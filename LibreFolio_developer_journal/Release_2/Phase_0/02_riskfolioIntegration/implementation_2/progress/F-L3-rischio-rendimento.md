@@ -2966,3 +2966,213 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 >   - `riskFreeRate={0}` esplicito;
 >   - la guida per la retta dal benchmark e il rombo.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### 13-B committato, e il fast-forward al checkpoint 8 di A ✅ 2026-10-06, 16:1x-16:3x
+
+> - 13-B: `ae293341a`, `49901e23c`, `b7e70a949`; albero `7c1b4bf55`. `/tmp/libreFolio_f4/verify_l13b.sh`: **PASS**.
+> - **Fast-forward** (coordinatore) a `9ce2efaed`, albero `2d6a2d605`: il checkpoint 8 di A, che ha fuso il mio 13-B e
+>   il k5b di Risk; worktree pulito. Validazione di A: `risk-lab` 41.
+> - **Dal giro di A**, nei miei file:
+>   - `scatterChartHelpers.test.ts`: `:119-122` diventa `:124` («runs from the risk-free rate through the benchmark on a
+>     plot with no portfolio point»), con i casi dell'ancora;
+>   - la guardia di `assetSetI18n.test.ts` ora dice «L3° describes the line exactly when it draws one»;
+>   - lo spec E2E non è toccato.
+>   La retta ora c'è anche nel laboratorio quando un benchmark si applica: da `(0, rf)` attraverso il rombo. Le note
+>   guadagnano `above` e `lineBenchmark`.
+> - **Un rosso nel mio spec, trovato da A** (skill test-triage, verdetto: **assumption**). È il test del preset broker:
+>   `risk-selected-count` atteso «2», ricevuto «3», in un giro completo; da solo passa.
+>   - L'oracolo `pageCatalogue()` (`risk-lab.spec.ts:1337`) prende l'**ultima** chiamata a `/risk/eligibility` per il
+>     catalogo. Dal `2ce42c3ff` (30/09) il pannello chiede anche della sola selezione, per l'offerta del periodo comune.
+>     Se quella risponde per ultima, l'oracolo calcola le holdings ∩ la selezione invece che ∩ il catalogo.
+>   - Cura: l'unione di tutte le chiamate registrate, perché la selezione sta dentro il catalogo.
+
+## Giro 14 · la riga del benchmark nel laboratorio, l'oracolo, la guida · 2026-10-06, dalle 16:3x
+
+| # | passo | stato |
+|---|---|---|
+| L14-1 | rossi: unitari (`assetSetLevels`, `AssetSetRiskReturnSection`) ed E2E (i capovolgimenti decisi dal developer e l'oracolo), due test-author su file distinti | ✅ 2026-10-06, 17:1x |
+| L14-2 | codice: la riga del benchmark (aggiunta se non selezionato, in cima con la tinta in D371), riga e punto legati, `riskFreeRate={0}`, i commenti «niente retta» | ✅ 2026-10-06, 17:1x |
+| L14-3 | guida (docs-writer, solo EN): la retta dal benchmark e le sue note, il rombo, la riga del benchmark, il titolo corto, le colonne di L1° e L3°, il rendimento dai soli prezzi | ✅ 2026-10-06, 17:3x |
+| L14-4 | cancelli, poi il checkpoint (stima data al coordinatore: ~18:15) | ✅ 2026-10-06, 17:4x (CHECKPOINT READY) |
+
+> **Il contratto della riga** (concordato con A il 06/10, sull'API di `RiskReturnLevel`):
+> - **benchmark non selezionato** che si applica: una riga aggiunta (`added: true`, id `ref-<id>`, celle
+>   `risk-asset-set-l3-ref-<colonna>`), con `role: 'benchmark'` e `isReference: true`. Le cifre vengono dal
+>   `comparison`: volatilità e rendimento come il suo punto, `comparison_sharpe` e `comparison_sortino` (dal k6 di Risk);
+>   beta e correlazione hanno il trattino «rispetto a sé stesso»;
+> - **D371** (benchmark selezionato): nessuna riga aggiunta; la sua riga prende `role: 'benchmark'`, va in cima e
+>   prende la tinta, e tiene id, celle e `data-reference="true"` su beta e correlazione;
+> - `data-row-count` resta il numero degli asset, e `data-reference-count` conta solo le righe aggiunte;
+> - riga e punto si selezionano a vicenda: la riga aggiunta ↔ il punto `'benchmark'`.
+
+### L14-1 · i rossi in corso (test-author `l14-unit` e `l14-e2e`, in parallelo su file distinti) · 2026-10-06, 16:3x
+
+> - **Unitari** (`assetSetLevels.test.ts`, `AssetSetRiskReturnSection.test.ts`):
+>   - `buildAssetSetBenchmarkPoint` porta anche `sharpe` e `sortino`;
+>   - il nuovo `withBenchmarkRow(rows, benchmark)` nei suoi tre casi;
+>   - nella sezione: la riga `ref-<id>` in cima con le sue celle, i due contatori, la riga del riferimento in cima in
+>     D371, e la selezione fra riga e punto (capovolto «a click on the benchmark dot changes nothing», `:1411`).
+> - **E2E** (`risk-lab.spec.ts`):
+>   - l'oracolo `pageCatalogue()` prende l'unione delle chiamate, rosso prima con un test senza pagina;
+>   - le righe di L3° contate senza quelle aggiunte;
+>   - la riga `ref-` e `data-reference-count` dove si applica un benchmark non selezionato, l'ordine in D371;
+>   - capovolto «the benchmark's dot selects nothing».
+> - **Una trappola scritta nel brief**: i punti del grafico restano costruiti sulle sole righe degli asset. Se la riga
+>   aggiunta li alimentasse, il punto del benchmark prenderebbe l'id `asset-<id>` invece di `'benchmark'` e il legame
+>   fra riga e punto si romperebbe. Il test esistente `:1167-1172` lo fissa.
+
+### L14-2 (parte) · commenti e tasso, senza cambiare comportamento ✅ 2026-10-06, 16:4x
+
+> - **I commenti «la retta non c'è mai»**, falsi dal checkpoint 8 di A, riscritti:
+>   - il docblock di `AssetSetRiskReturnSection.svelte` («A line only against the benchmark, never against the
+>     selection»: niente aggregato, quindi nessuna retta che giudichi la selezione; la retta passa dal benchmark scelto
+>     dal lettore, e solo quando ce n'è uno) e il commento nel template;
+>   - `assetSetLevels.ts`, i docblock di `buildAssetSetScatterPoints` e di `buildAssetSetChartPoints`.
+>   Resta `assetSetLevels.test.ts:524`, quando test-author avrà finito con quel file.
+> - **`riskFreeRate={LAB_RISK_FREE_RATE}`** (0) esplicito nel montaggio di `RiskReturnLevel`. Il laboratorio carica i
+>   rapporti a un tasso nullo (`appliedRiskFreePercent: 0`, e il `comparison` fa lo stesso): la retta parte da lì, e
+>   resta giusta se un giorno il laboratorio avrà un tasso.
+
+### La tappa 2 di Risk parte: una regola e una decisione che mi riguardano · 2026-10-06, 16:4x
+
+> - **La regola di `eligibility.ts`** (coordinatore, 06/10): Risk importa da `components/risk/eligibility.ts`, mio,
+>   `eligibilityBatches`, `mergeEligibilityAnswers`, `describeEligibility` e `dayFormatter`, senza modificarli. **Prima di
+>   cambiare quelle esportazioni (firma o comportamento), avviso Risk e il coordinatore.**
+> - **D378** (developer, 06/10):
+>   - la sezione in sola lettura degli asset non ammissibili c'è su ogni pagina;
+>   - un benchmark salvato che non si può misurare nel periodo della pagina non si prova;
+>   - `BenchmarkSelect` pubblica un nuovo stato, `blocked`, quando il verdetto della scelta corrente è `ineligible`: la
+>     scelta resta salvata e resta nel trigger.
+>   Nel laboratorio `labBenchmarkId` passa il benchmark solo su `set`, quindi uno bloccato esce già dalla domanda di L3°.
+> - **Da decidere nel mio giro di adozione della tappa 2** (quando passerò `verdicts={eligibilityView}` al selettore),
+>   segnalato da Risk:
+>   - mentre l'ammissibilità del laboratorio carica, la mappa è vuota e lo stato è `set`, quindi L3° chiederebbe col
+>     benchmark; quando la risposta lo blocca, chiederebbe di nuovo senza. Sono due domande;
+>   - **la mia direzione**: allargare l'attesa del 13-A (`benchmarkPending`) anche al caricamento dell'ammissibilità,
+>     per una domanda sola, con un rosso prima (L3° chiede una volta sola, e senza un benchmark bloccato).
+
+### L14-1 · i rossi E2E (test-author `l14-e2e`) ✅ 2026-10-06, 16:3x-17:00
+
+> - **L'oracolo**: `pageCatalogue` restituisce l'unione delle chiamate, col docblock che spiega perché. Un test senza
+>   pagina (in un `describe` suo, senza login) gli passa le due chiamate nei due ordini. **Rosso prima della cura**:
+>   atteso `[3,5,8,13,21]`, ricevuto `[5,13]`, cioè la selezione. Verde dopo.
+> - **Le righe di L3°**: `L3_ASSET_ROWS` (`tbody tr[data-row-id]:not([data-row-id^="ref-"])`), usato da `paidRows` e dal
+>   conteggio della selezione; nuovo `paidReferenceRow`; L1° non è toccato.
+> - **`expectBenchmarkRowFirst`**:
+>   - benchmark non selezionato: `ref-<id>` una volta sola, in cima, `data-reference-count="1"`;
+>   - D371: `data-reference-count="0"` e la riga del riferimento in cima;
+>   - in entrambi i casi `data-row-count` resta il numero degli asset.
+>   Chiamato nei 4 test con un benchmark non selezionato e in (c). In (c) il riferimento diventa l'**ultimo** asset
+>   salvato, con una premessa: col primo, «in cima» sarebbe già vero oggi.
+> - **(d)**: la selezione fra righe e punti fa anche la riga del benchmark. Un clic sulla cella del nome di `ref-<id>`
+>   (sul trattino aprirebbe il suo aiuto) la seleziona e porta il grafico a `data-selected-id="benchmark"`; un secondo
+>   clic la toglie. **Il clic sul punto** non si può fare dall'E2E senza posizioni in pixel, che la suite rifiuta
+>   (`e2e/fixtures/charts.ts:56-59`): lo copre il test del componente che test-author `l14-unit` sta capovolgendo
+>   (`:1429`).
+> - **Rossi** (corsia 6154, build fatta prima): 6 falliti sulle asserzioni nuove (i 4 casi (b): «must have a row of its
+>   own … exactly one», ricevuto 0; (c): atteso `"3"`, ricevuto `"1"`; (d): nessuna riga da selezionare) e 3 passati
+>   (l'oracolo e i due test del preset broker). Gli altri 3 test che usano `paidRows` sono verdi.
+> - `tsc e2e` 2 (il pavimento); prettier pulito; 6154 libera alle 17:00:32.
+> - **Da sistemare in questo giro**: un vecchio commento in un test (`:5533`) dice ancora che il grafico non disegna
+>   nessuna retta dal benchmark.
+> - **Le due ricostruzioni di `frontend/build` viste da test-author** (16:54, 16:59) sono del runner, che all'avvio
+>   ricostruisce se i sorgenti sono più nuovi: c'erano le mie modifiche ai commenti e quelle dell'altro test-author.
+>   Il bundle non conteneva `withBenchmarkRow`, quindi i rossi sono contro il codice di oggi.
+
+### L14-1 · i rossi unitari (test-author `l14-unit`) ✅ 2026-10-06, 16:4x-17:1x
+
+> - **15 rossi, 231 verdi su 246**; i rossi sono tutti nuovi, più il capovolto.
+>   - `assetSetLevels.test.ts`: il punto del benchmark porta Sharpe e Sortino (5 casi: assenti, uno solo, zero,
+>     negativi); `withBenchmarkRow` nei tre casi, con una premessa sulle righe vere del builder e il controllo che
+>     l'input non cambi.
+>   - `AssetSetRiskReturnSection.test.ts`:
+>     - capovolto «a click on the benchmark dot changes nothing» (era a `:1429`): ora seleziona `ref-90`, un secondo
+>       clic toglie la selezione, e da un asset selezionato la sposta;
+>     - la riga `ref-90` in cima, con le sue celle e i due contatori (con e senza i rapporti);
+>     - l'ordinamento del lettore la sposta come le altre, e il terzo clic la rimette in cima;
+>     - D371: la riga 90 in cima, nessuna `ref-`;
+>     - più guardie verdi per costruzione (nessun benchmark, uno che non si applica, gli stati di carico).
+> - **13 test esistenti adattati** (verdi oggi, che il cambiamento avrebbe rotto: verificato rimettendo i vecchi
+>   aiutanti): `drawnOrder()` salta le righe `ref-` (prima ne faceva un `NaN`); gli aiutanti accettano gli id `ref-`;
+>   due controlli di forma esatta del punto del benchmark passano a `toMatchObject`.
+> - **Controllo che il contratto possa diventare verde**: un'implementazione finta l'ha portato a 246/246. Rotta
+>   apposta, i test giusti diventano rossi. Poi tolta del tutto.
+> - Rapporti assenti nella risposta → `null` (trattino «misurato, non misurabile»), come nel contratto: il `comparison`
+>   li porta sempre (`Optional`), quindi `null` vuol dire proprio questo.
+
+### L14-2 · il codice della riga del benchmark ✅ 2026-10-06, 17:1x
+
+> **Note implementazione**
+> - **`assetSetLevels.ts`**:
+>   - `AssetSetBenchmarkPoint` porta `sharpe` e `sortino` (`comparison_sharpe`, `comparison_sortino`);
+>   - `AssetSetPaidRow` ha `role?: 'benchmark'` e `added?`;
+>   - nuovo `withBenchmarkRow(rows, benchmark)`: senza benchmark le righe come sono; in D371 la riga del riferimento
+>     prende il ruolo; altrimenti una riga aggiunta in fondo, con le cifre del suo punto, beta e correlazione `null` e
+>     `isReference: true`. L'input non cambia.
+> - **Il mio involucro**:
+>   - `assetRows` (una riga per asset) alimenta i punti, gli stati di carico e il vuoto;
+>   - `rows = withBenchmarkRow(assetRows, benchmarkApplies ? benchmarkPoint : null)` alimenta la tabella. Il punto di un
+>     benchmark non selezionato resta `'benchmark'`, e `RiskReturnLevel` lega la riga `ref-` a quel punto.
+> - **I commenti «niente retta»** rimasti, ora veri: `assetSetLevels.test.ts:524`, e lo spec (`:5659`, «the line, when
+>   the chart draws one, runs through it»).
+> - **⚠️ Fuori pista**: i due punti del benchmark scritti a mano nella guardia di A (`assetSetI18n.test.ts:272-273`, il
+>   blocco concesso ad A, ora committato) non avevano `sharpe` e `sortino`, che ora il tipo chiede: 2 errori di
+>   `front check`. Ho aggiunto `sharpe: null, sortino: null`, senza cambiare cosa controlla la guardia; lo dico ad A
+>   nella consegna.
+> - **Prove** (fuori corsia): i 4 file (`assetSetLevels`, la sezione, i livelli, `assetSetI18n`) **316/316**; `front
+>   check` 0/0; prettier pulito.
+> - **E2E** (corsia 6154, `front build --debug` prima): `front-portfolio risk-lab` **42/42**. Sono i 41 di prima più
+>   il test senza pagina dell'oracolo; i 6 rossi del giro sono verdi.
+
+### L14-3 · la guida (docs-writer `l14-guide`) ✅ 2026-10-06, 17:1x-17:3x
+
+> - `correlation.en.md` (+15 −9), solo EN, senza timbro (la pagina non ha traduzioni). Ogni frase è verificata sul
+>   codice (file:riga nel rapporto di docs-writer):
+>   - L1°: le colonne si ridimensionano trascinando il bordo, ognuna parte larga quanto il suo titolo e non si stringe
+>     oltre; i nomi non sono fissati;
+>   - L3°: il titolo corto «Ann. return», col nome intero nel tooltip e nel menu delle colonne;
+>   - il benchmark è un rombo, gli asset sono cerchi;
+>   - **«A line runs through the benchmark, never through the selection»**: dal tasso privo di rischio (zero qui)
+>     attraverso il rombo; senza benchmark nessuna retta;
+>   - le note sotto il grafico, quando compaiono;
+>   - la riga del benchmark: in cima, con la tinta ambra e un piccolo rombo prima del nome; aggiunta se non
+>     selezionato, coi suoi rapporti e il trattino su beta e correlazione; in D371 è la riga dell'asset che sale;
+>   - la selezione fra righe e punti vale anche per il benchmark;
+>   - il rendimento viene dai soli prezzi, senza cedole né dividendi;
+>   - «A Dash Is Not a Zero» corretta, perché la frase vecchia era diventata falsa.
+> - `mkdocs build` strict pulito; `check-links` 88/8/3 + D28; `sw.js` invariato.
+> - **⚠️ Fuori pista, segnalati da docs-writer**:
+>   - `financial-theory/…/benchmark-selection.en.md:101` dice ancora che la scheda Correlation non disegna nessuna
+>     retta, «not even through its benchmark», ed è la pagina che apre la **?** sotto il grafico. Il paragrafo è di A
+>     (ultimo cambiamento `fa18eace8`): segnalato ad A, che lo corregge nel suo giro;
+>   - una frase mia (`:128`) diceva Sortino calcolato contro il tasso privo di rischio. Nel backend
+>     (`metrics.py:241-258`) Sortino usa la deviazione al ribasso rispetto a un rendimento obiettivo esplicito
+>     (`annual_target_return`, qui 0). Corretta: «Sharpe … against a **risk-free rate of zero**, and Sortino against a
+>     **target return of zero**».
+
+### L14-4 · i cancelli ✅ 2026-10-06, 17:25-17:35 (`/tmp/libreFolio_f4/l14_gates.sh`, corsia 6154, uno per volta)
+
+> | cancello | esito |
+> |---|---|
+> | `front build --debug` · `mkdocs build` (0 WARNING) | ✅ · ✅ |
+> | `front check` · `tsc -p tsconfig.e2e.json` · prettier | 0/0 · 2 (il pavimento) · pulito |
+> | lista vitest | 1525 |
+> | `core-unit` · `component-unit` · `risk-controller-unit` | 2987 · 2634 · 96 |
+> | `risk-levels-component` · `risk-levels-unit` | 203 · 376 |
+> | `front-portfolio risk-lab` | **42/42** (i 41 più il test dell'oracolo) |
+> | `risk` · `risk-benchmark-shared` · `services risk-asset-set` | 33 · 4 · 51 |
+> | `check-orphans` · `i18n audit` · `mkdocs check-links` | ok · 3549 chiavi, 382 inutilizzate, nessuna mancante · 88/8/3 + D28 |
+> | righe di provider: `risk-lab` · `risk` · `bench` | 0 · 0 · 0 |
+>
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera alla fine.
+
+### Checkpoint 14 · 2026-10-06, 17:4x (verso Risk)
+
+> - Base `9ce2efaed` (il checkpoint 8 di A), 8 percorsi modificati, tre gruppi:
+>   - **G1** il codice e i suoi test: `assetSetLevels.ts` e il suo test, l'involucro e il suo test, la guardia
+>     `assetSetI18n.test.ts` (i due punti tipizzati), lo spec (la riga, l'oracolo, i commenti). L'oracolo non si separa:
+>     sta nello stesso file dei rossi della riga;
+>   - **G2** la guida;
+>   - **G3** questo journal.
+> - Nessuna chiave i18n toccata. CHANGELOG: niente da me.
+> - Stato dopo l'invio: **FROZEN** fino al commit.

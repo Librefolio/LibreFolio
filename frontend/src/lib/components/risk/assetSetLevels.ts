@@ -88,14 +88,28 @@ export interface AssetSetPaidRow {
      * comparison's items.
      */
     isReference: boolean;
+    /**
+     * The table opens with this row and tints it like the benchmark's dot (the developer's
+     * review, 06/10/2026: «anche nel lab il benchmark diventa una riga in cima»). Only the
+     * benchmark's row has it — a selected one (D371) or one `withBenchmarkRow` added.
+     */
+    role?: 'benchmark';
+    /**
+     * The row was added for a benchmark the selection does not hold: it takes a `ref-` id
+     * and `-ref-` cells in `RiskReturnLevel`, and stays out of the per-asset counts.
+     */
+    added?: boolean;
 }
 
-/** The benchmark's own coordinates, so a scatter can place it beside the rest. */
+/** The benchmark's own figures, so a scatter can place it beside the rest and the table can give it a row. */
 export interface AssetSetBenchmarkPoint {
     assetId: number;
     name: string;
     volatility: number;
     expectedReturn: number;
+    /** Its own Sharpe and Sortino, charged the same rate and target as the assets' (`null` when not measurable). */
+    sharpe: number | null;
+    sortino: number | null;
 }
 
 /**
@@ -222,11 +236,11 @@ export function buildAssetSetPaidRows(assetIds: readonly number[], names: Readon
  * The scatter's dots, one per asset that has both coordinates.
  *
  * 🔴 There is no portfolio dot and there cannot be one: `RiskAssetSetReturnOutput`
- * has no field for an aggregate. That absence is what keeps the Capital Market
- * Line off this chart — `capitalMarketLine()` draws only when a point whose role
- * is `portfolio` exists — and therefore what keeps the judgement "paid well for
- * the risk" off a surface whose design forbids it. The defence is a missing
- * shape, not a flag, so nothing here can switch it back on by mistake.
+ * has no field for an aggregate. That absence is what keeps a line through the
+ * selection off this chart, and with it the judgement of a whole the selection does
+ * not have. The defence is a missing shape, not a flag, so nothing here can switch
+ * it on by mistake. The only line the lab draws runs through the benchmark, when one
+ * is placed (`capitalMarketLineAnchor`; the developer's review, 06/10/2026).
  */
 export function buildAssetSetScatterPoints(rowsIn: readonly AssetSetPaidRow[]): {id: string; name: string; volatility: number; annualReturn: number; role: 'asset'}[] {
     const points: {id: string; name: string; volatility: number; annualReturn: number; role: 'asset'}[] = [];
@@ -260,7 +274,46 @@ export function buildAssetSetBenchmarkPoint(comparison: RiskAnalyticResult | nul
     // chart — which is how it once shipped.
     const assetId = output.comparison_asset_id;
     const name = names.get(assetId) ?? resolveName?.(assetId) ?? label(assetId, names);
-    return {assetId, name, volatility, expectedReturn};
+    return {assetId, name, volatility, expectedReturn, sharpe: num(output.comparison_sharpe), sortino: num(output.comparison_sortino)};
+}
+
+/**
+ * L3°'s table rows with the benchmark's own row, which opens the table (the developer's
+ * review, 06/10/2026: «Sì, anche nel lab il benchmark diventa una riga in cima»).
+ *
+ * - No benchmark: the rows as they are.
+ * - A selected benchmark (D371): its own row becomes the benchmark's — it gains the role,
+ *   and keeps its id, its cells and its figures. Nothing is added; `RiskReturnLevel`
+ *   moves it to the top and tints it.
+ * - A benchmark the selection does not hold: one row is added, last, with the figures its
+ *   dot carries — volatility and return, Sharpe and Sortino — and, as the reference
+ *   itself, no beta or correlation: measured against itself they would be 1 by
+ *   construction. `RiskReturnLevel` gives it a `ref-` id and opens the table with it.
+ *
+ * The rows passed in are not changed. The chart's dots are built from the asset rows,
+ * never from these: an added row's dot is the benchmark's own (`'benchmark'`).
+ */
+export function withBenchmarkRow(rows: readonly AssetSetPaidRow[], benchmark: AssetSetBenchmarkPoint | null): AssetSetPaidRow[] {
+    if (benchmark === null) return [...rows];
+    if (rows.some((row) => row.assetId === benchmark.assetId)) {
+        return rows.map((row) => (row.assetId === benchmark.assetId ? {...row, role: 'benchmark'} : row));
+    }
+    return [
+        ...rows,
+        {
+            assetId: benchmark.assetId,
+            name: benchmark.name,
+            volatility: benchmark.volatility,
+            expectedReturn: benchmark.expectedReturn,
+            sharpe: benchmark.sharpe,
+            sortino: benchmark.sortino,
+            beta: null,
+            correlation: null,
+            isReference: true,
+            role: 'benchmark',
+            added: true,
+        },
+    ];
 }
 
 /** A dot of L3°'s chart: an asset, or the benchmark it is compared against. */
@@ -283,8 +336,10 @@ export interface AssetSetChartPoint {
  * the cloud.
  *
  * Its role is `benchmark`, never `portfolio`. That is not cosmetic: `role` is what
- * `capitalMarketLine()` searches for, so labelling the reference as a portfolio would
- * anchor a verdict line on an asset that is not the reader's holdings.
+ * `capitalMarketLineAnchor()` reads. As the benchmark it anchors the line the reader
+ * asked for — "better paid than the reference" (the developer's review, 06/10/2026);
+ * labelled a portfolio it would pass for the reader's holdings as a whole, which a
+ * selection does not have.
  */
 export function buildAssetSetChartPoints(rows: readonly AssetSetPaidRow[], benchmark: AssetSetBenchmarkPoint | null): AssetSetChartPoint[] {
     const points: AssetSetChartPoint[] = buildAssetSetScatterPoints(rows).map((point) => (benchmark !== null && point.id === `asset-${benchmark.assetId}` ? {...point, role: 'benchmark'} : point));

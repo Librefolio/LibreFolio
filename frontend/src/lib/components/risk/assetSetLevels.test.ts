@@ -49,7 +49,7 @@ import {schemas} from '$lib/api';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
-import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, type AssetSetBenchmarkPoint, type AssetSetPaidRow, type CalendarLength} from './assetSetLevels';
+import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, withBenchmarkRow, type AssetSetBenchmarkPoint, type AssetSetPaidRow, type CalendarLength} from './assetSetLevels';
 
 type Payload = Record<string, unknown>;
 
@@ -521,10 +521,11 @@ describe('buildAssetSetPaidRows', () => {
 
 describe('buildAssetSetScatterPoints', () => {
     it('emits one dot per placeable row and never a portfolio one', () => {
-        // 🔴 `capitalMarketLine()` draws only when a point whose role is
-        // `portfolio` exists, so "no portfolio point" *is* the mechanism that
-        // keeps the verdict "paid well for the risk" off a chart of a selection
-        // that has no weights and therefore no whole to judge.
+        // 🔴 No portfolio point *is* the mechanism that keeps a line through the
+        // selection off the chart, and with it the verdict "paid well for the risk"
+        // about a whole the selection does not have: no weights, no aggregate. The
+        // only line the lab draws runs through the benchmark, when one is placed
+        // (`capitalMarketLineAnchor`; the developer's review, 06/10/2026).
         const rows = buildAssetSetPaidRows(SELECTION, LABELS, returnResult([returnItem(7, 0.21, 0.094), returnItem(3, 0.34, -0.052), returnItem(12, 0.058, -0.012)]), null, null);
         const points = buildAssetSetScatterPoints(rows);
 
@@ -590,8 +591,11 @@ describe('buildAssetSetChartPoints', () => {
     const BONDS = paidRow({assetId: 12, name: 'Xtrackers EUR Corporate Bond', volatility: 0.058, expectedReturn: -0.012});
     /** A selected reference's row: measured on the same joint window as its point, so the two agree. */
     const ACWI = paidRow({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, isReference: true});
-    /** The reference's point, as `buildAssetSetBenchmarkPoint` reads it off the comparison. */
-    const REFERENCE: AssetSetBenchmarkPoint = {assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081};
+    /**
+     * The reference's point, as `buildAssetSetBenchmarkPoint` reads it off the comparison — `comparisonResult`'s, whose
+     * answer carries no ratios for the reference. The dots read its coordinates and its name, never its ratios.
+     */
+    const REFERENCE: AssetSetBenchmarkPoint = {assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, sharpe: null, sortino: null};
     /** The reference's own dot, when no row carries it. */
     const SEPARATE: Dot = {id: 'benchmark', name: 'MSCI ACWI', volatility: 0.142, annualReturn: 0.081, role: 'benchmark'};
 
@@ -646,7 +650,8 @@ describe('buildAssetSetBenchmarkPoint', () => {
     it('places the reference when both of its coordinates arrived', () => {
         const point = buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), LABELS);
 
-        expect(point).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081});
+        // Its coordinates and its name; the ratios beside them are the cases at the end of this group.
+        expect(point).toMatchObject({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081});
     });
 
     it('refuses to place a reference with only one coordinate', () => {
@@ -665,7 +670,7 @@ describe('buildAssetSetBenchmarkPoint', () => {
     it('places a reference measured at zero, which is a reading and not an absence', () => {
         const flat = comparisonResult([comparisonItem(7)], {comparison_volatility: 0, comparison_expected_annual_return: 0});
 
-        expect(buildAssetSetBenchmarkPoint(flat, LABELS)).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0, expectedReturn: 0});
+        expect(buildAssetSetBenchmarkPoint(flat, LABELS)).toMatchObject({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0, expectedReturn: 0});
     });
 
     it('names the reference #id when the label map has no entry for it', () => {
@@ -702,6 +707,184 @@ describe('buildAssetSetBenchmarkPoint', () => {
         // `comparison_asset_id` is required: without it there is no reference to
         // name, so the whole payload is refused rather than half-read.
         expect(buildAssetSetBenchmarkPoint(ok('asset_set_comparison', {kind: 'comparison_set', observations: 502, comparison_volatility: 0.142, comparison_expected_annual_return: 0.081, items: []}), LABELS)).toBeNull();
+    });
+
+    /**
+     * The reference's own Sharpe and Sortino, beside its coordinates (the developer's decision of 06/10/2026: the
+     * benchmark becomes a row of L3°'s table, so it shows what a row shows). Read off the same comparison as the
+     * coordinates — `comparison_sharpe` and `comparison_sortino`, on the same returns and the same joint calendar —
+     * and never off a KPI of the asset alone, for the reason the coordinates are not. `null` when the answer has none.
+     *
+     * Sharpe ≈ return ÷ volatility at the zero risk-free rate the levels charge, as in every fixture of this file:
+     * 0.081 ÷ 0.142 ≈ 0.57, and the Sortino above it, as a downside deviation below the volatility makes it.
+     */
+    it("carries the reference's own Sharpe and Sortino beside its coordinates, as the comparison measured them", () => {
+        const comparison = comparisonResult([comparisonItem(7)], {comparison_sharpe: 0.57, comparison_sortino: 0.83});
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses with the two ratios').toBe(true);
+
+        expect(buildAssetSetBenchmarkPoint(comparison, LABELS)).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: 0.83});
+    });
+
+    it.each<{case: string; overrides: Payload; point: {volatility: number; expectedReturn: number; sharpe: number | null; sortino: number | null}}>([
+        // What an answer from before the two fields carries: neither, omitted rather than nulled.
+        {case: 'an answer without them', overrides: {}, point: {volatility: 0.142, expectedReturn: 0.081, sharpe: null, sortino: null}},
+        // Not one return below the target, so no downside deviation to divide by: the backend nulls the Sortino alone.
+        {case: 'a Sortino not definable', overrides: {comparison_sharpe: 0.57, comparison_sortino: null}, point: {volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: null}},
+        // It earned exactly the risk-free rate: zero is a reading, and a falsy test would turn it into a blank.
+        {case: 'both exactly zero', overrides: {comparison_expected_annual_return: 0, comparison_sharpe: 0, comparison_sortino: 0}, point: {volatility: 0.142, expectedReturn: 0, sharpe: 0, sortino: 0}},
+        // Asset 3's figures as a reference: −0.052 ÷ 0.34 ≈ −0.15. A negative ratio is ordinary, not a missing one.
+        {case: 'both negative', overrides: {comparison_volatility: 0.34, comparison_expected_annual_return: -0.052, comparison_sharpe: -0.15, comparison_sortino: -0.21}, point: {volatility: 0.34, expectedReturn: -0.052, sharpe: -0.15, sortino: -0.21}},
+    ])('$case: the ratios as the answer gives them — null where it has none — and the reference placed all the same', ({overrides, point}) => {
+        const comparison = comparisonResult([comparisonItem(7)], overrides);
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses').toBe(true);
+
+        expect(buildAssetSetBenchmarkPoint(comparison, LABELS)).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', ...point});
+    });
+});
+
+/**
+ * withBenchmarkRow — the benchmark as a row of L3°'s table (the developer's decision of 06/10/2026: «Sì, anche nel lab
+ * il benchmark diventa una riga in cima», tinted in its dot's colour). It takes the rows the builder made and the
+ * benchmark's point, and returns the rows the table draws:
+ *
+ *  - no benchmark: the rows as they came — none marked, none added, not even the one the comparison names;
+ *  - the benchmark is one of the rows (D371, `row.assetId === benchmark.assetId`): that row becomes the benchmark's,
+ *    `role: 'benchmark'`, and keeps every other field the builder gave it — it is one of the selection, so it is not
+ *    `added`. Nothing is added and nothing moves: opening the table with the reference is `RiskReturnLevel`'s
+ *    (`referenceRowsFirst`), and so is letting the reader's sort move it;
+ *  - otherwise: the rows as they came, and one row added for the benchmark, last — `added`, a reference
+ *    (`isReference`: its beta and correlation would be against itself, so they are null), with the coordinates and the
+ *    ratios the comparison measured for it.
+ *
+ * The rows handed in are left as they were: the section draws its chart's dots and reads its states from the
+ * selection's own rows, so a role or a row leaking into them would put the benchmark on the chart twice, or fill a
+ * loading skeleton with a reference's figures.
+ */
+describe('withBenchmarkRow', () => {
+    /** The selection measured on both axes and in both ratios. Sharpe ≈ return ÷ volatility, as everywhere in this file. */
+    const RETURNS = returnResult([returnItem(7, 0.21, 0.094), returnItem(3, 0.34, -0.052), returnItem(12, 0.058, -0.012)]);
+    const KPIS = kpiResult([
+        kpiItem(7, {volatility: 0.21, sharpe: 0.45, sortino: 0.62}),
+        kpiItem(3, {volatility: 0.34, max_drawdown: -0.4, max_drawdown_duration_days: 725, sharpe: -0.15, sortino: -0.21}),
+        kpiItem(12, {volatility: 0.058, max_drawdown: -0.07, max_drawdown_duration_days: 96, sharpe: -0.21, sortino: -0.27}),
+    ]);
+
+    /**
+     * Against the reference outside the selection (41, `MSCI ACWI`): each active return is the asset's return less the
+     * reference's 0.081, and each information ratio that over its tracking error, exactly. The reference's own ratios
+     * ride beside its coordinates.
+     */
+    const AGAINST_OUTSIDE = comparisonResult(
+        [comparisonItem(7), comparisonItem(3, {active_return: -0.133, tracking_error: 0.266, information_ratio: -0.5, correlation: 0.61, beta: 1.46}), comparisonItem(12, {active_return: -0.093, tracking_error: 0.1488, information_ratio: -0.625, correlation: 0.21, beta: 0.09})],
+        {comparison_sharpe: 0.57, comparison_sortino: 0.83},
+    );
+    /** That reference's point, as `buildAssetSetBenchmarkPoint` reads it off `AGAINST_OUTSIDE`. */
+    const OUTSIDE: AssetSetBenchmarkPoint = {assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: 0.83};
+
+    /**
+     * D371: asset 3 selected, mid-list, as the reference — measured like the others and left out of the items, against
+     * which the other two are measured (the active returns are theirs less its −0.052).
+     */
+    const AGAINST_SELECTED = comparisonResult([comparisonItem(7, {active_return: 0.146, tracking_error: 0.292, information_ratio: 0.5, correlation: 0.52, beta: 0.32}), comparisonItem(12, {active_return: 0.04, tracking_error: 0.32, information_ratio: 0.125, correlation: 0.42, beta: 0.07})], {
+        comparison_asset_id: 3,
+        comparison_volatility: 0.34,
+        comparison_expected_annual_return: -0.052,
+        comparison_sharpe: -0.15,
+        comparison_sortino: -0.21,
+    });
+    /**
+     * Its point — deliberately NOT the row's. In production the two agree, the backend measuring both on the same joint
+     * window; they disagree here because agreement cannot show which one the table's row keeps, and the row is what the
+     * table has always shown for that asset.
+     */
+    const SELECTED: AssetSetBenchmarkPoint = {assetId: 3, name: '#3', volatility: 0.35, expectedReturn: -0.05, sharpe: -0.14, sortino: -0.2};
+
+    /** The rows a case reads that are marked — a role or an `added` of any value — as `assetId:role:added`. */
+    function marked(rows: readonly AssetSetPaidRow[]): string[] {
+        return rows.filter((row) => row.role !== undefined || row.added !== undefined).map((row) => `${row.assetId}:${row.role}:${row.added}`);
+    }
+
+    /**
+     * The rows as the builder makes them against `comparison` — the premise every case stands on: one per selected asset,
+     * in the selection's order, every figure measured, the reference flagged where the comparison names one, and none
+     * marked: a role is `withBenchmarkRow`'s to give.
+     */
+    function builtRows(comparison: RiskAnalyticResult, reference: number | null): AssetSetPaidRow[] {
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses').toBe(true);
+        const rows = buildAssetSetPaidRows(SELECTION, LABELS, RETURNS, KPIS, comparison);
+        expect(
+            rows.map((row) => row.assetId),
+            'premise: one row per selected asset, in the selection order',
+        ).toEqual(SELECTION);
+        expect(
+            rows.filter((row) => [row.volatility, row.expectedReturn, row.sharpe, row.sortino].includes(null)).map((row) => row.assetId),
+            'premise: every row measured — a fixture refused by its schema would leave blanks',
+        ).toEqual([]);
+        expect(
+            rows.filter((row) => row.isReference).map((row) => row.assetId),
+            'premise: the builder flags the reference the comparison names, and only it',
+        ).toEqual(reference === null ? [] : [reference]);
+        expect(marked(rows), 'premise: the builder marks no row').toEqual([]);
+        return rows;
+    }
+
+    it.each<{against: string; comparison: RiskAnalyticResult; reference: number | null}>([
+        {against: 'a reference outside the selection', comparison: AGAINST_OUTSIDE, reference: null},
+        {against: 'a reference the reader selected (D371)', comparison: AGAINST_SELECTED, reference: 3},
+    ])('no benchmark: the rows as they came, none marked and none added — measured against $against', ({comparison, reference}) => {
+        const rows = builtRows(comparison, reference);
+        const before = structuredClone(rows);
+
+        const result = withBenchmarkRow(rows, null);
+
+        expect(result, 'the rows, every field as the builder made it, and no more of them').toEqual(before);
+        expect(marked(result), 'a row marked or added with no benchmark to show — not even the one the comparison names').toEqual([]);
+        expect(rows, 'the rows handed in were modified').toEqual(before);
+    });
+
+    it('the benchmark is one of the rows (D371): that row becomes the benchmark and keeps every field the builder gave it; nothing is added, nothing moves', () => {
+        const rows = builtRows(AGAINST_SELECTED, 3);
+        const before = structuredClone(rows);
+
+        const result = withBenchmarkRow(rows, SELECTED);
+
+        expect(
+            result.map((row) => row.assetId),
+            'a row added, or one moved: opening the table with the reference is the level’s, not this function’s',
+        ).toEqual(SELECTION);
+        expect(rowFor(result, 3), "the reference's row: the role, and otherwise the builder's own name and figures — never the point's, and not `added`").toEqual({
+            assetId: 3,
+            name: 'iShares Core MSCI EM IMI',
+            volatility: 0.34,
+            expectedReturn: -0.052,
+            sharpe: -0.15,
+            sortino: -0.21,
+            beta: null,
+            correlation: null,
+            isReference: true,
+            role: 'benchmark',
+        });
+        expect(
+            result.filter((row) => row.assetId !== 3),
+            'every other row as the builder made it',
+        ).toEqual(before.filter((row) => row.assetId !== 3));
+        expect(marked(result), 'the reference marked, and no other row').toEqual(['3:benchmark:undefined']);
+        expect(rows, 'the rows handed in were modified: the role belongs to the table’s rows, not to the selection’s').toEqual(before);
+    });
+
+    it('a benchmark outside the rows: every row as it came, then one row added for it, last — the benchmark itself, compared with nothing', () => {
+        const rows = builtRows(AGAINST_OUTSIDE, null);
+        expect(
+            rows.map((row) => row.assetId),
+            `premise: the reference, ${BENCHMARK_ID}, is none of the rows`,
+        ).not.toContain(BENCHMARK_ID);
+        const before = structuredClone(rows);
+
+        const result = withBenchmarkRow(rows, OUTSIDE);
+
+        expect(result, 'the rows as they came, then the benchmark’s, added last').toEqual([...before, {assetId: BENCHMARK_ID, name: 'MSCI ACWI', role: 'benchmark', added: true, isReference: true, volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: 0.83, beta: null, correlation: null}]);
+        expect(marked(result), 'one row added for the benchmark, and no asset row marked').toEqual([`${BENCHMARK_ID}:benchmark:true`]);
+        expect(rows, 'the rows handed in were modified — a row pushed onto them would reach the chart as an asset').toEqual(before);
     });
 });
 
