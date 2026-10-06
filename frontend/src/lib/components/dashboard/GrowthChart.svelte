@@ -104,23 +104,32 @@
     }
 
     const restoredMode = readStoredMode();
+    const restoredSubmode = readStoredSubmode();
     let viewMode: GrowthMode = $state(restoredMode);
     // pnlSubmode = line|candles|income (plan §5.1). All three submodes are live and the
     // picker is rendered (data-testid growth-pnl-submode-*); 'candles' is where the
     // synthetic OHLC series is shown.
-    let pnlSubmode: PnlSubmode = $state(readStoredSubmode());
+    let pnlSubmode: PnlSubmode = $state(restoredSubmode);
     /** A restored % view still has to be checked against the loaded history (see below). */
     let restoredPctUnchecked = restoredMode === 'pct';
 
+    function isIncomeView(): boolean {
+        return viewMode === 'pnl' && pnlSubmode === 'income';
+    }
+
     function selectMode(mode: GrowthMode) {
+        const wasIncome = isIncomeView();
         viewMode = mode;
         restoredPctUnchecked = false;
         setUserStorage(MODE_STORAGE_KEY, mode);
+        if (!wasIncome && isIncomeView()) incomeOpeningPending = true;
     }
 
     function selectSubmode(submode: PnlSubmode) {
+        const wasIncome = isIncomeView();
         pnlSubmode = submode;
         setUserStorage(SUBMODE_STORAGE_KEY, submode);
+        if (!wasIncome && isIncomeView()) incomeOpeningPending = true;
     }
     // Named for the zoom it drives, NOT for a submode: it began life income-only, but
     // the mechanism was always the shared visible range. Deliberately "zoom" and not
@@ -182,6 +191,13 @@
     /** Income bars start one rung up: a single day of personal cash flow is almost always empty. */
     const INCOME_MIN_WIDTH: CandleWidth = '1W';
     /**
+     * The rung Income opens on, on every entry into it (developer, 05/10/2026: «facciamo che
+     * il bucket di default è 1M»): a month of personal cash flow reads, a week is mostly
+     * empty. When the geometry cannot draw it, Income opens on the offered rung nearest to
+     * it. Candles keep their own opening, the finest rung they can draw.
+     */
+    const INCOME_OPENING_WIDTH: CandleWidth = '1M';
+    /**
      * Narrowest candle body the ladder will still OFFER.
      *
      * Deliberately NOT `CANDLE_MIN_SLOT_PX`, and the difference is the point. That
@@ -225,6 +241,9 @@
     let candleWidth: CandleWidth = $state('1W');
     /** True until the ladder has picked its own opening rung; see reconcileCandleWidth(). */
     let candleWidthPending = $state(true);
+    /** Set on every entry into Income — mounting on a restored Income, or switching into it —
+     *  and consumed by reconcileCandleWidth(), so a redraw inside Income keeps the user's pick. */
+    let incomeOpeningPending = restoredMode === 'pnl' && restoredSubmode === 'income';
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -1237,6 +1256,15 @@
         const offered = availableCandleWidths;
         if (offered.length === 0) return;
 
+        // Income opens on its own rung on every entry (INCOME_OPENING_WIDTH), or on the
+        // offered rung nearest to it. The width is then shared with Candles, as before.
+        if (incomeOpeningPending && isIncomeView()) {
+            candleWidth = nearestOfferedWidth(offered, INCOME_OPENING_WIDTH);
+            incomeOpeningPending = false;
+            candleWidthPending = false;
+            return;
+        }
+
         // Opening pick: the LOWEST drawable rung — the finest detail the geometry can
         // honour. Same convention the line charts already use for their initial
         // resolution, so the two controls do not teach the user two different habits.
@@ -1250,6 +1278,14 @@
         const current = CANDLE_WIDTH_ORDER.indexOf(candleWidth);
         const next = CANDLE_WIDTH_ORDER.find((w, i) => i > current && offered.includes(w));
         candleWidth = next ?? offered[offered.length - 1];
+    }
+
+    /** The offered rung nearest to `target`: `target` itself when offered. The offer is contiguous, so this is a clamp. */
+    function nearestOfferedWidth(offered: readonly CandleWidth[], target: CandleWidth): CandleWidth {
+        if (offered.includes(target)) return target;
+        const at = CANDLE_WIDTH_ORDER.indexOf(target);
+        const distance = (width: CandleWidth) => Math.abs(CANDLE_WIDTH_ORDER.indexOf(width) - at);
+        return offered.reduce((best, width) => (distance(width) < distance(best) ? width : best));
     }
 
     function formatTooltipMonth(date: string): string {
@@ -2002,7 +2038,10 @@
         lastLadderPlanKey = ladderPlan?.key ?? null;
         const ladderAxis = ladderPlan ? ladderAxisOption(ladderPlan) : null;
 
-        const yAxisFormatter =
+        // Income draws bars, which stand on zero; every other view draws a line or candles.
+        const incomeBars = viewMode === 'pnl' && pnlSubmode === 'income';
+
+        const formatTick =
             viewMode === 'pct'
                 ? (v: number) => `${v.toFixed(1)}%`
                 : (v: number) => {
@@ -2016,8 +2055,12 @@
                       const scaled = v === 0 ? 0 : v / scale;
                       return maskFormattedNumber(`${scaled.toLocaleString(undefined, {maximumSignificantDigits: 15})}${suffix}`);
                   };
-        // Income draws bars, which stand on zero; every other view draws a line or candles.
-        const incomeBars = viewMode === 'pnl' && pnlSubmode === 'income';
+        // Tick 0 is the computed lower edge, which D25 hides with `showMinLabel: false`. But
+        // `containLabel` still measures the hidden label, and D18 prints that raw edge in full
+        // (`55,588k`), so the plot moved right by the width of a label nobody sees (developer
+        // review, 05/10/2026: a left gap in Abs and P&L). Blank text measures nothing. Income
+        // keeps its zero label: its axis starts at 0, which bars need to stand on.
+        const yAxisFormatter = (v: number, index?: number) => (!incomeBars && index === 0 ? '' : formatTick(v));
 
         /**
          * Colour for a signed amount: green up, red down, **neutral at zero**.

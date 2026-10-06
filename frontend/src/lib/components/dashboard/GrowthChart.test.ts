@@ -46,8 +46,9 @@
  * of the axis and tooltip formatters (S2a), the one form of every signed tooltip amount in
  * the locale's glyphs (D23, D23b), persistence of the mode and the P&L submode (S5), the
  * synthetic-candle caption (S9), the grid's left inset (developer review, 2026-09-29), the
- * ladder x axis of the Candles and Income submodes (S7), the money axis ticks: distinct,
- * in the locale's glyphs, with the edge the chart fixes left unlabelled (S7b: D18, D23, D25),
+ * ladder x axis of the Candles and Income submodes (S7) with the rung the ladder opens on (B12:
+ * k4 G2, Income on 1M), the money axis ticks: distinct, in the locale's glyphs, with the edge the
+ * chart fixes left unlabelled and blank, so the grid does not measure it (S7b: D18, D23, D25, k4 G1),
  * and the purchase value of the Income submode: one name for its two halves, their total in
  * the tooltip, each half in its Abs colour (S8: R11, D26).
  * Each describe states its own reasons.
@@ -229,19 +230,33 @@ const SUBMODE_KEY = 'lf_anon_dashboard-growth-pnl-submode';
 
 const DAY_COUNT = 40;
 /**
- * Days that one Income bar covers, and how many bars that leaves.
+ * Days per rung of the candle-width ladder, by the suffix of the rung's test id
+ * (`growth-candle-width-1w` → `1w`): plain day counts, as the component defines them.
  *
- * The Income submode is driven by the candle-width ladder: a bar is a SUM over its
- * bucket, not one day. `1W` is the ladder's floor for Income — a single day of personal
- * cash flow is almost always empty — and it is what the component opens on here, because
- * jsdom reports no plot width so every rung stays offered and the lowest is taken.
+ * The Income submode is driven by the ladder: a bar is a SUM over its bucket, not one day, so
+ * how many bars the 40 days make depends on the rung Income opens on. k4 G2 decides that rung:
+ * 1M, where it used to be 1W, the lowest rung offered (every entry into Income opens on 1M,
+ * clamped into the offered rungs — and jsdom reports no plot width, so every rung stays
+ * offered). The memo cases are not about that rule, so they count the bars of the rung ON
+ * SCREEN: they hold whichever rung Income opens on, and B12 (S7) pins the opening itself.
  *
- * Derived rather than written down: hard-coding 6 would pin today's arithmetic and say
- * nothing about where it came from, so a change of floor would leave a number that is
+ * Derived rather than written down: hard-coding 6 (or 2) would pin one opening rule and say
+ * nothing about where the number came from, so a change of rule would leave a number that is
  * wrong without being obviously wrong.
  */
-const INCOME_BUCKET_DAYS = 7;
-const INCOME_BUCKET_COUNT = Math.ceil(DAY_COUNT / INCOME_BUCKET_DAYS);
+const RUNG_DAYS: Readonly<Record<string, number>> = {'1d': 1, '3d': 3, '1w': 7, '2w': 14, '1m': 30, '3m': 90, '6m': 180, '1y': 365};
+
+/** How many buckets the 40 days make at the rung pressed on screen. Fails unless exactly one rung of the ladder is pressed. */
+function bucketsAtPressedRung(): number {
+    const pressed = screen
+        .queryAllByTestId(/^growth-candle-width-/)
+        .filter((button) => button.getAttribute('aria-pressed') === 'true')
+        .map((button) => (button.getAttribute('data-testid') ?? '').replace('growth-candle-width-', ''));
+    expect(pressed, 'exactly one rung of the ladder is pressed').toHaveLength(1);
+    const days = RUNG_DAYS[pressed[0]];
+    expect(days, `the pressed rung ${pressed[0]} is a rung of the ladder`).toBeDefined();
+    return Math.ceil(DAY_COUNT / days);
+}
 
 const DATES: string[] = Array.from({length: DAY_COUNT}, (_, index) => new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10));
 
@@ -526,7 +541,8 @@ function brokerSeries(series: SeriesUpdate[]): SeriesUpdate[] {
 // Reading the full option: the formatters, and what they print
 // =============================================================================
 
-type AxisFormatter = (value: number) => string;
+/** ECharts calls an axis label formatter as `formatter(value, index)`, index 0 the lowest tick (k4 G1); most cases pass the value alone, as before. */
+type AxisFormatter = (value: number, index?: number) => string;
 type TooltipFormatter = (params: Array<{dataIndex: number}>) => string;
 
 /**
@@ -763,8 +779,8 @@ interface LazyInputCase {
     seriesWhileAbsent: number;
     /** The props update that delivers the input. */
     arrival: Record<string, unknown>;
-    /** How many real (non-sentinel) values the input should put on the chart. */
-    expectedRealValues: number;
+    /** How many real (non-sentinel) values the input should put on the chart, given the Income buckets on screen (the other submodes ignore them). */
+    expectedRealValues: (incomeBuckets: number) => number;
     /** Reads that count out of the rendered series. */
     countRealValues: (series: SeriesUpdate[]) => number;
 }
@@ -776,7 +792,8 @@ const LAZY_INPUTS: LazyInputCase[] = [
         // Candlestick only: the broker overlay needs >= 2 brokers, and this case has none.
         seriesWhileAbsent: 1,
         arrival: {pnlCandles: PNL_CANDLES},
-        expectedRealValues: DAY_COUNT,
+        // One candle per day: Candles open on their lowest rung, 1D (B12).
+        expectedRealValues: () => DAY_COUNT,
         countRealValues: (series) => realCandleQuads(series[0]),
     },
     {
@@ -786,7 +803,7 @@ const LAZY_INPUTS: LazyInputCase[] = [
         // appended after them, so while the prop is absent there are exactly three.
         seriesWhileAbsent: 3,
         arrival: {brokerPnlHistory: BROKER_PNL_HISTORY},
-        expectedRealValues: 2 * DAY_COUNT,
+        expectedRealValues: () => 2 * DAY_COUNT,
         countRealValues: (series) => brokerSeries(series).reduce((total, entry) => total + nonNullPoints(entry), 0),
     },
     {
@@ -795,7 +812,7 @@ const LAZY_INPUTS: LazyInputCase[] = [
         seriesWhileAbsent: 6,
         arrival: {incomeHistory: INCOME_HISTORY},
         // Two series (dividend, interest), each one bar per bucket.
-        expectedRealValues: 2 * INCOME_BUCKET_COUNT,
+        expectedRealValues: (buckets) => 2 * buckets,
         // Slots 0 and 1 of the income submode's fixed 6-slot order: dividend, interest.
         countRealValues: (series) => nonZeroPoints(series[0]) + nonZeroPoints(series[1]),
     },
@@ -804,7 +821,7 @@ const LAZY_INPUTS: LazyInputCase[] = [
         submode: 'income',
         seriesWhileAbsent: 6,
         arrival: {costHistory: COST_HISTORY},
-        expectedRealValues: INCOME_BUCKET_COUNT,
+        expectedRealValues: (buckets) => buckets,
         // Slot 2: costs (FEE+TAX, signed negative).
         countRealValues: (series) => nonZeroPoints(series[2]),
     },
@@ -813,7 +830,7 @@ const LAZY_INPUTS: LazyInputCase[] = [
         submode: 'income',
         seriesWhileAbsent: 6,
         arrival: {depositHistory: DEPOSIT_HISTORY},
-        expectedRealValues: INCOME_BUCKET_COUNT,
+        expectedRealValues: (buckets) => buckets,
         // Slot 3: deposit size.
         countRealValues: (series) => nonZeroPoints(series[3]),
     },
@@ -823,7 +840,7 @@ const LAZY_INPUTS: LazyInputCase[] = [
         seriesWhileAbsent: 6,
         arrival: {acquisitionFunding: ACQUISITION_FUNDING},
         // Two series (new capital, reinvested), each one bar per bucket.
-        expectedRealValues: 2 * INCOME_BUCKET_COUNT,
+        expectedRealValues: (buckets) => 2 * buckets,
         // Slots 4 and 5: the new-capital / reinvested funding split.
         countRealValues: (series) => nonZeroPoints(series[4]) + nonZeroPoints(series[5]),
     },
@@ -879,8 +896,11 @@ describe('GrowthChart aggregation memo', () => {
         await waitFor(() => expect(setOptionCount()).toBeGreaterThan(rendersBeforeArrival), {timeout: 5_000});
 
         // 4. The aggregation must now carry the data that arrived — not the entry cached
-        //    while it did not exist.
-        expect(countRealValues(renderedSeries())).toBe(expectedRealValues);
+        //    while it did not exist. In Income, one value per bar of the rung on screen, and
+        //    every series draws exactly those bars.
+        const incomeBuckets = submode === 'income' ? bucketsAtPressedRung() : 0;
+        if (submode === 'income') expect(renderedSeries().map((entry) => entry.data.length)).toEqual(renderedSeries().map(() => incomeBuckets));
+        expect(countRealValues(renderedSeries())).toBe(expectedRealValues(incomeBuckets));
 
         // The lazy-fetch callback is part of the candles contract: activating the submode
         // with no data must ask for it exactly once, which is also what makes step 2 above
@@ -1584,9 +1604,12 @@ describe('GrowthChart grid left inset (developer review, 2026-09-29)', () => {
  * contract in the file's locale (en) on this machine's ICU, which `growthLadderAxis.test.ts`
  * checks first (A0): they are dates this file chose, not UI translations.
  *
- * Opening pick: without the measured grid every rung is offered, so Candles open on 1D and Income
- * on 1W, its floor. Every case that names a rung presses it and waits for it to read as pressed,
- * so no case depends on the opening pick.
+ * Opening pick (k4 G2): Candles open on the lowest rung the geometry can draw. Every entry into
+ * Income — mounted on it, switched to it from the line, from Candles or from another view — opens on
+ * 1M, clamped into the offered rungs (if 1M is not offered, the offered rung nearest it), and a rung
+ * the user picks there holds until Income is left. Without the measured grid every rung is offered,
+ * so Candles open on 1D and Income on 1M. B12 pins that rule; every other case that names a rung
+ * presses it and waits for it to read as pressed, so no case but B12 depends on the opening pick.
  */
 // WHY the 30 s budget: a case chains several 5 s waits, and a red `waitFor` must be able to exhaust
 // its own timeout and rethrow the case's assertion instead of dying on the test timeout.
@@ -1597,7 +1620,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
 
     /** The two submodes on the ladder, and the rungs the cases press (the test-id suffixes). WHY: a typo in a case is a type error, not a 5 s timeout. */
     type Submode = 'candles' | 'income';
-    type Rung = '1d' | '1w' | '2w' | '1m';
+    type Rung = '1d' | '1w' | '2w' | '1m' | '3m';
 
     /** Both ladder submodes. WHY: every defect shows on both, and a fix on one alone must stay red. */
     const SUBMODES: Array<{title: string; submode: Submode}> = [
@@ -2008,10 +2031,11 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
     });
 
     it.each([
-        {title: 'Income', submode: 'income' as Submode, offered: ['2w', '1m', '3m', '6m'], pressed: '2w'},
-        {title: 'Candles', submode: 'candles' as Submode, offered: ['1w', '2w', '1m', '3m', '6m'], pressed: '1w'},
-    ])('B8 $title, 730 days, measured 527 px plot: offers only the rungs it can draw, and presses one of them', async ({submode, offered, pressed}) => {
+        {title: 'Income', submode: 'income' as Submode, offered: ['2w', '1m', '3m', '6m']},
+        {title: 'Candles', submode: 'candles' as Submode, offered: ['1w', '2w', '1m', '3m', '6m']},
+    ])('B8 $title, 730 days, measured 527 px plot: offers only the rungs it can draw, and presses one of them', async ({submode, offered}) => {
         // WHY: defects 5 and 8, Income bars need slot × 0.9 / 3.2 ≥ 2 px (1W gives 1.41), candle bodies 2.5 px (3D gives 2.16), both 3 bodies (1Y has 2), and the drawn rung must be offered and pressed.
+        // WHICH offered rung opens is B12's subject (k4 G2 moved Income's from 2W, its lowest, to 1M), so here exactly one of them is pressed.
         fakeGeometry.measured = true;
         await enterLadderView(FIXTURE_730, submode);
         const ids = (rungs: string[]) => rungs.map((rung) => `growth-candle-width-${rung}`).sort();
@@ -2021,7 +2045,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
                     .queryAllByTestId(/^growth-candle-width-/)
                     .map((button) => button.getAttribute('data-testid') ?? '')
                     .sort();
-                expect({offered: shown, pressed: pressedAmong(shown)}).toEqual({offered: ids(offered), pressed: ids([pressed])});
+                expect({offered: shown, pressed: pressedAmong(shown).length}).toEqual({offered: ids(offered), pressed: 1});
             },
             {timeout: 5_000},
         );
@@ -2110,6 +2134,139 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         const zoom = await firstZoomAfter(since);
         expect({start: zoom?.start, end: zoom?.end}).toEqual({start: 0, end: 100});
     });
+
+    // --- B12: the rung the ladder opens on (k4 G2) ----------------------------------------------
+
+    /** The rungs the ladder offers, by test id. WHY: an offered rung is a button; a rung the geometry cannot draw is removed, not disabled. */
+    function rungsOffered(): string[] {
+        return screen.queryAllByTestId(/^growth-candle-width-/).map((button) => button.getAttribute('data-testid') ?? '');
+    }
+
+    /** Waits until `rung` is the one rung pressed and every series draws `buckets` buckets. WHY both: the pressed button is what the user reads, the buckets what the chart draws. */
+    async function expectOnRung(rung: Rung, buckets: number) {
+        await waitFor(
+            () => {
+                const series = renderedSeries();
+                expect(series.length, 'a series array was drawn').toBeGreaterThan(0);
+                expect({pressed: pressedAmong(rungsOffered()), buckets: series.map((entry) => entry.data.length)}).toEqual({pressed: [`growth-candle-width-${rung}`], buckets: series.map(() => buckets)});
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    /** 1M on the 40 days: two buckets, end-anchored (Jan 1..10, Jan 11..Feb 9). WHY derived: the rung's day count is the rule, the 2 its consequence. */
+    const MONTH_BUCKETS_40 = Math.ceil(DAY_COUNT / 30);
+
+    it('B12 Income, 40 days, entered from the line: opens on 1M, which every rung being offered leaves unclamped', async () => {
+        // WHY: k4 G2 (developer, 05/10/2026: «facciamo che il bucket di default è 1M»). A week of personal cash
+        // flow is mostly empty bars; a month is the bucket a reader compares. Catches the ladder's own opening
+        // rule, the lowest offered rung (1W here), left on Income.
+        await enterLadderView(FIXTURE_40, 'income');
+        // Precondition: 1M is offered, so no clamp is in play.
+        expect(rungsOffered()).toContain('growth-candle-width-1m');
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+    });
+
+    it('B12 Income, 40 days, entered from Candles: opens on 1M on every entry, whichever rung the candles were on', async () => {
+        // WHY: k4 G2, "every entry into Income". Switching Candles ↔ Income keeps the width today, so Income
+        // inherits the candles' rung: climbed from their 1D to its 1W floor, or kept as it was from 3M. Catches
+        // the width carried over, and a floor raised to 1M instead of an opening (3M sits above it and would
+        // be kept).
+        const view = await enterLadderView(FIXTURE_40, 'candles');
+        await fireEvent.click(view.getByTestId('growth-pnl-submode-income'));
+        await waitForFrame(FRAME.income);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+
+        await fireEvent.click(view.getByTestId('growth-pnl-submode-candles'));
+        await waitForFrame(FRAME.candles);
+        await pressRung('3m');
+        await waitForBuckets(1);
+        await fireEvent.click(view.getByTestId('growth-pnl-submode-income'));
+        await waitForFrame(FRAME.income);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+    });
+
+    it('B12 Income, 40 days, restored from the persisted submode: opens on 1M from its first frame', async () => {
+        // WHY: k4 G2, "mounting on Income". The persisted submode (S5) brings a user straight into Income,
+        // and the first frame must already be the month: weeks first would flash, then jump. Catches the
+        // opening applied on a click only, or only after a first draw.
+        storage.set(MODE_KEY, 'pnl');
+        storage.set(SUBMODE_KEY, 'income');
+        render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+        const [first] = fullOptionsSince(0) as unknown as Array<{series: SeriesUpdate[]}>;
+        expect(
+            first.series.map((entry) => entry.data.length),
+            'the first frame draws the 1M buckets',
+        ).toEqual(first.series.map(() => MONTH_BUCKETS_40));
+    });
+
+    it('B12 Income, 40 days, re-entered from another view: opens on 1M again, not on the rung it was left on', async () => {
+        // WHY: k4 G2, "or from another mode". Leaving P&L for Abs leaves Income, so coming back is a new entry.
+        // Catches the rung kept across the round trip, which the ladder does today because it reconciles only
+        // while it is on screen.
+        const view = await enterLadderView(FIXTURE_40, 'income');
+        await pressRung('3m');
+        await waitForBuckets(1);
+        await fireEvent.click(view.getByTestId('growth-toggle-eur'));
+        await waitForFrame(FRAME.abs);
+        await fireEvent.click(view.getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.income);
+        // Precondition: P&L comes back on Income, the submode the user left it on.
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        await expectOnRung('1m', MONTH_BUCKETS_40);
+    });
+
+    it('B12 Income, 40 days, measured 527 px plot: 1M makes two bars, under three, so it is not offered, and Income opens on 2W, the offered rung nearest it', async () => {
+        // WHY: k4 G2's clamp. A short history cannot draw three monthly bars and the ladder never offers what it
+        // cannot draw (B8), so the opening takes the offered rung nearest 1M: the offered rungs are contiguous,
+        // so here the highest below it. Catches the ladder's own opening (1W, the lowest offered), and a 1M
+        // drawn although it is not offered.
+        fakeGeometry.measured = true;
+        await enterLadderView(FIXTURE_40, 'income');
+        // Precondition: the measured plot offers 1W and 2W only (1M: 2 bars; 3M and up: 1).
+        await waitFor(() => expect([...rungsOffered()].sort()).toEqual(['growth-candle-width-1w', 'growth-candle-width-2w']), {timeout: 5_000});
+        await expectOnRung('2w', Math.ceil(DAY_COUNT / 14));
+    });
+
+    it.each([
+        {title: 'Candles open on their lowest drawable rung, 1W (green today and after the fix)', submode: 'candles' as Submode, rung: '1w' as Rung, buckets: Math.ceil(730 / 7)},
+        {title: 'Income opens on 1M, which the plot can draw', submode: 'income' as Submode, rung: '1m' as Rung, buckets: Math.ceil(730 / 30)},
+    ])('B12 730 days, measured 527 px plot: $title', async ({submode, rung, buckets}) => {
+        // WHY: both opening rules on the measured offer of B8 — Candles from 1W, Income from 2W, 1M drawable in
+        // both. Catches Income opening on its lowest drawable rung (2W), and Candles moved off theirs.
+        fakeGeometry.measured = true;
+        await enterLadderView(FIXTURE_730, submode);
+        await expectOnRung(rung, buckets);
+    });
+
+    it('B12 Candles, 40 days: open on their lowest offered rung, 1D without the measured grid (green today and after the fix)', async () => {
+        // WHY: k4 G2 moves Income's opening only; Candles keep theirs, the finest detail the geometry can
+        // honour. Catches the 1M opening applied to every entry into the ladder.
+        await enterLadderView(FIXTURE_40, 'candles');
+        await expectOnRung('1d', DAY_COUNT);
+    });
+
+    it('B12 Income, 40 days: a rung the user picks holds across redraws — the privacy toggle, a re-fetch of the same period — while Income stays on screen (green today and after the fix)', async () => {
+        // WHY: k4 G2 opens Income on 1M and stops there: inside Income the user's pick holds until they leave
+        // it. Catches an opening that fires on every draw rather than on an entry: the full rebuild of the
+        // privacy toggle, or a re-fetch (a new history array of the same period), would throw the pick away.
+        const view = await enterLadderView(FIXTURE_40, 'income');
+        await pressRung('2w');
+        await expectOnRung('2w', Math.ceil(DAY_COUNT / 14));
+
+        const beforePrivacy = setOptionCount();
+        setPrivacyEnabled(true);
+        await fullOptionAfter(beforePrivacy);
+        await expectOnRung('2w', Math.ceil(DAY_COUNT / 14));
+
+        const beforeRefetch = setOptionCount();
+        await view.rerender({history: FIXTURE_40.history.map((point) => ({...point}))});
+        await waitFor(() => expect(chartInstances[0].setOptionCalls.slice(beforeRefetch).some((call) => Array.isArray(call.option.series))).toBe(true), {timeout: 5_000});
+        await expectOnRung('2w', Math.ceil(DAY_COUNT / 14));
+    });
 });
 
 // =============================================================================
@@ -2138,6 +2295,14 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
  * hidden label. Its two keys are present and `undefined`, never omitted. The full rebuild
  * replaces `series` and `xAxis` but MERGES `yAxis` into the previous one, so an omitted key would
  * keep the line's callback and hidden label after a switch to Income.
+ *
+ * k4 G1 (developer review, 05/10/2026), the edge measured anyway. Hidden is not enough:
+ * `grid.containLabel` still measures the hidden edge label, and D18 prints the raw edge in full
+ * (`55,588k` where a tick reads `55k`), so the Abs and P&L plots started further right than their
+ * labels needed — 82 px instead of 55 on real ECharts 6 at 800×300. ECharts calls the formatter as
+ * `formatter(value, index)`, the lowest tick at index 0, so in every view with the computed edge
+ * that label is blank, masked or not, while every other tick, and a call with the value alone (as
+ * the S2a cases make), print as before. Income keeps its index-0 label: there it is a real tick.
  */
 // WHY the 30 s budget: a case walks several views, each behind a 5 s wait, and a red `waitFor`
 // must be able to exhaust its own timeout and rethrow the case's assertion instead of dying on
@@ -2319,6 +2484,98 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         const back = await waitForFrame(FRAME.pnlLine);
         expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
         expect(lowerEdgeOf(back)).toEqual(FIXED_EDGE);
+    });
+
+    // --- k4 G1: the edge label is blank, so containLabel measures nothing there -----------------
+
+    /** Privacy off, then on. WHY: the blank must hold over the mask too, and the mask must not leak past it. */
+    const PRIVACY = [
+        {title: 'in the clear', masked: false},
+        {title: 'masked', masked: true},
+    ];
+
+    /** Edges a computed `min` can hand the label: below zero, a large raw value D18 prints in full (`55.588M`), zero, and a return. */
+    const EDGES = [-4_152, 55_588_000, 0, 12.3];
+
+    /** What a masked money label prints in en-US: the minus outside the mask (D8), nothing else. */
+    const maskedMoney = (value: number) => (value < 0 ? `-${PRIVACY_PLACEHOLDER}` : PRIVACY_PLACEHOLDER);
+
+    /**
+     * The y-axis formatter of each view whose axis has the computed edge — Abs, P&L line, Candles, % —
+     * walked as the D25 case walks them, with the edge proven a callback in each. WHY: one walk per mount,
+     * so the privacy flag set before the mount is the one every formatter is built under.
+     */
+    async function edgeFormatters(): Promise<Array<{view: string; format: AxisFormatter}>> {
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        const views: Array<{view: string; format: AxisFormatter}> = [];
+        const take = (view: string, option: FullOption) => {
+            // Barrier: this view's axis has the computed edge, the one whose label is the subject.
+            expect(typeof option.yAxis.min, `${view}: the lower edge is a callback`).toBe('function');
+            views.push({view, format: option.yAxis.axisLabel.formatter});
+        };
+        take('Abs', await waitForFrame(FRAME.abs));
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        take('P&L line', await waitForFrame(FRAME.pnlLine));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        take('Candles', await waitForFrame(FRAME.candles));
+        // % last, as in D25: its frame is the P&L line's, so its own formatter is its barrier.
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        await waitFor(() => expect(latestFullOption().yAxis.axisLabel.formatter(12.3)).toBe('12.3%'), {timeout: 5_000});
+        take('%', latestFullOption());
+        return views;
+    }
+
+    it.each(PRIVACY)('k4 G1: prints nothing at tick index 0, the edge, in Abs, P&L line, Candles and % — $title', async ({masked}) => {
+        // WHY: developer review, 05/10/2026: an empty band left of the Abs and P&L plots. D25 hides the edge
+        // label, but containLabel still measures it, at its full D18 width; a label blank at index 0 measures
+        // nothing, whatever the edge. Catches the edge still formatted at index 0, in any of the four views,
+        // in the clear or masked — the mask (`-•••`) is as wide as a label that is not empty.
+        setPrivacyEnabled(masked);
+        const views = await edgeFormatters();
+        const read = Object.fromEntries(views.map(({view, format}) => [view, inLocale('en-US', () => EDGES.map((edge) => format(edge, 0)))]));
+        expect(read).toEqual(Object.fromEntries(views.map(({view}) => [view, EDGES.map(() => '')])));
+    });
+
+    it.each(PRIVACY)('k4 G1: prints every tick from index 1 on exactly as before — $title (green today and after the fix)', async ({masked}) => {
+        // WHY: the blank is the edge's alone; every other tick keeps D18's exact label, D23's glyphs and D8's
+        // mask. Catches a rule that blanks more than index 0 (`index <= 1`, an inverted test), or that formats
+        // the other ticks another way.
+        setPrivacyEnabled(masked);
+        const views = await edgeFormatters();
+        const PCT_TICKS = [-0.6, 0, 1.2, 12.3];
+        const sequencesOf = (view: string) => (view === '%' ? [PCT_TICKS] : TICKS_EN.map(({values}) => values));
+        const read = Object.fromEntries(views.map(({view, format}) => [view, inLocale('en-US', () => sequencesOf(view).map((values) => values.map((value, offset) => format(value, offset + 1))))]));
+        const money = masked ? TICKS_EN.map(({values}) => values.map(maskedMoney)) : TICKS_EN.map(({labels}) => labels);
+        expect(read).toEqual({Abs: money, 'P&L line': money, Candles: money, '%': [['-0.6%', '0.0%', '1.2%', '12.3%']]});
+    });
+
+    it.each(PRIVACY)('k4 G1: a call with the value alone prints the edge as before — $title (green today and after the fix)', async ({masked}) => {
+        // WHY: the index is ECharts' second argument, and the older callers — the S2a and S7b cases among them
+        // — pass the value alone. Catches an index that defaults to 0 and blanks every such call.
+        setPrivacyEnabled(masked);
+        const views = await edgeFormatters();
+        const VALUES = [-4_152, 55_588_000, 0];
+        const read = Object.fromEntries(views.map(({view, format}) => [view, inLocale('en-US', () => VALUES.map((value) => format(value)))]));
+        const money = masked ? VALUES.map(maskedMoney) : ['-4.152k', '55.588M', '0'];
+        expect(read).toEqual({Abs: money, 'P&L line': money, Candles: money, '%': ['-4152.0%', '55588000.0%', '0.0%']});
+    });
+
+    it.each(PRIVACY)('k4 G1: Income keeps the label of its tick index 0, a real tick on an axis that stands on zero — $title (green today and after the fix)', async ({masked}) => {
+        // WHY: Income has no computed edge (D25): its lowest tick is a round value — zero, or the deepest cost
+        // bar — and a reader needs it. Catches the blank applied to every view.
+        setPrivacyEnabled(masked);
+        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        await waitForFrame(FRAME.abs);
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForFrame(FRAME.pnlLine);
+        await fireEvent.click(getByTestId('growth-pnl-submode-income'));
+        const income = await waitForFrame(FRAME.income);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
+        // Barrier: Income's axis has no computed edge, so its index 0 is not the edge G1 blanks.
+        expect(income.yAxis).toHaveProperty('min', undefined);
+        const VALUES = [0, -30, -5_000, 1_500];
+        const labels = inLocale('en-US', () => VALUES.map((value) => income.yAxis.axisLabel.formatter(value, 0)));
+        expect(labels).toEqual(masked ? VALUES.map(maskedMoney) : ['0', '-30', '-5k', '1.5k']);
     });
 });
 
