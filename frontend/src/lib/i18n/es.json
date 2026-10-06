@@ -1238,7 +1238,8 @@
       "monthLabel": "{month}",
       "valueAt": "Valor al {date}",
       "eventsInPeriod": "Eventos en el período:",
-      "partialBucket": "Parcial: {days} de {total} días"
+      "partialBucket": "Parcial: {days} de {total} días",
+      "currentBucket": "En curso: {days} de {total} días"
     },
     "resolution": {
       "weekly": "Semanal",

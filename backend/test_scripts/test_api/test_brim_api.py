@@ -10,6 +10,12 @@ Tests for Broker Report Import Manager API endpoints:
 - GET /brokers/import/plugins: List available plugins
 - POST /brokers/import/sets/preview and /sets/combine: report sets (phase A2)
 - POST /brokers/import/gap-fix: the corrections that align LibreFolio with the bank (phase A3)
+- GET /brokers/import/files and /files/{id} detect again the plugins of a file detected
+  before item 8, whose sidecar has no detection signature (step 5, item 8: Category 13)
+- DELETE /brokers/import/files/{id} waiting for the broker's metadata lock leaves its backend
+  process responsive (step 5, item 8 + F1: Category 14)
+- GET /brokers/import/files/{id}/preview of a damaged Excel workbook answers 400, not 500
+  (step 6, F2: Category 15)
 
 See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
@@ -20,16 +26,27 @@ Reference: backend/app/api/v1/brokers.py
 
 import io
 import json
+import os
+import threading
 import time
 import uuid
+import zipfile
 from decimal import Decimal
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Set, TextIO, Tuple
 
 import httpx
+import psutil
 import pytest
 
-from backend.app.config import PROJECT_ROOT, get_settings
-from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.app.config import PROJECT_ROOT, get_settings, get_test_data_dir
+from backend.test_scripts.test_server_helper import _TestingServerManager, port_holder_pids
 from backend.test_scripts.test_utils import print_section, print_success
+
+try:
+    import fcntl
+except ImportError:  # not POSIX: the backend's broker lock is in-process only (Category 14 is skipped)
+    fcntl = None
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -2053,6 +2070,378 @@ class TestParseRefusalReason:
                 assert (info.json()["status"], info.json()["error_message"]) == ("failed", detail), "the refused file goes to failed, with the message the user reads"
                 assert detail.endswith("': required column 'date' not found in the CSV header"), f"the refusal does not say which column is missing: {detail!r}"
                 print_success("✓ the forced generic CSV names the missing column, and the file is failed")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
+# CATEGORY 13: A FILE DETECTED BEFORE ITEM 8 IS DETECTED AGAIN (step 5, item 8)
+# ============================================================================
+#
+# ``compatible_plugins`` is computed at upload and kept in the file's sidecar. Since item 8 the sidecar also keeps
+# ``plugins_signature``, the signature of the plugin catalogue that computed it (the app version), and a read of an
+# original whose signature is absent or old detects its plugins again and saves them. The test leaves on disk the
+# sidecar of a Danske export detected before item 8 by a catalogue that did not read it: no ``plugins_signature``, no
+# plugin, every other key as today's upload wrote it. That is not 1.1.0's sidecar: 1.1.0 recorded no ``batch_id``
+# either, so its uploads are detected again but form no set (guarded at service level, in
+# test_services/test_brim_report_sets.py). The sidecar is rewritten in this lane's test data directory
+# (``get_test_data_dir``: the runner exports ``--data-dir`` to the backend under test and to pytest alike), then the
+# test reads the file through the list and through the file endpoint. The rules of the detection are tested at service
+# level, in test_services/test_brim_parse_race.py. The test deletes the file and the broker it created.
+
+DANSKE_CASH_NAME = "danske_bank-cash.csv"
+
+
+def _lane_sidecar(broker_id: int, file_id: str) -> Path:
+    """Where the backend of this test lane keeps the sidecar of an uploaded file."""
+    return get_test_data_dir() / "broker_reports" / "uploaded" / f"broker_{broker_id}" / f"{file_id}.json"
+
+
+def _as_detected_before_item_8(sidecar: Path) -> None:
+    """Leave a sidecar as a build before item 8 left it, its catalogue not reading the export: no ``plugins_signature``, and no plugin.
+
+    Written atomically, as the backend writes it: a neighbour's file list reads every sidecar on disk.
+    """
+    metadata = json.loads(sidecar.read_text())
+    metadata.pop("plugins_signature", None)
+    metadata["compatible_plugins"] = []
+    staged = sidecar.with_name(f"{sidecar.name}.tmp.{uuid.uuid4().hex}")
+    staged.write_text(json.dumps(metadata, indent=2))
+    staged.replace(sidecar)
+
+
+class TestPluginRedetection:
+    """Item 8 — the file list and the file endpoint give today's plugins for a file detected before item 8, and save them."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ["list", "file"])
+    async def test_a_danske_export_detected_before_item_8_is_detected_again(self, test_server, endpoint):
+        """RS-I801: the Danske cash statement, its sidecar left without the detection signature, read through ``GET /files`` or ``GET /files/{id}``: Danske."""
+        print_section(f"RS-I801: a Danske export detected before item 8, read through the {endpoint} endpoint")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                await _require_plugin(client, DANSKE_CODE)
+                upload = await _upload_csv(client, broker_id, (DANSKE_SAMPLE_DIR / DANSKE_CASH_NAME).read_bytes(), DANSKE_CASH_NAME)
+                assert upload.status_code == 200, upload.text
+                file_id = upload.json()["file_id"]
+                file_ids.append(file_id)
+                assert upload.json()["compatible_plugins"] == [DANSKE_CODE], f"premise: today's catalogue reads the sample as Danske only: {upload.json()}"
+                sidecar = _lane_sidecar(broker_id, file_id)
+                assert sidecar.is_file(), f"premise: the test reaches the data directory of the backend under test: no sidecar at {sidecar}"
+                _as_detected_before_item_8(sidecar)
+
+                if endpoint == "list":
+                    listed = [info for info in await _files_on(client, broker_id) if info["file_id"] == file_id]
+                    assert len(listed) == 1, f"{file_id} listed {len(listed)} times"
+                    read = listed[0]
+                else:
+                    response = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+                    assert response.status_code == 200, response.text
+                    read = response.json()
+
+                assert read["compatible_plugins"] == [DANSKE_CODE], f"the {endpoint} endpoint still gives the plugins stored before item 8: {read['compatible_plugins']}"
+                stored = json.loads(sidecar.read_text())
+                assert stored["compatible_plugins"] == [DANSKE_CODE], f"the detection is not saved: {stored['compatible_plugins']}"
+                assert isinstance(stored.get("plugins_signature"), str) and stored["plugins_signature"], f"the detection is saved without the catalogue's signature: {sorted(stored)}"
+                print_success(f"✓ the {endpoint} endpoint detects again the plugins of a file detected before item 8")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
+# CATEGORY 14: A DELETE WAITING FOR THE BROKER'S LOCK LEAVES ITS BACKEND PROCESS RESPONSIVE (step 5, item 8 + F1)
+# ============================================================================
+#
+# Every metadata write of a broker holds ``_broker_metadata_lock(broker_id)``: a re-entrant lock in the process, then
+# ``fcntl.flock(LOCK_EX)`` on ``<data dir>/broker_reports/.locks/broker_<id>.lock``, exclusive across processes. F1 holds it
+# for a whole combine, on a worker thread, so a write of the same broker may wait seconds for it. ``DELETE /files/{id}``
+# (``delete_file``) and the parse endpoint's ``save_parse_result`` called such a write on the event loop itself, where the
+# wait stalls every request of the backend process; both now run in ``asyncio.to_thread``. The test takes the broker's
+# lock from its own process as the backend takes it, sends the DELETE from a thread, waits until the backend process has
+# the lock file open (``_acquire_file_lock`` opens it and takes the lock with no ``await`` in between, so from then on the
+# delete is inside ``flock``), then asks THAT process for ``GET /plugins``: it must answer while the lock is held, and the
+# delete must still be pending. Released, the delete answers 200 and the file is gone from the list.
+#
+# The same process is the point. Under ``--workers N`` the runner's shared backend runs ceil(N / 2) uvicorn workers (one
+# with the default ``--workers 1``, two with ``--workers 4``), and a worker whose event loop is stuck accepts no connection:
+# a request on a fresh connection is served by another worker, however many times it is sent, and proves nothing. So,
+# before the lock is taken, the test opens keep-alive connections and asks the OS which backend process serves each
+# (``psutil``, among the listeners of the test port, found with ``lsof`` as ``test_server_helper`` finds them) until two
+# share one — N listeners, at most N + 1 connections (pigeonhole) — and sends the DELETE on one, the GET on the other.
+# ``save_parse_result`` is not covered here: it takes the lock right after ``move_to_parsed`` released it, a window no
+# client can take the lock in. Every wait is bounded, the lock is released in ``finally``, and the test deletes the file
+# and the broker it created.
+
+PLUGINS_URL = f"{API_BASE}/brokers/import/plugins"
+# Every wait for something that must happen is bounded by this.
+_WAIT_SECONDS = 30.0
+# How long the backend process is given to answer the light request while the lock is held. A free event loop answers in
+# milliseconds, a stuck one not before the release: the bound only decides how soon the defect shows, is paid on the red
+# path only, and stays far above what a loaded parallel run (two workers serving four clients) costs a free loop.
+_PROBE_SECONDS = 10.0
+# The pause between two looks at the backend's open files, while its delete makes its way to the lock.
+_POLL_SECONDS = 0.05
+# The DELETE outlives every wait the test makes before it releases the lock (the barrier and the probe).
+_DELETE_SECONDS = 3 * _WAIT_SECONDS
+
+
+class _InFlight:
+    """One request on its own daemon thread, through a client of its own: what it answered or raised, and an Event set when it is done."""
+
+    def __init__(self, name: str, send: Callable[[], httpx.Response]) -> None:
+        self.name = name
+        self.response: Optional[httpx.Response] = None
+        self.error: Optional[Exception] = None
+        self.done = threading.Event()
+        self._send = send
+        threading.Thread(target=self._run, name=name, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            self.response = self._send()
+        except Exception as exc:  # reported by outcome(), never swallowed
+            self.error = exc
+        finally:
+            self.done.set()
+
+    def outcome(self) -> str:
+        if self.error is not None:
+            return f"raised {type(self.error).__name__}: {self.error}"
+        if self.response is None:
+            return "no answer yet"
+        return f"{self.response.status_code} {self.response.text}"
+
+    def finish(self) -> httpx.Response:
+        """The answer, waited for with a bound: a request that never ends fails the test instead of hanging the suite."""
+        assert self.done.wait(_WAIT_SECONDS), f"{self.name}: no answer {_WAIT_SECONDS}s after the broker's lock was released"
+        assert self.response is not None, f"{self.name} {self.outcome()}"
+        return self.response
+
+
+def _lane_broker_lock_file(broker_id: int) -> Path:
+    """The lock file the backend of this test lane takes for every metadata write of the broker (``brim_provider._acquire_file_lock``)."""
+    return get_test_data_dir() / "broker_reports" / ".locks" / f"broker_{broker_id}.lock"
+
+
+def _hold_broker_lock(lock_file: Path) -> TextIO:
+    """Take the broker's lock as the backend does, ``open(..., "a+")`` then ``flock(LOCK_EX)``, but without waiting: nobody may hold the lock of a broker this test just created."""
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_file, "a+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        pytest.fail(f"premise: the lock of the broker this test created is free once its upload answered, yet {lock_file} is held", pytrace=False)
+    return handle
+
+
+def _let_go(handle: TextIO) -> None:
+    """Release the broker's lock and close its file; once closed, a second call does nothing (``finally`` calls it again)."""
+    if handle.closed:
+        return
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
+def _backend_processes() -> Set[int]:
+    """The processes listening on the test port: the backend's worker(s) and supervisor, or this very process when the server runs in it."""
+    pids = port_holder_pids(settings.TEST_PORT)
+    assert pids, f"lsof names no process listening on port {settings.TEST_PORT} ({pids!r}): the test cannot tell which process serves which connection"
+    return pids
+
+
+def _connection_port(response: httpx.Response) -> int:
+    """The local port of the keep-alive connection a response came over: it names the connection, hence the process that accepted it."""
+    return response.extensions["network_stream"].get_extra_info("client_addr")[1]
+
+
+def _serving_process(client_port: int, backend: Set[int]) -> Optional[int]:
+    """The backend process holding the server end of the connection whose client end is local port ``client_port``."""
+    for pid in sorted(backend):
+        if any(conn.laddr.port == settings.TEST_PORT and conn.raddr and conn.raddr.port == client_port for conn in psutil.Process(pid).net_connections(kind="tcp")):
+            return pid
+    return None
+
+
+def _pinned_pair(cookies: httpx.Cookies, backend: Set[int], opened: List[httpx.Client]) -> Tuple[httpx.Client, httpx.Client, int]:
+    """Two clients of one keep-alive connection each, both served by one backend process, and that process.
+
+    Each client opens its connection with ``GET /plugins`` and the OS tells which process accepted it: N processes listen,
+    so N + 1 connections always put two on one. No client-side expiry: the pool must never swap the connection for a new
+    one, which another worker could accept. Every client opened goes to ``opened``, which the caller closes.
+    """
+    served_by: Dict[int, httpx.Client] = {}
+    for _ in range(len(backend) + 1):
+        client = httpx.Client(cookies=cookies, timeout=TIMEOUT, limits=httpx.Limits(max_connections=1, max_keepalive_connections=1, keepalive_expiry=None))
+        opened.append(client)
+        response = client.get(PLUGINS_URL)
+        assert response.status_code == 200, response.text
+        port = _connection_port(response)
+        pid = _serving_process(port, backend)
+        assert pid is not None, f"none of the backend's processes {sorted(backend)} serves the connection from local port {port}"
+        if pid in served_by:
+            return served_by[pid], client, pid
+        served_by[pid] = client
+    pytest.fail(f"{len(backend) + 1} connections on {len(backend)} listening processes, never two on one: the backend's processes changed meanwhile", pytrace=False)
+
+
+def _holds_open(pid: int, lock_file: Path, own_fd: int) -> bool:
+    """Whether backend process ``pid`` has ``lock_file`` open; this test's own descriptor does not count (an in-process server shares its PID)."""
+    target = os.path.realpath(lock_file)
+    return any(os.path.realpath(entry.path) == target and (pid, entry.fd) != (os.getpid(), own_fd) for entry in psutil.Process(pid).open_files())
+
+
+def _wait_until_waiting(pid: int, lock_file: Path, own_fd: int, delete: _InFlight) -> None:
+    """Return once backend process ``pid`` has the broker's lock file open: its delete is then inside ``flock``, waiting for this test."""
+    deadline = time.monotonic() + _WAIT_SECONDS
+    while not _holds_open(pid, lock_file, own_fd):
+        assert not delete.done.is_set(), f"the DELETE answered without waiting for the broker's lock this test holds: {delete.outcome()}"
+        assert time.monotonic() < deadline, f"backend process {pid} did not open {lock_file} within {_WAIT_SECONDS}s of the DELETE: the delete never reached the broker's lock"
+        delete.done.wait(_POLL_SECONDS)
+
+
+def _probe(client: httpx.Client, pid: int) -> httpx.Response:
+    """``GET /plugins`` on a pinned connection, bounded by ``_PROBE_SECONDS``: a process whose event loop waits for a lock never answers it."""
+    try:
+        return client.get(PLUGINS_URL, timeout=_PROBE_SECONDS)
+    except httpx.TimeoutException:
+        pytest.fail(f"backend process {pid} did not answer GET /plugins within {_PROBE_SECONDS}s while its DELETE waited for the broker's lock: the delete waits on the event loop, and every request of the process waits with it", pytrace=False)
+
+
+@pytest.mark.skipif(fcntl is None, reason="no flock(2) on this platform: the backend's broker lock is in-process only, and the test has no lock to hold")
+class TestBrokerLockOffTheEventLoop:
+    """Item 8 + F1 — a delete waiting for the broker's metadata lock waits on a worker thread: its backend process keeps answering."""
+
+    @pytest.mark.asyncio
+    async def test_a_delete_waiting_for_the_broker_lock_leaves_the_backend_responsive(self, test_server, sample_csv_content):
+        """RS-I802: the broker's lock held by the test process, ``DELETE /files/{id}`` waits for it while the backend process
+        holding the delete answers ``GET /plugins``; released, the delete answers 200 and the file is no longer listed."""
+        print_section("RS-I802: a delete waiting for the broker's lock leaves its backend process responsive")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            lock_file = _lane_broker_lock_file(broker_id)
+            file_ids: List[str] = []
+            opened: List[httpx.Client] = []
+            lock: Optional[TextIO] = None
+            delete: Optional[_InFlight] = None
+            try:
+                upload = await _upload_csv(client, broker_id, sample_csv_content, f"locked_{uuid.uuid4().hex[:8]}.csv")
+                assert upload.status_code == 200, upload.text
+                file_id = upload.json()["file_id"]
+                file_ids.append(file_id)
+                backend = _backend_processes()
+                delete_client, probe_client, pid = _pinned_pair(client.cookies, backend, opened)
+
+                lock = _hold_broker_lock(lock_file)
+                assert not _holds_open(pid, lock_file, lock.fileno()), f"premise: backend process {pid} has no request on this broker before the DELETE, yet it has {lock_file} open"
+                delete = _InFlight("RS-I802 DELETE", lambda: delete_client.delete(f"{API_BASE}/brokers/import/files/{file_id}", timeout=_DELETE_SECONDS))
+                _wait_until_waiting(pid, lock_file, lock.fileno(), delete)
+
+                probe = _probe(probe_client, pid)
+                assert probe.status_code == 200, probe.text
+                assert _serving_process(_connection_port(probe), backend) == pid, f"the light request was not served by backend process {pid}, which holds the delete: it proves nothing about that process's event loop"
+                assert not delete.done.is_set(), f"the DELETE answered while this test still held the broker's lock: {delete.outcome()}"
+
+                _let_go(lock)
+                deleted = delete.finish()
+                assert deleted.status_code == 200, deleted.text
+                assert deleted.json() == {"success": True, "file_id": file_id}, deleted.text
+                assert file_id not in {info["file_id"] for info in await _files_on(client, broker_id)}, f"{file_id} is still listed after its DELETE answered 200"
+                print_success(f"✓ backend process {pid} answered while its DELETE waited for the broker's lock; released, the delete completed")
+            finally:
+                if lock is not None:
+                    _let_go(lock)
+                if delete is not None:
+                    delete.done.wait(_WAIT_SECONDS)
+                for pinned in opened:
+                    pinned.close()
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
+# CATEGORY 15: THE PREVIEW OF A DAMAGED EXCEL WORKBOOK ANSWERS 400 (step 6, F2)
+# ============================================================================
+#
+# ``GET /files/{id}/preview`` reads an ``.xlsx`` with pandas and openpyxl, answers a ``ValueError`` with 400 and anything
+# else with 500 "Failed to build file preview". A damaged workbook made the reader raise ``zipfile.BadZipFile``,
+# ``KeyError``, ``xml.etree.ElementTree.ParseError`` or ``xlrd.XLRDError``, none of them a ``ValueError``: the user's
+# broken file answered as a fault of the server. The coordinator's decision, verbatim: «le 4 famiglie, prese solo attorno
+# alle due chiamate pandas, in `UnreadablePreviewError(ValueError)`. API invariate; un rosso anche via `uploads.py`.» So
+# the endpoint is unchanged and answers 400, with a ``detail``. Two synthetic files, uploaded on the test's broker: bytes
+# that are not even a zip, named ``damaged.xlsx``, and a valid workbook whose first sheet's XML is replaced by
+# ``<not-xml``. Which exception each damage raises, and the cause the new error keeps, is tested at service level, in
+# test_services/test_file_preview.py; the generic uploads' preview in test_api/test_uploads_api.py (UPLOAD-005H). The
+# test deletes the file and the broker it created.
+
+# Bytes that are no workbook and not even a zip archive.
+NOT_A_WORKBOOK = b"LibreFolio F2 synthetic bytes: not an Excel workbook and not a zip archive.\n" * 16
+# The member openpyxl writes a workbook's first sheet to.
+FIRST_SHEET_XML = "xl/worksheets/sheet1.xml"
+
+
+def _workbook_with_unparseable_sheet() -> bytes:
+    """A valid workbook, built with openpyxl, whose first sheet's XML is replaced by ``<not-xml``, every other member copied unchanged: it opens, its first sheet does not parse."""
+    openpyxl = pytest.importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Statement"
+    sheet["A1"] = "date"
+    sheet["B1"] = "amount"
+    sheet["A2"] = "2025-01-01"
+    sheet["B2"] = 1000
+    valid = io.BytesIO()
+    workbook.save(valid)
+    rebuilt = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(valid.getvalue())) as original, zipfile.ZipFile(rebuilt, "w") as damaged:
+        assert FIRST_SHEET_XML in original.namelist(), f"premise: openpyxl writes the first sheet as {FIRST_SHEET_XML}: {original.namelist()}"
+        for member in original.infolist():
+            damaged.writestr(member, b"<not-xml" if member.filename == FIRST_SHEET_XML else original.read(member))
+    return rebuilt.getvalue()
+
+
+# (name the file is uploaded under, how its bytes are built)
+DAMAGED_WORKBOOKS = (
+    pytest.param("damaged.xlsx", lambda: NOT_A_WORKBOOK, id="not-a-zip"),
+    pytest.param("broken_sheet.xlsx", _workbook_with_unparseable_sheet, id="unparseable-sheet-xml"),
+)
+
+
+class TestDamagedWorkbookPreview:
+    """F2 — ``GET /files/{id}/preview`` of a damaged Excel workbook answers 400 with a ``detail``: the file is the user's, the fault is not the server's."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("filename", "build"), DAMAGED_WORKBOOKS)
+    async def test_the_preview_of_a_damaged_workbook_answers_400(self, test_server, filename, build):
+        """RS-F201: a damaged ``.xlsx`` uploaded on the test's broker — bytes that are not even a zip, or a workbook whose
+        first sheet's XML does not parse: its preview answers 400 with a non-empty ``detail`` (500 before F2)."""
+        print_section(f"RS-F201: the preview of a damaged workbook, {filename}, answers 400")
+        content = build()
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                files = {"file": (filename, io.BytesIO(content), XLSX_MEDIA_TYPE)}
+                upload = await client.post(f"{API_BASE}/brokers/import/upload", files=files, data={"broker_id": broker_id}, timeout=TIMEOUT)
+                assert upload.status_code == 200, upload.text
+                file_id = upload.json()["file_id"]
+                file_ids.append(file_id)
+
+                response = await client.get(f"{API_BASE}/brokers/import/files/{file_id}/preview", timeout=TIMEOUT)
+
+                assert response.status_code == 400, f"the preview of the damaged {filename} answers {response.status_code} {response.text}: a damaged workbook is the user's file, not a fault of the server (F2)"
+                detail = response.json().get("detail")
+                assert isinstance(detail, str) and detail.strip(), f"the 400 says why, in a detail: {response.text}"
+                print_success(f"✓ the preview of the damaged {filename} answers 400")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
