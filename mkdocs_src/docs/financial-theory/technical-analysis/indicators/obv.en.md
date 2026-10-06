@@ -1,6 +1,6 @@
 # 📊 OBV — On-Balance Volume
 
-OBV builds a single running total that adds a day's entire volume when price closes up, and subtracts it when price closes down. It is the oldest and simplest way to fold trading activity into a directional signal.
+OBV builds a single running total that adds a session's entire volume when price closes up, and subtracts it when price closes down. It is the oldest and simplest way to fold trading activity into a directional signal.
 
 ---
 
@@ -33,7 +33,7 @@ OBV takes **no parameters**. It has no `period`, threshold, or smoothing setting
 
     OBV is mathematically a cumulative sum starting from the beginning of an
     asset's history, so its absolute level has no intrinsic meaning. LibreFolio
-    rebases the displayed OBV series to zero at the **start of the currently
+    rebases the displayed OBV series to zero at the **first session of the currently
     requested chart range**, so what you read on screen is always "net signed
     volume accumulated since the left edge of the chart" — comparable regardless
     of how far back the underlying data goes.

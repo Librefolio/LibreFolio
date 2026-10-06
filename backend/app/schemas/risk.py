@@ -141,10 +141,27 @@ class RiskStressApplicationRule(StrEnum):
 
 
 class RiskHistoricalReplayExclusionTreatment(StrEnum):
-    """Effective handling of one manually excluded replay asset."""
+    """Effective handling of one excluded replay asset."""
 
     OMITTED_FROM_REPLAY = "omitted_from_replay"
     ZERO_RETURN_RESIDUAL = "zero_return_residual"
+
+
+class RiskHistoricalReplayExclusionReason(StrEnum):
+    """Why one asset takes no part in a historical replay.
+
+    The user excludes an asset by hand; the engine excludes, on its own, every asset whose quotes do
+    not cover the replay window at both ends within the project's staleness threshold. At the start
+    a late listing and a gap in an older history are told apart, because the sentence differs; at
+    the end they are not, because the facts stop at the window end.
+    """
+
+    MANUAL_EXCLUSION = "manual_exclusion"
+    NO_PRICES_IN_WINDOW = "no_prices_in_window"
+    STARTS_AFTER_WINDOW_START = "starts_after_window_start"
+    STALE_AT_WINDOW_START = "stale_at_window_start"
+    STALE_AT_WINDOW_END = "stale_at_window_end"
+    MISSING_FX = "missing_fx"
 
 
 class RiskSimulationProcess(StrEnum):
@@ -242,10 +259,10 @@ class RiskHistoricalReplayProxyAsset(StrictModel):
 
 
 class RiskHistoricalReplayExcludedAsset(StrictModel):
-    """Auditable outcome of one explicit replay exclusion."""
+    """Auditable outcome of one replay exclusion, manual or automatic."""
 
     asset_id: PositiveInt
-    reason: Literal["manual_exclusion"] = "manual_exclusion"
+    reason: RiskHistoricalReplayExclusionReason = RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION
     weight: Optional[FiniteFloat] = Field(None, ge=0, le=1)
     treatment: RiskHistoricalReplayExclusionTreatment
 
@@ -261,6 +278,11 @@ class RiskHistoricalReplayAudit(StrictModel):
     missing_history_policy: RiskScenarioMissingHistoryPolicy
     composition_policy: RiskCompositionPolicy
     proxy_series_usage: Literal["returns_only"] = "returns_only"
+    suggested_range: Optional[DateRangeModel] = Field(
+        None,
+        description="Part of the replay window in which every asset excluded by the window's edges is priced; offered only when replaying it brings them back without losing any other asset",
+    )
+    suggested_range_recovers: List[PositiveInt] = Field(default_factory=list, description="Assets the suggested range brings back, ordered by asset")
 
     @model_validator(mode="after")
     def validate_audit(self) -> RiskHistoricalReplayAudit:
@@ -286,6 +308,18 @@ class RiskHistoricalReplayAudit(StrictModel):
             abs_tol=1e-12,
         ):
             raise ValueError("excluded_weight_total must match excluded asset weights")
+        return self
+
+    @model_validator(mode="after")
+    def validate_suggested_range(self) -> RiskHistoricalReplayAudit:
+        recovered = self.suggested_range_recovers
+        if recovered != sorted(set(recovered)):
+            raise ValueError("suggested_range_recovers must be unique and ordered by asset")
+        if (self.suggested_range is None) != (not recovered):
+            raise ValueError("suggested_range and suggested_range_recovers must be set together")
+        automatic = {item.asset_id for item in self.excluded_assets if item.reason != RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION}
+        if not set(recovered) <= automatic:
+            raise ValueError("a suggested range can only recover automatically excluded assets")
         return self
 
 
@@ -401,6 +435,9 @@ class PreparedAssetSeries(StrictModel):
 
     valuations: AssetValuationSeries
     returns: AssetReturnSeries
+    # The asset's own quote dates inside the requested range, whether or not the joint calendar kept
+    # them: a stored carry (a weekend or market-holiday row repeating the close before it) is not one.
+    quote_dates: List[date] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_alignment(self) -> PreparedAssetSeries:
@@ -789,6 +826,10 @@ class RiskContributionOutput(StrictModel):
     kind: Literal[RiskOutputKind.CONTRIBUTION] = Field(default=RiskOutputKind.CONTRIBUTION, json_schema_extra={"enum": ["contribution"]})
     portfolio_volatility: FiniteFloat = Field(..., ge=0)
     cash_weight: FiniteFloat = Field(0, ge=0)
+    # Σ weights of the scope assets left without a series, which weigh in `cash_weight` as cash
+    # would. Inside it while true cash is not negative; with negative true cash (weights above 1)
+    # the two are not nested, so no rule ties them.
+    excluded_weight: FiniteFloat = Field(0, ge=0)
     items: List[RiskContributionItem] = Field(default_factory=list)
     # Concentration, acquired. These two are published together on purpose: the
     # effective count is blind to correlation, so ten equally weighted holdings score
@@ -814,6 +855,13 @@ class RiskReturnItem(StrictModel):
     # intercept has the Sharpe ratio as its slope. It is NOT what the holder earned —
     # on a highly volatile asset the two differ by tens of percentage points.
     expected_annual_return: FiniteFloat
+    # The holding's reward per unit of risk, on the returns and the annualization of this very
+    # point. Sharpe charges each observation the rate `expm1(log1p(rf) / f)`, so the line through
+    # the point with this slope crosses the return axis at `f` times that rate — at the origin when
+    # the rate is zero. Sortino charges the target return (MAR) instead, against the downside
+    # deviation. Either is None when undefined, never 0, and a warning names the holding.
+    sharpe: Optional[FiniteFloat] = None
+    sortino: Optional[FiniteFloat] = None
 
 
 class RiskReturnOutput(StrictModel):
@@ -826,6 +874,8 @@ class RiskReturnOutput(StrictModel):
     # weights sum to 1 - cash_weight, so a reader who adds up the bubbles and finds
     # they miss the whole deserves the reason rather than the puzzle.
     cash_weight: FiniteFloat = Field(0, ge=0)
+    # Weight of the scope assets left without a series: see RiskContributionOutput.excluded_weight.
+    excluded_weight: FiniteFloat = Field(0, ge=0)
     items: List[RiskReturnItem] = Field(default_factory=list)
 
 
@@ -952,6 +1002,14 @@ class RiskComparisonPoint(StrictModel):
     comparison_drawdown: FiniteFloat = Field(..., le=0)
 
 
+class RiskComparisonHoldingItem(StrictModel):
+    """One holding of the scope against the same comparison asset, measured in the same request."""
+
+    asset_id: PositiveInt
+    beta: Optional[FiniteFloat] = None
+    correlation: Optional[FiniteFloat] = Field(None, ge=-1, le=1)
+
+
 class RiskComparisonOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.COMPARISON] = Field(default=RiskOutputKind.COMPARISON, json_schema_extra={"enum": ["comparison"]})
@@ -972,7 +1030,27 @@ class RiskComparisonOutput(StrictModel):
     # services/risk/metrics.annualized_expected_return for why the convention is not
     # interchangeable with a compounded one.
     comparison_expected_annual_return: Optional[FiniteFloat] = None
+    # The reference's own Sharpe and Sortino, on the observations and the factor of its volatility
+    # and return above, so a benchmark row reads one measurement. They are charged the request's
+    # risk-free rate and target return, as the portfolio's KPI is.
+    comparison_sharpe: Optional[FiniteFloat] = None
+    comparison_sortino: Optional[FiniteFloat] = None
     series: List[RiskComparisonPoint] = Field(default_factory=list)
+    # On a portfolio scope, each holding against the same reference, measured in this request on
+    # its joint calendar — in current composition the calendar the portfolio's own beta is read on.
+    # The reference is never one of them, even when it is held (D371): it is the yardstick. Empty on
+    # an asset scope, whose only subject is the asset the fields above describe.
+    items: List[RiskComparisonHoldingItem] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_holdings(self) -> RiskComparisonOutput:
+        """The reference is the yardstick, so it is never also measured; each holding appears once."""
+        asset_ids = [item.asset_id for item in self.items]
+        if self.comparison_asset_id in asset_ids:
+            raise ValueError("the comparison asset cannot appear among the compared holdings")
+        if len(asset_ids) != len(set(asset_ids)):
+            raise ValueError("a holding cannot appear twice among the compared holdings")
+        return self
 
 
 class RiskVarCvarBin(StrictModel):
@@ -1004,10 +1082,21 @@ class RiskVarCvarBin(StrictModel):
 
 
 class RiskVarCvarOutput(StrictModel):
+    """Historical VaR and CVaR at one confidence level and one horizon.
+
+    `horizon_days` is the requested horizon in **calendar days**. The tail is
+    estimated on returns compounded over `horizon_observations` consecutive
+    observations: the number the series holds in that many calendar days at its
+    observed frequency, so a 30-day month is 21 observations of a series quoted on
+    trading days and 30 of one quoted every day. `observations` counts the
+    compounded windows the tail was estimated from, `horizon_observations - 1`
+    fewer than the series' returns.
+    """
 
     kind: Literal[RiskOutputKind.VAR_CVAR] = Field(default=RiskOutputKind.VAR_CVAR, json_schema_extra={"enum": ["var_cvar"]})
     confidence_level: FiniteFloat = Field(..., gt=0, lt=1)
     horizon_days: PositiveInt
+    horizon_observations: PositiveInt
     observations: PositiveInt
     value_at_risk: FiniteFloat = Field(..., ge=0)
     conditional_value_at_risk: FiniteFloat = Field(..., ge=0)
@@ -1354,8 +1443,10 @@ class RiskAssetSetVarCvarOutput(StrictModel):
     one horizon gives every asset the same count, so a per-row copy would suggest
     they could differ. It is stated anyway, rather than left to the metadata,
     because compounding to a multi-day horizon *consumes* observations — this is
-    the count the tail was actually estimated from, which is `horizon_days - 1`
-    fewer than the window's.
+    the count the tail was actually estimated from, which is
+    `horizon_observations - 1` fewer than the window's. As on the singular output,
+    `horizon_days` is in calendar days and `horizon_observations` is what the joint
+    calendar holds in them.
 
     No `return_bins`. The singular :class:`RiskVarCvarOutput` publishes a
     histogram because one surface draws one distribution; *n* histograms would
@@ -1366,6 +1457,7 @@ class RiskAssetSetVarCvarOutput(StrictModel):
     kind: Literal[RiskOutputKind.VAR_CVAR_SET] = Field(default=RiskOutputKind.VAR_CVAR_SET, json_schema_extra={"enum": ["var_cvar_set"]})
     confidence_level: FiniteFloat = Field(..., gt=0, lt=1)
     horizon_days: PositiveInt
+    horizon_observations: PositiveInt
     observations: PositiveInt
     items: List[RiskAssetSetVarCvarItem]
 
@@ -1512,6 +1604,9 @@ class RiskAssetSetComparisonOutput(StrictModel):
     observations: int = Field(..., ge=0)
     comparison_volatility: Optional[FiniteFloat] = Field(None, ge=0)
     comparison_expected_annual_return: Optional[FiniteFloat] = None
+    # The reference's own Sharpe and Sortino, on the same returns and factor as the two above.
+    comparison_sharpe: Optional[FiniteFloat] = None
+    comparison_sortino: Optional[FiniteFloat] = None
     items: List[RiskAssetSetComparisonItem]
 
     @model_validator(mode="after")
@@ -1550,6 +1645,11 @@ class RiskWarning(StrictModel):
     message: str = Field(..., min_length=1)
     details: Dict[str, JsonValue] = Field(default_factory=dict)
     degrades_result: bool = True
+    # The translatable form of `message`, rendered by the frontend with `message_params`, the same
+    # contract as `DataQualityIssue`. `message` stays the English fallback for a warning without a
+    # key, so a code added later is shown verbatim instead of as a raw key.
+    message_i18n_key: Optional[str] = Field(None, min_length=1, max_length=160, pattern=r"^risk\.warnings\.[A-Za-z0-9_.]+$")
+    message_params: Dict[str, JsonValue] = Field(default_factory=dict)
 
 
 class RiskError(StrictModel):
@@ -1591,6 +1691,71 @@ class RiskQueryResponse(StrictModel):
     items: List[RiskAnalyticResult] = Field(default_factory=list)
 
 
+# =============================================================================
+# ASSET ELIGIBILITY — whether an asset can take part in an analysis of a period
+# =============================================================================
+
+
+class RiskEligibilityLevel(StrEnum):
+    """Whether an asset can be selected for a risk analysis of a period."""
+
+    ELIGIBLE = "eligible"
+    WARNING = "warning"
+    INELIGIBLE = "ineligible"
+
+
+class RiskEligibilityReason(StrEnum):
+    """Why an asset is ineligible (the first four) or eligible with a warning (the last two).
+
+    `no_price_history` (never quoted) is told apart from `no_prices` (no quote in the period, some
+    elsewhere), because only the second can be mended by choosing another period.
+    """
+
+    NO_PRICE_HISTORY = "no_price_history"
+    NO_PRICES = "no_prices"
+    TOO_FEW_QUOTES = "too_few_quotes"
+    MISSING_FX = "missing_fx"
+    STARTS_LATE = "starts_late"
+    STALE_AT_END = "stale_at_end"
+
+
+class RiskEligibilityRequest(StrictModel):
+    asset_ids: List[PositiveInt] = Field(..., min_length=1, max_length=500)
+    date_range: DateRangeModel
+    target_currency: str
+
+    @field_validator("target_currency")
+    @classmethod
+    def validate_target_currency(cls, value: str) -> str:
+        return Currency.validate_code(value)
+
+
+class RiskAssetEligibility(StrictModel):
+    asset_id: PositiveInt
+    level: RiskEligibilityLevel
+    reasons: List[RiskEligibilityReason] = Field(default_factory=list)
+    first_quote: Optional[date] = Field(None, description="Earliest quote in the asset's history, up to the period end")
+    last_quote: Optional[date] = Field(None, description="Latest quote on or before the period end")
+    quotes_in_period: int = Field(..., ge=0)
+
+
+class RiskEligibilityResponse(StrictModel):
+    items: List[RiskAssetEligibility]
+    min_quotes: int = Field(..., ge=1, description="Fewest quotes in the period an eligible asset needs")
+    stale_days: int = Field(..., ge=1, description="Calendar days after which a start or an end counts as late")
+    common_range: Optional[DateRangeModel] = Field(
+        None,
+        description="Span in which every requested asset with quotes is quoted, from the latest first quote to the earliest last quote; null when the spans do not overlap",
+    )
+    suggested_range: Optional[DateRangeModel] = Field(
+        None,
+        description=(
+            "Period that makes every quoted asset eligible without warnings, offered only when the requested period starts before, ends after or misses the common span; "
+            "it starts the day after the latest first quote, so that quote is the starting price. The requested period trimmed to the common span, or the common span itself"
+        ),
+    )
+
+
 __all__ = [
     "AssetReturnPoint",
     "AssetReturnSeries",
@@ -1604,6 +1769,7 @@ __all__ = [
     "RiskAnalyticOutput",
     "RiskAnalyticRequest",
     "RiskAnalyticResult",
+    "RiskAssetEligibility",
     "RiskCatalogDefinition",
     "RiskCatalogResponse",
     "RiskComparisonOutput",
@@ -1616,12 +1782,17 @@ __all__ = [
     "RiskDrawdownOutput",
     "RiskDrawdownPoint",
     "RiskDrawdownRecoveryStatus",
+    "RiskEligibilityLevel",
+    "RiskEligibilityReason",
+    "RiskEligibilityRequest",
+    "RiskEligibilityResponse",
     "RiskError",
     "RiskErrorCode",
     "RiskExcludedAsset",
     "RiskFreeReference",
     "RiskHistoricalReplayAudit",
     "RiskHistoricalReplayExcludedAsset",
+    "RiskHistoricalReplayExclusionReason",
     "RiskHistoricalReplayExclusionTreatment",
     "RiskHistoricalReplayProxyAsset",
     "RiskKpiOutput",

@@ -52,9 +52,10 @@ function scalar(value: CorrelationCell['value']): number | null {
     return (value as number | null | undefined) ?? null;
 }
 
-/** Qualitative reading of |ρ|. `inverse` wins over magnitude: a strongly
- *  negative correlation is first of all a *compensating* one, and saying
- *  "high" about it would invert the advice. */
+/** Qualitative reading of ρ, with symmetric thresholds. `inverse` needs a
+ *  coefficient at or below −0.3: calling −0.01 "compensating" told the reader
+ *  two unrelated assets offset each other (F-3b, V8). Between −0.3 and +0.3 a
+ *  pair is `low` whatever its sign. */
 export type CorrelationBand = 'high' | 'moderate' | 'low' | 'inverse';
 
 /** Fast symmetric lookup over the cell list. */
@@ -77,13 +78,14 @@ const BAND_LOW = 0.3;
  */
 export function correlationBand(value: number | null | undefined): CorrelationBand | null {
     if (value == null || !Number.isFinite(value)) return null;
-    if (value < 0) return 'inverse';
+    if (value <= -BAND_LOW) return 'inverse';
     if (value > BAND_HIGH) return 'high';
     if (value >= BAND_LOW) return 'moderate';
     return 'low';
 }
 
-function pairKey(a: number, b: number): string {
+/** One key per unordered pair: the list and the matrix name the same pair in opposite orders. */
+export function pairKey(a: number, b: number): string {
     return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
@@ -204,6 +206,54 @@ export function clusterOrder(assetIds: readonly number[], lookup: CorrelationLoo
     return members.filter((cluster): cluster is number[] => cluster !== null).flat();
 }
 
+/**
+ * Emoji *as emoji*, and the invisible characters that glue them together: glyphs that
+ * render as emoji by default, text pictographs forced to emoji by U+FE0F, flags, skin
+ * tones, keycaps, ZWJ sequences and tag sequences. Text symbols that merely *can* be
+ * emoji — `®`, `©`, `™`, a bare `☀` — are kept: they are part of names such as
+ * `SPDR® S&P 500®`, and the canvas measures them like any other glyph.
+ */
+const NAME_DECORATION = /\p{Extended_Pictographic}\uFE0F|[\p{Emoji_Presentation}\p{Regional_Indicator}\p{Emoji_Modifier}\p{Variation_Selector}\u200D\u20E3\u{E0020}-\u{E007F}]/gu;
+
+/**
+ * The name without its emoji, for the two places that must compare or measure it.
+ *
+ * Sorting: flags and markers typed into a name (`🇪🇺👑 Amundi…`, `Btp… 🇮🇹`) sort
+ * before every letter. Drawing: the heatmap's canvas mis-measures emoji, so a
+ * decorated axis label was placed as if it were shorter and landed on the cells.
+ * Everywhere else — tooltips, lists, chips — the name keeps its emoji. A name
+ * made of emoji alone is kept whole rather than turned into an empty string.
+ */
+export function plainName(name: string): string {
+    return name.replace(NAME_DECORATION, '').replace(/\s+/g, ' ').trim() || name;
+}
+
+/**
+ * Asset ids in the order of the names the reader sees, ties broken by id.
+ *
+ * The matrix's "by name" button used to keep the payload order. That stopped being
+ * alphabetical the day request ids were canonicalised ascending so the cache key
+ * would be stable, and from then on the button said one thing and did another —
+ * it ordered by id. Sorting here keeps the promise the label makes, whatever order
+ * the API returns. `locale` is optional so tests can pin it; the app passes none.
+ * Emoji are ignored (`plainName`), or every decorated name files ahead of every
+ * plain one.
+ */
+export function nameOrder(assetIds: readonly number[], nameOf: (assetId: number) => string, locale?: string): number[] {
+    const compare = nameComparator(locale);
+    return [...assetIds].sort((left, right) => compare(nameOf(left), nameOf(right)) || left - right);
+}
+
+/**
+ * The comparison behind `nameOrder`, for a caller that sorts rows rather than ids —
+ * the loss table of Asset Global sorts its "Asset" column with it, so the table and
+ * the matrix's "by name" button can never disagree. Ties are the caller's to break.
+ */
+export function nameComparator(locale?: string): (left: string, right: string) => number {
+    const collator = new Intl.Collator(locale, {sensitivity: 'base', numeric: true});
+    return (left, right) => collator.compare(plainName(left), plainName(right));
+}
+
 /** One entry of the pair list. */
 export interface CorrelationPair {
     rowAssetId: number;
@@ -218,15 +268,20 @@ export interface CorrelationPair {
 export const NEAR_IDENTICAL = 0.9;
 
 export interface PairLists {
-    /** Most correlated, descending. */
+    /** Pairs in the `high` band, most correlated first. */
     correlated: CorrelationPair[];
-    /** Negatively correlated, most negative first. Empty when nothing offsets. */
+    /** Pairs in the `inverse` band, most negative first. Empty when nothing offsets. */
     offsetting: CorrelationPair[];
 }
 
 /**
- * The two lists that answer the question the matrix hides: *which pairs are
+ * The two rankings that answer the question the matrix hides: *which pairs are
  * redundant, and which actually offset each other?*
+ *
+ * Only pairs that clear a band enter: `high` (ρ > 0.7) for the first ranking,
+ * `inverse` (ρ ≤ −0.3) for the second. The rankings used to take every positive
+ * and every negative coefficient, so a 0.55 was listed as "most similar" and a
+ * −0.01 as "offsetting" — titles the numbers did not support (F-3b, V8).
  *
  * Only the lower triangle is walked — the matrix is symmetric, so visiting both
  * halves would list every pair twice — and the diagonal is skipped, because an
@@ -251,15 +306,113 @@ export function topPairs(assetIds: readonly number[], lookup: CorrelationLookup,
     }
 
     const correlated = pairs
-        .filter((pair) => pair.value > 0)
+        .filter((pair) => pair.band === 'high')
         .sort((left, right) => right.value - left.value || left.rowAssetId - right.rowAssetId)
         .slice(0, limit);
     const offsetting = pairs
-        .filter((pair) => pair.value < 0)
+        .filter((pair) => pair.band === 'inverse')
         .sort((left, right) => left.value - right.value || left.rowAssetId - right.rowAssetId)
         .slice(0, limit);
 
     return {correlated, offsetting};
+}
+
+/**
+ * Asset ids grouped by asset type, in the app's menu order, then by name.
+ *
+ * Types missing from `typeRank` — or assets without a type — go last, together,
+ * so an unclassified asset never splits a family. The menu order is passed in
+ * rather than imported, which keeps this module free of the taxonomy.
+ */
+export function typeOrder(assetIds: readonly number[], typeOf: (assetId: number) => string | null | undefined, nameOf: (assetId: number) => string, typeRank: readonly string[], locale?: string): number[] {
+    const rank = (assetId: number): number => {
+        const index = typeRank.indexOf(typeOf(assetId) ?? '');
+        return index < 0 ? typeRank.length : index;
+    };
+    const byName = new Map(nameOrder(assetIds, nameOf, locale).map((assetId, position) => [assetId, position]));
+    return [...assetIds].sort((left, right) => rank(left) - rank(right) || (byName.get(left) ?? 0) - (byName.get(right) ?? 0));
+}
+
+/** The share a sector or a country must reach to name an asset's group; below it the asset is diversified. */
+export const DOMINANT_SHARE = 0.5;
+
+/** The backend's catch-all key, in sector and country distributions alike. */
+export const OTHER_EXPOSURE = 'Other';
+
+/** An asset's group for the sector and area orderings: see `dominantExposure`. */
+export interface ExposureGroup {
+    /** A named sector or country; `null` when diversified; `OTHER_EXPOSURE` when only the catch-all is known. */
+    key: string | null;
+    /** Weight of `key` among the classified entries (the catch-all left out); 1 for the catch-all fallback. */
+    share: number;
+}
+
+/**
+ * Where a distribution puts most of its weight — the catch-all left out.
+ *
+ * "Other" says nothing about an asset, so it never names a group (the developer,
+ * F-3b): the entries are weighed among themselves without it, and one reaching
+ * `DOMINANT_SHARE` of that classified weight names the group; when none does the
+ * asset is diversified. Only an asset known solely through "Other" falls back to
+ * it, as the last named group. `null` when there is no usable distribution at all
+ * (unclassified). Empty keys, non-finite and non-positive weights are ignored; a
+ * tie on the largest weight goes to the key that sorts first, so the group does
+ * not depend on the order the entries arrive in.
+ */
+export function dominantExposure(distribution: Readonly<Record<string, number>> | null | undefined, threshold = DOMINANT_SHARE): ExposureGroup | null {
+    if (!distribution) return null;
+    let classified = 0;
+    let sawOther = false;
+    let bestKey: string | null = null;
+    let best = 0;
+    for (const [key, weight] of Object.entries(distribution)) {
+        // An empty key names nothing: it would open a group without a label.
+        if (key === '' || !Number.isFinite(weight) || weight <= 0) continue;
+        if (key === OTHER_EXPOSURE) {
+            sawOther = true;
+            continue;
+        }
+        classified += weight;
+        if (weight > best || (weight === best && bestKey !== null && key < bestKey)) {
+            best = weight;
+            bestKey = key;
+        }
+    }
+    if (bestKey === null) return sawOther ? {key: OTHER_EXPOSURE, share: 1} : null;
+    const share = best / classified;
+    return share >= threshold ? {key: bestKey, share} : {key: null, share};
+}
+
+/**
+ * Asset ids grouped by their dominant sector or country (`dominantExposure`).
+ *
+ * Four tiers: named groups, sorted by `groupLabel` (the name the reader sees),
+ * with the most concentrated asset leading each; then diversified assets; then
+ * those known only through "Other", the final fallback; then unclassified ones —
+ * the last three by name. It is an ordering, not a classification: a world fund
+ * at 70% United States sits with the American assets because that is where most
+ * of its weight is, and the tooltip says so.
+ */
+export function exposureOrder(assetIds: readonly number[], exposureOf: (assetId: number) => ExposureGroup | null, nameOf: (assetId: number) => string, groupLabel: (key: string) => string, locale?: string): number[] {
+    const collator = new Intl.Collator(locale, {sensitivity: 'base', numeric: true});
+    const byName = new Map(nameOrder(assetIds, nameOf, locale).map((assetId, position) => [assetId, position]));
+    const tier = (group: ExposureGroup | null): number => (group === null ? 3 : group.key === OTHER_EXPOSURE ? 2 : group.key === null ? 1 : 0);
+    return [...assetIds].sort((left, right) => {
+        const a = exposureOf(left);
+        const b = exposureOf(right);
+        const byTier = tier(a) - tier(b);
+        if (byTier !== 0) return byTier;
+        // Same tier: groups are compared only among named ones, decided by the tier
+        // itself. Testing the keys for truthiness instead let an empty key sit in the
+        // named tier yet skip this comparison, which made the order depend on the
+        // input (test-author, F-3b).
+        if (tier(a) === 0 && a !== null && b !== null && a.key !== null && b.key !== null) {
+            const byGroup = collator.compare(plainName(groupLabel(a.key)), plainName(groupLabel(b.key)));
+            if (byGroup !== 0) return byGroup;
+            if (a.share !== b.share) return b.share - a.share;
+        }
+        return (byName.get(left) ?? 0) - (byName.get(right) ?? 0);
+    });
 }
 
 /** A heatmap point in ECharts order: `[columnIndex, rowIndex, value]`. */
@@ -303,6 +456,51 @@ export function lowerTrianglePoints(order: readonly number[], lookup: Correlatio
         }
     }
     return points;
+}
+
+/** Cell bounds, in CSS pixels. Below the minimum a value no longer fits; above the maximum a small matrix turns into posters. */
+export const HEATMAP_CELL = {minWidth: 44, maxWidth: 88, minHeight: 34, maxHeight: 52, aspect: 0.7} as const;
+
+/** Geometry of the heatmap canvas. */
+export interface HeatmapLayout {
+    width: number;
+    height: number;
+    cellWidth: number;
+    cellHeight: number;
+    grid: {left: number; right: number; top: number; bottom: number};
+}
+
+/**
+ * Size the chart from its content instead of squeezing the content into the chart.
+ *
+ * The chart used to take the card's width and a fixed height, so a longer
+ * selection shrank the cells and a longer name had nowhere to go. Here cells keep
+ * a readable minimum: when the card is too narrow for them the chart becomes
+ * wider than the card, which then scrolls sideways. When the card is wider than
+ * needed, cells stop at a maximum.
+ *
+ * `yLabelWidth` and `xLabelWidth` are the measured widths of the widest labels,
+ * already capped by the caller. Column labels are rotated by 45°: a label `w`
+ * wide and `h` tall reaches `(w + h)·sin 45°` below the plot, and the first one
+ * reaches as far to the left of its tick, which sits half a cell into the plot.
+ */
+export function heatmapLayout({columns, rows, availableWidth, yLabelWidth, xLabelWidth, labelHeight}: {columns: number; rows: number; availableWidth: number; yLabelWidth: number; xLabelWidth: number; labelHeight: number}): HeatmapLayout {
+    const gap = 12;
+    const top = 8;
+    const right = 12;
+    const diagonal = (xLabelWidth + labelHeight) * Math.SQRT1_2;
+    const left = Math.ceil(Math.max(yLabelWidth, diagonal - HEATMAP_CELL.minWidth / 2)) + gap;
+    const bottom = Math.ceil(diagonal) + gap;
+    const fitted = columns > 0 ? Math.floor((availableWidth - left - right) / columns) : HEATMAP_CELL.minWidth;
+    const cellWidth = Math.min(HEATMAP_CELL.maxWidth, Math.max(HEATMAP_CELL.minWidth, fitted));
+    const cellHeight = Math.min(HEATMAP_CELL.maxHeight, Math.max(HEATMAP_CELL.minHeight, Math.round(cellWidth * HEATMAP_CELL.aspect)));
+    return {
+        width: left + columns * cellWidth + right,
+        height: top + rows * cellHeight + bottom,
+        cellWidth,
+        cellHeight,
+        grid: {left, right, top, bottom},
+    };
 }
 
 /**

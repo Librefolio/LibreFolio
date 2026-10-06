@@ -43,8 +43,9 @@ from backend.app.services.asset_sources.core import (
     AssetSourceProvider,
 )
 from backend.app.services.fx import convert_bulk
+from backend.app.services.market_calendar import ensure_market_holidays
 from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.services.series_preparation import prepare_asset_series_set
+from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signal_service import (
     SignalPreparedSeriesBundle,
     SignalService,
@@ -189,7 +190,7 @@ class PriceQueryOperations:
                 warmup_days = (req.date_range.start - date_type.min).days
             else:
                 warmup_days = max(
-                    plan.max_history_points_before_visible,
+                    plan.max_history_days_before_visible,
                     plan.max_prepared_history_points_before_visible * RISK_WARMUP_DAY_MULTIPLIER,
                 )
             warmup_days = min(
@@ -528,6 +529,9 @@ class PriceQueryOperations:
                 )
                 conv_idx += 1
 
+        # One table for the whole call, and only when something is computed from the prices: the
+        # signals read it to tell a stored weekend or holiday repeat from a quote.
+        market_holidays = await ensure_market_holidays() if any(req.signals for req in requests) else frozenset()
         prepared_series_bundles: list[Optional[SignalPreparedSeriesBundle]] = []
         for request_index, (
             req,
@@ -553,6 +557,7 @@ class PriceQueryOperations:
                 [result],
                 requested_range=prepared_range,
                 target_currency=target,
+                market_holidays=market_holidays,
             )
             series_sets = {None: primary_set}
             for comparison_asset_id in plan.comparison_asset_ids:
@@ -564,6 +569,7 @@ class PriceQueryOperations:
                     [result, dependency_result],
                     requested_range=prepared_range,
                     target_currency=target,
+                    market_holidays=market_holidays,
                 )
             prepared_series_bundles.append(
                 SignalPreparedSeriesBundle(
@@ -645,6 +651,9 @@ class PriceQueryOperations:
                     currencies = ", ".join(sorted(price_currencies))
                     result.errors.append("Technical signal computation excluded unconverted price dates because the series contains mixed currencies: " f"{currencies}")
                 signal_price_points = result.prices if currency_coherent else [point for point in result.prices if target and point.currency == target]
+                # A stored weekend or holiday row repeating the close before it is a carry, not a quote: marked as
+                # carried, it leaves the sessions the indicators compute on, exactly as it leaves the risk series.
+                signal_price_points = list(mark_market_closed_carries({point.date: point for point in signal_price_points}, market_holidays).values())
                 neutral_prices = [
                     SignalPricePoint(
                         date=point.date,

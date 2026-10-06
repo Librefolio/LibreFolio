@@ -19,6 +19,7 @@ from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import FXConversionRequest
+from backend.app.schemas.signals import SignalStatus
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
 settings = get_settings()
@@ -98,6 +99,27 @@ async def set_rate(
         await session.commit()
 
 
+def weekdays_between(first: date, last: date) -> list[date]:
+    """The days a weekday-publishing source (ECB-like) stores a rate on."""
+    return [first + timedelta(days=offset) for offset in range((last - first).days + 1) if (first + timedelta(days=offset)).weekday() < 5]
+
+
+async def delete_rates(base: str, quote: str, days: list[date]) -> None:
+    """Remove the rates a test stored: FX rates are global rows, whoever writes them cleans up."""
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        await session.execute(
+            delete(FxRate).where(
+                FxRate.base == base,
+                FxRate.quote == quote,
+                FxRate.date.in_(days),
+            )
+        )
+        await session.commit()
+
+
 @pytest.mark.asyncio
 async def test_handler_uses_one_combined_convert_bulk_call(
     monkeypatch,
@@ -157,71 +179,169 @@ async def test_handler_uses_one_combined_convert_bulk_call(
     )
 
     assert len(calls) == 1
-    assert len(calls[0]) == 8
+    # Three daily conversions, then the SMA 2 signal days: two sessions load
+    # four calendar days before the three visible ones.
+    assert len(calls[0]) == 3 + 7
     assert len(response.results) == 3
     assert len(response.signal_results) == 1
     assert response.signal_results[0].signals[0].status.value == "ok"
 
 
+# =============================================================================
+# Quote days (developer's decision of 30/09/2026)
+#
+# FX rates already reach the signals with ``backward_fill_info`` on the days
+# the source does not publish. Indicators compute on the published days only,
+# so their warm-up loads twice the sessions in calendar days; the daily
+# conversions keep every calendar day.
+# =============================================================================
+
+
+def published_rate(day: date) -> Decimal:
+    """A deterministic rate for a day the source publishes."""
+    ordinal = day.toordinal()
+    return Decimal(10_000 + (ordinal % 13) * 37 + (ordinal % 5) * 11) / Decimal(10_000)
+
+
+def weekend_backfilling_convert_bulk(calls: list[list]):
+    """A source that publishes on weekdays: a weekend date resolves to Friday's rate, backfilled."""
+
+    async def fake_convert_bulk(session, conversions, raise_on_error):
+        calls.append(list(conversions))
+        results = []
+        for amount, to_currency, on_date in conversions:
+            rate_date = on_date - timedelta(days=max(0, on_date.weekday() - 4))
+            results.append(
+                (
+                    Currency(code=to_currency, amount=amount.amount * published_rate(rate_date)),
+                    rate_date,
+                    rate_date != on_date,
+                )
+            )
+        return results, []
+
+    return fake_convert_bulk
+
+
+async def eur_usd_sma(start: date, end: date, period: int):
+    return await fx_api.convert_currency_bulk(
+        request=[
+            FXConversionRequest(
+                from_amount=Currency(code="EUR", amount=Decimal("100")),
+                to="USD",
+                date_range=DateRangeModel(start=start, end=end),
+                signals=[{"instance_id": "sma", "signal_code": "SMA", "params": {"period": period}}],
+            )
+        ],
+        session=object(),
+        _current_user=object(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_signal_rates_load_twice_the_sessions_in_calendar_days(monkeypatch):
+    """T7 — an SMA 5 warms up on five published days: ten calendar days are loaded for it."""
+    calls: list[list] = []
+    monkeypatch.setattr(fx_api, "convert_bulk", weekend_backfilling_convert_bulk(calls))
+    start = date(2026, 3, 5)  # a Thursday
+    end = start + timedelta(days=17)
+
+    await eur_usd_sma(start, end, period=5)
+
+    (conversions,) = calls
+    signal_dates = [on_date for amount, _to_currency, on_date in conversions if amount.amount == Decimal("1")]
+    load_start = start - timedelta(days=10)
+    assert signal_dates == [load_start + timedelta(days=offset) for offset in range((end - load_start).days + 1)]
+
+
+@pytest.mark.asyncio
+async def test_fx_indicator_computes_on_published_days_only(monkeypatch):
+    """T7 — the weekend days carried from Friday are neither computed on nor dated."""
+    calls: list[list] = []
+    monkeypatch.setattr(fx_api, "convert_bulk", weekend_backfilling_convert_bulk(calls))
+    start = date(2026, 3, 5)  # a Thursday: three published days end on it with either warm-up
+    end = date(2026, 3, 22)  # a Sunday
+
+    response = await eur_usd_sma(start, end, period=3)
+
+    calendar_days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+    # The daily conversions keep every calendar day: only the signal input reads published days.
+    assert [result.conversion_date for result in response.results] == calendar_days
+    signal = response.signal_results[0].signals[0]
+    assert signal.status == SignalStatus.OK
+    coverage = signal.availability.input_coverage
+    loaded = [coverage.first_available_date + timedelta(days=offset) for offset in range((coverage.last_available_date - coverage.first_available_date).days + 1)]
+    published = [day for day in loaded if day.weekday() < 5]
+    # FX coverage already reads the weekends as carried, and keeps doing so.
+    assert (coverage.observed_points, coverage.backfilled_points) == (len(published), len(loaded) - len(published))
+    series = signal.series[0]
+    assert [point.date for point in series.points] == [day for day in calendar_days if day.weekday() < 5]
+    for point in series.points:
+        window = [day for day in published if day <= point.date][-3:]
+        assert point.value == pytest.approx(float(sum(published_rate(day) for day in window) / 3)), point.date.isoformat()
+
+
 @pytest.mark.asyncio
 async def test_fx_identity_and_direct_signals(test_server):
-    start = date(2025, 6, 1)
+    start = date(2025, 6, 1)  # a Sunday
     end = start + timedelta(days=9)
-    await set_rate(
-        "EUR",
-        "USD",
-        start - timedelta(days=2),
-        Decimal("2"),
-    )
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.post(
-            f"{API_BASE}/fx/currencies/convert",
-            json=[
-                {
-                    "from_amount": {
-                        "code": "EUR",
-                        "amount": "100",
-                    },
-                    "to": "EUR",
-                    "date_range": {
-                        "start": start.isoformat(),
-                        "end": end.isoformat(),
-                    },
-                    "signals": [
-                        {
-                            "instance_id": "identity-sma",
-                            "signal_code": "SMA",
-                            "params": {"period": 2},
-                        }
-                    ],
-                },
-                {
-                    "from_amount": {
-                        "code": "EUR",
-                        "amount": "100",
-                    },
-                    "to": "USD",
-                    "date_range": {
-                        "start": start.isoformat(),
-                        "end": end.isoformat(),
-                    },
-                    "signals": [
-                        {
-                            "instance_id": "direct-sma",
-                            "signal_code": "SMA",
-                            "params": {"period": 2},
+    # Indicators count published days: SMA 2 warms up on the two before the range (Thursday and
+    # Friday), inside the four calendar days its two sessions load.
+    published = weekdays_between(start - timedelta(days=4), end)
+    for day in published:
+        await set_rate("EUR", "USD", day, Decimal("2"))
+    try:
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            response = await client.post(
+                f"{API_BASE}/fx/currencies/convert",
+                json=[
+                    {
+                        "from_amount": {
+                            "code": "EUR",
+                            "amount": "100",
                         },
-                        {
-                            "instance_id": "atr",
-                            "signal_code": "ATR",
-                            "params": {"period": 14},
+                        "to": "EUR",
+                        "date_range": {
+                            "start": start.isoformat(),
+                            "end": end.isoformat(),
                         },
-                    ],
-                },
-            ],
-            timeout=TIMEOUT,
-        )
+                        "signals": [
+                            {
+                                "instance_id": "identity-sma",
+                                "signal_code": "SMA",
+                                "params": {"period": 2},
+                            }
+                        ],
+                    },
+                    {
+                        "from_amount": {
+                            "code": "EUR",
+                            "amount": "100",
+                        },
+                        "to": "USD",
+                        "date_range": {
+                            "start": start.isoformat(),
+                            "end": end.isoformat(),
+                        },
+                        "signals": [
+                            {
+                                "instance_id": "direct-sma",
+                                "signal_code": "SMA",
+                                "params": {"period": 2},
+                            },
+                            {
+                                "instance_id": "atr",
+                                "signal_code": "ATR",
+                                "params": {"period": 14},
+                            },
+                        ],
+                    },
+                ],
+                timeout=TIMEOUT,
+            )
+    finally:
+        await delete_rates("EUR", "USD", published)
 
     assert response.status_code == 200
     payload = response.json()
@@ -231,54 +351,64 @@ async def test_fx_identity_and_direct_signals(test_server):
     direct = payload["signal_results"][1]
     assert identity["request_index"] == 0
     assert direct["request_index"] == 1
+    identity_points = identity["signals"][0]["series"][0]["points"]
+    direct_points = direct["signals"][0]["series"][0]["points"]
     assert identity["signals"][0]["status"] == "ok"
-    assert all(point["value"] == 1.0 for point in identity["signals"][0]["series"][0]["points"])
+    # An identity conversion is never carried: every calendar day is a session.
+    assert [point["date"] for point in identity_points] == [(start + timedelta(days=offset)).isoformat() for offset in range(10)]
+    assert all(point["value"] == 1.0 for point in identity_points)
     assert direct["signals"][0]["status"] == "ok"
-    assert all(point["value"] == 2.0 for point in direct["signals"][0]["series"][0]["points"])
+    # A converted rate is dated on the days the source published it.
+    assert [point["date"] for point in direct_points] == [day.isoformat() for day in published if start <= day <= end]
+    assert all(point["value"] == 2.0 for point in direct_points)
     assert direct["signals"][1]["status"] == "unavailable"
 
 
 @pytest.mark.asyncio
 async def test_fx_inverse_signal_uses_effective_rate(test_server):
-    start = date(2025, 7, 1)
+    start = date(2025, 7, 1)  # a Tuesday
     end = start + timedelta(days=5)
-    await set_rate(
-        "EUR",
-        "USD",
-        start - timedelta(days=2),
-        Decimal("2"),
-    )
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.post(
-            f"{API_BASE}/fx/currencies/convert",
-            json=[
-                {
-                    "from_amount": {
-                        "code": "USD",
-                        "amount": "100",
-                    },
-                    "to": "EUR",
-                    "date_range": {
-                        "start": start.isoformat(),
-                        "end": end.isoformat(),
-                    },
-                    "signals": [
-                        {
-                            "instance_id": "inverse-sma",
-                            "signal_code": "SMA",
-                            "params": {"period": 2},
-                        }
-                    ],
-                }
-            ],
-            timeout=TIMEOUT,
-        )
+    # Indicators count published days: SMA 2 warms up on the two before the range (Friday and
+    # Monday), inside the four calendar days its two sessions load.
+    published = weekdays_between(start - timedelta(days=4), end)
+    for day in published:
+        await set_rate("EUR", "USD", day, Decimal("2"))
+    try:
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            response = await client.post(
+                f"{API_BASE}/fx/currencies/convert",
+                json=[
+                    {
+                        "from_amount": {
+                            "code": "USD",
+                            "amount": "100",
+                        },
+                        "to": "EUR",
+                        "date_range": {
+                            "start": start.isoformat(),
+                            "end": end.isoformat(),
+                        },
+                        "signals": [
+                            {
+                                "instance_id": "inverse-sma",
+                                "signal_code": "SMA",
+                                "params": {"period": 2},
+                            }
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+    finally:
+        await delete_rates("EUR", "USD", published)
 
     assert response.status_code == 200
     signal = response.json()["signal_results"][0]["signals"][0]
     assert signal["status"] == "ok"
-    assert all(point["value"] == 0.5 for point in signal["series"][0]["points"])
+    points = signal["series"][0]["points"]
+    assert [point["date"] for point in points] == [day.isoformat() for day in published if start <= day <= end]
+    assert all(point["value"] == 0.5 for point in points)
 
 
 @pytest.mark.asyncio

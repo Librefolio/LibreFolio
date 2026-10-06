@@ -357,11 +357,11 @@
     "lastPrice": "Dernier Prix",
     "panels": {
       "own": "Vos actifs",
-      "ownHint": "Avec des transactions dans des courtiers que vous possédez",
+      "ownHint": "Détenus maintenant dans des courtiers que vous possédez",
       "others": "Actifs des autres utilisateurs",
-      "othersHint": "Avec des transactions qui ne sont pas les vôtres",
+      "othersHint": "Détenus maintenant uniquement par d'autres utilisateurs",
       "analysis": "Surveillés",
-      "analysisHint": "Enregistrés mais sans transactions — gardés à l'œil"
+      "analysisHint": "Détenus par personne aujourd'hui — jamais achetés ou déjà vendus, gardés à l'œil"
     },
     "providerParams": {
       "borsa_italiana": {
@@ -1331,15 +1331,16 @@
       "period": "Longueur de la mémoire du filtre en jours. Valeurs plus élevées = plus lisse mais réponse plus lente.",
       "offset": "Décalage vertical en pourcentage de la valeur de base. Déplace le signal vers le haut ou le bas.",
       "currencyPair": "Sélectionnez une paire FX pour superposer ses données de taux de change sur le graphique.",
-      "emaPeriod": "Fenêtre de recul en jours. Correspond au coefficient $\\alpha = 2/(N+1)$. Plus court = réaction rapide, plus long = plus lisse.",
-      "fastPeriod": "Fenêtre EMA court terme pour la ligne rapide du MACD. Standard : 12 jours. Des valeurs plus basses réagissent plus vite.",
-      "slowPeriod": "Fenêtre EMA long terme pour la ligne lente du MACD. Standard : 26 jours. Des valeurs plus hautes capturent la tendance de fond.",
-      "signalPeriod": "Lissage EMA appliqué à la ligne MACD. Standard : 9 jours. Réduit le bruit dans les signaux de croisement.",
+      "emaPeriod": "Fenêtre de recul en séances, les jours avec une cotation. Correspond au coefficient $\\alpha = 2/(N+1)$. Plus court = réaction rapide, plus long = plus lisse.",
+      "fastPeriod": "Fenêtre EMA court terme pour la ligne rapide du MACD. Standard : 12 séances. Des valeurs plus basses réagissent plus vite.",
+      "slowPeriod": "Fenêtre EMA long terme pour la ligne lente du MACD. Standard : 26 séances. Des valeurs plus hautes capturent la tendance de fond.",
+      "signalPeriod": "Lissage EMA appliqué à la ligne MACD. Standard : 9 séances. Réduit le bruit dans les signaux de croisement.",
       "multiplier": "Nombre d'écarts-types ($k \\cdot \\sigma$). $k=2$ couvre ~95% des valeurs en distribution normale.",
       "overbought": "Niveau au-dessus duquel l'actif est considéré suracheté. Standard : 70. Valeurs proches de 100 indiquent une forte pression d'achat.",
       "oversold": "Niveau en dessous duquel l'actif est considéré survendu. Standard : 30. Valeurs proches de 0 indiquent une forte pression de vente.",
       "assetComparison": "Sélectionnez un actif pour superposer son prix sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%.",
-      "fxPair": "Sélectionnez une paire FX pour superposer son taux sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%."
+      "fxPair": "Sélectionnez une paire FX pour superposer son taux sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%.",
+      "sessionPeriod": "Fenêtre de recul en séances, les jours avec une cotation. Valeurs plus élevées = plus lisse mais réponse plus lente."
     },
     "macdLineColor": "Couleur Ligne MACD",
     "noDataAvailable": "Aucune donnée disponible. Essayez de synchroniser cet actif/paire.",
@@ -1661,7 +1662,8 @@
     "pnlSubmodeCandles": "Bougies",
     "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés",
     "pnlAcqNewCapital": "Nouveau capital",
-    "pnlAcqReinvested": "Réinvesti"
+    "pnlAcqReinvested": "Réinvesti",
+    "allocationGeneric": "{type} générique"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",
@@ -2175,7 +2177,8 @@
   "sharedResource": {
     "syncAll": "Sync. Tout",
     "refreshAll": "Recharger Tout",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "syncSelection": "Sync. sélection"
   },
   "table": {
     "columns": "Colonnes",
@@ -2606,7 +2609,8 @@
       "riskFullHistory": "Mesure le drawdown par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
     },
     "units": {
-      "days": "jours"
+      "days": "jours",
+      "sessions": "séances"
     },
     "visual": {
       "components": "Composants",
@@ -3103,7 +3107,8 @@
       },
       "correlation": {
         "name": "Corrélation",
-        "description": "Matrice de corrélation de Pearson des rendements dans la devise cible."
+        "description": "Matrice de corrélation de Pearson des rendements dans la devise cible.",
+        "help": "Ce panneau analyse les corrélations deux à deux de tous les actifs examinés, calculées sur la période choisie en tenant compte des éventuelles conversions de devises. Une valeur élevée, proche de +1, signifie que deux actifs évoluent ensemble et se diversifient peu ; proche de 0, qu’ils évoluent chacun de leur côté ; négative, que l’un amortit l’autre. Cliquez sur l’icône pour le guide."
       },
       "historicalVar": {
         "name": "VaR / CVaR historique",
@@ -3219,28 +3224,24 @@
       "carried_forward": "Valeurs reportées",
       "partial": "Partielle",
       "carriedPrices": "Points de prix reportés",
-      "carriedFx": "Points de change reportés"
+      "carriedFx": "Points de change reportés",
+      "missingPrice": "{count} actif(s) sans prix sur cette période — exclus de l'analyse",
+      "missingFx": "{count} paire(s) de devises sans source de change — les actifs cotés dans ces devises sont exclus",
+      "missingFxRates": "Taux de change manquants ou de plus de {days} jours pour {count} paire(s) — synchronisez pour compléter l'analyse",
+      "missingFxRatesManual": "Taux de change manquants pour {count} paire(s) manuelle(s) — ajoutez-les à la main"
     },
     "assetSet": {
       "assetsTab": "Actifs",
       "correlationTab": "Corrélation",
       "addAsset": "Ajouter un actif à la matrice",
       "maxAssets": "La limite API de 100 actifs est atteinte.",
-      "presetBroker": "Précharger les actifs de…",
-      "presetNone": "Choisir un courtier…",
-      "panelTitle": "Relations et scénarios",
-      "selectedCount": "{selected} sélectionnés sur {total}",
+      "selectedCount": "{selected} en analyse sur {total} analysables",
       "nearIdentical": "quasi identiques",
       "bulk": {
         "selectAll": "Tout sélectionner",
         "selectNone": "Tout désélectionner",
         "invert": "Inverser",
         "mine": "Mes actifs"
-      },
-      "filters": {
-        "type": "Type",
-        "currency": "Devise",
-        "clear": "Effacer les filtres"
       },
       "band": {
         "high": "ils évoluent ensemble",
@@ -3251,22 +3252,28 @@
       "ordering": {
         "label": "Ordre de la matrice",
         "similarity": "Par similarité",
-        "original": "Par nom"
+        "name": "Par nom",
+        "type": "Par type",
+        "sector": "Par secteur",
+        "region": "Par zone"
       },
       "pairs": {
         "correlatedTitle": "Les plus semblables",
-        "correlatedHint": "Paires qui évoluent ensemble : les détenir toutes deux ajoute peu.",
+        "correlatedHint": "Paires avec ρ > 0.70 : elles évoluent ensemble, les détenir toutes deux ajoute peu.",
         "offsettingTitle": "Ceux qui se compensent",
-        "offsettingHint": "Paires qui évoluent en sens opposé : l’une amortit l’autre.",
+        "offsettingHint": "Paires avec ρ ≤ −0.30 : elles évoluent en sens opposé, l’une amortit l’autre.",
         "noneCorrelated": "Aucune paire n’évolue clairement ensemble.",
-        "noneOffsetting": "Aucune paire n’en compense une autre : ici rien n’amortit rien."
+        "noneOffsetting": "Aucune paire n’en compense une autre : ici rien n’amortit rien.",
+        "tagSimilar": "très similaires",
+        "tagOffsetting": "se compensent",
+        "tagOpposite": "opposés"
       },
       "levels": {
         "asset": "Actif",
         "blankNote": "Un tiret signifie que la mesure n'a pas pu être faite pour cet actif sur cette fenêtre — cela ne signifie pas zéro.",
         "l1": {
           "title": "Combien chacun a-t-il fait mal ?",
-          "description": "La même échelle de perte, posée à chaque actif sélectionné. Uniquement des pourcentages : un ensemble d'actifs n'a pas de pondérations, donc aucun montant à afficher.",
+          "description": "Pour chaque actif sélectionné, ce qu'il a perdu aux pires moments de la période : la mauvaise journée, le mauvais mois, la baisse la plus profonde et à quelle distance il se trouve encore de son sommet.",
           "lastedDays": "durée {days} j",
           "columns": {
             "badDay": "Mauvaise journée",
@@ -3274,16 +3281,74 @@
             "worstFall": "Pire baisse",
             "currentFall": "Sous le sommet",
             "toPeak": "Hausse jusqu'au sommet"
+          },
+          "columnHelp": {
+            "badDay": "La perte moyenne sur les 5 % des pires jours de la fenêtre (CVaR historique à 95 %).",
+            "badMonth": "Comme la mauvaise journée, mais sur une plus longue suite de jours consécutifs : la perte moyenne sur les 5 % des pires de ces périodes (CVaR historique à 95 %).",
+            "worstFall": "La baisse la plus profonde d'un sommet jusqu'au point le plus bas qui a suivi dans la fenêtre, et sa durée.",
+            "currentFall": "À quelle distance de son sommet de la fenêtre l'actif se trouve le dernier jour.",
+            "toPeak": "De combien il doit monter pour retrouver ce sommet : après une baisse de 20 %, il faut +25 %."
           }
         },
         "l3": {
           "title": "Combien chacun a-t-il payé pour son risque ?",
-          "description": "Risque contre rendement, un point par actif. Aucune droite ne les traverse : une sélection n'a pas de tout, donc rien au-dessus ou en dessous de quoi se situer.",
-          "expectedReturn": "Rendement attendu",
+          "description": "Pour chaque actif sélectionné, l'ampleur de ses variations et son rendement moyen annuel, dans le tableau et dans le graphique ; avec une référence choisie juste au-dessus, aussi à quel point il a évolué avec elle.",
+          "expectedReturn": "Rendement moyen annuel",
           "correlation": "Corrélation",
-          "noBenchmark": "Choisissez une référence dans le tableau de bord pour ajouter le bêta et la corrélation. Une référence déjà présente dans la sélection ne peut pas servir de mesure à elle-même.",
-          "scatterNote": "Les points montrent le rendement attendu en moyenne-variance : sur un actif très volatil, le rendement réellement vécu est plus faible, car la volatilité érode la capitalisation."
+          "columnHelp": {
+            "volatility": "L'ampleur des variations des rendements de l'actif, sur une base annuelle : l'écart type des rendements de la période, annualisé.",
+            "expectedReturn": "La moyenne des rendements de la période, ramenée à une année selon la fréquence des cotations. Elle décrit le passé, ce n'est pas une prévision. Pour un actif très volatil, elle dépasse ce qu'il a réellement rapporté, car les variations érodent le rendement composé.",
+            "sortino": "Combien de rendement moyen annuel pour chaque unité de variation à la baisse : seules les baisses comptent, pas les hausses.",
+            "sharpe": "Combien de rendement moyen annuel pour chaque unité de volatilité : la rémunération du risque pris, hausses et baisses confondues.",
+            "beta": "De combien l'actif a bougé quand la référence bougeait : 1 veut dire autant, 2 deux fois plus, 0 indépendamment d'elle.",
+            "correlation": "À quel point l'actif et la référence ont évolué ensemble, de −1 (toujours opposés) à +1 (toujours ensemble)."
+          },
+          "axisReturn": "Rendement moyen annuel",
+          "period": {
+            "window": "Période : du {start} au {end} ({length}).",
+            "narrowed": "Plus court que la période choisie (du {selectedStart} au {selectedEnd}).",
+            "annualized": "La volatilité et le rendement moyen sont annualisés ; Sharpe et Sortino en découlent.",
+            "years": "{count, plural, one {# an} other {# ans}}",
+            "months": "{count, plural, one {# mois} other {# mois}}",
+            "days": "{count, plural, one {# jour} other {# jours}}"
+          },
+          "referenceItself": "Non applicable : cet actif est la référence elle-même, et il ne se compare pas à lui-même."
         }
+      },
+      "legend": {
+        "negative": "Négative",
+        "none": "Nulle",
+        "positive": "Positive"
+      },
+      "group": {
+        "diversified": "Diversifié",
+        "unclassified": "Non classé"
+      },
+      "exposure": {
+        "sector": "Secteur",
+        "region": "Zone"
+      },
+      "syncSelectionHint": "Synchronise les prix des actifs sélectionnés et les taux de change qui les convertissent",
+      "reloadHint": "Recharge toutes les analyses de la sélection",
+      "preset": {
+        "allMine": "Toutes mes positions",
+        "byBroker": "Par courtier",
+        "hint": "Remplace la sélection par les actifs détenus le dernier jour de la période.",
+        "noneHeld": "Rien n'y est détenu le dernier jour de la période : la sélection ne change pas."
+      },
+      "picker": {
+        "notAnalysable": "Non analysables sur la période"
+      },
+      "selectedCountHint": "Le premier nombre compte les actifs que le laboratoire analyse en ce moment. Le second compte combien il pourrait en analyser sur la période choisie : tous les actifs présents dans LibreFolio, pas seulement ceux que vous détenez, pourvu qu'ils aient assez de prix sur cette période. Ceux qui n'en ont pas restent listés dans le « + », en lecture seule, avec le motif.",
+      "parkedNote": "{count, plural, one {# actif sélectionné n'est pas analysable sur la période et reste hors de l'analyse.} other {# actifs sélectionnés ne sont pas analysables sur la période et restent hors de l'analyse.}}",
+      "eligibilityFailed": "L'éligibilité n'a pas pu être vérifiée : tous les actifs restent sélectionnables.",
+      "fitPeriod": {
+        "banner": "Avec la période choisie, {count, plural, one {# actif sélectionné n'a pas de prix} other {# actifs sélectionnés n'ont pas de prix}} sur une partie de l'intervalle.",
+        "button": "Utiliser la période où tous ont des prix (du {start} au {end})",
+        "hint": "Déplace la période en haut sur l'intervalle où tous les actifs sélectionnés qui ont des prix sont cotés. Reviennent dans l'analyse : {names}."
+      },
+      "benchmark": {
+        "help": "L'actif de référence, le « risque de base » : le bêta indique, actif par actif, si chacun a bougé plus (au-dessus de 1) ou moins (en dessous de 1) que lui ; la corrélation, à quel point ensemble."
       }
     },
     "metrics": {
@@ -3397,16 +3462,45 @@
       "worker_busy": "Le service de calcul est occupé. Réessayez dans un instant.",
       "execution_timeout": "Le calcul a pris trop de temps et a été interrompu.",
       "optimization_infeasible": "Aucune allocation ne satisfait les contraintes demandées.",
-      "unknown": "Cette mesure n'a pas renvoyé de résultat."
+      "unknown": "Cette mesure n'a pas renvoyé de résultat.",
+      "answer_discarded": "La réponse a été écartée parce que les données ont changé pendant son arrivée. Relancez l'analyse."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
       "sortino_undefined": "Sortino est indéfini car l'écart baissier est nul.",
-      "insufficient_pair_history": "Certaines paires de corrélation ont un historique commun insuffisant.",
+      "insufficient_pair_history": "L'historique commun est trop court pour une corrélation.",
       "flat_series": "Certaines valeurs sont indéfinies car une série est constante.",
-      "low_pair_coverage": "Certaines paires de corrélation ont une faible couverture.",
+      "low_pair_coverage": "La fenêtre commune couvre trop peu de la période.",
       "comparison_beta_undefined": "Le bêta est indéfini car l'actif de comparaison a une variance nulle.",
-      "comparison_correlation_undefined": "La corrélation est indéfinie car une série a une variance nulle."
+      "comparison_correlation_undefined": "La corrélation est indéfinie car une série a une variance nulle.",
+      "slice_assets_not_held": "{count, plural, one {# actif demandé n'est pas détenu} other {# actifs demandés ne sont pas détenus}} dans le périmètre choisi et {count, plural, one {a été ignoré} other {ont été ignorés}} : {names}.",
+      "zero_risk_residual_includes_in_transit": "La part comptée à rendement nul inclut une valeur en transit, sans série de rendements.",
+      "assets_excluded_missing_price": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucun prix de marché sur la période — {names}.",
+      "assets_excluded_missing_fx": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : le taux de change vers votre devise est manquant — {names}.",
+      "assets_excluded_invalid_currency": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : la devise de leurs prix n'est pas valide — {names}.",
+      "assets_excluded_insufficient_history": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : historique insuffisant sur la période — {names}.",
+      "data_quality_stale_prices": "Prix de plus de {days} jours pour {count, plural, one {# actif} other {# actifs}} : {names}.",
+      "data_quality_stale_fx_rates": "Taux de change de plus de {days} jours : {pairs}.",
+      "data_quality_missing_prices": "Prix de marché manquants pour {count, plural, one {# actif} other {# actifs}} : {names}.",
+      "data_quality_missing_fx_rates": "Taux de change manquants : {pairs}.",
+      "data_quality_incomplete_dates": "{count, plural, one {# jour de la période n'a pas pu être évalué} other {# jours de la période n'ont pas pu être évalués}} entièrement.",
+      "data_quality_degraded": "Une partie des données sources est incomplète.",
+      "comparison_beta_undefined_assets": "Bêta indéfini pour {names} : l'actif de comparaison a une variance nulle.",
+      "comparison_correlation_undefined_assets": "Corrélation indéfinie pour {names} : une série a une variance nulle.",
+      "sharpe_undefined_assets": "Sharpe indéfini pour {names} : la volatilité est nulle.",
+      "sortino_undefined_assets": "Sortino indéfini pour {names} : l'écart baissier est nul.",
+      "worst_realization_undefined_assets": "Aucune observation en perte sur la période pour {names}.",
+      "worst_realization_undefined": "Aucune observation en perte sur la période.",
+      "hypothetical_metadata_other_fallback": "{names} : données de {dimension, select, sector {secteur} other {géographie}} manquantes — traité comme « Autre » à 100 %.",
+      "historical_replay_proxies_used": "Le rejeu a utilisé une série de substitution pour : {names}.",
+      "historical_replay_excluded_manual": "Exclusion manuelle : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
+      "historical_replay_excluded_no_prices": "Aucun prix dans la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
+      "historical_replay_excluded_starts_late": "Première cotation après le début de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
+      "historical_replay_excluded_missing_fx": "Aucun taux de change vers votre devise dans la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
+      "historical_replay_excluded_stale_at_start": "Aucun prix dans les {days} jours précédant le début de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
+      "historical_replay_excluded_stale_at_end": "Aucun prix dans les {days} derniers jours de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
+      "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu.",
+      "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
@@ -3511,7 +3605,10 @@
         "uncovered": {
           "label": "Quelle part de moi n'est pas mesurée ici ?",
           "caption": "Liquidités, plus chaque position sans série de prix exploitable",
-          "residual": "Les lignes ci-dessous décrivent le reste du portefeuille ; {share} n'en fait pas partie"
+          "residual": "Les lignes ci-dessous décrivent le reste du portefeuille ; {share} n'en fait pas partie",
+          "split": "{cash} de liquidités · {unpriced} sans prix",
+          "allUnpriced": "Tout en positions sans prix",
+          "allCash": "Tout en liquidités"
         },
         "rowsCaption": "La barre montre l'écart entre poids et risque : à droite plus de risque que de poids, à gauche moins. Les poids sont des parts du portefeuille entier.",
         "correlation": {
@@ -3526,9 +3623,6 @@
         "sharpe": "Sharpe",
         "volatility": "Volatilité",
         "beta": "Bêta",
-        "sortinoHelp": "Rendement par unité de risque baissier. Contrairement au Sharpe, il ne pénalise pas les hausses violentes.",
-        "sharpeHelp": "Rendement par unité de volatilité totale : il pénalise les hausses autant que les baisses.",
-        "betaHelp": "Ampleur du mouvement par rapport à l’indice de référence.",
         "benchmark": "Comparé à",
         "perimeter": {
           "current_composition": "sur la composition actuelle",
@@ -3538,10 +3632,36 @@
           "title": "Risque contre rendement, actif par actif",
           "portfolio": "Portefeuille",
           "axisVolatility": "Volatilité annualisée",
-          "axisReturn": "Rendement annualisé attendu",
+          "axisReturn": "Rendement moyen annuel",
           "line": "Droite risque-rendement",
-          "note": "Au-dessus de la droite signifie mieux payé pour le risque pris. Les points montrent le rendement attendu en moyenne-variance, la grandeur dans laquelle la pente de la droite est le ratio de Sharpe : sur un actif très volatil, le rendement réellement vécu est plus faible, car la volatilité érode la capitalisation.",
-          "cash": "Les liquidités ({share} du patrimoine) ne sont pas un point : dans le modèle elles rapportent exactement zéro, et les dessiner en ferait une mesure."
+          "notes": {
+            "above": "Au-dessus de la droite : mieux payé pour le risque pris.",
+            "line": "La droite part du taux sans risque et, sans indice de référence, passe par le portefeuille : sa pente est le ratio de Sharpe du portefeuille.",
+            "expected": "Les points utilisent le rendement moyen annuel :",
+            "size": "La taille d'un point est son poids dans le portefeuille : les gros points sont ceux qui font le plus bouger le résultat.",
+            "outside": "Non tracé :",
+            "outsideCash": "liquidités {share}",
+            "outsideUnpriced": "positions sans prix {share}",
+            "expectedWarning": "sur un actif très volatil, celui réellement vécu est plus bas.",
+            "lineBenchmark": "La droite part du taux sans risque et passe par l'indice de référence : sa pente est le ratio de Sharpe de l'indice.",
+            "priceOnly": "Le rendement vient des seuls prix : coupons et dividendes ne sont pas encore inclus.",
+            "lineDocs": "D'où vient la droite, et quel indice de référence choisir"
+          },
+          "tooltip": {
+            "weight": "Poids dans le portefeuille : {share}",
+            "benchmark": "Référence",
+            "heldBenchmark": "Référence · en portefeuille, poids {share}"
+          }
+        },
+        "rows": {
+          "kpi": "Sortino, Sharpe et volatilité"
+        },
+        "table": {
+          "weight": "Poids",
+          "weightHelp": "La part du patrimoine dans cette position, aujourd'hui. C'est aussi la taille de son point dans le graphique.",
+          "notHeld": "Pas dans le portefeuille : l'indice de référence est là pour la comparaison.",
+          "expectedReturnShort": "Rend. annuel",
+          "namedHelp": "{name}\n{help}"
         }
       },
       "l4": {
@@ -3592,19 +3712,64 @@
           },
           "truncation": "Déclaré sur {declared} jours, appliqué sur {applied} : le cône répond à la question la plus courte."
         },
-        "replayExcluded": "Exclus :",
-        "replayNeedsChoice": "{name} n’a pas d’historique exploitable sur cette période. Excluez-le, ou donnez-lui un substitut — un substitut est une opinion sur ce qu’il aurait fait.",
-        "replayProxyUnusable": "Le substitut choisi pour {name} n’a pas non plus d’historique exploitable. Choisissez-en un autre.",
-        "replayExcludeAndRetry": "Exclure et relancer",
         "replayTotal": "Cette composition aurait terminé la période à {percent} {amount}",
-        "replayAudit": "Substituts : {proxies} · Exclus : {excluded} ({weight} du périmètre, à rendement nul)",
-        "replayAuditOmitted": "Substituts : {proxies} · Exclus : {excluded} (omis du rejeu : les chiffres parlent pour les autres)",
         "shockShowDetail": "Afficher le choc par compartiment",
         "shockHideDetail": "Masquer le choc par compartiment",
         "shockTotal": "Ce scénario déplacerait le périmètre de {percent} {amount}",
-        "shockCoverage": "Seuls {percent} du périmètre ont pu être classés : le total ne parle que de cette part."
+        "shockCoverage": "Seuls {percent} du périmètre ont pu être classés : le total ne parle que de cette part.",
+        "replayPeriod": "Période",
+        "replayExcludedResidual": "Hors du rejeu : {count, plural, one {# actif} other {# actifs}} ; {weight} de la valeur compte comme liquidités à rendement nul.",
+        "replayExcludedOmitted": "Hors du rejeu : {count, plural, one {# actif} other {# actifs}} ; les chiffres parlent pour les autres.",
+        "replayReasonNoPrices": "Aucun prix sur la période",
+        "replayReasonStartsLate": "Coté après le début de la période",
+        "replayReasonStaleAtStart": "Aucun prix récent au début de la période",
+        "replayReasonStaleAtEnd": "Aucun prix récent à la fin de la période",
+        "replayReasonMissingFx": "Aucun taux de change vers votre devise",
+        "replayReasonManual": "Exclu par vous",
+        "replayReasonOther": "Autre raison",
+        "replayNothing": "Rien à rejouer : aucun actif n'a de prix utilisables sur cette période.",
+        "replaySuggested": "Rejouer du {start} au {end} : {count, plural, one {# actif revient} other {# actifs reviennent}}",
+        "replaySuggestedPartial": "Seulement une partie de la crise.",
+        "replayPresetNone": "Aucun préréglage",
+        "tools": {
+          "empty": "Choisissez un outil : le rejeu historique montre ce qui s’est réellement passé, le choc hypothétique applique une hypothèse de votre part, la simulation utilise un modèle.",
+          "add": "Ajouter :",
+          "close": "Fermer {tool}"
+        },
+        "table": {
+          "asset": "Actif",
+          "weight": "Poids",
+          "return": "Rendement",
+          "contribution": "Contribution",
+          "impact": "Impact",
+          "bar": "Effet"
+        }
       },
-      "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé."
+      "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
+      "notice": {
+        "partialTitle": "Certains résultats sont partiels",
+        "notesTitle": "À savoir sur ces résultats",
+        "noPriceSourceTitle": "Positions sans prix, exclues de certaines mesures",
+        "affected": "Mesures concernées"
+      }
+    },
+    "eligibility": {
+      "reasons": {
+        "no_prices": "Aucun prix sur la période",
+        "too_few_quotes": "Moins de {minQuotes} cotations sur la période ({count})",
+        "missing_fx": "Aucun taux de change vers {currency} au début ou à la fin de la période",
+        "starts_late": "Première cotation le {date}, après le début de la période",
+        "stale_at_end": "Dernier prix le {date}, plus de {days} jours avant la fin",
+        "no_price_history": "Aucun prix n'a jamais été enregistré pour cet actif"
+      },
+      "levels": {
+        "ineligible": "Non analysable sur la période",
+        "warning": "Analysable, avec un avertissement"
+      }
+    },
+    "benchmark": {
+      "measuredHere": "Cette référence est aussi un actif mesuré ici et ne peut pas servir de mesure à elle-même : choisissez-en une autre pour la comparaison.",
+      "blocked": "Inutilisables sur cette période"
     }
   },
   "updateCheck": {
@@ -5421,5 +5586,16 @@
       "dark": "Thème sombre",
       "light": "Thème clair"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Type",
+      "currency": "Devise",
+      "clear": "Effacer les filtres"
+    },
+    "selectVisible": "Sélectionner les visibles",
+    "deselectVisible": "Désélectionner les visibles",
+    "confirm": "Ajouter {count}",
+    "allSelected": "Tous les actifs sont déjà dans la sélection."
   }
 }

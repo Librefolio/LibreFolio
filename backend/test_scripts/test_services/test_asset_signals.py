@@ -6,6 +6,7 @@ import asyncio
 import time
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -29,13 +30,19 @@ from backend.app.schemas.prices import FAPriceQueryItem  # noqa: E402
 from backend.app.schemas.signals import (  # noqa: E402
     SignalAvailabilityReason,
     SignalCalendarReturnPointStatus,
+    SignalDomain,
+    SignalExecutionContext,
     SignalPriceValueSource,
     SignalRequest,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalWarningCode,
 )
+from backend.app.services import market_calendar  # noqa: E402
 from backend.app.services.asset_source import AssetSourceManager  # noqa: E402
+from backend.app.services.asset_sources import price_query as price_query_module  # noqa: E402
+from backend.app.services.asset_sources.price_query import PriceQueryOperations  # noqa: E402
+from backend.app.services.provider_registry import SignalPluginRegistry  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -677,81 +684,82 @@ async def test_invalid_signal_is_isolated_from_valid_signal_and_prices(
 
 
 @pytest.mark.asyncio
-async def test_duplicate_asset_items_use_seed_for_each_load_range():
-    async with AsyncSession(
-        get_async_engine(),
-        expire_on_commit=False,
-    ) as session:
-        asset = Asset(
-            display_name=f"Signal Duplicate {time.time_ns()}",
-            currency="EUR",
-            asset_type=AssetType.STOCK,
-            active=True,
-        )
-        session.add(asset)
-        await session.flush()
-        start = date(2026, 1, 1)
-        session.add_all(
-            [
-                PriceHistory(
-                    asset_id=asset.id,
-                    date=start,
-                    close=Decimal("10"),
-                    currency="EUR",
-                    source_plugin_key="signal_test",
-                ),
-                PriceHistory(
-                    asset_id=asset.id,
-                    date=start + timedelta(days=40),
-                    close=Decimal("50"),
-                    currency="EUR",
-                    source_plugin_key="signal_test",
-                ),
-                PriceHistory(
-                    asset_id=asset.id,
-                    date=start + timedelta(days=60),
-                    close=Decimal("70"),
-                    currency="EUR",
-                    source_plugin_key="signal_test",
-                ),
-            ]
-        )
-        await session.commit()
+async def test_duplicate_asset_items_use_seed_for_each_load_range(
+    asset_signal_rollback_session,
+):
+    """Two items for one asset, each with its own load range and its own seed.
 
-        results = await AssetSourceManager.get_prices_bulk(
-            [
-                FAPriceQueryItem(
-                    asset_id=asset.id,
-                    date_range=DateRangeModel(
-                        start=start + timedelta(days=50),
-                        end=start + timedelta(days=60),
-                    ),
+    The first opens on a day without a row and is seeded from inside the bulk
+    window; the second, warmed up for SMA 20, opens before every row of the
+    window and is seeded from the row before it. Twenty-five genuine sessions
+    precede its visible range, since the SMA counts sessions, not the
+    calendar copies of a seed.
+    """
+    session = asset_signal_rollback_session
+    asset = Asset(
+        display_name=f"Signal Duplicate {time.time_ns()}",
+        currency="EUR",
+        asset_type=AssetType.STOCK,
+        active=True,
+    )
+    session.add(asset)
+    await session.flush()
+    start = date(2026, 1, 1)
+    closes = {
+        start: Decimal("10"),
+        **{start + timedelta(days=offset): Decimal(20 + offset) for offset in range(16, 40)},
+        start + timedelta(days=40): Decimal("50"),
+        start + timedelta(days=60): Decimal("70"),
+    }
+    session.add_all(
+        [
+            PriceHistory(
+                asset_id=asset.id,
+                date=day,
+                close=close,
+                currency="EUR",
+                source_plugin_key="signal_test",
+            )
+            for day, close in closes.items()
+        ]
+    )
+    await session.flush()
+
+    results = await AssetSourceManager.get_prices_bulk(
+        [
+            FAPriceQueryItem(
+                asset_id=asset.id,
+                date_range=DateRangeModel(
+                    start=start + timedelta(days=50),
+                    end=start + timedelta(days=60),
                 ),
-                FAPriceQueryItem(
-                    asset_id=asset.id,
-                    date_range=DateRangeModel(
-                        start=start + timedelta(days=55),
-                        end=start + timedelta(days=60),
-                    ),
-                    signals=[
-                        SignalRequest(
-                            instance_id="sma",
-                            signal_code="SMA",
-                            params={"period": 20},
-                        )
-                    ],
+            ),
+            FAPriceQueryItem(
+                asset_id=asset.id,
+                date_range=DateRangeModel(
+                    start=start + timedelta(days=55),
+                    end=start + timedelta(days=60),
                 ),
-            ],
-            session,
-        )
+                signals=[
+                    SignalRequest(
+                        instance_id="sma",
+                        signal_code="SMA",
+                        params={"period": 20},
+                    )
+                ],
+            ),
+        ],
+        session,
+    )
 
     first_point = results[0].prices[0]
     assert first_point.close == Decimal("50")
     assert first_point.backward_fill_info.actual_rate_date == start + timedelta(days=40)
-    assert results[1].signals[0].status in {
-        SignalStatus.OK,
-        SignalStatus.PARTIAL,
-    }
+    signal = results[1].signals[0]
+    # SMA 20 loads forty calendar days: its range opens on day 15, where no row exists, so
+    # only the seed from before the bulk window (day 0) can make it start there.
+    assert signal.availability.input_coverage.first_available_date == start + timedelta(days=15)
+    assert signal.status == SignalStatus.OK
 
 
 # =============================================================================
@@ -1345,3 +1353,435 @@ async def test_calendar_assets_keep_independent_ok_partial_and_unavailable_subse
     assert unavailable.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_HISTORY
     assert unavailable.error is None
     assert unavailable.series == []
+
+
+# =============================================================================
+# Quote days (developer's decision of 30/09/2026)
+#
+# «Sui giorni di quotazione, come la definizione standard: SMA 200 = 200 sedute.»
+# In this adapter a stored carry — a weekend or union-holiday row whose close
+# repeats the row before it exactly, as justETF stores them — reaches the signal
+# service marked as backfilled, by the rule of
+# `market_calendar.is_market_closed_repeat` and the table the adapter awaits
+# once per `get_prices_bulk` call. Session plugins then load twice their
+# sessions in calendar days; full-history plans and the prepared multiplier are
+# unchanged.
+#
+# The holiday table is served, never built: a QuantLib build in a spawn process
+# has no place in a unit, and a served table makes the holidays exact. The
+# seven-day source's rows are flushed and rolled back.
+# =============================================================================
+
+NOT_PASSED = object()
+SEVEN_DAY_FIRST_DAY = date(2024, 1, 1)  # a Monday
+SEVEN_DAY_VISIBLE = DateRangeModel(start=date(2024, 3, 4), end=date(2024, 3, 31))  # Monday to Sunday
+SEVEN_DAY_SMA_PERIOD = 10
+MOVING_SATURDAY = date(2024, 3, 9)
+TABLE_DAY_THAT_MOVES = date(2024, 3, 14)  # a Thursday in the served table, quoted with a new close
+TABLE_DAY_THAT_REPEATS = date(2024, 3, 20)  # a Wednesday in the served table, repeating Tuesday
+FLAT_WEEKDAY = date(2024, 3, 26)  # a Tuesday repeating Monday, in no table
+
+
+@pytest.fixture
+def served_market_holidays(monkeypatch):
+    """Serve a known holiday table where the adapter awaits it, and count the awaits."""
+    served = SimpleNamespace(table=frozenset(), awaits=0)
+
+    async def serve() -> frozenset[date]:
+        served.awaits += 1
+        return served.table
+
+    monkeypatch.setattr(price_query_module, "ensure_market_holidays", serve, raising=False)
+    monkeypatch.setattr(market_calendar, "ensure_market_holidays", serve)
+    return served
+
+
+def seven_day_closes(
+    *,
+    moving_saturdays: frozenset[date] = frozenset(),
+    repeating_weekdays: frozenset[date] = frozenset(),
+) -> dict[date, Decimal]:
+    """One close per calendar day, the way a seven-day source stores them.
+
+    A weekend day repeats the row before it exactly unless it is a moving
+    Saturday; a weekday moves unless it is listed as repeating.
+    """
+    closes: dict[date, Decimal] = {}
+    previous = Decimal("0")
+    moves = 0
+    day = SEVEN_DAY_FIRST_DAY
+    while day <= SEVEN_DAY_VISIBLE.end:
+        if day in moving_saturdays:
+            close = previous + Decimal("1.25")
+        elif day.weekday() >= 5 or day in repeating_weekdays:
+            close = previous
+        else:
+            close = Decimal(10_000 + 17 * moves + 90 * ((3 * moves) % 5)) / Decimal(100)
+            moves += 1
+        closes[day] = close
+        previous = close
+        day += timedelta(days=1)
+    return closes
+
+
+@pytest_asyncio.fixture
+async def seven_day_asset(asset_signal_rollback_session):
+    """Create a close-only asset whose rows are the given closes."""
+
+    async def create(closes: dict[date, Decimal]) -> int:
+        asset = Asset(
+            display_name=f"Quote Days Seven-Day Source {uuid4().hex}",
+            currency="EUR",
+            asset_type=AssetType.ETF,
+            active=True,
+        )
+        asset_signal_rollback_session.add(asset)
+        await asset_signal_rollback_session.flush()
+        asset_signal_rollback_session.add_all(
+            [
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=day,
+                    close=close,
+                    currency="EUR",
+                    source_plugin_key="signal_test",
+                )
+                for day, close in closes.items()
+            ]
+        )
+        await asset_signal_rollback_session.flush()
+        return asset.id
+
+    return create
+
+
+async def seven_day_signals(session, asset_id: int, signals: list[SignalRequest]):
+    results = await AssetSourceManager.get_prices_bulk(
+        [
+            FAPriceQueryItem(
+                asset_id=asset_id,
+                date_range=SEVEN_DAY_VISIBLE,
+                include_price=False,
+                signals=signals,
+            )
+        ],
+        session,
+    )
+    return result_for_asset(results, asset_id)
+
+
+def seven_day_sma() -> list[SignalRequest]:
+    return [SignalRequest(instance_id="sma", signal_code="SMA", params={"period": SEVEN_DAY_SMA_PERIOD})]
+
+
+def loaded_days(closes: dict[date, Decimal], coverage) -> list[date]:
+    """The calendar days the adapter loaded, read from the coverage it reports."""
+    return [day for day in closes if coverage.first_available_date <= day <= coverage.last_available_date]
+
+
+def assert_is_the_sma_of(series, quotes: dict[date, Decimal]) -> None:
+    """Dated on the visible quote days, valued as the SMA of the quotes alone."""
+    days = sorted(quotes)
+    closes = [float(quotes[day]) for day in days]
+    period = SEVEN_DAY_SMA_PERIOD
+    expected = {day: sum(closes[index + 1 - period : index + 1]) / period for index, day in enumerate(days) if index + 1 >= period}
+    assert [point.date for point in series.points] == [day for day in days if SEVEN_DAY_VISIBLE.start <= day <= SEVEN_DAY_VISIBLE.end]
+    for point in series.points:
+        if point.date in expected:
+            assert point.value == pytest.approx(expected[point.date]), point.date.isoformat()
+        else:
+            assert point.value is None, point.date.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_stored_weekend_carries_reach_the_signals_backfilled(
+    asset_signal_rollback_session,
+    seven_day_asset,
+    served_market_holidays,
+):
+    """T5 — justETF stores Saturday and Sunday as Friday's close: two carries, not two quotes."""
+    closes = seven_day_closes()
+    asset_id = await seven_day_asset(closes)
+
+    signal = (await seven_day_signals(asset_signal_rollback_session, asset_id, seven_day_sma())).signals[0]
+
+    coverage = signal.availability.input_coverage
+    loaded = loaded_days(closes, coverage)
+    weekdays = [day for day in loaded if day.weekday() < 5]
+    # Premise: the loaded span is calendar-complete and opens on a quote.
+    assert coverage.first_available_date.weekday() < 5
+    assert coverage.last_available_date == SEVEN_DAY_VISIBLE.end
+    assert (coverage.available_points, coverage.missing_points) == (len(loaded), 0)
+    # Coverage keeps the calendar; its split now reads the weekend rows as carried.
+    assert (coverage.observed_points, coverage.backfilled_points) == (len(weekdays), len(loaded) - len(weekdays))
+    assert_is_the_sma_of(signal.series[0], {day: closes[day] for day in weekdays})
+
+
+@pytest.mark.asyncio
+async def test_a_weekend_row_that_moves_stays_a_quote(
+    asset_signal_rollback_session,
+    seven_day_asset,
+    served_market_holidays,
+):
+    """T5 — weekend *and* exact repeat: a Saturday that moves is a quote, its Sunday repeat is not."""
+    closes = seven_day_closes(moving_saturdays=frozenset({MOVING_SATURDAY}))
+    asset_id = await seven_day_asset(closes)
+
+    signal = (await seven_day_signals(asset_signal_rollback_session, asset_id, seven_day_sma())).signals[0]
+
+    coverage = signal.availability.input_coverage
+    loaded = loaded_days(closes, coverage)
+    quotes = {day: closes[day] for day in loaded if day.weekday() < 5 or day == MOVING_SATURDAY}
+    dates = [point.date for point in signal.series[0].points]
+    assert MOVING_SATURDAY in dates
+    assert MOVING_SATURDAY + timedelta(days=1) not in dates
+    assert (coverage.observed_points, coverage.backfilled_points) == (len(quotes), len(loaded) - len(quotes))
+    assert_is_the_sma_of(signal.series[0], quotes)
+
+
+@pytest.mark.asyncio
+async def test_the_served_holiday_table_marks_a_holiday_repeat_but_not_a_move_or_a_flat_weekday(
+    asset_signal_rollback_session,
+    seven_day_asset,
+    served_market_holidays,
+):
+    """T5 — the union-holiday table extends the rule to weekdays: only an exact repeat on a
+    listed day is a carry; a listed day that moves and an unlisted flat weekday stay quotes."""
+    served_market_holidays.table = frozenset({TABLE_DAY_THAT_MOVES, TABLE_DAY_THAT_REPEATS})
+    closes = seven_day_closes(repeating_weekdays=frozenset({TABLE_DAY_THAT_REPEATS, FLAT_WEEKDAY}))
+    asset_id = await seven_day_asset(closes)
+
+    signal = (await seven_day_signals(asset_signal_rollback_session, asset_id, seven_day_sma())).signals[0]
+
+    coverage = signal.availability.input_coverage
+    loaded = loaded_days(closes, coverage)
+    quotes = {day: closes[day] for day in loaded if day.weekday() < 5 and day != TABLE_DAY_THAT_REPEATS}
+    dates = [point.date for point in signal.series[0].points]
+    assert TABLE_DAY_THAT_REPEATS not in dates
+    assert TABLE_DAY_THAT_MOVES in dates
+    assert FLAT_WEEKDAY in dates
+    assert (coverage.observed_points, coverage.backfilled_points) == (len(quotes), len(loaded) - len(quotes))
+    assert_is_the_sma_of(signal.series[0], quotes)
+    assert served_market_holidays.awaits == 1
+
+
+@pytest.mark.asyncio
+async def test_calendar_return_reports_a_stored_weekend_carry_as_carried(
+    asset_signal_rollback_session,
+    seven_day_asset,
+    served_market_holidays,
+):
+    """T5 — the calendar return reads the same calendar days and values; the carries it reads
+    are now reported as carried from Friday, because they reach the service marked."""
+    closes = seven_day_closes()
+    asset_id = await seven_day_asset(closes)
+
+    signal = (
+        await seven_day_signals(
+            asset_signal_rollback_session,
+            asset_id,
+            [SignalRequest(instance_id="calendar", signal_code=CALENDAR_SIGNAL_CODE, params={"window_days": 7})],
+        )
+    ).signals[0]
+
+    assert signal.status == SignalStatus.OK
+    series = calendar_series(signal)
+    assert [point.date for point in series.points] == [SEVEN_DAY_VISIBLE.start + timedelta(days=offset) for offset in range(28)]
+    for point in series.points:
+        assert point.value == pytest.approx((float(closes[point.date]) / float(closes[point.date - timedelta(days=7)]) - 1) * 100)
+    saturday = point_on(series, date(2024, 3, 16))
+    assert (saturday.provenance.current_price_date, saturday.provenance.current_price_days_back) == (date(2024, 3, 15), 1)
+    assert (saturday.provenance.reference_price_date, saturday.provenance.reference_price_days_back) == (date(2024, 3, 8), 1)
+
+
+@pytest.mark.asyncio
+async def test_one_bulk_call_awaits_the_holiday_table_once_and_hands_it_to_both_prepared_sets(
+    monkeypatch,
+    asset_signal_data,
+    served_market_holidays,
+):
+    """T5 — one await per call, whatever the number of requests, and the same table for the
+    primary prepared set and for the primary-with-comparison set."""
+    served_market_holidays.table = frozenset({date(1899, 12, 31)})  # a date nothing here is quoted near
+    prepared_with: list[object] = []
+    real_prepare = price_query_module.prepare_asset_series_set
+
+    def prepare_spy(*args, **kwargs):
+        prepared_with.append(kwargs.get("market_holidays", NOT_PASSED))
+        return real_prepare(*args, **kwargs)
+
+    monkeypatch.setattr(price_query_module, "prepare_asset_series_set", prepare_spy)
+    primary_id, comparison_id = asset_signal_data["asset_ids"][:2]
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            [
+                FAPriceQueryItem(
+                    asset_id=primary_id,
+                    date_range=visible_range(asset_signal_data),
+                    include_price=False,
+                    signals=[
+                        SignalRequest(instance_id="sma", signal_code="SMA", params={"period": 5}),
+                        SignalRequest(
+                            instance_id="beta",
+                            signal_code="RISK_ROLLING_BETA",
+                            params={"window": 10, "comparison_asset_id": comparison_id},
+                        ),
+                    ],
+                ),
+                FAPriceQueryItem(
+                    asset_id=comparison_id,
+                    date_range=visible_range(asset_signal_data),
+                    include_price=False,
+                    signals=[SignalRequest(instance_id="ema", signal_code="EMA", params={"period": 14})],
+                ),
+            ],
+            session,
+        )
+
+    assert [signal.status for result in results for signal in result.signals] == [SignalStatus.OK] * 3
+    # Premise: the beta prepares the primary set, then the primary-with-comparison set.
+    assert len(prepared_with) == 2
+    assert served_market_holidays.awaits == 1
+    assert prepared_with == [served_market_holidays.table, served_market_holidays.table]
+
+
+@pytest.mark.asyncio
+async def test_a_bulk_call_without_signals_never_awaits_the_holiday_table(
+    asset_signal_data,
+    served_market_holidays,
+):
+    """Only a computation reads the table: a plain price query must not wait for its build."""
+    asset_id = asset_signal_data["primary_asset_id"]
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            [FAPriceQueryItem(asset_id=asset_id, date_range=visible_range(asset_signal_data))],
+            session,
+        )
+
+    assert len(result_for_asset(results, asset_id).prices) == 30  # premise: the prices were served
+    assert served_market_holidays.awaits == 0
+
+
+def spy_load_starts(monkeypatch) -> list[date]:
+    """Record the first calendar day of every price series the adapter builds."""
+    starts: list[date] = []
+    real = PriceQueryOperations._build_backward_filled_series
+
+    def spy(price_map, start_date, end_date, seed_price=None):
+        starts.append(start_date)
+        return real(price_map, start_date, end_date, seed_price=seed_price)
+
+    monkeypatch.setattr(PriceQueryOperations, "_build_backward_filled_series", staticmethod(spy))
+    return starts
+
+
+async def signals_on_primary(asset_signal_data, signals: list[SignalRequest]):
+    asset_id = asset_signal_data["primary_asset_id"]
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        results = await AssetSourceManager.get_prices_bulk(
+            [
+                FAPriceQueryItem(
+                    asset_id=asset_id,
+                    date_range=visible_range(asset_signal_data),
+                    include_price=False,
+                    signals=signals,
+                )
+            ],
+            session,
+        )
+    return result_for_asset(results, asset_id)
+
+
+def plugin_total_points(signal_code: str, params: dict) -> int:
+    plugin_class = SignalPluginRegistry.get_plugin(signal_code)
+    context = SignalExecutionContext(
+        domain=SignalDomain.ASSET,
+        requested_range=DateRangeModel(start=date(2026, 1, 1)),
+        source_reference="asset:warmup",
+    )
+    return plugin_class.warmup_requirement(plugin_class.validate_params(params), context).total_points
+
+
+@pytest.mark.asyncio
+async def test_sma_200_loads_400_calendar_days_before_the_visible_start(
+    monkeypatch,
+    asset_signal_data,
+    served_market_holidays,
+):
+    """T6 — «SMA 200 = 200 sedute»: two calendar days per session of warm-up."""
+    starts = spy_load_starts(monkeypatch)
+    requested = visible_range(asset_signal_data)
+
+    signal = (await signals_on_primary(asset_signal_data, [SignalRequest(instance_id="sma", signal_code="SMA", params={"period": 200})])).signals[0]
+
+    assert starts == [requested.start - timedelta(days=400)]
+    # Every calendar day of this fixture is a quote: the 400 days are 400 sessions.
+    assert signal.status == SignalStatus.OK
+    assert (signal.warmup.loaded_points, signal.warmup.used_points) == (430, 400)
+
+
+@pytest.mark.asyncio
+async def test_a_full_history_plan_still_loads_from_the_first_price(
+    monkeypatch,
+    asset_signal_data,
+    served_market_holidays,
+):
+    """T6 — guard: a full-history plan (drawdown) keeps loading the whole history."""
+    starts = spy_load_starts(monkeypatch)
+
+    result = await signals_on_primary(
+        asset_signal_data,
+        [
+            SignalRequest(instance_id="sma", signal_code="SMA", params={"period": 200}),
+            SignalRequest(instance_id="drawdown", signal_code="RISK_DRAWDOWN", params={}),
+        ],
+    )
+
+    assert starts == [date.min]
+    sma = next(signal for signal in result.signals if signal.instance_id == "sma")
+    assert sma.warmup.loaded_points == 500  # the whole fixture: nothing precedes its first row
+
+
+@pytest.mark.asyncio
+async def test_a_prepared_risk_signal_keeps_its_own_multiplier(
+    monkeypatch,
+    asset_signal_data,
+    served_market_holidays,
+):
+    """T6 — guard: the prepared risk signals already load twice their points."""
+    starts = spy_load_starts(monkeypatch)
+    requested = visible_range(asset_signal_data)
+
+    await signals_on_primary(
+        asset_signal_data,
+        [SignalRequest(instance_id="volatility", signal_code="RISK_ROLLING_VOLATILITY", params={"window": 20})],
+    )
+
+    assert starts == [requested.start - timedelta(days=2 * plugin_total_points("RISK_ROLLING_VOLATILITY", {"window": 20}))]
+
+
+@pytest.mark.asyncio
+async def test_calendar_return_keeps_a_calendar_day_load_window(
+    monkeypatch,
+    asset_signal_data,
+    served_market_holidays,
+):
+    """T6 — guard: the calendar return is no session plugin; its window is calendar days."""
+    starts = spy_load_starts(monkeypatch)
+    requested = visible_range(asset_signal_data)
+
+    await signals_on_primary(
+        asset_signal_data,
+        [SignalRequest(instance_id="calendar", signal_code=CALENDAR_SIGNAL_CODE, params={"window_days": 30})],
+    )
+
+    assert starts == [requested.start - timedelta(days=30)]

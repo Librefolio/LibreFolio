@@ -16,7 +16,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
-from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskUnavailableError
+from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs, RiskUnavailableError
 from backend.app.services.risk.metrics import drawdown_episodes
 
 
@@ -41,6 +41,7 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
     supported_modes = (RiskMode.HISTORICAL,)
     params_model = DrawdownSummaryParams
     min_observations = 2
+    series_inputs = RiskSeriesInputs.PRIMARY
 
     def compute(self, params: DrawdownSummaryParams, context: RiskExecutionContext) -> RiskComputation:
         dates, returns = require_primary_returns(context)

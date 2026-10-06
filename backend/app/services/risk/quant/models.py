@@ -16,9 +16,12 @@ from backend.app.schemas.risk import (
     RiskSimulationProcess,
     RiskSimulationRegime,
 )
+from backend.app.services.risk.metrics import calendar_days_to_observations
 
 MAX_SOBOL_DIMENSION = 21_201
 MAX_HISTORY_OBSERVATIONS = 5_000
+# A history with no declared frequency is read as one observation per calendar day.
+DEFAULT_STEPS_PER_YEAR = 365.0
 
 
 def historical_returns_digest(matrix: Sequence[Sequence[float]]) -> str:
@@ -45,7 +48,10 @@ class SimulationEngineRequest(BaseModel):
     * ``block_bootstrap`` carries the *aligned historical return matrix* and
       estimates nothing. It cannot even express a covariance: the fields are
       rejected by validation, which is what makes an ill-conditioned
-      covariance structurally unreachable in that mode.
+      covariance structurally unreachable in that mode. Its ``steps_per_year``
+      is the history's observed frequency: the horizon, the regimes and the
+      block length stay in calendar days and are resampled in the observations
+      the history holds in them.
 
     ``process`` is deliberately **required**. The two contracts carry different
     data, so a default would let one shape be built by accident and silently
@@ -64,6 +70,7 @@ class SimulationEngineRequest(BaseModel):
     historical_returns: List[List[FiniteFloat]] | None = Field(None, min_length=2, max_length=MAX_HISTORY_OBSERVATIONS)
     historical_digest: str | None = Field(None, min_length=64, max_length=64)
     block_length_days: int | None = Field(None, ge=1, le=MAX_HISTORY_OBSERVATIONS)
+    steps_per_year: FiniteFloat | None = Field(None, gt=0)
     weights: List[FiniteFloat] = Field(..., min_length=1)
     cash_weight: FiniteFloat = Field(0.0, ge=0, le=1)
     horizon_days: int = Field(..., ge=1, le=3650)
@@ -72,6 +79,11 @@ class SimulationEngineRequest(BaseModel):
     sobol_start_index: int | None = Field(None, ge=0, le=2**32 - 1)
     bootstrap_seed: int | None = Field(None, ge=0, le=2**32 - 1)
     diagnostics: bool = False
+
+    @property
+    def effective_steps_per_year(self) -> float:
+        """Observations a year of the resampled history; unset reads as every calendar day."""
+        return DEFAULT_STEPS_PER_YEAR if self.steps_per_year is None else self.steps_per_year
 
     @model_validator(mode="after")
     def validate_dimensions(self) -> SimulationEngineRequest:
@@ -106,14 +118,14 @@ class SimulationEngineRequest(BaseModel):
             raise ValueError("historical return rows must match asset_ids")
         if any(value <= -1 for row in self.historical_returns for value in row):
             raise ValueError("historical simple returns must be greater than -1")
-        if self.block_length_days is not None and self.block_length_days > len(self.historical_returns):
+        if self.block_length_days is not None and calendar_days_to_observations(self.block_length_days, self.effective_steps_per_year) > len(self.historical_returns):
             raise ValueError("block length cannot exceed the observed history")
 
     def _validate_parametric_contract(self, asset_count: int) -> None:
         """Keep the pre-existing GBM contract bit-for-bit unchanged."""
         if self.regime != RiskSimulationRegime.NONE:
             raise ValueError("prescribed regimes require the block bootstrap process")
-        for name in ("historical_returns", "historical_digest", "block_length_days", "bootstrap_seed"):
+        for name in ("historical_returns", "historical_digest", "block_length_days", "bootstrap_seed", "steps_per_year"):
             if getattr(self, name) is not None:
                 raise ValueError(f"{name} is meaningful only for the block bootstrap process")
         self._validate_covariance_shape(asset_count)
@@ -224,6 +236,7 @@ def simulation_cache_key(
 
 
 __all__ = [
+    "DEFAULT_STEPS_PER_YEAR",
     "MAX_HISTORY_OBSERVATIONS",
     "MAX_SOBOL_DIMENSION",
     "SimulationEngineDiagnostics",

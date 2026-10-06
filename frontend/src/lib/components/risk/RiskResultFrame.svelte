@@ -6,6 +6,8 @@
     import {riskMetadata, singleValue} from '$lib/risk/riskTypes';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
+    import {warningSentence, type RiskResultWarning} from './levels/levelHelpers';
+
     interface Props {
         title: string;
         description?: string;
@@ -22,11 +24,18 @@
     let errorCode = $derived(singleValue(result?.error)?.code ?? null);
     let canRender = $derived(Boolean(result && (result.status === 'ok' || result.status === 'partial') && result.output));
 
-    function translatedCode(prefix: 'errors' | 'warnings', code: string | null | undefined, fallbackKey: string): string {
+    function translatedCode(prefix: 'errors', code: string | null | undefined, fallbackKey: string): string {
         if (!code) return $t(fallbackKey);
         const key = `risk.${prefix}.${code}`;
         const translated = $t(key);
         return translated === key ? $t(fallbackKey) : translated;
+    }
+
+    // A warning is read through the key and the values the backend sends, never
+    // through a key built from its code: a code-named key with ICU arguments,
+    // looked up without values, shows its braces on screen.
+    function warningText(warning: RiskResultWarning): string {
+        return warningSentence(warning, $t) || $t('risk.states.warning');
     }
 
     function percent(value: number | null | undefined): string {
@@ -78,7 +87,7 @@
         <div class="mt-3 space-y-1" data-testid="{testId}-warnings">
             {#each result.warnings as warning}
                 <p class="text-xs text-amber-600 dark:text-amber-400">
-                    {translatedCode('warnings', warning.code, 'risk.states.warning')}
+                    {warningText(warning)}
                 </p>
             {/each}
         </div>

@@ -47,9 +47,9 @@ class KamaSignalParams(BaseModel):
         json_schema_extra={
             "x-i18n-key": "chartSettings.params.period",
             "x-control-order": 1,
-            "x-suffix": "days",
+            "x-suffix": "sessions",
             "x-step": 1,
-            "x-tooltip-key": "chartSettings.tooltips.period",
+            "x-tooltip-key": "chartSettings.tooltips.sessionPeriod",
         },
     )
 
@@ -57,7 +57,8 @@ class KamaSignalParams(BaseModel):
 @register_plugin(SignalPluginRegistry)
 class KamaSignalPlugin(SignalPlugin):
     signal_code = "KAMA"
-    implementation_version = "1.0.0"
+    # 2.0.0 — computes on quote days: SMA 200 = 200 sessions (developer's decision of 30/09/2026).
+    implementation_version = "2.0.0"
     category = SignalCategory.TREND
     display_name_key = "signals.kama.name"
     description_key = "signals.kama.description"
