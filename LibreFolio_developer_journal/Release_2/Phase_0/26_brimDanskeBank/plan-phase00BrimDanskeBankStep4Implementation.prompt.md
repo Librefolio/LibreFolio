@@ -2443,3 +2443,130 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 ### 19.7 ✅ V1 — pronta per il checkpoint (2026-10-06)
 
 - Poi: il piano della voce 8 (A), solo analisi, e il secondo giro di review da capo.
+
+### 19.8 ✅ Il secondo giro riparte da capo (2026-10-06)
+
+- Codice: HEAD `172b8e616` (V1 committato); il server dice `v1.1.0-476-g172b8e616-dirty`, dove `-dirty` sono il piano e il piano del passo 5.
+- Il frontend non è cambiato dopo l'ultima build (`git diff 97259ce7f HEAD -- frontend/` è vuoto; build delle 14:44, con H).
+- Data-dir di review: un `populate --force --clean` (autorizzato solo lì; da 3 file a 0), poi gli utenti e `init-settings`.
+- Server su `127.0.0.1:6166`, login 200, **0 chiamate BRIM** prima della review: il catalogo è freddo, come nel caso del 500.
+
+### 19.9 ⏳ Le osservazioni del developer, secondo giro ripreso (2026-10-06)
+
+**Testuali**:
+
+> «meglio di prima, non si incarta, ma quando tolgo dal set le risorse continuano a non essere selezionati. Se poi li riselezione e scelgo il pligin di danske bak vanno su correttamete.
+>
+> il read as pra è corretto, mi pare che quasi tutto ci sia, prova anche tu a fare delle prove per far saltare fuori altri bug più tecnici»
+
+**Chiarimento chiesto da L** (la decisione del primo giro diceva che togliere dal set toglie anche la spunta). La risposta, testuale:
+
+> «credo ti sia confuso o che mi sono espresso male, lo ridico per non richiare di essere frainteso:
+> Quando tolgo un file dal set non significa necessariamente che non lo voglio usare, solo che non lo voglio fare con quel plugin.
+> Deve quindi restare selezionato, ma con plugin da scegliere.
+>
+> E anche come linea guida per il futuro, i prossimi plugin che usano i set, il comportamento deve essere questo, quando scegliamo il plugin il file entra nel set, se ci rendiamo conto di aver sbagliato e lo vogliamo portare fuori, il file non si deve deselezionare, deve solo scoparire il plugin selezionato in attesa di una nuova scelta»
+
+- **La decisione nuova (R5)**, che sostituisce quella del primo giro su «Togli dal set»:
+  - togliere un file dal set **non cambia la spunta**: il file resta com'era, senza plugin («Seleziona plugin…»), e «Analizza» aspetta una scelta;
+  - scegliere il plugin di un set fa entrare il file nel set;
+  - vale come **regola per tutti i plugin a set futuri**: va scritta nella guida dei plugin e nella pagina del wizard.
+- È una correzione di codice, quindi si fa dopo la chiusura del giro: analisi e piano al coordinatore, poi i rossi e la cura, come H.
+- **Il coordinatore, intanto**: via del developer alla voce 8, testuale «Approvo le raccomandazioni (Consigliato)» (D1 A-persist, D2 la versione dell'app, D3 il costo una volta sola in un thread). Concessione su `brokers.py` per le sole due chiamate (`:687`, `:135`). **Requisito nuovo**: il lock deve funzionare anche fra processi (`fcntl.flock` per broker, più la scrittura atomica che ricontrolla che il sidecar sia ancora al suo posto), con un test a due processi o a due thread più una prova di `flock`, scritto prima dal test-author. Ordine: prima il giro di review, poi la voce 8.
+
+### 19.10 ✅ Le prove tecniche di L, chieste dal developer (2026-10-06)
+
+Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui propri broker. Gli script sono `/tmp/libreFolio_l_review_probes.py` (47 prove), `…_probe_p15.py`, `…_probe_json.py` e `…_probe_rename.py`.
+
+**Come previsto (45 su 47)**:
+- due upload in parallelo;
+- l'anteprima del set;
+- `exclude_file_ids`: id sconosciuto → 422, di un altro broker → 422, tutti i membri → 404, non UUID → 422;
+- un plugin non a set o sconosciuto → 400/404; il batch di un altro broker → 404;
+- combine e riuso;
+- il parse del combinato (27 transazioni), mentre il parse di un membro da solo è rifiutato con 422;
+- due parse concorrenti dello stesso combinato → 200 e 200;
+- l'eliminazione di un membro e quella del combinato;
+- un CSV vuoto → 400; un XLSX corrotto e un `.txt` caricati → 200 senza plugin; un nome unicode con spazi → 200;
+- un batch non UUID → 422; un broker inesistente → 403;
+- preview, download e last-parse;
+- i corpi malformati di `gap-fix` e `duplicates` → 422; `auto` su un CSV che nessuno legge → 400.
+- **Lo stesso export due volte nello stesso set non raddoppia le transazioni**: 27 in tutti e due i casi, perché il combine toglie le righe doppie. Non è un difetto.
+
+**Difetti trovati**, nessuno viene da G. Le cause sono verificate nel codice e nei log:
+
+| # | Difetto | Causa | Gravità | Proprietà |
+|---|---|---|---|---|
+| F1 | Due **combine concorrenti** dello stesso set creano **due** file combinati | in `combine_set` il controllo di riuso e il salvataggio non sono atomici | medio-bassa: un doppio clic su «Analizza» o due schede lasciano un doppione | di L (`brim_report_sets.py`, `brim_provider.py`) |
+| F2 | L'**anteprima di un XLSX corrotto** risponde 500 «Failed to build file preview» | `file_preview.py:215` (`_read_excel_preview`): `BadZipFile` di openpyxl non è mappato su `ValueError`, quindi niente 400 | bassa | `file_preview.py` (comune) |
+| F3 | **Un upload `*.json` sovrascrive il file dell'utente coi propri metadati**: il download e l'anteprima restituiscono il sidecar. Vale anche per la rinomina (`custom_filename`) e per `.JSON` | il file salvato è `{file_id}{ext}`, con l'estensione dell'utente e senza elenco ammesso, e il sidecar è `{file_id}.json`. In più, un `_move_file` sposterebbe il sidecar come se fosse il file e non aggiornerebbe più lo stato | **media: perdita dei dati dell'utente** (alcuni exchange esportano in JSON) | `brim_provider.py` (di L) e l'upload in `brokers.py` (comune) |
+| F4 | Un **upload con un'estensione lunghissima** risponde 500 (`OSError: File name too long`) | come F3: l'estensione non è controllata | bassa | come F3 |
+
+**Proposte** (niente codice prima del via):
+- **F1**: il lock per broker della voce 8 (`flock`) copre anche il riuso e il salvataggio in `combine_set`. Quindi va con la voce 8, col suo rosso: due combine in parallelo → un solo combinato.
+- **F3 e F4**: al caricamento, un **elenco di estensioni ammesse** (l'unione delle `supported_extensions` dei plugin, eventualmente più i tipi di anteprima). Un'estensione fuori elenco si rifiuta con 422 e un messaggio chiaro, oppure si salva come `.dat` tenendo il nome originale per la visualizzazione (decisione del developer). In ogni caso mai `.json`.
+- **F2**: mappare gli errori di lettura (`BadZipFile`, `InvalidFileException`, decodifica) su `ValueError`, così l'anteprima risponde 400 «non riesco a leggere questo file».
+- Quando, prima o dopo il taglio: lo decide il developer. Consiglio prima del taglio almeno per F3 (perdita di dati).
+
+### 19.11 ✅ Il secondo giro si chiude (2026-10-06)
+
+- **Il developer** (ask_user, testuale): «Chiudi pure la review: ho visto abbastanza». Server di review spento, porta 6166 libera (`lsof` rc=1), nessun processo rimasto. Gli script delle prove sono copiati nei file della sessione.
+- **Le decisioni del coordinatore**:
+  1. **R5** prima della voce 8, in un checkpoint a sé: i rossi (i test G ed H da aggiornare), la correzione in `removeFileFromSet`, la regola nella guida dei plugin e nella pagina del wizard (EN). Una frase di CHANGELOG per la voce Danske, «You choose how a set is read»;
+  2. **F1** dentro la voce 8: lo stesso lock per broker copre `combine_set`, col rosso «due combine concorrenti → un solo combinato»;
+  3. **F3 e F4** nella 1.2, prima del taglio. Concessione su `brokers.py` per la validazione dell'estensione nell'upload; nessun ramo tocca `brokers.py` né `file_preview.py`. Prima i rossi: `.json`, `.JSON`, `custom_filename` con `.json`, un'estensione lunghissima;
+  4. **F2** è di L, in `file_preview.py`: `BadZipFile` → 400, col suo rosso. Va verificato che la mappatura valga anche in `uploads.py`, che importa dallo stesso modulo.
+  - **Ordine**: R5 → voce 8 con F1 → F2, F3 e F4 in un checkpoint di «robustezza dell'upload». Un checkpoint per volta, e una riga 🐛 di CHANGELOG per ogni punto che l'utente vede.
+- **F3 e F4, la scelta del developer** (ask_user, testuale): «422: rifiuta il file con un messaggio chiaro (Consigliato)».
+
+## 20. R5 — togliere dal set lascia la spunta (2026-10-06)
+
+**La decisione** (testuale, §19.9): «Quando tolgo un file dal set non significa necessariamente che non lo voglio usare, solo che non lo voglio fare con quel plugin. Deve quindi restare selezionato, ma con plugin da scegliere. […] il file non si deve deselezionare, deve solo scoparire il plugin selezionato in attesa di una nuova scelta».
+
+**Contratto**:
+- `removeFileFromSet(fileId)`: il file riceve `''`, cioè esce dal set senza plugin, e **la sua spunta non cambia**. Se era spuntato resta spuntato, con `pluginCode: ''`: la colonna Plugin mostra «Seleziona plugin…» con i suoi plugin compatibili (anche quello del set), e «Analizza» aspetta (`step2CanParse`). Se non era spuntato, resta non spuntato con «—».
+- Con questo, **nessun comando della scheda cambia più la spunta**: «Letto come» / «uno per uno», «Leggi da solo», «Togli dal set».
+- Scegliere di nuovo il plugin del set rimette il file nel set (`updateFilePlugin`), come oggi.
+- **La regola per i plugin a set futuri**, nella guida dei plugin: scegliere il plugin di un set fa entrare il file nel set; toglierlo dal set non cambia la spunta e lascia il file senza plugin, in attesa di una nuova scelta.
+
+**Rosso** (test-author):
+- E2E `tx-import-report-set.spec.ts`: H-E3 e gli altri test che oggi si aspettano la spunta tolta dopo «Togli dal set» (H-E3, G-memory (set) se ci passa, G-C o altri: da trovare), aggiornati al nuovo contratto. Più un caso: rimuovere un membro da un set spuntato → il file resta spuntato con la select vuota, «Analizza» è bloccato, e scegliere Danske lo rimette nel set.
+- Vitest, se esiste un test che copre la spunta di `removeFileFromSet` nella logica pura (probabilmente no: il gestore sta nel wizard).
+
+**Doc** (docs-writer, EN): `danske-bank.en.md` («Remove from the set … and is unticked» va cambiato), `import-wizard.md` (`removeFileFromSet`), `brim_plugin_guide.md` (la regola per i plugin a set).
+
+**Gate**: `tx-unit`, `front check`, `front build --debug`, `tx-import-report-set` a 1 e a 4 worker (col `--clean`), gli altri E2E di import, `component-unit`, `mkdocs build` strict e `check-links`.
+
+> **Permessi** (coordinatore, 2026-10-06): il `--clean` sulla 6156 prima di ogni giro E2E vale per R5, per la voce 8 e per la robustezza dell'upload, fino alla prossima integrazione. **Integrazione**: H, V1 e R5 entrano insieme in `dev_release2` subito dopo il checkpoint di R5. Il developer fonde il target (oggi `6addaba05`) nel ramo di L, L valida la revisione combinata, poi fast-forward e CHANGELOG (la riga V1, la riga R5 e una frase per H nella voce Danske).
+
+> **Note implementazione — R5 (2026-10-06)**:
+> - **Il rosso** (test-author, in `tx-import-report-set.spec.ts`):
+>   - adattati: H-E3 (il ritorno subito dopo «Togli dal set») e G-memory (set) (il terzo estratto tolto resta spuntato senza plugin; l'utente lo despunta);
+>   - nuovi: R5-E1 sugli export della banca, R5-E1 sulla cassa doppia (la select offre i due plugin, nessuno scelto) e R5-E2, la guardia sul set non spuntato (il file resta non spuntato con «—»);
+>   - nessun Vitest asseriva la spunta tolta.
+>   - Dopo il `--clean` autorizzato (da 226 file a 0): **4 rossi e 2 verdi**, come previsto. I 4 cadono tutti su «‹id› is selected» (`data-state` `unchecked` invece di `checked`).
+> - **La cura** (`ImportWizardModal.svelte`): `removeFileFromSet` tiene il file in `selectedFiles` con `pluginCode: ''` invece di toglierlo, nello stesso blocco sincrono di `filePluginOverrides` (consiglio del test-author: così il `{#key}` lo rimonta spuntato). Il commento dice che, come «Letto come» e «Leggi da solo», cambia il modo di lettura, mai la spunta.
+> - **I gate** (corsia 6156, un comando per volta, `--clean` prima del giro):
+>
+> | Verifica | Esito |
+> |---|---|
+> | Prettier `--check`, `front check`, `front build --debug` | puliti / **0/0** / ok |
+> | `tx-import-report-set` | **27 passed** a 1 worker (carico 161) e **27 passed** a 4 worker |
+> | `-guide` / `handoff` / `file-selection` / `upload` / `flow` / `resolution` | `2` / `2` / `2` / `9` / `10` / `12 passed` |
+> | `tx-unit` / `component-unit` | `627` / `2233 passed` |
+>
+> - **La doc** (docs-writer, EN):
+>   - `danske-bank.en.md`: «Togli dal set» lascia la spunta e toglie il plugin; nessun comando cambia la spunta; il rimedio per un set incompleto con un file tolto ancora spuntato;
+>   - `import-wizard.md`: `removeFileFromSet` e il punto «nessun comando aggiunge o toglie un file dalla selezione»;
+>   - `brim_plugin_guide.md`: la **regola per ogni plugin a set**, cioè scegliere il plugin fa entrare nel set, toglierlo non cambia la spunta e lascia il file senza plugin;
+>   - `mkdocs build` strict ok; `check-links` col solo D28.
+> - **⚠️ Fuori pista — R6, un difetto più vecchio trovato dal docs-writer e verificato da L nel codice**: un set **spuntato solo in parte** non blocca l'analisi (`setBlocksAnalysis` guarda solo la completezza). `buildParseUnits` conta solo i membri spuntati, ma il combine manda `setRequest(set, …)`, che esclude solo i file fuori dal set: **anche i membri non spuntati vengono combinati e importati**.
+>   - Ci si arriva con G, H e R5: un file spuntato esce dal set, si esclude il set, poi lo si rimette col plugin del set.
+>   - È una decisione di prodotto, e va chiesta al developer: bloccare il set spuntato in parte, con un avviso «spunta o togli la spunta a tutto il set», oppure combinare solo i membri spuntati (`exclude_file_ids`). Non fa parte di R5.
+> - **CHANGELOG proposto**, una frase per H e R5 nella voce Danske (sotto «You choose how a set is read»): `None of these commands ticks or unticks a file: reading the files one by one, reading one alone or taking it out of the set only changes how it is read, and a file left without a plugin waits for you to choose one. The set's timeline shows each export's name in full.`
+
+### 20.1 ✅ R5 — pronta per il checkpoint (2026-10-06)
+
+> **Commit di V1** (developer, verificati dal coordinatore): `104641cb1` fix, `2ef332763` docs, `172b8e616` journal; `~3` = `97259ce7f`, albero `f24ff6802`.
+>
+> **Il piano della voce 8** (opzione A, nella 1.2, solo analisi): [plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md](plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md), mandato al coordinatore il 2026-10-06.
