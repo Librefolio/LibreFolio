@@ -587,6 +587,21 @@ describe('buildBaseAnalytics', () => {
         expect(buildBaseAnalytics('current_composition', ctx([]))).toEqual([]);
     });
 
+    // k6 (06/10): each risk/return point publishes its own Sharpe and Sortino, so the scatter is charged
+    // exactly what the KPI beside it is charged — the same perimeter, the same rate, the same target.
+    it('current_composition: the risk/return points are charged the rate and the target of the KPI beside them', () => {
+        const analytics = buildBaseAnalytics('current_composition', {...ctx(['risk_contribution', 'historical_kpi', 'asset_risk_return'], 3.5), includeCurrentCompositionRiskReturn: true});
+        expect(
+            analytics.map((a) => a.analytic_code),
+            'premise: the risk/return pair rides with the KPI in this wave',
+        ).toEqual(['risk_contribution', 'historical_kpi', 'asset_risk_return']);
+        const kpi = analytics.find((a) => a.analytic_code === 'historical_kpi');
+        const riskReturn = analytics.find((a) => a.analytic_code === 'asset_risk_return');
+        expect(kpi?.parameters, 'premise: the KPI is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+        expect(riskReturn?.parameters, "the risk/return points are not charged the KPI's rate and target").toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+        expect(JSON.stringify(riskReturn?.parameters), 'the risk/return points carry the same parameters as the KPI in other bytes').toBe(JSON.stringify(kpi?.parameters));
+    });
+
     it('passes the mode through to the capability predicate', () => {
         const seen: Array<[string, string]> = [];
         buildBaseAnalytics('historical', {
@@ -632,22 +647,26 @@ describe('buildBaseAnalytics', () => {
         }
 
         // Written out, never derived from the constants that build them. The context charges a 2%
-        // risk-free rate, so the KPI carries 0.02.
+        // risk-free rate, so the KPI carries 0.02 — and so, since k6 (06/10), does the comparison: the
+        // reference's own Sharpe and Sortino are charged the reader's rate and a zero target, as the KPI is.
         const KPI = ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
         const BAD_DAY = ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}];
         const BAD_MONTH = ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}];
         const DRAWDOWN = ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}];
         const RISK_RETURN = ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}];
-        const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK}];
+        const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.02, target_annual_return: 0}];
 
-        /** What the union returns today with a benchmark of 47, copied from a run before the split and kept literal: the pin. */
+        /**
+         * What the union returns with a benchmark of 47, copied from a run before the split and kept literal: the pin.
+         * k6 (06/10) is its one deliberate change: the comparison also carries the rate and the target.
+         */
         const UNION_TODAY = [
             ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}],
             ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
             ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}],
             ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}],
             ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}],
-            ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: 47}],
+            ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: 47, risk_free_annual_rate: 0.02, target_annual_return: 0}],
         ];
 
         it.each<[string, number | null]>([
@@ -666,6 +685,18 @@ describe('buildBaseAnalytics', () => {
         it('L3° alone, with a benchmark: the comparison against it closes the request', () => {
             const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
             expect(wire(analytics), "L3°'s request does not end on the comparison against the benchmark, after its KPI and risk/return").toEqual([KPI, RISK_RETURN, COMPARISON]);
+        });
+
+        // k6 (06/10): the comparison publishes the reference's own Sharpe and Sortino, so it is charged what
+        // the KPI beside it is charged — the reader's risk-free rate as a fraction, and a zero target.
+        it('L3° with a benchmark: the comparison carries the benchmark, then the rate and the target of the KPI beside it', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES, 3.5), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            const kpi = analytics.find((analytic) => analytic.analytic_code === 'asset_set_kpi');
+            const comparison = analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison');
+            expect(kpi?.parameters, 'premise: the KPI beside it is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+            const expected = {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.035, target_annual_return: 0};
+            expect(comparison?.parameters, "the comparison is not charged the KPI's rate and target").toEqual(expected);
+            expect(JSON.stringify(comparison?.parameters), 'the comparison carries the right parameters in other bytes: the benchmark first, then the two rates').toBe(JSON.stringify(expected));
         });
 
         it.each<[string, number | null]>([
