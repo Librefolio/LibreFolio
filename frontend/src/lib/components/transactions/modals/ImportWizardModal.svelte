@@ -307,6 +307,8 @@
     let allReportSets = $derived([...brokerSetGroups.values()].flatMap((group) => group.sets));
     let selectedFileIdSet = $derived(new Set(selectedFiles.map((f) => f.fileId)));
     let blockingSets = $derived(allReportSets.filter((set) => setBlocksAnalysis(set, selectedFileIdSet, setPreviews.get(set.key))));
+    /** R6: a set ticked only in part blocks until it is ticked whole or unticked; its hint comes first. */
+    let partlySelectedSets = $derived(allReportSets.filter((set) => setSelectionState(set, selectedFileIdSet) === 'some'));
     let parseUnits = $derived(buildParseUnits(selectedFiles, allReportSets));
     let selectedSetCount = $derived(parseUnits.filter((unit) => unit.kind === 'set').length);
     let setPreviewsLoading = $derived([...setPreviews.values()].some((entry) => entry.status === 'loading'));
@@ -3578,12 +3580,6 @@ ${arrow}<span>${label}</span></span>`,
         if (setPreviews.get(set.key)?.members !== memberSignature(set)) void previewSet(set);
     }
 
-    /** "Exclude from the import": the incomplete set stops blocking, and the other files go on (design §4.1, rule 6). */
-    function excludeSet(set: ReportSetGroup) {
-        const ids = new Set(set.files.map((file) => file.file_id));
-        selectedFiles = selectedFiles.filter((f) => !ids.has(f.fileId));
-    }
-
     /** The members a set preview is asked for: the cache key beside the set's own. */
     function memberSignature(set: ReportSetGroup): string {
         return set.files
@@ -4475,7 +4471,6 @@ ${arrow}<span>${label}</span></span>`,
                                                 onToggleSelected={() => toggleSetSelection(set)}
                                                 onToggleExpanded={() => toggleSetExpanded(set.key)}
                                                 onUploadMissing={(roleCode, file) => void uploadMissingIntoSet(set, roleCode, file)}
-                                                onExclude={() => excludeSet(set)}
                                                 onPreviewFile={(fileId) => openPreview(fileId)}
                                                 onDeleteFile={(file) => requestDeleteFile(file as BrimFile, broker.id)}
                                                 plugins={setPluginInfos}
@@ -5208,9 +5203,9 @@ ${arrow}<span>${label}</span></span>`,
                     ◀ {$t('common.back')}
                 </button>
                 {#if blockingSets.length > 0}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks">
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks" data-reason={partlySelectedSets.length > 0 ? 'partly-selected' : 'incomplete'}>
                         <AlertTriangle size={14} />
-                        {$t('importWizard.reportSet.incompleteBlocks')}
+                        {partlySelectedSets.length > 0 ? $t('importWizard.reportSet.partlySelectedBlocks') : $t('importWizard.reportSet.incompleteBlocks')}
                     </span>
                 {:else if selectedFiles.length > 0 && !step2CanParse}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">

@@ -780,9 +780,8 @@
       "unrecognised": "Not recognised",
       "historyFirst": "First import of this broker: at the end we propose the balance and the positions on {date}; from then on every movement is imported.",
       "historyLater": "LibreFolio already holds this broker's history from {date}: the movements it already has will show up as duplicates, and the earlier ones are not imported again.",
-      "exclude": "Exclude from the import",
       "selectedCount": "{sets} set(s) and {n} file(s) selected from {b} broker(s)",
-      "incompleteBlocks": "Continue is disabled while a selected set is incomplete: upload its missing file or exclude it.",
+      "incompleteBlocks": "Continue is disabled while a selected set is incomplete: upload its missing file or deselect the set.",
       "step1Missing": "{plugin} also needs: {role} ({ext}).",
       "step1MissingHint": "Drop it here: it joins the same set. You can also continue: the set will show as incomplete.",
       "analyzeRowLabel": "Set of {date} · combined ({n} files)",
@@ -899,7 +898,8 @@
       "readAloneWith": "Read alone with {plugin}",
       "removeFromSet": "Remove from the set",
       "defaultPluginNote": "Read as the {plugin} set, not with the broker's default plugin ({defaultPlugin}). To change it, use “Read as” or a file's ⋮ menu.",
-      "alsoRecognisedBy": "{file} is also recognised by: {plugins}"
+      "alsoRecognisedBy": "{file} is also recognised by: {plugins}",
+      "partlySelectedBlocks": "Continue is disabled while a set is only partly selected: select the whole set or deselect it."
     },
     "parseDetail": {
       "sourceRow": "File line",

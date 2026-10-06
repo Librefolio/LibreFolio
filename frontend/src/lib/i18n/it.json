@@ -780,9 +780,8 @@
       "unrecognised": "Non riconosciuti",
       "historyFirst": "Primo import di questo broker: alla fine ti proponiamo il saldo e le posizioni al {date}; da lì in poi importiamo ogni movimento.",
       "historyLater": "LibreFolio ha già la storia di questo broker dal {date}: i movimenti già presenti risulteranno duplicati, e quelli precedenti non si reimportano.",
-      "exclude": "Escludi dall'import",
       "selectedCount": "{sets} set e {n} file selezionati da {b} broker",
-      "incompleteBlocks": "Continua è disattivato finché un set selezionato è incompleto: carica il file mancante o escludilo.",
+      "incompleteBlocks": "Continua è disattivato finché un set selezionato è incompleto: carica il file mancante o togli la spunta al set.",
       "step1Missing": "Per {plugin} serve anche: {role} ({ext}).",
       "step1MissingHint": "Trascinalo qui sopra: entra nello stesso set. Puoi anche continuare: il set comparirà incompleto.",
       "analyzeRowLabel": "Set del {date} · combinato ({n} file)",
@@ -899,7 +898,8 @@
       "readAloneWith": "Leggi da solo con {plugin}",
       "removeFromSet": "Togli dal set",
       "defaultPluginNote": "Letto come set {plugin}, non col plugin predefinito del broker ({defaultPlugin}). Per cambiarlo usa «Letto come» o il menu ⋮ di un file.",
-      "alsoRecognisedBy": "{file} è riconosciuto anche da: {plugins}"
+      "alsoRecognisedBy": "{file} è riconosciuto anche da: {plugins}",
+      "partlySelectedBlocks": "Continua è disattivato finché un set è spuntato solo in parte: spunta tutto il set o togli la spunta."
     },
     "parseDetail": {
       "sourceRow": "Riga del file",
