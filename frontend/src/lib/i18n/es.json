@@ -65,7 +65,12 @@
     "openFxPair": "Abrir detalle del par FX",
     "editorTipDesktop": "Doble clic en el gráfico para ir a esa fecha",
     "editorTipMobile": "Mantén presionado en el gráfico para ir a esa fecha",
-    "aiExport": "Exportar IA"
+    "aiExport": "Exportar IA",
+    "browse": {
+      "previous": "Activo anterior",
+      "next": "Activo siguiente",
+      "position": "Activo {current} de {total}"
+    }
   },
   "assets": {
     "create": "Nuevo activo",
@@ -3652,26 +3657,26 @@
     "share": {
       "titleLabel": "Título sugerido",
       "x": {
-        "message": "¡Hola! Estoy siguiendo mis inversiones con LibreFolio y me encanta. ¡Pruébala tú también!\n#LibreFolio #CodigoAbierto #Autoalojado #Inversiones #Privacidad",
+        "message": "¡Hola! Estoy siguiendo mis inversiones con LibreFolio y me encanta. ¡Pruébala tú también!",
         "hint": "El enlace del proyecto se añade a la copia y a la publicación. X se abre en una nueva pestaña."
       },
       "reddit": {
-        "title": "Estoy probando LibreFolio para seguir mi cartera en mi propio servidor",
-        "message": "Llevaba un tiempo buscando una forma más sencilla de seguir mis inversiones sin entregar todos los datos de mi cartera a un servicio externo. Estos días estoy probando LibreFolio y me está gustando tenerlo todo en un mismo sitio.\n\nEs un programa de código abierto que puedes instalar en tu propio servidor para organizar tu cartera y analizar su evolución, manteniendo el control de tus datos. Si buscas algo parecido, ¡échale un vistazo!",
+        "title": "Estoy probando LibreFolio, un gestor de carteras de código abierto",
+        "message": "Llevaba un tiempo buscando una forma más sencilla de seguir mis inversiones sin entregar todos los datos de mi cartera a un servicio externo. Estos días estoy probando LibreFolio y me está gustando tenerlo todo en un mismo sitio.\n\nEs un programa de código abierto para organizar tu cartera y analizar su evolución, manteniendo el control de tus datos. Si buscas algo parecido, ¡échale un vistazo!",
         "hint": "Abrimos una publicación de texto con título y cuerpo separados. Si Reddit deja el cuerpo vacío, pega el texto ya copiado."
       },
       "facebook": {
-        "message": "Últimamente estoy usando LibreFolio para seguir mis inversiones y me gusta tenerlo todo en un mismo sitio sin perder el control de mis datos.\n\nSi buscas un gestor de carteras de código abierto que puedas alojar en tu propio servidor, ¡échale un vistazo!",
+        "message": "Últimamente estoy usando LibreFolio para seguir mis inversiones y me gusta tenerlo todo en un mismo sitio sin perder el control de mis datos.\n\nSi buscas un gestor de carteras de código abierto que deje tus datos bajo tu control, ¡échale un vistazo!",
         "hint": "Facebook prepara solo la vista previa del enlace. Cuando se abra, pega el texto copiado en el mensaje de la publicación.",
         "afterCopy": "Texto y enlace copiados. Pega el texto en el mensaje de tu publicación de Facebook."
       },
       "instagram": {
-        "message": "Un poco más de orden en mis inversiones, sin dejar mis datos en otro sitio. Estoy probando LibreFolio: un gestor de carteras de código abierto para alojar en tu propio servidor.\n\n#LibreFolio #CodigoAbierto #Autoalojado #Inversiones #Privacidad",
+        "message": "Un poco más de orden en mis inversiones, sin dejar mis datos en otro sitio. Estoy probando LibreFolio, un gestor de carteras de código abierto.",
         "hint": "Instagram no prepara una publicación desde este enlace. Cuando se abra, elige Crear (+), selecciona una foto o un vídeo y pega el pie de foto copiado.",
         "afterCopy": "Pie de foto y enlace copiados. En Instagram: Crear (+), elegir foto/vídeo y pegar el pie de foto."
       },
       "tiktok": {
-        "message": "Mi nuevo aliado para seguir mi cartera: LibreFolio. Código abierto, en mi servidor y con mis datos bajo control. Si te gusta trastear, ¡descúbrelo!\n\n#LibreFolio #CodigoAbierto #Autoalojado #FinanzasPersonales",
+        "message": "Mi nuevo aliado para seguir mi cartera: LibreFolio. Código abierto y con mis datos bajo control. Si te gusta trastear, ¡descúbrelo!",
         "hint": "Abrimos la página de subida de TikTok; inicia sesión si se solicita. Selecciona tu vídeo y pega la descripción copiada. No subimos vídeos ni textos automáticamente.",
         "afterCopy": "Descripción y enlace copiados. En la página de subida de TikTok, selecciona el vídeo y pega la descripción."
       }
@@ -4561,7 +4566,7 @@
             "help": {
               "planAvailable": "Un plan que respeta todas las restricciones: las secciones de abajo lo detallan.",
               "decimalVerified": "El backend volvió a comprobar el plan en aritmética decimal exacta, aparte del solver: se cumple cada restricción y los valores de los objetivos son exactos.",
-              "optimalProven": "El solver demostró que no existe un plan mejor, objetivo por objetivo, en el orden elegido en Estrategia.",
+              "optimalProven": "El solver demostró que no existe un plan mejor, objetivo por objetivo en el orden elegido en Estrategia, y la verificación exacta del plan coincide con sus cifras. La prueba vale dentro del pequeño margen de cálculo del solver, que crece con los importes.",
               "completed": "El solver terminó la búsqueda por sí mismo, sin alcanzar ningún límite.",
               "timeLimit": "El solver alcanzó su límite de tiempo antes de terminar la búsqueda.",
               "nodeLimit": "El solver alcanzó su límite de nodos, el número de intentos que puede hacer, antes de terminar la búsqueda."
@@ -4778,7 +4783,7 @@
             "decimalVerified": "plan verificado en Decimal exacto por el backend",
             "dual": "Dual",
             "exactObjectives": "Valores exactos de los objetivos (backend, Decimal)",
-            "floatingFinished": "El solver cerró cada etapa, pero su plan no superó la verificación en Decimal exacto.",
+            "floatingFinished": "El solver terminó su búsqueda, pero sus propias cifras no coinciden con la verificación exacta de este plan, así que la prueba no se sostiene. El plan respeta todas las restricciones: es el mejor plan encontrado, pero no está demostrado que sea el mejor.",
             "floatingUnfinished": "El solver se detuvo antes de cerrar cada etapa: es el mejor plan encontrado, no uno demostrado.",
             "infeasible": "Inviabilidad demostrada",
             "notProven": "No demostrado",
@@ -4800,8 +4805,8 @@
             "reportedFloating": "informado en coma flotante",
             "scope": "Ámbito",
             "scopes": {
-              "global": "ámbito global",
-              "incumbent_face": "cara del incumbent"
+              "global": "todos los planes",
+              "incumbent_face": "solo planes tan buenos como el encontrado"
             },
             "solverStages": "Etapas del solver",
             "sources": {
@@ -4820,10 +4825,10 @@
             "solverInfeasibleWitness": "El solver cerró la primera etapa como inviable: ningún plan cumple todas las restricciones estrictas.",
             "exactValue": "Valor exacto",
             "help": {
-              "status": "Si el solver cerró esta etapa: «terminada» significa que demostró el mejor valor.",
+              "status": "Si el solver cerró esta etapa. «Terminada»: demostró el mejor valor. «Sin terminar»: se detuvo en un límite. Después de una etapa que se detuvo, las siguientes solo buscaron entre los planes tan buenos como el ya encontrado, así que allí incluso una brecha de 0 no demuestra nada.",
               "primal": "El valor del mejor plan que encontró el solver para esta etapa.",
-              "dual": "La cota que demostró el solver: ningún plan puede hacerlo mejor.",
-              "absoluteGap": "Distancia entre los dos valores. 0 significa que la etapa está cerrada en el óptimo.",
+              "dual": "La cota que demostró el solver para esta etapa: ninguno de los planes que buscó puede hacerlo mejor. A partir de la segunda etapa, solo buscó entre los planes tan buenos como el elegido en las etapas anteriores.",
+              "absoluteGap": "Distancia entre los dos valores. Una brecha de 0 demuestra el mejor valor solo si la etapa está terminada.",
               "relativeGap": "La misma distancia, como fracción del valor."
             }
           },
@@ -5043,7 +5048,7 @@
           "l2Help": "Distancia a los objetivos: para cada activo, la diferencia entre su valor después del plan y su parte objetivo de R, al cuadrado, luego sumada sobre todos los activos. R es lo ya invertido en estos activos más el efectivo que puedes usar. Gana el plan con la suma más baja; el cuadrado hace pesar más las diferencias grandes. Valores al precio de cotización, sin comisiones ni margen.",
           "priorityHelp": "Los números los eliges en el paso Rutas, para los activos que varios brókeres pueden comprar, y en el paso Brókeres, para las fuentes de efectivo: gana el más bajo. Todos a 0 = sin preferencia.",
           "tieBreakTitle": "Desempate final",
-          "tieBreak": "Si aún queda un empate, decide un orden fijo de activos y brókeres: con los mismos datos sale siempre el mismo plan.",
+          "tieBreak": "Si aún queda un empate, decide un orden fijo de activos y brókeres. Una búsqueda que termina por sí misma da siempre el mismo plan con los mismos datos; una búsqueda detenida por un límite de tiempo o de nodos puede dar un plan distinto.",
           "l2Formula": "Distancia a los objetivos:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: valor del activo después del plan\n• $p_i$: su objetivo\n• $R$: lo ya invertido más el efectivo utilizable\nGana el plan con la suma más baja: el cuadrado hace pesar más las diferencias grandes. Al precio de cotización, sin comisiones ni margen."
         },
         "summary": {

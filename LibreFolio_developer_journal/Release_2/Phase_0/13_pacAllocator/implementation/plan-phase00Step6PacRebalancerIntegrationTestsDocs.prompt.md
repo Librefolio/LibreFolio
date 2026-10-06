@@ -282,6 +282,42 @@ Changelog:
 - [ ] 13. Eseguire review indipendenti finali.
 - [ ] 14. Preparare handoff e congelare.
 
+> **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`: avanzamento
+> a `7038c2224`, poi la riga del CHANGELOG in `d9aad0ec9`. Le caselle restano come sono:
+> questa nota dice dove sono finiti i punti, senza spuntarli. Vale solo per il PAC; il
+> Rebalancer riparte dall'analisi della riga 14 del [README](README.md).
+> - **1. Plugin.** `services/tool_plugins/pac_allocator.py`.
+> - **2. Selector.** `api pac-planner-tool`, `services pac-planner-*`, `schemas pac-planner`
+>   e gli altri di [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md).
+> - **3. `api sync` e fingerprint.** Ai gate R14.8 sul merge `111b0bbd0` e di nuovo dopo la
+>   compattazione (fingerprint in handoff §0.2).
+> - **4. Renderer.** Registrato in `features/tools/registry.ts:241-244`; la card è nella
+>   pagina Tools.
+> - **5–6. Test backend e frontend.** Fatti, verdi ai gate del 05/10.
+> - **7. Review UI.** Solo il PAC (via libera nel R14.5 del
+>   [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md)).
+> - **8. E2E.** Non fatti. Il developer, il 05/10, li vuole dopo il Rebalancer, insieme ai
+>   suoi, sfruttando le parti comuni. Prima ci sarà anche un E2E del motore lato backend, sul
+>   modello di `backend/test_scripts/test_e2e/test_search_to_prices.py`: costruisce la
+>   richiesta del tool solo con gli altri endpoint (portafoglio, asset, prezzi, FX) e prova i
+>   casi limite.
+> - **9. Correzioni.** Fatte nei round, più `0900f11fa`.
+> - **10. Docs.** Le pagine utente sono allineate (S11, `a568d6f45`). Una pagina developer sul
+>   motore PAC non c'è. In più, `developer/architecture/patterns/tool_plugins.en.md:287` dice
+>   ancora che il registro non collega nessun componente e che `pac_allocator` risulta
+>   `renderer_missing`: non è più vero dal 25/09 (`0210f9848`). La pagina è della
+>   piattaforma Tool.
+> - **11. i18n e CHANGELOG.** i18n fatto; il CHANGELOG l'ha scritto il coordinatore in
+>   `d9aad0ec9`.
+> - **12. Gate combinati.** Fatti sul merge `68483ddda` e prima dell'avanzamento.
+> - **13. Review indipendenti.** Non fatte come review separate:
+>   - matematica → slice di robustezza del solver (riga 12 del README);
+>   - permessi e privacy → coperte dai test e dal controllo del coordinatore sul delta;
+>   - risorse → domanda (b) dell'analisi del Rebalancer;
+>   - code review → con la rimozione finale del P1 (riga 13 del README).
+> - **14. Handoff.** `16_toolPlatform/handoff-pac-D.md`. L'integrazione è stata un
+>   avanzamento di `dev_release2`.
+
 ## 12. Gate combinati
 
 Comandi esatti vengono confermati dal runner/catalogue corrente. Tutti usano:
