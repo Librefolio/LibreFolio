@@ -22,7 +22,7 @@ Traders often pair ADX with a trend-following system (moving-average crossovers,
     -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{if} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ else } 0
     $$
 
-2.  **True Range** $TR_t$ (see [ATR](atr.md)), smoothed over $N$ periods, normalises the directional moves into **+DI** / **-DI**:
+2.  **True Range** $TR_t$ (see [ATR](atr.md)), smoothed over $N$ sessions, normalises the directional moves into **+DI** / **-DI**:
 
     $$
     +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
@@ -42,7 +42,7 @@ Traders often pair ADX with a trend-following system (moving-average crossovers,
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Smoothing window for +DM, -DM, TR and DX. |
+| Period ($N$) | `period` | 14 | Smoothing window for +DM, -DM, TR and DX, in sessions. |
 
 ---
 

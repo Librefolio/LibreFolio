@@ -202,8 +202,8 @@ class PriceStoreOperations:
                         currency=price.currency or default_currency,
                         source_plugin_key=source_plugin_key,
                         # Every write stamps fetched_at, manual ones included, because it
-                        # feeds _compute_price_fingerprint()'s COUNT+MAX(fetched_at) cache
-                        # key (portfolio_engine.py:2182). Editing an existing price by hand
+                        # feeds the COUNT+MAX(fetched_at) cache key of
+                        # PortfolioCalculationEngine._compute_price_fingerprint(). Editing an existing price by hand
                         # leaves COUNT unchanged, so fetched_at is the ONLY thing that tells
                         # the portfolio cache to recompute — without it the user's own edit
                         # would stay invisible. A previous comment here claimed manual rows

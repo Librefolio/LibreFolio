@@ -3,22 +3,28 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, BrokerUserAccess
+from backend.app.db.models import Asset, AssetProviderAssignment, BrokerUserAccess, PriceHistory
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio import (
+    DataQualityExclusionReason,
+    DataQualityIssue,
     DataQualityReport,
     DataQualityStatus,
+    IssueCode,
+    IssueDomain,
+    IssueSeverity,
     PortfolioReportQuery,
     PortfolioReportResponse,
 )
@@ -30,9 +36,14 @@ from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
     RiskAnalyticRequest,
     RiskAnalyticResult,
+    RiskAssetEligibility,
+    RiskEligibilityLevel,
+    RiskEligibilityRequest,
+    RiskEligibilityResponse,
     RiskError,
     RiskErrorCode,
     RiskExcludedAsset,
+    RiskHistoricalReplayExclusionReason,
     RiskMode,
     RiskQueryRequest,
     RiskQueryResponse,
@@ -44,6 +55,8 @@ from backend.app.schemas.risk import (
     RiskWarning,
 )
 from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.market_calendar import ensure_market_holidays
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import (
@@ -52,7 +65,18 @@ from backend.app.services.risk.base import (
     RiskComputation,
     RiskExecutionContext,
     RiskHistoricalReplayContext,
+    RiskSeriesInputs,
     RiskUnavailableError,
+)
+from backend.app.services.risk.eligibility import (
+    PriceWindowFacts,
+    analysis_eligibility,
+    common_quoted_range,
+    load_price_window_facts,
+    period_limits_coverage,
+    replay_coverage,
+    suggested_analysis_ranges,
+    suggested_replay_range,
 )
 from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
@@ -167,15 +191,22 @@ class RiskService:
         if missing_scope_asset_ids:
             raise RiskScopeNotFoundError(f"Unknown asset IDs in risk scope: {sorted(missing_scope_asset_ids)}")
 
+        # One holiday table per request, handed to every preparation and reading of it (see `market_calendar`).
+        market_holidays = await ensure_market_holidays()
         prepared = await self._prepare_asset_series(
             asset_ids=tuple(sorted(set(scope_inputs.requested_asset_ids) | (comparison_dependency_asset_ids & existing_asset_ids))),
             date_range=request.date_range,
             target_currency=request.target_currency,
+            market_holidays=market_holidays,
+        )
+        never_priced_asset_ids = await self._never_priced_asset_ids(
+            tuple(item.asset_id for item in _scope_exclusions(scope_inputs.requested_asset_ids, prepared) if item.reason == DataQualityExclusionReason.MISSING_PRICE),
         )
         context = self._build_context(
             request=request,
             scope_inputs=scope_inputs,
             prepared=prepared,
+            never_priced_asset_ids=never_priced_asset_ids,
         )
         if any(_is_hypothetical_plan(plan) for plan in plans.values()):
             context = replace(
@@ -216,6 +247,7 @@ class RiskService:
                         scope_inputs=scope_inputs,
                         existing_asset_ids=existing_asset_ids,
                         target_currency=request.target_currency,
+                        market_holidays=market_holidays,
                     )
                 except RiskUnavailableError as exc:
                     results[index] = self._unavailable(
@@ -310,7 +342,109 @@ class RiskService:
                 computation=computation,
             )
 
-        return RiskQueryResponse(items=[results[index] for index in range(len(request.analytics))])
+        items = await self._with_warning_asset_names([results[index] for index in range(len(request.analytics))])
+        if request.scope.kind == RiskScopeKind.ASSET_SET:
+            items = await self._with_asset_set_quality_issues(items)
+        return RiskQueryResponse(items=items)
+
+    async def asset_eligibility(self, request: RiskEligibilityRequest) -> RiskEligibilityResponse:
+        """Whether each asset can take part in a risk analysis of the requested period.
+
+        Read from the asset's own quotes, not from a joint calendar, so the answer for one asset does
+        not depend on what else is selected. An unknown asset has no quotes and is ineligible.
+        """
+        start = request.date_range.start
+        end = request.date_range.end or start
+        asset_ids = list(dict.fromkeys(request.asset_ids))
+        market_holidays = await ensure_market_holidays()
+        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=request.target_currency, market_holidays=market_holidays)
+        items: list[RiskAssetEligibility] = []
+        for asset_id in asset_ids:
+            fact = facts[asset_id]
+            level, reasons = analysis_eligibility(fact, start, end)
+            items.append(
+                RiskAssetEligibility(
+                    asset_id=asset_id,
+                    level=level,
+                    reasons=list(reasons),
+                    first_quote=fact.first_quote,
+                    last_quote=fact.last_quote,
+                    quotes_in_period=fact.quotes_in_window,
+                )
+            )
+        # A common period is proposed only when the chosen period is what troubles a quoted asset —
+        # it starts late, stops early or is quoted only outside the period (developer's decision of
+        # 24/09/2026); an asset without any quote cannot be helped by any period.
+        quoted_ids = [asset_id for asset_id in asset_ids if facts[asset_id].first_quote_ever is not None]
+        common = common_quoted_range(facts[asset_id] for asset_id in quoted_ids)
+        suggested = None
+        if any(period_limits_coverage(facts[asset_id], start, end) for asset_id in quoted_ids):
+            for candidate in suggested_analysis_ranges(common, start, end):
+                if await self._every_asset_eligible(quoted_ids, candidate, request.target_currency, market_holidays):
+                    suggested = candidate
+                    break
+        return RiskEligibilityResponse(
+            items=items,
+            min_quotes=RISK_MIN_OBSERVATIONS,
+            stale_days=STALE_PRICE_THRESHOLD_DAYS,
+            common_range=DateRangeModel(start=common[0], end=common[1]) if common else None,
+            suggested_range=DateRangeModel(start=suggested[0], end=suggested[1]) if suggested else None,
+        )
+
+    async def _every_asset_eligible(self, asset_ids: list[int], window: tuple[date, date], target_currency: str, market_holidays: AbstractSet[date] = frozenset()) -> bool:
+        """Whether every asset is eligible, without warnings, for an analysis of `window`."""
+        start, end = window
+        facts = await load_price_window_facts(self.db, asset_ids=asset_ids, window_start=start, window_end=end, target_currency=target_currency, market_holidays=market_holidays)
+        return all(analysis_eligibility(facts[asset_id], start, end)[0] == RiskEligibilityLevel.ELIGIBLE for asset_id in asset_ids)
+
+    async def _with_warning_asset_names(self, items: list[RiskAnalyticResult]) -> list[RiskAnalyticResult]:
+        """Name the assets a warning is about, so its translated sentence can list them.
+
+        Warnings carry asset ids in `details.asset_ids` (or a single `details.asset_id`); the display
+        names are read once for the whole response and added to `message_params` as `names`
+        (comma-separated) and `count`.
+        """
+        ids = sorted({asset_id for item in items for warning in item.warnings if warning.message_i18n_key for asset_id in _warning_asset_ids(warning)})
+        if not ids:
+            return items
+        names = dict((await self.db.execute(select(Asset.id, Asset.display_name).where(Asset.id.in_(ids)))).all())
+        enriched: list[RiskAnalyticResult] = []
+        for item in items:
+            warnings = []
+            for warning in item.warnings:
+                asset_ids = _warning_asset_ids(warning)
+                if warning.message_i18n_key and asset_ids:
+                    params = {**warning.message_params, "names": ", ".join(names.get(asset_id, f"#{asset_id}") for asset_id in asset_ids), "count": len(asset_ids)}
+                    warning = warning.model_copy(update={"message_params": params})
+                warnings.append(warning)
+            enriched.append(item.model_copy(update={"warnings": warnings}))
+        return enriched
+
+    async def _with_asset_set_quality_issues(self, items: list[RiskAnalyticResult]) -> list[RiskAnalyticResult]:
+        """Give an asset set's reports the banner's issues, which only the portfolio engine builds (D373).
+
+        The Asset Global lab shows the data-quality banner, with its «Sync» actions, above its notice. A
+        portfolio's report carries the engine's issues; an asset set's report comes from series
+        preparation, which builds none, so the banner could never appear there. They are built here, one
+        per category, from the same lists `_data_quality_warnings` words. Names are read once per
+        response, and the FX routes only when some report names a pair.
+        """
+        reports = [item.data_quality for item in items if item.data_quality is not None]
+        ids = sorted({asset_id for report in reports for asset_id in _issue_asset_ids(report)})
+        names = dict((await self.db.execute(select(Asset.id, Asset.display_name).where(Asset.id.in_(ids)))).all()) if ids else {}
+        configured: set[str] = set()
+        with_provider: set[str] = set()
+        if any(_issue_fx_pairs(report) for report in reports):
+            # The portfolio's own reading of the routes, so the two banners split the pairs alike.
+            configured, with_provider = await PortfolioService(self.db)._get_configured_fx_pair_sets()
+        enriched: list[RiskAnalyticResult] = []
+        for item in items:
+            if item.data_quality is None:
+                enriched.append(item)
+                continue
+            issues = _data_quality_issues(item.data_quality, names=names, configured_pairs=configured, provider_pairs=with_provider)
+            enriched.append(item.model_copy(update={"data_quality": item.data_quality.model_copy(update={"issues": issues})}))
+        return enriched
 
     async def _load_scope_inputs(  # noqa: C901 — scope-variant dispatch + sequential composition validation
         self,
@@ -394,6 +528,7 @@ class RiskService:
                         code="slice_assets_not_held",
                         message="Some requested assets are not held in the selected portfolio scope and were ignored.",
                         details={"asset_ids": list(unheld_asset_ids)},
+                        message_i18n_key="risk.warnings.slice_assets_not_held",
                     )
                 )
             requested_asset_ids = slice_asset_ids
@@ -430,6 +565,7 @@ class RiskService:
                 RiskWarning(
                     code="zero_risk_residual_includes_in_transit",
                     message="The zero-return residual includes in-transit value not represented by an asset return series.",
+                    message_i18n_key="risk.warnings.zero_risk_residual_includes_in_transit",
                 )
             )
 
@@ -457,6 +593,20 @@ class RiskService:
             return set()
         result = await self.db.execute(select(Asset.id).where(Asset.id.in_(asset_ids)))
         return set(result.scalars().all())
+
+    async def _never_priced_asset_ids(self, asset_ids: tuple[int, ...]) -> frozenset[int]:
+        """The assets among `asset_ids` that no provider is assigned to and no price was ever stored for.
+
+        Nothing will price them, so their missing price is permanent (developer's decision of
+        29/09/2026). Both facts are asked in one statement, issued only for a request that excludes
+        some asset for a missing price.
+        """
+        if not asset_ids:
+            return frozenset()
+        sourced = exists().where(AssetProviderAssignment.asset_id == Asset.id)
+        priced = exists().where(PriceHistory.asset_id == Asset.id)
+        result = await self.db.execute(select(Asset.id).where(Asset.id.in_(asset_ids), ~sourced, ~priced))
+        return frozenset(result.scalars().all())
 
     async def _load_asset_classifications(
         self,
@@ -504,12 +654,14 @@ class RiskService:
         asset_ids: tuple[int, ...],
         date_range: DateRangeModel,
         target_currency: str,
+        market_holidays: AbstractSet[date] = frozenset(),
     ) -> PreparedAssetSeriesSet:
         if not asset_ids:
             return prepare_asset_series_set(
                 [],
                 requested_range=date_range,
                 target_currency=target_currency,
+                market_holidays=market_holidays,
             )
         date_end = date_range.end or date_range.start
         load_start = date_range.start
@@ -533,6 +685,7 @@ class RiskService:
             price_results,
             requested_range=date_range,
             target_currency=target_currency,
+            market_holidays=market_holidays,
         )
 
     async def _prepare_historical_replay_context(
@@ -543,6 +696,7 @@ class RiskService:
         scope_inputs: _ScopeInputs,
         existing_asset_ids: set[int],
         target_currency: str,
+        market_holidays: AbstractSet[date] = frozenset(),
     ) -> RiskExecutionContext:
         replay_range = getattr(plan.params, "replay_range", None)
         if not isinstance(replay_range, DateRangeModel):
@@ -573,11 +727,36 @@ class RiskService:
             )
 
         excluded_set = set(excluded_asset_ids)
-        source_asset_ids = {asset_id: proxy_by_asset.get(asset_id, asset_id) for asset_id in scope_inputs.requested_asset_ids if asset_id not in excluded_set}
+        candidate_ids = [asset_id for asset_id in scope_inputs.requested_asset_ids if asset_id not in excluded_set]
+        # Automatic exclusion (developer's decision of 24/09/2026): an asset the user did not proxy,
+        # whose own quotes do not cover the replay window at both ends, takes no part in the replay
+        # instead of blocking it. It must be left out before the joint series is prepared: kept
+        # in, a late starter moves the joint baseline and shortens the replay of every other asset.
+        replay_end = replay_range.end or replay_range.start
+        own_ids = [asset_id for asset_id in candidate_ids if asset_id not in proxy_by_asset]
+        window_facts = await load_price_window_facts(
+            self.db,
+            asset_ids=own_ids,
+            window_start=replay_range.start,
+            window_end=replay_end,
+            target_currency=target_currency,
+            market_holidays=market_holidays,
+        )
+        auto_excluded = {asset_id: reason for asset_id in own_ids if (reason := replay_coverage(window_facts[asset_id], replay_range.start, replay_end)) is not None}
+        suggested_range, recovers = await self._verified_replay_range(
+            facts=window_facts,
+            auto_excluded=auto_excluded,
+            own_ids=own_ids,
+            window=(replay_range.start, replay_end),
+            target_currency=target_currency,
+            market_holidays=market_holidays,
+        )
+        source_asset_ids = {asset_id: proxy_by_asset.get(asset_id, asset_id) for asset_id in candidate_ids if asset_id not in auto_excluded}
         prepared = await self._prepare_asset_series(
             asset_ids=tuple(sorted(set(source_asset_ids.values()))),
             date_range=replay_range,
             target_currency=target_currency,
+            market_holidays=market_holidays,
         )
         replay_data_quality = _merge_data_quality(
             scope_inputs.data_quality,
@@ -595,8 +774,37 @@ class RiskService:
                 source_asset_ids=source_asset_ids,
                 excluded_asset_ids=tuple(sorted(excluded_asset_ids)),
                 data_quality=replay_data_quality,
+                auto_excluded_assets=auto_excluded,
+                suggested_range=suggested_range,
+                suggested_range_recovers=recovers,
             ),
         )
+
+    async def _verified_replay_range(
+        self,
+        *,
+        facts: dict[int, PriceWindowFacts],
+        auto_excluded: dict[int, RiskHistoricalReplayExclusionReason],
+        own_ids: list[int],
+        window: tuple[date, date],
+        target_currency: str,
+        market_holidays: AbstractSet[date] = frozenset(),
+    ) -> tuple[Optional[DateRangeModel], tuple[int, ...]]:
+        """A part of the replay window that brings back the assets its edges exclude.
+
+        Proposed only when a second reading of the facts confirms it: every asset it recovers, and
+        every asset already covered, is priced at both of its ends. Assets excluded for other reasons
+        stay out of the check, since no shorter window brings them back.
+        """
+        proposal = suggested_replay_range(facts, auto_excluded, window[0], window[1])
+        if proposal is None:
+            return None, ()
+        (start, end), recovers = proposal
+        kept = [asset_id for asset_id in own_ids if asset_id not in auto_excluded or asset_id in recovers]
+        check = await load_price_window_facts(self.db, asset_ids=kept, window_start=start, window_end=end, target_currency=target_currency, market_holidays=market_holidays)
+        if any(replay_coverage(check[asset_id], start, end) is not None for asset_id in kept):
+            return None, ()
+        return DateRangeModel(start=start, end=end), recovers
 
     def _build_context(
         self,
@@ -604,31 +812,17 @@ class RiskService:
         request: RiskQueryRequest,
         scope_inputs: _ScopeInputs,
         prepared: PreparedAssetSeriesSet,
+        never_priced_asset_ids: frozenset[int] = frozenset(),
     ) -> RiskExecutionContext:
         prepared_by_asset = {item.returns.asset_id: item for item in prepared.series if item.returns.points}
         usable_scope_asset_ids = tuple(asset_id for asset_id in scope_inputs.requested_asset_ids if asset_id in prepared_by_asset)
-        unusable_reasons = {item.asset_id: item.reason.value for item in prepared.data_quality.unusable_assets}
-        excluded_assets = tuple(
-            RiskExcludedAsset(
-                asset_id=asset_id,
-                reason=unusable_reasons.get(asset_id, "insufficient_history"),
-            )
-            for asset_id in scope_inputs.requested_asset_ids
-            if asset_id not in usable_scope_asset_ids
-        )
+        excluded_assets = _scope_exclusions(scope_inputs.requested_asset_ids, prepared, never_priced_asset_ids)
         data_quality = _merge_data_quality(
             scope_inputs.data_quality,
             prepared.data_quality,
         )
         execution_warnings = list(scope_inputs.warnings)
-        if excluded_assets:
-            execution_warnings.append(
-                RiskWarning(
-                    code="assets_excluded",
-                    message="One or more scope assets were excluded from risk calculations.",
-                    details={"asset_ids": [item.asset_id for item in excluded_assets]},
-                )
-            )
+        execution_warnings.extend(_assets_excluded_warnings(excluded_assets))
 
         primary_baseline_date: Optional[date] = None
         primary_return_dates: tuple[date, ...] = ()
@@ -650,7 +844,10 @@ class RiskService:
                 calendar_days,
                 annualization_factor,
                 coverage,
-            ) = _portfolio_twrr_returns(scope_inputs.portfolio_report)
+            ) = _portfolio_twrr_returns(
+                scope_inputs.portfolio_report,
+                observation_dates=_held_quote_dates(prepared, scope_inputs.requested_asset_ids),
+            )
             primary_return_basis = RiskReturnBasis.TWRR
         elif request.scope.kind == RiskScopeKind.PORTFOLIO:
             rows = {asset_id: tuple(float(point.value) for point in prepared_by_asset[asset_id].returns.points) for asset_id in usable_scope_asset_ids}
@@ -712,6 +909,7 @@ class RiskService:
             weights=scope_inputs.weights,
             asset_values=scope_inputs.asset_values,
             cash_weight=usable_cash_weight,
+            excluded_weight=sum((scope_inputs.weights.get(item.asset_id, 0.0) for item in excluded_assets), 0.0),
             scope_value=scope_inputs.scope_value,
             broker_ids=scope_inputs.broker_ids,
             composition_as_of=scope_inputs.composition_as_of,
@@ -783,6 +981,9 @@ class RiskService:
         if _is_hypothetical_plan(plan):
             context_warnings = tuple(warning for warning in context_warnings if warning.code != "assets_excluded")
             context_exclusions = ()
+        elif _reads_the_twrr_alone(plan, context):
+            context_warnings = tuple(warning for warning in context_warnings if warning.code not in _COMPOSITION_WARNING_CODES)
+            context_exclusions = ()
         warnings = _dedupe_warnings(
             (
                 *context_warnings,
@@ -790,16 +991,7 @@ class RiskService:
             )
         )
         if data_quality.data_quality_status != DataQualityStatus.OK:
-            warnings = _dedupe_warnings(
-                (
-                    *warnings,
-                    RiskWarning(
-                        code="data_quality_degraded",
-                        message="Risk result uses incomplete or carried-forward source data.",
-                        details={"status": data_quality.data_quality_status.value},
-                    ),
-                )
-            )
+            warnings = _dedupe_warnings((*warnings, *_data_quality_warnings(data_quality)))
         status = RiskResultStatus.PARTIAL if any(warning.degrades_result for warning in warnings) or context_exclusions or computation.excluded_assets or data_quality.data_quality_status != DataQualityStatus.OK else RiskResultStatus.OK
         return RiskAnalyticResult(
             instance_id=plan.request.instance_id,
@@ -826,17 +1018,21 @@ class RiskService:
             if context.scope_kind == RiskScopeKind.PORTFOLIO and context.portfolio_data_quality is not None:
                 return context.portfolio_data_quality
             return DataQualityReport()
-        if (
-            context.mode == RiskMode.HISTORICAL
-            and context.scope_kind == RiskScopeKind.PORTFOLIO
-            and plan.request.analytic_code
-            in {
-                "historical_kpi",
-                "historical_var",
-            }
-            and context.portfolio_data_quality is not None
-        ):
-            return context.portfolio_data_quality
+        if context.primary_return_basis == RiskReturnBasis.TWRR and context.portfolio_data_quality is not None:
+            # Judged on the series it consumed. The TWRR is the portfolio's own, so its report is the
+            # whole story for a PRIMARY reader. A benchmark is prepared on the scope's joint calendar,
+            # which the assets excluded from the scope never entered: their entries are not its own.
+            series_inputs = plan.analytic_class.series_inputs
+            if series_inputs == RiskSeriesInputs.PRIMARY:
+                return context.portfolio_data_quality
+            if series_inputs == RiskSeriesInputs.PRIMARY_AND_BENCHMARK and context.prepared_data_quality is not None:
+                benchmark_asset_id = getattr(plan.params, "comparison_asset_id", None)
+                foreign_asset_ids = {item.asset_id for item in context.excluded_assets} - {benchmark_asset_id}
+                prepared = context.prepared_data_quality
+                return _merge_data_quality(
+                    context.portfolio_data_quality,
+                    prepared.model_copy(update={"unusable_assets": [item for item in prepared.unusable_assets if item.asset_id not in foreign_asset_ids]}),
+                )
         return context.data_quality
 
     @staticmethod
@@ -855,7 +1051,7 @@ class RiskService:
             annualization_factor = None
 
         analyzed_range = computation.analyzed_range if computation is not None and computation.analyzed_range is not None else _context_analyzed_range(context)
-        context_exclusions = () if _is_hypothetical_plan(plan) else context.excluded_assets
+        context_exclusions = () if _is_hypothetical_plan(plan) or _reads_the_twrr_alone(plan, context) else context.excluded_assets
         computation_exclusions = computation.excluded_assets if computation is not None else ()
         exclusions = _dedupe_exclusions(
             (
@@ -917,8 +1113,15 @@ class RiskService:
         )
 
 
+def _held_quote_dates(prepared: PreparedAssetSeriesSet, held_asset_ids: tuple[int, ...]) -> frozenset[date]:
+    """The days on which at least one held asset has a quote of its own — a benchmark's quotes don't count."""
+    held = set(held_asset_ids)
+    return frozenset(quote_date for series in prepared.series if series.returns.asset_id in held for quote_date in series.quote_dates)
+
+
 def _portfolio_twrr_returns(
     report: Optional[PortfolioReportResponse],
+    observation_dates: AbstractSet[date] = frozenset(),
 ) -> tuple[
     Optional[date],
     tuple[date, ...],
@@ -927,9 +1130,19 @@ def _portfolio_twrr_returns(
     Optional[float],
     float,
 ]:
+    """The portfolio TWRR as period returns, read on the observation days (developer's decision of 30/09/2026).
+
+    The report has one TWRR point per calendar day, so a day on which nothing held was quoted is a
+    zero return that no market produced. With `observation_dates` — the days a held asset was quoted —
+    only those points are kept after the baseline, and each return is chain-linked from the cumulative
+    TWRR across the days dropped, so the TWRR stays exact; coverage is then measured against those
+    days, not against the calendar. With none (nothing held has a quote), every calendar day is kept.
+    """
     if report is None or not report.history:
         return None, (), (), 0, None, 0.0
     points = [point for point in report.history if point.twrr is not None]
+    if observation_dates:
+        points = points[:1] + [point for point in points[1:] if point.date in observation_dates]
     if len(points) < 2:
         return None, (), (), 0, None, 0.0
     cumulative = [float(point.twrr) for point in points]
@@ -938,7 +1151,11 @@ def _portfolio_twrr_returns(
     baseline = points[0].date
     calendar_days = (return_dates[-1] - baseline).days
     annualization_factor = len(returns) * 365 / calendar_days if calendar_days > 0 else None
-    coverage = min(1.0, len(returns) / calendar_days) if calendar_days > 0 else 0.0
+    if observation_dates:
+        candidates = sum(1 for quote_date in observation_dates if baseline < quote_date <= return_dates[-1])
+        coverage = min(1.0, len(returns) / candidates) if candidates else 0.0
+    else:
+        coverage = min(1.0, len(returns) / calendar_days) if calendar_days > 0 else 0.0
     return (
         baseline,
         return_dates,
@@ -990,6 +1207,190 @@ def _is_hypothetical_plan(plan: _AnalyticPlan) -> bool:
 
 def _is_geography_hypothetical_plan(plan: _AnalyticPlan) -> bool:
     return _is_hypothetical_plan(plan) and getattr(getattr(plan, "params", None), "dimension", None).value == "geography"
+
+
+# What the scope says about its per-asset composition: the assets left without a series, and a
+# zero-return residual that includes value in transit. Neither enters the portfolio TWRR.
+_COMPOSITION_WARNING_CODES = frozenset({"assets_excluded", "zero_risk_residual_includes_in_transit"})
+
+
+def _reads_the_twrr_alone(plan: _AnalyticPlan, context: RiskExecutionContext) -> bool:
+    """Whether the analytic reads the portfolio TWRR and no scope asset series (developer's decision of 29/09/2026).
+
+    The TWRR already values every holding, so such a result loses nothing when a scope asset has no
+    series of its own, and does not inherit the scope's exclusions.
+    """
+    return context.primary_return_basis == RiskReturnBasis.TWRR and plan.analytic_class.series_inputs != RiskSeriesInputs.SCOPE_ASSETS
+
+
+def _scope_exclusions(
+    scope_asset_ids: tuple[int, ...],
+    prepared: PreparedAssetSeriesSet,
+    never_priced_asset_ids: frozenset[int] = frozenset(),
+) -> tuple[RiskExcludedAsset, ...]:
+    """The scope assets left without a return series, each with the reason the preparation recorded.
+
+    `insufficient_history` when it recorded none: the asset has prices, but no return series came out
+    of them. A missing price is `no_price_source` for an asset nothing has ever priced — a permanent
+    state, where `missing_price` is an occasional one.
+    """
+    usable_asset_ids = {item.returns.asset_id for item in prepared.series if item.returns.points}
+    recorded = {item.asset_id: item.reason.value for item in prepared.data_quality.unusable_assets}
+    exclusions: list[RiskExcludedAsset] = []
+    for asset_id in scope_asset_ids:
+        if asset_id in usable_asset_ids:
+            continue
+        reason = recorded.get(asset_id, "insufficient_history")
+        if reason == DataQualityExclusionReason.MISSING_PRICE and asset_id in never_priced_asset_ids:
+            reason = "no_price_source"
+        exclusions.append(RiskExcludedAsset(asset_id=asset_id, reason=reason))
+    return tuple(exclusions)
+
+
+def _warning_asset_ids(warning: RiskWarning) -> list[int]:
+    """The assets a warning is about, from `details.asset_ids` or a single `details.asset_id`."""
+    raw = warning.details.get("asset_ids")
+    if raw is None and "asset_id" in warning.details:
+        raw = [warning.details["asset_id"]]
+    return [asset_id for asset_id in (raw or []) if isinstance(asset_id, int) and not isinstance(asset_id, bool)]
+
+
+def _assets_excluded_warnings(excluded_assets: tuple[RiskExcludedAsset, ...]) -> list[RiskWarning]:
+    """One `assets_excluded` warning per reason, so the sentence can say why the assets are missing.
+
+    Keys are written out branch by branch: the i18n audit reads backend keys from their literal
+    assignments, and one built at runtime would look unused.
+    """
+    by_reason: dict[str, list[int]] = {}
+    for item in excluded_assets:
+        by_reason.setdefault(item.reason, []).append(item.asset_id)
+    code = "assets_excluded"
+    message = "One or more scope assets were excluded from risk calculations."
+    warnings: list[RiskWarning] = []
+    for reason, asset_ids in sorted(by_reason.items()):
+        details: dict = {"asset_ids": asset_ids, "reason": reason}
+        if reason == "missing_price":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_missing_price"))
+        elif reason == "no_price_source":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_no_price_source"))
+        elif reason == "missing_fx":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_missing_fx"))
+        elif reason == "invalid_currency":
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_invalid_currency"))
+        else:
+            warnings.append(RiskWarning(code=code, message=message, details=details, message_i18n_key="risk.warnings.assets_excluded_insufficient_history"))
+    return warnings
+
+
+_PRICE_EXCLUSION_REASONS = frozenset({DataQualityExclusionReason.MISSING_PRICE.value, "no_price_source"})
+
+
+def _stale_price_ids(data_quality: DataQualityReport) -> list[int]:
+    return sorted({item.asset_id for item in data_quality.stale_prices} | set(data_quality.carried_forward_price_asset_ids))
+
+
+def _missing_price_ids(data_quality: DataQualityReport) -> list[int]:
+    unusable = {item.asset_id for item in data_quality.unusable_assets if str(item.reason) in _PRICE_EXCLUSION_REASONS}
+    return sorted({item.asset_id for item in data_quality.missing_price_assets} | unusable)
+
+
+def _issue_asset_ids(data_quality: DataQualityReport) -> set[int]:
+    return set(_stale_price_ids(data_quality)) | set(_missing_price_ids(data_quality))
+
+
+def _issue_fx_pairs(data_quality: DataQualityReport) -> list[str]:
+    """Every pair the report names, as the slug the FX pages and the banner's actions use."""
+    raw = [*data_quality.unresolved_fx_pairs, *(item.pair for item in data_quality.missing_fx_pairs), *data_quality.carried_forward_fx_pairs]
+    return sorted({PortfolioService._normalize_fx_pair_slug(pair) for pair in raw})
+
+
+def _asset_issue(code: IssueCode, severity: IssueSeverity, *, message_i18n_key: str, action: str, group_key: str, ids: list[int], names: dict[int, str]) -> DataQualityIssue:
+    return DataQualityIssue(
+        domain=IssueDomain.ASSET,
+        code=code,
+        severity=severity,
+        message_i18n_key=message_i18n_key,
+        message_params={"count": len(ids)},
+        count=len(ids),
+        affected_asset_ids=ids,
+        affected_asset_names=[names.get(asset_id, f"#{asset_id}") for asset_id in ids],
+        cta_action=action,
+        cta_target=str(ids[0]),
+        group_key=group_key,
+    )
+
+
+def _fx_issue(code: IssueCode, *, message_i18n_key: str, action: str, group_key: str, pairs: list[str], target: bool, extra: dict | None = None) -> DataQualityIssue:
+    return DataQualityIssue(
+        domain=IssueDomain.FOREX,
+        code=code,
+        severity=IssueSeverity.WARNING,
+        message_i18n_key=message_i18n_key,
+        message_params={"count": len(pairs), **(extra or {})},
+        count=len(pairs),
+        affected_fx_pairs=pairs,
+        cta_action=action,
+        cta_target=pairs[0] if target else None,
+        group_key=group_key,
+    )
+
+
+def _data_quality_issues(data_quality: DataQualityReport, *, names: dict[int, str], configured_pairs: AbstractSet[str], provider_pairs: AbstractSet[str]) -> list[DataQualityIssue]:
+    """The banner's issues for an asset set's report: one per category, `code + group_key` unique.
+
+    The categories and their actions are the portfolio engine's, so the lab's banner reads like the
+    Dashboard's: stale prices sync, a missing price opens the asset, a pair with no route asks for one,
+    a pair with a provider syncs, a manual pair opens the pair. The sentences are the lab's own where the
+    portfolio's speak of a NAV or of dates this report does not carry.
+    """
+    issues: list[DataQualityIssue] = []
+    stale = _stale_price_ids(data_quality)
+    if stale:
+        issues.append(_asset_issue(IssueCode.STALE_PRICE, IssueSeverity.WARNING, message_i18n_key="dataQuality.stalePrice", action="sync_asset_prices", group_key="stale_price", ids=stale, names=names))
+    missing = _missing_price_ids(data_quality)
+    if missing:
+        issues.append(_asset_issue(IssueCode.MISSING_PRICE, IssueSeverity.ERROR, message_i18n_key="risk.quality.missingPrice", action="navigate_asset", group_key="missing_price", ids=missing, names=names))
+    pairs = _issue_fx_pairs(data_quality)
+    no_route = [pair for pair in pairs if pair not in configured_pairs]
+    synced = [pair for pair in pairs if pair in configured_pairs and pair in provider_pairs]
+    manual = [pair for pair in pairs if pair in configured_pairs and pair not in provider_pairs]
+    if no_route:
+        issues.append(_fx_issue(IssueCode.MISSING_FX_MARKET, message_i18n_key="risk.quality.missingFx", action="add_fx_pair", group_key="missing_fx", pairs=no_route, target=False))
+    if synced:
+        issues.append(_fx_issue(IssueCode.MISSING_FX_RATES, message_i18n_key="risk.quality.missingFxRates", action="sync_fx_pair", group_key="missing_fx_rates", pairs=synced, target=True, extra={"days": STALE_PRICE_THRESHOLD_DAYS}))
+    if manual:
+        issues.append(_fx_issue(IssueCode.MISSING_FX_RATES, message_i18n_key="risk.quality.missingFxRatesManual", action="navigate_fx", group_key="missing_fx_rates_manual", pairs=manual, target=True))
+    return issues
+
+
+def _data_quality_warnings(data_quality: DataQualityReport) -> list[RiskWarning]:
+    """One `data_quality_degraded` warning per cause, each naming what is affected.
+
+    Excluded assets are not repeated here: `assets_excluded` already names them. A degraded report
+    with none of the causes below still says so, in a generic sentence.
+    """
+    code = "data_quality_degraded"
+    message = "Risk result uses incomplete or carried-forward source data."
+    status = data_quality.data_quality_status.value
+    warnings: list[RiskWarning] = []
+    stale_ids = sorted({item.asset_id for item in data_quality.stale_prices} | set(data_quality.carried_forward_price_asset_ids))
+    if stale_ids:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "stale_prices", "asset_ids": stale_ids}, message_i18n_key="risk.warnings.data_quality_stale_prices", message_params={"days": STALE_PRICE_THRESHOLD_DAYS}))
+    if data_quality.carried_forward_fx_pairs:
+        pairs = sorted(data_quality.carried_forward_fx_pairs)
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "stale_fx_rates", "pairs": pairs}, message_i18n_key="risk.warnings.data_quality_stale_fx_rates", message_params={"days": STALE_PRICE_THRESHOLD_DAYS, "pairs": ", ".join(pairs)}))
+    missing_ids = sorted({item.asset_id for item in data_quality.missing_price_assets})
+    if missing_ids:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "missing_prices", "asset_ids": missing_ids}, message_i18n_key="risk.warnings.data_quality_missing_prices"))
+    fx_pairs = sorted(set(data_quality.unresolved_fx_pairs) | {item.pair for item in data_quality.missing_fx_pairs})
+    if fx_pairs:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "missing_fx_rates", "pairs": fx_pairs}, message_i18n_key="risk.warnings.data_quality_missing_fx_rates", message_params={"pairs": ", ".join(fx_pairs)}))
+    incomplete_dates = set(data_quality.incomplete_nav_dates) | set(data_quality.incomplete_book_value_dates) | set(data_quality.incomplete_allocation_dates) | set(data_quality.incomplete_valuation_dates)
+    if incomplete_dates:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "incomplete_dates", "count": len(incomplete_dates)}, message_i18n_key="risk.warnings.data_quality_incomplete_dates", message_params={"count": len(incomplete_dates)}))
+    if not warnings and not data_quality.unusable_assets:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status}, message_i18n_key="risk.warnings.data_quality_degraded"))
+    return warnings
 
 
 def _dedupe_warnings(

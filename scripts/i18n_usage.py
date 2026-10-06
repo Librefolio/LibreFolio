@@ -65,6 +65,27 @@ _CONST_DECL = re.compile(
     r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*['\"]([^'\"]+)['\"]"
 )
 
+# A prefix chosen between two literals, e.g.
+#   let keyPrefix = $derived(scope === 'simulation' ? 'risk.betaBanner.simulation' : 'risk.betaBanner');
+# Both branches are finite and written down, so a template built on it resolves to
+# both — exactly like a typed union, and unlike a free `string`. Without this, the
+# template `${keyPrefix}.title` has no literal head at all and every key it renders
+# is reported dead (review 22/09, §1.7: four live `risk.betaBanner.*` keys).
+_CONDITIONAL_DECL = re.compile(r"\b(?:const|let)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*(?:\$derived\(\s*)?[^?;\n`]+\?\s*['\"]([^'\"\n]+)['\"]\s*:\s*['\"]([^'\"\n]+)['\"]")
+
+
+def _resolvable_names(content: str) -> dict[str, list[str]]:
+    """Every identifier whose string value(s) are written in the file.
+
+    A ``const`` has one value; a literal conditional has two. Both are finite, so
+    both can be expanded instead of ending the prefix.
+    """
+    names: dict[str, list[str]] = {name: [value] for name, value in _CONST_DECL.findall(content)}
+    for name, first, second in _CONDITIONAL_DECL.findall(content):
+        values = names.setdefault(name, [])
+        values.extend(v for v in (first, second) if v not in values)
+    return names
+
 # An identifier-ish literal: the shape a backend "code" takes.
 _CODE_LITERAL = re.compile(r"['\"]([a-z][a-z0-9]*(?:_[a-z0-9]+)*)['\"]")
 
@@ -104,7 +125,7 @@ def _union_members(text: str, name: str) -> list[str] | None:
     return re.findall(r"['\"]([^'\"]+)['\"]", m.group(1))
 
 
-def _expand(template: str, consts: dict[str, str], text: str) -> tuple[list[str], bool]:
+def _expand(template: str, consts: dict[str, list[str]], text: str) -> tuple[list[str], bool]:
     """Expand a template literal into concrete prefixes.
 
     Returns ``(candidates, trailing_only)``. ``trailing_only`` is True when every
@@ -118,7 +139,7 @@ def _expand(template: str, consts: dict[str, str], text: str) -> tuple[list[str]
     for name in names:
         key = name.strip()
         if key in consts:
-            resolved.append([consts[key]])
+            resolved.append(list(consts[key]))
             continue
         members = _union_members(text, key.split(".")[0]) if key else None
         resolved.append(members)
@@ -163,7 +184,7 @@ def _argument_region(content: str, start: int) -> str:
 
 
 def _template_verdict(
-    template: str, consts: dict[str, str], text: str
+    template: str, consts: dict[str, list[str]], text: str
 ) -> tuple[list[str], bool, bool]:
     """Resolve one key template into ``(candidates, trailing_only, fully_resolved)``."""
     candidates, trailing_only = _expand(template, consts, text)
@@ -174,7 +195,7 @@ def _template_verdict(
     return candidates, trailing_only, fully_resolved
 
 
-def _record_template(usage: Usage, template: str, consts: dict[str, str], text: str, origin: str) -> None:
+def _record_template(usage: Usage, template: str, consts: dict[str, list[str]], text: str, origin: str) -> None:
     """Fold one template literal into the accumulated evidence."""
     candidates, trailing_only, fully_resolved = _template_verdict(template, consts, text)
     head = template.split("${", 1)[0].rstrip(".")
@@ -217,7 +238,7 @@ def collect_from_source(src_dir: Path) -> Usage:
             except OSError:
                 continue
 
-            consts = dict(_CONST_DECL.findall(content))
+            consts = _resolvable_names(content)
 
             # Literals inside a translation call, including every branch of a
             # ternary — `$t(cond ? 'a.b' : 'a.c')` must yield both, not neither.

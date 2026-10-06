@@ -20,9 +20,11 @@ genuine SQL query, so a tableless in-memory session would not satisfy them.
 are never monkeypatched either - both already read directly from the real
 `PriceHistory`/`FxRate` tables (see `test_ai_export_components_fx.py`'s
 `_seed_warmup_anchor` convention, reused here): a single very old anchor row
-per (asset)/(currency pair) lets unlimited backward-fill cover the ~1200
-calendar-day warm-up window real `SignalService` plans require, without
-seeding a full daily series.
+per (asset)/(currency pair) gives unlimited backward-fill a value for every
+day of the warm-up window, so each loaded series is calendar-complete. Those
+copies are carried points, not sessions: indicators count quote days
+(developer's decision of 30/09/2026), so the warm-up they actually use is the
+genuine rows and rates the scenario seeds around the period.
 """
 
 from __future__ import annotations
@@ -258,10 +260,12 @@ async def _seed_asset_warmup_anchor(session, asset: Asset, *, close: str, curren
     """One very old, genuinely-observed `PriceHistory` row.
 
     `AssetSourceManager.get_prices_bulk`'s unlimited backward-fill (see
-    `_build_backward_filled_series`) copies this single anchor forward across
-    the entire ~1200-calendar-day warm-up window real `SignalService` plans
-    require, exactly like `_seed_warmup_anchor` does for FX rates in
-    `test_ai_export_components_fx.py` - no need to seed a full daily series.
+    `_build_backward_filled_series`) copies this anchor onto every day of the
+    warm-up window real `SignalService` plans load, so the series is
+    calendar-complete from its first day - exactly like `_seed_warmup_anchor`
+    does for FX rates in `test_ai_export_components_fx.py`. The copies are
+    carried points, not sessions: they give the indicators no warm-up, which
+    comes only from genuine rows such as `_seed_asset_visible_prices` seeds.
     """
     await _price(session, asset, day=date(2015, 1, 1), close=close, currency=currency, source_plugin_key=source_plugin_key, volume="500")
 
@@ -304,6 +308,7 @@ async def _seed_rate(session, *, base: str, quote: str, rate: str, day: date, so
 
 
 async def _seed_rate_warmup_anchor(session, *, base: str, quote: str, rate: str) -> None:
+    """One 1990 rate every warm-up day resolves to by backward-fill: carried days, not published ones."""
     await _seed_rate(session, base=base, quote=quote, rate=rate, day=date(1990, 1, 1), source="ECB")
 
 
@@ -532,9 +537,10 @@ async def scenario(session, test_user) -> Scenario:
     await _buy(session, broker2, usd_asset, quantity="5", amount="-480", currency="EUR", day=date(2025, 9, 2))
 
     await _seed_asset_warmup_anchor(session, usd_asset, close="85", currency="USD")
-    # Extends 30 days before period_start (real, non-backward-filled, non-null volume) so
-    # lookback-window plugins (MFI needs 15 points, others less) have enough directly-observed
-    # coverage without relying on the far (2015) backward-fill anchor for their own window.
+    # Extends 30 days before period_start (real, non-backward-filled, non-null volume). These 41 rows
+    # are the only sessions the asset's indicators count - the 2015 anchor's copies are carried - which
+    # is enough for the short windows (RSI, MFI, MACD, Bollinger...); the 50- and 200-session averages
+    # stay unavailable here, and no test below depends on them.
     await _seed_asset_visible_prices(session, usd_asset, start=PERIOD_START - timedelta(days=30), end=PERIOD_END, currency="USD")
 
     jpy_asset = await _make_asset(session, currency="JPY", ticker="AFIJPYA")
@@ -545,6 +551,13 @@ async def scenario(session, test_user) -> Scenario:
 
     await _seed_rate_warmup_anchor(session, base="EUR", quote="USD", rate="1.08")
     await _seed_rate_warmup_anchor(session, base="EUR", quote="JPY", rate="155")
+    # Nine weeks of weekday EUR/USD fixings before the period, as ECB publishes them: the FX
+    # indicators count published days, and the 1990 anchor's carried copies are none. Without
+    # them every FX indicator of the curated bundle would be unavailable.
+    fx_warmup_start = PERIOD_START - timedelta(days=63)
+    fx_warmup_days = [fx_warmup_start + timedelta(days=offset) for offset in range(63) if (fx_warmup_start + timedelta(days=offset)).weekday() < 5]
+    for index, day in enumerate(fx_warmup_days):
+        await _seed_rate(session, base="EUR", quote="USD", rate=str(Decimal("1.08") + Decimal(index % 9) / Decimal(400)), day=day)
     for offset in range(0, (PERIOD_END - PERIOD_START).days + 1):
         day = PERIOD_START + timedelta(days=offset)
         await _seed_rate(session, base="EUR", quote="USD", rate=str(Decimal("1.10") + Decimal(offset) / Decimal(200)), day=day)
@@ -822,6 +835,8 @@ class TestFxDatasetComposition:
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("fx.market_technical"), context, detail_level=DetailLevel.STANDARD)
         assert [e.component_id for e in composition.sections] == ["fx.technical_coverage", "fx.rate_ohlc", "fx.returns_volatility", "fx.indicators", "fx.states_events"]
+        indicators_section = next(e for e in composition.sections if e.component_id == "fx.indicators")
+        assert len(indicators_section.payload["indicators"]) > 0
 
     @pytest.mark.asyncio
     async def test_fx_direct_exposure_composes_with_no_optional_components(self, session, test_user, scenario):
@@ -887,10 +902,12 @@ class TestAnalysisComposition:
         full_indicators = next(e for e in full.sections if e.component_id == "asset.indicators")
         compact_keys = {ind["instance_id"] for ind in compact_indicators.payload["indicators"]}
         full_keys = {ind["instance_id"] for ind in full_indicators.payload["indicators"]}
+        assert compact_keys, "presence barrier: two empty sets would compare equal and prove nothing"
         assert compact_keys == full_keys, "same signal cardinality across detail levels - only bucket granularity should differ"
 
         compact_events = next(e for e in compact.sections if e.component_id == "asset.states_events")
         full_events = next(e for e in full.sections if e.component_id == "asset.states_events")
+        assert full_events.payload["detected_event_count"] > 0, "presence barrier: zero against zero would prove nothing"
         assert compact_events.payload["detected_event_count"] == full_events.payload["detected_event_count"], "detected event total must not depend on bucket granularity"
         assert compact_events.payload["exported_event_count"] <= full_events.payload["exported_event_count"], "detail may reduce exported events without changing detection"
 
@@ -909,6 +926,7 @@ class TestAnalysisComposition:
         full_indicators = next(e for e in full.sections if e.component_id == "fx.indicators")
         compact_keys = {ind["instance_id"] for ind in compact_indicators.payload["indicators"]}
         full_keys = {ind["instance_id"] for ind in full_indicators.payload["indicators"]}
+        assert compact_keys, "presence barrier: two empty sets would compare equal and prove nothing"
         assert compact_keys == full_keys
 
 
@@ -1108,15 +1126,14 @@ class TestAutomaticFxAndTechnicalCoverage:
     async def test_volume_capability_grants_mfi_indicator_from_yfinance_sourced_prices(self, session, test_user, scenario):
         # MFI's shared volume-coverage gate (`validate_meaningful_volume_input`)
         # requires a sufficient *directly observed* (non-backward-filled)
-        # fraction over the full technical warm-up+visible window (~1200
-        # calendar days, not just MFI's own 15-point lookback) - see
-        # `signal_plugins/base.py`. A native-currency asset (matching the
-        # scope's `target_currency`) avoids the FX-conversion pass, which
-        # would otherwise also mark price points as "not directly observed"
-        # whenever the FX rate itself needed backward-fill (a distinct,
-        # legitimate staleness source, exercised separately by the FX
-        # domain validations above) - isolating this test to volume/price
-        # coverage only.
+        # fraction of the points MFI computes on - the sessions the service
+        # hands it (see `signal_plugins/base.py`). A native-currency asset
+        # (matching the scope's `target_currency`) avoids the FX-conversion
+        # pass, whose converted quotes carry a backward-fill record whenever
+        # the FX rate itself was carried: still sessions, but not "directly
+        # observed" volume (a distinct, legitimate staleness source, exercised
+        # separately by the FX domain validations above) - isolating this test
+        # to volume/price coverage only.
         mfi_asset = await _make_asset(session, currency=CURRENCY, ticker="AFIMFIVOL")
         await _seed_asset_visible_prices(
             session,

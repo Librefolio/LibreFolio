@@ -35,11 +35,31 @@
  * extreme. That guarantees `max(L, 100-L)` ≥ **50** lightness points of headroom
  * for every entry of all four palettes, where the per-theme rule guarantees 17.
  *
- * ## Why one shade level is enough
+ * ## How many members a group holds
  *
- * The five ETF subtypes have five *distinct* parents (STOCK, BOND, COMMODITY,
- * REAL_ESTATE, CRYPTO), so no group ever holds more than `{pure, one subtype}`.
- * The implementation stays generic, but the default step is tuned for that.
+ * It depends on the resolver:
+ *
+ * - by **content** (`primaryAssetType`), a group holds its pure type and the subtypes
+ *   that contain it — up to **three** today, `REAL_ESTATE` with `ETF_REAL_ESTATE` and
+ *   `CROWDFUND_REAL_ESTATE`. No chart groups this way since I's D15;
+ * - by **vehicle** (`assetTypeFamily`), the allocation pie: the ETF family holds the generic
+ *   ETF and every ETF subtype — up to **seven** — and Crowdfund holds two. The allocation
+ *   history chart groups by the same families but draws each one as a single area, with no
+ *   shades and its subtypes in the tooltip only (D375): from this module it takes only the
+ *   family order and the base colours.
+ *
+ * Groups of up to three walk lightness `step` points at a time away from the nearer
+ * extreme, as they always have. From four members on that walk clamps to black or
+ * white after two to four steps (measured on every slot of the pie's palettes, 01/10/2026),
+ * so a larger group spreads its shades on **both sides** of the base within lightness
+ * [10, 90], as far apart as the band allows (never more than `step`), and halves the
+ * saturation of every other shade (the developer's rule "B"). Lightness alone cannot
+ * separate seven members: about 11.5 points apart at best, while the saturation keeps
+ * every pair of a 4–7-member family at least as far apart (CIEDE2000 ≥ 5.8) as the
+ * closest pair of today's groups of two or three (5.4).
+ *
+ * **Known limit**: from eight members on the shades stay distinct but closer (CIEDE2000
+ * about 3) — the band holds only so many separable steps of one hue.
  *
  * ## Scope
  *
@@ -62,7 +82,8 @@ export interface AllocationHierarchyEntry<T> {
 
 export interface AllocationHierarchyOptions {
     /**
-     * Maps a raw key to its primary type — contract **K2**, `primaryAssetType`.
+     * Maps a raw key to its group — contract **K2**. Both allocation charts pass
+     * `assetTypeFamily` (the vehicle); `primaryAssetType` (the content) fits it too.
      *
      * Injected rather than imported: `assetTypes.ts` reads the generated Zodios
      * schemas at module load, so importing it would drag `$lib/api/generated` —
@@ -91,6 +112,13 @@ export interface AllocationHierarchyResult<T> {
 }
 
 const DEFAULT_SHADE_STEP = 20;
+/** Groups up to this size keep the one-sided walk, which is what they have always looked like. */
+const ONE_SIDED_GROUP_SIZE = 3;
+/** The lightness band a larger group spreads over: beyond it a shade reads as black or white. */
+const SPREAD_MIN_LIGHTNESS = 10;
+const SPREAD_MAX_LIGHTNESS = 90;
+/** Saturation of every other shade in a larger group: lightness alone cannot separate seven members. */
+const SPREAD_SATURATION_FACTOR = 0.5;
 
 /** Case-insensitive, because `by_type` mixes enum casing with the synthetic `"Liquidity"` bucket. */
 function sameKey(a: string, b: string): boolean {
@@ -98,19 +126,45 @@ function sameKey(a: string, b: string): boolean {
 }
 
 /**
- * Derive a related colour by moving lightness away from the nearer extreme.
- * Falls back to the base colour when it is not parseable hex — a slice keeping
- * its parent's colour is a far better failure than a black one.
+ * Derive a related colour for a group member.
+ *
+ * Without `groupSize`, or for a group of up to three, lightness moves `step` points
+ * per depth away from the nearer extreme — today's shading. A larger group spreads its
+ * shades on both sides of the base (see "How many members a group holds" above).
+ * Falls back to the base colour when it is not parseable hex — a slice keeping its
+ * parent's colour is a far better failure than a black one.
  */
-export function shadeForDepth(base: string, depth: number, step: number = DEFAULT_SHADE_STEP): string {
+export function shadeForDepth(base: string, depth: number, step: number = DEFAULT_SHADE_STEP, groupSize?: number): string {
     if (depth <= 0) return base;
 
     const hsl = hexToHsl(base);
     if (!hsl) return base;
 
     const direction = hsl.l < 50 ? 1 : -1;
-    const lightness = Math.min(100, Math.max(0, hsl.l + direction * step * depth));
-    return hslToHex(hsl.h, hsl.s, lightness);
+    if (groupSize === undefined || groupSize <= ONE_SIDED_GROUP_SIZE) {
+        const lightness = Math.min(100, Math.max(0, hsl.l + direction * step * depth));
+        return hslToHex(hsl.h, hsl.s, lightness);
+    }
+
+    const far = direction > 0 ? SPREAD_MAX_LIGHTNESS : SPREAD_MIN_LIGHTNESS;
+    const near = direction > 0 ? SPREAD_MIN_LIGHTNESS : SPREAD_MAX_LIGHTNESS;
+    const roomFar = Math.abs(far - hsl.l);
+    const roomNear = Math.abs(hsl.l - near);
+    const shades = groupSize - 1;
+    // k shades on the far side, the rest on the near one, spaced as widely as the band allows.
+    let farCount = 1;
+    let gap = -1;
+    for (let k = 1; k <= shades; k++) {
+        const nearCount = shades - k;
+        const candidate = Math.min(roomFar / k, nearCount > 0 ? roomNear / nearCount : Infinity, step);
+        if (candidate > gap) {
+            gap = candidate;
+            farCount = k;
+        }
+    }
+    const lightness = depth <= farCount ? hsl.l + direction * gap * depth : hsl.l - direction * gap * (depth - farCount);
+    const saturation = depth % 2 === 0 ? hsl.s * SPREAD_SATURATION_FACTOR : hsl.s;
+    return hslToHex(hsl.h, saturation, lightness);
 }
 
 /**
@@ -141,8 +195,9 @@ export function buildAllocationHierarchy<T>(entries: readonly AllocationHierarch
         // `.toUpperCase()` is redundant against contract K2, which already upper-cases
         // before its lookup and returns the normalised value even when it misses. It is
         // kept as a cheap guard against contract drift, not because any test needs it —
-        // that invariant belongs to `primaryAssetType`, so it is pinned in
-        // `assetTypeTables.test.ts` rather than duplicated here.
+        // that invariant belongs to the resolver (`assetTypeFamily`, like
+        // `primaryAssetType`), so it is pinned in `assetTypeTables.test.ts` rather
+        // than duplicated here.
         const groupKey = resolvePrimary(entry.key).toUpperCase();
         const bucket = groups.get(groupKey);
         if (bucket) {
@@ -189,7 +244,7 @@ export function buildAllocationHierarchy<T>(entries: readonly AllocationHierarch
             result.push({
                 key: entry.key,
                 item: entry.item,
-                color: depth === 0 ? base : shadeForDepth(base, depth, shadeStep),
+                color: depth === 0 ? base : shadeForDepth(base, depth, shadeStep, members.length),
                 primary: groupKey,
                 depth,
                 groupSize: members.length,

@@ -20,12 +20,46 @@
  * testid is `search-select-option-{value}`, shared by every SearchSelect on the
  * page, so an unscoped query would fish from a neighbour's list the moment two are
  * mounted. `within(dropdown(...))` is the closing barrier.
+ *
+ * The last block is `AssetSelect`'s, which has no test file of its own: what it
+ * hands this trigger through the `selectedItem` snippet. A compact trigger grew
+ * taller once an asset was chosen — a 28px icon box and a second, smaller line under
+ * the name — so the chosen asset reads as one line there, with the dropdown's
+ * `w-4 h-4` icon and the trigger's own text size, and the full-size trigger keeps its
+ * box. jsdom lays nothing out, so the size utilities themselves are the subject, read
+ * off the elements found by structure; the asset cache is this file's own fixture,
+ * mocked for the whole file and read by that block alone (SearchSelect never reads it).
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {SelectOption} from './types';
 import SearchSelect from './SearchSelect.svelte';
+
+/** The asset cache `AssetSelect` reads, owned by the last block: one active asset with an icon of its own, a ticker and a currency. */
+const CACHED_ASSET = vi.hoisted(() => ({
+    id: 4242,
+    display_name: 'Invented Holding Plc',
+    identifier_ticker: 'INVH',
+    currency: 'EUR',
+    asset_type: 'STOCK',
+    icon_url: 'https://cdn.test/invh.png',
+    active: true,
+}));
+
+vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/stores/reference/assetStore')>();
+    const {readable} = await import('svelte/store');
+    return {
+        ...actual,
+        assetStoreVersion: readable(0),
+        ensureAssetsLoaded: vi.fn(() => Promise.resolve()),
+        // A fresh array each call, as the real store re-derives one: `AssetSelect` sorts it in place.
+        getAllAssets: vi.fn(() => [{...CACHED_ASSET}]),
+    };
+});
+
+import AssetSelect from './AssetSelect.svelte';
 
 /**
  * A list bracketed by section headers, with one disabled row, so the awkward
@@ -491,5 +525,98 @@ describe('SearchSelect', () => {
             // …and there is no separate search field in the dropdown body.
             expect(within(dropdown()).queryByTestId('ccy-search')).toBeNull();
         });
+    });
+});
+
+// =============================================================================
+// AssetSelect — the chosen asset on the trigger
+// =============================================================================
+
+/** A Tailwind font-size utility — a step of the scale or an arbitrary size, never a colour such as `text-gray-500`. */
+const FONT_SIZE = /^text-(xs|sm|base|lg|[2-9]?xl|\[[^\]]+\])$/;
+
+/** An element as its tag and utilities, for a red that says what is on screen. */
+function described(element: Element): string {
+    return [element.tagName.toLowerCase(), ...element.classList].join('.');
+}
+
+/** Every element at or under `root`. */
+function selfAndBelow(root: Element): Element[] {
+    return [root, ...root.querySelectorAll('*')];
+}
+
+/** The size an element's text is drawn at, as the utilities say it: its own, else its nearest ancestor's, up to `top` included. */
+function fontSizeOf(element: Element, top: Element): string | null {
+    for (let node: Element | null = element; node; node = node.parentElement) {
+        const size = [...node.classList].find((token) => FONT_SIZE.test(token));
+        if (size) return size;
+        if (node === top) break;
+    }
+    return null;
+}
+
+/**
+ * Text stacked on lines of its own: an element holding two or more `div`/`p` children that carry
+ * text, unless it lays them out side by side (`flex` without `flex-col`). Today's selected item has
+ * one: the name above, the label and the currency below.
+ */
+function stackedLines(root: Element): string[] {
+    return selfAndBelow(root)
+        .filter((parent) => {
+            if (parent.classList.contains('flex') && !parent.classList.contains('flex-col')) return false;
+            const lines = [...parent.children].filter((child) => (child.tagName === 'DIV' || child.tagName === 'P') && (child.textContent ?? '').trim() !== '');
+            return lines.length > 1;
+        })
+        .map(described);
+}
+
+/** The elements that write the chosen asset's name — its ticker or its display name — in text of their own. */
+function nameHolders(root: Element): Element[] {
+    const names = [CACHED_ASSET.identifier_ticker, CACHED_ASSET.display_name];
+    return selfAndBelow(root).filter((element) => [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && names.some((name) => (node.textContent ?? '').includes(name))));
+}
+
+/** `AssetSelect` mounted on the cached asset, and its trigger once the chosen asset is drawn on it. */
+async function mountAssetSelect(compact: boolean): Promise<{trigger: HTMLElement; icon: HTMLImageElement}> {
+    render(AssetSelect, {value: CACHED_ASSET.id, compact, testid: 'chosen-asset'});
+    const trigger = screen.getByTestId('chosen-asset-trigger');
+    // The barrier: the chosen asset's own icon is on the trigger, so the selected item has been drawn.
+    const icon = await waitFor(() => {
+        const found = trigger.querySelector<HTMLImageElement>(`img[src="${CACHED_ASSET.icon_url}"]`);
+        expect(found, 'the chosen asset is not drawn on the trigger: the selected item never rendered').not.toBeNull();
+        return found as HTMLImageElement;
+    });
+    return {trigger, icon};
+}
+
+describe('AssetSelect — the chosen asset on the trigger', () => {
+    it("compact: one line, with the dropdown's w-4 h-4 icon and the trigger's text size, and no icon box", async () => {
+        await setupI18n();
+        const {trigger, icon} = await mountAssetSelect(true);
+        const triggerSize = fontSizeOf(trigger, trigger);
+        expect(triggerSize, 'premise: the compact trigger states a text size of its own').not.toBeNull();
+        const names = nameHolders(trigger);
+        expect(names.length, 'premise: the chosen asset is named on the trigger').toBeGreaterThan(0);
+
+        expect(
+            selfAndBelow(trigger)
+                .filter((element) => element.classList.contains('w-7') || element.classList.contains('h-7'))
+                .map(described),
+            'the compact trigger still draws the chosen asset in the 28px icon box, taller than the line it sits on',
+        ).toEqual([]);
+        expect([...icon.classList], "the chosen asset's icon is not the dropdown's w-4 h-4 one").toEqual(expect.arrayContaining(['w-4', 'h-4']));
+        expect(stackedLines(trigger), 'the chosen asset takes two lines on a compact trigger, so the trigger grows once a value is chosen').toEqual([]);
+        expect(
+            names.map((holder) => `${described(holder)}: ${fontSizeOf(holder, trigger)}`),
+            "the chosen asset is not written at the trigger's text size",
+        ).toEqual(names.map((holder) => `${described(holder)}: ${triggerSize}`));
+    });
+
+    it('full size: the chosen asset keeps its icon box and its two lines', async () => {
+        await setupI18n();
+        const {trigger, icon} = await mountAssetSelect(false);
+
+        expect([...(icon.parentElement as HTMLElement).classList], 'the full-size trigger lost the icon box around the chosen asset').toEqual(expect.arrayContaining(['w-7', 'h-7']));
+        expect(stackedLines(trigger), 'the full-size trigger no longer writes the name above the label and the currency').toHaveLength(1);
     });
 });
