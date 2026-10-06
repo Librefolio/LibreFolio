@@ -2543,7 +2543,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > test dell'allocazione verdi, i 5 rossi sono quelli noti del GrowthChart di I. Il grafico storico non cambia: lo
 > prova il pin byte per byte dei gruppi fino a 3 sulle sue due palette.
 
-### Il D15 di I e le palette del grafico storico · ⏳ 02/10/2026
+### Il D15 di I e le palette del grafico storico · ✅ 05/10/2026 (la domanda sulle palette è superata da D375)
 
 > **La sequenza del coordinator** (decisione del developer, 02/10 alle 10:05: la revisione si fa sulla revisione
 > combinata, perché il secondo anello per veicolo vive solo nella nostra famiglia e i margini solo in I): K integrato,
@@ -2564,6 +2564,13 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > della torta (5,4), per i due grafici; in alternativa (b) una regola B regolata per palette. Quando si applica il D15,
 > il test-author estende il criterio dei 7 membri a `HISTORY_PALETTES` con il criterio che il developer sceglie, rosso
 > prima se una posizione fallisce, e la descrizione di `allocation-unit` prende una frase in più nello stesso commit.
+>
+> **Esito (05/10)**: nella revisione della Dashboard il developer ha scelto (a), *«i colori attuali sono perfetti»*.
+> Nella stessa revisione però ha visto *«aree con sovrapposizioni»* nello storico. Le misure di A sui suoi dati hanno
+> escluso il doppio conteggio, e lui ha scelto un'area per famiglia, con i sottotipi solo nel tooltip (D375). Lo storico
+> quindi non disegna più sfumature, e il criterio sulle sue palette non ha più oggetto. test-author l'aveva già scritto
+> (9 casi, verdi all'arrivo, 2 mutanti uccisi) e l'ha tolto: i due file sono tornati identici a HEAD, sha256 verificati.
+> Il D15 si chiude nel checkpoint 4, con l'area per famiglia.
 
 ### D371 — nel laboratorio un asset selezionato può fare da riferimento · ✅ backend 02/10/2026
 
@@ -2879,3 +2886,101 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >   codice d'uscita di `merge-file`, quindi ogni file risultava a zero conflitti. Il coordinator l'ha scoperto
 >   facendo la fusione vera; ho dato a F l'unione esatta. D'ora in poi il codice d'uscita si salva subito dopo il
 >   comando.
+
+### Checkpoint 3: tre tentativi per una risposta scartata (D374), `AssetSelect` compatto su una riga, lo spec del benchmark senza provider · ✅ 05/10/2026 (FROZEN)
+
+> **Le decisioni**:
+> - **D374**, dal developer tramite il coordinator: *«come il catalogo»*, cioè 3 tentativi in tutto (la prima
+>   richiesta più due). Una costante sola per il catalogo, `loadBase` e `runGuarded`; «Riprova» solo dopo l'ultimo
+>   scarto; nessuna attesa fra un tentativo e l'altro.
+> - **Il selettore del benchmark che si alzava dopo la scelta** (revisione della Dashboard del 05/10). La causa è
+>   `AssetSelect` compatto, che disegnava la voce scelta in un riquadro da 28 px, su due righe. Il coordinator ha dato
+>   la concessione su `AssetSelect.svelte`, solo per il ramo compatto.
+> - **`risk-benchmark-shared`** lasciava passare il giro dei prezzi live dopo l'apertura dei mercati USA (trovato da F).
+>
+> **Il fast-forward**: test-author aveva trovato casi dei componenti del laboratorio di F che fissavano 2 tentativi,
+> su versioni di F molto più avanti delle mie. Il developer ha scelto (Y): Risk avanza in fast-forward alla punta di F
+> (`8cb564ace`, giro 8b compreso), nello stesso ORDER del coordinator. Prima ho salvato i rossi in `/tmp` e nei file di
+> sessione e ho riportato i due file a HEAD. Dopo l'ORDER, test-author li ha riapplicati (la patch è entrata senza fuzz)
+> e ha riallineato i file di F, dentro la sua concessione: solo i copioni degli scarti e i conteggi.
+>
+> **Il codice**:
+> - `riskStore.svelte.ts`: `RISK_DISCARD_ATTEMPTS = 3`, esportata, al posto di `CATALOG_DISCARD_RETRIES`, per i due
+>   cataloghi.
+> - `riskPanelController.svelte.ts`:
+>   - `loadBase(force)` resta la porta pubblica e chiama `loadBaseAttempt(force, 1)`, che chiede di nuovo fino al
+>     limite. Il conteggio resta privato, così nessun chiamante può partire oltre il limite.
+>   - `runGuarded` ripete finché la risposta è scartata, restano tentativi e la corsa è ancora la domanda corrente.
+>     Un errore va al `catch` e non si ripete.
+>   - Nei commenti, «twice running» diventa «on every attempt».
+> - `AssetSelect.svelte`: in compatto la voce scelta sta su una riga, come quella del menu: icona da 16 px, «ticker ·
+>   nome», il badge «inattivo». La versione normale non cambia.
+> - `risk-benchmark-shared.spec.ts`: `holdLivePricePoll`, copiata identica da `risk-lab`, chiamata per prima.
+>
+> **I test** (test-author, rossi prima):
+> - controller 17 rossi e store 1 (la costante non definita), tutti sul numero di tentativi;
+> - 9 casi del laboratorio riallineati, rossi sul codice di prima;
+> - una matrice di 11 varianti su una copia in `/tmp`. Il riferimento dà 0 rossi. Ogni variante sbagliata ne dà almeno
+>   1: 4 tentativi, costante non esportata, ciclo che ignora la corsa superata, corsa superata che scrive, errore
+>   ripetuto, catalogo, base o corse fermi a 2;
+> - `AssetSelect`, in `SearchSelect.test.ts` perché `AssetSelect` non ha un file suo: il caso compatto con un valore è
+>   rosso sul riquadro da 28 px; la versione normale è fissata com'è;
+> - lo spec: prima 1 chiamata a Yahoo e 4 scritture di prezzi intraday; dopo 0 e 0, anche con 4 worker.
+>
+> **Mutanti 5 su 5 uccisi**, sul codice vero:
+> - costante a 2: 29 rossi;
+> - base ferma a 2: 12 rossi;
+> - il ciclo delle corse che ignora la corsa superata: 7 rossi;
+> - catalogo fermo a 2: 1 rosso;
+> - il compatto con il riquadro: 1 rosso.
+>
+> Ogni file è stato ripristinato e verificato con sha256.
+>
+> **Verifica** (6152, tutto in sequenza):
+> - unit: `risk-controller-unit` 96 · `risk-unit` 20 · `risk-levels-unit` 296 · `risk-levels-component` 92 ·
+>   `component-unit` 2487 · `core-unit` 2990 · `onboarding-component-unit` 408;
+> - `front check` 0 errori e 0 avvisi; orfani ✅;
+> - E2E: `risk-benchmark-shared` 4 · `risk` 14 · `risk-lab` 41 · `asset-detail` 29 · `tx-import-resolution` 12 ·
+>   `tx-import-matching` 6 · `tx-import-duplicate-precedence` 6.
+>
+> I compatti con un valore sono coperti: `L3Benchmark` (`risk`), `BenchmarkSelect` (`risk`, `risk-lab`,
+> `risk-benchmark-shared`), `SignalAssetParamControl` (`asset-detail`) e la risoluzione degli asset del wizard (i
+> `tx-import-*`).
+>
+> **Tre rossi che non vengono da k3**, provati con la procedura di triage:
+> - **Quali**: `tx-ca-contract` CAC-011 e CAC-012, il wizard che non arriva alla revisione (5 volte su 5), e
+>   `tx-import-asset-inspector` E2-001, il menu della valuta che non si apre una seconda volta (4 volte su 5).
+> - **La prova**: 2 giri con `AssetSelect` di k3 e 2 con `AssetSelect` riportato a HEAD, con gli stessi rossi. Fuori
+>   dalle pagine di rischio, nessun modulo carica lo store o il controller del rischio: `riskTypes.ts` ne importa solo
+>   un tipo. Su quelle pagine, quindi, l'unico file di k3 raggiungibile è `AssetSelect`.
+> - **Lettura probabile**:
+>   - CAC-011 e CAC-012 sono un'ipotesi sul tempo dentro il test. `walkToReview` e `confirmNotices` usano
+>     `isVisible({timeout})`, e Playwright quel timeout lo ignora. Con la macchina carica (load 8–23) il passo
+>     «Correzioni» compare dopo il controllo, viene saltato, e la revisione non arriva: l'istantanea mostra il
+>     passo con 6 righe da sistemare e «Continua» disabilitato.
+>   - E2-001 riapre il menu subito dopo la chiusura del riquadro di conferma della valuta. Il menu si chiude, o non
+>     si apre: va guardato da chi possiede quei test.
+> - Riferiti al coordinator, con le istantanee in `/tmp/lf-triage-k3/`.
+>
+> **⚠️ Fuori pista**:
+> - **La parte B è uscita** (il criterio delle palette dello storico): con D375 lo storico non ha più sfumature.
+> - **`riskStore.test.ts`, mio, con l'ordine casuale**: 3 test cadono con alcuni semi, già su HEAD, per il
+>   `vi.resetModules()` del blocco «first identity resolution». Il runner non mescola. Da sistemare a parte.
+> - **Il preset del broker nel laboratorio** (`heldAssetIds`, di F) chiede il report di nuovo una volta sola dopo uno
+>   scarto, e il suo commento lo chiama «la politica di `loadBase`», che ora è 3. È una domanda per il developer,
+>   tramite il coordinator; il codice resta di F.
+> - **«twice running» resta nei commenti di file non miei**, segnalati ai proprietari:
+>   - di F: le sezioni del laboratorio (`AssetSetCorrelationSection`, `AssetSetLossComparisonSection`,
+>     `AssetSetRiskReturnSection`, `AssetSetReplaySection`, `AssetSetComparisonLevels`) e le intestazioni o i titoli di
+>     due suoi test;
+>   - di A: `RiskLevelsPanel.svelte`.
+> - **La privacy, una mia mancanza**. Nella verifica del checkpoint 5 di A avevo controllato blob e struttura, non il
+>   contenuto, e il coordinator ha trovato nella guida della review dati veri del developer. Da ora ogni verifica della
+>   famiglia cerca anche nomi, importi, percentuali e conteggi presi dai suoi dati. La scansione su Risk, A e F ha
+>   trovato:
+>   - righe già committate nei rami della famiglia, che non sono sul remoto;
+>   - due righe già pubbliche fuori dalla famiglia.
+>
+>   Ho riferito tutto al coordinator. In D375 ho tolto quali sottotipi possiede.
+> - **Un errore mio, corretto**: avevo scritto ad A che lo scatter era un file di I. Per la tabella dei proprietari del
+>   29/09 è di A, condiviso con il laboratorio.

@@ -26,7 +26,8 @@
  * file shares nothing with it but `risk-mocks.ts`, which is additive.
  *
  * Nothing to restore: the risk endpoints are mocked, the choice lives in this context's
- * `localStorage` (which dies with the context), and no database row is written — so every
+ * `localStorage` (which dies with the context), and no database row is written — the page's
+ * live-price poll included, held for the whole test (`holdLivePricePoll`) — so every
  * test runs beside its neighbours.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
@@ -169,8 +170,40 @@ function askedAbout(requests: RiskRequest[], assetId: number): boolean {
     return requests.some((request) => request.scope.kind === 'asset' && request.scope.asset_id === assetId);
 }
 
+/**
+ * Hold the asset page's live-price poll, unanswered, for the whole test.
+ *
+ * A copy of `holdLivePricePoll` in `risk-lab.spec.ts`, with exactly its behaviour — the same
+ * pattern, the same empty handler — because Playwright refuses to let one test file import
+ * another: a change to one is a change to both.
+ *
+ * Every test here opens `/assets/{id}`, which polls `POST /assets/prices/current` for its asset
+ * on load and every 30 s, and from a second timer 5 s in and every minute after. Once the US
+ * market is open, an answered poll asks the live provider and writes today's price into the
+ * lane's database — measured on 05/10/2026 at 14:53Z, one run of this file without the hold:
+ * Yahoo's `current_value for MSFT` and four «Intra-day price extend» writes on that asset; with
+ * the hold, none. And `zodios-client` turns every answered poll into a portfolio mutation, which
+ * drops the risk cache and discards whatever comparison is in flight: a background actor racing
+ * the very requests these tests read.
+ *
+ * Held, never answered, because nothing else is inert: a stubbed answer still passes through that
+ * interceptor and still invalidates. An unanswered call does nothing at all: each poller awaits it
+ * and, after axios's 30 s timeout, gives up without a word. The handler calls no route method, so
+ * nothing can throw when the context closes. Installed first in `beforeEach`, before any page is
+ * open. No test here opens the sync modal, so no FX provider catalogue is asked for and none is held.
+ *
+ * ⚠️ This isolates the tests; it repairs nothing. Outside this file the poll still reaches the
+ * providers and writes on every visit.
+ */
+async function holdLivePricePoll(page: Page): Promise<void> {
+    await page.route(/\/api\/v1\/assets\/prices\/current(?:\?|$)/, () => {
+        // Deliberately neither fulfilled nor continued: see above.
+    });
+}
+
 test.describe('Asset page Risk tab — the comparison opens on the shared benchmark', () => {
     test.beforeEach(async ({page}) => {
+        await holdLivePricePoll(page);
         await login(page, TEST_USER);
     });
 

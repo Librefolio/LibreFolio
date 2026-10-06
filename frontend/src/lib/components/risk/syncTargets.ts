@@ -63,3 +63,22 @@ export function buildSyncTargets(assetIds: readonly number[], targetCurrency: st
 
     return {assets, fxPairs: [...pairs].sort()};
 }
+
+/** What a data-quality banner action does in the lab. */
+export type LabQualityAction = {kind: 'sync'} | {kind: 'navigate'; href: string};
+
+/**
+ * What a data-quality banner action does in the lab: a sync opens the lab's own sync, which
+ * refreshes the selection's prices and rates (`buildSyncTargets`); the rest navigate, as on the
+ * Dashboard. `null` for an action the lab does not know, or a navigation without a target.
+ *
+ * Any `sync_` action syncs, the two the backend sends today (`sync_asset_prices`,
+ * `sync_fx_pair`) and a later one alike: the lab has one sync, and it covers both.
+ */
+export function labQualityAction(action: string, target: string | null): LabQualityAction | null {
+    if (action.startsWith('sync_')) return {kind: 'sync'};
+    if (action === 'navigate_asset') return target ? {kind: 'navigate', href: `/assets/${encodeURIComponent(target)}`} : null;
+    if (action === 'navigate_fx') return target ? {kind: 'navigate', href: `/fx/${encodeURIComponent(target)}`} : null;
+    if (action === 'add_fx_pair') return {kind: 'navigate', href: '/fx'};
+    return null;
+}
