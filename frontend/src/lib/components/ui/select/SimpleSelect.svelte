@@ -27,6 +27,8 @@
         dropdownPosition?: 'top' | 'bottom' | 'auto';
         /** Custom class for container */
         class?: string;
+        /** Extra classes for the trigger button itself, appended to its own (e.g. an explicit height a caller lines up with another control). */
+        triggerClass?: string;
         /** Test ID for E2E testing (adds -button suffix to trigger) */
         testId?: string;
         /** Accessible field label, combined with the selected option on the trigger */
@@ -47,7 +49,25 @@
         matchTriggerWidth?: boolean;
     }
 
-    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', class: className = '', testId, ariaLabel, optionTestId, item, selectedItem, onchange, compact = false, showChevron = true, matchTriggerWidth = false}: Props = $props();
+    let {
+        value = $bindable(''),
+        options,
+        placeholder = '',
+        disabled = false,
+        loading = false,
+        dropdownPosition = 'bottom',
+        class: className = '',
+        triggerClass = '',
+        testId,
+        ariaLabel,
+        optionTestId,
+        item,
+        selectedItem,
+        onchange,
+        compact = false,
+        showChevron = true,
+        matchTriggerWidth = false,
+    }: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
@@ -263,7 +283,7 @@
                {disabled || loading
             ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-700'
             : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
-               {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''}"
+               {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''} {triggerClass}"
         data-testid={testId ? `${testId}-button` : undefined}
         role="combobox"
         aria-label={triggerAccessibleName}

@@ -3564,7 +3564,8 @@
         "replayReasonOther": "Other reason",
         "replayNothing": "Nothing to replay: no asset has usable prices over this period.",
         "replaySuggested": "Replay from {start} to {end}: {count, plural, one {# asset comes back} other {# assets come back}}",
-        "replaySuggestedPartial": "Only part of the crisis."
+        "replaySuggestedPartial": "Only part of the crisis.",
+        "replayPresetNone": "No preset"
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {

@@ -695,6 +695,54 @@ async def test_portfolio_optimization_supports_all_scopes_and_strategies():
     assert invalid_item["error"]["code"] == "invalid_parameters"
 
 
+@pytest.mark.asyncio
+async def test_comparison_accepts_the_two_rates_and_still_refuses_a_parameter_it_does_not_know():
+    """k6 (06/10/2026): `comparison` takes the KPI's risk-free rate and target, and is still closed.
+
+    Both instances share one request, so the control and the subject see the same portfolio, window
+    and benchmark: a misspelt rate is still `invalid_parameters`, while the two real ones are accepted,
+    echoed in the metadata, and answered with the benchmark's own ratios.
+    """
+    user_id = await fixture_user_id()
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+
+    async def current_user():
+        return SimpleNamespace(id=user_id)
+
+    app.dependency_overrides[get_current_user] = current_user
+    end = date.today() - timedelta(days=3)
+    start = end - timedelta(days=297)
+    rates = {"comparison_asset_id": 1, "risk_free_annual_rate": 0.03, "target_annual_return": 0.05}
+    payload = {
+        "scope": {"kind": "portfolio", "broker_ids": [3]},
+        "date_range": {"start": start.isoformat(), "end": end.isoformat()},
+        "target_currency": "EUR",
+        "mode": "historical",
+        "analytics": [
+            {"instance_id": "misspelt", "analytic_code": "comparison", "parameters": {"comparison_asset_id": 1, "risk_free_rate": 0.03}},
+            {"instance_id": "rated", "analytic_code": "comparison", "parameters": rates},
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(f"{API_BASE}/query", json=payload)
+    finally:
+        await get_async_engine().dispose()
+
+    assert response.status_code == 200, response.text
+    items = {item["instance_id"]: item for item in response.json()["items"]}
+    # The control, as it is today.
+    assert items["misspelt"]["status"] == "unavailable"
+    assert items["misspelt"]["error"]["code"] == "invalid_parameters"
+    rated = items["rated"]
+    assert rated["status"] in {"ok", "partial"}, rated["error"]
+    assert rated["metadata"]["params"] == rates
+    assert {"comparison_sharpe", "comparison_sortino", "items"} <= set(rated["output"])
+
+
 # ---------------------------------------------------------------------------
 # POST /risk/eligibility — whether each asset can take part in an analysis of a period
 # (developer's decision of 24/09/2026)
