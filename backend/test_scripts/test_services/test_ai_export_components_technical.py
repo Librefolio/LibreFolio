@@ -34,7 +34,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from backend.app.schemas.common import BackwardFillInfo, Currency
+from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
     PortfolioReportMetadata,
@@ -2716,3 +2716,56 @@ class TestTechnicalContextComponents:
         for bucket in payload["buckets"]:
             for event in bucket["events"]:
                 assert "signal_category" not in event
+
+
+# =============================================================================
+# Quote days (developer's decision of 30/09/2026)
+#
+# Indicators compute on sessions («SMA 200 = 200 sedute»), so the FX technical
+# rate series loads twice the bundle's session requirement in calendar days.
+# The components' builders and payloads do not change, so their versions stay
+# at 1: the changed indicator values are versioned by the plugins.
+# =============================================================================
+
+
+def _fx_bundle_session_requirement(scope: BuildScope) -> int:
+    """The largest warm-up of the curated FX bundle, in sessions, read from the plugins themselves."""
+    context = SignalExecutionContext(
+        domain=SignalDomain.FX,
+        requested_range=DateRangeModel(start=scope.period_start, end=scope.period_end),
+        cadence=SignalCadence.DAILY,
+        source_reference="fx:quote-days",
+    )
+    requirement = 0
+    for request in technical_shared.build_fx_signal_requests():
+        plugin_class = SignalPluginRegistry.get_plugin(request.signal_code)
+        requirement = max(requirement, plugin_class.warmup_requirement(plugin_class.validate_params(request.params), context).total_points)
+    return requirement
+
+
+class TestQuoteDayWarmup:
+    def test_fx_warmup_days_are_twice_the_bundle_session_requirement(self):
+        """T8 — EMA 200 needs 1200 sessions: 2400 calendar days are loaded for it."""
+        scope = _fx_scope()
+        sessions = _fx_bundle_session_requirement(scope)
+        assert sessions == 1200  # premise: EMA 200 drives the curated FX bundle
+
+        assert technical_shared._fx_warmup_days(scope) == 2 * sessions
+
+    def test_fx_warmup_days_stay_capped_at_the_first_representable_date(self):
+        """T8 — guard: the cap at ``date.min`` is unchanged."""
+        scope = _fx_scope(period_start=date.min + timedelta(days=100), period_end=date.min + timedelta(days=130))
+
+        assert technical_shared._fx_warmup_days(scope) == 100
+
+    @pytest.mark.asyncio
+    async def test_fx_rate_series_requests_the_doubled_warmup_window(self, monkeypatch):
+        """T8 — the loader asks the FX service for every calendar day of the doubled window."""
+        rate_calls = _patch_convert_bulk(monkeypatch)
+        scope = _fx_scope()
+        load_start = scope.period_start - timedelta(days=2 * _fx_bundle_session_requirement(scope))
+
+        rate_series = await technical_shared.load_fx_rate_series(_make_context(scope))
+
+        assert rate_calls == [(scope.period_end - load_start).days + 1]
+        assert rate_series.observations[0].requested_date == load_start

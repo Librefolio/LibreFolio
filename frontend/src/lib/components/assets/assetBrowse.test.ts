@@ -49,7 +49,7 @@ const ALIGN = `align \`${BROWSE_MODULE}\` with \`assetScope\` in \`${LIST_PAGE}\
  * runner and `vitest run` start (as `moneyRenderSites.test.ts` reads them).
  *
  * The body is the first `{` met outside the parameter list: the braces before it belong to the
- * parameter's type (`a: {tx_count?: number; …}`), which sits inside the parentheses.
+ * parameter's type (`a: {held_by_me?: boolean; …}`), which sits inside the parentheses.
  */
 function assetScopeDeclaration(file: string): string {
     const source = readFileSync(resolve(process.cwd(), file), 'utf8');
@@ -261,16 +261,17 @@ describe('assetBrowse — the published list order', () => {
 // =============================================================================
 
 /**
- * API-shaped assets, in API order. Their panel on the list page is `assetScope`: own when
- * `tx_count_own > 0`, else others when `tx_count > 0`, else analysis; a missing count is 0.
+ * API-shaped assets, in API order. Their panel on the list page is `assetScope`, which reads what is
+ * held now: own when `held_by_me`, else others when `held_by_others`, else analysis; a missing flag
+ * reads as false.
  */
 const ASSETS = [
-    {id: 1, active: true, tx_count: 0, tx_count_own: 0}, // analysis
-    {id: 2, active: false, tx_count: 3, tx_count_own: 3}, // own, inactive
-    {id: 3, active: true, tx_count: 5, tx_count_own: 2}, // own
-    {id: 4, active: true, tx_count: 4}, // others: no own count
-    {id: 5, active: true}, // analysis: no counts at all
-    {id: 6, active: false, tx_count: 1, tx_count_own: 0}, // others, inactive
+    {id: 1, active: true, held_by_me: false, held_by_others: false}, // analysis
+    {id: 2, active: false, held_by_me: true, held_by_others: false}, // own, inactive
+    {id: 3, active: true, held_by_me: true, held_by_others: true}, // own, held by others too
+    {id: 4, active: true, held_by_others: true}, // others: no held_by_me flag
+    {id: 5, active: true}, // analysis: no flags at all
+    {id: 6, active: false, held_by_me: false, held_by_others: true}, // others, inactive
     {id: 7, active: false}, // analysis, inactive
 ];
 
@@ -290,16 +291,17 @@ describe('assetBrowse — defaultAssetBrowseOrder (the list page unfiltered)', (
         expect(defaultAssetBrowseOrder([], 99)).toEqual([]);
     });
 
-    it('groups by the list page assetScope: an own count wins, a missing count is zero', () => {
+    it('groups by the list page assetScope: held by me wins over held by others, a missing flag reads as false', () => {
         const assets = [
-            {id: 13, active: true, tx_count: 0}, // analysis
-            {id: 12, active: true, tx_count: 2, tx_count_own: 0}, // others
-            {id: 11, active: true, tx_count_own: 1}, // own, with no tx_count at all
+            {id: 13, active: true, held_by_others: false}, // analysis, with no held_by_me at all
+            {id: 12, active: true, held_by_me: false, held_by_others: true}, // others
+            {id: 11, active: true, held_by_me: true}, // own, with no held_by_others at all
             {id: 14, active: true}, // analysis
-            {id: 15, active: true, tx_count: 9, tx_count_own: 9}, // own
+            {id: 15, active: true, held_by_me: true, held_by_others: true}, // own: held by me wins
+            {id: 16, active: true, held_by_me: false, held_by_others: false, tx_count_own: 2, tx_count: 5}, // analysis despite its trade counts: a position sold years ago is no longer yours, the panels read what is held now (decision of 24/09)
         ];
         // Within a panel, the input order is kept.
-        expect(defaultAssetBrowseOrder(assets, 12)).toEqual([11, 15, 12, 13, 14]);
+        expect(defaultAssetBrowseOrder(assets, 12)).toEqual([11, 15, 12, 13, 14, 16]);
     });
 });
 

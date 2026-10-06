@@ -23,8 +23,29 @@
  * nullable, never the other way round.
  */
 import {schemas} from '$lib/api';
+import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
-import {riskOutput, singleValue} from '$lib/risk/riskTypes';
+import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
+
+/**
+ * What a section of the lab hands its panel, read through `bind:this`, for the one notice above
+ * the sections (the developer's decision of 05/10/2026, as on the Dashboard since 24/09).
+ *
+ * The notice is the panel's and the results are the sections': a section's frame keeps only
+ * what did not come back at all, so what is partial, and why, is said once, at the top.
+ */
+export interface AssetSetQualitySource {
+    /**
+     * What the lab's one notice reads from the section: the results its frames render, in page
+     * order, `null` where the answer had none. None at all from a section that keeps its own
+     * disclosure (the replay, which answers over a period of its own).
+     */
+    results: Array<RiskAnalyticResult | null>;
+    /** i18n keys naming results by instance, where the analytic's name is ambiguous (the two VaR horizons). */
+    labels: Readonly<Record<string, string>>;
+    /** The data-quality issues of the section's controllers, in their order, not yet merged: the lab's banner merges them. */
+    issues: DataQualityIssue[];
+}
 
 /** One row of the L1° comparison: what this asset did to whoever held it. */
 export interface AssetSetHurtRow {
@@ -60,14 +81,35 @@ export interface AssetSetPaidRow {
     beta: number | null;
     /** Correlation with that benchmark, over the same joint calendar. */
     correlation: number | null;
+    /**
+     * This asset is the benchmark itself (D371: a selected asset may be the reference).
+     * Its beta and correlation are then not blanks but inapplicable — measured against
+     * itself they would be 1 by construction — and the backend leaves it out of the
+     * comparison's items.
+     */
+    isReference: boolean;
+    /**
+     * The table opens with this row and tints it like the benchmark's dot (the developer's
+     * review, 06/10/2026: «anche nel lab il benchmark diventa una riga in cima»). Only the
+     * benchmark's row has it — a selected one (D371) or one `withBenchmarkRow` added.
+     */
+    role?: 'benchmark';
+    /**
+     * The row was added for a benchmark the selection does not hold: it takes a `ref-` id
+     * and `-ref-` cells in `RiskReturnLevel`, and stays out of the per-asset counts.
+     */
+    added?: boolean;
 }
 
-/** The benchmark's own coordinates, so a scatter can place it beside the rest. */
+/** The benchmark's own figures, so a scatter can place it beside the rest and the table can give it a row. */
 export interface AssetSetBenchmarkPoint {
     assetId: number;
     name: string;
     volatility: number;
     expectedReturn: number;
+    /** Its own Sharpe and Sortino, charged the same rate and target as the assets' (`null` when not measurable). */
+    sharpe: number | null;
+    sortino: number | null;
 }
 
 /**
@@ -165,7 +207,9 @@ export function buildAssetSetHurtRows(assetIds: readonly number[], names: Readon
 export function buildAssetSetPaidRows(assetIds: readonly number[], names: ReadonlyMap<number, string>, riskReturn: RiskAnalyticResult | null, kpi: RiskAnalyticResult | null, comparison: RiskAnalyticResult | null): AssetSetPaidRow[] {
     const points = byAsset(riskOutput(riskReturn, schemas.RiskAssetSetReturnOutput)?.items);
     const kpis = byAsset(riskOutput(kpi, schemas.RiskAssetSetKpiOutput)?.items);
-    const versus = byAsset(riskOutput(comparison, schemas.RiskAssetSetComparisonOutput)?.items);
+    const comparisonOutput = riskOutput(comparison, schemas.RiskAssetSetComparisonOutput);
+    const versus = byAsset(comparisonOutput?.items);
+    const referenceId = comparisonOutput?.comparison_asset_id ?? null;
 
     return assetIds.map((assetId) => {
         const point = points.get(assetId);
@@ -183,6 +227,7 @@ export function buildAssetSetPaidRows(assetIds: readonly number[], names: Readon
             sortino: num(stats?.sortino),
             beta: num(against?.beta),
             correlation: num(against?.correlation),
+            isReference: assetId === referenceId,
         };
     });
 }
@@ -191,11 +236,11 @@ export function buildAssetSetPaidRows(assetIds: readonly number[], names: Readon
  * The scatter's dots, one per asset that has both coordinates.
  *
  * 🔴 There is no portfolio dot and there cannot be one: `RiskAssetSetReturnOutput`
- * has no field for an aggregate. That absence is what keeps the Capital Market
- * Line off this chart — `capitalMarketLine()` draws only when a point whose role
- * is `portfolio` exists — and therefore what keeps the judgement "paid well for
- * the risk" off a surface whose design forbids it. The defence is a missing
- * shape, not a flag, so nothing here can switch it back on by mistake.
+ * has no field for an aggregate. That absence is what keeps a line through the
+ * selection off this chart, and with it the judgement of a whole the selection does
+ * not have. The defence is a missing shape, not a flag, so nothing here can switch
+ * it on by mistake. The only line the lab draws runs through the benchmark, when one
+ * is placed (`capitalMarketLineAnchor`; the developer's review, 06/10/2026).
  */
 export function buildAssetSetScatterPoints(rowsIn: readonly AssetSetPaidRow[]): {id: string; name: string; volatility: number; annualReturn: number; role: 'asset'}[] {
     const points: {id: string; name: string; volatility: number; annualReturn: number; role: 'asset'}[] = [];
@@ -224,11 +269,176 @@ export function buildAssetSetBenchmarkPoint(comparison: RiskAnalyticResult | nul
     // Both coordinates or no dot: a benchmark plotted on one axis would sit at a
     // position half of which nobody measured.
     if (volatility === null || expectedReturn === null) return null;
-    // 🔴 The selection's label map can never name the reference: the payload
-    // validator rejects a reference that is also among the compared, so by
-    // construction it is not in the selection. Without `resolveName` the dot is
-    // `#id` on every chart — which is how it shipped.
+    // The selection's label map names the reference when it is also selected (D371);
+    // otherwise it cannot, and without `resolveName` the dot would be `#id` on every
+    // chart — which is how it once shipped.
     const assetId = output.comparison_asset_id;
     const name = names.get(assetId) ?? resolveName?.(assetId) ?? label(assetId, names);
-    return {assetId, name, volatility, expectedReturn};
+    return {assetId, name, volatility, expectedReturn, sharpe: num(output.comparison_sharpe), sortino: num(output.comparison_sortino)};
+}
+
+/**
+ * L3°'s table rows with the benchmark's own row, which opens the table (the developer's
+ * review, 06/10/2026: «Sì, anche nel lab il benchmark diventa una riga in cima»).
+ *
+ * - No benchmark: the rows as they are.
+ * - A selected benchmark (D371): its own row becomes the benchmark's — it gains the role,
+ *   and keeps its id, its cells and its figures. Nothing is added; `RiskReturnLevel`
+ *   moves it to the top and tints it.
+ * - A benchmark the selection does not hold: one row is added, last, with the figures its
+ *   dot carries — volatility and return, Sharpe and Sortino — and, as the reference
+ *   itself, no beta or correlation: measured against itself they would be 1 by
+ *   construction. `RiskReturnLevel` gives it a `ref-` id and opens the table with it.
+ *
+ * The rows passed in are not changed. The chart's dots are built from the asset rows,
+ * never from these: an added row's dot is the benchmark's own (`'benchmark'`).
+ */
+export function withBenchmarkRow(rows: readonly AssetSetPaidRow[], benchmark: AssetSetBenchmarkPoint | null): AssetSetPaidRow[] {
+    if (benchmark === null) return [...rows];
+    if (rows.some((row) => row.assetId === benchmark.assetId)) {
+        return rows.map((row) => (row.assetId === benchmark.assetId ? {...row, role: 'benchmark'} : row));
+    }
+    return [
+        ...rows,
+        {
+            assetId: benchmark.assetId,
+            name: benchmark.name,
+            volatility: benchmark.volatility,
+            expectedReturn: benchmark.expectedReturn,
+            sharpe: benchmark.sharpe,
+            sortino: benchmark.sortino,
+            beta: null,
+            correlation: null,
+            isReference: true,
+            role: 'benchmark',
+            added: true,
+        },
+    ];
+}
+
+/** A dot of L3°'s chart: an asset, or the benchmark it is compared against. */
+export interface AssetSetChartPoint {
+    id: string;
+    name: string;
+    volatility: number;
+    annualReturn: number;
+    role: 'asset' | 'benchmark';
+}
+
+/**
+ * The dots of L3°'s chart, the benchmark among them, and never twice the same asset.
+ *
+ * One dot per row that has both coordinates, in the order of the rows. When the
+ * benchmark is one of them (D371: a selected asset may be the reference), that row's
+ * own dot is drawn as the benchmark — its id stays `asset-<id>`, so it still selects
+ * its row, and its coordinates are the row's, so the chart cannot disagree with the
+ * table. Only a benchmark no row places gets a dot of its own, last, so it draws over
+ * the cloud.
+ *
+ * Its role is `benchmark`, never `portfolio`. That is not cosmetic: `role` is what
+ * `capitalMarketLineAnchor()` reads. As the benchmark it anchors the line the reader
+ * asked for — "better paid than the reference" (the developer's review, 06/10/2026);
+ * labelled a portfolio it would pass for the reader's holdings as a whole, which a
+ * selection does not have.
+ */
+export function buildAssetSetChartPoints(rows: readonly AssetSetPaidRow[], benchmark: AssetSetBenchmarkPoint | null): AssetSetChartPoint[] {
+    const points: AssetSetChartPoint[] = buildAssetSetScatterPoints(rows).map((point) => (benchmark !== null && point.id === `asset-${benchmark.assetId}` ? {...point, role: 'benchmark'} : point));
+    if (benchmark !== null && !points.some((point) => point.role === 'benchmark')) {
+        points.push({id: 'benchmark', name: benchmark.name, volatility: benchmark.volatility, annualReturn: benchmark.expectedReturn, role: 'benchmark'});
+    }
+    return points;
+}
+
+/** The period L3°'s figures were calculated on, as its note states it. All days are ISO `YYYY-MM-DD`. */
+export interface AssetSetCalculationWindow {
+    /** The first day whose price movement the figures capture: the day after the baseline price. */
+    start: string;
+    /** The last return day. */
+    end: string;
+    /** Calendar days from `start` to `end`, both counted: the engine's `calendar_days`. */
+    days: number;
+    /** The window falls more than a week short of the toolbar's period at either end. */
+    narrowed: boolean;
+}
+
+/**
+ * A weekend or a holiday before the first quote does not make a period shorter: only a gap
+ * longer than the project's staleness threshold (7 calendar days) does.
+ */
+const NARROWED_AFTER_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+/** A plain day as UTC midnight: a local midnight moves by one on the night the clocks change. */
+function utcDay(isoDay: string): number {
+    return Date.parse(`${isoDay}T00:00:00Z`);
+}
+
+/**
+ * The window the figures were actually calculated on, read from the first result — in the
+ * order handed, the section hands `[riskReturn, kpi, comparison]` — whose metadata measured
+ * something.
+ *
+ * The engine reports an asset set's `analyzed_range` from its first to its last RETURN, and
+ * `calendar_days` from the BASELINE PRICE to that last return. The baseline is the last day
+ * BEFORE the toolbar's period whenever every asset has a price there (`risk/service.py` loads
+ * from the day before; `series_preparation.py` takes the latest such day), and the first price
+ * inside it otherwise. So the period opens the day after the baseline — `end − calendar_days + 1`,
+ * the first day whose movement the figures capture — which is the toolbar's own first day in the
+ * common case, quoted or not. Not `analyzed_range.start`: that is the first QUOTED day, a Monday
+ * for a period opening on a weekend. Metadata that does not parse, or that measured nothing, is
+ * passed over.
+ */
+export function assetSetCalculationWindow(results: readonly (RiskAnalyticResult | null)[], dateStart: string, dateEnd: string): AssetSetCalculationWindow | null {
+    for (const result of results) {
+        const metadata = riskMetadata(result);
+        if (metadata === null || metadata.n_observations <= 0 || metadata.calendar_days <= 0) continue;
+        // The generated range widens each day to a list (`singleValue`, as for every widened field).
+        const end = singleValue(metadata.analyzed_range.end) ?? singleValue(metadata.analyzed_range.start);
+        if (end === null) continue;
+        const endMs = utcDay(end);
+        if (Number.isNaN(endMs)) continue;
+        const start = new Date(endMs - (metadata.calendar_days - 1) * DAY_MS).toISOString().slice(0, 10);
+        const lateStart = (utcDay(start) - utcDay(dateStart)) / DAY_MS;
+        const earlyEnd = (utcDay(dateEnd) - endMs) / DAY_MS;
+        return {start, end, days: metadata.calendar_days, narrowed: lateStart > NARROWED_AFTER_DAYS || earlyEnd > NARROWED_AFTER_DAYS};
+    }
+    return null;
+}
+
+/** An inclusive span of days in whole calendar years, months and days. */
+export interface CalendarLength {
+    years: number;
+    months: number;
+    days: number;
+}
+
+/**
+ * `months` calendar months after `isoDay`, as UTC ms, keeping the day of the month but clamped
+ * to the target month's last day (31 Jan + 1 month = 28/29 Feb). Always counted from the same
+ * day, never chained: chaining would carry a clamp into every later month.
+ */
+function addMonthsClamped(isoDay: string, months: number): number {
+    const [year, month, day] = isoDay.split('-').map(Number);
+    const total = month - 1 + months;
+    const targetYear = year + Math.floor(total / 12);
+    const targetMonth = ((total % 12) + 12) % 12;
+    const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+    return Date.UTC(targetYear, targetMonth, Math.min(day, lastDay));
+}
+
+/**
+ * The length of the period L3°'s note states, in calendar units rather than as a count of days
+ * (the developer's review, round 4): 1 Jul – 1 Oct, both ends counted, is 3 months and 1 day,
+ * because July and August have 31 days — not the "3 months and 3 days" of 30-day months — and
+ * 1 Oct – 30 Sep is one year. Whole months first, then the days left; nothing when `end`
+ * precedes `start`.
+ */
+export function calendarLength(start: string, end: string): CalendarLength {
+    const startMs = utcDay(start);
+    const endExclusive = utcDay(end) + DAY_MS;
+    if (Number.isNaN(startMs) || Number.isNaN(endExclusive) || endExclusive <= startMs) return {years: 0, months: 0, days: 0};
+    let wholeMonths = 0;
+    while (addMonthsClamped(start, wholeMonths + 1) <= endExclusive) wholeMonths += 1;
+    const days = Math.round((endExclusive - addMonthsClamped(start, wholeMonths)) / DAY_MS);
+    return {years: Math.floor(wholeMonths / 12), months: wholeMonths % 12, days};
 }

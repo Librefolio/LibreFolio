@@ -10,6 +10,7 @@ import {canonicalizeRiskRequest, serializeCanonicalRiskRequest} from '$lib/risk/
 import type {RiskMode, RiskQueryRequest, RiskQueryResponse, RiskScopeKind} from '$lib/risk/riskRequest';
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
 import {registerPortfolioMutationListener} from '$lib/stores/portfolio/portfolioMutation';
+import {EMPTY_VERDICTS, eligibilityBatches, mergeEligibilityAnswers, type EligibilityVerdicts} from '$lib/components/risk/eligibility';
 
 export type RiskCatalogResponse = Awaited<ReturnType<typeof zodiosApi.get_risk_catalog_api_v1_risk_catalog_get>>;
 export type RiskCatalogDefinition = NonNullable<RiskCatalogResponse['items']>[number];
@@ -27,6 +28,9 @@ let queryErrorCache = $state(new Map<CacheKey, unknown>());
 let catalogInflight: Promise<RiskCatalogResponse | null> | null = null;
 let scenarioCatalogInflight: Promise<RiskScenarioCatalogResponse | null> | null = null;
 const queryInflight = new Map<CacheKey, Promise<RiskQueryResponse | null>>();
+// Not reactive: nothing renders the cache, the callers await its answers.
+let eligibilityCache = new Map<CacheKey, EligibilityVerdicts>();
+const eligibilityInflight = new Map<CacheKey, Promise<EligibilityVerdicts | null>>();
 let cacheGeneration = 0;
 
 export type RiskQueryCacheStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -57,8 +61,14 @@ function releaseWhenSettled(promise: Promise<unknown>, release: () => void): voi
     promise.then(release, release);
 }
 
-/** How many times a catalog fetch may be re-issued after its answer is discarded. */
-const CATALOG_DISCARD_RETRIES = 3;
+/**
+ * How many times in all a risk question is asked while its answer keeps being discarded: the
+ * first request plus two re-asks (D374, «come il catalogo»). One constant for the two catalog
+ * fetches below and for the controller's base wave and on-demand runs, so the bound cannot
+ * drift apart between them. Three, not two: on Asset Global a slow request can cross more than
+ * one 30 s live-price poll, and each poll moves the cache generation.
+ */
+export const RISK_DISCARD_ATTEMPTS = 3;
 
 export function getRiskQuerySnapshot(request: RiskQueryRequest): RiskQueryCacheSnapshot {
     const key = makeRiskRequestKey(request);
@@ -83,7 +93,7 @@ export async function fetchRiskCatalog(force = false): Promise<RiskCatalogRespon
         // means the answer describes a world that no longer exists, so the right
         // reaction is to ask again rather than hand the caller a null it can only
         // report as an error. Bounded, so a generation that keeps moving cannot spin.
-        for (let attempt = 0; attempt < CATALOG_DISCARD_RETRIES; attempt += 1) {
+        for (let attempt = 0; attempt < RISK_DISCARD_ATTEMPTS; attempt += 1) {
             const requestSessionGeneration = getClientSessionGeneration();
             const requestCacheGeneration = cacheGeneration;
             const response = await zodiosApi.get_risk_catalog_api_v1_risk_catalog_get();
@@ -108,7 +118,7 @@ export async function fetchRiskScenarioCatalog(force = false): Promise<RiskScena
 
     const promise = (async () => {
         // Same discard-is-not-failure reasoning as fetchRiskCatalog above.
-        for (let attempt = 0; attempt < CATALOG_DISCARD_RETRIES; attempt += 1) {
+        for (let attempt = 0; attempt < RISK_DISCARD_ATTEMPTS; attempt += 1) {
             const requestSessionGeneration = getClientSessionGeneration();
             const requestCacheGeneration = cacheGeneration;
             const response = await zodiosApi.get_scenario_catalog_api_v1_risk_scenario_catalog_get();
@@ -170,6 +180,50 @@ export async function queryRisk(request: RiskQueryRequest, force = false): Promi
     return promise;
 }
 
+/**
+ * The engine's eligibility verdicts on a set of assets over a period, in a currency (D378).
+ *
+ * The same question is asked once per session: the key is the user, the period, the currency and the ids
+ * sorted, so two pickers — or one remounted when its section reopens — share the answer and its request.
+ * It is cleared with the rest of the cache by `invalidateRisk` (a session change, a portfolio mutation, a
+ * sync): verdicts follow the prices, and a sync is how prices change. The engine takes at most 500 ids a
+ * request, so the question is split and the answers merged, as the lab does.
+ *
+ * Resolves `null` when the session or the cache moved on while it was asked, like `queryRisk`; a failure
+ * rejects and is not kept, so the next question asks again.
+ */
+export function queryEligibility(assetIds: readonly number[], period: {start: string; end: string}, currency: string): Promise<EligibilityVerdicts | null> {
+    const ids = [...new Set(assetIds)].sort((left, right) => left - right);
+    if (ids.length === 0) return Promise.resolve(EMPTY_VERDICTS);
+    const key = `${getClientSessionUserId() ?? 'anonymous'}|${period.start}|${period.end}|${currency}|${ids.join(',')}`;
+    const cached = eligibilityCache.get(key);
+    if (cached) return Promise.resolve(cached);
+    const existing = eligibilityInflight.get(key);
+    if (existing) return existing;
+
+    const requestSessionGeneration = getClientSessionGeneration();
+    const requestCacheGeneration = cacheGeneration;
+    const stale = () => !isClientSessionCurrent(requestSessionGeneration) || requestCacheGeneration !== cacheGeneration;
+    const promise = (async () => {
+        try {
+            const answers = await Promise.all(eligibilityBatches(ids).map((batch) => zodiosApi.asset_eligibility_api_v1_risk_eligibility_post({asset_ids: batch, date_range: {start: period.start, end: period.end || null}, target_currency: currency})));
+            if (stale()) return null;
+            const verdicts = mergeEligibilityAnswers(answers);
+            eligibilityCache.set(key, verdicts);
+            return verdicts;
+        } catch (error) {
+            if (stale()) return null;
+            throw error;
+        }
+    })();
+
+    eligibilityInflight.set(key, promise);
+    releaseWhenSettled(promise, () => {
+        if (eligibilityInflight.get(key) === promise) eligibilityInflight.delete(key);
+    });
+    return promise;
+}
+
 export function getRiskDefinition(catalog: RiskCatalogResponse | null | undefined, analyticCode: string): RiskCatalogDefinition | undefined {
     return catalog?.items?.find((definition) => definition.analytic_code === analyticCode);
 }
@@ -188,6 +242,8 @@ export function invalidateRisk(): void {
     catalogInflight = null;
     scenarioCatalogInflight = null;
     queryInflight.clear();
+    eligibilityCache = new Map();
+    eligibilityInflight.clear();
 }
 
 registerClientSessionReset('riskStore', invalidateRisk);

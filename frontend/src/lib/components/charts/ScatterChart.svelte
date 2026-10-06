@@ -18,14 +18,17 @@
      *
      * Following the house pattern (`CorrelationHeatmap`), the arithmetic lives
      * in `scatterChartHelpers.ts` and is unit-tested there; this file is the
-     * drawing. It holds no `if` worth testing — which is exactly why no chart
-     * component in this repository has a spec of its own.
+     * drawing. Its own spec, `ScatterChart.test.ts`, pins only the wiring the
+     * builder cannot see: the selection reaching it, and a click coming back as
+     * the id of the point clicked.
      *
-     * Two things the container publishes deliberately:
+     * Three things the container publishes deliberately:
      *
      * - `data-point-count` / `data-dropped-count`: what actually got plotted.
      *   A dot lost to a `NaN` is invisible inside a canvas, and a test that
      *   cannot see it cannot fail on it.
+     * - `data-selected-id`: the selection the chart was handed, `""` for none.
+     *   A highlight inside a canvas is just as invisible.
      * - `data-chart-ready`, via `attachChartReady`: without it an E2E has no
      *   signal to wait on and goes back to sleeping for a fixed number of
      *   milliseconds, which is how a suite becomes slow and flaky at once.
@@ -55,16 +58,23 @@
         testId?: string;
         /** Shown when nothing is placeable. Supplied already translated; defaults to the house em-dash. */
         emptyLabel?: string;
+        /**
+         * Id of the point to draw as selected, or `null` for none. The caller owns the
+         * selection; the chart only shows it. The Dashboard passes nothing.
+         */
+        selectedId?: string | null;
+        /** Called with the id of the point clicked. A click on the line or on empty space calls nothing. */
+        onpointclick?: (id: string) => void;
     }
 
-    let {points, labels, riskFreeRate = 0, height = '420px', testId = 'risk-return-scatter', emptyLabel = '—'}: Props = $props();
+    let {points, labels, riskFreeRate = 0, height = '420px', testId = 'risk-return-scatter', emptyLabel = '—', selectedId = null, onpointclick}: Props = $props();
 
     let container: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
     let dark = $state(false);
     const resizeWatcher = createResizeWatcher(() => chart?.resize());
 
-    let built = $derived(buildScatterOption({points, riskFreeRate, dark, labels}));
+    let built = $derived(buildScatterOption({points, riskFreeRate, dark, labels, selectedId}));
 
     onMount(() => {
         dark = document.documentElement.classList.contains('dark');
@@ -106,6 +116,13 @@
             chart = echarts.init(container);
             attachChartReady(chart, container, testId);
             scheduleFirstRenderStabilityFix(chart, container);
+            // Once per instance: `render()` runs on every option change, and a listener
+            // added each time would report one click as many. The line's datum is a bare
+            // pair and carries no id, so only a dot answers.
+            chart.on('click', (params) => {
+                const id = (params?.data as {id?: unknown} | undefined)?.id;
+                if (typeof id === 'string') onpointclick?.(id);
+            });
         }
         resizeWatcher.observe(container);
 
@@ -123,12 +140,15 @@
                 tooltip: {
                     position: tooltipPositionAboveFinger,
                     confine: true,
-                    formatter: (params: {data?: {name?: string; value?: [number, number]}}) => {
+                    formatter: (params: {data?: {name?: string; value?: [number, number]; detail?: string}}) => {
                         const item = params.data;
                         if (!item?.value) return '';
                         const [volatility, annualReturn] = item.value;
                         const nameHtml = escapeHtml(String(item.name ?? ''));
-                        return [`<div style="font-weight:600">${nameHtml}</div>`, `<div style="margin-top:4px">${labels.volatility}: ${axisPercent(volatility)}</div>`, `<div>${labels.return}: ${formatPercent(annualReturn, {scale: 100, digits: 1})}</div>`].join('');
+                        // The caller's line — what the dot weighs, or that it is the benchmark —
+                        // sits under the name, because it says what the dot is before where.
+                        const detailHtml = item.detail ? `<div>${escapeHtml(item.detail)}</div>` : '';
+                        return [`<div style="font-weight:600">${nameHtml}</div>`, detailHtml, `<div style="margin-top:4px">${labels.volatility}: ${axisPercent(volatility)}</div>`, `<div>${labels.return}: ${formatPercent(annualReturn, {scale: 100, digits: 1})}</div>`].join('');
                     },
                 },
             },
@@ -137,7 +157,7 @@
     }
 </script>
 
-<div class="w-full" data-testid={testId} data-point-count={points.length - built.droppedCount} data-dropped-count={built.droppedCount}>
+<div class="w-full" data-testid={testId} data-point-count={points.length - built.droppedCount} data-dropped-count={built.droppedCount} data-selected-id={selectedId ?? ''}>
     {#if built.isEmpty}
         <!-- An empty canvas is indistinguishable from a broken one, so the empty
              case says so in words rather than rendering nothing. -->

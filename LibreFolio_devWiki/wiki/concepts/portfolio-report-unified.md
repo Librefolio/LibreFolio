@@ -62,6 +62,14 @@ cache_key = broker_ids|dateFrom|dateTo|currency|contrib_flag
 
 If the key matches a cached entry, `fetchReport()` returns immediately without hitting the API. Cache invalidated on: any transaction CRUD, manual refresh button.
 
+### Callers that need only the holdings (2026-09-24)
+
+`fetchReport()`'s defaults ask for **`include_history` and `include_allocation_history`**: the whole daily series of
+the period. A caller that reads only `summary.holdings` pays for both. The Asset Global lab's "All mine" command did
+exactly that, and the developer noticed the wait. It now asks for the light report, with both flags `false`, which
+the store caches under its own key suffix (`|nohist|noalloc`). The wait was noticed, not timed: the server log does
+not carry durations.
+
 ## Why Not Separate Endpoints?
 
 The previous `/summary` + `/history` separate calls caused:
