@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- Shared support actions in the donation popup and About page: coffee links and X, Reddit, Facebook, Instagram and TikTok icons, with platform-specific messages in the active interface language. **Copy and go** includes the public project link and opens a new tab, leaving the original screen open. Reddit separates title and body; platforms without text-prefill support explain how to paste the copied caption. TikTok opens its upload page rather than the feed. Clipboard and pop-up failures are reported explicitly; nothing is published automatically.
+- Shared support actions in the donation popup and About page: coffee links and X, Reddit, Facebook, Instagram and TikTok icons, with platform-specific messages in the active interface language, each followed by the same five hashtags (#LibreFolio #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance). **Copy and go** includes the public project link and opens a new tab, leaving the original screen open. Reddit separates title and body; platforms without text-prefill support explain how to paste the copied caption. TikTok opens its upload page rather than the feed. Clipboard and pop-up failures are reported explicitly; nothing is published automatically.
 - A new authenticated **Tools** foundation provides a versioned catalogue, isolated per-item computation, read-only diagnostics and compiled custom interfaces. The hub reports missing or incompatible tools explicitly; no financial calculation or portfolio write is implied when no compatible plugin is installed.
 - **PAC allocator** is the first packaged tool in that catalogue. Its planner computes purchase plans — in whole or fractional units, or in amounts, following each broker's increment — that bring an allocation as close as possible to its target weights. It works in exact arithmetic, across multiple currencies and arbitrary quote bases. Cash in another currency can pay for an order: you choose whether you convert first or the broker converts when you buy, both at the FX step's rate minus the conversion spread, and every exchange appears in the plan. Every answer says what it is worth: proven optimal, the best plan found when optimality could not be proven, proven infeasible, or no plan within the calculation limits. These are never presented as the same thing, and missing or invalid inputs are reported rather than guessed. The guided interface walks through liquidity, brokers, assets, order routes, targets and, only when needed, exchange rates. Brokers and assets can be entered by hand or copied from LibreFolio, together with cash, current prices, exchange rates and the current distribution as an editable starting target. Each copy keeps its source and capture time. **Calculate** refreshes the copied prices, rates and balances you have not changed, and leaves typed values as they are. Results show:
   - the orders by broker and route, with their fees;
@@ -105,11 +105,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Browsers offer saved credentials on the sign-in username field too, and registration and password change are recognised by password managers, so changing a password updates the right saved account.
 - The installed app no longer shows black corners on the Android splash screen or around the iPhone home-screen icon, and Android gets a proper maskable icon.
 - On phones, the asset dialog keeps Save and Cancel reachable, **Sync** on an asset page no longer looks crossed out while the page loads, and the asset page tabs show an icon.
+- On phones, the price chart tooltip of an asset with a long name no longer runs off the screen: the name is shortened with an ellipsis, while the value and its currency stay whole.
 - The top toolbars of the Assets, asset detail, Dashboard, broker detail and FX pages no longer push buttons out of the bar at intermediate widths, in every interface language.
 - With a single broker selected, a long broker name in the Dashboard's broker filter is shortened with an ellipsis instead of sticking out of the bar on narrow screens.
 
+#### 🐳 Docker images
+
+- **The published images ship the production interface again.** Since at least v1.1.0 they contained a debug build of the web app (not minified, with source maps), 58 MB instead of 21 MB, about 5 MB more to download on a first visit. The image build now refuses a debug build, local builds included.
+- **The full image includes the documentation screenshots for offline use**, as the installation guide says; until now full and light were identical. The light image, the one `latest` points to, still loads them from the online documentation.
+- The installation guide and the release notes name the image tags that exist: `latest` (light), `X.Y.Z` (full) and `X.Y.Z-light`, without a leading `v`. `latest-light` and `v1.1.0-light` never existed.
+
 ### 🔄 Changed
 
+- **Pages download less data.** The server compresses its responses (gzip): a first visit downloads about 2.8 MB instead of 7.5 MB, and a typical session about 0.9 MB instead of 5.5 MB, which helps on slow or metered connections.
 - Language and display currency for new users start from administrator defaults; existing users are not forced through onboarding.
 - Import file tables paginate from five rows. After uploading, only the brokers that received those files start expanded.
 - First-time asset creation is explained briefly; known ISINs or tickers can prefill a missing asset name. The currency tooltip now describes the currency used to store asset prices.
