@@ -9,6 +9,7 @@
     import {_} from '$lib/i18n';
     import type {PortfolioSummary, PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import TweenedValue from '$lib/components/ui/TweenedValue.svelte';
@@ -78,11 +79,22 @@
         const prev = parseFloat(prevHistoryPoint.total_pnl.amount);
         return last - prev;
     });
+    /** Direction of the day's change, published as `data-direction`; the colour agrees (up and flat green, down red). */
+    const pnlDeltaDayDirection = $derived(pnlDeltaDay == null ? undefined : pnlDeltaDay > 0 ? 'up' : pnlDeltaDay < 0 ? 'down' : 'flat');
+
+    /**
+     * `change` as a percentage of `|base|`: the sign is the direction of the change even when the
+     * base is negative (a loss that shrinks is a rise). Null only on a zero or unreadable base.
+     */
+    function dayChangePct(change: number, base: number): number | null {
+        if (!Number.isFinite(change) || !Number.isFinite(base) || base === 0) return null;
+        return (change / Math.abs(base)) * 100;
+    }
+
+    /** Card 2: the day change as a share of yesterday's NAV. */
     const pnlDeltaDayPct = $derived.by(() => {
-        if (!lastHistoryPoint || !prevHistoryPoint) return null;
-        const prevNav = parseFloat(prevHistoryPoint.nav_value.amount);
-        if (prevNav === 0 || pnlDeltaDay == null) return null;
-        return ((pnlDeltaDay / prevNav) * 100).toFixed(2);
+        if (!prevHistoryPoint || pnlDeltaDay == null) return null;
+        return dayChangePct(pnlDeltaDay, parseFloat(prevHistoryPoint.nav_value.amount));
     });
 
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
@@ -111,11 +123,10 @@
         const amount = parseFloat(totalPnlCur.amount);
         return Number.isFinite(amount) ? amount : null;
     });
+    /** Card 1: the day change as a share of yesterday's total P&L. */
     const pnlDeltaDayVsPrevTotalPct = $derived.by(() => {
         if (!prevHistoryPoint || pnlDeltaDay == null) return null;
-        const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
-        if (!Number.isFinite(prevTotalPnl) || Math.abs(prevTotalPnl) < 0.01) return null;
-        return ((pnlDeltaDay / prevTotalPnl) * 100).toFixed(2);
+        return dayChangePct(pnlDeltaDay, parseFloat(prevHistoryPoint.total_pnl.amount));
     });
     // Absolute (since-inception) ROI next to the absolute total P&L in Card 3 —
     // period ROI (simple_roi_percent) belongs to Card 2's period-based returns only.
@@ -254,10 +265,10 @@
                     <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
                 </p>
                 {#if pnlDeltaDay != null}
-                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
+                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day" data-direction={pnlDeltaDayDirection}>
                         <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
                         {#if pnlDeltaDayVsPrevTotalPct != null}
-                            <span> ({pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayVsPrevTotalPct}%)</span>
+                            <span> (<span data-testid="kpi-pnl-delta-day-pct">{formatPercent(pnlDeltaDayVsPrevTotalPct)}</span>)</span>
                         {/if}
                     </p>
                 {/if}
@@ -306,8 +317,8 @@
                     <TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />
                 </span>
             </div>
-            {#if pnlDeltaDayPct}
-                <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct">{pnlDeltaDay != null && pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayPct}%</p>
+            {#if pnlDeltaDayPct != null}
+                <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct" data-direction={pnlDeltaDayDirection}>{formatPercent(pnlDeltaDayPct)}</p>
             {/if}
             <div class="flex flex-col gap-2 mt-1">
                 <KpiMetricBar label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
