@@ -414,3 +414,27 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
   - No CA exported, so there is no CA copy to delete.
 - **Proposed commits:** `LibreFolio-cloud-sizing/release-images/commit_proposal.txt` (the coordinator stages and commits).
 - **State: FROZEN.** Step 6 (Tailscale) waits for the coordinator.
+
+### 8. ✅ Startup-timeout contract (the coordinator's «step 7») — 2026-10-06
+- **Origin:** the pre-existing red found by step 3's `utils all` gate. The coordinator relayed it after integrating P0 (`dda56c9e1` → `810bab323`; `dev_release2` = `3d6f12eea` with the CHANGELOG), and assigned the fix, `playwright.config.ts`, `_server.py` and `test_runtime_isolation.py` to M.
+- **`frontend/playwright.config.ts`:**
+  - `STARTUP_TIMEOUT_RAW = process.env.LIBREFOLIO_TEST_STARTUP_TIMEOUT ?? '300'`, a guard that throws unless it is a whole number of seconds, and `STARTUP_TIMEOUT_S`;
+  - `webServer.timeout` becomes `STARTUP_TIMEOUT_S * 1000` (was `process.env.CI ? 300 * 1000 : 120 * 1000`).
+- **`scripts/test_runner/_server.py:43-48`:** comment only. The value `int(os.environ.get("LIBREFOLIO_TEST_STARTUP_TIMEOUT", "300"))` is unchanged and now cross-referenced.
+- **Config evaluated for real** (esbuild bundle under `frontend/node_modules/.cache`, script `release-images/scripts/pwcfg_probe.mjs`): default 300000 ms, `CI=true` 300000, override 45 → 45000, `CI=true` + 600 → 600000, `abc` and `""` → throws. Python: 300 / 300 / 45.
+- **Test (test-author):** `test_runtime_isolation.py:1282-1390` replaces the CI-parametrized test with:
+  - `test_startup_timeout_ignores_ci_and_honours_the_override` (4 cases, fresh subprocesses);
+  - `test_playwright_webserver_waits_exactly_as_long_as_the_runner`: static and Node-free; one env read, its default equal to the runner's (300), `webServer.timeout` = `S * 1000` found by brace depth, no `process.env.CI`;
+  - `test_playwright_wait_check_rejects_a_drifted_config`: 6 in-memory drift controls, including the old ternary.
+- **Gates** (lane 6158):
+
+  | Selector | Before | After |
+  |---|---|---|
+  | `utils runtime-isolation` | red | 143/143 |
+  | `--workers 4 utils all` | — | green, 827 passed, 0 failed |
+  | `--no-shared-server front-utility utilities` (Playwright starts its own webServer: `[WebServer]` lines in the log) | — | 16 passed |
+- Lint: prettier `--check` OK on the config; ruff OK; black clean on the test. `_server.py` already has pre-existing black drift at `:112-140`, not reformatted (comment-only edit).
+> **⚠️ Fuori pista**:
+> - The first E2E attempt stopped **before Playwright** with `no such table: users`. My step-7 cleanup had deleted the lane data dir `/tmp/librefolio-r2-m/ri-test`, and `--no-shared-server` runs create no schema. Fixed by `db create` + `db populate --force --with-reports` on the lane's own data dir, then the run passed. Infrastructure, not product.
+> - `dev.py:396` still says "gallery/E2E 120s timeout" in a comment. `dev.py` is outside this step, so it is flagged only.
+> - Overrides are not parsed identically, and this is not pinned. Python `int()` also accepts `+45`, `4_5` and `-5`, which the TS guard rejects; both reject `abc` and `""`.
