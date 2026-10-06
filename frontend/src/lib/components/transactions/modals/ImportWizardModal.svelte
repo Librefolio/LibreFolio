@@ -3421,7 +3421,9 @@ ${arrow}<span>${label}</span></span>`,
 
     /**
      * «Read as» on a set's card (phase G, A): another report-set plugin for every member, or each
-     * member alone with its best single-file plugin — a member no such plugin reads stays out, unselected.
+     * member alone with its best single-file plugin, or none. Only how the files are read changes:
+     * every member keeps its tick (step H, R2), and one no single-file plugin reads stays ticked with
+     * no plugin — Parse waits for a choice, and the set's plugin is still offered to bring it back.
      */
     function readSetAs(set: ReportSetGroup, code: string | null) {
         const brokerDefault = brokers.find((b) => b.id === set.brokerId)?.default_import_plugin ?? null;
@@ -3433,10 +3435,9 @@ ${arrow}<span>${label}</span></span>`,
             chosen.set(file.file_id, choice);
         }
         filePluginOverrides = next;
-        selectedFiles = selectedFiles.flatMap((f) => {
+        selectedFiles = selectedFiles.map((f) => {
             const choice = chosen.get(f.fileId);
-            if (choice === undefined) return [f];
-            return choice === '' ? [] : [{...f, pluginCode: choice}];
+            return choice === undefined ? f : {...f, pluginCode: choice};
         });
         void refreshChangedSetPreviews();
     }
@@ -3448,10 +3449,15 @@ ${arrow}<span>${label}</span></span>`,
         void refreshChangedSetPreviews();
     }
 
-    /** «Remove from the set» (phase G, B): the file leaves its set with no plugin, unselected. */
+    /**
+     * «Remove from the set» (phase G, B; R5): the file leaves its set with no plugin, waiting for a new
+     * choice, and keeps its tick — taking a file out of a set says «not with this plugin», not «not at
+     * all». Like «Read as» and «Read alone with», it changes how the file is read, never its tick;
+     * choosing the set's plugin again puts it back.
+     */
     function removeFileFromSet(fileId: string) {
         filePluginOverrides = new Map(filePluginOverrides).set(fileId, '');
-        selectedFiles = selectedFiles.filter((f) => f.fileId !== fileId);
+        selectedFiles = selectedFiles.map((f) => (f.fileId === fileId ? {...f, pluginCode: ''} : f));
         void refreshChangedSetPreviews();
     }
 
@@ -4488,37 +4494,42 @@ ${arrow}<span>${label}</span></span>`,
                                         {#if brokerGroups.sets.length > 0}
                                             <p class="px-3 pt-2 text-xs font-medium text-gray-600 dark:text-gray-300" data-testid={`import-wizard-other-files-${broker.id}`}>{$t('importWizard.reportSet.otherFiles')}</p>
                                         {/if}
-                                        <DataTable
-                                            bind:this={tableRefs[brokerIdx]}
-                                            data={brokerGroups.singles}
-                                            columns={fileTableColumns}
-                                            getRowId={(row) => row.file_id}
-                                            storageKey={`import-wizard-files-${broker.id}`}
-                                            enableSelection={true}
-                                            selectionMode="multi"
-                                            initialSelectedIds={selectedFiles.filter((f) => f.brokerId === broker.id && brokerGroups.singles.some((single) => single.file_id === f.fileId)).map((f) => f.fileId)}
-                                            onSelectionChange={(ids) => handleSelectionChange(broker.id, ids)}
-                                            onRowDoubleClick={(row) => openPreview(row.file_id)}
-                                            enableActions={true}
-                                            actionsColumnWidth="64px"
-                                            rowActions={[
-                                                {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)},
-                                                {id: 'delete', icon: Trash2, label: $t('common.delete'), variant: 'danger', onClick: (row) => requestDeleteFile(row, broker.id)},
-                                            ]}
-                                            enableSorting={true}
-                                            enableColumnFilters={true}
-                                            enableColumnResize={true}
-                                            enablePagination={brokerGroups.singles.length > 5}
-                                            alwaysShowPagination={brokerGroups.singles.length > 5}
-                                            enableColumnVisibility={false}
-                                            defaultPageSize={5}
-                                            pageSizeOptions={[5, 10, 25, 50, 100, 0]}
-                                            tableLayout="auto"
-                                            stickyActions={false}
-                                            enableContextMenu={true}
-                                            initialFilters={undefined}
-                                            onColumnResize={(colId, w) => handleColumnResize(brokerIdx, colId, w)}
-                                        />
+                                        <!-- The table reads the selection only when it mounts (initialSelectedIds), so it is
+                                             remounted whenever a file joins or leaves it: a file that arrives from a set keeps
+                                             its tick, and the next click on another row cannot drop it (step H). -->
+                                        {#key brokerGroups.singles.map((file) => file.file_id).join(',')}
+                                            <DataTable
+                                                bind:this={tableRefs[brokerIdx]}
+                                                data={brokerGroups.singles}
+                                                columns={fileTableColumns}
+                                                getRowId={(row) => row.file_id}
+                                                storageKey={`import-wizard-files-${broker.id}`}
+                                                enableSelection={true}
+                                                selectionMode="multi"
+                                                initialSelectedIds={selectedFiles.filter((f) => f.brokerId === broker.id && brokerGroups.singles.some((single) => single.file_id === f.fileId)).map((f) => f.fileId)}
+                                                onSelectionChange={(ids) => handleSelectionChange(broker.id, ids)}
+                                                onRowDoubleClick={(row) => openPreview(row.file_id)}
+                                                enableActions={true}
+                                                actionsColumnWidth="64px"
+                                                rowActions={[
+                                                    {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)},
+                                                    {id: 'delete', icon: Trash2, label: $t('common.delete'), variant: 'danger', onClick: (row) => requestDeleteFile(row, broker.id)},
+                                                ]}
+                                                enableSorting={true}
+                                                enableColumnFilters={true}
+                                                enableColumnResize={true}
+                                                enablePagination={brokerGroups.singles.length > 5}
+                                                alwaysShowPagination={brokerGroups.singles.length > 5}
+                                                enableColumnVisibility={false}
+                                                defaultPageSize={5}
+                                                pageSizeOptions={[5, 10, 25, 50, 100, 0]}
+                                                tableLayout="auto"
+                                                stickyActions={false}
+                                                enableContextMenu={true}
+                                                initialFilters={undefined}
+                                                onColumnResize={(colId, w) => handleColumnResize(brokerIdx, colId, w)}
+                                            />
+                                        {/key}
                                     </div>
                                 {/if}
                             </div>

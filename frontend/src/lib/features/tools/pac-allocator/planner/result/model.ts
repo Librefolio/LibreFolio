@@ -91,7 +91,10 @@ export function resultBadges(result: PacReadyResult): ResultBadge[] {
                 key: 'tools.pacAllocator.planner.result.badges.optimalProven',
                 fallback: 'Proven optimal',
                 tone: 'success',
-                help: {key: 'tools.pacAllocator.planner.result.badges.help.optimalProven', fallback: 'The solver proved that no better plan exists, objective by objective, in the order chosen in Strategy.'},
+                help: {
+                    key: 'tools.pacAllocator.planner.result.badges.help.optimalProven',
+                    fallback: "The solver proved that no better plan exists, objective by objective in the order chosen in Strategy, and the exact check of the plan matches its numbers. The proof holds within the solver's small calculation margin, which grows with the amounts.",
+                },
             });
             break;
         case 'not_proven':
@@ -101,10 +104,16 @@ export function resultBadges(result: PacReadyResult): ResultBadge[] {
                 fallback: 'Optimality not proven',
                 tone: 'warning',
                 // With no plan, «the best plan found» would be false: the badge says what the state says.
+                // A completed search that is still not proven means the final exact check contradicted the solver's bounds.
                 help:
                     result.outcome === 'no_incumbent'
                         ? NO_INCUMBENT_HELP
-                        : {key: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', fallback: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'},
+                        : result.stop_reason === 'completed'
+                          ? {
+                                key: 'tools.pacAllocator.planner.result.proof.floatingFinished',
+                                fallback: 'The solver finished its search, but its own numbers do not match the exact check of this plan, so the proof does not hold. The plan respects every constraint: it is the best plan found, but it is not proven to be the best.',
+                            }
+                          : {key: 'tools.pacAllocator.planner.result.proof.floatingUnfinished', fallback: 'The solver stopped before closing every stage: this is the best plan found, not a proven one.'},
             });
             break;
         case 'infeasibility_proven':

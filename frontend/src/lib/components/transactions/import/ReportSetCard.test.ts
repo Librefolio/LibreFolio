@@ -49,9 +49,10 @@
  * new ones: `plugins` (the catalogue, with names and report roles), `brokerDefaultPlugin`,
  * `onReadAs(code | null)`, `onReadAlone(fileId, code)`, `onRemoveFromSet(fileId)`. `mountCard` passes
  * them to every mount, so the F2 tests above keep their meaning once the card reads them.
- *   A  report-set-read-as — a native <select> in the header, valued at the set's plugin: one option per
- *      report-set plugin that reads every member (setPluginChoices, the set's own first) and one
- *      value="" to read the files one by one; a change calls onReadAs(code), or onReadAs(null) for "".
+ *   A  report-set-read-as — in the header, how the set is read: one choice per report-set plugin that reads
+ *      every member (setPluginChoices, the set's own first) and one to read the files one by one; choosing
+ *      calls onReadAs(code), or onReadAs(null) for one by one. It was a native <select>; since step H (R1,
+ *      below) it is our own select, and the G · A tests drive it as such.
  *   B  in each role table's row menu: read-alone-<code> for each single-file plugin that reads the row's
  *      file (readAlonePlugins), calling onReadAlone(fileId, code); remove-from-set on every row, calling
  *      onRemoveFromSet(fileId). Preview and Delete stay.
@@ -62,7 +63,19 @@
  * second report-set plugin that reads one custody export only (cu-early) — every member of the
  * one-file set, so A has a second plugin to offer there.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0 and §14 G.2.
+ * Step H (plan §17.5, the developer's first review of G) — written red first:
+ *   R1 «Read as» is our SimpleSelect, testId report-set-read-as, never a native <select>: its trigger
+ *      report-set-read-as-button opens report-set-read-as-dropdown, whose options are report-set-read-as-option-<code>
+ *      for each plugin of setPluginChoices — the set's own aria-selected="true" — and report-set-read-as-option-one-by-one.
+ *      Choosing a plugin calls onReadAs(code), one by one onReadAs(null). No native <select> in the header: a folded
+ *      card is its header.
+ *   R3 each timeline row names its role whole: report-set-timeline-label, with data-role = the role code (the
+ *      LibreFolio history row: "history"). jsdom has no layout, so whether a label is cut is the E2E's to measure
+ *      (scrollWidth ≤ clientWidth on desktop). Here the label is found, keyed, and holds the whole name: the roles
+ *      are invented and no dictionary names them, so the card names them by their description — a value this test
+ *      passed in.
+ *
+ * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0, §14 G.2 and §17.5.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, type Component} from 'svelte';
@@ -257,11 +270,24 @@ const PREVIEW_INCOMPLETE = {
     complete: false,
 };
 
+// H · R3: the same set, read by an invented plugin whose roles no dictionary names — the card then names each role by
+// its description, a value this test passes in. Long names, the kind a fixed-width label used to cut.
+const LONG_CUSTODY_ROLE = {...CUSTODY_ROLE, code: 'probe_long_custody', description: 'Probe securities transactions of every custody account'};
+const LONG_CASH_ROLE = {...CASH_ROLE, code: 'probe_long_cash', description: 'Probe cash statement of the settlement account', must_cover: 'probe_long_custody'};
+const LONG_PLUGIN = {...PLUGIN, report_roles: [LONG_CUSTODY_ROLE, LONG_CASH_ROLE]};
+const LONG_CATALOGUE = [LONG_PLUGIN, SINGLE_PLUGIN, SECOND_SET_PLUGIN];
+const LONG_ROLE_OF: Record<string, string> = {custody: LONG_CUSTODY_ROLE.code, cash: LONG_CASH_ROLE.code};
+const PREVIEW_LONG_ROLES = {
+    ...PREVIEW,
+    members: MEMBERS.map((entry) => ({...entry, role: entry.role === null ? null : LONG_ROLE_OF[entry.role]})),
+    roles: PREVIEW.roles.map((role) => ({...role, code: LONG_ROLE_OF[role.code]})),
+};
+
 // ---------------------------------------------------------------------------
 // Mounting and reading
 // ---------------------------------------------------------------------------
 
-async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: boolean; selection?: 'all' | 'some' | 'none'; brokerDefaultPlugin?: string | null} = {}) {
+async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: boolean; selection?: 'all' | 'some' | 'none'; brokerDefaultPlugin?: string | null; plugin?: unknown; plugins?: unknown[]} = {}) {
     const callbacks = {
         onToggleSelected: vi.fn(),
         onToggleExpanded: vi.fn(),
@@ -276,13 +302,13 @@ async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: 
     };
     render(card(), {
         set: options.set ?? SET,
-        plugin: PLUGIN,
+        plugin: options.plugin ?? PLUGIN,
         previewState: {status: 'ready', preview: options.preview ?? PREVIEW, error: null},
         selection: options.selection ?? 'all',
         expanded: options.expanded ?? true,
         analysed: false,
         uploadingRole: null,
-        plugins: CATALOGUE,
+        plugins: options.plugins ?? CATALOGUE,
         brokerDefaultPlugin: options.brokerDefaultPlugin ?? null,
         ...callbacks,
     });
@@ -351,14 +377,29 @@ function menuActions(menu: HTMLElement): string[] {
     return [...menu.querySelectorAll<HTMLElement>('[data-testid^="context-menu-action-"]')].map((item) => (item.dataset.testid ?? '').replace(/^context-menu-action-/, '')).sort();
 }
 
-/** G: the select that says how the set is read. */
-function readAsSelect(): HTMLSelectElement {
-    return the('report-set-read-as') as HTMLSelectElement;
+/** H · R1: the trigger of «Read as», our own select (SimpleSelect, testId report-set-read-as). */
+function readAsTrigger(): HTMLElement {
+    return the('report-set-read-as-button');
 }
 
-function optionValues(select: HTMLSelectElement): string[] {
-    return [...select.options].map((option) => option.value);
+/** H · R1: open «Read as» from its trigger; the list it opens. */
+async function openReadAs(): Promise<HTMLElement> {
+    await fireEvent.click(readAsTrigger());
+    return the('report-set-read-as-dropdown');
 }
+
+/** H · R1: what the options of an open «Read as» stand for — a plugin code, or one-by-one — in the order shown. */
+function readAsOptions(dropdown: HTMLElement): string[] {
+    return [...dropdown.querySelectorAll<HTMLElement>('[data-testid^="report-set-read-as-option-"]')].map((option) => (option.dataset.testid ?? '').replace(/^report-set-read-as-option-/, ''));
+}
+
+/** H · R1: the one option of an open «Read as» that stands for a plugin code, or for one-by-one. */
+function readAsOption(dropdown: HTMLElement, choice: string): HTMLElement {
+    return the(`report-set-read-as-option-${choice}`, {}, dropdown);
+}
+
+/** H · R1: the option that reads the files one by one. */
+const ONE_BY_ONE = 'one-by-one';
 
 /** Where a pointer click on an element lands: its innermost first descendant (see the header). */
 function landingPoint(el: Element): Element {
@@ -626,30 +667,37 @@ describe('ReportSetCard — the rest of the card is unchanged (guards)', () => {
 // G — how the set is read (plan §14 G.2: A, B, C)
 // ---------------------------------------------------------------------------
 
-describe('ReportSetCard — G · A: how the set is read', () => {
-    it('a native select valued at the set’s plugin: that plugin and "one by one", when no other report-set plugin reads every member', async () => {
+describe('ReportSetCard — G · A, H · R1: how the set is read, through our own select', () => {
+    it('our own select, never a native one: opened, it offers the set’s plugin — selected — and "one by one", when no other report-set plugin reads every member', async () => {
         await mountCard();
 
-        const select = readAsSelect();
-        expect(select.tagName).toBe('SELECT');
-        expect(select).toHaveValue(PLUGIN_CODE);
-        expect(optionValues(select).sort()).toEqual(['', PLUGIN_CODE]);
+        const readAs = the('report-set-read-as');
+        expect(readAs.tagName, 'report-set-read-as is our select, not a native <select>').not.toBe('SELECT');
+        expect(readAs.querySelectorAll('select'), 'no native <select> inside it').toHaveLength(0);
+        expect(readAs.contains(readAsTrigger()), 'its trigger is inside it').toBe(true);
+
+        const dropdown = await openReadAs();
+        expect([...readAsOptions(dropdown)].sort()).toEqual([ONE_BY_ONE, PLUGIN_CODE].sort());
+        expect(readAsOption(dropdown, PLUGIN_CODE), 'the set is read with its plugin').toHaveAttribute('aria-selected', 'true');
+        expect(readAsOption(dropdown, ONE_BY_ONE)).toHaveAttribute('aria-selected', 'false');
     });
 
-    it('every report-set plugin that reads every member is offered, the set’s own first, and "one by one" once', async () => {
+    it('every report-set plugin that reads every member is offered, the set’s own first and selected, and "one by one" once', async () => {
         // The one-file set: its custody export is read by the second report-set plugin too.
         await mountCard({set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE});
 
-        const values = optionValues(readAsSelect());
-        expect(values.filter((value) => value !== '')).toEqual([PLUGIN_CODE, SECOND_SET_CODE]);
-        expect(values.filter((value) => value === '')).toHaveLength(1);
-        expect(readAsSelect()).toHaveValue(PLUGIN_CODE);
+        const dropdown = await openReadAs();
+        const choices = readAsOptions(dropdown);
+        expect(choices.filter((choice) => choice !== ONE_BY_ONE)).toEqual([PLUGIN_CODE, SECOND_SET_CODE]);
+        expect(choices.filter((choice) => choice === ONE_BY_ONE)).toHaveLength(1);
+        expect(readAsOption(dropdown, PLUGIN_CODE)).toHaveAttribute('aria-selected', 'true');
+        expect(readAsOption(dropdown, SECOND_SET_CODE)).toHaveAttribute('aria-selected', 'false');
     });
 
     it('choosing another report-set plugin calls onReadAs with its code, once', async () => {
         const {onReadAs, onReadAlone, onRemoveFromSet} = await mountCard({set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE});
 
-        await fireEvent.change(readAsSelect(), {target: {value: SECOND_SET_CODE}});
+        await fireEvent.click(readAsOption(await openReadAs(), SECOND_SET_CODE));
 
         expect(onReadAs).toHaveBeenCalledTimes(1);
         expect(onReadAs).toHaveBeenCalledWith(SECOND_SET_CODE);
@@ -659,21 +707,21 @@ describe('ReportSetCard — G · A: how the set is read', () => {
 
     it('choosing to read the files one by one calls onReadAs(null), once', async () => {
         const {onReadAs} = await mountCard();
-        const select = readAsSelect();
-        expect(optionValues(select), 'the "one by one" option is there to be chosen').toContain('');
 
-        await fireEvent.change(select, {target: {value: ''}});
+        await fireEvent.click(readAsOption(await openReadAs(), ONE_BY_ONE));
 
         expect(onReadAs).toHaveBeenCalledTimes(1);
         expect(onReadAs).toHaveBeenCalledWith(null);
     });
 
-    it('it sits in the header: a folded card shows it too', async () => {
+    it('it sits in the header: a folded card shows it, on the set’s plugin, and holds no native <select>', async () => {
         await mountCard({expanded: false});
 
         expect(all('report-set-role-table'), 'the card is folded').toHaveLength(0);
-        expect(the('report-set-card').contains(readAsSelect())).toBe(true);
-        expect(readAsSelect()).toHaveValue(PLUGIN_CODE);
+        const root = the('report-set-card');
+        expect(root.contains(readAsTrigger()), 'the trigger is in the folded card').toBe(true);
+        expect(root.querySelectorAll('select'), 'a folded card is its header: no native <select> in it').toHaveLength(0);
+        expect(readAsOption(await openReadAs(), PLUGIN_CODE)).toHaveAttribute('aria-selected', 'true');
     });
 });
 
@@ -744,6 +792,27 @@ describe('ReportSetCard — G · C: what else reads these files', () => {
 
         the('report-set-timeline'); // presence barrier: the open card has rendered its body
         expect(all('report-set-also-recognised')).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// H · R3 — each timeline row names its role whole (plan §17.5)
+// ---------------------------------------------------------------------------
+
+describe('ReportSetCard — H · R3: each timeline row names its role whole', () => {
+    it('one label per row, keyed by its role — the history’s by "history" — each role’s holding the whole name of its role', async () => {
+        await mountCard({plugin: LONG_PLUGIN, plugins: LONG_CATALOGUE, preview: PREVIEW_LONG_ROLES});
+
+        const timeline = the('report-set-timeline');
+        expect(
+            all('report-set-timeline-label', timeline)
+                .map((label) => label.dataset.role)
+                .sort(),
+            'one label per row of the timeline: the two roles, and LibreFolio’s history',
+        ).toEqual([LONG_CASH_ROLE.code, LONG_CUSTODY_ROLE.code, 'history'].sort());
+        expect(text(the('report-set-timeline-label', {role: LONG_CUSTODY_ROLE.code}, timeline)), 'the custody row names its role whole').toBe(LONG_CUSTODY_ROLE.description);
+        expect(text(the('report-set-timeline-label', {role: LONG_CASH_ROLE.code}, timeline)), 'the cash row names its role whole').toBe(LONG_CASH_ROLE.description);
+        expect(text(the('report-set-timeline-label', {role: 'history'}, timeline)), 'the history row has its label').not.toBe('');
     });
 });
 
