@@ -37,7 +37,7 @@ single-file import is still a three-click flow.
 
 1. **Upload** — The user uploads a broker export file. It can be dragged into the broker page or accessed from the Files tab.
 
-2. **Plugin Detection** — BRIM auto-discovers `BRIMProvider` classes from `backend/app/services/brim_providers/`, sorts compatible plugins by `detection_priority` (highest first), and selects the first plugin whose `can_parse(file_path)` returns `True`. If no specific plugin matches, the Generic CSV provider is used as fallback.
+2. **Plugin Detection** — BRIM auto-discovers `BRIMProvider` classes from `backend/app/services/brim_providers/`, sorts compatible plugins by `detection_priority` (highest first), and selects the first plugin whose `can_parse(file_path)` returns `True`. If no specific plugin matches, the Generic CSV provider is used as fallback. The file's list of compatible plugins is stored with the app version that detected it: after an update, the first read of an original detected by another version detects it again and saves the new list, so a plugin added or changed since the upload is offered for older files (combined files are never detected again). See [The lifecycle of `compatible_plugins`](../../architecture/patterns/brim_plugin_guide.md#compatible-plugins-lifecycle).
 
 3. **Parse & Preview** — The selected plugin's `parse()` method returns a `BRIMParseOutput` containing standardized `TXCreateItem` objects, warnings, extracted assets, optional field TODOs, and optional per-asset notices. **Nothing is saved yet.** The user sees a table of parsed transactions before proceeding.
 
