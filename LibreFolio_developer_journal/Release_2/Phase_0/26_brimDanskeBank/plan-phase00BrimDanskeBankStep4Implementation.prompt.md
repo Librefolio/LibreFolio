@@ -2278,3 +2278,168 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 ### 17.7 ✅ H — pronta per il checkpoint (2026-10-06)
 
 - Poi il secondo giro di review sulla 6166, da capo, dopo il checkpoint.
+
+> **Commit di H** (developer, verificati dal coordinatore): `aa9c62291` fix, `c58e72368` docs, `97259ce7f` journal; `~3` = `af5591991`, albero `ddfb5a782`.
+> - Le correzioni ai messaggi, chieste da L: «every file keeps its tick» in C1, l'oggetto di C2 `docs(import): one by one keeps each file's tick`, e in C3 il gate in più del fix di `SearchSelect`.
+
+## 18. La voce 8: «scrivendo CSV il primo risultato è Generic CSV» (2026-10-06), analisi senza codice
+
+**La nota del developer** (testuale, dalle verifiche sul server nightly `049d36c8d`, senza G, tramite il coordinatore): «sui file uplodati si, quelli già analizzati mostrano solo il plugin già usato!».
+
+### 18.1 ✅ Dove e perché
+
+- **Dove**:
+  - nel wizard, «Seleziona file», la colonna Plugin è un `ImportPluginSelect` filtrato sui `compatible_plugins` del file (T5: «only show these plugins»);
+  - la select del broker, cioè il plugin predefinito di `BrokerForm`, mostra invece tutto il catalogo, e lì «CSV» → Generic CSV primo funziona (R13, ordinamento di K).
+- **La causa verificata**:
+  - `compatible_plugins` si calcola **una volta, al caricamento** (`save_uploaded_file`, `brim_provider.py:711`), col `can_parse` che ogni plugin ha in quel momento, e si salva nei metadati;
+  - **non si ricalcola mai**: né all'analisi (`_move_file` cambia `status`, `processed_at` e `parsed_plugin_code`) né alla lettura (`:800` lo restituisce com'è salvato). L'unica eccezione sono i file combinati (`:1143`), già esclusa dal coordinatore;
+  - nessuna logica del frontend riduce i file analizzati al plugin usato: la colonna Plugin del nightly (`git show 049d36c8d`) è identica a quella attuale.
+  - Quindi «un file analizzato mostra solo il plugin già usato» vuol dire che, quando è stato caricato, solo quel plugin lo accettava.
+- **Il perché più probabile, da confermare**: i file analizzati sono stati caricati con una versione più vecchia.
+  - Fino al 28/09 (`9d9c26d0d`, il lettore di base col ripiego cp1252), il `can_parse` del Generic CSV apriva il file in UTF-8 stretto e dava `False` a ogni errore. Un export Windows-1252 o Latin-1, tipico di broker e banche europee e motivo della correzione `6ea71ea8d`, non riceveva il Generic CSV;
+  - lo stesso vale per XLSX e XLS, perché il generico legge solo `.csv` (voluto);
+  - i file caricati sul nightly invece ricevono il generico: prima di G, qualunque CSV con una prima riga leggibile;
+  - i campioni sintetici sono UTF-8 e non lo mostrano: il vecchio generico rifiutava solo i 2 CSV Latin-1 di Danske.
+  - **Per confermarlo**: i `compatible_plugins` di un file analizzato (DevTools → Network → `GET /api/v1/brokers/import/files`), la sua data di caricamento e la codifica o il formato.
+
+### 18.2 ✅ Col codice attuale, con G
+
+- Il Generic CSV si propone solo se l'intestazione nomina `date` e `type` (alias multilingue).
+- Sui campioni, `/tmp/libreFolio_l_item8_samples.py` dà **49 elenchi su 56 con un solo plugin**: un export di broker appena caricato offre solo il suo plugin. Generic CSV compare per i 7 campioni generici e per 7 dei broker (bitvavo, cointracking, etoro, parqet, revolut ×2, schwab).
+- Quindi con G «un solo plugin» diventa **il caso normale** per gli export di broker, per scelta (decisione 1 di G: il generico non si propone dove non sa leggere, e se forzato dice quale colonna manca).
+- La voce 8 resta verificabile nella select del broker e, nel wizard, sui file che il generico legge.
+
+### 18.3 ✅ Voluto o difetto?
+
+- **Il filtro sui `compatible_plugins` è voluto** (T5).
+- **L'elenco congelato al caricamento è un difetto**: è la voce 7 del backlog di G, la stessa radice. Le conseguenze, con G:
+  1. i file caricati **prima di G** tengono il Generic CSV anche dove non sa leggere, e sceglierlo fallisce col motivo (G.5): chiaro, ma evitabile;
+  2. i file cp1252 caricati **prima del 28/09** non elencano il generico, anche quando con G potrebbe leggerli (cioè hanno `date` e `type`);
+  3. **il più serio per l'alpha**: un plugin arrivato **dopo** il caricamento non viene mai offerto per quel file. E siccome `setPluginFor` (frontend) e `collect_members` (server) leggono proprio `compatible_plugins`, un export Danske caricato prima del plugin Danske **non entra mai in un set**: bisogna ricaricarlo.
+
+### 18.4 ⏳ Opzioni per la correzione, da decidere col developer (niente codice adesso)
+
+| Opzione | Cosa | Superfici e costo |
+|---|---|---|
+| **A (consigliata)** | Rilevare di nuovo quando i plugin cambiano: insieme all'elenco si salva una firma del catalogo (codici più `plugin_version`); quando si elencano i file, gli originali con la firma vecchia vengono ricalcolati fuori dall'event loop e riscritti in modo atomico | `brim_provider.py` (salvataggio e lettura), forse l'endpoint della lista; test di servizio (firma vecchia → ricalcolo; firma uguale → niente) e API. Un `can_parse` per file vecchio dopo ogni cambio di plugin, trasparente per l'utente |
+| B | Un'azione manuale «Rileva di nuovo i plugin» (pagina File o wizard) | Più economica, ma l'utente deve saperlo |
+| C | Lasciare com'è e documentarlo | Nessun costo; i file vecchi restano coi loro elenchi |
+
+- **Quando** lo decide il developer: prima o dopo il taglio della release. Con A, i file caricati prima dell'aggiornamento si allineano da soli, compresi gli export Danske degli utenti alpha.
+- **Nel secondo giro sulla 6166** (DB nuovo, tutto caricato con G) il developer può vedere il comportamento attuale: Generic CSV primo nella select del broker; nel wizard, il generico solo sui CSV con `date` e `type`, e solo il loro plugin sugli export di broker. Il congelamento non si riproduce in una corsia nuova; per mostrarlo bisognerebbe ritoccare a mano i metadati sintetici della corsia di review, cosa che propongo ma non faccio senza permesso.
+
+## 19. Review del passo G, secondo giro (2026-10-06)
+
+### 19.1 ✅ La corsia di review, da capo
+
+- Codice: HEAD `97259ce7f` (H committato; c'è anche il piano, modificato). `front build --debug`; il server dice `v1.1.0-473-g97259ce7f-dirty`, dove `-dirty` è solo il piano.
+- Data-dir `/tmp/librefolio-r2-l-review`: un `test --test-port 6166 --data-dir /tmp/librefolio-r2-l-review db populate --force --clean` (autorizzato solo lì; i file passano da 14 a 0), poi gli utenti e `init-settings` come nel primo giro.
+- Server: `dev.py server --test --host 127.0.0.1 --port 6166 --data-dir /tmp/librefolio-r2-l-review --no-reload --no-scheduler`; ascolta solo su `127.0.0.1:6166`, login 200.
+- File sintetici: gli stessi del primo giro (§17.1), in `/tmp/librefolio-r2-l-review-files/`.
+
+### 19.2 ⏳ Le osservazioni del developer
+
+**Testuali** (secondo giro, prima risposta):
+
+> «piccola nota, appena connesso ho visto in period p&L:
+> +91,31 € 🇪🇺 EUR (+-16.36%)
+>
+> il +- credevo lo avevamo risolto, dobbiamo forse aggiornare la baseline di questa immagine?
+>
+> cmq appena arrivato all'upload ho caricato danske_bank-cash.csv e danske_bank-custody.xlsx ma facendo avanti mi è comparso
+>
+> Danske Bank also needs: Securities transactions (XLSX).
+>
+> Drop it here: it joins the same set. You can also continue: the set will show as incomplete. How to export it
+>
+> e mi si sono deselezionati entrambi, e xlsx ha anche perso il selettore del broker con il suo stato che è diventato: danske_bank-custody.xlsx: HTTP 500 — Internal Server Error»
+
+### 19.3 ✅ Analisi (2026-10-06)
+
+**V1 — l'upload dell'XLSX con HTTP 500: un difetto vero, non di G, nell'infrastruttura comune.**
+- Log del server di review: `POST /api/v1/brokers/import/upload` → 500, `RuntimeError: dictionary changed size during iteration` in `BRIMProviderRegistry.get_compatible_plugins` (`provider_registry.py:447`), chiamato da `save_uploaded_file` (`brim_provider.py:711`, in `asyncio.to_thread`).
+- **Il meccanismo** (lettura del codice):
+  - il wizard carica i due file in parallelo, su due thread;
+  - il catalogo era freddo: prima dell'upload non c'era stata nessuna chiamata a `/brokers/import/plugins`, e all'avvio non c'è riscaldamento;
+  - `auto_discover` (`:112`) non ha lock e imposta `_discovery_done` solo alla fine. Il secondo thread salta i moduli che il primo ha già messo in `sys.modules` (prima di `exec_module`), dichiara finita la scoperta e scorre `_providers` mentre il primo sta ancora registrando i plugin.
+- **Le conseguenze**: dopo ogni riavvio del server, il primo caricamento di più file può dare 500 su un file. Peggio, un thread può vedere un catalogo **parziale** e salvare un `compatible_plugins` incompleto, che non si ricalcola più (§18).
+- **Perché i test non l'hanno visto**: nei test il catalogo è già caldo prima di ogni concorrenza.
+- `provider_registry.py` è comune (FX, asset, BRIM; ultima modifica `d54d74189`, 10/09); `dev_release2` è identico.
+- **Proposta**:
+  - un `threading.RLock` di classe attorno alla scoperta, con doppio controllo di `_discovery_done`;
+  - scorrere una copia (`list(cls._providers.items())`) in `get_compatible_plugins`, `auto_detect_plugin` e `list_plugin_info`;
+  - facoltativo: scaldare i cataloghi all'avvio;
+  - prima il rosso (test-author): due thread su un catalogo freddo, con un modulo plugin lento in una cartella temporanea.
+  - Da decidere: il permesso, perché il file è fuori dal perimetro di L.
+- **Il «deselezionati entrambi»**: l'XLSX non è stato caricato, quindi la cassa da sola forma un set incompleto e l'avviso «Danske Bank also needs…» è corretto. Da chiarire col developer cosa ha visto deselezionarsi; il file in errore non ha un id sul server, quindi perde la select del broker.
+
+**V2 — «+-16.36%» nel «Period P&L»: un difetto vero, fuori dal perimetro di L, anche su `dev_release2`.**
+- `KpiSection.svelte`: `({pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayVsPrevTotalPct}%)`. Il segno segue il delta in denaro (+91,31 €), ma la percentuale è relativa al totale precedente: quando quel totale è negativo la percentuale è negativa, e il risultato è «+» seguito da «-16.36».
+- Il file è identico su `dev_release2` (ultima modifica `53219bc00`, 30/09), quindi aggiornare la baseline non lo risolve. Va al coordinatore, che sa se un ramo non ancora integrato lo corregge.
+- C'è anche una domanda di senso: una percentuale su una base negativa o zero ha significato?
+
+### 19.4 ⏸ Il secondo giro si ferma qui
+
+- **Decisione del developer** (ask_user, testuale): «Fermiamoci qui: prima si corregge il 500».
+- Server di review spento, porta 6166 libera (`lsof` rc=1), nessun processo rimasto.
+- **Decisione del coordinatore**: nessun ramo tocca `provider_registry.py` né `KpiSection.svelte`.
+  - **V1** lo corregge L, dentro H, in un commit a sé, dopo la chiusura del giro: prima il rosso (test-author: due thread su un catalogo freddo, con un modulo plugin lento), poi `RLock` di classe con doppio controllo e copie di `_providers` nei tre metodi che lo scorrono. **Niente riscaldamento all'avvio**: `main.py` lo toccano la famiglia Risk (lifespan) e M (middleware), e il lock basta per la correttezza. Gate: le suite `services` ed `external` dei provider (BRIM, FX, asset) e gli E2E di import. Va proposta una riga 🐛 di CHANGELOG.
+  - **V2**: passato a N (Dashboard), che porta al developer anche la domanda di senso sulla base negativa.
+- La **voce 8** (opzioni A/B/C di §18.4) aspetta la scelta del developer.
+- Dopo la correzione di V1 si ricomincia il secondo giro, da capo.
+
+### 19.5 ✅ Voce 8: la scelta del developer
+
+- Testuale (ask_user): «A — rilevare di nuovo quando i plugin cambiano (Consigliata)». Il developer non ha indicato il quando, quindi lo chiedo al coordinatore. Serve un piano proprio (analisi → via), dopo V1.
+
+### 19.6 ⏳ V1 — la scoperta dei plugin al riparo dalla concorrenza (dentro H, commit a sé)
+
+**Contratto**:
+- `AbstractPluginRegistry.auto_discover` diventa sicura fra thread. Ogni registro ha un suo `threading.RLock`, creato in `__init_subclass__`. Il doppio controllo è: `_discovery_done` letto fuori dal lock, poi di nuovo dentro; la scoperta intera avviene sotto il lock, e `_discovery_done` diventa vero solo alla fine.
+  - Un thread che arriva durante la scoperta di un altro aspetta e poi trova il catalogo completo.
+  - Il lock è rientrante, quindi un modulo che durante l'import richiama lo stesso registro non si blocca.
+  - Il lock per registro non ha rischio di ordine fra lock: nessun modulo plugin interroga un altro registro mentre viene importato (verificato con grep su `brim_providers`, `fx_providers`, `asset_source_providers`, `signal_plugins` e `tool_plugins`).
+- In `provider_registry.py` si scorre una copia di `_providers` in **tutti e cinque** i punti: `list_providers` (`:251`), `shutdown_all_providers` (`:263`), `auto_detect_plugin` (`:403`), `get_compatible_plugins` (`:447`) e `list_plugin_info` (`:467`). Il coordinatore ne aveva contati tre.
+- Niente riscaldamento all'avvio (decisione del coordinatore: `main.py` è di Risk e M).
+
+**Rosso** (test-author), in `backend/test_scripts/test_services/test_provider_registry_misc.py` (azione `services provider-registry-misc`):
+- un registro di prova con la sua cartella di plugin temporanea e un modulo lento;
+- due thread, il secondo che entra mentre il primo sta ancora importando: senza la correzione il secondo vede `RuntimeError` o un catalogo parziale; con la correzione tutti e due vedono il catalogo intero;
+- una guardia verde: la rientranza nello stesso thread non si blocca.
+
+**Gate**: `services` dei registri e dei provider (BRIM, FX, asset), `external` dei provider (BRIM, FX, asset), gli E2E di import (col `--clean` prima), `lint`.
+
+> **Via del coordinatore** (2026-10-06): d'accordo sui cinque punti a copia e sull'`RLock` per registro. I gate coprono tutti i registri: signal, risk, tool, FX, asset e BRIM, più i test del registro e gli E2E di import. Le suite `external` che vanno in rete non si eseguono e si segnalano come non eseguite. Serve una riga 🐛 di CHANGELOG, poi il checkpoint in un commit a sé.
+> - **Voce 8 (A) va nella 1.2, prima del taglio.** Il motivo del coordinatore: con la 1.2 arriva Danske, e chi aggiorna dalla 1.1.0 ha file caricati senza quel plugin, che altrimenti non entrerebbero mai in un set. Dopo V1 si scrive il piano, solo analisi; il via al codice lo porta il coordinatore al developer.
+
+> **Note implementazione — V1 (2026-10-06)**:
+> - **Il rosso** (test-author, in `test_provider_registry_misc.py`, 7 casi nuovi): la corsa, deterministica con Event e attese limitate, su un registro di prova che eredita da `BRIMProviderRegistry`, con una cartella temporanea, uno spazio dei nomi unico e moduli registrati con `@register_provider`. Il secondo chiamante dava `RuntimeError: dictionary changed size during iteration` a `provider_registry.py:447`, la stessa riga del 500 vero. Più 5 casi sulle copie, uno per punto che scorre il catalogo (rossi), e una guardia sulla rientranza (verde). Il test-author ha anche provato il contratto su sottoclassi temporanee: ogni metà della correzione è fissata da un suo test.
+> - **La cura** (`provider_registry.py`):
+>   - `import threading`; `_discovery_lock = threading.RLock()` in `__init_subclass__`;
+>   - `auto_discover` col doppio controllo, e la scoperta spostata in `_discover_modules()` sotto il lock. Gli errori si registrano prima di `_discovery_done = True`; il `raise` degli errori avviene fuori dal lock;
+>   - `list(cls._providers.items())` nei cinque punti (`:272`, `:284`, `:424`, `:468`, `:488`).
+> - **I gate** (corsia 6156, un comando per volta):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `services provider-registry-misc` / `provider-registry` / `provider-contracts` | `13` (i 6 rossi sono verdi) / `7` / `405 passed` |
+> | `services signal-registry` / `signal-contracts` / `signal-runtime` / `tools-registry` | `65` / `10` / `6` / `93 passed` |
+> | `services risk-all test_risk_registry` | `4 passed` (450 non selezionati) |
+> | `services brim-provider-base` / `brim-versioning` / `brim-parse-pool` / `brim-parse-race` / `brim-report-sets` / `asset-source` | `34` / `5` / `8` / `14` / `255` / `61 passed` |
+> | `external brim-providers` / `brim-danske-bank` (offline, sui campioni) | `626 passed`, 1 saltato / `324 passed` |
+> | `external fx-providers` / `asset-providers` / `justetf-multicurrency` | **non eseguiti**: vanno in rete (decisione del coordinatore) |
+> | `--clean` autorizzato, poi gli E2E di import | `report-set` 24, `-guide` 2, `handoff` 2, `file-selection` 2, `upload` 9, `flow` 10, `resolution` 12, tutti verdi, con carico 35–50 |
+> | **Avvio a freddo, da capo a fondo** (`/tmp/libreFolio_l_v1_coldstart_uploads.sh`): server di test sulla 6156 appena avviato, nessuna chiamata BRIM prima, poi 6 upload in parallelo come fa il wizard | 3 avvii su 3: **6 × 200**, ogni `compatible_plugins` completo e giusto, 0 righe `dictionary changed size` nel log |
+> | `api brim` (per ultimo) / `check-orphans` | `73 passed` / pulito |
+> | `black --check` e `ruff check` sui due file | puliti |
+> | `dev.py lint` | 1 errore **non di L**: C901 in `pac_allocator/normalize.py:461` (`ac18ce097`, 05/10, arrivato con D). I miei file sono puliti |
+>
+> - I server degli avvii a freddo li ho avviati in shell async collegate e fermati con `stop_bash`, senza `kill`. Dopo ogni avvio, la porta 6156 era libera.
+> - **La doc** (docs-writer, solo EN): `developer/architecture/patterns/registry_pattern.md`, un passo 5 «Thread-safe» nel processo di scoperta. `mkdocs build` strict ok; `check-links` col solo D28.
+> - **⚠️ Fuori pista — deriva della doc, trovata dal docs-writer e non toccata (per il backlog)**: `registry_pattern.md` cita un `get_provider()` che non esiste (esistono `get_plugin` e `get_provider_instance`), chiama `AbstractProviderRegistry` la base di tutti i registri (la base vera è `AbstractPluginRegistry`), e non elenca `RiskAnalyticRegistry` né `ToolPluginRegistry`. `ToolPluginRegistry` ha anche un suo lock e rifiuta con `RuntimeError` la rientranza durante l'import; `tools-registry` resta verde (93).
+> - **CHANGELOG proposto** (🐛 Fixed): `- **Uploading several reports right after LibreFolio starts no longer fails.** The first uploads after a restart could end in an *Internal Server Error* on one file, or record an incomplete list of the plugins able to read it, while the import plugins were still being loaded; loading them is now safe when uploads arrive together.`
+
+### 19.7 ✅ V1 — pronta per il checkpoint (2026-10-06)
+
+- Poi: il piano della voce 8 (A), solo analisi, e il secondo giro di review da capo.
