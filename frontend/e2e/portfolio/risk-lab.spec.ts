@@ -2741,13 +2741,17 @@ async function pickUnselectedAssetId(page: Page): Promise<number> {
  *
  * Every case reads what the primitive publishes on its root, `<testid>-control`:
  * `data-benchmark-id` (`''` when there is none), `data-benchmark-state`
- * (`none|pending|set|unknown`) and `data-measured`. Never the trigger's label, which is an
+ * (`none|pending|set|unknown|blocked`) and `data-measured`. Never the trigger's label, which is an
  * asset's name inside a translated frame.
  *
  * Since D371 (02/10/2026) a selected asset may be the benchmark, and becomes the reference of the
  * others: the lab's picker lists the selected assets too, publishes `data-measured="false"` whatever
  * the choice and draws no ⚠, and applies such a choice like any other — L3° leaves the reference's
  * own beta and correlation blank, each dash saying why, and draws it once (benchmark picker (c), (f)).
+ *
+ * Since D378 (06/10/2026) a stored benchmark the engine cannot measure over the page's period is not
+ * tried: the picker publishes `blocked`, keeps the choice, and L3° asks without it (benchmark
+ * picker (g)).
  *
  * The choice lives under the user-scoped key {@link benchmarkStorageKey} reproduces, shared by
  * every Risk page. The cases seed it, and the selection beside it, in this context's
@@ -6021,6 +6025,78 @@ test.describe('Asset Global risk laboratory', () => {
         // Applied like any other: L3° asks with it and draws it once, L1° is measured without it.
         await expectComparisonWith(page, requests, selection, chosen.id);
         await expectLossWithoutComparison(page, requests, selection);
+    });
+
+    /**
+     * Benchmark picker (g) — a stored benchmark the engine rules out over the period (D378).
+     *
+     * The developer's decision of 06/10/2026, the same on every page: a benchmark already chosen that
+     * cannot be measured over the page's period is not tried — «Non lo prova: la riga del benchmark
+     * sparisce, e il motivo lo dice solo il selettore». The picker publishes `blocked` and keeps the
+     * choice: on its root (`data-benchmark-id`), in storage, and in its list — current, read-only, in
+     * the section of the assets the engine rules out (`<testid>-blocked`), with the engine's reason.
+     * L3° asks without it: no L3° request about the selection carries the comparison, at any point,
+     * and L3° draws neither beta nor correlation, nor a row or a dot for the benchmark.
+     *
+     * The verdicts are this test's own: `answerEligibility`, registered after `installRiskMocks`,
+     * answers first, and admits every asset but the stored benchmark, which has no quote in the
+     * period. The benchmark is outside the selection, so no chip is parked and L3° is asked about
+     * exactly the stored selection. "At any point" is the point: the lab hands its picker its own
+     * verdicts, which say nothing until the catalogue's answer lands, and the picker does not wait for
+     * them — it says `set`, then `blocked`. An L3° that asked on `set` would ask with the benchmark,
+     * then again without it: the benchmark tried, which the last request alone would hide
+     * (`labL3Waits`).
+     *
+     * Red until the lab hands its picker the verdicts: today it hands none, so the picker never learns
+     * the benchmark is ruled out — it stays `set` — and L3° asks with it.
+     */
+    test('the benchmark picker keeps a stored benchmark the engine rules out over the period as blocked, current in its section apart, and L3° never asks with it (D378)', async ({page}) => {
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
+        const {selection, reference} = await castBenchmark(page);
+        // The engine's word for this test: the stored benchmark has no quote in the period, every other asset is admitted.
+        const eligibility = await answerEligibility(page, (assetId) => (assetId === reference.id ? NO_PRICES : ELIGIBLE));
+        const key = await storeLabOpening(page, selection, reference.id);
+        await openLabOn(page, selection);
+
+        // Premises, read behind `openLabOn`'s barrier that every chip carries the catalogue's verdict — so
+        // the catalogue's question has been answered: the engine judged the stored benchmark, and admitted
+        // every selected asset, so none is parked and L3° is asked about exactly the stored selection.
+        expect(
+            eligibility.some((call) => call.assetIds.includes(reference.id)),
+            `premise: the lab must have asked the engine about the stored benchmark #${reference.id}`,
+        ).toBe(true);
+        for (const assetId of selection) {
+            await expect(page.getByTestId(`risk-selected-asset-${assetId}`), `premise: selected asset ${assetId} must be admitted, or L3° would be asked about another set`).toHaveAttribute('data-level', 'eligible');
+        }
+
+        // Blocked, and kept: the root still names the choice.
+        const control = benchmarkControl(page);
+        await expect(control, 'a stored benchmark the engine rules out over the period must read blocked (D378)').toHaveAttribute('data-benchmark-state', 'blocked', {timeout: 15_000});
+        await expect(control, 'a blocked benchmark stays the current choice').toHaveAttribute('data-benchmark-id', String(reference.id));
+
+        // …and so does the list: current, in the section apart, with the engine's reason — the one place
+        // that says why. Listed there once, and not also among the benchmarks on offer. Scoped to this
+        // picker: `search-select-option-*` is shared by every select on the page.
+        await openBenchmarkPicker(page);
+        const blockedOption = page.getByTestId(`${LAB_BENCHMARK}-blocked`).getByTestId(`search-select-option-${reference.id}`);
+        await expect(blockedOption, `${reference.display_name} (#${reference.id}) must be listed apart, among the assets the engine rules out`).toBeVisible();
+        await expect(blockedOption, 'the blocked benchmark must stay marked as the current choice').toHaveAttribute('aria-selected', 'true');
+        await expect(blockedOption, 'a blocked benchmark is read-only in the list').toBeDisabled();
+        await expect(blockedOption, "the reason the picker gives must be the engine's").toHaveAttribute('data-reasons', 'no_prices');
+        await expect(page.getByTestId(LAB_BENCHMARK).getByTestId(`search-select-option-${reference.id}`), 'the blocked benchmark must be listed once, apart, never also on offer').toHaveCount(1);
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId(`${LAB_BENCHMARK}-trigger`), 'Escape must close the picker').toHaveAttribute('aria-expanded', 'false');
+
+        // Not tried: L3° drawn with no comparison, and not one of its requests about the selection carried
+        // one — every request, not the last alone, read once the table is drawn.
+        await expectNoComparison(page, requests, selection);
+        // «La riga del benchmark sparisce»: no row for it either, read behind the rows drawn above.
+        await expect(paidTable(page), 'a blocked benchmark must add no row to L3°').toHaveAttribute('data-reference-count', '0');
+        await expect(paidReferenceRow(page, reference.id)).toHaveCount(0);
+
+        // Blocked, not forgotten: D378 keeps the choice, for a period that can measure it.
+        expect(await readStorage(page, key), 'the stored benchmark was cleared: D378 keeps the choice').toBe(String(reference.id));
     });
 
     /**
