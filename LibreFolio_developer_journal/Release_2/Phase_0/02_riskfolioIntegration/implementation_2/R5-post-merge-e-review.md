@@ -2984,3 +2984,93 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >   Ho riferito tutto al coordinator. In D375 ho tolto quali sottotipi possiede.
 > - **Un errore mio, corretto**: avevo scritto ad A che lo scatter era un file di I. Per la tabella dei proprietari del
 >   29/09 è di A, condiviso con il laboratorio.
+
+### Checkpoint 4: il grafico di crescita (spazio a sinistra, Income su 1M) e lo storico per famiglia (D375) · ✅ 06/10/2026 (FROZEN)
+
+> **Le concessioni del coordinator**:
+> - `GrowthChart.svelte` (di I), che «atterra con la famiglia»: lo spazio vuoto a sinistra in Abs e P&L, e il bucket
+>   di default 1M per Income;
+> - `AllocationHistoryChart.svelte`: D375 e l'ordine dello stack;
+> - `allocationHierarchy.ts`: solo il commento d'intestazione;
+> - `_frontend_portfolio.py:348`: solo l'ultima frase della desc di `allocation-unit`.
+>
+> **La diagnosi dello spazio**, con una sonda ECharts 6 SSR a 800×300. Con `containLabel` la griglia misura anche
+> l'etichetta nascosta del bordo calcolato, che D18 stampa per intero (`55,588k`): il grafico parte a 82 px invece che
+> a 55. Con il testo vuoto all'indice 0 parte a 55 px in ogni caso.
+>
+> **I test** (test-author, rossi prima):
+> - G1, lo spazio a sinistra: 2 rossi e i pin;
+> - G2, Income su 1M: 6 rossi, tra cui il caso stretto che apre su 2W, e i pin;
+> - 5 casi esistenti riallineati, perché davano per scontato 1W;
+> - H, lo storico: le famiglie, le somme, il tooltip annidato con `data-allocation-family` e `data-allocation-member`,
+>   la regola dei primi 5 più «Remaining», e la pulizia dell'ordine, anche per settore e geografia; più i pin.
+>
+> Sul codice di prima, `growth-chart-memo` dava 8 rossi su 77, e `allocation-unit` 10 rossi su 228.
+>
+> **Fatto**:
+> - **GrowthChart**:
+>   - `yAxisFormatter(v, index)` è vuoto all'indice 0 fuori da Income;
+>   - `INCOME_OPENING_WIDTH = '1M'`: `incomeOpeningPending` si accende a ogni entrata (Income ripristinato al montaggio,
+>     `selectMode`, `selectSubmode`) e `reconcileCandleWidth` lo consuma con `nearestOfferedWidth`. Anche il ramo di
+>     Income consuma l'apertura di Candles, così da Income a Candles la larghezza resta condivisa, come prima.
+> - **AllocationHistoryChart**:
+>   - `SeriesStyle` e `familyStyling`: i gruppi di `buildAllocationHierarchy`, con il colore base così com'è;
+>   - una serie per famiglia, con i dati sommati, e `buildFamilyTooltipRows`;
+>   - la pulizia dell'ordine: `lastSeriesOrder` si azzera alla creazione dell'istanza; se l'ordine degli id cambia,
+>     `hideTip` e poi `setOption({series: []}, {replaceMerge: ['series']})` prima dell'opzione nuova;
+>   - il commento della palette.
+> - `allocationHierarchy.ts`: il commento d'intestazione. `_frontend_portfolio.py:348`: l'ultima frase della desc di
+>   `allocation-unit`, e solo quella riga.
+>
+> **Mutanti 7 su 7 uccisi**, sul codice vero, ogni file ripristinato e verificato con sha256:
+> - il bordo vuoto anche in Income;
+> - nessun bordo vuoto;
+> - Income che apre su 1W;
+> - il cambio di modalità che non conta come entrata;
+> - nessuna pulizia dell'ordine;
+> - la famiglia con il colore dell'ultimo membro;
+> - il generico non per primo.
+>
+> **Verifica** (6152, in sequenza, con il carico della macchina fra 10 e 65):
+> - `growth-chart-memo` 77 · `allocation-unit` 228 · `asset-unit` 530 · `component-unit` 2487 · `core-unit` 2990;
+> - `front check` 0 errori e 0 avvisi; orfani ✅;
+> - E2E `front-portfolio dashboard` 24 · `front-broker detail` 32.
+>
+> **Previsione**: il runner contro l'albero di A con la sua modifica concessa, simulata perché non l'ha ancora scritta
+> (la lista e `tests=` di `risk-levels-component`, più una frase): merge-file 0 conflitti, il codice d'uscita salvato
+> subito, entrambe le modifiche presenti, e il file fuso è Python valido.
+>
+> **La pagina utente** (docs-writer, solo EN): `user/dashboard/charts.en.md`.
+> - «Where it starts»: Candles sulla larghezza più fine che possono disegnare; Income su 1M a ogni entrata, o sulla
+>   larghezza più vicina che si può disegnare.
+> - Un punto nuovo, «When it changes»: la scelta resta dentro Income, e la larghezza resta condivisa con Candles.
+> - «Income starts at 1W» diventa «non offre mai meno di 1W».
+> - La voce History: per tipo, un'area per famiglia, e i sottotipi nel tooltip.
+>
+> Build strict ✅. `check-links`: solo il rosso ereditato D28. `translate-validate` mostra il debito: le traduzioni di
+> questa pagina non hanno la sezione P&L, e la voce History resta vecchia. Niente stamp.
+>
+> **Stato: FROZEN**, consegnato al coordinator.
+>
+> La bozza e il brief stanno nei file di sessione (`files/k4-draft/notes.md`, `files/brief-k4.md`). Gli artefatti di
+> `/tmp` sono copiati in `files/tmp-backup-0510/`.
+
+### Checkpoint 5, dopo k4: il replay ridisegnato (D376) · ⏳ da iniziare
+
+> **Il disegno**: D376 in 04, con le aggiunte della seconda revisione.
+> - **Backend**: `impacts` porta solo gli asset rigiocati. Il test che fissa `[1, 2]` va aggiornato, rosso prima.
+> - **Frontend**:
+>   - la tabella prende il posto di `TornadoChart` ma ne tiene le props, così `L4Shock` di A non cambia, e i testid
+>     che leggono i test del laboratorio di F;
+>   - il riquadro sugli esclusi in cima, con le icone degli asset;
+>   - il preset di crisi cancellabile;
+>   - le scorciatoie del periodo accanto alle date;
+>   - in `L4WhatIf` il selettore degli strumenti, che ricorda nel browser l'ultimo insieme aperto.
+>
+>   Tutto nei miei file.
+>
+> **In coda**:
+> - la fase 2: `BenchmarkSelect` adotta il pannello di F; a F va prima mandato il contratto, `verdicts` o `period`;
+> - la fase 3: «Confronto Asset» e/o `SignalAssetParamControl`;
+> - la proposta del rendimento totale (dal developer, tramite A): cedole e dividendi registrati, il prezzo come ripiego;
+> - `dev_release2` con L e D, prima dell'integrazione.
