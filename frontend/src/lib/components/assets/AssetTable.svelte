@@ -18,6 +18,7 @@
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
     import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
+    import {publishAssetTableOrder, type AssetPanelId} from './assetBrowse';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
@@ -65,9 +66,11 @@
         onColumnResize?: (columnId: string, width: number) => void;
         /** Distinct storageKey per stacked instance (independent client state). */
         storageKey?: string;
+        /** The usage panel this table shows: its row order is published for the detail page's prev/next. */
+        browseSegment?: AssetPanelId;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, onColumnResize, storageKey = 'assetsTable'}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
@@ -357,6 +360,7 @@
         ]}
         {storageKey}
         {onColumnResize}
+        onRowOrderChange={browseSegment ? (rowIds) => publishAssetTableOrder(browseSegment, rowIds.map(Number)) : undefined}
     />
 </div>
 
