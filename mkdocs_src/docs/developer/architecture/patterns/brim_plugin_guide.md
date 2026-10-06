@@ -911,7 +911,10 @@ plugin has nothing to implement, but it is the contract every set lives in:
 - taking a file out of its set never changes its tick: the file keeps its tick and loses its
   plugin, waiting for a new choice — «not with this plugin» is not «not at all»;
 - *Read as* (another report-set plugin, or the files one by one) and *Read alone with ‹plugin›*
-  change only how the files are read, never which ones are ticked.
+  change only how the files are read, never which ones are ticked;
+- a set ticked only in part is not analysed: the analysis waits until the user ticks the whole set
+  or unticks it, and nothing ticks it for them — `exclude_file_ids` names only the files taken out
+  of the set, so `/sets/preview` and `/sets/combine` would read its unticked members too.
 
 A file taken out by mistake goes back when the set's plugin is chosen for it again
 ([Import Wizard → How a set is read](../../frontend/components/features/import-wizard.md#set-read-as)).
