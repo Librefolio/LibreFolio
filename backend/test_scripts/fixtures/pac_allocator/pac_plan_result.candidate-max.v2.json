@@ -50,7 +50,7 @@
   "scenario_basis": {
     "as_of": "2026-09-15",
     "valuation_currency": "EUR",
-    "policy": "min_fragmentation",
+    "policy": "proportional",
     "counts": {
       "assets": 16,
       "brokers": 4,
@@ -76,8 +76,15 @@
   },
   "stop_reason": "completed",
   "solver_evidence": {
-    "kind": "not_run",
-    "reason": "allocation.solver_not_required"
+    "kind": "reported_floating",
+    "stages": [
+      {"kind": "reported_floating", "stage": "fixed_l2", "objective_code": "fixed_l2", "ordinal": 1, "status": "finished", "scope": "global", "sense": "min", "unit": {"kind": "valuation_money_squared", "currency_code": "EUR"}, "primal": "0", "dual": "0", "absolute_gap": "0", "relative_gap": "0", "tolerances": {"feasibility": "0.000001", "integrality": "0.000000001", "absolute_gap": "0", "relative_gap": "0"}, "engine": "SCIP", "version": "10.0", "settings": [{"name": "time_budget", "value": "30"}]},
+      {"kind": "reported_floating", "stage": "shortfall", "objective_code": "shortfall", "ordinal": 2, "status": "finished", "scope": "incumbent_face", "sense": "min", "unit": {"kind": "valuation_money", "currency_code": "EUR"}, "primal": "0", "dual": "0", "absolute_gap": "0", "relative_gap": "0", "tolerances": {"feasibility": "0.000001", "integrality": "0.000000001", "absolute_gap": "0", "relative_gap": "0"}, "engine": "SCIP", "version": "10.0", "settings": [{"name": "time_budget", "value": "30"}]},
+      {"kind": "reported_floating", "stage": "split_asset_count", "objective_code": "split_asset_count", "ordinal": 3, "status": "finished", "scope": "incumbent_face", "sense": "min", "unit": {"kind": "count"}, "primal": "0", "dual": "0", "absolute_gap": "0", "relative_gap": "0", "tolerances": {"feasibility": "0.000001", "integrality": "0.000000001", "absolute_gap": "0", "relative_gap": "0"}, "engine": "SCIP", "version": "10.0", "settings": [{"name": "time_budget", "value": "30"}]},
+      {"kind": "reported_floating", "stage": "active_order_rows", "objective_code": "active_order_rows", "ordinal": 4, "status": "finished", "scope": "incumbent_face", "sense": "min", "unit": {"kind": "count"}, "primal": "0", "dual": "0", "absolute_gap": "0", "relative_gap": "0", "tolerances": {"feasibility": "0.000001", "integrality": "0.000000001", "absolute_gap": "0", "relative_gap": "0"}, "engine": "SCIP", "version": "10.0", "settings": [{"name": "time_budget", "value": "30"}]},
+      {"kind": "reported_floating", "stage": "route_priority", "objective_code": "route_priority", "ordinal": 5, "status": "finished", "scope": "incumbent_face", "sense": "min", "unit": {"kind": "ordinal_penalty"}, "primal": "0", "dual": "0", "absolute_gap": "0", "relative_gap": "0", "tolerances": {"feasibility": "0.000001", "integrality": "0.000000001", "absolute_gap": "0", "relative_gap": "0"}, "engine": "SCIP", "version": "10.0", "settings": [{"name": "time_budget", "value": "30"}]},
+      {"kind": "reported_floating", "stage": "explicit_cost", "objective_code": "explicit_cost", "ordinal": 6, "status": "finished", "scope": "incumbent_face", "sense": "min", "unit": {"kind": "valuation_money", "currency_code": "EUR"}, "primal": "0", "dual": "0", "absolute_gap": "0", "relative_gap": "0", "tolerances": {"feasibility": "0.000001", "integrality": "0.000000001", "absolute_gap": "0", "relative_gap": "0"}, "engine": "SCIP", "version": "10.0", "settings": [{"name": "time_budget", "value": "30"}]}
+    ]
   },
   "issues": [
     {
@@ -116,6 +123,7 @@
     ],
     "funding_actions": [],
     "fx_actions": [],
+    "conversions": [],
     "order_rows": [],
     "ledger_rows": [
       {"broker_id": "broker-eur", "currency": "EUR", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
@@ -123,6 +131,7 @@
       {"broker_id": "broker-gbp", "currency": "GBP", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"},
       {"broker_id": "broker-jpy", "currency": "JPY", "initial_selected": "0", "funding_in": "0", "funding_out": "0", "fx_debit": "0", "fx_credit": "0", "buy_debit": "0", "gross_sell_credit": "0", "buy_fees": "0", "sell_fees": "0", "broker_withheld_tax": "0", "self_reserved_tax": "0", "rounding_delta": "0", "final_spendable": "0", "final_physical": "0"}
     ],
+    "rounding_top_ups": [],
     "exposure_rows": [
       {"dimension": "asset_type", "category_id": "equity", "label": "Equity", "target_weight": {"kind": "finite_decimal", "value": "1"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "provenance_ids": ["prov-candidate-max"]},
       {"dimension": "sector", "category_id": "unknown", "label": "Unknown", "target_weight": {"kind": "finite_decimal", "value": "1"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "provenance_ids": ["prov-candidate-max"]},

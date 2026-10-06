@@ -43,7 +43,7 @@ Learn how to use the Broker Report Import Module (BRIM) to import your transacti
 
 ## 🧙 The Import Wizard Steps
 
-The wizard has **four steps you always see** and **three that appear only when your files
+The wizard has **four steps you always see** and **four that appear only when your files
 actually need them**. Those optional steps join the flow only when later analysis first
 encounters the relevant data. The progress bar and guide therefore use the current **N/M** for
 the steps that apply to this import: a clean single-file report stays short, while a messy
@@ -58,6 +58,7 @@ multi-file one gets exactly the extra questions it deserves.
 | 🔧 Corrections | ⚪ Optional | The parser booked rows it could not fully understand |
 | 🧹 Duplicates | ⚪ Optional | The same movement appears in two of the files you are importing together |
 | 4 · Review & Import | ✅ Always | — |
+| ⚖️ Align with the bank | ⚪ Optional | After the review of a **report set** (e.g. [Danske Bank](danske-bank.md#first-import-align-with-the-bank)): the bank's balances or positions differ from what LibreFolio will hold, an end-of-period check does not match, or the comparison failed |
 
 !!! info "The optional steps run in this order for a reason"
 
@@ -80,7 +81,7 @@ The step is **optional**: reports uploaded in earlier sessions are already store
 
 ### ⚙️ Step 2: Select Files & Parser
 
-This step lists the reports stored for each broker, grouped in collapsible per-broker panels, so you can pick exactly which ones to parse — including files uploaded in an earlier session (the files you just uploaded are pre-selected). Reports can be previewed or deleted from this step. Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. If you upload a generic spreadsheet, use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields.
+This step lists the reports stored for each broker, grouped in collapsible per-broker panels, so you can pick exactly which ones to parse — including files uploaded in an earlier session (the files you just uploaded are pre-selected). Reports can be previewed or deleted from this step. Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. If you upload a generic spreadsheet, use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields. When a bank splits one account across several exports, such as [Danske Bank](danske-bank.md), the files you upload together form a **report set**: it appears as a single card, ticked as a whole, instead of one row per file.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Parser Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -340,6 +341,10 @@ Click **Import N transactions** to hand the selected rows to the **bulk editor**
 nothing is written to the ledger yet. Give them one last look — or keep editing — and then
 **Save All** to commit them to your portfolio.
 
+With a **report set**, **Import N transactions** may first stop on **Align with the bank**, which
+compares what LibreFolio will hold with what the bank states and proposes the corrections that
+close the difference — see [Danske Bank](danske-bank.md#first-import-align-with-the-bank).
+
 ---
 
 ## 🧭 Guided First Import {: #guided-first-import }
@@ -349,9 +354,9 @@ real conditional flow above. Import is one saved onboarding flow with per-step s
 separate flow for every wizard screen.
 
 - **It tracks the wizard you're actually seeing.** Its **Step N of M** label follows the current
-  visible steps. Optional **Unify Assets**, **Corrections**, and **Duplicates** guidance begins
-  only when the wizard first reaches that step; a step that does not apply remains available for
-  a later import that needs it.
+  visible steps. Optional **Unify Assets**, **Corrections**, **Duplicates** and, on a report-set
+  import, **Align with the bank** guidance begins only when the wizard first reaches that step; a
+  step that does not apply remains available for a later import that needs it.
 - **It yields to deeper dialog stacks.** The coachmark remains available through the wizard and
   one dialog opened above it. If that dialog opens another dialog, the coachmark temporarily
   hides and returns when the upper dialog closes.

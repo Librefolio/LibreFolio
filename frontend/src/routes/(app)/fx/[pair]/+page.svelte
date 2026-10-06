@@ -1632,7 +1632,7 @@
     <!-- Provider Configuration Modal (reuses FxPairAddModal in editMode) -->
     <!-- ======================================================================= -->
     <div data-testid="fx-detail-provider-modal">
-        <FxPairAddModal bind:open={showProviderModal} {dateEnd} {dateStart} editBase={data.canonicalBase} editMode={true} editQuote={data.canonicalQuote} {editRoutes} onclose={() => (showProviderModal = false)} oncreated={handleProviderModalCreated} />
+        <FxPairAddModal bind:open={showProviderModal} editBase={data.canonicalBase} editMode={true} editQuote={data.canonicalQuote} {editRoutes} onclose={() => (showProviderModal = false)} oncreated={handleProviderModalCreated} />
     </div>
 
     <!-- Confirm modal for swap direction while editing -->

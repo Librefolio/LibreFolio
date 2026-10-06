@@ -4,8 +4,10 @@ Every quantity here is computed on ``ExactRatio``, never on floats: the planner
 must be able to *prove* a result, and a proof cannot rest on a representation
 that rounds. The evaluator is deliberately independent of the solver — it scores
 a candidate without knowing how that candidate was produced, which is what makes
-it usable both as the objective of the SCIP model and as the referee of the
-exhaustive oracle.
+it usable as the formula the SCIP objectives mirror, as the referee that replays
+every SCIP incumbent (``rounding_top_ups`` then tells a HALF_UP cash deficit the
+user can top up from a rejection), and — in the test tree — as the scorer
+behind the exhaustive oracle.
 
 The P1 ``analyze`` arithmetic that used to open this file was removed on
 2026-09-21 (`b82e59ffa` and its follow-up): it was a Decimal prototype for
@@ -14,7 +16,7 @@ budgets and target gaps, never released, superseded by the exact domain below.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from hashlib import sha256
@@ -63,6 +65,7 @@ from backend.app.services.pac_allocator.models import (
     ExactPlannerScenario,
     ExactPolicyPurpose,
     ExactPolicyView,
+    ExactRoundingTopUp,
     ExactUnit,
     ExactWithholding,
     LedgerPostingFamily,
@@ -103,6 +106,10 @@ class ExactScenarioContractError(ExactEvaluatorError):
 
 class ExactPolicyContractError(ExactEvaluatorError):
     """Raised when an exact policy view cannot represent the requested phase."""
+
+
+class ExactReplayRejectedError(ExactEvaluatorError):
+    """Raised when the exact replay rejects a candidate for more than rounding."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,9 +315,9 @@ def _validate_order_route_units(
             raise ExactScenarioContractError(f"order route {route.route_id} has incompatible {field_name}")
         if minimum.kind == "monetary_amount" and minimum.currency != quote_currency:
             raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency {field_name}")
-    if route.cap.kind != expected_cap_kind:
+    if route.cap is not None and route.cap.kind != expected_cap_kind:
         raise ExactScenarioContractError(f"order route {route.route_id} has incompatible cap unit")
-    if route.cap.kind == "notional" and route.cap.currency != quote_currency:
+    if route.cap is not None and route.cap.kind == "notional" and route.cap.currency != quote_currency:
         raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency cap")
     if fee.fixed_fee.currency != quote_currency:
         raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency fee schedule")
@@ -536,7 +543,7 @@ def _can_reach_buy(
             positive_targets.add(item.asset_id)
     for route in scenario.order_routes:
         check_budget(checkpoint)
-        if route.side != "buy" or route.broker_id != broker_id or route.asset_id not in positive_targets or route.cap.value <= _EXACT_ZERO:
+        if route.side != "buy" or route.broker_id != broker_id or route.asset_id not in positive_targets or (route.cap is not None and route.cap.value <= _EXACT_ZERO):
             continue
         quote_currency = index.assets[route.asset_id].quote.price.currency
         if currency == quote_currency or _fx_pair_key(currency, quote_currency) in index.fx_rate_by_pair:
@@ -792,22 +799,20 @@ def _order_upper_bounds(
         check_budget(checkpoint)
         capability = index.capabilities[(route.broker_id, route.capability_id)]
         quote_currency = index.assets[route.asset_id].quote.price.currency
-        maximum = route.cap.value
         if route.side == "buy":
             native_resource = resource_bound / index.valuation_rate[quote_currency]
-            resource_measure = native_resource / _order_prices(index, route).execution_native if capability.kind == "whole_quantity" else native_resource
-            maximum = min(maximum, resource_measure)
+            maximum = native_resource / _order_prices(index, route).execution_native if capability.kind == "whole_quantity" else native_resource
         else:
             holding = index.holdings.get((route.asset_id, route.broker_id))
             if holding is None:
                 maximum = _EXACT_ZERO
             elif capability.kind == "whole_quantity":
-                maximum = min(maximum, holding.planning_quantity)
+                maximum = holding.planning_quantity
             else:
-                maximum = min(
-                    maximum,
-                    holding.planning_quantity * _order_prices(index, route).execution_native,
-                )
+                maximum = holding.planning_quantity * _order_prices(index, route).execution_native
+        # A route without a cap of its own keeps the resource (buy) or holding (sell) bound.
+        if route.cap is not None:
+            maximum = min(maximum, route.cap.value)
         family: DecisionFamily = "buy_quantum" if route.side == "buy" else "sell_quantum"
         bounds[exact_decision_id(family, route.route_id)] = _floor_units(
             maximum,
@@ -2523,8 +2528,8 @@ def _order_route_constraint_facts(
         _constraint_id("ORDER_CAP", route.route_id): _ConstraintFact(
             value=measure,
             lower_bound=_EXACT_ZERO,
-            upper_bound=route.cap.value,
-            satisfied=measure <= route.cap.value,
+            upper_bound=route.cap.value if route.cap is not None else None,
+            satisfied=route.cap is None or measure <= route.cap.value,
         ),
         _constraint_id(
             "ORDER_SIDE_ALLOWED",
@@ -3649,3 +3654,77 @@ def evaluate_exact_candidate(
     )
     check_budget(checkpoint)
     return result
+
+
+# The rules a pure HALF_UP deficit breaks: the pool's own cash rule, the FX
+# source cash rule (the same balance, seen from its FX debit), the global
+# no-leverage rule, and the rounding bound. A top-up repairs all four.
+_ROUNDING_DEFICIT_CODES = frozenset(
+    {
+        "FX_SOURCE_CASH",
+        "NO_SHORT_OR_LEVERAGE",
+        "ROUNDING_BOUND",
+        "SPENDABLE_CASH_NONNEGATIVE",
+    }
+)
+
+
+def _require_rounding_only_rejection(evaluation: ExactEvaluation) -> frozenset[str]:
+    """Return the replay's conflict codes once they can only be cash a rounding left short."""
+    if not evaluation.candidate_valid or evaluation.accounting is None:
+        raise ExactReplayRejectedError(f"the exact replay rejected a candidate outside the policy contract: {', '.join(evaluation.conflict_codes)}")
+    codes = frozenset(evaluation.conflict_codes)
+    if "SPENDABLE_CASH_NONNEGATIVE" not in codes or not codes <= _ROUNDING_DEFICIT_CODES:
+        raise ExactReplayRejectedError(f"the exact replay rejected rules no rounding explains: {', '.join(evaluation.conflict_codes)}")
+    if any(row.final_quantity < _EXACT_ZERO for row in evaluation.holdings):
+        raise ExactReplayRejectedError("the exact replay rejected a negative final holding")
+    return codes
+
+
+def rounding_top_ups(
+    scenario: ExactPlannerScenario,
+    evaluation: ExactEvaluation,
+) -> tuple[ExactRoundingTopUp, ...]:
+    """Classify an exact replay: the cash each pool lacks to rounding, or a rejection.
+
+    The replay stays authoritative. A feasible replay needs nothing. A replay
+    whose only violation is negative final spendable cash, each pool short by
+    ``D <= N x minor unit`` (``N`` = the pool's postings that carry a quantum:
+    the buy debit of every order, a nonzero fee, the FX credit), is a plan the
+    user can execute by adding ``D`` to each such pool: one top-up per negative
+    pool, in ledger order. A failed ``ROUNDING_BOUND`` is accepted only as the
+    top-ups repair it: the adjustment within the bound, and the shortfall within
+    the bound once the top-ups are reachable cash. Anything else raises
+    ``ExactReplayRejectedError``; the messages name rules and pools, never amounts.
+    """
+    if evaluation.feasible:
+        return ()
+    codes = _require_rounding_only_rejection(evaluation)
+    index = _build_scenario_index(scenario)
+    rounded_postings = Counter((posting.broker_id, posting.currency) for posting in evaluation.postings if posting.quantum is not None)
+    top_ups = []
+    for ledger in evaluation.ledgers:
+        if ledger.final_spendable >= _EXACT_ZERO:
+            continue
+        pool = (ledger.broker_id, ledger.currency)
+        deficit = -ledger.final_spendable
+        count = rounded_postings[pool]
+        if count == 0 or deficit > count * index.currency_quantum[ledger.currency]:
+            raise ExactReplayRejectedError(f"the exact replay left {ledger.broker_id}/{ledger.currency} short beyond its rounded postings")
+        top_ups.append(
+            ExactRoundingTopUp(
+                broker_id=ledger.broker_id,
+                currency=ledger.currency,
+                amount=deficit,
+                rounded_postings=count,
+                valuation_amount=_to_valuation(index, deficit, ledger.currency),
+            )
+        )
+    if not top_ups:
+        raise ExactReplayRejectedError("the exact replay rejected spendable cash without a negative pool")
+    if "ROUNDING_BOUND" in codes:
+        accounting = evaluation.accounting
+        topped_up = sum((item.valuation_amount for item in top_ups), _EXACT_ZERO)
+        if abs(accounting.rounding_adjustment) > accounting.rounding_bound or accounting.shortfall + topped_up < -accounting.rounding_bound:
+            raise ExactReplayRejectedError("the exact replay rejected a rounding bound the top-ups do not repair")
+    return tuple(top_ups)

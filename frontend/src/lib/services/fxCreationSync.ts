@@ -6,12 +6,17 @@ import {notify} from '$lib/stores/app/notify.svelte';
 import {getFxStore} from '$lib/stores/fxStoreRegistry';
 import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {todayIso} from '$lib/utils/dateOnly';
 import {formatSyncDetail, fxPairHtml} from '$lib/utils/providerHelpers';
 import {buildFxSyncToast, type SyncToastResult} from '$lib/utils/sync/syncToastHelpers';
 import {extractErrorMessage} from '$lib/utils/trySave';
 
-type FxSyncResponse = Awaited<ReturnType<typeof zodiosApi.sync_rates_api_v1_fx_currencies_sync_post>>;
+export type FxSyncResponse = Awaited<ReturnType<typeof zodiosApi.sync_rates_api_v1_fx_currencies_sync_post>>;
 type FxSyncResult = FxSyncResponse['results'][number];
+export type FxSyncOutcome = 'ok' | 'partial' | 'failed' | 'skipped' | 'transport-error';
+
+/** A full history outlasts the client's 30 s default, as in FxSyncModal and PageSyncModal. */
+export const FX_SYNC_TIMEOUT_MS = 120_000;
 
 export interface FxPairCreatedDetail {
     readonly base: string;
@@ -26,7 +31,7 @@ export interface FxPairSyncCompleteDetail extends FxPairCreatedDetail {
     readonly start: string;
     readonly end: string;
     readonly sessionGeneration: number;
-    readonly outcome: 'ok' | 'partial' | 'failed' | 'skipped' | 'transport-error';
+    readonly outcome: FxSyncOutcome;
     readonly results: readonly FxSyncResult[];
     readonly missingPairs: readonly string[];
 }
@@ -34,8 +39,6 @@ export interface FxPairSyncCompleteDetail extends FxPairCreatedDetail {
 export interface FxPairCreationContext {
     readonly detail: FxPairCreatedDetail;
     readonly pairs: readonly string[];
-    readonly start: string;
-    readonly end: string;
     readonly sessionGeneration: number;
     readonly editMode?: boolean;
     readonly oncreated?: (detail: FxPairCreatedDetail) => void | Promise<void>;
@@ -55,7 +58,8 @@ function joinedText(value: string | null | (string | null)[] | undefined): strin
     return Array.isArray(value) ? value.filter((part): part is string => part !== null).join('; ') : (value ?? '');
 }
 
-function formatResult(result: FxSyncResult | undefined, slug: string): SyncToastResult {
+/** One pair's line of an FX sync toast, with the backend's text escaped. */
+export function formatFxSyncResult(result: FxSyncResult | undefined, slug: string): SyncToastResult {
     const tr = get(_);
     const normalized = result
         ? {
@@ -76,12 +80,38 @@ function formatResult(result: FxSyncResult | undefined, slug: string): SyncToast
 }
 
 /**
+ * How a sync of `pairs` went. A pair the response does not answer, or an operation-level
+ * error, counts as a failure; the toast variant follows the outcome.
+ */
+export function classifyFxSyncOutcome(pairs: readonly string[], response: FxSyncResponse | undefined, transportError?: string) {
+    const results = response?.results ?? [];
+    const requestedResults = pairs.map((slug) => results.find((result) => result.pair === slug));
+    const missingPairs = pairs.filter((_, index) => !requestedResults[index]);
+    const operationErrors = response?.errors ?? [];
+    const outcome: FxSyncOutcome = transportError
+        ? 'transport-error'
+        : missingPairs.length > 0 || operationErrors.length > 0 || requestedResults.some((result) => result?.status === 'failed')
+          ? 'failed'
+          : requestedResults.every((result) => result?.status === 'skipped')
+            ? 'skipped'
+            : requestedResults.some((result) => result?.status !== 'ok')
+              ? 'partial'
+              : 'ok';
+    const variant: SyncToastResult['variant'] = outcome === 'ok' ? 'success' : outcome === 'skipped' ? 'info' : outcome === 'partial' ? 'warning' : 'error';
+    return {results, requestedResults, missingPairs, operationErrors, outcome, variant};
+}
+
+/**
  * Finish a committed configuration without retaining the modal's reactive draft.
  * Browser-lifetime only: closing the modal is supported, closing the tab is not.
+ *
+ * A new pair with a real provider syncs its whole history, `'min'` (everything the
+ * provider publishes) up to today, as a new asset does: a period taken from the page
+ * that opened the modal left every older transaction without a rate.
  */
 export async function finishFxPairCreation(context: FxPairCreationContext): Promise<void> {
-    const {sessionGeneration, start, end, oncreated, onsynced, onclose, editMode = false} = context;
-    const detail = Object.freeze({...context.detail, autoSyncStarted: !editMode && context.detail.hasRealProvider && !!start && !!end && context.detail.autoSyncStarted});
+    const {sessionGeneration, oncreated, onsynced, onclose, editMode = false} = context;
+    const detail = Object.freeze({...context.detail, autoSyncStarted: !editMode && context.detail.hasRealProvider && context.detail.autoSyncStarted});
     const pairs = Object.freeze([...new Set([detail.slug, ...context.pairs])]);
     const current = () => isClientSessionCurrent(sessionGeneration);
     if (typeof window === 'undefined' || !current()) return;
@@ -134,8 +164,10 @@ export async function finishFxPairCreation(context: FxPairCreationContext): Prom
 
     let response: FxSyncResponse | undefined;
     let transportError: string | undefined;
+    const start = 'min';
+    const end = todayIso();
     try {
-        response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: [...pairs], start, end});
+        response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: [...pairs], start, end}, {timeout: FX_SYNC_TIMEOUT_MS});
     } catch (error) {
         transportError = extractErrorMessage(error, get(_)('prices.sync.failedDefault'));
     }
@@ -146,19 +178,7 @@ export async function finishFxPairCreation(context: FxPairCreationContext): Prom
     if (!current()) return;
     for (const slug of pairs) getFxStore(slug).invalidateAll();
 
-    const results = response?.results ?? [];
-    const requestedResults = pairs.map((slug) => results.find((result) => result.pair === slug));
-    const missingPairs = pairs.filter((_, index) => !requestedResults[index]);
-    const operationErrors = response?.errors ?? [];
-    const outcome: FxPairSyncCompleteDetail['outcome'] = transportError
-        ? 'transport-error'
-        : missingPairs.length > 0 || operationErrors.length > 0 || requestedResults.some((result) => result?.status === 'failed')
-          ? 'failed'
-          : requestedResults.every((result) => result?.status === 'skipped')
-            ? 'skipped'
-            : requestedResults.some((result) => result?.status !== 'ok')
-              ? 'partial'
-              : 'ok';
+    const {results, requestedResults, missingPairs, operationErrors, outcome, variant: outcomeVariant} = classifyFxSyncOutcome(pairs, response, transportError);
     const completion: FxPairSyncCompleteDetail = {...detail, pairs, start, end, sessionGeneration, outcome, results, missingPairs};
     const listenerResults = await Promise.allSettled(
         [...completionListeners].map((listener) => {
@@ -181,8 +201,8 @@ export async function finishFxPairCreation(context: FxPairCreationContext): Prom
     }
     if (!current()) return;
 
-    const formatted = requestedResults.map((result, index) => formatResult(result, pairs[index]));
-    let variant: SyncToastResult['variant'] = outcome === 'ok' ? 'success' : outcome === 'skipped' ? 'info' : outcome === 'partial' ? 'warning' : 'error';
+    const formatted = requestedResults.map((result, index) => formatFxSyncResult(result, pairs[index]));
+    let variant: SyncToastResult['variant'] = outcomeVariant;
     let message = formatted.map((item) => item.message).join('\n\n');
     if (transportError) {
         message = buildFxSyncToast({status: 'failed', message: escapeHtml(transportError)}, detail.slug, get(_), undefined, undefined, {outerFlags: true, linkToDetail: true}).message;

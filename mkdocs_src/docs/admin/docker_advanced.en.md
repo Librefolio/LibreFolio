@@ -186,7 +186,7 @@ All Docker operations are available through `dev.py`:
 
 ```bash
 ./dev.py docker build          # Build image (auto-builds frontend + docs)
-./dev.py docker build --light  # Light variant: no documentation images (tag *-light, ~1.5 GB vs ~2.9 GB full)
+./dev.py docker build --light  # Light variant: no documentation screenshots (tagged *-light)
 ./dev.py docker build --no-cache  # Full rebuild without Docker cache
 ./dev.py docker rebuild        # Build → stop → restart (one-step deploy)
 ./dev.py docker up             # Start containers
@@ -196,17 +196,31 @@ All Docker operations are available through `dev.py`:
 ./dev.py docker exec <cmd>     # Run a dev.py command inside the container
 ```
 
-The `--light` variant ships the same application but without the bundled documentation screenshots (they are loaded on demand from the online docs site instead), and is tagged with a `-light` suffix. See [Image Variants](../user/installation.md#image-variants-full-and-light) in the user installation guide.
+The `--light` variant ships the same application without the bundled documentation screenshots (they are loaded on demand from the online docs site instead). `./dev.py docker build` tags the full image `librefolio:<version>` and `librefolio:latest`, and the light one `librefolio:<version>-light` and `librefolio:latest-light` (`<version>` is the git version of your checkout). These are local names only: on the registry, `latest` is itself the light variant and there is no `latest-light` tag. See [Image Variants](../user/installation.md#image-variants-full-and-light) in the user installation guide.
+
+!!! warning "A debug frontend build fails the image build — on purpose"
+
+    The image must ship the production build of the web app. If `frontend/build/` was last built in debug mode (for example by `./dev.py server --test`, `./dev.py server --debug` or the test runner) or instrumented for coverage, the image build stops with an error like:
+
+    ```text
+    ERROR: /build is not a production frontend build: it is a debug build (.build-debug = 1)
+    Rebuild it with './dev.py front build', then build the image again.
+    ```
+
+    Run `./dev.py front build`, then build the image again. `./dev.py docker build` rebuilds the frontend on its own only when its sources have changed, not when the last build was a debug one.
 
 !!! tip "Documentation with screenshots"
 
-    If you are building the documentation and want complete screenshots in the gallery, run:
+    A full image contains the documentation screenshots only if they were generated, and the documentation rebuilt with them, **before** the image build — otherwise a local full image and a light one are the same apart from their tag. The complete sequence is:
 
     ```bash
-    ./dev.py mkdocs gallery
+    ./dev.py mkdocs gallery   # generate the screenshots
+    ./dev.py front build      # the gallery leaves a debug frontend build: rebuild it for production
+    ./dev.py mkdocs build     # rebuild the documentation with the screenshots
+    ./dev.py docker build     # build the full image
     ```
 
-    This requires a fully installed environment (with `pipenv`) and Playwright browsers. The command starts its own test server and populates the test database automatically (use `--no-populate` to skip reseeding). Be patient — gallery generation takes a few minutes.
+    `./dev.py mkdocs gallery` requires a fully installed environment (with `pipenv`) and Playwright browsers. The command starts its own test server and populates the test database automatically (use `--no-populate` to skip reseeding). Be patient — gallery generation takes a few minutes.
 
 ### 📡 `docker exec` — Running Commands Inside the Container
 
@@ -333,6 +347,8 @@ It is highly recommended to expose LibreFolio securely using **Tailscale** (reco
     - 🔐 Manage custom SSL/TLS certificates for HTTPS.
     - 🖥️ Serve multiple applications on the same server.
     - 🛡️ Add custom security headers and rate limiting.
+
+LibreFolio compresses its own responses: the API's JSON, the web app's JavaScript and CSS, and the documentation pages are sent gzip-compressed to clients that accept it, while already-compressed images (PNG, JPEG, WebP) and the live asset-search stream are sent as they are. A reverse proxy in front of LibreFolio therefore does not need to compress them again.
 
 ### 💾 3. Database Backup
 

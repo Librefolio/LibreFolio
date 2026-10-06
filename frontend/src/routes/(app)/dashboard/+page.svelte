@@ -23,7 +23,11 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
+    import {buildMissingFxRatesSyncRequest} from '$lib/utils/sync/syncRange';
+    import {fxPairHtml} from '$lib/utils/providerHelpers';
+    import {extractErrorMessage} from '$lib/utils/trySave';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
@@ -63,7 +67,7 @@
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
-    import type {FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
+    import {classifyFxSyncOutcome, formatFxSyncResult, FX_SYNC_TIMEOUT_MS, type FxPairSyncCompleteDetail, type FxSyncResponse} from '$lib/services/fxCreationSync';
     import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -130,16 +134,6 @@
 
     function closeAssetPanel() {
         void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
-    }
-
-    function normalizeToSlug(pair: string): string {
-        const parts = pair
-            .replace('/', '-')
-            .split('-')
-            .map((p) => p.trim().toUpperCase())
-            .filter(Boolean);
-        if (parts.length < 2) return pair.trim().toUpperCase();
-        return parts.slice(0, 2).sort().join('-');
     }
 
     /** Debounce timer for broker filter changes. */
@@ -321,6 +315,83 @@
         }
     }
 
+    /**
+     * «Sync rates» on MISSING_FX_RATES. A date is missing only when no rate exists on or
+     * before it, so the missing dates precede the pair's first stored rate and a sync of the
+     * period on screen never reaches them: the request targets the dates the issue carries,
+     * a week either side, never past today (`buildMissingFxRatesSyncRequest`).
+     *
+     * The outcome is told once the report is reloaded, because only then is it known whether
+     * the dates are covered: when the provider returned nothing for them, the toast says so
+     * instead of reporting a success the banner would contradict.
+     */
+    async function syncMissingFxRates(issue: DataQualityIssue) {
+        const request = buildMissingFxRatesSyncRequest(issue);
+        if (!request) return;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        const coversRequestedPair = (candidate: DataQualityIssue) => (buildMissingFxRatesSyncRequest(candidate)?.pairs ?? []).some((slug) => request.pairs.includes(slug));
+        syncLoading = true;
+        syncingCode = issue.code;
+        toasts.info($_('fx.sync.inProgress'));
+        try {
+            let response: FxSyncResponse | undefined;
+            let transportError: string | undefined;
+            try {
+                response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(request, {timeout: FX_SYNC_TIMEOUT_MS});
+            } catch (error) {
+                transportError = extractErrorMessage(error, $_('prices.sync.failedDefault'));
+            }
+            if (!current()) return;
+            const {requestedResults, operationErrors, outcome, variant: outcomeVariant} = classifyFxSyncOutcome(request.pairs, response, transportError);
+
+            // No reload after a transport error: the backend may still be writing those rates.
+            let remaining: DataQualityIssue | undefined;
+            let stillMissing: boolean | null = null;
+            if (!transportError) {
+                invalidateFxRoutes();
+                invalidate();
+                try {
+                    await loadAll(true, true);
+                    remaining = dataQualityIssues.find((candidate) => candidate.cta_action === 'sync_fx_pair' && coversRequestedPair(candidate));
+                    stillMissing = remaining !== undefined;
+                } catch {
+                    stillMissing = null;
+                }
+                if (!current()) return;
+            }
+
+            const tr = (key: string, opts?: any) => $_(key, opts);
+            const pairOptions = {outerFlags: true, linkToDetail: true};
+            let variant = outcomeVariant;
+            let message = transportError
+                ? request.pairs.map((slug) => buildFxSyncToast({status: 'failed', message: escapeHtml(transportError)}, slug, tr, undefined, undefined, pairOptions).message).join('\n\n')
+                : requestedResults.map((result, index) => formatFxSyncResult(result, request.pairs[index]).message).join('\n\n');
+            if (operationErrors.length > 0) message += `\n${operationErrors.map(escapeHtml).join('; ')}`;
+            if (remaining && (outcome === 'ok' || outcome === 'partial')) {
+                const params = remaining.message_params ?? {};
+                const stillMissingPairs = (buildMissingFxRatesSyncRequest(remaining)?.pairs ?? []).filter((slug) => request.pairs.includes(slug));
+                message += `\n\n${$_('dataQuality.missingFxRatesAfterSync', {
+                    values: {
+                        pairs: stillMissingPairs.map((slug) => fxPairHtml(slug, pairOptions)).join(', '),
+                        date_from: escapeHtml(String(params.date_from ?? '')),
+                        date_to: escapeHtml(String(params.date_to ?? '')),
+                        dates_count: params.dates_count ?? '',
+                    },
+                })}`;
+                if (variant === 'success') variant = 'warning';
+            }
+            notify({
+                name: 'fx.rates.synced',
+                detail: {origin: 'dashboard-banner', pairs: request.pairs, start: request.start, end: request.end, outcome, stillMissing},
+                toast: {variant, message},
+            });
+        } finally {
+            syncLoading = false;
+            syncingCode = null;
+        }
+    }
+
     async function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
         if (action === 'navigate_asset' && target) {
             goto(`/assets/${target}`);
@@ -332,33 +403,7 @@
             fxPairCreateSlug = pairs[0] ?? '';
             showFxPairAddModal = true;
         } else if (action === 'sync_fx_pair') {
-            const pairs = _issue.affected_fx_pairs?.length ? _issue.affected_fx_pairs : target ? [target] : [];
-            if (pairs.length === 0) return;
-            const slugs = [...new Set(pairs.map(normalizeToSlug))];
-            syncLoading = true;
-            syncingCode = _issue.code;
-            toasts.info($_('fx.sync.inProgress'));
-            try {
-                const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                    pairs: slugs,
-                    start: dateRangeCtl.start,
-                    end: dateRangeCtl.end,
-                });
-                const changed = ((response as any)?.results ?? []).reduce((sum: number, r: any) => sum + (r?.points_changed ?? r?.points_fetched ?? 0), 0);
-                if (changed === 0) {
-                    toasts.info($_('fx.sync.noNewData'));
-                } else {
-                    toasts.success(`${slugs.join(', ')} — ${$_('fx.sync.synced')} (${changed} pts)`);
-                }
-                invalidateFxRoutes();
-                invalidate();
-                await loadAll(true);
-            } catch (e: any) {
-                toasts.error(`FX sync failed: ${e?.message || 'unknown'}`);
-            } finally {
-                syncLoading = false;
-                syncingCode = null;
-            }
+            await syncMissingFxRates(_issue);
         } else if (action === 'sync_asset_prices') {
             // STALE_PRICE: re-sync the flagged provider assets from the day after their last
             // stored price ('resume', the rule every auto-sync uses) up to the dashboard's end
@@ -676,6 +721,7 @@
                             bind:value={targetCurrency}
                             compact={true}
                             configuredOnly={true}
+                            testId="dashboard-target-currency"
                             defaultCurrency={baseCurrency}
                             createForexLabel={$_('common.createForex')}
                             dropdownPosition="bottom"
@@ -891,7 +937,7 @@
 <!-- FxPairAddModal — opened from DataQualityBanner CTA -->
 {#if showFxPairAddModal}
     {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
-    <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} dateStart={dateRangeCtl.start} dateEnd={dateRangeCtl.end} oncreated={handleFxPairCreated} onsynced={handleFxPairCreationSynced} />
+    <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={handleFxPairCreated} onsynced={handleFxPairCreationSynced} />
 {/if}
 
 <!-- Transaction view modal — opened from the Transazioni tab's row double-click -->

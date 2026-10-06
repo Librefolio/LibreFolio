@@ -149,6 +149,13 @@ LibreFolio prend en charge l'importation de fichiers de relevés provenant des c
     </div>
     <span class="card-desc">Importez les mouvements de compte de Crédit Agricole — trésorerie réelle, frais, impôts et coupons/dividendes ; export titres optionnel pour l'historique de plus de 2 ans.</span>
     </a>
+    <a href="danske-bank/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://danskebank.fi/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Danske Bank">
+    <span class="card-title" style="margin: 0;">Danske Bank</span>
+    </div>
+    <span class="card-desc">Importez un compte d'épargne en actions finlandais : le XLSX des titres et le CSV des espèces, téléversés ensemble comme un seul lot de rapports.</span>
+    </a>
  <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
  <img src="https://traderepublic.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trade Republic">
@@ -264,6 +271,7 @@ LibreFolio prend en charge l'importation de fichiers de relevés provenant des c
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://finecobank.com/favicon.ico" width="16" height="16" style=""><span>FI</span></span> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Les deux modèles d'exportation ; montants dans la devise du rapport |
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.intesasanpaolo.com/favicon.ico" width="16" height="16" style=""><span>IS</span></span> **Intesa Sanpaolo** | 🧪 Beta | CSV/XLSX | ❌ | ✅ | ✅ | ✅ | Mouvements coupons/dividendes/frais/taxes ; l'instantané patrimoine alimente le cash lorsqu'il est présent + positions |
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style=""><span>CA</span></span> **Crédit Agricole** | ✅ Stable | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | Les mouvements de compte apportent du cash réel, frais, taxes et coupons/dividendes ; l'export titres optionnel récupère l'historique sur 2 ans ; contre-entrées auto de cash, échéances et ajustements de succession |
+    | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://danskebank.fi/favicon.ico" width="16" height="16" style=""><span>DB</span></span> **Danske Bank** | 🔬 Alpha | XLSX + CSV | ✅ | ✅ | ✅ | ✅ | Deux exports dans un seul lot de rapports |
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://traderepublic.com/favicon.ico" width="16" height="16" style=""><span>TR</span></span> **Trade Republic** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.xtb.com/favicon.ico" width="16" height="16" style=""><span>XT</span></span> **XTB** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://parqet.com/favicon.ico" width="16" height="16" style=""><span>PA</span></span> **Parqet** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |

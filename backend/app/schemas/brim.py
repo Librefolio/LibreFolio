@@ -27,10 +27,10 @@ from datetime import date
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.common import SafeDecimal, StrictModel
+from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -47,6 +47,10 @@ def is_fake_asset_id(asset_id: Optional[int]) -> bool:
     if asset_id is None:
         return False
     return asset_id >= FAKE_ASSET_ID_BASE - 10000  # Allow 10000 fake assets per import
+
+
+# Columns every combined report-set table must carry (see BRIMCombinedTable).
+COMBINED_REQUIRED_HEADERS = ("lf_row_kind", "lf_source")
 
 
 # =============================================================================
@@ -112,6 +116,15 @@ class BRIMDuplicateLevel(StrEnum):
 # =============================================================================
 
 
+class BRIMDerivedRef(StrictModel):
+    """One original file a combined report-set file was built from."""
+
+    file_id: str = Field(..., description="UUID of the original file")
+    role: Optional[str] = Field(default=None, description="Role of the file in the set (e.g. 'custody', 'cash')")
+    filename: str = Field(..., description="Original filename, as uploaded")
+    deleted: bool = Field(default=False, description="True once the original has been deleted; the combined file stays usable")
+
+
 class BRIMFileInfo(StrictModel):
     """
     Information about an uploaded broker report file.
@@ -154,6 +167,12 @@ class BRIMFileInfo(StrictModel):
     parsed_plugin_code: Optional[str] = Field(default=None, description="Plugin code used at last successful parse")
     parsed_plugin_version: Optional[str] = Field(default=None, description="Plugin version at last successful parse")
     parse_is_stale: bool = Field(default=False, description="True if cached parse was produced by an older plugin version and a re-parse is recommended")
+    # Report sets: files uploaded together, and the combined file derived from them
+    batch_id: Optional[str] = Field(default=None, description="Upload batch the file belongs to; files uploaded together form a report set")
+    kind: Literal["original", "combined"] = Field(default="original", description="original = uploaded by the user; combined = derived by a report-set plugin")
+    derived_from: List[BRIMDerivedRef] = Field(default_factory=list, description="For a combined file: the originals it was built from")
+    combined_into: List[str] = Field(default_factory=list, description="For an original file: the combined files built from it")
+    combine_is_stale: bool = Field(default=False, description="True if a combined file was built by an older plugin version")
 
 
 # =============================================================================
@@ -205,6 +224,41 @@ class BRIMExtractedAssetInfo(StrictModel):
     notices: List[BRIMAssetNotice] = Field(default_factory=list, description="Advisory notices for this asset (e.g. suspected maturity/redemption); empty by default")
 
 
+class BRIMReportRole(StrictModel):
+    """One kind of export a report-set plugin reads (e.g. custody transactions, cash statement)."""
+
+    code: str = Field(..., min_length=1, description="Role code, unique within the plugin (e.g. 'custody', 'cash')")
+    required: bool = Field(default=True, description="The set cannot be combined without at least one file of this role")
+    multiple: bool = Field(default=False, description="Several files of this role are allowed in one set")
+    extensions: List[str] = Field(..., min_length=1, description="Accepted file extensions (e.g. ['.csv'])")
+    description: str = Field(..., description="English description of the export (UI fallback)")
+    max_history: Optional[str] = Field(default=None, description="How far back the bank exports this role, as an ISO 8601 duration (e.g. 'P1Y')")
+    must_cover: Optional[str] = Field(default=None, description="Role whose period this role must cover (e.g. the cash statement must cover the custody period)")
+
+
+class BRIMCoverage(StrictModel):
+    """The period a report-set member covers on one date axis."""
+
+    axis: Literal["trade", "value"] = Field(..., description="trade = operation date; value = settlement (value) date")
+    start: date = Field(..., description="First date covered (inclusive)")
+    end: date = Field(..., description="Last date covered (inclusive)")
+
+    @model_validator(mode="after")
+    def _check_order(self) -> BRIMCoverage:
+        if self.start > self.end:
+            raise ValueError("coverage start must not be after its end")
+        return self
+
+
+class BRIMMemberSummary(StrictModel):
+    """What a report-set plugin reads from one member without combining: role, size and coverage."""
+
+    role: Optional[str] = Field(default=None, description="Role recognised in the file, or None")
+    rows: int = Field(..., ge=0, description="Number of data rows")
+    coverage: List[BRIMCoverage] = Field(default_factory=list, description="Covered period per date axis")
+    account_fingerprint: Optional[str] = Field(default=None, exclude=True, description="Opaque account key compared in memory only; never serialised")
+
+
 class BRIMPluginInfo(StrictModel):
     """
     Information about an available import plugin.
@@ -232,6 +286,7 @@ class BRIMPluginInfo(StrictModel):
     docs_url: Optional[str] = Field(None, description="URL to the plugin documentation page")
     plugin_version: str = Field(..., description="Semver of the parsing logic; bumped when plugin output would change for the same input")
     detection_priority: int = Field(100, description="Priority for auto-detection (higher = checked first). 100+ broker-specific, 50-99 semi-generic, 0-49 fallbacks")
+    report_roles: List[BRIMReportRole] = Field(default_factory=list, description="Export roles of a report-set plugin; empty for single-file plugins")
 
 
 # =============================================================================
@@ -458,6 +513,181 @@ def _coerce_notices(value: Any) -> Any:
 
 
 # =============================================================================
+# REPORT SETS (multi-file imports)
+# =============================================================================
+
+
+class BRIMSetShape(StrictModel):
+    """What a report-set plugin can tell about its members without combining them.
+
+    Used by the set preview: the segments covered by the files that define the
+    window (e.g. the custody exports), the gaps between them that the other files
+    prove, and plugin notices with stable codes.
+    """
+
+    segments: List[DateRangeModel] = Field(default_factory=list, description="Covered segments, in date order")
+    gaps: List[DateRangeModel] = Field(default_factory=list, description="Proven gaps between segments")
+    notices: List[BRIMNotice] = Field(default_factory=list, description="Plugin notices about the set")
+
+
+class BRIMCombinedTable(BaseModel):
+    """The combined table a report-set plugin builds from its members.
+
+    Internal plugin-to-core object: the core writes it as the combined CSV
+    (``write_combined_csv``), so the file format is the same for every plugin.
+    Each row carries the verbatim source values plus the ``lf_*`` columns that
+    explain it (kind, zone, reason, source).
+    """
+
+    headers: List[str] = Field(..., description="Column headers; must include lf_row_kind and lf_source")
+    rows: List[List[str]] = Field(default_factory=list, description="Row values as strings, aligned with headers")
+    summary: Dict[str, Any] = Field(default_factory=dict, description="Combine summary, persisted in the combined file's sidecar")
+
+    @model_validator(mode="after")
+    def _check_shape(self) -> BRIMCombinedTable:
+        if len(set(self.headers)) != len(self.headers):
+            raise ValueError("combined table headers must be unique")
+        missing = [header for header in COMBINED_REQUIRED_HEADERS if header not in self.headers]
+        if missing:
+            raise ValueError(f"combined table is missing required headers: {', '.join(missing)}")
+        width = len(self.headers)
+        for index, row in enumerate(self.rows):
+            if len(row) != width:
+                raise ValueError(f"combined table row {index} has {len(row)} values, expected {width}")
+        return self
+
+
+class BRIMTruthCash(StrictModel):
+    """A cash balance the bank states, in one currency."""
+
+    currency: str = Field(..., description="ISO 4217 currency code")
+    amount: SafeDecimal = Field(..., description="Balance amount (can be negative)")
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def _validate_currency(cls, value: Any) -> str:
+        return Currency.validate_code(value)
+
+
+class BRIMTruthPosition(StrictModel):
+    """A position the bank's files prove: an exact quantity, or a minimum."""
+
+    asset_id: int = Field(..., description="Fake asset ID from the parse (the wizard resolves it to a real asset)")
+    quantity: SafeDecimal = Field(..., description="Quantity held (exact) or minimum quantity held (at_least)")
+    exactness: Literal["exact", "at_least"] = Field(..., description="exact = the bank states the quantity; at_least = a lower bound the files prove")
+    unit_cost: Optional[Currency] = Field(default=None, description="Per-unit cost, when the files prove it")
+
+
+class BRIMAbsorbedRow(StrictModel):
+    """One cash row a checkpoint summarises (value date, currency, amount), used to explain a difference."""
+
+    as_of: date = Field(..., description="Value date of the row")
+    currency: str = Field(..., description="ISO 4217 currency code")
+    amount: SafeDecimal = Field(..., description="Signed cash amount of the row")
+    label: Optional[str] = Field(default=None, description="Short description from the export")
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def _validate_currency(cls, value: Any) -> str:
+        return Currency.validate_code(value)
+
+
+class BRIMAbsorbed(StrictModel):
+    """Rows a checkpoint summarises instead of importing them one by one."""
+
+    count: int = Field(default=0, ge=0, description="Number of summarised rows")
+    cash: List[BRIMTruthCash] = Field(default_factory=list, description="Net cash of the summarised rows, per currency")
+    rows: List[BRIMAbsorbedRow] = Field(default_factory=list, description="The summarised cash rows, to tell which ones LibreFolio already has")
+    opening_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Balance before the first summarised row (the start of the export)")
+
+
+class BRIMCheckpoint(StrictModel):
+    """What the bank states on the eve of a segment.
+
+    The core compares it with what LibreFolio will know at that date and proposes
+    the gap-fix corrections that close the difference.
+    """
+
+    as_of: date = Field(..., description="End of the day the truth refers to (the eve of the segment)")
+    kind: Literal["opening", "gap"] = Field(..., description="opening = first checkpoint of the history; gap = closes a proven gap")
+    cash: List[BRIMTruthCash] = Field(default_factory=list, description="Cash balances stated by the bank")
+    positions: List[BRIMTruthPosition] = Field(default_factory=list, description="Positions proven by the files")
+    absorbed: BRIMAbsorbed = Field(default_factory=BRIMAbsorbed, description="Rows this checkpoint summarises")
+    evidence: List[BRIMEvidence] = Field(default_factory=list, description="Source rows backing the checkpoint")
+
+
+class BRIMVerification(StrictModel):
+    """A truth point that is only compared, never corrected (e.g. the end of the last segment)."""
+
+    as_of: date = Field(..., description="End of the day the truth refers to")
+    cash: List[BRIMTruthCash] = Field(default_factory=list, description="Cash balances stated by the bank")
+    evidence: List[BRIMEvidence] = Field(default_factory=list, description="Source rows backing the verification")
+
+
+class BRIMSetRequest(StrictModel):
+    """Identifies one report set: the files uploaded together for a broker and recognised by a plugin."""
+
+    broker_id: int = Field(..., gt=0, description="Target broker ID")
+    plugin_code: str = Field(..., description="Report-set plugin code")
+    batch_id: str = Field(..., description="Upload batch shared by the set's files")
+    exclude_file_ids: List[str] = Field(default_factory=list, description="Originals of the upload the user left out of the set (read alone, or removed from it)")
+
+
+class BRIMSetMemberInfo(StrictModel):
+    """One file of a report set, as the preview sees it."""
+
+    file_id: str = Field(..., description="UUID of the file")
+    filename: str = Field(..., description="Original filename")
+    role: Optional[str] = Field(default=None, description="Role recognised by the plugin, or None")
+    rows: int = Field(default=0, ge=0, description="Number of data rows")
+    coverage: List[BRIMCoverage] = Field(default_factory=list, description="Covered period per date axis")
+
+
+class BRIMSetRoleStatus(StrictModel):
+    """Whether a plugin role is covered by the set's files."""
+
+    code: str = Field(..., description="Role code")
+    required: bool = Field(..., description="The set needs this role")
+    multiple: bool = Field(..., description="Several files of this role are allowed")
+    status: Literal["present", "missing", "excess"] = Field(..., description="present, missing, or too many files for a single-file role")
+    file_ids: List[str] = Field(default_factory=list, description="Files recognised with this role")
+
+
+class BRIMSetMissing(StrictModel):
+    """A required role the set lacks, with the period its file must cover when it can be computed."""
+
+    role: str = Field(..., description="Missing role code")
+    start: Optional[date] = Field(default=None, description="First day the missing export must cover")
+    end: Optional[date] = Field(default=None, description="Last day the missing export must cover")
+
+
+class BRIMSetPreview(StrictModel):
+    """What a report set contains and whether it can be combined. Read-only."""
+
+    broker_id: int = Field(..., description="Target broker ID")
+    plugin_code: str = Field(..., description="Report-set plugin code")
+    batch_id: str = Field(..., description="Upload batch of the set")
+    members: List[BRIMSetMemberInfo] = Field(default_factory=list, description="Files of the set")
+    roles: List[BRIMSetRoleStatus] = Field(default_factory=list, description="One entry per plugin role")
+    missing: List[BRIMSetMissing] = Field(default_factory=list, description="Required roles without a file")
+    segments: List[DateRangeModel] = Field(default_factory=list, description="Covered segments, in date order")
+    gaps: List[DateRangeModel] = Field(default_factory=list, description="Proven gaps between segments")
+    history_start: Optional[date] = Field(default=None, description="First day of the broker history already in LibreFolio")
+    history_end: Optional[date] = Field(default=None, description="Last day of that history: the latest transaction carrying the plugin's history tag")
+    history_count: int = Field(default=0, ge=0, description="Transactions of that history, gap-fix corrections included")
+    warnings: List[BRIMNotice] = Field(default_factory=list, description="Notices with stable codes for the UI")
+    complete: bool = Field(default=False, description="True when the set can be combined")
+
+
+class BRIMSetCombineResponse(StrictModel):
+    """The combined file of a report set."""
+
+    combined: BRIMFileInfo = Field(..., description="The combined file, parseable like any other file")
+    summary: Dict[str, Any] = Field(default_factory=dict, description="Combine summary (counts, window, checkpoints)")
+    reused: bool = Field(default=False, description="True when an identical combined file already existed")
+
+
+# =============================================================================
 # FIELD_TODO (intentionally incomplete field in accepted TX)
 # =============================================================================
 
@@ -482,6 +712,80 @@ class BRIMFieldTodo(StrictModel):
     message: str = Field(..., description="Human-readable fallback message (English)")
     context: Optional[Dict[str, Any]] = Field(default=None, description="Extra params for i18n (e.g. {old_ticker, new_ticker})")
     evidence: List[BRIMEvidence] = Field(default_factory=list, description="Source-data tables backing this todo (e.g. the originating file row)")
+
+
+# =============================================================================
+# GAP-FIX (align LibreFolio with the bank's truth points)
+# =============================================================================
+
+
+class BRIMGapFixRequest(StrictModel):
+    """What the wizard is about to import, and what the bank states: the gap-fix compares them."""
+
+    broker_id: int = Field(..., gt=0, description="Target broker ID")
+    plugin_code: str = Field(..., description="Plugin that produced the truth points")
+    checkpoints: List[BRIMCheckpoint] = Field(default_factory=list, description="Truth points with real asset IDs")
+    verifications: List[BRIMVerification] = Field(default_factory=list, description="Truth points that are only compared")
+    selection: List[TXCreateItem] = Field(default_factory=list, description="Transactions the wizard is about to hand to the editor")
+    pending_creates: List[TXCreateItem] = Field(default_factory=list, description="Unsaved rows already in the bulk editor")
+    pending_delete_tx_ids: List[int] = Field(default_factory=list, description="Saved transactions the bulk editor is about to delete")
+
+
+class BRIMGapFixCashRow(StrictModel):
+    """Bank vs LibreFolio cash in one currency at a truth point."""
+
+    currency: str = Field(..., description="ISO 4217 currency code")
+    bank: SafeDecimal = Field(..., description="Balance stated by the bank")
+    librefolio: SafeDecimal = Field(..., description="Balance LibreFolio will have")
+    difference: SafeDecimal = Field(..., description="bank - librefolio")
+
+
+class BRIMGapFixPositionRow(StrictModel):
+    """Bank vs LibreFolio quantity of one asset at a checkpoint."""
+
+    asset_id: int = Field(..., description="Real asset ID")
+    exactness: Literal["exact", "at_least"] = Field(..., description="exact quantity or lower bound")
+    bank: SafeDecimal = Field(..., description="Quantity stated or proven by the bank")
+    librefolio: SafeDecimal = Field(..., description="Quantity LibreFolio will have")
+    difference: SafeDecimal = Field(..., description="Quantity proposed (bank - librefolio; never negative for at_least)")
+
+
+class BRIMGapFixExplanation(StrictModel):
+    """Where a checkpoint difference comes from."""
+
+    absorbed_count: int = Field(default=0, ge=0, description="Rows the checkpoint summarises")
+    absorbed_missing_count: int = Field(default=0, ge=0, description="Summarised rows LibreFolio does not have")
+    absorbed_missing_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Net cash of the missing summarised rows")
+    opening_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Balance before the export (opening checkpoint only)")
+    unexplained_cash: List[BRIMTruthCash] = Field(default_factory=list, description="Difference not explained by the rows above")
+    notes: List[BRIMNotice] = Field(default_factory=list, description="Notices (e.g. an asset still unresolved)")
+
+
+class BRIMGapFixCheckpointResult(StrictModel):
+    """One checkpoint: the comparison and the gap-fix corrections that close it."""
+
+    as_of: date = Field(..., description="End of the day of the checkpoint")
+    kind: Literal["opening", "gap"] = Field(..., description="opening or gap")
+    cash: List[BRIMGapFixCashRow] = Field(default_factory=list, description="Cash comparison per currency")
+    positions: List[BRIMGapFixPositionRow] = Field(default_factory=list, description="Position comparison per asset")
+    proposals: List[TXCreateItem] = Field(default_factory=list, description="Gap-fix corrections, tagged gap_fix")
+    todos: List[BRIMFieldTodo] = Field(default_factory=list, description="Fields to complete on the proposals (tx_index into proposals)")
+    explanation: BRIMGapFixExplanation = Field(default_factory=BRIMGapFixExplanation, description="Where the difference comes from")
+
+
+class BRIMGapFixVerificationResult(StrictModel):
+    """A truth point that is only compared."""
+
+    as_of: date = Field(..., description="End of the day of the verification")
+    ok: bool = Field(..., description="True when every currency matches within 0.01")
+    cash: List[BRIMGapFixCashRow] = Field(default_factory=list, description="Cash comparison per currency")
+
+
+class BRIMGapFixResponse(StrictModel):
+    """The gap-fix of one broker: checkpoints in date order, then verifications."""
+
+    checkpoints: List[BRIMGapFixCheckpointResult] = Field(default_factory=list, description="Checkpoint results, in date order")
+    verifications: List[BRIMGapFixVerificationResult] = Field(default_factory=list, description="Verification results, in date order")
 
 
 class BRIMParseResponse(StrictModel):
@@ -511,6 +815,9 @@ class BRIMParseResponse(StrictModel):
     warnings: List[BRIMNotice] = Field(default_factory=list, description="Parser notices (info/warning) with optional source-data evidence")
     validation_issues: List[BRIMValidationIssue] = Field(default_factory=list, description="Structured validation errors from TXCreateItem construction")
     field_todos: List[BRIMFieldTodo] = Field(default_factory=list, description="Fields in accepted transactions that require manual user input")
+    checkpoints: List[BRIMCheckpoint] = Field(default_factory=list, description="Report sets: truth points to compare with LibreFolio (gap-fix)")
+    verifications: List[BRIMVerification] = Field(default_factory=list, description="Report sets: truth points that are only compared")
+    history_start: Optional[date] = Field(default=None, description="Report sets: first day of the broker history already in LibreFolio; earlier rows are already represented")
 
     @field_validator("warnings", mode="before")
     @classmethod
@@ -541,6 +848,8 @@ class BRIMParseOutput(BaseModel):
     validation_issues: List[BRIMValidationIssue] = Field(default_factory=list)
     field_todos: List[BRIMFieldTodo] = Field(default_factory=list)
     extracted_assets: Dict[int, BRIMExtractedAssetInfo] = Field(default_factory=dict)
+    checkpoints: List[BRIMCheckpoint] = Field(default_factory=list)
+    verifications: List[BRIMVerification] = Field(default_factory=list)
 
     @field_validator("warnings", mode="before")
     @classmethod
@@ -551,8 +860,8 @@ class BRIMParseOutput(BaseModel):
 # NOTE: No atomic commit schema / endpoint.
 # After parsing, the client should:
 # 1. Resolve fake asset IDs to real asset IDs (Staging Modal)
-# 2. Submit transactions to POST /brokers/{broker_id}/transactions/bulk
-#    (standard endpoint, atomic per-broker — see Phase 7 Part 3).
+# 2. Submit transactions to POST /transactions/validate and /transactions/commit
+#    (TransactionService.execute_batch, the standard batch endpoints).
 # 3. The BRIM file status auto-transitions to PARSED/FAILED right after
 #    the /parse call; no additional state change is needed after commit.
 

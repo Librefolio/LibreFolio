@@ -54,9 +54,10 @@
  * flow rules below already discard (`Number(x[k])`, `String(x[k]).length`, `x[k].length`, the test of
  * a ternary). A literal key names its field, so `x['tags']` and `x[0]` stay under the name rule.
  *
- * Some helpers take HTML in their **first parameter**: `buildTooltipRow(label, …)` and
- * `buildTooltipHeader(title, …)` (`echartsTooltipHelpers.ts`, and the local copies some charts keep
- * under the same names), and GrowthChart's `pnlRow(label, …)`, which is handed `<b>…</b>` on purpose —
+ * Some helpers take HTML in their **first parameter**: `buildTooltipRow(label, …)`,
+ * `buildTooltipHeader(title, …)`, `buildFittedTooltipRow(labelHtml, …)` and `fitTooltipToWidth(html, …)`
+ * (`echartsTooltipHelpers.ts`, and the local copies some charts keep under the same names), and
+ * GrowthChart's `pnlRow(label, …)`, which is handed `<b>…</b>` on purpose —
  * `HTML_FIRST_ARGUMENT`. The first argument of a call to one of them is checked as an interpolation
  * is, wherever the call stands: `pnlRow(broker.brokerName, …)` is the finding `${broker.brokerName}`
  * would be. Translations stay allowed there as everywhere: an i18n call, and a property of a label
@@ -164,12 +165,13 @@ const FRAGMENT_NAME = /(?:Html|Icon|icon|Badge|badge)$/;
 const NUMERIC_FORMATS = new Set(['toFixed', 'toLocaleString']);
 
 /**
- * Helpers whose FIRST parameter is HTML by contract. `buildTooltipRow(label, …)` and
- * `buildTooltipHeader(title, …)` come from `echartsTooltipHelpers.ts` — some charts keep local copies
- * under the same names — and GrowthChart's `pnlRow(label, …)` is handed `<b>…</b>` on purpose. The
+ * Helpers whose FIRST parameter is HTML by contract. `buildTooltipRow(label, …)`,
+ * `buildTooltipHeader(title, …)`, `buildFittedTooltipRow(labelHtml, …)` and `fitTooltipToWidth(html, …)`
+ * come from `echartsTooltipHelpers.ts` — some charts keep local copies under the same names — and
+ * GrowthChart's `pnlRow(label, …)` is handed `<b>…</b>` on purpose. The
  * first argument of a call to one of them is checked as an interpolation into HTML.
  */
-const HTML_FIRST_ARGUMENT = new Set(['buildTooltipRow', 'buildTooltipHeader', 'pnlRow']);
+const HTML_FIRST_ARGUMENT = new Set(['buildTooltipRow', 'buildTooltipHeader', 'buildFittedTooltipRow', 'fitTooltipToWidth', 'pnlRow']);
 
 /** A bundle of translated labels — `labels`, `pnlLabels`, `eurLabels`: its properties are i18n text, whatever they are called. */
 const LABEL_BUNDLE = /^(?:labels|[a-z][A-Za-z0-9]*Labels)$/;

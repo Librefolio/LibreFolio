@@ -3,8 +3,13 @@
  * Creation owns configuration; the detached sync owns its eventual feedback.
  * Drive the real modal and route picker through DOM, replacing only API/reference
  * data. Every in-flight request is released by the test, never by a clock.
+ *
+ * The modal takes no date range: a pair created with a real provider always syncs
+ * the provider's full history (`start: 'min'`) up to today on the user's calendar,
+ * whichever page opened it. Edit mode and MANUAL-only pairs never sync. "Today" is
+ * frozen per test (only `Date` is faked, so testing-library's polling still runs).
  */
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
@@ -79,7 +84,11 @@ const createRoutes = vi.mocked(zodiosApi.create_routes_bulk_api_v1_fx_providers_
 const deleteRoutes = vi.mocked(zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete);
 const listRoutes = vi.mocked(zodiosApi.list_routes_api_v1_fx_providers_routes_get);
 const syncRates = vi.mocked(zodiosApi.sync_rates_api_v1_fx_currencies_sync_post);
-const RANGE = {dateStart: '2024-03-01', dateEnd: '2024-03-31'};
+/** Local noon on the frozen day, so no time zone can move it across midnight. */
+const FROZEN_NOW = new Date(2024, 2, 31, 12, 0, 0);
+const TODAY = '2024-03-31';
+/** What every creation sync asks for: the provider's whole history, up to today. */
+const FULL_HISTORY = {start: 'min', end: TODAY};
 const DIRECT: ChainStep[] = [{from: 'EUR', to: 'GBP', provider: 'ECB'}];
 const CHAIN: ChainStep[] = [
     {from: 'EUR', to: 'USD', provider: 'ECB'},
@@ -113,7 +122,7 @@ function syncResponse(...pairs: string[]): SyncResponse {
     return {
         results: pairs.map((pair) => ({pair, status: 'ok', points_fetched: 8, points_changed: 3})),
         success_count: pairs.length,
-        date_range: {start: RANGE.dateStart, end: RANGE.dateEnd},
+        date_range: FULL_HISTORY,
         total_points_changed: pairs.length * 3,
     };
 }
@@ -137,7 +146,7 @@ function mount(props: Partial<ComponentProps<typeof FxPairAddModal>> = {}) {
     const oncreated = vi.fn();
     const onsynced = vi.fn();
     const onclose = vi.fn();
-    const view = render(FxPairAddModal, {open: true, initialBase: 'EUR', initialQuote: 'GBP', ...RANGE, oncreated, onsynced, onclose, ...props});
+    const view = render(FxPairAddModal, {open: true, initialBase: 'EUR', initialQuote: 'GBP', oncreated, onsynced, onclose, ...props});
     return {...view, oncreated, onsynced, onclose};
 }
 
@@ -204,6 +213,9 @@ beforeAll(async () => {
 beforeEach(() => {
     cleanup();
     vi.clearAllMocks();
+    // Only `Date`: testing-library's waitFor and Svelte's scheduling keep real timers.
+    vi.useFakeTimers({toFake: ['Date']});
+    vi.setSystemTime(FROZEN_NOW);
     feedback.notices.length = 0;
     transitionClientSession('fx-creation-component-owner');
     createRoutes.mockReset().mockImplementation(async (items) => creationResponse(items));
@@ -225,6 +237,10 @@ beforeEach(() => {
         return currency;
     });
     vi.mocked(getConfiguredPairSlugs).mockReturnValue(new Set());
+});
+
+afterEach(() => {
+    vi.useRealTimers();
 });
 
 describe('FxPairAddModal — tour preview', () => {
@@ -267,7 +283,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             await closed();
             await waitFor(() => expect(syncRates).toHaveBeenCalledTimes(1));
             expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}]]);
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], start: RANGE.dateStart, end: RANGE.dateEnd}]);
+            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], ...FULL_HISTORY}]);
             expect(oncreated).toHaveBeenCalledTimes(1);
             pending.resolve(syncResponse('EUR-GBP'));
             await waitFor(() => expect(onsynced).toHaveBeenCalledTimes(1));
@@ -294,7 +310,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             await closed();
 
             const expectedPairs = kind === 'chain' ? ['EUR-GBP', 'EUR-USD', 'GBP-USD'] : ['EUR-GBP'];
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: expectedPairs, start: RANGE.dateStart, end: RANGE.dateEnd}]);
+            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: expectedPairs, ...FULL_HISTORY}]);
             expect(createRoutes).toHaveBeenCalledTimes(1);
             // Deep equality is an allowlist: presentation-only ChainStep data,
             // dates, session IDs and callback options cannot leak into the POST.
@@ -341,27 +357,36 @@ describe('FxPairAddModal — configuration before background sync', () => {
                 {base: 'GBP', quote: 'USD', chain_steps: [CHAIN[1]], priority: 1},
             ],
         ]);
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP', 'GBP-USD'], start: RANGE.dateStart, end: RANGE.dateEnd}]);
+        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP', 'GBP-USD'], ...FULL_HISTORY}]);
     });
 
-    it.each([
-        {name: 'MANUAL', route: false, dates: RANGE},
-        {name: 'no start date', route: true, dates: {...RANGE, dateStart: ''}},
-        {name: 'no end date', route: true, dates: {...RANGE, dateEnd: ''}},
-    ])('shows one linked creation toast without sync for $name', async ({route, dates}) => {
-        const {oncreated, onsynced} = mount(dates);
-        if (route) await pickRoute('direct');
-        else await ready();
+    it('a creation with a real provider always syncs its full history — no date range is needed or taken', async () => {
+        const {oncreated, onsynced} = mount();
+        await pickRoute('direct');
+        await save();
+        await closed();
+        await waitFor(() => expect(syncRates).toHaveBeenCalledTimes(1));
+        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], ...FULL_HISTORY}]);
+        expect(oncreated).toHaveBeenCalledExactlyOnceWith({base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', hasRealProvider: true, autoSyncStarted: true});
+        await waitFor(() => expect(onsynced).toHaveBeenCalledTimes(1));
+        expect(onsynced).toHaveBeenCalledWith(expect.objectContaining({slug: 'EUR-GBP', pairs: ['EUR-GBP'], ...FULL_HISTORY, outcome: 'ok'}));
+        expect(onlyNotice().variant).toBe('success');
+        expectLinkedPair(onlyNotice().message, 'EUR-GBP');
+    });
+
+    it('shows one linked creation toast without sync for a MANUAL-only pair', async () => {
+        const {oncreated, onsynced} = mount();
+        await ready();
         await save();
         await closed();
         expect(oncreated).toHaveBeenCalledTimes(1);
-        expect(oncreated).toHaveBeenCalledWith({base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', hasRealProvider: route, autoSyncStarted: false});
+        expect(oncreated).toHaveBeenCalledWith({base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', hasRealProvider: false, autoSyncStarted: false});
         expect(syncRates).not.toHaveBeenCalled();
         expect(onsynced).not.toHaveBeenCalled();
         expect(buildFxSyncToast).not.toHaveBeenCalled();
         expect(onlyNotice().variant).toBe('success');
         expectLinkedPair(onlyNotice().message, 'EUR-GBP');
-        expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: route ? DIRECT : [{from: 'EUR', to: 'GBP', provider: 'MANUAL'}], priority: route ? 1 : 999}]]);
+        expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: [{from: 'EUR', to: 'GBP', provider: 'MANUAL'}], priority: 999}]]);
     });
 
     it('editing a provider does not start creation-time sync or creation feedback', async () => {
@@ -394,7 +419,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
         expect(feedback.notices).toEqual([]);
     });
 
-    it('an old sync may finish after reopening without changing the new pair, range or callbacks', async () => {
+    it('an old sync may finish after reopening without changing the new pair or callbacks', async () => {
         const pending = deferred<SyncResponse>();
         syncRates.mockReturnValue(pending.promise);
         const {rerender, oncreated, onsynced} = mount();
@@ -405,7 +430,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             await waitFor(() => expect(syncRates).toHaveBeenCalledTimes(1));
             await closed();
             vi.mocked(findConversionPaths).mockResolvedValue([]);
-            await rerender({open: true, initialBase: 'JPY', initialQuote: 'USD', dateStart: '2023-01-01', dateEnd: '2023-02-01', onsynced: newSynced});
+            await rerender({open: true, initialBase: 'JPY', initialQuote: 'USD', onsynced: newSynced});
             await ready();
             expect(screen.getByTestId('fx-add-pair-modal')).toBeVisible();
 
@@ -421,7 +446,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             await save();
             await closed();
             expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([[{base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1}], [{base: 'JPY', quote: 'USD', chain_steps: [{from: 'JPY', to: 'USD', provider: 'MANUAL'}], priority: 999}]]);
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], start: RANGE.dateStart, end: RANGE.dateEnd}]);
+            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], ...FULL_HISTORY}]);
         } finally {
             pending.resolve(syncResponse('EUR-GBP'));
             await pending.promise;
@@ -443,7 +468,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             await waitFor(() => expect(feedback.notices).toHaveLength(1));
             expect(oncreated).toHaveBeenCalledTimes(1);
             expect(onsynced).toHaveBeenCalledTimes(1);
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], start: RANGE.dateStart, end: RANGE.dateEnd}]);
+            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP'], ...FULL_HISTORY}]);
             expect(onlyNotice().variant).toBe('success');
             expectLinkedPair(onlyNotice().message, 'EUR-GBP');
         } finally {
@@ -504,13 +529,13 @@ describe('FxPairAddModal — configuration before background sync', () => {
             expect(syncRates).not.toHaveBeenCalled();
             old.unmount();
             vi.mocked(findConversionPaths).mockResolvedValue([]);
-            const fresh = mount({initialBase: 'JPY', initialQuote: 'USD', dateStart: '2023-01-01', dateEnd: '2023-02-01'});
+            const fresh = mount({initialBase: 'JPY', initialQuote: 'USD'});
             await ready();
 
             posted.resolve(creationResponse(items));
             await waitFor(() => expect(syncRates).toHaveBeenCalledTimes(1));
             expect(createRoutes.mock.calls.map(([body]) => body)).toEqual([items]);
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP', 'EUR-USD', 'GBP-USD'], start: RANGE.dateStart, end: RANGE.dateEnd}]);
+            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: ['EUR-GBP', 'EUR-USD', 'GBP-USD'], ...FULL_HISTORY}]);
             expect(screen.getByTestId('fx-add-pair-modal')).toBeVisible();
             expect(screen.getByTestId('fx-add-pair-save')).toBeEnabled();
             expect(fresh.oncreated).not.toHaveBeenCalled();
@@ -523,7 +548,7 @@ describe('FxPairAddModal — configuration before background sync', () => {
             expect(fresh.onsynced).not.toHaveBeenCalled();
 
             // The replacement draft must still create its own manual pair, not
-            // reuse any currency, route, date or callback from the old request.
+            // reuse any currency, route or callback from the old request.
             createRoutes.mockImplementation(async (body) => creationResponse(body));
             await save();
             await closed();

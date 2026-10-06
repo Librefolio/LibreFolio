@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info} from 'lucide-svelte';
+    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info, Eye, Download} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
@@ -15,6 +15,9 @@
     import {resolveIssueMessage, translateFieldName} from '$lib/utils/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
+    import BrimEvidenceTable from '$lib/components/transactions/import/BrimEvidenceTable.svelte';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {maskable} from '$lib/utils/privacy/maskable';
     import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo, BrimNotice} from '$lib/types';
 
     interface ParsedFileResult {
@@ -29,6 +32,28 @@
         status: 'pending' | 'parsing' | 'done' | 'error';
         response: BrimParseResponse | null;
         errorMessage?: string;
+        /** A report set analysed through its combined file (the row's `fileId` is the combined file). */
+        set?: {memberNames: string[]; summary: Record<string, unknown> | null; reused: boolean} | null;
+    }
+
+    /** The combine outcomes shown for a report set, in reading order. */
+    const SET_OUTCOMES = ['pair', 'standalone', 'summarized', 'deferred', 'excluded'] as const;
+    const OUTCOME_ICON: Record<(typeof SET_OUTCOMES)[number], string> = {pair: '✅', standalone: '💶', summarized: '📦', deferred: '⏳', excluded: '🚫'};
+
+    function summaryCounts(summary: Record<string, unknown> | null | undefined, key: string): Record<string, number> {
+        const raw = summary?.[key];
+        if (!raw || typeof raw !== 'object') return {};
+        const counts: Record<string, number> = {};
+        for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+            if (typeof value === 'number' && Number.isFinite(value)) counts[name] = value;
+        }
+        return counts;
+    }
+
+    function reasonLabel(reason: string): string {
+        const key = `importWizard.reportSet.reason.${reason}`;
+        const translated = $t(key);
+        return translated === key ? reason : translated;
     }
 
     interface Props {
@@ -134,6 +159,59 @@
     });
     let hasBlockerTodo = $derived(fieldTodoEntries.some((e) => e.todo.severity === 'blocker'));
 
+    /** A todo as the section shows it: the message, the context keys the frontend understands, the rest. */
+    interface TodoView {
+        message: string;
+        facts: Array<{key: string; label: string; value: string}>;
+        suggestions: string[];
+        /** The context keys no fact understood, pretty-printed for the closed technical details. */
+        technical: string | null;
+    }
+
+    /** Plugin hints read by the fix step, with nothing to tell the user here. */
+    const TODO_SILENT_KEYS: ReadonlySet<string> = new Set(['split_hint', 'compare_nominal']);
+
+    function todoMoney(value: unknown, code: unknown): string | null {
+        const amount = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+        if (!Number.isFinite(amount) || typeof code !== 'string' || code === '') return null;
+        return formatCurrencyAmountPlain(amount, code);
+    }
+
+    /** Same rule as the fix step: the localised wording of the reason code, else the plugin's own message. */
+    function todoView(todo: BrimFieldTodo): TodoView {
+        const key = `importWizard.brimNotice.${todo.reason_code}`;
+        const translated = $t(key);
+        const message = translated === key ? todo.message : translated;
+        const ctx = (todo.context ?? {}) as Record<string, unknown>;
+        const used = new Set<string>(TODO_SILENT_KEYS);
+        const facts: TodoView['facts'] = [];
+
+        if (typeof ctx.row === 'number' || (typeof ctx.row === 'string' && ctx.row !== '')) {
+            facts.push({key: 'row', label: $t('importWizard.parseDetail.sourceRow'), value: String(ctx.row)});
+            used.add('row');
+        }
+        const cash = todoMoney(ctx.cash, ctx.currency);
+        if (cash) {
+            facts.push({key: 'cash', label: $t('importWizard.fixStep.splitRowAmountLabel'), value: cash});
+            used.add('cash').add('currency');
+        }
+        const charges = todoMoney(ctx.charges, ctx.currency);
+        if (charges) {
+            facts.push({key: 'charges', label: $t('importWizard.parseDetail.charges'), value: charges});
+            used.add('charges').add('currency');
+        }
+        // Withheld when the plugin did not compare: on a sale the face value means nothing next to the proceeds.
+        if (ctx.compare_nominal === true && (typeof ctx.nominale === 'string' || typeof ctx.nominale === 'number')) {
+            facts.push({key: 'nominale', label: $t('importWizard.fixStep.splitNominalLabel'), value: todoMoney(ctx.nominale, ctx.currency) ?? maskable(String(ctx.nominale))});
+            used.add('nominale').add('nominale_row');
+        }
+        const suggestions = Array.isArray(ctx.split_suggestions) ? ctx.split_suggestions.filter((s): s is string => typeof s === 'string' && s !== '') : [];
+        if (Array.isArray(ctx.split_suggestions)) used.add('split_suggestions');
+
+        const rest = Object.fromEntries(Object.entries(ctx).filter(([name]) => !used.has(name)));
+        return {message, facts, suggestions, technical: Object.keys(rest).length > 0 ? JSON.stringify(rest, null, 2) : null};
+    }
+
     let title = $derived.by(() => {
         if (parseResult) return $t('importWizard.detailTitle', {values: {file: parseResult.fileName}});
         return $t('importWizard.summary');
@@ -171,6 +249,59 @@
                 <div class="text-sm text-gray-500 dark:text-gray-400">
                     {$t('importWizard.txCount', {values: {n: activeResults.reduce((s, r) => s + (r.response!.transactions?.length ?? 0), 0), k: activeResults.length}})}
                 </div>
+            {/if}
+
+            <!-- Report set: how the exports were matched -->
+            {#if parseResult?.set}
+                {@const outcomes = summaryCounts(parseResult.set.summary, 'outcomes')}
+                {@const reasons = summaryCounts(parseResult.set.summary, 'reasons')}
+                <section data-testid="parse-detail-pairing" data-pair={outcomes.pair ?? 0} data-standalone={outcomes.standalone ?? 0} data-summarized={outcomes.summarized ?? 0} data-deferred={outcomes.deferred ?? 0} data-excluded={outcomes.excluded ?? 0}>
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.reportSet.pairingTitle')}</h3>
+                    <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{parseResult.set.memberNames.join(' + ')}</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        {#each SET_OUTCOMES as outcome}
+                            {@const count = outcomes[outcome] ?? 0}
+                            <span
+                                class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs {count > 0 ? 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-gray-100' : 'bg-gray-50 text-gray-400 dark:bg-slate-900 dark:text-gray-500'}"
+                                data-testid="parse-detail-pairing-outcome"
+                                data-outcome={outcome}
+                                data-count={count}
+                            >
+                                <span aria-hidden="true">{OUTCOME_ICON[outcome]}</span>
+                                <span class="font-semibold tabular-nums">{count}</span>
+                                <span>{$t(`importWizard.reportSet.outcome.${outcome}`)}</span>
+                            </span>
+                        {/each}
+                    </div>
+                    {#if Object.keys(reasons).length > 0}
+                        <table class="mt-3 w-full max-w-md text-xs" data-testid="parse-detail-pairing-reasons">
+                            <thead>
+                                <tr class="text-gray-500 dark:text-gray-400">
+                                    <th class="py-1 pr-3 text-left font-normal">{$t('importWizard.reportSet.column.reason')}</th>
+                                    <th class="py-1 text-right font-normal">{$t('importWizard.reportSet.column.rows')}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                                {#each Object.entries(reasons) as [reason, count]}
+                                    <tr class="text-gray-700 dark:text-gray-300" data-testid="parse-detail-pairing-reason" data-reason={reason} data-count={count}>
+                                        <td class="py-1 pr-3">{reasonLabel(reason)}</td>
+                                        <td class="py-1 text-right font-mono tabular-nums">{count}</td>
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
+                    {/if}
+                    <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
+                        {#if onPreview}
+                            <button type="button" class="inline-flex items-center gap-1 text-libre-green hover:underline" onclick={onPreview} data-testid="parse-detail-preview-combined">
+                                <Eye size={12} />{$t('importWizard.reportSet.previewCombined')}
+                            </button>
+                        {/if}
+                        <a class="inline-flex items-center gap-1 text-libre-green hover:underline" href={`/api/v1/brokers/import/files/${encodeURIComponent(parseResult.fileId)}/download`} data-testid="parse-detail-download-combined">
+                            <Download size={12} />{$t('importWizard.reportSet.downloadCombined')}
+                        </a>
+                    </div>
+                </section>
             {/if}
 
             <!-- TX by Type -->
@@ -283,17 +414,46 @@
                         {#each fieldTodoEntries as entry}
                             {@const todo = entry.todo}
                             {@const isBlocker = todo.severity === 'blocker'}
-                            <li class="flex items-start gap-2 px-3 py-1.5 rounded text-sm {isBlocker ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}">
+                            {@const view = todoView(todo)}
+                            <li class="flex items-start gap-2 px-3 py-1.5 rounded text-sm {isBlocker ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}" data-testid="parse-detail-todo" data-reason-code={todo.reason_code} data-severity={todo.severity}>
                                 <Wrench size={14} class="mt-0.5 shrink-0 {isBlocker ? 'text-red-500' : 'text-amber-500'}" />
-                                <div class="min-w-0 flex-1">
-                                    {#if entry.fileName}
-                                        <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">{entry.fileName} ·</span>
+                                <div class="min-w-0 flex-1 space-y-1.5">
+                                    <div>
+                                        {#if entry.fileName}
+                                            <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">{entry.fileName} ·</span>
+                                        {/if}
+                                        <span class="font-medium {isBlocker ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
+                                        <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({translateFieldName(todo.field, $t)})</span>
+                                        <span class="ml-1 {isBlocker ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}">{view.message}</span>
+                                    </div>
+                                    {#if view.facts.length > 0}
+                                        <dl class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                                            {#each view.facts as fact (fact.key)}
+                                                <div class="flex gap-1" data-testid="parse-detail-todo-fact" data-fact={fact.key}>
+                                                    <dt class="text-gray-500 dark:text-gray-400">{fact.label}</dt>
+                                                    <dd class="font-mono text-gray-800 dark:text-gray-100">{fact.value}</dd>
+                                                </div>
+                                            {/each}
+                                        </dl>
                                     {/if}
-                                    <span class="font-medium {isBlocker ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
-                                    <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({translateFieldName(todo.field, $t)})</span>
-                                    <span class="ml-1 {isBlocker ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}">{todo.message}</span>
-                                    {#if todo.context}
-                                        <span class="text-xs text-gray-500 dark:text-gray-400 ml-1">— {JSON.stringify(todo.context)}</span>
+                                    {#if view.suggestions.length > 0}
+                                        <div class="text-xs">
+                                            <p class="text-gray-500 dark:text-gray-400">{$t('importWizard.parseDetail.suggestions')}</p>
+                                            <ul class="list-disc space-y-0.5 pl-5 text-gray-700 dark:text-gray-300">
+                                                {#each view.suggestions as suggestion}
+                                                    <li>{suggestion}</li>
+                                                {/each}
+                                            </ul>
+                                        </div>
+                                    {/if}
+                                    {#each todo.evidence ?? [] as evidence}
+                                        <BrimEvidenceTable {evidence} tone={isBlocker ? 'blocker' : 'warning'} collapsible />
+                                    {/each}
+                                    {#if view.technical}
+                                        <details class="text-xs" data-testid="parse-detail-todo-technical">
+                                            <summary class="cursor-pointer text-gray-500 dark:text-gray-400">{$t('importWizard.parseDetail.technical')}</summary>
+                                            <pre class="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-white/70 p-2 font-mono text-[11px] text-gray-700 dark:bg-slate-900/60 dark:text-gray-300">{view.technical}</pre>
+                                        </details>
                                     {/if}
                                 </div>
                             </li>

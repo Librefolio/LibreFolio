@@ -732,7 +732,7 @@ const ONBOARDING_FLOW_IDS = [
 ] as const;
 const ONBOARDING_STEP_IDS = {
     transaction_bulk_guide: ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
-    import_guide: ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.bulk'],
+    import_guide: ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk'],
 } as const;
 
 test.describe('Onboarding replay controls', () => {

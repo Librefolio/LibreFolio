@@ -10,7 +10,7 @@ uses for this purpose, confirmed from ``_build_objective_refs``/
 
 followed by the canonical tie-break vector (``view.tie_breaks[0].decision_ids``,
 read directly off the view rather than re-derived, per the same
-public-contract-only discipline as ``oracle.py``).
+public-contract-only discipline as the exhaustive oracle of the test tree).
 
 Each builder returns an ``ObjectiveStage`` (a name plus the linear/quadratic
 SCIP expression to *minimize* for that stage). The actual lexicographic

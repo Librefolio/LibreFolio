@@ -106,3 +106,135 @@ describe('KpiSection — absolute ROI next to total P&L (F5)', () => {
         expect(delta.textContent?.trim().length).toBeGreaterThan(0);
     });
 });
+
+/**
+ * V2 — the daily change and its percentage, on Card 1 (P&L) and Card 2 (Returns).
+ *
+ * Reported as «+91,31 € (+-16.36%)»: the `+` followed the amount while the number carried its
+ * own sign, and against a negative base the quotient came out with the opposite sign to the
+ * change. The rule, the developer's, the same on both cards:
+ *   percentage = day change / |previous value| × 100;
+ *   sign and colour follow the direction (up → `+`, down → `-`), never «+-»;
+ *   hidden ONLY when the previous value is exactly 0.
+ * Card 1's base is yesterday's total P&L, Card 2's is yesterday's NAV. The change is the
+ * difference between the total P&L of the last two history points on both cards.
+ *
+ * Anchors: `kpi-pnl-delta-day-pct` carries exactly the formatted percentage (formatPercent: `+`
+ * only above zero, two decimals); `data-direction` carries the direction, which is what drives
+ * the colour — a CSS class is not a contract.
+ */
+describe('KpiSection — daily change percentage (V2)', () => {
+    /** A history point with every field the cards read; only P&L and NAV vary between cases. */
+    function point(date: string, totalPnl: string, navValue: string) {
+        return {
+            date,
+            cash_value: EUR('500'),
+            market_value: EUR('10000'),
+            nav_value: EUR(navValue),
+            capital_baseline: EUR('10000'),
+            book_asset_like: EUR('10000'),
+            cash_from_contributed_capital: EUR('400'),
+            cash_from_generated_returns: EUR('100'),
+            total_pnl: EUR(totalPnl),
+        };
+    }
+
+    /** Yesterday then today, as the dashboard's history ends. */
+    function renderDay(prev: {totalPnl: string; nav?: string}, last: {totalPnl: string; nav?: string}) {
+        const history = [point('2026-10-05', prev.totalPnl, prev.nav ?? '10000'), point('2026-10-06', last.totalPnl, last.nav ?? '10000')];
+        return render(KpiSection, {summary: summary(), history, loading: false, displayCurrency: 'EUR'});
+    }
+
+    async function dayLine() {
+        await waitFor(() => expect(screen.getByTestId('kpi-pnl-delta-day')).toBeInTheDocument());
+        return screen.getByTestId('kpi-pnl-delta-day');
+    }
+
+    describe('Card 1 — share of yesterday’s total P&L', () => {
+        it('a loss that shrinks is a rise: + and up, never «+-»', async () => {
+            renderDay({totalPnl: '-558.10'}, {totalPnl: '-466.79'});
+            const line = await dayLine();
+
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+16.36%');
+            expect(line).toHaveAttribute('data-direction', 'up');
+            expect(line.textContent).not.toContain('+-');
+        });
+
+        it('a loss that grows is a fall: - and down', async () => {
+            renderDay({totalPnl: '-558.10'}, {totalPnl: '-649.41'});
+            const line = await dayLine();
+
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('-16.36%');
+            expect(line).toHaveAttribute('data-direction', 'down');
+            expect(line.textContent).not.toContain('+-');
+        });
+
+        it('keeps the positive-base reading unchanged', async () => {
+            renderDay({totalPnl: '2950.00'}, {totalPnl: '3041.45'});
+            const line = await dayLine();
+
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+3.10%');
+            expect(line).toHaveAttribute('data-direction', 'up');
+        });
+
+        it('a day without change is flat, with an unsigned zero', async () => {
+            renderDay({totalPnl: '-558.10'}, {totalPnl: '-558.10'});
+            const line = await dayLine();
+
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('0.00%');
+            expect(line).toHaveAttribute('data-direction', 'flat');
+        });
+
+        it('hides the percentage when yesterday’s total P&L is exactly zero, keeping the amount', async () => {
+            renderDay({totalPnl: '0'}, {totalPnl: '50'});
+            const line = await dayLine();
+
+            // Positive barrier: the line is rendered under the new contract (it has a direction)…
+            expect(line).toHaveAttribute('data-direction', 'up');
+            // …and only the share of a zero base is missing.
+            expect(screen.queryByTestId('kpi-pnl-delta-day-pct')).toBeNull();
+            expect(line.textContent?.trim().length).toBeGreaterThan(0);
+        });
+
+        it('shows the percentage for a tiny base that is not zero', async () => {
+            renderDay({totalPnl: '0.005'}, {totalPnl: '1.005'});
+            await dayLine();
+
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+20000.00%');
+        });
+    });
+
+    describe('Card 2 — share of yesterday’s NAV', () => {
+        async function returnsPct() {
+            await waitFor(() => expect(screen.getByTestId('kpi-returns')).toBeInTheDocument());
+            return screen.queryByTestId('kpi-returns-delta-pct');
+        }
+
+        it('shows a rise against a negative NAV as +, never «+-»', async () => {
+            renderDay({totalPnl: '-500', nav: '-1000'}, {totalPnl: '-450'});
+            const pct = await returnsPct();
+
+            expect(pct).not.toBeNull();
+            expect(pct!.textContent?.trim()).toBe('+5.00%');
+            expect(pct).toHaveAttribute('data-direction', 'up');
+        });
+
+        it('shows a fall against a positive NAV as - and down', async () => {
+            renderDay({totalPnl: '1000', nav: '10000'}, {totalPnl: '900'});
+            const pct = await returnsPct();
+
+            expect(pct).not.toBeNull();
+            expect(pct!.textContent?.trim()).toBe('-1.00%');
+            expect(pct).toHaveAttribute('data-direction', 'down');
+        });
+
+        it('hides the percentage only when yesterday’s NAV is exactly zero', async () => {
+            renderDay({totalPnl: '-558.10', nav: '0'}, {totalPnl: '-466.79'});
+            const pct = await returnsPct();
+
+            // Positive barrier in the same render: Card 1, whose base is not zero, shows its share.
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+16.36%');
+            expect(pct).toBeNull();
+        });
+    });
+});
