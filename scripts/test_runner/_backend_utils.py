@@ -223,6 +223,15 @@ def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Test runner CLI contract tests", verbose=verbose)
 
 
+def utils_translation_code_blocks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that translated code blocks keep the source indentation (Aphra pipeline + validator)."""
+    print_section("Utils: Translation Code Blocks")
+    print_info("Testing: mkdocs_src/aphra-pipeline/code_blocks.py, translate_docs.py, validate_translations.py")
+    print_info("Tests: fence-aware whitespace cleanup, EN indentation restore, code-block-indent check, corpus guard")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_code_blocks.py", test_names)
+    return run_command(cmd, "Translation code-block tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -367,6 +376,16 @@ Tests for utility modules and helper functions:
         desc="test_names → pytest -k semantics on the real coverage-js-adapter action, registry dispatch forwarding, coverage_js.py compile check",
         # Monkeypatches run_command/subprocess.run and reads source text only;
         # no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-code-blocks",
+        utils_translation_code_blocks,
+        name="Translation Code Blocks",
+        desc="Aphra cleanup never collapses whitespace inside fenced code; translated blocks get the EN indentation back before the write; translate-validate raises code-block-indent; every up-to-date translation keeps the EN indentation",
+        # Pure functions over strings, plus a read-only pass over mkdocs_src/docs and
+        # the translation hash cache: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

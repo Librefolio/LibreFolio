@@ -28,6 +28,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Sibling module: dev.py and a standalone run both put this directory on sys.path.
+from code_blocks import code_line_mask, restore_code_indent
+
 # ---------------------------------------------------------------------------
 # Path constants (resolved relative to this script's location)
 # ---------------------------------------------------------------------------
@@ -348,6 +351,22 @@ def _cleanup_config_toml() -> None:
 # Post-processing — clean Aphra translation artifacts
 # ---------------------------------------------------------------------------
 
+_INNER_SPACES = re.compile(r'(?<=\S) {2,}(?=\S)')
+
+
+def _collapse_inner_spaces(text: str) -> str:
+    """Collapse runs of 2+ spaces between non-space characters, outside fenced code.
+
+    Leading indentation (nested lists, admonition and content-tab bodies), Markdown hard
+    breaks (two trailing spaces) and every line of a fenced code block are left alone.
+    """
+    lines = text.split('\n')
+    return '\n'.join(
+        line if in_code else _INNER_SPACES.sub(' ', line)
+        for line, in_code in zip(lines, code_line_mask(text), strict=True)
+    )
+
+
 def _clean_translation(text: str) -> str:
     """
     Strip Aphra artifacts from translated text:
@@ -358,7 +377,7 @@ def _clean_translation(text: str) -> str:
     4. Inline glossary markers [N] (preserves markdown links [text](url))
     5. Footnote definitions [^N]: ...
     6. Inline footnote references [^N]
-    7. Double/triple spaces left by removed markers
+    7. Double/triple spaces left by removed markers (between words, outside fenced code)
     8. 3+ consecutive blank lines collapsed to 2
     9. Internal .md links normalized (page.XX.md → page.md)
     10. Admonition body indentation (1 space → 4 spaces for MkDocs)
@@ -415,8 +434,11 @@ def _clean_translation(text: str) -> str:
     # 6. Remove inline footnote references [^N] (not markdown links)
     text = re.sub(r'\[\^\d+\]', '', text)
 
-    # 7. Clean up double/triple spaces left by removed markers
-    text = re.sub(r'  +', ' ', text)
+    # 7. Clean up double/triple spaces left by removed markers. Only between words and
+    #    outside fenced code: collapsing every run of spaces in the whole document used to
+    #    flatten code indentation (broken compose files, fences dropped out of list items
+    #    and content tabs) and Markdown hard breaks.
+    text = _collapse_inner_spaces(text)
 
     # 8. Collapse 3+ consecutive blank lines to 2 (left by removed footnotes)
     text = re.sub(r'\n{3,}', '\n\n', text)
@@ -429,10 +451,11 @@ def _clean_translation(text: str) -> str:
     #    Preserves anchors: page.en.md#section → page.md#section
     text = re.sub(r'(\([^)]*?)\.[a-z]{2}\.md([)#])', r'\1.md\2', text)
 
-    # 10. Fix admonition body indentation
-    #     LLMs frequently produce admonition body lines with 1 space instead
-    #     of the 4 spaces required by MkDocs Material. This scans for the
-    #     pattern: !!! type "title"\n\n <body> and pads to 4 spaces.
+    # 10. Fix admonition body indentation (safety net)
+    #     Pads `!!!` admonition body lines from 1 space to the 4 spaces MkDocs
+    #     Material requires: pattern !!! type "title"\n\n <body>. Most 1-space
+    #     bodies came from the old step 7 collapsing every run of spaces, not
+    #     from the LLM; step 7 no longer touches indentation, so this rarely fires.
     lines = text.split('\n')
     in_admonition = False
     after_blank = False
@@ -472,6 +495,16 @@ def _clean_translation(text: str) -> str:
     text = text.rstrip() + '\n'
 
     return text
+
+
+def _finalize_translation(source_text: str, translated: str) -> tuple[str, int]:
+    """Clean the raw LLM output, then give its code blocks the source indentation back.
+
+    Every translated code block that pairs with its source block takes the source leading
+    whitespace, line by line (fences included); translated comments and labels stay.
+    Returns the text to write and the number of code lines whose whitespace was restored.
+    """
+    return restore_code_indent(source_text, _clean_translation(translated))
 
 
 # ---------------------------------------------------------------------------
@@ -1781,7 +1814,9 @@ def _translate_one_lang(
     result["structural_issues"] = struct_issues
 
     if translated:
-        translated = _clean_translation(translated)
+        translated, restored_lines = _finalize_translation(source_text, translated)
+        if restored_lines:
+            _log(f"       🧹 Restored the source indentation on {restored_lines} code line(s)")
         output_path.write_text(translated, encoding="utf-8")
         result["output_path"] = output_path
     else:
@@ -2404,7 +2439,7 @@ def run_translate(args) -> int:
 
     # ── Post-step: structural diff validation on FINAL output files ──
     # The Step 3.5 diff runs on the intermediate translation (before Critique/Refine).
-    # This post-step checks the actual written files after _clean_translation().
+    # This post-step checks the actual written files after _finalize_translation().
     post_warnings: list[tuple[str, str, int, str]] = []  # (cache_key, lang, issues, report)
     source_link_warnings: list[tuple[str, list[str]]] = []  # (cache_key, [lines with .en.md links])
     checked_sources: set[str] = set()
