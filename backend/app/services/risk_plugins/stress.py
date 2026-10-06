@@ -608,6 +608,11 @@ class StressAnalytic(RiskAnalytic):
             if ids:
                 warnings.append(_replay_exclusion_warning(reason, ids, exclusion_treatment))
 
+        # Only the replayed assets have an impact. An excluded asset has no return for the
+        # window, and a 0.0 row would state one (D151: a zero is not an abstention): the UI
+        # drew it as a +0.00% bar (D376). The exclusion stays where it is fully described: the
+        # audit (weight, reason, treatment), `excluded_assets` and the warnings. On a weighted
+        # scope its weight is still carried as cash at zero return, above.
         impacts = [
             RiskStressImpact(
                 asset_id=asset_id,
@@ -619,17 +624,6 @@ class StressAnalytic(RiskAnalytic):
             )
             for asset_id, (source_asset_id, _dates, _values) in selected.items()
         ]
-        if weighted_scope:
-            impacts.extend(
-                RiskStressImpact(
-                    asset_id=asset_id,
-                    weight=context.weights.get(asset_id),
-                    shock_return=0.0,
-                    contribution_return=0.0,
-                    impact_amount=_amount(context.asset_values.get(asset_id), 0.0),
-                )
-                for asset_id in sorted(all_excluded)
-            )
 
         prepared = replay.prepared_series
         analyzed_range = prepared.effective_range or params.replay_range

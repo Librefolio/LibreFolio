@@ -361,7 +361,16 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             //
             // L3°'s share only: L1°'s request never carries the benchmark, so it never
             // joins L1°'s window.
-            if (paidLevels && ctx.assetSetBenchmarkId != null) add('asset_set_comparison', {comparison_asset_id: ctx.assetSetBenchmarkId});
+            //
+            // It also states the reference's own Sharpe and Sortino, charged the same rate and
+            // target as the KPI beside it, so the benchmark's row reads the reader's setting.
+            if (paidLevels && ctx.assetSetBenchmarkId != null) {
+                add('asset_set_comparison', {
+                    comparison_asset_id: ctx.assetSetBenchmarkId,
+                    risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
+                    target_annual_return: 0,
+                });
+            }
         }
     } else {
         add('risk_contribution');
@@ -372,7 +381,12 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
                 risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
                 target_annual_return: 0,
             });
-            add('asset_risk_return');
+            // Each point carries its own Sharpe and Sortino, charged the same rate and target as
+            // the KPI above, so a holding's row and the portfolio's cards read one setting.
+            add('asset_risk_return', {
+                risk_free_annual_rate: ctx.appliedRiskFreePercent / 100,
+                target_annual_return: 0,
+            });
         }
     }
     return analytics;

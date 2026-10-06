@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from backend.app.schemas import risk as risk_schemas
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio import (
     DataQualityExcludedAsset,
@@ -29,12 +30,14 @@ from backend.app.schemas.risk import (
     RiskAnalyticOutput,
     RiskAnalyticRequest,
     RiskAnalyticResult,
+    RiskAssetSetComparisonItem,
     RiskAssetSetComparisonOutput,
     RiskAssetSetDrawdownOutput,
     RiskAssetSetKpiOutput,
     RiskAssetSetReturnItem,
     RiskAssetSetReturnOutput,
     RiskAssetSetVarCvarOutput,
+    RiskComparisonOutput,
     RiskComparisonPoint,
     RiskCompositionPolicy,
     RiskContributionOutput,
@@ -879,6 +882,159 @@ def test_risk_return_output_bounds_the_risk_axis_but_not_the_reward_axis():
     # disagree, so the strict model refuses the key rather than accepting a duplicate.
     with pytest.raises(ValidationError):
         RiskReturnOutput(**_risk_return_output(portfolio_sharpe=1.45))
+
+
+# ---------------------------------------------------------------------------
+# k6 (agreed with the Dashboard owner on 06/10/2026): the ratios beside the points.
+#
+# - `RiskReturnItem` gains `sharpe` and `sortino`: optional finite numbers of either sign, `None` when
+#   undefined, absent from a payload written before k6. The whole still has no ratio of its own.
+# - `RiskComparisonOutput` gains the benchmark's own `comparison_sharpe` / `comparison_sortino` and
+#   `items`, one `RiskComparisonHoldingItem {asset_id, beta, correlation}` per holding, empty by
+#   default. The item is strict: a positive id, a finite beta of any sign, a finite correlation in
+#   [-1, 1], both optional. The output refuses the benchmark among its items, and a holding twice.
+# - `RiskAssetSetComparisonOutput` gains the reference's `comparison_sharpe` / `comparison_sortino`; its
+#   items gain nothing.
+# Every model still validates a payload that carries none of the new fields.
+#
+# `RiskComparisonHoldingItem` is read through the module, so its absence reds these tests and not the
+# collection of the file.
+# ---------------------------------------------------------------------------
+
+
+def _comparison_output(**overrides):
+    base = {
+        "comparison_asset_id": 9,
+        "active_return": 0.012,
+        "tracking_error": 0.08,
+        "information_ratio": 0.15,
+        "correlation": 0.7,
+        "beta": 0.9,
+        "observations": 30,
+        "comparison_volatility": 0.14,
+        "comparison_expected_annual_return": 0.07,
+    }
+    base.update(overrides)
+    return base
+
+
+def _holding(asset_id: int, beta: float | None = 1.1, correlation: float | None = 0.6) -> dict:
+    return {"asset_id": asset_id, "beta": beta, "correlation": correlation}
+
+
+def test_risk_return_items_carry_their_own_sharpe_and_sortino_or_none():
+    """Optional finite numbers of either sign: a holding that lost money has negative ratios, and that is a measurement."""
+    older = RiskReturnOutput(**_risk_return_output())
+    assert [(item.sharpe, item.sortino) for item in older.items] == [(None, None), (None, None)]
+
+    rated = RiskReturnItem(asset_id=6, weight=0.25, volatility=0.88, expected_annual_return=-0.11, sharpe=-0.16, sortino=-0.21)
+    assert (rated.sharpe, rated.sortino) == (-0.16, -0.21)
+    for field in ("sharpe", "sortino"):
+        for value in (float("nan"), float("inf")):
+            with pytest.raises(ValidationError):
+                RiskReturnItem(asset_id=6, weight=0.25, volatility=0.88, expected_annual_return=-0.11, **{field: value})
+
+    measured = {"asset_id": 1, "weight": 0.5, "volatility": 0.29, "expected_annual_return": 0.46, "sharpe": 1.58, "sortino": None}
+    output = RiskReturnOutput(**_risk_return_output(items=[rated.model_dump(), measured]))
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(output.model_dump(mode="json"))
+    assert isinstance(restored, RiskReturnOutput)
+    assert [(item.asset_id, item.sharpe, item.sortino) for item in restored.items] == [(6, -0.16, -0.21), (1, 1.58, None)]
+
+
+def test_comparison_output_without_the_k6_fields_still_validates_with_their_defaults():
+    older = RiskComparisonOutput(**_comparison_output())
+
+    assert (older.comparison_sharpe, older.comparison_sortino, older.items) == (None, None, [])
+    assert RiskComparisonOutput.model_validate(older.model_dump(mode="json")) == older
+
+
+def test_comparison_output_states_the_benchmark_ratios_and_one_item_per_holding():
+    holding_item = risk_schemas.RiskComparisonHoldingItem
+
+    output = RiskComparisonOutput(**_comparison_output(comparison_sharpe=-0.35, comparison_sortino=0.42, items=[_holding(1, beta=1.3, correlation=-0.4), _holding(2, beta=None, correlation=None)]))
+
+    assert (output.comparison_sharpe, output.comparison_sortino) == (-0.35, 0.42)
+    assert [type(item) for item in output.items] == [holding_item, holding_item]
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(output.model_dump(mode="json"))
+    assert isinstance(restored, RiskComparisonOutput)
+    assert restored.model_dump(mode="json") == output.model_dump(mode="json")
+    assert [(item.asset_id, item.beta, item.correlation) for item in restored.items] == [(1, 1.3, -0.4), (2, None, None)]
+    for field in ("comparison_sharpe", "comparison_sortino"):
+        with pytest.raises(ValidationError):
+            RiskComparisonOutput(**_comparison_output(**{field: float("nan")}))
+
+
+@pytest.mark.parametrize(
+    ("beta", "correlation"),
+    [
+        pytest.param(2.4, 1.0, id="a-steep-beta-at-the-upper-bound"),
+        pytest.param(-0.5, -1.0, id="a-negative-beta-at-the-lower-bound"),
+        pytest.param(0.0, None, id="a-flat-holding"),
+        pytest.param(None, None, id="a-flat-benchmark"),
+    ],
+)
+def test_comparison_holding_item_takes_any_finite_beta_and_a_correlation_within_its_bounds(beta, correlation):
+    holding_item = risk_schemas.RiskComparisonHoldingItem
+
+    item = holding_item(asset_id=1, beta=beta, correlation=correlation)
+
+    assert (item.asset_id, item.beta, item.correlation) == (1, beta, correlation)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        pytest.param({"asset_id": 0}, id="zero-id"),
+        pytest.param({"asset_id": -3}, id="negative-id"),
+        pytest.param({"correlation": 1.0001}, id="correlation-above-one"),
+        pytest.param({"correlation": -1.0001}, id="correlation-below-minus-one"),
+        pytest.param({"correlation": float("nan")}, id="nan-correlation"),
+        pytest.param({"beta": float("nan")}, id="nan-beta"),
+        pytest.param({"beta": float("inf")}, id="infinite-beta"),
+        pytest.param({"tracking_error": 0.1}, id="a-field-it-does-not-have"),
+    ],
+)
+def test_comparison_holding_item_refuses(override):
+    holding_item = risk_schemas.RiskComparisonHoldingItem
+    assert holding_item(**_holding(1)).asset_id == 1  # the control: the same item, unaltered, is valid
+
+    with pytest.raises(ValidationError):
+        holding_item(**{**_holding(1), **override})
+
+
+def test_comparison_output_refuses_the_benchmark_among_its_holdings_and_a_holding_twice():
+    """The yardstick is never one of the measured (D371), and a holding has one beta, not two."""
+    # The control: the same holdings once each, without the benchmark, are a valid payload — so each
+    # refusal below is the validator's, not an unknown key's.
+    control = RiskComparisonOutput(**_comparison_output(items=[_holding(1), _holding(2)]))
+    assert [item.asset_id for item in control.items] == [1, 2]
+
+    with pytest.raises(ValidationError):
+        RiskComparisonOutput(**_comparison_output(items=[_holding(1), _holding(9, beta=1.0, correlation=1.0)]))
+    with pytest.raises(ValidationError):
+        RiskComparisonOutput(**_comparison_output(items=[_holding(1), _holding(2), _holding(1, beta=0.4, correlation=0.2)]))
+
+
+def test_asset_set_comparison_output_carries_the_reference_ratios_and_its_items_gain_nothing():
+    base = {
+        "comparison_asset_id": 103,
+        "observations": 30,
+        "comparison_volatility": 0.14,
+        "comparison_expected_annual_return": 0.08,
+        "items": [{"asset_id": 101, "active_return": 0.01, "tracking_error": 0.05, "information_ratio": 0.2, "correlation": 0.6, "beta": 1.1}],
+    }
+    older = RiskAssetSetComparisonOutput(**base)
+    assert (older.comparison_sharpe, older.comparison_sortino) == (None, None)
+
+    rated = RiskAssetSetComparisonOutput(**base, comparison_sharpe=0.57, comparison_sortino=-0.81)
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(rated.model_dump(mode="json"))
+    assert isinstance(restored, RiskAssetSetComparisonOutput)
+    assert (restored.comparison_sharpe, restored.comparison_sortino) == (0.57, -0.81)
+    for field in ("comparison_sharpe", "comparison_sortino"):
+        with pytest.raises(ValidationError):
+            RiskAssetSetComparisonOutput(**base, **{field: float("nan")})
+    # The per-asset row gains nothing: the ratios are the reference's, not the selection's.
+    assert set(RiskAssetSetComparisonItem.model_fields) == {"asset_id", "active_return", "tracking_error", "information_ratio", "correlation", "beta"}
 
 
 def test_portfolio_scope_asset_slice_is_unique_sorted_and_bounded():

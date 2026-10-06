@@ -2984,3 +2984,266 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >   Ho riferito tutto al coordinator. In D375 ho tolto quali sottotipi possiede.
 > - **Un errore mio, corretto**: avevo scritto ad A che lo scatter era un file di I. Per la tabella dei proprietari del
 >   29/09 è di A, condiviso con il laboratorio.
+
+### Checkpoint 4: il grafico di crescita (spazio a sinistra, Income su 1M) e lo storico per famiglia (D375) · ✅ 06/10/2026 (FROZEN)
+
+> **Le concessioni del coordinator**:
+> - `GrowthChart.svelte` (di I), che «atterra con la famiglia»: lo spazio vuoto a sinistra in Abs e P&L, e il bucket
+>   di default 1M per Income;
+> - `AllocationHistoryChart.svelte`: D375 e l'ordine dello stack;
+> - `allocationHierarchy.ts`: solo il commento d'intestazione;
+> - `_frontend_portfolio.py:348`: solo l'ultima frase della desc di `allocation-unit`.
+>
+> **La diagnosi dello spazio**, con una sonda ECharts 6 SSR a 800×300. Con `containLabel` la griglia misura anche
+> l'etichetta nascosta del bordo calcolato, che D18 stampa per intero (`55,588k`): il grafico parte a 82 px invece che
+> a 55. Con il testo vuoto all'indice 0 parte a 55 px in ogni caso.
+>
+> **I test** (test-author, rossi prima):
+> - G1, lo spazio a sinistra: 2 rossi e i pin;
+> - G2, Income su 1M: 6 rossi, tra cui il caso stretto che apre su 2W, e i pin;
+> - 5 casi esistenti riallineati, perché davano per scontato 1W;
+> - H, lo storico: le famiglie, le somme, il tooltip annidato con `data-allocation-family` e `data-allocation-member`,
+>   la regola dei primi 5 più «Remaining», e la pulizia dell'ordine, anche per settore e geografia; più i pin.
+>
+> Sul codice di prima, `growth-chart-memo` dava 8 rossi su 77, e `allocation-unit` 10 rossi su 228.
+>
+> **Fatto**:
+> - **GrowthChart**:
+>   - `yAxisFormatter(v, index)` è vuoto all'indice 0 fuori da Income;
+>   - `INCOME_OPENING_WIDTH = '1M'`: `incomeOpeningPending` si accende a ogni entrata (Income ripristinato al montaggio,
+>     `selectMode`, `selectSubmode`) e `reconcileCandleWidth` lo consuma con `nearestOfferedWidth`. Anche il ramo di
+>     Income consuma l'apertura di Candles, così da Income a Candles la larghezza resta condivisa, come prima.
+> - **AllocationHistoryChart**:
+>   - `SeriesStyle` e `familyStyling`: i gruppi di `buildAllocationHierarchy`, con il colore base così com'è;
+>   - una serie per famiglia, con i dati sommati, e `buildFamilyTooltipRows`;
+>   - la pulizia dell'ordine: `lastSeriesOrder` si azzera alla creazione dell'istanza; se l'ordine degli id cambia,
+>     `hideTip` e poi `setOption({series: []}, {replaceMerge: ['series']})` prima dell'opzione nuova;
+>   - il commento della palette.
+> - `allocationHierarchy.ts`: il commento d'intestazione. `_frontend_portfolio.py:348`: l'ultima frase della desc di
+>   `allocation-unit`, e solo quella riga.
+>
+> **Mutanti 7 su 7 uccisi**, sul codice vero, ogni file ripristinato e verificato con sha256:
+> - il bordo vuoto anche in Income;
+> - nessun bordo vuoto;
+> - Income che apre su 1W;
+> - il cambio di modalità che non conta come entrata;
+> - nessuna pulizia dell'ordine;
+> - la famiglia con il colore dell'ultimo membro;
+> - il generico non per primo.
+>
+> **Verifica** (6152, in sequenza, con il carico della macchina fra 10 e 65):
+> - `growth-chart-memo` 77 · `allocation-unit` 228 · `asset-unit` 530 · `component-unit` 2487 · `core-unit` 2990;
+> - `front check` 0 errori e 0 avvisi; orfani ✅;
+> - E2E `front-portfolio dashboard` 24 · `front-broker detail` 32.
+>
+> **Previsione**: il runner contro l'albero di A con la sua modifica concessa, simulata perché non l'ha ancora scritta
+> (la lista e `tests=` di `risk-levels-component`, più una frase): merge-file 0 conflitti, il codice d'uscita salvato
+> subito, entrambe le modifiche presenti, e il file fuso è Python valido.
+>
+> **La pagina utente** (docs-writer, solo EN): `user/dashboard/charts.en.md`.
+> - «Where it starts»: Candles sulla larghezza più fine che possono disegnare; Income su 1M a ogni entrata, o sulla
+>   larghezza più vicina che si può disegnare.
+> - Un punto nuovo, «When it changes»: la scelta resta dentro Income, e la larghezza resta condivisa con Candles.
+> - «Income starts at 1W» diventa «non offre mai meno di 1W».
+> - La voce History: per tipo, un'area per famiglia, e i sottotipi nel tooltip.
+>
+> Build strict ✅. `check-links`: solo il rosso ereditato D28. `translate-validate` mostra il debito: le traduzioni di
+> questa pagina non hanno la sezione P&L, e la voce History resta vecchia. Niente stamp.
+>
+> **Stato: FROZEN**, consegnato al coordinator.
+>
+> La bozza e il brief stanno nei file di sessione (`files/k4-draft/notes.md`, `files/brief-k4.md`). Gli artefatti di
+> `/tmp` sono copiati in `files/tmp-backup-0510/`.
+
+### Checkpoint 5a: il replay, prima metà di D376 · ✅ 06/10/2026 (FROZEN)
+
+> **Lo scopo**: D376 si divide in due checkpoint, perché le correzioni visibili arrivino prima.
+> - **k5a, qui**: le barre +0,00 %, l'impaginazione, il preset cancellabile, le scorciatoie del periodo e il riquadro
+>   degli esclusi con i badge.
+> - **k5b, dopo k6**: la tabella e il selettore degli strumenti.
+>
+> **Le concessioni del coordinator** (06/10), solo props aggiuntive, con il default che lascia identici tutti i chiamanti
+> di oggi:
+> - `SimpleSelect.svelte`: `triggerClass` (24 chiamanti);
+> - `DateRangePicker.svelte`: `fieldsClass` ed `excludePresets` (14 chiamanti).
+>
+> A ha concesso il ribaltamento della sua asserzione in `risk-analysis.spec.ts`: le scorciatoie nel periodo del replay.
+>
+> **Il codice**:
+> - **Backend**: `stress.py` non aggiunge più a `impacts` una riga a zero per ogni escluso, perché uno zero non è
+>   un'astensione (D151). Gli esclusi restano nell'audit (peso, motivo, trattamento), in `excluded_assets` e negli
+>   avvisi. Il rendimento del portafoglio non cambia: la quota esclusa resta liquidità a rendimento zero.
+> - **`L4Replay.svelte`**:
+>   - il menu delle crisi offre «Nessun preset» (`risk.levels.l4.replayPresetNone`, 4 lingue), che toglie la crisi e
+>     lascia le date; anche una scorciatoia o una data scritta a mano tolgono la crisi;
+>   - il periodo ha di nuovo le scorciatoie accanto alle date, tranne MAX: il suo segnaposto «tutta la storia» lo
+>     risolve solo il filtro della pagina. Questo rovescia la voce F3, su richiesta del developer;
+>   - menu e campi delle date hanno la stessa altezza (`h-8`, una costante sola); «Esegui replay» sta su una riga sua,
+>     a destra;
+>   - il riquadro degli esclusi sta sopra il totale, con il pulsante del periodo comune dentro. Ogni escluso è un
+>     `AssetChip` (di F, solo montato) in variante `excluded`, con il peso come coda. I dati dell'asset vengono dalla
+>     cache, letta e mai caricata, poi da `assetNames`, poi dall'id.
+> - **`series_preparation.py`**: un TODO sopra i rendimenti dai soli prezzi, che rimanda alla proposta del rendimento
+>   totale (richiesta del developer tramite A).
+>
+> **I test** (test-author, rossi prima):
+> - backend: 4 rossi, tra cui una guardia nuova (un asset rigiocato a 0,0 tiene la sua riga);
+> - `L4Replay`: 12 rossi su impaginazione, preset, scorciatoie, riquadro e badge;
+> - i componenti condivisi: 4 rossi su `SimpleSelect` e 8 su `DateRangePicker`, più 11 pin del percorso di default;
+> - lo spec di A: rosso esattamente sull'asserzione girata.
+>
+> Con il codice, i test diretti danno 216 verdi su 6 file (L4Replay, `scenarioHelpers`, i due componenti condivisi, la
+> sezione del replay di F e `AssetChip`); il backend `risk-all` 825.
+>
+> **Verifica** (corsia 6152, un comando alla volta, carico fra 10 e 21):
+> - ruff e black puliti; `services risk-all` 825; `api risk` 14, dopo `db populate --force`;
+> - `risk-levels-component` 104, `risk-levels-unit` 297, `component-unit` 2510, `core-unit` 2990;
+> - `front check` 0/0; orfani a posto; audit i18n con 3521 chiavi e 0 incomplete;
+> - E2E `risk` 14/14 e `risk-lab` 41/41; alla fine la 6152 è libera.
+>
+> **Mutanti**: 20 sul prodotto vero, con il ripristino verificato dallo sha256 a ogni passo. Al primo giro ne muoiono 18;
+> due restano vivi:
+> - M2, «Nessun preset» che cancella la risposta: nessun test diceva che la risposta resta, eppure la domanda è la stessa;
+> - M7, MAX di nuovo offerto: lo fissava solo l'E2E di A, nessun test di `L4Replay`.
+>
+> test-author ha aggiunto un test per ciascuno in `L4Replay.test.ts` (38 → 40), ognuno con un controllo positivo nello
+> stesso test: YTD, nello stesso gruppo di MAX, è disegnato; una scorciatoia invece cancella la risposta, e la spia la
+> vede. Rigirati con la mia imbracatura: **20/20**. `risk-levels-component` sale a 106; prettier è pulito.
+>
+> **La doc** (docs-writer, solo EN; ho verificato sul codice ogni sua affermazione):
+> - `historical-replay.en.md`, che è mia;
+> - la sezione «What if…?» di `user/assets/correlation.en.md`, che è di F. F ha concesso una tantum esattamente quel
+>   diff (sha256 `bd531ff9…`) e nient'altro nel file. Sulla sua punta `9008b21c2` il diff si applica pulito; le sue
+>   prossime modifiche alla pagina stanno nella parte L3 (`:113-121`).
+>
+> Build strict ✅; `check-links` dà solo il rosso ereditato D28. Nessuna delle due pagine ha traduzioni, quindi niente
+> stamp.
+>
+> **Privacy**: ho scansionato tutte le righe aggiunte (nomi, cifre note, importi in €, percentuali), l'ultima volta
+> sullo stato congelato: pulite.
+>
+> **Previsione** (dal merge-base, `rc` salvato subito). Ho confrontato k5a con A `f6b7273f8` (compreso il suo lavoro in
+> corso), con F `9008b21c2` e con `dev_release2` `aa74797ff`. In comune ci sono i 4 cataloghi i18n (JSON validi), lo
+> spec di A e la pagina di F: tutti con 0 conflitti.
+>
+> Fuori da k5a, la prossima fusione di `dev_release2` nella famiglia avrà un conflitto additivo nel runner, in
+> `_backend_api.py`: la riga `pac-planner-tool` di `dev_release2` contro la nostra riga `risk` con la `desc` aggiornata.
+> Si tengono tutte e due.
+>
+> **⚠️ Fuori pista**:
+> - Il commento TODO in `series_preparation.py` diceva «also in TODO_FUTURI.md», ma quella voce non c'è né qui né in
+>   `dev_release2`: secondo A la tiene il coordinator. Di nuovo un fatto vero altrove, o non ancora vero, scritto come
+>   vero qui. L'ho tolto prima del congelamento; il rimando si aggiunge quando la voce esiste.
+> - Il docs-writer ha toccato una pagina di F perché il mio brief diceva «ogni pagina utente che descrive il blocco».
+>   Il brief doveva nominare i proprietari: il blocco è mio, la pagina no.
+> - Un'osservazione del docs-writer, che non cambio: dopo il pulsante del periodo comune il menu tiene la crisi, perché
+>   `applySuggestion()` non tocca `presetId`. Per F3 il periodo comune è la crisi ristretta a dove gli asset hanno
+>   prezzi. Da guardare nella revisione combinata.
+>
+> **Il checkpoint**: 18 percorsi in 6 commit (impatti del replay, TODO, props condivise, blocco del replay, doc, diario),
+> in `ORDER-risk-k5a.sh` su HEAD `c65b52576`. **Stato: FROZEN**, consegnato al coordinator.
+
+### Checkpoint 6: i valori per posizione nella L3 e i rapporti del benchmark · ✅ 06/10/2026 (FROZEN)
+
+> Concordato con A il 06/10 (revisione del developer: «devi mettere tutto!»).
+> - **Sharpe e Sortino** stanno sugli item di `asset_risk_return`, calcolati sugli stessi rendimenti e con la stessa
+>   annualizzazione del punto, con il tasso privo di rischio e l'obiettivo (MAR) della richiesta, come `historical_kpi`.
+>   Una richiesta `asset_set` a parte non lo garantirebbe, perché il calendario comune dipende dall'elenco degli asset.
+> - **Beta e correlazione** (variante (iii), proposta da me e accettata da A alle 11:5x): `comparison` pubblica
+>   `items: [{asset_id, beta, correlation}]`, una voce per posizione del perimetro portafoglio, nella stessa richiesta.
+>   Il servizio prepara il benchmark insieme al perimetro (`service.py:187-199`), quindi ogni posizione si misura sullo
+>   stesso calendario e con lo stesso accoppiamento del beta del portafoglio. Il benchmark stesso è saltato (D371, con
+>   un validatore come nel laboratorio); su un perimetro `asset` la lista è vuota. Lo stato è quello di
+>   `comparisonResult`, che A ha già nell'avviso della L3.
+>   La variante concordata prima, una richiesta `asset_set_comparison` sulle posizioni dopo l'onda di base, avrebbe
+>   portato le regole di `asset_set`, una seconda richiesta e uno stato nuovo da cablare.
+> - **`comparison` e `asset_set_comparison`**: in più `comparison_sharpe` e `comparison_sortino` del benchmark sulla
+>   finestra comune, e i due parametri del tasso.
+> - A aggiunge i due parametri alla richiesta di `L3Benchmark` solo nel giro che fonde k6: oggi `ComparisonParams` è
+>   `extra="forbid"`, e un parametro sconosciuto diventa `invalid_parameters`.
+> - `api sync`: il client generato è ignorato da git, quindi ogni ramo lo rigenera dopo la fusione. L'interfaccia è
+>   di A.
+>
+> **⚠️ Fuori pista**: avevo scritto che la retta dal tasso privo di rischio con pendenza Sharpe passa «esattamente» per
+> il punto. È esatto solo a tasso zero. Sharpe toglie a ogni osservazione `rf_p = expm1(log1p(rf)/f)`, quindi la retta
+> che passa per il punto incrocia l'asse a `f·rf_p` (circa `ln(1+rf)`), non a `rf`. L'ho detto ad A per la retta dello
+> scatter, nel giro del tasso modificabile.
+>
+> **Passi**: rossi (test-author) → backend → `buildBaseAnalytics` (parametri a `asset_risk_return` e
+> `asset_set_comparison`) → cancelli e mutanti → doc → checkpoint.
+>
+> **I rossi** (test-author, 06/10): 59, tutti per i motivi di k6, e nessun altro test ha cambiato colore.
+> - Backend: `services risk-all` 33 rossi su 853, `schemas risk` 17 su 64, `api risk` 1 su 15.
+> - Frontend: 8 rossi su 190 nei due file (`riskAnalysisHelpers.test.ts`, `riskPanelController.test.ts`).
+> - Ha trovato due perni di versione e un perno di byte che il brief non elencava (`test_risk_analytics.py:519`,
+>   `riskPanelController.test.ts:1305`).
+> - Due regole per l'implementazione: una posizione senza serie si salta, non solleva; i parametri nel frontend
+>   vanno nell'ordine `{comparison_asset_id, risk_free_annual_rate, target_annual_return}`.
+>
+> **Il codice** (applicato da uno script di 25 sostituzioni esatte, provato a secco prima):
+> - `asset_risk_return` 1.2.0, `comparison` 1.2.0, `asset_set_comparison` 1.2.0, gli schemi e
+>   `RiskComparisonHoldingItem`, e `buildBaseAnalytics`;
+> - un rapporto non definito è `None` con un avviso che nomina l'asset (chiavi `_assets` esistenti, nessuna chiave
+>   i18n nuova) e rende il risultato «parziale», come già fa `historical_kpi`;
+> - un benchmark piatto annulla tutti i beta e le correlazioni: lo dicono i due avvisi singolari che ci sono già,
+>   senza ripeterlo per ogni posizione.
+>
+> Al primo giro tutto verde: `risk-all` 853, `schemas` 64, `api risk` 15, vitest 190; ruff, black e prettier puliti.
+>
+> **⚠️ Fuori pista**: la mia bozza leggeva ogni posizione con `prepared_asset_return_points`, che solleva un errore per
+> una posizione senza serie: avrebbe fatto fallire tutto il confronto per una sola posizione. test-author l'aveva già
+> fissato con un test. L'ho corretto prima di applicare, cercando la serie in una mappa e saltando la posizione.
+>
+> **La modalità storica**: il TWRR del portafoglio si legge sui suoi giorni di osservazione, mentre le posizioni restano
+> sul calendario comune della richiesta. Oggi nessuna pagina chiede il confronto storico su un portafoglio (la
+> Dashboard usa `current_composition`), ma la scelta è scritta nel codice e test-author l'ha fissata: il beta di una
+> posizione accoppiata sugli intervalli del TWRR sarebbe un altro numero, e il test lo dimostra sullo stesso fixture.
+> Ha fissato anche lo stato: un rapporto non definito rende il risultato «parziale», sia in `asset_risk_return` sia
+> in `comparison`.
+>
+> **Mutanti**: 27 sul prodotto vero, con il ripristino verificato dallo sha256 ogni volta. Al primo giro ne muoiono 23
+> su 26; tre sopravvivono, e test-author aggiunge un test per ciascuno:
+> - K7: i rapporti del benchmark calcolati con il fattore della richiesta invece che con quello proprio del confronto;
+> - K14 e K24: `comparison` e `asset_set_comparison` che non dichiarano il tasso applicato.
+>
+> Dopo i tre test: 26/26, più K27 (Sortino del benchmark con il fattore della richiesta), ucciso dal test di K7. Altri
+> tre mutanti di test-author (accoppiamento storico, stato «parziale») muoiono sui suoi test. `services risk-all`
+> passa a 863.
+>
+> **⚠️ Fuori pista**: per K7 avevo indicato il fixture storico come prova, pensando che lì il fattore della richiesta
+> fosse quello del calendario preparato. In modalità storica, però, `require_annualization_factor` restituisce il
+> fattore del TWRR, e su quel fixture tutti i 23 giorni del TWRR trovano il benchmark: i due fattori coincidono e il
+> mutante sopravvive. test-author se n'è accorto e ha spostato di due giorni l'inizio del benchmark: 21 coppie, fattore
+> 255,5 contro 262,34. Avevo indicato il fattore senza leggere il codice che lo produce.
+>
+> **La doc**: le pagine di teoria spiegano già la conversione del tasso (`sharpe-ratio.en.md`, Formula). I numeri
+> nuovi arrivano all'utente con l'interfaccia di A, quindi la doc della riga del benchmark e delle colonne per
+> posizione va con il suo giro.
+>
+> **Verifica** (corsia 6152, un comando alla volta, carico fra 4 e 13):
+> - ruff e black puliti; `services risk-all` 863, `schemas risk` 64, `api risk` 15 (dopo `db populate --force`);
+> - `api sync`: rigenera solo i file ignorati da git; nessun percorso tracciato cambia;
+> - `risk-controller-unit` 96, `risk-levels-unit` 297, `risk-levels-component` 106, `risk-request-unit` 26,
+>   `risk-unit` 20, `risk-benchmark-unit` 13, `risk-frame-component` 13, `core-unit` 2992, `component-unit` 2510;
+> - `front check` 0/0, orfani a posto, audit i18n 3521 chiavi e 0 incomplete;
+> - E2E `risk` 14, `risk-lab` 41, `risk-benchmark-shared` 4, `risk-asset-detail` 2; alla fine la 6152 è libera.
+>
+> **Previsione**: nessun percorso di k6 è cambiato da A, da F o in `dev_release2`.
+>
+> **Il checkpoint**: 13 percorsi in 3 commit (backend e test, frontend e test, diario), in `ORDER-risk-k6.sh` su HEAD
+> `2a4364724`. Nessuna voce di CHANGELOG da sola: l'utente vede i numeri con l'interfaccia di A, e la voce va con il
+> suo giro. **Stato: FROZEN**, consegnato al coordinator.
+
+### Checkpoint 5b, dopo k6: la tabella e il selettore degli strumenti (D376) · ⏳
+
+> - La tabella prende il posto di `TornadoChart` ma ne tiene le props, così `L4Shock` di A non cambia, e tiene i testid
+>   che leggono i test di F. Usa `DataTable` così com'è, con `enableColumnResize`: il file è riservato al cambio di F.
+> - In `L4WhatIf`, il selettore degli strumenti ricorda nel browser l'ultimo insieme aperto. Alla prima visita sono
+>   aperti tutti e tre, come oggi.
+>
+> **In coda**:
+> - la fase 2: contratto concordato con F il 06/10. `BenchmarkSelect` monta `AssetPickerPanel` in modalità single,
+>   con i `verdicts` della pagina oppure un `period`, che li fa chiedere a lui. Serve prima la fusione di F in Risk;
+> - la fase 3: «Confronto Asset» e/o `SignalAssetParamControl`;
+> - la proposta del rendimento totale;
+> - `dev_release2` con L e D, prima dell'integrazione.

@@ -9,9 +9,11 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.risk import (
+    RiskComparisonHoldingItem,
     RiskComparisonOutput,
     RiskComparisonPoint,
     RiskErrorCode,
+    RiskFreeReference,
     RiskMode,
     RiskOutputKind,
     RiskReturnBasis,
@@ -28,13 +30,18 @@ from backend.app.services.risk.analytic_helpers import (
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
+    RiskExecutionContext,
     RiskSeriesInputs,
     RiskUnavailableError,
 )
 from backend.app.services.risk.metrics import (
     annualized_expected_return,
+    annualized_sharpe,
+    annualized_sortino,
     annualized_volatility,
+    beta,
     comparison_summary,
+    pearson_correlation,
 )
 
 
@@ -108,6 +115,50 @@ def _pair_over_primary_spans(
     return pairs
 
 
+def _holding_items(
+    comparison_asset_id: int,
+    context: RiskExecutionContext,
+    benchmark_points: Sequence[tuple[date, date, float]],
+) -> list[RiskComparisonHoldingItem]:
+    """Each holding of a portfolio scope against the reference, on the request's joint calendar.
+
+    The holdings and the reference were prepared together, so each holding's returns sit on the
+    reference's dates and pair with them date for date, through the same span rule as the primary.
+    In current composition the portfolio is read on that calendar too, so the holdings and the
+    portfolio pair over the same days; in historical mode the portfolio's TWRR is read on its own
+    observation days, and the holdings keep the joint calendar. A held reference is the yardstick,
+    not a subject (D371), so it gets no item; nor does a holding without a prepared series. An
+    asset scope has no holdings to break down: its only subject is the asset itself.
+    """
+    if context.scope_kind != RiskScopeKind.PORTFOLIO or context.prepared_series is None:
+        return []
+    prepared = {item.returns.asset_id: item.returns.points for item in context.prepared_series.series}
+    items: list[RiskComparisonHoldingItem] = []
+    for asset_id in sorted(context.scope_asset_ids):
+        points = prepared.get(asset_id)
+        if asset_id == comparison_asset_id or not points:
+            continue
+        pairs = _pair_over_primary_spans(
+            [point.date for point in points],
+            [float(point.value) for point in points],
+            points[0].previous_valuation_date,
+            benchmark_points,
+        )
+        if len(pairs) < 2:
+            # Beta and correlation need two pairs; a missing item says «not measured», a 0 would not.
+            continue
+        holding_returns = [pair.primary_return for pair in pairs]
+        reference_returns = [pair.comparison_return for pair in pairs]
+        items.append(
+            RiskComparisonHoldingItem(
+                asset_id=asset_id,
+                beta=beta(holding_returns, reference_returns),
+                correlation=pearson_correlation(holding_returns, reference_returns),
+            )
+        )
+    return items
+
+
 class ComparisonParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -119,6 +170,24 @@ class ComparisonParams(BaseModel):
             "x-control-order": 1,
         },
     )
+    risk_free_annual_rate: float = Field(
+        0.0,
+        gt=-1,
+        json_schema_extra={
+            "x-i18n-key": "chartSettings.params.riskFreeAnnualRate",
+            "x-control-order": 2,
+            "x-step": 0.001,
+        },
+    )
+    target_annual_return: float = Field(
+        0.0,
+        gt=-1,
+        json_schema_extra={
+            "x-i18n-key": "risk.params.targetAnnualReturn",
+            "x-control-order": 3,
+            "x-step": 0.001,
+        },
+    )
 
 
 @register_plugin(RiskAnalyticRegistry)
@@ -127,7 +196,10 @@ class ComparisonAnalytic(RiskAnalytic):
     # 1.1.0 — both series are compounded between the dates they share. A portfolio read
     # on its observation days skips days its benchmark may still be quoted on; 1.0.0
     # paired by date and dropped the benchmark's moves on those days.
-    algorithm_version = "1.1.0"
+    # 1.2.0 — the payload adds the reference's own Sharpe and Sortino, charged the rate and the
+    # target the request gives (both 0 by default), and, on a portfolio, each holding's beta and
+    # correlation against the same reference. The other numbers are unchanged.
+    algorithm_version = "1.2.0"
     name_i18n_key = "risk.analytics.comparison.name"
     description_i18n_key = "risk.analytics.comparison.description"
     output_kind = RiskOutputKind.COMPARISON
@@ -142,11 +214,12 @@ class ComparisonAnalytic(RiskAnalytic):
 
     def compute(self, params, context):
         primary_dates, primary_returns = require_primary_returns(context)
+        benchmark_points = prepared_asset_return_points(context, params.comparison_asset_id)
         pairs = _pair_over_primary_spans(
             primary_dates,
             primary_returns,
             context.primary_baseline_date,
-            prepared_asset_return_points(context, params.comparison_asset_id),
+            benchmark_points,
         )
         common_dates = tuple(pair.point_date for pair in pairs)
         if len(common_dates) < self.min_observations:
@@ -184,6 +257,50 @@ class ComparisonAnalytic(RiskAnalytic):
                     message="Correlation is undefined because at least one series has zero variance.",
                 )
             )
+        comparison_sharpe = annualized_sharpe(comparison_common_returns, annualization_factor, annual_risk_free_rate=params.risk_free_annual_rate)
+        comparison_sortino = annualized_sortino(comparison_common_returns, annualization_factor, annual_target_return=params.target_annual_return)
+        if comparison_sharpe is None:
+            warnings.append(
+                RiskWarning(
+                    code="sharpe_undefined",
+                    message_i18n_key="risk.warnings.sharpe_undefined_assets",
+                    message="Sharpe is undefined for the comparison asset because its volatility is zero.",
+                    details={"asset_ids": [params.comparison_asset_id]},
+                )
+            )
+        if comparison_sortino is None:
+            warnings.append(
+                RiskWarning(
+                    code="sortino_undefined",
+                    message_i18n_key="risk.warnings.sortino_undefined_assets",
+                    message="Sortino is undefined for the comparison asset because its downside deviation is zero.",
+                    details={"asset_ids": [params.comparison_asset_id]},
+                )
+            )
+        items = _holding_items(params.comparison_asset_id, context, benchmark_points)
+        # A flat reference voids every beta and correlation at once, and the two warnings above
+        # already say so for all of them. Otherwise each holding whose figure is undefined is named.
+        if summary.beta is not None:
+            undefined_beta = [item.asset_id for item in items if item.beta is None]
+            undefined_correlation = [item.asset_id for item in items if item.correlation is None]
+            if undefined_beta:
+                warnings.append(
+                    RiskWarning(
+                        code="comparison_beta_undefined",
+                        message_i18n_key="risk.warnings.comparison_beta_undefined_assets",
+                        message="Beta is undefined for one or more holdings because the comparison asset has zero variance.",
+                        details={"asset_ids": undefined_beta},
+                    )
+                )
+            if undefined_correlation:
+                warnings.append(
+                    RiskWarning(
+                        code="comparison_correlation_undefined",
+                        message_i18n_key="risk.warnings.comparison_correlation_undefined_assets",
+                        message="Correlation is undefined for one or more holdings because at least one series has zero variance.",
+                        details={"asset_ids": undefined_correlation},
+                    )
+                )
         return RiskComputation(
             output=RiskComparisonOutput(
                 comparison_asset_id=params.comparison_asset_id,
@@ -200,6 +317,9 @@ class ComparisonAnalytic(RiskAnalytic):
                 # where the rest of it lives.
                 comparison_volatility=annualized_volatility(comparison_common_returns, annualization_factor),
                 comparison_expected_annual_return=annualized_expected_return(comparison_common_returns, annualization_factor),
+                comparison_sharpe=comparison_sharpe,
+                comparison_sortino=comparison_sortino,
+                items=items,
                 series=[
                     RiskComparisonPoint(
                         date=point_date,
@@ -220,6 +340,11 @@ class ComparisonAnalytic(RiskAnalytic):
             ),
             method="comparison_asset",
             warnings=tuple(warnings),
+            risk_free=RiskFreeReference(
+                annual_rate=params.risk_free_annual_rate,
+                source="analytic_param",
+                currency=context.target_currency,
+            ),
             comparison_asset_id=params.comparison_asset_id,
             n_observations=len(common_dates),
             calendar_days=calendar_days,

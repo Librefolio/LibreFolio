@@ -31,7 +31,7 @@ import asyncio
 import json
 import math
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import NamedTuple
@@ -83,6 +83,7 @@ from backend.app.schemas.risk import (
     RiskAssetSetVarCvarOutput,
     RiskDrawdownRecoveryStatus,
     RiskErrorCode,
+    RiskFreeReference,
     RiskMode,
     RiskOutputKind,
     RiskQueryRequest,
@@ -1087,7 +1088,8 @@ def test_asset_set_comparison_never_makes_the_reference_a_subject():
         pytest.param(
             FLAT_GAINER,
             (CHOPPY_ASSET_ID, STEADY_ASSET_ID, REFERENCE_ASSET_ID),
-            {"comparison_beta_undefined", "comparison_correlation_undefined"},
+            # k6: a flat reference has no Sharpe or Sortino of its own either, and each warning names it.
+            {"comparison_beta_undefined", "comparison_correlation_undefined", "sharpe_undefined", "sortino_undefined"},
             id="flat-reference-with-warnings",
         ),
     ],
@@ -1224,8 +1226,11 @@ async def test_asset_set_comparison_accepts_a_selected_reference_through_the_ser
 
 
 def test_asset_set_comparison_accepting_a_selected_reference_is_a_new_algorithm_version():
-    """A request the plugin used to refuse now has an answer (D371): a new algorithm version."""
-    assert AssetSetComparisonAnalytic.algorithm_version == "1.1.0"
+    """A request the plugin used to refuse now has an answer (D371): a new algorithm version.
+
+    That answer was 1.1.0. 1.2.0 (k6, 06/10/2026) adds the reference's own Sharpe and Sortino.
+    """
+    assert AssetSetComparisonAnalytic.algorithm_version == "1.2.0"
 
 
 def test_asset_set_comparison_reports_an_undefined_beta_as_undefined():
@@ -1235,6 +1240,9 @@ def test_asset_set_comparison_reports_an_undefined_beta_as_undefined():
     flat benchmark leaves them undefined. Publishing ``0`` there would read as
     "measured, and they are unrelated" — a much stronger statement than the data
     supports, and one a scatter would happily draw.
+
+    The same flat reference has no Sharpe or Sortino of its own (k6): each is ``None``,
+    and its warning names the reference, not the selection.
     """
     context = asset_set_context(
         {
@@ -1254,9 +1262,149 @@ def test_asset_set_comparison_reports_an_undefined_beta_as_undefined():
     assert all(item.tracking_error > 0 for item in output.items)
 
     warnings_by_code = {warning.code: warning for warning in computation.warnings}
-    assert set(warnings_by_code) == {"comparison_beta_undefined", "comparison_correlation_undefined"}
-    for warning in warnings_by_code.values():
-        assert warning.details["asset_ids"] == list(context.scope_asset_ids)
+    assert set(warnings_by_code) == {"comparison_beta_undefined", "comparison_correlation_undefined", "sharpe_undefined", "sortino_undefined"}
+    for code in ("comparison_beta_undefined", "comparison_correlation_undefined"):
+        assert warnings_by_code[code].details["asset_ids"] == list(context.scope_asset_ids)
+    for code in ("sharpe_undefined", "sortino_undefined"):
+        assert warnings_by_code[code].message_i18n_key == f"risk.warnings.{code}_assets"
+        assert warnings_by_code[code].details["asset_ids"] == [FLAT_GAINER_ASSET_ID]
+    assert (output.comparison_sharpe, output.comparison_sortino) == (None, None)
+
+
+# ---------------------------------------------------------------------------
+# k6 — the reference's own Sharpe and Sortino (agreed with the Dashboard owner on 06/10/2026).
+#
+# `AssetSetComparisonParams` takes the KPI's two rates — `risk_free_annual_rate` and
+# `target_annual_return`, zero by default, above -1. The payload publishes `comparison_sharpe` and
+# `comparison_sortino`: the reference's own ratios, on the returns and the shared factor its
+# volatility and expected return are measured on — so, with `rf_p = expm1(log1p(rf) / f)`,
+# `comparison_sharpe * comparison_volatility == comparison_expected_annual_return - f * rf_p` — or
+# `None`, with a warning naming the reference. The items do not change.
+#
+# The expected ratios are computed here with `statistics`, by the definitions the metrics document:
+# the excess over the per-observation rate, divided by the sample deviation for Sharpe and by the
+# downside deviation against the target, over every observation, for Sortino.
+# ---------------------------------------------------------------------------
+
+REFERENCE_RATES = [
+    pytest.param({}, id="no-parameters"),
+    pytest.param({"risk_free_annual_rate": 0.03}, id="risk-free-3pct"),
+    pytest.param({"risk_free_annual_rate": 0.03, "target_annual_return": 0.05}, id="risk-free-3pct-target-5pct"),
+]
+
+
+def _period_rate(annual_rate: float, factor: float) -> float:
+    return math.expm1(math.log1p(annual_rate) / factor)
+
+
+def _stdlib_sharpe(returns: list[float], factor: float, annual_rate: float) -> float:
+    rate = _period_rate(annual_rate, factor)
+    return statistics.fmean([value - rate for value in returns]) / statistics.stdev(returns) * math.sqrt(factor)
+
+
+def _stdlib_sortino(returns: list[float], factor: float, annual_target: float) -> float:
+    target = _period_rate(annual_target, factor)
+    downside = math.sqrt(math.fsum(min(value - target, 0.0) ** 2 for value in returns) / len(returns))
+    return statistics.fmean([value - target for value in returns]) / downside * math.sqrt(factor)
+
+
+def _reference_context(reference_returns: list[float] | None = None) -> RiskExecutionContext:
+    """Two selected assets beside the reference (`REFERENCE` unless told otherwise), on one joint calendar."""
+    reference = REFERENCE if reference_returns is None else reference_returns
+    prepared = make_prepared_set({CHOPPY_ASSET_ID: CHOPPY, STEADY_ASSET_ID: STEADY, REFERENCE_ASSET_ID: reference})
+    return asset_set_context({}, scope_asset_ids=(CHOPPY_ASSET_ID, STEADY_ASSET_ID), prepared=prepared)
+
+
+def test_asset_set_comparison_params_take_the_two_rates_of_the_kpi():
+    """Zero by default and above -1, as on `asset_set_kpi`; the reference is still required, and the model still closed."""
+    defaults = AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID)
+    assert (defaults.risk_free_annual_rate, defaults.target_annual_return) == (0.0, 0.0)
+    charged = AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, "risk_free_annual_rate": 0.03, "target_annual_return": 0.05})
+    assert (charged.comparison_asset_id, charged.risk_free_annual_rate, charged.target_annual_return) == (REFERENCE_ASSET_ID, 0.03, 0.05)
+
+    for field in ("risk_free_annual_rate", "target_annual_return"):
+        assert AssetSetComparisonParams.model_fields[field].default == AssetSetKpiParams.model_fields[field].default == 0.0
+        assert getattr(AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, field: -0.99}), field) == -0.99
+        with pytest.raises(ValidationError):
+            AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, field: -1.0})
+    with pytest.raises(ValidationError):
+        AssetSetComparisonAnalytic.validate_params({"risk_free_annual_rate": 0.03})
+    with pytest.raises(ValidationError):
+        AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, "risk_free_rate": 0.03})
+
+
+@pytest.mark.parametrize("rates", REFERENCE_RATES)
+def test_asset_set_comparison_states_the_reference_own_sharpe_and_sortino(rates):
+    """The reference's ratios belong to the point it is drawn at: same returns, same shared factor.
+
+    Sortino is charged the target, never the risk-free rate: wherever the two differ, the swapped
+    figure is another number, and the parametrization makes them differ.
+    """
+    risk_free = rates.get("risk_free_annual_rate", 0.0)
+    target = rates.get("target_annual_return", 0.0)
+    context = _reference_context()
+    factor = context.annualization_factor
+    assert factor is not None
+    # Premises: the reference has losses, so its downside is real; a swapped rate would show.
+    assert min(REFERENCE) < 0
+    if risk_free != target:
+        assert _stdlib_sortino(REFERENCE, factor, risk_free) != pytest.approx(_stdlib_sortino(REFERENCE, factor, target), rel=1e-6)
+
+    computation = AssetSetComparisonAnalytic().compute(AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, **rates}), context)
+    output = computation.output
+
+    assert computation.annualization_factor == factor
+    assert output.comparison_sharpe == pytest.approx(_stdlib_sharpe(REFERENCE, factor, risk_free), rel=1e-9)
+    assert output.comparison_sortino == pytest.approx(_stdlib_sortino(REFERENCE, factor, target), rel=1e-9)
+    assert output.comparison_sharpe * output.comparison_volatility == pytest.approx(output.comparison_expected_annual_return - factor * _period_rate(risk_free, factor), rel=1e-12, abs=1e-15)
+    # Both defined, so neither is warned about.
+    assert {warning.code for warning in computation.warnings}.isdisjoint({"sharpe_undefined", "sortino_undefined"})
+
+
+def test_asset_set_comparison_rates_move_the_reference_ratios_and_leave_the_items_alone():
+    """Without rates nothing is charged; with them only the reference's two ratios move."""
+    context = _reference_context()
+    implicit = AssetSetComparisonAnalytic().compute(AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID), context).output
+    explicit = AssetSetComparisonAnalytic().compute(AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, "risk_free_annual_rate": 0.0, "target_annual_return": 0.0}), context).output
+    charged = AssetSetComparisonAnalytic().compute(AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, "risk_free_annual_rate": 0.03, "target_annual_return": 0.05}), context).output
+
+    assert implicit.model_dump() == explicit.model_dump()
+    ratios = {"comparison_sharpe", "comparison_sortino"}
+    assert charged.model_dump(exclude=ratios) == implicit.model_dump(exclude=ratios)
+    assert charged.comparison_sharpe != pytest.approx(implicit.comparison_sharpe, rel=1e-6)
+    assert charged.comparison_sortino != pytest.approx(implicit.comparison_sortino, rel=1e-6)
+    # The per-asset row gains no field: the ratios are the reference's, not the selection's.
+    assert set(RiskAssetSetComparisonItem.model_fields) == {"asset_id", "active_return", "tracking_error", "information_ratio", "correlation", "beta"}
+
+
+def test_asset_set_comparison_declares_the_risk_free_rate_it_charged():
+    """As the singular comparison does: the rate the reference's Sharpe was charged, where it came from, in the target currency."""
+    context = replace(_reference_context(), target_currency="CHF")
+
+    charged = AssetSetComparisonAnalytic().compute(AssetSetComparisonAnalytic.validate_params({"comparison_asset_id": REFERENCE_ASSET_ID, "risk_free_annual_rate": 0.03, "target_annual_return": 0.05}), context)
+    implicit = AssetSetComparisonAnalytic().compute(AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID), context)
+
+    assert charged.risk_free == RiskFreeReference(annual_rate=0.03, source="analytic_param", currency="CHF")
+    assert implicit.risk_free == RiskFreeReference(annual_rate=0.0, source="analytic_param", currency="CHF")
+
+
+def test_asset_set_comparison_names_the_reference_when_only_its_sortino_is_undefined():
+    """A reference that moves but never loses has a Sharpe, and no downside for a Sortino to divide by."""
+    never_losing = [round(0.002 + 0.0015 * math.cos(index * 0.7), 10) for index in range(OBSERVATIONS)]
+    context = _reference_context(never_losing)
+    factor = context.annualization_factor
+    assert factor is not None
+    assert min(never_losing) > 0
+
+    computation = AssetSetComparisonAnalytic().compute(AssetSetComparisonParams(comparison_asset_id=REFERENCE_ASSET_ID), context)
+    output = computation.output
+
+    assert all(item.beta is not None for item in output.items)
+    assert output.comparison_sharpe == pytest.approx(_stdlib_sharpe(never_losing, factor, 0.0), rel=1e-9)
+    assert output.comparison_sortino is None
+    assert [(warning.code, warning.message_i18n_key, warning.details.get("asset_ids")) for warning in computation.warnings] == [
+        ("sortino_undefined", "risk.warnings.sortino_undefined_assets", [REFERENCE_ASSET_ID]),
+    ]
 
 
 # ---------------------------------------------------------------------------
