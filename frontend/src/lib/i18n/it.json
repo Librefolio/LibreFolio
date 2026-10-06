@@ -3603,7 +3603,8 @@
       }
     },
     "benchmark": {
-      "measuredHere": "Questo benchmark è anche un asset misurato qui e non può fare da metro a sé stesso: scegline un altro per il confronto."
+      "measuredHere": "Questo benchmark è anche un asset misurato qui e non può fare da metro a sé stesso: scegline un altro per il confronto.",
+      "blocked": "Non utilizzabili in questo periodo"
     }
   },
   "updateCheck": {

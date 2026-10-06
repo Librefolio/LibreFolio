@@ -3,6 +3,7 @@ import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 const catalogApi = vi.hoisted(() => vi.fn());
 const scenarioCatalogApi = vi.hoisted(() => vi.fn());
 const queryApi = vi.hoisted(() => vi.fn());
+const eligibilityApi = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/api', async (importOriginal) => {
     const actual = await importOriginal<typeof import('$lib/api')>();
@@ -13,10 +14,12 @@ vi.mock('$lib/api', async (importOriginal) => {
             get_risk_catalog_api_v1_risk_catalog_get: catalogApi,
             get_scenario_catalog_api_v1_risk_scenario_catalog_get: scenarioCatalogApi,
             query_risk_api_v1_risk_query_post: queryApi,
+            asset_eligibility_api_v1_risk_eligibility_post: eligibilityApi,
         },
     };
 });
 
+import type {AssetEligibilityItem, EligibilityVerdicts} from '$lib/components/risk/eligibility';
 import {buildHistoricalReplayParameters, buildRiskQueryRequest, buildSimulationParameters, canonicalizeScope, type RiskScope} from '$lib/risk/riskRequest';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
@@ -392,6 +395,263 @@ describe('riskStore', () => {
             path_count: 8192,
             sobol_start_index: 11,
         });
+    });
+});
+
+/**
+ * `queryEligibility(assetIds, period, currency)` — Risk's verdicts on a set of assets for a
+ * period and a currency, asked once per question (stage 2: `BenchmarkSelect` on F's asset
+ * picker panel, D371 for the lab and D378 for every page).
+ *
+ * The verdict is the engine's (`POST /api/v1/risk/eligibility`): the store only asks, in the
+ * batches the engine accepts (`eligibilityBatches`, at most 500 ids, never an empty list), and
+ * merges the answers (`mergeEligibilityAnswers`). What is pinned:
+ *
+ *   1. **No assets, no question**: `EMPTY_VERDICTS`, and nothing reaches the engine.
+ *   2. **The question as the engine takes it**: `{asset_ids, date_range: {start, end},
+ *      target_currency}` through the generated client, batched, each id asked once.
+ *   3. **One question, one request**: cached per (sorted unique ids, start, end, currency), so
+ *      the order of the ids and their repetitions do not matter and every other part does; and
+ *      identical questions asked at once share the request in flight. Two pickers, or one
+ *      picker remounted, never ask twice.
+ *   4. **`invalidateRisk()` forgets the answers**: the next question asks again, and does not
+ *      wait on a request that left before the invalidation. That request's answer, when it
+ *      lands, is discarded: it resolves `null` — as `queryRisk`'s does — and is cached nowhere.
+ *   5. **A failure rejects and is not remembered**: the caller decides what a failure means,
+ *      and the same question asked later asks again. Unlike `queryRisk`, which keeps errors.
+ *
+ * Self-contained on purpose. The block below resets the module registry (`vi.resetModules`),
+ * so a function bound in a `beforeAll` may belong to a module instance the store no longer is
+ * under a shuffled order. This block binds nothing: every case reads `queryEligibility`, its
+ * `invalidateRisk` and the eligibility module from the registry at call time, so they are
+ * always one instance, and it never transitions the client session.
+ */
+describe('riskStore — queryEligibility', () => {
+    interface Period {
+        start: string;
+        end: string;
+    }
+
+    type QueryEligibility = (assetIds: readonly number[], period: Period, currency: string) => Promise<EligibilityVerdicts | null>;
+
+    interface EligibilityBody {
+        asset_ids: number[];
+        date_range: {start: string; end?: string | null};
+        target_currency: string;
+    }
+
+    interface EligibilityAnswer {
+        items: AssetEligibilityItem[];
+        min_quotes: number;
+        stale_days: number;
+        common_range?: Period | null;
+        suggested_range?: Period | null;
+    }
+
+    const PERIOD: Period = {start: '2025-01-01', end: '2025-12-31'};
+    const byNumber = (left: number, right: number): number => left - right;
+
+    /**
+     * The store and the eligibility module, as the registry holds them now. A missing export
+     * fails the case that asked for it, with the contract in the message, rather than the import.
+     */
+    async function subject(): Promise<{queryEligibility: QueryEligibility; invalidateRisk: () => void; eligibility: typeof import('$lib/components/risk/eligibility')}> {
+        const store = (await import('./riskStore.svelte')) as unknown as Record<string, unknown>;
+        const eligibility = await import('$lib/components/risk/eligibility');
+        expect(typeof store.queryEligibility, 'riskStore exports no queryEligibility(assetIds, period, currency): the pickers have no shared, cached way to ask the eligibility engine').toBe('function');
+        return {queryEligibility: store.queryEligibility as QueryEligibility, invalidateRisk: store.invalidateRisk as () => void, eligibility};
+    }
+
+    /** A verdict per id, mixed so a dropped or misplaced batch shows: every third id is ruled out. */
+    function verdictFor(assetId: number): AssetEligibilityItem {
+        return assetId % 3 === 0 ? {asset_id: assetId, level: 'ineligible', reasons: ['no_prices'], first_quote: null, last_quote: null, quotes_in_period: 0} : {asset_id: assetId, level: 'eligible', reasons: [], first_quote: '2024-06-03', last_quote: '2025-12-30', quotes_in_period: 250};
+    }
+
+    /** The engine's answer to one request: a verdict for exactly the ids it was asked about. */
+    function answerTo(body: EligibilityBody, extra: Partial<EligibilityAnswer> = {}): EligibilityAnswer {
+        return {items: body.asset_ids.map(verdictFor), min_quotes: 20, stale_days: 7, ...extra};
+    }
+
+    function engineAnswers(extra: Partial<EligibilityAnswer> = {}): void {
+        eligibilityApi.mockImplementation(async (body: EligibilityBody) => answerTo(body, extra));
+    }
+
+    /** Every request body the generated client received, in order. */
+    function bodies(): EligibilityBody[] {
+        return eligibilityApi.mock.calls.map(([body]) => body as EligibilityBody);
+    }
+
+    function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
+        let resolve!: (value: T) => void;
+        const promise = new Promise<T>((settle) => {
+            resolve = settle;
+        });
+        return {promise, resolve};
+    }
+
+    beforeEach(async () => {
+        eligibilityApi.mockReset();
+        // An answer cached by a neighbouring case would let a question here pass without asking.
+        ((await import('./riskStore.svelte')) as unknown as {invalidateRisk: () => void}).invalidateRisk();
+    });
+
+    it('exports queryEligibility(assetIds, period, currency)', async () => {
+        await subject();
+    });
+
+    it('resolves EMPTY_VERDICTS for no assets, without asking the engine', async () => {
+        const {queryEligibility, eligibility} = await subject();
+        engineAnswers();
+
+        // The engine rejects an empty list: the question must not leave at all.
+        await expect(queryEligibility([], PERIOD, 'EUR')).resolves.toBe(eligibility.EMPTY_VERDICTS);
+        expect(eligibilityApi, 'an empty question reached the engine').not.toHaveBeenCalled();
+    });
+
+    it('asks the generated client with the ids, the period and the currency, and merges the answer', async () => {
+        const {queryEligibility, eligibility} = await subject();
+        // A single request keeps the ranges: they describe the assets of that request taken together.
+        const ranges = {common_range: {start: '2025-03-14', end: '2025-12-30'}, suggested_range: {start: '2025-03-15', end: '2025-12-30'}};
+        engineAnswers(ranges);
+
+        const verdicts = await queryEligibility([7, 3, 9], PERIOD, 'EUR');
+
+        expect(eligibilityApi).toHaveBeenCalledTimes(1);
+        const [body] = bodies();
+        expect({...body, asset_ids: [...body.asset_ids].sort(byNumber)}, 'the request is not the question as the engine takes it').toEqual({asset_ids: [3, 7, 9], date_range: {start: PERIOD.start, end: PERIOD.end}, target_currency: 'EUR'});
+        expect(verdicts, 'the answer was not merged by mergeEligibilityAnswers').toEqual(eligibility.mergeEligibilityAnswers([answerTo(body, ranges)]));
+        expect(verdicts?.items.get(3)?.level, 'premise: the merged answer carries the engine’s verdicts').toBe('ineligible');
+        expect(verdicts?.commonRange).toEqual(ranges.common_range);
+    });
+
+    it('splits a question larger than the engine accepts into batches of at most 500, each id asked once, and merges every batch', async () => {
+        const {queryEligibility, eligibility} = await subject();
+        engineAnswers();
+        const ids = Array.from({length: 2 * eligibility.ELIGIBILITY_BATCH + 1}, (_, index) => index + 1);
+
+        const verdicts = await queryEligibility(ids, PERIOD, 'EUR');
+
+        const batches = bodies().map((body) => body.asset_ids);
+        expect(batches.length, 'not split as eligibilityBatches splits: 1001 ids are three requests').toBe(3);
+        for (const batch of batches) expect(batch.length).toBeLessThanOrEqual(eligibility.ELIGIBILITY_BATCH);
+        expect(batches.flat().sort(byNumber), 'an id was asked twice, or never').toEqual(ids);
+        for (const body of bodies()) {
+            expect(body.date_range).toEqual({start: PERIOD.start, end: PERIOD.end});
+            expect(body.target_currency).toBe('EUR');
+        }
+        expect(verdicts, 'the batches were not merged by mergeEligibilityAnswers').toEqual(eligibility.mergeEligibilityAnswers(bodies().map((body) => answerTo(body))));
+        expect(verdicts?.items.size).toBe(ids.length);
+    });
+
+    it('serves the same question again from its cache, whatever the order of the ids or their repetitions', async () => {
+        const {queryEligibility} = await subject();
+        engineAnswers();
+
+        const first = await queryEligibility([3, 1, 2], PERIOD, 'EUR');
+        const again = await queryEligibility([2, 3, 1, 3, 1], {...PERIOD}, 'EUR');
+
+        expect(eligibilityApi, 'the same question reached the engine twice').toHaveBeenCalledTimes(1);
+        expect(again).toEqual(first);
+        expect(again?.items.size).toBe(3);
+    });
+
+    it('asks again when any part of the question changes: the ids, the start, the end or the currency', async () => {
+        const {queryEligibility} = await subject();
+        engineAnswers();
+
+        await queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        await queryEligibility([1, 2, 4], PERIOD, 'EUR');
+        await queryEligibility([1, 2, 3], {start: '2025-02-01', end: PERIOD.end}, 'EUR');
+        await queryEligibility([1, 2, 3], {start: PERIOD.start, end: '2025-11-28'}, 'EUR');
+        await queryEligibility([1, 2, 3], PERIOD, 'USD');
+
+        expect(eligibilityApi, 'two different questions shared one cached answer').toHaveBeenCalledTimes(5);
+        expect(bodies().map((body) => [body.date_range.start, body.date_range.end, body.target_currency])).toEqual([
+            [PERIOD.start, PERIOD.end, 'EUR'],
+            [PERIOD.start, PERIOD.end, 'EUR'],
+            ['2025-02-01', PERIOD.end, 'EUR'],
+            [PERIOD.start, '2025-11-28', 'EUR'],
+            [PERIOD.start, PERIOD.end, 'USD'],
+        ]);
+
+        // …while the first question is still answered from the cache.
+        await queryEligibility([3, 2, 1], PERIOD, 'EUR');
+        expect(eligibilityApi).toHaveBeenCalledTimes(5);
+    });
+
+    it('shares one request between identical questions asked at once', async () => {
+        const {queryEligibility} = await subject();
+        const answer = deferred<EligibilityAnswer>();
+        eligibilityApi.mockImplementation(() => answer.promise);
+
+        const first = queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        const second = queryEligibility([3, 2, 1, 1], PERIOD, 'EUR');
+        answer.resolve(answerTo({asset_ids: [1, 2, 3], date_range: PERIOD, target_currency: 'EUR'}));
+        const [left, right] = await Promise.all([first, second]);
+
+        expect(eligibilityApi, 'a question asked while the same one was in flight sent a request of its own').toHaveBeenCalledTimes(1);
+        expect(left?.items.size).toBe(3);
+        expect(right).toEqual(left);
+    });
+
+    it('asks again after invalidateRisk()', async () => {
+        const {queryEligibility, invalidateRisk} = await subject();
+        engineAnswers();
+
+        await queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        invalidateRisk();
+        await queryEligibility([1, 2, 3], PERIOD, 'EUR');
+
+        expect(eligibilityApi, 'invalidateRisk() left the eligibility answers cached').toHaveBeenCalledTimes(2);
+    });
+
+    it('resolves null for an answer that lands after invalidateRisk(), and caches nothing', async () => {
+        const {queryEligibility, invalidateRisk} = await subject();
+        const late = deferred<EligibilityAnswer>();
+        eligibilityApi.mockImplementationOnce(() => late.promise);
+
+        const straddling = queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        await vi.waitFor(() => expect(eligibilityApi, 'the question never left').toHaveBeenCalledTimes(1));
+        invalidateRisk();
+        late.resolve(answerTo({asset_ids: [1, 2, 3], date_range: PERIOD, target_currency: 'EUR'}));
+
+        // The answer describes a world the invalidation said is gone: discarded, as queryRisk's is.
+        expect(await straddling, 'an answer to a question asked before the invalidation was handed back as current').toBeNull();
+        engineAnswers();
+        const asked = await queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        expect(eligibilityApi, 'the discarded answer was cached: the same question did not ask again').toHaveBeenCalledTimes(2);
+        expect(asked?.items.size).toBe(3);
+    });
+
+    it('does not hand a question asked after invalidateRisk() to a request that left before it', async () => {
+        const {queryEligibility, invalidateRisk} = await subject();
+        const late = deferred<EligibilityAnswer>();
+        eligibilityApi.mockImplementationOnce(() => late.promise);
+
+        const straddling = queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        await vi.waitFor(() => expect(eligibilityApi, 'the question never left').toHaveBeenCalledTimes(1));
+        invalidateRisk();
+        engineAnswers();
+        const fresh = queryEligibility([1, 2, 3], PERIOD, 'EUR');
+
+        // Joining the request in flight would hand this caller the null its answer is bound to become.
+        await vi.waitFor(() => expect(eligibilityApi, 'the question asked after the invalidation joined the request in flight instead of asking again').toHaveBeenCalledTimes(2));
+        expect((await fresh)?.items.size).toBe(3);
+        late.resolve(answerTo({asset_ids: [1, 2, 3], date_range: PERIOD, target_currency: 'EUR'}));
+        expect(await straddling).toBeNull();
+    });
+
+    it('rejects when the request fails, and does not remember the failure: the same question asks again', async () => {
+        const {queryEligibility} = await subject();
+        const failure = new Error('synthetic: eligibility engine unreachable');
+        eligibilityApi.mockRejectedValueOnce(failure);
+
+        await expect(queryEligibility([1, 2, 3], PERIOD, 'EUR'), 'a failed request must reach the caller, which decides what it means').rejects.toBe(failure);
+
+        engineAnswers();
+        const retried = await queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        expect(eligibilityApi, 'the failure was cached: the same question did not ask again').toHaveBeenCalledTimes(2);
+        expect(retried?.items.size).toBe(3);
     });
 });
 

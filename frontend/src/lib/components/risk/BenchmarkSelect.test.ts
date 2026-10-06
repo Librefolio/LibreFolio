@@ -45,21 +45,59 @@
  *      stays null, `data-benchmark-id` is `''` and the trigger shows no asset — even for
  *      an id the list goes on to confirm, which arrives with `set` and not before. So a
  *      page that waits for `set` and a page that reads `value` cannot disagree, and
- *      neither can measure against an id nobody confirmed.
+ *      neither can measure against an id nobody confirmed. (Pinned for the check against
+ *      the asset list; the wait for a verdict, round four, is not pinned here — see below.)
+ *
+ * Fourth round (06/10/2026), stage 2: the picker moves onto F's shared asset picker panel
+ * (`AssetPickerPanel mode="single"`, which keeps `SearchSelect`'s test ids, so every case
+ * above reads the ids it always read) and learns the engine's eligibility — D371 for the
+ * lab, D378 for every page:
+ *
+ *  11. **What stays as it was is pinned as well**: each section in `assetSelectOrder`'s
+ *      order (active first, then by name) whatever order the cache holds — the panel never
+ *      sorts, so the picker must — the section titles' test ids, and `${testid}-load-error`.
+ *  12. **Where the verdicts come from**, published as `data-eligibility` on the root:
+ *      - `verdicts` given (the lab's way): used as they are, nothing asked — `given`;
+ *      - a `period` and a `currency` and no verdicts: one `queryEligibility` 300 ms after
+ *        mounting, about the catalogue it offers (the current choice included, what the page
+ *        measures left out), worded by `describeEligibility` — `pending` while it waits,
+ *        then `ready`; a rejected request reads `failed`, rules nothing out and is logged; a
+ *        new period or currency asks again after the same debounce, an answer to an older
+ *        question is ignored, and a remount on the same question is answered by the store's
+ *        cache, not by the engine; a `null` — the store's word for an answer it discarded,
+ *        its cache emptied while the question was in flight — is no answer: still `pending`,
+ *        the same question again after the same debounce, settled by the next answer;
+ *      - neither: nothing asked, nothing ruled out — `none`, as before.
+ *  13. **A ruled-out asset is listed apart and never chosen**: in `${testid}-blocked`, titled
+ *      by `risk.benchmark.blocked`, disabled, with the engine's codes in `data-reasons`. A
+ *      warning leaves an asset selectable, with the panel's ⚠; no verdict means selectable.
+ *  14. **A current choice the engine rules out is `blocked`** (D378): `value` keeps the id,
+ *      the trigger still shows it, the blocked section marks it current, and the shared store
+ *      keeps it — `resolveRiskBenchmark()` still reads it `set`, never `blocked`. With given
+ *      verdicts the state follows the map at once; with a period a stored choice stays
+ *      `pending` until its verdict for that period and currency is in — a `null` from the
+ *      store is not one — and again after a new period; a failed request makes it `set`,
+ *      because a failure locks nothing. Never `set` on the way to `blocked`: a page
+ *      compares only on `set`, and would have asked once. Choosing an asset that can be
+ *      chosen is `set`, as always.
  *
  * Not pinned, on purpose: whether `onchange` also fires when the mount-time resolution
  * lands (the contract does not say), what the trigger says while the state is `pending`
- * beyond showing no asset, and clearing — `AssetSelect` has no control that empties a
- * choice, so there is nothing for a reader to press.
+ * beyond showing no asset, and clearing — the picker has no control that empties a
+ * choice, so there is nothing for a reader to press. From round four: what `value`,
+ * `data-benchmark-id` and the trigger hold while a confirmed choice waits for its verdict
+ * (rule 10 speaks of the list's check), and a choice made while the verdicts are still on
+ * their way.
  *
  * Observed only through what a page can see: `data-testid`s, the bound `value` (held in
  * a `$state` behind a getter/setter, as a parent's `bind:value` would hold it), the
- * `onchange` payload, the shared store and its storage key. Asset names are this file's
- * own fixture and the placeholder is a prop it passes in; the one sentence that matters
- * is resolved from the shipped catalogue through the same `$_` the component uses, so no
+ * `onchange` payload, the shared store and its storage key — and, from round four, the
+ * question the picker puts to the store and what reaches the engine. Asset names are this
+ * file's own fixture and the placeholder is a prop it passes in; the sentences that matter
+ * are resolved from the shipped catalogue through the same `$_` the component uses, so no
  * translated text is written down here.
  */
-import {beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
 import {tick} from 'svelte';
 import {get} from 'svelte/store';
 
@@ -69,6 +107,37 @@ import {get} from 'svelte/store';
 // export spelled out because the component tree imports more of this module than the
 // store does.
 vi.mock('$app/environment', () => ({browser: true, dev: true, building: false, version: 'test'}));
+
+/**
+ * This jsdom build exposes no `localStorage` at all (see `DataTable.test.ts`), and the
+ * shared key is half of what this file pins: a Map-backed stand-in, as in
+ * `riskBenchmarkStore.test.ts`, fresh for every case (`beforeEach`). Installed here too,
+ * before anything is imported: with `browser: true` above, a module that reads storage
+ * while it loads — the language store the shared asset panel imports does — would
+ * otherwise throw before any case runs, and fail the whole file for a reason that is the
+ * harness's, not the picker's.
+ */
+const storage = vi.hoisted(() => {
+    function install(): void {
+        const backing = new Map<string, string>();
+        Object.defineProperty(globalThis, 'localStorage', {
+            configurable: true,
+            writable: true,
+            value: {
+                getItem: (key: string) => backing.get(key) ?? null,
+                setItem: (key: string, value: string) => void backing.set(key, String(value)),
+                removeItem: (key: string) => void backing.delete(key),
+                clear: () => backing.clear(),
+                key: (index: number) => [...backing.keys()][index] ?? null,
+                get length() {
+                    return backing.size;
+                },
+            },
+        });
+    }
+    install();
+    return {install};
+});
 
 /**
  * The asset cache, owned by this file: the list it holds, a gate on
@@ -92,7 +161,8 @@ vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => {
         // A fresh rejection per call, so no rejected promise is ever left unobserved.
         ensureAssetsLoaded: vi.fn(() => (cache.failure ? Promise.reject(cache.failure) : (cache.gate ?? Promise.resolve()))),
         getAssetInfo: vi.fn((id: number) => cache.entries.find((asset) => asset.id === id) ?? null),
-        // A fresh array each call, as the real store re-derives one: `AssetSelect` sorts it in place.
+        // A fresh array each call, as the real store re-derives one: whoever orders it — in
+        // place, as `AssetSelect` did, or through `assetSelectOrder` — leaves the cache as it was.
         getAllAssets: vi.fn(() => cache.entries.map((asset) => ({...asset}))),
     };
 });
@@ -109,8 +179,45 @@ vi.mock('$lib/stores/risk/riskBenchmarkStore.svelte', async (importOriginal) => 
     };
 });
 
+/**
+ * Round four. The eligibility engine, owned by this file: the generated client's call,
+ * answered per case (`engineAnswers`, `engineHolds`). The rest of `$lib/api` is the real one.
+ */
+const engine = vi.hoisted(() => ({api: vi.fn()}));
+
+vi.mock('$lib/api', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/api')>();
+    return {...actual, zodiosApi: {...actual.zodiosApi, asset_eligibility_api_v1_risk_eligibility_post: engine.api}};
+});
+
+/** The panel's currency menu puts flags beside the codes, from the currency cache: kept empty, and off the network. */
+vi.mock('$lib/stores/reference/currencyStore', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('$lib/stores/reference/currencyStore')>()),
+    ensureCurrenciesLoaded: vi.fn(async () => {}),
+}));
+
+/**
+ * The real risk store, with a spy on `queryEligibility`: the question the picker puts to the
+ * store, between it and the engine above. Through to the real function, so its cache is the
+ * one a remount meets. Until stage 2 lands the store has no such export, and the spy says so
+ * if anything calls it.
+ */
+vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        queryEligibility: vi.fn((...args: unknown[]) => {
+            if (typeof actual.queryEligibility !== 'function') throw new Error('riskStore exports no queryEligibility: stage 2 has not landed');
+            return (actual.queryEligibility as (...forwarded: unknown[]) => unknown)(...args);
+        }),
+    };
+});
+
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
+import {schemas} from '$lib/api';
+import {dayFormatter, describeEligibility, mergeEligibilityAnswers, type AssetEligibilityItem, type EligibilityVerdicts} from '$lib/components/risk/eligibility';
+import {assetSelectOrder, type PickerVerdict} from '$lib/components/ui/select/assetPicker';
 import {_} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import es from '$lib/i18n/es.json';
@@ -119,6 +226,7 @@ import itCatalogue from '$lib/i18n/it.json';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import {ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
 import {resolveRiskBenchmark, riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
+import * as riskStore from '$lib/stores/risk/riskStore.svelte';
 import BenchmarkSelect from './BenchmarkSelect.svelte';
 
 // ─── Fixture ────────────────────────────────────────────────────────────────────────────────
@@ -147,6 +255,45 @@ const MEASURED_KEY = 'risk.benchmark.measuredHere';
 const CATALOGUES = {en, it: itCatalogue, fr, es};
 /** A page's own, already-translated wording for the warning (`measuredHint`): this file's string, never a catalogue's. */
 const HINT = 'Synthetic page hint: the lab already compares this asset';
+
+// ─── Fixture, round four: the engine's eligibility ──────────────────────────────────────────
+
+const ALL_IDS = FIXTURE.map((asset) => asset.id).sort((left, right) => left - right);
+/** The title of the section of ruled-out assets: a new key, which the product ships in four catalogues. */
+const BLOCKED_KEY = 'risk.benchmark.blocked';
+/** Two windows a page can be on, and its target currency. */
+const P1 = {start: '2025-01-01', end: '2025-12-31'};
+const P2 = {start: '2025-04-01', end: '2025-12-31'};
+const CURRENCY = 'EUR';
+/** A translation key that reached the screen untranslated: `scope.key`, no space anywhere. */
+const RAW_KEY = /^[\w-]+(\.[\w-]+)+$/;
+
+type EngineVerdict = Pick<AssetEligibilityItem, 'level' | 'reasons'>;
+const ADMITTED: EngineVerdict = {level: 'eligible', reasons: []};
+/** Ruled out for two reasons whose sentences carry no date: worded alike whatever the reader's locale does to days. */
+const NO_PRICES: EngineVerdict = {level: 'ineligible', reasons: ['no_prices', 'missing_fx']};
+const LATE_START: EngineVerdict = {level: 'warning', reasons: ['starts_late']};
+
+/** The engine's view of the fixture for a page's period: BOREALIS has no prices in it, DUNE starts late, the rest are admitted. */
+function engineView(assetId: number): EngineVerdict {
+    if (assetId === BOREALIS.id) return NO_PRICES;
+    if (assetId === DUNE.id) return LATE_START;
+    return ADMITTED;
+}
+
+/** Texts the lab hands in with its verdicts: this file's own strings, compared as given. */
+const GIVEN_TEXTS = {blocked: ['probe-blocked: no prices in the lab period'], warning: ['probe-warning: first quote after the start']};
+const RULED_OUT: PickerVerdict = {level: 'ineligible', codes: ['no_prices'], texts: GIVEN_TEXTS.blocked};
+const ADMITTED_VERDICT: PickerVerdict = {level: 'eligible', codes: [], texts: []};
+
+/** The lab's way: verdicts already worded. BOREALIS ruled out, DUNE warned about, COBALT and EMBER without a verdict. */
+function givenVerdicts(): Map<number, PickerVerdict> {
+    return new Map<number, PickerVerdict>([
+        [AURORA.id, ADMITTED_VERDICT],
+        [BOREALIS.id, RULED_OUT],
+        [DUNE.id, {level: 'warning', codes: ['starts_late'], texts: GIVEN_TEXTS.warning}],
+    ]);
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────────────────
 
@@ -249,12 +396,35 @@ function returningReader(stored: number | null): string {
     return account;
 }
 
-/** The resolution state the picker publishes (third round). */
-type BenchmarkState = 'none' | 'pending' | 'set' | 'unknown';
+/** The resolution state the picker publishes (third round), and `blocked` (fourth round, D378). */
+type BenchmarkState = 'none' | 'pending' | 'set' | 'unknown' | 'blocked';
+
+type Period = {start: string; end: string};
+
+/** The parent's state: what `bind:value`, `bind:state` and the page's own props would hold. */
+interface ParentState {
+    value: number | null;
+    measured: number[];
+    state: BenchmarkState;
+    /** Round four: verdicts already worded (the lab's way)… */
+    verdicts?: ReadonlyMap<number, PickerVerdict>;
+    /** …or the page's window and target currency, which make the picker ask the engine. */
+    period?: Period;
+    currency?: string;
+}
+
+interface MountOptions {
+    measured?: number[];
+    testid?: string;
+    hint?: string;
+    verdicts?: ReadonlyMap<number, PickerVerdict>;
+    period?: Period;
+    currency?: string;
+}
 
 interface Mounted {
-    /** The parent's state: what `bind:value`, `bind:state` and the page's measured ids would hold. */
-    box: {value: number | null; measured: number[]; state: BenchmarkState};
+    /** The parent's state: what `bind:value`, `bind:state` and the page's props would hold. */
+    box: ParentState;
     /** Every write the component made to `value`, with the shared store as it stood at that instant. */
     writes: Array<{value: number | null; storeAtWrite: number | null}>;
     /** Every state the component wrote, in order. */
@@ -270,15 +440,17 @@ interface Mounted {
  * Mount the picker as a page would: `value` and `state` bound to the parent's `$state`,
  * the measured ids read from it too, so a page that changes what it measures is a plain
  * assignment. `measured` left undefined passes no prop at all, so the default is what
- * runs; so does `hint`, which becomes `measuredHint` when given.
+ * runs; so does `hint`, which becomes `measuredHint` when given. Round four's `verdicts`,
+ * `period` and `currency` are read from the parent's state the same way, and only when
+ * given: a picker mounted without them has neither, which is a case of its own.
  *
  * The parent's `state` starts at `'none'`, as a page's `$state('none')` would, and not
  * `undefined`: binding `undefined` to a prop that declares a fallback is a Svelte error
  * (`props_invalid_value`), so a picker written `state = $bindable('none')` would refuse
  * to mount for a reason that is the harness's, not the picker's.
  */
-function mount(options: {measured?: number[]; testid?: string; hint?: string} = {}): Mounted {
-    const box = reactiveBox<{value: number | null; measured: number[]; state: BenchmarkState}>({value: null, measured: options.measured ?? [], state: 'none'});
+function mount(options: MountOptions = {}): Mounted {
+    const box = reactiveBox<ParentState>({value: null, measured: options.measured ?? [], state: 'none', verdicts: options.verdicts, period: options.period, currency: options.currency});
     const writes: Mounted['writes'] = [];
     const states: BenchmarkState[] = [];
     const onchange = vi.fn<(next: number | null) => void>();
@@ -305,6 +477,9 @@ function mount(options: {measured?: number[]; testid?: string; hint?: string} = 
     });
     if (options.measured !== undefined) {
         Object.defineProperty(props, 'measuredAssetIds', {enumerable: true, configurable: true, get: () => box.measured});
+    }
+    for (const key of ['verdicts', 'period', 'currency'] as const) {
+        if (options[key] !== undefined) Object.defineProperty(props, key, {enumerable: true, configurable: true, get: () => box[key]});
     }
     const view = render(BenchmarkSelect, props);
     const testid = options.testid ?? DEFAULT_TESTID;
@@ -334,7 +509,7 @@ async function resolutionSettled(): Promise<void> {
     await tick();
 }
 
-/** Open the list and wait for it to fill: `AssetSelect` shows "loading" until its cache call settles. */
+/** Open the list and wait for it to fill: the picker may still be loading its catalogue from the cache. */
 async function openList(m: Mounted): Promise<HTMLElement> {
     await fireEvent.click(m.trigger);
     const listbox = await within(m.root).findByRole('listbox');
@@ -364,8 +539,8 @@ async function choose(m: Mounted, asset: FixtureAsset): Promise<void> {
 }
 
 /**
- * Choose by typing and Enter. `SearchSelect` keeps its search box live while the list reads
- * "loading", and Enter picks from what the search shows — the one way a reader can beat
+ * Choose by typing and Enter. The picker keeps its search box live while its list may still
+ * read "loading", and Enter picks from what the search shows — the one way a reader can beat
  * the mount-time check to a choice, which is the case the race tests exist for.
  */
 async function chooseByTyping(m: Mounted, query: string): Promise<void> {
@@ -388,34 +563,157 @@ function deferred(): {promise: Promise<void>; resolve: () => void} {
     return {promise, resolve};
 }
 
+// ─── Helpers, round four ────────────────────────────────────────────────────────────────────
+
+type QueryEligibility = (assetIds: readonly number[], period: Period, currency: string) => Promise<EligibilityVerdicts | null>;
+
+/**
+ * The question the picker puts to the store, through the spy installed above. Read through
+ * the namespace: the export does not exist before stage 2, and a named import would fail the
+ * type check instead of the cases that are about it.
+ */
+function eligibilitySpy(): Mock<QueryEligibility> {
+    return (riskStore as unknown as {queryEligibility: Mock<QueryEligibility>}).queryEligibility;
+}
+
+/** Each question the picker asked the store: the ids (once each, sorted), the period and the currency. */
+function questions(): Array<{ids: number[]; period: unknown; currency: unknown}> {
+    return eligibilitySpy().mock.calls.map(([ids, period, currency]) => ({ids: [...new Set(ids)].sort((left, right) => left - right), period, currency}));
+}
+
+interface EligibilityBody {
+    asset_ids: number[];
+    date_range: {start: string; end?: string | null};
+    target_currency: string;
+}
+
+/** The engine's answer to one request: a verdict for exactly the ids asked, through the generated schema the client validates against. */
+function engineAnswer(assetIds: readonly number[], verdictFor: (assetId: number) => EngineVerdict = engineView) {
+    return schemas.RiskEligibilityResponse.parse({
+        items: assetIds.map((assetId) => {
+            const verdict = verdictFor(assetId);
+            // An asset with no quote in the period has no first or last one to report either.
+            const quoted = !(verdict.reasons ?? []).includes('no_prices');
+            return {
+                asset_id: assetId,
+                level: verdict.level,
+                reasons: [...(verdict.reasons ?? [])],
+                first_quote: quoted ? '2025-02-03' : null,
+                last_quote: quoted ? '2025-12-30' : null,
+                quotes_in_period: quoted ? 220 : 0,
+            };
+        }),
+        min_quotes: 20,
+        stale_days: 7,
+    });
+}
+
+/** The engine answers every request at once. */
+function engineAnswers(verdictFor: (assetId: number) => EngineVerdict = engineView): void {
+    engine.api.mockImplementation(async (body: EligibilityBody) => engineAnswer(body.asset_ids, verdictFor));
+}
+
+interface HeldRequest {
+    body: EligibilityBody;
+    answer: (verdictFor?: (assetId: number) => EngineVerdict) => void;
+}
+
+/** The engine keeps every request until the case answers it, so "while it asks" is a state, not a race. */
+function engineHolds(): HeldRequest[] {
+    const held: HeldRequest[] = [];
+    engine.api.mockImplementation(
+        (body: EligibilityBody) =>
+            new Promise((resolve) => {
+                held.push({body, answer: (verdictFor = engineView) => resolve(engineAnswer(body.asset_ids, verdictFor))});
+            }),
+    );
+    return held;
+}
+
+/**
+ * The sentences the reader must find for `assetId`, worded by `describeEligibility` from the
+ * engine's answer through the `$_` the component uses. The reasons in this fixture carry no
+ * date, so the formatter's locale cannot change a sentence.
+ */
+function engineSentences(assetId: number): string[] {
+    const verdicts = mergeEligibilityAnswers([engineAnswer([assetId])]);
+    const item = verdicts.items.get(assetId);
+    if (!item) throw new Error(`the fixture engine gave #${assetId} no verdict`);
+    const translate = (key: string, options?: {values?: Record<string, string | number>}): string => get(_)(key, options);
+    return [...describeEligibility(item, verdicts, CURRENCY, translate, dayFormatter('en')).texts];
+}
+
+/**
+ * The picker's clock, faked: the debounce is 300 ms of it, so "not yet" and "now" are facts
+ * and not bets on the machine. `Date` with it, for the panel's guard against reopening within
+ * 200 ms of a close. With it on, nothing may `waitFor`: that would wait on this clock.
+ */
+function fakeClock(): void {
+    vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+}
+
+/** Every promise the picker started has answered and the DOM has caught up, with no time passing. */
+async function settle(): Promise<void> {
+    for (let round = 0; round < 3; round += 1) {
+        await vi.advanceTimersByTimeAsync(0);
+        await tick();
+    }
+}
+
+/** `ms` of the picker's clock go by, then everything settles. */
+async function elapse(ms: number): Promise<void> {
+    await vi.advanceTimersByTimeAsync(ms);
+    await settle();
+}
+
+/** Open the list with the clock faked: one click on a closed picker, then the list as it stands. */
+async function openNow(m: Mounted): Promise<HTMLElement> {
+    await fireEvent.click(m.trigger);
+    return within(m.root).getByRole('listbox');
+}
+
+/** The section of ruled-out assets, inside this picker. */
+function blockedSection(m: Mounted): HTMLElement {
+    return within(m.root).getByTestId(`${m.testid}-blocked`);
+}
+
+function optionOf(container: HTMLElement, assetId: number): HTMLElement {
+    return within(container).getByTestId(`search-select-option-${assetId}`);
+}
+
+/** `risk.benchmark.blocked` as the component resolves it. */
+function blockedTitle(): string {
+    return get(_)(BLOCKED_KEY);
+}
+
+/** The bound prop and the root attribute say the same thing. */
+function expectPublished(m: Mounted, state: BenchmarkState, message?: string): void {
+    expect(control(m), message).toHaveAttribute('data-benchmark-state', state);
+    expect(m.box.state, message).toBe(state);
+}
+
 beforeAll(async () => {
     await setupI18n('en');
 });
 
+afterEach(() => {
+    vi.useRealTimers();
+});
+
 beforeEach(() => {
-    // This jsdom build exposes no `localStorage` at all (see `DataTable.test.ts`), and the
-    // shared key is half of what this file pins: same Map-backed stand-in as
-    // `riskBenchmarkStore.test.ts`, fresh for every case.
-    const backing = new Map<string, string>();
-    Object.defineProperty(globalThis, 'localStorage', {
-        configurable: true,
-        writable: true,
-        value: {
-            getItem: (key: string) => backing.get(key) ?? null,
-            setItem: (key: string, value: string) => void backing.set(key, String(value)),
-            removeItem: (key: string) => void backing.delete(key),
-            clear: () => backing.clear(),
-            key: (index: number) => [...backing.keys()][index] ?? null,
-            get length() {
-                return backing.size;
-            },
-        },
-    });
+    // A fresh stand-in for every case (see `storage` above).
+    storage.install();
     cache.entries = FIXTURE.map((asset) => ({...asset}));
     cache.gate = null;
     cache.failure = null;
     resolveSpy().mockClear();
     vi.mocked(ensureAssetsLoaded).mockClear();
+    // Round four: an engine that answers at once unless a case says otherwise, a spy with no
+    // history, and a store that remembers no answer a neighbouring case got.
+    engine.api.mockReset();
+    engineAnswers();
+    eligibilitySpy().mockClear();
+    riskStore.invalidateRisk();
 });
 
 // ─── The harness itself ─────────────────────────────────────────────────────────────────────
@@ -1050,6 +1348,568 @@ describe('BenchmarkSelect — the resolution state it publishes', () => {
         expect(control(m)).toHaveAttribute('data-benchmark-id', String(DUNE.id));
         expect(m.box.value).toBe(DUNE.id);
         expect(riskBenchmark.assetId).toBe(DUNE.id);
+        expect(localStorage.getItem(keyFor(reader))).toBe(String(DUNE.id));
+    });
+});
+
+// ═══ Fourth round (06/10/2026), stage 2: on the shared panel, with the engine's eligibility ══
+//
+// `BenchmarkSelect` mounts F's `AssetPickerPanel` (`mode="single"`) in place of `AssetSelect`,
+// and D378 makes the one picker the same on every page: the assets the engine cannot measure in
+// the page's period are listed apart, read-only, with the engine's reasons; a stored benchmark it
+// cannot measure is kept but published `blocked`, and pages compare only on `set`. The verdicts
+// come from the page (`verdicts`, the lab's way) or from the engine, through the store's
+// `queryEligibility`, when the page hands in a `period` and a `currency`. Cases with a debounce
+// run on a faked clock (`fakeClock`), where nothing may `waitFor`.
+
+// ─── 9. The harness, round four ─────────────────────────────────────────────────────────────
+
+describe('BenchmarkSelect — the harness, round four', () => {
+    it('owns an engine view and given verdicts where every rule has something to act on', () => {
+        // A ruled-out benchmark beside an admitted one: the «Benchmark» section loses one and keeps one.
+        expect([AURORA.is_benchmark, BOREALIS.is_benchmark]).toEqual([true, true]);
+        expect(engineView(BOREALIS.id).level).toBe('ineligible');
+        expect(engineView(AURORA.id).level).toBe('eligible');
+        expect(engineView(DUNE.id).level, 'a warning, which must leave its asset selectable').toBe('warning');
+        // The lab's verdicts rule out the same benchmark and leave two assets with none.
+        expect(givenVerdicts().get(BOREALIS.id)?.level).toBe('ineligible');
+        expect(FIXTURE.filter((asset) => !givenVerdicts().has(asset.id)).map((asset) => asset.id)).toEqual([COBALT.id, EMBER.id]);
+        expect(P1).not.toEqual(P2);
+    });
+
+    it('words the ruled-out benchmark in sentences from the shipped catalogue, one per reason, never a key', () => {
+        const sentences = engineSentences(BOREALIS.id);
+        expect(sentences).toHaveLength((NO_PRICES.reasons ?? []).length);
+        for (const sentence of sentences) expect(sentence).not.toMatch(RAW_KEY);
+    });
+});
+
+// ─── 10. What stays as it was ───────────────────────────────────────────────────────────────
+
+describe('BenchmarkSelect — on the shared panel, what stays as it was', () => {
+    it('orders each section as AssetSelect did — active assets first, then by name — whatever order the cache holds', async () => {
+        // The panel shows the order it is given and never sorts: the picker must.
+        /** Inactive, and first by name: only "active first" puts it after DUNE. */
+        const AMBER = {id: 204, display_name: 'Amber Retired Fund', currency: 'EUR', asset_type: 'FUND', active: false, is_benchmark: false, tx_count_own: 0};
+        cache.entries = [DUNE, EMBER, BOREALIS, AMBER, COBALT, AURORA].map((asset) => ({...asset}));
+        returningReader(null);
+        const m = mount();
+        await resolutionSettled();
+
+        const rows = rowsOf(await openList(m));
+
+        // The order written out below is assetSelectOrder's, section by section.
+        expect(assetSelectOrder([BOREALIS, AURORA]).map((asset) => asset.id)).toEqual([AURORA.id, BOREALIS.id]);
+        expect(assetSelectOrder([DUNE, EMBER, AMBER, COBALT]).map((asset) => asset.id)).toEqual([COBALT.id, DUNE.id, AMBER.id, EMBER.id]);
+        expect(rows).toEqual(['title', AURORA.id, BOREALIS.id, 'title', COBALT.id, DUNE.id, AMBER.id, EMBER.id]);
+    });
+
+    it('titles the benchmarks and the rest with the section test ids it has always had', async () => {
+        returningReader(null);
+        const m = mount();
+        await resolutionSettled();
+
+        const listbox = await openList(m);
+
+        const titles = Array.from(listbox.querySelectorAll<HTMLElement>('[data-testid^="search-select-header-"]')).map((title) => title.getAttribute('data-testid'));
+        expect(titles).toEqual(['search-select-header-__section:benchmark', 'search-select-header-__section:__rest']);
+    });
+
+    it('says under `${testid}-load-error`, inside its root, that the asset list could not be loaded', async () => {
+        cache.entries = [];
+        cache.failure = new Error('synthetic: asset list unreachable');
+        returningReader(null);
+        const m = mount({testid: ASSET_PAGE_TESTID});
+
+        const message = await screen.findByTestId(`${ASSET_PAGE_TESTID}-load-error`);
+        expect(control(m)).toContainElement(message);
+    });
+});
+
+// ─── 11. The title of the section apart ─────────────────────────────────────────────────────
+
+describe('BenchmarkSelect — the title of the section of ruled-out assets', () => {
+    it.each(Object.keys(CATALOGUES) as (keyof typeof CATALOGUES)[])(`ships ${BLOCKED_KEY} in %s.json`, (locale) => {
+        const sentence = at(CATALOGUES[locale], BLOCKED_KEY);
+        expect(typeof sentence, `${BLOCKED_KEY} is missing from ${locale}.json: the assets the engine rules out would sit under no title`).toBe('string');
+        expect(normalize(sentence as string)).not.toBe('');
+    });
+
+    it(`resolves ${BLOCKED_KEY} through the $_ the component uses`, () => {
+        // svelte-i18n echoes a missing id back: the section would be titled with its own key.
+        expect(blockedTitle(), `${BLOCKED_KEY} does not resolve: the catalogue is not loaded or the key is missing`).not.toBe(BLOCKED_KEY);
+    });
+});
+
+// ─── 12. Where the verdicts come from ───────────────────────────────────────────────────────
+
+describe('BenchmarkSelect — where the verdicts come from', () => {
+    beforeEach(() => {
+        fakeClock();
+    });
+
+    it('asks nothing and rules nothing out with neither verdicts nor a period: data-eligibility="none"', async () => {
+        returningReader(null);
+        const m = mount();
+        await settle();
+        await elapse(1_000);
+
+        expect(control(m), 'the root does not say where its verdicts come from').toHaveAttribute('data-eligibility', 'none');
+        expect(eligibilitySpy(), 'a picker with no period asked the store').not.toHaveBeenCalled();
+        expect(engine.api).not.toHaveBeenCalled();
+        const listbox = await openNow(m);
+        expect(new Set(offeredIds(listbox))).toEqual(new Set(ALL_IDS));
+        for (const id of ALL_IDS) expect(optionOf(listbox, id)).toBeEnabled();
+        expect(within(m.root).queryByTestId(`${m.testid}-blocked`)).toBeNull();
+    });
+
+    it.each<[string, Pick<MountOptions, 'period' | 'currency'>]>([
+        ['alone', {}],
+        ['beside a period and a currency', {period: P1, currency: CURRENCY}],
+    ])('takes the verdicts it is given as they are, %s, and asks nothing: data-eligibility="given"', async (_label, extra) => {
+        returningReader(null);
+        const m = mount({verdicts: givenVerdicts(), ...extra});
+        await settle();
+        await elapse(1_000);
+
+        expect(control(m), 'the root does not say its verdicts were given').toHaveAttribute('data-eligibility', 'given');
+        expect(eligibilitySpy(), 'the picker asked the store although the page handed it verdicts').not.toHaveBeenCalled();
+        expect(engine.api, 'the engine was asked although the page handed the picker its verdicts').not.toHaveBeenCalled();
+    });
+
+    it('lists a ruled-out asset apart, under its title, disabled and with its reasons; a warning or no verdict stays selectable', async () => {
+        returningReader(null);
+        const m = mount({verdicts: givenVerdicts()});
+        await settle();
+
+        const listbox = await openNow(m);
+        const blocked = blockedSection(m);
+        expect(
+            within(blocked)
+                .queryAllByTestId(/^search-select-option-\d+$/)
+                .map(idOf),
+            'the section apart lists what the verdicts rule out, and only that',
+        ).toEqual([BOREALIS.id]);
+        const borealis = optionOf(blocked, BOREALIS.id);
+        expect(borealis).toBeDisabled();
+        expect(borealis).toHaveAttribute('data-level', 'ineligible');
+        expect(borealis).toHaveAttribute('data-reasons', 'no_prices');
+        for (const text of GIVEN_TEXTS.blocked) expect(borealis, 'the given verdict is not shown as given').toHaveTextContent(text);
+        expect(blockedTitle(), `${BLOCKED_KEY} does not resolve`).not.toBe(BLOCKED_KEY);
+        expect(blocked, `the section apart is not titled by ${BLOCKED_KEY}`).toHaveAccessibleName(blockedTitle());
+
+        for (const id of [AURORA.id, DUNE.id, COBALT.id, EMBER.id]) {
+            const option = optionOf(listbox, id);
+            expect(blocked, `#${id} is listed apart`).not.toContainElement(option);
+            expect(option, `#${id} cannot be chosen`).toBeEnabled();
+        }
+        expect(within(optionOf(listbox, DUNE.id)).getByTestId(`${m.testid}-warning-${DUNE.id}`), 'a warned asset does not carry the panel’s ⚠').toBeInTheDocument();
+    });
+
+    it('refuses a ruled-out asset, and takes a warned one', async () => {
+        const reader = returningReader(null);
+        const m = mount({verdicts: givenVerdicts()});
+        await settle();
+
+        await openNow(m);
+        await fireEvent.click(optionOf(blockedSection(m), BOREALIS.id));
+        expect(m.onchange, 'a ruled-out asset was chosen').not.toHaveBeenCalled();
+        expect(riskBenchmark.assetId).toBeNull();
+        expectPublished(m, 'none');
+
+        // A refused click leaves the list open: the warned asset is chosen from the same list.
+        await fireEvent.click(optionOf(m.root, DUNE.id));
+        expect(m.onchange).toHaveBeenCalledExactlyOnceWith(DUNE.id);
+        expectPublished(m, 'set');
+        expect(localStorage.getItem(keyFor(reader))).toBe(String(DUNE.id));
+    });
+
+    it('asks the store once, 300 ms after mounting, about the catalogue it offers, with the page’s period and currency', async () => {
+        returningReader(null);
+        mount({period: P1, currency: CURRENCY, measured: [DUNE.id]});
+        await settle();
+
+        await elapse(299);
+        expect(eligibilitySpy(), 'the question left before the 300 ms debounce was over').not.toHaveBeenCalled();
+        await elapse(1);
+        expect(eligibilitySpy(), 'no queryEligibility 300 ms after mounting with a period and a currency').toHaveBeenCalledTimes(1);
+        expect(questions()[0], 'not the question of the catalogue on offer, for the page’s period and currency').toEqual({ids: [AURORA.id, BOREALIS.id, COBALT.id, EMBER.id], period: P1, currency: CURRENCY});
+        expect(engine.api, 'the question did not reach the engine through the store').toHaveBeenCalledTimes(1);
+
+        await elapse(1_000);
+        expect(eligibilitySpy(), 'the picker asked again with nothing changed').toHaveBeenCalledTimes(1);
+    });
+
+    it('puts the current choice in its question even when the page measures it, and leaves the other measured assets out', async () => {
+        returningReader(AURORA.id);
+        mount({period: P1, currency: CURRENCY, measured: [AURORA.id, DUNE.id]});
+        await settle();
+        await elapse(300);
+
+        expect(eligibilitySpy(), 'no queryEligibility 300 ms after mounting with a period and a currency').toHaveBeenCalled();
+        expect(questions().at(-1)?.ids, 'the question must judge the current choice, and nothing else the page measures').toEqual([AURORA.id, BOREALIS.id, COBALT.id, EMBER.id]);
+    });
+
+    it('publishes data-eligibility pending while it waits out the debounce and while it asks, then ready', async () => {
+        const held = engineHolds();
+        returningReader(null);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+
+        expect(control(m), 'waiting out the debounce is waiting').toHaveAttribute('data-eligibility', 'pending');
+        await elapse(300);
+        expect(held, 'premise: the question reached the engine').toHaveLength(1);
+        expect(control(m), 'a question in flight is waiting').toHaveAttribute('data-eligibility', 'pending');
+
+        held[0].answer();
+        await settle();
+        expect(control(m)).toHaveAttribute('data-eligibility', 'ready');
+    });
+
+    it('words the engine’s verdicts with describeEligibility: a ruled-out asset apart in the reader’s sentences, a late starter selectable with ⚠', async () => {
+        returningReader(null);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+        expect(engine.api, 'premise: the engine was asked').toHaveBeenCalledTimes(1);
+
+        const listbox = await openNow(m);
+        const blocked = blockedSection(m);
+        const borealis = optionOf(blocked, BOREALIS.id);
+        expect(borealis).toBeDisabled();
+        expect(borealis).toHaveAttribute('data-level', 'ineligible');
+        expect(borealis, 'the engine’s codes are not on the row').toHaveAttribute('data-reasons', (NO_PRICES.reasons ?? []).join(' '));
+        for (const sentence of engineSentences(BOREALIS.id)) expect(borealis, 'a reason is not worded by describeEligibility').toHaveTextContent(sentence);
+        expect(blocked).toHaveAccessibleName(blockedTitle());
+
+        const dune = optionOf(listbox, DUNE.id);
+        expect(blocked).not.toContainElement(dune);
+        expect(dune).toBeEnabled();
+        expect(dune).toHaveAttribute('data-level', 'warning');
+        expect(within(dune).getByTestId(`${m.testid}-warning-${DUNE.id}`)).toBeInTheDocument();
+        for (const id of [AURORA.id, COBALT.id, EMBER.id]) expect(optionOf(listbox, id)).toBeEnabled();
+    });
+
+    it('reads a failed request as failed: nothing ruled out, everything selectable, and the failure logged', async () => {
+        const failure = new Error('synthetic: eligibility engine unreachable');
+        engine.api.mockRejectedValue(failure);
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            returningReader(null);
+            const m = mount({period: P1, currency: CURRENCY});
+            await settle();
+            await elapse(300);
+
+            expect(engine.api, 'premise: the engine was asked').toHaveBeenCalled();
+            expect(control(m)).toHaveAttribute('data-eligibility', 'failed');
+            const logged = errors.mock.calls.some((args) => args.some((arg) => arg === failure || (typeof arg === 'string' && arg.includes(failure.message))));
+            expect(logged, 'the failure was swallowed: no console.error carries it').toBe(true);
+            const listbox = await openNow(m);
+            expect(within(m.root).queryByTestId(`${m.testid}-blocked`), 'a failure ruled something out').toBeNull();
+            for (const id of ALL_IDS) expect(optionOf(listbox, id)).toBeEnabled();
+        } finally {
+            errors.mockRestore();
+        }
+    });
+
+    it('asks again, after the same debounce, when the page moves its period or changes its currency', async () => {
+        returningReader(null);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+        expect(eligibilitySpy(), 'premise: the first question left').toHaveBeenCalledTimes(1);
+
+        m.box.period = P2;
+        await settle();
+        await elapse(299);
+        expect(eligibilitySpy(), 'a new period asked before the debounce was over').toHaveBeenCalledTimes(1);
+        await elapse(1);
+        expect(eligibilitySpy(), 'a new period asked nothing').toHaveBeenCalledTimes(2);
+        expect(questions()[1]).toEqual({ids: ALL_IDS, period: P2, currency: CURRENCY});
+
+        m.box.currency = 'USD';
+        await settle();
+        await elapse(300);
+        expect(eligibilitySpy(), 'a new currency asked nothing').toHaveBeenCalledTimes(3);
+        expect(questions()[2]).toEqual({ids: ALL_IDS, period: P2, currency: 'USD'});
+    });
+
+    it.each(['after', 'before'] as const)('ignores the answer to an older question landing %s the answer to the newer one', async (order) => {
+        const held = engineHolds();
+        returningReader(null);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+        m.box.period = P2;
+        await settle();
+        await elapse(300);
+        expect(
+            held.map((request) => request.body.date_range.start),
+            'premise: one question per period reached the engine',
+        ).toEqual([P1.start, P2.start]);
+
+        // Under P1 the engine rules BOREALIS out; under P2 it admits every asset.
+        const older = () => held[0].answer(engineView);
+        const newer = () => held[1].answer(() => ADMITTED);
+        if (order === 'after') {
+            newer();
+            await settle();
+            older();
+        } else {
+            older();
+            await settle();
+            expect(control(m), 'the answer to the older question was taken for the current one').toHaveAttribute('data-eligibility', 'pending');
+            newer();
+        }
+        await settle();
+
+        expect(control(m)).toHaveAttribute('data-eligibility', 'ready');
+        const listbox = await openNow(m);
+        expect(within(m.root).queryByTestId(`${m.testid}-blocked`), 'the verdict of a superseded question is on screen').toBeNull();
+        expect(optionOf(listbox, BOREALIS.id)).toBeEnabled();
+    });
+
+    it('asks the engine no second time when remounted on the same question: the store’s cache answers', async () => {
+        returningReader(null);
+        const first = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+        expect(control(first), 'premise: the first picker got its answer').toHaveAttribute('data-eligibility', 'ready');
+        expect(engine.api).toHaveBeenCalledTimes(1);
+        first.unmount();
+
+        const second = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+
+        expect(control(second)).toHaveAttribute('data-eligibility', 'ready');
+        expect(engine.api, 'the remounted picker sent the same question to the engine again').toHaveBeenCalledTimes(1);
+        await openNow(second);
+        expect(optionOf(blockedSection(second), BOREALIS.id), 'the cached answer did not reach the remounted picker').toBeDisabled();
+    });
+});
+
+// ─── 13. A current choice the engine rules out (D378) ───────────────────────────────────────
+
+describe('BenchmarkSelect — a current choice the engine rules out (D378)', () => {
+    /**
+     * All D378 keeps of a blocked choice: the id wherever a page reads it, and the stored
+     * choice untouched. No `waitFor` inside: the faked-clock cases call it too.
+     */
+    async function expectBlockedButKept(m: Mounted, reader: string, asset: FixtureAsset): Promise<void> {
+        expectPublished(m, 'blocked', `the engine rules ${asset.display_name} out, and it is the current choice`);
+        expect(m.box.value, 'a blocked choice lost its value').toBe(asset.id);
+        expect(control(m)).toHaveAttribute('data-benchmark-id', String(asset.id));
+        expect(m.trigger, 'a blocked choice is no longer the one shown').toHaveTextContent(asset.display_name);
+        expect(riskBenchmark.assetId, 'the picker cleared the shared choice').toBe(asset.id);
+        expect(localStorage.getItem(keyFor(reader)), 'the picker cleared the stored key').toBe(String(asset.id));
+        // The store knows nothing of verdicts: it reads the stored choice as set, never blocked.
+        await expect(resolveRiskBenchmark()).resolves.toEqual({state: 'set', assetId: asset.id});
+    }
+
+    it('publishes blocked for a stored choice the given verdicts rule out, and keeps it: value, trigger, store, and current in the section apart', async () => {
+        const reader = returningReader(BOREALIS.id);
+        const m = mount({verdicts: givenVerdicts()});
+        await resolutionSettled();
+        await waitFor(() => expectPublished(m, 'blocked', 'the given verdicts rule the stored choice out'));
+
+        await expectBlockedButKept(m, reader, BOREALIS);
+        expect(transitions(m.states), 'blocked as soon as the verdicts say so — never set on the way, which a page comparing on set would have acted on').toEqual(['pending', 'blocked']);
+
+        const listbox = await openList(m);
+        const borealis = optionOf(blockedSection(m), BOREALIS.id);
+        expect(borealis, 'the section apart does not mark the current choice').toHaveAttribute('aria-selected', 'true');
+        expect(borealis).toBeDisabled();
+        expect(within(listbox).getAllByTestId(`search-select-option-${BOREALIS.id}`), 'listed once').toHaveLength(1);
+    });
+
+    it('follows the given verdicts: blocked as soon as they rule the current choice out, set again once they no longer do', async () => {
+        returningReader(AURORA.id);
+        const m = mount({verdicts: new Map<number, PickerVerdict>()});
+        await resolutionSettled();
+        await waitFor(() => expectPublished(m, 'set', 'no verdict on the choice: nothing to block'));
+
+        m.box.verdicts = new Map([[AURORA.id, RULED_OUT]]);
+        await waitFor(() => expectPublished(m, 'blocked', 'the verdicts now rule the current choice out'));
+        expect(m.box.value).toBe(AURORA.id);
+
+        m.box.verdicts = new Map([[AURORA.id, ADMITTED_VERDICT]]);
+        await waitFor(() => expectPublished(m, 'set', 'the verdicts admit the current choice again'));
+        expect(transitions(m.states)).toEqual(['pending', 'set', 'blocked', 'set']);
+        expect(riskBenchmark.assetId).toBe(AURORA.id);
+    });
+
+    it('keeps set a stored choice the given verdicts only warn about', async () => {
+        returningReader(DUNE.id);
+        const m = mount({verdicts: givenVerdicts()});
+        await resolutionSettled();
+
+        await waitFor(() => expectPublished(m, 'set'));
+        expect(m.box.value).toBe(DUNE.id);
+        expect(transitions(m.states)).toEqual(['pending', 'set']);
+    });
+
+    it('with a period, keeps a stored choice pending until its verdict for that period is in, then set', async () => {
+        fakeClock();
+        const held = engineHolds();
+        returningReader(AURORA.id);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+
+        expectPublished(m, 'pending', 'the list confirmed the stored benchmark, but its verdict for the period is not in');
+        await elapse(300);
+        expect(held, 'premise: the question reached the engine').toHaveLength(1);
+        expectPublished(m, 'pending', 'the question that judges the stored benchmark is in flight');
+
+        held[0].answer();
+        await settle();
+        expectPublished(m, 'set');
+        expect(m.box.value).toBe(AURORA.id);
+        expect(control(m)).toHaveAttribute('data-benchmark-id', String(AURORA.id));
+        expect(transitions(m.states)).toEqual(['pending', 'set']);
+    });
+
+    it('with a period, makes a stored choice the engine rules out blocked once its verdict is in, and keeps it', async () => {
+        fakeClock();
+        const held = engineHolds();
+        const reader = returningReader(BOREALIS.id);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+        expect(held, 'premise: the question reached the engine').toHaveLength(1);
+        expect(held[0].body.asset_ids, 'the question left out the stored choice it has to judge').toContain(BOREALIS.id);
+        expectPublished(m, 'pending');
+
+        held[0].answer();
+        await settle();
+
+        await expectBlockedButKept(m, reader, BOREALIS);
+        expect(transitions(m.states), 'never set on the way: a page comparing on set would have asked once').toEqual(['pending', 'blocked']);
+        await openNow(m);
+        expect(optionOf(blockedSection(m), BOREALIS.id), 'the section apart does not mark the current choice').toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('goes back to pending when the page moves its period, until the verdict for the new one is in', async () => {
+        fakeClock();
+        const held = engineHolds();
+        returningReader(BOREALIS.id);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+        expect(held, 'premise: the question reached the engine').toHaveLength(1);
+        held[0].answer(() => ADMITTED);
+        await settle();
+        expectPublished(m, 'set', 'premise: the engine admits the stored benchmark under P1');
+
+        m.box.period = P2;
+        await settle();
+        expectPublished(m, 'pending', 'a new period: the verdict in hand is for the old one');
+        await elapse(300);
+        expect(held, 'premise: the new period was asked about').toHaveLength(2);
+        expectPublished(m, 'pending', 'the question about the new period is in flight');
+
+        // Under P2 the engine rules BOREALIS out.
+        held[1].answer();
+        await settle();
+        expectPublished(m, 'blocked');
+        expect(transitions(m.states)).toEqual(['pending', 'set', 'pending', 'blocked']);
+        expect(riskBenchmark.assetId).toBe(BOREALIS.id);
+    });
+
+    it('takes a null from the store for no answer: pending still, the same question again after the same debounce, settled by the next answer', async () => {
+        fakeClock();
+        // `null` is the store's word for an answer it discarded, its cache emptied while the question
+        // was in flight (a sync, a session change). Stood in for once: every later question goes
+        // through to the real store and this file's engine, which rules BOREALIS out under P1.
+        eligibilitySpy().mockResolvedValueOnce(null);
+        try {
+            const reader = returningReader(BOREALIS.id);
+            const m = mount({period: P1, currency: CURRENCY});
+            await settle();
+            await elapse(300);
+
+            // Positive control: the first question left, and what came back was that null, not a verdict.
+            expect(eligibilitySpy(), 'premise: the first question left after the debounce').toHaveBeenCalledTimes(1);
+            expect(eligibilitySpy().mock.settledResults[0], 'premise: the first question was answered null').toEqual({type: 'fulfilled', value: null});
+            expect(engine.api, 'premise: the null stood in for the engine, which nothing reached').not.toHaveBeenCalled();
+            expect(control(m), 'a null was taken for the verdicts').toHaveAttribute('data-eligibility', 'pending');
+            expectPublished(m, 'pending', 'a null is no verdict on the stored choice, and a page compares on set');
+
+            await elapse(299);
+            expect(eligibilitySpy(), 'asked again before the debounce was over').toHaveBeenCalledTimes(1);
+            await elapse(1);
+            expect(eligibilitySpy(), 'a null was not asked again: the picker waits for an answer nobody will give').toHaveBeenCalledTimes(2);
+            expect(questions()[0]).toEqual({ids: ALL_IDS, period: P1, currency: CURRENCY});
+            expect(questions()[1], 'the second question is not the first one asked again').toEqual(questions()[0]);
+            expect(engine.api, 'the second question did not reach the engine through the store').toHaveBeenCalledTimes(1);
+
+            // Settled by the second answer: ready, and the stored choice blocked — never set on the way.
+            expect(control(m)).toHaveAttribute('data-eligibility', 'ready');
+            await expectBlockedButKept(m, reader, BOREALIS);
+            expect(transitions(m.states), 'set on the way to blocked: a page comparing on set would have asked once').toEqual(['pending', 'blocked']);
+            await openNow(m);
+            const borealis = optionOf(blockedSection(m), BOREALIS.id);
+            expect(borealis, 'the second answer’s verdict is not on the list').toBeDisabled();
+            expect(borealis).toHaveAttribute('data-reasons', (NO_PRICES.reasons ?? []).join(' '));
+            expect(borealis).toHaveAttribute('aria-selected', 'true');
+
+            await elapse(1_000);
+            expect(eligibilitySpy(), 'an answer did not end the asking').toHaveBeenCalledTimes(2);
+        } finally {
+            // Spent by the first question, unless the case failed before it: never left for a neighbour.
+            eligibilitySpy().mockReset();
+        }
+    });
+
+    it('makes a stored choice set when the eligibility request fails: a failure locks nothing', async () => {
+        fakeClock();
+        engine.api.mockRejectedValue(new Error('synthetic: eligibility engine unreachable'));
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            returningReader(BOREALIS.id);
+            const m = mount({period: P1, currency: CURRENCY});
+            await settle();
+            await elapse(300);
+
+            expect(control(m), 'premise: the request failed').toHaveAttribute('data-eligibility', 'failed');
+            expectPublished(m, 'set');
+            expect(m.box.value).toBe(BOREALIS.id);
+            expect(transitions(m.states)).toEqual(['pending', 'set']);
+        } finally {
+            errors.mockRestore();
+        }
+    });
+
+    it('keeps a stored id the list does not hold unknown under a period: there is no verdict to wait for', async () => {
+        fakeClock();
+        const reader = returningReader(GONE_ID);
+        const m = mount({period: P1, currency: CURRENCY});
+        await settle();
+        await elapse(300);
+
+        expectPublished(m, 'unknown');
+        expect(m.box.value).toBeNull();
+        expect(localStorage.getItem(keyFor(reader))).toBe(String(GONE_ID));
+    });
+
+    it('turns blocked into set when the reader chooses an asset that can be chosen — store, state and value before onchange', async () => {
+        const reader = returningReader(BOREALIS.id);
+        const m = mount({verdicts: givenVerdicts()});
+        await resolutionSettled();
+        await waitFor(() => expectPublished(m, 'blocked', 'premise: the stored choice is ruled out'));
+        m.onchange.mockClear();
+        const heard: Array<{next: number | null; state: BenchmarkState; store: number | null; value: number | null}> = [];
+        m.onchange.mockImplementation((next) => {
+            heard.push({next, state: m.box.state, store: riskBenchmark.assetId, value: m.box.value});
+        });
+
+        // DUNE carries a warning: selectable all the same.
+        await choose(m, DUNE);
+
+        expect(m.onchange).toHaveBeenCalledExactlyOnceWith(DUNE.id);
+        expect(heard[0], 'inside onchange the state, the store and value must already hold the choice').toEqual({next: DUNE.id, state: 'set', store: DUNE.id, value: DUNE.id});
+        expectPublished(m, 'set');
+        expect(control(m)).toHaveAttribute('data-benchmark-id', String(DUNE.id));
         expect(localStorage.getItem(keyFor(reader))).toBe(String(DUNE.id));
     });
 });
