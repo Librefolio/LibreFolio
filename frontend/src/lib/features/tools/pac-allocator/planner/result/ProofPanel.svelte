@@ -37,10 +37,10 @@
     const STATUS_FALLBACKS = {finished: 'finished', unfinished: 'unfinished', infeasible: 'infeasible'} as const;
     const STATUS_VARIANTS = {finished: 'success', unfinished: 'warning', infeasible: 'error'} as const;
     const HELP_FALLBACKS = {
-        status: 'Whether the solver closed this stage: finished means it proved the best value.',
+        status: 'Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at a limit. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing.',
         primal: 'The value of the best plan the solver found for this stage.',
-        dual: 'The bound the solver proved: no plan can do better than this.',
-        absoluteGap: 'Distance between the two values. 0 means the stage is closed at the optimum.',
+        dual: 'The bound the solver proved for this stage: none of the plans it searched can do better. From the second stage on, it searched only among plans as good as the chosen one on the stages above.',
+        absoluteGap: 'Distance between the two values. A gap of 0 proves the best value only when the stage is finished.',
         relativeGap: 'The same distance, as a fraction of the value.',
     } as const;
 
@@ -76,7 +76,7 @@
     });
 
     function scopeText(scope: 'global' | 'incumbent_face'): string {
-        return $t(`${KEY}.scopes.${scope}`, {default: scope === 'global' ? 'global scope' : 'incumbent face'});
+        return $t(`${KEY}.scopes.${scope}`, {default: scope === 'global' ? 'all plans' : 'only plans as good as the one found'});
     }
 
     interface ObjectiveHelp {
@@ -169,7 +169,7 @@
                     })}
                 </p>
             {:else if proof.kind === 'not_proven'}
-                <!-- Every finished stage is SCIP-optimal, so a published plan that is not proven always has an open stage: the badge says so. -->
+                <!-- Not proven: either a stage is still open, or every stage closed but the final exact check contradicted the solver's bounds; the badge help says which. -->
                 <p class="{HINT} first-letter:uppercase" data-testid="pac-planner-proof-reason">
                     {$t(`tools.pacAllocator.planner.result.proof.reasons.${proof.reason_code}`, {default: 'an exact proof was not established'})}
                 </p>
@@ -210,7 +210,9 @@
             </ol>
             <p class={HINT} data-testid="pac-planner-proof-tie-break">
                 <span class="font-medium">{$t(`${PLANNER_KEY}.strategy.tieBreakTitle`, {default: 'Final tie-break'})}</span> ·
-                {$t(`${PLANNER_KEY}.strategy.tieBreak`, {default: 'If a tie is still left, a fixed order of Assets and Brokers decides: the same data always give the same plan.'})}
+                {$t(`${PLANNER_KEY}.strategy.tieBreak`, {
+                    default: 'If a tie is still left, a fixed order of Assets and Brokers decides. A search that ends by itself always gives the same plan for the same data; one stopped by a time or node limit may give a different plan.',
+                })}
             </p>
         </div>
     {/if}
