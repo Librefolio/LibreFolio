@@ -31,6 +31,7 @@ import {userSettings} from '$lib/stores/app/settings';
 import {currentLanguage} from '$lib/stores/app/language';
 import {currencyStoreVersion, type CurrencyInfo} from '$lib/stores/reference/currencyStore';
 import type {CountryInfo} from '$lib/stores/reference/countryStore';
+import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 import AssetModal from './AssetModal.svelte';
 import type AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
 
@@ -1639,6 +1640,130 @@ describe('AssetModal search selection asks each identifier question once (R18)',
         expectComparison(['display_name']);
         await applyProviderTitle();
         expect(view.onReuseExisting).not.toHaveBeenCalled();
+        assertTraffic();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// K17 — a provider that only knows the family of the stored type.
+//
+// Borsa Italiana answers ETF for every fund of ETFplus. Against an asset stored
+// as ETF_STOCK that is no disagreement: the provider names the family the
+// subtype already belongs to, and knows nothing finer. Offered as a difference,
+// the row is ticked by default and Apply rewrites ETF_STOCK to ETF — a downgrade
+// nobody asked for. The developer's rule: a proposal of the parent type counts
+// as valid anyway, so no row is offered and the stored subtype stays. A sibling
+// subtype or a refinement is real information, and is still offered.
+//
+// The type the form holds is read off the closed type select, whose trigger
+// shows the picture of the selected type: an attribute, never a translated label.
+// ---------------------------------------------------------------------------
+
+const TYPE_READ_DESCRIPTION = 'Type metadata accepted';
+
+/** A stored asset of `assetType` whose classification the provider repeats verbatim: nothing is missing, so "all match" is reachable. */
+function typeEditFixture(assetType: string): EditData {
+    return editFixture({asset_type: assetType, classification_params: {sector_area: {distribution: {Technology: 1}}, geographic_area: {distribution: {USA: 1}}}});
+}
+
+/**
+ * Metadata agreeing with `typeEditFixture` on everything but the type — and the name, when one
+ * is given. Its description fills the empty field: the positive barrier before any absence claim.
+ */
+function typeMetadata(assetType: string, displayName = 'Owned Atlas security'): ProbeResponse {
+    return {
+        provider_code: 'lifecycle_atlas',
+        identifier: 'SYN-ATLAS',
+        total_execution_time_ms: 4,
+        metadata: {
+            success: true,
+            execution_time_ms: 4,
+            patch_data: {
+                display_name: displayName,
+                asset_type: assetType,
+                currency: 'USD',
+                classification_params: {
+                    short_description: TYPE_READ_DESCRIPTION,
+                    sector_area: {distribution: {Technology: '1'}},
+                    geographic_area: {distribution: {USA: '1'}},
+                },
+            },
+        },
+    };
+}
+
+/** A manual Ask provider landing `response`; ends once this very response was accepted. */
+async function askProviderForType(response: ProbeResponse) {
+    const metadata = plan('K17 type metadata', routes.metadata, [probeRequest(['metadata'])], response);
+    expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
+    await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
+    expectBusy(true);
+    await metadata.finish();
+    expectBusy(false);
+    // The description is compared after the type, in the same pass: once it has landed, the type has been decided too.
+    expect(screen.getByTestId('asset-modal-description')).toHaveValue(TYPE_READ_DESCRIPTION);
+}
+
+/** The picture of the type the form holds: the closed type select shows the selected type's, and only it. */
+function selectedTypePicture(): string | null {
+    const images = screen.getByTestId('asset-modal-type-button').querySelectorAll('img');
+    expect(images, 'the closed type select shows exactly one picture, the one of the selected type').toHaveLength(1);
+    return images[0].getAttribute('src');
+}
+
+/** The fields the comparison on screen asks about. */
+function comparisonFields(): string[] {
+    const modal = screen.getByTestId('comparison-modal');
+    expect(modal).toBeVisible();
+    return within(modal)
+        .getAllByTestId('comparison-card')
+        .map((card) => card.getAttribute('data-field') ?? '');
+}
+
+describe('AssetModal keeps a stored subtype the provider only knows by its family (K17)', () => {
+    it.each([
+        {label: 'nothing else differs', providerName: 'Owned Atlas security', after: [] as string[]},
+        {label: 'the name differs too', providerName: 'Provider family-only title', after: ['display_name']},
+    ])('offers no type row for ETF against a stored ETF_STOCK, and keeps the subtype ($label)', async ({providerName, after}) => {
+        expect(getAssetTypeIconUrl('ETF_STOCK'), 'ETF_STOCK and ETF share a picture: the type select could not tell the stored subtype from its family').not.toBe(getAssetTypeIconUrl('ETF'));
+        await renderEdit(typeEditFixture('ETF_STOCK'));
+        expect(selectedTypePicture()).toBe(getAssetTypeIconUrl('ETF_STOCK'));
+
+        await askProviderForType(typeMetadata('ETF', providerName));
+        // K17: today the family-only ETF arrives as a ticked difference, and Apply downgrades ETF_STOCK to ETF.
+        expect(screen.queryByTestId('comparison-checkbox-asset_type'), 'the provider proposed ETF, the family of the stored ETF_STOCK. By the K17 rule that is agreement, not a difference: offered as a row it is ticked by default, and Apply downgrades the stored subtype to its family').toBeNull();
+        if (after.length === 0) {
+            // Nothing left to ask: no dialog, and the "all match" claim proves the comparison ran to its end.
+            expect(screen.queryByTestId('comparison-modal')).toBeNull();
+            expect(mocks.toasts.success).toHaveBeenCalledTimes(1);
+        } else {
+            expect(comparisonFields()).toEqual(after);
+            await fireEvent.click(screen.getByTestId('comparison-apply'));
+            await flushUi();
+            expect(screen.queryByTestId('comparison-modal')).toBeNull();
+            expect(screen.getByTestId('asset-modal-display-name')).toHaveValue(providerName);
+        }
+        expect(selectedTypePicture(), 'the stored ETF_STOCK must survive a provider that only knows its family').toBe(getAssetTypeIconUrl('ETF_STOCK'));
+        assertTraffic();
+    });
+
+    it.each([
+        {label: 'a sibling subtype', stored: 'ETF_STOCK', proposed: 'ETF_BOND'},
+        {label: 'a refinement of the stored family', stored: 'ETF', proposed: 'ETF_STOCK'},
+    ])('still offers $label as a ticked type row, and Apply takes it ($stored → $proposed)', async ({stored, proposed}) => {
+        expect(getAssetTypeIconUrl(stored), `${stored} and ${proposed} share a picture: the type select could not tell them apart`).not.toBe(getAssetTypeIconUrl(proposed));
+        await renderEdit(typeEditFixture(stored));
+        expect(selectedTypePicture()).toBe(getAssetTypeIconUrl(stored));
+
+        await askProviderForType(typeMetadata(proposed));
+        expect(comparisonFields()).toEqual(['asset_type']);
+        expect(screen.getByTestId('comparison-body')).toHaveAttribute('data-total-count', '1');
+        expect(screen.getByTestId('comparison-checkbox-asset_type')).toBeChecked();
+        await fireEvent.click(screen.getByTestId('comparison-apply'));
+        await flushUi();
+        expect(screen.queryByTestId('comparison-modal')).toBeNull();
+        // The reading the family-only case relies on, proven live: the select follows a type the comparison wrote.
+        expect(selectedTypePicture()).toBe(getAssetTypeIconUrl(proposed));
         assertTraffic();
     });
 });

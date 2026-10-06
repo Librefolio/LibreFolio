@@ -19,7 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {X} from 'lucide-svelte';
-    import {sectorI18nKey} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeClass, getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
     import IdentifierPrimaryChooser, {type IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
 
     // =========================================================================
@@ -244,7 +244,26 @@
         }
         return key;
     }
+
+    /** The localized name of an asset type; the raw code when the catalogue has none (`$t` echoes a missing key). */
+    function typeLabel(type: string): string {
+        const i18nKey = `assets.types.${type}`;
+        const localized = $t(i18nKey);
+        return localized !== i18nKey ? localized : type;
+    }
 </script>
+
+<!-- The asset type as the asset cards draw it: badge colour, icon and localized name. -->
+{#snippet typeBadge(type: string | null | undefined)}
+    {#if type}
+        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded {assetTypeBadgeClass(type)}" data-testid="comparison-type-badge" data-type={type}>
+            <img src={getAssetTypeIconUrl(type)} alt="" class="w-4 h-4 object-contain" />
+            {typeLabel(type)}
+        </span>
+    {:else}
+        <span class="text-xs text-gray-400 italic">—</span>
+    {/if}
+{/snippet}
 
 <ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} {zIndex} testId="comparison-modal">
     <!-- Header -->
@@ -310,6 +329,8 @@
                                             <span class="text-gray-400 italic">—</span>
                                         {/each}
                                     </div>
+                                {:else if item.field === 'asset_type'}
+                                    {@render typeBadge(item.currentValue)}
                                 {:else}
                                     <div class="text-xs font-mono text-gray-600 dark:text-gray-400">{truncate(item.currentValue)}</div>
                                 {/if}
@@ -334,6 +355,8 @@
                                             <span class="text-gray-400 italic">—</span>
                                         {/each}
                                     </div>
+                                {:else if item.field === 'asset_type'}
+                                    {@render typeBadge(item.providerValue)}
                                 {:else}
                                     <div class="text-xs font-mono text-libre-green dark:text-green-400">{truncate(item.providerValue)}</div>
                                 {/if}
