@@ -55,10 +55,11 @@
  *    The selection belongs to the asset, not to a position: a sort carries it with its row;
  *  - **the chart half** — the selection handed to the scatter as `selectedId` (`asset-<id>`, or `null`),
  *    a dot's `onpointclick('asset-<id>')` toggling that row through the table's instance — a second
- *    click on the selected dot clears it, as on its row — and the benchmark's dot, or a dot whose asset
- *    has no row, selecting nothing. Both are `ScatterChart` props; the cases read them off the stand-in,
- *    and the chart's own side of them (`data-selected-id`, a click coming back as the dot's id) is
- *    `ScatterChart.test.ts`'s.
+ *    click on the selected dot clears it, as on its row — and a dot whose asset has no row selecting
+ *    nothing. So did the benchmark's dot, which had no row, until the developer's decision of 06/10/2026
+ *    (the last section of this header) gave it one: its dot now selects that row. Both are `ScatterChart`
+ *    props; the cases read them off the stand-in, and the chart's own side of them (`data-selected-id`, a
+ *    click coming back as the dot's id) is `ScatterChart.test.ts`'s.
  *
  * Red first again: the note cases on a table without a benchmark, the catalogue case for the note's key
  * and the selection cases fail on the section as it stands; the opening state (nothing selected), the
@@ -125,9 +126,44 @@
  * Red first, a fifth time: the reference's two cells (no `data-reference`, the blank note's sentence) and
  * the scatter cases with the reference selected (a separate `benchmark` dot beside its row's) fail on the
  * section as it stands; the fixtures, the catalogues, the reference's measured columns, the other dashes
- * and a reference outside the selection pass on both. Not pinned, because the contract does not say it: what
- * a click on the selected reference's dot does — it is `asset-<id>` and its row exists, while the second
- * review's rule was that the benchmark's dot selects nothing.
+ * and a reference outside the selection pass on both. Not pinned then, because the contract did not say it:
+ * what a click on the selected reference's dot does — it is `asset-<id>` and its row exists, while the second
+ * review's rule was that the benchmark's dot selects nothing. The decision of 06/10/2026, below, says it: the
+ * benchmark's dot selects the benchmark's row, and for a selected reference that is its own.
+ *
+ * ── The benchmark's row (the developer, 2026-10-06) ──────────────────────────────────────────────
+ *
+ * «Sì, anche nel lab il benchmark diventa una riga in cima», with a background in its dot's colour, as on the
+ * Dashboard; the reference rows open the table, and sort with the others when the reader sorts. The rows the
+ * section hands `RiskReturnLevel` become `withBenchmarkRow(rows, benchmarkApplies ? benchmarkPoint : null)` —
+ * pinned in `assetSetLevels.test.ts` — while the chart's dots, `buildAssetSetChartPoints(rows, benchmarkPoint)`,
+ * and the four states still read the selection's own rows. So:
+ *
+ *  - **a benchmark outside the selection that applies is a row added for it, first**: `ref-<id>`, its name cell
+ *    `risk-asset-set-l3-ref-name` with `data-reference="benchmark"`, its asset id and the benchmark's mark
+ *    (`data-role-mark`) before the name its dot carries; its value cells `risk-asset-set-l3-ref-<column>` — the
+ *    volatility and average return the comparison measured, its Sortino and Sharpe when the answer carries them
+ *    (`comparison_sortino`, `comparison_sharpe`), and for beta and correlation the em dash with
+ *    `data-reference="true"`, as on a selected reference's row. The wrapper's `data-row-count` still counts the
+ *    selected assets, and `data-reference-count` counts the row added. The reader's sort moves it like any row;
+ *  - **no benchmark, or one that does not apply**: no `ref-` row, `data-reference-count="0"`;
+ *  - **a selected reference (D371) is no added row**: its own row opens the table, with its id, its cells and
+ *    their test ids, and the benchmark's mark;
+ *  - **the benchmark's row and its dot are one selection**: a click on the `benchmark` dot selects `ref-<id>`, a
+ *    second clears it, and a click on that row marks the dot. This flips the second review's case "a click on the
+ *    benchmark dot changes nothing"; a dot whose asset has no row still selects nothing;
+ *  - **the states read the selection's figures only**: loading, discarded and empty stay what they were beside a
+ *    benchmark that applies, whose row is no figure of the selection.
+ *
+ * Two readers of the rows since: `rowIds()` every drawn row, the `ref-` one included, and `drawnOrder()` the
+ * selected assets' rows alone — so every case written about the selection's rows reads them as before, the
+ * benchmark's row above them — and `placeableDots()` reads in the selection's order, the chart's, since the table
+ * now moves a selected reference up and the chart does not.
+ *
+ * Red first, a sixth time: the row added at the top, its sort, a selected reference opening the table, the
+ * benchmark's dot selecting its row (the second review's case, flipped) and that row marking the dot fail on the
+ * section as it stands; no row without a benchmark that applies, the states beside one and a selected reference's
+ * dot selecting its own row pass on both.
  *
  * **The scatter is a stand-in.** `ScatterChart` belongs to another workstream and draws through
  * ECharts, whose canvas jsdom does not implement (see `SemiDonutChartStub.svelte`). It is replaced by a
@@ -170,7 +206,7 @@ import type {z} from 'zod';
  */
 const scatter = vi.hoisted(() => {
     interface StandInProps {
-        points: readonly {id: string; role?: string}[];
+        points: readonly {id: string; role?: string; name?: string}[];
         labels: {volatility: string; return: string; capitalMarketLine: string};
         testId?: string;
         /** The linked selection's chart half, as `ScatterChart` takes it. */
@@ -201,7 +237,7 @@ import es from '$lib/i18n/es.json';
 import {currentLanguage} from '$lib/stores/app/language';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import AssetSetRiskReturnSection from './AssetSetRiskReturnSection.svelte';
-import {buildAssetSetPaidRows, type CalendarLength} from './assetSetLevels';
+import {buildAssetSetBenchmarkPoint, buildAssetSetPaidRows, type CalendarLength} from './assetSetLevels';
 import {dayFormatter} from './eligibility';
 
 type ReturnOutput = z.infer<typeof schemas.RiskAssetSetReturnOutput>;
@@ -256,6 +292,11 @@ const ICONS: ReadonlyMap<number, string> = new Map([
 const BENCHMARK_ID = 90;
 const BENCHMARK_VOLATILITY = 0.15;
 const BENCHMARK_RETURN = 0.058;
+/**
+ * The row `RiskReturnLevel` adds for a benchmark outside the selection (`rowIdOf`): `ref-<assetId>`, an id no asset's
+ * row can take (the developer's decision of 06/10/2026: the benchmark is a row at the top of the table).
+ */
+const BENCHMARK_ROW_ID = `ref-${BENCHMARK_ID}`;
 
 interface Measured {
     volatility: number;
@@ -358,6 +399,13 @@ const COMPARISON_REFERENCE_ALONE = ok('invented-comparison-reference-alone', 'as
     comparison_expected_annual_return: BENCHMARK_RETURN,
     items: [],
 });
+
+/**
+ * `COMPARISON` as today's backend answers it: the reference's own Sharpe and Sortino beside its coordinates
+ * (`comparison_sharpe`, `comparison_sortino`), measured on the same returns — so the very figures its row shows when
+ * the reader selects it (`REFERENCE_FIGURES`). `COMPARISON` itself is an answer from before the two fields.
+ */
+const COMPARISON_WITH_RATIOS = ok('invented-comparison-with-ratios', 'asset_set_comparison', {...(COMPARISON.output as ComparisonOutput), comparison_sharpe: REFERENCE_FIGURES.sharpe, comparison_sortino: REFERENCE_FIGURES.sortino});
 
 /**
  * The orders each column must take, written out by hand from the figures drawn:
@@ -517,6 +565,8 @@ interface MountProps {
 const MAIN: MountProps = {assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, riskReturn: RISK_RETURN, kpi: KPI};
 /** The same, with a benchmark that applies. */
 const WITH_BENCHMARK: MountProps = {...MAIN, comparison: COMPARISON, benchmarkApplies: true};
+/** The same benchmark, answered with its own ratios (`COMPARISON_WITH_RATIOS`). */
+const WITH_BENCHMARK_RATIOS: MountProps = {...WITH_BENCHMARK, comparison: COMPARISON_WITH_RATIOS};
 /** D371: the reference selected mid-list beside the others, the benchmark applying — `COMPARISON` unchanged. */
 const REFERENCE_SELECTED: MountProps = {assetIds: SELECTION_WITH_REFERENCE, assetLabels: LABELS_WITH_REFERENCE, assetIcons: ICONS, riskReturn: RISK_RETURN_WITH_REFERENCE, kpi: KPI_WITH_REFERENCE, comparison: COMPARISON, benchmarkApplies: true};
 /** D371: the reference selected alone — one row, and nothing to compare it with. */
@@ -562,15 +612,28 @@ function l3Table(): HTMLElement {
     return screen.getByTestId('risk-asset-set-l3-table');
 }
 
-/** The asset ids of the drawn rows, top to bottom, as DataTable publishes them. */
-function drawnOrder(): number[] {
-    return [...l3Table().querySelectorAll<HTMLElement>('tbody tr[data-row-id]')].map((row) => Number(row.dataset.rowId));
+/**
+ * Every drawn row's id, top to bottom, as DataTable publishes it: an asset's id, or `ref-<id>` for the row the level
+ * adds for a benchmark outside the selection (06/10/2026).
+ */
+function rowIds(): string[] {
+    return [...l3Table().querySelectorAll<HTMLElement>('tbody tr[data-row-id]')].map((row) => row.dataset.rowId ?? '');
 }
 
-/** One asset's DataTable row, by the id DataTable writes on it. */
-function rowById(assetId: number): HTMLElement {
-    const rows = l3Table().querySelectorAll<HTMLElement>(`tbody tr[data-row-id="${assetId}"]`);
-    expect(rows, `asset ${assetId}: no DataTable row of its own — tbody tr[data-row-id="${assetId}"]`).toHaveLength(1);
+/**
+ * The asset ids of the drawn rows, top to bottom. A row added for the benchmark is no asset and is left out —
+ * `rowIds()` reads it — so the cases about the selection's rows read the same rows, with the benchmark's above them.
+ */
+function drawnOrder(): number[] {
+    return rowIds()
+        .filter((rowId) => !rowId.startsWith('ref-'))
+        .map(Number);
+}
+
+/** One DataTable row, by the id DataTable writes on it: an asset's id, or `ref-<id>` for an added benchmark. */
+function rowById(rowId: number | string): HTMLElement {
+    const rows = l3Table().querySelectorAll<HTMLElement>(`tbody tr[data-row-id="${rowId}"]`);
+    expect(rows, `row ${rowId}: no DataTable row of its own — tbody tr[data-row-id="${rowId}"]`).toHaveLength(1);
     return rows[0];
 }
 
@@ -579,10 +642,14 @@ function headerOrder(): string[] {
     return [...l3Table().querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')].map((header) => (header.dataset.testid ?? '').replace('dt-header-', ''));
 }
 
-/** One asset's value cell for a column: the element carrying the figure and `data-measured`. */
-function cellOf(assetId: number, column: ValueColumn): HTMLElement {
-    const cells = within(rowById(assetId)).getAllByTestId(`risk-asset-set-l3-${column}`);
-    expect(cells, `asset ${assetId}: ${column} must be one cell`).toHaveLength(1);
+/**
+ * One row's value cell for a column: the element carrying the figure and `data-measured` — an asset's
+ * `risk-asset-set-l3-<column>`, an added benchmark's `risk-asset-set-l3-ref-<column>`.
+ */
+function cellOf(rowId: number | string, column: ValueColumn): HTMLElement {
+    const testId = String(rowId).startsWith('ref-') ? `risk-asset-set-l3-ref-${column}` : `risk-asset-set-l3-${column}`;
+    const cells = within(rowById(rowId)).getAllByTestId(testId);
+    expect(cells, `row ${rowId}: ${column} must be one cell`).toHaveLength(1);
     return cells[0];
 }
 
@@ -634,26 +701,28 @@ async function press(column: string, expected: 'asc' | 'desc' | 'none'): Promise
 }
 
 /**
- * A click on one asset's row, where a pointer lands: on one of its cells — the volatility, a plain
- * figure — from which the click bubbles to the `tr` DataTable listens on.
+ * A click on one row, where a pointer lands: on one of its cells — the volatility, a plain figure — from which the
+ * click bubbles to the `tr` DataTable listens on. An asset's id, or `ref-<id>` for an added benchmark.
  */
-async function clickRow(assetId: number): Promise<void> {
-    await fireEvent.click(cellOf(assetId, 'volatility'));
+async function clickRow(rowId: number | string): Promise<void> {
+    await fireEvent.click(cellOf(rowId, 'volatility'));
 }
 
 /**
- * The selection as every drawn row states it: `assetId` the one selected row, or `null` for none.
+ * The selection as every drawn row states it: `rowId` the one selected row — an asset's id, or `ref-<id>` for an
+ * added benchmark — or `null` for none.
  *
- * Each row is read, not only the one expected: a second row left selected fails, and so does a row that
- * publishes no state at all — `data-selected` missing is not "not selected", it is a table that stopped
+ * Each row is read, not only the one expected — the benchmark's too: a second row left selected fails, and so does a
+ * row that publishes no state at all — `data-selected` missing is not "not selected", it is a table that stopped
  * saying. Barrier first: an empty table would satisfy "no row selected" by having no rows.
  */
-function expectSelected(assetId: number | null, why: string): void {
-    const order = drawnOrder();
-    expect(order.length, `${why}: the table has no rows to read a selection from`).toBeGreaterThan(0);
-    if (assetId !== null) expect(order, `${why}: asset ${assetId} has no row`).toContain(assetId);
-    for (const rowId of order) {
-        expect(rowById(rowId), `${why} — asset ${rowId}'s row`).toHaveAttribute('data-selected', rowId === assetId ? 'true' : 'false');
+function expectSelected(rowId: number | string | null, why: string): void {
+    const ids = rowIds();
+    expect(ids.length, `${why}: the table has no rows to read a selection from`).toBeGreaterThan(0);
+    const selected = rowId === null ? null : String(rowId);
+    if (selected !== null) expect(ids, `${why}: row ${selected} is not drawn`).toContain(selected);
+    for (const id of ids) {
+        expect(rowById(id), `${why} — row ${id}`).toHaveAttribute('data-selected', id === selected ? 'true' : 'false');
     }
 }
 
@@ -1366,6 +1435,9 @@ describe('AssetSetRiskReturnSection — a click on a row selects it, one row at 
  * `ScatterChart` takes for it: `selectedId`, what the section hands the chart to mark, and
  * `onpointclick`, which the section answers by toggling the dot's row through the table's instance —
  * so the table stays the one source, and a dot's click selects, moves and clears as a row's does.
+ * Since the developer's decision of 06/10/2026 the benchmark's dot has a row too: the one added for a
+ * reference outside the selection (`ref-<id>`), or a selected reference's own (D371). A dot whose asset
+ * has no row still selects nothing.
  */
 describe('AssetSetRiskReturnSection — the chart half of the selection', () => {
     /** What the section hands the one scatter it drew, as it stands now (the getters are live). */
@@ -1426,25 +1498,67 @@ describe('AssetSetRiskReturnSection — the chart half of the selection', () => 
         expect(handed.selectedId, 'a cleared selection marks no dot').toBeNull();
     });
 
-    it('a click on the benchmark dot changes nothing: a reference outside the selection has no row', async () => {
+    /**
+     * FLIPPED by the developer's decision of 06/10/2026 («Sì, anche nel lab il benchmark diventa una riga in cima»).
+     * This case used to read "a click on the benchmark dot changes nothing: a reference outside the selection has no
+     * row" — the second review's rule. The reference has a row now, added for it at the top of the table
+     * (`ref-<id>`), and its dot is that row's both ways, as a portfolio page's benchmark nobody holds already was: a
+     * click selects it, a second clears it, and from an asset's row it moves the selection there, one row at most.
+     */
+    it("a click on the benchmark's dot selects the row added for it, ref-<id>, and a second click clears it", async () => {
         mountWith(WITH_BENCHMARK);
         const handed = handedToScatter();
         expect(typeof handed.onpointclick, 'the section hands the scatter no onpointclick').toBe('function');
         expect(
             handed.points.some((point) => point.id === 'benchmark'),
-            'premise: the reference is drawn as a dot',
+            'premise: the reference is drawn as a dot of its own',
         ).toBe(true);
+        expectSelected(null, 'premise: nothing selected on opening');
 
         handed.onpointclick?.('benchmark');
         await tick();
-        expectSelected(null, 'a click on the benchmark dot selected a row');
-        expect(handed.selectedId).toBeNull();
+        expectSelected(BENCHMARK_ROW_ID, "a click on the benchmark's dot must select the benchmark's row");
+        expect(handed.selectedId, "the chart marks the benchmark's dot").toBe('benchmark');
+
+        handed.onpointclick?.('benchmark');
+        await tick();
+        expectSelected(null, "a second click on the benchmark's dot must clear the selection, as on any dot");
+        expect(handed.selectedId, 'a cleared selection marks no dot').toBeNull();
 
         await clickRow(65);
         handed.onpointclick?.('benchmark');
         await tick();
-        expectSelected(65, 'a click on the benchmark dot must leave the selection as it was');
-        expect(handed.selectedId).toBe('asset-65');
+        expectSelected(BENCHMARK_ROW_ID, "from an asset's row, the benchmark's dot moves the selection to the benchmark's: one row at most");
+        expect(handed.selectedId).toBe('benchmark');
+    });
+
+    it("a click on the benchmark's row marks the benchmark's dot — not an asset's — and a second click clears it", async () => {
+        mountWith(WITH_BENCHMARK);
+        const handed = handedToScatter();
+        expect(handed.selectedId, 'premise: no dot marked on opening').toBeNull();
+
+        await clickRow(BENCHMARK_ROW_ID);
+        expectSelected(BENCHMARK_ROW_ID, "a click on the benchmark's row must select it");
+        expect(handed.selectedId, "the chart must mark the benchmark's own dot: the row stands for it").toBe('benchmark');
+
+        await clickRow(BENCHMARK_ROW_ID);
+        expectSelected(null, 'a second click on the row must clear the selection');
+        expect(handed.selectedId, 'a cleared selection marks no dot').toBeNull();
+    });
+
+    it("a selected reference's dot (D371), asset-<id>, selects its own row wherever the table puts it, and a click on that row clears it", async () => {
+        mountWith(REFERENCE_SELECTED);
+        const handed = handedToScatter();
+        expect(handed.points.find((point) => point.id === `asset-${BENCHMARK_ID}`)?.role, "premise: the reference is its own row's dot, drawn as the benchmark").toBe('benchmark');
+
+        handed.onpointclick?.(`asset-${BENCHMARK_ID}`);
+        await tick();
+        expectSelected(BENCHMARK_ID, "the reference's dot must select the reference's own row — no row is added for it");
+        expect(handed.selectedId).toBe(`asset-${BENCHMARK_ID}`);
+
+        await clickRow(BENCHMARK_ID);
+        expectSelected(null, 'a click on the selected row must clear the selection');
+        expect(handed.selectedId).toBeNull();
     });
 
     it('a click on a dot whose asset has no row changes nothing: the section selects only what its table holds', async () => {
@@ -1764,9 +1878,14 @@ describe('AssetSetRiskReturnSection — a selected benchmark is not compared wit
         {fixture: 'selected alone', props: REFERENCE_ALONE},
     ].flatMap(({fixture, props}) => BENCHMARK_COLUMNS.map((column) => ({fixture, props, column})));
 
-    /** The dots the table can place — drawn rows whose volatility and average return are both measured — as `asset-<id>`, top to bottom. */
-    function placeableDots(): string[] {
-        const placeable = drawnOrder().filter((assetId) => cellOf(assetId, 'volatility').dataset.measured === 'true' && cellOf(assetId, 'expectedReturn').dataset.measured === 'true');
+    /**
+     * The dots the table can place — selected assets whose drawn volatility and average return are both measured — as
+     * `asset-<id>`, in the selection's order: the order the chart's dots are built in, from the selection's own rows.
+     * Not the table's top to bottom any more: since 06/10/2026 the table opens with the benchmark, and the chart does not
+     * move it.
+     */
+    function placeableDots(selection: readonly number[]): string[] {
+        const placeable = selection.filter((assetId) => cellOf(assetId, 'volatility').dataset.measured === 'true' && cellOf(assetId, 'expectedReturn').dataset.measured === 'true');
         return placeable.map((assetId) => `asset-${assetId}`);
     }
 
@@ -1814,6 +1933,8 @@ describe('AssetSetRiskReturnSection — a selected benchmark is not compared wit
     });
 
     it.each<{fixture: string; props: MountProps; marked: string[]}>([
+        // The selected assets' cells: the row added for a reference outside the selection is the benchmark row's own
+        // case, at the end of this file — `drawnOrder()` reads the assets' rows alone.
         {fixture: 'the reference outside the selection', props: WITH_BENCHMARK, marked: []},
         {fixture: 'the reference selected mid-list', props: REFERENCE_SELECTED, marked: [`${BENCHMARK_ID}:beta=true`, `${BENCHMARK_ID}:correlation=true`]},
     ])("$fixture: data-reference marks the reference's beta and correlation, and no other value cell", ({props, marked}) => {
@@ -1853,7 +1974,7 @@ describe('AssetSetRiskReturnSection — a selected benchmark is not compared wit
         {benchmark: 'one of the selection', props: REFERENCE_SELECTED, dots: (placeable) => placeable, benchmarkDot: `asset-${BENCHMARK_ID}`},
     ])('a benchmark $benchmark: one dot per placeable row, and the reference once — as $benchmarkDot', ({props, dots, benchmarkDot}) => {
         mountWith(props);
-        const placeable = placeableDots();
+        const placeable = placeableDots(props.assetIds ?? SELECTION);
         // Barrier: the rows place a cloud, the reference's own row among it when it is selected.
         expect(placeable.length, 'premise: the table places at least two dots').toBeGreaterThan(1);
         const mounts = scatterMounts();
@@ -1870,8 +1991,127 @@ describe('AssetSetRiskReturnSection — a selected benchmark is not compared wit
 
         // Barrier: the section drew its table, the reference's one row placeable — the absence is the scatter's alone.
         expect(l3Table()).toHaveAttribute('data-row-count', '1');
-        expect(placeableDots(), 'premise: the reference can be placed').toEqual([`asset-${BENCHMARK_ID}`]);
+        expect(placeableDots(REFERENCE_ALONE.assetIds ?? []), 'premise: the reference can be placed').toEqual([`asset-${BENCHMARK_ID}`]);
         expect(scatterMounts(), 'a scatter was drawn: the reference counted twice, as its row and as its own point').toHaveLength(0);
         expect(screen.queryByTestId('risk-asset-set-l3-risk-return')).toBeNull();
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// The benchmark's row (2026-10-06): «Sì, anche nel lab il benchmark diventa una riga in cima»
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The table's rows are `withBenchmarkRow(rows, benchmarkApplies ? benchmarkPoint : null)` now — the function is pinned
+ * in `assetSetLevels.test.ts`: a reference outside the selection that applies is a row added for it at the top,
+ * `ref-<id>`; a selected one (D371) is its own row, moved up; without a benchmark that applies nothing is added. The
+ * chart's dots and the four states still read the selection's own rows. The selection half — the benchmark's row and its
+ * dot as one selection — is in the chart half's group above.
+ */
+describe('AssetSetRiskReturnSection — the benchmark is a row at the top of the table (06/10/2026)', () => {
+    /** A reference outside the selection that applies, answered with its own ratios and from before them. */
+    const UNSELECTED: {answer: string; props: MountProps; ratios: Record<'sortino' | 'sharpe', string> | null}[] = [
+        {answer: 'with its ratios', props: WITH_BENCHMARK_RATIOS, ratios: {sortino: REFERENCE_DRAWN.sortino, sharpe: REFERENCE_DRAWN.sharpe}},
+        {answer: 'from before its ratios', props: WITH_BENCHMARK, ratios: null},
+    ];
+
+    it.each(UNSELECTED)("a benchmark outside the selection, answered $answer: a row added for it, ref-<id>, opens the table — the comparison's figures, and the dash that says it is the benchmark itself", ({props, ratios}) => {
+        expect(schemas.RiskAssetSetComparisonOutput.safeParse(props.comparison?.output).success, 'premise: the comparison parses').toBe(true);
+        expect(props.assetIds ?? SELECTION, `premise: the reference, ${BENCHMARK_ID}, is not selected`).not.toContain(BENCHMARK_ID);
+        mountWith(props);
+
+        expect(rowIds(), `no row added for the benchmark: ${BENCHMARK_ROW_ID}`).toContain(BENCHMARK_ROW_ID);
+        expect(rowIds(), "the benchmark's row opens the table, then the selection in its own order").toEqual([BENCHMARK_ROW_ID, ...SELECTION.map(String)]);
+        expect(l3Table(), 'data-row-count counts the selected assets: the benchmark row is not one').toHaveAttribute('data-row-count', String(SELECTION.length));
+        expect(l3Table(), 'data-reference-count counts the row added for the reference').toHaveAttribute('data-reference-count', '1');
+
+        // The row is the benchmark's: its mark, its asset, and the name its dot carries.
+        const row = rowById(BENCHMARK_ROW_ID);
+        const name = within(row).getByTestId('risk-asset-set-l3-ref-name');
+        expect(name, 'the name cell of a row added for the benchmark says whose it is').toHaveAttribute('data-reference', 'benchmark');
+        expect(name).toHaveAttribute('data-asset-id', String(BENCHMARK_ID));
+        expect(name.firstElementChild, "the benchmark's mark comes before its name").toHaveAttribute('data-role-mark', 'benchmark');
+        const dot = scatterMounts()[0]?.live.points.find((point) => point.id === 'benchmark');
+        expect(dot, "premise: the benchmark's own dot is drawn").toBeDefined();
+        expect(normalize(name.textContent), 'the row and the dot must name the same reference').toBe(dot?.name);
+
+        // Its volatility and average return: the comparison's, as its dot's.
+        for (const column of ['volatility', 'expectedReturn'] as const) {
+            const cell = cellOf(BENCHMARK_ROW_ID, column);
+            expect(cell, `${column}: the comparison measured it`).toHaveAttribute('data-measured', 'true');
+            expect(normalize(cell.textContent), `${column}: the comparison's figure`).toBe(REFERENCE_DRAWN[column]);
+        }
+        // Its ratios: the comparison's own when the answer carries them, the dash when it does not.
+        for (const column of ['sortino', 'sharpe'] as const) {
+            const cell = cellOf(BENCHMARK_ROW_ID, column);
+            expect(cell, `${column}: measured, or not, as the answer says`).toHaveAttribute('data-measured', String(ratios !== null));
+            expect(normalize(cell.textContent), column).toBe(ratios === null ? '\u2014' : ratios[column]);
+        }
+        // Its beta and correlation: against itself they would be 1 — the dash that says so, as on a selected reference's row.
+        for (const column of BENCHMARK_COLUMNS) {
+            const cell = cellOf(BENCHMARK_ROW_ID, column);
+            expect(normalize(cell.textContent), `${column}: the blank is the em dash`).toBe('\u2014');
+            expect(cell, `${column}: nothing is measured`).toHaveAttribute('data-measured', 'false');
+            expect(cell, `${column}: the dash does not say the row is the benchmark itself`).toHaveAttribute('data-reference', 'true');
+            expect(explainerOf(cell), `${column}: the dash is bare — it must sit in the project's Tooltip`).not.toBeNull();
+        }
+
+        // The row is the benchmark's alone: no asset's cell in it, and no benchmark's cell in an asset's row.
+        expect(within(row).queryAllByTestId(/^risk-asset-set-l3-(?!ref-)/), "the benchmark's row carries an asset's cells").toHaveLength(0);
+        for (const assetId of SELECTION) expect(within(rowById(assetId)).queryAllByTestId(/^risk-asset-set-l3-ref-/), `asset ${assetId}'s row carries the benchmark's cells`).toHaveLength(0);
+    });
+
+    it("the reader's sort moves the benchmark's row like any other, and the third press puts it back on top", async () => {
+        mountWith(WITH_BENCHMARK);
+        expect(rowIds(), "premise: the benchmark's row opens the table").toEqual([BENCHMARK_ROW_ID, ...SELECTION.map(String)]);
+
+        // Volatility: 63 9.0%, the benchmark 15.0%, 61 18.0%, 65 26.0%, 64 31.0% — and 62 blank, last both ways.
+        await press('volatility', 'asc');
+        expect(rowIds(), 'ascending: the benchmark between the two figures it falls between').toEqual(['63', BENCHMARK_ROW_ID, '61', '65', '64', String(UNMEASURED)]);
+        await press('volatility', 'desc');
+        expect(rowIds(), 'descending: the same, the other way').toEqual(['64', '65', '61', BENCHMARK_ROW_ID, '63', String(UNMEASURED)]);
+        await press('volatility', 'none');
+        expect(rowIds(), 'the third press: the benchmark back on top, then the selection in its own order').toEqual([BENCHMARK_ROW_ID, ...SELECTION.map(String)]);
+    });
+
+    it.each<{state: string; props: MountProps; places: boolean}>([
+        {state: 'no benchmark', props: MAIN, places: false},
+        {state: 'a benchmark that does not apply', props: {...WITH_BENCHMARK_RATIOS, benchmarkApplies: false}, places: true},
+    ])('$state: no row is added — no ref- row, and data-reference-count="0"', ({props, places}) => {
+        expect(buildAssetSetBenchmarkPoint(props.comparison ?? null, LABELS) !== null, places ? 'premise: the comparison places a reference — what keeps its row out is that it does not apply' : 'premise: no comparison, no reference').toBe(places);
+        mountWith(props);
+
+        expect(rowIds(), "the selection's rows, and no other").toEqual(SELECTION.map(String));
+        expect(l3Table()).toHaveAttribute('data-row-count', String(SELECTION.length));
+        expect(l3Table(), 'a row counted as added for a reference').toHaveAttribute('data-reference-count', '0');
+        expect(screen.queryAllByTestId(/^risk-asset-set-l3-ref-/), "a benchmark's cell with no benchmark's row").toHaveLength(0);
+    });
+
+    it("a benchmark the reader selected (D371) adds no row: its own row opens the table, keeping its asset's id and cells, with the benchmark's mark", () => {
+        mountWith(REFERENCE_SELECTED);
+
+        const ids = rowIds();
+        expect(
+            ids.filter((rowId) => rowId.startsWith('ref-')),
+            'a row added for a reference that is one of the selection',
+        ).toEqual([]);
+        expect(l3Table(), 'a row counted as added').toHaveAttribute('data-reference-count', '0');
+        expect(l3Table(), 'one row per selected asset, the reference among them').toHaveAttribute('data-row-count', String(SELECTION_WITH_REFERENCE.length));
+        expect(ids, "the reference's own row first, then the rest in the selection's order").toEqual([String(BENCHMARK_ID), ...SELECTION_WITH_REFERENCE.filter((assetId) => assetId !== BENCHMARK_ID).map(String)]);
+
+        expect(nameCell(BENCHMARK_ID).firstElementChild, "the benchmark's mark comes before the reference's name").toHaveAttribute('data-role-mark', 'benchmark');
+        expect(within(rowById(BENCHMARK_ID)).queryAllByTestId(/^risk-asset-set-l3-ref-/), "a selected reference takes an added row's cells").toHaveLength(0);
+    });
+
+    it.each<{state: string; props: MountProps; drawn: string}>([
+        {state: 'loading', props: {loading: true}, drawn: 'risk-asset-set-l3-loading'},
+        {state: 'discarded', props: {discarded: true}, drawn: 'risk-asset-set-l3-discarded'},
+        {state: 'an empty selection', props: {assetIds: [], assetLabels: new Map()}, drawn: 'risk-asset-set-l3-empty'},
+    ])("$state, with not one figure of the selection's and a benchmark that applies: still that state — the benchmark's row is no figure of the selection", ({props, drawn}) => {
+        expect(buildAssetSetBenchmarkPoint(COMPARISON_WITH_RATIOS, LABELS), 'premise: the comparison places the benchmark, figures and all').not.toBeNull();
+        mountWith({comparison: COMPARISON_WITH_RATIOS, benchmarkApplies: true, ...props});
+
+        expect(screen.getByTestId(drawn), "the state the selection's own figures call for").toBeInTheDocument();
+        expect(screen.queryByTestId('risk-asset-set-l3-table'), "a table drawn for the benchmark's row alone").toBeNull();
     });
 });
