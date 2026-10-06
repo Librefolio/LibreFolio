@@ -88,8 +88,8 @@ That treatment is worth a moment, because it is not neutral. Leaving a holding o
 On those three tabs, the replay says what it left out before the figures it reports:
 
 - a warning **above everything else** when more than half of the portfolio's value is left out, stating the share the result still covers: past that point the total speaks for a minority of the portfolio, with the rest held flat beside it;
-- as soon as one holding is left out, a box **above the total, where there is one, and the bars** lists the holdings left out, **grouped by reason**, each as a badge with its icon and its name — on a portfolio with its share of the value too, under a line stating how much of the value counts as cash at zero return. The [common period](#the-common-period), when there is one, is offered in the same box;
-- the bars draw only the holdings that were **replayed**: a holding left out has [no return of its own](#what-takes-its-place), so it gets no bar, not a bar at zero;
+- as soon as one holding is left out, a box **above the total, where there is one, and the table** lists the holdings left out, **grouped by reason**, each as a badge with its icon and its name — on a portfolio with its share of the value too, under a line stating how much of the value counts as cash at zero return. The [common period](#the-common-period), when there is one, is offered in the same box;
+- the table lists only the holdings that were **replayed**, each with its weight, its own return, its contribution to the total and the amount gained or lost — on a selection of assets, its return alone — and its bar, which shows its contribution on a portfolio and its own return on a selection: a holding left out has [no return of its own](#what-takes-its-place), so it gets no row, not a row at zero;
 - when every holding is left out, no figure: the result says there is **nothing to replay**, and lists the reasons.
 
 ### 📆 The Common Period {: #the-common-period }
