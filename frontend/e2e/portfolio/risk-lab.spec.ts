@@ -1328,16 +1328,25 @@ async function answerEligibility(page: Page, verdictFor: (assetId: number) => Ve
 }
 
 /**
- * The page's asset list, read off the last question it put to the engine.
+ * The page's asset list: every id the page asked the engine about, across all its questions.
  *
  * The lab asks about its whole catalogue (`catalogueKey`), so this is the list the
  * page itself holds — the one the holdings command restricts its answer to — rather
  * than a probe taken beside it that a neighbour could move.
+ *
+ * 🔴 Never the last question alone. The panel asks the engine twice: about the
+ * catalogue, after its 300 ms pause, and about the selection alone, for the
+ * common-period offer (`2ce42c3ff`). The two answers land in either order, and read
+ * off the last one the list was the selection whenever its question came last — a
+ * broker preset then expected two of the three holdings it loaded, red on a full
+ * run and green alone. The selection is a subset of the catalogue, so the union of
+ * every question is the catalogue whichever came last, and it also gathers a
+ * catalogue asked in batches (`eligibilityBatches`). The page-less oracles at the
+ * end of this file hold it to that.
  */
 function pageCatalogue(calls: readonly EligibilityCall[]): Set<number> {
-    const last = calls[calls.length - 1];
-    if (!last) throw new Error('The page never asked the eligibility engine, so its asset list is unknown to this test.');
-    return new Set(last.assetIds);
+    if (calls.length === 0) throw new Error('The page never asked the eligibility engine, so its asset list is unknown to this test.');
+    return new Set(calls.flatMap((call) => call.assetIds));
 }
 
 /**
@@ -2448,11 +2457,26 @@ const L3_CELLS = ['volatility', 'expectedReturn', 'sortino', 'sharpe'] as const;
 /** The two a benchmark adds, in their order: drawn only while one applies, blank in the reference's own row when it is one of the selected (D371). */
 const L3_BENCHMARK_CELLS = ['beta', 'correlation'] as const;
 
-/** The L3° rows, top to bottom. Scoped to `tbody`: the header row carries no asset. */
-const paidRows = (page: Page) => paidTable(page).locator('tbody tr[data-row-id]');
+/**
+ * The selector of L3°'s asset rows: scoped to `tbody`, since the header row carries no asset, and
+ * without the row added for a benchmark the selection does not hold (`ref-<id>`, see
+ * {@link paidReferenceRow}). That row is not an asset, so leaving it out keeps every count read
+ * through this one per asset — the rule the table's own `data-row-count` follows.
+ */
+const L3_ASSET_ROWS = 'tbody tr[data-row-id]:not([data-row-id^="ref-"])';
+
+/** The L3° asset rows, top to bottom; an added reference row is not among them ({@link L3_ASSET_ROWS}). */
+const paidRows = (page: Page) => paidTable(page).locator(L3_ASSET_ROWS);
 
 /** One asset's L3° row, by the id DataTable writes on it — never by position. */
 const paidRow = (page: Page, assetId: number) => paidTable(page).locator(`tbody tr[data-row-id="${assetId}"]`);
+
+/**
+ * The row L3° adds for a benchmark the selection does not hold, by the id DataTable writes on it:
+ * `ref-<assetId>`, its cells `risk-asset-set-l3-ref-<column>`. A benchmark the selection holds (D371)
+ * has no such row: it is one of the assets, and keeps its own ({@link paidRow}).
+ */
+const paidReferenceRow = (page: Page, assetId: number) => paidTable(page).locator(`tbody tr[data-row-id="ref-${assetId}"]`);
 
 /** The asset ids of the L3° rows, in the order drawn. One read, not a retry: a caller that expects an order polls it. */
 async function paidRowAssetIds(page: Page): Promise<number[]> {
@@ -2913,6 +2937,35 @@ async function expectComparisonWith(page: Page, requests: readonly RiskRequest[]
     const referenceSelected = selection.includes(referenceId);
     const dots = referenceSelected ? 'one dot per selected asset, the benchmark among them drawn once, never beside itself' : 'one dot per selected asset, and one for the benchmark';
     await expect(page.getByTestId('risk-asset-set-l3-scatter'), dots).toHaveAttribute('data-point-count', String(referenceSelected ? selection.length : selection.length + 1), {timeout: 20_000});
+}
+
+/**
+ * The benchmark's row opens L3°'s table — the developer's decision of 06/10/2026, «anche nel lab il
+ * benchmark diventa una riga in cima», tinted like its dot. Reference rows open the table and sort
+ * with the others once the reader sorts; nothing here sorts.
+ *
+ * A benchmark the selection does not hold is no asset's row, so one is added for it: exactly one
+ * `ref-<id>` row ({@link paidReferenceRow}), first, and outside the per-asset count — the table keeps
+ * `data-row-count` at one per selected asset and publishes `data-reference-count="1"`. A benchmark the
+ * selection holds (D371) is one of the assets: nothing is added (`data-reference-count="0"`), and its
+ * own row moves first.
+ *
+ * "First" is read off the drawn order, unfiltered: here a row's position is the subject. A caller
+ * fronts this with the barrier that L3° has drawn the comparison ({@link expectComparisonWith}, or
+ * `data-benchmark="true"`), so the rows read are that answer's.
+ */
+async function expectBenchmarkRowFirst(page: Page, selection: readonly number[], referenceId: number): Promise<void> {
+    const table = paidTable(page);
+    const firstRow = table.locator('tbody tr[data-row-id]').first();
+    await expect(table, "a reference row is not an asset: the table's per-asset count must stay one per selected asset").toHaveAttribute('data-row-count', String(selection.length));
+    if (selection.includes(referenceId)) {
+        await expect(table, `benchmark #${referenceId} is one of the selected assets (D371): no row may be added for it`).toHaveAttribute('data-reference-count', '0');
+        await expect(firstRow, `the selected benchmark's own row, ${referenceId}, must open L3°'s table`).toHaveAttribute('data-row-id', String(referenceId));
+        return;
+    }
+    await expect(paidReferenceRow(page, referenceId), `benchmark #${referenceId}, outside the selection, must have a row of its own in L3°'s table — exactly one`).toHaveCount(1);
+    await expect(firstRow, `the benchmark's row, ref-${referenceId}, must open L3°'s table`).toHaveAttribute('data-row-id', `ref-${referenceId}`);
+    await expect(table, 'the table must count the reference row it added').toHaveAttribute('data-reference-count', '1');
 }
 
 /**
@@ -5603,12 +5656,17 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(paidAgain.getByTestId('risk-asset-set-l3-correlation')).toHaveCount(reselected.length);
         await expect(page.getByTestId('risk-asset-set-l3-no-benchmark')).toHaveCount(0);
 
-        // The reference gets its own dot and still no Capital Market Line: its role
-        // is `benchmark`, which `capitalMarketLine()` does not search for. One dot
-        // per asset plus one for the reference — any more would be an aggregate
+        // The reference gets its own dot, with the role `benchmark`: the line, when the
+        // chart draws one, runs through it (`capitalMarketLineAnchor`; the developer's
+        // review, 06/10/2026), never through a portfolio the selection does not have. One
+        // dot per asset plus one for the reference — any more would be an aggregate
         // nobody measured.
         await expectChartCanvas(page, 'risk-asset-set-l3-scatter', 20_000);
         await expect(page.getByTestId('risk-asset-set-l3-scatter')).toHaveAttribute('data-point-count', String(reselected.length + 1));
+
+        // …and the reference outside the selection has a row of its own, opening the table
+        // (the developer's decision of 06/10/2026), counted apart from the assets.
+        await expectBenchmarkRowFirst(page, reselected, benchmarkId);
 
         // Nothing to restore: the benchmark and the selection both live in this
         // context's `localStorage`, which dies with the context, and no database
@@ -5662,6 +5720,7 @@ test.describe('Asset Global risk laboratory', () => {
         await expectComparisonWith(page, requests, selection, reference.id);
         // …in L3° alone: L1° is measured without it, read once L3°'s answer with the benchmark is drawn.
         await expectLossWithoutComparison(page, requests, selection);
+        await expectBenchmarkRowFirst(page, selection, reference.id);
 
         // Its help, last, so the open tooltip covers nothing read above. From a clean slate: the
         // pointer first rests on a measured figure, which has no tooltip to open, so nothing left
@@ -5729,6 +5788,9 @@ test.describe('Asset Global risk laboratory', () => {
         const reasked = `choosing a benchmark re-asked L1° about the selection: ${lossAfter.length - lossBefore} new L1° request(s), carrying ${JSON.stringify(lossAfter.slice(lossBefore).map((request) => [...codesOf(request)].sort()))}`;
         expect(lossAfter.length - lossBefore, reasked).toBe(0);
         await expectLossWithoutComparison(page, requests, selection);
+
+        // The benchmark chosen, outside the selection, gains a row of its own, opening L3°'s table.
+        await expectBenchmarkRowFirst(page, selection, reference.id);
     });
 
     /**
@@ -5757,13 +5819,21 @@ test.describe('Asset Global risk laboratory', () => {
      * the page measures, so the picker publishes `data-measured="true"` and draws the ⚠ — the first
      * assertion to fail — and past that the panel withholds the choice (`labBenchmarkId`), so no
      * request carries a comparison and L3° draws neither column.
+     *
+     * And its own row opens the table (the developer's decision of 06/10/2026: «anche nel lab il
+     * benchmark diventa una riga in cima»), with no row added for it — `data-reference-count="0"`: it is
+     * one of the assets. The reference is the last asset stored, so the move is the rule's doing. Red
+     * until the lab gives the benchmark its row: until then the table keeps the order of the selection.
      */
     test('a stored benchmark that is one of the selected assets is applied: its own row explains its blank beta and correlation, and the chart draws it once', async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
         const requests = await installRiskMocks(page);
         const {selection} = await castBenchmark(page);
         // One of the assets this test selects: an entry of the array it stores, not a place on the page.
-        const reference = selection[0];
+        // The last one, so that its row opening the table is the reference's doing: the table opens on
+        // the selection in the order stored, and the first entry would open it with or without the rule.
+        const reference = selection[selection.length - 1];
+        expect(selection.indexOf(reference), 'premise: the reference must not be the first asset stored, or its row would open the table by the order alone').toBeGreaterThan(0);
         const others = selection.filter((assetId) => assetId !== reference);
         await storeLabOpening(page, selection, reference);
         await openLabOn(page, selection);
@@ -5799,6 +5869,9 @@ test.describe('Asset Global risk laboratory', () => {
                 await expect(paidCell(page, assetId, cell), `asset ${assetId} is not the reference: its ${cell} must not be flagged as one`).not.toHaveAttribute('data-reference', 'true');
             }
         }
+
+        // Its own row opens the table, and none is added for it: it is one of the assets (D371).
+        await expectBenchmarkRowFirst(page, selection, reference);
 
         // The two dashes explain themselves — last, so an open tooltip covers nothing read above, and
         // each from a clean slate: the pointer first rests on the reference's own volatility, a figure
@@ -5890,6 +5963,9 @@ test.describe('Asset Global risk laboratory', () => {
 
         // …and L1°, measured all the same, never with it.
         await expectLossWithoutComparison(page, requests, selection);
+
+        // The one wave drawn opens L3°'s table on the benchmark's own row, outside the selection.
+        await expectBenchmarkRowFirst(page, selection, reference.id);
     });
 
     /**
@@ -6119,18 +6195,30 @@ test.describe('Asset Global risk laboratory', () => {
      * colour.
      *
      * The row → dot half is read where the chart publishes it: `data-selected-id` on the
-     * scatter's container, the selection the chart was handed — `asset-<id>`, `""` for none —
-     * because the dot's own green is inside a canvas (`scatterChartHelpers.test.ts` pins how it
-     * is drawn). The dot → row half is not driven here: a click on a dot would need the canvas's
-     * pixel coordinates, which this suite does not compute. `AssetSetRiskReturnSection.test.ts`
-     * pins it with the real section — a dot's click selects its row through the table, a second
-     * click clears it, the benchmark's dot selects nothing — and `ScatterChart.test.ts` pins that
-     * a click on a dot comes back as that dot's id.
+     * scatter's container, the selection the chart was handed — `asset-<id>`, `benchmark` for the
+     * benchmark's own dot, `""` for none — because the dot's own green is inside a canvas
+     * (`scatterChartHelpers.test.ts` pins how it is drawn). The dot → row half is not driven here: a
+     * click on a dot would need the canvas's pixel coordinates, which this suite does not compute.
+     * `AssetSetRiskReturnSection.test.ts` pins it with the real section — a dot's click selects its
+     * row through the table, a second click clears it — and `ScatterChart.test.ts` pins that a click
+     * on a dot comes back as that dot's id.
      *
-     * Nothing to restore: the selection is the table's own state and dies with the page.
+     * The benchmark's dot no longer selects nothing (the developer's decision of 06/10/2026: «anche
+     * nel lab il benchmark diventa una riga in cima»). A benchmark the selection does not hold gets a
+     * row of its own, `ref-<id>`, and that row and the benchmark's dot are one thing to select, as an
+     * asset's row and dot are: a click on the dot selects the row, a click on the row marks the dot,
+     * and a second click clears either. Its row half is driven here, last, once a benchmark is chosen
+     * in L3°'s picker. Red until the lab gives the benchmark its row: today there is none to click.
+     *
+     * Nothing to restore: the selection is the table's own state and dies with the page, and the
+     * benchmark chosen lives in this context's `localStorage`, which dies with the context.
      */
-    test('L3° selects one row at a time: a click selects it, a second click clears it, a click on another row moves it there, and the scatter follows', async ({page}) => {
-        await installRiskMocks(page);
+    test("L3° selects one row at a time: a click selects it, a second click clears it, a click on another row moves it there, and the scatter follows — the benchmark's row among them", async ({page}) => {
+        // The benchmark's row is read last, after a choice in the picker and the L3° answer it sets
+        // off: the budget pays for that second wave, as in the benchmark cases. Every wait below is
+        // still a barrier on a published state.
+        test.setTimeout(BENCHMARK_CASE_BUDGET);
+        const requests = await installRiskMocks(page);
         await openAssetGlobalRisk(page);
         await ensureSelectionAtLeast(page, 2);
         await waitForRiskCatalog(page);
@@ -6152,7 +6240,7 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(scatter, 'premise: one dot per row, so each row clicked below has a dot to mark').toHaveAttribute('data-point-count', String(selected.length), {timeout: 20_000});
 
         // Nothing is selected on opening — and every row states it, rather than carrying no state at all.
-        await expect(paidTable(page).locator('tbody tr[data-row-id][data-selected="false"]'), 'nothing may be selected before the reader clicks').toHaveCount(selected.length);
+        await expect(paidTable(page).locator(`${L3_ASSET_ROWS}[data-selected="false"]`), 'nothing may be selected before the reader clicks').toHaveCount(selected.length);
         await expect(selectedRows).toHaveCount(0);
         await expect(scatter, 'nothing selected on opening: the chart is handed no dot to mark').toHaveAttribute('data-selected-id', '');
 
@@ -6178,6 +6266,31 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(paidRow(page, first), 'the row selected before must let go').toHaveAttribute('data-selected', 'false');
         await expect(selectedRows, 'one row at most').toHaveCount(1);
         await expect(scatter, "the chart's mark must move with the selection, to the new row's dot").toHaveAttribute('data-selected-id', `asset-${second}`);
+
+        // ── The benchmark's row and its dot (the developer's decision of 06/10/2026) ────────────
+        // Chosen the way a reader chooses one, in L3°'s picker: the flagged benchmark `castBenchmark`
+        // reads off the asset list. Outside this selection — which is stated, not assumed: a selected
+        // benchmark is one of the assets (D371) and keeps its own row, with no `ref-` row to select.
+        const {reference} = await castBenchmark(page);
+        expect(selected, `premise: benchmark #${reference.id} must be outside the selection, or it has no row of its own`).not.toContain(reference.id);
+        await chooseBenchmark(page, reference);
+        await expectComparisonWith(page, requests, selected, reference.id);
+        const referenceRow = paidReferenceRow(page, reference.id);
+        await expect(referenceRow, `benchmark #${reference.id}, outside the selection, must have a row of its own to select`).toHaveCount(1);
+        // Pressed on its name, as a reader picks a row out: the reference's beta and correlation are
+        // dashes, and a press on a dash opens its help and selects no row (the L3° dash case above).
+        const referenceName = referenceRow.getByTestId('risk-asset-set-l3-ref-name');
+
+        await referenceName.click();
+        await expect(referenceRow, "a click on the benchmark's row must select it").toHaveAttribute('data-selected', 'true');
+        await expect(paidRow(page, second), 'the asset row selected before must let go').toHaveAttribute('data-selected', 'false');
+        await expect(selectedRows, "one row at most, the benchmark's among them").toHaveCount(1);
+        await expect(scatter, "the chart must be handed the benchmark's own dot, to mark it").toHaveAttribute('data-selected-id', 'benchmark');
+
+        await referenceName.click();
+        await expect(referenceRow, "a second click on the benchmark's row must clear it").toHaveAttribute('data-selected', 'false');
+        await expect(selectedRows).toHaveCount(0);
+        await expect(scatter, "a cleared selection must leave the chart no dot to mark, the benchmark's included").toHaveAttribute('data-selected-id', '');
     });
 
     test("broker preset: loads exactly that broker's holdings and lets no amount through, a broker holding nothing keeps the selection, and a chip removed by hand comes back through the picker", async ({page}) => {
@@ -6794,5 +6907,37 @@ test.describe('Asset Global risk laboratory', () => {
         expect(exchangeFor(engine.exchanges, selection, period)?.notEligible, 'the premise: every selected asset is eligible in the new period').toEqual([]);
 
         await expect(banner, 'the engine suggests a period, but it brings no selected asset back: there is nothing to offer').toHaveCount(0);
+    });
+});
+
+/**
+ * ─── The oracles this file reads, checked without a page ───────────────────
+ *
+ * Some assertions above are only as true as a helper that turns what the stubs recorded into an
+ * expectation. Those helpers are pure, so they are checked here on calls written by hand: no login,
+ * no lab, no backend — and so outside the block above, whose `beforeEach` logs in. An oracle that
+ * reads the wrong thing fails in this block, by name, instead of turning a test above red on a full
+ * run and green when it runs alone.
+ */
+test.describe('Asset Global risk laboratory — the oracles, without a page', () => {
+    /**
+     * `pageCatalogue` — the page's asset list, whichever of the panel's two eligibility questions
+     * landed last.
+     *
+     * The order that failed on a full run: the catalogue's question, then the selection's. Read off
+     * the last call, the oracle answered with the selection, and the broker preset expected two of
+     * the three holdings it then loaded (`risk-selected-count` 2 against 3) — a test that passed on
+     * its own. The other order is checked too: the page promises neither.
+     */
+    test('pageCatalogue answers the whole catalogue, whichever eligibility question landed last', () => {
+        const period = {start: '2026-07-01', end: '2026-09-30'};
+        const catalogueIds = [3, 5, 8, 13, 21];
+        // The selection is a subset of the catalogue, as on the page: its chips are drawn from it.
+        const catalogue: EligibilityCall = {assetIds: catalogueIds, dateRange: period, targetCurrency: 'EUR'};
+        const selection: EligibilityCall = {assetIds: [5, 13], dateRange: period, targetCurrency: 'EUR'};
+        const ascending = (ids: ReadonlySet<number>) => [...ids].sort((left, right) => left - right);
+
+        expect(ascending(pageCatalogue([catalogue, selection])), "the selection's question landed last, and the oracle must still answer the catalogue the page holds").toEqual(catalogueIds);
+        expect(ascending(pageCatalogue([selection, catalogue])), "the catalogue's question landed last").toEqual(catalogueIds);
     });
 });

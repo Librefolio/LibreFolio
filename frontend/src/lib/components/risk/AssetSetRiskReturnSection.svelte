@@ -10,16 +10,18 @@
      * comparison between assets, never a judgement"*. A scatter states two
      * coordinates and lets the reader see the trade-off without ranking anyone.
      *
-     * 🔴 **AND THE JUDGEMENT IS NOT SUPPRESSED, IT IS IMPOSSIBLE.** On a
-     * risk/return plot the verdict is the Capital Market Line: above it means
-     * "paid well for the risk". `capitalMarketLine()` draws only when a point
-     * whose role is `portfolio` exists, and that point exists only when the
-     * payload carries both a portfolio volatility and a portfolio expected
-     * return. `RiskAssetSetReturnOutput` **has no field for either** — not
-     * `None`, absent — and the model is `extra="forbid"`, so a fabricated
-     * aggregate is not merely rejected, it is unexpressible. Nothing on this
-     * surface can turn the line back on, because there is no switch to turn: the
-     * defence lives in a shape, in a file that would have to be edited.
+     * 🔴 **A line only against the benchmark, never against the selection.** On a
+     * risk/return plot the Capital Market Line is a verdict: above it means "better
+     * paid for the risk" than whatever it runs through. Through a portfolio it would
+     * judge the selection as a whole, and a set of assets has no whole:
+     * `RiskAssetSetReturnOutput` **has no field for an aggregate** — not `None`,
+     * absent — and the model is `extra="forbid"`, so a fabricated portfolio dot is
+     * not merely rejected, it is unexpressible. Through the benchmark it compares each
+     * asset with a reference the reader chose (the developer's review, 06/10/2026: «non
+     * compare la retta tra 0 e benchmark»), so `capitalMarketLineAnchor()` anchors it
+     * there whenever a benchmark is placed, and the lab draws no line without one.
+     * The notes under the chart say which line it is (`lineBenchmark`), and only when
+     * it is drawn.
      *
      * **No money.** `assetSetLevels` has no currency parameter and returns no
      * amount; a set of assets has no weights and therefore no sum.
@@ -53,7 +55,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
-    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, type AssetSetPaidRow} from './assetSetLevels';
+    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
     import {dayFormatter} from './eligibility';
     import RiskReturnLevel from './RiskReturnLevel.svelte';
 
@@ -96,7 +98,8 @@
 
     let {assetIds, assetLabels, assetIcons, riskReturn, kpi, comparison, benchmarkApplies, loading = false, failed = false, discarded = false, onretry, tableRef = $bindable(), dateStart, dateEnd}: Props = $props();
 
-    let rows = $derived(buildAssetSetPaidRows(assetIds, assetLabels, riskReturn, kpi, comparison));
+    /** One row per selected asset: the dots, the load states and the counts read these. */
+    let assetRows = $derived(buildAssetSetPaidRows(assetIds, assetLabels, riskReturn, kpi, comparison));
     /**
      * The reference's name comes from the selection when it is one of the selected
      * assets (D371), and otherwise from the asset store, as the portfolio L3 names its
@@ -114,9 +117,26 @@
      * reference is its own row's dot, drawn as the benchmark; any other gets a dot of
      * its own, last, so it draws over the cloud.
      */
-    let points = $derived(buildAssetSetChartPoints(rows, benchmarkPoint));
+    let points = $derived(buildAssetSetChartPoints(assetRows, benchmarkPoint));
 
-    let hasAnyFigure = $derived(rows.some((row) => row.volatility !== null || row.expectedReturn !== null));
+    /**
+     * The table's rows: the assets, and the benchmark's own row when one applies, which opens
+     * the table tinted like its dot (`withBenchmarkRow`; the developer's review, 06/10). A
+     * selected benchmark keeps its row; any other gets one added, `ref-<id>`, that a click
+     * on the benchmark's dot selects, and the other way round.
+     */
+    let rows = $derived(withBenchmarkRow(assetRows, benchmarkApplies ? benchmarkPoint : null));
+
+    /**
+     * The lab charges every ratio against a zero risk-free rate (it has no control to set
+     * one: `appliedRiskFreePercent: 0` in its controllers, and the comparison's Sharpe is
+     * charged the same), so the line through the benchmark starts there too. Passed
+     * explicitly rather than left to the chart's default, so it stays right if the lab
+     * ever gains a rate.
+     */
+    const LAB_RISK_FREE_RATE = 0;
+
+    let hasAnyFigure = $derived(assetRows.some((row) => row.volatility !== null || row.expectedReturn !== null));
 
     /**
      * The period the figures were calculated on, recalled under the table because the toolbar
@@ -164,18 +184,19 @@
         <div class="py-4 text-center" data-testid="risk-asset-set-l3-discarded">
             <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l3-retry">{$t('common.retry')}</button>
         </div>
-    {:else if rows.length === 0}
+    {:else if assetRows.length === 0}
         <p class="py-4 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l3-empty">{$t('risk.states.empty')}</p>
     {:else}
         <!-- The table, the chart and their notes are the shared level's (`RiskReturnLevel`):
              the data first, then its chart (the developer's review, 30/09). The notes are the
-             shared ones, by capability; with no portfolio dot the line is never drawn here, so
-             neither of the two lines about it can appear (`riskReturnNotes`), and
+             shared ones, by capability; with no portfolio dot the line is drawn here only through
+             the benchmark, and only then do its notes appear (`riskReturnNotes`), and
              `assetSetI18n.test.ts` checks that no note the lab renders names a line. -->
         <RiskReturnLevel
             {rows}
             {points}
             capabilities={{ratios: true, benchmark: benchmarkApplies}}
+            riskFreeRate={LAB_RISK_FREE_RATE}
             {assetIcons}
             testIdPrefix="risk-asset-set-l3"
             storageKey="risk-asset-set-l3"
