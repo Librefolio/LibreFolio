@@ -97,7 +97,7 @@
     import RiskPartialNotice from './levels/RiskPartialNotice.svelte';
     import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {applyBulkAction, labBenchmarkId, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
+    import {applyBulkAction, labBenchmarkId, labL3Waits, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {buildSyncTargets, labQualityAction} from './syncTargets';
 
@@ -248,17 +248,29 @@
             .sort((left, right) => left - right)
             .join(','),
     );
+    /**
+     * The eligibility question the page is asking now — list, period, currency — or `null`
+     * while there is none yet (the page's list still loading, no period). The selection is
+     * restored before the list arrives, so "nothing to ask yet" is not an answer: L3° keeps
+     * waiting for the list and its verdicts rather than asking with a benchmark that might
+     * prove unmeasurable (`labL3Waits`).
+     */
+    let eligibilityQuestion = $derived(catalogueKey && dateStart ? `${catalogueKey}|${dateStart}|${dateEnd}|${targetCurrency}` : null);
+    /** The question the last answer — or failure — was for. A failure settles it too: no verdict means selectable. */
+    let eligibilityAnsweredFor = $state<string | null>(null);
+    let eligibilitySettled = $derived(eligibilityQuestion !== null && eligibilityAnsweredFor === eligibilityQuestion);
 
     $effect(() => {
         const ids = catalogueKey ? catalogueKey.split(',').map(Number) : [];
         const period = {start: dateStart, end: dateEnd};
         const currency = targetCurrency;
+        const question = eligibilityQuestion;
         const generation = ++eligibilityGeneration;
-        if (ids.length === 0 || !period.start) {
+        if (ids.length === 0 || !period.start || question === null) {
             verdicts = EMPTY_VERDICTS;
             return;
         }
-        const timer = setTimeout(() => void loadEligibility(generation, ids, period, currency), ELIGIBILITY_DEBOUNCE_MS);
+        const timer = setTimeout(() => void loadEligibility(generation, question, ids, period, currency), ELIGIBILITY_DEBOUNCE_MS);
         return () => clearTimeout(timer);
     });
 
@@ -268,7 +280,7 @@
         return mergeEligibilityAnswers(answers);
     }
 
-    async function loadEligibility(generation: number, ids: number[], period: {start: string; end: string}, currency: string): Promise<void> {
+    async function loadEligibility(generation: number, question: string, ids: number[], period: {start: string; end: string}, currency: string): Promise<void> {
         try {
             const next = await requestEligibility(ids, period, currency);
             if (generation !== eligibilityGeneration) return;
@@ -280,6 +292,7 @@
             verdicts = EMPTY_VERDICTS;
             eligibilityFailed = true;
         }
+        eligibilityAnsweredFor = question;
     }
 
     /** The verdicts in the reader's language, for the "+" and the chips. */
@@ -575,6 +588,15 @@
      * only then); with nothing stored the picker reports `none` while it mounts. L1° does
      * not wait: it never uses the benchmark. The levels are no longer held back as a
      * whole, since the picker is drawn inside them and is what ends the wait.
+     *
+     * 🔴 **And until the lab's verdicts are in, when a benchmark is set** (D378, the
+     * developer's decision of 06/10/2026: a benchmark that cannot be measured over the period
+     * is not tried). The picker takes the lab's own verdicts (`eligibilityView`), shows the
+     * ruled-out assets read-only, and says `blocked` when the chosen one is ruled out — the
+     * choice stays stored, and `labBenchmarkId` keeps it out of L3°'s question. It does not
+     * wait for those verdicts, so L3° does (`labL3Waits`): asked before they come, it would
+     * try the benchmark and then ask again without it. A new period asks the engine again,
+     * and L3° waits again.
      */
     let benchmarkValue = $state<number | null>(null);
     let benchmarkState = $state<RiskBenchmarkState>('pending');
@@ -816,7 +838,7 @@
                 <span class="inline-flex text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
             </Tooltip>
             <div class="min-w-0 max-w-xs flex-1">
-                <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} boxClass="w-full" testid="risk-asset-set-benchmark" />
+                <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} verdicts={eligibilityView} boxClass="w-full" testid="risk-asset-set-benchmark" />
             </div>
         </div>
     {/snippet}
@@ -825,7 +847,19 @@
         <DataQualityBanner issues={qualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
         <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
         <AssetSetCorrelationSection bind:this={correlationSection} assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
-        <AssetSetComparisonLevels bind:this={levelsSection} assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} benchmarkPending={benchmarkState === 'pending'} {benchmarkPicker} refreshVersion={syncGeneration} />
+        <AssetSetComparisonLevels
+            bind:this={levelsSection}
+            assetIds={analysedIds}
+            assetLabels={selectionLabels}
+            assetIcons={selectionIcons}
+            {dateStart}
+            {dateEnd}
+            {targetCurrency}
+            {benchmarkId}
+            benchmarkPending={labL3Waits(benchmarkState, eligibilitySettled)}
+            {benchmarkPicker}
+            refreshVersion={syncGeneration}
+        />
         <AssetSetReplaySection bind:this={replaySection} assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">

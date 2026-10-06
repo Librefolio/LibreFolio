@@ -39,6 +39,8 @@ Import the files **as downloaded**: don't open and re-save them in Excel first.
 
 Uploading from the [Files](../../files/index.md#broker-reports) page, or from a broker's **Uploaded Reports**, works the same way: the files you upload in one go form one set, which you then tick in the wizard's **Select Files**.
 
+After an update, LibreFolio checks the files you uploaded earlier again, so exports that a newer importer can read are recognised without being uploaded again. Exports uploaded with LibreFolio 1.1.0 or earlier, though, cannot form a set — those versions did not record which files were uploaded together — so upload the two again, together.
+
 ### 🧩 If one file is missing
 
 Dropped only one of the two files? LibreFolio notices it as soon as you click **Next: Select Files**: it stays on **Upload** and tells you which export is missing and which period it must cover. Drop the missing file there — it joins the **same set** — and click **Next: Select Files** again.

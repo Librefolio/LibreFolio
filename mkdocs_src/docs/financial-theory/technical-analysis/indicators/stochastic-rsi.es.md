@@ -54,10 +54,10 @@ El RSI Estocástico es una **cascada de dos etapas**: la etapa uno (RSI) rectifi
 
 ```mermaid
 flowchart LR
- C["💹 Precio de Cierre"] --> RSI["💪 RSI(N)"]
- RSI --> MINMAX["📐 Mín./máx. de ventana móvil en N barras"]
- MINMAX --> K["🎯 %K"]
- K --> D["🔁 %D = SMA(d, %K)"]
+    C["💹 Precio de Cierre"] --> RSI["💪 RSI(N)"]
+    RSI --> MINMAX["📐 Mín./máx. de ventana móvil en N barras"]
+    MINMAX --> K["🎯 %K"]
+    K --> D["🔁 %D = SMA(d, %K)"]
 ```
 
 !!! tip "Más rápido pero más ruidoso"

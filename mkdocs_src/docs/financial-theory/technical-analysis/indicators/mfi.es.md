@@ -51,15 +51,15 @@ El MFI reutiliza la misma normalización exacta del RSI, $100 - 100/(1+x)$, pero
 
 ```mermaid
 flowchart LR
- HLC["📈 Alto / Bajo / Cierre"] --> TP["🎯 Precio Típico"]
- TP --> DIR["➕➖ Dirección vs TP anterior"]
- V["📦 Volumen"] --> RMF["💰 Flujo de Dinero Bruto = TP × V"]
- TP --> RMF
- DIR --> SPLIT["🔀 Flujo Positivo / Negativo"]
- RMF --> SPLIT
- SPLIT --> SUMN["🔁 Suma en N barras"]
- SUMN --> RATIO["📐 Relación de Flujo de Dinero"]
- RATIO --> MFI["💸 MFI = 100 − 100/(1+MFR)"]
+    HLC["📈 Alto / Bajo / Cierre"] --> TP["🎯 Precio Típico"]
+    TP --> DIR["➕➖ Dirección vs TP anterior"]
+    V["📦 Volumen"] --> RMF["💰 Flujo de Dinero Bruto = TP × V"]
+    TP --> RMF
+    DIR --> SPLIT["🔀 Flujo Positivo / Negativo"]
+    RMF --> SPLIT
+    SPLIT --> SUMN["🔁 Suma en N barras"]
+    SUMN --> RATIO["📐 Relación de Flujo de Dinero"]
+    RATIO --> MFI["💸 MFI = 100 − 100/(1+MFR)"]
 ```
 
 !!! tip "MFI vs RSI"

@@ -1106,97 +1106,6 @@ class PortfolioReportMetadata(StrictModel):
     included_features: List[str] = Field(default_factory=list)
 
 
-class PortfolioAllocationSourceRequest(StrictModel):
-    """Opt-in Asset catalog and OWNER full-custody source for allocation editors."""
-
-    as_of_date: date_type = Field(..., description="Inclusive custody and saved-price snapshot date.")
-    selected_cash_broker_ids: List[Annotated[int, Field(strict=True, gt=0)]] = Field(
-        default_factory=list,
-        description="OWNER broker ids whose native cash balances must be aggregated.",
-    )
-
-    @field_validator("selected_cash_broker_ids")
-    @classmethod
-    def validate_selected_cash_broker_ids(cls, broker_ids: List[int]) -> List[int]:
-        if len(broker_ids) != len(set(broker_ids)):
-            raise ValueError("selected_cash_broker_ids must not contain duplicates")
-        return broker_ids
-
-
-class PortfolioAllocationSourceQuote(StrictModel):
-    """Latest saved native quote at or before the requested date."""
-
-    raw_price: Optional[SafeDecimal] = None
-    currency: str = Field(..., description="Native asset/quote currency.")
-    quote_base_quantity: int = Field(..., ge=1, description="Asset units represented by raw_price.")
-    reference_date: Optional[date_type] = None
-    source: Optional[str] = Field(None, description="Saved price source plugin key.")
-    days_before_requested: Optional[int] = Field(None, ge=0)
-
-
-class PortfolioAllocationSourceContext(StrictModel):
-    """One OWNER custody position for a canonical asset."""
-
-    context_key: str
-    broker_id: int
-    broker_name: str
-    broker_icon_url: Optional[str] = None
-    broker_portal_url: Optional[str] = None
-    broker_default_import_plugin: Optional[str] = None
-    ownership_share_percent: SafeDecimal = Field(..., description="Display metadata only; custody_quantity is not share-scaled.")
-    custody_quantity: SafeDecimal
-
-
-class PortfolioAllocationSourceAsset(StrictModel):
-    """Canonical Asset candidate with any current OWNER custody contexts."""
-
-    asset_id: int
-    instrument_key: str
-    candidate_key: str
-    name: str
-    ticker: Optional[str] = None
-    asset_type: str
-    icon_url: Optional[str] = None
-    active: bool
-    usage_scope: Literal["owned", "other_users", "observed"]
-    quote: PortfolioAllocationSourceQuote
-    contexts: List[PortfolioAllocationSourceContext] = Field(default_factory=list)
-
-
-class PortfolioAllocationSourceCashBalance(StrictModel):
-    """One exact native-currency cash balance."""
-
-    currency: str
-    amount: SafeDecimal
-
-    @field_validator("currency")
-    @classmethod
-    def validate_currency(cls, currency: str) -> str:
-        return Currency.validate_code(currency)
-
-
-class PortfolioAllocationSourceCashSource(StrictModel):
-    """One OWNER broker and its full-custody native cash balances."""
-
-    broker_id: int
-    broker_name: str
-    broker_icon_url: Optional[str] = None
-    broker_portal_url: Optional[str] = None
-    broker_default_import_plugin: Optional[str] = None
-    ownership_share_percent: SafeDecimal = Field(..., description="Display metadata only; balances are not share-scaled.")
-    balances: List[PortfolioAllocationSourceCashBalance] = Field(default_factory=list)
-
-
-class PortfolioAllocationSource(StrictModel):
-    """Read-only facts copied by allocation editors; never targets or advice."""
-
-    generated_at: datetime
-    as_of_date: date_type
-    assets: List[PortfolioAllocationSourceAsset] = Field(default_factory=list)
-    cash_sources: List[PortfolioAllocationSourceCashSource] = Field(default_factory=list)
-    selected_cash_balances: List[PortfolioAllocationSourceCashBalance] = Field(default_factory=list)
-
-
 # =============================================================================
 # PORTFOLIO PLANNER SOURCE — authenticated, uncached domain-copy snapshot
 # =============================================================================
@@ -1688,7 +1597,6 @@ class PortfolioReportQuery(StrictModel):
     include_cost_history: bool = Field(False, description="Include the signed FEE+TAX cost history (batch 2). Same sparse/eager caller policy as include_income_history.")
     include_deposit_history: bool = Field(False, description="Include the DEPOSIT history (batch 2). Same sparse/eager caller policy as include_income_history.")
     include_acquisition_funding: bool = Field(False, description="Include the new-vs-reinvested BUY funding split (batch 2). Same sparse/eager caller policy as include_income_history.")
-    allocation_source: Optional[PortfolioAllocationSourceRequest] = Field(None, description="Opt-in Asset catalog and OWNER full-custody allocation-editor source.")
 
 
 class PortfolioReportResponse(StrictModel):
@@ -1710,4 +1618,3 @@ class PortfolioReportResponse(StrictModel):
     cost_history: Optional[CostHistorySeries] = Field(None, description="Signed FEE+TAX cost history (batch 2). Only when include_cost_history=True.")
     deposit_history: Optional[DepositHistorySeries] = Field(None, description="DEPOSIT history (batch 2). Only when include_deposit_history=True.")
     acquisition_funding: Optional[AcquisitionFundingSeries] = Field(None, description="New-vs-reinvested BUY funding split (batch 2). Only when include_acquisition_funding=True.")
-    allocation_source: Optional[PortfolioAllocationSource] = Field(None, description="Asset catalog and OWNER full-custody source facts when requested.")

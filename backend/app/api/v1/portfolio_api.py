@@ -34,7 +34,6 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_allocation_source import (
-    PortfolioAllocationSourceAccessError,
     PortfolioPlannerSourceAccessError,
     PortfolioPlannerSourceAssetNotFoundError,
     build_portfolio_planner_source,
@@ -238,16 +237,7 @@ async def get_portfolio_report(
         body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
 
     service = PortfolioService(session)
-    try:
-        return await service.get_report(user_id=current_user.id, query=body)
-    except PortfolioAllocationSourceAccessError as exc:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "allocation_source_cash_broker_forbidden",
-                "broker_ids": list(exc.broker_ids),
-            },
-        ) from exc
+    return await service.get_report(user_id=current_user.id, query=body)
 
 
 @portfolio_router.post(

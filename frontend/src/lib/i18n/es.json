@@ -3977,198 +3977,6 @@
     "pacAllocator": {
       "name": "Asignador PAC",
       "description": "Planifica las compras que acercan al máximo una nueva inversión a su asignación objetivo, en participaciones enteras o importes, sin enviar órdenes.",
-      "scenario": "Escenario",
-      "reportCurrency": "Divisa del informe",
-      "asOfDate": "Fecha de referencia (opcional)",
-      "rows": {
-        "empty": "Añade al menos una fila. Hasta entonces, el backend indicará que faltan filas.",
-        "initialQuantity": "Cantidad inicial",
-        "price": "Precio nativo",
-        "quoteBasis": "Cantidad base de la cotización",
-        "target": "Objetivo (%)",
-        "gridMode": "Cuadrícula de compra",
-        "whole": "Cantidades enteras",
-        "fractional": "Cantidades fraccionarias",
-        "quantityStep": "Paso de cantidad de compra",
-        "quoteDate": "Fecha de la cotización (opcional)",
-        "addAsset": "Nuevo activo local",
-        "description": "Cada fila representa un activo en un contexto. Usa la acción específica para conservar la identidad del instrumento entre contextos.",
-        "identity": "Identidad local del instrumento",
-        "rowNumber": "Fila {number}",
-        "sameAsset": "Mismo activo, otro contexto",
-        "title": "Activos y contextos de custodia"
-      },
-      "cash": {
-        "existing": "Efectivo existente",
-        "notSupplied": "No proporcionado",
-        "noneExisting": "Sin efectivo existente, de forma explícita",
-        "amount": "Importe",
-        "addCurrency": "Añadir divisa",
-        "contributions": "Nuevas aportaciones",
-        "noneContributions": "Sin nuevas aportaciones, de forma explícita",
-        "existingHint": "Efectivo nativo ya disponible, agrupado por divisa.",
-        "contributionsHint": "Dinero nuevo para este escenario, separado del efectivo existente.",
-        "enterAmounts": "Introducir importes",
-        "addContribution": "Añadir aportación",
-        "backToBrokers": "Usar las reservas de los Broker",
-        "backendAggregate": "Agregado del backend",
-        "fromBrokers": "Desde brókeres",
-        "fullNativeReserve": "Reserva nativa completa",
-        "loadingBrokerCash": "Cargando las reservas de los Broker…",
-        "markNoneContributions": "Sin nuevas aportaciones",
-        "markNoneExisting": "Sin efectivo existente",
-        "markNotSupplied": "Marcar como no proporcionado",
-        "monetaryStep": "Incremento del importe",
-        "monetaryStepHint": "Incremento mínimo aceptado para esta aportación, por ejemplo 0.01 para los céntimos.",
-        "noNativeBalances": "Sin reserva nativa",
-        "noOwnerBrokers": "No hay ningún Broker OWNER disponible. Introduce el efectivo manualmente.",
-        "noSelectedBalances": "No hay saldo del bróker seleccionado.",
-        "refreshingSelection": "Actualizando las reservas nativas seleccionadas…",
-        "selectedReserves": "Reservas nativas seleccionadas",
-        "sourceStale": "Esperando los saldos actuales de los brókeres. La instantánea anterior no se enviará."
-      },
-      "rates": {
-        "title": "Tipos de cambio de valoración",
-        "description": "Compara los valores en la divisa del informe. El efectivo no se convierte, transfiere ni combina.",
-        "add": "Añadir tipo",
-        "value": "Tipo hacia la divisa del informe",
-        "date": "Fecha del tipo (opcional)",
-        "noCashConversion": "Solo valoración: el efectivo no se convierte, transfiere ni combina.",
-        "copySaved": "Copiar tasa",
-        "copyUnavailable": "No hay ninguna tasa guardada de {currency} a {reportCurrency} disponible para el {date}.",
-        "enterManually": "Introducir manualmente",
-        "equationHint": "Ejemplo: 1 USD = 0.90 EUR significa que, en este informe, un USD se valora en 0.90 EUR.",
-        "nativeCurrency": "Moneda nativa",
-        "reason": "Los datos en {currency} deben valorarse en {reportCurrency}.",
-        "reasonAssets": "Precios de los activos: {assets}",
-        "reasonCash": "El efectivo existente seleccionado usa esta divisa.",
-        "reasonContribution": "Una nueva aportación usa esta divisa.",
-        "titleNumbered": "3. Tipos de cambio de valoración"
-      },
-      "revision": "Revisión del borrador",
-      "noOrders": "Las órdenes, la viabilidad y la optimización no están incluidas en este piloto.",
-      "stopWaiting": "Dejar de esperar",
-      "analyzing": "Analizando la revisión {revision}…",
-      "analyze": "Analizar la asignación PAC",
-      "stale": {
-        "pending": "La solicitud de la revisión {requestRevision} sigue en curso, pero el borrador está ahora en la revisión {draftRevision}. Su respuesta se ignorará.",
-        "ignored": "La respuesta de la revisión {revision} se ignoró porque cambió el borrador o la cuenta.",
-        "result": "Este resultado pertenece a una revisión anterior del borrador."
-      },
-      "draftPreserved": "Tu borrador se ha conservado.",
-      "platformErrorTitle": "Análisis no completado",
-      "platformError": "El backend no pudo completar este análisis. Tu borrador se ha conservado.",
-      "state": {
-        "ready": "Listo · el estado inicial se puede evaluar",
-        "needsInput": "Requiere datos",
-        "invalid": "Escenario no válido",
-        "unsupported": "Fuera del dominio P1"
-      },
-      "resultMeaning": "Este es un análisis del estado inicial. No certifica la viabilidad de las órdenes, el cumplimiento del objetivo ni la optimalidad.",
-      "exactView": "Exacta",
-      "formattedView": "Formateada",
-      "totals": {
-        "invested": "Valor invertido inicial",
-        "existingCash": "Efectivo existente",
-        "contributions": "Nuevas aportaciones",
-        "combinedCash": "Efectivo más aportaciones",
-        "maxGap": "Desviación absoluta máxima (pp)",
-        "squaredGap": "Desviación cuadrática (pp²)"
-      },
-      "result": {
-        "row": "Fila",
-        "value": "Valor del informe",
-        "weight": "Peso actual",
-        "target": "Objetivo",
-        "gap": "Desviación (pp)"
-      },
-      "cashPools": "Reservas de efectivo nativas",
-      "issues": "Hallazgos del backend",
-      "normalizedInput": "Entrada normalizada y unidades",
-      "addManualAsset": "Nuevo activo manual",
-      "loadingOwnedAssets": "Cargando el catálogo de activos…",
-      "noOwnedAssetsHint": "Aun así puedes añadir un activo manual.",
-      "custodyContext": "contexto de custodia",
-      "custodyContexts": "contextos de custodia",
-      "missingPrice": "Falta el precio",
-      "modified": "Modificado",
-      "staleLabel": "Desactualizado",
-      "noAssetMatches": "Ningún activo candidato coincide con los filtros actuales.",
-      "fullCustody": "Cantidad total en custodia",
-      "personalShare": "participación personal",
-      "manual": "Manual",
-      "snapshotAt": "Instantánea de la cartera",
-      "priceAt": "precio con fecha",
-      "duplicate": "Duplicar como fila manual",
-      "identityAndCustody": "Identidad y custodia",
-      "instrumentId": "ID del instrumento",
-      "selectedContexts": "Contextos de activos seleccionados",
-      "selectedContextsHint": "Los datos de origen importados son de solo lectura. Los objetivos y las cuadrículas de compra siguen siendo editables; las filas manuales son totalmente editables.",
-      "emptyRowsHint": "Selecciona un activo candidato arriba o añade un activo manual.",
-      "confirmDeselectTitle": "¿Eliminar los contextos de activo importados?",
-      "confirmDeselectMessage": "Se editaron algunas filas vinculadas. Al deseleccionar el activo se elimina cada contexto importado vinculado indicado abajo. Las copias manuales independientes permanecen.",
-      "assets": {
-        "hint": "Elige Asset canónicos. Los precios actuales son solo datos contextuales de la fuente y no afectan al reparto de P1.",
-        "title": "2. Asset que financiar"
-      },
-      "brokerCustody": "Custodia en el bróker",
-      "cashPoolsHint": "Los saldos nativos permanecen separados por divisa. Este informe no convierte, transfiere ni combina el efectivo.",
-      "customizedRemovalItems": "Ajustes que se perderán",
-      "customizedRemovalMessage": "Al eliminar este Asset se descartarán su objetivo y sus ajustes personalizados.",
-      "customizedRemovalTitle": "¿Eliminar el Asset personalizado?",
-      "denominatorHint": "Los pesos y las desviaciones actuales usan solo el valor invertido en activos. El efectivo existente y las nuevas aportaciones permanecen separados y no modifican estos porcentajes P1.",
-      "economicShare": "Participación económica personal",
-      "economicShareHint": "Participación de propiedad solo informativa. Las cantidades importadas siguen siendo las de la custodia completa y nunca se prorratean.",
-      "fundsHint": "Copia el efectivo nativo de los Broker OWNER o introduce importes exactos. Las nuevas aportaciones se mantienen separadas.",
-      "fundsTitle": "1. Fondos disponibles",
-      "gallery": {
-        "empty": "No se encontraron Asset candidatos",
-        "hint": "Selecciona Asset canónicos o añade uno manual.",
-        "inactive": "Inactivo",
-        "observed": "Observado",
-        "otherUsers": "Otros usuarios",
-        "owned": "En propiedad",
-        "search": "Buscar Asset o Broker",
-        "title": "2. Asset",
-        "zeroPosition": "cantidad inicial 0"
-      },
-      "gridModeHint": "Controla solo el incremento de cantidad de las compras futuras. El inventario fraccionario existente nunca se redondea.",
-      "importedSnapshot": "Instantánea de custodia importada",
-      "initialState": "Estado inicial",
-      "manualCopy": "Copia manual independiente",
-      "nativePrice": "Precio nativo",
-      "newManualAsset": "Asset manual",
-      "noCurrentCustody": "Sin custodia actual",
-      "p1": {
-        "description": "Distribuye el efectivo disponible según el porcentaje objetivo. No examina la cartera actual ni genera órdenes.",
-        "title": "Asignador PAC P1"
-      },
-      "pilotNotice": "Solo análisis manual del estado inicial. No se leen datos de la cartera, no se proponen órdenes y no se guarda nada.",
-      "quantityStepHint": "Incremento mínimo de cantidad para nuevas compras. Es distinto del paso monetario de las aportaciones.",
-      "quoteBasisHint": "Número de unidades del Asset representadas por el precio cotizado.",
-      "readOnlyFacts": "datos de origen de solo lectura",
-      "results": {
-        "boundary": "Estos son importes monetarios teóricos. No se ha seleccionado ningún precio, cantidad, ruta de Broker, transferencia FX ni orden.",
-        "budget": "Presupuesto invertible",
-        "contributions": "Nuevas aportaciones",
-        "empty": "Ejecuta el análisis para calcular la asignación monetaria teórica.",
-        "existingCash": "Efectivo existente",
-        "hint": "P1 reparte el efectivo disponible según el porcentaje objetivo. No calcula unidades, órdenes, viabilidad ni un valor óptimo.",
-        "idealAllocation": "Asignación teórica",
-        "title": "4. Análisis PAC"
-      },
-      "rowLimitHint": "Máximo {count} contextos. Añadir un activo con varios contextos de custodia siempre se hace todo o nada.",
-      "rowLimitWarning": "Espacios restantes: {count}",
-      "selectedContextCount": "Contextos seleccionados: {count}",
-      "target": "Objetivo",
-      "targetEditor": {
-        "hint": "Define cómo repartir el efectivo invertible. Estos porcentajes no describen la cartera actual.",
-        "title": "3. Distribución del efectivo"
-      },
-      "units": "unidades",
-      "valuationSettings": "Ajustes de valoración",
-      "valuationSettingsHint": "La divisa del informe expresa el valor de los activos, el efectivo y las aportaciones. La fecha es el corte inclusivo para los datos guardados.",
-      "valuationSettingsInfo": "Estos ajustes definen una única unidad de comparación y la fecha límite de los datos. No mueven efectivo ni ejecutan operaciones.",
       "planner": {
         "actions": {
           "editConfiguration": "Editar configuración",
@@ -4184,10 +3992,6 @@
           "unknown": "Fecha desconocida"
         },
         "applyToDraft": "Aplicar al borrador",
-        "assetCopy": {
-          "empty": "Ningún activo de la base de datos está en el borrador: nada que copiar.",
-          "manual": "manual, no copiado"
-        },
         "assetEditor": {
           "categoryId": "ID de categoría",
           "categoryLabel": "Etiqueta",
@@ -4348,26 +4152,12 @@
           "useAllHint": "Usar todo el importe disponible",
           "selectedAll": "Parte de todo el importe disponible: bájalo si quieres invertir menos."
         },
-        "classificationsCopy": {
-          "source": "Fuente: las clasificaciones de los activos (tipo, sector, geografía) guardadas en LibreFolio.",
-          "title": "Copiar clasificaciones"
-        },
         "conflict": {
           "cashIncoming": "Saldo del sistema · {date}",
           "cashPrevious": "Saldo copiado en el borrador · {date}",
           "cashSelected": "Importe a usar (tuyo) · no cambia",
-          "exposuresIncoming": "Clasificación del sistema · {date}",
-          "exposuresPrevious": "Clasificación copiada · {date}",
-          "exposuresYours": "tus filas no cambian",
-          "fxCurrent": "Tasa en el borrador (tuya) · no cambia",
-          "fxIncoming": "Tasa del sistema · {date}",
-          "fxPrevious": "Tasa copiada en el borrador · {date}",
           "intro": "Has pedido copiar de nuevo. Estos hechos ahora son distintos:",
           "keep": "Mantener la copia anterior",
-          "priceCurrent": "Precio en el borrador (tuyo) · no cambia",
-          "priceIncoming": "Precio del sistema · {date}",
-          "priceLine": "{price} por {units} · {date}",
-          "pricePrevious": "Precio copiado en el borrador · {date}",
           "rule": "Actualizar solo cambia el hecho copiado y su fecha. Tus campos se quedan como están.",
           "titleMany": "{count} hechos copiados han cambiado desde la última copia",
           "titleOne": "{name} ha cambiado desde la última copia",
@@ -4383,15 +4173,10 @@
         },
         "copy": {
           "alreadyInDraft": "Ya está en el borrador: copiar de nuevo lo actualiza",
-          "apply": "{count, plural, one {Copiar # elemento} other {Copiar # elementos}}",
           "needsCurrency": "Elige la divisa de valoración en el paso Escenario para copiar del sistema.",
           "noOwner": "Copiar requiere al menos un bróker del que seas propietario. Introduce los valores a mano en su lugar.",
-          "ownerScope": "La API Portfolio lee a través de los brókeres de los que eres propietario; estos valores no dependen del bróker.",
-          "reading": "Leyendo la instantánea…",
-          "rule": "Nada está vinculado en vivo: una copia es una instantánea que puedes editar. Copiar de nuevo solo actualiza lo que no has cambiado y enumera el resto.",
           "scopeError": "No se pudo cargar la lista de brókeres. No se ha copiado nada.",
           "sourcePortfolio": "Solo puedes copiar de los brókeres de los que eres propietario.",
-          "stop": "Detener",
           "allInPlan": "{kind, select, liquidity {La liquidez de todos los brókeres que puedes copiar ya está en el plan.} other {Todos los brókeres que puedes copiar ya están en el plan.}}"
         },
         "copyNotice": {
@@ -4476,11 +4261,6 @@
           "syncRates": "Descargar los tipos",
           "openPair": "Abrir el par",
           "limitsHelp": "No en esta versión:\n• un tipo o un spread distinto para cada bróker;\n• un margen de seguridad sobre el tipo;\n• una comisión de conversión además del spread;\n• conversiones en más de un paso (EUR → USD → CHF)."
-        },
-        "fxCopy": {
-          "empty": "Todavía no se necesita ningún par de divisas.",
-          "source": "Fuente: las últimas tasas de cambio guardadas en LibreFolio. No se llama a ningún proveedor.",
-          "title": "Copiar tasas de cambio"
         },
         "issues": {
           "allocation": {
@@ -4638,10 +4418,6 @@
         },
         "policies": {
           "proportional": "Proporcional"
-        },
-        "pricesCopy": {
-          "source": "Fuente: los últimos precios guardados en LibreFolio. No se llama a ningún proveedor.",
-          "title": "Copiar precios"
         },
         "problems": {
           "assetClassInvalid": "La clase del activo debe ser un código en minúsculas de al menos 3 caracteres.",
@@ -5340,131 +5116,10 @@
       }
     },
     "version": "Versión",
-    "allocation": {
-      "asset": {
-        "custodyCount": "{count} contextos de custodia",
-        "futureConstraints": "Restricciones para compras futuras",
-        "futureConstraintsHint": "Registradas para el futuro solucionador. P1 no cuantiza esta asignación monetaria teórica."
-      },
-      "diagnostics": {
-        "invalid": "Corregir el escenario",
-        "needsInput": "Completar el escenario",
-        "noIssues": "Todos los datos requeridos son válidos para este análisis P1.",
-        "ready": "Escenario listo",
-        "technical": "Detalles técnicos",
-        "unsupported": "Escenario fuera de los límites de P1"
-      },
-      "fundingSummary": {
-        "afterAnalysis": "después del análisis",
-        "available": "Disponible",
-        "contributions": "Aportaciones",
-        "empty": "No se ha introducido efectivo ni aportaciones.",
-        "existing": "Existente",
-        "hint": "El efectivo existente y las nuevas aportaciones se mantienen como datos separados. Los totales combinados solo se muestran tras el análisis del backend.",
-        "title": "Fondos disponibles por moneda",
-        "updating": "Actualizando…"
-      },
-      "issues": {
-        "assetsRequired": "Selecciona al menos un Asset.",
-        "cashRequired": "Introduce filas de efectivo o mantén una lista explícitamente vacía.",
-        "contributionStep": "La aportación debe ser múltiplo de su incremento monetario.",
-        "currencyDomain": "Este escenario contiene más monedas que el límite de {limit} de P1.",
-        "duplicateCurrency": "{currency} aparece más de una vez donde solo se permite una fila por moneda.",
-        "duplicateInstrument": "Este Asset está seleccionado más de una vez.",
-        "duplicateRow": "Dos filas de custodia tienen la misma identidad técnica.",
-        "duplicateTarget": "Este Asset tiene más de un objetivo.",
-        "fieldRequired": "Completa este campo obligatorio.",
-        "generic": "Revisa este dato del escenario.",
-        "holdingsRequired": "Selecciona al menos una posición de la cartera.",
-        "identityRate": "La moneda de informe {currency} debe usar una tasa de valoración de identidad igual a 1.",
-        "identityRateRedundant": "La tasa de la moneda de informe es redundante y se ha considerado igual a 1.",
-        "incompleteDecimal": "Completa el valor decimal.",
-        "initialDebt": "El efectivo existente negativo queda fuera de este análisis P1.",
-        "invalidCurrency": "Elige una moneda válida de tres letras.",
-        "invalidDate": "Introduce una fecha válida.",
-        "invalidDecimal": "Introduce un número decimal válido.",
-        "invalidQuoteBasis": "La base unitaria de la cotización debe ser un número entero positivo.",
-        "inventoryOffGrid": "La custodia fraccionaria existente no coincide con el incremento de compra futuro. Se ha conservado exactamente.",
-        "negativeContribution": "Una nueva aportación no puede ser negativa.",
-        "nonintegerWholeStep": "Un incremento de compra en unidades enteras debe ser un número entero.",
-        "nonpositiveFxRate": "La tasa de valoración debe ser mayor que cero.",
-        "nonpositiveMonetaryStep": "El incremento monetario debe ser mayor que cero.",
-        "nonpositivePrice": "El precio actual debe ser mayor que cero.",
-        "nonpositiveQuantityStep": "El incremento de cantidad de compra debe ser mayor que cero.",
-        "numericDomain": "Un número supera el dominio numérico exacto admitido.",
-        "quoteRequired": "Introduce el precio actual y su moneda.",
-        "referenceAfterAsOf": "La fecha de la fuente no puede ser posterior a la fecha del análisis.",
-        "referenceDateUnspecified": "No se ha indicado una fecha de referencia; revisa manualmente la vigencia de los datos.",
-        "shortInventory": "Las posiciones cortas quedan fuera de este análisis P1.",
-        "targetOutOfRange": "Cada objetivo debe estar entre el 0% y el 100%.",
-        "targetRequired": "Cada Asset seleccionado necesita un porcentaje objetivo.",
-        "targetTotal": "Los porcentajes objetivo deben sumar exactamente el 100%.",
-        "targetsRequired": "Define una asignación objetivo para los Asset seleccionados.",
-        "unselectedTarget": "Un objetivo hace referencia a un Asset que ya no está seleccionado.",
-        "unusedValuation": "Este escenario no utiliza la tasa de valoración de {currency}.",
-        "valuationRateRequired": "Introduce una tasa de valoración para {currency}."
-      },
-      "path": {
-        "cash": "Efectivo existente",
-        "contributions": "Aportaciones",
-        "holdings": "Posiciones",
-        "targets": "Objetivos",
-        "valuationRates": "Tasas de valoración"
-      },
-      "results": {
-        "stale": "Los datos han cambiado después de este resultado. Vuelve a ejecutar el análisis antes de usarlo."
-      },
-      "target": {
-        "remaining": "Restante",
-        "selectAssetsFirst": "Selecciona al menos un Asset antes de definir los objetivos.",
-        "total": "Total",
-        "visual": "Distribución"
-      }
-    },
     "backendVersion": "Backend/API",
     "contractVersion": "Contrato",
     "implementationVersion": "Implementación",
     "open": "Abrir herramienta",
-    "portfolioRebalancer": {
-      "analyze": "Analizar las diferencias con los objetivos",
-      "custodyContext": "Contexto de custodia",
-      "customizedRemovalMessage": "Al eliminar esta posición se descartarán sus ajustes del escenario.",
-      "customizedRemovalTitle": "¿Eliminar la posición personalizada?",
-      "description": "Compara la asignación invertida actual con un objetivo final.",
-      "funding": {
-        "hint": "El efectivo y las aportaciones se muestran por separado. P1 no los usa para inferir operaciones ejecutables.",
-        "title": "Contexto de efectivo opcional"
-      },
-      "holdings": {
-        "hint": "Selecciona Asset para copiar todos sus contextos de custodia o añade una posición manual.",
-        "title": "1. Posiciones de la cartera"
-      },
-      "name": "Reequilibrador de cartera",
-      "p1": {
-        "description": "Compara la asignación invertida actual con un objetivo final. No recomienda ni genera operaciones.",
-        "title": "Reequilibrador de cartera P1"
-      },
-      "results": {
-        "availableCash": "Efectivo y nuevas aportaciones (solo contexto)",
-        "boundary": "Una diferencia positiva o negativa es descriptiva, no una instrucción de compra o venta. No se genera ninguna orden, ruta de Broker, transferencia FX ni acción fiscal.",
-        "currentValue": "Valor actual",
-        "currentWeight": "% actual",
-        "custodyContexts": "Custodias",
-        "empty": "Ejecuta el análisis para comparar la asignación actual con la asignación objetivo.",
-        "hint": "P1 compara el valor invertido actual con el objetivo final. No propone operaciones ni demuestra su viabilidad.",
-        "investedTotal": "Valor invertido actual",
-        "targetValue": "Valor objetivo",
-        "title": "3. Diferencias de asignación",
-        "valueGap": "Diferencia de valor",
-        "zeroInvested": "El valor invertido actual es cero, por lo que los pesos actuales y las diferencias en puntos porcentuales no están disponibles."
-      },
-      "targetEditor": {
-        "copyCurrent": "Usar la distribución actual",
-        "hint": "Define la asignación final deseada de la cartera invertida. El efectivo se mantiene como contexto separado.",
-        "title": "2. Asignación objetivo final"
-      },
-      "uncustodied": "Sin custodia"
-    },
     "uiVersion": "UI"
   },
   "onboarding": {

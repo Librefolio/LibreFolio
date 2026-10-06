@@ -122,7 +122,6 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/onboarding/guideCopy.test.ts",
             "src/lib/features/tools/client.test.ts",
             "src/lib/features/tools/registry.test.ts",
-            "src/lib/features/tools/pac-allocator/allocationSource.test.ts",
             "src/lib/features/tools/pac-allocator/planner/decimal.test.ts",
             "src/lib/features/tools/pac-allocator/planner/format.test.ts",
             "src/lib/components/support/supportLinks.test.ts",

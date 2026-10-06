@@ -47,14 +47,14 @@ El CCI es estructuralmente similar a un $z$-score de las Bandas de Bollinger, pe
 
 ```mermaid
 flowchart LR
- HLC["📈 Máximo / Mínimo / Cierre"] --> TP["🎯 Precio Típico = (H+L+C)/3"]
- TP --> AVG["📏 SMA(N) del TP"]
- TP --> DIFF["➖ TP − promedio"]
- AVG --> DIFF
- TP --> MD["📐 Desviación Absoluta Media"]
- DIFF --> DIV["➗ ÷ (0.015 × MD)"]
- MD --> DIV
- DIV --> CCI["🔄 CCI(t)"]
+    HLC["📈 Máximo / Mínimo / Cierre"] --> TP["🎯 Precio Típico = (H+L+C)/3"]
+    TP --> AVG["📏 SMA(N) del TP"]
+    TP --> DIFF["➖ TP − promedio"]
+    AVG --> DIFF
+    TP --> MD["📐 Desviación Absoluta Media"]
+    DIFF --> DIV["➗ ÷ (0.015 × MD)"]
+    MD --> DIV
+    DIV --> CCI["🔄 CCI(t)"]
 ```
 
 !!! note "±100 es una convención, no una ley"
