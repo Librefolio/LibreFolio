@@ -36,6 +36,7 @@ from backend.app.schemas.portfolio import (
     IssueDomain,
     IssueSeverity,
 )
+from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.fx import convert_bulk
 from backend.app.services.price_resolver import AssetPriceSeries, build_asset_price_series
 from backend.app.services.settings_service import get_effective_base_currency
@@ -424,12 +425,8 @@ class ScopeAwareTransactionClassifier:
 # DAILY PORTFOLIO STATE — Core daily snapshot
 # =============================================================================
 
-STALE_PRICE_THRESHOLD_DAYS = 7
-
-# Grace period after first acquisition during which a missing market price is
-# considered a normal pre-listing/placement lag (e.g. BTP collocamento) rather
-# than a data-quality problem worth flagging (TRANSACTION_IMPLIED issue).
-TRANSACTION_IMPLIED_GRACE_DAYS = 14
+# The stale-price threshold and the transaction-implied grace period live in
+# data_quality_thresholds, shared with the risk engine.
 
 
 @dataclass

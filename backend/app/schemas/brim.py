@@ -630,6 +630,7 @@ class BRIMSetRequest(StrictModel):
     broker_id: int = Field(..., gt=0, description="Target broker ID")
     plugin_code: str = Field(..., description="Report-set plugin code")
     batch_id: str = Field(..., description="Upload batch shared by the set's files")
+    exclude_file_ids: List[str] = Field(default_factory=list, description="Originals of the upload the user left out of the set (read alone, or removed from it)")
 
 
 class BRIMSetMemberInfo(StrictModel):

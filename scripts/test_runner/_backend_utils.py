@@ -169,6 +169,24 @@ def utils_pwa_assets(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "PWA asset tests", verbose=verbose)
 
 
+def utils_check_frontend_build(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Dockerfile's frontend guard: only a production build may reach an image."""
+    print_section("Utils: Frontend Build Guard")
+    print_info("Testing: scripts/docker/check_frontend_build.sh")
+    print_info("Tests: production build passes; debug marker, sourcemaps, coverage marker, missing index.html/200.html fail")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_check_frontend_build.py", test_names)
+    return run_command(cmd, "Frontend build guard tests", verbose=verbose)
+
+
+def utils_release_image_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the release.yml / Dockerfile contract that keeps the gallery's debug build out of the images."""
+    print_section("Utils: Release Image Contract")
+    print_info("Testing: .github/workflows/release.yml, Dockerfile")
+    print_info("Tests: production front build + docs rebuild between gallery and image builds, nightly report, guarded frontend stage")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_release_image_contract.py", test_names)
+    return run_command(cmd, "Release image contract tests", verbose=verbose)
+
+
 def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
     """Test the i18n three-verdict classifier (used / not verified / dead)."""
     print_section("Utils: i18n Usage Gate")
@@ -203,6 +221,15 @@ def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> boo
     print_info("Tests: test_names → pytest -k semantics, registry forwarding, coverage_js_adapter link")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_runner_cli.py", test_names)
     return run_command(cmd, "Test runner CLI contract tests", verbose=verbose)
+
+
+def utils_translation_code_blocks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that translated code blocks keep the source indentation (Aphra pipeline + validator)."""
+    print_section("Utils: Translation Code Blocks")
+    print_info("Testing: mkdocs_src/aphra-pipeline/code_blocks.py, translate_docs.py, validate_translations.py")
+    print_info("Tests: fence-aware whitespace cleanup, EN indentation restore, code-block-indent check, corpus guard")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_code_blocks.py", test_names)
+    return run_command(cmd, "Translation code-block tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -270,6 +297,26 @@ Tests for utility modules and helper functions:
     add_test(cat, "ai-export-probe-helpers", utils_ai_export_probe_helpers, name="AI Export Probe Helpers", desc="Fast unit tests for probe orchestration, metrics, security, and audit helpers; never runs a real prompt probe")
     add_test(
         cat,
+        "check-frontend-build",
+        utils_check_frontend_build,
+        name="Frontend Build Guard",
+        desc="scripts/docker/check_frontend_build.sh: a production build passes (a missing .build-debug only warns); a debug marker, any sourcemap (named), the coverage marker or a missing index.html/200.html exits 1",
+        # Throwaway build trees in tmp_path, the script run with sh: no DB, no
+        # server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "release-image-contract",
+        utils_release_image_contract,
+        name="Release Image Contract",
+        desc="release.yml rebuilds the frontend (production) and the docs between the gallery and both image builds, the nightly report reads every soft-gated step; the Dockerfile takes frontend/build only through the guarded frontend stage",
+        # Reads .github/workflows/release.yml and Dockerfile, mutates copies in
+        # memory: no DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "js-cache-fail-loud",
         utils_js_cache_fail_loud,
         name="JS Cache Fail-Loud (I1)",
@@ -300,7 +347,7 @@ Tests for utility modules and helper functions:
         "gate-i18n-usage",
         utils_gate_i18n_usage,
         name="i18n Usage Gate",
-        desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
+        desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, a key prefix chosen between two literals is expanded over both branches, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
         isolation="pure",
     )
     add_test(
@@ -329,6 +376,16 @@ Tests for utility modules and helper functions:
         desc="test_names → pytest -k semantics on the real coverage-js-adapter action, registry dispatch forwarding, coverage_js.py compile check",
         # Monkeypatches run_command/subprocess.run and reads source text only;
         # no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-code-blocks",
+        utils_translation_code_blocks,
+        name="Translation Code Blocks",
+        desc="Aphra cleanup never collapses whitespace inside fenced code; translated blocks get the EN indentation back before the write; translate-validate raises code-block-indent; every up-to-date translation keeps the EN indentation",
+        # Pure functions over strings, plus a read-only pass over mkdocs_src/docs and
+        # the translation hash cache: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

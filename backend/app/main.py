@@ -20,6 +20,7 @@ warnings.filterwarnings("ignore", message=".*already taken in index.*")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,7 @@ from backend.app.config import (
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
 from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
+from backend.app.services.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     BRIMProviderRegistry,
@@ -269,6 +271,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     _background_tasks.add(provider_prewarm_task)
     provider_prewarm_task.add_done_callback(_background_tasks.discard)
 
+    # Build the market holiday table in its own process, in background: the first computation that needs it awaits it
+    market_holiday_task = start_market_holiday_prewarm()
+    _background_tasks.add(market_holiday_task)
+    market_holiday_task.add_done_callback(_background_tasks.discard)
+
     # Start scheduler daemon
     shutdown_event = get_shutdown_event()
     scheduler_task = asyncio.create_task(scheduler_loop(shutdown_event))
@@ -293,6 +300,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # a parse only exists inside one.
     shutdown_brim_parse_pool(wait=True)
     await shutdown_quant_worker_pools()
+    # Never waits for a holiday build in progress: its process is ended at once
+    await shutdown_market_holidays()
 
     # Close all TTL caches (stop timer wheel threads for clean exit)
     close_all_caches()
@@ -335,6 +344,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Compress responses (API JSON, SvelteKit JS/CSS, docs HTML) for clients that accept
+# gzip: a first visit drops from ~7.5 MB to ~2.8 MB. Starlette leaves images, fonts,
+# archives, Server-Sent Events, 206 range replies and pre-encoded responses alone,
+# adds `Vary: Accept-Encoding`, and compresses bodies >= 128 KiB off the event loop.
+# Level 6 compresses as well as 9 on these bodies for a third of the CPU.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=API_V1_PREFIX)

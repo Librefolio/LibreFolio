@@ -29,13 +29,13 @@ $$
 
 ```mermaid
 flowchart TD
- A["Risolvi asset a nella data t"] --> B{"Quotazione di mercato in t?"}
- B -- "sì" --> C["MARKET"]
- B -- "no" --> D{"Osservazioni di transazioni in t?"}
- D -- "sì" --> E["TRADE_AVG"]
- D -- "no" --> F{"Qualche osservazione prima di t?"}
- F -- "sì" --> G["CARRIED (LOCF)"]
- F -- "no" --> H["MISSING"]
+    A["Risolvi asset a nella data t"] --> B{"Quotazione di mercato in t?"}
+    B -- "sì" --> C["MARKET"]
+    B -- "no" --> D{"Osservazioni di transazioni in t?"}
+    D -- "sì" --> E["TRADE_AVG"]
+    D -- "no" --> F{"Qualche osservazione prima di t?"}
+    F -- "sì" --> G["CARRIED (LOCF)"]
+    F -- "no" --> H["MISSING"]
 ```
 
 Lo schema pubblico del motore associa i prezzi del risolutore alle etichette delle fonti di valutazione:

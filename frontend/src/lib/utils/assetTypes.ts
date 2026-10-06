@@ -58,8 +58,9 @@ const PNG_MAP: Record<string, string> = {
  *
  * This is the **container** view — "which kind of instrument is it?" — and it is deliberately a
  * different relation from {@link primaryAssetType}, which is the **content** view: `ETF_STOCK`
- * belongs to the `ETF` family and contains `STOCK`. The select groups by family; allocation
- * charts aggregate by content. One map per question, never two maps of the same one.
+ * belongs to the `ETF` family and contains `STOCK`. The select and both allocation charts — the
+ * pie and, since I's D15, the history chart — group by family. One map per question, never two
+ * maps of the same one.
  */
 export const ASSET_TYPE_FAMILY: Readonly<Record<string, string>> = {
     ETF_STOCK: 'ETF',
@@ -238,6 +239,24 @@ export function assetTypeFamily(type: string | null | undefined): string {
     const raw = (type ?? '').trim().toUpperCase();
     if (raw === '') return 'OTHER';
     return ASSET_TYPE_FAMILY[raw] ?? raw;
+}
+
+/**
+ * True when a proposed type only names the **family** of the current one: `ETF` against a stored
+ * `ETF_STOCK`. A provider that cannot tell the content — Borsa Italiana says `ETF` for all of
+ * ETFplus — agrees with the subtype rather than contradicting it: the developer's rule (K step 17,
+ * item 17) is that a parent-type suggestion counts as valid. Equal values, a refinement (`ETF` →
+ * `ETF_STOCK`), sibling subtypes, different families and blank input all return false. Case and
+ * surrounding spaces are ignored, as in {@link assetTypeFamily}.
+ *
+ * @example isFamilyOnlyProposal('ETF_STOCK', 'ETF')  // true
+ * @example isFamilyOnlyProposal('ETF', 'ETF_STOCK')  // false — a refinement is still offered
+ */
+export function isFamilyOnlyProposal(current: string | null | undefined, proposed: string | null | undefined): boolean {
+    const stored = (current ?? '').trim().toUpperCase();
+    const offered = (proposed ?? '').trim().toUpperCase();
+    if (stored === '' || offered === '' || stored === offered) return false;
+    return assetTypeFamily(stored) === offered;
 }
 
 /**

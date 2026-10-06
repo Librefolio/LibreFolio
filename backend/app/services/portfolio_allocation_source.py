@@ -1,33 +1,30 @@
-"""Read-only Asset catalog and OWNER full-custody facts for allocation editors."""
+"""Authenticated, uncached, read-only planner source: Portfolio, Broker, Asset, saved-price, WAC and saved-FX facts for planner copy actions."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
+from fractions import Fraction
 
 import pycountry
-from babel.numbers import get_currency_precision
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, UserRole
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
+    PLANNER_CURRENT_WEIGHT_QUANTUM,
     PlannerSourceSection,
-    PortfolioAllocationSource,
-    PortfolioAllocationSourceAsset,
-    PortfolioAllocationSourceCashBalance,
-    PortfolioAllocationSourceCashSource,
-    PortfolioAllocationSourceContext,
-    PortfolioAllocationSourceQuote,
+    PortfolioPlannerCurrentDistribution,
+    PortfolioPlannerCurrentWeight,
     PortfolioPlannerSourceAsset,
     PortfolioPlannerSourceBroker,
     PortfolioPlannerSourceCashBalance,
     PortfolioPlannerSourceClassification,
-    PortfolioPlannerSourceCurrencySpec,
     PortfolioPlannerSourceFieldPath,
     PortfolioPlannerSourceFxQuote,
     PortfolioPlannerSourceHolding,
@@ -43,91 +40,6 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.sector_fin_utils import FinancialSector
-
-
-class PortfolioAllocationSourceAccessError(PermissionError):
-    """Requested cash brokers are not OWNER-accessible to the caller."""
-
-    def __init__(self, broker_ids: list[int]) -> None:
-        self.broker_ids = tuple(sorted(broker_ids))
-        super().__init__(f"Cash broker selection is not fully OWNER-accessible: {', '.join(map(str, self.broker_ids))}")
-
-
-async def build_portfolio_allocation_source(
-    session: AsyncSession,
-    *,
-    user_id: int,
-    as_of_date: date_type,
-    selected_cash_broker_ids: list[int],
-) -> PortfolioAllocationSource:
-    """Build catalog candidates, OWNER custody contexts, and native cash facts."""
-    access_rows, accesses = await _load_owner_accesses(session, user_id=user_id)
-    _ensure_cash_brokers_accessible(selected_cash_broker_ids=selected_cash_broker_ids, accesses=accesses)
-    holding_rows = await _load_holding_rows(session, accesses=accesses, as_of_date=as_of_date)
-    candidate_assets, candidate_asset_ids = await _load_candidate_assets(session, holding_rows=holding_rows)
-    prices = await _load_latest_prices(session, candidate_asset_ids=candidate_asset_ids, as_of_date=as_of_date)
-    total_counts, own_counts = await _load_usage_counts(
-        session,
-        accesses=accesses,
-        candidate_asset_ids=candidate_asset_ids,
-    )
-    contexts_by_asset = _build_contexts_by_asset(holding_rows=holding_rows, accesses=accesses)
-    source_assets = _build_source_assets(
-        candidate_assets=candidate_assets,
-        contexts_by_asset=contexts_by_asset,
-        prices=prices,
-        total_counts=total_counts,
-        own_counts=own_counts,
-        as_of_date=as_of_date,
-    )
-    cash_by_broker = await _load_cash_by_broker(session, accesses=accesses, as_of_date=as_of_date)
-    cash_sources = _build_cash_sources(access_rows=access_rows, cash_by_broker=cash_by_broker)
-
-    return PortfolioAllocationSource(
-        generated_at=utcnow(),
-        as_of_date=as_of_date,
-        assets=source_assets,
-        cash_sources=cash_sources,
-        selected_cash_balances=_build_selected_cash_balances(
-            selected_cash_broker_ids=selected_cash_broker_ids,
-            cash_by_broker=cash_by_broker,
-        ),
-    )
-
-
-async def _load_owner_accesses(
-    session: AsyncSession,
-    *,
-    user_id: int,
-) -> tuple[list, dict[int, tuple[BrokerUserAccess, Broker]]]:
-    access_rows = (
-        await session.execute(
-            select(BrokerUserAccess, Broker)
-            .join(Broker, Broker.id == BrokerUserAccess.broker_id)
-            .where(
-                BrokerUserAccess.user_id == user_id,
-                BrokerUserAccess.role == UserRole.OWNER,
-            )
-            .order_by(Broker.name, Broker.id)
-        )
-    ).all()
-
-    accesses: dict[int, tuple[BrokerUserAccess, Broker]] = {}
-    for access, broker in access_rows:
-        if broker.id is None:
-            raise RuntimeError("Persisted broker is missing its id")
-        accesses[broker.id] = (access, broker)
-    return access_rows, accesses
-
-
-def _ensure_cash_brokers_accessible(
-    *,
-    selected_cash_broker_ids: list[int],
-    accesses: dict[int, tuple[BrokerUserAccess, Broker]],
-) -> None:
-    inaccessible_cash_broker_ids = sorted(set(selected_cash_broker_ids) - accesses.keys())
-    if inaccessible_cash_broker_ids:
-        raise PortfolioAllocationSourceAccessError(inaccessible_cash_broker_ids)
 
 
 async def _load_holding_rows(
@@ -155,23 +67,6 @@ async def _load_holding_rows(
             .having(quantity_sum != 0)
         )
     ).all()
-
-
-async def _load_candidate_assets(
-    session: AsyncSession,
-    *,
-    holding_rows: list,
-) -> tuple[list[Asset], set[int]]:
-    all_assets = list((await session.execute(select(Asset).order_by(Asset.display_name, Asset.id))).scalars())
-    assets_by_id = {asset.id: asset for asset in all_assets if asset.id is not None}
-    current_asset_ids = {asset_id for _, asset_id, _ in holding_rows if asset_id is not None}
-    missing_asset_ids = current_asset_ids - assets_by_id.keys()
-    if missing_asset_ids:
-        raise RuntimeError(f"Allocation source references missing assets: {sorted(missing_asset_ids)}")
-
-    candidate_assets = [asset for asset in all_assets if asset.id is not None and (asset.active or asset.id in current_asset_ids)]
-    candidate_asset_ids = {asset.id for asset in candidate_assets if asset.id is not None}
-    return candidate_assets, candidate_asset_ids
 
 
 async def _load_latest_prices(
@@ -211,104 +106,6 @@ async def _load_latest_prices(
     return {price.asset_id: price for price in price_rows}
 
 
-async def _load_usage_counts(
-    session: AsyncSession,
-    *,
-    accesses: dict[int, tuple[BrokerUserAccess, Broker]],
-    candidate_asset_ids: set[int],
-) -> tuple[dict[int, int], dict[int, int]]:
-    total_counts: dict[int, int] = {}
-    if candidate_asset_ids:
-        total_counts = {asset_id: count for asset_id, count in (await session.execute(select(Transaction.asset_id, func.count(Transaction.id)).where(Transaction.asset_id.in_(candidate_asset_ids)).group_by(Transaction.asset_id))).all() if asset_id is not None}
-
-    positive_owner_broker_ids = {broker_id for broker_id, (access, _broker) in accesses.items() if access.share_percentage > 0}
-    own_counts: dict[int, int] = {}
-    if candidate_asset_ids and positive_owner_broker_ids:
-        own_counts = {
-            asset_id: count
-            for asset_id, count in (
-                await session.execute(
-                    select(Transaction.asset_id, func.count(Transaction.id))
-                    .where(
-                        Transaction.asset_id.in_(candidate_asset_ids),
-                        Transaction.broker_id.in_(positive_owner_broker_ids),
-                    )
-                    .group_by(Transaction.asset_id)
-                )
-            ).all()
-            if asset_id is not None
-        }
-    return total_counts, own_counts
-
-
-def _build_contexts_by_asset(
-    *,
-    holding_rows: list,
-    accesses: dict[int, tuple[BrokerUserAccess, Broker]],
-) -> dict[int, list[PortfolioAllocationSourceContext]]:
-    contexts_by_asset: dict[int, list[PortfolioAllocationSourceContext]] = defaultdict(list)
-    for broker_id, asset_id, custody_quantity in holding_rows:
-        if asset_id is None:
-            continue
-        access, broker = accesses[broker_id]
-        contexts_by_asset[asset_id].append(
-            PortfolioAllocationSourceContext(
-                context_key=f"asset:{asset_id}:broker:{broker_id}",
-                broker_id=broker_id,
-                broker_name=broker.name,
-                broker_icon_url=broker.icon_url,
-                broker_portal_url=broker.portal_url,
-                broker_default_import_plugin=broker.default_import_plugin,
-                ownership_share_percent=access.share_percentage * Decimal("100"),
-                custody_quantity=custody_quantity,
-            )
-        )
-    return contexts_by_asset
-
-
-def _build_source_assets(
-    *,
-    candidate_assets: list[Asset],
-    contexts_by_asset: dict[int, list[PortfolioAllocationSourceContext]],
-    prices: dict[int, PriceHistory],
-    total_counts: dict[int, int],
-    own_counts: dict[int, int],
-    as_of_date: date_type,
-) -> list[PortfolioAllocationSourceAsset]:
-    source_assets: list[PortfolioAllocationSourceAsset] = []
-    for asset in candidate_assets:
-        if asset.id is None:
-            continue
-        asset_id = asset.id
-        contexts = contexts_by_asset.get(asset_id, [])
-        price = prices.get(asset_id)
-        reference_date = price.date if price else None
-        usage_scope = "owned" if own_counts.get(asset_id, 0) > 0 else "other_users" if total_counts.get(asset_id, 0) > 0 else "observed"
-        source_assets.append(
-            PortfolioAllocationSourceAsset(
-                asset_id=asset_id,
-                instrument_key=f"asset:{asset_id}",
-                candidate_key=f"asset:{asset_id}:candidate",
-                name=asset.display_name,
-                ticker=asset.identifier_ticker,
-                asset_type=asset.asset_type.value,
-                icon_url=asset.icon_url,
-                active=asset.active,
-                usage_scope=usage_scope,
-                quote=PortfolioAllocationSourceQuote(
-                    raw_price=price.close if price else None,
-                    currency=price.currency if price else asset.currency,
-                    quote_base_quantity=asset.quote_base_quantity or 1,
-                    reference_date=reference_date,
-                    source=price.source_plugin_key if price else None,
-                    days_before_requested=(as_of_date - reference_date).days if reference_date else None,
-                ),
-                contexts=sorted(contexts, key=lambda item: (item.broker_name.casefold(), item.broker_id)),
-            )
-        )
-    return source_assets
-
-
 async def _load_cash_by_broker(
     session: AsyncSession,
     *,
@@ -340,52 +137,22 @@ async def _load_cash_by_broker(
     return cash_by_broker
 
 
-def _build_cash_sources(
-    *,
-    access_rows: list,
-    cash_by_broker: dict[int, dict[str, Decimal]],
-) -> list[PortfolioAllocationSourceCashSource]:
-    cash_sources: list[PortfolioAllocationSourceCashSource] = []
-    for access, broker in access_rows:
-        if broker.id is None:
-            continue
-        cash_sources.append(
-            PortfolioAllocationSourceCashSource(
-                broker_id=broker.id,
-                broker_name=broker.name,
-                broker_icon_url=broker.icon_url,
-                broker_portal_url=broker.portal_url,
-                broker_default_import_plugin=broker.default_import_plugin,
-                ownership_share_percent=access.share_percentage * Decimal("100"),
-                balances=[PortfolioAllocationSourceCashBalance(currency=currency, amount=amount) for currency, amount in sorted(cash_by_broker.get(broker.id, {}).items())],
-            )
-        )
-    return cash_sources
-
-
-def _build_selected_cash_balances(
-    *,
-    selected_cash_broker_ids: list[int],
-    cash_by_broker: dict[int, dict[str, Decimal]],
-) -> list[PortfolioAllocationSourceCashBalance]:
-    selected_cash_by_currency: dict[str, Decimal] = {}
-    for broker_id in selected_cash_broker_ids:
-        for currency, amount in cash_by_broker.get(broker_id, {}).items():
-            selected_cash_by_currency[currency] = selected_cash_by_currency.get(currency, Decimal("0")) + amount
-    return [PortfolioAllocationSourceCashBalance(currency=currency, amount=amount) for currency, amount in sorted(selected_cash_by_currency.items())]
-
-
 # =============================================================================
 # Planner source v2 — dedicated uncached domain-copy endpoint
 # =============================================================================
 
-_PLANNER_SOURCE_REVISION = "2.0.0"
+_PLANNER_SOURCE_REVISION = "1.0.0"
 _PORTFOLIO_PROVENANCE_ID = "source:portfolio-ledger"
 _MARKET_PROVENANCE_ID = "source:market-data"
 _BROKER_PROVENANCE_ID = "source:broker-domain"
 _FX_PROVENANCE_ID = "source:saved-fx"
 _WAC_PROVENANCE_ID = "source:runtime-wac"
+_ENGINE_PROVENANCE_ID = "source:portfolio-engine"
 _KNOWN_SECTORS = frozenset(sector.value for sector in FinancialSector)
+# The metadata writers store Pydantic JSON, where a Decimal weight is plain decimal text ("0.6000").
+_SAVED_WEIGHT_TEXT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+# The catch-all geographic key the writers keep as it is (geo_utils.normalize_country_keys).
+_GEOGRAPHY_OTHER = "Other"
 
 
 class PortfolioPlannerSourceAccessError(PermissionError):
@@ -422,6 +189,10 @@ def _price_key(asset_id: int, reference_date: date_type) -> str:
 
 def _wac_key(asset_id: int, broker_id: int, as_of: date_type, currency: str) -> str:
     return f"wac:asset:{asset_id}:broker:{broker_id}:{as_of.isoformat()}:{currency}"
+
+
+def _current_weight_key(asset_id: int) -> str:
+    return f"current:asset:{asset_id}"
 
 
 def _classification_key(asset_id: int, dimension: str, category_id: str | None) -> str:
@@ -527,6 +298,17 @@ def _build_planner_provenance(
                 kind="domain_copy",
                 domain="wac",
                 source_ref="portfolio_service.compute_wac_iterative",
+                source_label=None,
+                captured_at=captured_at,
+            )
+        )
+    if "current_distribution" in requested_sections:
+        records.append(
+            PortfolioPlannerSourceProvenance(
+                provenance_id=_ENGINE_PROVENANCE_ID,
+                kind="domain_copy",
+                domain="portfolio",
+                source_ref="portfolio_engine.PortfolioCalculationEngine",
                 source_label=None,
                 captured_at=captured_at,
             )
@@ -948,11 +730,14 @@ def _parse_saved_distribution(  # noqa: C901 — direct validation keeps persist
             return None
         if dimension == "sector" and category not in _KNOWN_SECTORS:
             return None
-        if dimension == "geography" and (len(category) != 3 or category != category.upper() or pycountry.countries.get(alpha_3=category) is None):
+        if dimension == "geography" and category != _GEOGRAPHY_OTHER and (len(category) != 3 or category != category.upper() or pycountry.countries.get(alpha_3=category) is None):
             return None
-        if not isinstance(raw_weight, Decimal):
+        if isinstance(raw_weight, Decimal):
+            weight = raw_weight
+        elif isinstance(raw_weight, str) and _SAVED_WEIGHT_TEXT.fullmatch(raw_weight):
+            weight = Decimal(raw_weight)
+        else:
             return None
-        weight = raw_weight
         if not weight.is_finite() or weight < 0:
             return None
         parsed.append((category, weight))
@@ -1204,13 +989,12 @@ async def _build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence
     as_of: date_type,
     target_currency: str,
     issues: list[PortfolioPlannerSourceIssue],
-) -> tuple[list[PortfolioPlannerWacContext], set[str]]:
-    # Lazy import avoids the portfolio_service → allocation_source module cycle.
+) -> list[PortfolioPlannerWacContext]:
+    # Resolved at call time, not at module load: tests patch portfolio_service.compute_wac_iterative.
     from backend.app.services.portfolio_service import compute_wac_iterative  # noqa: PLC0415
 
     prepared: list[tuple[int, int, object | None]] = []
     fx_windows: set[tuple[str, str, date_type, date_type]] = set()
-    currencies = {target_currency}
 
     # Deliberately sequential: one AsyncSession is shared, and no provisional
     # item cap or silent truncation belongs in this domain endpoint.
@@ -1229,10 +1013,10 @@ async def _build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence
                         code="allocation.currency_spec_missing",
                         kind="missing",
                         severity="error",
-                        section="currency_specs",
-                        entity_kind="currency_spec",
-                        entity_id=f"currency:asset:{asset_id}:invalid",
-                        field="minor_unit",
+                        section="wac_contexts",
+                        entity_kind="wac_context",
+                        entity_id=_wac_key(asset_id, broker_id, as_of, target_currency),
+                        field="unit_cost",
                     )
                 )
             prepared.append((broker_id, asset_id, None))
@@ -1261,7 +1045,6 @@ async def _build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence
                     qualifying_tx.date,
                 )
             )
-            currencies.add(source_currency)
 
     current_fx_rows = await _load_current_wac_fx_rows(session, windows=fx_windows)
     rows: list[PortfolioPlannerWacContext] = []
@@ -1344,7 +1127,6 @@ async def _build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence
                     source_currency,
                     destination_currency,
                 )
-                currencies.update((source_currency, destination_currency))
                 evidence = PortfolioPlannerSourceWacFxEvidence(
                     source_currency=source_currency,
                     destination_currency=destination_currency,
@@ -1418,7 +1200,7 @@ async def _build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence
                 provenance_id=_WAC_PROVENANCE_ID,
             )
         )
-    return rows, currencies
+    return rows
 
 
 async def _build_planner_fx_quotes(
@@ -1427,7 +1209,7 @@ async def _build_planner_fx_quotes(
     request_pairs: list[str],
     as_of: date_type,
     issues: list[PortfolioPlannerSourceIssue],
-) -> tuple[list[PortfolioPlannerSourceFxQuote], set[str]]:
+) -> list[PortfolioPlannerSourceFxQuote]:
     directed_pairs = [tuple(pair.split("/", maxsplit=1)) for pair in request_pairs]
     saved_rows = await _load_latest_planner_fx_rows(
         session,
@@ -1435,11 +1217,9 @@ async def _build_planner_fx_quotes(
         as_of=as_of,
     )
     rows: list[PortfolioPlannerSourceFxQuote] = []
-    currencies: set[str] = set()
 
     for pair in sorted(request_pairs):
         base, quote = pair.split("/", maxsplit=1)
-        currencies.update((base, quote))
         saved_row = saved_rows.get((base, quote))
         if saved_row is None:
             fx_id = _fx_key(pair, as_of, "missing")
@@ -1495,58 +1275,161 @@ async def _build_planner_fx_quotes(
             )
         )
 
-    return rows, currencies
-
-
-def _build_currency_specs(
-    currencies: set[str],
-    *,
-    issues: list[PortfolioPlannerSourceIssue],
-) -> list[PortfolioPlannerSourceCurrencySpec]:
-    rows: list[PortfolioPlannerSourceCurrencySpec] = []
-    for currency in sorted(currencies):
-        normalized = _validated_currency(currency)
-        entity_id = f"currency:{currency}" if currency.isascii() else "currency:invalid"
-        if normalized is None:
-            issues.append(
-                _field_issue(
-                    code="allocation.currency_spec_missing",
-                    kind="missing",
-                    severity="error",
-                    section="currency_specs",
-                    entity_kind="currency_spec",
-                    entity_id=entity_id,
-                    field="minor_unit",
-                )
-            )
-            continue
-        try:
-            precision = get_currency_precision(normalized)
-            if precision is None:
-                precision = 2
-            if precision < 0:
-                raise ValueError("negative currency precision")
-            minor_unit = Decimal("1").scaleb(-precision)
-        except (ArithmeticError, TypeError, ValueError):
-            issues.append(
-                _field_issue(
-                    code="allocation.currency_spec_missing",
-                    kind="missing",
-                    severity="error",
-                    section="currency_specs",
-                    entity_kind="currency_spec",
-                    entity_id=f"currency:{normalized}",
-                    field="minor_unit",
-                )
-            )
-            continue
-        rows.append(
-            PortfolioPlannerSourceCurrencySpec(
-                currency=normalized,
-                minor_unit=minor_unit,
-            )
-        )
     return rows
+
+
+def _largest_remainder_weights(values: dict[int, Decimal]) -> dict[int, Decimal]:
+    """Split exactly 1 into weight quanta proportional to non-negative values.
+
+    Every exact share is floored to the quantum; the quanta still missing go to the
+    largest remainders, ties to the lowest asset id, so the weights sum to exactly 1.
+    """
+    units = int(1 / PLANNER_CURRENT_WEIGHT_QUANTUM)
+    total = sum((Fraction(value) for value in values.values()), Fraction(0))
+    counts: dict[int, int] = {}
+    remainders: list[tuple[Fraction, int]] = []
+    for asset_id, value in values.items():
+        exact = Fraction(value) * units / total
+        counts[asset_id] = exact.numerator // exact.denominator
+        remainders.append((exact - counts[asset_id], asset_id))
+    missing_units = units - sum(counts.values())
+    for _remainder, asset_id in sorted(remainders, key=lambda item: (-item[0], item[1]))[:missing_units]:
+        counts[asset_id] += 1
+    return {asset_id: (Decimal(count) * PLANNER_CURRENT_WEIGHT_QUANTUM).quantize(PLANNER_CURRENT_WEIGHT_QUANTUM) for asset_id, count in counts.items()}
+
+
+async def _build_planner_current_distribution(  # noqa: C901 — per-Asset valuation outcomes stay explicit
+    session: AsyncSession,
+    *,
+    user_id: int,
+    broker_ids: list[int],
+    scenario_asset_ids: list[int],
+    as_of: date_type,
+    target_currency: str,
+    issues: list[PortfolioPlannerSourceIssue],
+) -> PortfolioPlannerCurrentDistribution:
+    """Weight the scenario Assets by the portfolio engine's market value at ``as_of``.
+
+    Same engine call as the portfolio summary, so values match the Allocation page.
+    The denominator is the scenario instead of every holding and cash stays out; a
+    held Asset without a valuation withholds every weight instead of vanishing.
+    """
+    # Lazy: portfolio_service imports this module at load time.
+    from backend.app.services.portfolio_engine import PortfolioCalculationEngine, ValuationSource  # noqa: PLC0415
+    from backend.app.services.portfolio_service import _QUANTITY_DUST_THRESHOLD  # noqa: PLC0415
+
+    engine_result = await PortfolioCalculationEngine(session).calculate(
+        user_id=user_id,
+        broker_ids=sorted(broker_ids),
+        date_from=None,
+        date_to=as_of,
+        target_currency=target_currency,
+    )
+    scenario = set(scenario_asset_ids)
+    positions_by_asset: dict[int, list] = defaultdict(list)
+    for position in engine_result.position_states_end:
+        if position.asset_id in scenario and position.quantity > _QUANTITY_DUST_THRESHOLD:
+            positions_by_asset[position.asset_id].append(position)
+
+    values: dict[int, Decimal] = {}
+    row_facts: list[dict] = []
+    complete = True
+    for asset_id in scenario_asset_ids:
+        weight_id = _current_weight_key(asset_id)
+        positions = sorted(positions_by_asset.get(asset_id, []), key=lambda position: position.broker_id)
+        if not positions:
+            values[asset_id] = Decimal("0")
+            row_facts.append(
+                {
+                    "weight_id": weight_id,
+                    "asset_id": _asset_key(asset_id),
+                    "held": False,
+                    "valuation_source": None,
+                    "valuation_reference_date": None,
+                    "valuation_days_before_requested": None,
+                    "valuation_stale": False,
+                }
+            )
+            continue
+
+        # The engine values one Asset per date, so every Broker row shares the mark.
+        valuation = positions[0]
+        unvalued = next((position for position in positions if position.market_value is None), None)
+        if unvalued is not None:
+            complete = False
+            if unvalued.valuation_source != ValuationSource.MISSING and unvalued.missing_fx_pair:
+                first, second, _inverted = _normalized_fx_pair(*unvalued.missing_fx_pair.split("/", 1))
+                issues.append(
+                    _field_issue(
+                        code="allocation.saved_fx_missing",
+                        kind="missing",
+                        severity="error",
+                        section="current_distribution",
+                        entity_kind="current_weight",
+                        entity_id=weight_id,
+                        field="weight",
+                        params=[_text_param("pair", f"{first}/{second}")],
+                    )
+                )
+            else:
+                issues.append(
+                    _field_issue(
+                        code="allocation.price_missing",
+                        kind="missing",
+                        severity="error",
+                        section="current_distribution",
+                        entity_kind="current_weight",
+                        entity_id=weight_id,
+                        field="weight",
+                    )
+                )
+        elif any(position.market_value < 0 for position in positions):
+            complete = False
+            issues.append(
+                _field_issue(
+                    code="allocation.nonpositive_price",
+                    kind="invalid",
+                    severity="error",
+                    section="current_distribution",
+                    entity_kind="current_weight",
+                    entity_id=weight_id,
+                    field="weight",
+                )
+            )
+        else:
+            values[asset_id] = sum((position.market_value for position in positions), Decimal("0"))
+
+        reference_date = valuation.valuation_reference_date
+        row_facts.append(
+            {
+                "weight_id": weight_id,
+                "asset_id": _asset_key(asset_id),
+                "held": True,
+                "valuation_source": ValuationSource(valuation.valuation_source).value,
+                "valuation_reference_date": reference_date,
+                "valuation_days_before_requested": (as_of - reference_date).days if reference_date is not None else None,
+                "valuation_stale": any(position.valuation_stale for position in positions),
+            }
+        )
+
+    weights: dict[int, Decimal] = {}
+    if not complete:
+        status = "incomplete"
+    elif sum(values.values(), Decimal("0")) <= 0:
+        status = "no_holdings"
+    else:
+        status = "complete"
+        weights = _largest_remainder_weights(values)
+
+    return PortfolioPlannerCurrentDistribution(
+        status=status,
+        method="portfolio_engine_market_value",
+        rounding="largest_remainder",
+        weight_quantum="0.0001",
+        as_of=as_of,
+        provenance_id=_ENGINE_PROVENANCE_ID,
+        rows=[PortfolioPlannerCurrentWeight(**facts, weight=weights.get(asset_id)) for asset_id, facts in zip(scenario_asset_ids, row_facts, strict=True)],
+    )
 
 
 async def build_portfolio_planner_source(
@@ -1677,14 +1560,9 @@ async def build_portfolio_planner_source(
         else []
     )
 
-    currencies = {request.target_currency}
-    currencies.update(broker_currency for broker in brokers for broker_currency in broker.observed_currencies)
-    currencies.update(cash.currency for cash in cash_balances)
-    currencies.update(price.currency for price in prices if price.currency is not None)
-
     wac_contexts: list[PortfolioPlannerWacContext] = []
     if "wac_contexts" in requested_sections:
-        wac_contexts, wac_currencies = await _build_planner_wac_contexts(
+        wac_contexts = await _build_planner_wac_contexts(
             session,
             holding_rows=selected_holding_rows,
             selected_asset_ids=selected_asset_ids,
@@ -1693,19 +1571,28 @@ async def build_portfolio_planner_source(
             target_currency=request.target_currency,
             issues=issues,
         )
-        currencies.update(wac_currencies)
 
     fx_quotes: list[PortfolioPlannerSourceFxQuote] = []
     if "fx_quotes" in requested_sections:
-        fx_quotes, fx_currencies = await _build_planner_fx_quotes(
+        fx_quotes = await _build_planner_fx_quotes(
             session,
             request_pairs=request.fx_pairs,
             as_of=request.as_of,
             issues=issues,
         )
-        currencies.update(fx_currencies)
 
-    currency_specs = _build_currency_specs(currencies, issues=issues)
+    current_distribution: PortfolioPlannerCurrentDistribution | None = None
+    if "current_distribution" in requested_sections:
+        current_distribution = await _build_planner_current_distribution(
+            session,
+            user_id=user_id,
+            broker_ids=list(accesses),
+            scenario_asset_ids=[asset.id for asset in candidate_assets if asset.id is not None],
+            as_of=request.as_of,
+            target_currency=request.target_currency,
+            issues=issues,
+        )
+
     provenance = _build_planner_provenance(
         requested_sections,
         captured_at=captured_at,
@@ -1718,7 +1605,6 @@ async def build_portfolio_planner_source(
             requested_sections=request.requested_sections,
             source_revision=_PLANNER_SOURCE_REVISION,
         ),
-        currency_specs=currency_specs,
         provenance=provenance,
         assets=assets,
         brokers=brokers,
@@ -1728,5 +1614,6 @@ async def build_portfolio_planner_source(
         classifications=classifications,
         wac_contexts=wac_contexts,
         fx_quotes=fx_quotes,
+        current_distribution=current_distribution,
         issues=issues,
     )

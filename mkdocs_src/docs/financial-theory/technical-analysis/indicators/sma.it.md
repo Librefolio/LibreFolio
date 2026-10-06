@@ -40,10 +40,10 @@ La SMA è un filtro **Finite Impulse Response (FIR)** passa-basso con una finest
 
 ```mermaid
 flowchart LR
- subgraph Window["Finestra scorrevole di N=20 chiusure"]
- C1["C(t-19)"] --> C2["..."] --> C3["C(t)"]
- end
- Window -->|"media non ponderata"| SMA["📏 SMA(t)"]
+    subgraph Window["Finestra scorrevole di N=20 chiusure"]
+        C1["C(t-19)"] --> C2["..."] --> C3["C(t)"]
+    end
+    Window -->|"media non ponderata"| SMA["📏 SMA(t)"]
 ```
 
 !!! tip "Ritardo di gruppo"

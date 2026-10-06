@@ -100,6 +100,11 @@ def create_xlsx_bytes() -> bytes:
     return output.getvalue()
 
 
+def create_damaged_xlsx_bytes() -> bytes:
+    """Create synthetic bytes for a file named .xlsx that are no workbook, not even a zip archive (F2)."""
+    return b"LibreFolio F2 synthetic bytes: not an Excel workbook and not a zip archive.\n" * 16
+
+
 def create_minimal_pdf_bytes() -> bytes:
     """Create a tiny but valid PDF file."""
     return (
@@ -573,6 +578,38 @@ class TestStructuredPreview:
             assert data["text_content"].startswith("# Title")
 
             print_success("✓ Preview used metadata MIME fallback")
+
+    @pytest.mark.asyncio
+    async def test_damaged_xlsx_preview_returns_400(self, test_server):
+        """UPLOAD-005H: Preview of a damaged .xlsx answers 400 with a detail, not 500 (F2)."""
+        print_section("UPLOAD-005H: Damaged XLSX preview answers 400")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {
+                "file": (
+                    "damaged.xlsx",
+                    BytesIO(create_damaged_xlsx_bytes()),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            }
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            assert upload_resp.status_code == 200, upload_resp.text
+            file_id = upload_resp.json()["file"]["id"]
+
+            try:
+                response = await client.get(f"{API_BASE}/uploads/{file_id}/preview", timeout=TIMEOUT)
+
+                assert response.status_code == 400, f"the preview of a damaged .xlsx answers {response.status_code} {response.text}: a damaged workbook is the user's file, not a fault of the server (F2)"
+                detail = response.json().get("detail")
+                assert isinstance(detail, str) and detail.strip(), f"the 400 says why, in a detail: {response.text}"
+            finally:
+                # Whoever uploads cleans up: the owner deletes the file, as UPLOAD-007 does.
+                delete_resp = await client.delete(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
+                assert delete_resp.status_code == 200, delete_resp.text
+
+            print_success("✓ Damaged XLSX preview answered 400")
 
 
 # ============================================================================

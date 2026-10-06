@@ -46,12 +46,12 @@ La construction du canal Donchian est un **filtre max** et un **filtre min** app
 
 ```mermaid
 flowchart LR
- H["📈 Haut"] --> UP["🔼 Maximum glissant sur N barres"]
- L["📉 Bas"] --> DN["🔽 Minimum glissant sur N barres"]
- UP --> UPPER["↗️ Canal supérieur"]
- DN --> LOWER["↘️ Canal inférieur"]
- UPPER --> MID["➗ Middle = (Upper+Lower)/2"]
- LOWER --> MID
+    H["📈 Haut"] --> UP["🔼 Maximum glissant sur N barres"]
+    L["📉 Bas"] --> DN["🔽 Minimum glissant sur N barres"]
+    UP --> UPPER["↗️ Canal supérieur"]
+    DN --> LOWER["↘️ Canal inférieur"]
+    UPPER --> MID["➗ Middle = (Upper+Lower)/2"]
+    LOWER --> MID
 ```
 
 !!! info "Comportement en fonction échelon"

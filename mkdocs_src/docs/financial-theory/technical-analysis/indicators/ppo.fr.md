@@ -48,15 +48,15 @@ La sortie passe-bande du MACD (voir [MACD](macd.md)) a une amplitude qui évolue
 
 ```mermaid
 flowchart LR
- C["💹 Clôture"] --> EF["📉 EMA rapide"]
- C --> ES["📉 EMA lente"]
- EF --> DIFF["➖ EMA rapide − EMA lente"]
- ES --> DIFF
- DIFF --> AGC["🎚️ ÷ EMA lente ×100 (CAG)"]
- AGC --> PPO["📐 Ligne PPO"]
- PPO --> SIG["🔁 EMA(périodeSignal)"]
- PPO --> HIST["📊 Histogramme = PPO − Signal"]
- SIG --> HIST
+    C["💹 Clôture"] --> EF["📉 EMA rapide"]
+    C --> ES["📉 EMA lente"]
+    EF --> DIFF["➖ EMA rapide − EMA lente"]
+    ES --> DIFF
+    DIFF --> AGC["🎚️ ÷ EMA lente ×100 (CAG)"]
+    AGC --> PPO["📐 Ligne PPO"]
+    PPO --> SIG["🔁 EMA(périodeSignal)"]
+    PPO --> HIST["📊 Histogramme = PPO − Signal"]
+    SIG --> HIST
 ```
 
 !!! info "Mêmes croisements, échelle différente"

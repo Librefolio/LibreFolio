@@ -38,7 +38,7 @@ A fixed-period EMA is a compromise: fast enough to follow trends, but noisy in r
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 10 | Lookback window for the Efficiency Ratio. |
+| Period ($N$) | `period` | 10 | Lookback window for the Efficiency Ratio, in sessions. |
 
 !!! note "Fast/slow constants are not exposed"
 

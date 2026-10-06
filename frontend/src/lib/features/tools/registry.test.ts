@@ -7,7 +7,7 @@ import {createToolRendererRegistry, defineToolRenderer, resolveToolRenderer} fro
 const fakeComponent = (() => undefined) as unknown as Component;
 // The backend build and documentation page this fixture invents. Deliberately not the
 // contract version, so nothing can pass by conflating the two.
-const fixtureArtifactVersion = '1.0.0';
+const fixtureArtifactVersion = '9.4.2';
 let accountSequence = 0;
 let catalog: VerifiedToolCatalog;
 
@@ -20,9 +20,9 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
 }
 
 function makeCatalog(): VerifiedToolCatalog {
-    const contracts = [getCompiledToolContract('pac_allocator', '2.0.0')];
+    const contracts = [getCompiledToolContract('pac_allocator', '1.0.0')];
     if (contracts.some((contract) => !contract)) {
-        throw new Error('the compiled pac_allocator 2.0.0 contract must be generated');
+        throw new Error('the compiled pac_allocator 1.0.0 contract must be generated');
     }
     return validateToolCatalog(
         {
@@ -97,9 +97,9 @@ function makeCatalog(): VerifiedToolCatalog {
 }
 
 function registration(load: () => Promise<{default: Component}> = vi.fn(async () => ({default: fakeComponent}))) {
-    return defineToolRenderer('pac_allocator', '2.0.0', {
+    return defineToolRenderer('pac_allocator', '1.0.0', {
         componentKey: 'pac-allocator',
-        uiVersion: '2.0.0',
+        uiVersion: '1.0.0',
         load,
     });
 }
@@ -125,27 +125,39 @@ describe('compiled tool renderer registry', () => {
             binding: {
                 descriptor: {
                     tool_code: 'pac_allocator',
-                    contract_version: '2.0.0',
-                    ui: {kind: 'custom', component_key: 'pac-allocator', version: '2.0.0'},
+                    contract_version: '1.0.0',
+                    ui: {kind: 'custom', component_key: 'pac-allocator', version: '1.0.0'},
                 },
             },
         });
     });
 
-    it('reports renderer_missing for a compatible tool the compiled registry does not render', () => {
-        // The compiled registry ships no renderer until the pac_allocator v2 UI exists.
-        // Asserting the descriptor is the barrier: it proves the catalog entry was found
-        // and judged compatible, so this is a missing renderer, not a missing tool.
+    it('resolves the compiled pac_allocator 1.0.0 planner renderer', () => {
+        // The shipped registry must bind the v2 planner UI: a missing entry would put the
+        // tool back in the renderer_missing state the developer saw after the P1 removal.
         const resolution = resolveToolRenderer(catalog, 'pac_allocator');
+
+        expect(resolution).toMatchObject({
+            status: 'ready',
+            binding: {
+                descriptor: {
+                    tool_code: 'pac_allocator',
+                    contract_version: '1.0.0',
+                    ui: {kind: 'custom', component_key: 'pac-allocator', version: '1.0.0'},
+                },
+            },
+        });
+    });
+
+    it('reports renderer_missing for a compatible tool a registry does not render', () => {
+        // The descriptor is the barrier: the catalog entry was found and judged
+        // compatible, so this is a missing renderer, not a missing tool.
+        const resolution = createToolRendererRegistry([]).resolve(catalog, 'pac_allocator');
 
         expect(resolution).toMatchObject({
             status: 'unavailable',
             reason: 'renderer_missing',
-            descriptor: {
-                tool_code: 'pac_allocator',
-                contract_version: '2.0.0',
-                ui: {kind: 'custom', component_key: 'pac-allocator', version: '2.0.0'},
-            },
+            descriptor: {tool_code: 'pac_allocator', contract_version: '1.0.0'},
         });
     });
 
@@ -183,9 +195,9 @@ describe('compiled tool renderer registry', () => {
     it('keeps registration metadata guarded against the compiled descriptor', () => {
         // Only the component key deviates from the compiled contract, so the guard this
         // asserts is the component key one and nothing else.
-        const invalid = defineToolRenderer('pac_allocator', '2.0.0', {
+        const invalid = defineToolRenderer('pac_allocator', '1.0.0', {
             componentKey: 'not-the-compiled-component',
-            uiVersion: '2.0.0',
+            uiVersion: '1.0.0',
             load: async () => ({default: fakeComponent}),
         });
 

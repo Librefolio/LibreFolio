@@ -46,12 +46,12 @@ L'OBV è un **integratore** a tempo discreto (un accumulatore, l'equivalente dig
 
 ```mermaid
 flowchart LR
- C["💹 Chiusura"] --> SGN["➕➖0️⃣ segno(ΔChiusura)"]
- V["📦 Volume"] --> MUL["✖️ volume con segno"]
- SGN --> MUL
- MUL --> ACC["🔁 Somma cumulativa (integratore)"]
- ACC --> OBV["📊 OBV(t)"]
- ACC -.->|"retroazione"| ACC
+    C["💹 Chiusura"] --> SGN["➕➖0️⃣ segno(ΔChiusura)"]
+    V["📦 Volume"] --> MUL["✖️ volume con segno"]
+    SGN --> MUL
+    MUL --> ACC["🔁 Somma cumulativa (integratore)"]
+    ACC --> OBV["📊 OBV(t)"]
+    ACC -.->|"retroazione"| ACC
 ```
 
 :material-link: [On-balance volume su Wikipedia](https://en.wikipedia.org/wiki/On-balance_volume){ target="_blank" }

@@ -45,7 +45,37 @@
  * The component is loaded once, in a `beforeAll` with its own timeout (the first transform is cold
  * and takes seconds); a load failure is recorded and every test then fails on its own, saying so.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0.
+ * Phase G (plan §14 G.2, A + B + C) — the user chooses how the set is read. Existing props unchanged;
+ * new ones: `plugins` (the catalogue, with names and report roles), `brokerDefaultPlugin`,
+ * `onReadAs(code | null)`, `onReadAlone(fileId, code)`, `onRemoveFromSet(fileId)`. `mountCard` passes
+ * them to every mount, so the F2 tests above keep their meaning once the card reads them.
+ *   A  report-set-read-as — in the header, how the set is read: one choice per report-set plugin that reads
+ *      every member (setPluginChoices, the set's own first) and one to read the files one by one; choosing
+ *      calls onReadAs(code), or onReadAs(null) for one by one. It was a native <select>; since step H (R1,
+ *      below) it is our own select, and the G · A tests drive it as such.
+ *   B  in each role table's row menu: read-alone-<code> for each single-file plugin that reads the row's
+ *      file (readAlonePlugins), calling onReadAlone(fileId, code); remove-from-set on every row, calling
+ *      onRemoveFromSet(fileId). Preview and Delete stay.
+ *   C1 report-set-default-note[data-default-plugin] when defaultPluginNote is not null.
+ *   C2 report-set-also-recognised[data-file-id][data-plugins] for each member another report-set plugin
+ *      also reads (otherSetPlugins, codes comma-separated).
+ * The invented catalogue: the set's plugin, a single-file plugin that reads the cash statements, and a
+ * second report-set plugin that reads one custody export only (cu-early) — every member of the
+ * one-file set, so A has a second plugin to offer there.
+ *
+ * Step H (plan §17.5, the developer's first review of G) — written red first:
+ *   R1 «Read as» is our SimpleSelect, testId report-set-read-as, never a native <select>: its trigger
+ *      report-set-read-as-button opens report-set-read-as-dropdown, whose options are report-set-read-as-option-<code>
+ *      for each plugin of setPluginChoices — the set's own aria-selected="true" — and report-set-read-as-option-one-by-one.
+ *      Choosing a plugin calls onReadAs(code), one by one onReadAs(null). No native <select> in the header: a folded
+ *      card is its header.
+ *   R3 each timeline row names its role whole: report-set-timeline-label, with data-role = the role code (the
+ *      LibreFolio history row: "history"). jsdom has no layout, so whether a label is cut is the E2E's to measure
+ *      (scrollWidth ≤ clientWidth on desktop). Here the label is found, keyed, and holds the whole name: the roles
+ *      are invented and no dictionary names them, so the card names them by their description — a value this test
+ *      passed in.
+ *
+ * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0, §14 G.2 and §17.5.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, type Component} from 'svelte';
@@ -136,11 +166,17 @@ const SET_KEY = `set:${BROKER}:${PLUGIN_CODE}:${BATCH}`;
 const CUSTODY_ROLE = {code: 'custody', required: true, multiple: true, extensions: ['.xlsx'], description: 'Probe custody export', max_history: 'P1Y'};
 const CASH_ROLE = {code: 'cash', required: true, multiple: true, extensions: ['.csv'], description: 'Probe cash statement', max_history: 'P5Y', must_cover: 'custody'};
 const PLUGIN = {code: PLUGIN_CODE, name: 'Probe Set Bank', docs_url: null, report_roles: [CUSTODY_ROLE, CASH_ROLE]};
+// G: a single-file plugin that reads the cash statements, and a second report-set plugin that reads one custody export.
+const SINGLE_CODE = 'broker_probe_single_csv';
+const SECOND_SET_CODE = 'broker_probe_second_bank';
+const SINGLE_PLUGIN = {code: SINGLE_CODE, name: 'Probe Single CSV', docs_url: null, report_roles: []};
+const SECOND_SET_PLUGIN = {code: SECOND_SET_CODE, name: 'Probe Second Bank', docs_url: null, report_roles: [{code: 'statement', required: true, multiple: false, extensions: ['.xlsx'], description: 'Probe second-bank statement'}]};
+const CATALOGUE = [PLUGIN, SINGLE_PLUGIN, SECOND_SET_PLUGIN];
 
 type Coverage = {axis: 'trade' | 'value'; start: string; end: string};
 
-/** An uploaded original of the set; `second` orders the uploads. */
-function setFile(file_id: string, filename: string, second: number) {
+/** An uploaded original of the set; `second` orders the uploads; `compatible` adds plugins to the set's own. */
+function setFile(file_id: string, filename: string, second: number, compatible: string[] = []) {
     return {
         file_id,
         filename,
@@ -149,7 +185,7 @@ function setFile(file_id: string, filename: string, second: number) {
         target_broker_id: BROKER,
         batch_id: BATCH,
         kind: 'original',
-        compatible_plugins: [PLUGIN_CODE],
+        compatible_plugins: [PLUGIN_CODE, ...compatible],
     };
 }
 
@@ -158,14 +194,15 @@ function member(file: ReturnType<typeof setFile>, role: string | null, rows: num
 }
 
 // The uploads, in upload order. The custody files arrive out of period order; two start on the same
-// day (the name decides); one has no coverage at all (its name would sort it first).
+// day (the name decides); one has no coverage at all (its name would sort it first). G: the cash
+// statements are also read by the single-file plugin, cu-early by the second report-set plugin.
 const CU_LATE = setFile('cu-late', 'probe-custody-b.xlsx', 1);
 const CU_EMPTY = setFile('cu-empty', 'probe-custody-0.xlsx', 2);
-const CU_EARLY = setFile('cu-early', 'probe-custody-c.xlsx', 3);
+const CU_EARLY = setFile('cu-early', 'probe-custody-c.xlsx', 3, [SECOND_SET_CODE]);
 const CU_TIE = setFile('cu-tie', 'probe-custody-a.xlsx', 4);
 // The second cash statement has two axes: its trade axis starts first, before the older statement.
-const CA_OLD = setFile('ca-old', 'probe-cash-z.csv', 5);
-const CA_TWO = setFile('ca-two', 'probe-cash-y.csv', 6);
+const CA_OLD = setFile('ca-old', 'probe-cash-z.csv', 5, [SINGLE_CODE]);
+const CA_TWO = setFile('ca-two', 'probe-cash-y.csv', 6, [SINGLE_CODE]);
 const STRAY = setFile('stray', 'probe-notes.csv', 7);
 const FILES = [CU_LATE, CU_EMPTY, CU_EARLY, CU_TIE, CA_OLD, CA_TWO, STRAY];
 
@@ -233,11 +270,24 @@ const PREVIEW_INCOMPLETE = {
     complete: false,
 };
 
+// H · R3: the same set, read by an invented plugin whose roles no dictionary names — the card then names each role by
+// its description, a value this test passes in. Long names, the kind a fixed-width label used to cut.
+const LONG_CUSTODY_ROLE = {...CUSTODY_ROLE, code: 'probe_long_custody', description: 'Probe securities transactions of every custody account'};
+const LONG_CASH_ROLE = {...CASH_ROLE, code: 'probe_long_cash', description: 'Probe cash statement of the settlement account', must_cover: 'probe_long_custody'};
+const LONG_PLUGIN = {...PLUGIN, report_roles: [LONG_CUSTODY_ROLE, LONG_CASH_ROLE]};
+const LONG_CATALOGUE = [LONG_PLUGIN, SINGLE_PLUGIN, SECOND_SET_PLUGIN];
+const LONG_ROLE_OF: Record<string, string> = {custody: LONG_CUSTODY_ROLE.code, cash: LONG_CASH_ROLE.code};
+const PREVIEW_LONG_ROLES = {
+    ...PREVIEW,
+    members: MEMBERS.map((entry) => ({...entry, role: entry.role === null ? null : LONG_ROLE_OF[entry.role]})),
+    roles: PREVIEW.roles.map((role) => ({...role, code: LONG_ROLE_OF[role.code]})),
+};
+
 // ---------------------------------------------------------------------------
 // Mounting and reading
 // ---------------------------------------------------------------------------
 
-async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: boolean; selection?: 'all' | 'some' | 'none'} = {}) {
+async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: boolean; selection?: 'all' | 'some' | 'none'; brokerDefaultPlugin?: string | null; plugin?: unknown; plugins?: unknown[]} = {}) {
     const callbacks = {
         onToggleSelected: vi.fn(),
         onToggleExpanded: vi.fn(),
@@ -245,15 +295,21 @@ async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: 
         onExclude: vi.fn(),
         onPreviewFile: vi.fn(),
         onDeleteFile: vi.fn(),
+        // G: how the set is read.
+        onReadAs: vi.fn(),
+        onReadAlone: vi.fn(),
+        onRemoveFromSet: vi.fn(),
     };
     render(card(), {
         set: options.set ?? SET,
-        plugin: PLUGIN,
+        plugin: options.plugin ?? PLUGIN,
         previewState: {status: 'ready', preview: options.preview ?? PREVIEW, error: null},
         selection: options.selection ?? 'all',
         expanded: options.expanded ?? true,
         analysed: false,
         uploadingRole: null,
+        plugins: options.plugins ?? CATALOGUE,
+        brokerDefaultPlugin: options.brokerDefaultPlugin ?? null,
         ...callbacks,
     });
     // Barrier: the card is mounted before anything is read.
@@ -309,6 +365,41 @@ async function runRowAction(role: string, fileId: string, actionId: 'preview' | 
     const menu = await screen.findByTestId('context-menu');
     await fireEvent.click(within(menu).getByTestId(`context-menu-action-${actionId}`));
 }
+
+/** G: open a file's row menu in its role table, and leave it open. */
+async function openRowMenu(role: string, fileId: string): Promise<HTMLElement> {
+    await fireEvent.click(withLayout(the(`row-actions-${fileId}`, {}, roleTable(role))));
+    return screen.findByTestId('context-menu');
+}
+
+/** G: the actions an open row menu offers, by the id in their testid, sorted. */
+function menuActions(menu: HTMLElement): string[] {
+    return [...menu.querySelectorAll<HTMLElement>('[data-testid^="context-menu-action-"]')].map((item) => (item.dataset.testid ?? '').replace(/^context-menu-action-/, '')).sort();
+}
+
+/** H · R1: the trigger of «Read as», our own select (SimpleSelect, testId report-set-read-as). */
+function readAsTrigger(): HTMLElement {
+    return the('report-set-read-as-button');
+}
+
+/** H · R1: open «Read as» from its trigger; the list it opens. */
+async function openReadAs(): Promise<HTMLElement> {
+    await fireEvent.click(readAsTrigger());
+    return the('report-set-read-as-dropdown');
+}
+
+/** H · R1: what the options of an open «Read as» stand for — a plugin code, or one-by-one — in the order shown. */
+function readAsOptions(dropdown: HTMLElement): string[] {
+    return [...dropdown.querySelectorAll<HTMLElement>('[data-testid^="report-set-read-as-option-"]')].map((option) => (option.dataset.testid ?? '').replace(/^report-set-read-as-option-/, ''));
+}
+
+/** H · R1: the one option of an open «Read as» that stands for a plugin code, or for one-by-one. */
+function readAsOption(dropdown: HTMLElement, choice: string): HTMLElement {
+    return the(`report-set-read-as-option-${choice}`, {}, dropdown);
+}
+
+/** H · R1: the option that reads the files one by one. */
+const ONE_BY_ONE = 'one-by-one';
 
 /** Where a pointer click on an element lands: its innermost first descendant (see the header). */
 function landingPoint(el: Element): Element {
@@ -569,6 +660,159 @@ describe('ReportSetCard — the rest of the card is unchanged (guards)', () => {
         expect(all('report-set-timeline')).toHaveLength(0);
         expect(all('report-set-role-table')).toHaveLength(0);
         expect(all('report-set-unrecognised')).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// G — how the set is read (plan §14 G.2: A, B, C)
+// ---------------------------------------------------------------------------
+
+describe('ReportSetCard — G · A, H · R1: how the set is read, through our own select', () => {
+    it('our own select, never a native one: opened, it offers the set’s plugin — selected — and "one by one", when no other report-set plugin reads every member', async () => {
+        await mountCard();
+
+        const readAs = the('report-set-read-as');
+        expect(readAs.tagName, 'report-set-read-as is our select, not a native <select>').not.toBe('SELECT');
+        expect(readAs.querySelectorAll('select'), 'no native <select> inside it').toHaveLength(0);
+        expect(readAs.contains(readAsTrigger()), 'its trigger is inside it').toBe(true);
+
+        const dropdown = await openReadAs();
+        expect([...readAsOptions(dropdown)].sort()).toEqual([ONE_BY_ONE, PLUGIN_CODE].sort());
+        expect(readAsOption(dropdown, PLUGIN_CODE), 'the set is read with its plugin').toHaveAttribute('aria-selected', 'true');
+        expect(readAsOption(dropdown, ONE_BY_ONE)).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('every report-set plugin that reads every member is offered, the set’s own first and selected, and "one by one" once', async () => {
+        // The one-file set: its custody export is read by the second report-set plugin too.
+        await mountCard({set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE});
+
+        const dropdown = await openReadAs();
+        const choices = readAsOptions(dropdown);
+        expect(choices.filter((choice) => choice !== ONE_BY_ONE)).toEqual([PLUGIN_CODE, SECOND_SET_CODE]);
+        expect(choices.filter((choice) => choice === ONE_BY_ONE)).toHaveLength(1);
+        expect(readAsOption(dropdown, PLUGIN_CODE)).toHaveAttribute('aria-selected', 'true');
+        expect(readAsOption(dropdown, SECOND_SET_CODE)).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('choosing another report-set plugin calls onReadAs with its code, once', async () => {
+        const {onReadAs, onReadAlone, onRemoveFromSet} = await mountCard({set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE});
+
+        await fireEvent.click(readAsOption(await openReadAs(), SECOND_SET_CODE));
+
+        expect(onReadAs).toHaveBeenCalledTimes(1);
+        expect(onReadAs).toHaveBeenCalledWith(SECOND_SET_CODE);
+        expect(onReadAlone).not.toHaveBeenCalled();
+        expect(onRemoveFromSet).not.toHaveBeenCalled();
+    });
+
+    it('choosing to read the files one by one calls onReadAs(null), once', async () => {
+        const {onReadAs} = await mountCard();
+
+        await fireEvent.click(readAsOption(await openReadAs(), ONE_BY_ONE));
+
+        expect(onReadAs).toHaveBeenCalledTimes(1);
+        expect(onReadAs).toHaveBeenCalledWith(null);
+    });
+
+    it('it sits in the header: a folded card shows it, on the set’s plugin, and holds no native <select>', async () => {
+        await mountCard({expanded: false});
+
+        expect(all('report-set-role-table'), 'the card is folded').toHaveLength(0);
+        const root = the('report-set-card');
+        expect(root.contains(readAsTrigger()), 'the trigger is in the folded card').toBe(true);
+        expect(root.querySelectorAll('select'), 'a folded card is its header: no native <select> in it').toHaveLength(0);
+        expect(readAsOption(await openReadAs(), PLUGIN_CODE)).toHaveAttribute('aria-selected', 'true');
+    });
+});
+
+describe('ReportSetCard — G · B: one file of the set, read another way', () => {
+    it('a cash statement the single-file plugin reads: "read it alone" with that plugin calls onReadAlone(file, plugin)', async () => {
+        const {onReadAlone, onRemoveFromSet, onReadAs} = await mountCard();
+
+        const menu = await openRowMenu('cash', 'ca-old');
+        await fireEvent.click(within(menu).getByTestId(`context-menu-action-read-alone-${SINGLE_CODE}`));
+
+        expect(onReadAlone).toHaveBeenCalledTimes(1);
+        expect(onReadAlone).toHaveBeenCalledWith('ca-old', SINGLE_CODE);
+        expect(onRemoveFromSet).not.toHaveBeenCalled();
+        expect(onReadAs).not.toHaveBeenCalled();
+    });
+
+    it('"remove from the set" calls onRemoveFromSet(file)', async () => {
+        const {onRemoveFromSet, onReadAlone} = await mountCard();
+
+        const menu = await openRowMenu('custody', 'cu-tie');
+        await fireEvent.click(within(menu).getByTestId('context-menu-action-remove-from-set'));
+
+        expect(onRemoveFromSet).toHaveBeenCalledTimes(1);
+        expect(onRemoveFromSet).toHaveBeenCalledWith('cu-tie');
+        expect(onReadAlone).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        {what: 'a cash statement', role: 'cash', fileId: 'ca-two', expected: ['delete', 'preview', `read-alone-${SINGLE_CODE}`, 'remove-from-set']},
+        {what: 'a custody export no single-file plugin reads', role: 'custody', fileId: 'cu-late', expected: ['delete', 'preview', 'remove-from-set']},
+        {what: 'a custody export another report-set plugin reads (a set plugin is never "read alone")', role: 'custody', fileId: 'cu-early', expected: ['delete', 'preview', 'remove-from-set']},
+    ])('the row menu of $what: Preview, Delete, remove-from-set, and read-alone only with a plugin that reads it', async ({role, fileId, expected}) => {
+        await mountCard();
+
+        const menu = await openRowMenu(role, fileId);
+
+        expect(menuActions(menu)).toEqual([...expected].sort());
+    });
+});
+
+describe('ReportSetCard — G · C: what else reads these files', () => {
+    it('C1: the broker’s default plugin is another one and reads a member: the note names it', async () => {
+        await mountCard({brokerDefaultPlugin: SINGLE_CODE});
+
+        expect(all('report-set-default-note').map((note) => note.dataset.defaultPlugin)).toEqual([SINGLE_CODE]);
+    });
+
+    it.each([
+        {what: 'no default plugin', brokerDefaultPlugin: null, set: SET, preview: PREVIEW},
+        {what: 'the set’s own plugin as the default', brokerDefaultPlugin: PLUGIN_CODE, set: SET, preview: PREVIEW},
+        {what: 'a default that reads no member', brokerDefaultPlugin: SINGLE_CODE, set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE},
+    ])('C1 (guard: true before G too): no note with $what', async ({brokerDefaultPlugin, set, preview}) => {
+        await mountCard({brokerDefaultPlugin, set, preview});
+
+        the('report-set-timeline'); // presence barrier: the open card has rendered its body
+        expect(all('report-set-default-note')).toHaveLength(0);
+    });
+
+    it('C2: each member another report-set plugin also reads gets its note, naming those plugins', async () => {
+        await mountCard();
+
+        expect(all('report-set-also-recognised').map((note) => [note.dataset.fileId, note.dataset.plugins])).toEqual([['cu-early', SECOND_SET_CODE]]);
+    });
+
+    it('C2 (guard: true before G too): no note when no member is read by another report-set plugin', async () => {
+        const plain = {...SET, files: FILES.map((file) => ({...file, compatible_plugins: file.compatible_plugins.filter((code) => code !== SECOND_SET_CODE)}))};
+        await mountCard({set: plain});
+
+        the('report-set-timeline'); // presence barrier: the open card has rendered its body
+        expect(all('report-set-also-recognised')).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// H · R3 — each timeline row names its role whole (plan §17.5)
+// ---------------------------------------------------------------------------
+
+describe('ReportSetCard — H · R3: each timeline row names its role whole', () => {
+    it('one label per row, keyed by its role — the history’s by "history" — each role’s holding the whole name of its role', async () => {
+        await mountCard({plugin: LONG_PLUGIN, plugins: LONG_CATALOGUE, preview: PREVIEW_LONG_ROLES});
+
+        const timeline = the('report-set-timeline');
+        expect(
+            all('report-set-timeline-label', timeline)
+                .map((label) => label.dataset.role)
+                .sort(),
+            'one label per row of the timeline: the two roles, and LibreFolio’s history',
+        ).toEqual([LONG_CASH_ROLE.code, LONG_CUSTODY_ROLE.code, 'history'].sort());
+        expect(text(the('report-set-timeline-label', {role: LONG_CUSTODY_ROLE.code}, timeline)), 'the custody row names its role whole').toBe(LONG_CUSTODY_ROLE.description);
+        expect(text(the('report-set-timeline-label', {role: LONG_CASH_ROLE.code}, timeline)), 'the cash row names its role whole').toBe(LONG_CASH_ROLE.description);
+        expect(text(the('report-set-timeline-label', {role: 'history'}, timeline)), 'the history row has its label').not.toBe('');
     });
 });
 
