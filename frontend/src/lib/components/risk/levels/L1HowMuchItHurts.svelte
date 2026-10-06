@@ -119,6 +119,16 @@
         month: `${DOCS}/conditional-value-at-risk/`,
         worst: `${DOCS}/max-drawdown/`,
     };
+    /**
+     * The tail measures' pages, each under a `docsPath` key because that is the form `check-links`
+     * reads. Handed to the `measure` snippet as bare arguments, as they used to be, the gate
+     * never saw them: a renamed page would have broken the link with nothing turning red.
+     */
+    const TAIL_DOCS = {
+        worstRealization: {docsPath: `${DOCS}/worst-realization/`},
+        drawdownAtRisk: {docsPath: `${DOCS}/drawdown-at-risk/`},
+        conditionalDrawdownAtRisk: {docsPath: `${DOCS}/conditional-drawdown-at-risk/`},
+    };
 </script>
 
 {#snippet measure(label: string, value: string, testId: string, docsPath?: string)}
@@ -162,16 +172,16 @@
                             <!-- The acquired measures, each attached to the figure it
                                  refines instead of standing on its own. -->
                             {#if row.id === 'day' && tails.worstRealization !== null}
-                                {@render measure($t('risk.levels.l1.tails.worstRealization'), lossPercent(tails.worstRealization), 'risk-l1-worst-realization', `${DOCS}/worst-realization/`)}
+                                {@render measure($t('risk.levels.l1.tails.worstRealization'), lossPercent(tails.worstRealization), 'risk-l1-worst-realization', TAIL_DOCS.worstRealization.docsPath)}
                                 {#if tails.worstRealizationDate}
                                     <p class="text-right text-[10px] text-gray-400 dark:text-gray-500" data-testid="risk-l1-worst-realization-date">{$t('risk.levels.l1.tails.worstRealizationOn', {values: {date: tails.worstRealizationDate}})}</p>
                                 {/if}
                             {/if}
                             {#if row.id === 'worst' && tails.drawdownAtRisk !== null}
-                                {@render measure($t('risk.levels.l1.tails.drawdownAtRisk', {values: {confidence: confidenceLabel}}), lossPercent(tails.drawdownAtRisk), 'risk-l1-drawdown-at-risk', `${DOCS}/drawdown-at-risk/`)}
+                                {@render measure($t('risk.levels.l1.tails.drawdownAtRisk', {values: {confidence: confidenceLabel}}), lossPercent(tails.drawdownAtRisk), 'risk-l1-drawdown-at-risk', TAIL_DOCS.drawdownAtRisk.docsPath)}
                             {/if}
                             {#if row.id === 'worst' && tails.conditionalDrawdownAtRisk !== null}
-                                {@render measure($t('risk.levels.l1.tails.conditionalDrawdownAtRisk'), lossPercent(tails.conditionalDrawdownAtRisk), 'risk-l1-conditional-drawdown-at-risk', `${DOCS}/conditional-drawdown-at-risk/`)}
+                                {@render measure($t('risk.levels.l1.tails.conditionalDrawdownAtRisk'), lossPercent(tails.conditionalDrawdownAtRisk), 'risk-l1-conditional-drawdown-at-risk', TAIL_DOCS.conditionalDrawdownAtRisk.docsPath)}
                             {/if}
                         {/snippet}
                     </RiskMetricCard>

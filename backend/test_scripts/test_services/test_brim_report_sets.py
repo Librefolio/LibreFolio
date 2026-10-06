@@ -58,17 +58,39 @@ corrections included). Written red-first in ``TestSetSchemas`` (defaults, round 
 strictness) and ``TestPreviewSet`` (filled by ``preview_set``), through
 ``_require_history_fields``.
 
+Phase G (plan §14 G.2, D) lets the user leave files out of a set: ``BRIMSetRequest``
+gains ``exclude_file_ids`` (empty by default, the model still strict), ``collect_members``
+drops the excluded originals and ``preview_set`` / ``combine_set`` pass them through; an
+excluded id that is not an original of that broker and upload is ``BRIMSetExcludeUnknown``
+(422, ``exclude_unknown``), and excluding every member is the 404 of today. Written
+red-first at the end of this file, through ``_excluding`` and ``_exclude_request``.
+``TestSetSchemas.test_request_fields_are_required`` now compares the three fields it
+sends, so the new default does not turn it red.
+
+Step 5 (plan-phase00BrimDanskeBankStep5PluginRedetection, §4), red-first after phase G:
+item 8, a Danske pair uploaded together but detected before item 8 (sidecars that keep
+their ``batch_id`` but have no ``plugins_signature`` and no plugin recorded) is detected
+again on read and forms its set (``collect_members``, the preview); F1, two concurrent
+``combine_set`` of one set leave one combined file, the second answering ``reused=True``.
+A guard written afterwards, from 1.1.0's own sidecar, pins the limitation of a pair
+uploaded with 1.1.0, which recorded no ``batch_id``: detected again, it forms no set and
+must be uploaded again, together. The rules of the detection and of the broker lock are
+in ``test_brim_parse_race.py``.
+
 Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.1–§3.5 and §3.8
 Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1 and A2
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import csv
 import importlib
 import inspect
 import json
 import shutil
+import threading
 import uuid
 from collections.abc import AsyncIterator, Iterator, Sequence
 from datetime import UTC, date, datetime, timedelta
@@ -1023,12 +1045,12 @@ class TestUploadBatchId:
             assert (info.batch_id, info.kind, info.derived_from, info.combined_into, info.combine_is_stale) == (None, "original", [], [], False)
 
     def test_legacy_sidecar_reads_with_defaults(self, isolated_brim_dir: Path) -> None:
-        """A sidecar written before A1, with none of the new keys, still builds, as an unlinked original."""
+        """A sidecar written before A1, with none of the new keys, still builds, as an unlinked original; having no ``plugins_signature``, its plugin list is detected again from its data file (item 8)."""
         legacy = _info(_write_legacy_file(isolated_brim_dir))  # precondition, true before A1 too
         _require_fields(BRIMFileInfo, *NEW_FILE_INFO_FIELDS)
 
         assert (legacy.batch_id, legacy.kind, legacy.derived_from, legacy.combined_into, legacy.combine_is_stale) == (None, "original", [], [], False)
-        assert (legacy.filename, legacy.target_broker_id, legacy.compatible_plugins) == ("legacy.csv", BROKER_ID, ["broker_generic_csv"])
+        assert (legacy.filename, legacy.target_broker_id, legacy.compatible_plugins) == ("legacy.csv", BROKER_ID, BRIMProviderRegistry.get_compatible_plugins(brim_provider.get_file_path(legacy.file_id)))
 
 
 class TestWriteCombinedCsv:
@@ -1573,7 +1595,8 @@ class TestSetSchemas:
     def test_request_fields_are_required(self, missing: str) -> None:
         set_request = _schema("BRIMSetRequest", A2)
         payload = {"broker_id": 7, "plugin_code": FAKE_CODE, "batch_id": "b-1"}
-        assert set_request.model_validate(payload).model_dump() == payload
+        # The three fields sent, compared alone: phase G adds ``exclude_file_ids`` with an empty default.
+        assert set_request.model_validate(payload).model_dump(include=set(payload)) == payload
         del payload[missing]
 
         with pytest.raises(ValidationError):
@@ -2726,3 +2749,526 @@ class TestCombineSetPluginFailure:
             assert plugin.detect_role(_write(tmp_path, "custody.csv", CUSTODY_CSV)) == "custody"
             with pytest.raises(failure):
                 plugin.combine({})
+
+
+# =============================================================================
+# PHASE G — the user chooses how a set is read: the files left out (D)
+# =============================================================================
+#
+# Written red-first (plan §14 G.2, D). The set request names the originals of the upload
+# the user left out of the set — read alone, or removed from it: ``exclude_file_ids``,
+# empty by default, so every existing caller is unchanged, and the model stays strict.
+# ``collect_members`` drops them; ``preview_set`` and ``combine_set`` pass them through. An
+# excluded id that is not an original of that broker and upload is
+# ``BRIMSetExcludeUnknown`` (422, ``exclude_unknown``); excluding every member is the 404 of
+# today (``members_not_found``). The responses do not change, and a combined file is still
+# reused for the exact same members only: the same exclusion reuses it, dropping the
+# exclusion builds another one.
+
+G = "G"
+EXCLUDE = "exclude_file_ids"
+EXCLUDE_UNKNOWN = (422, "exclude_unknown")
+# A second cash export of the January set, after it: the cash role takes several files, so
+# leaving this one out keeps the set complete.
+CASH_FEB = _cash_csv("2025-02-03", "2025-02-17")
+
+
+def _excluding(name: str) -> Any:
+    """A set-service function that takes ``exclude_file_ids``; the test fails, naming it, until it does."""
+    function = _sets(name)
+    if EXCLUDE not in inspect.signature(function).parameters:
+        _missing(f"{SETS_MODULE}.{name}() has no '{EXCLUDE}' parameter", G)
+    return function
+
+
+def _exclude_request() -> Any:
+    """``BRIMSetRequest`` with its ``exclude_file_ids`` field; the test fails, naming it, until it has one."""
+    set_request = _schema("BRIMSetRequest", A2)
+    if EXCLUDE not in set_request.model_fields:
+        _missing(f"BRIMSetRequest has no field {EXCLUDE}", G)
+    return set_request
+
+
+def _exclude_unknown() -> Any:
+    """The new error of a set request that names a file which is not an original of its upload."""
+    return _set_symbol("BRIMSetExcludeUnknown", G)
+
+
+def _two_member_set() -> Tuple[str, BRIMFileInfo, BRIMFileInfo]:
+    """One upload of the fake on ``BROKER_ID``: a custody export and the one cash export that covers it."""
+    batch = str(uuid.uuid4())
+    return batch, _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch), _member(CASH_JAN, CASH_NAME, batch_id=batch)
+
+
+def _three_member_set() -> Tuple[str, BRIMFileInfo, BRIMFileInfo, BRIMFileInfo]:
+    """``_two_member_set`` plus a second cash export, which can be left out without making the set incomplete."""
+    batch, custody, cash = _two_member_set()
+    return batch, custody, cash, _member(CASH_FEB, "cash-statement-feb.csv", batch_id=batch)
+
+
+def _ids(files: Sequence[Any]) -> set:
+    return {item.file_id for item in files}
+
+
+class TestSetRequestExclusions:
+    """G · D — ``BRIMSetRequest.exclude_file_ids``: the originals left out of the set; empty by default, the model still strict."""
+
+    BASE = {"broker_id": 7, "plugin_code": FAKE_CODE, "batch_id": "b-1"}
+
+    def test_defaults_to_nothing_left_out(self) -> None:
+        """An old client sends the three fields only: nothing is left out."""
+        set_request = _exclude_request()
+
+        request = set_request.model_validate(self.BASE)
+
+        assert request.exclude_file_ids == []
+        assert request.model_dump() == {**self.BASE, EXCLUDE: []}
+
+    def test_carries_the_file_ids_as_sent(self) -> None:
+        set_request = _exclude_request()
+
+        request = set_request.model_validate({**self.BASE, EXCLUDE: ["f-2", "f-1"]})
+
+        assert request.exclude_file_ids == ["f-2", "f-1"]
+        assert set_request.model_validate_json(request.model_dump_json()) == request
+
+    @pytest.mark.parametrize(
+        ("extra", "field"),
+        [
+            pytest.param({EXCLUDE: [], "exclude_files": ["f-1"]}, "exclude_files", id="unknown-key-beside-it"),
+            pytest.param({EXCLUDE: "f-1"}, EXCLUDE, id="a-string-instead-of-a-list"),
+        ],
+    )
+    def test_stays_strict(self, extra: Dict[str, Any], field: str) -> None:
+        set_request = _exclude_request()
+
+        with pytest.raises(ValidationError) as caught:
+            set_request.model_validate({**self.BASE, **extra})
+
+        assert field in {str(error["loc"][0]) for error in caught.value.errors()}, caught.value.errors()
+
+
+class TestSetExcludeUnknownError:
+    """G · D — ``BRIMSetExcludeUnknown``: one more ``BRIMSetError``, 422 with the stable code ``exclude_unknown``."""
+
+    def test_is_a_set_error_with_its_status_and_code(self) -> None:
+        exclude_unknown = _exclude_unknown()
+
+        assert issubclass(exclude_unknown, _sets("BRIMSetError"))
+        assert (exclude_unknown.status_code, exclude_unknown.code) == EXCLUDE_UNKNOWN
+
+
+class TestCollectMembersExclusions:
+    """G · D — ``collect_members(..., exclude_file_ids=())``: the originals left out are no members."""
+
+    def test_the_excluded_originals_are_dropped(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        collect_members = _excluding("collect_members")
+        batch, custody, cash, cash_feb = _three_member_set()
+
+        members = collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[cash_feb.file_id])
+
+        assert _ids(members) == {custody.file_id, cash.file_id}
+        assert len(members) == 2, [member.filename for member in members]
+
+    def test_nothing_is_left_out_by_default(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        """Called as before, the set is still every original of the upload the plugin reads."""
+        collect_members = _excluding("collect_members")
+        batch, custody, cash, cash_feb = _three_member_set()
+
+        members = collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+
+        assert _ids(members) == {custody.file_id, cash.file_id, cash_feb.file_id}
+
+    @pytest.mark.parametrize("stranger", ["unknown-id", "one-of-several", "other-broker", "other-batch", "the-combined-file"])
+    def test_an_id_that_is_not_an_original_of_the_upload_is_refused(self, set_storage: Path, fake_plugin: BRIMProvider, stranger: str) -> None:
+        """An id that does not exist, an original of another broker (same batch) or of another upload, the set's own combined file:
+        none is an original of this broker and upload, and one of them is enough to refuse the request."""
+        collect_members, exclude_unknown = _excluding("collect_members"), _exclude_unknown()
+        batch, custody, cash, cash_feb = _three_member_set()
+        if stranger == "unknown-id":
+            excluded = [str(uuid.uuid4())]
+        elif stranger == "one-of-several":
+            excluded = [cash_feb.file_id, str(uuid.uuid4())]
+        elif stranger == "other-broker":
+            excluded = [_member(CASH_FEB, "cash-other-broker.csv", batch_id=batch, broker_id=OTHER_BROKER_ID).file_id]
+        elif stranger == "other-batch":
+            excluded = [_member(CASH_FEB, "cash-other-batch.csv", batch_id=str(uuid.uuid4())).file_id]
+        else:
+            combined, _table = _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
+            assert (_info(combined.file_id).kind, _info(combined.file_id).batch_id) == ("combined", batch), "precondition: the combined file shares the upload"
+            excluded = [combined.file_id]
+
+        with pytest.raises(exclude_unknown) as caught:
+            collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=excluded)
+
+        assert isinstance(caught.value, _sets("BRIMSetError"))
+        assert (caught.value.status_code, caught.value.code) == EXCLUDE_UNKNOWN
+
+    @pytest.mark.parametrize("bystander", ["read-by-another-plugin", "failed"])
+    def test_any_original_of_the_upload_may_be_named(self, set_storage: Path, fake_plugin: BRIMProvider, bystander: str) -> None:
+        """An original of this broker and upload that is no member (another plugin's file, a failed one) is not unknown: nothing changes."""
+        collect_members = _excluding("collect_members")
+        batch, custody, cash, cash_feb = _three_member_set()
+        if bystander == "read-by-another-plugin":
+            other = _member(GENERIC_CSV, "generic.csv", batch_id=batch)
+            assert FAKE_CODE not in other.compatible_plugins, "precondition: the fake does not read the generic CSV"
+        else:
+            other = _member(CASH_FEB, "cash-failed.csv", batch_id=batch)
+            assert brim_provider.move_to_failed(other.file_id, "synthetic failure")
+
+        members = collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[other.file_id])
+
+        assert _ids(members) == {custody.file_id, cash.file_id, cash_feb.file_id}
+
+    def test_leaving_out_every_member_is_members_not_found(self, set_storage: Path, fake_plugin: BRIMProvider) -> None:
+        collect_members = _excluding("collect_members")
+        batch, custody, cash, cash_feb = _three_member_set()
+
+        with pytest.raises(_sets("BRIMSetMembersNotFound")) as caught:
+            collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[custody.file_id, cash.file_id, cash_feb.file_id])
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS["BRIMSetMembersNotFound"]
+
+
+class TestPreviewSetExclusions:
+    """G · D — ``preview_set(..., exclude_file_ids=...)``: the preview of the set without the files left out."""
+
+    @pytest.mark.asyncio
+    async def test_a_file_left_out_is_no_member(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        preview_set = _excluding("preview_set")
+        batch, custody, cash, cash_feb = _three_member_set()
+
+        preview = await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[cash_feb.file_id])
+
+        assert _ids(preview.members) == {custody.file_id, cash.file_id}
+        assert _roles(preview)["cash"].file_ids == [cash.file_id]
+        assert preview.complete is True
+        assert cash_feb.file_id not in preview.model_dump_json()
+
+    @pytest.mark.asyncio
+    async def test_leaving_out_the_only_file_of_a_required_role_makes_it_missing(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        preview_set = _excluding("preview_set")
+        batch, custody, cash = _two_member_set()
+
+        preview = await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[cash.file_id])
+
+        assert [member.file_id for member in preview.members] == [custody.file_id]
+        assert (_roles(preview)["cash"].status, _roles(preview)["cash"].file_ids) == ("missing", [])
+        assert [item.role for item in preview.missing] == ["cash"]
+        assert preview.complete is False
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_file_is_refused(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        preview_set, exclude_unknown = _excluding("preview_set"), _exclude_unknown()
+        batch, _custody, _cash = _two_member_set()
+
+        with pytest.raises(exclude_unknown) as caught:
+            await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[str(uuid.uuid4())])
+
+        assert (caught.value.status_code, caught.value.code) == EXCLUDE_UNKNOWN
+
+    @pytest.mark.asyncio
+    async def test_leaving_out_every_member_is_members_not_found(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        preview_set = _excluding("preview_set")
+        batch, custody, cash = _two_member_set()
+
+        with pytest.raises(_sets("BRIMSetMembersNotFound")) as caught:
+            await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[custody.file_id, cash.file_id])
+
+        assert (caught.value.status_code, caught.value.code) == SET_ERRORS["BRIMSetMembersNotFound"]
+
+
+class TestCombineSetExclusions:
+    """G · D — ``combine_set(..., exclude_file_ids=...)``: the combined file of the kept members, reused for the same members only."""
+
+    @pytest.mark.asyncio
+    async def test_the_combined_file_holds_the_kept_members_only(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set = _excluding("combine_set")
+        batch, custody, cash, cash_feb = _three_member_set()
+
+        result = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID, exclude_file_ids=[cash_feb.file_id])
+
+        expected = fake_plugin.combine({"custody": [brim_provider.get_file_path(custody.file_id)], "cash": [brim_provider.get_file_path(cash.file_id)]})
+        assert result.reused is False
+        assert _ids(result.combined.derived_from) == {custody.file_id, cash.file_id}
+        assert result.summary == expected.summary
+        assert _info(cash_feb.file_id).combined_into == [], "the file left out is not linked to the combined file"
+        assert [info.file_id for info in _combined_files()] == [result.combined.file_id]
+
+    @pytest.mark.asyncio
+    async def test_the_same_exclusion_reuses_it_and_no_exclusion_builds_another(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set = _excluding("combine_set")
+        batch, custody, cash, cash_feb = _three_member_set()
+        first = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID, exclude_file_ids=[cash_feb.file_id])
+        assert first.reused is False  # presence barrier: the first call does combine
+
+        again = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID, exclude_file_ids=[cash_feb.file_id])
+        whole = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
+
+        assert (again.reused, again.combined.file_id) == (True, first.combined.file_id)
+        assert whole.reused is False
+        assert whole.combined.file_id != first.combined.file_id
+        assert _ids(whole.combined.derived_from) == {custody.file_id, cash.file_id, cash_feb.file_id}
+        assert {info.file_id for info in _combined_files()} == {first.combined.file_id, whole.combined.file_id}
+
+    @pytest.mark.asyncio
+    async def test_leaving_out_a_required_role_is_refused_and_writes_nothing(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set = _excluding("combine_set")
+        batch, _custody, cash = _two_member_set()
+
+        with pytest.raises(_sets("BRIMSetIncomplete")) as caught:
+            await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID, exclude_file_ids=[cash.file_id])
+
+        assert (caught.value.status_code, caught.value.code, caught.value.missing_roles) == (*SET_ERRORS["BRIMSetIncomplete"], ["cash"])
+        assert _combined_files() == []
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_file_is_refused_and_writes_nothing(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        combine_set, exclude_unknown = _excluding("combine_set"), _exclude_unknown()
+        batch, _custody, _cash = _two_member_set()
+
+        with pytest.raises(exclude_unknown) as caught:
+            await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID, exclude_file_ids=[str(uuid.uuid4())])
+
+        assert (caught.value.status_code, caught.value.code) == EXCLUDE_UNKNOWN
+        assert _combined_files() == []
+
+
+# =============================================================================
+# STEP 5 — a set detected before item 8, a pair uploaded with 1.1.0, and one combined file per set (F1)
+# =============================================================================
+#
+# Written red-first (plan-phase00BrimDanskeBankStep5PluginRedetection, §4). Item 8: ``compatible_plugins`` was computed
+# once, at upload. A pair uploaded together (one ``batch_id``) by a build before item 8, whose catalogue did not read
+# it, keeps sidecars without ``plugins_signature`` and with ``[]``, so ``collect_members`` never finds it. Read again
+# after the update, its files are detected again and the pair forms its set without a new upload. The rules of the
+# detection (signature, combined files, missing data file) and of the broker lock are in test_brim_parse_race.py.
+#
+# That model keeps the ``batch_id``: the 1.2 development builds before item 8 already stored it; 1.1.0 did not, it came
+# with report sets, after 1.1.0. A pair uploaded with 1.1.0 is detected again too, but belongs to no set: such exports
+# must be uploaded again, together. ``TestDanskePairUploadedWith1_1_0`` pins that documented limitation with sidecars
+# written as 1.1.0's ``save_uploaded_file`` wrote them; it was written after the product, and pins a limit, not a cure.
+#
+# F1 (plan §0; step 4, §19.10): two ``combine_set`` of the same set at once each found nothing to reuse, and each saved
+# a combined file. With the broker lock around reuse → build → save, the second waits, finds the first one's file and
+# answers ``reused=True``. The first combine is parked inside the plugin until the second reaches the plugin too (the
+# defect: it found nothing to reuse) or a grace runs out (the cure: it is waiting for the lock).
+
+DANSKE_CODE = "broker_danske_bank"
+DANSKE_SAMPLE_DIR = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports"
+DANSKE_PAIR = (("danske_bank-custody.xlsx", "custody"), ("danske_bank-cash.csv", "cash"))
+# Every wait for something that must happen is bounded by this: a regression fails the test, it never hangs the suite.
+_WAIT_SECONDS = 30.0
+# How long the second combine is given to reach the plugin while the first is parked inside it. It only bounds the
+# chance the DEFECT gets to show itself (the second combine's preview and reuse check take milliseconds); with the cure
+# the second combine waits for the broker lock, the grace runs out and the first is released whatever the value.
+_OVERLAP_GRACE_SECONDS = 3.0
+
+
+def _as_detected_before_item_8(root: Path, file_id: str) -> None:
+    """The sidecar as a build before item 8 left it, its catalogue not reading the export: no ``plugins_signature``, and no plugin.
+
+    Its ``batch_id`` stays: those builds already stored it. Not 1.1.0's sidecar, which had none: see ``_store_as_1_1_0_did``.
+    """
+    path = root / BRIMFileStatus.UPLOADED.value / f"broker_{BROKER_ID}" / f"{file_id}.json"
+    metadata = json.loads(path.read_text())
+    metadata.pop("plugins_signature", None)
+    metadata["compatible_plugins"] = []
+    path.write_text(json.dumps(metadata, indent=2))
+
+
+def _danske_pair_detected_before_item_8(root: Path) -> Tuple[str, Dict[str, BRIMFileInfo]]:
+    """The synthetic Danske main pair, uploaded in one batch on ``BROKER_ID``, then left as a build before item 8 left it."""
+    batch = str(uuid.uuid4())
+    uploaded: Dict[str, BRIMFileInfo] = {}
+    for name, role in DANSKE_PAIR:
+        info = _member((DANSKE_SAMPLE_DIR / name).read_bytes(), name, batch_id=batch)
+        assert DANSKE_CODE in info.compatible_plugins, f"premise: today's catalogue reads {name} as Danske: {info.compatible_plugins}"
+        _as_detected_before_item_8(root, info.file_id)
+        uploaded[role] = info
+    return batch, uploaded
+
+
+def _plugins_on_record() -> Dict[str, List[str]]:
+    """The plugins each file of ``BROKER_ID`` is read with now, for a failure message."""
+    return {info.filename: info.compatible_plugins for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID}
+
+
+class TestDanskePairDetectedBeforeItem8:
+    """Item 8 — a Danske pair uploaded together, but detected before item 8, forms its set after the update without being uploaded again."""
+
+    def test_collect_members_finds_both_files(self, set_storage: Path) -> None:
+        collect_members, members_not_found = _sets("collect_members"), _sets("BRIMSetMembersNotFound")
+        batch, uploaded = _danske_pair_detected_before_item_8(set_storage)
+
+        try:
+            members = collect_members(broker_id=BROKER_ID, plugin_code=DANSKE_CODE, batch_id=batch)
+        except members_not_found as caught:
+            pytest.fail(f"the set does not form ({caught.message}): its files are still read with the plugins stored before item 8: {_plugins_on_record()}", pytrace=False)
+
+        assert _ids(members) == _ids(uploaded.values())
+        assert all(DANSKE_CODE in member.compatible_plugins for member in members), [member.compatible_plugins for member in members]
+
+    @pytest.mark.asyncio
+    async def test_the_set_preview_is_complete(self, set_storage: Path, db_session: AsyncSession) -> None:
+        preview_set, members_not_found = _sets("preview_set"), _sets("BRIMSetMembersNotFound")
+        batch, uploaded = _danske_pair_detected_before_item_8(set_storage)
+
+        try:
+            preview = await preview_set(db_session, broker_id=BROKER_ID, plugin_code=DANSKE_CODE, batch_id=batch)
+        except members_not_found as caught:
+            pytest.fail(f"the set does not form ({caught.message}): its files are still read with the plugins stored before item 8: {_plugins_on_record()}", pytrace=False)
+
+        assert {member.file_id: member.role for member in preview.members} == {uploaded["custody"].file_id: "custody", uploaded["cash"].file_id: "cash"}
+        assert (preview.complete, preview.missing) == (True, []), (preview.missing, _codes(preview))
+
+
+# An upload made while 1.1.0 (2026-09-07) was the release.
+UPLOADED_WITH_1_1_0_AT = "2026-09-15T09:30:00+00:00"
+
+
+def _store_as_1_1_0_did(root: Path, name: str) -> str:
+    """One Danske sample, stored on ``BROKER_ID`` as 1.1.0's ``save_uploaded_file`` stored an upload; returns its file id.
+
+    The data file, then a sidecar with the twelve keys 1.1.0 wrote and no other: no ``batch_id``, no
+    ``plugins_signature``, no ``kind`` (``git show v1.1.0:backend/app/services/brim_provider.py``).
+    ``compatible_plugins`` is what 1.1.0's catalogue detected: nothing, it had no Danske plugin.
+    """
+    content = (DANSKE_SAMPLE_DIR / name).read_bytes()
+    file_id = str(uuid.uuid4())
+    ext = Path(name).suffix.lower() or ".dat"
+    folder = root / BRIMFileStatus.UPLOADED.value / f"broker_{BROKER_ID}"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{file_id}{ext}").write_bytes(content)
+    sidecar = {
+        "file_id": file_id,
+        "filename": name,
+        "extension": ext,
+        "size_bytes": len(content),
+        "status": BRIMFileStatus.UPLOADED.value,
+        "uploaded_at": UPLOADED_WITH_1_1_0_AT,
+        "processed_at": None,
+        "compatible_plugins": [],
+        "error_message": None,
+        "uploaded_by_user_id": USER_ID,
+        "target_broker_id": BROKER_ID,
+        "last_parse_result": None,
+    }
+    (folder / f"{file_id}.json").write_text(json.dumps(sidecar, indent=2))
+    return file_id
+
+
+class TestDanskePairUploadedWith1_1_0:
+    """Limitation — a Danske pair uploaded with 1.1.0 is detected again after the update, but forms no set: it must be uploaded again, together.
+
+    1.1.0 recorded no ``batch_id``, so its uploads are linked to nothing. Each file is offered Danske again, yet no
+    batch's ``collect_members`` takes it (a set request names its batch, a string), and Danske's parse of one file
+    alone answers 422 ``set_required``. Documented for users in danske-bank.en.md and for developers in
+    brim_plugin_guide.md (the lifecycle of ``compatible_plugins``). Should this turn red because these files now
+    belong to a set, the limitation is gone: update both pages with this test.
+    """
+
+    def test_is_detected_again_but_forms_no_set_and_must_be_uploaded_again_together(self, set_storage: Path) -> None:
+        """The pair stored as 1.1.0 stored it, beside the same two exports uploaded again, together, after the update."""
+        collect_members = _sets("collect_members")
+        from_1_1_0 = {role: _store_as_1_1_0_did(set_storage, name) for name, role in DANSKE_PAIR}
+        again = str(uuid.uuid4())
+        uploaded_again = {role: _member((DANSKE_SAMPLE_DIR / name).read_bytes(), name, batch_id=again) for name, role in DANSKE_PAIR}
+        assert all(DANSKE_CODE in info.compatible_plugins for info in uploaded_again.values()), f"premise: today's catalogue reads the pair as Danske: {[info.compatible_plugins for info in uploaded_again.values()]}"
+
+        read = {role: _info(file_id) for role, file_id in from_1_1_0.items()}
+        batches = sorted({info.batch_id for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.batch_id is not None})
+        sets = {batch: _ids(collect_members(broker_id=BROKER_ID, plugin_code=DANSKE_CODE, batch_id=batch)) for batch in batches}
+
+        assert {role: info.compatible_plugins for role, info in read.items()} == {"custody": [DANSKE_CODE], "cash": [DANSKE_CODE]}, "the files uploaded with 1.1.0 are not offered Danske after the update"
+        assert {role: info.batch_id for role, info in read.items()} == {"custody": None, "cash": None}, "a file uploaded with 1.1.0 reads with a batch, though 1.1.0 recorded none: see the class docstring"
+        stored_by_1_1_0 = set(from_1_1_0.values())
+        joined = {batch: members & stored_by_1_1_0 for batch, members in sets.items() if members & stored_by_1_1_0}
+        assert not joined, f"a file uploaded with 1.1.0 joined a set, by batch: {joined}; the limitation is gone, see the class docstring"
+        assert sets == {again: _ids(uploaded_again.values())}, f"uploaded again, together, the pair does not form exactly its own set; the sets on the broker, by batch: {sets}"
+
+
+class _CombineGate:
+    """Parks the first ``combine`` of the fake until it is released; marks the arrival of a second one."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._calls = 0
+        self.first_inside = threading.Event()
+        self.second_inside = threading.Event()
+        self.release_first = threading.Event()
+
+    def enter(self) -> None:
+        with self._lock:
+            self._calls += 1
+            first = self._calls == 1
+        if first:
+            self.first_inside.set()
+            self.release_first.wait(timeout=_WAIT_SECONDS)
+        else:
+            self.second_inside.set()
+
+    def release_everything(self) -> None:
+        """Never leave a thread parked on the gate, whatever happened to the test."""
+        self.release_first.set()
+        self.first_inside.set()
+        self.second_inside.set()
+
+
+def _gated_fake(gate: _CombineGate) -> type:
+    """The two-role fake whose ``combine`` passes ``gate`` first (the registry builds an instance per call: the gate is shared)."""
+
+    class _GatedCombineProvider(_FakeTwoRoleProvider):
+        def combine(self, members: Dict[str, List[Path]]) -> Any:
+            gate.enter()
+            return super().combine(members)
+
+    return _GatedCombineProvider
+
+
+@contextlib.asynccontextmanager
+async def _second_db_session() -> AsyncIterator[AsyncSession]:
+    """Another private in-memory database, like ``db_session``: two requests at once have a session each."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(SQLModel.metadata.create_all)
+    session = AsyncSession(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await engine.dispose()
+
+
+class TestConcurrentCombine:
+    """F1 — two ``combine_set`` of one set at once leave one combined file; the second answers ``reused=True`` with it."""
+
+    @pytest.mark.asyncio
+    async def test_two_concurrent_combines_of_one_set_build_one_combined_file(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """The count is the subject: the combined files of this test's own broker and upload, in its own storage."""
+        combine_set = _sets("combine_set")
+        batch, custody, cash = _two_member_set()
+        gate = _CombineGate()
+        # Same code, a fake whose combine is gated. `fake_plugin` restores the whole registry afterwards.
+        BRIMProviderRegistry._providers[FAKE_CODE] = _gated_fake(gate)
+        request = {"broker_id": BROKER_ID, "plugin_code": FAKE_CODE, "batch_id": batch, "user_id": USER_ID}
+        first_inside = overlapped = False
+        async with _second_db_session() as second_session:
+            calls = [asyncio.create_task(combine_set(db_session, **request))]
+            try:
+                first_inside = await asyncio.to_thread(gate.first_inside.wait, _WAIT_SECONDS)
+                if first_inside:
+                    calls.append(asyncio.create_task(combine_set(second_session, **request)))
+                    overlapped = await asyncio.to_thread(gate.second_inside.wait, _OVERLAP_GRACE_SECONDS)
+            finally:
+                gate.release_everything()
+                outcomes = await asyncio.wait_for(asyncio.gather(*calls, return_exceptions=True), timeout=_WAIT_SECONDS)
+
+        assert first_inside, f"premise: the first combine never reached the plugin: {outcomes!r}"
+        failures = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
+        assert not failures, f"a concurrent combine failed: {failures!r}"
+        combined = [info for info in _combined_files() if info.batch_id == batch]
+        assert len(combined) == 1, f"two combines of one set at once built {len(combined)} combined files (the second reached the plugin while the first was inside it: {overlapped}): {[info.file_id for info in combined]}"
+        assert sorted(outcome.reused for outcome in outcomes) == [False, True], [(outcome.reused, outcome.combined.file_id) for outcome in outcomes]
+        assert {outcome.combined.file_id for outcome in outcomes} == {combined[0].file_id}
+        assert (_info(custody.file_id).combined_into, _info(cash.file_id).combined_into) == ([combined[0].file_id], [combined[0].file_id])

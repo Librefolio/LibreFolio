@@ -30,7 +30,9 @@ mkdocs_src/aphra-pipeline/
 ├── .env.example            # Template for contributors
 ├── .gitignore              # Ignores .env, config.toml, cache
 ├── README.md               # Quick-start guide
-└── translate_docs.py       # Orchestration script (integrated with dev.py)
+├── code_blocks.py          # Fenced-block pairing + code indentation restore (shared helper)
+├── translate_docs.py       # Orchestration script (integrated with dev.py)
+└── validate_translations.py # translate-validate checks (integrated with dev.py)
 ```
 
 The script integrates with `dev.py` via `register_subparser()`, adding:
@@ -62,7 +64,7 @@ flowchart TB
 
     analyze -->|"shared analysis"| per_lang
 
-    refine --> clean["🧹 Post-process<br/>Strip [N] glossary, tags"]
+    refine --> clean["🧹 Post-process<br/>Strip [N] glossary, tags<br/>Restore code indentation"]
     clean --> output["source.it.md"]
 
     style per_file fill:#e8f4fd,stroke:#2196f3
@@ -195,6 +197,62 @@ Aphra's output contains artifacts we strip automatically:
 - `<translation>` / `</translation>` wrapper tags
 - Inline glossary markers `[N]` (preserving markdown links)
 - Glossary definition blocks at the end of the file
+- Translator notes the LLM adds on its own (a trailing "Translator's Notes" section, `[^N]` footnotes)
+
+Removing an inline marker leaves a double space behind. The cleanup collapses runs of two
+or more spaces to one only **between non-space characters** and only **outside fenced code
+blocks**: leading indentation (nested lists, admonition and content-tab bodies), Markdown
+hard breaks (two trailing spaces) and every line of a code block stay as they are. An
+earlier version collapsed every run of spaces in the whole document, which flattened code
+indentation to 0–1 space (a `docker-compose` example in the IT/FR/ES admin manual was no
+longer a valid compose file), pushed nested fences out of their list items and content
+tabs (numbered lists split, tabs rendered empty) and removed hard breaks. The step that
+re-pads `!!!` admonition bodies from 1 to 4 spaces stays as a safety net.
+
+The file written by `_translate_one_lang()` is the output of `_finalize_translation()`:
+`_clean_translation()` followed by `restore_code_indent()`, which gives every translated
+code block the indentation of its English block back (see below). When something was
+restored, the run log shows `🧹 Restored the source indentation on N code line(s)`.
+
+#### Code block indentation
+
+Translation never has a reason to move code, so the English indentation of every fenced
+block is the reference. The helpers live in `mkdocs_src/aphra-pipeline/code_blocks.py`
+(standard library only) and are shared by the pipeline and the validator. They see
+backtick and tilde fences at any indentation (list items, content tabs, admonitions):
+
+- `pair_blocks()` pairs each translated block with its English block **by content**: the
+  same code pairs even when its `#`/`//` comments or `<placeholders>` are translated, so a
+  block added or missing on one side does not shift the others. Blocks left over in a
+  stretch that differs (e.g. Mermaid with translated labels) pair in order when language
+  and line count match.
+- `restore_code_indent()` gives each paired block the English leading whitespace back, line
+  by line, fences included. A line whose tokens equal the English line becomes the English
+  line; any other line keeps its translated text (comments, labels) behind the English
+  indentation, and gets the English gap before an inline comment back when its code part
+  is identical. Blank lines, prose, unpaired blocks, blocks with a different line count
+  and unclosed fences are left alone.
+- `code_indent_issues()` lists the translated lines whose indentation still differs from
+  the English block.
+
+`./dev.py mkdocs translate-validate` re-checks every translation with the
+`code-block-indent` check (❌ ERROR, non-zero exit). It pairs blocks the same way and
+reports each drifted block once: first drifted line, line range of the translated block,
+how many of its lines are off, and the relative indentation levels of the English block
+versus the translation. The positional `code-block-modified` notice (🌐 LOCALIZED)
+attributes a changed code line to translated comments only: indentation drift is never
+treated as an intentional localization.
+
+In the release workflow (`.github/workflows/release.yml`, step *Validate broken MkDocs
+translation links*) the command runs with `--hide-localized`. The step is
+`continue-on-error` only on `dev`, where the nightly run lists it as a soft failure in the
+job summary; on any other run, a published release included, an ERROR fails the pipeline.
+
+Tests: `./dev.py test utils translation-code-blocks`
+(`backend/test_scripts/test_utilities/test_translation_code_blocks.py`). Besides the unit
+cases, a corpus guard checks that every up-to-date translation (English MD5 equal to the
+cached one and language in `langs_done`, the rule `translate` uses to skip a page) keeps
+the English code indentation.
 
 ---
 
@@ -358,6 +416,11 @@ The `autobatcher` library handles queue submission and polling transparently.
 ## Caching
 
 The pipeline caches **source file MD5 hashes** in `.translate-hashes.json` to skip unchanged files between runs. If a source `.en.md` hasn't changed, all its translations are skipped.
+
+Only the English side is hashed: `translate` skips a language when the `.en.md` MD5 equals
+the cached one and the language is in `langs_done`, and `translate-stamp` updates those two
+fields. Translated files never enter the decision, so a manual repair of a translation (a
+whitespace-only fix, for example) neither triggers a re-translation nor needs a stamp.
 
 Use `--force` to ignore the cache and re-translate everything.
 

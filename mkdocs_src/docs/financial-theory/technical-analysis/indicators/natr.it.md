@@ -36,12 +36,12 @@ Dove ATR è un inviluppo rettificato e smussato del range di prezzo, NATR aggiun
 
 ```mermaid
 flowchart LR
- HLC["📈 High / Low / Close"] --> TR["🌡️ True Range"]
- TR --> ATRN["🔁 SMMA(N) → ATR"]
- ATRN --> DIV["➗ ÷ Close"]
- C["💹 Close"] --> DIV
- DIV --> SCALE["✖️ ×100"]
- SCALE --> NATR["📐 NATR(t)"]
+    HLC["📈 High / Low / Close"] --> TR["🌡️ True Range"]
+    TR --> ATRN["🔁 SMMA(N) → ATR"]
+    ATRN --> DIV["➗ ÷ Close"]
+    C["💹 Close"] --> DIV
+    DIV --> SCALE["✖️ ×100"]
+    SCALE --> NATR["📐 NATR(t)"]
 ```
 
 !!! note "Scegliere tra ATR e NATR"

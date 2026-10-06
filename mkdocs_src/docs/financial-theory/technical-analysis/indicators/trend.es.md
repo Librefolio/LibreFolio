@@ -44,13 +44,13 @@ Un indicador de tendencia estima la **media local** del proceso de precios (o, p
 
 ```mermaid
 flowchart LR
- P["💹 Serie de Precios / OHLC"] --> EMA["📉 EMA"]
- P --> SMA["📏 SMA"]
- P --> KAMA["🛣️ KAMA"]
- P --> ADX["💹 ADX (+DI/-DI)"]
- P --> AROON["⏱️ Aroon"]
- EMA & SMA & KAMA --> DIR["🧭 Estimación de dirección"]
- ADX & AROON --> STR["💪 Estimación de fuerza / oportunidad"]
+    P["💹 Serie de Precios / OHLC"] --> EMA["📉 EMA"]
+    P --> SMA["📏 SMA"]
+    P --> KAMA["🛣️ KAMA"]
+    P --> ADX["💹 ADX (+DI/-DI)"]
+    P --> AROON["⏱️ Aroon"]
+    EMA & SMA & KAMA --> DIR["🧭 Estimación de dirección"]
+    ADX & AROON --> STR["💪 Estimación de fuerza / oportunidad"]
 ```
 
 !!! info "Dirección vs fuerza"

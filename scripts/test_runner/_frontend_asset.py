@@ -33,6 +33,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/utils/__tests__/assetTypeTables.test.ts",
         "src/lib/components/dashboard/allocationTypeEmoji.test.ts",
         "src/lib/components/dashboard/growthLadderAxis.test.ts",
+        "src/lib/components/dashboard/growthLadderBuckets.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
@@ -163,6 +164,18 @@ def front_asset_mobile_layout(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("assets/asset-mobile-layout.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_browse(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the asset detail prev/next browse E2E tests (K step 16, item 2)."""
+    print_section("Frontend Asset Browse Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-browse.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -185,7 +198,7 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend Asset E2E & unit tests (list, detail, modal, classification)",
         description="""Frontend Asset Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart, the GrowthChart ladder-axis planner (labels, month separators, sparse anchor) against an independent oracle", tests="vitest")
+    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart, the GrowthChart ladder-axis planner (labels, month separators, sparse anchor) against an independent oracle, and the GrowthChart ladder's calendar periods (Monday weeks, months from the 1st, quarters, halves and years, fixed 3D and 2W blocks that never move), a period that is over and cut by the series marked partial and the one still running left whole", tests="vitest")
     add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Component Tests (Vitest + jsdom)", desc="Mounts the real dashboard GrowthChart with ECharts swapped for a recorder. Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding. Also: privacy masking of axis and tooltip amounts (and privacy-off parity), one form for every signed tooltip amount with the locale's own sign (D23, D23b), the persisted mode/submode restore with its fallbacks, the candle caption, the grid's left inset, and the Candles/Income ladder x axis (S7): end-anchored buckets on a category axis, the planner's labels and separators, the short oldest bucket drawn translucent and explained in its tooltip (escaped), and the zoom window kept across rung changes and redraws, and the money axis ticks (S7b): exact, distinct labels (D18), the locale's minus (D23), the auto-scaled lower edge unlabelled while Income keeps ECharts' zero-based defaults (D25), and the Income purchase value (S8): both halves named as the book value in the full build and the partial update, one legend entry, the bold total over its two ↳ shares and their sum, new capital in the KPI blue (R11, D26)", tests="src/lib/components/dashboard/GrowthChart.test.ts")
     add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters", tests="assets/asset-list.spec.ts")
     add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit", tests="assets/asset-detail.spec.ts")
@@ -202,6 +215,14 @@ def populate_registry(registry: dict) -> None:
         name="Asset Mobile Layout",
         desc="Phone width (390/360 px, 1280 control): AssetModal footer reachable in create and edit (items 4 + 6a), Sync plain while the provider assignment loads and full-cell when blocked (6b), detail tabs never empty (7) — K step 13",
         tests="assets/asset-mobile-layout.spec.ts",
+    )
+    add_test(
+        cat,
+        "asset-browse",
+        front_asset_browse,
+        name="Asset Browse",
+        desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2",
+        tests="assets/asset-browse.spec.ts",
     )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat

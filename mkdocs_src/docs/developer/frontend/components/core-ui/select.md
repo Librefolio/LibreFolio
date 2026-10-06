@@ -8,7 +8,8 @@ positioning (`position: fixed`, so the dropdown is never clipped by `overflow` p
 logic that exists lives in plain TypeScript — `optionFilter.ts` (filtering, ranking and
 keyboard-step helpers: `SearchSelect` uses all of them, `SimpleSelect` the step helpers), `types.ts`
 (`SelectOption`) and `treeSelect.ts` (the tree shapes of `TreeSelect`). Every specialized select
-composes one of the generic ones — except `FxProviderSelect`, a self-contained route picker.
+composes one of the generic ones — except `FxProviderSelect`, a self-contained route picker, and
+`AssetPickerPanel`, built on `SelectPopover`.
 
 ## 🏗️ Component Hierarchy
 
@@ -34,6 +35,8 @@ graph TD
 
     FPS["<b>FxProviderSelect</b><br/><small>Self-contained FX route picker<br/>📡 <code>/fx/providers</code></small>"]
 
+    APP["<b>AssetPickerPanel</b><br/><small>Portfolio assets · single or multi choice<br/>On <code>SelectPopover</code> + <code>CheckMenu</code></small>"]
+
     style SS fill:#e8f5e9,stroke:#2e7d32
     style SrS fill:#e8f5e9,stroke:#2e7d32
     style TS fill:#e8f5e9,stroke:#2e7d32
@@ -43,6 +46,7 @@ graph TD
     style MORE fill:#fff3e0,stroke:#e65100
     style ATS fill:#fff3e0,stroke:#e65100
     style FPS fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5
+    style APP fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5
     style STS fill:#f5f5f5,stroke:#9e9e9e
 ```
 
@@ -50,7 +54,7 @@ Generic selects, then domain-specific wrappers:
 
 - 🟢 **SimpleSelect / SearchSelect / TreeSelect** — generic, self-contained selects with rendering
 - 🟠 **Specialized selects** — domain data and rendering on top of a generic one; the dashed
-  `FxProviderSelect` composes none of them
+  `FxProviderSelect` and `AssetPickerPanel` compose none of them
 - ⚪ **SignalTreeSelect** — lives in `charts/`; `TreeSelect` was generalized from it, and it is now a
   thin adapter over `TreeSelect`
 
@@ -98,6 +102,9 @@ are **ranked**, best match first.
 - Keyboard: ↑/↓ skip titles and disabled rows and stop at the ends (no wrap-around), Enter picks the
   highlighted row, Escape closes; a printable key on the closed trigger opens it and starts the
   search.
+- Reopening: only a touch or pen close blocks it for 200 ms (`closedByTouch`), as a ghost click on
+  the trigger can follow the tap; a mouse or keyboard close never does. Separately, with a value
+  set, Enter is ignored for 200 ms after the trigger takes focus (`triggerFocusedAt`).
 
 **Used in**: the `SearchSelect`-based wrappers below, plus direct uses such as the import wizard's
 `ImportAssetPicker`.
@@ -229,7 +236,9 @@ A specialized `SearchSelect` for currency selection.
 - Searchable by code, name, symbol (€, $, £), ISO-2 country codes and localized country names
 - Optional shortcuts at the top of the list — *All currencies* (`includeAll`), *Back to default*
   (`defaultCurrency`), *Original value* (`originalCurrency`) — and `configuredOnly`, which keeps only
-  the currencies reachable through a configured FX route
+  the currencies at either end of a configured FX pair (`fxRoutesStore.getConfiguredCurrencySet()`),
+  plus `value` and `defaultCurrency`; the currency a chain route passes through is left out, since
+  syncing a chain stores only the composed rate of its own pair
 
 **Used in**: currency fields across the app — FX pair creation (base/quote), broker form, asset
 modal, dashboard and asset detail target currency, settings.
@@ -356,3 +365,63 @@ convention, checks that every composite ships to both folders, and holds every p
 content rule, `ETF_MONETARY` being the declared exception. There are seven composites today:
 `etf-stock`, `etf-bond`, `etf-commodity`, `etf-real-estate`, `etf-crypto`, `etf-liquidity`
 (`ETF_MONETARY`) and `crowdfunding-real-estate`.
+
+---
+
+## 🧺 AssetPickerPanel
+
+A picker of **portfolio assets**: instruments out of the user's asset catalogue. Not to be confused
+with `ui/media/AssetPickerModal.svelte`, which picks an image file. One panel, two modes:
+
+- **`mode="multi"`** — the Asset Global lab's **+**. Rows are checked, and one press adds them all
+  (`onadd`, in the order they were checked). The `selected` assets are left out of the list, `room`
+  caps how many rows can be checked, `fullLabel` is the note shown once they fill it, and the caller
+  supplies the `trigger` snippet. **Select visible** checks the visible rows up to `room`, or
+  unchecks them when there is nothing left to check. The search wants every word of the query,
+  accents aside (`pickerRows()`).
+- **`mode="single"`** — a drop-in for `SearchSelect`: the same test ids (the root `${testId}`,
+  `${testId}-trigger`, `${testId}-search`, `search-select-option-{id}`,
+  `search-select-header-__section:{key}`), the same search (`filterOptions()`, with its
+  [ranking](#ranking-the-matches)) and the same keyboard (`stepSelectable()`). One click chooses and
+  closes. `sections` and `restLabel` work as in `AssetSelect`; it also takes `placeholder`,
+  `loading`, `disabled`, `dropdownPosition` (default: `auto`) and `dropdownMinWidth` (default: 280).
+  The trigger is one line at a fixed height: the `w-4 h-4` icon, `ticker · name` and, for an
+  inactive asset, the inactive badge.
+
+Both modes share:
+
+- A search box, and the **Type** and **Currency** filters (two `CheckMenu`s).
+- `verdicts`, a map of `PickerVerdict`s, read and never computed: an `ineligible` asset is listed
+  read-only, with its reasons, in the `${testId}-blocked` section titled `blockedLabel`; a `warning`
+  one can be chosen and shows ⚠. An asset without a verdict is selectable.
+- The caller's order: the panel never sorts the rows (in single mode, a query ranks the matches, as
+  `SearchSelect` does).
+- `searchText`, what a query matches besides the name. The default, `assetSearchText()`, is the
+  ISIN, the ticker and the other codes — never the currency or the type (P3/A6).
+- No amounts: a row shows the icon, the name, the type and the currency.
+
+In single mode the current value is never dropped: the trigger shows it whatever its verdict or the
+filters.
+
+It is built on three files beside it:
+
+- `SelectPopover.svelte` — the dropdown shell, moved from the lab. It closes on a **completed**
+  click outside, not on the press, and on Escape. An optional `placement` places it in viewport
+  coordinates through `dropdownPlacement()`.
+- `CheckMenu.svelte` — a compact multi-choice filter menu (nothing chosen means every value), with
+  the test ids `${testId}-button`, `${testId}-panel`, `${testId}-clear` and `${testId}-{value}`.
+- `assetPicker.ts` — the pure helpers `applyFilters()`, `foldForSearch()`, `pickerRows()`,
+  `toggleVisibleRows()`, `visibleRowsAllChecked()`, `assetSearchText()`, `assetSelectOrder()`
+  (`AssetSelect`'s order: active assets first, then by name with `localeCompare`) and
+  `dropdownPlacement()`, and the types `PickerAsset`, `PickerVerdict`, `PickerSection` and
+  `SelectionFilters`.
+
+No production file of `ui/select/` imports from `components/risk/`: the last block of
+`AssetPickerPanel.test.ts` reads every source of the folder, tests aside, and fails on such an
+import.
+
+**Used in**: `risk/LabAssetPicker.svelte` (multi mode), on the **Correlation** tab of the Assets
+page. Planned, not done yet: `BenchmarkSelect`, and later the **Asset Comparison** chart signal, are
+to adopt the single mode.
+**Data source**: none of its own — the caller passes `assets` and `verdicts`; the currency menu
+takes its flags from `currencyStore`.

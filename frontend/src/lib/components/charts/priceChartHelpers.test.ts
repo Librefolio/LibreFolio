@@ -32,6 +32,7 @@ import {
     resolveActivePointIndex,
     resolveZoomBounds,
     resolveZoomIndex,
+    splitGhostLabel,
     synthesizeDailyOHLC,
     toAbsoluteValue,
     toDisplaySeries,
@@ -1287,5 +1288,44 @@ describe('formatTruncatedGhostLabel', () => {
     it('truncates the whole string when it does not match the ghost shape', () => {
         const plain = 'Z'.repeat(40);
         expect(formatTruncatedGhostLabel(plain)).toBe(`${'Z'.repeat(29)}…`);
+    });
+});
+
+// ===========================================================================
+// splitGhostLabel — the ghost label's name and currency, apart and uncut (K step 16, item 1)
+// ===========================================================================
+
+/**
+ * The tooltip's ghost row — the asset in its original currency, while a conversion is active — reads
+ * `💱 Name (🇺🇸 USD)`. Today `formatTruncatedGhostLabel` cuts the name at 30 characters in JS and keeps the currency
+ * whole. In the fitted tooltip (`buildFittedTooltipRow`) the label item's CSS ellipsis does the cut, and the currency
+ * travels with the value, in the item that never shrinks: the tooltip needs the two parts apart, and the name whole.
+ * Same regex as `formatTruncatedGhostLabel` (`^💱\s*(.+?)\s*(\([^)]+\))$`), so both agree on what a ghost label is.
+ */
+describe('splitGhostLabel — the name and the currency apart, nothing cut (K step 16, item 1)', () => {
+    it('splits `💱 Name (flag CUR)` into the 💱 name and the currency parenthetical', () => {
+        expect(splitGhostLabel('💱 Some Name (🇺🇸 USD)')).toEqual({name: '💱 Some Name', currency: '(🇺🇸 USD)'});
+    });
+
+    it.each([
+        {why: 'a plain name', label: 'Apple Inc.'},
+        {why: 'a 💱 name with no parenthetical', label: '💱 Apple'},
+        {why: 'a 40-character name, not cut either', label: 'Z'.repeat(40)},
+    ])('returns a label with no currency parenthetical unchanged, with no currency — $why', ({label}) => {
+        expect(splitGhostLabel(label)).toEqual({name: label, currency: null});
+    });
+
+    it('never truncates the name — the tooltip CSS does, where formatTruncatedGhostLabel cut it at 30 characters', () => {
+        const longName = 'A'.repeat(40);
+        expect(splitGhostLabel(`💱 ${longName} (🇺🇸 USD)`)).toEqual({name: `💱 ${longName}`, currency: '(🇺🇸 USD)'});
+    });
+
+    it("keeps the name's own parentheses in the name: only the last parenthetical is the currency", () => {
+        expect(splitGhostLabel('💱 iShares Core MSCI World (Acc) (🇺🇸 USD)')).toEqual({name: '💱 iShares Core MSCI World (Acc)', currency: '(🇺🇸 USD)'});
+    });
+
+    it.each(['💱 Apple (🇺🇸 USD)', '💱 iShares World (Acc) (🇪🇺 EUR)', '💱 Apple', 'Apple (🇺🇸 USD)', 'Apple'])('agrees with formatTruncatedGhostLabel on what a ghost label is: rejoined, a label too short to cut reads the same — %s', (label) => {
+        const {name, currency} = splitGhostLabel(label);
+        expect(currency === null ? name : `${name} ${currency}`).toBe(formatTruncatedGhostLabel(label));
     });
 });

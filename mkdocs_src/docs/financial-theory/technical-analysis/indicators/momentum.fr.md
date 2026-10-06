@@ -45,12 +45,12 @@ Mathématiquement, la plupart des indicateurs de momentum sont des dérivées di
 
 ```mermaid
 flowchart LR
- P["💹 Prix de clôture"] --> RSI["💪 RSI"]
- P --> MACD["📊 MACD"]
- P --> ROC["🚀 ROC"]
- RSI --> SRSI["🎛️ Stochastic RSI"]
- MACD -->|"÷ EMA lente"| PPO["📐 PPO"]
- HLC["📈 Haut / Bas / Clôture"] --> CCI["🔄 CCI"]
+    P["💹 Prix de clôture"] --> RSI["💪 RSI"]
+    P --> MACD["📊 MACD"]
+    P --> ROC["🚀 ROC"]
+    RSI --> SRSI["🎛️ Stochastic RSI"]
+    MACD -->|"÷ EMA lente"| PPO["📐 PPO"]
+    HLC["📈 Haut / Bas / Clôture"] --> CCI["🔄 CCI"]
 ```
 
 !!! tip "Oscillateurs bornés vs non bornés"

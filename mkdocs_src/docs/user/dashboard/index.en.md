@@ -14,7 +14,7 @@ The Dashboard interface is organized into four primary tabs, allowing you to swi
 
 1. **Overview** (default): Key metrics, cash balances, and visual charts of your portfolio.
 2. **[Positions & Analysis](positions.md)**: Open holdings, weights, and detailed tax lot (FIFO) analysis.
-3. **Risk**: The **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?** It always covers your whole portfolio: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so. See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
+3. **Risk**: The **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?** It always covers your whole portfolio: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so. **What if…?** opens on a selector: add the historical replay, the hypothetical shock or the simulation; the tools you leave open come back the next time, in this browser, and closing a tool with its **×** removes it together with its answer. See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
 4. **Transactions**: The operations in the selected date range and broker scope, as a paginated, read-only list — double-click a row to open its detail viewer. See [Transactions](../transactions/index.md) for the full guide.
 
 ---
@@ -44,7 +44,7 @@ At the top right of the dashboard, you have several controls to customize your v
 
 - **Time range** — presets from 1 week to All-Time (MAX), or a custom range via the date picker.
 - **Broker filter** — filter all metrics to one or more specific brokers.
-- **Target currency** — converts all assets and cash balances dynamically into a single selected currency for aggregate viewing.
+- **Target currency** — converts all assets and cash balances dynamically into a single selected currency for aggregate viewing. The list offers your default currency and the currencies of your configured FX pairs — both ends of each pair. A currency that a [chain route](../fx/add-pair.md) only passes through is not offered: syncing a chain stores only the rate of its own pair, so LibreFolio has no rates to convert into that currency. To make a currency available, give it a pair of its own: pick **Create forex…** at the bottom of the list, or tick **Also create intermediate pairs** when you add a pair through a chain route.
 - **AI Export** (:material-brain:) — opens a clipboard export. Choose **Data
   Snapshot** for factual data only, or an **analysis task** that automatically
   includes its instructions and response contract, then select the **detail
@@ -72,6 +72,18 @@ If any prices or FX rates are missing on the end date, a banner appears at the t
  Assets without a price provider (entered manually, such as real-estate crowdfunding projects) are permanently valued at purchase cost — this is intentional and does not generate a warning.
 
 The banner also warns you when an asset you hold has a price provider but its latest price is **more than a week old** on the end date: click **Sync prices** to fetch the missing prices, and the warning goes away once they are up to date. Manual assets are never flagged this way, since there is nothing to sync.
+
+Exchange rates are checked over your whole history up to the end date. When a configured FX pair with a provider has **no rate** for some dates, the banner lists it with the span of the missing dates. LibreFolio converts an amount with the latest rate on or before its date, however old, so these dates come *before* the pair's first stored rate — often well before the period on screen, because every past transaction counts towards totals such as your Total P&L. Click **Sync rates** to fill them:
+
+- LibreFolio downloads that span of dates with **one extra week on each side** (never beyond today), whatever period the dashboard is showing. The extra week covers weekends and bank holidays, when providers publish nothing: such a day at the edge of the span then takes the rate of the previous working day.
+- Once the download is over, the dashboard refreshes and a message reports the result for each pair.
+- If the download goes through but the same pairs are still flagged, the provider has no rates for the dates still missing — typically because they come before the start of its history. The message then turns into a warning that says so: enter those rates by hand in the pair's [Data Editor](../fx/detail/data-editor.md).
+
+Pairs with manual rates only (no provider) get a warning of their own: its **View FX** button opens the page of the first pair it lists, where you add the rates yourself.
+
+!!! tip "Fill a pair's whole history at once"
+
+    Open the [FX page](../fx/index.md), choose the **All** (MAX) range and click [Sync All](../fx/sync.md): LibreFolio downloads everything the providers publish for your pairs, up to today. A pair you add with a provider does this by itself — see [Adding a Currency Pair](../fx/add-pair.md).
 
 ---
 

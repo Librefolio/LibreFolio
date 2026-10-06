@@ -29,13 +29,13 @@ $$
 
 ```mermaid
 flowchart TD
- A["Résoudre l'actif a à la date t"] --> B{"Cotation marché à t ?"}
- B -- "oui" --> C["MARKET"]
- B -- "non" --> D{"Observations de transaction à t ?"}
- D -- "oui" --> E["TRADE_AVG"]
- D -- "non" --> F{"Une observation avant t ?"}
- F -- "oui" --> G["CARRIED (LOCF)"]
- F -- "non" --> H["MISSING"]
+    A["Résoudre l'actif a à la date t"] --> B{"Cotation marché à t ?"}
+    B -- "oui" --> C["MARKET"]
+    B -- "non" --> D{"Observations de transaction à t ?"}
+    D -- "oui" --> E["TRADE_AVG"]
+    D -- "non" --> F{"Une observation avant t ?"}
+    F -- "oui" --> G["CARRIED (LOCF)"]
+    F -- "non" --> H["MISSING"]
 ```
 
 Le schéma public du moteur fait correspondre les marques du résolveur aux étiquettes de source d'évaluation :

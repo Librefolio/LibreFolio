@@ -18,6 +18,14 @@
  * `IdentifierPrimaryChooser`. Its default and its override both have to survive the
  * trip into the `resolutions` map, and both are exercised below.
  *
+ * The *asset type* row is the one string row not drawn as passed in (K17): each value
+ * box shows the type as the badge of the asset cards — its icon and its catalogue
+ * name — because a raw `ETF_STOCK` in monospace tells the user deciding nothing. The
+ * badge is found by `comparison-type-badge` and identified by `data-type`, its picture
+ * by `src`. The name it must show is read from the loaded i18n store (`get(_)`), never
+ * written here: the claim is "the badge shows the catalogue's name for this key", not
+ * any word of it. Every other string row keeps the raw, truncated value.
+ *
  * What it deliberately does NOT assert:
  *   - translated text. Section titles, the apply-button label and the value-box
  *     captions all come from the four-language catalogue. Groups are addressed by
@@ -32,7 +40,10 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
+import {get} from 'svelte/store';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {_} from '$lib/i18n';
+import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 import ProviderComparisonModal, {type DiffItem} from './ProviderComparisonModal.svelte';
 
 /** A plain string-valued difference. `label` is arbitrary — never asserted on. */
@@ -72,6 +83,35 @@ function card(field: string): HTMLElement {
 
 function sectionOrder(): string[] {
     return [...document.querySelectorAll<HTMLElement>('[data-testid="comparison-group"]')].map((g) => g.getAttribute('data-section') ?? '');
+}
+
+/** The catalogue's name for a type, read from the loaded i18n store — never a translation written here. */
+function typeLabel(type: string): string {
+    const key = `assets.types.${type}`;
+    const label = get(_)(key);
+    expect(label, `${key} does not resolve: the catalogue is not loaded, or the key is gone`).not.toBe(key);
+    // Barrier for "the box no longer prints the raw code": a label spelling its own code could not tell the two apart.
+    expect(label, `the ${key} label contains the raw code itself, so this test could not tell the badge from the code`).not.toContain(type);
+    return label;
+}
+
+/** The type badges inside one value box. */
+function typeBadges(box: HTMLElement): HTMLElement[] {
+    return within(box).queryAllByTestId('comparison-type-badge');
+}
+
+/** The one type badge of a value box. */
+function onlyTypeBadge(box: HTMLElement): HTMLElement {
+    const badges = typeBadges(box);
+    expect(badges, `${box.getAttribute('data-testid')} holds ${badges.length} comparison-type-badge instead of one: an asset type is drawn as the badge of the asset cards — its icon and its catalogue name — not as the raw enum code`).toHaveLength(1);
+    return badges[0];
+}
+
+/** The one picture a type badge shows. */
+function pictureOf(badge: HTMLElement): string | null {
+    const images = badge.querySelectorAll('img');
+    expect(images, 'a type badge shows exactly one picture').toHaveLength(1);
+    return images[0].getAttribute('src');
 }
 
 describe('ProviderComparisonModal — grouping', () => {
@@ -224,6 +264,80 @@ describe('ProviderComparisonModal — value rendering', () => {
         const entries = within(screen.getByTestId('comparison-current-sector_area')).getAllByTestId('comparison-dist-entry');
         expect(entries.map((e) => e.getAttribute('data-dist-key'))).toEqual(['TECHNOLOGY', 'ENERGY']);
         expect(entries.map((e) => e.getAttribute('data-dist-pct'))).toEqual(['70.00%', '30.00%']);
+    });
+
+    it('draws an asset_type value as the badge of the asset cards: its icon and its catalogue name, not the raw code (K17)', async () => {
+        await setupI18n();
+        const sides = [
+            {side: 'current', type: 'ETF_STOCK', label: typeLabel('ETF_STOCK')},
+            {side: 'provider', type: 'ETF_BOND', label: typeLabel('ETF_BOND')},
+        ];
+        mount([stringDiff('asset_type', 'ETF_STOCK', 'ETF_BOND')]);
+        await settled();
+
+        for (const {side, type, label} of sides) {
+            const box = screen.getByTestId(`comparison-${side}-asset_type`);
+            const badge = onlyTypeBadge(box);
+            expect(badge).toHaveAttribute('data-type', type);
+            expect(pictureOf(badge)).toBe(getAssetTypeIconUrl(type));
+            expect(badge).toHaveTextContent(label);
+            expect(box.textContent, `comparison-${side}-asset_type still prints the raw code ${type}`).not.toContain(type);
+        }
+    });
+
+    it('falls back to the raw code, inside the badge, for a type the catalogue does not name (K17)', async () => {
+        await setupI18n();
+        const unknown = 'NOT_A_REAL_TYPE';
+        // Barrier: the key genuinely misses — svelte-i18n answers a missing key with the key itself.
+        expect(get(_)(`assets.types.${unknown}`), `assets.types.${unknown} resolves: this case needs a code the catalogue does not name`).toBe(`assets.types.${unknown}`);
+        mount([stringDiff('asset_type', unknown, 'ETF_STOCK')]);
+        await settled();
+
+        const box = screen.getByTestId('comparison-current-asset_type');
+        const badge = onlyTypeBadge(box);
+        expect(badge).toHaveAttribute('data-type', unknown);
+        expect(pictureOf(badge)).toBe(getAssetTypeIconUrl(unknown));
+        expect(badge).toHaveTextContent(unknown);
+        // svelte-i18n hands back the key for a missing name, so `$t(key) || code` would print the path, not the code.
+        expect(box.textContent, 'the badge prints the i18n path of the missing name instead of the raw code').not.toContain('assets.types.');
+    });
+
+    it.each([
+        {empty: 'current', filled: 'provider', current: null, provider: 'ETF_STOCK'},
+        {empty: 'provider', filled: 'current', current: 'ETF_STOCK', provider: null},
+    ])('shows a dash and no badge for a null $empty type, beside the badge of the $filled one (K17)', async ({empty, filled, current, provider}) => {
+        await setupI18n();
+        mount([stringDiff('asset_type', current, provider)]);
+        await settled();
+
+        // Presence barrier: the badge is drawn on this very row, so its absence next door is a decision, not a late mount.
+        expect(onlyTypeBadge(screen.getByTestId(`comparison-${filled}-asset_type`))).toHaveAttribute('data-type', 'ETF_STOCK');
+        const box = screen.getByTestId(`comparison-${empty}-asset_type`);
+        expect(box).toHaveTextContent('—');
+        expect(typeBadges(box), `comparison-${empty}-asset_type draws a badge for a null type: there is no type to draw`).toHaveLength(0);
+        expect(box.querySelector('img'), `comparison-${empty}-asset_type draws a picture for a null type: other.png would claim a type nobody set`).toBeNull();
+    });
+
+    it('keeps every other string row as raw text with no type badge, even when its value spells a type code (K17 guard)', async () => {
+        await setupI18n();
+        // The display name spells type codes on purpose: the badge belongs to the asset_type field, never to what a value looks like.
+        const rows = [
+            {field: 'currency', current: 'USD', provider: 'EUR'},
+            {field: 'display_name', current: 'ETF_STOCK', provider: 'ETF_BOND'},
+        ];
+        mount(rows.map(({field, current, provider}) => stringDiff(field, current, provider)));
+        await settled();
+
+        for (const {field, current, provider} of rows) {
+            for (const [side, value] of [
+                ['current', current],
+                ['provider', provider],
+            ]) {
+                const box = screen.getByTestId(`comparison-${side}-${field}`);
+                expect(box).toHaveTextContent(value);
+                expect(typeBadges(box), `comparison-${side}-${field} draws a type badge: only the asset_type row does`).toHaveLength(0);
+            }
+        }
     });
 });
 

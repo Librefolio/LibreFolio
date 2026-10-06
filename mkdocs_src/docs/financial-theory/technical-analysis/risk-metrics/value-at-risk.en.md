@@ -97,21 +97,29 @@ This is the fact that answers the question the correction usually provokes — *
 
 ### ⏳ The Observation Count Is Not the History Length {: #the-observation-count-is-not-the-history-length }
 
-$T$ is not the number of days in the window. The tail is computed from **horizon-compounded** returns, so the number of values entering the calculation is
+$T$ is not the number of days in the window. The tail is computed from **horizon-compounded** returns — every run of $n$ consecutive returns compounded into one — so the number of values entering the calculation is
 
 $$
-T = N - h + 1
+T = N - n + 1
 $$
 
-where $N$ is the number of returns in the window and $h$ is the **Horizon (days)** parameter. The analytic computes exactly this quantity and publishes it with the result as its observation count; that published count, not the window length, is the $T$ the rule applies to.
+where $N$ is the number of returns in the window and $n$ is the horizon counted in observations. The **Horizon (days)** parameter $h$ is in **calendar days**, and it is converted into observations at the rate the series was actually observed — its [observed annualization factor](observed-annualization.md) $f$:
 
-Horizon is a form field on the analytic, defaulting to $h = 1$ and accepting values from 1 to 365. At the default, $T = N$ — which is why round histories are the affected ones.
+$$
+n = \max\left(1,\ \operatorname{round}\left(\frac{h \cdot f}{365}\right)\right)
+$$
 
-Raise it and the table above inverts. At $h = 10$, a round $N$ yields $T = N - 9$, a number ending in 1, never divisible by 10, 20 or 100. Across the same history lengths, at $h = 10$ **250, 500, 750, 1000, 1250 and 2000 observations are unaffected at all three confidence levels**. The default horizon of 1 is precisely the setting under which tidy histories move; a horizon of 10 leaves those same histories untouched. This is a consequence of the arithmetic rather than a defect in it, but it does mean a comparison between two analyses has to match the horizon as well as the window and the level.
+A horizon therefore spans the same stretch of calendar on every series, to the nearest observation. Thirty days — the bad month the app reports beside the bad day — are $n = 21$ observations of a series quoted on trading days ($f \approx 252$) and $n = 30$ of one quoted every calendar day ($f = 365$).
+
+The analytic computes exactly these quantities and publishes both with the result: $n$ as its horizon in observations, $T$ as its observation count. That published count, not the window length, is the $T$ the rule applies to. It is also the count the minimum of 20 observations is checked against: with fewer than 20 compounded windows the figure is not computed, and the result comes back unavailable for insufficient history. A bad month therefore needs $N \ge 40$ returns at $f \approx 252$, where $n = 21$, and $N \ge 49$ at $f = 365$.
+
+Horizon is a form field on the analytic, defaulting to $h = 1$ and accepting values from 1 to 365. At the default $n = 1$ on every series — none is observed more than once per calendar day, so $f \le 365$ — and $T = N$, which is why round histories are the affected ones.
+
+Raise it and the table above inverts. At $h = 10$, a series quoted on trading days compounds $n = 7$ observations, so a round $N$ yields $T = N - 6$, a number ending in 4; a series quoted every calendar day compounds $n = 10$, and $T = N - 9$ ends in 1. Neither is ever divisible by 10, 20 or 100, and the same holds on any series observed at least 54.75 times a year ($f \ge 54.75$): ten days then hold between 2 and 10 observations, so a round $N$ loses between 1 and 9 of them. Across the same history lengths, at $h = 10$ **250, 500, 750, 1000, 1250 and 2000 observations are unaffected at all three confidence levels**, on either kind of series. The default horizon of 1 is precisely the setting under which tidy histories move; a horizon of 10 leaves those same histories untouched — except on a series observed less often, such as a weekly fund ($f \approx 52$), where ten days still round to a single observation and $T = N$. This is a consequence of the arithmetic rather than a defect in it, but it does mean a comparison between two analyses has to match the horizon as well as the window and the level — and, since the same horizon holds a different $n$ at a different $f$, the observed frequency of the series too.
 
 !!! info "How to check a particular case"
 
-    Take the observation count published with the result — [Data Quality](data-quality.md) reports it, already net of the horizon — and multiply it by $1 - c$. A whole number means the figure moved, by one observation; anything else means it is unchanged.
+    Take the observation count the Value at Risk publishes with its figures — `observations`, already net of the horizon and published next to `horizon_observations` — and multiply it by $1 - c$. A whole number means the figure moved, by one observation; anything else means it is unchanged. The observation count in the result's metadata (`n_observations`, see [Data Quality](data-quality.md)) is $N$, counted before compounding: it equals $T$ only when $n = 1$.
 
 ---
 

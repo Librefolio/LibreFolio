@@ -1,4 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
+import {schemas} from '../../src/lib/api/generated';
+import {waitForSettled} from '../fixtures/app-events';
 import {login} from '../fixtures/auth-helpers';
 import {showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
@@ -1010,22 +1012,31 @@ test.describe('Chart axes under privacy (S2a/S2b)', () => {
 /**
  * S7 — the P&L ladder x axis (Candles and Income).
  *
- * Under the ladder one bucket spans the pressed width (`growth-candle-width-<rung>`:
- * 1D = 1 served day, 1W = 7, 1M = 30). The contract pinned here: the buckets are
- * END-anchored — the last one closes on the last served day, so the partial bucket
- * is the first one, and it is drawn translucent; Candles and Income sit on one
- * category axis whose data are the closing dates; its labels are planned (never a
- * raw ISO date, never repeated, never overlapping, never cut by the canvas edge);
- * every bucket has its split line while a slot is at least 8px wide, and below that
- * only the buckets that hold a 1st of the month do, each on its own left edge; the
- * Income bars share their bucket's slot; and a zoom the user set survives a redraw.
+ * Under the ladder one bucket is one calendar period of the pressed rung
+ * (`growth-candle-width-<rung>`: 1D a served day, 1W an ISO week from Monday, 1M a
+ * month from the 1st — the developer's decision of 06/10/2026, which replaced the
+ * runs of 1, 7 and 30 days anchored at the last served day). The contract pinned
+ * here: category i closes on the last served day of period i, so the last one closes
+ * on the last served day; a period that is over and that the served days cover only
+ * in part (the window starts mid-period) is drawn translucent, and the period still
+ * running on the page's today is drawn whole, its missing days being the future;
+ * Candles and Income sit on one category axis whose data are the closing dates; its
+ * labels are planned (never a raw ISO date, never repeated, never overlapping, never
+ * cut by the canvas edge); every bucket has its split line while a slot is at least
+ * 8px wide, and below that only the buckets that hold a 1st of the month do, each on
+ * its own left edge; each Income bar takes its share of its bucket's slot, 30% of the
+ * slot left between buckets and 10% of a bar between the three columns of one; and a
+ * zoom the user set survives a redraw.
  *
  * The axis is canvas text, so the only faithful reading is the zrender scene the
  * chart painted (`ladderSnapshot`, one evaluate on `__lfChart`), re-read inside every
  * poll: a full redraw replaces the elements, so a reading taken earlier is stale by
  * design. The oracle is the history the backend served for the window, recorded from
- * the response — never a constant, so a seed that changes shape fails a precondition
- * instead of passing for the wrong reason.
+ * the response, and the page's own today — never a constant, so a seed that changes
+ * shape fails a precondition instead of passing for the wrong reason. The periods are
+ * computed here from the calendar's own fields (`calendarBuckets`), never imported
+ * from the component's bucket module: an oracle that called the code it checks would
+ * agree with it by construction.
  *
  * Each contract letter (C, P, D, A, E, G, B, T, W, Z, M) is a soft poll whose message
  * starts with the letter, so one run names every broken letter; hard preconditions
@@ -1064,11 +1075,97 @@ const LADDER_PHONE = {width: 375, height: 800};
  * edges and the plot; the `[S7] E4 zoomed` digest logs W and the plot to check against.
  */
 const LADDER_E4_PHONE = {width: 405, height: 800};
-/** The E1 rungs and the served days one of their buckets spans — the expected closings derive from it. */
-const LADDER_E1_CASES = [
-    {rung: '1m', span: 30},
-    {rung: '1w', span: 7},
-] as const;
+/** The E1 rungs: a month and an ISO week, the two calendar units a 1440px plot draws as candles. */
+const LADDER_E1_CASES = [{rung: '1m'}, {rung: '1w'}] as const;
+
+/**
+ * The rungs the S7 oracle reads, by test-id suffix. E3, the phone case and E4 still name
+ * their rung by the day span of the old ladder (30, 1): `logLadder` maps that span to the
+ * calendar rung it now stands for, through RUNG_OF_LEGACY_SPAN.
+ */
+type OracleRung = '1d' | '1w' | '1m';
+const RUNG_OF_LEGACY_SPAN: Readonly<Record<number, OracleRung>> = {1: '1d', 7: '1w', 30: '1m'};
+
+/** One bucket of the served days: the served indices it holds, its calendar period, and its closing date — the last served day it holds. */
+interface CalendarBucket {
+    first: number;
+    last: number;
+    start: string;
+    end: string;
+    closing: string;
+}
+
+const UTC_DAY_MS = 86_400_000;
+/** Whole UTC days since 1970-01-01: calendar arithmetic no timezone can move. */
+const utcDayOf = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / UTC_DAY_MS;
+const isoOfUtcDay = (day: number): string => new Date(day * UTC_DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * The calendar period a served day falls in: the day itself (1d), its ISO week from
+ * Monday to Sunday (1w), its month from the 1st to its last day (1m). Written from the
+ * decision with the calendar's own fields, never imported from the component.
+ */
+function calendarPeriod(iso: string, rung: OracleRung): {start: string; end: string} {
+    if (rung === '1d') return {start: iso, end: iso};
+    const date = new Date(`${iso}T00:00:00Z`);
+    if (rung === '1w') {
+        const monday = utcDayOf(iso) - ((date.getUTCDay() + 6) % 7);
+        return {start: isoOfUtcDay(monday), end: isoOfUtcDay(monday + 6)};
+    }
+    const [year, month0] = [date.getUTCFullYear(), date.getUTCMonth()];
+    return {start: isoOfUtcDay(Date.UTC(year, month0, 1) / UTC_DAY_MS), end: isoOfUtcDay(Date.UTC(year, month0 + 1, 0) / UTC_DAY_MS)};
+}
+
+/** The buckets the served days make on `rung`: one per calendar period they touch, oldest first. */
+function calendarBuckets(served: string[], rung: OracleRung): CalendarBucket[] {
+    const buckets: CalendarBucket[] = [];
+    served.forEach((date, index) => {
+        const open = buckets.at(-1);
+        if (open && date <= open.end) {
+            open.last = index;
+            open.closing = date;
+        } else {
+            buckets.push({first: index, last: index, ...calendarPeriod(date, rung), closing: date});
+        }
+    });
+    return buckets;
+}
+
+/**
+ * The buckets the chart must draw translucent, by index: the partial periods. A period is
+ * partial when the served days start after its first day, or — once it is over, its last
+ * day before `today` — stop before its last day. The period still running on `today` is
+ * not cut by its missing days, which are the future; it is partial only if the window
+ * also starts inside it.
+ */
+function partialBuckets(buckets: CalendarBucket[], served: string[], today: string): Set<number> {
+    return new Set(buckets.flatMap((bucket, index) => (served[bucket.first] > bucket.start || (served[bucket.last] < bucket.end && bucket.end < today) ? [index] : [])));
+}
+
+/** The page's today in its own local calendar: the day the component's `todayIso()` reads. */
+async function pageToday(page: Page): Promise<string> {
+    return page.evaluate(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    });
+}
+
+/**
+ * `openLadder` at 1440px on the 1Y window, plus the calendar oracle: the page's today, the
+ * buckets the served days make on `rung`, and the partial ones. Two preconditions make the
+ * oracle the one the chart drew with: the page's day did not change while the chart drew (a
+ * run across midnight would judge yesterday's buckets by today's calendar), and the window
+ * ends on that day, so its last bucket is the period in progress.
+ */
+async function openCalendarLadder(page: Page, opts: {submode: 'candles' | 'income'; rung: '1w' | '1m'}) {
+    const dayBefore = await pageToday(page);
+    const opened = await openLadder(page, {viewport: LADDER_DESKTOP, submode: opts.submode, rung: opts.rung});
+    const today = await pageToday(page);
+    expect(today, `precondition: the page's day did not change while the chart drew (${dayBefore} → ${today})`).toBe(dayBefore);
+    expect(opened.served.at(-1), `precondition: the 1Y window ends on the page's today, ${today}, so its last bucket is the period in progress`).toBe(today);
+    const buckets = calendarBuckets(opened.served, opts.rung);
+    return {...opened, today, buckets, partial: partialBuckets(buckets, opened.served, today)};
+}
 
 /** A rectangle in canvas pixels: the same space as the chart's width `W`. */
 interface LadderRect {
@@ -1239,16 +1336,6 @@ function round2(value: number): number {
     return Math.round(value * 100) / 100;
 }
 
-/**
- * The expected category data: with `n = ceil(len / span)`, bucket i closes on
- * `served[L − span·(n−1−i)]` — the last on the last served day, the partial one first.
- */
-function endAnchoredClosings(served: string[], span: number): string[] {
-    const n = Math.ceil(served.length / span);
-    const last = served.length - 1;
-    return Array.from({length: n}, (_, i) => served[last - span * (n - 1 - i)]);
-}
-
 /** Every break in a contiguous daily ISO history: [] when each step is exactly one UTC day. */
 function dailyGaps(dates: string[]): string[] {
     const DAY_MS = 86_400_000;
@@ -1354,24 +1441,34 @@ function categoryAxisFacts(snap: LadderSnapshot, n: number): {xType: string | nu
     return {xType: snap.xType, foreignLabelIds};
 }
 
-/** W: the drawn Income bars narrower than a quarter of their bucket slot. */
-function narrowBars(snap: LadderSnapshot, n: number): string[] {
+/**
+ * The share of its bucket slot one Income bar takes (decision of 06/10/2026): 30% of the
+ * slot is left between buckets and 10% of a bar between the three columns of one, so a bar
+ * is (1 − 0.30) / (3 + 2 × 0.10) = 0.21875 of the slot. Literals: the decision's numbers,
+ * not the component's constants.
+ */
+const INCOME_BAR_SHARE_OF_SLOT = (1 - 0.3) / (3 + 2 * 0.1);
+
+/** W: the drawn Income bars more than half a pixel off their share of the bucket slot. */
+function offShareBars(snap: LadderSnapshot, n: number): string[] {
     const slot = slotWidth(snap, n);
+    const expected = INCOME_BAR_SHARE_OF_SLOT * slot;
     return drawnItems(snap, 'bar')
-        .filter((item) => Math.abs(item.width ?? 0) < 0.25 * slot)
-        .map((item) => `${item.series}#${item.raw}: ${round2(item.width ?? 0)}px = ${round2((item.width ?? 0) / slot)} × slot ${round2(slot)}px`);
+        .filter((item) => Math.abs(Math.abs(item.width ?? 0) - expected) > 0.5)
+        .map((item) => `${item.series}#${item.raw}: ${round2(item.width ?? 0)}px, expected ${round2(expected)}px = ${INCOME_BAR_SHARE_OF_SLOT.toFixed(5)} × slot ${round2(slot)}px`);
 }
 
 /**
- * P, in iff form: a drawn item is translucent (0 < opacity < 1) exactly when it belongs
- * to bucket 0, and its element paints the opacity its visual declares. Every item that
- * breaks either half is listed.
+ * P, in iff form: a drawn item is translucent (0 < opacity < 1) exactly when its bucket is
+ * in `partial` (`partialBuckets`: the periods that are over and cut, and a running one only
+ * if the window starts inside it), and its element paints the opacity its visual declares.
+ * Every item that breaks either half is listed.
  */
-function partialMarkingBreaks(snap: LadderSnapshot, subType: 'bar' | 'candlestick'): string[] {
+function partialMarkingBreaks(snap: LadderSnapshot, subType: 'bar' | 'candlestick', partial: ReadonlySet<number>): string[] {
     const translucent = (opacity: number) => opacity > 0 && opacity < 1;
     return drawnItems(snap, subType)
-        .filter((item) => translucent(item.elOpacity) !== (item.raw === 0) || translucent(item.visualOpacity) !== (item.raw === 0) || item.elOpacity !== item.visualOpacity)
-        .map((item) => `${item.series}#${item.raw}: element ${item.elOpacity}, visual ${item.visualOpacity}`);
+        .filter((item) => translucent(item.elOpacity) !== partial.has(item.raw) || translucent(item.visualOpacity) !== partial.has(item.raw) || item.elOpacity !== item.visualOpacity)
+        .map((item) => `${item.series}#${item.raw}: element ${item.elOpacity}, visual ${item.visualOpacity}, expected ${partial.has(item.raw) ? 'translucent' : 'opaque'}`);
 }
 
 /** The distinct drawn Income bar widths, rounded to 0.01 px and sorted: what a whole-range zoom must leave alone. */
@@ -1404,27 +1501,38 @@ async function dispatchZoom(host: Locator, start: number, end: number): Promise<
  * Print one snapshot as a single `[S7]` line: the evidence each case reports.
  *
  * A letter's verdict says *that* the axis broke the contract; the digest says *how* — the
- * closings against the expected ones, each label's text and glyph box, the split lines,
- * every item's width against the slot, element against visual opacity, the zoom and the
- * scale extent. The list reporter prints a test's stdout whether it passes or fails, so
- * a green run carries the same evidence as a red one.
+ * closings against the expected ones, the first and last periods, the partial buckets,
+ * each label's text and glyph box, the split lines, every item's width against the slot,
+ * element against visual opacity, the zoom and the scale extent. The list reporter prints
+ * a test's stdout whether it passes or fails, so a green run carries the same evidence as
+ * a red one.
+ *
+ * `rung` is the calendar rung, or the day span E3, the phone case and E4 still pass (see
+ * RUNG_OF_LEGACY_SPAN). The partial buckets need the page's `today`; without it they are
+ * not printed.
  */
-function logLadder(tag: string, snap: LadderSnapshot, served: string[], span: number): void {
-    const n = Math.ceil(served.length / span);
+function logLadder(tag: string, snap: LadderSnapshot, served: string[], rung: OracleRung | number, today?: string): void {
+    const calendarRung = typeof rung === 'number' ? RUNG_OF_LEGACY_SPAN[rung] : rung;
+    if (!calendarRung) throw new Error(`logLadder: no calendar rung stands for a span of ${rung} days`);
+    const buckets = calendarBuckets(served, calendarRung);
+    const n = buckets.length;
     const slot = slotWidth(snap, n);
     const ends = (list: string[] | null) => (list ? {count: list.length, first3: list.slice(0, 3), last3: list.slice(-3)} : null);
     const box = (rect: LadderRect | null) => (rect ? [round2(rect.x), round2(rect.y), round2(rect.width), round2(rect.height)] : null);
+    const period = (bucket: CalendarBucket | undefined) => (bucket ? [bucket.start, bucket.end] : null);
     const digest = {
         len: served.length,
-        span,
-        mod: served.length % span,
+        rung: calendarRung,
+        today: today ?? null,
         n,
         W: snap.W,
         plot: box(snap.plot),
         slot: round2(slot),
         xType: snap.xType,
         xData: ends(snap.xData),
-        expected: ends(endAnchoredClosings(served, span)),
+        expected: ends(buckets.map((bucket) => bucket.closing)),
+        periods: {first: period(buckets[0]), last: period(buckets.at(-1))},
+        partial: today ? [...partialBuckets(buckets, served, today)] : null,
         zoom: snap.zoom,
         extent: snap.extent,
         labels: snap.labels.map((label) => [label.anid, label.text, box(label.box)]),
@@ -1537,50 +1645,63 @@ test.describe('GrowthChart ladder x axis (S7)', () => {
         await login(page, TEST_USER);
     });
 
-    for (const {rung, span} of LADDER_E1_CASES) {
-        test(`S7-E1-${rung} candles at 1440px end their buckets on the last served day and draw the axis as a ladder`, async ({page}) => {
+    for (const {rung} of LADDER_E1_CASES) {
+        test(`S7-E1-${rung} candles at 1440px close each bucket on the last served day of its calendar period and draw the axis as a ladder`, async ({page}) => {
             // A window change, a lazy candle fetch and a rung switch against a backend that
             // runs FIFO at report time, then soft polls that each run their full timeout
             // while the axis is wrong: more than one interaction's budget.
             test.setTimeout(60_000);
-            const {host, served} = await openLadder(page, {viewport: LADDER_DESKTOP, submode: 'candles', rung});
-            const n = Math.ceil(served.length / span);
-            // When the served days divide into whole buckets, start and end anchoring give
-            // the same closings and no bucket is partial: C and P would prove nothing.
-            expect(served.length % span, `precondition: ${served.length} served days are not a multiple of ${span}, so one bucket is partial`).not.toBe(0);
-            logLadder(`E1-${rung}`, await ladderSnapshot(host), served, span);
+            const {host, served, today, buckets, partial} = await openCalendarLadder(page, {submode: 'candles', rung});
+            const n = buckets.length;
+            const partialList = `[${[...partial].join(', ')}]`;
+            logLadder(`E1-${rung}`, await ladderSnapshot(host), served, rung, today);
 
-            // (a) The closings, derived from the served days.
-            await expect.soft.poll(async () => (await ladderSnapshot(host)).xData, {message: `C — the ${rung} buckets are end-anchored: category i is served[L − ${span}·(n−1−i)], the last on the last served day`}).toEqual(endAnchoredClosings(served, span));
+            // (a) The closings, derived from the served days and the calendar. On a day when the
+            // old day runs would close on the same days (at 1w, a Sunday) C holds under both
+            // rules; the oracle is still the calendar's, and other days tell the two apart.
+            await expect.soft
+                .poll(async () => (await ladderSnapshot(host)).xData, {message: `C — the ${rung} buckets are calendar periods (${buckets[0].start} → ${buckets.at(-1)?.end}): category i closes on the last served day of period i, the last on the last served day`})
+                .toEqual(buckets.map((bucket) => bucket.closing));
             // (c) What the axis paints.
             await expectLadderLabels(host);
             // (d) A separator on every bucket, where the slot is wide enough to carry one.
             await expectBucketSeparators(host, n);
-            // (b) Last, behind its own precondition: P is about the first bucket, so it means
-            // nothing unless that bucket drew a candle.
-            await expect.poll(async () => drawnItems(await ladderSnapshot(host), 'candlestick').some((item) => item.raw === 0), {message: 'precondition: the first bucket (raw index 0) draws a candle'}).toBe(true);
-            await expect.soft.poll(async () => partialMarkingBreaks(await ladderSnapshot(host), 'candlestick'), {message: 'P — the partial first candle, and only it, is translucent (0 < opacity < 1), element and visual alike'}).toEqual([]);
+            // (b) Last, behind its own precondition: P judges drawn candles, so the buckets it
+            // speaks of must draw one — the period in progress, which must stay opaque, and
+            // every partial period, which must not.
+            const judged = [...partial, n - 1];
+            await expect
+                .poll(
+                    async () => {
+                        const drawn = new Set(drawnItems(await ladderSnapshot(host), 'candlestick').map((item) => item.raw));
+                        return judged.filter((index) => !drawn.has(index));
+                    },
+                    {message: `precondition: the period in progress (#${n - 1}) and the partial periods ${partialList} each draw a candle`},
+                )
+                .toEqual([]);
+            await expect.soft.poll(async () => partialMarkingBreaks(await ladderSnapshot(host), 'candlestick', partial), {message: `P — a candle is translucent exactly when its period is partial (${partialList}), never the period in progress (#${n - 1}); element and visual alike`}).toEqual([]);
         });
     }
 
-    test('S7-E2 income at 1440px sits on the same category ladder, its bars sized to the bucket slot', async ({page}) => {
+    test('S7-E2 income at 1440px sits on the same calendar ladder, each bar its share of the bucket slot', async ({page}) => {
         // E1's budget, plus a zoom and its redraw.
         test.setTimeout(60_000);
-        const span = 30;
-        const {host, served} = await openLadder(page, {viewport: LADDER_DESKTOP, submode: 'income', rung: '1m'});
-        const n = Math.ceil(served.length / span);
-        logLadder('E2 before-zoom', await ladderSnapshot(host), served, span);
+        const {host, served, today, buckets, partial} = await openCalendarLadder(page, {submode: 'income', rung: '1m'});
+        const n = buckets.length;
+        logLadder('E2 before-zoom', await ladderSnapshot(host), served, '1m', today);
 
         // One axis for both submodes: a bucket is a category, so a label is keyed by a
         // bucket index, never by a timestamp.
         await expect.soft.poll(async () => categoryAxisFacts(await ladderSnapshot(host), n), {message: 'T — Income sits on a category axis: type category, every label id a bucket index below n'}).toEqual({xType: 'category', foreignLabelIds: []});
-        await expect.soft.poll(async () => (await ladderSnapshot(host)).xData, {message: `C — the 1m Income buckets are end-anchored: category i is served[L − ${span}·(n−1−i)], the last on the last served day`}).toEqual(endAnchoredClosings(served, span));
+        await expect.soft
+            .poll(async () => (await ladderSnapshot(host)).xData, {message: `C — the 1m Income buckets are calendar months (${buckets[0].start} → ${buckets.at(-1)?.end}): category i closes on the last served day of month i, the last on the last served day`})
+            .toEqual(buckets.map((bucket) => bucket.closing));
         await expectLadderLabels(host);
         await expectBucketSeparators(host, n);
 
         // A width check needs a sample: three drawn bars is a floor, not a count.
         await expect.poll(async () => drawnItems(await ladderSnapshot(host), 'bar').length, {message: 'precondition: at least three Income bars are drawn'}).toBeGreaterThanOrEqual(3);
-        await expect.soft.poll(async () => narrowBars(await ladderSnapshot(host), n), {message: 'W — every drawn Income bar is at least a quarter of its bucket slot wide'}).toEqual([]);
+        await expect.soft.poll(async () => offShareBars(await ladderSnapshot(host), n), {message: `W — every drawn Income bar is ${INCOME_BAR_SHARE_OF_SLOT.toFixed(5)} of its bucket slot (30% of the slot between buckets, 10% of a bar between columns), within 0.5px`}).toEqual([]);
 
         // On a band axis a category window snaps to whole buckets, so a zoom that rounds to
         // the full index range changes nothing; on a time axis every bar widens.
@@ -1598,11 +1719,13 @@ test.describe('GrowthChart ladder x axis (S7)', () => {
                 {message: 'Z — a 3–97% zoom snaps to whole buckets: the full range, every bar width unchanged'},
             )
             .toEqual({widths: widthsBefore, start: 3, end: 97});
-        logLadder('E2 after-zoom', await ladderSnapshot(host), served, span);
+        logLadder('E2 after-zoom', await ladderSnapshot(host), served, '1m', today);
 
-        // Every bar series, drawn elements only: a bucket with no income draws no bar, and an
-        // absent bar has no opacity to judge — the digests say whether bucket 0 drew anything.
-        await expect.soft.poll(async () => partialMarkingBreaks(await ladderSnapshot(host), 'bar'), {message: 'P — the partial first bucket, and only it, draws translucent bars (0 < opacity < 1), element and visual alike'}).toEqual([]);
+        // Every bar series, drawn elements only: a period with no flows draws no bar, and an
+        // absent bar has no opacity to judge — the digests say which buckets drew anything.
+        await expect.soft
+            .poll(async () => partialMarkingBreaks(await ladderSnapshot(host), 'bar', partial), {message: `P — a bucket draws translucent bars exactly when its month is partial ([${[...partial].join(', ')}]), never the month in progress (#${n - 1}); element and visual alike`})
+            .toEqual([]);
     });
 
     test('S7-E3 a candles zoom survives the privacy redraw', async ({page}) => {
@@ -1739,5 +1862,96 @@ test.describe('GrowthChart candles caption at phone width (S9)', () => {
         await expect(caption).toBeVisible({timeout: 10_000});
         await expect(caption, 'one line: the caption never wraps').toHaveCSS('white-space', 'nowrap');
         await expect(caption, 'at 375px it does not fit, and says so').toHaveAttribute('data-overflowing', 'true', {timeout: 10_000});
+    });
+});
+
+/**
+ * D8 — the display-currency menu offers only currencies the user can convert to.
+ *
+ * With `configuredOnly` the menu keeps what fxRoutesStore calls reachable, plus the current
+ * value and the default currency. Syncing a chain stores the composed rate of its own pair and
+ * nothing else, so the currency a chain passes through is not convertible: offering it lets the
+ * user pick a currency every amount then fails to convert to. It becomes convertible — and is
+ * offered — once it is an endpoint of a configured pair of its own.
+ *
+ * The route list is this page's own: GET /fx/providers/routes is stubbed with complete read
+ * items, validated against the generated schema (the response model forbids extra fields). NOK
+ * is the intermediate because it is neither the default currency nor the selector's value, both
+ * of which the menu keeps whatever the routes say. Nothing is written.
+ */
+test.describe('Dashboard display currency menu (D8)', () => {
+    type RouteStep = {from: string; to: string; provider: string};
+
+    /** One configured route as GET /fx/providers/routes returns it (FXConversionRouteReadItem). */
+    function routeItem(base: string, quote: string, chainSteps: RouteStep[]) {
+        return {
+            base,
+            quote,
+            priority: 1,
+            chain_steps: chainSteps,
+            is_chain: chainSteps.length > 1,
+            providers_used: [...new Set(chainSteps.map((step) => step.provider))].sort(),
+        };
+    }
+
+    /** EUR-USD is configured, and reached through NOK: NOK is a leg, not an endpoint. */
+    const EUR_USD_VIA_NOK = routeItem('EUR', 'USD', [
+        {from: 'EUR', to: 'NOK', provider: 'ECB'},
+        {from: 'NOK', to: 'USD', provider: 'FED'},
+    ]);
+    /** A configured pair of its own whose endpoint is the chain's intermediate. */
+    const NOK_SEK_DIRECT = routeItem('NOK', 'SEK', [{from: 'NOK', to: 'SEK', provider: 'ECB'}]);
+
+    /** Serve `items` as the only configured routes, load the dashboard fresh, and open its currency menu. */
+    async function openDisplayCurrencyMenu(page: Page, items: Array<ReturnType<typeof routeItem>>): Promise<Locator> {
+        const body = {items};
+        schemas.FXConversionRoutesResponse.parse(body);
+        let served = 0;
+        await page.route('**/api/v1/fx/providers/routes*', async (route) => {
+            if (route.request().method() !== 'GET') {
+                await route.fallback();
+                return;
+            }
+            served += 1;
+            await route.fulfill({json: body});
+        });
+        // A fresh document: fxRoutesStore is module state, so only this load can fill it.
+        await page.goto('/dashboard');
+        const dashboard = page.getByTestId('dashboard-page');
+        await expect(dashboard).toBeVisible({timeout: 15_000});
+        await waitForSettled(dashboard, 30_000);
+        await expect.poll(() => served, {message: "the menu reads this page's routes"}).toBeGreaterThan(0);
+
+        const menu = page.getByTestId('dashboard-target-currency');
+        const trigger = page.getByTestId('dashboard-target-currency-trigger');
+        await expect(trigger).toBeVisible({timeout: 10_000});
+        await trigger.click();
+        return menu;
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a chain route offers its two endpoints, never the currency it passes through', async ({page}) => {
+        try {
+            const menu = await openDisplayCurrencyMenu(page, [EUR_USD_VIA_NOK]);
+            // Presence first: USD can only come from the routes, so this is the loaded list.
+            await expect(menu.getByTestId('search-select-option-USD')).toBeVisible({timeout: 10_000});
+            await expect(menu.getByTestId('search-select-option-NOK')).toHaveCount(0);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('the intermediate is offered once it is an endpoint of a configured pair of its own', async ({page}) => {
+        try {
+            const menu = await openDisplayCurrencyMenu(page, [EUR_USD_VIA_NOK, NOK_SEK_DIRECT]);
+            await expect(menu.getByTestId('search-select-option-USD')).toBeVisible({timeout: 10_000});
+            await expect(menu.getByTestId('search-select-option-NOK')).toBeVisible();
+            await expect(menu.getByTestId('search-select-option-SEK')).toBeVisible();
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
     });
 });

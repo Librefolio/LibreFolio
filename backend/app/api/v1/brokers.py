@@ -132,7 +132,8 @@ async def _get_brim_file_with_access(
     denied_detail: str = "Access denied",
 ) -> BRIMFileInfo:
     """Load a BRIM file and validate broker access when needed."""
-    file_info = brim_provider.get_file_info(file_id)
+    # Off the event loop: reading a sidecar may detect the file's plugins again (item 8), which reads the file.
+    file_info = await asyncio.to_thread(brim_provider.get_file_info, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -684,7 +685,8 @@ async def list_files(
             # Use all accessible
             accessible_broker_ids = user_broker_ids
 
-    return brim_provider.list_files(status=status, broker_ids=accessible_broker_ids)
+    # Off the event loop: listing reads every sidecar and may detect old files' plugins again (item 8).
+    return await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
 
 
 @brim_router.get("/files/{file_id}", response_model=BRIMFileInfo)
@@ -759,7 +761,8 @@ async def delete_file(
         min_role=UserRole.EDITOR,
         denied_detail="EDITOR or OWNER access required to delete files",
     )
-    deleted = brim_provider.delete_file(file_id)
+    # Off the event loop: the delete holds the broker's metadata lock, which a combine may be holding.
+    deleted = await asyncio.to_thread(brim_provider.delete_file, file_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -969,8 +972,9 @@ async def parse_file(
         # The current plugin_version is resolved by save_parse_result via
         # the registry (single source of truth) and persisted alongside
         # plugin_code so BRIMFileInfo can compute parse_is_stale if the
-        # plugin is bumped later.
-        brim_provider.save_parse_result(
+        # plugin is bumped later. Off the event loop: the write holds the broker's metadata lock.
+        await asyncio.to_thread(
+            brim_provider.save_parse_result,
             file_id,
             response.model_dump(mode="json"),
             plugin_code=plugin_code,
@@ -1039,11 +1043,12 @@ async def preview_report_set(
 
     Returns each file's role and coverage, the roles still missing (with the period
     their export must cover), segments, gaps, the broker history already in
-    LibreFolio and warnings with stable codes. Writes nothing.
+    LibreFolio and warnings with stable codes. Writes nothing. The files listed in
+    ``exclude_file_ids`` (originals of the upload the user left out) are no members.
     """
     await _require_broker_editor(request.broker_id, current_user, session)
     try:
-        return await brim_report_sets.preview_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id)
+        return await brim_report_sets.preview_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, exclude_file_ids=request.exclude_file_ids)
     except BRIMSetError as e:
         raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
 
@@ -1062,7 +1067,7 @@ async def combine_report_set(
     """
     await _require_broker_editor(request.broker_id, current_user, session)
     try:
-        return await brim_report_sets.combine_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, user_id=current_user.id)
+        return await brim_report_sets.combine_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, user_id=current_user.id, exclude_file_ids=request.exclude_file_ids)
     except BRIMSetError as e:
         raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
 

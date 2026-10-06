@@ -7,13 +7,13 @@ To add a new currency pair to your FX dashboard:
 3. The system automatically discovers available **data routes** — both direct and chain routes
 4. Select the route you prefer and click **Confirm**. The pair configuration is saved and the
    modal closes right away:
-    - If you picked a route with a real provider (direct or chain) and the FX page has a valid
-      date range selected, LibreFolio then syncs rates for the new pair — together with any
-      intermediate pairs you chose to also create — and a toast reports the result once it's
-      done. The pair's name in that toast is clickable and takes you to its detail page.
-    - If you picked no provider (manual rates only) or no date range is set, no sync runs; you
-      instead get an immediate toast confirming the pair was created, with the same clickable
-      pair name.
+    - If you picked a route with a real provider (direct or chain), LibreFolio then downloads the
+      pair's **whole rate history** — everything the provider publishes, up to today — together
+      with any intermediate pairs you chose to also create. The date range selected on the page
+      you opened the dialog from makes no difference. A toast reports the result once it's done;
+      the pair's name in that toast is clickable and takes you to its detail page.
+    - If you picked no provider (manual rates only), no sync runs; you instead get an immediate
+      toast confirming the pair was created, with the same clickable pair name.
 
     The sync toast is honest about the outcome — it is only shown in green when the sync
     actually succeeded; a partial or failed sync is reported as such, not disguised as success.

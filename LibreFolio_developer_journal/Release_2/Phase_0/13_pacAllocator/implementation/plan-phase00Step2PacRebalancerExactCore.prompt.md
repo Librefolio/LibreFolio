@@ -4,6 +4,17 @@
 **Dipende da:** Step 1 MCP review + payload witness.
 **Non dipende da:** disponibilità del solver durante la prima slice.
 
+> ⚠️ **Nota 2026-09-24 (round 5).** Lane, selector e simboli P1 citati in questo piano
+> descrivono la fase in cui è stato scritto. Lo stato corrente è altrove:
+> - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
+> - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
+>   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
+> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+>
+> L'avanzamento è nella tabella del [README](README.md) e nel
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
+> restano come evidenza storica. Lo **Stato** in testa non è stato rimisurato.
+
 ← Master: [piano implementativo](plan-phase00PacRebalancerImplementation.prompt.md)
 ← Precedente: [contratti e capacità](plan-phase00Step1PacRebalancerContractsCapacity.prompt.md)
 ← Autorità: [nucleo matematico](../plan-phase00PacRebalancerMathematicalCore.prompt.md) ·
@@ -1077,6 +1088,34 @@ Selector:
 services pac-planner-core
 services pac-planner-oracle
 ```
+
+> **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
+> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
+> aperti, senza spuntarli. I selector reali sono in
+> [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md).
+> - **2B. Test di `ExactRatio`.** `ExactRatio` è in `services/pac_allocator/numeric.py:48`
+>   ed è provato da `test_pac_planner_exact.py` (32 test), con esempi scelti a mano. Test
+>   generati a caso, per proprietà (`hypothesis`), **non ce ne sono**.
+> - **4D. Test di arrotondamento.** Gli arrotondamenti sono provati in
+>   `test_pac_planner_{exact,policies,wire_numbers,evaluator,report}.py`. Dal 29/09 (QX1-b,
+>   `f6d7a955d`) un piano che chiude pochi centesimi sotto zero solo per gli arrotondamenti
+>   viene pubblicato con un'integrazione dichiarata per ogni cassa, invece di essere
+>   scartato.
+> - **5. Fee, FX e tasse.** Fee e FX sono nel motore (`fx_rates` e `fx_spread_rate`,
+>   `schemas/pac_allocator.py:605-609`). La riserva per le tasse serve solo quando si
+>   vende, quindi va col Rebalancer.
+> - **6. Ledger e inventario.** Il ledger è fatto. L'inventario delle vendite va col
+>   Rebalancer.
+> - **9. Oracle indipendente.** Esiste, in
+>   `backend/test_scripts/test_services/_pac_exhaustive_oracle.py`. Dal 28/09
+>   (`b48b3cec9`) vive solo nei test: il servizio considera prova soltanto lo stato di SCIP.
+> - **10. Confronto esaustivo e permutazioni.** Il confronto con l'oracle è in
+>   `test_pac_planner_oracle.py`; l'indifferenza all'ordine delle righe in
+>   `test_pac_planner_evaluator.py:2055`.
+> - **11. Review matematica indipendente.** **Non fatta.** Passa alla review matematica
+>   della slice di robustezza del solver (riga 12 del [README](README.md)). Resta aperta
+>   anche la review di QX1-b: vedi R3 nel
+>   [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md).
 
 ## 13. Stop conditions
 

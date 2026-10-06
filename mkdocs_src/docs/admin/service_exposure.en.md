@@ -422,6 +422,24 @@ wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/doc
 chmod +x custom_startup.sh
 ```
 
+??? info "Upgrading from an earlier version of the script"
+
+    The current script also works as a **watchdog** and comes with a Docker health check (both are explained in the next section). If your Tailscale container runs an earlier version, update it as follows:
+
+    1. **Download the script again** into the same folder. The `-O custom_startup.sh` option makes the new version overwrite the old file: without it, `wget` keeps the existing file and saves the download as `custom_startup.sh.1`. Then make sure the script is executable:
+
+        ```bash
+        cd <path_chosen>/tailscale-nodes
+        wget -O custom_startup.sh https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh
+        chmod +x custom_startup.sh
+        ```
+
+    2. **Update your compose file**: in the Tailscale service, add the new environment variables `TS_ENABLE_HEALTH_CHECK`, `TS_LOCAL_ADDR_PORT` and, optionally, `STARTUP_TIMEOUT`, together with the `healthcheck` block, exactly as shown in the compose file of the next section.
+
+    3. **Recreate the container**: a simple restart does not apply compose changes. Run `docker compose up -d` from the folder that contains your `docker-compose.yml` (it recreates the services whose configuration changed), or use the *Recreate* / re-deploy action of Portainer or CasaOS.
+
+    4. **Check the log** with `docker logs -f tailscale-librefolio`: you should see `Tailscale is running.`, then `Starting the funnel on port 6040...` and the Funnel's own `Available on the internet:` message with your public URL. Shortly afterwards (normally within the 2-minute `start_period` of the health check), Docker reports the container as **healthy**, as shown in the status column of `docker ps` or in Portainer and CasaOS. If instead the container keeps restarting in a loop, see the troubleshooting note in [3. Startup and Approval](#3-startup-and-approval).
+
 ### 2. Docker Compose Configuration
 
 We suggest defining and declaring the Tailscale service **within the same `docker-compose.yml` file as the service** you want to expose (e.g., LibreFolio) to keep them close and logically coupled. Add the service block as shown below:
@@ -455,13 +473,30 @@ services:
       - TS_ACCEPT_DNS=true
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=false
+      - TS_ENABLE_HEALTH_CHECK=true         # Expose /healthz for the healthcheck below (Tailscale ≥ 1.78)
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002   # Where /healthz listens: inside the container only
+      - STARTUP_TIMEOUT=180                 # Optional: seconds to reach the Running state (default 180)
     volumes:
 
       - <path_chosen>/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
       - <path_chosen>/tailscale-nodes/custom_startup.sh:/custom_startup.sh
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+    # Shows healthy/unhealthy in Docker, Portainer or CasaOS; the restart itself comes from custom_startup.sh exiting
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
 ```
+
+The startup script also works as a **watchdog**, while the `healthcheck` block makes the state of the container visible:
+
+* **Watchdog (automatic restart)**: if Tailscale cannot start (for example, `tailscale up` fails because there is no internet connection at boot or because of a wrong flag), does not reach the *Running* state within `STARTUP_TIMEOUT` seconds, or if Tailscale, socat or the Funnel stop later on, the script exits with an error and Docker restarts the container (`restart: unless-stopped`). The container never stays "running" with nothing behind it. A `docker stop`, instead, shuts everything down cleanly in about a second.
+* **Health check (status only)**: `TS_ENABLE_HEALTH_CHECK=true` enables Tailscale's `/healthz` endpoint (Tailscale 1.78 or later), which answers successfully only while the node has a Tailscale IP address; `TS_LOCAL_ADDR_PORT=127.0.0.1:9002` keeps it reachable from inside the container only. Docker queries it every 30 seconds and marks the container as *healthy* or *unhealthy* (Portainer and CasaOS show the same status).
+
+Plain Docker (outside Swarm mode) does **not** restart a container marked *unhealthy*: it only flags it. The restart comes from the script exiting, so you do not need an extra "autoheal" container (such helpers also need access to the Docker socket, which means full control of the host).
 
 #### Configuration Parameters Description
 
@@ -505,6 +540,22 @@ services:
         <br>
         <em>Note: Once the container has successfully started, the one-time key is consumed and automatically disappears from the "Keys" list in the admin console, while the new registered device will appear in "Machines".</em>
       </td>
+    </tr>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">TS_ENABLE_HEALTH_CHECK</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;">Set to <code>true</code> to enable Tailscale's <code>/healthz</code> endpoint (Tailscale 1.78 or later), which the <code>healthcheck</code> block queries. It answers <code>200</code> (OK) when the node has at least one Tailscale IP address and <code>503</code> otherwise. The endpoint requires no authentication.</td>
+    </tr>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">TS_LOCAL_ADDR_PORT</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;">The address and port where the <code>/healthz</code> endpoint listens. Tailscale's default, <code>[::]:9002</code>, listens on all interfaces; <code>127.0.0.1:9002</code> makes it reachable from inside the container only. If you change it, update the URL in the <code>healthcheck</code> test as well.</td>
+    </tr>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">STARTUP_TIMEOUT</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;"><em>Optional</em> (default <code>180</code>). How many seconds the script waits for Tailscale to reach the <em>Running</em> state; when the time runs out, the script exits and Docker restarts the container. Increase it only if your server is very slow to start.</td>
+    </tr>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">DEBUG</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;"><em>Optional</em>, not included in the example above. Set <code>DEBUG=1</code> to have the script print every command it runs to the container log, which helps with troubleshooting. It is off by default to keep the log readable.</td>
     </tr>
   </tbody>
 </table>
@@ -570,15 +621,25 @@ services:
           - TS_ACCEPT_DNS=true
           - TS_STATE_DIR=/var/lib/tailscale
           - TS_USERSPACE=false
+          - TS_ENABLE_HEALTH_CHECK=true         # Expose /healthz for the healthcheck below (Tailscale ≥ 1.78)
+          - TS_LOCAL_ADDR_PORT=127.0.0.1:9002   # Where /healthz listens: inside the container only
+          - STARTUP_TIMEOUT=180                 # Optional: seconds to reach the Running state (default 180)
         volumes:
 
           - /DATA/AppData/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
           - /DATA/AppData/tailscale-nodes/custom_startup.sh:/custom_startup.sh
           - /etc/localtime:/etc/localtime:ro
           - /etc/timezone:/etc/timezone:ro
+        # Shows healthy/unhealthy in Docker, Portainer or CasaOS; the restart itself comes from custom_startup.sh exiting
+        healthcheck:
+          test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 120s
     ```
 
-### 3. Startup and Approval
+### 3. Startup and Approval {: #3-startup-and-approval }
 
 Start the compose container of your service (inclusive of the Tailscale sidecar):
 
@@ -614,6 +675,19 @@ Press Ctrl+C to exit.
 ```
 
 * **Note**: At this point, the service is online, but you must wait a few minutes for the MagicDNS record propagation to complete globally.
+
+??? question "The container restarts in a loop or is marked unhealthy"
+
+    With the current script, a persistent problem shows up as a container that keeps restarting (Docker, Portainer or CasaOS may also mark it as *unhealthy*), instead of a container that looks "running" but does not work. Read the log with `docker logs tailscale-librefolio`: before each restart, the script prints what went wrong, usually followed by `Exiting so Docker restarts the container.` The most common causes are:
+
+    * **A flag in `TS_EXTRA_ARGS` has no value.** This optional variable (not used in the compose above) passes extra flags to `tailscale up`: the container splits its value on spaces and passes each word to the command. If a flag lacks its value, `tailscale up` fails: the reason is on the line right after `Running 'tailscale up'`, just above the help text that starts with `USAGE` (for example `flag needs an argument: -advertise-tags`). The log then shows `failed to auth tailscale: … tailscale up failed: exit status 2` and `containerboot exited before Tailscale was running.` Write each value either as `--flag=value` or as `--flag value`: `--advertise-tags=tag:container` and `--advertise-tags tag:container` both work.
+    * **A management panel cut the value.** The environment-variable editor of CasaOS (and of similar panels) truncates a value at its second `=`: `TS_EXTRA_ARGS=--advertise-tags=tag:container` becomes `--advertise-tags`, which fails as described above. In these panels, write flag values with a space: `--advertise-tags tag:container`.
+    * **A required variable is missing**: the script stops at once with `HOST_IP is not set` (or the same message for `HOST_PORT` or `TAILSCALE_FUNNEL_PORT`).
+    * **No internet connection at boot**: the container keeps restarting until Tailscale can start, then works normally. This is expected.
+    * **Very slow start**: the log shows `Tailscale is not running after 180s.`; increase `STARTUP_TIMEOUT`.
+    * **Unhealthy, but not restarting**: the health check gets no successful answer from `/healthz`. If you have just added it, make sure that `TS_ENABLE_HEALTH_CHECK=true` is set and that the URL of the `healthcheck` test matches `TS_LOCAL_ADDR_PORT`; otherwise, the node has no Tailscale IP address at the moment.
+
+    To trace every command of the script, add `DEBUG=1` to the `environment` section, recreate the container and read the log again.
 
 !!! tip "Disable Key Expiry for the Container"
 

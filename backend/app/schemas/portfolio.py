@@ -1106,97 +1106,6 @@ class PortfolioReportMetadata(StrictModel):
     included_features: List[str] = Field(default_factory=list)
 
 
-class PortfolioAllocationSourceRequest(StrictModel):
-    """Opt-in Asset catalog and OWNER full-custody source for allocation editors."""
-
-    as_of_date: date_type = Field(..., description="Inclusive custody and saved-price snapshot date.")
-    selected_cash_broker_ids: List[Annotated[int, Field(strict=True, gt=0)]] = Field(
-        default_factory=list,
-        description="OWNER broker ids whose native cash balances must be aggregated.",
-    )
-
-    @field_validator("selected_cash_broker_ids")
-    @classmethod
-    def validate_selected_cash_broker_ids(cls, broker_ids: List[int]) -> List[int]:
-        if len(broker_ids) != len(set(broker_ids)):
-            raise ValueError("selected_cash_broker_ids must not contain duplicates")
-        return broker_ids
-
-
-class PortfolioAllocationSourceQuote(StrictModel):
-    """Latest saved native quote at or before the requested date."""
-
-    raw_price: Optional[SafeDecimal] = None
-    currency: str = Field(..., description="Native asset/quote currency.")
-    quote_base_quantity: int = Field(..., ge=1, description="Asset units represented by raw_price.")
-    reference_date: Optional[date_type] = None
-    source: Optional[str] = Field(None, description="Saved price source plugin key.")
-    days_before_requested: Optional[int] = Field(None, ge=0)
-
-
-class PortfolioAllocationSourceContext(StrictModel):
-    """One OWNER custody position for a canonical asset."""
-
-    context_key: str
-    broker_id: int
-    broker_name: str
-    broker_icon_url: Optional[str] = None
-    broker_portal_url: Optional[str] = None
-    broker_default_import_plugin: Optional[str] = None
-    ownership_share_percent: SafeDecimal = Field(..., description="Display metadata only; custody_quantity is not share-scaled.")
-    custody_quantity: SafeDecimal
-
-
-class PortfolioAllocationSourceAsset(StrictModel):
-    """Canonical Asset candidate with any current OWNER custody contexts."""
-
-    asset_id: int
-    instrument_key: str
-    candidate_key: str
-    name: str
-    ticker: Optional[str] = None
-    asset_type: str
-    icon_url: Optional[str] = None
-    active: bool
-    usage_scope: Literal["owned", "other_users", "observed"]
-    quote: PortfolioAllocationSourceQuote
-    contexts: List[PortfolioAllocationSourceContext] = Field(default_factory=list)
-
-
-class PortfolioAllocationSourceCashBalance(StrictModel):
-    """One exact native-currency cash balance."""
-
-    currency: str
-    amount: SafeDecimal
-
-    @field_validator("currency")
-    @classmethod
-    def validate_currency(cls, currency: str) -> str:
-        return Currency.validate_code(currency)
-
-
-class PortfolioAllocationSourceCashSource(StrictModel):
-    """One OWNER broker and its full-custody native cash balances."""
-
-    broker_id: int
-    broker_name: str
-    broker_icon_url: Optional[str] = None
-    broker_portal_url: Optional[str] = None
-    broker_default_import_plugin: Optional[str] = None
-    ownership_share_percent: SafeDecimal = Field(..., description="Display metadata only; balances are not share-scaled.")
-    balances: List[PortfolioAllocationSourceCashBalance] = Field(default_factory=list)
-
-
-class PortfolioAllocationSource(StrictModel):
-    """Read-only facts copied by allocation editors; never targets or advice."""
-
-    generated_at: datetime
-    as_of_date: date_type
-    assets: List[PortfolioAllocationSourceAsset] = Field(default_factory=list)
-    cash_sources: List[PortfolioAllocationSourceCashSource] = Field(default_factory=list)
-    selected_cash_balances: List[PortfolioAllocationSourceCashBalance] = Field(default_factory=list)
-
-
 # =============================================================================
 # PORTFOLIO PLANNER SOURCE — authenticated, uncached domain-copy snapshot
 # =============================================================================
@@ -1211,10 +1120,10 @@ class PlannerSourceSection(StrEnum):
     CLASSIFICATIONS = "classifications"
     WAC_CONTEXTS = "wac_contexts"
     FX_QUOTES = "fx_quotes"
+    CURRENT_DISTRIBUTION = "current_distribution"
 
 
 PlannerSourceResponseSection = Literal[
-    "currency_specs",
     "provenance",
     "assets",
     "brokers",
@@ -1224,6 +1133,7 @@ PlannerSourceResponseSection = Literal[
     "classifications",
     "wac_contexts",
     "fx_quotes",
+    "current_distribution",
     "issues",
 ]
 PlannerSourceEntityKind = Literal[
@@ -1235,7 +1145,7 @@ PlannerSourceEntityKind = Literal[
     "classification",
     "wac_context",
     "fx_quote",
-    "currency_spec",
+    "current_weight",
 ]
 PlannerSourceEntityId = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[!-~]+$")]
 PlannerSourceProvenanceId = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[!-~]+$")]
@@ -1301,6 +1211,13 @@ class PortfolioPlannerSourceRequest(StrictModel):
             raise ValueError("fx_pairs must not contain duplicate pairs")
         return pairs
 
+    @model_validator(mode="after")
+    def validate_current_distribution_scope(self) -> PortfolioPlannerSourceRequest:
+        # The weight denominator is the scenario, so it must be named explicitly.
+        if PlannerSourceSection.CURRENT_DISTRIBUTION in self.requested_sections and self.asset_ids is None:
+            raise ValueError("current_distribution requires an explicit asset_ids scenario")
+        return self
+
 
 class PortfolioPlannerSourceSnapshot(StrictModel):
     """Request-bound metadata for one immutable domain-copy response."""
@@ -1309,7 +1226,7 @@ class PortfolioPlannerSourceSnapshot(StrictModel):
     target_currency: CurrencyCode
     generated_at: datetime
     requested_sections: List[PlannerSourceSection]
-    source_revision: Literal["2.0.0"]
+    source_revision: Literal["1.0.0"]
 
     @field_validator("generated_at")
     @classmethod
@@ -1317,13 +1234,6 @@ class PortfolioPlannerSourceSnapshot(StrictModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("generated_at must be timezone-aware")
         return value
-
-
-class PortfolioPlannerSourceCurrencySpec(StrictModel):
-    """Backend-derived ISO currency quantum used by exact planner arithmetic."""
-
-    currency: CurrencyCode
-    minor_unit: SafeDecimal = Field(..., gt=0)
 
 
 class PortfolioPlannerSourceProvenance(StrictModel):
@@ -1474,6 +1384,60 @@ class PortfolioPlannerSourceFxQuote(StrictModel):
     provenance_id: PlannerSourceProvenanceId
 
 
+PLANNER_CURRENT_WEIGHT_QUANTUM = Decimal("0.0001")
+
+
+class PortfolioPlannerCurrentWeight(StrictModel):
+    """One scenario Asset's current portfolio-engine weight; never an amount."""
+
+    weight_id: PlannerSourceEntityId
+    asset_id: PlannerSourceEntityId
+    held: bool
+    weight: Optional[SafeDecimal] = Field(..., ge=0, le=1)
+    valuation_source: Optional[Literal["MARKET_PRICE", "LAST_TRADE_PRICE", "MISSING"]]
+    valuation_reference_date: Optional[date_type]
+    valuation_days_before_requested: Optional[int] = Field(..., ge=0)
+    valuation_stale: bool
+
+    @field_validator("weight")
+    @classmethod
+    def validate_weight_quantum(cls, value: Optional[Decimal]) -> Optional[Decimal]:
+        if value is not None and value % PLANNER_CURRENT_WEIGHT_QUANTUM != 0:
+            raise ValueError("weight must be a multiple of 0.0001")
+        return value
+
+
+class PortfolioPlannerCurrentDistribution(StrictModel):
+    """Current portfolio-engine market-value weights over the scenario Assets.
+
+    The denominator is the requested Asset scenario, cash excluded. Weights exist only
+    when every held scenario Asset has a valuation and the total is positive.
+    """
+
+    status: Literal["complete", "incomplete", "no_holdings"]
+    method: Literal["portfolio_engine_market_value"]
+    rounding: Literal["largest_remainder"]
+    weight_quantum: Literal["0.0001"]
+    as_of: date_type
+    provenance_id: PlannerSourceProvenanceId
+    rows: List[PortfolioPlannerCurrentWeight]
+
+    @model_validator(mode="after")
+    def validate_weights(self) -> PortfolioPlannerCurrentDistribution:
+        asset_ids = [row.asset_id for row in self.rows]
+        if len(asset_ids) != len(set(asset_ids)):
+            raise ValueError("current_distribution rows must name distinct Assets")
+        weights = [row.weight for row in self.rows]
+        if self.status == "complete":
+            if not self.rows or any(weight is None for weight in weights):
+                raise ValueError("a complete current_distribution must weight every row")
+            if sum((weight for weight in weights if weight is not None), Decimal("0")) != 1:
+                raise ValueError("current_distribution weights must sum to exactly 1")
+        elif any(weight is not None for weight in weights):
+            raise ValueError("only a complete current_distribution carries weights")
+        return self
+
+
 class PortfolioPlannerSourceRootPath(StrictModel):
     kind: Literal["root"] = Field(json_schema_extra={"enum": ["root"]})
 
@@ -1555,6 +1519,7 @@ PortfolioPlannerSourceIssueCode = Literal[
     "allocation.currency_spec_missing",
     "allocation.price_missing",
     "allocation.price_date_missing",
+    "allocation.nonpositive_price",
     "allocation.quote_base_quantity_missing",
     "allocation.asset_type_missing",
     "allocation.classification_sector_missing",
@@ -1599,7 +1564,6 @@ class PortfolioPlannerSourceResponse(StrictModel):
     """Independent, read-only domain facts for explicit planner copy actions."""
 
     snapshot: PortfolioPlannerSourceSnapshot
-    currency_specs: List[PortfolioPlannerSourceCurrencySpec]
     provenance: List[PortfolioPlannerSourceProvenance] = Field(..., min_length=1)
     assets: List[PortfolioPlannerSourceAsset]
     brokers: List[PortfolioPlannerSourceBroker]
@@ -1609,6 +1573,7 @@ class PortfolioPlannerSourceResponse(StrictModel):
     classifications: List[PortfolioPlannerSourceClassification]
     wac_contexts: List[PortfolioPlannerWacContext]
     fx_quotes: List[PortfolioPlannerSourceFxQuote]
+    current_distribution: Optional[PortfolioPlannerCurrentDistribution] = Field(None, description="Current portfolio-engine weights over the scenario Assets. Only when the current_distribution section is requested.")
     issues: List[PortfolioPlannerSourceIssue]
 
 
@@ -1632,7 +1597,6 @@ class PortfolioReportQuery(StrictModel):
     include_cost_history: bool = Field(False, description="Include the signed FEE+TAX cost history (batch 2). Same sparse/eager caller policy as include_income_history.")
     include_deposit_history: bool = Field(False, description="Include the DEPOSIT history (batch 2). Same sparse/eager caller policy as include_income_history.")
     include_acquisition_funding: bool = Field(False, description="Include the new-vs-reinvested BUY funding split (batch 2). Same sparse/eager caller policy as include_income_history.")
-    allocation_source: Optional[PortfolioAllocationSourceRequest] = Field(None, description="Opt-in Asset catalog and OWNER full-custody allocation-editor source.")
 
 
 class PortfolioReportResponse(StrictModel):
@@ -1654,4 +1618,3 @@ class PortfolioReportResponse(StrictModel):
     cost_history: Optional[CostHistorySeries] = Field(None, description="Signed FEE+TAX cost history (batch 2). Only when include_cost_history=True.")
     deposit_history: Optional[DepositHistorySeries] = Field(None, description="DEPOSIT history (batch 2). Only when include_deposit_history=True.")
     acquisition_funding: Optional[AcquisitionFundingSeries] = Field(None, description="New-vs-reinvested BUY funding split (batch 2). Only when include_acquisition_funding=True.")
-    allocation_source: Optional[PortfolioAllocationSource] = Field(None, description="Asset catalog and OWNER full-custody source facts when requested.")

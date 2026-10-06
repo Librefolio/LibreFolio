@@ -16,7 +16,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import structlog
 from sqlalchemy import select
@@ -80,6 +80,13 @@ class BRIMSetMembersNotFound(BRIMSetError):
     code = "members_not_found"
 
 
+class BRIMSetExcludeUnknown(BRIMSetError):
+    """A file left out of the set that is not an original of its broker and upload."""
+
+    status_code = 422
+    code = "exclude_unknown"
+
+
 class BRIMSetIncomplete(BRIMSetError):
     status_code = 422
     code = "set_incomplete"
@@ -111,9 +118,20 @@ def get_set_plugin(plugin_code: str) -> BRIMProvider:
     return plugin
 
 
-def collect_members(*, broker_id: int, plugin_code: str, batch_id: str) -> List[BRIMFileInfo]:
-    """The original files of one upload batch that the plugin can read, oldest first."""
-    members = [info for info in brim_provider.list_files(broker_ids=[broker_id]) if info.kind == "original" and info.batch_id == batch_id and info.target_broker_id == broker_id and plugin_code in info.compatible_plugins and info.status != BRIMFileStatus.FAILED]
+def collect_members(*, broker_id: int, plugin_code: str, batch_id: str, exclude_file_ids: Sequence[str] = ()) -> List[BRIMFileInfo]:
+    """The original files of one upload batch that the plugin can read, oldest first.
+
+    ``exclude_file_ids`` are the originals the user left out of the set (read alone with
+    another plugin, or removed from it). Each must be an original of this broker and upload:
+    any other id is refused rather than ignored, so a stale request never passes silently.
+    """
+    originals = [info for info in brim_provider.list_files(broker_ids=[broker_id]) if info.kind == "original" and info.batch_id == batch_id and info.target_broker_id == broker_id]
+    known = {info.file_id for info in originals}
+    unknown = sorted({file_id for file_id in exclude_file_ids if file_id not in known})
+    if unknown:
+        raise BRIMSetExcludeUnknown(f"Not an original of batch {batch_id} for this broker: {', '.join(unknown)}")
+    excluded = set(exclude_file_ids)
+    members = [info for info in originals if plugin_code in info.compatible_plugins and info.status != BRIMFileStatus.FAILED and info.file_id not in excluded]
     if not members:
         raise BRIMSetMembersNotFound(f"No files of batch {batch_id} can be read by {plugin_code} for this broker")
     members.sort(key=lambda info: (info.uploaded_at, info.filename))
@@ -276,14 +294,14 @@ def build_preview(  # noqa: C901 — one pass per concern (members, roles, cover
     )
 
 
-async def preview_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str) -> BRIMSetPreview:
+async def preview_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str, exclude_file_ids: Sequence[str] = ()) -> BRIMSetPreview:
     """Preview one report set; reads the member files, writes nothing.
 
     The broker history comes from one read of the tagged transactions: H0, its last day and its
     size (gap-fix corrections included), shown by the set's timeline, and the gap-fix dates.
     """
     plugin = get_set_plugin(plugin_code)
-    members = await asyncio.to_thread(collect_members, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id)
+    members = await asyncio.to_thread(collect_members, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id, exclude_file_ids=exclude_file_ids)
     dated = await _tagged_dates(session, broker_id=broker_id, history_tag=plugin.history_tag)
     return await asyncio.to_thread(
         build_preview,
@@ -313,52 +331,69 @@ def _combined_filename(plugin: BRIMProvider, preview: BRIMSetPreview) -> str:
     return f"{plugin.provider_name} — combined.csv"
 
 
-async def combine_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str, user_id: Optional[int]) -> BRIMSetCombineResponse:
-    """Combine a complete set, or reuse the identical combined file built before (design D-S6)."""
+async def combine_set(session: AsyncSession, *, broker_id: int, plugin_code: str, batch_id: str, user_id: Optional[int], exclude_file_ids: Sequence[str] = ()) -> BRIMSetCombineResponse:
+    """Combine a complete set, or reuse the identical combined file built before (design D-S6).
+
+    The members are the preview's, without the files the user left out (``exclude_file_ids``).
+    """
     plugin = get_set_plugin(plugin_code)
-    preview = await preview_set(session, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id)
+    preview = await preview_set(session, broker_id=broker_id, plugin_code=plugin_code, batch_id=batch_id, exclude_file_ids=exclude_file_ids)
     if not preview.complete:
         missing_roles = [item.role for item in preview.missing]
         reasons = ", ".join(missing_roles) or ", ".join(notice.code for notice in preview.warnings if notice.code in {"excess_files", "mixed_accounts"})
         raise BRIMSetIncomplete(f"The report set cannot be combined yet: {reasons}", missing_roles)
 
     recognised = [member for member in preview.members if member.role is not None]
-    member_ids = [member.file_id for member in recognised]
-    reusable = await asyncio.to_thread(
-        brim_provider.find_reusable_combined,
+    info, summary, reused = await asyncio.to_thread(
+        _combine_under_broker_lock,
         broker_id=broker_id,
+        plugin=plugin,
         plugin_code=plugin_code,
-        plugin_version=plugin.plugin_version,
-        member_ids=member_ids,
-    )
-    if reusable is not None:
-        summary = await asyncio.to_thread(brim_provider.read_combine_summary, reusable.file_id)
-        return BRIMSetCombineResponse(combined=reusable, summary=summary, reused=True)
-
-    paths_by_role: Dict[str, List[Path]] = defaultdict(list)
-    for member in recognised:
-        path = await asyncio.to_thread(brim_provider.get_file_path, member.file_id)
-        if path is None:
-            raise BRIMSetMembersNotFound(f"File {member.filename} is no longer available")
-        paths_by_role[member.role].append(path)
-
-    try:
-        table = await asyncio.to_thread(plugin.combine, dict(paths_by_role))
-    except (BRIMParseError, ValueError) as exc:
-        message = getattr(exc, "message", None) or str(exc)
-        raise BRIMSetCombineFailed(f"The report set could not be combined: {message}") from exc
-    info = await asyncio.to_thread(
-        brim_provider.save_combined_file,
-        broker_id=broker_id,
-        plugin_code=plugin_code,
-        plugin_version=plugin.plugin_version,
-        members=[BRIMDerivedRef(file_id=member.file_id, role=member.role, filename=member.filename) for member in recognised],
-        table=table,
+        recognised=recognised,
         filename=_combined_filename(plugin, preview),
         user_id=user_id,
     )
-    logger.info("Combined report set", broker_id=broker_id, plugin_code=plugin_code, members=len(recognised), combined_file_id=info.file_id)
-    return BRIMSetCombineResponse(combined=info, summary=table.summary, reused=False)
+    if not reused:
+        logger.info("Combined report set", broker_id=broker_id, plugin_code=plugin_code, members=len(recognised), combined_file_id=info.file_id)
+    return BRIMSetCombineResponse(combined=info, summary=summary, reused=reused)
+
+
+def _combine_under_broker_lock(*, broker_id: int, plugin: BRIMProvider, plugin_code: str, recognised: List[BRIMSetMemberInfo], filename: str, user_id: Optional[int]) -> Tuple[BRIMFileInfo, Dict[str, Any], bool]:
+    """Reuse, or combine and save, as one step under the broker's metadata lock (F1).
+
+    Two analyses of one set at once (a double click, two tabs) used to build two combined files: the
+    second looked for a reusable file before the first had saved its own. Holding the lock from the
+    check to the save makes the second find the first's file. It runs in a worker thread: the lock
+    is re-entrant within a thread, so taken on the event loop it would let both through.
+    """
+    member_ids = [member.file_id for member in recognised]
+    with brim_provider.broker_metadata_lock(broker_id):
+        reusable = brim_provider.find_reusable_combined(broker_id=broker_id, plugin_code=plugin_code, plugin_version=plugin.plugin_version, member_ids=member_ids)
+        if reusable is not None:
+            return reusable, brim_provider.read_combine_summary(reusable.file_id), True
+
+        paths_by_role: Dict[str, List[Path]] = defaultdict(list)
+        for member in recognised:
+            path = brim_provider.get_file_path(member.file_id)
+            if path is None:
+                raise BRIMSetMembersNotFound(f"File {member.filename} is no longer available")
+            paths_by_role[member.role].append(path)
+
+        try:
+            table = plugin.combine(dict(paths_by_role))
+        except (BRIMParseError, ValueError) as exc:
+            message = getattr(exc, "message", None) or str(exc)
+            raise BRIMSetCombineFailed(f"The report set could not be combined: {message}") from exc
+        info = brim_provider.save_combined_file(
+            broker_id=broker_id,
+            plugin_code=plugin_code,
+            plugin_version=plugin.plugin_version,
+            members=[BRIMDerivedRef(file_id=member.file_id, role=member.role, filename=member.filename) for member in recognised],
+            table=table,
+            filename=filename,
+            user_id=user_id,
+        )
+        return info, table.summary, False
 
 
 # =============================================================================

@@ -123,7 +123,7 @@ services:
 docker compose up -d
 ```
 
-📦 Docker will download the official image from the GitHub Container Registry (GHCR) and start LibreFolio.
+📦 Docker will download the official image from the GitHub Container Registry (GHCR) and start LibreFolio. The `latest` tag is the [light variant](#image-variants-full-and-light) of the image, the recommended default.
 
 ### 🌐 4. Access LibreFolio
 
@@ -169,23 +169,33 @@ However, for maximum simplicity and security without opening ports on your route
 
 ## 🏷️ Image Variants: Full and Light {: #image-variants-full-and-light }
 
-The official image is published in two variants:
+The official image is published in two variants. Both contain the same application and all the documentation text pages, in all four languages; they differ only in the documentation screenshots:
 
-- 🗂️ **`latest`** (full) — includes the entire documentation with screenshots and images, for fully offline use.
-- 🪶 **`latest-light`** — the same application, but **without the documentation images**, making the image several hundred MB lighter. All documentation text pages are still included: when you open a page that contains screenshots, the images are loaded on demand from the online documentation site.
+- 🪶 **Light** (the recommended default) — **without the documentation screenshots**: when you open a documentation page that contains screenshots, they are loaded on demand from the online documentation site. About 450 MB to download, about 1.6 GB on disk.
+- 🗂️ **Full** — also includes about 2,000 documentation screenshots (desktop and mobile, in all four languages, in light and dark themes), so the built-in documentation works fully offline. About 0.8 GB to download, about 2 GB on disk.
 
-Every version tag also has a light counterpart (for example, `ghcr.io/librefolio/librefolio:v1.1.0-light`).
+Sizes are approximate and vary slightly from one release to the next.
 
-!!! warning "The light variant needs internet for documentation images"
+Each release is published on the registry with these tags:
 
-    With the `-light` image, viewing screenshots and images inside the built-in documentation (Help menu) requires an **internet connection**, because they are fetched from the online documentation site. Everything else — the whole application and all documentation text — works fully offline.
+| Tag | Variant | Use it to |
+|-----|---------|-----------|
+| `latest` | 🪶 Light | Follow the newest release (the tag used in the `docker-compose.yml` above) |
+| `X.Y.Z` (e.g. `1.1.0`) | 🗂️ Full | Pin a version, with the documentation fully offline |
+| `X.Y.Z-light` (e.g. `1.1.0-light`) | 🪶 Light | Pin a version and stay on the light variant |
 
-To use the light variant, replace the image tag in your `docker-compose.yml`:
+Version tags are plain version numbers, without the `v` of the GitHub release tags (for example `1.1.0`). `latest` itself is the light variant, so it has no separate `-light` tag, and a release publishes its full variant only under its version number: to use the full variant, you pin a version — and a pinned image does not move to newer releases on its own (see [Updating LibreFolio](#updating)).
+
+!!! warning "The light variant needs internet for documentation screenshots"
+
+    With the light variant (`latest` or any `-light` tag), viewing the screenshots inside the built-in documentation (Help menu) requires an **internet connection**, because they are fetched from the online documentation site. Everything else — the whole application and all documentation text — is served from the image itself.
+
+To use the full variant, replace the image tag in your `docker-compose.yml` with a version tag without suffix, for example:
 
 ```yaml
 services:
   librefolio:
-    image: ghcr.io/librefolio/librefolio:latest-light
+    image: ghcr.io/librefolio/librefolio:1.1.0
 ```
 
 ---
@@ -212,7 +222,7 @@ For detailed instructions on what to save and how to perform consistent backups,
 LibreFolio is currently in **Beta** (version 1.1.0). Database migrations run automatically at container start and are designed to preserve existing installs, but between versions there can still be structural changes — some subsystems (such as Risk Analysis) are explicitly marked as beta. Having a [backup](#data-backup) before updating is always a good idea.
 
 - By using the `:latest` tag in the `docker-compose.yml` file, you will immediately receive the latest features but expose yourself to potential incompatibilities during automatic updates.
-- If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag (for example, `ghcr.io/librefolio/librefolio:v1.1.0`).
+- If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag: for example `ghcr.io/librefolio/librefolio:1.1.0` (full variant) or `ghcr.io/librefolio/librefolio:1.1.0-light` (to stay on the light variant). See [Image Variants](#image-variants-full-and-light) for the difference.
 
 ### 🛠️ 1. Manual Update {: #manual-update }
 

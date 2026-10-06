@@ -60,12 +60,15 @@ class DrawdownPlugin(SignalPlugin):
     signal_code = "RISK_DRAWDOWN"
     # 1.1.0 (2026-09-02): full_history default — numerical behavior changed
     # (peak is now the all-time high, not the visible-window max).
-    implementation_version = "1.1.0"
+    # 1.2.0 — the prepared series drop stored carries and read the market holidays.
+    implementation_version = "1.2.0"
+    computes_on_quote_days = False
     display_name_key = "signals.riskDrawdown.name"
     description_key = "signals.riskDrawdown.description"
     semantic_id = "underwater_drawdown"
     semantic_description = "Measures each price observation below its running peak."
     icon = "📉"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/current-drawdown/"
     category = SignalCategory.RISK
     params_model = DrawdownParams
     input_requirements = SignalInputRequirements(
