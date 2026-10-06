@@ -269,8 +269,8 @@ describe('asset-set i18n — L3° describes the line exactly when it draws one',
     async function labDots(benchmark: LabBenchmark) {
         const {buildAssetSetChartPoints} = await import('./assetSetLevels');
         if (benchmark === 'none') return buildAssetSetChartPoints(labRows(null), null);
-        if (benchmark === 'unselected') return buildAssetSetChartPoints(labRows(null), {assetId: 90, name: 'c', volatility: 0.18, expectedReturn: 0.07});
-        return buildAssetSetChartPoints(labRows(2), {assetId: 2, name: 'b', volatility: 0.15, expectedReturn: 0.05});
+        if (benchmark === 'unselected') return buildAssetSetChartPoints(labRows(null), {assetId: 90, name: 'c', volatility: 0.18, expectedReturn: 0.07, sharpe: null, sortino: null});
+        return buildAssetSetChartPoints(labRows(2), {assetId: 2, name: 'b', volatility: 0.15, expectedReturn: 0.05, sharpe: null, sortino: null});
     }
 
     /** The source of one note's branch of the list, split the way `renderedNoteKeys` splits it. */
