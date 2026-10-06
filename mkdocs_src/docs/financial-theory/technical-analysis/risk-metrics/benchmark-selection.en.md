@@ -54,6 +54,8 @@ The comparison is not free-form. The analysis takes a **real asset that exists i
 
 **It must have a usable price history.** The benchmark's series is prepared exactly like the positions under analysis, on the same shared calendar and in the same target currency. If no usable series can be built for it, the result is unavailable rather than approximate.
 
+The benchmark picker asks the engine which assets have a usable price history of their own over the analysis period and in the target currency, and lists the others apart, read-only, each with the engine's reasons. A benchmark chosen earlier that does not pass this check stays chosen and shown in the picker, but nothing is measured against it. If the check cannot be made, nothing is locked.
+
 **It must move.** Beta divides by the variance of the comparison series, so a reference that never moves has no variance to divide by: beta comes back undefined, correlation with it, and both raise an explicit warning rather than a number. This is why a flat reference — a constant, a hypothetical fixed rate of return — cannot function as a benchmark here. The constraint is not a policy that could be waived; it is the arithmetic of the ratio.
 
 !!! info "A benchmark is not a threshold"
