@@ -3353,3 +3353,141 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > - la fase 3: «Confronto Asset» e/o `SignalAssetParamControl`;
 > - la proposta del rendimento totale;
 > - `dev_release2` con L e D, prima dell'integrazione.
+
+### Fase 2: `BenchmarkSelect` sul pannello degli asset di F · ✅ 06/10/2026 (FROZEN)
+
+> **Punto di partenza**: HEAD `9ce2efaed`, il fast-forward alla punta di A. Contiene il checkpoint 8 di A, i giri
+> 13-A e 13-B di F e il mio k5b, validati da A (`risk` 33, `risk-lab` 41). La fase 1 di F (`AssetPickerPanel`) è
+> quindi sotto di me.
+>
+> **Dalla devWiki** (`decisions/lab-eligibility-from-risk-engine`): l'idoneità la calcola solo il motore
+> (`POST /risk/eligibility`, al massimo 500 id per richiesta, mai una lista vuota). Si chiede di nuovo quando cambiano
+> catalogo, periodo o valuta, con 300 ms di attesa, e una risposta superata si scarta. Senza verdetto un asset è
+> selezionabile, e una chiamata fallita non blocca niente. Il grafo graphify non c'è in questo worktree (artefatto
+> ignorato da git): ho letto direttamente la pagina.
+>
+> **Il contratto con F** (06/10 mattina) vale ancora; i fatti verificati oggi sul codice:
+> - `AssetPickerPanel` (`ui/select`, condiviso, di F) in modalità `single` vuole il catalogo già ordinato
+>   (`assets`), le `sections`, il `restLabel`, il `blockedLabel` e i `verdicts`. Tiene i testid di `SearchSelect`
+>   (`{testId}`, `-trigger`, `-search`, `search-select-option-{id}`, le intestazioni), che i 1055 righe di
+>   `BenchmarkSelect.test.ts` e gli E2E già leggono;
+> - `EligibilityView` estende `PickerVerdict`: nessuna conversione;
+> - `eligibility.ts` (di F; diventa condiviso quando lo importo) esporta `eligibilityBatches`,
+>   `mergeEligibilityAnswers`, `describeEligibility` e `dayFormatter`;
+> - oggi `BenchmarkSelect` monta `AssetSelect`, che carica da sé la cache degli asset (`ensureAssetsLoaded`).
+>
+> **Il piano** (Risk):
+> 1. `riskStore.svelte.ts`: `queryEligibility(assetIds, period, currency)`, con la stessa forma di `queryRisk`:
+>    - una cache per (id ordinati, inizio, fine, valuta) e le richieste in volo condivise, così due selettori o un
+>      selettore rimontato non chiedono due volte;
+>    - la svuota `invalidateRisk`, cioè un cambio di sessione, una modifica del portafoglio o una sincronizzazione;
+>    - a lotti con `eligibilityBatches`, unite con `mergeEligibilityAnswers`.
+> 2. `BenchmarkSelect.svelte`: monta `AssetPickerPanel` `mode="single"` al posto di `AssetSelect`.
+>    - Il catalogo viene dalla cache degli asset, con il caricamento e l'errore di oggi, ordinato con
+>      `assetSelectOrder`; resta fuori ciò che la pagina misura (`measuredAssetIds`, opt-in), tranne la scelta
+>      corrente, con il ⚠ di oggi. Le sezioni («Benchmark» prima) e i testid restano quelli di oggi.
+>    - I verdetti arrivano in uno di due modi:
+>      - `verdicts`, già pronti: il laboratorio di F passa `eligibilityView`;
+>      - `period` più `currency`: il selettore chiede da sé, con 300 ms di attesa, scarta una risposta superata e
+>        traduce le risposte con `describeEligibility`. Se la chiamata fallisce non blocca niente e lo dice con un
+>        attributo `data-eligibility="failed"`.
+>    - Senza nessuno dei due, nessun verdetto: tutto selezionabile, come oggi.
+>    - `blockedLabel`: una chiave nuova, `risk.benchmark.blocked`.
+>    - La radice `{testid}-control` tiene `data-benchmark-*`.
+> 3. `RiskAnalysisPanel.svelte` (Asset Detail): passa `period` e `currency` dalla sua finestra.
+>
+> **Le parti degli altri**, ognuna nel proprio giro, dopo che la fase 2 arriva nel loro ramo:
+> - A: `L3Benchmark` passa `period` e `currency` (oggi riceve solo il controller e il tasso);
+> - F: il `BenchmarkSelect` del laboratorio passa `verdicts={eligibilityView}`, con un rosso prima.
+>
+> **Niente file condivisi**: il pannello si usa così com'è.
+>
+> **Test** (test-author, rossi prima):
+> - `BenchmarkSelect.test.ts`: adattarlo al pannello, più i due percorsi dei verdetti, la scelta corrente non idonea,
+>   l'attesa, la risposta superata, il fallimento e la cache;
+> - `riskStore`: la cache di `queryEligibility` e la sua invalidazione;
+> - gli E2E già esistenti: `risk-benchmark-shared` (mio), `risk` (di A), `risk-lab` (di F) e `risk-asset-detail`.
+>   I testid restano; gli spec di A simulano solo catalogo, catalogo degli scenari e query, quindi la chiamata di
+>   idoneità di Asset Detail arriva al backend di test.
+>
+> **Doc**: `benchmark-selection.en.md` (mia), una frase: l'elenco offre i benchmark usabili nel periodo, e mostra gli
+> altri a parte, con il motivo.
+>
+> **Domande al developer**: all'inizio pensavo nessuna, perché il comportamento è quello approvato nel laboratorio («è
+> chiaro e coerente»). A ha fatto notare che D371 copre solo il laboratorio, e che sulla Dashboard la sezione grigia
+> cambia quello che il developer vede. Due domande, una alla volta → **D378**:
+> - la sezione degli asset non misurabili su tutte le pagine: «Sì, uguale su tutte le pagine: il selettore del
+>   benchmark è uno solo»;
+> - un benchmark già scelto e non misurabile nel periodo: «Non lo prova: la riga del benchmark sparisce, e il motivo
+>   lo dice solo il selettore».
+>
+> **Il piano cambia così**:
+> - `RiskBenchmarkState` (nello store, mio) ha un valore in più, `blocked`. Il selettore lo pubblica quando il
+>   verdetto della scelta corrente è `ineligible`. Lo store non lo restituisce mai: la scelta salvata non cambia.
+> - Con `period`, una scelta salvata resta `pending` finché arriva il suo verdetto per il periodo e la valuta della
+>   pagina, anche dopo un cambio di finestra. Se la chiamata fallisce la scelta è `set`.
+> - Le pagine chiedono il confronto solo su `set`: la L3 di A già oggi, il laboratorio con `labBenchmarkId`, e Asset
+>   Detail, che disabiliterà «Confronta».
+> - La regola su `eligibility.ts` (coordinator, 06/10): Risk importa `eligibilityBatches` e
+>   `mergeEligibilityAnswers` senza modificarle, e F avvisa prima di cambiare quelle funzioni; va scritta anche nel
+>   piano di F.
+>
+> **Fatto il 06/10** (pomeriggio e sera):
+> - **I rossi** (test-author): 11 nello store (`queryEligibility`: lotti, cache, invalidazione, risposta tardiva,
+>   fallimento), 26 nel selettore e 2 E2E su Asset Detail. Prima di consegnarli li ha provati contro un prototipo
+>   costruito fuori dal repository e contro 22 sue versioni sbagliate. Ha dovuto anche spostare il finto
+>   `localStorage` in `vi.hoisted`, perché il pannello importa lo store della lingua, che lo legge al caricamento.
+> - **Il codice**: `queryEligibility` in `riskStore`, `blocked` in `RiskBenchmarkState`, `BenchmarkSelect` sul
+>   pannello e Asset Detail che passa il suo periodo e confronta solo su `set`, più la chiave
+>   `risk.benchmark.blocked` ×4. Al primo giro: vitest 103/103 e E2E `risk-asset-detail` 4/4. svelte-check aveva un
+>   avviso (lo stato iniziale letto una volta sola), tolto con una costante.
+> - **Le tre scelte lasciate aperte dai rossi**:
+>   - il valore resta l'id mentre la scelta aspetta il suo verdetto;
+>   - fra `pending` e `blocked` non passa mai da `set`;
+>   - una risposta `null`, cioè una cache svuotata nel frattempo, fa chiedere di nuovo e non vale come «nessun
+>     verdetto».
+>
+>   Per la terza c'è un test, e quel test è l'unico che uccide il suo mutante.
+> - **Lo stop** del coordinator alle 17:4x (il developer doveva andare), e la ripresa alle 19:28. Nel frattempo la
+>   macchina si è riavviata e `/tmp` è stato svuotato: le mie cartelle di lavoro di k5a, k5b e k6 non ci sono più.
+>   Gli script di supporto ora stanno nei file di sessione (`scripts-r2/`).
+> - **Dopo la ripresa**:
+>   - test-author ha reso deterministico il secondo test originale di Asset Detail, che ora fa domande vere di
+>     idoneità, con lo stub del file. Ha anche corretto l'intestazione dello spec (il proprietario è Risk) e la
+>     `desc` del runner (concessione del coordinator). E2E 4/4, anche con `--workers 4`;
+>   - il docs-writer ha aggiunto un paragrafo a `benchmark-selection.en.md`, alla riga 57 (`@@ -56,2 +56,4 @@`),
+>     lontano dal paragrafo di A alla riga 103 (era la 101). La pagina non ha traduzioni.
+>
+> **⚠️ Fuori pista**:
+> - Avevo scritto «nessuna domanda al developer» e lo avevo detto al coordinator. Era sbagliato: D371 copriva solo il
+>   laboratorio, e la sezione grigia sulla Dashboard cambia quello che il developer vede. A se n'è accorto prima di
+>   me. Due domande, D378, e il piano è cambiato: lo stato `blocked`, e l'attesa del verdetto in `pending`.
+> - Nel brief dei rossi avevo citato un motivo inesistente, `no_prices_in_period`; quello vero è `no_prices`.
+>   test-author l'ha corretto.
+> - Il primo test-author non c'era più dopo il riavvio dell'app: ne ho avviato uno nuovo con un brief completo.
+>
+> **Mutanti**: 17 sul prodotto vero, con il ripristino verificato dallo sha256, e tutti uccisi al primo giro:
+> - 10 sul selettore: l'attesa di 300 ms, la risposta superata, il `null`, il fallimento, `set` prima del verdetto,
+>   la scelta non idonea che resta `set`, un avviso che blocca, i verdetti dati ignorati, la domanda fatta anche con
+>   i verdetti dati, l'etichetta della sezione;
+> - 5 sullo store: niente cache, gli id non ordinati nella chiave, una risposta tardiva messa in cache,
+>   un'invalidazione che non svuota le risposte, una richiesta sola per tutti gli id;
+> - 2 su Asset Detail, uccisi dai suoi E2E: il confronto su un benchmark bloccato, e la pagina senza il suo periodo.
+>
+> **Verifica** (corsia 6152, un comando alla volta, carico fra 8 e 19 dopo il riavvio):
+> - `front build --debug` passa, con svelte-check 0/0;
+> - unit: `risk-unit` 31, `risk-benchmark-unit` 13, `risk-levels-component` 237, `risk-levels-unit` 376,
+>   `risk-controller-unit` 96, `risk-frame-component` 13, `core-unit` 2978, `component-unit` 2623;
+> - `front check` 0/0; orfani a posto (303); audit i18n 3550 chiavi, 0 incomplete;
+> - `mkdocs build` strict senza avvisi; `check-links` dà solo il rosso ereditato D28;
+> - E2E `risk-asset-detail` 4 (4 anche con `--workers 4`), `risk-benchmark-shared` 4, `risk` 33, `risk-lab` 41;
+>   alla fine la 6152 è libera.
+>
+> Nessun percorso backend.
+>
+> **Il checkpoint**: 15 percorsi in 4 commit (selettore e store, Asset Detail con il suo spec e la `desc` del runner,
+> doc, diario), in `ORDER-risk-s2.sh` su HEAD `9ce2efaed`. **Stato: FROZEN**, consegnato al coordinator.
+>
+> **Dopo**: A (`L3Benchmark` passa `period`/`currency`, e lascia cadere il confronto quando lo stato non è più
+> `set`) e F (`verdicts={eligibilityView}`, con l'attesa di L3° che copre anche il caricamento dell'idoneità), ognuno
+> nel suo giro. Poi la fase 3 («Confronto Asset» e/o `SignalAssetParamControl`) e la proposta del rendimento totale.

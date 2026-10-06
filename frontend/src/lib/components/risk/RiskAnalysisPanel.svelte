@@ -10,6 +10,7 @@
     import type {RenderedSignal} from '$lib/charts/signals';
     import SignalAssetParamControl from '$lib/components/charts/SignalAssetParamControl.svelte';
     import BenchmarkSelect from '$lib/components/risk/BenchmarkSelect.svelte';
+    import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -78,7 +79,9 @@
     // itself can be the shared choice — chosen on another page — and is then shown and
     // flagged, but never compared: an asset is not its own yardstick.
     let comparisonAssetId = $state<number | null>(null);
-    let comparisonUsable = $derived(comparisonAssetId !== null && !(scope.kind === 'asset' && comparisonAssetId === scope.asset_id));
+    /** The picker's word on the choice: a comparison is asked on `set` only, never on a `blocked` one (D378). */
+    let comparisonState = $state<RiskBenchmarkState>('none');
+    let comparisonUsable = $derived(comparisonAssetId !== null && comparisonState === 'set' && !(scope.kind === 'asset' && comparisonAssetId === scope.asset_id));
 
     // Without these four the controller would have nothing to re-issue, and the
     // `discard-the-answer-not-the-question` fix would be silently gone while every
@@ -706,7 +709,10 @@
             <div class="mt-3 flex flex-wrap items-end gap-2">
                 <BenchmarkSelect
                     bind:value={comparisonAssetId}
+                    bind:state={comparisonState}
                     measuredAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
+                    period={{start: dateStart, end: dateEnd}}
+                    currency={targetCurrency}
                     testid="risk-comparison-asset-select"
                     placeholder={$t('signals.comparisonAsset.placeholder')}
                     onchange={() => {
