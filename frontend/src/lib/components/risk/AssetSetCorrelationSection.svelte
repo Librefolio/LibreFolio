@@ -26,17 +26,23 @@
      * **It discloses through the redesign's own frame, not its own.** A matrix
      * computed over a selection the server had to trim is still a matrix: it
      * renders, it looks whole, and nothing in its shape says an asset is
-     * missing. `RiskLevelSection` already carries that disclosure for the four
-     * levels, and `degradedResults`/`resultReasons` already compute it, so this
-     * section borrows all three rather than growing a fifth copy — and inherits
-     * every future repair to them for free.
+     * missing. `RiskLevelSection` already carries the disclosure of what did not
+     * come back at all, and `degradedResults` computes it, so this section
+     * borrows both rather than growing a copy. What is *partial*, and why, it
+     * hands to the lab's one notice above the sections through `qualitySource()`
+     * (the developer, 05/10): a trimmed selection reads the same under every
+     * section, and said once it is one problem, not four.
      */
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import {riskOutput} from '$lib/risk/riskTypes';
-    import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import type {AssetSetQualitySource} from './assetSetLevels';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
-    import {degradedResults, levelMetadata, resultReasons} from './levels/levelHelpers';
+    import {createMatrixMetadata} from './matrixMetadata.svelte';
+    import {degradedResults, levelMetadata, resultErrorCodes} from './levels/levelHelpers';
+    import {levelErrorHealth} from './levels/partialNotice';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
     import {resultByCode} from './riskAnalysisHelpers';
 
@@ -45,13 +51,16 @@
         assetIds: number[];
         /** Axis names the page already holds. Missing ids degrade to `#id`. */
         assetLabels: ReadonlyMap<number, string>;
+        /** Asset types by id, for the matrix's "by type" ordering. */
+        assetTypes?: ReadonlyMap<number, string | null | undefined>;
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
+        /** Bumped by the panel after an accepted sync: forces a fresh base read. */
+        refreshVersion?: number;
     }
 
-    let {assetIds, assetLabels, dateStart, dateEnd, targetCurrency}: Props = $props();
-
+    let {assetIds, assetLabels, assetTypes, dateStart, dateEnd, targetCurrency, refreshVersion = 0}: Props = $props();
     const controller = createRiskPanelController(() => ({
         scope: {kind: 'asset_set', asset_ids: assetIds},
         dateStart,
@@ -61,14 +70,13 @@
         // needs, and passing a live one here would re-ask the question on every
         // keystroke in a control this section does not read.
         appliedRiskFreePercent: 0,
-        refreshVersion: 0,
+        refreshVersion,
     }));
 
     let result = $derived(resultByCode(controller.historicalResults, 'correlation'));
     let output = $derived(riskOutput(result, schemas.RiskCorrelationOutput));
 
-    let health = $derived(degradedResults([result]));
-    let reasons = $derived(resultReasons([result]));
+    let health = $derived(levelErrorHealth(degradedResults([result])));
     /**
      * The window the figures were measured over — now rendered by the frame.
      *
@@ -80,14 +88,43 @@
      *
      * ⚠️ One field does not survive the lift: `levelMetadata` drops `method` on
      * purpose. That costs this section nothing, and for a sharper reason than
-     * the one it gives — `correlation.py:128` is the *only* assignment of
-     * `method` in the plugin, `"pearson_post_fx"`. The field can print exactly
+     * the one it gives — the correlation plugin (`risk_plugins/correlation.py`)
+     * assigns `method` exactly once, `"pearson_post_fx"`. The field can print exactly
      * one string forever, and a value that cannot vary is not provenance.
      */
     let metadata = $derived(levelMetadata([result]));
+    /**
+     * Why the matrix did not come back, said by the frame as L1°/L3° and the replay say theirs:
+     * the result's own error code (an unavailable or failed correlation, `insufficient_history`
+     * for one), then a base answer discarded on every attempt, as on the Dashboard's L4.
+     */
+    let errorCodes = $derived([...resultErrorCodes([result]), ...(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : [])]);
+
+    /**
+     * What the panel reads through `bind:this` for the lab's one notice: the correlation this
+     * frame renders (the controller's own object, `null` without one) and the controller's
+     * data-quality issues. A function, so a `$derived` in the panel tracks what it reads here.
+     */
+    export function qualitySource(): AssetSetQualitySource {
+        return {results: [result], labels: {}, issues: controller.dataQualityIssues};
+    }
+
+    /**
+     * Sector and country distributions of the selection, for the matrix's two
+     * exposure orderings (F-3b), loaded by the shared `matrixMetadata` module
+     * (K11: the Dashboard's L2 matrix reads the same inputs). One bulk GET of the
+     * asset metadata: it cannot trigger `notifyPortfolioMutation`, so it cannot
+     * discard the correlation answer in flight. A failed read leaves the maps
+     * empty, and the two buttons simply do not appear.
+     *
+     * The module also reads each asset's type, but this section keeps taking the
+     * types from the page's list (`assetTypes`): they are known before any read,
+     * and the "by type" ordering must survive a failed metadata read.
+     */
+    const matrixMetadata = createMatrixMetadata(() => ({assetIds, language: $currentLanguage}));
 </script>
 
-<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" {health} {reasons} {metadata}>
+<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" docsPath="financial-theory/technical-analysis/risk-metrics/correlation/" docsLabel={$t('risk.analytics.correlation.help')} {health} {errorCodes} {metadata}>
     <!-- `data-catalog` is published here because every section on this page is
          gated on the capability catalogue, so an absent section means
          "unsupported" *or* "not loaded yet" and a test cannot tell which. The
@@ -97,9 +134,14 @@
         <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{$t('risk.analytics.correlation.description')}</p>
 
         {#if controller.loadError}
-            <p class="py-6 text-center text-sm text-red-600 dark:text-red-400" data-testid="risk-correlation-error">{$t('risk.states.loadFailed')}</p>
+            <div class="py-6 text-center" data-testid="risk-correlation-error">
+                <p class="text-sm text-red-600 dark:text-red-400">{$t('risk.states.loadFailed')}</p>
+                <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry"
+                    >{$t('common.retry')}</button
+                >
+            </div>
         {:else if output}
-            <CorrelationHeatmap {output} {assetLabels} />
+            <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
         {:else if controller.initialLoading}
             <div class="h-48 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-correlation-loading"></div>
         {:else if controller.loadDiscarded}

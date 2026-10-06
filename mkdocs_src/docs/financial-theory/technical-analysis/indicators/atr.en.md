@@ -30,7 +30,7 @@ A simple high-minus-low range ignores overnight or gap moves; ATR fixes this by 
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Smoothing window applied to the True Range. |
+| Period ($N$) | `period` | 14 | Smoothing window applied to the True Range, in sessions. |
 
 ---
 

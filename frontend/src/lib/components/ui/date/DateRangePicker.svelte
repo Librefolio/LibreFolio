@@ -49,6 +49,10 @@
         showPresets?: boolean;
         /** Show custom window input */
         showCustomWindow?: boolean;
+        /** Quick presets to leave out (e.g. MAX where its «all history» sentinel has no period to resolve to). Default: none. */
+        excludePresets?: readonly QuickPreset[];
+        /** Extra classes for the frame around the two date fields, appended to its own (e.g. an explicit height). */
+        fieldsClass?: string;
         /** Show date input fields (From/To) — set false to show only presets */
         showDateFields?: boolean;
         /** Compact mode (smaller text, tighter spacing) */
@@ -105,6 +109,8 @@
         activePreset = $bindable(null),
         showPresets = true,
         showCustomWindow = true,
+        excludePresets = [],
+        fieldsClass = '',
         showDateFields = true,
         compact = false,
         stacked = false,
@@ -217,6 +223,14 @@
         {key: 'YTD', label: $_('datePicker.presets.ytd')},
         {key: 'MAX', label: $_('datePicker.presets.max')},
     ];
+
+    /**
+     * Whether a quick preset is drawn: all of them, except those the caller leaves out. Applied
+     * inside each group, so leaving one out never moves another into a different group.
+     */
+    function isOffered(preset: {key: QuickPreset}): boolean {
+        return !excludePresets.includes(preset.key);
+    }
 
     // "Jolly" fill badges — two independent pools, each belonging to one of the two visual
     // blocks (Block A = core presets, Block B = YTD/Tutti/Personalizzato). They are NEVER shown
@@ -1106,7 +1120,7 @@
 <svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
 {#snippet coreButtons()}
-    {#each presets.slice(0, 6) as preset, i}
+    {#each presets.slice(0, 6).filter(isOffered) as preset, i}
         <button
             type="button"
             bind:this={coreBadgeRefs[i]}
@@ -1122,7 +1136,7 @@
 {#snippet durationJollyButtons()}
     <!-- Duration pool (3Y/5Y/10Y) — JS-measured, never a fixed CSS breakpoint set. Fills
          leftover space in Block A only up to how many actually fit (see measureAndFill). -->
-    {#each durationFillPresets.slice(0, extrasToShowDuration) as preset}
+    {#each durationFillPresets.slice(0, extrasToShowDuration).filter(isOffered) as preset}
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
@@ -1136,7 +1150,7 @@
 
 {#snippet periodJollyButtons()}
     <!-- Period pool (WTD/MTD/QTD) — same idea as durationJollyButtons but for Block B. -->
-    {#each periodFillPresets.slice(0, extrasToShowPeriod) as preset}
+    {#each periodFillPresets.slice(0, extrasToShowPeriod).filter(isOffered) as preset}
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
@@ -1149,7 +1163,7 @@
 {/snippet}
 
 {#snippet trailingButtons()}
-    {#each presets.slice(6) as preset, i}
+    {#each presets.slice(6).filter(isOffered) as preset, i}
         <button
             type="button"
             bind:this={trailingBadgeRefs[i]}
@@ -1253,7 +1267,7 @@
                 bind:this={triggerEl}
                 class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
                     ? 'ring-1 ring-libre-green border-libre-green'
-                    : ''}"
+                    : ''} {fieldsClass}"
             >
                 <!-- A label, so the padding around the field is part of the field. -->
                 <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">

@@ -57,12 +57,15 @@ class RollingVolatilityPlugin(SignalPlugin):
     """Annualize rolling sample volatility with the observed calendar factor."""
 
     signal_code = "RISK_ROLLING_VOLATILITY"
-    implementation_version = "1.0.0"
+    # 1.1.0 — the prepared series drop stored carries and read the market holidays.
+    implementation_version = "1.1.0"
+    computes_on_quote_days = False
     display_name_key = "signals.riskRollingVolatility.name"
     description_key = "signals.riskRollingVolatility.description"
     semantic_id = "rolling_realized_volatility"
     semantic_description = "Annualizes rolling sample volatility at observed frequency."
     icon = "〽️"
+    docs_path = "financial-theory/technical-analysis/risk-metrics/volatility/"
     category = SignalCategory.RISK
     params_model = RollingVolatilityParams
     input_requirements = SignalInputRequirements(

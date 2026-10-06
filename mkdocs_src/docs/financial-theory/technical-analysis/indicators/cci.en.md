@@ -37,7 +37,7 @@ CCI was designed to flag the start of new cycles: readings beyond +100 suggest p
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Window for the typical-price average and mean deviation. |
+| Period ($N$) | `period` | 14 | Window for the typical-price average and mean deviation, in sessions. |
 
 ---
 

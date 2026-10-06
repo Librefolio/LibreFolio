@@ -38,9 +38,9 @@ The MACD system produces three series:
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Fast Period | `fastPeriod` | 12 | Short-term EMA window (days). |
-| Slow Period | `slowPeriod` | 26 | Long-term EMA window (days). |
-| Signal Period | `signalPeriod` | 9 | EMA smoothing applied to the MACD line. |
+| Fast Period | `fastPeriod` | 12 | Short-term EMA window (sessions). |
+| Slow Period | `slowPeriod` | 26 | Long-term EMA window (sessions). |
+| Signal Period | `signalPeriod` | 9 | EMA smoothing applied to the MACD line (sessions). |
 
 ---
 

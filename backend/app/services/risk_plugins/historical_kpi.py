@@ -13,6 +13,7 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
+from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.acquired import (
     conditional_drawdown_at_risk,
@@ -26,7 +27,7 @@ from backend.app.services.risk.analytic_helpers import (
     require_annualization_factor,
     require_primary_returns,
 )
-from backend.app.services.risk.base import RiskAnalytic, RiskComputation
+from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskSeriesInputs
 from backend.app.services.risk.metrics import (
     annualized_sharpe,
     annualized_sortino,
@@ -118,7 +119,8 @@ class HistoricalKpiAnalytic(RiskAnalytic):
     )
     supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
     params_model = HistoricalKpiParams
-    min_observations = 20
+    min_observations = RISK_MIN_OBSERVATIONS
+    series_inputs = RiskSeriesInputs.PRIMARY
 
     def compute(self, params, context):
         dates, returns = require_primary_returns(context)
@@ -142,6 +144,7 @@ class HistoricalKpiAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="sharpe_undefined",
+                    message_i18n_key="risk.warnings.sharpe_undefined",
                     message="Sharpe is undefined because sample volatility is zero.",
                 )
             )
@@ -149,6 +152,7 @@ class HistoricalKpiAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="sortino_undefined",
+                    message_i18n_key="risk.warnings.sortino_undefined",
                     message="Sortino is undefined because downside deviation is zero.",
                 )
             )
@@ -166,6 +170,7 @@ class HistoricalKpiAnalytic(RiskAnalytic):
             warnings.append(
                 RiskWarning(
                     code="worst_realization_undefined",
+                    message_i18n_key="risk.warnings.worst_realization_undefined",
                     message="No losing observation in the selected window.",
                 )
             )

@@ -27,6 +27,7 @@ from backend.app.services.risk.base import (
     RiskComputation,
     RiskUnavailableError,
 )
+from backend.app.services.risk.metrics import calendar_days_to_observations
 from backend.app.services.risk.quant import (
     MAX_SOBOL_DIMENSION,
     SimulationEngineRequest,
@@ -37,6 +38,7 @@ from backend.app.services.risk.quant import (
     historical_returns_digest,
     run_simulation,
 )
+from backend.app.services.risk.quant.models import DEFAULT_STEPS_PER_YEAR
 from backend.app.services.risk.quant.spawn_worker import (
     SpawnWorkerQueueFullError,
     SpawnWorkerRemoteError,
@@ -174,7 +176,11 @@ class SimulationParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class SimulationAnalytic(RiskAnalytic):
     analytic_code = "simulation"
-    algorithm_version = "3.0.0-bootstrap-quantlib-1.43"
+    # 4.0.0 — the bootstrap resamples the observations the history holds in the
+    # calendar horizon (`steps_per_year` = the observed frequency), and the drift
+    # uncertainty compounds over those same observations. 3.x stepped once per
+    # calendar day, so on a weekday series "365 days" simulated 1.45 years.
+    algorithm_version = "4.0.0-bootstrap-quantlib-1.43"
     name_i18n_key = "risk.analytics.simulation.name"
     description_i18n_key = "risk.analytics.simulation.description"
     output_kind = RiskOutputKind.SIMULATION
@@ -221,6 +227,7 @@ class SimulationAnalytic(RiskAnalytic):
                 asset_ids,
                 weights,
                 cash_weight,
+                steps_per_year=context.annualization_factor,
             )
         else:
             engine_request, observations = self._build_parametric_request(
@@ -276,7 +283,7 @@ class SimulationAnalytic(RiskAnalytic):
             returns_by_asset,
             asset_ids,
             weights,
-            params.horizon_days,
+            calendar_days_to_observations(params.horizon_days, context.annualization_factor),
         )
         return RiskComputation(
             output=RiskSimulationOutput(
@@ -335,7 +342,7 @@ class SimulationAnalytic(RiskAnalytic):
         returns_by_asset,
         asset_ids,
         weights,
-        horizon_days: int,
+        horizon_observations: int,
     ) -> tuple[float, int] | None:
         """Qualify the band with the drift's own standard error, or disclose nothing.
 
@@ -349,7 +356,7 @@ class SimulationAnalytic(RiskAnalytic):
                 returns_by_asset,
                 asset_ids,
                 weights,
-                horizon_days=horizon_days,
+                horizon_observations=horizon_observations,
             )
         except ValueError:
             return None
@@ -361,6 +368,8 @@ class SimulationAnalytic(RiskAnalytic):
         asset_ids,
         weights,
         cash_weight,
+        *,
+        steps_per_year: float | None = None,
     ) -> tuple[SimulationEngineRequest, int]:
         """Carry the real history across the boundary, and nothing estimated."""
         matrix = align_simple_returns(returns_by_asset, asset_ids)
@@ -375,20 +384,28 @@ class SimulationAnalytic(RiskAnalytic):
         # parameter validation runs before any series exists. Measured: the same
         # `block_length_days=900` is accepted against 1000 observations and
         # refused against 30 -- the payload never changes, only the user's data.
+        # The block is in calendar days and the history in observations, so the
+        # block is converted at the history's own frequency before they meet.
         #
         # INVALID_PARAMETERS rather than INSUFFICIENT_HISTORY on purpose. The
         # latter says "get more history", which the user usually cannot do; the
         # block length is a control they can simply lower. The code has to name
         # the action that is actually available.
-        if params.block_length_days is not None and params.block_length_days > observations:
-            raise RiskUnavailableError(
-                f"block_length_days {params.block_length_days} exceeds the {observations} observations available in the selected range",
-                code=RiskErrorCode.INVALID_PARAMETERS,
-                details={
-                    "block_length_days": params.block_length_days,
-                    "observations": observations,
-                },
+        if params.block_length_days is not None:
+            block_length_observations = calendar_days_to_observations(
+                params.block_length_days,
+                DEFAULT_STEPS_PER_YEAR if steps_per_year is None else steps_per_year,
             )
+            if block_length_observations > observations:
+                raise RiskUnavailableError(
+                    f"block_length_days {params.block_length_days} spans {block_length_observations} observations, more than the {observations} available in the selected range",
+                    code=RiskErrorCode.INVALID_PARAMETERS,
+                    details={
+                        "block_length_days": params.block_length_days,
+                        "block_length_observations": block_length_observations,
+                        "observations": observations,
+                    },
+                )
         request = SimulationEngineRequest(
             process=RiskSimulationProcess.BLOCK_BOOTSTRAP,
             regime=params.regime,
@@ -397,6 +414,7 @@ class SimulationAnalytic(RiskAnalytic):
             historical_returns=matrix.tolist(),
             historical_digest=historical_returns_digest(matrix),
             block_length_days=params.block_length_days,
+            steps_per_year=steps_per_year,
             bootstrap_seed=params.bootstrap_seed,
             weights=weights,
             cash_weight=cash_weight,

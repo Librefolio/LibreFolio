@@ -1,6 +1,6 @@
 # 📉 EMA — Exponential Moving Average
 
-The EMA tracks the **trend** by smoothing daily price noise, giving more weight to recent observations than older ones.
+The EMA tracks the **trend** by smoothing session-to-session price noise, giving more weight to recent observations than older ones.
 
 ---
 
@@ -21,7 +21,7 @@ $$
 where $P_t$ is the closing price at time $t$ and $\alpha$ is the **smoothing coefficient**.
 
 **Mapping $N$ → $\alpha$.**
-Traders specify a "period" $N$ (in days). The coefficient is derived by matching the *average age* of data between an EMA and a Simple Moving Average (SMA) of the same window:
+Traders specify a "period" $N$ (in sessions). The coefficient is derived by matching the *average age* of data between an EMA and a Simple Moving Average (SMA) of the same window:
 
 $$
 \text{Age}_{SMA} = \frac{N-1}{2}, \qquad
@@ -42,7 +42,7 @@ For example, $N = 14 \implies \alpha = 2/15 \approx 0.133$.
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Lookback window in days. Higher → smoother, slower. |
+| Period ($N$) | `period` | 14 | Lookback window in sessions. Higher → smoother, slower. |
 | Offset | `offset` | 0 | Vertical shift as % of base value. |
 
 ---

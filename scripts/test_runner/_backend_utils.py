@@ -347,7 +347,7 @@ Tests for utility modules and helper functions:
         "gate-i18n-usage",
         utils_gate_i18n_usage,
         name="i18n Usage Gate",
-        desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
+        desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, a key prefix chosen between two literals is expanded over both branches, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
         isolation="pure",
     )
     add_test(

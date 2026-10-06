@@ -510,3 +510,68 @@ volte non è uguale nemmeno a sé stessa*.
 lo facessi, il fatto che una corsa dei cancelli lasci dietro una corsia non lo saprebbe
 nessuno, e il prossimo giro succederebbe su una corsia da cui qualcuno misura»*.
 **Ripulire un effetto collaterale è il modo più efficace di impedire che venga scoperto.**
+
+---
+
+## I vincoli del round 5 (dal 23/09/2026)
+
+### Ⓢ — due corsie, due scopi: la copia di prod non vede mai una suite
+
+| | porta | data-dir | uso |
+|---|---|---|---|
+| **copia di prod** | `6162` | `/tmp/librefolio-r2-risk-prodcopy` | server, verifiche, review col developer |
+| **suite** | `6152` | `/tmp/librefolio-r2-risk` | **solo** `dev.py test …` |
+
+🔴 **Mai un `dev.py test` sulla copia di prod.** Il runner **distrugge** la data-dir su cui gira,
+per disegno: la ripopola con i mock (`_backend_api.py:592`, `_frontend_common.py:163`,
+`_backend_services.py:819`). Una suite lanciata lì cancellerebbe i dati del developer e girerebbe
+comunque sui mock.
+
+**La copia si fa dalla snapshot**, non dal main checkout (che i figli non possono leggere):
+
+```bash
+SNAP=/tmp/librefolio-r2-prod-snapshot
+COPIA=/tmp/librefolio-r2-risk-prodcopy
+test -f "$SNAP/sqlite/app.db" \
+  && test ! -e "$SNAP/.librefolio-production-data" \
+  && { [ ! -e "$COPIA" ] || mv "$COPIA" "$COPIA.prev-$(date +%Y%m%d-%H%M%S)"; } \
+  && cp -R "$SNAP" "$COPIA" \
+  && chmod -R u+w "$COPIA" \
+  && sqlite3 "$COPIA/sqlite/app.db" "SELECT version_num FROM alembic_version" \
+  || echo "❌ copia NON eseguita: fermati e chiedi"
+```
+
+Deve stampare `004_release_1_2_0_schema`. La snapshot è `a-w`, da qui il `chmod`. **Se manca
+(reboot), si chiede al coordinator**: non si ricostruisce. Prima di passare il server al developer
+per una review, **si rinfresca**: deve trovare i suoi dati, non gli esperimenti.
+
+**Credenziali**: fornite dal developer (messaggio del coordinator, 23/09), non trascritte in file versionati. `dev.py user` non ha
+`--data-dir` e senza `--test-db` mira al prod del checkout: **prima `list`, poi `reset`, solo sulla
+copia**, sempre con `LIBREFOLIO_TEST_DATA_DIR` puntata sulla copia.
+
+### Ⓣ — la catena Alembic è a quattro, e non si allunga
+
+`001 → 002 → 003_scheduler_timezone → 004_release_1_2_0_schema`. Le tre revisioni post-002 del round
+precedente — comprese le due `003_*` e la merge `ab290f6b6756` — **non esistono più**. **Niente
+`005`**: se serve una colonna, si chiede, e il developer aggiorna la `004`, che non è rilasciata.
+Due migrazioni scritte in parallelo non producono conflitto Git e biforcano la catena in silenzio.
+Se compare `Can't locate revision '003_…'`, è un DB vecchio: manca `--data-dir`, non va riparata la
+catena.
+
+### Ⓤ — `api sync` è in-process
+
+`scripts/list_api_endpoints.py:69` fa `app.openapi()`: nessun `uvicorn`, nessuna porta, nessun DB.
+La skill `devpy-server` che lo descrive come «avvia un server temporaneo» è **obsoleta** su questo
+punto. `generated.ts` e `openapi.json` sono ignorati da git: rigenerarli non è una modifica di codice.
+
+### Ⓥ — chi scrive cosa nel round 5
+
+| superficie | owner | Risk |
+|---|---|---|
+| `riskAnalysisHelpers.ts` e `.test.ts` — **file interi** | **J** | non li tocca; se servisse, passa dal coordinator |
+| `utils/assetTypes.ts` | **K** | consuma, non scrive |
+| `equity_crash.yml`, `global_risk_off.yml` (le righe di R17) | **K**, nel commit dell'enum | fuori da quei file finché R17 non è integrato |
+| `CorrelationHeatmap.svelte` | **F** | non la modifica |
+| gli 11 testid di `risk-lab` composti da `RiskLevelSection` (10) e `TornadoChart` (1), più 3 radici scelte da chi li monta | — | non li rinomina senza avvisare (corretto il 24/09: erano scritti «12» e solo `RiskLevelSection`) |
+| `AllocationPanel.svelte`, `AllocationHistoryChart.svelte`, `allocationHierarchy.ts` | **I** | solo aggiunte in file nuovi |
+| `risk-lab.spec.ts` | **F** | non lo tocca |

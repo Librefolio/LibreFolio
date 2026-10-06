@@ -43,7 +43,7 @@
          * number that failed to load, not as one that does not apply.
          *
          * So the default is derived from the payload and the prop is an explicit
-         * override. The condition is the one `formatScopedCurrencyAmount:163`
+         * override. The condition is the one `formatScopedCurrencyAmount`
          * already uses, reused rather than restated, so the guards across the
          * subsystem converge on the same predicate even where the string differs.
          */

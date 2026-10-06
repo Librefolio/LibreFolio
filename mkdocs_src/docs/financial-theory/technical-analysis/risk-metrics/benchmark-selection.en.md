@@ -54,6 +54,8 @@ The comparison is not free-form. The analysis takes a **real asset that exists i
 
 **It must have a usable price history.** The benchmark's series is prepared exactly like the positions under analysis, on the same shared calendar and in the same target currency. If no usable series can be built for it, the result is unavailable rather than approximate.
 
+The benchmark picker asks the engine which assets have a usable price history of their own over the analysis period and in the target currency, and lists the others apart, read-only, each with the engine's reasons. A benchmark chosen earlier that does not pass this check stays chosen and shown in the picker, but nothing is measured against it. If the check cannot be made, nothing is locked.
+
 **It must move.** Beta divides by the variance of the comparison series, so a reference that never moves has no variance to divide by: beta comes back undefined, correlation with it, and both raise an explicit warning rather than a number. This is why a flat reference — a constant, a hypothetical fixed rate of return — cannot function as a benchmark here. The constraint is not a policy that could be waived; it is the arithmetic of the ratio.
 
 !!! info "A benchmark is not a threshold"
@@ -64,15 +66,45 @@ The comparison is not free-form. The analysis takes a **real asset that exists i
 
 ## 📏 The Shared Window {: #the-shared-window }
 
-Two series rarely cover exactly the same dates, so the comparison is computed on the **intersection** of the two calendars: only dates present in both contribute.
+Two series rarely cover exactly the same dates, so the comparison is computed on the **intersection** of the two calendars: on each shared date, each series contributes its returns since the previous shared date — for the first, since the primary's previous date — compounded into one. A benchmark quoted on days the primary skips — a crypto-asset at the weekend, beside a portfolio read on its [observation days](data-quality.md#coverage) — keeps those moves.
 
 Three consequences are published with the result.
 
 **A minimum applies.** Below 20 shared observations the comparison is not computed at all: the result comes back unavailable with an insufficient-history reason carrying both the number of shared observations found and the number required. A benchmark that barely overlaps your history produces no figure instead of a fragile one.
 
-**Coverage is reported.** The result records what fraction of the primary series' own dates survived the intersection — that is, how much of your history the chosen reference was actually able to cover. A benchmark launched halfway through your holding period does not silently compare half a period; it says so.
+**Coverage is reported.** The result records what fraction of the primary series' own dates survived the intersection — that is, on how many of your dates the chosen reference had a return of its own. A benchmark launched halfway through your holding period does not silently compare half a period; it says so.
 
 **The annualisation factor is re-measured on the shared window.** Because the intersection is generally shorter and sparser than the full analysis window, any annualised quantity in the comparison is scaled by a factor measured on the common sample rather than inherited from the wider analysis — the same observed-factor logic described in [Observed Annualization](observed-annualization.md), applied to the overlap.
+
+---
+
+## 📈 The Risk/Return Line {: #the-risk-return-line }
+
+On the **Risk** tab of the Dashboard and of a broker's page, the level **Am I being paid for this risk?** draws a chart of risk against return — annualised volatility across, average annual return up. It shows one dot per holding, sized by its weight in the portfolio; one for the portfolio itself, as composed today and replayed over the window; one for the benchmark, drawn as a diamond; and a straight dashed line.
+
+The line starts on the vertical axis at the **risk-free rate the page uses** — the same rate as its Sharpe and Sortino figures, which today is 0 on the Dashboard and on a broker's page — and runs **through the benchmark**. In theory this is the Capital Market Line, which runs through the *market portfolio*; here the benchmark is what stands in for the market:
+
+$$R = R_f + \frac{R_b - R_f}{\sigma_b}\,\sigma$$
+
+where:
+
+- $\sigma$ is an annualised volatility, and $R$ the average annual return the line reaches at that volatility;
+- $R_f$ is the risk-free rate the page uses;
+- $R_b$ and $\sigma_b$ are the benchmark's average annual return — its mean return per period, scaled to a year — and its annualised volatility.
+
+**Reading it.** The slope, $(R_b - R_f)/\sigma_b$, is the benchmark's [Sharpe ratio](sharpe-ratio.md): its average return over the risk-free rate per unit of volatility. A dot above the line was better paid for its risk than the benchmark — more average return over the risk-free rate per unit of volatility, a higher Sharpe ratio. A dot below it was paid less. Like every relative figure on this page, that is a comparison with the reference, not a grade.
+
+**Choosing the benchmark for it.** Because the benchmark stands for "the market", a **broad global index** — a tracker of a world equity index, for example — is the most meaningful stand-in. A domestic index, a sector index or a bond fund still draws a line, but turns it into a comparison with that narrower reference: see [Why the Choice Is Already Half the Verdict](#why-the-choice-is-already-half-the-verdict).
+
+**With no benchmark chosen** — or one that could not be measured over the window — the line runs through **your own portfolio** instead. Above it then means better paid than the portfolio as a whole, and the slope is the portfolio's Sharpe ratio.
+
+**A benchmark you hold** is drawn once, not as two dots: it is your holding's own dot, at its weight, in the benchmark's style, and the line runs through it.
+
+**On the Assets page.** Its [Correlation tab](../../../user/assets/correlation.md#what-did-each-pay), which compares a selection of assets you put together, draws the same line when a benchmark is chosen and measured over the window: it starts at the risk-free rate the page uses — 0 today, as on the Dashboard — and runs through the benchmark's diamond, so its slope is the benchmark's Sharpe ratio and a dot above it was better paid for its risk than the benchmark. A benchmark that is one of the selected assets is drawn once, as that asset's own dot in the benchmark's style, and the line runs through it. With no benchmark, or one that could not be measured over the window, no line is drawn, because no portfolio can take the benchmark's place — a selection has no weights and so no whole of its own to run a line through — and the chart shows the trade-off and leaves the judgement to you.
+
+!!! warning "Prices only, for now"
+
+    The returns on this chart come from price series alone: coupons and dividends are not included yet. A holding that pays out a large share of its return as income therefore sits lower than its total return would place it — and when the benchmark does, the line tilts down with it.
 
 ---
 
@@ -92,7 +124,7 @@ Three consequences are published with the result.
 
 !!! warning "A shared calendar hides what it discards"
 
-    Only dates present in both series are compared. If the reference is missing precisely during the turbulent stretch that matters most, those dates leave the comparison entirely, and the remaining figure is calmer than the period it claims to describe. The coverage figure is what makes that loss visible — read it before reading the beta.
+    Only dates present in both series are compared. If the reference is missing precisely during the turbulent stretch that matters most, the comparison sees that stretch as a single compounded step — or not at all, before the reference's first shared date — rather than as it unfolded. The coverage figure is what makes that loss visible — read it before reading the beta.
 
 ---
 
@@ -102,3 +134,4 @@ Three consequences are published with the result.
 - 🔗 **[Correlation](correlation.md)** — whether the chosen reference is relevant at all
 - 📅 **[Observed Annualization](observed-annualization.md)** — why the factor is re-measured on the overlap
 - 🧪 **[Data Quality](data-quality.md)** — what the shared calendar drops, and how it is reported
+- 📐 **[Sharpe Ratio](sharpe-ratio.md)** — the slope of the risk/return line
