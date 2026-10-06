@@ -339,14 +339,25 @@ The labels are
 - `readFileAlone(fileId, code)`: the file gets `code`, and only its plugin changes — selected, it
   stays selected with `code`; unselected, it stays unselected, and `pickBestPlugin` gives it `code`
   when it is ticked.
-- `removeFileFromSet(fileId)`: the file gets `''`, and leaves the selection. It is the only one of
-  these commands that changes the selection: a plugin choice never ticks or unticks a file.
+- `removeFileFromSet(fileId)`: the file gets `''` — out of its set, with no plugin, waiting for a
+  new choice — and again only its plugin changes: selected, it stays selected with
+  `pluginCode: ''`, like a member that `readSetAs(set, null)` leaves with no plugin
+  (*Select plugin…*, its `compatible_plugins` offered, the set's plugin included; **Parse** waits);
+  unselected, it stays unselected, and `pickBestPlugin` gives it `''` when it is ticked. No
+  single-file plugin is picked for it, even one that reads the file: taking a file out of a set
+  says «not with this plugin», not «not at all», and the next plugin is the user's choice.
+- None of these commands changes the selection: `readSetAs`, `readFileAlone` and
+  `removeFileFromSet`, like a plugin choice (`updateFilePlugin`), map `selectedFiles`, changing the
+  `pluginCode` of the files they target, and never add or drop a file. The same rule holds for
+  every report-set plugin
+  ([BRIM Plugin Guide → The set and its API](../../../architecture/patterns/brim_plugin_guide.md#the-set-and-its-api)).
 - **Back into the set**: a file out of its set is a single file, in the broker's table (headed
-  **Other files of this broker** while the broker has a set). Unselected, its plugin column shows
-  `—`; ticked, it gets its `ImportPluginSelect`. Choosing the set's plugin there goes through
-  `updateFilePlugin`, and the file is a member again. After `readSetAs(set, null)` the set is
-  re-formed this way, file by file: the first member given the set's plugin brings back the set —
-  same broker, plugin and batch, so the same key — and its card, holding that file only and
+  **Other files of this broker** while the broker has a set), selected or not as it was. Selected,
+  it has its `ImportPluginSelect`; unselected — a file of a set that was not selected, say — its
+  plugin column shows `—` until the user ticks it. Choosing the set's plugin in the select goes
+  through `updateFilePlugin`, and the file is a member again. After `readSetAs(set, null)` the set
+  is re-formed this way, file by file: the first member given the set's plugin brings back the set
+  — same broker, plugin and batch, so the same key — and its card, holding that file only and
   incomplete while a role it needs is out; each next member joins it.
 
 `choicesFor(brokerId)` lays this session's choices over the memory of the last analysis

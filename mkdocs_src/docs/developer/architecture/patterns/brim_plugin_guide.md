@@ -833,6 +833,19 @@ the memory is read back from `GET /files` (notably `derived_from`, `status`, `pr
 `parsed_plugin_code`) —
 [Import Wizard → The memory of the last analysis](../../frontend/components/features/import-wizard.md#set-memory).
 
+**How the user changes a set: one rule for every report-set plugin.** The wizard applies it, so a
+plugin has nothing to implement, but it is the contract every set lives in:
+
+- choosing a report-set plugin for a file puts the file in that plugin's set — the one of its
+  broker and upload batch;
+- taking a file out of its set never changes its tick: the file keeps its tick and loses its
+  plugin, waiting for a new choice — «not with this plugin» is not «not at all»;
+- *Read as* (another report-set plugin, or the files one by one) and *Read alone with ‹plugin›*
+  change only how the files are read, never which ones are ticked.
+
+A file taken out by mistake goes back when the set's plugin is chosen for it again
+([Import Wizard → How a set is read](../../frontend/components/features/import-wizard.md#set-read-as)).
+
 All routes live under `/api/v1/brokers/import` and require EDITOR or OWNER access on the broker.
 
 - **`POST /upload`** takes an optional form field `batch_id`, a UUID (anything else is a 422),
