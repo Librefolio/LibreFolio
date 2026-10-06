@@ -57,8 +57,14 @@ function releaseWhenSettled(promise: Promise<unknown>, release: () => void): voi
     promise.then(release, release);
 }
 
-/** How many times a catalog fetch may be re-issued after its answer is discarded. */
-const CATALOG_DISCARD_RETRIES = 3;
+/**
+ * How many times in all a risk question is asked while its answer keeps being discarded: the
+ * first request plus two re-asks (D374, «come il catalogo»). One constant for the two catalog
+ * fetches below and for the controller's base wave and on-demand runs, so the bound cannot
+ * drift apart between them. Three, not two: on Asset Global a slow request can cross more than
+ * one 30 s live-price poll, and each poll moves the cache generation.
+ */
+export const RISK_DISCARD_ATTEMPTS = 3;
 
 export function getRiskQuerySnapshot(request: RiskQueryRequest): RiskQueryCacheSnapshot {
     const key = makeRiskRequestKey(request);
@@ -83,7 +89,7 @@ export async function fetchRiskCatalog(force = false): Promise<RiskCatalogRespon
         // means the answer describes a world that no longer exists, so the right
         // reaction is to ask again rather than hand the caller a null it can only
         // report as an error. Bounded, so a generation that keeps moving cannot spin.
-        for (let attempt = 0; attempt < CATALOG_DISCARD_RETRIES; attempt += 1) {
+        for (let attempt = 0; attempt < RISK_DISCARD_ATTEMPTS; attempt += 1) {
             const requestSessionGeneration = getClientSessionGeneration();
             const requestCacheGeneration = cacheGeneration;
             const response = await zodiosApi.get_risk_catalog_api_v1_risk_catalog_get();
@@ -108,7 +114,7 @@ export async function fetchRiskScenarioCatalog(force = false): Promise<RiskScena
 
     const promise = (async () => {
         // Same discard-is-not-failure reasoning as fetchRiskCatalog above.
-        for (let attempt = 0; attempt < CATALOG_DISCARD_RETRIES; attempt += 1) {
+        for (let attempt = 0; attempt < RISK_DISCARD_ATTEMPTS; attempt += 1) {
             const requestSessionGeneration = getClientSessionGeneration();
             const requestCacheGeneration = cacheGeneration;
             const response = await zodiosApi.get_scenario_catalog_api_v1_risk_scenario_catalog_get();

@@ -15,6 +15,7 @@
  */
 
 import {getClientSessionUserId} from '$lib/stores/app/clientSession';
+import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
 
 /** The fields of an asset this module reads. */
 export interface SelectableAsset {
@@ -169,31 +170,6 @@ function fallbackSelection(assets: readonly SelectableAsset[]): number[] {
         .map((asset) => asset.id);
 }
 
-/** The criteria the filter row can narrow the candidate set by. */
-export interface SelectionFilters {
-    /** Empty means "every type" — an empty filter is not an empty result. */
-    types: readonly string[];
-    currencies: readonly string[];
-}
-
-/**
- * Apply the filter row.
- *
- * An empty criterion means *unconstrained*, not *matches nothing*: a filter row
- * that starts empty must show everything, or the page opens blank and the user
- * has to guess why.
- */
-export function applyFilters<T extends SelectableAsset>(assets: readonly T[], filters: SelectionFilters): T[] {
-    return assets.filter((asset) => {
-        // `||`, not `??`: an empty-string type is as unclassified as a null
-        // one, and under `??` it would match no criterion at all — an asset
-        // that disappears the moment any filter is switched on.
-        if (filters.types.length > 0 && !filters.types.includes(asset.asset_type || 'OTHER')) return false;
-        if (filters.currencies.length > 0 && !filters.currencies.includes(asset.currency)) return false;
-        return true;
-    });
-}
-
 /** Which mass action was pressed. */
 export type BulkAction = 'all' | 'none' | 'invert';
 
@@ -241,53 +217,14 @@ function dedupe(ids: readonly number[]): number[] {
 }
 
 /**
- * A text as the "+" picker's search compares it: lower case, accents removed.
- * "societe" finds "Société", which a plain `includes` would miss.
- */
-export function foldForSearch(text: string): string {
-    return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-}
-
-/**
- * The rows of the "+" picker: the candidates not selected yet whose search text
- * holds **every** word of the query, in the order the caller passed them.
+ * The benchmark the lab's comparison levels measure against, or `null`.
  *
- * Words rather than the whole query, so "etf usd" finds an ETF quoted in dollars
- * whichever way its name is written. An empty query lists every candidate.
+ * Read from the shared picker (`BenchmarkSelect`): only a choice it has confirmed against the
+ * asset list (`set`) is used — a stored id still being confirmed, or one no asset matches,
+ * never reaches a request. A choice that is also one of the selected assets is used too
+ * (D371): the backend keeps it in the selection, measures it like the others, and leaves it
+ * out of the comparison's items, so it is the yardstick of the others and never of itself.
  */
-export function pickerRows<T extends {id: number}>(candidates: readonly T[], selected: readonly number[], query: string, searchText: (asset: T) => string): T[] {
-    const taken = new Set(selected);
-    const words = foldForSearch(query).split(/\s+/).filter(Boolean);
-    return candidates.filter((asset) => {
-        if (taken.has(asset.id)) return false;
-        if (words.length === 0) return true;
-        const haystack = foldForSearch(searchText(asset));
-        return words.every((word) => haystack.includes(word));
-    });
-}
-
-/**
- * The picker's "select visible" switch.
- *
- * It **unchecks** the visible rows when there is nothing left it could check:
- * every visible row is checked already, or the selection has no room left. Otherwise
- * it checks the visible rows in order, up to `room`, the number of assets the
- * selection can still take. Rows checked under an earlier query stay checked
- * either way: a search narrows what is shown, not what was chosen.
- */
-export function toggleVisibleRows(checked: readonly number[], visible: readonly number[], room: number): number[] {
-    const current = new Set(checked);
-    const unchecked = visible.filter((id) => !current.has(id));
-    const free = Math.max(0, room - current.size);
-    if (unchecked.length === 0 || free === 0) {
-        const shown = new Set(visible);
-        return checked.filter((id) => !shown.has(id));
-    }
-    return [...checked, ...unchecked.slice(0, free)];
-}
-
-/** Whether the switch above would uncheck, which is what its label must say. */
-export function visibleRowsAllChecked(checked: readonly number[], visible: readonly number[], room: number): boolean {
-    const current = new Set(checked);
-    return visible.length > 0 && (visible.every((id) => current.has(id)) || current.size >= room);
+export function labBenchmarkId(state: RiskBenchmarkState, value: number | null): number | null {
+    return state === 'set' ? value : null;
 }

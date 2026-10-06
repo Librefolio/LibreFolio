@@ -17,8 +17,9 @@ const fetchRiskCatalog = vi.hoisted(() => vi.fn());
 const fetchRiskScenarioCatalog = vi.hoisted(() => vi.fn());
 const queryRisk = vi.hoisted(() => vi.fn());
 const invalidateRisk = vi.hoisted(() => vi.fn());
-/** Read at call time by the `hasRiskCapability` stub; `beforeEach` puts it back. */
-const capability = vi.hoisted(() => ({supported: true}));
+/** Read at call time by the `hasRiskCapability` stub; `beforeEach` puts it back. `only`, when a
+ *  test sets it, narrows "everything" to what one catalogue offers. */
+const capability = vi.hoisted(() => ({supported: true, only: null as ((code: string, scopeKind: string, mode: string) => boolean) | null}));
 
 vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
     const actual = await importOriginal<typeof import('$lib/stores/risk/riskStore.svelte')>();
@@ -30,13 +31,27 @@ vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
         invalidateRisk,
         // Every analytic is available: capability gating is the panel's business,
         // not the controller's, and stubbing it here keeps the subject singular.
-        // The one test about an unsupported analytic flips it for itself.
-        hasRiskCapability: () => capability.supported,
+        // The one test about an unsupported analytic flips it for itself, and the
+        // asset-set cases narrow it to what an asset set is offered, so the lab's
+        // request here is the one the lab sends.
+        hasRiskCapability: (_catalog: unknown, code: string, scopeKind: string, mode: string) => capability.supported && (capability.only?.(code, scopeKind, mode) ?? true),
     };
 });
 
 import {assertEffectsRun, effectRoot, reactiveBox, recordReads} from '$test/runes.svelte';
-import {ANSWER_DISCARDED_CODE, baseSignature, createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES, mergeQualityIssues, ON_DEMAND_ANALYSES, type OnDemandAnalysis, type RiskControllerInputs, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+import {
+    ANSWER_DISCARDED_CODE,
+    baseSignature,
+    createRiskPanelController,
+    discardedErrorCodes,
+    LEVEL_ON_DEMAND_ANALYSES,
+    mergeQualityIssues,
+    ON_DEMAND_ANALYSES,
+    type OnDemandAnalysis,
+    type RiskControllerInputs,
+    type RiskControllerOptions,
+    type RiskPanelController,
+} from '$lib/stores/risk/riskPanelController.svelte';
 import {normalizeQualityIssue} from '$lib/components/risk/riskAnalysisHelpers';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 
@@ -69,9 +84,9 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
     return {promise, resolve};
 }
 
-function mountController(initial: RiskControllerInputs = defaultInputs()) {
+function mountController(initial: RiskControllerInputs = defaultInputs(), options: RiskControllerOptions = {}) {
     const inputs = reactiveBox(initial);
-    const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => inputs));
+    const {value: controller, stop} = effectRoot(() => createRiskPanelController(() => inputs, options));
     flushSync();
     return {controller, inputs, stop};
 }
@@ -286,6 +301,33 @@ function answerBaseWave(historical: object[], current: object[]): void {
     queryRisk.mockImplementation((request: RiskQueryRequest) => Promise.resolve({items: request.mode === 'historical' ? historical : current}));
 }
 
+/**
+ * Answers the base wave's two questions, historical and current-composition, each from its own
+ * queue in order, and counts them. One attempt asks both at once, so the queues advance together
+ * and each one says what its half of the wave answered on each attempt.
+ *
+ * As in `scriptOnDemand`, a question past the end of its queue is rejected rather than answered:
+ * a controller that asks more often than a test allows is caught by the count, never rescued by a
+ * reply nobody scripted. An on-demand question has no place in a base wave and is rejected too.
+ */
+function scriptBaseWave(answers: Record<RiskMode, Scripted[]>) {
+    const queues: Record<RiskMode, Scripted[]> = {historical: [...answers.historical], current_composition: [...answers.current_composition]};
+    const asked: Record<RiskMode, number> = {historical: 0, current_composition: 0};
+
+    queryRisk.mockImplementation((request: RiskQueryRequest) => {
+        if (onDemandAnalysisOf(request) !== null) return Promise.reject(new Error('an on-demand question reached a script written for the base wave'));
+        asked[request.mode] += 1;
+        const next = queues[request.mode].shift();
+        if (next === undefined) return Promise.reject(new Error(`the ${request.mode} question was asked ${asked[request.mode]} times; this test scripted fewer answers`));
+        return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
+    });
+
+    return {
+        asked: (mode: RiskMode) => asked[mode],
+        unused: (mode: RiskMode) => queues[mode].length,
+    };
+}
+
 describe('riskPanelController', () => {
     beforeEach(() => {
         fetchRiskCatalog.mockReset().mockResolvedValue(CATALOG);
@@ -293,6 +335,7 @@ describe('riskPanelController', () => {
         queryRisk.mockReset().mockResolvedValue({items: []});
         invalidateRisk.mockReset();
         capability.supported = true;
+        capability.only = null;
     });
 
     it('does not touch its inputs while the host script is still running', () => {
@@ -527,12 +570,14 @@ describe('riskPanelController', () => {
 
     it('separates an answer that was discarded from one that came back empty', async () => {
         // The counterpart to the test above, and the reason `loadDiscarded` exists at
-        // all: when the re-ask is discarded too, the honest report is "your answer was
-        // thrown away", which is neither an error nor an absence of data. Surrendering
-        // in silence is what produced the original defect; surrendering out loud is a
+        // all: when every re-ask is discarded too — three attempts in all, the bound the
+        // catalog fetch already had — the honest report is "your answer was thrown
+        // away", which is neither an error nor an absence of data. Surrendering in
+        // silence is what produced the original defect; surrendering out loud is a
         // state a surface can act on.
         const {controller, stop} = mountController();
 
+        const questionsPerWave = 2;
         let asked = 0;
         queryRisk.mockImplementation(() => {
             asked += 1;
@@ -541,12 +586,81 @@ describe('riskPanelController', () => {
 
         await controller.loadBase(false);
 
-        expect(controller.loadDiscarded, 'a load whose answer was discarded twice running says nothing about it, so an empty panel is indistinguishable from a portfolio with no data').toBe(true);
+        expect(controller.loadDiscarded, 'a load whose answer was discarded on every attempt says nothing about it, so an empty panel is indistinguishable from a portfolio with no data').toBe(true);
         expect(controller.loadError, 'a discard was promoted to a failure; nothing failed, and an error banner would describe a breakage that did not happen').toBe(false);
         expect(controller.historicalResults, 'an answer that was never accepted was filed as a result, which asserts an empty portfolio on the strength of a request this client threw away').toEqual([]);
         expect(controller.currentResults, 'same for the current-composition half of the wave: a discard is not a measurement').toEqual([]);
-        expect(asked, 'the re-ask is not bounded at one retry: a session generation that keeps moving would spin here instead of surrendering, or the second discard was never attempted').toBe(4);
+        expect(asked, 'the wave is not bounded at three attempts: a session generation that keeps moving would spin here instead of surrendering, or the controller surrendered before its third attempt').toBe(3 * questionsPerWave);
         expect(controller.initialLoading, 'the panel is still spinning after the controller gave up, so the discard it just recorded can never be rendered').toBe(false);
+        stop();
+    });
+
+    // ------------------------------------------------------------------
+    // How many times. The live price poll of Asset Global invalidates the risk
+    // cache every 30 s, so a slow laboratory wave can be discarded more than once
+    // with nothing wrong anywhere. A base wave therefore gets the catalog's bound —
+    // three attempts in all, `RISK_DISCARD_ATTEMPTS` — re-asked at once, with no
+    // backoff, and `loadDiscarded` (the retry) stands only after the third discard.
+    // A throw is a failure at whichever attempt it lands, and is never re-asked.
+    // ------------------------------------------------------------------
+    it('re-asks a base wave discarded twice running, and applies the third answer', async () => {
+        const {controller, stop} = mountController();
+        const script = scriptBaseWave({
+            historical: [null, null, answer('historical_kpi')],
+            current_composition: [null, null, answer('risk_contribution')],
+        });
+
+        await controller.loadBase(false);
+
+        expect(script.asked('historical'), 'the wave gave up after its second discard: the bound is three attempts in all, and the third answer is the one that would have been kept').toBe(3);
+        expect(script.asked('current_composition'), 'the current-composition half, discarded with the historical one, was not asked once per attempt').toBe(3);
+        expect(controller.historicalResults, 'the third answer was not applied: the panel stays empty although its data arrived').toEqual([{analytic_code: 'historical_kpi'}]);
+        expect(controller.currentResults, 'only half of the third answer was applied').toEqual([{analytic_code: 'risk_contribution'}]);
+        expect(controller.loadDiscarded, 'a wave that loaded on its third attempt still reports itself discarded, so the surface would offer a retry beside the figures it already has').toBe(false);
+        expect(controller.loadError, 'a discard was reported as a failure; nothing failed').toBe(false);
+        expect(controller.initialLoading).toBe(false);
+        stop();
+    });
+
+    it('says so when a base wave is discarded three times running, and asks no fourth time', async () => {
+        const {controller, stop} = mountController();
+        // A fourth answer is there to be taken: a controller that asked until something
+        // stuck, instead of within its bound, would take it and look healthy.
+        const script = scriptBaseWave({
+            historical: [null, null, null, answer('historical_kpi from a fourth attempt')],
+            current_composition: [null, null, null, answer('risk_contribution from a fourth attempt')],
+        });
+
+        await controller.loadBase(false);
+
+        expect(script.asked('historical'), 'the wave is not bounded at three attempts: it surrendered after its second discard, or it asked a fourth time').toBe(3);
+        expect(script.unused('historical'), 'a fourth answer was consumed').toBe(1);
+        expect(script.asked('current_composition'), 'the current-composition half, discarded with the historical one, was not asked once per attempt').toBe(3);
+        expect(controller.loadDiscarded, 'a wave discarded on all three attempts says nothing about it, so an empty panel offers no retry').toBe(true);
+        expect(controller.loadError, 'a discard was promoted to a failure').toBe(false);
+        expect(controller.historicalResults, 'a discard, or an answer the bound forbade asking for, was filed as a result').toEqual([]);
+        expect(controller.currentResults).toEqual([]);
+        expect(controller.initialLoading, 'the panel is still spinning after the controller gave up').toBe(false);
+        stop();
+    });
+
+    it.each<[string, Scripted[]]>([
+        ['on the first attempt', [new Error('synthetic calculation failure')]],
+        ['on the re-ask after a discard', [null, new Error('synthetic calculation failure')]],
+        ['on the third attempt, after two discards', [null, null, new Error('synthetic calculation failure')]],
+    ])('reports a base wave that fails %s as a failure, and does not ask again', async (_when, answers) => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        onTestFinished(() => consoleError.mockRestore());
+        const {controller, stop} = mountController();
+        const script = scriptBaseWave({historical: answers, current_composition: answers});
+
+        await controller.loadBase(false);
+
+        expect(script.asked('historical'), 'a failure was asked again, or a discard before it was not').toBe(answers.length);
+        expect(controller.loadError, 'a wave that threw is not reported as a failure').toBe(true);
+        expect(controller.loadDiscarded, 'a failure was reported as a discarded answer: nothing was thrown away, the calculation broke').toBe(false);
+        expect(controller.historicalResults).toEqual([]);
+        expect(controller.initialLoading).toBe(false);
         stop();
     });
 
@@ -600,10 +714,11 @@ describe('riskPanelController', () => {
     // turns that from a rare state into a routine one.
     //
     // The contract these tests hold: a discard under a generation that still
-    // holds is re-asked once, with the same request; a second discard is said
+    // holds is re-asked with the same request, up to three attempts in all —
+    // `RISK_DISCARD_ATTEMPTS`, the catalog's bound — and a third discard is said
     // out loud through `discarded.<analysis>` — neither an error nor an empty
     // answer; a discard under a generation that moved is dropped like any stale
-    // answer, with no re-ask and no flag.
+    // answer, at whichever attempt, with no re-ask and no flag.
     // ------------------------------------------------------------------
     describe('an on-demand answer that was discarded', () => {
         it.each(ON_DEMAND_ANALYSES)('re-asks a discarded %s question once, with the same request, and shows the second answer', async (analysis) => {
@@ -623,19 +738,36 @@ describe('riskPanelController', () => {
             stop();
         });
 
-        it.each(ON_DEMAND_ANALYSES)('says so when a %s answer is discarded twice running, and stops asking', async (analysis) => {
+        it.each(ON_DEMAND_ANALYSES)('re-asks a %s question discarded twice running, with the same request, and shows the third answer', async (analysis) => {
             const {controller, stop} = mountController();
-            // An older answer is on screen: after two discards it must not stand under the new question.
+            const third = answer(`${analysis} third answer`);
+            const script = scriptOnDemand({[analysis]: [null, null, third]});
+            const build = vi.fn(() => QUESTIONS[analysis]);
+
+            await controller.runGuarded(analysis, build);
+
+            expect(script.asked(analysis), 'the run gave up after its second discard: the bound is three attempts in all, and the third answer is the one that would have been kept').toHaveLength(3);
+            expect(resultOf(controller, analysis), 'the third answer is not the one on screen').toEqual(third.items[0]);
+            expect(controller.discarded[analysis], 'a run that recovered on its third attempt still reports its answer discarded, so the level would offer a retry beside a result already on screen').toBe(false);
+            expect(build, 'a re-ask rebuilt the question instead of repeating the one whose answer was discarded').toHaveBeenCalledTimes(1);
+            expect(script.asked(analysis)[2], 'the third attempt is not the question that was discarded (request or cache policy differ)').toEqual(script.asked(analysis)[0]);
+            expect(loadingOf(controller, analysis), 'the spinner outlived the answer it was waiting for').toBe(false);
+            stop();
+        });
+
+        it.each(ON_DEMAND_ANALYSES)('says so when a %s answer is discarded three times running, and stops asking', async (analysis) => {
+            const {controller, stop} = mountController();
+            // An older answer is on screen: after three discards it must not stand under the new question.
             controller.setResult(analysis, answer(`${analysis} previous answer`).items[0] as never);
-            const script = scriptOnDemand({[analysis]: [null, null, answer(`${analysis} third answer`)]});
+            const script = scriptOnDemand({[analysis]: [null, null, null, answer(`${analysis} fourth answer`)]});
 
             await controller.runGuarded(analysis, () => QUESTIONS[analysis]);
 
-            expect(script.asked(analysis), 'the re-ask is not bounded at one: either the second discard was never re-asked, or a generation that keeps moving would spin here instead of surrendering').toHaveLength(2);
-            expect(script.unused(analysis), 'a third answer was consumed').toBe(1);
+            expect(script.asked(analysis), 'the re-ask is not bounded at three attempts: either the run surrendered after its second discard, or a generation that keeps moving would spin here instead of surrendering').toHaveLength(3);
+            expect(script.unused(analysis), 'a fourth answer was consumed').toBe(1);
             expect(resultOf(controller, analysis), 'an answer that was never accepted is on screen: the older answer survived under the new question, or a discard was filed as a result').toBeNull();
             expect(loadingOf(controller, analysis), 'the level is still spinning after the controller gave up, so the discard can never be rendered').toBe(false);
-            expect(controller.discarded[analysis], 'an answer discarded twice running disappears in silence: the reader sees an empty level and no reason to ask again').toBe(true);
+            expect(controller.discarded[analysis], 'an answer discarded three times running disappears in silence: the reader sees an empty level and no reason to ask again').toBe(true);
             stop();
         });
 
@@ -753,14 +885,57 @@ describe('riskPanelController', () => {
             stop();
         });
 
+        // The same rule at every attempt the bound now allows: a run superseded while it
+        // re-asks — by `resetAnalysis` or by a newer run of the same analysis — stops
+        // re-asking at once, and writes neither its outcome nor a discard over whatever
+        // replaced it. The resetAnalysis row for the second attempt is the case above.
+        it.each<[string, 2 | 3, 'resetAnalysis' | 'a newer run', OnDemandAnswer]>([
+            ['a newer run during its second attempt, which is discarded again', 2, 'a newer run', null],
+            ['resetAnalysis during its third attempt, which is discarded again', 3, 'resetAnalysis', null],
+            ['resetAnalysis during its third attempt, which comes back', 3, 'resetAnalysis', answer('replay answer to a withdrawn third attempt')],
+            ['a newer run during its third attempt, which is discarded again', 3, 'a newer run', null],
+        ])('stops re-asking when superseded by %s, and writes nothing', async (_title, attempt, supersede, late) => {
+            const {controller, stop} = mountController();
+            const inFlight = deferred<OnDemandAnswer>();
+            const newer = answer('replay answer to the newer run');
+            // The superseded run's discards, its attempt in flight, then the newer run's answer:
+            // a superseded run that asks once more finds the queue empty, and the count says so.
+            const script = scriptOnDemand({replay: [...Array<OnDemandAnswer>(attempt - 1).fill(null), inFlight.promise, newer]});
+            const build = () => QUESTIONS.replay;
+
+            const run = controller.runGuarded('replay', build);
+            // Settles on the attempt to supersede, or on the run if the controller gives up before it.
+            await Promise.race([script.askedTimes('replay', attempt), run]);
+            expect(script.asked('replay'), `precondition: the run never made its attempt ${attempt}: an answer discarded ${attempt - 1} times running was given up on instead of asked again`).toHaveLength(attempt);
+            expect(controller.replayLoading, 'precondition: the run is still in flight').toBe(true);
+
+            if (supersede === 'resetAnalysis') {
+                controller.resetAnalysis('replay');
+            } else {
+                await controller.runGuarded('replay', build);
+                expect(controller.replayResult, 'precondition: the newer run answered').toEqual(newer.items[0]);
+            }
+            inFlight.resolve(late);
+            await run;
+
+            const askedByTheNewerRun = supersede === 'a newer run' ? 1 : 0;
+            expect(script.asked('replay'), 'a superseded run asked again: its answer could only land under a question that has since been replaced').toHaveLength(attempt + askedByTheNewerRun);
+            expect(controller.replayResult, 'the superseded run wrote its outcome over what replaced it').toEqual(supersede === 'a newer run' ? newer.items[0] : null);
+            expect(controller.replayLoading).toBe(false);
+            expect(controller.discarded.replay, 'a superseded run reported a discard nobody is waiting for').toBe(false);
+            stop();
+        });
+
         it('clears the discard as soon as the same analysis is asked again', async () => {
             const {controller, stop} = mountController();
             const retry = deferred<OnDemandAnswer>();
-            const script = scriptOnDemand({simulation: [null, null, retry.promise]});
+            const script = scriptOnDemand({simulation: [null, null, null, retry.promise]});
             const build = () => QUESTIONS.simulation;
 
-            await controller.runGuarded('simulation', build);
-            expect(controller.discarded.simulation, 'precondition: two discards running are reported').toBe(true);
+            // Raced against a fourth ask: a run asking past its bound would take the next run's
+            // pending answer as its own and hang here, instead of failing on the line below.
+            await Promise.race([controller.runGuarded('simulation', build), script.askedTimes('simulation', 4)]);
+            expect(controller.discarded.simulation, 'precondition: an answer discarded on every attempt is reported').toBe(true);
 
             const rerun = controller.runGuarded('simulation', build);
             expect(controller.discarded.simulation, 'the sentence about the old answer stays on screen while the new question is in flight').toBe(false);
@@ -771,7 +946,7 @@ describe('riskPanelController', () => {
             await rerun;
             expect(controller.simulationResult).toEqual(fresh.items[0]);
             expect(controller.discarded.simulation).toBe(false);
-            expect(script.asked('simulation')).toHaveLength(3);
+            expect(script.asked('simulation')).toHaveLength(4);
             stop();
         });
 
@@ -780,24 +955,25 @@ describe('riskPanelController', () => {
             // (runGuarded's own contract): no question left, so nothing happened
             // that could replace the sentence about the one that was thrown away.
             const {controller, stop} = mountController();
-            const script = scriptOnDemand({comparison: [null, null]});
+            const script = scriptOnDemand({comparison: [null, null, null]});
 
             await controller.runGuarded('comparison', () => QUESTIONS.comparison);
-            expect(controller.discarded.comparison, 'precondition: two discards running are reported').toBe(true);
+            expect(controller.discarded.comparison, 'precondition: an answer discarded on every attempt is reported').toBe(true);
+            const askedBeforeDecline = script.asked('comparison').length;
 
             await controller.runGuarded('comparison', () => null);
 
-            expect(script.asked('comparison')).toHaveLength(2);
+            expect(script.asked('comparison'), 'a declined run asked something').toHaveLength(askedBeforeDecline);
             expect(controller.discarded.comparison, 'a declined run erased the sentence about an answer it never replaced').toBe(true);
             stop();
         });
 
         it('forgets the discard of the analysis that is reset, and only that one', async () => {
             const {controller, stop} = mountController();
-            scriptOnDemand({stress: [null, null], replay: [null, null]});
+            scriptOnDemand({stress: [null, null, null], replay: [null, null, null]});
             await controller.runGuarded('stress', () => QUESTIONS.stress);
             await controller.runGuarded('replay', () => QUESTIONS.replay);
-            expect(controller.discarded, 'precondition: both analyses were discarded twice running').toEqual({...NONE_DISCARDED, stress: true, replay: true});
+            expect(controller.discarded, 'precondition: both analyses were discarded on every attempt').toEqual({...NONE_DISCARDED, stress: true, replay: true});
 
             controller.resetAnalysis('stress');
 
@@ -817,9 +993,9 @@ describe('riskPanelController', () => {
         ])('forgets every discard when %s', async (_when, move) => {
             const mounted = mountController();
             const {controller, stop} = mounted;
-            scriptOnDemand({comparison: [null, null], stress: [null, null], replay: [null, null], simulation: [null, null]});
+            scriptOnDemand({comparison: [null, null, null], stress: [null, null, null], replay: [null, null, null], simulation: [null, null, null]});
             for (const analysis of ON_DEMAND_ANALYSES) await controller.runGuarded(analysis, () => QUESTIONS[analysis]);
-            expect(controller.discarded, 'precondition: every analysis was discarded twice running').toEqual({comparison: true, stress: true, replay: true, simulation: true});
+            expect(controller.discarded, 'precondition: every analysis was discarded on every attempt').toEqual({comparison: true, stress: true, replay: true, simulation: true});
 
             await move(mounted);
 
@@ -845,6 +1021,7 @@ describe('riskPanelController', () => {
         it.each<[string, Scripted[]]>([
             ['on the first ask', [new Error('synthetic calculation failure')]],
             ['on the re-ask after a discard', [null, new Error('synthetic calculation failure')]],
+            ['on the third attempt, after two discards', [null, null, new Error('synthetic calculation failure')]],
         ])('reports a failure %s as a failure, not as a discard', async (_when, answers) => {
             const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
             onTestFinished(() => consoleError.mockRestore());
@@ -867,11 +1044,11 @@ describe('riskPanelController', () => {
             // rather than by the analysis would pass every other test in this block.
             const {controller, stop} = mountController();
             const shock = answer('stress shock answer');
-            const script = scriptOnDemand({replay: [null, null], stress: [shock]});
+            const script = scriptOnDemand({replay: [null, null, null], stress: [shock]});
 
             await Promise.all([controller.runGuarded('replay', () => QUESTIONS.replay), controller.runGuarded('stress', () => QUESTIONS.stress)]);
 
-            expect(script.asked('replay'), 'the discarded replay was not re-asked exactly once').toHaveLength(2);
+            expect(script.asked('replay'), 'the discarded replay was not asked once per attempt, three times in all').toHaveLength(3);
             expect(controller.stressResult, "the shock's answer was lost to the replay's discard").toEqual(shock.items[0]);
             expect(controller.discarded, 'a discard was reported on an analysis that answered, or on one that never ran').toEqual({...NONE_DISCARDED, replay: true});
             stop();
@@ -885,7 +1062,7 @@ describe('riskPanelController', () => {
 
         it('publishes the discard reactively, so the level that reads it re-renders', async () => {
             const {controller, stop} = mountController();
-            scriptOnDemand({comparison: [null, null]});
+            scriptOnDemand({comparison: [null, null, null]});
             const reads = recordReads(() => controller.discarded.comparison);
             expect(reads.values, 'precondition: the flag is readable from an effect').toEqual([false]);
 
@@ -970,6 +1147,180 @@ describe('riskPanelController', () => {
             ).toEqual(['risk_contribution']);
             expect(controller.dataQualityIssues, 'the Dashboard banner changed: the issues every result carries no longer come out once each, as they went in').toEqual(dashboardReportIssues().map(normalized));
             stop();
+        });
+    });
+
+    // ------------------------------------------------------------------
+    // The asset-set wave, split per level (the developer's decision, 2026-10-02): L1° is measured
+    // without the benchmark and only L3° asks with it, so the lab builds one controller per level —
+    // `includeAssetSetLossLevels` for L1°, `includeAssetSetPaidLevels` for L3° — and each option has
+    // to reach the request the way `includeAssetSetLevels` does. Written red first: today the
+    // controller passes neither on, so the request it issues carries no per-asset analytic at all.
+    //
+    // The pins are the other half, green today and meant to stay so: the callers that never opt in
+    // — the Dashboard's levels, Asset Detail's panel — and the lab as it asks today, on the union,
+    // each send byte for byte the requests they send now. Copied from a run before the split.
+    // ------------------------------------------------------------------
+    describe('the asset-set wave, split per level', () => {
+        /** Invented, and unlike any other number a request carries — an id, a horizon, a rate. */
+        const BENCHMARK = 47;
+        /** What the backend's catalogue offers an asset set — the correlation and the per-asset family, historical only — as `AssetSetComparisonLevels.test.ts` declares it. */
+        const ASSET_SET_HISTORICAL_CODES = new Set(['correlation', 'asset_set_kpi', 'asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_comparison']);
+
+        function assetSetCatalogue(code: string, scopeKind: string, mode: string): boolean {
+            return scopeKind === 'asset_set' && mode === 'historical' && ASSET_SET_HISTORICAL_CODES.has(code);
+        }
+
+        /** The lab's inputs: two holdings, a 0% risk-free rate (the page has no control for one), and a benchmark outside the selection. */
+        function labInputs(): RiskControllerInputs {
+            return {...defaultInputs(), scope: {kind: 'asset_set', asset_ids: [12, 15]}, appliedRiskFreePercent: 0, assetSetBenchmarkId: BENCHMARK};
+        }
+
+        /** Mounted with `options`, its first base wave settled, and stopped when the test ends, red or green. */
+        async function settledController(initial: RiskControllerInputs, options: RiskControllerOptions): Promise<void> {
+            const {controller, stop} = mountController(initial, options);
+            onTestFinished(stop);
+            await vi.waitFor(() => expect(controller.initialLoading, 'the base wave the mount fires never settled').toBe(false));
+        }
+
+        /** The per-asset analytics of the one historical request issued: instance and parameters. */
+        function assetSetAnalyticsAsked(): unknown[] {
+            const historical = queryRisk.mock.calls.map(([request]) => request as RiskQueryRequest).filter((request) => request.mode === 'historical');
+            expect(historical, 'premise: one base load is one historical request').toHaveLength(1);
+            return historical[0].analytics.filter((analytic) => analytic.analytic_code.startsWith('asset_set_')).map((analytic) => [analytic.instance_id, analytic.parameters]);
+        }
+
+        /** Every request issued, with its `force` flag: first as data, for a readable diff, then as the bytes the wire carries. */
+        function expectIssuedToday(today: unknown[], caller: string): void {
+            expect(queryRisk.mock.calls, `${caller}: the requests moved — a caller that never asked for the split sends something new`).toEqual(today);
+            expect(JSON.stringify(queryRisk.mock.calls), `${caller}: the same requests in different bytes — a key moved, or one appeared that serialises`).toBe(JSON.stringify(today));
+        }
+
+        /** The Dashboard's levels over 2025, in EUR, at a 2% risk-free rate: two requests, historical then current composition. */
+        const DASHBOARD_TODAY = [
+            [
+                {
+                    scope: {kind: 'portfolio'},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'historical',
+                    analytics: [
+                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
+                        {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                        {instance_id: 'base-historical-historical_var-monthly', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
+                        {instance_id: 'base-historical-drawdown_summary', analytic_code: 'drawdown_summary', parameters: {}},
+                    ],
+                },
+                false,
+            ],
+            [
+                {
+                    scope: {kind: 'portfolio'},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'current_composition',
+                    composition_policy: 'current_buy_and_hold',
+                    analytics: [
+                        {instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}},
+                        {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {}},
+                    ],
+                },
+                false,
+            ],
+        ];
+
+        /** Asset Detail's panel for one asset, same window: two requests. */
+        const ASSET_DETAIL_TODAY = [
+            [
+                {
+                    scope: {kind: 'asset', asset_id: 12},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'historical',
+                    analytics: [
+                        {instance_id: 'base-historical-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
+                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
+                        {instance_id: 'base-historical-historical_var', analytic_code: 'historical_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                    ],
+                },
+                false,
+            ],
+            [
+                {
+                    scope: {kind: 'asset', asset_id: 12},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'current_composition',
+                    composition_policy: 'current_buy_and_hold',
+                    analytics: [{instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}}],
+                },
+                false,
+            ],
+        ];
+
+        /** The lab's two levels as they ask today, on the union, the benchmark inside: one request for both. */
+        const LAB_UNION_TODAY = [
+            [
+                {
+                    scope: {kind: 'asset_set', asset_ids: [12, 15]},
+                    date_range: {start: '2025-01-01', end: '2025-12-31'},
+                    target_currency: 'EUR',
+                    mode: 'historical',
+                    analytics: [
+                        {instance_id: 'base-historical-correlation', analytic_code: 'correlation', parameters: {}},
+                        {instance_id: 'base-historical-asset_set_kpi', analytic_code: 'asset_set_kpi', parameters: {risk_free_annual_rate: 0, target_annual_return: 0}},
+                        {instance_id: 'base-historical-asset_set_var', analytic_code: 'asset_set_var', parameters: {confidence_level: 0.95, horizon_days: 1}},
+                        {instance_id: 'base-historical-asset_set_var-monthly', analytic_code: 'asset_set_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
+                        {instance_id: 'base-historical-asset_set_drawdown', analytic_code: 'asset_set_drawdown', parameters: {}},
+                        {instance_id: 'base-historical-asset_set_risk_return', analytic_code: 'asset_set_risk_return', parameters: {}},
+                        {instance_id: 'base-historical-asset_set_comparison', analytic_code: 'asset_set_comparison', parameters: {comparison_asset_id: 47}},
+                    ],
+                },
+                false,
+            ],
+        ];
+
+        it('includeAssetSetLossLevels reaches the request: the bad day, the bad month and the drawdown, and nothing of the benchmark', async () => {
+            capability.only = assetSetCatalogue;
+            await settledController(labInputs(), {includeAssetSetLossLevels: true});
+
+            expect(assetSetAnalyticsAsked(), "the loss option never reached L1°'s request, or brought the benchmark into it").toEqual([
+                ['base-historical-asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
+                ['base-historical-asset_set_var-monthly', {confidence_level: 0.95, horizon_days: 30}],
+                ['base-historical-asset_set_drawdown', {}],
+            ]);
+        });
+
+        it('includeAssetSetPaidLevels reaches the request: the KPI, the risk/return and the comparison against the benchmark', async () => {
+            capability.only = assetSetCatalogue;
+            await settledController(labInputs(), {includeAssetSetPaidLevels: true});
+
+            expect(assetSetAnalyticsAsked(), "the paid option never reached L3°'s request").toEqual([
+                ['base-historical-asset_set_kpi', {risk_free_annual_rate: 0, target_annual_return: 0}],
+                ['base-historical-asset_set_risk_return', {}],
+                ['base-historical-asset_set_comparison', {comparison_asset_id: BENCHMARK}],
+            ]);
+        });
+
+        it("pins the Dashboard's levels: the requests they send today, byte for byte", async () => {
+            // `RiskLevelsPanel`'s options (the Dashboard and the broker page), callbacks aside: those change no request.
+            // Every analytic stays advertised, so a split option that defaulted to on would put the per-asset family on this wire.
+            await settledController(defaultInputs(), {includeDrawdownSummary: true, includeMonthlyVar: true, includeCurrentCompositionRiskReturn: true});
+            expectIssuedToday(DASHBOARD_TODAY, "the Dashboard's levels");
+        });
+
+        it("pins Asset Detail's panel: the requests it sends today, byte for byte", async () => {
+            // `RiskAnalysisPanel`'s only option is a callback.
+            await settledController({...defaultInputs(), scope: {kind: 'asset', asset_id: 12}}, {scenarioCatalogLoaded: () => undefined});
+            expectIssuedToday(ASSET_DETAIL_TODAY, "Asset Detail's panel");
+        });
+
+        it('pins the lab as it asks today, on the union with a benchmark: one request, byte for byte', async () => {
+            capability.only = assetSetCatalogue;
+            await settledController(labInputs(), {includeAssetSetLevels: true});
+            expectIssuedToday(LAB_UNION_TODAY, 'the lab on the union');
         });
     });
 });

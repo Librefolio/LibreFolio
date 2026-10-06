@@ -45,12 +45,14 @@
     import type {ColumnDef} from '$lib/components/table/types';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
     import {formatRatio} from './riskAnalysisHelpers';
-    import {buildAssetSetBenchmarkPoint, buildAssetSetPaidRows, buildAssetSetScatterPoints, type AssetSetPaidRow} from './assetSetLevels';
-    import {assetNameColumn} from './assetSetTable';
+    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, type AssetSetPaidRow} from './assetSetLevels';
+    import {assetNameColumn, figureCell} from './assetSetTable';
+    import {dayFormatter} from './eligibility';
 
     interface Props {
         assetIds: number[];
@@ -60,7 +62,7 @@
         riskReturn: RiskAnalyticResult | null;
         kpi: RiskAnalyticResult | null;
         comparison: RiskAnalyticResult | null;
-        /** Set when a benchmark is chosen and it is not itself in the selection. */
+        /** Set when a benchmark is chosen and the comparison against it was measured. */
         benchmarkApplies: boolean;
         loading?: boolean;
         /**
@@ -69,7 +71,7 @@
          */
         failed?: boolean;
         /**
-         * The base answer arrived and was discarded twice running (`controller.loadDiscarded`).
+         * The base answer arrived and was discarded on every attempt (`controller.loadDiscarded`).
          * The frame says so (`answer_discarded` in its `errorCodes`); the body only offers
          * the cure, a retry, when there is no figure to show.
          */
@@ -81,19 +83,23 @@
          * manual icon. Set only while the table is on screen.
          */
         tableRef?: DataTable<AssetSetPaidRow>;
+        /**
+         * The toolbar's period, as ISO days. The note under the table states the window the
+         * figures were actually calculated on, and says when it falls short of this one.
+         */
+        dateStart: string;
+        dateEnd: string;
     }
 
-    let {assetIds, assetLabels, assetIcons, riskReturn, kpi, comparison, benchmarkApplies, loading = false, failed = false, discarded = false, onretry, tableRef = $bindable()}: Props = $props();
+    let {assetIds, assetLabels, assetIcons, riskReturn, kpi, comparison, benchmarkApplies, loading = false, failed = false, discarded = false, onretry, tableRef = $bindable(), dateStart, dateEnd}: Props = $props();
 
     let rows = $derived(buildAssetSetPaidRows(assetIds, assetLabels, riskReturn, kpi, comparison));
-    let assetPoints = $derived(buildAssetSetScatterPoints(rows));
     /**
-     * The reference's name comes from the asset store, as the portfolio L3 names its
-     * own benchmark (`RiskLevelsPanel`, `benchmarkName`). `assetLabels` is the
-     * selection's map, and the reference is never in the selection — the payload
-     * validator forbids it — so reading the name from there labelled the diamond
-     * `#id` on every chart. `$assetStoreVersion` is read so a name that arrives after
-     * the first render replaces the fallback.
+     * The reference's name comes from the selection when it is one of the selected
+     * assets (D371), and otherwise from the asset store, as the portfolio L3 names its
+     * own benchmark (`RiskLevelsPanel`, `benchmarkName`): read only from the selection's
+     * map, a benchmark outside it was labelled `#id` on every chart. `$assetStoreVersion`
+     * is read so a name that arrives after the first render replaces the fallback.
      */
     let benchmarkPoint = $derived.by(() => {
         void $assetStoreVersion;
@@ -101,19 +107,46 @@
     });
 
     /**
-     * The dots, with the benchmark last so it draws over the cloud.
-     *
-     * Its role is `benchmark`, never `portfolio`. That is not cosmetic: `role`
-     * is what `capitalMarketLine()` searches for, so labelling the reference as
-     * a portfolio would anchor a verdict line on an asset that is not the
-     * reader's holdings — a judgement drawn from a mislabelled dot.
+     * The dots, the benchmark among them (`buildAssetSetChartPoints`): a selected
+     * reference is its own row's dot, drawn as the benchmark; any other gets a dot of
+     * its own, last, so it draws over the cloud.
      */
-    let points = $derived(benchmarkPoint === null ? assetPoints : [...assetPoints, {id: 'benchmark', name: benchmarkPoint.name, volatility: benchmarkPoint.volatility, annualReturn: benchmarkPoint.expectedReturn, role: 'benchmark' as const}]);
+    let points = $derived(buildAssetSetChartPoints(rows, benchmarkPoint));
 
     // Two dots are the least that can show a relationship; one is a fact without
     // a comparison, and this level exists to compare.
     let hasScatter = $derived(points.length >= 2);
     let hasAnyFigure = $derived(rows.some((row) => row.volatility !== null || row.expectedReturn !== null));
+
+    /**
+     * The period the figures were calculated on, recalled under the table because the toolbar
+     * that chose it is far away (the developer's review, round 4). Read from the answers' own
+     * metadata, never from the toolbar, so it always describes the figures on screen, and says
+     * so when an asset — or the benchmark — with a shorter history narrowed the window.
+     */
+    let calculationWindow = $derived(assetSetCalculationWindow([riskReturn, kpi, comparison], dateStart, dateEnd));
+    let formatDay = $derived(dayFormatter($currentLanguage));
+    /**
+     * The length in calendar years, months and days — «3 mesi e 1 giorno», «1 anno» — never
+     * as a count of days (the developer's review, round 4). Zero parts are left out, and the
+     * rest are joined the way the reader's language joins a list.
+     */
+    let periodLength = $derived.by(() => {
+        if (calculationWindow === null) return '';
+        const {years, months, days} = calendarLength(calculationWindow.start, calculationWindow.end);
+        const parts = [years > 0 ? $t('risk.assetSet.levels.l3.period.years', {values: {count: years}}) : null, months > 0 ? $t('risk.assetSet.levels.l3.period.months', {values: {count: months}}) : null, days > 0 ? $t('risk.assetSet.levels.l3.period.days', {values: {count: days}}) : null].filter(
+            (part): part is string => part !== null,
+        );
+        if (parts.length === 0) return $t('risk.assetSet.levels.l3.period.days', {values: {count: calculationWindow.days}});
+        return new Intl.ListFormat($currentLanguage, {style: 'long', type: 'conjunction'}).format(parts);
+    });
+    /** The first line: the window, and — only when it is shorter — the period that was asked for. */
+    let periodWindowText = $derived.by(() => {
+        if (calculationWindow === null) return '';
+        const sentences = [$t('risk.assetSet.levels.l3.period.window', {values: {start: formatDay(calculationWindow.start), end: formatDay(calculationWindow.end), length: periodLength}})];
+        if (calculationWindow.narrowed) sentences.push($t('risk.assetSet.levels.l3.period.narrowed', {values: {selectedStart: formatDay(dateStart), selectedEnd: formatDay(dateEnd)}}));
+        return sentences.join(' ');
+    });
 
     function percent(value: number): string {
         return formatPercent(value, {scale: 100, signed: false, digits: 1});
@@ -159,8 +192,15 @@
             filterable: false,
             getValue: (row) => figure(row),
             cell: (row) => {
+                // D371: the benchmark's own beta and correlation are not missing figures but
+                // inapplicable — measured against itself they would be 1 by construction — so
+                // its dash says so, in the developer's words, instead of the generic one.
+                if (row.isReference && (id === 'beta' || id === 'correlation')) {
+                    return figureCell(`<span class="${VALUE_CLASS}" data-testid="risk-asset-set-l3-${id}" data-measured="false" data-reference="true">\u2014</span>`, false, () => $t('risk.assetSet.levels.l3.referenceItself'));
+                }
                 const value = figure(row);
-                return {type: 'html', html: `<span class="${VALUE_CLASS}" data-testid="risk-asset-set-l3-${id}" data-measured="${value !== null}">${value === null ? '\u2014' : text(value)}</span>`};
+                // A dash explains itself in a tooltip, as in L1° (`figureCell`); a figure carries none.
+                return figureCell(`<span class="${VALUE_CLASS}" data-testid="risk-asset-set-l3-${id}" data-measured="${value !== null}">${value === null ? '\u2014' : text(value)}</span>`, value !== null, () => $t('risk.assetSet.levels.blankNote'));
             },
         };
     }
@@ -267,10 +307,17 @@
             />
         </div>
 
-        <p class="text-[11px] text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l3-blank-note">{$t('risk.assetSet.levels.blankNote')}</p>
+        {#if calculationWindow}
+            <!-- Two lines (the developer's review, round 4): the window, then what is annualised.
+                 Only volatility and the average return are; Sharpe and Sortino derive from them,
+                 and beta and correlation have no unit of time — the line claims no more. -->
+            <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-asset-set-l3-period" data-start={calculationWindow.start} data-end={calculationWindow.end} data-days={calculationWindow.days} data-narrowed={String(calculationWindow.narrowed)}>
+                <span class="block" data-testid="risk-asset-set-l3-period-window">{periodWindowText}</span><span class="block" data-testid="risk-asset-set-l3-period-annualized">{$t('risk.assetSet.levels.l3.period.annualized')}</span>
+            </p>
+        {/if}
 
         <!-- The data first, then its chart (the developer's review, 30/09): the table
-             and its notes open the level, the scatter draws the same figures. -->
+             and its period open the level, the scatter draws the same figures. -->
         {#if hasScatter}
             <div data-testid="risk-asset-set-l3-risk-return">
                 <!-- `riskFreeRate` is left at its default and anchors nothing here:

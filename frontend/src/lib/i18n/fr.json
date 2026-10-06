@@ -3078,11 +3078,6 @@
         "invert": "Inverser",
         "mine": "Mes actifs"
       },
-      "filters": {
-        "type": "Type",
-        "currency": "Devise",
-        "clear": "Effacer les filtres"
-      },
       "band": {
         "high": "ils évoluent ensemble",
         "moderate": "ils évoluent en partie ensemble",
@@ -3132,7 +3127,7 @@
         },
         "l3": {
           "title": "Combien chacun a-t-il payé pour son risque ?",
-          "description": "Pour chaque actif sélectionné, l'ampleur de ses variations et son rendement moyen annuel, dans le graphique et dans le tableau ; avec une référence choisie dans le tableau de bord, aussi à quel point il a évolué avec elle.",
+          "description": "Pour chaque actif sélectionné, l'ampleur de ses variations et son rendement moyen annuel, dans le tableau et dans le graphique ; avec une référence choisie en haut de l'onglet, aussi à quel point il a évolué avec elle.",
           "expectedReturn": "Rendement moyen annuel",
           "correlation": "Corrélation",
           "scatterNote": "Chaque point est un actif : l'axe horizontal montre combien il a varié, l'axe vertical combien il a rapporté en moyenne par an. Pour un actif très volatil, la moyenne dépasse ce qu'il a réellement rapporté.",
@@ -3144,7 +3139,16 @@
             "beta": "De combien l'actif a bougé quand la référence bougeait : 1 veut dire autant, 2 deux fois plus, 0 indépendamment d'elle.",
             "correlation": "À quel point l'actif et la référence ont évolué ensemble, de −1 (toujours opposés) à +1 (toujours ensemble)."
           },
-          "axisReturn": "Rendement moyen annuel"
+          "axisReturn": "Rendement moyen annuel",
+          "period": {
+            "window": "Période : du {start} au {end} ({length}).",
+            "narrowed": "Plus court que la période choisie (du {selectedStart} au {selectedEnd}).",
+            "annualized": "La volatilité et le rendement moyen sont annualisés ; Sharpe et Sortino en découlent.",
+            "years": "{count, plural, one {# an} other {# ans}}",
+            "months": "{count, plural, one {# mois} other {# mois}}",
+            "days": "{count, plural, one {# jour} other {# jours}}"
+          },
+          "referenceItself": "Non applicable : cet actif est la référence elle-même, et il ne se compare pas à lui-même."
         }
       },
       "legend": {
@@ -3169,10 +3173,6 @@
         "noneHeld": "Rien n'y est détenu le dernier jour de la période : la sélection ne change pas."
       },
       "picker": {
-        "selectVisible": "Sélectionner les visibles",
-        "deselectVisible": "Désélectionner les visibles",
-        "confirm": "Ajouter {count}",
-        "allSelected": "Tous les actifs sont déjà dans la sélection.",
         "notAnalysable": "Non analysables sur la période"
       },
       "selectedCountHint": "Le premier nombre compte les actifs que le laboratoire analyse en ce moment. Le second compte combien il pourrait en analyser sur la période choisie : tous les actifs présents dans LibreFolio, pas seulement ceux que vous détenez, pourvu qu'ils aient assez de prix sur cette période. Ceux qui n'en ont pas restent listés dans le « + », en lecture seule, avec le motif.",
@@ -3182,6 +3182,9 @@
         "banner": "Avec la période choisie, {count, plural, one {# actif sélectionné n'a pas de prix} other {# actifs sélectionnés n'ont pas de prix}} sur une partie de l'intervalle.",
         "button": "Utiliser la période où tous ont des prix (du {start} au {end})",
         "hint": "Déplace la période en haut sur l'intervalle où tous les actifs sélectionnés qui ont des prix sont cotés. Reviennent dans l'analyse : {names}."
+      },
+      "benchmark": {
+        "help": "L'actif de référence, le « risque de base » : le bêta indique, actif par actif, si chacun a bougé plus (au-dessus de 1) ou moins (en dessous de 1) que lui ; la corrélation, à quel point ensemble."
       }
     },
     "metrics": {
@@ -4580,5 +4583,16 @@
       "dark": "Thème sombre",
       "light": "Thème clair"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Type",
+      "currency": "Devise",
+      "clear": "Effacer les filtres"
+    },
+    "selectVisible": "Sélectionner les visibles",
+    "deselectVisible": "Désélectionner les visibles",
+    "confirm": "Ajouter {count}",
+    "allSelected": "Tous les actifs sont déjà dans la sélection."
   }
 }

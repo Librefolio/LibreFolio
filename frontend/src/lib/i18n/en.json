@@ -3078,11 +3078,6 @@
         "invert": "Invert",
         "mine": "My assets"
       },
-      "filters": {
-        "type": "Type",
-        "currency": "Currency",
-        "clear": "Clear filters"
-      },
       "band": {
         "high": "they move together",
         "moderate": "they move together in part",
@@ -3132,7 +3127,7 @@
         },
         "l3": {
           "title": "What did each of these pay for its risk?",
-          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the chart and in the table; with a benchmark chosen on the Dashboard, also how much it moved along with it.",
+          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the table and in the chart; with a benchmark chosen at the top of the tab, also how much it moved along with it.",
           "expectedReturn": "Average annual return",
           "correlation": "Correlation",
           "scatterNote": "Each dot is an asset: the horizontal axis shows how much it swung, the vertical one how much it returned on average per year. For a very volatile asset the average is higher than what it actually returned.",
@@ -3144,7 +3139,16 @@
             "beta": "How much the asset moved when the benchmark moved: 1 means as much, 2 twice as much, 0 independently of it.",
             "correlation": "How closely the asset and the benchmark moved together, from −1 (always opposite) to +1 (always together)."
           },
-          "axisReturn": "Average annual return"
+          "axisReturn": "Average annual return",
+          "period": {
+            "window": "Period: {start} – {end} ({length}).",
+            "narrowed": "Shorter than the selected period ({selectedStart} – {selectedEnd}).",
+            "annualized": "Volatility and average return are annualised; Sharpe and Sortino derive from them.",
+            "years": "{count, plural, one {# year} other {# years}}",
+            "months": "{count, plural, one {# month} other {# months}}",
+            "days": "{count, plural, one {# day} other {# days}}"
+          },
+          "referenceItself": "Not applicable: this asset is the benchmark itself, and it is not compared with itself."
         }
       },
       "legend": {
@@ -3169,10 +3173,6 @@
         "noneHeld": "Nothing is held there on the last day of the period: the selection is unchanged."
       },
       "picker": {
-        "selectVisible": "Select visible",
-        "deselectVisible": "Deselect visible",
-        "confirm": "Add {count}",
-        "allSelected": "Every asset is already in the selection.",
         "notAnalysable": "Cannot be analysed in the period"
       },
       "selectedCountHint": "The first number counts the assets the laboratory is analysing right now. The second counts how many it could analyse in the chosen period: every asset in LibreFolio, not only the ones you hold, as long as it has enough prices in that period. The assets that do not are still listed in the “+”, read-only, with the reason.",
@@ -3182,6 +3182,9 @@
         "banner": "With the chosen period, {count, plural, one {# selected asset has} other {# selected assets have}} no prices for part of it.",
         "button": "Use the period in which all have prices ({start} – {end})",
         "hint": "Moves the period at the top to the span in which every selected asset with prices is quoted. Back in the analysis: {names}."
+      },
+      "benchmark": {
+        "help": "The reference asset, the \"baseline risk\": beta tells, asset by asset, whether each moved more (above 1) or less (below 1) than it; correlation, how closely they moved together."
       }
     },
     "metrics": {
@@ -4580,5 +4583,16 @@
       "dark": "Dark mode",
       "light": "Light mode"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Type",
+      "currency": "Currency",
+      "clear": "Clear filters"
+    },
+    "selectVisible": "Select visible",
+    "deselectVisible": "Deselect visible",
+    "confirm": "Add {count}",
+    "allSelected": "Every asset is already in the selection."
   }
 }

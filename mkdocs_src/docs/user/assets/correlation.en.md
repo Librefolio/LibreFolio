@@ -47,7 +47,7 @@ The **Type** and **Currency** chips narrow the assets that **Select all**, **Des
 
 !!! note "The toolbar filters belong to the Assets tab"
 
-    The search box and the type, currency and archived filters of the page toolbar stay visible on this tab, but they do not apply here: the Correlation tab always works from the full asset list, through its own filters described above. The toolbar's **date range** is the exception — it sets the window the tab's figures are measured over (see [One Shared Window](#one-shared-window)).
+    On this tab the page toolbar hides the search box and the type, currency and archived filters: they narrow the Assets tab's list, while this tab always works from the full asset list, through its own search and filters in the **+** panel described above. The toolbar keeps the **date range**, which sets the window the tab's figures are measured over (see [One Shared Window](#one-shared-window)), and two buttons that act on the selection: **Sync selection**, for the prices of the selected assets and the exchange rates that convert them, and **Reload All**, which reloads every analysis of the selection.
 
 ### 🏦 Preloading a Broker's Assets {: #preloading-a-brokers-assets }
 
@@ -91,7 +91,7 @@ The matrix needs at least two assets to show a pair. When a square has no coeffi
 
 ### 📉 How Much Did Each of These Hurt? {: #how-much-did-each-hurt }
 
-The second section, **How much did each of these hurt?**, puts every selected asset on the same scale of harm. Each asset gets a row, and the columns run from the shortest horizon to the longest:
+The second section, **How much did each of these hurt?**, puts every selected asset on the same scale of harm. Each asset gets a row, headed by its icon and its name on one line — a name too long to fit scrolls by itself — and the columns run from the shortest horizon to the longest:
 
 | Column | What it tells you |
 |---|---|
@@ -103,29 +103,32 @@ The second section, **How much did each of these hurt?**, puts every selected as
 
 **Rise to peak** is there to teach an asymmetry: the way back is steeper than the way down, because the rise starts from a smaller base. An asset **20% below its peak needs +25%** to return to it, not +20%.
 
-Every loss is drawn in the same red for every asset, and nothing is ranked: the table compares the assets, it does not grade them. The ⓘ next to each column heading opens its theory page — [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md), [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md) or [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md).
+Every loss is drawn in the same red for every asset, and the page never ranks the assets by itself: the table opens in the order of the selection, and only a click on a column title sorts it, as in the [next section](#what-did-each-pay). Each figure's title explains it in a tooltip — hover it, or tap it on a touch screen — but links nowhere: the book icon in the section's header opens the manual's [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) pages, the eye icon beside it shows or hides columns, and the theory behind the columns is in [Conditional Value at Risk](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md), [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md) and [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md).
 
 ### ⚖️ What Did Each of These Pay for Its Risk? {: #what-did-each-pay }
 
-The third section, **What did each of these pay for its risk?**, sets risk against reward, asset by asset.
+The third section, **What did each of these pay for its risk?**, sets risk against reward, asset by asset: first in a table, then in a chart of the same figures.
 
-- **The chart** places one dot per asset — annualised volatility across, expected annualised return up — as soon as at least two points can be placed.
+- **The table** gives the figures of every asset — **Volatility**, **Average annual return**, **Sortino** and **Sharpe** — one row per asset, named as in the previous section. Sortino measures the return per unit of downside risk, Sharpe per unit of total volatility. Each figure's title explains it in a tooltip: hover it, or tap it on a touch screen. The eye icon beside the section's book icon shows or hides columns.
+- **Only you sort it.** The table opens in the order of the selection. A click on a column title sorts by that figure — ascending, then descending, then back to the selection's order — and [dashes](#a-dash-is-not-a-zero) stay last whichever way it sorts; the **Asset** title sorts by name. The figures are printed plainly, with no colours and no arrows in the cells: the page never ranks the assets by itself.
+- **Under the table, a line gives the period** the figures were computed over: its first and last day, and its length in calendar years, months and days (1 July to 1 October, both ends counted, is 3 months and 1 day). These are always the dates actually used, and a difference of a few days from the page's date range at either end, such as a weekend or a holiday on which no selected asset is quoted can leave, does not make the line call the period shorter: it does so, recalling the selected dates, only when an asset — or the benchmark — with a shorter history makes the period start more than seven days after the range's first day, or end more than seven days before its last (see [One Shared Window](#one-shared-window)). It also says that volatility and the average annual return are annualised, and that Sharpe and Sortino derive from them. Beta and correlation, the benchmark columns described below, are not annualised.
+- **The chart** places one dot per asset — annualised volatility across, average annual return up — as soon as at least two points can be placed.
 - **No line is drawn through the points.** On a portfolio, a line through the portfolio's own point separates "better paid" from "worse paid" for the risk taken. A selection has no whole, so there is nothing to be above or below: the chart shows the trade-off and leaves the judgement to you.
-- **The table** gives the figures of every asset — **Volatility**, **Expected return**, **Sortino** and **Sharpe** — printed plainly: no colours, no arrows, no ranking. Sortino measures the return per unit of downside risk, Sharpe per unit of total volatility.
+- **The table and the chart share one selection.** A click on a row, or on its dot, selects that asset in both: the row is highlighted, and the dot is drawn larger and in green. A second click on it clears the selection; a click on another asset, in either, moves the selection there. A benchmark that is not one of the selected assets has no row, so a click on its dot selects nothing.
 
-!!! warning "Expected return is not the return you lived through"
+!!! warning "The average annual return is not the return you lived through"
 
-    **Expected return** is the window's average return scaled to a year — the quantity a risk/return chart is built on. On a very volatile asset, the return actually lived through over the same window is lower, because volatility erodes compounding. Do not read the height of a dot as what the asset earned.
+    The **average annual return** is the window's average return scaled to a year — the quantity a risk/return chart is built on. It describes the past; it is not a forecast. On a very volatile asset, the return actually lived through over the same window is lower, because volatility erodes compounding. Do not read the height of a dot as what the asset earned.
 
 Sharpe and Sortino are computed here against a **risk-free rate of zero**: the tab has no control to set one.
 
 Two more columns, **Beta** (how much the asset moves when the benchmark moves) and **Correlation** (how closely the two move together), join the table only when a benchmark applies — and the benchmark then appears on the chart as a larger diamond:
 
-- it is **the benchmark chosen under *Compared with* on the Dashboard's Risk tab** — the same choice a broker's detail page uses, so that their comparisons stay comparable. This tab has no picker of its own;
-- it **cannot be one of the selected assets**: a yardstick cannot also be one of the things it measures. Remove it from the selection, or choose another benchmark, to get the columns back;
+- it is **chosen on this tab, under *Compared with***: the last row of the panel at the top of the tab, below the selected assets — a setting of the whole tab. It is the same choice as on every other risk page — the Dashboard's Risk tab, a broker's detail page, an asset's detail page — so that their comparisons stay comparable: choosing it here changes it there too, and the reverse. The ⓘ next to *Compared with* explains what the benchmark is for: the reference against which beta and correlation are read;
+- it **may be one of the selected assets** — a core ETF, for example, that the others are compared against. The picker lists every asset, the selected ones included. That asset keeps its row and its own figures, measured like the others'; in its row, **Beta** and **Correlation** show a dash, whose tooltip explains that they do not apply because that asset is the benchmark itself: compared with itself, both would be 1 by construction. On the chart it is drawn once, as the benchmark;
 - the columns also stay hidden when the benchmark could not be measured over the window.
 
-When the two columns are missing, a note under the table recalls how to add them. See [Volatility](../../financial-theory/technical-analysis/risk-metrics/volatility.md), [Sharpe Ratio](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md), [Sortino Ratio](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md) and [Beta & Active Return](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md).
+See [Volatility](../../financial-theory/technical-analysis/risk-metrics/volatility.md), [Sharpe Ratio](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md), [Sortino Ratio](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md) and [Beta & Active Return](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md).
 
 ### ⏮️ What If…? {: #what-if }
 
@@ -135,13 +138,19 @@ The last section, **What if…?**, starts closed: click its title to open it. On
 2. Press **Run replay**: the replay runs only when you ask for it.
 3. Read one bar per asset — what that asset actually returned over the period, worst first: losses to the left in red, gains to the right in green. There is no total, because a selection has no composition to add up.
 
-The replay keeps its period, give or take the seven days of the [staleness threshold](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#staleness-threshold): each asset must be priced at both ends of it. An asset that is not is **left out of the replay**: it gets no bar, and the other assets are replayed without it. The section is then marked **Partial**, and a note names the assets left out and says why — for example *First quote after the replay window began: … — left out of the replay.* If none of the selected assets can be replayed, the section is marked **Unavailable for the selected data**. An asset is left out when:
+The replay keeps its period, give or take the seven days of the [staleness threshold](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#staleness-threshold): each asset must be priced at both ends of it. An asset that is not is **left out of the replay**: it gets no bar, and the other assets are replayed without it. Below the bars, the replay [says what it left out](../../financial-theory/technical-analysis/risk-metrics/historical-replay.md#what-the-result-shows): it lists those assets, grouped by reason, under a header such as *Left out of the replay: 2 assets; the figures speak for the others.* A selection has no weights, so the list shows no shares of the value and nothing counts as cash: an asset left out is [simply omitted](../../financial-theory/technical-analysis/risk-metrics/historical-replay.md#what-takes-its-place). The section around the replay does not repeat that list: it is just marked **Partial**.
 
-- it has no price in the period, nor in the seven days before it begins;
-- it was quoted before the period, but not in the seven days before it begins;
-- its first price comes more than seven days after the period begins;
-- it has no price in the last seven days of the period;
-- its currency has no exchange rate into the tab's currency over the period.
+If none of the selected assets can be replayed, there are no bars, and the section is marked **Unavailable for the selected data**. In place of the bars, the block lists the assets, grouped the same way, under *Nothing to replay: no asset has usable prices over this period.*
+
+The block groups the assets under these reasons:
+
+- **No prices in the period** — it has no price in the period, nor in the seven days before it begins;
+- **First quoted after the period began** — its first price comes more than seven days after the period begins;
+- **No recent price when the period began** — it was quoted before the period, but not in the seven days before it begins;
+- **No recent price at the end of the period** — it has no price in the last seven days of the period;
+- **No exchange rate to your currency** — its currency has no exchange rate into the [tab's currency](#one-currency) over the period.
+
+When assets were left out at the edges of the period — a first quote after it began, a gap just before it, no recent price at its end — the block can propose [the part of the period in which they are priced too](../../financial-theory/technical-analysis/risk-metrics/historical-replay.md#the-common-period). A button below the list — for example **Replay from … to …: 2 assets come back** — sets those dates and runs the replay in one click. It appears even when nothing at all could be replayed. If you replayed one of the built-in crises, that part is shorter than the episode, and the block says so: *Only part of the crisis.* An asset left out for having no prices in the period, or no exchange rate, is never part of the proposal: no shorter period would bring it back.
 
 Changing the selection or the page's date range clears a finished replay: run it again for the new answer. See [Historical Replay](../../financial-theory/technical-analysis/risk-metrics/historical-replay.md) for the method.
 
@@ -157,7 +166,7 @@ Every figure is measured over **one window, the same for every selected asset**.
 
 1. **It starts on the first day on which every selected asset can be valued** — has a price, and an exchange rate into the tab's currency if it is quoted in another. When they all can be valued from before the date range, the window simply starts with the range; an asset whose history begins later moves the start for all of them.
 2. **From there, every date on which at least one selected asset is quoted counts** — quoted meaning that a price was recorded for that very day. A price recorded on a weekend or a market holiday is a **carry, not a quote**, when it repeats the previous close exactly (see [Stored Carries](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#stored-carries)): it adds no date, so a weekend counts only when an asset's price really moved on it, as a crypto-asset's can.
-3. **An asset that is not quoted on one of those dates enters with its last price**, so its price does not move that day: its return is zero — or, for an asset quoted in another currency, only the exchange rate's move. Over a weekend, a holiday or a day on which only another market traded, that is ordinary and marks nothing. Only a price held over for **more than seven calendar days** — the [staleness threshold](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#staleness-threshold) — makes every section measured over the window say so: its measurements are marked **Partial**, with a note naming the assets, as in *Prices older than 7 days for 1 asset: …*; an exchange rate held over for more than seven days does the same, with *Exchange rates older than 7 days: …*.
+3. **An asset that is not quoted on one of those dates enters with its last price**, so its price does not move that day: its return is zero — or, for an asset quoted in another currency, only the exchange rate's move. Over a weekend, a holiday or a day on which only another market traded, that is ordinary and marks nothing. Only a price held over for **more than seven calendar days** — the [staleness threshold](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#staleness-threshold) — makes the [notice above the sections](#each-section-speaks-for-itself) say so: it names the measurements over the window as partial, with a note naming the assets, as in *Prices older than 7 days for 1 asset: …*; an exchange rate held over for more than seven days does the same, with *Exchange rates older than 7 days: …*.
 
 A date on which one of the assets cannot be valued even so is left out for all of them. That is what makes the rows comparable: two assets side by side fell, rose and moved over exactly the same days.
 
@@ -165,10 +174,10 @@ The price of that fairness is shared too:
 
 - **Adding an asset with a shorter history narrows the window for all of them, and their figures change.** Removing it widens the window again. This is expected, not an error.
 - **Adding an asset quoted on days the others are not adds those days for all of them** — a day its market is open and theirs is closed, or a weekend on which its price really moves. On those days the others enter with their last price, so their figures change as well.
-- **A benchmark, when one applies, joins the window** of *How much did each of these hurt?* and *What did each of these pay for its risk?*, because it is measured together with the selection there: a benchmark with a shorter history narrows those two sections as well, and the days on which it is quoted count there too. The correlation matrix is computed without it and keeps the selection's own window.
-- **An asset that cannot be valued at all** over the window — no price up to its last day, or no exchange rate into the tab's currency — narrows nothing: it is left out of the calculation. It disappears from the matrix, keeps a row of dashes in the tables, and the sections say that an asset was excluded.
+- **A benchmark, when one applies, joins the window** of *What did each of these pay for its risk?* only — it is [chosen](#what-did-each-pay) under *Compared with*, in the panel at the top of the tab — because it is measured together with the selection there: a benchmark with a shorter history narrows that section, and the days on which it is quoted count there. *How much did each of these hurt?* and the correlation matrix are computed without it and keep the selection's own window, whatever the benchmark. A benchmark that is also one of the selected assets changes no window: it is already part of the selection, and every section measures it as such.
+- **An asset that cannot be valued at all** over the window — no price up to its last day, or no exchange rate into the tab's currency — narrows nothing: it is left out of the calculation. It disappears from the matrix, keeps a row of dashes in the tables, and the notice above the sections says that an asset was excluded.
 
-To see what a section was measured over, open **Calculation details** at its bottom. It shows the number of **Observations** behind the figures, together with the **Coverage**, the annualization factor and the return basis. It gives figures rather than dates, and the observations can move either way when you add an asset: down if its history is shorter, up if it is quoted on days the others are not. **Coverage** looks at every date in the date range on which at least one asset is quoted, and gives the share the window keeps: below 100%, the window starts later than the range, or skips days on which an asset could not be valued.
+To see what a section was measured over, open **Calculation details** at its bottom. It shows the number of **Observations** behind the figures, together with the **Coverage**, the annualization factor and the return basis. It gives figures rather than dates. For the dates, look under the table of *What did each of these pay for its risk?*: a [line](#what-did-each-pay) there gives the first and last day of that section's window and its length in calendar years, months and days, while its Calculation details keeps the figures. The observations can move either way when you add an asset: down if its history is shorter, up if it is quoted on days the others are not. **Coverage** looks at every date in the date range on which at least one asset is quoted, and gives the share the window keeps: below 100%, the window starts later than the range, or skips days on which an asset could not be valued.
 
 ### 💱 One Currency {: #one-currency }
 
@@ -176,19 +185,24 @@ Returns are measured in the instance's default currency — the one your adminis
 
 ### ➖ A Dash Is Not a Zero {: #a-dash-is-not-a-zero }
 
-A dash (—) means *this could not be measured for that asset over this window*. It never means zero: a zero is a measurement, a dash is the absence of one. A selected asset always keeps its row, so a row of dashes means "not measurable here", never "not selected".
+A dash (—) means *this could not be measured for that asset over this window* — save for one case: when the benchmark is one of the selected assets, the dash under its own Beta and Correlation means that they [do not apply](#what-did-each-pay). It never means zero: a zero is a measurement, a dash is the absence of one. A selected asset always keeps its row, so a row of dashes means "not measurable here", never "not selected".
 
-### 🧩 Each Section Speaks for Itself {: #each-section-speaks-for-itself }
+The tables carry no standing note about this: the explanation sits on the dash itself. Hover a dash — or tap it on a touch screen — to read it.
+
+### 🧩 What Is Missing, What Is Partial {: #each-section-speaks-for-itself }
 
 The sections do not stand or fall together. The drawdown columns need very little history; the other figures need at least 20 observations, and the bad month more still. So on a short window, **Worst fall**, **Below peak now** and **Rise to peak** can be filled in while the bad day, the bad month and the whole risk/return section cannot.
 
-Rather than going blank, each section states its own condition in amber above its content:
+What did not come back at all is said where it is missing, in amber above the content of its own section:
 
-- which measurement fell short, and how — **Partial**, **Unavailable for the selected data** or **Calculation failed**;
-- for a measurement that did not run, the limit that stopped it — for example *Insufficient history for this calculation.*;
-- the calculation's own notes, such as prices older than seven days or an asset excluded from the calculation.
+- which measurement, and how — **Unavailable for the selected data** or **Calculation failed**;
+- the limit that stopped it — for example *Insufficient history for this calculation.*
 
-A **Partial** section still shows its figures: the notes say what they are missing.
+What is only partial, and every note, is said **once**, in a single notice between the panel at the top of the tab and the correlation matrix. The sections read the same selection over the same window, so the same stale price or excluded asset, repeated under each of them, would read as several problems. The notice is titled *Some results are partial* when at least one measurement is partial, or *Worth knowing about these results* when there are only notes; with neither, there is no notice. It names each partial measurement once — for example *Correlation · Bad day · Bad month · Per-asset drawdowns · Per-asset risk and return* — and lists every note once, however many sections carry it, such as prices older than seven days or an asset excluded from the calculation. A partial measurement still shows its figures: the notice says what they are missing.
+
+**What if…?** keeps its own status and notes, because it replays a period of its own rather than the shared window: see [What If…?](#what-if).
+
+Above the notice, right below the panel at the top of the tab, a **data-quality banner** lists what is wrong with the data itself, for all four sections, **What if…?** included: prices that are outdated or missing, and exchange rates that are outdated, missing or without a source. It appears only when there is something to fix, and starts folded: its header counts the errors and warnings, and clicking it opens the list. Each kind of problem is listed once, covering every asset or currency pair that any section ran into, with its own action. **Sync prices** and **Sync rates** open the same sync as the toolbar's **Sync selection** on this tab, for the prices of the selected assets and the exchange rates that convert them; the other actions are links, to the page of each asset that has no price, or to the FX pages — to [add a pair](../fx/add-pair.md) that has no source, or to enter a manual pair's rates by hand. The banner and the notice can mention the same fact, such as an outdated price: the banner offers the fix, the notice says what it did to the figures.
 
 ### 🔀 Same Asset, Another Figure Elsewhere {: #same-asset-another-figure }
 

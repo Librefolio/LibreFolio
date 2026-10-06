@@ -3078,11 +3078,6 @@
         "invert": "Invertir",
         "mine": "Mis activos"
       },
-      "filters": {
-        "type": "Tipo",
-        "currency": "Moneda",
-        "clear": "Borrar los filtros"
-      },
       "band": {
         "high": "se mueven juntos",
         "moderate": "se mueven juntos en parte",
@@ -3132,7 +3127,7 @@
         },
         "l3": {
           "title": "¿Cuánto pagó cada uno por su riesgo?",
-          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en el gráfico y en la tabla; con un índice de referencia elegido en el Panel, también cuánto se movió junto a él.",
+          "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en la tabla y en el gráfico; con un índice de referencia elegido en la parte superior de la pestaña, también cuánto se movió junto a él.",
           "expectedReturn": "Rentabilidad media anual",
           "correlation": "Correlación",
           "scatterNote": "Cada punto es un activo: el eje horizontal muestra cuánto osciló y el vertical cuánto rindió de media al año. En un activo muy volátil, la media es más alta que lo que rindió de verdad.",
@@ -3144,7 +3139,16 @@
             "beta": "Cuánto se movió el activo cuando se movía el índice de referencia: 1 significa lo mismo, 2 el doble, 0 con independencia de él.",
             "correlation": "Cuánto se movieron juntos el activo y el índice de referencia, de −1 (siempre opuestos) a +1 (siempre juntos)."
           },
-          "axisReturn": "Rentabilidad media anual"
+          "axisReturn": "Rentabilidad media anual",
+          "period": {
+            "window": "Período: del {start} al {end} ({length}).",
+            "narrowed": "Más corto que el período elegido (del {selectedStart} al {selectedEnd}).",
+            "annualized": "La volatilidad y la rentabilidad media están anualizadas; Sharpe y Sortino se derivan de ellas.",
+            "years": "{count, plural, one {# año} other {# años}}",
+            "months": "{count, plural, one {# mes} other {# meses}}",
+            "days": "{count, plural, one {# día} other {# días}}"
+          },
+          "referenceItself": "No aplicable: este activo es el propio índice de referencia, y no se compara consigo mismo."
         }
       },
       "legend": {
@@ -3169,10 +3173,6 @@
         "noneHeld": "Allí no se posee nada el último día del período: la selección no cambia."
       },
       "picker": {
-        "selectVisible": "Seleccionar visibles",
-        "deselectVisible": "Deseleccionar visibles",
-        "confirm": "Añadir {count}",
-        "allSelected": "Todos los activos ya están en la selección.",
         "notAnalysable": "No analizables en el período"
       },
       "selectedCountHint": "El primer número cuenta los activos que el laboratorio está analizando ahora. El segundo cuenta cuántos podría analizar en el período elegido: todos los activos de LibreFolio, no solo los que posees, siempre que tengan suficientes precios en ese período. Los que no los tienen siguen en el «+», de solo lectura, con el motivo.",
@@ -3182,6 +3182,9 @@
         "banner": "Con el período elegido, {count, plural, one {# activo seleccionado no tiene precios} other {# activos seleccionados no tienen precios}} en una parte del intervalo.",
         "button": "Usar el período en que todos tienen precios (del {start} al {end})",
         "hint": "Mueve el período de arriba al intervalo en que cotizan todos los activos seleccionados que tienen precios. Vuelven al análisis: {names}."
+      },
+      "benchmark": {
+        "help": "El activo de referencia, el «riesgo de base»: la beta indica, activo por activo, si cada uno se movió más (por encima de 1) o menos (por debajo de 1) que él; la correlación, cuánto juntos."
       }
     },
     "metrics": {
@@ -4580,5 +4583,16 @@
       "dark": "Tema oscuro",
       "light": "Tema claro"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Tipo",
+      "currency": "Moneda",
+      "clear": "Borrar los filtros"
+    },
+    "selectVisible": "Seleccionar visibles",
+    "deselectVisible": "Deseleccionar visibles",
+    "confirm": "Añadir {count}",
+    "allSelected": "Todos los activos ya están en la selección."
   }
 }

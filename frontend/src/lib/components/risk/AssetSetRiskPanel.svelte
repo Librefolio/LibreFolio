@@ -69,12 +69,15 @@
      * telling the page when there is nothing to sync.
      */
     import {untrack} from 'svelte';
-    import {AlertTriangle, Briefcase, CheckCheck, ChevronDown, FlipHorizontal, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
+    import {AlertTriangle, Briefcase, CheckCheck, ChevronDown, FlipHorizontal, Info, RefreshCw, Square, Wallet, X} from 'lucide-svelte';
 
+    import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import {DataQualityBanner} from '$lib/components/ui/feedback';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import SelectPopover from '$lib/components/ui/select/SelectPopover.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -83,17 +86,20 @@
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import {invalidateRisk} from '$lib/stores/risk/riskStore.svelte';
+    import {mergeQualityIssues} from '$lib/stores/risk/riskPanelController.svelte';
     import AssetSetCorrelationSection from './AssetSetCorrelationSection.svelte';
     import AssetSetComparisonLevels from './AssetSetComparisonLevels.svelte';
     import AssetSetReplaySection from './AssetSetReplaySection.svelte';
     import AssetChip from './AssetChip.svelte';
+    import BenchmarkSelect from './BenchmarkSelect.svelte';
     import LabAssetPicker from './LabAssetPicker.svelte';
-    import LabPopover from './LabPopover.svelte';
-    import {riskBenchmark} from '$lib/stores/risk/riskBenchmarkStore.svelte';
+    import {partialNotice} from './levels/partialNotice';
+    import RiskPartialNotice from './levels/RiskPartialNotice.svelte';
+    import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {applyBulkAction, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
+    import {applyBulkAction, labBenchmarkId, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
-    import {buildSyncTargets} from './syncTargets';
+    import {buildSyncTargets, labQualityAction} from './syncTargets';
 
     interface AssetOption {
         id: number;
@@ -184,8 +190,8 @@
      * (`liveAssetIdsKey` in `assets/+page.svelte`). The order outlived the reason it
      * was introduced for, and is kept on purpose: it costs nothing, and it keeps the
      * sections clear of whatever that refresh sets off if the poll ever regresses,
-     * since `loadBase` asks again only once. `finally`, so a page refresh that fails
-     * still leaves the sections re-asked on the new data.
+     * since `loadBase` re-asks only up to `RISK_DISCARD_ATTEMPTS` in all. `finally`, so a
+     * page refresh that fails still leaves the sections re-asked on the new data.
      *
      * A run that was not accepted changed nothing, so it refreshes nothing.
      */
@@ -481,8 +487,8 @@
         // (`POST /assets/prices/current`), that is a portfolio mutation, and
         // `portfolioStore`'s mutation listener drops every report in flight. Read as
         // "no holdings", a null used to wipe the selection in silence. It is asked once
-        // more — the policy `loadBase` adopted for the same guard, and the right answer
-        // to a transient failure too — and a second null is reported as a failure.
+        // more — the right answer to a transient failure too — and a second null is
+        // reported as a failure.
         // Only the holdings are read, so the report is asked without its daily history and
         // allocation history: those two series are what made "All mine" wait, and nothing here
         // reads them. The lighter report is cached under its own key (`|nohist|noalloc`).
@@ -543,39 +549,66 @@
     /**
      * The benchmark the comparison levels measure against, when one applies.
      *
-     * Read from the shared `riskBenchmark` and never from a picker of this page's
-     * own: `03-mappa-livelli-pagine` §3.1 makes the benchmark identical across
-     * scopes, because two pages comparing against different references stop being
-     * comparable — which is the property the redesign exists to build.
+     * Chosen in the shared picker (`BenchmarkSelect`), the last row of the selection card:
+     * the developer's rule is that wherever a page measures against a benchmark it can be
+     * chosen there, and that the picker opens on the current one. The choice itself still
+     * lives in the shared `riskBenchmark` store, so choosing it here chooses it on every risk
+     * page — `03-mappa-livelli-pagine` §3.1: two pages comparing against different
+     * references stop being comparable.
      *
-     * 🔴 **Mirrored through `$effect` and not read inside a `$derived`, and that
-     * is a correctness requirement rather than a style.** `riskBenchmark.assetId`
-     * is a getter that *hydrates on read*: it calls `localStorage` and assigns to
-     * the store's `$state`. Writing state while a derived is being evaluated is
-     * fatal in runes mode, so reading it from a `$derived` threw and took the
-     * whole `{#if}` block with it — the controls stayed on screen and every
-     * section below them vanished, which looks exactly like "no assets selected".
-     * An effect may write, so the choice is mirrored here and derived from the
-     * mirror. `L3Benchmark` gets away with a direct read because its read happens
-     * inside a handler, not inside a derivation.
+     * The picker confirms a stored choice against the asset list before it says `set`
+     * (`pending` until then), and only a confirmed choice reaches a request
+     * (`labBenchmarkId`). A choice that is also one of the selected assets is offered and
+     * used like any other (D371): the backend keeps it in the selection, measures it like
+     * the others and leaves it out of the comparison's items, and L3° says in its own row
+     * why its beta and correlation are blank. So the picker leaves nothing out and shows no
+     * ⚠ here.
+     *
+     * 🔴 **The levels mount only once the picker has stopped saying `pending`.** Their
+     * controllers ask for their base waves the moment they mount. Mounted earlier, every
+     * load with a stored benchmark would ask L3° twice — first without the benchmark, over
+     * another window, then with it — and it would show figures that are replaced a moment
+     * later. Starting at `pending` keeps them out until the picker reports; with nothing
+     * stored it reports `none` while it mounts.
      */
-    let benchmarkChoice = $state<number | null>(null);
-
-    $effect(() => {
-        // Reading inside the effect both triggers the hydration and subscribes to
-        // the store's state, so a benchmark chosen on another page still arrives.
-        benchmarkChoice = riskBenchmark.assetId;
-    });
+    let benchmarkValue = $state<number | null>(null);
+    let benchmarkState = $state<RiskBenchmarkState>('pending');
+    let benchmarkId = $derived(labBenchmarkId(benchmarkState, benchmarkValue));
 
     /**
-     * 🔴 Withheld when the benchmark is itself one of the selected assets.
-     * `RiskAssetSetComparisonOutput` rejects that outright — "the comparison
-     * asset cannot appear among the compared items" — because a yardstick cannot
-     * also be one of the measured. Asking anyway would turn a coherent state into
-     * a validation error the reader has no way to act on, so the request simply
-     * does not carry it and L3° says the columns are unavailable.
+     * One notice above the sections, as on the Dashboard (the developer's decision of 05/10).
+     *
+     * Every section reads the same selection over the same window, so a stale price or an
+     * excluded asset used to be said once under each frame — the same sentence, read as four
+     * problems. The frames now keep only what did not come back at all, and this notice says
+     * what is partial, and why, once: from the results the correlation and the two levels
+     * render, read through `bind:this`. The replay keeps its own, as L4 does on the Dashboard:
+     * it answers another question, over a period of its own, so it hands the notice nothing.
+     *
+     * **And the banner above it** (decision B, 05/10): the data-quality issues of all four
+     * controllers — the replay's included, as the Dashboard's banner reads its replay — merged
+     * by Risk's one rule, `mergeQualityIssues`, on the key the banner renders them by. Its
+     * actions go through `labQualityAction`: a sync opens this panel's own sync (the
+     * selection's prices and rates), the rest navigate.
      */
-    let benchmarkId = $derived(benchmarkChoice !== null && !analysedIds.includes(benchmarkChoice) ? benchmarkChoice : null);
+    let correlationSection = $state<ReturnType<typeof AssetSetCorrelationSection>>();
+    let levelsSection = $state<ReturnType<typeof AssetSetComparisonLevels>>();
+    let replaySection = $state<ReturnType<typeof AssetSetReplaySection>>();
+    let qualitySources = $derived([correlationSection?.qualitySource(), levelsSection?.qualitySource(), replaySection?.qualitySource()].filter((source) => source !== undefined));
+    let notice = $derived(
+        partialNotice(
+            qualitySources.flatMap((source) => source.results),
+            $t,
+            Object.fromEntries(qualitySources.flatMap((source) => Object.entries(source.labels))),
+        ),
+    );
+    let qualityIssues = $derived(mergeQualityIssues(qualitySources.flatMap((source) => source.issues)));
+
+    function handleQualityAction(action: string, target: string | null): void {
+        const next = labQualityAction(action, target);
+        if (next?.kind === 'sync') openSync();
+        else if (next?.kind === 'navigate') void goto(next.href);
+    }
 
     function runBulkAction(action: BulkAction): void {
         selectionTouched = true;
@@ -686,7 +719,7 @@
                     </button>
                 {/each}
 
-                <LabPopover bind:open={presetOpen} testId="risk-broker-filter-dropdown" panelClass="w-64">
+                <SelectPopover bind:open={presetOpen} testId="risk-broker-filter-dropdown" panelClass="w-64">
                     {#snippet trigger({open, toggle})}
                         <button type="button" class={QUICK_BUTTON} aria-expanded={open} onclick={toggle} disabled={brokerAssetsLoading} data-testid="risk-broker-filter-button">
                             {#if brokerAssetsLoading}
@@ -723,7 +756,7 @@
                             </div>
                         {/if}
                     {/snippet}
-                </LabPopover>
+                </SelectPopover>
             </div>
 
             <Tooltip text={$t('risk.assetSet.selectedCountHint')} position="bottom" maxWidth="360px" wrapperClass="ml-auto">
@@ -766,12 +799,27 @@
         {#if atCapacity}
             <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">{$t('risk.assetSet.maxAssets')}</p>
         {/if}
+        <!-- The benchmark is a parameter of the whole lab, chosen beside the assets it is set
+             against (the developer's review, 02/10): today only «What did each of these pay?»
+             uses it, for beta, correlation and its dot. Mounted with the card, so a stored
+             choice is confirmed before the levels below ask for their data. -->
+        <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-slate-700" data-testid="risk-asset-set-benchmark-row">
+            <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l3.benchmark')}</span>
+            <Tooltip text={$t('risk.assetSet.benchmark.help')} position="bottom" maxWidth="320px">
+                <span class="inline-flex text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
+            </Tooltip>
+            <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} testid="risk-asset-set-benchmark" />
+        </div>
     </section>
 
     {#if analysedIds.length > 0}
-        <AssetSetCorrelationSection assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
-        <AssetSetComparisonLevels assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
-        <AssetSetReplaySection assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+        <DataQualityBanner issues={qualityIssues} mode="grouped" onaction={(action, target) => handleQualityAction(action, target)} />
+        <RiskPartialNotice partial={notice.partial} reasons={notice.reasons} />
+        <AssetSetCorrelationSection bind:this={correlationSection} assetIds={analysedIds} assetLabels={selectionLabels} assetTypes={selectionTypes} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
+        {#if benchmarkState !== 'pending'}
+            <AssetSetComparisonLevels bind:this={levelsSection} assetIds={analysedIds} assetLabels={selectionLabels} assetIcons={selectionIcons} {dateStart} {dateEnd} {targetCurrency} {benchmarkId} refreshVersion={syncGeneration} />
+        {/if}
+        <AssetSetReplaySection bind:this={replaySection} assetIds={analysedIds} assetLabels={selectionLabels} {dateStart} {dateEnd} {targetCurrency} refreshVersion={syncGeneration} />
     {:else if seeding}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center" data-testid="risk-asset-set-seeding">
             <RefreshCw size={20} class="mx-auto animate-spin text-libre-green" />

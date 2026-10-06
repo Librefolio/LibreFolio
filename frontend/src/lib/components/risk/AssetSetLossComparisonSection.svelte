@@ -47,7 +47,7 @@
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
     import {buildAssetSetHurtRows, type AssetSetHurtRow} from './assetSetLevels';
-    import {assetNameColumn} from './assetSetTable';
+    import {assetNameColumn, figureCell} from './assetSetTable';
 
     interface Props {
         assetIds: number[];
@@ -68,7 +68,7 @@
          */
         failed?: boolean;
         /**
-         * The base answer arrived and was discarded twice running (`controller.loadDiscarded`).
+         * The base answer arrived and was discarded on every attempt (`controller.loadDiscarded`).
          * The frame says so (`answer_discarded` in its `errorCodes`); the body only offers
          * the cure, a retry, when there is no figure to show.
          */
@@ -132,6 +132,9 @@
         return `<span class="${classes}" data-testid="risk-asset-set-l1-${column}" data-measured="${measured}"${extra}>${text}</span>`;
     }
 
+    /** What a dash means, said on the dash itself rather than in a note under the table. */
+    const blankExplanation = () => $t('risk.assetSet.levels.blankNote');
+
     function lossColumn(id: 'badDay' | 'badMonth' | 'currentFall', figure: (row: AssetSetHurtRow) => number | null): ColumnDef<AssetSetHurtRow> {
         return {
             id,
@@ -145,7 +148,7 @@
             getValue: (row) => drawnLoss(figure(row)),
             cell: (row) => {
                 const value = figure(row);
-                return {type: 'html', html: cellHtml(id, value !== null, value === null ? '\u2014' : fall(value), LOSS_CLASS)};
+                return figureCell(cellHtml(id, value !== null, value === null ? '\u2014' : fall(value), LOSS_CLASS), value !== null, blankExplanation);
             },
         };
     }
@@ -187,7 +190,7 @@
                         ? `<span class="block text-[10px] font-normal text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l1-worstFall-days">${escapeHtml($t('risk.assetSet.levels.l1.lastedDays', {values: {days: row.worstFallDays}}))}</span>`
                         : '';
                 const text = row.worstFall === null ? '\u2014' : fall(row.worstFall);
-                return {type: 'html', html: cellHtml('worstFall', row.worstFall !== null, `${text}${lastedHtml}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`)};
+                return figureCell(cellHtml('worstFall', row.worstFall !== null, `${text}${lastedHtml}`, LOSS_CLASS, ` data-recovery="${escapeHtml(row.recovery ?? '')}"`), row.worstFall !== null, blankExplanation);
             },
         },
         lossColumn('currentFall', (row) => row.currentFall),
@@ -203,7 +206,7 @@
             minWidth: VALUE_MIN_WIDTH,
             filterable: false,
             getValue: (row) => row.toPeak,
-            cell: (row) => ({type: 'html', html: cellHtml('toPeak', row.toPeak !== null, row.toPeak === null ? '\u2014' : rise(row.toPeak), 'tabular-nums text-gray-600 dark:text-gray-300')}),
+            cell: (row) => figureCell(cellHtml('toPeak', row.toPeak !== null, row.toPeak === null ? '\u2014' : rise(row.toPeak), 'tabular-nums text-gray-600 dark:text-gray-300'), row.toPeak !== null, blankExplanation),
         },
     ];
 
@@ -252,11 +255,5 @@
                 enableContextMenu={false}
             />
         </div>
-
-        <!-- An em-dash means "this asset could not be measured over this window",
-             not "zero". Said once under the table rather than in every blank cell,
-             and said at all because a dash is otherwise indistinguishable from a
-             figure that failed to load. -->
-        <p class="text-[11px] text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l1-blank-note">{$t('risk.assetSet.levels.blankNote')}</p>
     {/if}
 </div>
