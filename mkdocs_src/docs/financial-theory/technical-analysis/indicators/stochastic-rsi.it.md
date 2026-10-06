@@ -54,10 +54,10 @@ L'RSI Stocastico è una **cascata a due stadi**: il primo stadio (RSI) raddrizza
 
 ```mermaid
 flowchart LR
- C["💹 Chiusura"] --> RSI["💪 RSI(N)"]
- RSI --> MINMAX["📐 Min/max mobile su N barre"]
- MINMAX --> K["🎯 %K"]
- K --> D["🔁 %D = SMA(d, %K)"]
+    C["💹 Chiusura"] --> RSI["💪 RSI(N)"]
+    RSI --> MINMAX["📐 Min/max mobile su N barre"]
+    MINMAX --> K["🎯 %K"]
+    K --> D["🔁 %D = SMA(d, %K)"]
 ```
 
 !!! tip "Più veloce ma più rumoroso"
