@@ -347,6 +347,10 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
     fresh_quote_points = 0
     for item in active:
         valuation_points = [_valuation_point(item.target_points[point_date], target_currency) for point_date in joint_valuation_dates]
+        # TODO(total return): these returns are price-only, so coupons and dividends never enter,
+        # and an income-paying asset (a coupon bond) reads below its total return. The developer's
+        # direction (05/10/2026): add the recorded income where its transactions exist, with the
+        # price as the fallback and the basis declared per asset.
         return_points = [
             AssetReturnPoint(
                 date=current.valuation_date,
