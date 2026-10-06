@@ -159,6 +159,21 @@ jobs:
         run: |
           pipenv run ./dev.py mkdocs gallery --workers 4 || echo "::warning::Gallery had failures — releasing with the screenshots that succeeded (missing ones load from the online docs site)."
 
+      - name: Rebuild SvelteKit Frontend (production, for the images)
+        # The gallery's Playwright webServer is `dev.py server --test`, which
+        # rebuilds frontend/build/ in DEBUG mode (no minification, sourcemaps).
+        # The images copy frontend/build/, so it is rebuilt for production here;
+        # the Dockerfile's frontend stage refuses a debug build.
+        run: pipenv run ./dev.py front build
+
+      - name: Rebuild MkDocs Documentation (with the gallery screenshots)
+        id: rebuild-mkdocs
+        # The site was built before the gallery (fast webServer start), so it has
+        # no screenshots yet. Rebuilt here, the full image ships them; the light
+        # image's docs stage strips them again.
+        continue-on-error: ${{ github.ref_name == 'dev' }}
+        run: pipenv run ./dev.py mkdocs build
+
       # Nightly (dev) only: surface soft-failed steps as a yellow run banner + a
       # readable summary, instead of a green checkmark that hides them. Release
       # runs keep the hard-fail behaviour (no continue-on-error there).
@@ -175,6 +190,7 @@ jobs:
               ("Validate broken MkDocs translation links", "${{ steps.check-translate-validate.outcome }}"),
               ("Validate cross-boundary links", "${{ steps.check-cross-links.outcome }}"),
               ("Build MkDocs Documentation", "${{ steps.build-mkdocs.outcome }}"),
+              ("Rebuild MkDocs Documentation (with the gallery screenshots)", "${{ steps.rebuild-mkdocs.outcome }}"),
           ]
           failed = [name for name, outcome in steps if outcome == "failure"]
           if not failed:
@@ -301,7 +317,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ github.event.release.tag_name }}"
-          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n\n# Light variant (no documentation images — they load from the online docs site)\ndocker pull ghcr.io/librefolio/librefolio:%s-light\n```\n' "$TAG_NAME" "$TAG_NAME")
+          # Images carry metadata-action's {{version}} tags, without the leading "v".
+          IMAGE_TAG="${TAG_NAME#v}"
+          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n\n# Light variant (no documentation images — they load from the online docs site)\ndocker pull ghcr.io/librefolio/librefolio:%s-light\n```\n' "$IMAGE_TAG" "$IMAGE_TAG")
 
           # gh CLI has no --notes-append flag: fetch current notes and append manually
           CURRENT_NOTES=$(gh release view "$TAG_NAME" --json body -q .body)
