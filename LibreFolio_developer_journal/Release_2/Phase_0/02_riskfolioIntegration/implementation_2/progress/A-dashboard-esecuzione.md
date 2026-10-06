@@ -2744,3 +2744,76 @@ commit del checkpoint 1.
 >
 > **Checkpoint 10 consegnato al coordinator**: la pagina, `:101`, e il piano. Nello stesso ORDINE c'è la fusione della
 > punta di F14 `28559e829`. **Stato: FROZEN.** Poi viene l'analisi dei bucket di Income, solo lettura, senza codice.
+
+### Checkpoint 10 committato, F14 fuso; la revisione combinata validata · ✅ 06/10
+
+> **Commit** `ec7a69a57` (oggetto accorciato dal coordinator: «docs(risk): lab line goes through its benchmark»), merge
+> di F14 `1041c38fa`, albero `b72fdfee7` (quello atteso). Worktree pulito.
+>
+> **Validazione** (corsia 6153, carico 10–25):
+> - `front build --debug` OK (82 s); `front check` 0/0;
+> - `risk-levels-unit` 376, `risk-levels-component` 203, `core-unit` 2987, `component-unit` 2634;
+> - `check-orphans` OK; `mkdocs build` strict OK; `check-links` solo `#rolling-return`;
+> - E2E `risk` **33** (71 s), `risk-lab` **42** (99 s, il test in più è di F14); 0 chiamate ai provider (17:49–17:52 UTC).
+>
+> Esiti mandati al coordinator, che fa fare il fast-forward a F.
+> - ⚠️ **Fuori pista**: nello script di validazione la funzione `run` sovrascriveva la variabile `s` (inizio della
+>   finestra E2E) con il suo riepilogo. Ho ricostruito le finestre dalle ore di fine e dalle durate misurate. Il DB e
+>   il server non ne sono stati toccati.
+
+### Passo 26 — analisi dei bucket di Income (solo lettura) · 🔶 06/10
+
+> **Mandato del coordinator (19:28)**: `GrowthChart.svelte` è mio da `9b57893ae`. Prima l'analisi, senza codice. Gli
+> appunti del developer (build `v1.1.0-436`):
+> 1. allineare i bucket al calendario (il mese dal 1°, la settimana dal lunedì): il bucket passato parziale è
+>    sbiadito, quello corrente vale pieno;
+> 2. barre troppo vicine già a 9 mesi: una soglia minima nuova (a 9 mesi su desktop il minimo è 2W) e un margine
+>    visibile fra un bucket e l'altro.
+>
+> **Wiki**: nessuna pagina sulla scala dei bucket (il grafo graphify manca in questo worktree, ed è normale). La
+> storia è nel journal `20_performanceCharts`: con D16-ii (25/09) si era scelto l'ancoraggio alla fine con giorni
+> fissi, e il developer ora lo rovescia.
+>
+> **Misure** (6153, dati di prova, Playwright dalle librerie già installate; polling dei prezzi e catalogo FX
+> bloccati come negli E2E; nessuna installazione, server fermato dopo):
+>
+> | viewport | larghezza del piano del grafico (P&L) |
+> |---|---|
+> | desktop 1280 | 484 px |
+> | desktop 1440 | 573 px |
+> | desktop 1728 | 734 px |
+> | telefono 390 | 279 px |
+>
+> Il grafico occupa 3/5 della riga da 1024 px in su, sulla Dashboard come nel Broker Detail; sotto, tutta la
+> larghezza.
+> - ⚠️ **Fuori pista**:
+>   - Income sui dati di prova mostra «No data available», e il pannello copre i pulsanti, quindi ho misurato in Abs e
+>     in P&L Linea (la griglia è la stessa, cambiano solo le etichette dell'asse y);
+>   - la parte del Broker Detail andava in timeout, e l'ho tolta: il layout è identico nel codice.
+>
+> **Modello** (`/tmp/libreFolio_a_income_model.py`, periodi del 06/10): con il calendario, YTD a 1M dà 10 bucket. Il
+> primo (gennaio) è intero, quindi oggi non c'è più il «dall'1 al 9 gennaio»; ottobre è il mese in corso.
+>
+> **Analisi consegnata al coordinator**, che la porta al developer. In sintesi:
+> - **periodi di calendario**: 1W da lunedì a domenica, 1M dal 1°, 3M/6M/1Y trimestri, semestri e anni; 2W e 3D come
+>   blocchi fissi da un'origine fissa, quindi i confini non si spostano mai;
+> - un bucket passato tagliato dal periodo è sbiadito («Parziale: N su M giorni»); quello corrente è pieno («In
+>   corso: N su M giorni», chiave nuova `chart.tooltip.currentBucket`);
+> - raccomandato anche per le Candele, ma con le loro soglie invariate;
+> - **offerta di Income**: barra ≥ 4,5 px con il 30 % di spazio fra i bucket (bucket ≥ 20,6 px). A 9M su desktop il
+>   minimo è 2W su 1280, 1440 e 1728 (bucket da 23–35 px); sul telefono è 1M. L'offerta deve contare i bucket di
+>   calendario, non `ceil(giorni/span)`;
+> - lo spazio fra le 3 colonne resta al 10 %; `INCOME_OPENING_WIDTH` e `nearestOfferedWidth` non cambiano (sul
+>   periodo 1M Income apre su 2W, come oggi);
+> - l'asse x mantiene il contratto del pianificatore; le etichette con il nome del mese sono un'opzione;
+> - test: un modulo puro `growthLadderBuckets.ts` con il suo test (serve la concessione sul runner), il blocco S7, e
+>   da girare B1, B2, il caso a 40 giorni, S7-E1, S7-E2 e `partialMarkingBreaks`. La documentazione inglese di
+>   `charts.en.md` lascia debito di traduzione. C'è una riga di CHANGELOG proposta.
+> - **Decisioni aperte per il developer**:
+>   - (a) anche le Candele;
+>   - (b) l'ancoraggio di 3D e 2W;
+>   - (c) la soglia, 4,5 px raccomandata;
+>   - (d) la riga «In corso» nel tooltip;
+>   - (e) le etichette con il nome del mese.
+>
+> **Prossimo**: aspetto le decisioni del developer, poi il codice. Il passo 24 (D378) aspetta la fase 2 di Risk.
