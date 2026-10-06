@@ -3565,7 +3565,20 @@
         "replayNothing": "Niente da rigiocare: nessun asset ha prezzi utilizzabili in questo periodo.",
         "replaySuggested": "Rigioca il periodo {start} – {end}: {count, plural, one {torna # asset} other {tornano # asset}}",
         "replaySuggestedPartial": "Solo una parte della crisi.",
-        "replayPresetNone": "Nessun preset"
+        "replayPresetNone": "Nessun preset",
+        "tools": {
+          "empty": "Scegli uno strumento: il replay storico mostra cosa è successo davvero, lo shock ipotetico applica una tua ipotesi, la simulazione usa un modello.",
+          "add": "Aggiungi:",
+          "close": "Chiudi {tool}"
+        },
+        "table": {
+          "asset": "Asset",
+          "weight": "Peso",
+          "return": "Rendimento",
+          "contribution": "Contributo",
+          "impact": "Impatto",
+          "bar": "Effetto"
+        }
       },
       "backtestNotice": "Con una fetta attiva, questi numeri sono ricostruiti sulla composizione di oggi: dicono come *sarebbe* andata, non come è andata davvero.",
       "notice": {

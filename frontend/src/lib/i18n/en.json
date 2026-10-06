@@ -3565,7 +3565,20 @@
         "replayNothing": "Nothing to replay: no asset has usable prices over this period.",
         "replaySuggested": "Replay from {start} to {end}: {count, plural, one {# asset comes back} other {# assets come back}}",
         "replaySuggestedPartial": "Only part of the crisis.",
-        "replayPresetNone": "No preset"
+        "replayPresetNone": "No preset",
+        "tools": {
+          "empty": "Choose a tool: the historical replay shows what really happened, the hypothetical shock applies an assumption of yours, the simulation runs a model.",
+          "add": "Add:",
+          "close": "Close {tool}"
+        },
+        "table": {
+          "asset": "Asset",
+          "weight": "Weight",
+          "return": "Return",
+          "contribution": "Contribution",
+          "impact": "Impact",
+          "bar": "Effect"
+        }
       },
       "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
       "notice": {

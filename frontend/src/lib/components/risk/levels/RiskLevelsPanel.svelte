@@ -357,7 +357,7 @@
             metadata={l4Metadata}
             onfirstopen={() => controller.loadScenarioCatalog()}
         >
-            <L4WhatIf>
+            <L4WhatIf {controller}>
                 {#snippet replay()}
                     <L4Replay {controller} {assetNames} currency={targetCurrency} {dateStart} {dateEnd} />
                 {/snippet}
