@@ -2894,3 +2894,165 @@ commit del checkpoint 1.
 > sulla retta) e di Risk sono arrivate verificate dai rispettivi autori.
 >
 > **Checkpoint 11 consegnato**: due commit, `assetScope` e journal. **Stato: FROZEN.**
+
+### Checkpoint 11 committato, la famiglia in `dev_release2` · ✅ 06/10
+
+> **Coordinator (21:15)**: la famiglia è in `dev_release2` = `ebf4752e2`. Il checkpoint 11 è `863834086` (`assetScope`)
+> più `f1a34d973` (journal), e il mio ramo è riallineato a `ebf4752e2`.
+
+### Passo 28 — i bucket di Income sul calendario · ✅ 06/10
+
+> **Decisioni del developer** (approvate tramite il coordinator, «riguardo i suggerimenti di A sono daccordo»):
+> - (a) **calendario anche per le Candele**: una sola scala, con le loro soglie invariate;
+> - (b) **3D e 2W a blocchi fissi**: terne contate dal 1970-01-01, coppie di settimane ISO dal lunedì 1969-12-29. I
+>   confini non si spostano mai;
+> - (c) **soglia di Income**: barra ≥ 4,5 px, spazio fra i bucket al 30 % (fra le 3 colonne resta al 10 %);
+> - (d) **il bucket corrente è pieno**, con la riga «In corso: N su M giorni» (chiave nuova
+>   `chart.tooltip.currentBucket`); il nome del mese nell'intestazione non si fa;
+> - (e) **le etichette dell'asse non cambiano**.
+>
+> Supera D16-ii (giorni fissi ancorati all'ultimo giorno, del 25/09).
+>
+> **Concessioni** (coordinator): il modulo nuovo `growthLadderBuckets.ts` e la sua voce nel runner (solo in aggiunta,
+> `asset-unit`, accanto a `growthLadderAxis.test.ts`); `GrowthChart.test.ts`; il blocco S7 di `dashboard.spec.ts`;
+> `user/dashboard/charts.en.md` con docs-writer, solo inglese, senza stamp; la chiave `chart.tooltip.currentBucket` ×4.
+> Il CHANGELOG lo scrive il coordinator con il mio testo.
+>
+> **Disegno**:
+> - `growthLadderBuckets.ts`, puro:
+>   - `calendarPeriodOf(data, gradino)`: 1D è il giorno; 3D le terne fisse; 1W e 2W blocchi da 7 o 14 giorni dal lunedì
+>     fisso; 1M, 3M, 6M e 1Y mese, trimestre, semestre e anno;
+>   - `buildCalendarLadder(date, gradino, oggi)`: un bucket per periodo toccato dalla serie, con indici, periodo,
+>     giorni coperti e giorni del periodo. `partial` vale per un periodo passato coperto solo in parte (mancano giorni
+>     all'inizio, oppure alla fine di un periodo finito); `current` per il periodo che arriva fino a oggi o lo supera;
+>   - `countCalendarBuckets` per l'offerta;
+> - `GrowthChart.svelte`:
+>   - `buildLadderBuckets` passa per il modulo; il bucket porta il periodo, `partial` (solo passato) e `current`;
+>   - la data di chiusura resta l'ultimo giorno con dati, così il contratto dell'asse e «Valore al …» non cambiano;
+>   - l'intestazione del tooltip mostra i confini del periodo; sotto, «Parziale» oppure «In corso»;
+>   - l'offerta conta i bucket di calendario;
+>   - `INCOME_CATEGORY_GAP` 0,3 e `INCOME_MIN_BAR_PX` 4,5; via `CANDLE_WIDTH_DAYS`, riscritto il commento dei «plain day
+>     counts»;
+> - ordine: codice, controllo a occhio sui dati di prova, eventuale review del developer, test-author con i rossi
+>   provati sul codice di prima, documentazione, checkpoint.
+>
+> **Note implementazione** (codice, prima della review e dei test):
+> - **`growthLadderBuckets.ts`** (nuovo, puro):
+>   - `calendarPeriodOf`, `buildCalendarLadder` (indici, periodo, giorni coperti e giorni del periodo, `partial`,
+>     `current`) e `countCalendarBuckets`;
+>   - i calcoli sono su numeri di giorno UTC interi, quindi nessun fuso sposta un confine;
+>   - verificato in Node sul modello Python dell'analisi: conteggi uguali per i sei periodi; YTD a 1M con gennaio
+>     intero e ottobre `current`; 9M con gennaio `partial` (26 su 31); un periodo che finisce nel passato ha l'ultimo
+>     bucket `partial`; febbraio bisestile va fino al 29.
+> - **`GrowthChart.svelte`**:
+>   - `CandleWidth = LadderRung`; via `CANDLE_WIDTH_DAYS`, riscritto il commento della scala;
+>   - `buildLadderBuckets(date, gradino)` passa per il modulo con `todayIso()`. La data di chiusura resta l'ultimo
+>     giorno con dati; il periodo viaggia in `period`, e il bucket porta `partial` oppure `current`;
+>   - l'offerta conta i bucket di calendario (`countCalendarBuckets`);
+>   - `INCOME_CATEGORY_GAP` 0,3 e `INCOME_MIN_BAR_PX` 4,5, con il commento che riporta le misure;
+>   - `PARTIAL_BUCKET_OPACITY` riscritto: sbiadito solo il passato non confrontabile;
+>   - tooltip: l'intestazione mostra i confini del periodo (un bucket da 1D resta una data); sotto, «Parziale» oppure
+>     «In corso».
+> - **i18n**: `chart.tooltip.currentBucket` in 4 lingue con `dev.py i18n add` («In progress / In corso / En cours / En
+>   curso: {days} … {total} …»), sulla forma di `partialBucket`.
+> - **Verdi**: prettier; `front check` 0/0.
+> - **Rossi attesi**: `GrowthChart.test.ts` 29, tutti nel blocco S7 (B1–B12), più B7 che fissava lo spazio al 10 %. Sono
+>   i casi D16-ii, superati dalla decisione del developer: li gira test-author (concessione). Diversi aspettano la fine
+>   del timeout (5 s): ora i test dipendono da «oggi», quindi serve fissare l'orologio (`vi.setSystemTime`).
+> - **Controllo a occhio sui dati di prova** (6153, Candele, che hanno la stessa scala; su questi dati Income è
+>   vuoto):
+>   - YTD a 1M: 10 bucket, il primo chiude il 31/1 (gennaio intero), l'ultimo il 6/10 (in corso), nessuno sbiadito;
+>   - YTD a 1W: 41 bucket, sbiadito solo il primo (la settimana dal 29/12 al 4/1);
+>   - YTD a 3M: 4 trimestri;
+>   - 3M a 1M: 4 bucket, luglio sbiadito (inizia il 6);
+>   - 3M a 1W: 14 settimane intere;
+>   - 3M a 3M non è offerto (2 bucket).
+>
+>   Nessun errore nella pagina. Server fermato, 6153 libera.
+>
+> **Review sui dati veri (6163)**:
+> - il developer ha scelto «Sì, sui miei dati veri prima dei test»; il coordinator ha dato il via libera alle 21:30
+>   (snapshot ricreato alle 19:50 con l'OK del developer, identico al precedente; è anteriore all'aggiornamento dei
+>   prezzi delle 20:12, irrilevante per i bucket di Income);
+> - copia: impronta uguale, `umask 077` e `mkdir -m 700`, 0 voci leggibili da altri, nessun marcatore; server su
+>   `127.0.0.1:6163`, log `600` dentro la copia; la build servita conteneva il codice nuovo;
+> - **esito: «va bene così, via con test-author»**;
+> - copia e log cancellati con la prova (`lsof +D` 0, nessun processo, `ls` «No such file»); 6163, 6153 e 6040 libere;
+>   riga di chiusura mandata al coordinator.
+>
+> **Documentazione** (docs-writer `dw-income-calendar`, solo inglese, senza stamp):
+> - `user/dashboard/charts.en.md`, 13+/8−, unico file:
+>   - il paragrafo d'apertura di `#pnl-width` («periodo di calendario»);
+>   - i punti «Calendar periods», «Only widths that can be drawn» (con lo spazio di Income e la regola dei 4,5 px:
+>     2W su desktop e 1M sul telefono a nove mesi), «Where it starts» (l'esempio del periodo di un mese che apre su
+>     2W) e «When it changes»;
+>   - il paragrafo finale sostituito dalle due regole, in corso e parziale, con gli esempi YTD e 3M;
+>   - la frase sul tooltip di Income (`:181`) e, perché aveva le stesse affermazioni false, quella delle Candele
+>     (`:149`). Il separatore dell'intestazione è quello del codice («1M - …»).
+>
+>   Ogni affermazione è controllata sul codice. Ancore invariate. `mkdocs build` strict OK; `check-links` solo
+>   `#rolling-return`; sha256 `0ce97f64…`.
+> - Debito di traduzione vero: le pagine IT, FR ed ES non hanno nemmeno la sezione P&L.
+> - **Caso limite segnalato da docs-writer**: un periodo in corso che il periodo selezionato taglia all'inizio (il
+>   periodo parte dentro il periodo di oggi) è `partial`, quindi sbiadito con «Parziale». È voluto e coerente con la
+>   regola del developer: lì mancano giorni del passato, non solo del futuro. Capita solo quando il periodo
+>   selezionato è più corto di un periodo del gradino. Il commento del modulo dice però solo «in corso = pieno»: **da
+>   precisare dopo test-author**, che adesso controlla gli sha dei sorgenti.
+>
+> **test-author, primo giro** (`ta-income-calendar`):
+> - **U1** `growthLadderBuckets.test.ts` (nuovo), 123 test:
+>   - `calendarPeriodOf` per ogni gradino: anni a cavallo, febbraio bisestile, date prima del 1970;
+>   - `buildCalendarLadder`: parziale all'inizio e alla fine, corrente, tagliato all'inizio e corrente, 2W e 3D fissi;
+>   - `countCalendarBuckets` sulla tabella dell'analisi;
+>
+>   Oracoli letterali, controllati con uno script Python indipendente. Mutanti: M6 (2W ancorato alla serie), M7
+>   (corrente decisa dall'ultimo giorno con dati), più M8–M14.
+> - **U2** `GrowthChart.test.ts`, blocco S7, 75 test (file 117/117):
+>   - B1–B5 girati al calendario;
+>   - B7 (30 % e 10 %, e la soglia dell'offerta dai gap dichiarati);
+>   - B8, la tabella del developer: 6 periodi × 4 larghezze misurate;
+>   - B9–B12 (la finestra di 1M apre su 2W; a 9M su 573 px Income apre su 1M);
+>   - «oggi» fissato con `vi.useFakeTimers({toFake: ['Date']})`.
+>
+>   Mutanti M1–M7 e M15–M21; i sorgenti sono stati ripristinati identici dopo ogni mutante.
+> - **E1** `dashboard.spec.ts` S7: un oracolo di calendario indipendente con l'«oggi» della pagina; `partialMarkingBreaks`
+>   giudica sull'insieme dei bucket parziali; le barre devono essere lo 0,21875 dello slot.
+> - **Cancelli**: vitest 240/240; `growth-chart-memo` 117; `core-unit` 3336; `component-unit` 2715; E2E `dashboard`
+>   26/26, anche con `--workers 4`; `front check` 0/0. **`asset-unit` 529/530**: rosso per colpa mia (sotto).
+> - **Punti segnalati**:
+>   1. **i18n, colpa mia**: la chiave del tooltip era scelta con un ternario, e il contratto «chiavi letterali»
+>      (`chartCoreHelpers.test.ts:3069`) è diventato rosso. Ora sono due chiamate letterali. È lo stesso principio
+>      già scritto in `candleWidthUnit`: una chiave composta a runtime sfugge alla verifica i18n;
+>   2. le «build in debug di qualcun altro» erano il backend condiviso del runner (`server --test` ricostruisce in
+>      debug dopo i mutanti), e la pagina modificata era il mio docs-writer. Nessun attore estraneo;
+>   3. «In corso: 1 su 1 giorni» sulla candela 1D di oggi → **il developer: «Togli la riga per 1D»**. Ora un periodo di
+>      un solo giorno non ha la marca `current`;
+>   4. la memo `ladderCache` restava con il «corrente» di ieri dopo la mezzanotte. Ora la chiave comprende
+>      `todayIso()`.
+> - Commento del modulo precisato: un periodo dentro cui la serie inizia è parziale anche se è ancora in corso.
+> - **Runner**: `growthLadderBuckets.test.ts` registrato in `asset-unit` (lista di vitest più una frase in `desc`, solo
+>   aggiunte, concessione del coordinator); `check-orphans` pulito.
+> - test-author, secondo giro: il caso 1D girato, il test della memo a cavallo della mezzanotte e i cancelli rifatti.
+>
+> **test-author, secondo giro**:
+> - B5 girato (`GrowthChart.test.ts:2096`): a 1D nessuna candela ha la riga, nemmeno quella di oggi; la settimana in
+>   corso a 1W la conserva («1 su 7»). Rosso con il mutante M22 (tolto `&& periodDays > 1`);
+> - **B13** nuovo (`:2577`): stessi dati, il giorno passa oltre la fine di un periodo, ridisegno:
+>   - Candele 1W, dal 4 al 5 ottobre: l'ultima settimana perde la riga «In corso»;
+>   - Income 1M, dal 30 aprile al 1° maggio: aprile passa da «In corso, pieno» a «Parziale, sbiadito».
+>
+>   Rosso con M23 (la memo ignora il giorno).
+> - **sorgenti** ripristinati identici (sha `bfe5f5b7…`, `d12bbce3…`);
+> - **cancelli**: vitest 242; `growth-chart-memo` 119; `asset-unit` **653** (530 + 123, il contratto i18n di nuovo
+>   verde); `core-unit` 3336; `component-unit` 2715; E2E `dashboard` 26/26 sulla build con il codice nuovo;
+>   prettier; `front check` 0/0; `check-orphans` pulito.
+>
+> **Verificato io**:
+> - gli sha dei 6 file coincidono con i resoconti; 12 percorsi (10 M + 2 nuovi); `diff --check` pulito; 6153 libera;
+> - i18n 4641 chiavi, nessuna traduzione mancante; journal senza cifre;
+> - **provider**: la spec `dashboard` fa 20 righe di chiamate vere per giro (feed live JustETF, cache di
+>   `scheduled_investment`). Non viene da questo giro: la spec di base non blocca il polling dei prezzi. Va nella voce
+>   di backlog del coordinator insieme a `asset-list` e `risk-asset-detail`.
+>
+> **Checkpoint 12 consegnato**: un commit con il codice, i test, la guida, la chiave, il runner e il journal; il testo
+> per il CHANGELOG al coordinator. **Stato: FROZEN.** Dopo: il passo 24 (D378).
