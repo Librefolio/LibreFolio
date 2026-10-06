@@ -77,3 +77,15 @@ export function buildSocialShareUrl(platform: SocialPlatform, text: string, titl
 export function buildSocialShareCopy(text: string): string {
     return `${text}\n${PUBLIC_PROJECT_URL}`;
 }
+
+/**
+ * The hashtags of every share, on every platform and in every language — `#LibreFolio` first, so a
+ * share can be followed whatever language it was written in. They live here, never in a catalogue:
+ * a translated hashtag (`#Investimenti`, `#CodigoAbierto`) cannot be tracked across languages.
+ */
+export const SHARE_HASHTAGS: readonly string[] = ['#LibreFolio', '#OpenSource', '#SelfHosted', '#PortfolioTracker', '#PersonalFinance'];
+
+/** A share message as shown, copied and sent: the translated text, a blank line, the hashtags. */
+export function withShareHashtags(message: string): string {
+    return `${message.trimEnd()}\n\n${SHARE_HASHTAGS.join(' ')}`;
+}

@@ -15,7 +15,7 @@ vi.mock('$lib/utils/clipboard', () => ({writeTextToClipboard: vi.fn()}));
 vi.mock('./shareNavigation', () => ({reserveShareTab: vi.fn()}));
 
 import SocialShareModal from './SocialShareModal.svelte';
-import {PUBLIC_PROJECT_URL, SOCIAL_SHARE_CONFIG, SOCIAL_SHARE_ORDER, buildSocialShareCopy, buildSocialShareUrl, type SocialPlatform} from './supportLinks';
+import {PUBLIC_PROJECT_URL, SHARE_HASHTAGS, SOCIAL_SHARE_CONFIG, SOCIAL_SHARE_ORDER, buildSocialShareCopy, buildSocialShareUrl, type SocialPlatform} from './supportLinks';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 import {writeTextToClipboard} from '$lib/utils/clipboard';
 import {reserveShareTab} from './shareNavigation';
@@ -43,6 +43,21 @@ function translation(localeCode: SupportedLocale, key: string): string {
 
 function messageFor(localeCode: SupportedLocale, platform: SocialPlatform): string {
     return translation(localeCode, `support.share.${platform}.message`);
+}
+
+/** The shared hashtag set as one line: imported, never restated — supportLinks.test.ts pins its content. */
+function hashtagLine(): string {
+    expect(SHARE_HASHTAGS, 'supportLinks.ts must export SHARE_HASHTAGS').toBeDefined();
+    return SHARE_HASHTAGS.join(' ');
+}
+
+/** What the modal shows, copies and sends: the catalogue message, one blank line, the hashtag line. */
+function visibleMessageFor(localeCode: SupportedLocale, platform: SocialPlatform): string {
+    return `${messageFor(localeCode, platform)}\n\n${hashtagLine()}`;
+}
+
+function lastLine(text: string): string {
+    return text.split('\n').at(-1) ?? '';
 }
 
 function hintFor(localeCode: SupportedLocale, platform: SocialPlatform): string {
@@ -158,7 +173,7 @@ describe('SocialShareModal — public share surface', () => {
         expect(titleField).toHaveAttribute('readonly');
         expect(titleField).toHaveValue(titleFor('en'));
         expect(message).toHaveAttribute('readonly');
-        expect(message).toHaveValue(messageFor('en', 'reddit'));
+        expect(message).toHaveValue(visibleMessageFor('en', 'reddit'));
         expect(screen.getByTestId('support-social-share-hint')).toHaveTextContent(hintFor('en', 'reddit'));
         expect(screen.getByTestId('support-social-share-title-label')).toHaveTextContent(titleLabelFor('en'));
         expect(dialog.querySelector('[data-social-icon="reddit"]')).not.toBeNull();
@@ -190,38 +205,43 @@ describe('SocialShareModal — public share surface', () => {
                 platform,
             })),
         ),
-    )('binds the active $lang locale copy and hint for $platform', async ({lang, platform}: {lang: SupportedLocale; platform: SocialPlatform}) => {
+    )('binds the active $lang locale copy, the shared hashtag line and the hint for $platform', async ({lang, platform}: {lang: SupportedLocale; platform: SocialPlatform}) => {
         await setupI18n(lang);
         mount({platform});
         const message = screen.getByTestId('support-social-share-message') as HTMLTextAreaElement;
         const copy = screen.getByTestId('support-social-share-copy');
 
-        expect(message).toHaveValue(messageFor(lang, platform));
+        expect(message).toHaveValue(visibleMessageFor(lang, platform));
         expect(screen.getByTestId('support-social-share-hint')).toHaveTextContent(hintFor(lang, platform));
         expect(copy).toHaveAttribute('data-social-platform', platform);
         expect(copy.className).toContain(SOCIAL_SHARE_CONFIG[platform].brandClass);
 
         if (platform === 'reddit') {
-            expect(screen.getByTestId('support-social-share-post-title')).toHaveValue(titleFor(lang));
+            const titleField = screen.getByTestId('support-social-share-post-title') as HTMLInputElement;
+            expect(titleField).toHaveValue(titleFor(lang));
+            expect(titleField.value).not.toContain('#');
             expect(screen.getByTestId('support-social-share-title-label')).toHaveTextContent(titleLabelFor(lang));
         } else {
             expect(screen.queryByTestId('support-social-share-post-title')).toBeNull();
         }
 
-        if (platform === 'x') {
-            const [headline, hashtags = ''] = message.value.split('\n');
-            expect(headline).not.toMatch(/^#/);
-            expect(hashtags).toMatch(/^#/);
-        }
+        // One hashtag set for every platform and language: the last line, after one blank line,
+        // and the only line that carries a hashtag.
+        const lines = message.value.split('\n');
+        expect(lines.at(-1)).toBe(hashtagLine());
+        expect(lines.at(-2)).toBe('');
+        expect(lines.slice(0, -1).join('\n')).not.toContain('#');
     });
 
-    it('updates the visible message and Reddit title when the active locale changes while open', async () => {
+    it('updates the visible message and Reddit title when the active locale changes while open, keeping the same hashtag line', async () => {
         mount({platform: 'reddit'});
-        const message = screen.getByTestId('support-social-share-message');
+        const message = screen.getByTestId('support-social-share-message') as HTMLTextAreaElement;
         const title = screen.getByTestId('support-social-share-post-title');
-        expect(message).toHaveValue(messageFor('en', 'reddit'));
+        expect(message).toHaveValue(visibleMessageFor('en', 'reddit'));
+        const hashtagsBefore = lastLine(message.value);
         await setupI18n('it');
-        await waitFor(() => expect(message).toHaveValue(messageFor('it', 'reddit')));
+        await waitFor(() => expect(message).toHaveValue(visibleMessageFor('it', 'reddit')));
+        expect(lastLine(message.value)).toBe(hashtagsBefore);
         expect(title).toHaveValue(titleFor('it'));
         expect(screen.getByTestId('support-social-share-hint')).toHaveTextContent(hintFor('it', 'reddit'));
     });
@@ -502,7 +522,7 @@ describe('SocialShareModal — copy and navigation flow', () => {
             name: 'the locale changes',
             invalidate: async () => {
                 locale.set('it');
-                await waitFor(() => expect(screen.getByTestId('support-social-share-message')).toHaveValue(messageFor('it', 'x')));
+                await waitFor(() => expect(screen.getByTestId('support-social-share-message')).toHaveValue(visibleMessageFor('it', 'x')));
             },
         },
         {

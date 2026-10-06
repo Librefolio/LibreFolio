@@ -3652,26 +3652,26 @@
     "share": {
       "titleLabel": "Suggested title",
       "x": {
-        "message": "Hey! I'm using LibreFolio to track my investments and I'm loving it. Give it a try!\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "message": "Hey! I'm using LibreFolio to track my investments and I'm loving it. Give it a try!",
         "hint": "The project link is added to the copy and the post. X opens in a new tab."
       },
       "reddit": {
-        "title": "Trying LibreFolio to track my portfolio on my own server",
-        "message": "I've been looking for a simpler way to follow my investments without handing all my portfolio data to an external service. Lately I've been trying LibreFolio, and I'm enjoying having everything in one place.\n\nIt's an open-source portfolio tracker you can install on your own server to organize your holdings and explore their performance while keeping your data under your control. If that sounds useful, take a look!",
+        "title": "Trying LibreFolio, an open-source portfolio tracker",
+        "message": "I've been looking for a simpler way to follow my investments without handing all my portfolio data to an external service. Lately I've been trying LibreFolio, and I'm enjoying having everything in one place.\n\nIt's an open-source portfolio tracker to organize your holdings and explore their performance, while keeping your data under your control. If that sounds useful, take a look!",
         "hint": "We open a text post with a separate title and body. If Reddit leaves the body empty, paste the text already copied."
       },
       "facebook": {
-        "message": "Lately I've been using LibreFolio to keep an eye on my investments, and I like having everything in one place without giving up control of my data.\n\nIf you're looking for an open-source portfolio tracker you can run on your own server, give it a look!",
+        "message": "Lately I've been using LibreFolio to keep an eye on my investments, and I like having everything in one place without giving up control of my data.\n\nIf you're looking for an open-source portfolio tracker that keeps your data under your control, give it a look!",
         "hint": "Facebook prepares only the link preview. After opening it, paste the copied text into the post's message field.",
         "afterCopy": "Text and link copied. Paste the text into Facebook's post message."
       },
       "instagram": {
-        "message": "A little more order in my investments, without leaving my data elsewhere. I'm trying LibreFolio: an open-source portfolio tracker you can host on your own server.\n\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "message": "A little more order in my investments, without leaving my data elsewhere. I'm trying LibreFolio, an open-source portfolio tracker.",
         "hint": "Instagram cannot prepare a post from this link. After opening it, choose Create (+), select a photo or video, then paste the copied caption.",
         "afterCopy": "Caption and link copied. On Instagram: Create (+), choose your photo/video, then paste the caption."
       },
       "tiktok": {
-        "message": "My new sidekick for tracking my portfolio: LibreFolio. Open source, on my own server, with my data under my control. If you like tinkering, check it out!\n\n#LibreFolio #OpenSource #SelfHosted #PersonalFinance",
+        "message": "My new sidekick for tracking my portfolio: LibreFolio. Open source, with my data under my control. If you like tinkering, check it out!",
         "hint": "We open TikTok's upload page; sign in if asked. Select your video, then paste the copied caption. No video or caption is uploaded automatically.",
         "afterCopy": "Caption and link copied. On TikTok's upload page, select your video and paste the caption."
       }
