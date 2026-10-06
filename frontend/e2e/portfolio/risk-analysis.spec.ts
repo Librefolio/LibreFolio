@@ -1957,6 +1957,10 @@ test.describe('Risk analysis functional integration', () => {
         await expect.poll(() => scenarioCatalogCalls.length, {timeout: 10_000}).toBe(1);
 
         // --- Sync -------------------------------------------------------------
+        // Enabled only once the Dashboard knows what it syncs — its holdings and their FX pairs, from
+        // its own report, which nothing above waits for. `data-busy="false"` is that report landed, the
+        // barrier `openDashboardRiskWithHoldings` uses; without it the 3 s default was a bet on its speed.
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
         const syncButton = panel.getByTestId('risk-sync-button');
         await expect(syncButton).toBeEnabled();
         await syncButton.click();
