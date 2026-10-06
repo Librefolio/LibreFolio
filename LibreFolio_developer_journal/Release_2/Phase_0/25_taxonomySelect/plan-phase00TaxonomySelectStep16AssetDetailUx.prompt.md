@@ -328,9 +328,156 @@ Oggi:
   >   nome si accorcia coi puntini, valore e valuta restano interi.
   > - 🔄 Condivisione: niente più «sul mio server» nei messaggi suggeriti; gli stessi hashtag (`#LibreFolio
   >   #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance`) su tutti i social e in tutte le lingue.
-- [ ] **16.3 Voce 2** (+ 2b se approvata) — test rossi, store, componente, callback, doc. Commit `feat(ui): browse
-  assets from the detail page`.
-- [ ] **16.4 Regressioni e handoff** — CHECKPOINT READY, FROZEN. Commit del journal.
+- [x] **16.3 Voce 2** (2b nel backlog, decisione del developer) — test rossi, store, componente, callback, doc. Commit
+  `feat(ui): browse assets from the detail page`. ✅ 2026-10-06 (iniziata alle 14:05, base `56c718c23`; `dev_release2`
+  = `c77c7f09e`, solo il CHANGELOG in più).
+  > **Progetto definitivo** (dopo le decisioni e i vincoli del coordinator):
+  > - `components/assets/assetBrowse.ts`, modulo puro, solo in memoria. Niente `sessionStorage`: conta da dove si è
+  >   entrati, non cosa resta dopo un ricaricamento. Contiene:
+  >   - `publishAssetListOrder(view, panels)` e `publishAssetTableOrder(panel, ids)`/`clearAssetTableOrder(panel)`;
+  >   - `getAssetListOrder()`: griglia = pannelli concatenati; tabella = per pannello l'ordine della tabella, se c'è
+  >     (filtri di colonna compresi), altrimenti quello del pannello;
+  >   - `defaultAssetBrowseOrder(assets, currentId)`: gli attivi, più gli inattivi se l'asset aperto è inattivo, in
+  >     ordine di ciclo di vita, a pannelli;
+  >   - `browseNeighbours(order, id)`;
+  >   - la copia di `assetScope`, protetta da un test che nomina il file da allineare;
+  >   - azzeramento al cambio di sessione.
+  > - `AssetBrowseNav.svelte` nell'intestazione del dettaglio: `afterNavigate` decide l'elenco.
+  >   - Si arriva dalla lista (`/(app)/assets`) → l'ordine pubblicato.
+  >   - Ci si sposta fra asset → lo stesso ordine.
+  >   - Qualunque altra entrata (link diretto, Dashboard, ricaricamento) → l'ordine predefinito, da `/assets/query`.
+  >   - Pulsanti `‹ n/N ›`, disattivi ai bordi, nascosti sotto 2 asset; stato pubblicato in `data-state`.
+  >   - Il clic fa `goto(..., {replaceState: true, keepFocus: true})` e conserva la query (date).
+  > - `navigationStore.ts`: aggiunta `expectReplaceNavigation(url)`. La navigazione seguente verso quel percorso
+  >   sostituisce la cima della pila invece di aggiungere, così «Indietro» va alla lista.
+  > - `DataTable.svelte`: prop `onRowOrderChange(ids)`, gli id nell'ordine mostrato su tutte le pagine; test in
+  >   `DataTable.rowOrder.test.ts`.
+  > - `AssetTable.svelte`: prop `browseSegment`, che pubblica l'ordine della propria tabella.
+  > - `assets/+page.svelte`, 3 righe fuori dalle zone di Risk: import (`:24`), `<AssetBrowseOrder>` e
+  >   `browseSegment={panel.id}`.
+  > - Da sapere per l'integrazione: la famiglia Risk (A) **cambia `assetScope`** nella sua versione della lista (da
+  >   `tx_count` a `held_by_me`/`held_by_others`). Chi integra per secondo deve allineare la copia, e il test di guardia
+  >   lo impone.
+  >
+  > **⚠️ Fuori pista (crash dell'app, ~14:18)**: i due test-author avviati alle 14:12 (unit/component e E2E) sono morti
+  > col crash prima di scrivere qualunque file. Verificato alle 14:21: nel worktree solo il piano (14:11), nessun
+  > processo, porte 6155 e 6165 libere, nessun venv del worktree, nessun asset di test rimasto nella DB della lane
+  > (letta su una copia, poi cancellata). Sopravvissuta la bozza di K in `/tmp/libreFolio_k16_2_draft/`. Test-author
+  > rilanciati con gli stessi compiti.
+  >
+  > **Avanzamento (06/10, 15:10)**:
+  > - **rossi**:
+  >   - unit (`/tmp/libreFolio_k16_2_unit_red.log`): 21 test rossi per l'API assente e 2 file che non si caricavano;
+  >     verdi i 14 di caratterizzazione;
+  >   - E2E `asset-browse` (`…_e2e_red.log`): 6/6 rossi, tutti alla barriera `asset-browse` assente; la preparazione
+  >     funziona;
+  > - **implementazione**: `assetBrowse.ts`, `navigationStore.expectReplaceNavigation`, `DataTable.onRowOrderChange`,
+  >   `AssetBrowseNav.svelte`, `AssetBrowseOrder.svelte`, `AssetTable.browseSegment`; 3 righe nella lista e 2 nel
+  >   dettaglio; 3 chiavi i18n ×4 (`dev.py i18n add`). Unit **74/74**;
+  > - **E2E dopo la cura** (`…_e2e_green.log`): 5/6. AB-004, l'entrata diretta, resta `pending`.
+  >
+  > **⚠️ Fuori pista (difetto trovato dall'E2E)**:
+  > - In SvelteKit 2.50.1 `afterNavigate` registra la callback solo al mount; la chiama alla fine di una navigazione
+  >   (`client.js:1811`) o all'idratazione (`:615`).
+  > - Il layout `(app)` mostra la pagina solo dopo i18n, autenticazione e bootstrap (`+layout.svelte:196-230`). Su
+  >   un'entrata diretta il dettaglio si monta quindi a navigazione finita, e nessuno chiama la callback.
+  > - Durante una navigazione lato client, invece, `navigating` resta non nullo fino a dopo le callback (`:1565`,
+  >   `:1815`).
+  > - Cura: in `onMount`, con `navigating` nullo, si decide subito con l'ordine predefinito; una chiamata
+  >   d'idratazione successiva (`from` nullo) viene ignorata.
+  > - Rosso unitario chiesto al test-author, insieme all'harness che modella `navigating`.
+  >
+  > **⚠️ Fuori pista (pavimento svelte-check)**: 2 errori di tipo in `DataTable.rowOrder.test.ts:266` (`ColumnDef<Row>`
+  > contro `ColumnDef<unknown>` nel `rerender`), un file di test; correzione chiesta al test-author.
+  >
+  > **Chiusura (06/10, 15:30)**:
+  > - **rosso del montaggio tardivo** (test-author, `/tmp/libreFolio_k16_2_unit_red2.log`):
+  >   - l'harness ora modella `navigating` come SvelteKit: non nullo durante il mount di una navigazione lato client,
+  >     nullo dopo le callback;
+  >   - 2 rossi: decide al mount, e montaggio tardivo con fetch fallito; il controllo «niente doppio fetch» è verde,
+  >     come guardia;
+  >   - tipo del `rerender` corretto con lo stesso cast stretto di `DataTable.test.ts`: svelte-check 0/0;
+  > - **cura**: `AssetBrowseNav` in `onMount` sceglie l'ordine predefinito se `navigating` è nullo; ignora una
+  >   chiamata successiva con `from` nullo. Unit 77/77;
+  > - **verde**: `front build --debug` 0/0; E2E `asset-browse` **6/6** (`…_e2e_green2.log`);
+  > - **regressioni** (`/tmp/libreFolio_k16_2_reg_*.log`): `asset-mobile-layout` 14/14, `asset-detail` 29/29,
+  >   `asset-list` 28/28, `asset-name-xss` 2/2, `toolbar-width-sweep` 15/15, `core-unit` 3001/3001 (106 file),
+  >   `component-unit` 2265/2265 (100 file), `front check` 0/0, `check-orphans` pulito (97 spec, 291 unit);
+  > - **`git merge-file` contro la punta di A, `001bebf12`** (14:36, contiene `f6b7273f8`; base `9b5291c25`; codici
+  >   in `/tmp/libreFolio_k16_2_mergefile_001bebf12/exit_codes.txt`):
+  >   - **rc=0 su tutti i 12 file modificati**, compresi quelli che A cambia: lista, 4 cataloghi i18n,
+  >     `_frontend_utility.py`;
+  >   - nessun file nuovo in comune;
+  >   - nella lista unita le 3 righe di K ci sono e `viewMode`, `assetPanels` e `panel.id` esistono ancora;
+  > - **sovrapposizione semantica attesa**: A cambia `assetScope` in `held_by_me`/`held_by_others` (backend
+  >   `schemas/assets.py:779-780`). Chi integra per secondo:
+  >   1. allinea la copia in `assetBrowse.ts` alla nuova funzione, come impone il test di guardia;
+  >   2. porta le fixture di `defaultAssetBrowseOrder` in `assetBrowse.test.ts`, e `API_ASSETS` in
+  >      `AssetBrowseNav.test.ts`, da `tx_count`/`tx_count_own` ai flag `held_by_*`.
+  >
+  >   Il tipo degli asset accettati (`Parameters<typeof assetScope>[0]`) segue da solo.
+  >
+  > **⚠️ Fuori pista (revisione della doc, 06/10, 15:45)**: docs-writer ha documentato la funzione nelle pagine EN, senza
+  > timbro, quindi il debito di traduzione resta visibile. Leggendo il codice ha segnalato tre difetti, tutti verificati
+  > da K:
+  > 1. **Date vecchie nell'URL.** La pagina riscrive `?start&end` con `history.replaceState` (`dateRangeUrl.ts:10-14`),
+  >    che SvelteKit non vede. Le frecce usavano `$page.url.search`, quindi dopo un cambio di periodo portavano le date
+  >    vecchie, e un ricaricamento le rimetteva (`seedFromUrl`, `+layout.svelte:53`). Cura: `window.location.search`.
+  > 2. **«Tutto» non si ricalcola sul nuovo asset** in uno spostamento laterale. `reloadPage()` non riarma la risoluzione
+  >    (`rearmMaxPendingBeforeReload`, `:1629`), quindi il nuovo asset parte dalla data più vecchia del precedente. Il
+  >    difetto esisteva già con `handleDetailAsset`, ma le frecce lo rendono frequente. Cura: una riga nell'effetto di
+  >    cambio asset, `rearmMaxPendingBeforeReload()` prima di `reloadPage()`.
+  > 3. **Frecce che spariscono** passando dal dettaglio a un asset fuori dall'ordine (`navigate_asset` del tab Rischio).
+  >    Cura: l'ordine si tiene solo se contiene il nuovo asset, altrimenti si passa all'ordine predefinito.
+  >
+  > Rossi chiesti ai due test-author (unit per 1 e 3, E2E per 1 e 2), prima di toccare il prodotto.
+  >
+  > **Segnalazioni per il backlog, non di K**:
+  > - `mkdocs check-links` rosso per un'ancora già presente, `user/assets/detail/chart/#rolling-return`
+  >   (`[id]/+page.svelte`, commit `e3af27ff3`): l'ancora esiste solo in `chart.en.md`;
+  > - la pagina utente della lista dice che la ricerca trova anche ISIN, ticker e broker, ma il codice cerca solo nel
+  >   nome;
+  > - il cambio di tab del dettaglio ricostruisce l'URL da `$page.url` (`[id]/+page.svelte:2666`), quindi rimette anche
+  >   lui le date vecchie dopo un cambio di periodo (segnalato dal test-author; difetto precedente, fuori perimetro).
+  >
+  > **Chiusura dei tre difetti (06/10, 16:05)**:
+  > - **rossi**:
+  >   - unit (`/tmp/libreFolio_k16_2_unit_red3.log`): 3 nuovi rossi, cioè la query viva (2) e lo spostamento laterale
+  >     fuori dall'ordine (1); i 20 esistenti verdi. L'harness ora allinea l'URL di jsdom a `$page`;
+  >   - E2E (`…_e2e_red3.log`):
+  >     - AB-007: dopo «Tutto» e freccia, l'inizio resta quello di Alpha, 2026-09-07 invece di 2026-03-21;
+  >     - AB-008: l'URL riporta le date d'apertura, e il ricaricamento le ripristina;
+  >     - i 6 esistenti verdi;
+  > - **cure**:
+  >   - `AssetBrowseNav` usa `window.location.search` e tiene l'ordine solo se contiene il nuovo asset;
+  >   - `reloadPage()` chiama `rearmMaxPendingBeforeReload()` nel suo blocco di azzeramento (2 righe). Al mount è
+  >     idempotente; i chiamanti sono solo il mount e il cambio di asset;
+  > - **verde**:
+  >   - unit 80/80;
+  >   - `front build --debug` 0/0;
+  >   - E2E `asset-browse` **8/8** (`…_e2e_green3.log`);
+  >   - regressioni (`/tmp/libreFolio_k16_2_reg2_*.log`): `asset-detail` 29/29, `asset-mobile-layout` 14/14,
+  >     `component-unit` 2268/2268;
+  > - **merge-file** rifatto contro la punta di A, sempre `001bebf12` (`exit_codes.txt`): **rc=0 su tutti i 14 file
+  >   modificati**, comprese le 2 pagine di doc, di cui A cambia `user/assets/index.en.md`. Nessun file nuovo in
+  >   comune, nessun marcatore di conflitto nella lista unita.
+  >
+  > **Doc** (docs-writer, solo EN, nessun timbro):
+  > - `user/assets/detail/index.en.md`, «Header & Controls»: la voce nuova «‹ › Previous / Next asset» con due
+  >   sotto-voci, e la voce Back aggiornata;
+  > - `user/assets/index.en.md`: una frase;
+  > - `mkdocs build` passa; `sw.js` invariato;
+  > - debito di traduzione dichiarato: IT, FR ed ES della pagina del dettaglio non hanno la voce nuova
+  >   (`translate-validate`: `list-bullet-count` 10 contro 7).
+- [x] **16.4 Regressioni e handoff** — CHECKPOINT READY, FROZEN. Commit del journal. ✅ 2026-10-06.
+  > **Note implementazione**:
+  > - due commit proposti per la voce 2, `k-40-asset-browse` e `k-41-journal-16b`, con i messaggi e le liste dei
+  >   percorsi in `/tmp/libreFolio_commits/` e il manifesto `k-16b-manifest.txt`;
+  > - **CHANGELOG proposto**: ✨ Dettaglio asset: due frecce ‹ n/N › per passare all'asset precedente o successivo
+  >   senza tornare alla lista. Seguono la lista lasciata, con filtri, vista e ordinamento; senza lista, tutti gli
+  >   asset nell'ordine predefinito. «Indietro» torna alla lista in un passo;
+  > - **per chi integra per secondo** con la famiglia Risk: allineare `assetScope` in `assetBrowse.ts`, e le fixture dei
+  >   due test, ai flag `held_by_*` (vedi sopra).
 
 L'ordine è dalla voce più piccola e sicura alla più larga: la 2 è l'unica che tocca file condivisi.
 
