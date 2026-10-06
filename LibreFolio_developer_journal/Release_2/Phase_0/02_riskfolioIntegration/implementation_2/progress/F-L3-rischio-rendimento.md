@@ -3176,3 +3176,188 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 >   - **G3** questo journal.
 > - Nessuna chiave i18n toccata. CHANGELOG: niente da me.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### Dopo il checkpoint 14 · 2026-10-06, 17:4x-21:1x
+
+> - Checkpoint 14 committato: `93f3c838e`, `a759f9d2a`, `28559e829`, albero `8648067fb`. `/tmp/libreFolio_f4/verify_l14.sh`:
+>   **PASS**.
+> - Il developer si è fermato (17:43) e alla ripresa `/tmp` era vuoto: gli script e i record sono tornati dalle copie
+>   nei file di sessione. Il DB di corsia lo ricrea il primo E2E.
+> - **CHANGELOG della famiglia**: ho mandato le mie voci, prima ad A e poi al coordinatore, che le scrive. Sono:
+>   - la voce «Asset Global gains two comparison levels» corretta: la retta solo attraverso il benchmark, e non più il
+>     benchmark «scelto sulla Dashboard»;
+>   - sei voci nuove: la selezione col «+», la matrice, la barra della scheda, il benchmark dove si usa con la sua riga,
+>     le tabelle, la qualità dei dati detta una volta;
+>   - una correzione: il poll dei prezzi live;
+>   - **una settima, che avevo dimenticato**: i pannelli d'uso della pagina Assets (`180a8a6cd`, F-3b del 24/09), sulle
+>     bandierine `held_by_*` di Risk.
+>   Per le tre sovrapposizioni con Risk ho proposto una voce sola ciascuna:
+>   - il banner: la voce di Risk, con una frase sul laboratorio;
+>   - D371: la mia;
+>   - i pannelli `held_by_*`: la mia, che è quella che l'utente vede.
+> - **Riallineamento**: la famiglia è entrata in `dev_release2` (`ebf4752e2`) e il mio ramo è lì; ora c'è anche la
+>   tappa 2 di Risk.
+
+## Giro 15 · i verdetti al selettore del laboratorio, D378 · 2026-10-06, dalle 21:1x
+
+| # | passo | stato |
+|---|---|---|
+| L15-0 | analisi (sotto) | ✅ 2026-10-06 |
+| L15-1 | rossi (test-author): la regola pura dell'attesa, ed E2E con un benchmark salvato non misurabile | ✅ 2026-10-06, 21:4x |
+| L15-2 | codice: `verdicts={eligibilityView}`, il pannello che sa quando l'ammissibilità ha risposto, l'attesa di L3° | ✅ 2026-10-06, 21:5x |
+| L15-3 | guida (docs-writer, solo EN) | ✅ 2026-10-06, 21:5x |
+| L15-4 | cancelli, checkpoint piccolo | ✅ 2026-10-06, 22:0x (CHECKPOINT READY) |
+
+### L15-0 · analisi (su `ebf4752e2`)
+
+> **La tappa 2 di Risk, come è arrivata** (`BenchmarkSelect.svelte`, `riskBenchmarkStore.svelte.ts:88`):
+> - `RiskBenchmarkState` ha anche `blocked`; il controllo lo pubblica in `data-benchmark-state`, e `data-eligibility`
+>   dice da dove vengono i verdetti;
+> - prop nuove: `verdicts?` (presi così come sono, senza domande) oppure `period?` con `currency?` (allora il
+>   selettore chiede da sé);
+> - `published()`: una scelta confermata diventa `blocked` se il suo verdetto è `ineligible`. **Quando il selettore
+>   chiede da sé**, aspetta il suo verdetto (`pending`); **quando i verdetti glieli passa la pagina, no**: con la mappa
+>   ancora vuota dice `set`, e poi `blocked`;
+> - la scelta resta nel trigger, e nell'elenco sta nella sezione dei bloccati, segnata come corrente (`blockedLabel` =
+>   `risk.benchmark.blocked`).
+>
+> **Il laboratorio oggi**:
+> - `benchmarkId = labBenchmarkId(state, value)` passa il benchmark solo su `set`: uno `blocked` esce già dalla domanda
+>   di L3°;
+> - il selettore non riceve verdetti;
+> - L3° aspetta solo `benchmarkState === 'pending'` (13-A).
+>
+> **La trappola** (segnalata da Risk): passando `verdicts={eligibilityView}`, mentre l'ammissibilità del laboratorio
+> carica (300 ms di attesa, poi la chiamata) la mappa è vuota. Lo stato è `set`, L3° chiederebbe **col** benchmark, e
+> quando la risposta lo blocca chiederebbe di nuovo **senza**. D378 dice che un benchmark non misurabile non si prova.
+>
+> **Il progetto**:
+> 1. il selettore riceve `verdicts={eligibilityView}`;
+> 2. il pannello sa **se la domanda di ammissibilità corrente ha avuto risposta**: una chiave (catalogo, periodo,
+>    valuta) e la chiave dell'ultima risposta, riuscita o fallita. Se non c'è niente da chiedere, ha risposto;
+> 3. **L3° aspetta** finché `labL3Waits(state, settled)` è vero, cioè quando lo stato è `pending` oppure è `set` e
+>    l'ammissibilità non ha ancora risposto. Senza benchmark (`none`) non aspetta: la sua domanda non ne porta;
+> 4. **un cambio di periodo** riapre l'attesa: L3° si smonta e si rimonta, e chiede una volta col verdetto del nuovo
+>    periodo. Con l'attesa solo all'apertura, un cambio di periodo chiederebbe col verdetto vecchio e poi di nuovo: il
+>    benchmark sarebbe provato. Il prezzo è la breve attesa dell'ammissibilità; il cambio di periodo fa comunque
+>    ripartire L3°;
+> 5. un fallimento del motore libera l'attesa (nessun verdetto vuol dire selezionabile), altrimenti L3° non
+>    chiederebbe mai.
+>
+> **I rossi**:
+> - unitari (`assetSetSelection.test.ts`): `labL3Waits` su tutti gli stati per `settled` vero e falso;
+>   `labBenchmarkId('blocked', id)` → `null`;
+> - E2E (`risk-lab.spec.ts`): un benchmark salvato che il motore (stub `answerEligibility`) dice `ineligible` nel periodo:
+>   - il controllo mostra `blocked` e tiene l'id;
+>   - aperto l'elenco, la sua opzione sta nella sezione dei bloccati, segnata corrente;
+>   - **nessuna** domanda di L3° sulla selezione porta il `comparison`.
+>   Oggi è rosso, perché L3° lo chiede col benchmark. Più (c)/(f) rilanciati.
+>
+> **I file**: `assetSetSelection.ts` (e il suo test), `AssetSetRiskPanel.svelte`, `risk-lab.spec.ts`, la guida. Nessun
+> file condiviso.
+>
+> **Il codice è pronto** in `/tmp/libreFolio_f4/l15_code_DRAFT.py` (ogni ancora trovata una volta sola). Lo applico dopo
+> i rossi. Due scelte prese scrivendolo:
+> - **`eligibilityQuestion` vale `null` finché la lista della pagina non è arrivata.** La selezione si ripristina da
+>   `localStorage` prima della lista, e `analysedIds` = la selezione filtrata dai verdetti. Con i verdetti vuoti la
+>   selezione intera è analizzabile, quindi i livelli si montano subito. Se «niente da chiedere» contasse come risposta,
+>   L3° partirebbe col benchmark prima della lista e poi richiederebbe.
+> - Il prop dei livelli resta `benchmarkPending`: cambia solo cosa significa (L3° aspetta), detto nel docblock.
+>
+> **Un reperto fuori dal giro, per il triage** (non lo tocco: il checkpoint dev'essere piccolo, e D378 parla del solo
+> benchmark):
+> - per la stessa ragione **ogni** sezione del laboratorio chiede all'apertura con la selezione intera, compresi gli
+>   asset che i verdetti poi «parcheggiano», e richiede quando i verdetti arrivano;
+> - due domande invece di una per correlazione, L1°, L3° e replay. Comportamento di oggi, non introdotto qui;
+> - la stessa attesa dell'ammissibilità, estesa a tutti i livelli, lo eviterebbe.
+
+### L15-1 · i rossi (test-author `l15-reds`) ✅ 2026-10-06, 21:2x-21:4x
+
+> - **Unitari** (`assetSetSelection.test.ts`):
+>   - `labBenchmarkId('blocked', 7)` → `null`, una riga di guardia, verde (per `blocked` il selettore tiene l'id: solo lo
+>     stato lo tiene fuori dalla domanda);
+>   - `describe('labL3Waits')`, due tabelle («aspetta», «chiede subito»), più un controllo che copra ognuno dei 5 stati
+>     per `settled` vero e falso. Su un `Record<RiskBenchmarkState, true>`, così uno stato nuovo non compila senza le sue
+>     righe;
+>   - **10 rossi** (`labL3Waits is not a function`), 74 verdi.
+> - **E2E** (`risk-lab.spec.ts`), test (g) a `:6053`: lo stub `answerEligibility`, registrato dopo `installRiskMocks`,
+>   dice `NO_PRICES` per il solo benchmark salvato. Il test controlla:
+>   - `data-benchmark-state="blocked"`, e l'id resta;
+>   - nell'elenco l'opzione è nella sezione dei bloccati, `aria-selected="true"`, disattivata, con
+>     `data-reasons="no_prices"` e una volta sola;
+>   - `expectNoComparison`: nessuna domanda di L3° col `comparison`, `data-benchmark="false"`, nessuna riga `ref-`;
+>   - la chiave salvata tiene ancora l'id.
+>   **Rosso** per la ragione giusta: atteso `blocked`, ricevuto `set` (`data-eligibility="none"`: il laboratorio non
+>   passa verdetti). Con una variante temporanea, poi tolta, test-author ha visto anche che una domanda di L3° portava il
+>   benchmark #10. (a), (c) e (f) restano verdi.
+> - `tsc e2e` 2 (il pavimento); prettier pulito; 6154 libera. Test-author ha svuotato la cache del runner del
+>   worktree (`--fresh-run`), che teneva solo un elenco vecchio del 21/09.
+> - **⚠️ Fuori pista, la regola corretta** (trovato da test-author): con `('blocked', false)` che non aspetta, a un cambio
+>   di periodo il selettore dice ancora `blocked` col verdetto vecchio mentre la domanda nuova è in volo. L3° chiederebbe
+>   senza benchmark, e poi di nuovo con lui se il verdetto nuovo lo ammette: due domande, contro il passo 4
+>   dell'analisi. **Regola nuova**: L3° aspetta anche per `blocked` non ancora risolto, cioè per ogni benchmark scelto.
+>   Spostata la riga nella tabella (test-author) e aggiornata la bozza del codice.
+
+### L15-2 · il codice ✅ 2026-10-06, 21:5x (`/tmp/libreFolio_f4/l15_code_DRAFT.py`, ogni ancora trovata una volta)
+
+> **Note implementazione**
+> - `assetSetSelection.ts`: `labL3Waits(state, settled)` = `pending`, oppure un benchmark scelto (`set` o `blocked`)
+>   coi verdetti della domanda corrente non ancora arrivati. Il docblock spiega D378 e il caso del cambio di periodo.
+> - **`AssetSetRiskPanel.svelte`**:
+>   - `eligibilityQuestion` (lista, periodo, valuta; `null` finché la lista della pagina non c'è);
+>   - `eligibilityAnsweredFor`, scritto quando una risposta della generazione corrente arriva o fallisce;
+>   - `eligibilitySettled`;
+>   - il selettore riceve `verdicts={eligibilityView}`;
+>   - i livelli ricevono `benchmarkPending={labL3Waits(benchmarkState, eligibilitySettled)}`;
+>   - il docblock del benchmark ha un paragrafo per D378.
+> - `AssetSetComparisonLevels.svelte`: solo il docblock della prop `benchmarkPending` (ora vuol dire «L3° aspetta»).
+> - **Prove**:
+>   - unitari (`assetSetSelection`, i livelli, `BenchmarkSelect` di Risk) **214/214**, i 10 rossi verdi;
+>   - `front check` 0/0; prettier pulito;
+>   - `front build --debug`, poi `front-portfolio risk-lab` **43/43**: i 42 di prima più il (g), verde.
+
+### L15-3 · la guida (docs-writer `l15-guide`) ✅ 2026-10-06, 21:5x
+
+> - `correlation.en.md`, una riga aggiunta nella lista del benchmark (prima di «the columns also stay hidden…», così il
+>   suo «also» regge ancora): gli asset non analizzabili nel periodo stanno in fondo all'elenco del selettore, in sola
+>   lettura, sotto *Not usable over this period*, ciascuno col suo motivo (gli stessi verdetti del **+**). Un benchmark
+>   già scelto che cade fra loro resta scelto e si vede, ma **non si usa e non si prova**: niente colonne Beta e
+>   Correlazione, niente riga, rombo o retta, finché un periodo non lo rende misurabile.
+> - Ogni frase verificata sul codice (file:riga nel rapporto). docs-writer non dice «segnato come corrente» in modo
+>   visibile, perché nella parte in sola lettura la scelta corrente è segnata solo per gli screen reader
+>   (`aria-selected`).
+> - `mkdocs build` strict pulito; `sw.js` invariato. **`check-links`: 89 valide** (non 88), 8 non verificabili, 3 ancore
+>   note, più D28. Il controllo scansiona `frontend/src` e i plugin del backend, e le mie modifiche non hanno percorsi
+>   della documentazione: il +1 viene dalla base della famiglia (`ebf4752e2`).
+> - **Per un giro di guida più avanti**: la sezione «Adding and Removing Assets» (`:31`) è vecchia rispetto al **+**
+>   (che aggiunge più asset spuntati insieme, coi suoi filtri e gli esclusi in sola lettura), e la pagina non dice delle
+>   chip grigie né della nota sugli asset parcheggiati. Non entra in questo checkpoint, che dev'essere piccolo.
+
+### L15-4 · i cancelli ✅ 2026-10-06, 21:52-22:02 (`/tmp/libreFolio_f4/l15_gates.sh`, corsia 6154, uno per volta)
+
+> | cancello | esito |
+> |---|---|
+> | `front build --debug` · `mkdocs build` (0 WARNING) | ✅ · ✅ |
+> | `front check` · `tsc -p tsconfig.e2e.json` · prettier | 0/0 · 2 (il pavimento) · pulito |
+> | lista vitest | 1582 |
+> | `core-unit` · `component-unit` · `risk-controller-unit` | 3348 · 2715 · 96 |
+> | `risk-levels-component` · `risk-levels-unit` | 237 · 376 |
+> | `front-portfolio risk-lab` | **43/43** (con il (g)) |
+> | `risk` · `risk-benchmark-shared` · `services risk-asset-set` | 33 · 4 · 51 |
+> | `check-orphans` · `i18n audit` · `mkdocs check-links` | ok · 4640 chiavi, 511 inutilizzate, nessuna mancante (la base della famiglia; nessuna mia) · 89/8/3 + D28 |
+> | righe di provider: `risk-lab` · `risk` · `bench` | 0 · 0 · 0 |
+>
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera alla fine.
+
+### Checkpoint 15 · 2026-10-06, 22:0x (verso Risk)
+
+> - Base `ebf4752e2` (`dev_release2` con la famiglia), 7 percorsi modificati, tre gruppi:
+>   - **G1** il codice e i suoi test: `assetSetSelection.ts` e il suo test, il pannello, i livelli (solo il docblock),
+>     lo spec;
+>   - **G2** la guida;
+>   - **G3** questo journal.
+> - Nessuna chiave i18n toccata. Nessun file condiviso.
+> - **CHANGELOG**: una voce, che va al coordinatore. Il laboratorio non prova un benchmark salvato che non si può
+>   misurare nel periodo.
+> - Il reperto per il triage (ogni sezione chiede due volte all'apertura) resta aperto.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
