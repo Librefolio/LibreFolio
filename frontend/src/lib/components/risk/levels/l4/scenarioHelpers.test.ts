@@ -140,6 +140,23 @@ describe('tornadoRows', () => {
         expect(rows).toEqual([]);
     });
 
+    it('keeps a replayed asset that came out flat: a zero is a figure, not an abstention (D151)', () => {
+        // The other side of the rule above, for a replay. Since D376 the backend leaves the
+        // excluded assets out of `impacts`, so every row that arrives was replayed — and one that
+        // ended where it started says so with its 0%. Dropping the zero rows here to hide the old
+        // excluded ones would erase that statement along with them.
+        const rows = tornadoRows({
+            impacts: [
+                {asset_id: 7, weight: 0.4, shock_return: -0.1, contribution_return: -0.04, impact_amount: '-400.00'},
+                {asset_id: 3, weight: 0.3, shock_return: 0, contribution_return: 0, impact_amount: '0.00'},
+            ],
+        });
+        expect(rows.map((row) => [row.assetId, row.value, row.amount])).toEqual([
+            [7, -0.04, -400],
+            [3, 0, 0],
+        ]);
+    });
+
     it('says nothing for an absent or foreign payload', () => {
         expect(tornadoRows(null)).toEqual([]);
         expect(tornadoRows({kind: 'kpi', volatility: 0.1})).toEqual([]);
@@ -379,7 +396,13 @@ describe('replayExclusions — from the audit, when something was replayed', () 
         expect(replayBlock.replayExclusions(replayed('portfolio', replayAudit))).toEqual({
             groups: [
                 // Heaviest first inside a group.
-                {reason: 'no_prices_in_window', assets: [{assetId: 14, weight: 0.3}, {assetId: 12, weight: 0.1}]},
+                {
+                    reason: 'no_prices_in_window',
+                    assets: [
+                        {assetId: 14, weight: 0.3},
+                        {assetId: 12, weight: 0.1},
+                    ],
+                },
                 {reason: 'starts_after_window_start', assets: [{assetId: 13, weight: 0.2}]},
                 {reason: 'stale_at_window_start', assets: [{assetId: 17, weight: 0.04}]},
                 {reason: 'stale_at_window_end', assets: [{assetId: 16, weight: 0.1}]},
@@ -445,7 +468,13 @@ describe('replayExclusions — from the error, when nothing was left to replay',
             expect(exclusions, `wrapped=${wrapped}`).toEqual({
                 groups: [
                     {reason: 'no_prices_in_window', assets: [{assetId: 42, weight: 0.5}]},
-                    {reason: 'starts_after_window_start', assets: [{assetId: 41, weight: 0.25}, {assetId: 43, weight: 0.125}]},
+                    {
+                        reason: 'starts_after_window_start',
+                        assets: [
+                            {assetId: 41, weight: 0.25},
+                            {assetId: 43, weight: 0.125},
+                        ],
+                    },
                 ],
                 count: 3,
                 // Nothing was replayed, so no treatment was applied to anything.
@@ -466,7 +495,20 @@ describe('replayExclusions — from the error, when nothing was left to replay',
             }),
         );
 
-        expect(exclusions).toEqual({groups: [{reason: 'missing_fx', assets: [{assetId: 51, weight: null}, {assetId: 52, weight: null}]}], count: 2, weightTotal: null, treatment: null});
+        expect(exclusions).toEqual({
+            groups: [
+                {
+                    reason: 'missing_fx',
+                    assets: [
+                        {assetId: 51, weight: null},
+                        {assetId: 52, weight: null},
+                    ],
+                },
+            ],
+            count: 2,
+            weightTotal: null,
+            treatment: null,
+        });
     });
 
     it('orders one group’s assets by weight, heaviest first, ties and the unweighted by id', () => {
@@ -523,7 +565,15 @@ describe('replayExclusions — from the error, when nothing was left to replay',
     it('puts every asset under one unknown reason when the error names only their ids', () => {
         // A backend from before D372 sends the ids alone; they are still the assets left out.
         expect(replayBlock.replayExclusions(nothingLeft({excluded_asset_ids: [71, 72]}))).toEqual({
-            groups: [{reason: 'unknown', assets: [{assetId: 71, weight: null}, {assetId: 72, weight: null}]}],
+            groups: [
+                {
+                    reason: 'unknown',
+                    assets: [
+                        {assetId: 71, weight: null},
+                        {assetId: 72, weight: null},
+                    ],
+                },
+            ],
             count: 2,
             weightTotal: null,
             treatment: null,
@@ -627,7 +677,16 @@ describe('replaySectionView — what the section reads once the block shows the 
 
     it('takes a nothing-left refusal off the section’s errors, which keeps its status line', () => {
         for (const wrapped of [false, true]) {
-            const input = nothingLeft({excluded_asset_ids: [41, 42], excluded_assets: [{asset_id: 41, reason: 'starts_after_window_start', weight: 0.6}, {asset_id: 42, reason: 'no_prices_in_window', weight: 0.4}]}, {wrapped});
+            const input = nothingLeft(
+                {
+                    excluded_asset_ids: [41, 42],
+                    excluded_assets: [
+                        {asset_id: 41, reason: 'starts_after_window_start', weight: 0.6},
+                        {asset_id: 42, reason: 'no_prices_in_window', weight: 0.4},
+                    ],
+                },
+                {wrapped},
+            );
             const snapshot = structuredClone(input);
             // Positive control: the section would otherwise say "insufficient history".
             expect(resultErrorCodes([input])).toEqual(['insufficient_history']);

@@ -1140,6 +1140,15 @@ def test_historical_replay_proxy_replaces_only_the_return_series():
 
 
 def test_historical_replay_exclusion_preserves_zero_return_residual_weight():
+    """Realigned to D376 (05/10/2026): the excluded asset leaves `impacts`, and nothing else moves.
+
+    It used to pin `impacts == [1, 2]`, asset 2 drawn as a row at zero return, zero contribution
+    and no money: the UI drew it as a +0.00% bar beside the assets that lived through the window,
+    though it had no data in it. A zero is not an abstention (D151). So `output.impacts` holds the
+    replayed assets alone, and the excluded one stays where it already was — the audit, with its
+    weight, reason and treatment; `computation.excluded_assets`; the warnings. Its weight is still
+    carried as cash at zero return: the figures are the ones this test pinned before.
+    """
     replay_range = DateRangeModel(
         start=date(2026, 1, 2),
         end=date(2026, 1, 21),
@@ -1158,13 +1167,24 @@ def test_historical_replay_exclusion_preserves_zero_return_residual_weight():
         ),
     )
 
+    # Unchanged: half of the scope gains 10%, the excluded quarter sits at zero beside the cash
+    # quarter, and the rest is not renormalized — 5%, ten euros of the two hundred.
     assert computation.output.portfolio_return == pytest.approx(0.05)
     assert computation.output.impact_amount == Decimal("10.000")
-    assert [impact.asset_id for impact in computation.output.impacts] == [1, 2]
-    assert computation.output.impacts[1].shock_return == 0
+    # Only the replayed asset has a row; the excluded one is not a bar at zero.
+    assert [impact.asset_id for impact in computation.output.impacts] == [1], "an excluded asset is still an impact row at zero return: impacts must carry the replayed assets only (D376)"
+    (replayed,) = computation.output.impacts
+    assert (replayed.weight, replayed.contribution_return) == (0.5, pytest.approx(0.05))
+    # The excluded asset is where it already was, with its weight, its reason and its treatment.
     audit = computation.historical_replay_audit
     assert audit.excluded_weight_total == pytest.approx(0.25)
-    assert audit.excluded_assets[0].treatment.value == "zero_return_residual"
+    assert [(item.asset_id, item.reason, item.weight, item.treatment) for item in audit.excluded_assets] == [
+        (2, RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION, 0.25, RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL),
+    ]
+    assert computation.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="manual_historical_replay_exclusion"),)
+    assert [(warning.message_i18n_key, warning.details["asset_ids"], warning.details["treatment"]) for warning in computation.warnings] == [
+        ("risk.warnings.historical_replay_excluded_manual", [2], "zero_return_residual"),
+    ]
 
 
 def test_historical_replay_auto_excludes_a_missing_original_instead_of_blocking():
@@ -1375,9 +1395,14 @@ def test_historical_replay_auto_exclusion_keeps_the_weight_as_zero_return_cash()
         (2, Reason.STARTS_AFTER_WINDOW_START, 0.25, Treatment.ZERO_RETURN_RESIDUAL),
     ]
     impacts = {impact.asset_id: impact for impact in automatic.output.impacts}
-    assert set(impacts) == {1, 2}
+    # D376 (05/10/2026): the excluded weight sits at zero beside the cash — the 5% above — but the
+    # asset is no row of its own: drawn at zero return it read as "lived through the window and did
+    # nothing", when it had no data in it at all (D151). The audit, the warning and the exclusions
+    # below are where it is named. It used to pin {1, 2} and a (0.0, 0.0) row for asset 2.
+    assert set(impacts) == {1}, "an automatically excluded asset is still an impact row at zero return (D376)"
     assert impacts[1].contribution_return == pytest.approx(0.05)
-    assert (impacts[2].shock_return, impacts[2].contribution_return) == (0.0, 0.0)
+    # The manual exclusion of the same asset leaves the same single row.
+    assert [impact.asset_id for impact in manual.output.impacts] == [1], "a manually excluded asset is still an impact row at zero return (D376)"
     (warning,) = automatic.warnings
     assert warning.code == "historical_replay_assets_excluded"
     assert warning.message_i18n_key == "risk.warnings.historical_replay_excluded_starts_late"
@@ -1389,6 +1414,35 @@ def test_historical_replay_auto_exclusion_keeps_the_weight_as_zero_return_cash()
     assert manual.historical_replay_audit.excluded_assets[0].reason == Reason.MANUAL_EXCLUSION
     assert [warning.message_i18n_key for warning in manual.warnings] == ["risk.warnings.historical_replay_excluded_manual"]
     assert manual.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="manual_historical_replay_exclusion"),)
+
+
+def test_historical_replay_keeps_a_replayed_asset_that_came_out_flat_and_no_row_for_the_excluded_one():
+    """D376 read with D151: who leaves `impacts` is decided by who was replayed, never by the value.
+
+    Asset 1 lived through the window and ended exactly where it started: 0% is its figure, and its
+    row stays. Asset 2 had no price in the window: it was never replayed, so it has no row, though
+    its weight still counts as cash at zero return. Dropping the zero rows instead would get both
+    of them wrong in one move — the flat asset gone, the excluded one gone for a reason that only
+    happened to coincide.
+    """
+    computation = replay(
+        replay_context(
+            {1: [0.0] * 20},
+            scope_kind=RiskScopeKind.PORTFOLIO,
+            scope_asset_ids=(1, 2),
+            weights={1: 0.5, 2: 0.25},
+            cash_weight=0.25,
+            auto={2: Reason.NO_PRICES_IN_WINDOW},
+        )
+    )
+
+    assert computation.output.portfolio_return == 0.0
+    assert [(impact.asset_id, impact.weight, impact.shock_return, impact.contribution_return) for impact in computation.output.impacts] == [(1, 0.5, 0.0, 0.0)], "the replayed asset that came out flat must keep its row, and the excluded one must have none (D376, D151)"
+    assert [(item.asset_id, item.reason, item.weight, item.treatment) for item in computation.historical_replay_audit.excluded_assets] == [
+        (2, Reason.NO_PRICES_IN_WINDOW, 0.25, Treatment.ZERO_RETURN_RESIDUAL),
+    ]
+    assert computation.historical_replay_audit.excluded_weight_total == pytest.approx(0.25)
+    assert computation.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="historical_replay_no_prices_in_window"),)
 
 
 def test_historical_replay_auto_exclusion_omits_the_asset_from_an_asset_set():
@@ -1455,6 +1509,9 @@ def test_historical_replay_audits_manual_and_automatic_exclusions_with_one_warni
     assert RiskHistoricalReplayAudit.model_validate(audit.model_dump()) == audit
     # Only asset 1 moves: 0.3 × 10%, everything excluded sits at zero next to the cash.
     assert computation.output.portfolio_return == pytest.approx(0.03)
+    # …and only asset 1 is a row (D376): seven exclusions, one per reason the engine has, manual
+    # included, and not one of them drawn as a bar at zero.
+    assert [impact.asset_id for impact in computation.output.impacts] == [1], "an excluded asset is still an impact row at zero return (D376)"
 
     # Past half of the value excluded, the result first says it describes a minority of the
     # portfolio: 40% covered here, cash included, since cash is replayed at its zero return.
