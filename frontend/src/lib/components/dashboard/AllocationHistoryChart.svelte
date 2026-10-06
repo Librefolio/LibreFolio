@@ -22,7 +22,8 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import {_, t} from '$lib/i18n';
-    import {buildTooltipTheme, buildTooltipHeader, buildTooltipByThreshold, buildTooltipTopN, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildTooltipTheme, buildTooltipHeader, buildTooltipByThreshold, buildTooltipRow, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix, type TooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {getCountryInfo, ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
     import {getSectorEmoji, ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
     import {getAssetTypeEmoji} from '$lib/components/dashboard/allocationTypeEmoji';
@@ -75,6 +76,13 @@
         lineSeriesByName: Record<string, LineDataPoint[]>;
     }
 
+    /** One drawn series: its id, its colour and the raw categories it sums — one, except a type family (D375). */
+    interface SeriesStyle {
+        id: string;
+        color: string;
+        members: string[];
+    }
+
     // Resolution switches recompute dataZoom with absolute startValue/endValue (not
     // percentages). The shared CHART_SET_OPTION_OPTS only replaceMerges 'series', so a plain
     // merge would combine the new startValue/endValue with any stale percentage-based
@@ -108,6 +116,8 @@
     let shouldPickInitialResolution = true;
     let suppressDataZoomHandling = false;
     let needsInitialLayoutStabilityPass = false;
+    /** The series ids, in order, last applied to the current instance; null before its first option. */
+    let lastSeriesOrder: string | null = null;
 
     // Distinct colors for allocation categories — 14 slots, which is enough for
     // the `type` dimension and NOT enough for `sector`. Read the next paragraph
@@ -123,8 +133,9 @@
     //   type   — 12 base colours: the 11 families of assetTypeFamily (I's D15:
     //            the chart groups by vehicle, like the pie), plus the synthetic
     //            "Liquidity" bucket that `DailyStateBuilder.build` injects at its
-    //            step 4h, outside the enum. Subtypes take shades of their family's
-    //            colour. 12 <= 14, so no group is ever handed another's colour. (At
+    //            step 4h, outside the enum. Each family is drawn as ONE area in its
+    //            base colour, and its subtypes appear only in the tooltip (D375).
+    //            12 <= 14, so no family is ever handed another's colour. (At
     //            12 slots, grouping by content, it was: 13 keys, and the 13th took
     //            the colour of the 1st — the largest slice on screen.)
     //
@@ -559,6 +570,60 @@
         return emoji ? `${emoji} ${localized}` : localized;
     }
 
+    /** One entry per asset family, in the hierarchy's group order, with its base colour verbatim and its raw members. */
+    function familyStyling(dataset: AggregatedAllocationDataset, palette: readonly string[]): SeriesStyle[] {
+        const hierarchy = buildAllocationHierarchy(
+            dataset.sortedNames.map((name) => ({key: name, weight: dataset.avgWeights[name] ?? 0, item: name})),
+            {resolvePrimary: assetTypeFamily, palette},
+        );
+        const families: SeriesStyle[] = [];
+        for (const entry of hierarchy) {
+            const current = families[families.length - 1];
+            // A group's first member has depth 0, so its colour is the palette entry itself.
+            if (current && current.id === entry.primary) current.members.push(entry.item);
+            else families.push({id: entry.primary, color: entry.color, members: [entry.item]});
+        }
+        return families;
+    }
+
+    /**
+     * The type tooltip under D375: families ranked by the day's value, then, under a family,
+     * the members present that day — the generic one first, captioned as the pie captions it,
+     * then the subtypes by value. A family holding only its own key is a single row. More
+     * than six families: the top five and the rest summed, as before.
+     */
+    function buildFamilyTooltipRows(styling: readonly SeriesStyle[], dataset: AggregatedAllocationDataset, idx: number, theme: TooltipTheme, remainingLabel: string): string {
+        const valueAt = (key: string) => dataset.rawDataByName[key]?.[idx] ?? 0;
+        const percent = (value: number) => `${value.toFixed(1)}%`;
+        const families = styling
+            .map((family) => {
+                const members = family.members.map((key) => ({key, value: valueAt(key), pure: key.toUpperCase() === family.id})).filter((member) => member.value > 0.01);
+                return {...family, members, value: members.reduce((sum, member) => sum + member.value, 0)};
+            })
+            .filter((family) => family.value > 0.01)
+            .sort((left, right) => right.value - left.value);
+        const shown = families.length <= 6 ? families : families.slice(0, 5);
+        const rest = families.slice(shown.length);
+
+        let html = '';
+        for (const family of shown) {
+            let rows = buildTooltipRow(escapeHtml(getDisplayName(family.id)), percent(family.value), family.color);
+            if (!(family.members.length === 1 && family.members[0].pure)) {
+                const ordered = [...family.members].sort((left, right) => (left.pure !== right.pure ? (left.pure ? -1 : 1) : right.value - left.value));
+                for (const member of ordered) {
+                    const label = member.pure ? $t('dashboard.allocationGeneric', {values: {type: localizeName(family.id)}}) : getDisplayName(member.key);
+                    rows += `<div data-allocation-member="${escapeHtml(member.key)}" style="padding-left:16px">${buildTooltipRow(escapeHtml(label), percent(member.value))}</div>`;
+                }
+            }
+            html += `<div data-allocation-family="${escapeHtml(family.id)}">${rows}</div>`;
+        }
+        if (rest.length > 0) {
+            const sum = rest.reduce((total, family) => total + family.value, 0);
+            html += buildTooltipRow(escapeHtml(`${remainingLabel} (${rest.length})`), percent(sum), theme.mutedColor);
+        }
+        return html;
+    }
+
     function buildChartOption(dataset: AggregatedAllocationDataset, isDark: boolean, skipAnimation: boolean): echarts.EChartsOption {
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
         const textColor = isDark ? '#94a3b8' : '#64748b';
@@ -576,10 +641,11 @@
         // Order and colour are decided together, once, and consumed by both the
         // series and the tooltip — they must not drift apart.
         //
-        // With `stack: 'allocation'` the series order IS the vertical stacking
-        // order, so on this chart shading a subtype without reordering would be
-        // worse than not shading at all: the geometry would actively contradict
-        // the parentage the colour claims.
+        // By type, one area per family (D375, developer, 05/10/2026: «Una sola area per
+        // famiglia (ETF = somma di tutti), con i sottotipi solo nel tooltip»). The family
+        // order and base colour are the pie's, from buildAllocationHierarchy by vehicle;
+        // the shades it gives the members are not drawn here, so the stack never shows two
+        // near-identical bands that read as an overlap.
         //
         // Deliberately not cached on the dataset: the dataset survives theme
         // changes, the palette does not.
@@ -591,24 +657,27 @@
             debug.warn('AllocationHistoryChart', `palette exhausted: ${dataset.sortedNames.length} "${dimension}" categories for ${palette.length} colours — ` + `${dataset.sortedNames.length - palette.length} will repeat an earlier colour`);
         }
 
-        const styling: Array<{name: string; color: string}> =
-            dimension === 'type'
-                ? buildAllocationHierarchy(
-                      dataset.sortedNames.map((name) => ({key: name, weight: dataset.avgWeights[name] ?? 0, item: name})),
-                      {resolvePrimary: assetTypeFamily, palette},
-                  ).map(({item, color}) => ({name: item, color}))
-                : dataset.sortedNames.map((name, index) => ({name, color: palette[index % palette.length]}));
+        const styling: SeriesStyle[] = dimension === 'type' ? familyStyling(dataset, palette) : dataset.sortedNames.map((name, index) => ({id: name, color: palette[index % palette.length], members: [name]}));
 
-        const series: echarts.SeriesOption[] = styling.map(({name, color}) => {
-            const emoji = getCategoryEmoji(name);
-            const showLabel = dataset.avgWeights[name] >= 3 && emoji;
+        const series: echarts.SeriesOption[] = styling.map(({id, color, members}) => {
+            const emoji = getCategoryEmoji(id);
+            const averageWeight = members.reduce((sum, member) => sum + (dataset.avgWeights[member] ?? 0), 0);
+            const showLabel = averageWeight >= 3 && emoji;
 
             return {
-                id: name,
-                name: getDisplayName(name),
+                id,
+                name: getDisplayName(id),
                 type: 'line',
                 stack: 'allocation',
-                data: dataset.seriesDataByName[name],
+                data:
+                    members.length === 1
+                        ? dataset.seriesDataByName[members[0]]
+                        : dataset.rows.map((row) =>
+                              namedPoint(
+                                  row.date,
+                                  members.reduce((sum, member) => sum + (row.valuesByName[member] ?? 0), 0),
+                              ),
+                          ),
                 smooth: false,
                 symbol: 'none',
                 lineStyle: {color, width: 1, opacity: 0.7},
@@ -661,23 +730,19 @@
                     if (!row) return '';
 
                     const theme = buildTooltipTheme(isDark);
+                    const header = buildAllocationTooltipHeader(row, theme.mutedColor);
+                    const remainingLabel = $_('common.remaining') || 'Remaining';
+                    if (dimension === 'type') return header + buildFamilyTooltipRows(styling, dataset, idx, theme, remainingLabel);
+
                     const allItems = styling
-                        .map(({name, color}) => ({
-                            name: getDisplayName(name),
-                            value: dataset.rawDataByName[name]?.[idx] ?? 0,
+                        .map(({id, color}) => ({
+                            name: getDisplayName(id),
+                            value: dataset.rawDataByName[id]?.[idx] ?? 0,
                             color,
                         }))
                         .filter((item) => item.value > 0.01);
 
-                    const header = buildAllocationTooltipHeader(row, theme.mutedColor);
-                    const rows =
-                        dimension === 'type'
-                            ? allItems.length <= 6
-                                ? buildTooltipTopN(allItems, allItems.length, theme, $_('common.remaining') || 'Remaining')
-                                : buildTooltipTopN(allItems, 5, theme, $_('common.remaining') || 'Remaining')
-                            : buildTooltipByThreshold(allItems, 3, theme, $_('common.remaining') || 'Remaining');
-
-                    return header + rows;
+                    return header + buildTooltipByThreshold(allItems, 3, theme, remainingLabel);
                 },
             },
             legend: {
@@ -769,6 +834,7 @@
             // PriceChartFull.svelte.
             (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             needsInitialLayoutStabilityPass = true;
+            lastSeriesOrder = null;
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
@@ -796,6 +862,18 @@
         if (skipAnimation) {
             chartInstance.dispatchAction({type: 'hideTip'});
         }
+
+        // Under `replaceMerge`, ECharts keeps a series whose `id` comes back at the index it
+        // had before, so a series that appears in a later render, or a re-ranked one, kept
+        // its old place and the stack contradicted the order decided above (verified on
+        // ECharts 6 while settling D375). When the order moved, the series are cleared first;
+        // the tooltip goes too, for the same reason as above.
+        const seriesOrder = ((option.series ?? []) as Array<{id?: string}>).map((entry) => entry.id ?? '').join('\u0000');
+        if (lastSeriesOrder !== null && seriesOrder !== lastSeriesOrder) {
+            chartInstance.dispatchAction({type: 'hideTip'});
+            chartInstance.setOption({series: []}, {replaceMerge: ['series']});
+        }
+        lastSeriesOrder = seriesOrder;
 
         suppressDataZoomHandling = true;
         chartInstance.setOption(option, CHART_SERIES_UPDATE_OPTS);
