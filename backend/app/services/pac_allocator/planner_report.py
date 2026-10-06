@@ -875,8 +875,24 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     evidence list against the solver's stage count will see fewer rows and
     could reasonably suspect data loss. They are not lost — the tie-break is
     published separately, exactly once, as ``PlannerObjectiveResults.tie_break``.
+
+    **One fact about the tie stages does need a row, so it borrows one.** The
+    wire accepts a limit ``stop_reason`` only when some row is ``unfinished``
+    (``_validate_stop_evidence``). When every named stage finished but a
+    tie-break stage did not, no row could say so, and the result would fail
+    validation. So when any tie-break stage is ``unfinished``, the named row
+    with the highest ordinal is reported ``unfinished`` as well; its numbers
+    stay the ones SCIP reported.
+
+    **The absolute gap is recomputed, exactly.** The schema checks
+    ``absolute_gap >= |primal - dual|`` in exact arithmetic on the published
+    texts, and SCIP's float gap, printed on its own, can fall just short of
+    that. Whenever both bounds are published, the gap is their exact distance
+    instead (``_published_gap``).
     """
     unit_by_code = {ref.code: ref.unit for ref in view.objectives}
+    tie_unfinished = any(report.status == "unfinished" and report.objective_code not in unit_by_code for report in result.stages)
+    last_ordinal = max((report.ordinal for report in result.stages if report.objective_code in unit_by_code), default=None)
     settings = [SolverSettingEvidence(name=setting.name, value=setting.value) for setting in result.settings]
     tolerances = SolverToleranceEvidence(
         feasibility=_tolerance_text(result.tolerances.feasibility),
@@ -888,19 +904,21 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     for report in result.stages:
         if report.objective_code not in unit_by_code:
             continue  # a tie:* stage — see the docstring
+        primal = _float_text(report.primal)
+        dual = _float_text(report.dual)
         stages.append(
             SolverStageEvidence(
                 kind="reported_floating",
                 stage=report.stage,
                 objective_code=report.objective_code,
                 ordinal=report.ordinal,
-                status=report.status,
+                status="unfinished" if tie_unfinished and report.ordinal == last_ordinal else report.status,
                 scope=report.scope,
                 sense=report.sense,
                 unit=_objective_unit(unit_by_code[report.objective_code], scenario.valuation_currency),
-                primal=_float_text(report.primal),
-                dual=_float_text(report.dual),
-                absolute_gap=_float_text(report.absolute_gap, nonnegative=True),
+                primal=primal,
+                dual=dual,
+                absolute_gap=_published_gap(primal, dual, report.absolute_gap),
                 relative_gap=_float_text(report.relative_gap, nonnegative=True),
                 tolerances=tolerances,
                 engine=result.engine,
@@ -918,23 +936,31 @@ def build_stop_reason(result: SolverRunResult) -> str:
     ``completed`` **iff** no stage is ``unfinished``, so the only consistent
     mapping is the one below. Recorded here so the next reader does not have
     to re-derive it from the validator. An ``infeasible`` first stage is a
-    verdict, not an interruption, so it ends a ``completed`` search. Which
-    *limit* stopped a run is read from the stage that actually stopped, never
-    assumed to be the clock.
+    verdict, not an interruption, so it ends a ``completed`` search.
+
+    Which *limit* stopped a run is read from the stage that actually stopped,
+    never assumed to be the clock: the first ``unfinished`` stage that SCIP
+    did not close. After a limit the later stages still run inside pins
+    nobody proved, and SCIP may close them (``optimal``), so their status says
+    nothing about why the search stopped. If that stage reports ``nodelimit``
+    the answer is ``node_limit``; anything else — the clock, or a budget spent
+    before the stage could run — is ``time_limit``.
 
     **This field is also the plan's reproducibility statement**, which is worth
     stating because nothing in its name says so. SCIP's search is deterministic
     here — ``randomseedshift``/``permutationseed``/``lpseed`` are all 0 and no
     concurrent solve is enabled — so what varies between runs is *how much of
-    the lexicographic cascade completes*: each stage gets a wall-clock slice of
-    the remaining budget (``solver.py``), and the cascade is what makes the
+    the lexicographic cascade completes*: each stage gets all of the remaining
+    budget (stage 1 keeps a reserve back for the stages after a limit, which
+    split what is left; see ``solver.py``), and the cascade is what makes the
     answer unique. Therefore:
 
     - ``completed`` — every stage finished, the total order was fully applied,
       and the same input yields the same plan on any machine.
-    - ``time_limit`` / ``node_limit`` — the cascade was truncated, and *where*
-      it truncated depends on machine speed. The plan is valid and replayed in
-      exact arithmetic, but **it is not guaranteed to be reproducible**.
+    - ``time_limit`` / ``node_limit`` — a stage stopped on a limit, and *which*
+      stage, and how far the later ones got, depends on machine speed. The plan
+      is valid and replayed in exact arithmetic, but **it is not guaranteed to
+      be reproducible**.
 
     Measured 2026-09-22 at the real 30 000 ms engine budget. Since D-X1 every
     plan reaches the solver; on that date ``planner.py`` still routed views of
@@ -982,11 +1008,23 @@ def build_stop_reason(result: SolverRunResult) -> str:
     and one distinct candidate, at 7.6-8.1 s. The cascade still completes, so
     ``completed`` still means what it says — it just costs a quarter of the
     budget instead of a thousandth.
+
+    **Corrected 2026-10-06: brokers that sell the same asset bring the knee
+    far below this grid.** The grid gave every asset a single route. When an
+    asset can be bought at two brokers, the search must also choose between
+    routes that cost nearly the same, and that choice, not the number of
+    decisions, drives the cost: 5 assets with 2 brokers each closed stage 1
+    only after 22-24 s of the 30 s budget, and 10 such assets never closed it,
+    while the same 10 assets with one broker each took 85 ms (measured
+    2026-10-05 and 2026-10-06, on a loaded machine). So size a scenario in
+    assets x brokers, not in assets, and do not read the table above as a
+    promise.
     """
     unfinished = [stage for stage in result.stages if stage.status == "unfinished"]
     if not unfinished:
         return "completed"
-    return "node_limit" if any("nodelimit" in stage.scip_status for stage in unfinished) else "time_limit"
+    deciding = next((stage for stage in unfinished if stage.scip_status != "optimal"), None)
+    return "node_limit" if deciding is not None and "nodelimit" in deciding.scip_status else "time_limit"
 
 
 def _tolerance_text(value: float) -> str:
@@ -1017,6 +1055,29 @@ def _float_text(value: float | None, *, nonnegative: bool = False) -> str | None
         # noise around zero, not a negative gap.
         return "0"
     return text
+
+
+def _published_gap(primal: str | None, dual: str | None, absolute_gap: float | None) -> str | None:
+    """The absolute gap of one evidence row: exact whenever both bounds are published.
+
+    The solver measures the gap as the float ``abs(primal - dual)``
+    (``solver._observe``), and each of the three numbers is then published as
+    its own shortest text. The schema checks ``absolute_gap >= |primal - dual|``
+    exactly, on those texts, and the float gap can print just below the exact
+    distance: 7.965 - 7.770482487229448 is 0.194517512770552, while the float
+    gap prints as 0.19451751277055163. So the gap is recomputed from the two
+    published texts in exact rational arithmetic: the solver's definition
+    without the float rounding, and without a Decimal context that would round
+    a difference longer than 28 digits. Without both bounds there is nothing to
+    subtract, and the solver's own number (absent in practice) is kept.
+
+    A difference longer than the wire's 96 characters raises in
+    ``ratio_to_fixed_decimal`` instead of being rounded; that needs the two
+    bounds some 80 orders of magnitude apart.
+    """
+    if primal is None or dual is None:
+        return _float_text(absolute_gap, nonnegative=True)
+    return ratio_to_fixed_decimal(abs(ExactRatio.from_decimal(Decimal(primal)) - ExactRatio.from_decimal(Decimal(dual))))
 
 
 def _decimal_text(value: Decimal) -> str:
