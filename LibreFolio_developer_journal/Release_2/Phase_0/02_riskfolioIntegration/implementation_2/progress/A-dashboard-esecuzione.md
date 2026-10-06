@@ -2676,3 +2676,71 @@ commit del checkpoint 1.
 >
 > **Checkpoint 9 consegnato al coordinator** (~16:55): `CHECKPOINT READY` con 3 percorsi, i blob in
 > `files/ckpt9-blobs.txt` e il messaggio in `/tmp/libreFolio_commit_ckpt9.txt`. **Stato: FROZEN.**
+
+### Checkpoint 9 committato; STOP e ripresa · ✅ 06/10
+
+> **Coordinator (16:53)**: checkpoint 9 verificato; lo script del commit lo lancia il developer.
+> **Commit**: `1f7a13784`, albero `3cd7879dd` (quello atteso), worktree pulito.
+>
+> **F (17:24)**:
+> - **contraddizione nella documentazione** dovuta alla mia modifica della retta:
+>   `benchmark-selection.en.md:101`, il paragrafo «**Where there is no line.** The Correlation tab … draws none — not
+>   even through its benchmark». Dal checkpoint 8 il lab disegna la retta che passa per il benchmark quando ce n'è uno.
+>   Il lettore ci arriva dall'icona **?** sotto il grafico del lab (`lineDocs`). La pagina è solo in inglese, quindi
+>   nessun debito di traduzione;
+> - il suo checkpoint 14 aggiunge `sharpe: null, sortino: null` ai due punti del benchmark scritti a mano nella mia
+>   guardia (`assetSetI18n.test.ts:272-273`). La guardia controlla le stesse cose e passa (13/13).
+>
+> **STOP del developer (coordinator, 17:43)**: nessun processo e nessuna sessione attivi, porte 6153, 6163, 6040, 6041 e
+> 6042 libere, repo non toccato. Il punto di ripresa l'ho annotato nei file di sessione, fuori dal repo. Risposto
+> «FERMO».
+>
+> **RIPRESA (coordinator, 19:28, via del developer)**:
+> - SHA: F14 `28559e829` (albero `8648067fb`); fuori dalla famiglia, M `d0018a5a1` e N `1ae2a53c9`;
+> - via a, in ordine:
+>   1. il checkpoint 9 nel piano (questa sezione);
+>   2. in `benchmark-selection.en.md` **solo** il paragrafo «Where there is no line» (`:101`), con docs-writer, solo
+>      in inglese. Risk aggiunge una sua frase nella stessa pagina, fuori da quel paragrafo: ognuno dichiara le
+>      proprie righe nel checkpoint, e la fusione la simula il coordinator;
+>   3. il passo 24, quando la fase 2 di Risk arriva nel mio ramo;
+> - il mio prossimo checkpoint può fondere la punta di F14.
+>
+> **Verificato alla ripresa**:
+> - HEAD `1f7a13784`, 0 percorsi in corso, 6153 e 6163 libere;
+> - il paragrafo `:101` sta dentro la mia sezione concessa `#the-risk-return-line` (`:79-107`);
+> - le pagine non hanno una data da aggiornare;
+> - F14 tocca 8 file, ma non questa pagina;
+> - la fase 2 di Risk non è ancora committata: la punta di Risk è ancora `9ce2efaed`.
+
+### Passo 25 — il paragrafo della retta nel lab, nel manuale · ✅ 06/10
+
+> **Note implementazione** (docs-writer, `dw-lab-line-para`):
+> - `benchmark-selection.en.md` `@@ -101 +101`, una riga: il paragrafo «**Where there is no line.**» diventa
+>   «**On the Assets page.**». Dice che la scheda Correlazione disegna la stessa retta quando un benchmark è scelto e
+>   misurato:
+>   - parte dal tasso senza rischio della pagina, 0 oggi come sulla Dashboard, e passa per il rombo del benchmark: la
+>     pendenza è lo Sharpe del benchmark;
+>   - un benchmark che è uno degli asset selezionati è disegnato una volta sola, e la retta passa per lui;
+>   - senza benchmark, o con uno che non si può misurare, la retta non c'è: senza pesi non c'è un intero su cui
+>     ripiegare.
+>
+>   Il collegamento `correlation.md#what-did-each-pay` è invariato. Il titolo in grassetto nomina la pagina, perché il
+>   collegamento nomina già la scheda, come nella prima frase della sezione.
+> - docs-writer ha controllato ogni affermazione sul codice (`scatterChartHelpers.ts:160-165`, `assetSetLevels.ts`,
+>   `ScatterChart.svelte:70`, `riskReturnLevel.ts:174-188`).
+> - `mkdocs build` strict OK; `check-links` segnala solo `#rolling-return`, ereditato, e la voce in-app
+>   `benchmark-selection/#the-risk-return-line` è valida.
+> - La pagina è solo in inglese, quindi niente debito di traduzione e niente stamp. Non ha una data da aggiornare.
+> - **Fuori dal mio perimetro, già noto a F**: la sua guida `correlation.en.md:116` («No line is drawn») e i commenti nei
+>   suoi file (`AssetSetRiskReturnSection.svelte`, `assetSetLevels.ts`). Li sistema lui nel suo giro.
+>
+> **Il riavvio della macchina (~19:21)** ha svuotato `/tmp`:
+> - le data-dir di corsia si ricreano al primo uso;
+> - lo snapshot di produzione non c'è più: per una review sui dati veri servono di nuovo la procedura e l'OK del
+>   developer;
+> - i miei script in `/tmp` sono persi; i record utili sono nei file di sessione.
+>
+> Carico alla ripresa: 32 di media su 1 minuto (74 su 5 minuti). I tempi d'ora in poi vanno annotati insieme al carico.
+>
+> **Checkpoint 10 consegnato al coordinator**: la pagina, `:101`, e il piano. Nello stesso ORDINE c'è la fusione della
+> punta di F14 `28559e829`. **Stato: FROZEN.** Poi viene l'analisi dei bucket di Income, solo lettura, senza codice.
