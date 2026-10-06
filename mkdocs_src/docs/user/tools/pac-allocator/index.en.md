@@ -38,7 +38,7 @@ only when the scenario needs exchange rates.
 | **Routing** | For each Broker, which Assets it may buy: **Allow all**, **Exclude all**, or click each one. Optional limits, measured like that Broker's orders (units or amount): **Minimum purchase** (if the plan buys there, at least this much), **Required purchase** (bought whatever happens; if resources are not enough, the plan becomes impossible), and **Maximum purchase**. **Priority** (0 = preferred) only breaks ties between plans equally close to the target. With a **Price margin**, each purchase is counted at price × (1 + margin), to cover a price that rises before the order; the difference is a reserve, not invested. Empty fields restrict nothing. |
 | **Targets** | How to split the money you invest now among the Assets, in percent (decimals allowed). To calculate, the targets must add up to exactly 100%: **Balance all** rescales them, keeping their ratios. **Copy current distribution** reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not cash, and brings the ratios to 100%. These are weights only, a base to edit and not advice: you see them before using them, and a target you changed is not overwritten without your confirmation. |
 | **FX** (only when needed) | One rate per currency pair in play, **Auto** (the latest rate stored in LibreFolio, read when the step opens and again just before the calculation; no data provider is called) or **Manual**, plus one **Conversion spread**: a percentage surcharge on every converted amount. Valuation uses the official rate without spread; conversions use the rate with the spread. When LibreFolio has no rate for a pair, the step offers **Add the pair** or **Download the rates**: each opens the matching window of the FX page, and nothing is added or downloaded until you confirm there. |
-| **Strategy** | **Proportional**: purchases only, it sells nothing. Among all the purchase plans that respect your settings, it picks the best one with a cascade, each criterion deciding only among the plans still tied on the ones above: closeness to the targets (L2 distance), then uninvested money, then Broker and source priority, then explicit costs (fees, spread, margin), then number of orders. A fixed order of Assets and Brokers settles any final tie, so the same data always give the same plan. |
+| **Strategy** | **Proportional**: purchases only, it sells nothing. Among all the purchase plans that respect your settings, it picks the best one with a cascade, each criterion deciding only among the plans still tied on the ones above: closeness to the targets (L2 distance), then uninvested money, then Broker and source priority, then explicit costs (fees, spread, margin), then number of orders. A fixed order of Assets and Brokers settles any final tie, so a search that completes always gives the same plan for the same data; a search stopped by a time or node limit can give a different plan on a slower or busier machine. |
 | **Review** | A last check. It lists the complete copy that will be sent (the backend receives this copy, and only this), flags the fields still to complete, and offers **Calculate plan**. |
 
 Not supported in this version: a tax regime, losses, and sell fees for a
@@ -80,7 +80,7 @@ A calculation ends with one of these outcomes:
 
 | Outcome | What it means |
 |---|---|
-| **Plan found** | A plan that respects every constraint. It is marked **Proven optimal** when no better plan exists, objective by objective in the order of the **Strategy** step, or **Optimality not proven** when the solver reached its time or node limit: it is then the best plan found, not a proven one. |
+| **Plan found** | A plan that respects every constraint. It is marked **Proven optimal** when the solver proved, within its small calculation margin (which grows with the amounts), that no better plan exists, objective by objective in the order of the **Strategy** step. It is marked **Optimality not proven** when the solver reached its time or node limit, or when its own numbers do not match the exact check of the plan: it is then the best plan found, but it is not proven to be the best. |
 | **No operation** | No order, no exchange, and no funding is needed. |
 | **Infeasible** | Proven: no combination meets every hard constraint together. The hard constraints involved are listed; the planner does not choose which one to relax, and no partial plan is shown as valid. |
 | **No plan found** | Within its limits, the solver found no plan. This is not a proof that none exists. |
@@ -138,8 +138,11 @@ promise:
   never published.
 - **It never passes off an unproven plan as optimal.** A plan stopped by a time
   or node limit is shown as the best one found and marked
-  **Optimality not proven**. When no plan is found, it says so instead of
-  guessing.
+  **Optimality not proven**. So is a plan whose exact check does not match the
+  solver's own numbers, even when the search ended by itself. When no plan is
+  found, it says so instead of guessing. With amounts of around ten billion
+  units of a currency or more, the solver's calculations can lose precision: the
+  tool may then stop with an error, or mark the plan **Optimality not proven**.
 
 A completed calculation therefore reports one of the small set of honest
 outcomes listed in [Reading the result](#reading-the-result).
