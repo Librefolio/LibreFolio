@@ -38,7 +38,7 @@ Aroon Up spikes to 100 the moment price sets a new $N$-period high; it decays li
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Lookback window for locating the extreme high/low. |
+| Period ($N$) | `period` | 14 | Lookback window for locating the extreme high/low, in sessions. |
 
 ---
 

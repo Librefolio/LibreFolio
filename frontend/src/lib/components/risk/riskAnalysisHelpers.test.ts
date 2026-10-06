@@ -22,7 +22,26 @@ import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
-import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, formatScopedCurrencyAmount, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
+import {
+    addDays,
+    ASSET_SET_DAILY_VAR_INSTANCE,
+    ASSET_SET_MONTHLY_VAR_INSTANCE,
+    buildBaseAnalytics,
+    DAILY_VAR_INSTANCE,
+    formatCurrencyAmount,
+    formatRatio,
+    formatScopedCurrencyAmount,
+    localizedScenarioText,
+    MONTHLY_VAR_HORIZON_DAYS,
+    MONTHLY_VAR_INSTANCE,
+    normalizeQualityIssue,
+    numberRecord,
+    presentStressBuckets,
+    resultByCode,
+    scalarString,
+    stressImpactDimension,
+    type BaseAnalyticsContext,
+} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
 
@@ -523,6 +542,26 @@ describe('buildBaseAnalytics', () => {
         expect(analytics[0].parameters).toEqual({confidence_level: 0.95, horizon_days: 1});
     });
 
+    // The bad month is a calendar month: the backend turns calendar days into the observations the
+    // series holds (21 for a weekday series, 30 for one quoted every day — developer's decision of
+    // 30/09/2026), so the request says 30, not the 21 trading days it used to assume.
+    it('historical: the monthly VaR asks for a calendar month, 30 days, beside the 1-day one', () => {
+        const analytics = buildBaseAnalytics('historical', {...ctx(['historical_var']), includeMonthlyVar: true});
+        expect(MONTHLY_VAR_HORIZON_DAYS).toBe(30);
+        expect(analytics.map((a) => [a.instance_id, a.parameters])).toEqual([
+            [DAILY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 1}],
+            [MONTHLY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 30}],
+        ]);
+    });
+
+    it('asset set: the monthly per-asset VaR asks for the same calendar month', () => {
+        const analytics = buildBaseAnalytics('historical', {...ctx(['asset_set_var']), includeAssetSetLevels: true});
+        expect(analytics.map((a) => [a.instance_id, a.parameters])).toEqual([
+            [ASSET_SET_DAILY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 1}],
+            [ASSET_SET_MONTHLY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 30}],
+        ]);
+    });
+
     it('historical: omits any capability the catalog does not advertise', () => {
         const analytics = buildBaseAnalytics('historical', ctx(['correlation']));
         expect(analytics.map((a) => a.analytic_code)).toEqual(['correlation']);
@@ -548,6 +587,21 @@ describe('buildBaseAnalytics', () => {
         expect(buildBaseAnalytics('current_composition', ctx([]))).toEqual([]);
     });
 
+    // k6 (06/10): each risk/return point publishes its own Sharpe and Sortino, so the scatter is charged
+    // exactly what the KPI beside it is charged — the same perimeter, the same rate, the same target.
+    it('current_composition: the risk/return points are charged the rate and the target of the KPI beside them', () => {
+        const analytics = buildBaseAnalytics('current_composition', {...ctx(['risk_contribution', 'historical_kpi', 'asset_risk_return'], 3.5), includeCurrentCompositionRiskReturn: true});
+        expect(
+            analytics.map((a) => a.analytic_code),
+            'premise: the risk/return pair rides with the KPI in this wave',
+        ).toEqual(['risk_contribution', 'historical_kpi', 'asset_risk_return']);
+        const kpi = analytics.find((a) => a.analytic_code === 'historical_kpi');
+        const riskReturn = analytics.find((a) => a.analytic_code === 'asset_risk_return');
+        expect(kpi?.parameters, 'premise: the KPI is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+        expect(riskReturn?.parameters, "the risk/return points are not charged the KPI's rate and target").toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+        expect(JSON.stringify(riskReturn?.parameters), 'the risk/return points carry the same parameters as the KPI in other bytes').toBe(JSON.stringify(kpi?.parameters));
+    });
+
     it('passes the mode through to the capability predicate', () => {
         const seen: Array<[string, string]> = [];
         buildBaseAnalytics('historical', {
@@ -562,6 +616,155 @@ describe('buildBaseAnalytics', () => {
             ['correlation', 'historical'],
             ['historical_var', 'historical'],
         ]);
+    });
+
+    // ------------------------------------------------------------------
+    // The asset-set wave, split per level (the developer's decision, 2026-10-02).
+    //
+    // L1° — «How much did each of these hurt?» — is measured WITHOUT the benchmark; only L3° —
+    // «What did each of these pay for its risk?» — asks with it. The backend prepares one joint
+    // window per request, with the benchmark inside whenever the request asks for it, so a
+    // benchmark sharing L1°'s request decided L1°'s window: one with stale prices turned L1°
+    // «Partial» for a reason L1° never asks about. Hence two additive flags, one request each:
+    //   - `includeAssetSetLossLevels`: the per-asset VaR over a day and over a calendar month, then
+    //     the drawdown — never the comparison, whatever benchmark is set;
+    //   - `includeAssetSetPaidLevels`: the per-asset KPI and risk/return, then the comparison
+    //     against the benchmark when there is one.
+    // `includeAssetSetLevels` stays their union, byte for byte what it returns today.
+    //
+    // Written red first: today neither flag does anything, so every case that needs one to ask
+    // goes red on the analytics it misses. The pins of the union are green today and must stay so.
+    // ------------------------------------------------------------------
+    describe('the asset-set wave, split per level', () => {
+        /** The whole per-asset family is advertised, so every absence below is the flags' doing, never the catalogue's. */
+        const ASSET_SET_CODES = ['asset_set_kpi', 'asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_comparison'];
+        /** Invented, and unlike any other number an analytic carries — a horizon, a confidence, a rate. */
+        const BENCHMARK = 47;
+
+        /** Each analytic as the wire carries it: instance, code, parameters. */
+        function wire(analytics: ReturnType<typeof buildBaseAnalytics>): unknown[] {
+            return analytics.map((analytic) => [analytic.instance_id, analytic.analytic_code, analytic.parameters]);
+        }
+
+        // Written out, never derived from the constants that build them. The context charges a 2%
+        // risk-free rate, so the KPI carries 0.02 — and so, since k6 (06/10), does the comparison: the
+        // reference's own Sharpe and Sortino are charged the reader's rate and a zero target, as the KPI is.
+        const KPI = ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
+        const BAD_DAY = ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}];
+        const BAD_MONTH = ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}];
+        const DRAWDOWN = ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}];
+        const RISK_RETURN = ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}];
+        const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.02, target_annual_return: 0}];
+
+        /**
+         * What the union returns with a benchmark of 47, copied from a run before the split and kept literal: the pin.
+         * k6 (06/10) is its one deliberate change: the comparison also carries the rate and the target.
+         */
+        const UNION_TODAY = [
+            ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}],
+            ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
+            ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}],
+            ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}],
+            ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}],
+            ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: 47, risk_free_annual_rate: 0.02, target_annual_return: 0}],
+        ];
+
+        it.each<[string, number | null]>([
+            ['without a benchmark', null],
+            ['with a benchmark set', BENCHMARK],
+        ])('L1° alone, %s: the bad day, the bad month and the drawdown — never the comparison', (_when, benchmark) => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLossLevels: true, assetSetBenchmarkId: benchmark});
+            expect(wire(analytics), "L1°'s request is not the loss family alone — the VaR over a day and over a calendar month, then the drawdown, and nothing of the benchmark").toEqual([BAD_DAY, BAD_MONTH, DRAWDOWN]);
+        });
+
+        it('L3° alone, without a benchmark: the KPI and the risk/return, and no comparison', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetPaidLevels: true});
+            expect(wire(analytics), "L3°'s request without a benchmark is not the KPI and the risk/return alone").toEqual([KPI, RISK_RETURN]);
+        });
+
+        it('L3° alone, with a benchmark: the comparison against it closes the request', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            expect(wire(analytics), "L3°'s request does not end on the comparison against the benchmark, after its KPI and risk/return").toEqual([KPI, RISK_RETURN, COMPARISON]);
+        });
+
+        // k6 (06/10): the comparison publishes the reference's own Sharpe and Sortino, so it is charged what
+        // the KPI beside it is charged — the reader's risk-free rate as a fraction, and a zero target.
+        it('L3° with a benchmark: the comparison carries the benchmark, then the rate and the target of the KPI beside it', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES, 3.5), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            const kpi = analytics.find((analytic) => analytic.analytic_code === 'asset_set_kpi');
+            const comparison = analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison');
+            expect(kpi?.parameters, 'premise: the KPI beside it is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+            const expected = {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.035, target_annual_return: 0};
+            expect(comparison?.parameters, "the comparison is not charged the KPI's rate and target").toEqual(expected);
+            expect(JSON.stringify(comparison?.parameters), 'the comparison carries the right parameters in other bytes: the benchmark first, then the two rates').toBe(JSON.stringify(expected));
+        });
+
+        it.each<[string, number | null]>([
+            ['with a benchmark', BENCHMARK],
+            ['without a benchmark', null],
+        ])('the union, %s, is still what it is today — byte for byte', (_when, benchmark) => {
+            const today = benchmark === null ? UNION_TODAY.filter(([, code]) => code !== 'asset_set_comparison') : UNION_TODAY;
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLevels: true, assetSetBenchmarkId: benchmark});
+            expect(wire(analytics), 'the union moved: every caller of includeAssetSetLevels now sends a different request').toEqual(today);
+            expect(JSON.stringify(wire(analytics)), 'the union asks the same analytics in different bytes: a parameter changed its key order, or gained a key').toBe(JSON.stringify(today));
+        });
+
+        it.each<[string, number | null]>([
+            ['with a benchmark', BENCHMARK],
+            ['without a benchmark', null],
+        ])('both split flags, %s, ask exactly the union: the same analytics, in the same order, byte for byte', (_when, benchmark) => {
+            const context = {...ctx(ASSET_SET_CODES), assetSetBenchmarkId: benchmark};
+            const union = buildBaseAnalytics('historical', {...context, includeAssetSetLevels: true});
+            const split = buildBaseAnalytics('historical', {...context, includeAssetSetLossLevels: true, includeAssetSetPaidLevels: true});
+            expect(union.length, 'premise: the union asks the per-asset family').toBeGreaterThan(0);
+            expect(wire(split), 'L1° and L3° together ask something other than the union: splitting the request would change what is measured').toEqual(wire(union));
+            expect(JSON.stringify(split), 'L1° and L3° together ask the union in different bytes').toBe(JSON.stringify(union));
+        });
+
+        it('the union beside a split flag still asks each analytic once', () => {
+            const context = {...ctx(ASSET_SET_CODES), includeAssetSetLevels: true, assetSetBenchmarkId: BENCHMARK};
+            expect(wire(buildBaseAnalytics('historical', {...context, includeAssetSetLossLevels: true})), 'the union beside the loss flag asks an analytic twice, or drops one').toEqual(UNION_TODAY);
+            expect(wire(buildBaseAnalytics('historical', {...context, includeAssetSetPaidLevels: true})), 'the union beside the paid flag asks an analytic twice, or drops one').toEqual(UNION_TODAY);
+        });
+
+        it('the split flags still go through the catalogue: a code it withholds is never requested', () => {
+            // Only the VaR is advertised: no drawdown for L1°, whatever the flag asks.
+            expect(wire(buildBaseAnalytics('historical', {...ctx(['asset_set_var']), includeAssetSetLossLevels: true})), 'the loss flag requested a code the catalogue withholds, or dropped one it offers').toEqual([BAD_DAY, BAD_MONTH]);
+            // No comparison advertised: none for L3°, even with a benchmark set.
+            const paid = buildBaseAnalytics('historical', {...ctx(['asset_set_kpi', 'asset_set_risk_return']), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            expect(wire(paid), 'the paid flag requested a code the catalogue withholds, or dropped one it offers').toEqual([KPI, RISK_RETURN]);
+        });
+
+        it('the split flags ask the capability predicate about every code they add, in historical mode', () => {
+            const seen: Array<[string, string]> = [];
+            const analytics = buildBaseAnalytics('historical', {
+                appliedRiskFreePercent: 2,
+                hasCapability: (code, mode) => {
+                    seen.push([code, mode]);
+                    return false;
+                },
+                includeAssetSetLossLevels: true,
+                includeAssetSetPaidLevels: true,
+                assetSetBenchmarkId: BENCHMARK,
+            });
+            expect(analytics, 'a code the catalogue refused was requested anyway').toEqual([]);
+            // In any order: what matters is that none of them skips the predicate.
+            expect(seen.filter(([code]) => code.startsWith('asset_set_')).sort(), 'a code of the split skipped the capability predicate, or was asked about in the wrong mode').toEqual([
+                ['asset_set_comparison', 'historical'],
+                ['asset_set_drawdown', 'historical'],
+                ['asset_set_kpi', 'historical'],
+                ['asset_set_risk_return', 'historical'],
+                ['asset_set_var', 'historical'],
+                ['asset_set_var', 'historical'],
+            ]);
+        });
+
+        it('the split flags ask nothing in current_composition mode, like the union', () => {
+            // Advertised in every mode, so only the mode branch can keep the family out.
+            const context = {...ctx([...ASSET_SET_CODES, 'risk_contribution']), includeAssetSetLossLevels: true, includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK};
+            expect(buildBaseAnalytics('historical', context), 'premise: in historical mode the same context asks the whole per-asset family').toHaveLength(6);
+            expect(wire(buildBaseAnalytics('current_composition', context)), 'the per-asset family leaked into the current-composition wave').toEqual([['base-current_composition-risk_contribution', 'risk_contribution', {}]]);
+        });
     });
 });
 

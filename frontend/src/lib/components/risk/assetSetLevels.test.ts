@@ -20,16 +20,22 @@
  *    carries a negative maximum, peak and trough dates in order, and a
  *    recovered ratio; only a `recovered` episode may carry a recovery date.
  *  - `RiskAssetSetComparisonOutput` — the reference is never one of the items
- *    it is the yardstick for.
+ *    it is the yardstick for. It may be one of the *selection* (D371,
+ *    `asset_set_comparison` 1.1.0): the backend then measures it like the
+ *    others and skips it in `items`, and a selection made of the reference
+ *    alone answers with `items == []`.
  *  - `RiskAnalyticResult` — `ok` and `partial` *must* carry an output;
  *    `unavailable` and `failed` must *not*, and must carry an error instead.
  *    That is why no fixture here fakes an unavailable result holding a payload:
  *    the shape does not exist, so a test built on it would prove nothing.
  *
- * `metadata` and `data_quality` are omitted from the successful fixtures even
- * though the same model requires them. Nothing in `assetSetLevels.ts` reads
- * either, so writing two more payloads would add fixture surface to maintain
- * and not one assertion. A stated shortcut, not an oversight.
+ * `metadata` and `data_quality` are omitted from the row builders' fixtures even
+ * though the same model requires them. The row builders read neither, so
+ * writing two more payloads there would add fixture surface to maintain and not
+ * one assertion. A stated shortcut, not an oversight. The one reader of
+ * `metadata` is `assetSetCalculationWindow`, and its fixtures carry a complete
+ * one (`windowMetadata`), proved to parse with `schemas.RiskResultMetadata` —
+ * the schema `riskMetadata()` refuses anything less than.
  *
  * Where arithmetic links two invented figures, it is made exact so the reader
  * can verify the fixture instead of trusting it: a 40% fall that has given back
@@ -39,10 +45,11 @@
  */
 import {describe, expect, it} from 'vitest';
 
+import {schemas} from '$lib/api';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {ASSET_SET_DAILY_VAR_INSTANCE, ASSET_SET_MONTHLY_VAR_INSTANCE} from './riskAnalysisHelpers';
-import {buildAssetSetBenchmarkPoint, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, type AssetSetPaidRow} from './assetSetLevels';
+import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetHurtRows, buildAssetSetPaidRows, buildAssetSetScatterPoints, calendarLength, withBenchmarkRow, type AssetSetBenchmarkPoint, type AssetSetPaidRow, type CalendarLength} from './assetSetLevels';
 
 type Payload = Record<string, unknown>;
 
@@ -53,7 +60,11 @@ type Payload = Record<string, unknown>;
  */
 const SELECTION = [7, 3, 12];
 
-/** The shared reference. Never a member of the selection — the model forbids it. */
+/**
+ * The shared reference, outside `SELECTION`. Since D371 the reader may select it
+ * too — the cases that do say so — but it is never one of the comparison's
+ * `items`: the model forbids that.
+ */
 const BENCHMARK_ID = 41;
 
 /** The label map the sections build from the asset store. */
@@ -91,7 +102,7 @@ function varItem(assetId: number, valueAtRisk: number, conditionalValueAtRisk: n
 
 /** The one-day tail. 502 daily observations over the window below. */
 function dailyVar(items: Payload[], overrides: Payload = {}): RiskAnalyticResult {
-    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, observations: 502, items, ...overrides}, ASSET_SET_DAILY_VAR_INSTANCE);
+    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, horizon_observations: 1, observations: 502, items, ...overrides}, ASSET_SET_DAILY_VAR_INSTANCE);
 }
 
 /**
@@ -99,10 +110,11 @@ function dailyVar(items: Payload[], overrides: Payload = {}): RiskAnalyticResult
  *
  * `observations` is 20 lower than the daily run's and that is not decoration —
  * the output's own docstring says compounding to a horizon consumes
- * `horizon_days - 1` observations, so 502 − 20 = 482.
+ * `horizon_observations - 1` observations, and a 30-day month is 21
+ * observations, so 502 − 20 = 482.
  */
 function monthlyVar(items: Payload[]): RiskAnalyticResult {
-    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 21, observations: 482, items}, ASSET_SET_MONTHLY_VAR_INSTANCE);
+    return ok('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 30, horizon_observations: 21, observations: 482, items}, ASSET_SET_MONTHLY_VAR_INSTANCE);
 }
 
 /**
@@ -218,6 +230,16 @@ function rowFor<T extends {assetId: number}>(rows: readonly T[], assetId: number
     return found;
 }
 
+/** A row with both coordinates, for the cases a payload would only obscure. Not the reference unless a case says so. */
+function paidRow(overrides: Partial<AssetSetPaidRow> = {}): AssetSetPaidRow {
+    return {assetId: 7, name: 'Vanguard FTSE All-World', volatility: 0.21, expectedReturn: 0.094, sharpe: 0.62, sortino: 0.81, beta: null, correlation: null, isReference: false, ...overrides};
+}
+
+/** Whether a result's output satisfies the generated comparison schema — the parse every reader of it goes through. */
+function parsesAsComparison(result: RiskAnalyticResult | null): boolean {
+    return schemas.RiskAssetSetComparisonOutput.safeParse(result?.output).success;
+}
+
 describe('buildAssetSetHurtRows', () => {
     it('gives every selected asset a row in selection order, even when the analytics answered for fewer', () => {
         // A partial answer covering two of the three assets, and a drawdown
@@ -226,7 +248,7 @@ describe('buildAssetSetHurtRows', () => {
         const rows = buildAssetSetHurtRows(
             SELECTION,
             LABELS,
-            partial('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, observations: 502, items: [varItem(7, 0.021, 0.031), varItem(12, 0.009, 0.013)]}, ASSET_SET_DAILY_VAR_INSTANCE),
+            partial('asset_set_var', {kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, horizon_observations: 1, observations: 502, items: [varItem(7, 0.021, 0.031), varItem(12, 0.009, 0.013)]}, ASSET_SET_DAILY_VAR_INSTANCE),
             null,
             drawdownResult([openFall(3)]),
         );
@@ -386,6 +408,7 @@ describe('buildAssetSetPaidRows', () => {
             sortino: null,
             beta: null,
             correlation: null,
+            isReference: false,
         });
         expect(rowFor(rows, 7).sharpe).toBe(0.62);
     });
@@ -448,19 +471,61 @@ describe('buildAssetSetPaidRows', () => {
         expect(rows.map((row) => row.assetId)).toEqual([7, 3, 12]);
         expect(rows.every((row) => row.volatility === null && row.expectedReturn === null && row.sharpe === null && row.beta === null)).toBe(true);
     });
+
+    /**
+     * `isReference` (D371): the reference may be one of the selection. Its row is measured like any
+     * other, but the backend skips it in the comparison's `items` — its beta and correlation with itself
+     * would be 1 by construction — so those two stay null, and the flag says why. Read from the *parsed*
+     * output's `comparison_asset_id`: a payload the schema refuses names no reference, whatever its raw
+     * fields say.
+     */
+    const REFERENCE_CASES: {case: string; selection: number[]; comparison: RiskAnalyticResult | null; parses: boolean; reference: number | null}[] = [
+        {case: 'the reference selected first', selection: SELECTION, comparison: comparisonResult([comparisonItem(3), comparisonItem(12)], {comparison_asset_id: 7}), parses: true, reference: 7},
+        {case: 'the reference selected mid-list', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(12)], {comparison_asset_id: 3}), parses: true, reference: 3},
+        {case: 'the reference selected last', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(3)], {comparison_asset_id: 12}), parses: true, reference: 12},
+        // What the backend answers for it: not one item, the reference's own coordinates beside them.
+        {case: 'the reference selected alone', selection: [3], comparison: comparisonResult([], {comparison_asset_id: 3}), parses: true, reference: 3},
+        {case: 'the reference outside the selection', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(3), comparisonItem(12)]), parses: true, reference: null},
+        {case: 'no comparison asked for', selection: SELECTION, comparison: null, parses: false, reference: null},
+        {case: 'the comparison could not run', selection: SELECTION, comparison: unavailable('asset_set_comparison'), parses: false, reference: null},
+        // A tracking error is a standard deviation: the schema refuses a negative one, and with it the
+        // whole payload — the selected reference it still names included.
+        {case: 'malformed, naming a selected reference', selection: SELECTION, comparison: comparisonResult([comparisonItem(7), comparisonItem(12, {tracking_error: -0.052})], {comparison_asset_id: 3}), parses: false, reference: null},
+    ];
+
+    it.each(REFERENCE_CASES)('$case: isReference true on the row the parsed comparison names, false on every other', ({selection, comparison, parses, reference}) => {
+        // Barrier: the fixture is what its case says — read, or refused by the schema the builder parses with.
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses, or not, as the case says').toBe(parses);
+        const rows = buildAssetSetPaidRows(selection, LABELS, null, null, comparison);
+
+        expect(rows.map((row) => row.assetId)).toEqual(selection);
+        // `false` itself on every other row, never an absent flag — and so one row at most.
+        expect(rows.map((row) => row.isReference)).toEqual(selection.map((assetId) => assetId === reference));
+    });
+
+    it('measures a selected reference like any other asset, and leaves only its beta and correlation null', () => {
+        // Asset 3 is the reference. Against it, the active return is the asset's minus the reference's,
+        // the information ratio is active ÷ tracking error exactly, and the reference's own coordinates
+        // are its risk/return point: the backend measures both on the same joint window.
+        const against3 = [comparisonItem(7, {active_return: 0.146, tracking_error: 0.292, information_ratio: 0.5, correlation: 0.52, beta: 0.32}), comparisonItem(12, {active_return: 0.04, tracking_error: 0.32, information_ratio: 0.125, correlation: 0.42, beta: 0.07})];
+        const comparison = comparisonResult(against3, {comparison_asset_id: 3, comparison_volatility: 0.34, comparison_expected_annual_return: -0.052});
+        const kpi = kpiResult([kpiItem(3, {volatility: 0.34, max_drawdown: -0.4, max_drawdown_duration_days: 725, sharpe: -0.15, sortino: -0.21})]);
+        const rows = buildAssetSetPaidRows(SELECTION, LABELS, returnResult([returnItem(7, 0.21, 0.094), returnItem(3, 0.34, -0.052), returnItem(12, 0.058, -0.012)]), kpi, comparison);
+
+        // Barrier: the comparison was read — the others carry their beta and correlation from its items.
+        expect(rowFor(rows, 7)).toMatchObject({beta: 0.32, correlation: 0.52});
+        expect(rowFor(rows, 12)).toMatchObject({beta: 0.07, correlation: 0.42});
+        expect(rowFor(rows, 3)).toEqual({assetId: 3, name: 'iShares Core MSCI EM IMI', volatility: 0.34, expectedReturn: -0.052, sharpe: -0.15, sortino: -0.21, beta: null, correlation: null, isReference: true});
+    });
 });
 
 describe('buildAssetSetScatterPoints', () => {
-    /** A row with both coordinates, for the cases a payload would only obscure. */
-    function paidRow(overrides: Partial<AssetSetPaidRow> = {}): AssetSetPaidRow {
-        return {assetId: 7, name: 'Vanguard FTSE All-World', volatility: 0.21, expectedReturn: 0.094, sharpe: 0.62, sortino: 0.81, beta: null, correlation: null, ...overrides};
-    }
-
     it('emits one dot per placeable row and never a portfolio one', () => {
-        // 🔴 `capitalMarketLine()` draws only when a point whose role is
-        // `portfolio` exists, so "no portfolio point" *is* the mechanism that
-        // keeps the verdict "paid well for the risk" off a chart of a selection
-        // that has no weights and therefore no whole to judge.
+        // 🔴 No portfolio point *is* the mechanism that keeps a line through the
+        // selection off the chart, and with it the verdict "paid well for the risk"
+        // about a whole the selection does not have: no weights, no aggregate. The
+        // only line the lab draws runs through the benchmark, when one is placed
+        // (`capitalMarketLineAnchor`; the developer's review, 06/10/2026).
         const rows = buildAssetSetPaidRows(SELECTION, LABELS, returnResult([returnItem(7, 0.21, 0.094), returnItem(3, 0.34, -0.052), returnItem(12, 0.058, -0.012)]), null, null);
         const points = buildAssetSetScatterPoints(rows);
 
@@ -508,11 +573,85 @@ describe('buildAssetSetScatterPoints', () => {
     });
 });
 
+/**
+ * buildAssetSetChartPoints — the scatter's dots, the reference's among them (D371).
+ *
+ * One `asset` dot per row with both coordinates, `asset-<id>`, in row order. The
+ * reference gets one dot whenever it has a point: when it is one of the placeable
+ * rows, that row's own dot takes the role `benchmark` and keeps everything else —
+ * its id, its place, its name and its coordinates; otherwise its own `benchmark`
+ * point is appended last, as before D371. Never two dots for one asset.
+ */
+describe('buildAssetSetChartPoints', () => {
+    /** The contract's dot, written out rather than read off the implementation's own type. */
+    type Dot = {id: string; name: string; volatility: number; annualReturn: number; role: 'asset' | 'benchmark'};
+
+    const WORLD = paidRow({assetId: 7, name: 'Vanguard FTSE All-World', volatility: 0.21, expectedReturn: 0.094});
+    const EMERGING = paidRow({assetId: 3, name: 'iShares Core MSCI EM IMI', volatility: 0.34, expectedReturn: -0.052});
+    const BONDS = paidRow({assetId: 12, name: 'Xtrackers EUR Corporate Bond', volatility: 0.058, expectedReturn: -0.012});
+    /** A selected reference's row: measured on the same joint window as its point, so the two agree. */
+    const ACWI = paidRow({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, isReference: true});
+    /**
+     * The reference's point, as `buildAssetSetBenchmarkPoint` reads it off the comparison — `comparisonResult`'s, whose
+     * answer carries no ratios for the reference. The dots read its coordinates and its name, never its ratios.
+     */
+    const REFERENCE: AssetSetBenchmarkPoint = {assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, sharpe: null, sortino: null};
+    /** The reference's own dot, when no row carries it. */
+    const SEPARATE: Dot = {id: 'benchmark', name: 'MSCI ACWI', volatility: 0.142, annualReturn: 0.081, role: 'benchmark'};
+
+    /** A placeable row's own dot. */
+    function dot(row: AssetSetPaidRow, role: Dot['role'] = 'asset'): Dot {
+        return {id: `asset-${row.assetId}`, name: row.name, volatility: row.volatility as number, annualReturn: row.expectedReturn as number, role};
+    }
+
+    const CASES: {case: string; rows: AssetSetPaidRow[]; benchmark: AssetSetBenchmarkPoint | null; dots: Dot[]}[] = [
+        {case: 'no benchmark', rows: [WORLD, EMERGING, BONDS], benchmark: null, dots: [dot(WORLD), dot(EMERGING), dot(BONDS)]},
+        {case: 'a benchmark outside the selection', rows: [WORLD, EMERGING, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(EMERGING), dot(BONDS), SEPARATE]},
+        {case: 'the benchmark is the first row', rows: [ACWI, WORLD, BONDS], benchmark: REFERENCE, dots: [dot(ACWI, 'benchmark'), dot(WORLD), dot(BONDS)]},
+        {case: 'the benchmark is a middle row', rows: [WORLD, ACWI, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(ACWI, 'benchmark'), dot(BONDS)]},
+        {case: 'the benchmark is the last row', rows: [WORLD, BONDS, ACWI], benchmark: REFERENCE, dots: [dot(WORLD), dot(BONDS), dot(ACWI, 'benchmark')]},
+        {case: 'the selection is the benchmark alone', rows: [ACWI], benchmark: REFERENCE, dots: [dot(ACWI, 'benchmark')]},
+        // Selected but not placeable: no row dot carries it, so it is drawn as before D371 — its own point, last.
+        {case: 'the benchmark row has no volatility', rows: [WORLD, {...ACWI, volatility: null}, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(BONDS), SEPARATE]},
+        {case: 'the benchmark row has no return', rows: [WORLD, {...ACWI, expectedReturn: null}, BONDS], benchmark: REFERENCE, dots: [dot(WORLD), dot(BONDS), SEPARATE]},
+        {case: 'no row, a benchmark', rows: [], benchmark: REFERENCE, dots: [SEPARATE]},
+        {case: 'no row and no benchmark', rows: [], benchmark: null, dots: []},
+    ];
+
+    it.each(CASES)('$case: the dots in row order, the reference marked where it is drawn', ({rows, benchmark, dots}) => {
+        expect(buildAssetSetChartPoints(rows, benchmark)).toEqual(dots);
+    });
+
+    it.each(CASES)('$case: one dot per asset, and exactly one benchmark dot whenever there is a benchmark', ({rows, benchmark}) => {
+        // The rule itself, read off the output rather than off the expected list above.
+        const points = buildAssetSetChartPoints(rows, benchmark);
+        const ids = points.map((point) => point.id);
+        const referenceIds = benchmark === null ? [] : ids.filter((id) => id === 'benchmark' || id === `asset-${benchmark.assetId}`);
+        const benchmarkIds = points.filter((point) => point.role === 'benchmark').map((point) => point.id);
+        const strangers = points.filter((point) => point.role !== 'asset' && point.role !== 'benchmark').map((point) => point.id);
+
+        expect(new Set(ids).size, `a dot drawn twice: ${ids.join(', ')}`).toBe(ids.length);
+        expect(referenceIds.length, `the reference drawn twice, as its row and as its own point: ${referenceIds.join(', ')}`).toBeLessThanOrEqual(1);
+        expect(benchmarkIds, 'one benchmark dot when there is a benchmark, none without').toHaveLength(benchmark === null ? 0 : 1);
+        expect(strangers, 'a dot neither an asset nor the benchmark — a portfolio dot would anchor the capital market line').toEqual([]);
+    });
+
+    it("draws a selected reference with its row's own name and coordinates, never the comparison's", () => {
+        // In production the two agree: the backend measures both on the same joint window. They are made to
+        // disagree here, because agreement cannot show which one was read — and the row is what the table
+        // beside the chart shows, so the dot must not contradict it.
+        const row = {...ACWI, name: '#41', volatility: 0.15, expectedReturn: 0.07};
+
+        expect(buildAssetSetChartPoints([WORLD, row, BONDS], REFERENCE)).toEqual([dot(WORLD), {id: 'asset-41', name: '#41', volatility: 0.15, annualReturn: 0.07, role: 'benchmark'}, dot(BONDS)]);
+    });
+});
+
 describe('buildAssetSetBenchmarkPoint', () => {
     it('places the reference when both of its coordinates arrived', () => {
         const point = buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), LABELS);
 
-        expect(point).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081});
+        // Its coordinates and its name; the ratios beside them are the cases at the end of this group.
+        expect(point).toMatchObject({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081});
     });
 
     it('refuses to place a reference with only one coordinate', () => {
@@ -531,7 +670,7 @@ describe('buildAssetSetBenchmarkPoint', () => {
     it('places a reference measured at zero, which is a reading and not an absence', () => {
         const flat = comparisonResult([comparisonItem(7)], {comparison_volatility: 0, comparison_expected_annual_return: 0});
 
-        expect(buildAssetSetBenchmarkPoint(flat, LABELS)).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0, expectedReturn: 0});
+        expect(buildAssetSetBenchmarkPoint(flat, LABELS)).toMatchObject({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0, expectedReturn: 0});
     });
 
     it('names the reference #id when the label map has no entry for it', () => {
@@ -540,20 +679,20 @@ describe('buildAssetSetBenchmarkPoint', () => {
         expect(point?.name).toBe('#41');
     });
 
-    it('is handed a label map that includes the reference, because the selection one never can', () => {
-        // The reference may not also be one of the compared — the payload validator
-        // rejects that — so a map built from the *selection* has, by construction, no
-        // entry for it, and the dot shipped labelled `#41` on every chart. The other
-        // tests here used a `LABELS` that happens to contain 41: green over a state
-        // production cannot produce.
-        const selectionOnly = labels({7: 'Vanguard FTSE All-World'});
-
-        expect(buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), selectionOnly)?.name, 'a selection map cannot name the reference').toBe('#41');
+    it.each<{reference: string; names: ReadonlyMap<number, string>; name: string}>([
+        // Outside the selection, a map built from the *selection* has no entry for the reference, and without
+        // a resolver the dot shipped labelled `#41` on every chart — which is why the section passes one (below).
+        {reference: 'outside the selection', names: labels({7: 'Vanguard FTSE All-World'}), name: '#41'},
+        // Since D371 the reader may select it too: the backend skips it in `items`, and the selection's own map
+        // names it. A `LABELS` holding 41, as in the cases above, is a state production can now produce.
+        {reference: 'also selected', names: labels({7: 'Vanguard FTSE All-World', 41: 'MSCI ACWI'}), name: 'MSCI ACWI'},
+    ])('a reference $reference: the selection map alone labels it $name', ({names, name}) => {
+        expect(buildAssetSetBenchmarkPoint(comparisonResult([comparisonItem(7)]), names)?.name).toBe(name);
     });
 
     it('names the reference through the resolver when the selection map cannot', () => {
-        // The contract `AssetSetRiskReturnSection` relies on: it passes the asset
-        // store's lookup, the same one the portfolio L3 uses for its benchmark name.
+        // The contract `AssetSetRiskReturnSection` relies on for a reference outside the selection: it passes
+        // the asset store's lookup, the same one the portfolio L3 uses for its benchmark name.
         const selectionOnly = labels({7: 'Vanguard FTSE All-World'});
         const store = (assetId: number) => (assetId === BENCHMARK_ID ? 'MSCI ACWI' : undefined);
 
@@ -568,6 +707,184 @@ describe('buildAssetSetBenchmarkPoint', () => {
         // `comparison_asset_id` is required: without it there is no reference to
         // name, so the whole payload is refused rather than half-read.
         expect(buildAssetSetBenchmarkPoint(ok('asset_set_comparison', {kind: 'comparison_set', observations: 502, comparison_volatility: 0.142, comparison_expected_annual_return: 0.081, items: []}), LABELS)).toBeNull();
+    });
+
+    /**
+     * The reference's own Sharpe and Sortino, beside its coordinates (the developer's decision of 06/10/2026: the
+     * benchmark becomes a row of L3°'s table, so it shows what a row shows). Read off the same comparison as the
+     * coordinates — `comparison_sharpe` and `comparison_sortino`, on the same returns and the same joint calendar —
+     * and never off a KPI of the asset alone, for the reason the coordinates are not. `null` when the answer has none.
+     *
+     * Sharpe ≈ return ÷ volatility at the zero risk-free rate the levels charge, as in every fixture of this file:
+     * 0.081 ÷ 0.142 ≈ 0.57, and the Sortino above it, as a downside deviation below the volatility makes it.
+     */
+    it("carries the reference's own Sharpe and Sortino beside its coordinates, as the comparison measured them", () => {
+        const comparison = comparisonResult([comparisonItem(7)], {comparison_sharpe: 0.57, comparison_sortino: 0.83});
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses with the two ratios').toBe(true);
+
+        expect(buildAssetSetBenchmarkPoint(comparison, LABELS)).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: 0.83});
+    });
+
+    it.each<{case: string; overrides: Payload; point: {volatility: number; expectedReturn: number; sharpe: number | null; sortino: number | null}}>([
+        // What an answer from before the two fields carries: neither, omitted rather than nulled.
+        {case: 'an answer without them', overrides: {}, point: {volatility: 0.142, expectedReturn: 0.081, sharpe: null, sortino: null}},
+        // Not one return below the target, so no downside deviation to divide by: the backend nulls the Sortino alone.
+        {case: 'a Sortino not definable', overrides: {comparison_sharpe: 0.57, comparison_sortino: null}, point: {volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: null}},
+        // It earned exactly the risk-free rate: zero is a reading, and a falsy test would turn it into a blank.
+        {case: 'both exactly zero', overrides: {comparison_expected_annual_return: 0, comparison_sharpe: 0, comparison_sortino: 0}, point: {volatility: 0.142, expectedReturn: 0, sharpe: 0, sortino: 0}},
+        // Asset 3's figures as a reference: −0.052 ÷ 0.34 ≈ −0.15. A negative ratio is ordinary, not a missing one.
+        {case: 'both negative', overrides: {comparison_volatility: 0.34, comparison_expected_annual_return: -0.052, comparison_sharpe: -0.15, comparison_sortino: -0.21}, point: {volatility: 0.34, expectedReturn: -0.052, sharpe: -0.15, sortino: -0.21}},
+    ])('$case: the ratios as the answer gives them — null where it has none — and the reference placed all the same', ({overrides, point}) => {
+        const comparison = comparisonResult([comparisonItem(7)], overrides);
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses').toBe(true);
+
+        expect(buildAssetSetBenchmarkPoint(comparison, LABELS)).toEqual({assetId: BENCHMARK_ID, name: 'MSCI ACWI', ...point});
+    });
+});
+
+/**
+ * withBenchmarkRow — the benchmark as a row of L3°'s table (the developer's decision of 06/10/2026: «Sì, anche nel lab
+ * il benchmark diventa una riga in cima», tinted in its dot's colour). It takes the rows the builder made and the
+ * benchmark's point, and returns the rows the table draws:
+ *
+ *  - no benchmark: the rows as they came — none marked, none added, not even the one the comparison names;
+ *  - the benchmark is one of the rows (D371, `row.assetId === benchmark.assetId`): that row becomes the benchmark's,
+ *    `role: 'benchmark'`, and keeps every other field the builder gave it — it is one of the selection, so it is not
+ *    `added`. Nothing is added and nothing moves: opening the table with the reference is `RiskReturnLevel`'s
+ *    (`referenceRowsFirst`), and so is letting the reader's sort move it;
+ *  - otherwise: the rows as they came, and one row added for the benchmark, last — `added`, a reference
+ *    (`isReference`: its beta and correlation would be against itself, so they are null), with the coordinates and the
+ *    ratios the comparison measured for it.
+ *
+ * The rows handed in are left as they were: the section draws its chart's dots and reads its states from the
+ * selection's own rows, so a role or a row leaking into them would put the benchmark on the chart twice, or fill a
+ * loading skeleton with a reference's figures.
+ */
+describe('withBenchmarkRow', () => {
+    /** The selection measured on both axes and in both ratios. Sharpe ≈ return ÷ volatility, as everywhere in this file. */
+    const RETURNS = returnResult([returnItem(7, 0.21, 0.094), returnItem(3, 0.34, -0.052), returnItem(12, 0.058, -0.012)]);
+    const KPIS = kpiResult([
+        kpiItem(7, {volatility: 0.21, sharpe: 0.45, sortino: 0.62}),
+        kpiItem(3, {volatility: 0.34, max_drawdown: -0.4, max_drawdown_duration_days: 725, sharpe: -0.15, sortino: -0.21}),
+        kpiItem(12, {volatility: 0.058, max_drawdown: -0.07, max_drawdown_duration_days: 96, sharpe: -0.21, sortino: -0.27}),
+    ]);
+
+    /**
+     * Against the reference outside the selection (41, `MSCI ACWI`): each active return is the asset's return less the
+     * reference's 0.081, and each information ratio that over its tracking error, exactly. The reference's own ratios
+     * ride beside its coordinates.
+     */
+    const AGAINST_OUTSIDE = comparisonResult(
+        [comparisonItem(7), comparisonItem(3, {active_return: -0.133, tracking_error: 0.266, information_ratio: -0.5, correlation: 0.61, beta: 1.46}), comparisonItem(12, {active_return: -0.093, tracking_error: 0.1488, information_ratio: -0.625, correlation: 0.21, beta: 0.09})],
+        {comparison_sharpe: 0.57, comparison_sortino: 0.83},
+    );
+    /** That reference's point, as `buildAssetSetBenchmarkPoint` reads it off `AGAINST_OUTSIDE`. */
+    const OUTSIDE: AssetSetBenchmarkPoint = {assetId: BENCHMARK_ID, name: 'MSCI ACWI', volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: 0.83};
+
+    /**
+     * D371: asset 3 selected, mid-list, as the reference — measured like the others and left out of the items, against
+     * which the other two are measured (the active returns are theirs less its −0.052).
+     */
+    const AGAINST_SELECTED = comparisonResult([comparisonItem(7, {active_return: 0.146, tracking_error: 0.292, information_ratio: 0.5, correlation: 0.52, beta: 0.32}), comparisonItem(12, {active_return: 0.04, tracking_error: 0.32, information_ratio: 0.125, correlation: 0.42, beta: 0.07})], {
+        comparison_asset_id: 3,
+        comparison_volatility: 0.34,
+        comparison_expected_annual_return: -0.052,
+        comparison_sharpe: -0.15,
+        comparison_sortino: -0.21,
+    });
+    /**
+     * Its point — deliberately NOT the row's. In production the two agree, the backend measuring both on the same joint
+     * window; they disagree here because agreement cannot show which one the table's row keeps, and the row is what the
+     * table has always shown for that asset.
+     */
+    const SELECTED: AssetSetBenchmarkPoint = {assetId: 3, name: '#3', volatility: 0.35, expectedReturn: -0.05, sharpe: -0.14, sortino: -0.2};
+
+    /** The rows a case reads that are marked — a role or an `added` of any value — as `assetId:role:added`. */
+    function marked(rows: readonly AssetSetPaidRow[]): string[] {
+        return rows.filter((row) => row.role !== undefined || row.added !== undefined).map((row) => `${row.assetId}:${row.role}:${row.added}`);
+    }
+
+    /**
+     * The rows as the builder makes them against `comparison` — the premise every case stands on: one per selected asset,
+     * in the selection's order, every figure measured, the reference flagged where the comparison names one, and none
+     * marked: a role is `withBenchmarkRow`'s to give.
+     */
+    function builtRows(comparison: RiskAnalyticResult, reference: number | null): AssetSetPaidRow[] {
+        expect(parsesAsComparison(comparison), 'premise: the comparison parses').toBe(true);
+        const rows = buildAssetSetPaidRows(SELECTION, LABELS, RETURNS, KPIS, comparison);
+        expect(
+            rows.map((row) => row.assetId),
+            'premise: one row per selected asset, in the selection order',
+        ).toEqual(SELECTION);
+        expect(
+            rows.filter((row) => [row.volatility, row.expectedReturn, row.sharpe, row.sortino].includes(null)).map((row) => row.assetId),
+            'premise: every row measured — a fixture refused by its schema would leave blanks',
+        ).toEqual([]);
+        expect(
+            rows.filter((row) => row.isReference).map((row) => row.assetId),
+            'premise: the builder flags the reference the comparison names, and only it',
+        ).toEqual(reference === null ? [] : [reference]);
+        expect(marked(rows), 'premise: the builder marks no row').toEqual([]);
+        return rows;
+    }
+
+    it.each<{against: string; comparison: RiskAnalyticResult; reference: number | null}>([
+        {against: 'a reference outside the selection', comparison: AGAINST_OUTSIDE, reference: null},
+        {against: 'a reference the reader selected (D371)', comparison: AGAINST_SELECTED, reference: 3},
+    ])('no benchmark: the rows as they came, none marked and none added — measured against $against', ({comparison, reference}) => {
+        const rows = builtRows(comparison, reference);
+        const before = structuredClone(rows);
+
+        const result = withBenchmarkRow(rows, null);
+
+        expect(result, 'the rows, every field as the builder made it, and no more of them').toEqual(before);
+        expect(marked(result), 'a row marked or added with no benchmark to show — not even the one the comparison names').toEqual([]);
+        expect(rows, 'the rows handed in were modified').toEqual(before);
+    });
+
+    it('the benchmark is one of the rows (D371): that row becomes the benchmark and keeps every field the builder gave it; nothing is added, nothing moves', () => {
+        const rows = builtRows(AGAINST_SELECTED, 3);
+        const before = structuredClone(rows);
+
+        const result = withBenchmarkRow(rows, SELECTED);
+
+        expect(
+            result.map((row) => row.assetId),
+            'a row added, or one moved: opening the table with the reference is the level’s, not this function’s',
+        ).toEqual(SELECTION);
+        expect(rowFor(result, 3), "the reference's row: the role, and otherwise the builder's own name and figures — never the point's, and not `added`").toEqual({
+            assetId: 3,
+            name: 'iShares Core MSCI EM IMI',
+            volatility: 0.34,
+            expectedReturn: -0.052,
+            sharpe: -0.15,
+            sortino: -0.21,
+            beta: null,
+            correlation: null,
+            isReference: true,
+            role: 'benchmark',
+        });
+        expect(
+            result.filter((row) => row.assetId !== 3),
+            'every other row as the builder made it',
+        ).toEqual(before.filter((row) => row.assetId !== 3));
+        expect(marked(result), 'the reference marked, and no other row').toEqual(['3:benchmark:undefined']);
+        expect(rows, 'the rows handed in were modified: the role belongs to the table’s rows, not to the selection’s').toEqual(before);
+    });
+
+    it('a benchmark outside the rows: every row as it came, then one row added for it, last — the benchmark itself, compared with nothing', () => {
+        const rows = builtRows(AGAINST_OUTSIDE, null);
+        expect(
+            rows.map((row) => row.assetId),
+            `premise: the reference, ${BENCHMARK_ID}, is none of the rows`,
+        ).not.toContain(BENCHMARK_ID);
+        const before = structuredClone(rows);
+
+        const result = withBenchmarkRow(rows, OUTSIDE);
+
+        expect(result, 'the rows as they came, then the benchmark’s, added last').toEqual([...before, {assetId: BENCHMARK_ID, name: 'MSCI ACWI', role: 'benchmark', added: true, isReference: true, volatility: 0.142, expectedReturn: 0.081, sharpe: 0.57, sortino: 0.83, beta: null, correlation: null}]);
+        expect(marked(result), 'one row added for the benchmark, and no asset row marked').toEqual([`${BENCHMARK_ID}:benchmark:true`]);
+        expect(rows, 'the rows handed in were modified — a row pushed onto them would reach the chart as an asset').toEqual(before);
     });
 });
 
@@ -591,7 +908,7 @@ describe('the widened optional numerics', () => {
      * different reasons — which is the whole reason to write them separately.
      */
     it('unwraps an output that arrived wrapped in a list', () => {
-        const wrapped = ok('asset_set_var', [{kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, observations: 502, items: [varItem(7, 0.021, 0.031)]}], ASSET_SET_DAILY_VAR_INSTANCE);
+        const wrapped = ok('asset_set_var', [{kind: 'var_cvar_set', confidence_level: 0.95, horizon_days: 1, horizon_observations: 1, observations: 502, items: [varItem(7, 0.021, 0.031)]}], ASSET_SET_DAILY_VAR_INSTANCE);
 
         expect(rowFor(buildAssetSetHurtRows([7], LABELS, wrapped, null, null), 7).badDay).toBe(0.031);
     });
@@ -620,5 +937,299 @@ describe('the widened optional numerics', () => {
         // What must never happen is the list itself surviving into a cell, where
         // the next stop is a percent formatter and the output is `NaN%`.
         expect(rows.every((row) => row.sharpe === null || typeof row.sharpe === 'number')).toBe(true);
+    });
+});
+
+/**
+ * A result's `metadata`, complete — it parses with `schemas.RiskResultMetadata`, which is what
+ * `riskMetadata()` reads it through — and filled the way the engine fills it for an asset set
+ * (`RiskService` loads prices from the day before the requested start, `series_preparation.py`
+ * prepares them):
+ *
+ *  - the BASELINE PRICE — the one the first return is measured from — is the last complete date
+ *    before the requested start whenever every asset has history before it. Prices are carried over
+ *    every calendar day, so that is the day before the toolbar's first day, quoted or not. Only when
+ *    some asset has no earlier history is it the first complete date inside the range;
+ *  - `analyzed_range` runs from the first RETURN date to the last one, and a return exists only on a
+ *    day some asset is freshly quoted: a weekend or a holiday is a carry, not a return;
+ *  - `calendar_days` runs from the baseline price date to the last return date;
+ *  - `annualization_factor` is `observed_annualization`'s, `n · 365 / calendar_days`, and nothing
+ *    when nothing was observed.
+ *
+ * So the period the figures cover opens on `end − calendar_days + 1`, the day after the baseline
+ * price — the first day whose price movement they capture, and the toolbar's first day itself
+ * whenever there is history before it — and holds `calendar_days` days, both ends counted. Not on
+ * `end − calendar_days`, the baseline price day, which lies outside the period asked for; nor on
+ * `analyzed_range.start`, which drops the weekend or the holiday a first return spans. Every count of
+ * returns below is invented, of the order a joint calendar of exchange-traded assets gives: about 252
+ * a year.
+ */
+function windowMetadata(firstReturn: string, lastReturn: string | null, calendarDays: number, observations: number): Payload {
+    return {
+        analyzed_range: {start: firstReturn, end: lastReturn},
+        frequency: 'daily',
+        n_observations: observations,
+        calendar_days: calendarDays,
+        annualization_factor: observations > 0 && calendarDays > 0 ? (observations * 365) / calendarDays : null,
+        coverage: 1,
+        currency: 'EUR',
+        scope: 'asset_set',
+        return_basis: 'price_only',
+        algorithm_version: 'invented-asset-set',
+        computed_at: '2026-10-01T09:00:00+00:00',
+    };
+}
+
+/** The same result, carrying the metadata the API sends beside its output. */
+function withMetadata(result: RiskAnalyticResult, metadata: Payload | null): RiskAnalyticResult {
+    return {...result, metadata} as unknown as RiskAnalyticResult;
+}
+
+/**
+ * The period L3°'s note states: the window the figures were actually calculated on, against the one
+ * the toolbar asked for. Read from the first result, in the order handed, whose metadata measured
+ * something — the section hands `[riskReturn, kpi, comparison]`.
+ */
+describe('assetSetCalculationWindow', () => {
+    /** The toolbar's period in most cases below: a year, Wednesday to Wednesday. */
+    const SELECTED_START = '2025-10-01';
+    const SELECTED_END = '2026-09-30';
+
+    /**
+     * The year as an asset set with history before it reports it: the baseline price on 30 September,
+     * the day before the selection opens, the first return on its first day, the last return on its
+     * last day — 365 days from the baseline to the last return, which are the selection's own 365.
+     */
+    const FULL_YEAR = windowMetadata('2025-10-01', '2026-09-30', 365, 252);
+
+    /**
+     * The same history, under a selection opening on Saturday 4 October: the baseline is Friday's
+     * price, the first return Monday's — which holds the weekend's movement as well — and 362 days
+     * run from that Friday to the last return.
+     */
+    const SATURDAY_START = windowMetadata('2025-10-06', '2026-09-30', 362, 249);
+
+    /**
+     * Where the window opens and closes against the selection, and whether that makes it narrower.
+     * With history before the selection the window opens on its first day whatever the calendar, so
+     * a late start is an asset first priced inside the selection — its first price is the baseline,
+     * and the window opens the day after it — and an early end is a last return before the
+     * selection's last day. The tolerance is a week on either side, so seven days is the last that is
+     * not narrowed, and eight the first that is.
+     */
+    const NARROWING = [
+        {case: 'an asset first priced three and a half months into the selection, with no history before it', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2026-01-16', '2026-09-30', 258, 178), start: '2026-01-16', end: '2026-09-30', days: 258, narrowed: true},
+        {case: 'a selection closing on a Sunday, last quoted on the Friday', dateStart: SELECTED_START, dateEnd: '2026-09-27', metadata: windowMetadata('2025-10-01', '2026-09-25', 360, 249), start: '2025-10-01', end: '2026-09-25', days: 360, narrowed: false},
+        {case: 'a last return a fortnight before the selection closes', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-01', '2026-09-15', 350, 241), start: '2025-10-01', end: '2026-09-15', days: 350, narrowed: true},
+        {case: 'a start exactly seven days late', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-08', '2026-09-30', 358, 247), start: '2025-10-08', end: '2026-09-30', days: 358, narrowed: false},
+        {case: 'a start eight days late', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-09', '2026-09-30', 357, 246), start: '2025-10-09', end: '2026-09-30', days: 357, narrowed: true},
+        {case: 'an end exactly seven days early', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-01', '2026-09-23', 358, 247), start: '2025-10-01', end: '2026-09-23', days: 358, narrowed: false},
+        {case: 'an end eight days early', dateStart: SELECTED_START, dateEnd: SELECTED_END, metadata: windowMetadata('2025-10-01', '2026-09-22', 357, 246), start: '2025-10-01', end: '2026-09-22', days: 357, narrowed: true},
+    ];
+
+    /**
+     * `end − calendar_days + 1`, counted in whole UTC days. Each row is a place where counting any
+     * other way comes out a day off: a month end crossed together with a weekend, a leap day, a year
+     * that contains one, and the night the clocks go back in most of Europe — where a local midnight
+     * is still the previous day in UTC. The selection is the window itself, with history before it,
+     * so none is narrowed.
+     */
+    const COUNTING_BACK = [
+        {case: 'across a month end and a weekend, to the Saturday the selection opens on — never the Friday of the baseline price, nor the Monday of the first return', metadata: windowMetadata('2026-03-02', '2026-03-02', 3, 1), start: '2026-02-28', end: '2026-03-02', days: 3},
+        {case: 'onto a leap day', metadata: windowMetadata('2028-02-29', '2028-03-01', 2, 2), start: '2028-02-29', end: '2028-03-01', days: 2},
+        {case: 'over a leap day: 365 days ending on 29 September 2028 open on 1 October of the year before, not on the 30th a plain year back would give', metadata: windowMetadata('2027-10-01', '2028-09-29', 365, 252), start: '2027-10-01', end: '2028-09-29', days: 365},
+        {case: 'across the night the clocks go back, to the Saturday before it', metadata: windowMetadata('2025-10-27', '2025-10-27', 3, 1), start: '2025-10-25', end: '2025-10-27', days: 3},
+    ];
+
+    /** A single day, as `DateRangeModel` allows it: an `end` of null is "the start day only". One return, measured from the price the day before. */
+    const SINGLE_DAY = windowMetadata('2026-09-30', null, 1, 1);
+
+    /**
+     * What a result that measured nothing carries: `RiskService._metadata` zeroes `calendar_days`
+     * whenever `n_observations` is 0, and an unavailable result may still carry its metadata. Its
+     * range is the one asked for, which is no window at all.
+     */
+    const MEASURED_NOTHING = windowMetadata(SELECTED_START, SELECTED_END, 0, 0);
+
+    /** The window one metadata describes, read off the risk/return result alone. */
+    function windowOf(metadata: Payload, dateStart = SELECTED_START, dateEnd = SELECTED_END) {
+        return assetSetCalculationWindow([withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), metadata), null, null], dateStart, dateEnd);
+    }
+
+    it('every metadata fixture here is complete: it parses as the API would send it', () => {
+        const fixtures = [FULL_YEAR, SATURDAY_START, ...NARROWING.map((row) => row.metadata), ...COUNTING_BACK.map((row) => row.metadata), SINGLE_DAY, MEASURED_NOTHING];
+        for (const metadata of fixtures) {
+            const parsed = schemas.RiskResultMetadata.safeParse(metadata);
+            expect(parsed.success, `${JSON.stringify(metadata.analyzed_range)}: ${parsed.success ? '' : parsed.error.message}`).toBe(true);
+        }
+    });
+
+    it('opens the window on the day after the baseline price — with history before the selection, its first day — and holds calendar_days days, both ends counted', () => {
+        const window = windowOf(FULL_YEAR);
+        expect(window?.start, 'opened on end − calendar_days: the baseline price day, outside the period asked for — the figures start from its price, not from its movement').not.toBe('2025-09-30');
+        expect(window).toEqual({start: '2025-10-01', end: '2026-09-30', days: 365, narrowed: false});
+    });
+
+    it("opens on the selection's first day even when nothing is quoted on it, and not on the first return", () => {
+        const window = windowOf(SATURDAY_START, '2025-10-04');
+        expect(window?.start, "opened on analyzed_range.start, the first return: the weekend that Monday's return spans would fall out of the period stated").not.toBe('2025-10-06');
+        expect(window).toEqual({start: '2025-10-04', end: '2026-09-30', days: 362, narrowed: false});
+    });
+
+    it.each(NARROWING)('$case: opens on $start, narrowed $narrowed', ({dateStart, dateEnd, metadata, start, end, days, narrowed}) => {
+        expect(windowOf(metadata, dateStart, dateEnd)).toEqual({start, end, days, narrowed});
+    });
+
+    it.each(COUNTING_BACK)('counts back $case', ({metadata, start, end, days}) => {
+        expect(windowOf(metadata, start, end)).toEqual({start, end, days, narrowed: false});
+    });
+
+    it('reads a range given as a single day — its end null — as ending on its start: a period of that one day', () => {
+        expect(windowOf(SINGLE_DAY, '2026-09-30', '2026-09-30')).toEqual({start: '2026-09-30', end: '2026-09-30', days: 1, narrowed: false});
+    });
+
+    it('reads the first result that measured anything, in the order it is handed', () => {
+        // In one answer the three normally agree: the KPI and the risk/return are measured on one
+        // joint calendar, and the comparison's can only be narrower, since the reference's prices
+        // join it. They differ here only so the one read can be told apart: the KPI's as if its
+        // first common price were Monday 6 October, the comparison's as if it were 15 January, with
+        // no history before either.
+        const own = withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), FULL_YEAR);
+        const kpi = withMetadata(kpiResult([kpiItem(7)]), windowMetadata('2025-10-07', '2026-09-30', 359, 248));
+        const comparison = withMetadata(comparisonResult([comparisonItem(7)]), windowMetadata('2026-01-16', '2026-09-30', 258, 178));
+        const ownWindow = {start: '2025-10-01', end: '2026-09-30', days: 365, narrowed: false};
+        const kpiWindow = {start: '2025-10-07', end: '2026-09-30', days: 359, narrowed: false};
+        const comparisonWindow = {start: '2026-01-16', end: '2026-09-30', days: 258, narrowed: true};
+
+        expect(assetSetCalculationWindow([own, kpi, comparison], SELECTED_START, SELECTED_END), 'the risk/return result comes first: its window is the one read').toEqual(ownWindow);
+        expect(assetSetCalculationWindow([null, kpi, comparison], SELECTED_START, SELECTED_END), 'no risk/return result: the KPI is next').toEqual(kpiWindow);
+        expect(assetSetCalculationWindow([returnResult([returnItem(7, 0.16, 0.071)]), kpi, comparison], SELECTED_START, SELECTED_END), 'a risk/return result without metadata is passed over, never read as an empty window').toEqual(kpiWindow);
+        expect(assetSetCalculationWindow([null, null, comparison], SELECTED_START, SELECTED_END), 'the comparison is the last resort').toEqual(comparisonWindow);
+        // The order is the caller's, not a ranking of analytic codes: the same three, handed the other way round.
+        expect(assetSetCalculationWindow([comparison, kpi, own], SELECTED_START, SELECTED_END)).toEqual(comparisonWindow);
+    });
+
+    it('passes over a result that measured nothing — zero returns over zero days — and reads the next', () => {
+        const nothing = withMetadata(unavailable('asset_set_risk_return'), MEASURED_NOTHING);
+        const kpi = withMetadata(kpiResult([kpiItem(7)]), FULL_YEAR);
+
+        expect(assetSetCalculationWindow([nothing, kpi, null], SELECTED_START, SELECTED_END)).toEqual({start: '2025-10-01', end: '2026-09-30', days: 365, narrowed: false});
+    });
+
+    it('passes over a metadata that breaks its own contract instead of half-reading it', () => {
+        const kpi = withMetadata(kpiResult([kpiItem(7)]), windowMetadata('2025-10-07', '2026-09-30', 359, 248));
+        // Returns observed over no days at all: `observed_annualization` raises before it emits this.
+        const noDays = withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), windowMetadata('2025-10-01', '2026-09-30', 0, 252));
+        // No range at all: the model requires one.
+        const rangeless: Payload = {...FULL_YEAR};
+        delete rangeless.analyzed_range;
+        const noRange = withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), rangeless);
+
+        for (const [why, broken] of [
+            ['no days', noDays],
+            ['no range', noRange],
+        ] as const) {
+            expect(assetSetCalculationWindow([broken, kpi, null], SELECTED_START, SELECTED_END), `${why}: the KPI's window must be read instead`).toEqual({start: '2025-10-07', end: '2026-09-30', days: 359, narrowed: false});
+        }
+    });
+
+    it('is null when no result qualifies: none handed, none answered, none carrying metadata, none that measured anything', () => {
+        expect(assetSetCalculationWindow([], SELECTED_START, SELECTED_END)).toBeNull();
+        expect(assetSetCalculationWindow([null, null, null], SELECTED_START, SELECTED_END)).toBeNull();
+        // The row builders' fixtures above: answers with figures and no metadata.
+        expect(assetSetCalculationWindow([returnResult([returnItem(7, 0.16, 0.071)]), kpiResult([kpiItem(7)]), comparisonResult([comparisonItem(7)])], SELECTED_START, SELECTED_END)).toBeNull();
+        expect(assetSetCalculationWindow([withMetadata(returnResult([returnItem(7, 0.16, 0.071)]), null), null, null], SELECTED_START, SELECTED_END)).toBeNull();
+        expect(assetSetCalculationWindow([withMetadata(unavailable('asset_set_risk_return'), MEASURED_NOTHING), null, null], SELECTED_START, SELECTED_END)).toBeNull();
+    });
+});
+
+/**
+ * The length L3°'s note writes after the period's dates (the developer, 2026-10-01): no longer a count of
+ * days but the same span in calendar units — «3 mesi e 1 giorno», «1 anno», «8 mesi e 15 giorni» — which
+ * the section words from three plural keys, leaving out the parts that are zero.
+ *
+ * The span is the window's, both ends counted, so it runs to the day after `end`. Into it go as many
+ * whole calendar months as fit, each count of them added to `start` itself — never chained from the
+ * month before — with a day the target month lacks clamped to its last: 31 January plus one month is 28
+ * February, or 29. Twelve months make a year; what is left over is whole days. Nothing at all when `end`
+ * precedes `start`. All on UTC days, as `assetSetCalculationWindow` counts: the note's `data-days` is this
+ * very span, counted in days.
+ *
+ * Every row was worked out by hand from that definition, not read off an implementation: each one can be
+ * redone with a calendar.
+ */
+describe('calendarLength', () => {
+    const LENGTHS: {case: string; start: string; end: string; length: CalendarLength}[] = [
+        {case: "the developer's own: 93 days from 1 July are three whole months — July, August, September — and 1 October", start: '2026-07-01', end: '2026-10-01', length: {years: 0, months: 3, days: 1}},
+        {case: 'three months to the day: up to 30 September, nothing is left over', start: '2026-07-01', end: '2026-09-30', length: {years: 0, months: 3, days: 0}},
+        {case: "the toolbar's year, Wednesday to Wednesday: twelve months make one year", start: '2025-10-01', end: '2026-09-30', length: {years: 1, months: 0, days: 0}},
+        {case: 'one day more: a year and a day', start: '2025-10-01', end: '2026-10-01', length: {years: 1, months: 0, days: 1}},
+        {case: 'a year that holds a leap day is still one year: 366 days, not a year and a day', start: '2027-10-01', end: '2028-09-30', length: {years: 1, months: 0, days: 0}},
+        {case: 'less than a month: only days, both ends counted', start: '2026-09-01', end: '2026-09-15', length: {years: 0, months: 0, days: 15}},
+        {case: 'a single day: start and end the same', start: '2026-09-30', end: '2026-09-30', length: {years: 0, months: 0, days: 1}},
+        {case: 'from 16 January: eight months to 16 September, and fifteen days to the end of the month', start: '2026-01-16', end: '2026-09-30', length: {years: 0, months: 8, days: 15}},
+        {case: 'over two years: twenty-five months are two years and a month, and fifteen days', start: '2024-10-01', end: '2026-11-15', length: {years: 2, months: 1, days: 15}},
+        {case: 'clamped: 31 January plus a month is 28 February, so to 28 February is a month and a day — not 29 days, as with a month rolling over into March', start: '2026-01-31', end: '2026-02-28', length: {years: 0, months: 1, days: 1}},
+        {case: 'from the start, never chained: 31 January plus two months is 31 March, not 28 March by way of a clamped February', start: '2026-01-31', end: '2026-03-30', length: {years: 0, months: 2, days: 0}},
+        {case: 'from a leap day: a year on is clamped to 28 February 2029, and 1 March is one day more', start: '2028-02-29', end: '2029-02-28', length: {years: 1, months: 0, days: 1}},
+    ];
+
+    /**
+     * The nights the clocks change in most of Europe — back on Sunday 26 October 2025, forward on Sunday
+     * 29 March 2026 — when a local day lasts 25 hours, or 23. Between local midnights, days across one of
+     * them are an hour longer or shorter than a whole number, which a count rounded the wrong way turns
+     * into a day too many or too few; and a month added in local time to a UTC midnight lands an hour past
+     * the end it must fit before, so it is not counted at all. On UTC days neither can happen.
+     */
+    const CLOCK_CHANGES: {case: string; start: string; end: string; length: CalendarLength}[] = [
+        {case: "the developer's own: October 2025, across the night the clocks go back, is one month", start: '2025-10-01', end: '2025-10-31', length: {years: 0, months: 1, days: 0}},
+        {case: 'the twelve days left over after a month span the night the clocks go back', start: '2025-09-20', end: '2025-10-31', length: {years: 0, months: 1, days: 12}},
+        {case: 'the twelve days left over after a month span the night the clocks go forward', start: '2026-02-20', end: '2026-03-31', length: {years: 0, months: 1, days: 12}},
+    ];
+
+    /** How long a local day lasts, in hours: 24, except on the nights the clocks change. */
+    function localDayHours(year: number, monthIndex: number, day: number): number {
+        return (new Date(year, monthIndex, day + 1).getTime() - new Date(year, monthIndex, day).getTime()) / 3_600_000;
+    }
+
+    /**
+     * `read`, run with the process in Europe/Rome — whose clocks change, and where the lab is read —
+     * whatever zone the suite started in, the zone put back after. Node re-reads the zone when
+     * `process.env.TZ` is assigned, which `chartCoreHelpers.test.ts` relies on too; the two premises prove
+     * it took, so a suite started in UTC cannot pass these rows for want of a night that is not 24 hours.
+     */
+    function inEuropeRome<T>(read: () => T): T {
+        const previousTimeZone = process.env.TZ;
+        process.env.TZ = 'Europe/Rome';
+        try {
+            expect(localDayHours(2025, 9, 26), 'premise: in Europe/Rome, Sunday 26 October 2025 lasts 25 hours').toBe(25);
+            expect(localDayHours(2026, 2, 29), 'premise: in Europe/Rome, Sunday 29 March 2026 lasts 23 hours').toBe(23);
+            return read();
+        } finally {
+            if (previousTimeZone === undefined) delete process.env.TZ;
+            else process.env.TZ = previousTimeZone;
+        }
+    }
+
+    it.each(LENGTHS)('$case ($start … $end)', ({start, end, length}) => {
+        expect(calendarLength(start, end)).toEqual(length);
+    });
+
+    it("counts calendar months, not 30-day ones: the developer's 93 days are three months and a day, not three months and three days", () => {
+        const length = calendarLength('2026-07-01', '2026-10-01');
+        expect(length, '93 = 3 × 30 + 3: counted in 30-day months').not.toEqual({years: 0, months: 3, days: 3});
+        expect(length).toEqual({years: 0, months: 3, days: 1});
+    });
+
+    it.each(CLOCK_CHANGES)('$case ($start … $end): counted on UTC days, in a zone whose clocks change', ({start, end, length}) => {
+        expect(inEuropeRome(() => calendarLength(start, end))).toEqual(length);
+    });
+
+    it.each([
+        {before: 'by a day', start: '2026-09-30', end: '2026-09-29'},
+        {before: 'by three months', start: '2026-10-01', end: '2026-07-01'},
+        {before: 'by two years', start: '2027-10-01', end: '2025-10-01'},
+    ])('is nothing when the end precedes the start $before — never a negative part', ({start, end}) => {
+        expect(calendarLength(start, end)).toEqual({years: 0, months: 0, days: 0});
     });
 });

@@ -488,3 +488,9 @@ L'ordine è dalla voce più piccola e sicura alla più larga: la 2 è l'unica ch
    prod solo se il developer la autorizza.
 3. Regressioni verdi e statici al pavimento (`front check` 0/0).
 4. Porte libere, nessun venv del worktree, worktree con i soli file previsti.
+
+## Seguito
+
+- La validazione del treno (`998ce67d4`) ha trovato un difetto di TreeSelect: lavoro differito non annullato quando il
+  componente viene distrutto, più il `document` globale.
+- Ha un round a sé: [`plan-phase00TaxonomySelectStep16Round1-TreeSelectTeardown.prompt.md`](plan-phase00TaxonomySelectStep16Round1-TreeSelectTeardown.prompt.md).

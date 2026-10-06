@@ -24,6 +24,15 @@
   rather than stacked. `min(..., 100%)` caps the floor at the container's own
   width, so the last step down to a single column happens by itself.
 
+  ⚠️ ROWS ARE ALWAYS FULL. Auto-fit alone fills as many columns as fit, so four
+  cards at a width that fits three came out as three and then one, alone on a
+  row of its own (developer's review of 05/10/2026: "sempre in riga, 2x2 o in
+  colonna"). Once the grid is on screen it measures how many columns fit and
+  lowers that to the largest count that divides the number of cards: four cards
+  go 4, 2 or 1 across, three go 3 or 1. Still no breakpoint is enumerated: both
+  numbers come from the space and from the cards. Until the first measurement
+  the auto-fit template stands, so nothing is hidden before it.
+
   Only `minWidth` is exposed. Gap is fixed at `gap-4`, matching `KpiSection`,
   and that omission is deliberate: a second knob is a second axis along which
   five surfaces can drift apart, which is the defect this component exists to
@@ -50,9 +59,53 @@
 
     let {minWidth = '16rem', testId, children}: Props = $props();
 
-    const templateColumns = $derived(`repeat(auto-fit, minmax(min(${minWidth}, 100%), 1fr))`);
+    let grid: HTMLDivElement | undefined = $state(undefined);
+    /** Columns that keep every row full; `null` until the grid has been measured. */
+    let columns: number | null = $state(null);
+
+    const autoFitColumns = $derived(`repeat(auto-fit, minmax(min(${minWidth}, 100%), 1fr))`);
+    const templateColumns = $derived(columns === null ? autoFitColumns : `repeat(${columns}, minmax(0, 1fr))`);
+
+    /** `minWidth` in pixels: rem against the root font size, px as written. */
+    function minWidthPx(): number {
+        const value = parseFloat(minWidth);
+        if (minWidth.endsWith('rem')) return value * parseFloat(getComputedStyle(document.documentElement).fontSize);
+        return value;
+    }
+
+    /** The most columns that fit, lowered to the largest count that divides the cards. */
+    function measure(): void {
+        if (!grid) return;
+        const cards = grid.children.length;
+        // No width is no layout yet — a hidden tab, or jsdom — and auto-fit is the honest answer there.
+        if (cards === 0 || grid.clientWidth === 0) {
+            columns = null;
+            return;
+        }
+        const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+        const fit = Math.max(1, Math.floor((grid.clientWidth + gap) / (minWidthPx() + gap)));
+        let count = Math.min(fit, cards);
+        while (cards % count !== 0) count -= 1;
+        columns = count;
+    }
+
+    $effect(() => {
+        if (!grid) return;
+        void minWidth;
+        measure();
+        // The width changes with the window, the count with the data: a card can come and go
+        // under `{#if}`, and a resize alone would leave the old count in place.
+        const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure());
+        const childObserver = new MutationObserver(() => measure());
+        resizeObserver?.observe(grid);
+        childObserver.observe(grid, {childList: true});
+        return () => {
+            resizeObserver?.disconnect();
+            childObserver.disconnect();
+        };
+    });
 </script>
 
-<div class="grid gap-4" style="grid-template-columns: {templateColumns};" data-testid={testId}>
+<div bind:this={grid} class="grid gap-4" style="grid-template-columns: {templateColumns};" data-testid={testId} data-columns={columns ?? ''}>
     {@render children()}
 </div>

@@ -11,6 +11,7 @@
     import CorrelationHeatmap from '../CorrelationHeatmap.svelte';
     import {buildLookup, NEAR_IDENTICAL, topPairs} from '../correlationHelpers';
     import {buildConcentration, buildDivergenceRows, uncoveredWeight} from './levelHelpers';
+    import {formatShare} from './shareFormat';
 
     /**
      * L2 — "am I diversified like I think I am?"
@@ -77,14 +78,15 @@
 
     let rows = $derived(buildDivergenceRows(contributionResult));
     /**
-     * The share of NAV these rows do not describe.
+     * The share of NAV these rows do not describe, and what it is made of.
      *
      * Read with `!== null`, never `?? 0`: the field carries a schema default, so
      * the generated type offers `undefined` even though the server always sends
      * it, and the fallback that type invites — zero — reads as "nothing
      * uncovered". That is precisely the reassurance this line exists to withhold.
      */
-    let uncovered = $derived(uncoveredWeight(contributionResult));
+    let uncoveredSplit = $derived(uncoveredWeight(contributionResult));
+    let uncovered = $derived(uncoveredSplit?.total ?? null);
     let concentration = $derived(buildConcentration(contributionResult));
     let expanded = $state(false);
     let shown = $derived(expanded ? rows : rows.slice(0, visibleRows));
@@ -152,10 +154,29 @@
         return $t(`risk.levels.l2.effectiveAssets.${key}`, {values: {positions}});
     });
 
-    /** A share of the portfolio: one decimal, never signed — a weight has no direction. */
+    /**
+     * A share of the portfolio: one decimal, never signed — a weight has no direction. Below
+     * 0.1 % it gains a second decimal, and below that «< 0.01%», so a holding is never shown
+     * as zero (`formatShare`).
+     */
     function share(fraction: number): string {
-        return formatPercent(fraction, {scale: 100, signed: false, digits: 1});
+        return formatShare(fraction, 1);
     }
+
+    /**
+     * What the uncovered card's number is made of (developer's decision of 05/10/2026): the
+     * sentence is chosen by the split, with the shares when both parts are there. When the
+     * split is unknown, or nothing is uncovered, the definition is said instead — a «0.0%»
+     * under it reads as "none of these".
+     */
+    let uncoveredCaption = $derived.by(() => {
+        const split = uncoveredSplit;
+        if (!split || split.unpriced === null || split.cash === null) return $t('risk.levels.l2.uncovered.caption');
+        if (split.unpriced > 0 && split.cash > 0) return $t('risk.levels.l2.uncovered.split', {values: {cash: share(split.cash), unpriced: share(split.unpriced)}});
+        if (split.unpriced > 0) return $t('risk.levels.l2.uncovered.allUnpriced');
+        if (split.cash > 0) return $t('risk.levels.l2.uncovered.allCash');
+        return $t('risk.levels.l2.uncovered.caption');
+    });
 
     /**
      * A gap between two shares, in percentage POINTS.
@@ -259,8 +280,8 @@
                         technicalName={$t('risk.metrics.cashWeight')}
                         numericValue={uncovered ?? undefined}
                         formatValue={share}
-                        caption={loading ? '' : $t('risk.levels.l2.uncovered.caption')}
-                        docsPath="financial-theory/technical-analysis/risk-metrics/risk-contribution/"
+                        caption={loading ? '' : uncoveredCaption}
+                        docsPath="financial-theory/technical-analysis/risk-metrics/data-quality/#excluded-weight"
                         {loading}
                         testId="risk-l2-card-uncovered"
                     />
@@ -339,7 +360,7 @@
                         {$t('risk.levels.l2.correlation.noRedundancy')}
                     </p>
                 {/if}
-                <CorrelationHeatmap output={correlation} {assetLabels} height="360px" />
+                <CorrelationHeatmap output={correlation} {assetLabels} />
             </div>
         {/if}
     {/if}

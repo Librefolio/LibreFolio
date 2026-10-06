@@ -16,7 +16,7 @@ Mathematically, most momentum indicators are discrete derivatives or rescaled de
 |-----------|-------------------|---------|---------|
 | **RSI** | Recent gain/loss balance | Overbought/oversold, mean reversion | [📖](rsi.md) |
 | **MACD** | Trend acceleration | Bullish/bearish crossovers | [📖](macd.md) |
-| **ROC** | Percentage price change over $N$ days | Pure momentum, divergence spotting | [📖](roc.md) |
+| **ROC** | Percentage price change over $N$ sessions | Pure momentum, divergence spotting | [📖](roc.md) |
 | **Stochastic RSI** | RSI's own overbought/oversold extremes | Faster, more sensitive reversal signals | [📖](stochastic-rsi.md) |
 | **PPO** | MACD, normalised by price | Comparing momentum across assets of different price levels | [📖](ppo.md) |
 | **CCI** | Deviation from a typical-price average | Cyclical turning points | [📖](cci.md) |

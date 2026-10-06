@@ -9,6 +9,8 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import type {RenderedSignal} from '$lib/charts/signals';
     import SignalAssetParamControl from '$lib/components/charts/SignalAssetParamControl.svelte';
+    import BenchmarkSelect from '$lib/components/risk/BenchmarkSelect.svelte';
+    import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -16,7 +18,7 @@
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
-    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, type RiskScenarioDimension, type SimulationView} from '$lib/risk/riskRequest';
+    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, STRESS_ASSET_CLASSES, uniformAssetClassShocks, type RiskScenarioDimension, type SimulationView} from '$lib/risk/riskRequest';
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {ensureCountriesLoaded, getAllCountries, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
@@ -73,7 +75,13 @@
     let replayLoading = $derived(controller.replayLoading);
     let simulationLoading = $derived(controller.simulationLoading);
 
-    let comparisonAssetId = $state<number | undefined>(undefined);
+    // The shared benchmark (D370): `BenchmarkSelect` opens on it and writes it back. The asset
+    // itself can be the shared choice — chosen on another page — and is then shown and
+    // flagged, but never compared: an asset is not its own yardstick.
+    let comparisonAssetId = $state<number | null>(null);
+    /** The picker's word on the choice: a comparison is asked on `set` only, never on a `blocked` one (D378). */
+    let comparisonState = $state<RiskBenchmarkState>('none');
+    let comparisonUsable = $derived(comparisonAssetId !== null && comparisonState === 'set' && !(scope.kind === 'asset' && comparisonAssetId === scope.asset_id));
 
     // Without these four the controller would have nothing to re-issue, and the
     // `discard-the-answer-not-the-question` fix would be silently gone while every
@@ -112,7 +120,6 @@
         {value: 'qmc', label: 'QMC'},
     ];
     const pathOptions = [1024, 2048, 4096, 8192, 16384].map((value) => ({value: String(value), label: value.toLocaleString()}));
-    const stressAssetClasses = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'INDEX', 'OTHER'] as const;
     const simulationTabs = $derived([
         {id: 'evolution', label: $t('risk.simulation.evolution'), testId: 'risk-simulation-view-evolution'},
         {id: 'terminal_distribution', label: $t('risk.simulation.terminalDistribution'), testId: 'risk-simulation-view-terminal'},
@@ -170,7 +177,7 @@
     let stressAllBuckets = $derived.by(() => {
         void referenceLabelsVersion;
         const buckets = new Set([...stressPresentBuckets, ...Object.keys(stressBucketShocks)]);
-        if (stressDimension === 'asset_class') stressAssetClasses.forEach((bucket) => buckets.add(bucket));
+        if (stressDimension === 'asset_class') STRESS_ASSET_CLASSES.forEach((bucket) => buckets.add(bucket));
         if (stressDimension === 'sector') getSectorKeys().forEach((bucket) => buckets.add(bucket));
         if (stressDimension === 'geography') {
             getAllCountries().forEach((country) => buckets.add(country.iso3));
@@ -453,7 +460,7 @@
     }
 
     async function runComparison(): Promise<void> {
-        await controller.runGuarded('comparison', () => (comparisonAssetId ? {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: comparisonAssetId}} : null));
+        await controller.runGuarded('comparison', () => (comparisonUsable ? {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: comparisonAssetId}} : null));
     }
 
     async function runStress(): Promise<void> {
@@ -469,7 +476,7 @@
                         ? buildHypotheticalShockParameters({dimension: stressDimension, bucketShocks: assetBucketShocks})
                         : buildHypotheticalShockParameters({
                               dimension: 'asset_class',
-                              bucketShocks: Object.fromEntries(stressAssetClasses.map((assetType) => [assetType, stressPercent / 100])),
+                              bucketShocks: uniformAssetClassShocks(stressPercent / 100),
                           }),
             };
         });
@@ -700,17 +707,20 @@
             <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{analyticTitle('comparison', 'risk.analytics.comparison.name')}</h3>
             <p class="text-xs text-gray-400 dark:text-gray-500">{analyticDescription('comparison')}</p>
             <div class="mt-3 flex flex-wrap items-end gap-2">
-                <SignalAssetParamControl
-                    value={comparisonAssetId}
-                    excludeAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
-                    testId="risk-comparison-asset-select"
-                    onchange={(assetId) => {
+                <BenchmarkSelect
+                    bind:value={comparisonAssetId}
+                    bind:state={comparisonState}
+                    measuredAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
+                    period={{start: dateStart, end: dateEnd}}
+                    currency={targetCurrency}
+                    testid="risk-comparison-asset-select"
+                    placeholder={$t('signals.comparisonAsset.placeholder')}
+                    onchange={() => {
                         controller.bumpGeneration('comparison');
-                        comparisonAssetId = assetId;
                         controller.resetAnalysis('comparison');
                     }}
                 />
-                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runComparison} disabled={!comparisonAssetId || comparisonLoading} data-testid="risk-comparison-run">
+                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runComparison} disabled={!comparisonUsable || comparisonLoading} data-testid="risk-comparison-run">
                     <Play size={13} />
                     {$t('risk.actions.compare')}
                 </button>
