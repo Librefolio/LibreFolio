@@ -109,8 +109,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The top toolbars of the Assets, asset detail, Dashboard, broker detail and FX pages no longer push buttons out of the bar at intermediate widths, in every interface language.
 - With a single broker selected, a long broker name in the Dashboard's broker filter is shortened with an ellipsis instead of sticking out of the bar on narrow screens.
 
+#### 🐳 Docker images
+
+- **The published images ship the production interface again.** Since at least v1.1.0 they contained a debug build of the web app (not minified, with source maps), 58 MB instead of 21 MB, about 5 MB more to download on a first visit. The image build now refuses a debug build, local builds included.
+- **The full image includes the documentation screenshots for offline use**, as the installation guide says; until now full and light were identical. The light image, the one `latest` points to, still loads them from the online documentation.
+- The installation guide and the release notes name the image tags that exist: `latest` (light), `X.Y.Z` (full) and `X.Y.Z-light`, without a leading `v`. `latest-light` and `v1.1.0-light` never existed.
+
 ### 🔄 Changed
 
+- **Pages download less data.** The server compresses its responses (gzip): a first visit downloads about 2.8 MB instead of 7.5 MB, and a typical session about 0.9 MB instead of 5.5 MB, which helps on slow or metered connections.
 - Language and display currency for new users start from administrator defaults; existing users are not forced through onboarding.
 - Import file tables paginate from five rows. After uploading, only the brokers that received those files start expanded.
 - First-time asset creation is explained briefly; known ISINs or tickers can prefill a missing asset name. The currency tooltip now describes the currency used to store asset prices.
