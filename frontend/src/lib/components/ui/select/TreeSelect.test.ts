@@ -13,6 +13,13 @@
  *   - `defaultExpanded`: 'first' (skipping inline groups), 'selected', 'none';
  *   - `testIdPrefix`, the `item` / `groupLabel` snippets, `searchPlaceholder`, `noMatchesText`.
  *
+ * Plus one axis that is no prop: **no deferred work survives destroy** (K step 16, round 1). Opening, a
+ * printable key on the closed trigger, typing, the clear button and the keyboard each defer a step with
+ * `setTimeout(0)`; a picker unmounted with one still pending must cancel it, or the callback runs once
+ * jsdom is gone — `document is not defined`, an unhandled error under a green suite. The scroll to the
+ * active row must find it inside the dropdown, never through the global `document`. That block runs on
+ * fake timers, as `ui/feedback/Tooltip.test.ts` does.
+ *
  * ## Snippets come from `createRawSnippet`, not from a harness component
  *
  * One file, as in `ui/display/RiskMetricCard.test.ts`. A raw snippet renders once and does not
@@ -33,11 +40,12 @@
  * Never a CSS class, never a translated string: placeholder, search placeholder, empty-state text
  * and every label are strings this file owns. Opening defers "first entry active, then focus the
  * search box" with `setTimeout(0)`; focus is the observable end of that step, so every test waits
- * for it before reading the highlight or touching the keyboard.
+ * for it — on the fake clock of the last block, by draining the clock — before reading the highlight
+ * or touching the keyboard.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, type Snippet} from 'svelte';
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
 import TreeSelect from './TreeSelect.svelte';
 import type {TreeSelectGroup, TreeSelectItem} from './treeSelect';
@@ -128,7 +136,7 @@ function mount({value = '', ...props}: MountOptions = {}) {
     const onchange = vi.fn();
     // The parent's `$state` behind `bind:value`: the component writes it through the setter below.
     const bound = reactiveBox({value});
-    render(TreeSelect, {
+    const {unmount} = render(TreeSelect, {
         groups: GROUPS,
         placeholder: PLACEHOLDER,
         testId: TEST_ID,
@@ -143,7 +151,7 @@ function mount({value = '', ...props}: MountOptions = {}) {
             bound.value = next;
         },
     });
-    return {onchange, bound, trigger: screen.getByTestId(`${TEST_ID}-button`)};
+    return {onchange, bound, unmount, trigger: screen.getByTestId(`${TEST_ID}-button`)};
 }
 
 /** The component's own root: rows are looked up inside it. */
@@ -471,5 +479,113 @@ describe('TreeSelect — beyond the signals picker', () => {
             expect(within(tree).queryAllByRole('treeitem')).toHaveLength(0);
             expect(onchange).not.toHaveBeenCalled();
         });
+    });
+});
+
+/** A path that defers work, armed through the interaction a user performs. */
+interface DeferringPath {
+    label: string;
+    /** Brings the picker to where the path starts, running every step deferred on the way there. */
+    prepare?: (trigger: HTMLElement) => Promise<unknown>;
+    /** The interaction that defers, and nothing after it: the case destroys the picker at once. */
+    arm: (trigger: HTMLElement) => Promise<unknown>;
+}
+
+/**
+ * Each case arms the deferred work of one path, proves it is on the clock, unmounts the picker at once and counts
+ * what is left. `prepare` drains the clock behind it, so what `arm` leaves there is that path's own work and nothing
+ * the way there scheduled: a deferral left uncancelled turns red only the rows that arm it. The chain that was caught
+ * throwing after teardown — open → `setTimeout` → active row → `setTimeout` → `document.getElementById` — is covered
+ * link by link: the click row, the arrow-key row (the same scroll deferral) and the scroll case for the lookup.
+ *
+ * Every timer a row leaves must be the picker's own. jsdom queues a `selectionchange` on the same faked clock whenever
+ * focus moves into the search box (`focus()` collapses the document selection; measured), and no teardown of the
+ * picker can cancel that. So the open step always runs to its end before a row arms its deferral, and the clear
+ * button is clicked without being focused first: the search box never has a focus to take back.
+ *
+ * No `waitFor` in this block: its polling runs on the faked clock. A deferred step is run by draining the clock.
+ */
+describe('TreeSelect — no deferred work survives destroy (K step 16, round 1)', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    // Installed before the render: the handlers resolve `setTimeout` from the global when they run, so the fake
+    // clock must be in place before the interaction that arms them — otherwise they land on the real one, where
+    // `vi.getTimerCount()` cannot see them and where they can fire after the file's jsdom is gone.
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    // A case that failed before its `unmount()` leaves a picker mounted: unmount it while the clock that issued its
+    // handles is still installed, then restore the real one — whatever is left on the fake clock is discarded with
+    // it and can never fire. Then put back what the scroll case spied on.
+    afterEach(() => {
+        cleanup();
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    /** Opens with a click and runs the open step, with the scroll it defers: focus in the search box is its end. */
+    async function openSettled(trigger: HTMLElement): Promise<HTMLInputElement> {
+        await fireEvent.click(trigger);
+        await vi.runAllTimersAsync();
+        const input = searchBox(trigger);
+        expect(input, 'the open step must have run').toHaveFocus();
+        return input;
+    }
+
+    const PATHS: DeferringPath[] = [
+        {label: 'a click opens it', arm: (trigger) => fireEvent.click(trigger)},
+        // Two deferrals: the open step, and the key becoming the query.
+        {label: 'a printable key opens it', arm: (trigger) => fireEvent.keyDown(trigger, {key: 's'})},
+        {label: 'typing in the search box', prepare: openSettled, arm: (trigger) => fireEvent.input(searchBox(trigger), {target: {value: 'shared'}})},
+        {
+            label: 'the clear button empties the query',
+            prepare: async (trigger) => {
+                await fireEvent.input(await openSettled(trigger), {target: {value: 'shared'}});
+                await vi.runAllTimersAsync();
+            },
+            // The only button the open trigger holds; its name is a translated string.
+            arm: (trigger) => fireEvent.click(within(trigger).getByRole('button')),
+        },
+        {label: 'an arrow key moves the highlight', prepare: openSettled, arm: (trigger) => fireEvent.keyDown(searchBox(trigger), {key: 'ArrowDown'})},
+    ];
+
+    it.each(PATHS)('leaves no timer behind when unmounted right after $label', async ({prepare, arm}) => {
+        const {trigger, unmount} = mount();
+        await prepare?.(trigger);
+        expect(vi.getTimerCount(), 'the way to the path must leave nothing pending').toBe(0);
+
+        await arm(trigger);
+        // Positive control: the path has work on the clock, so the zero below is about it.
+        expect(vi.getTimerCount(), 'the path must defer work').toBeGreaterThan(0);
+
+        unmount();
+        expect(vi.getTimerCount(), 'deferred callbacks still pending after unmount').toBe(0);
+    });
+
+    it('scrolls the active row into view from inside the dropdown, never through the global document', async () => {
+        const {trigger} = mount();
+        const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+        const getElementById = vi.spyOn(document, 'getElementById');
+
+        const input = await openSettled(trigger);
+        await fireEvent.keyDown(input, {key: 'ArrowDown'});
+        await vi.runAllTimersAsync();
+        // Read here: what follows queries the DOM through testing-library, and only the component's lookups count.
+        const globalLookups = getElementById.mock.calls.map(([id]) => id);
+
+        // The dropdown is the tree the combobox says it controls.
+        const tree = within(root()).getByRole('tree');
+        expect(trigger).toHaveAttribute('aria-controls', tree.id);
+        // a1 is the first entry of the open; ArrowDown moves the highlight to a2.
+        const active = option('a2');
+        expect(input).toHaveAttribute('aria-activedescendant', active.id);
+        expect(tree).toContainElement(active);
+        // The last scroll goes to the active row, aligned so that a row already in view leaves the list still.
+        expect(scrollIntoView).toHaveBeenLastCalledWith({block: 'nearest'});
+        expect(scrollIntoView.mock.contexts.at(-1), 'the last scroll must go to the active row').toBe(active);
+        expect(globalLookups, 'the active row was looked up through the global document').toEqual([]);
     });
 });

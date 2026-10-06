@@ -1,6 +1,6 @@
 # 💪 RSI — Relative Strength Index
 
-The RSI measures whether buyers or sellers have dominated *recently*. It answers: *"Over the last $N$ days, how much of the total price movement was upward vs downward?"*
+The RSI measures whether buyers or sellers have dominated *recently*. It answers: *"Over the last $N$ sessions, how much of the total price movement was upward vs downward?"*
 
 ---
 
@@ -15,7 +15,7 @@ The result is squeezed into a 0–100 range:
 
 ## 🔢 Mathematical Formulas
 
-1.  **Decompose** daily changes into gains and losses:
+1.  **Decompose** the change from each session to the next into gains and losses:
 
     $$
     U_t = \max(P_t - P_{t-1},\; 0), \qquad
@@ -44,7 +44,7 @@ The normalisation $100 - 100/(1+RS)$ is a monotonically increasing sigmoid that 
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Lookback window for SMMA. |
+| Period ($N$) | `period` | 14 | Lookback window for SMMA, in sessions. |
 | Overbought | `overbought` | 70 | Threshold for overbought zone. |
 | Oversold | `oversold` | 30 | Threshold for oversold zone. |
 

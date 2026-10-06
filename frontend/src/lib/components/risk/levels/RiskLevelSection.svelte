@@ -3,10 +3,12 @@
     import {ChevronDown} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     import type {ResultHealth, ResultReason} from './levelHelpers';
     import type {LevelMetadataRow} from './levelHelpers';
     import {translateErrorCode, translateOrRaw} from './levelHelpers';
+    import {analyticNameKey} from './partialNotice';
 
     /**
      * The frame around one of the four levels.
@@ -40,22 +42,23 @@
          */
         health?: ResultHealth[];
         /**
-         * Why those measurements fell short, in the backend's own words.
+         * Why those measurements fell short, as finished sentences.
          *
          * The companion to `health`, and deliberately separate: the status says a
-         * number is incomplete, the reason says what to do about it. Shown
-         * verbatim — these are backend strings, and routing them through i18n
-         * keys built at runtime is how an unseen value ends up printing its own
-         * key on screen.
+         * number is incomplete, the reason says what to do about it. Each one is
+         * worded by the caller (`resultReasons` with a translator): the backend's
+         * own key and values, or its English sentence when those do not resolve —
+         * never an i18n key built here from a code, which is how an unseen value
+         * ends up printing its own key on screen.
          */
         reasons?: ResultReason[];
         /**
          * The codes of measurements that did not come back **at all**.
          *
          * Distinct from `reasons` in both content and provenance: `reasons` are
-         * the backend's own sentences, shown verbatim; these are identifiers,
-         * worded here. Keeping them apart is what lets `reasons` stay verbatim —
-         * one list the caller may never translate, one it always must.
+         * finished sentences, worded by the caller; these are identifiers, worded
+         * here. Keeping them apart is what keeps each list's contract readable —
+         * one the section shows as it is, one it always words.
          *
          * An empty level renders the same shape whether the analytic is out of
          * scope, short of history, or still in flight, and its single sentence
@@ -83,9 +86,32 @@
          * distinction lives here so no level has to remember it.
          */
         onfirstopen?: () => void;
+        /**
+         * The manual page for this question, relative to `/mkdocs/`, shown as a book
+         * icon on the right edge of the header — beside the toggle when the level is
+         * collapsible, never inside it. Named `docsPath` so the cross-boundary link
+         * check (`dev.py mkdocs check-links`) finds the literal a caller writes and
+         * validates it. Optional and without default: a caller that passes nothing
+         * renders exactly as before (agreed with Risk, F-3b V7).
+         */
+        docsPath?: string;
+        /**
+         * The icon's tooltip and accessible name. Defaults to the level's title. A caller
+         * may pass a short explanation of the card instead — the correlation panel does,
+         * at the developer's request (F-3b V7).
+         */
+        docsLabel?: string;
+        /**
+         * Actions drawn in the header, just before the manual's icon and in the same
+         * row — beside the toggle when the level is collapsible, never inside it, so a
+         * click on an action neither opens nor folds the level. Optional: a caller that
+         * passes nothing renders exactly as before. Added for the column toggle of Asset
+         * Global's loss table (the developer's review of L1°, 30/09; lent by Risk).
+         */
+        actions?: Snippet;
     }
 
-    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], errorCodes = [], metadata = [], children, onfirstopen}: Props = $props();
+    let {title, lead = '', level, collapsible = false, testId, health = [], reasons = [], errorCodes = [], metadata = [], children, onfirstopen, docsPath, docsLabel, actions}: Props = $props();
 
     /**
      * The failure sentences, recomputed on every locale change.
@@ -99,8 +125,7 @@
 
     /** `historical_var` is `historicalVar` in the catalogue; unknown codes stay raw. */
     function analyticName(code: string): string {
-        const camel = code.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-        return $t(`risk.analytics.${camel}.name`, {default: code});
+        return $t(analyticNameKey(code), {default: code});
     }
 
     let manuallyOpen = $state(false);
@@ -121,10 +146,21 @@
 
 <section class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm" data-testid={testId} data-level={level} data-open={open}>
     {#if collapsible}
-        <button type="button" class="w-full flex items-start justify-between gap-3 p-4 text-left" onclick={toggle} data-testid="{testId}-toggle" aria-expanded={open}>
-            {@render header()}
-            <ChevronDown size={18} class="shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" />
-        </button>
+        <!-- The toggle and the manual's icon side by side, never nested: a link inside a
+             `<button>` is invalid HTML, and a click on the icon must open the manual, not fold
+             the level. Tab order follows the reading order: the toggle first, then the icon. -->
+        <div class="flex items-start gap-2 p-4">
+            <button type="button" class="flex min-w-0 flex-1 items-start justify-between gap-3 text-left" onclick={toggle} data-testid="{testId}-toggle" aria-expanded={open}>
+                {@render header()}
+                <ChevronDown size={18} class="shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" />
+            </button>
+            {#if actions}
+                {@render actions()}
+            {/if}
+            {#if docsPath}
+                <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
+            {/if}
+        </div>
     {:else}
         <div class="p-4 pb-0">
             {@render header()}
@@ -227,7 +263,24 @@
 
 {#snippet header()}
     <div class="min-w-0">
-        <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="{testId}-title">{title}</h3>
+        <!-- The title on the left, the manual's icon alone on the right edge of the card (the developer). -->
+        <div class="flex items-start justify-between gap-2">
+            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="{testId}-title">{title}</h3>
+            {#if actions && !collapsible}
+                <!-- The actions and the manual's icon share the right edge; the wrapper exists
+                     only when there are actions, so a level without them is unchanged. -->
+                <div class="flex shrink-0 items-start gap-2">
+                    {@render actions()}
+                    {#if docsPath}
+                        <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
+                    {/if}
+                </div>
+            {:else if docsPath && !collapsible}
+                <!-- A collapsible level shows the icon beside its toggle instead (see the
+                     section's head): inside the toggle it would be a link inside a `<button>`. -->
+                <DocsLink path={docsPath} label={docsLabel ?? title} icon="book" size={16} testId="{testId}-docs" />
+            {/if}
+        </div>
         {#if lead}
             <!-- The sentence precedes the chart: the chart then demonstrates it,
                  instead of leaving the reader to infer the question from a shape. -->

@@ -161,28 +161,41 @@ it ships.
 A **report-set plugin** (non-empty `report_roles`; Danske Bank today) imports several exports of
 one bank as one: the files uploaded together for a broker and recognised by the plugin form a
 **set**, the backend combines them into one **combined file**, and the wizard parses that file.
-The backend half — roles, `/sets/preview`, `/sets/combine`, truth points, the history start (H0)
-and `/gap-fix` — is in
+The user can read a set another way — with another report-set plugin, or some or all of its files
+alone — and the wizard remembers how each file was read at the last analysis
+([How a set is read](#set-read-as)). The backend half — roles, `/sets/preview`, `/sets/combine`
+and the originals they leave out (`exclude_file_ids`), truth points, the history start (H0) and
+`/gap-fix` — is in
 [BRIM Plugin Guide → Multi-report plugins](../../../architecture/patterns/brim_plugin_guide.md#report-sets).
 
 The decisions live in two pure modules, tested without the component
 (`./dev.py test front-transaction tx-unit`); the wizard keeps the reactive state and the server
 calls:
 
-- `lib/utils/transactions/importReportSets.ts` — grouping, selection, analysis units, the card's
+- `lib/utils/transactions/importReportSets.ts` — grouping, how a set is read (the choices the card
+  offers, the memory of the last analysis, the set request), selection, analysis units, the card's
   timeline and the FilesTable badges;
 - `lib/utils/transactions/gapFixModel.ts` — the gap-fix requests and the view of the `gapFix` step.
 
 | Function (`importReportSets.ts`) | Contract |
 |---|---|
-| `setPluginFor(file, plugins, override?)` | The report-set plugin a file joins: the first plugin of its `compatible_plugins` (already in priority order) that declares roles, even when a generic plugin could read the file too; a manual override wins. `null` for a combined file and for a file without `batch_id` |
-| `groupBrokerFiles(brokerId, files, plugins, overrides?)` | `{sets, singles}` of one broker: one `ReportSetGroup` per plugin and `batch_id` (key `set:<broker>:<plugin>:<batch>`), newest first; combined files are in neither list |
+| `setPluginFor(file, plugins, override?)` | The report-set plugin a file joins: the first plugin of its `compatible_plugins` (already in priority order) that declares roles, even when a generic plugin could read the file too. An override wins: a report-set plugin puts the file in that set, any other plugin makes it a single file, and `''` a single file with no plugin (removed from its set); `null` and `undefined` mean no choice. `null` for a combined file, for a file without `batch_id` and for a failed original (`status === 'failed'`), whatever the override: a failed original is never a member, as in `collect_members` on the server (rule A2) |
+| `groupBrokerFiles(brokerId, files, plugins, overrides?)` | `{sets, singles}` of one broker: one `ReportSetGroup` per plugin and `batch_id` (key `set:<broker>:<plugin>:<batch>`), newest first; combined files are in neither list. `overrides` maps a file id to its choice, read by `setPluginFor` (the wizard passes `choicesFor(brokerId)`) |
 | `setSelectionState(set, selectedIds)` | `all`, `some` or `none` |
 | `buildParseUnits(selected, sets)` | The analysis units: the selected files of a set, read with the set's plugin, become **one** `set` unit; every other file is a `file` unit |
 | `setBlocksAnalysis(set, selectedIds, state?)` | `true` when a selected set's preview is still loading, failed, or says `complete: false` |
-| `combinedFileForSet(set, files)` | The newest combined file of the same broker, batch and plugin, or `null` |
+| `combinedFileForSet(set, files)` | The newest combined file of the same broker, batch and plugin whose live originals — its `derived_from` refs not marked `deleted` — are exactly the set's members, or `null`. A combined file built before a member was left out, or before one was added, belongs to another membership; an original deleted after the combine keeps the set analysed (v5.3) |
 | `buildSetTimeline(preview, roleOrder)` | The card's timeline, `null` when no member has a coverage. `rows`: one per role that has bars, in `roleOrder`, with a bar per coverage entry, ordered by start then end and carrying the file's `rows` (`null` when unknown), and the role's `gaps`: walking the bars by start and keeping the furthest end reached `e`, a bar starting after `e + 1` opens a gap from `e + 1` to the eve of its start — never before the first bar or after the last. `history`: from H0 to the later of H0 and `history_end` (an opening correction, dated the eve of H0, may be the history's last transaction), with `count` (`history_count`, else 0); `null` without H0. The span (`start`, `end`) includes the history's end; every bar, gap and history is placed in percentages of it |
-| `setsOfFiles(files, plugins)`, `fileSetBadges(file, ctx)` | The FilesTable badges ([below](#report-set-badges)) |
+| `rememberedChoices(files, plugins)` | The memory of the last analysis: file id → choice, for the originals an analysis spoke about ([below](#set-memory)) |
+| `setPluginChoices(set, plugins)` | **Read as**: the report-set plugins that read every member (in each member's `compatible_plugins`), the set's own first |
+| `readAlonePlugins(file, plugins, brokerDefault?)` | **Read alone with**: the file's single-file plugins — its `compatible_plugins` that declare no roles — in that order, the broker's default first when it is one of them; `[]` for a file only report-set plugins read |
+| `otherSetPlugins(file, setPluginCode, plugins)` | The other report-set plugins that read the file (note C2) |
+| `defaultPluginNote(set, brokerDefault, plugins)` | The broker's default plugin when it is not the set's plugin and reads at least one member (note C1), else `null` |
+| `setRequest(set, files)` | The body of `/sets/preview` and `/sets/combine`: `{broker_id, plugin_code, batch_id, exclude_file_ids}`. `exclude_file_ids` are the originals of the same broker and batch that the set's plugin reads, that are not failed and not members — read alone, or removed from the set. The wizard sends it for the preview and the combine, `FilesTable` for the preview |
+| `setsOfFiles(files, plugins)`, `fileSetBadges(file, ctx)` | The FilesTable badges ([below](#report-set-badges)); `setsOfFiles` groups with the memory, `rememberedChoices` |
+
+The choices are `PluginChoice` objects, `{code, name}`: the name comes from the catalogue, else the
+code.
 
 ### ⬆️ Step `upload`: the missing export
 
@@ -207,27 +220,49 @@ files; when the broker has at least one set, that table is headed **Other files 
 this session are selected and open; older sets stay listed, unselected. Every set's preview runs in
 the background.
 
-- A set is selected or deselected **as a whole** (`toggleSetSelection`), and its members take the
-  set's plugin (`pickBestPlugin` asks `setPluginFor` first). The card offers no per-member plugin
-  choice: the backend's preview and combine collect every file of the batch that the plugin can
-  read anyway.
+- A set is selected or deselected **as a whole** (`toggleSetSelection`, which, when it selects a set
+  whose preview was asked for other members, previews it again), and its members take the set's
+  plugin (`pickBestPlugin` returns the choice in force first, then asks `setPluginFor`). Which
+  plugin reads the set, and which files it holds, is the user's choice: see
+  [How a set is read](#set-read-as).
+- **The single files** are ticked one by one in the broker's `DataTable`: `handleSelectionChange`
+  drops from `selectedFiles` the single files the table no longer ticks — a set's members are not
+  in the table, and keep their selection — and adds a newly ticked file with `pickBestPlugin`. The
+  **Plugin** column shows `—` for a file that is not selected. A selected file gets an
+  `ImportPluginSelect` that holds its `pluginCode` (*Select plugin…*, `importWizard.selectPlugin`,
+  while it is `''`) and offers its `compatible_plugins`, report-set plugins included (the whole
+  catalogue when the list is empty); a choice goes through `updateFilePlugin`. **Parse** needs a
+  plugin on every selected file (`step2CanParse`): until then it is disabled, with the
+  `importWizard.pluginRequired` hint — or the `import-wizard-set-blocks` one, which comes first
+  while a selected set blocks. The table reads the selection only when it mounts
+  (`initialSelectedIds`, read in `untrack`), so it sits in a `{#key}` on its files' ids and
+  remounts whenever a file joins or leaves it: a file arriving from a set keeps its tick, and a
+  click on another row cannot drop it. Without the remount, such a file would be selected with its
+  box clear, and the next click on another box would emit a selection without it. `DataTable`
+  emits `onSelectionChange` only on user actions, never when it mounts, so the remount leaves the
+  wizard's selection as it is.
 - The card (`report-set-card`, with `data-set-key`, `data-batch-id`, `data-plugin-code`,
   `data-set-status` — `loading`, `complete`, `incomplete` or `error` — `data-selected` and
-  `data-analysed`) shows, per role, its localised name (`importWizard.reportSet.roleName.<code>`,
-  else the plugin's `description`), its extensions and `max_history`, then the role's files in a
-  table (below); per missing role, the period and **Upload the missing file**
-  (`report-set-upload-missing`), which uploads with the same broker and `batch_id`, re-reads the
-  broker's files and the set's preview, and selects the new file when the set was selected; the
-  files no role recognises, apart (`report-set-unrecognised`, `data-file-id`); the timeline
-  (below); the preview's warnings (`report-set-warning`, `data-code`); and the history note
-  (`report-set-history`, `data-kind` `first` or `later`). Everything is plain Svelte text: file
+  `data-analysed`, true when `combinedFileForSet` finds a parsed combined file of exactly its
+  members) has the **Read as** select in its header and, in its body, the reading notes (both in
+  [How a set is read](#set-read-as)); then it shows, per role, its localised name
+  (`importWizard.reportSet.roleName.<code>`, else the plugin's `description`), its extensions and
+  `max_history`, then the role's files in a table (below); per missing role, the period and
+  **Upload the missing file** (`report-set-upload-missing`), which uploads with the same broker and
+  `batch_id`, re-reads the broker's files and the preview of the set as it now stands — the set
+  before the upload would name the new file as left out — and selects the new file when the set
+  was selected; the files no role recognises, apart (`report-set-unrecognised`, `data-file-id`);
+  the timeline (below); the preview's warnings (`report-set-warning`, `data-code`); and the history
+  note (`report-set-history`, `data-kind` `first` or `later`). Everything is plain Svelte text: file
   names and plugin notices are data.
 - **The role tables**: each role with files gets a shared `DataTable` inside
   `report-set-role-table` (`data-role`), with body rows `tr[data-row-id=<file_id>]` and the columns
   **File**, **Period** (the earliest start → the latest end of the file's coverage entries) and
   **Rows**. The rows are ordered by that start, then by filename in natural order; files without
-  coverage come last. The row menu (⋮ `row-actions-<file_id>`) holds `context-menu-action-preview`
-  and `context-menu-action-delete`, and a double click previews the file. Sorting, filters,
+  coverage come last. The row menu (⋮ `row-actions-<file_id>`) holds `context-menu-action-preview`,
+  the reading actions `context-menu-action-read-alone-<code>` and
+  `context-menu-action-remove-from-set` ([How a set is read](#set-read-as)), and
+  `context-menu-action-delete`; a double click previews the file. Sorting, filters,
   pagination and row selection are off: the set is chosen whole with `report-set-select`, and its
   files keep their period order.
 - **The timeline** (`report-set-timeline`, built by `buildSetTimeline`): one row per role, where
@@ -239,23 +274,139 @@ the background.
   `data-end` = the history's last day, `data-count`). Each bar, gap and history sits in a
   `Tooltip` — after 200 ms of hover, or at once on a click — with its period and, for a file, its
   role, name and rows (when known); for a gap, that no export of the role covers those days; for
-  the history, how many transactions LibreFolio holds. Next to each row, its overall span (first
-  start → furthest end). The legend `report-set-timeline-legend` has a
-  `report-set-timeline-legend-item` per kind: `data-kind="file"` always, `history` and `gap` only
-  when the timeline has some.
+  the history, how many transactions LibreFolio holds. The legend `report-set-timeline-legend` has
+  a `report-set-timeline-legend-item` per kind: `data-kind="file"` always, `history` and `gap`
+  only when the timeline has some.
+- **The timeline's grid**: three columns — role label | bars | period — shared by every row, so
+  the bars of all rows start and end at the same point. The label column is `fit-content(40%)`:
+  as wide as the longest role name, it wraps only past 40% of the timeline's width, so a long name
+  such as *Securities transactions* is shown whole on desktop. Each label is a
+  `report-set-timeline-label` with `data-role`: the role code, `history` for the LibreFolio row.
+  The bars take `minmax(0,1fr)`, and the period column (`max-content`) holds each row's overall
+  span — first start → furthest end — or the history's. The date header (the span's first and
+  last day) sits in the bar column, and the legend starts there too, spanning the period column.
 - While a selected set blocks (`setBlocksAnalysis`), **Parse** is disabled with the
   `import-wizard-set-blocks` hint, and the card offers **Exclude from the import**
   (`report-set-exclude`), which deselects the set so that the other files can go on.
 - **Parse (n)** counts analysis units: a set counts once.
 
+### 🔀 How a set is read {: #set-read-as }
+
+Detection decides first: a file joins the set of the first report-set plugin that recognises it
+(`setPluginFor` without override). The user can change that from the card. The card only asks: the
+wizard owns the choices.
+
+**The card.** `ReportSetCard` takes five more props: `plugins` (the catalogue),
+`brokerDefaultPlugin` (the broker's `default_import_plugin`, or `null`), `onReadAs(code | null)`,
+`onReadAlone(fileId, code)` and `onRemoveFromSet(fileId)`.
+
+- **Read as** is LibreFolio's own select — a `compact` `SimpleSelect`, not the browser's native
+  `<select>` — in the header, so a folded card shows it too: `report-set-read-as` wraps it, its
+  trigger is `report-set-read-as-button` and its list `report-set-read-as-dropdown`. Its value is
+  the set's plugin; its options are `setPluginChoices(set, plugins)`, each
+  `report-set-read-as-option-<plugin_code>` — the one detection picks for the set's first member
+  labelled *(detected)* — then *Read the files one by one*,
+  `report-set-read-as-option-one-by-one`, whose value is the sentinel `__one_by_one__`
+  (`ONE_BY_ONE`), a value no plugin code can take: to the select, `''` — its default value — means
+  «nothing chosen». A choice calls `onReadAs(code)`, or `onReadAs(null)` for the sentinel.
+- **The row menu** of the role tables adds, after Preview, one action `read-alone-<code>` per
+  plugin that `readAlonePlugins` gives for at least one member (testid
+  `context-menu-action-read-alone-<code>`, label *Read alone with ‹plugin›*), visible only on the
+  rows of the files that plugin reads, which calls `onReadAlone(fileId, code)`; then
+  `remove-from-set` (`context-menu-action-remove-from-set`, *Remove from the set*), which calls
+  `onRemoveFromSet(fileId)`; then Delete.
+- **The notes**, in the body of an open card, as plain text: `report-set-default-note`
+  (`data-default-plugin`) when `defaultPluginNote()` is not `null` — the set is read as the set,
+  not with the broker's default plugin, and *Read as* or a file's ⋮ menu changes that (C1); one
+  `report-set-also-recognised` per member for which `otherSetPlugins` finds plugins
+  (`data-file-id`, `data-plugins`: their codes, comma-separated), naming them (C2).
+
+The labels are
+`importWizard.reportSet.{readAs, readAsOneByOne, detected, readAloneWith, removeFromSet, defaultPluginNote, alsoRecognisedBy}`.
+
+**The wizard.** This session's choices live in `filePluginOverrides` (file id → choice), which
+`resetState()` clears when the wizard closes:
+
+- `readSetAs(set, code)` changes how the members are read, never whether they are selected: it
+  records a choice for every member, and `selectedFiles` keeps the same files, each selected member
+  with its new plugin. With a report-set plugin, every member's choice is that plugin, so the set
+  moves to that plugin's key. With `null`, each member's choice is its first `readAlonePlugins`
+  entry — the broker's default when it reads the file — or `''` when it has none: the members
+  leave the set as single files, ticked or not as they were. A selected member with `''` has no
+  plugin — its `ImportPluginSelect` shows *Select plugin…* and still offers its
+  `compatible_plugins`, the set's plugin included — and **Parse** waits until it has one
+  (`step2CanParse`).
+- `readFileAlone(fileId, code)`: the file gets `code`, and only its plugin changes — selected, it
+  stays selected with `code`; unselected, it stays unselected, and `pickBestPlugin` gives it `code`
+  when it is ticked.
+- `removeFileFromSet(fileId)`: the file gets `''` — out of its set, with no plugin, waiting for a
+  new choice — and again only its plugin changes: selected, it stays selected with
+  `pluginCode: ''`, like a member that `readSetAs(set, null)` leaves with no plugin
+  (*Select plugin…*, its `compatible_plugins` offered, the set's plugin included; **Parse** waits);
+  unselected, it stays unselected, and `pickBestPlugin` gives it `''` when it is ticked. No
+  single-file plugin is picked for it, even one that reads the file: taking a file out of a set
+  says «not with this plugin», not «not at all», and the next plugin is the user's choice.
+- None of these commands changes the selection: `readSetAs`, `readFileAlone` and
+  `removeFileFromSet`, like a plugin choice (`updateFilePlugin`), map `selectedFiles`, changing the
+  `pluginCode` of the files they target, and never add or drop a file. The same rule holds for
+  every report-set plugin
+  ([BRIM Plugin Guide → The set and its API](../../../architecture/patterns/brim_plugin_guide.md#the-set-and-its-api)).
+- **Back into the set**: a file out of its set is a single file, in the broker's table (headed
+  **Other files of this broker** while the broker has a set), selected or not as it was. Selected,
+  it has its `ImportPluginSelect`; unselected — a file of a set that was not selected, say — its
+  plugin column shows `—` until the user ticks it. Choosing the set's plugin in the select goes
+  through `updateFilePlugin`, and the file is a member again. After `readSetAs(set, null)` the set
+  is re-formed this way, file by file: the first member given the set's plugin brings back the set
+  — same broker, plugin and batch, so the same key — and its card, holding that file only and
+  incomplete while a role it needs is out; each next member joins it.
+
+`choicesFor(brokerId)` lays this session's choices over the memory of the last analysis
+(`rememberedByBroker`: `rememberedChoices` per broker, [below](#set-memory)). The grouping
+(`brokerSetGroups`, through `groupBrokerFiles`) and `pickBestPlugin` read it: before any detection,
+`pickBestPlugin` gives a chosen set's plugin, a chosen single-file plugin, or `''`.
+
+**The previews follow the members.** A preview entry (`SetPreviewEntry`) keeps, beside the set's
+key, the members it was asked for (`memberSignature`: the sorted file ids), and `previewSet` sends
+`setRequest(set, brokerFiles)`, so the server reads the same membership. After each choice, and
+after a member is deleted, `refreshChangedSetPreviews()` re-reads the previews whose members no
+longer match; selecting a set with `toggleSetSelection` does the same for that set. A file the set
+needs, once taken out, makes the set incomplete, and it blocks **Parse** like any incomplete set.
+`initParseResults()` keeps each set unit's `excludeFileIds` (`ParsedSetInfo`), which the combine
+sends ([Step `analyze`](#set-analysis)).
+
+### 💾 The memory of the last analysis {: #set-memory }
+
+No field records how a file was read: `rememberedChoices(files, plugins)` reads it back from what
+the server already saves at analysis, and nothing is remembered while files are only uploaded. For
+each original with a `batch_id`, three kinds of events count. The combined files that count are
+those of the same broker and batch with `status === 'parsed'`, a report-set `parsed_plugin_code`
+and a readable `processed_at`.
+
+| Event | When | Choice | At |
+|---|---|---|---|
+| E1, member | a counted combined file lists the file among its live `derived_from` refs (not `deleted`) | its `parsed_plugin_code` | the combined file's `processed_at` |
+| E2, alone | the file itself has `status === 'parsed'` and a single-file `parsed_plugin_code` | that plugin | the file's `processed_at` |
+| E3, left out | a counted combined file does not list it, although its plugin is in the file's `compatible_plugins` and the file's `uploaded_at` is not later than the combined file's: the file was there when the combined file was built | `''` | the combined file's `processed_at` |
+
+The newest E1 wins when it is newer than every E2 and E3. Otherwise an E2 at least as new as the
+newest E1 gives its plugin: a lone parse and a set analysis that left the file out agree, both put
+it out of the set. Otherwise an E3 gives `''`. With no event the file has no entry, and detection
+decides.
+
+A reopened wizard therefore shows a set with the files it was analysed with and its plugin, a file
+analysed alone with its plugin, and a file left out of an analysed set as a single file with no
+plugin. The user changes that with the same commands, and the next analysis becomes the new memory.
+`setsOfFiles` applies the memory too, so the FilesTable badges follow it
+([below](#report-set-badges)).
+
 ### 🧠 Step `analyze`: combine, then parse {: #set-analysis }
 
 `initParseResults()` turns each unit into one row. A set's row (`ParsedFileResult.set`) is
 labelled *Set of ‹date› · combined (N files)*, with the member names below it (`parse-row-set`).
-`parseResultInPlace()` first calls `POST /sets/combine` — the backend reuses an identical combined
-file — then parses the combined file with the set's plugin: the row's `fileId` starts as the set
-key and becomes the combined file's id. A combine or parse error lands on that row only; the other
-rows go on.
+`parseResultInPlace()` first calls `POST /sets/combine` with the unit's `excludeFileIds` — the
+backend reuses a combined file of exactly these members — then parses the combined file with the
+set's plugin: the row's `fileId` starts as the set key and becomes the combined file's id. A
+combine or parse error lands on that row only; the other rows go on.
 
 `ParseDetailModal` adds, for a set, the **Matching securities ↔ cash** section
 (`parse-detail-pairing`, whose `data-pair` … `data-excluded` attributes keep the counts of
@@ -385,16 +536,18 @@ next **Import N transactions** computes them again on the current selection.
 pure:
 
 - `setsOfFiles(files, plugins)` maps each member to its set, running `groupBrokerFiles` broker by
-  broker (a file without a broker belongs to none);
+  broker with that broker's `rememberedChoices` as overrides (a file without a broker belongs to
+  none): a file left out of an analysed set, or analysed alone, gets no `set` badge;
 - `fileSetBadges(file, {sets, files, previews})` returns, in a fixed order, `combined` (with the
   names in `derived_from` and the deleted ones), `stale` (`combine_is_stale`), `usedInCombined`
   (a non-empty `combined_into`), `set` (with the set's date) and `incomplete` (with the missing
   roles). `incomplete` needs the set's preview ready and saying `complete: false`: it never shows
-  while the preview loads, after it failed, or when the set has an up-to-date combined file.
+  while the preview loads, after it failed, or when the set has an up-to-date combined file
+  (`combinedFileForSet`: of exactly its members).
 
 The plugin catalogue is read once (the cache shared with `ImportPluginSelect`), and each set's
-preview is requested once per list of members; a failed request only leaves the `incomplete` badge
-out.
+preview is requested once per list of members, with `setRequest`, so the server leaves out the same
+originals as the memory; a failed request only leaves the `incomplete` badge out.
 
 ---
 

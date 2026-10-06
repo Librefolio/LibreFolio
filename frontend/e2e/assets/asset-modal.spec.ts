@@ -194,9 +194,20 @@ test.describe('Asset Modal', () => {
         const form = page.getByTestId('asset-modal-form');
         await expect(form).toBeVisible();
 
-        // Form should have overflow-y-auto (scrollable when content exceeds max-height)
-        const overflowY = await form.evaluate((el) => getComputedStyle(el).overflowY);
-        expect(overflowY).toBe('auto');
+        // The form scrolls in a box capped at 70vh, inside the modal. The box is looked up — the first scroll container
+        // from the form up, the form included — not assumed: K step 17 item 15 moved it off the fieldset onto a wrapper.
+        const scrollBox = await form.evaluate((el) => {
+            let box: Element | null = el;
+            while (box && !['auto', 'scroll'].includes(getComputedStyle(box).overflowY)) box = box.parentElement;
+            if (!box) return null;
+            const modal = el.closest('[data-testid="asset-modal"]');
+            const testId = box.getAttribute('data-testid');
+            return {element: `<${box.tagName.toLowerCase()}${testId ? ` data-testid="${testId}"` : ''}>`, insideModal: modal !== null && modal !== box && modal.contains(box), maxHeight: getComputedStyle(box).maxHeight, innerHeight: window.innerHeight};
+        });
+        if (!scrollBox) throw new Error('no scroll container from the form up, the form included: the form cannot scroll');
+        expect(scrollBox.insideModal, `the form's scroll box ${scrollBox.element} lies inside [data-testid="asset-modal"]`).toBe(true);
+        const capPx = 0.7 * scrollBox.innerHeight;
+        expect(Math.abs(parseFloat(scrollBox.maxHeight) - capPx), `the form's scroll box ${scrollBox.element} is capped at 70vh: max-height ${scrollBox.maxHeight}, 0.7 × innerHeight ${scrollBox.innerHeight} = ${capPx.toFixed(1)}px`).toBeLessThanOrEqual(1);
 
         await page.getByTestId('asset-modal-cancel').click();
     });

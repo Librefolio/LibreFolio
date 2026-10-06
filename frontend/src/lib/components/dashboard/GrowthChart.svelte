@@ -32,6 +32,8 @@
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
+    import {buildCalendarLadder, countCalendarBuckets, type CalendarPeriod, type LadderRung} from './growthLadderBuckets';
+    import {todayIso} from '$lib/utils/dateOnly';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
     import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution, computeDensity, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
@@ -104,30 +106,40 @@
     }
 
     const restoredMode = readStoredMode();
+    const restoredSubmode = readStoredSubmode();
     let viewMode: GrowthMode = $state(restoredMode);
     // pnlSubmode = line|candles|income (plan §5.1). All three submodes are live and the
     // picker is rendered (data-testid growth-pnl-submode-*); 'candles' is where the
     // synthetic OHLC series is shown.
-    let pnlSubmode: PnlSubmode = $state(readStoredSubmode());
+    let pnlSubmode: PnlSubmode = $state(restoredSubmode);
     /** A restored % view still has to be checked against the loaded history (see below). */
     let restoredPctUnchecked = restoredMode === 'pct';
 
+    function isIncomeView(): boolean {
+        return viewMode === 'pnl' && pnlSubmode === 'income';
+    }
+
     function selectMode(mode: GrowthMode) {
+        const wasIncome = isIncomeView();
         viewMode = mode;
         restoredPctUnchecked = false;
         setUserStorage(MODE_STORAGE_KEY, mode);
+        if (!wasIncome && isIncomeView()) incomeOpeningPending = true;
     }
 
     function selectSubmode(submode: PnlSubmode) {
+        const wasIncome = isIncomeView();
         pnlSubmode = submode;
         setUserStorage(SUBMODE_STORAGE_KEY, submode);
+        if (!wasIncome && isIncomeView()) incomeOpeningPending = true;
     }
     // Named for the zoom it drives, NOT for a submode: it began life income-only, but
     // the mechanism was always the shared visible range. Deliberately "zoom" and not
     // "window" alone, to keep it distinct from the candle-WIDTH ladder (DBT-7), which
     // is a different control answering a different question.
     /**
-     * Candle-width ladder — how many DAYS one OHLC body covers.
+     * Candle-width ladder — which calendar period one OHLC body, or one group of Income bars,
+     * covers.
      *
      * This is NOT a time window: the x axis always shows the whole available history and
      * only the number of bodies changes. It was previously implemented as a visible-range
@@ -135,12 +147,12 @@
      * established vocabulary; the developer's original wording was "non rappresentano il
      * tempo da mostrare, ma la larghezza in giorni, che una candela copre".
      *
-     * Widths are plain day counts, not calendar buckets: `3D`, `2W`, `3M` and `6M` have no
-     * calendar analogue, so treating `1W` as an ISO week while `2W` is fourteen days would
-     * make the ladder incoherent halfway up.
+     * Each rung is a calendar period (developer's decision of 06/10/2026, replacing D16-ii's
+     * plain day counts): `1W` runs Monday to Sunday, `1M` from the 1st, `3M`, `6M` and `1Y` are
+     * quarters, halves and years, and `3D` and `2W` are fixed blocks whose edges never move.
+     * The periods are `growthLadderBuckets`'s.
      */
-    type CandleWidth = '1D' | '3D' | '1W' | '2W' | '1M' | '3M' | '6M' | '1Y';
-    const CANDLE_WIDTH_DAYS: Record<CandleWidth, number> = {'1D': 1, '3D': 3, '1W': 7, '2W': 14, '1M': 30, '3M': 90, '6M': 180, '1Y': 365};
+    type CandleWidth = LadderRung;
     const CANDLE_WIDTH_ORDER: CandleWidth[] = ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y'];
     /**
      * Rung captions are localized: the unit letter is NOT part of the key.
@@ -182,6 +194,13 @@
     /** Income bars start one rung up: a single day of personal cash flow is almost always empty. */
     const INCOME_MIN_WIDTH: CandleWidth = '1W';
     /**
+     * The rung Income opens on, on every entry into it (developer, 05/10/2026: «facciamo che
+     * il bucket di default è 1M»): a month of personal cash flow reads, a week is mostly
+     * empty. When the geometry cannot draw it, Income opens on the offered rung nearest to
+     * it. Candles keep their own opening, the finest rung they can draw.
+     */
+    const INCOME_OPENING_WIDTH: CandleWidth = '1M';
+    /**
      * Narrowest candle body the ladder will still OFFER.
      *
      * Deliberately NOT `CANDLE_MIN_SLOT_PX`, and the difference is the point. That
@@ -204,27 +223,45 @@
      *
      * The gaps are the ones the Income series declare, so the offer and the drawing cannot
      * disagree: bar = slot × (1 − category gap) / (columns + (columns − 1) × bar gap).
+     *
+     * Two gaps, deliberately unequal (developer's review of 06/10/2026: «ok fare le barre
+     * larghe, ma se sono tutte attaccate non si capisce nulla»): 30 % of the slot between two
+     * buckets, a visible margin, and 10 % of a bar between the three columns of one bucket, so
+     * a bucket still reads as one group.
      */
     const INCOME_COLUMNS = 3;
     const INCOME_BAR_GAP = 0.1;
-    const INCOME_CATEGORY_GAP = 0.1;
+    const INCOME_CATEGORY_GAP = 0.3;
     const INCOME_BAR_SHARE = (1 - INCOME_CATEGORY_GAP) / (INCOME_COLUMNS + (INCOME_COLUMNS - 1) * INCOME_BAR_GAP);
-    /** Narrowest Income bar the ladder will still offer: below it a bar is a hairline, and a bucket no longer reads as three columns. */
-    const INCOME_MIN_BAR_PX = 2;
+    /**
+     * Narrowest Income bar the ladder will still offer — a bucket of 20.6 px with the gaps above.
+     *
+     * Set by the developer's target of 06/10/2026: at nine months on a desktop, 2W is the
+     * finest width («a 9 mesi, 2S mi paiono strette ma sono più accettabili»). Measured plots:
+     * 484, 573 and 734 px at 1280, 1440 and 1728 px windows, 279 px on a 390 px phone; at nine
+     * months 1W makes 40 buckets there (12–18 px each), 2W 21 (23–35 px).
+     */
+    const INCOME_MIN_BAR_PX = 4.5;
     /** Below three bodies a "chart" is a couple of rectangles — except at 1D, which is exempt. */
     const LADDER_MIN_BODIES = 3;
     /**
-     * Opacity of the ladder's partial first bucket (candle or Income bars).
+     * Opacity of a ladder bucket that is not comparable with the others (candle or Income bars).
      *
-     * The ladder closes its last bucket on the latest day, so the days left over sit in
-     * the FIRST bucket, which then spans fewer days than its rung. Drawn like a whole one,
-     * its sums would read as a weak period and its candle as a narrow range, when it is
-     * simply a shorter one. Fading it says "not comparable"; the tooltip says by how much.
+     * The buckets are calendar periods, and the series cuts the ones at its ends. A period that
+     * is over and that the series covers only in part — the month the range starts in, or the
+     * one it ends in when the range ends in the past — would read as a weak period, or its
+     * candle as a narrow range, when it is simply a shorter one. Fading it says "not
+     * comparable"; the tooltip says by how much. The period that has not ended yet is not
+     * faded: its missing days are the future (developer, 06/10/2026: «essendo il futuro non
+     * ancora scritto, lo consideriamo comunque pieno»).
      */
     const PARTIAL_BUCKET_OPACITY = 0.5;
     let candleWidth: CandleWidth = $state('1W');
     /** True until the ladder has picked its own opening rung; see reconcileCandleWidth(). */
     let candleWidthPending = $state(true);
+    /** Set on every entry into Income — mounting on a restored Income, or switching into it —
+     *  and consumed by reconcileCandleWidth(), so a redraw inside Income keeps the user's pick. */
+    let incomeOpeningPending = restoredMode === 'pnl' && restoredSubmode === 'income';
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -323,7 +360,7 @@
         bucketStart: string;
         bucketEnd: string;
         resolution: ChartResolution;
-        /** Only on the ladder's partial first bucket; see PARTIAL_BUCKET_OPACITY. */
+        /** Only on a ladder bucket that is not comparable; see PARTIAL_BUCKET_OPACITY. */
         itemStyle?: {opacity: number};
     };
 
@@ -335,9 +372,15 @@
         bucketStart: string;
         bucketEnd: string;
         resolution: ChartResolution;
-        /** Set only on a ladder bucket that covers fewer days than its rung: the first
-         *  one, because the ladder is anchored at the last day of the series. */
+        /** Only on a ladder bucket: the calendar period it stands for. `bucketStart`/`bucketEnd`
+         *  are the days of it the series covers, so the closing date stays a day with data. */
+        period?: CalendarPeriod;
+        /** Only on a ladder bucket that is over and that the series covers in part: faded,
+         *  and its tooltip says how many of the period's days it holds. */
         partial?: {days: number; total: number};
+        /** Only on the ladder bucket that has not ended yet, wider than a day: drawn whole, and
+         *  its tooltip says how far it has got. */
+        current?: {days: number; total: number};
     }
 
     interface AggregatedMetric {
@@ -428,7 +471,9 @@
         if (dayCount === 0 || plotPx <= 0) return CANDLE_WIDTH_ORDER.slice(floor);
 
         const offered = CANDLE_WIDTH_ORDER.slice(floor).filter((width) => {
-            const bodies = Math.ceil(dayCount / CANDLE_WIDTH_DAYS[width]);
+            // The buckets the ladder will actually draw: calendar periods, so the offer and the
+            // drawing count the same thing.
+            const bodies = countCalendarBuckets(dates, width);
             const density = computeDensity(bodies, plotPx);
             if (!(density > 0)) return false;
             const slotPx = 1 / density;
@@ -442,8 +487,12 @@
     });
 
     const resolutionCache = new Map<ChartResolution, {inputs: AggregationInputs; data: AggregatedResolutionData}>();
-    /** Same identity-keyed memo as resolutionCache, for the ladder branch. */
-    const ladderCache = new Map<CandleWidth, {inputs: AggregationInputs; data: AggregatedResolutionData}>();
+    /**
+     * Same identity-keyed memo as resolutionCache, for the ladder branch — keyed on the day as
+     * well, because which period is still in progress depends on it: a page left open past
+     * midnight must not keep yesterday's current period.
+     */
+    const ladderCache = new Map<CandleWidth, {inputs: AggregationInputs; today: string; data: AggregatedResolutionData}>();
     let activeChartData: AggregatedResolutionData | null = null;
     // IMPORTANT: 'series' must NOT be in replaceMerge here. updateChartData() below sends only
     // {name, data} per series (a deliberate partial update for smooth transitions, unchanged
@@ -777,43 +826,43 @@
     }
 
     /**
-     * Ladder buckets: consecutive runs of `spanDays` calendar days, anchored at the LAST
-     * date of the series, so every bucket but the first is whole and the most recent one
-     * always closes on the latest day (D16-ii). The first bucket keeps whatever is left
-     * over and says so through `partial`.
+     * Ladder buckets: one per calendar period of `rung` the series touches
+     * (`growthLadderBuckets`; developer's decision of 06/10/2026, which replaces D16-ii's
+     * day counts anchored at the last day). The closing date of each bucket — its category
+     * value — is the last day of it the series holds, so the axis planner's contract and the
+     * candles' "value at" date stay days with data; the calendar edges travel in `period`.
+     *
+     * A period that is over and that the series covers in part is marked `partial` (faded);
+     * the one that has not ended yet is `current` (whole). Both carry the period's covered
+     * days and its length for the tooltip.
      *
      * Kept separate from `buildBucketInfos` on purpose. That one delegates to the shared
      * calendar aggregators (`aggregateLineSeries` and friends), which can only express ISO
-     * weeks and calendar months — there is no way to ask them for a three-day or
-     * fourteen-day bucket. The reduction below is therefore local, but the OUTPUT is the
-     * same `AggregatedResolutionData` the rest of the component already consumes, so this
-     * is one pipeline with two bucket builders, not a second pipeline.
-     *
-     * The history carries one point per calendar day, so a run of `spanDays` points is a
-     * run of `spanDays` days.
+     * weeks and calendar months — there is no way to ask them for a three-day block, a pair
+     * of weeks or a quarter. The OUTPUT is the same `AggregatedResolutionData` the rest of the
+     * component already consumes, so this is one pipeline with two bucket builders, not a
+     * second pipeline.
      *
      * `resolution` is carried for the tooltip only: a one-day bucket prints a date, any
-     * wider bucket prints its range. The calendar-month tooltip form is deliberately not
-     * reachable from here, because `1M` on this ladder is thirty days, not a month.
+     * wider bucket prints its range.
      */
-    function buildLadderBuckets(sourceDates: string[], spanDays: number): LadderBucket[] {
-        const out: LadderBucket[] = [];
-        const count = Math.ceil(sourceDates.length / spanDays);
-        for (let i = 0; i < count; i++) {
-            const end = sourceDates.length - 1 - spanDays * (count - 1 - i);
-            const start = Math.max(0, end - spanDays + 1);
-            const days = end - start + 1;
-            out.push({
-                date: sourceDates[end],
-                bucketStart: sourceDates[start],
-                bucketEnd: sourceDates[end],
-                resolution: spanDays === 1 ? 'daily' : 'weekly',
-                ...(days < spanDays ? {partial: {days, total: spanDays}} : {}),
-                startIndex: start,
-                endIndex: end,
-            });
-        }
-        return out;
+    function buildLadderBuckets(sourceDates: string[], rung: CandleWidth, today: string): LadderBucket[] {
+        return buildCalendarLadder(sourceDates, rung, today).map((bucket) => {
+            const days = {days: bucket.coveredDays, total: bucket.periodDays};
+            // A one-day period has nothing to report on how far it has got (developer, 06/10/2026:
+            // no «In progress: 1 of 1 days» on today's 1D candle), so it carries no current mark.
+            const current = bucket.current && bucket.periodDays > 1;
+            return {
+                date: sourceDates[bucket.endIndex],
+                bucketStart: sourceDates[bucket.startIndex],
+                bucketEnd: sourceDates[bucket.endIndex],
+                resolution: rung === '1D' ? 'daily' : 'weekly',
+                period: bucket.period,
+                ...(bucket.partial ? {partial: days} : current ? {current: days} : {}),
+                startIndex: bucket.startIndex,
+                endIndex: bucket.endIndex,
+            };
+        });
     }
 
     /** End-of-period reduction: the last value that actually exists inside the bucket. */
@@ -1065,10 +1114,11 @@
      */
     function getLadderData(width: CandleWidth): AggregatedResolutionData {
         const inputs = aggregationInputs;
+        const today = todayIso();
         const cached = ladderCache.get(width);
-        if (cached && cached.inputs === inputs) return cached.data;
+        if (cached && cached.inputs === inputs && cached.today === today) return cached.data;
 
-        const buckets = buildLadderBuckets(inputs.dates, CANDLE_WIDTH_DAYS[width]);
+        const buckets = buildLadderBuckets(inputs.dates, width, today);
         const empty: AggregatedMetric = {values: [], points: []};
         const entry: AggregatedResolutionData = {
             resolution: buckets[0]?.resolution ?? 'daily',
@@ -1088,7 +1138,7 @@
             },
         };
 
-        ladderCache.set(width, {inputs, data: entry});
+        ladderCache.set(width, {inputs, today, data: entry});
         return entry;
     }
 
@@ -1237,6 +1287,15 @@
         const offered = availableCandleWidths;
         if (offered.length === 0) return;
 
+        // Income opens on its own rung on every entry (INCOME_OPENING_WIDTH), or on the
+        // offered rung nearest to it. The width is then shared with Candles, as before.
+        if (incomeOpeningPending && isIncomeView()) {
+            candleWidth = nearestOfferedWidth(offered, INCOME_OPENING_WIDTH);
+            incomeOpeningPending = false;
+            candleWidthPending = false;
+            return;
+        }
+
         // Opening pick: the LOWEST drawable rung — the finest detail the geometry can
         // honour. Same convention the line charts already use for their initial
         // resolution, so the two controls do not teach the user two different habits.
@@ -1252,6 +1311,14 @@
         candleWidth = next ?? offered[offered.length - 1];
     }
 
+    /** The offered rung nearest to `target`: `target` itself when offered. The offer is contiguous, so this is a clamp. */
+    function nearestOfferedWidth(offered: readonly CandleWidth[], target: CandleWidth): CandleWidth {
+        if (offered.includes(target)) return target;
+        const at = CANDLE_WIDTH_ORDER.indexOf(target);
+        const distance = (width: CandleWidth) => Math.abs(CANDLE_WIDTH_ORDER.indexOf(width) - at);
+        return offered.reduce((best, width) => (distance(width) < distance(best) ? width : best));
+    }
+
     function formatTooltipMonth(date: string): string {
         const activeLocale = $locale ?? 'en';
         const [year, month, day] = date.split('-').map(Number);
@@ -1262,29 +1329,38 @@
         }).format(new Date(Date.UTC(year, month - 1, day)));
     }
 
-    /** "Partial: 5 of 7 days" under the header of the ladder's partial first bucket; empty on any other bucket.
-     *  The translation is data inside tooltip HTML, so it is escaped and reads as written. */
+    /**
+     * The line under a ladder bucket's header that says how much of its period it holds:
+     * "Partial: 26 of 31 days" on a period that is over and that the series covers in part,
+     * "In progress: 6 of 31 days" on the one that has not ended yet; empty on a whole period.
+     * The translation is data inside tooltip HTML, so it is escaped and reads as written. Two
+     * literal calls, never a key chosen at runtime: the project's i18n sweep only sees literals.
+     */
     function buildPartialBucketLine(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
-        if (!bucket.partial) return '';
-        const partialText = $_('chart.tooltip.partialBucket', {values: {days: bucket.partial.days, total: bucket.partial.total}});
-        return `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml(partialText)}</div>`;
+        let text: string;
+        if (bucket.partial) text = $_('chart.tooltip.partialBucket', {values: {days: bucket.partial.days, total: bucket.partial.total}});
+        else if (bucket.current) text = $_('chart.tooltip.currentBucket', {values: {days: bucket.current.days, total: bucket.current.total}});
+        else return '';
+        return `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml(text)}</div>`;
     }
 
     function buildTooltipBucketHeader(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
         const partialHtml = buildPartialBucketLine(bucket, theme);
-        // A one-day bucket has nothing to span, so it keeps the plain date — even when it
-        // is the leftover first bucket of a wider rung, which still says it is partial.
-        if (bucket.bucketStart === bucket.bucketEnd) {
+        // A one-day bucket has nothing to span, so it keeps the plain date. A ladder bucket is
+        // judged by its period: a week the series covers for one day still prints its week.
+        const span = bucket.period ?? {start: bucket.bucketStart, end: bucket.bucketEnd};
+        if (span.start === span.end) {
             return `${buildTooltipHeader(bucket.bucketEnd, theme.textColor)}${partialHtml}`;
         }
 
         if (ladderActive) {
-            // "3D  2026-09-15 → 2026-09-17". The old form said "Week" for every bucket
-            // wider than a day, which was simply false on a three-day or fourteen-day
-            // rung — the label named a calendar unit the ladder does not use.
-            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${bucket.bucketStart} → ${bucket.bucketEnd}`, theme.textColor)}${partialHtml}`;
+            // "1M  2026-10-01 → 2026-10-31": the calendar period the bucket stands for. The
+            // old form said "Week" for every bucket wider than a day, which was simply false
+            // on a three-day or fourteen-day rung.
+            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${span.start} → ${span.end}`, theme.textColor)}${partialHtml}`;
             // "Value at <date>" is true of a closing level and false of a sum, so the
-            // Income submode — whose bars are sums over the bucket — does not claim it.
+            // Income submode — whose bars are sums over the bucket — does not claim it. The
+            // date is the last day with data, never a day of the period still to come.
             if (pnlSubmode === 'income') return headerHtml;
             return `${headerHtml}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
         }
@@ -2002,7 +2078,10 @@
         lastLadderPlanKey = ladderPlan?.key ?? null;
         const ladderAxis = ladderPlan ? ladderAxisOption(ladderPlan) : null;
 
-        const yAxisFormatter =
+        // Income draws bars, which stand on zero; every other view draws a line or candles.
+        const incomeBars = viewMode === 'pnl' && pnlSubmode === 'income';
+
+        const formatTick =
             viewMode === 'pct'
                 ? (v: number) => `${v.toFixed(1)}%`
                 : (v: number) => {
@@ -2016,8 +2095,12 @@
                       const scaled = v === 0 ? 0 : v / scale;
                       return maskFormattedNumber(`${scaled.toLocaleString(undefined, {maximumSignificantDigits: 15})}${suffix}`);
                   };
-        // Income draws bars, which stand on zero; every other view draws a line or candles.
-        const incomeBars = viewMode === 'pnl' && pnlSubmode === 'income';
+        // Tick 0 is the computed lower edge, which D25 hides with `showMinLabel: false`. But
+        // `containLabel` still measures the hidden label, and D18 prints that raw edge in full
+        // (`55,588k`), so the plot moved right by the width of a label nobody sees (developer
+        // review, 05/10/2026: a left gap in Abs and P&L). Blank text measures nothing. Income
+        // keeps its zero label: its axis starts at 0, which bars need to stand on.
+        const yAxisFormatter = (v: number, index?: number) => (!incomeBars && index === 0 ? '' : formatTick(v));
 
         /**
          * Colour for a signed amount: green up, red down, **neutral at zero**.

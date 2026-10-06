@@ -1577,3 +1577,1046 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 - Dopo il checkpoint della validazione: un'analisi senza codice, da discutere col developer nella chat di L.
 - Poi due righe di decisione al coordinatore, per l'ordine delle integrazioni e per il CHANGELOG.
 - La bozza dell'analisi è nella cartella di sessione, fuori dal repo.
+
+> **Commit della validazione** (developer, 2026-10-05): `adf3b8cd7` «docs(import): Danske Bank is alpha» e `8c6853281` journal.
+> - **Danske è integrato**: `dev_release2` è avanzato a `8c6853281`, poi il commit `c8daff33f` del coordinatore con le righe del CHANGELOG. Il ramo di L resta un commit indietro, ed è normale.
+> - Il D28 (`#rolling-return` in it/fr/es) è il rosso accettato, confermato dal coordinatore.
+
+## 14. Passo G — la scelta del plugin di un set (2026-10-05)
+
+**Base**: `8c6853281`, corsia 6156. **Via del coordinatore**: «Via al passo G sul tuo ramo… prima il piano nel journal… poi i test rossi col test-author; poi l'implementazione e il checkpoint. G deve entrare prima del taglio della release.»
+
+> **⚠️ Fuori pista**: prima di cominciare ho lanciato per riflesso un `git fetch -q origin`. Aggiorna solo i riferimenti remoti, non il ramo né i file, ma non è un comando di sola lettura, quindi non va fatto: non lo ripeto.
+
+### G.0 Decisioni del developer (testuali, nella chat di L, 2026-10-05)
+
+- **La richiesta** (dal coordinatore): che nel caso del set il plugin non lo scelga l'utente sembra al developer «abbastanza grave».
+- **Il perimetro**: «A + B + C: tutto, con D dietro (Consigliato)». Le opzioni erano disegnate nei bozzetti mostrati al developer, salvati nella cartella di sessione:
+  - A = «Letto come» sulla card;
+  - B = dal menu di un file, «Leggi da solo con…» oppure «Togli dal set»;
+  - C = l'avviso;
+  - D = `exclude_file_ids`.
+- **I tempi**: «Dopo l'integrazione di Danske, ma prima del taglio della release (Consigliato)».
+- **La memoria**: «la scelta se è un set o meno, è nella fase di import, quindi finchè siamo solo in "upload" ci sta non salvare nulla, quando poi si passa al "parsed" il gioco è fatto e mi aspetto che il set sia salvato e ricordato, posso accettare che venga modificato in seguito, ma la memoria dovrebbe rimanere».
+  - Il bozzetto della memoria, «Sì, è questo il comportamento (Consigliato)»: dopo l'analisi il set ricorda i suoi file e il suo plugin, e un file analizzato da solo ricorda il suo plugin. Riaprendo, la memoria conta più del rilevamento; si cambia con gli stessi comandi, e la nuova scelta diventa la memoria alla prossima analisi.
+  - Non serve un campo nuovo: la memoria si ricava da quello che il server salva già all'analisi.
+
+### G.1 Stato verificato (2026-10-05)
+
+- `setPluginFor(file, plugins, override?)` sa già usare un override:
+  - verso un plugin a set, il file entra in quel set;
+  - verso un altro plugin, diventa file singolo.
+
+  I test lo coprono già. Però **nessun punto dell'interfaccia** imposta l'override di un membro: la colonna «Plugin» esiste solo nella tabella dei file singoli. Anche `pickBestPlugin` mette sui membri il plugin del set.
+- Il backend non conosce la scelta: `BRIMSetRequest` contiene solo `{broker_id, plugin_code, batch_id}`, e `collect_members` prende tutti gli originali del caricamento che il plugin legge.
+- Il rilevamento sui campioni sintetici dà questo: l'XLSX dei titoli lo legge solo `broker_danske_bank`; il CSV di cassa lo leggono `broker_danske_bank` e `broker_generic_csv`. Danske ha due ruoli, `custody` e `cash`, entrambi `required` e `multiple`.
+- Quello che il server salva già:
+  - per un file combinato: `kind`, `batch_id`, `derived_from` (`file_id`, `deleted`), `status`, `processed_at`, `parsed_plugin_code`, `uploaded_at`;
+  - per un originale: `combined_into`, `status`, `processed_at`, `parsed_plugin_code`, `compatible_plugins`, `uploaded_at`.
+- Anche FilesTable (la pagina File e i report del broker) chiede la preview dei set, per la badge «Incompleto», con la stessa richiesta del wizard.
+
+### G.2 Contratto
+
+**D · backend** (`schemas/brim.py`, `services/brim_report_sets.py`, `api/v1/brokers.py`):
+- `BRIMSetRequest.exclude_file_ids: List[str] = []`: il default vuoto lo rende compatibile, e il modello resta strict.
+- `collect_members(..., exclude_file_ids=())`: toglie gli esclusi dai membri. Preview e combine lo usano tutti e due.
+- Un id escluso che non è un originale di quel broker e di quel caricamento dà **422** con `BRIMSetExcludeUnknown` (codice `exclude_unknown`).
+- Se non resta nessun membro, vale il 404 di oggi (`members_not_found`).
+- Le risposte non cambiano. Il riuso del combinato resta per insieme esatto di membri (`members_key`).
+- Poi `api sync`; all'integrazione il client va rigenerato.
+
+**Logica pura** (`importReportSets.ts`):
+- `setPluginFor`: un override `''` vuol dire «file singolo senza plugin» e restituisce `null`. `null` o `undefined` restano «nessuna scelta».
+- `rememberedChoices(files, plugins) → Map<file_id, override>`: la memoria dopo l'analisi. Per ogni originale con un caricamento si considerano tre eventi, contando solo i combinati con `status === 'parsed'`:
+  - **E1, membro**: un combinato analizzato dello stesso broker e caricamento elenca il file fra i `derived_from` non cancellati. Il valore è il plugin del combinato, cioè il suo `parsed_plugin_code`; l'istante è il `processed_at` del combinato;
+  - **E2, letto da solo**: il file ha `status === 'parsed'` con un `parsed_plugin_code` che non è un plugin a set. Il valore è quel plugin; l'istante è il `processed_at` del file;
+  - **E3, lasciato fuori**: un combinato analizzato dello stesso caricamento non lo elenca, il file è compatibile col suo plugin ed esisteva già quando il combinato è nato (`uploaded_at` del file ≤ `uploaded_at` del combinato). Il valore è `''`; l'istante è il `processed_at` del combinato.
+
+  Il risultato:
+  - se l'E1 più recente è più recente di ogni E2 ed E3, il file sta nel set di quel plugin;
+  - altrimenti, se c'è un E2 più recente dell'ultimo E1, il file resta singolo con quel plugin. Un E2 e un E3 della stessa analisi non si contraddicono: tutti e due dicono «fuori dal set»;
+  - altrimenti, se c'è un E3, il valore è `''`;
+  - altrimenti non c'è memoria, e vale il rilevamento.
+- `setPluginChoices(set, plugins)`: i plugin a set compatibili con **tutti** i membri, primo quello del set.
+- `readAlonePlugins(file, plugins, brokerDefault?)`: i plugin compatibili che non sono a set, con prima il predefinito del broker se c'è fra questi.
+- `otherSetPlugins(file, setPluginCode, plugins)`: gli altri plugin a set compatibili col file (C2).
+- `defaultPluginNote(set, brokerDefault, plugins)`: il predefinito del broker, se è diverso dal plugin del set e compatibile con almeno un membro; altrimenti `null` (C1).
+- `setRequest(set, files)`: `{broker_id, plugin_code, batch_id, exclude_file_ids}`. Gli esclusi sono gli originali dello stesso broker e caricamento, compatibili col plugin, non `failed` e non membri del set. La usano il wizard e FilesTable.
+- `combinedFileForSet(set, files)`: in più chiede che gli id non cancellati di `derived_from` coincidano coi membri del set. Così un set con un membro tolto non risulta «già analizzato» a causa di un combinato vecchio, e un originale cancellato dopo non cambia nulla, come in v5.3.
+- `setsOfFiles(files, plugins)`: per ogni broker applica `rememberedChoices`, e le badge seguono la memoria.
+
+**A, B, C · `ReportSetCard.svelte`**:
+- Prop nuove:
+  - `plugins: SetPluginInfo[]`, il catalogo;
+  - `brokerDefaultPlugin: string | null`;
+  - `onReadAs(code: string | null)`;
+  - `onReadAlone(fileId, code)`;
+  - `onRemoveFromSet(fileId)`.
+- **A**: nell'intestazione, `<select data-testid="report-set-read-as">` col valore del plugin del set. Un'opzione per ogni plugin di `setPluginChoices`, quello del set marcato «rilevato», più `value=""` per «Leggi i file uno per uno». Il cambio chiama `onReadAs(code)`, oppure `onReadAs(null)` per `""`.
+- **B**: nel menu di riga della tabella del ruolo:
+  - un'azione `read-alone-<code>` per ogni plugin di `readAlonePlugins`, visibile solo sulle righe dei file che quel plugin legge; produce `context-menu-action-read-alone-<code>` e chiama `onReadAlone(fileId, code)`;
+  - `remove-from-set`, che produce `context-menu-action-remove-from-set` e chiama `onRemoveFromSet(fileId)`.
+
+  Anteprima ed Elimina restano.
+- **C1**: `report-set-default-note` con `data-default-plugin`, quando `defaultPluginNote` non è `null`.
+- **C2**: un `report-set-also-recognised` per file, con `data-file-id` e `data-plugins`, l'elenco dei codici separati da virgola.
+
+**Wizard** (`ImportWizardModal.svelte`):
+- **Override efficaci**: la memoria (`rememberedChoices` sui file del broker) più le scelte della sessione (`filePluginOverrides`); vincono quelle della sessione. Li usano `brokerSetGroups` e `pickBestPlugin`. Le scelte della sessione si azzerano ancora alla chiusura, come oggi.
+- **`readSetAs(set, code)`**:
+  - con un plugin a set, l'override va a ogni membro, e i membri selezionati prendono quel plugin;
+  - con `null`, ogni membro prende il suo miglior plugin non a set, oppure `''`. I membri con `''` si deselezionano, gli altri restano selezionati col nuovo plugin.
+- **`readFileAlone(fileId, code)`**: l'override va al file, che resta selezionato se lo era.
+- **`removeFileFromSet(fileId)`**: override `''`, e il file si deseleziona.
+- **Rientro nel set**: si sceglie il plugin del set nella colonna «Plugin» dei file singoli, con `updateFilePlugin` di oggi.
+- **Preview**: si salvano per chiave del set e per insieme dei membri. Dopo ogni cambio si rileggono quelle cambiate, con `setRequest`.
+- **Combine**: la richiesta porta gli `exclude_file_ids` dell'unità d'analisi.
+- **FilesTable**: chiede le preview con `setRequest`.
+
+**Memoria non mostrata con un testo nuovo** (proposta mia): «come all'ultima analisi» si capisce già dallo stato «Analizzato» del file e dal plugin preselezionato. Nella tabella dei singoli non aggiungo un'etichetta, per non toccare `ImportPluginSelect`, che è condiviso.
+
+**i18n** (via `dev.py i18n add`, 4 lingue): `importWizard.reportSet.{readAs, readAsOneByOne, detected, readAloneWith, removeFromSet, defaultPluginNote, alsoRecognisedBy}`.
+
+**Documentazione** (docs-writer, solo EN, senza stamp): la pagina utente Danske (come cambiare la lettura di un set, e la memoria); `import-wizard.md`; `brim_plugin_guide.md` (`exclude_file_ids` e la regola della memoria).
+
+**Test** (test-author, rossi prima, solo dati inventati, corsia 6156):
+- backend: `test_brim_report_sets.py` (`services brim-report-sets`) e `test_brim_api.py` (`api brim`);
+- Vitest: `importReportSets.test.ts` e `ReportSetCard.test.ts` (`tx-unit`);
+- E2E `tx-import-report-set.spec.ts`: G-A, G-B, G-C e la memoria. Per la memoria serve un terzo estratto conto sintetico, generato in una cartella temporanea.
+
+**Gate**:
+- backend BRIM, i Vitest e `front check` a 0/0;
+- `front build --debug`, gli E2E d'import, `check-orphans`;
+- `mkdocs build` strict e `check-links` (il D28 è accettato);
+- privacy; porta libera.
+
+**Definition of done**: tutti i test rossi diventano verdi, i gate sono verdi, e il checkpoint contiene le righe del CHANGELOG di G.
+
+### G.3 ✅ Il rosso (test-author) — 2026-10-05
+
+> **Note implementazione — il rosso di G (2026-10-05)**, test-author, corsia 6156, solo dati inventati, nessun file di prodotto toccato:
+>
+> | Comando | Esito | Rosso |
+> |---|---|---|
+> | `services brim-report-sets` | 23 rossi, 232 verdi | i 23 test nuovi di D |
+> | `front-transaction tx-unit` | 42 rossi, 580 verdi | `importReportSets` 30, `ReportSetCard` 12 |
+> | `front-transaction tx-import-report-set` | 7 rossi, 9 verdi | i 6 test nuovi di G, più R1 sulla sola asserzione del body del combine (`exclude_file_ids: []`) |
+> | `api brim` (lanciato per ultimo) | 8 rossi, 64 verdi | gli 8 test nuovi (RS-G01…G04) |
+> | `check-orphans` | pulito | — |
+>
+> **⚠️ Fuori pista — cosa ha trovato il test-author**:
+> - **Il CSV generico** si dichiara compatibile con qualsiasi `.csv` che abbia un'intestazione (`can_parse`), ma in analisi pretende `date` e `type`. Quindi l'estratto di cassa Danske non lo può leggere, e «Leggi da solo con CSV generico» fallirebbe sempre. Per il test «memoria, da solo» il test-author ha scritto un estratto sintetico con in più le colonne `date;type;amount;currency`, che Danske ignora.
+> - **Un originale con analisi fallita** (`failed`): `collect_members` lo scarta (regola A2), mentre il raggruppamento del frontend lo rimetterebbe nel set, e la card mostrerebbe un file che la preview non legge.
+> - In più non sono coperti dagli E2E la scelta di un altro plugin a set in A (c'è solo Danske) e `setRequest` usata da FilesTable (coperta solo dai test unitari).
+>
+> **Decisioni del developer** (testuali, chat di L, 2026-10-05):
+> - «credo che il problema sia di CSV generico che per ora guarda solo l'estenzione, dovrebbe guardare le colonne e vedere se tutte le obbligatorie, in almeno una delle lingue, ci sono»;
+> - sulla proposta (`can_parse` vero solo se l'intestazione ha `date` e `type`, coi sinonimi multilingue di `HEADER_MAPPINGS`): «Sì, così, dentro G (Consigliato)».
+>
+> **Il contratto cambia così**:
+> - `broker_generic_csv.can_parse` = estensione `.csv` **e** un'intestazione in cui `_detect_columns` trova `date` e `type`. Il resto del plugin non cambia.
+> - Sul frontend un originale `failed` non entra mai in un set: `setPluginFor` restituisce `null` anche con un override, come `collect_members` sul server (regola A2).
+> - Gli E2E che contavano sul generico «largo» vanno adattati:
+>   - R1 (A18, il broker col generico come predefinito), G-A, G-B e G-C usano l'estratto sintetico a due formati;
+>   - sul vero estratto Danske, «Leggi da solo» non offre più nulla e resta solo «Togli dal set».
+> - **Superfici nuove**, segnalate al coordinatore con la richiesta di controllare i conflitti: `broker_generic_csv.py`, `test_brim_providers.py` e le pagine `generic-csv.*.md` (solo EN, debito di traduzione).
+
+> **Coordinatore** (2026-10-05): nessun altro ramo tocca `broker_generic_csv.py`, `test_brim_providers.py` o `generic-csv.*.md`; sono superfici di G. Due avvertenze:
+> - nei gate di G va anche `external brim-providers`;
+> - nel checkpoint, una riga su cosa vede un utente con un CSV senza `date`/`type` che prima proponeva il generico.
+>
+> **Note implementazione — il rosso emendato (2026-10-05)**, test-author:
+>
+> | Comando | Esito | Rosso |
+> |---|---|---|
+> | `external brim-providers` | 10 rossi, 597 verdi, 2 saltati (già prima) | i 10 test nuovi di `TestGenericCSVDeclaresOnlyWhatItReads` |
+> | `front-transaction tx-unit` | 45 rossi, 581 verdi | i 3 nuovi sul file `failed` più i 42 del primo giro |
+> | `front-transaction tx-import-report-set` | 8 rossi, 10 verdi | R1 (solo il body del combine) e 7 test G; A18, ora su un estratto a due formati, è verde |
+> | `check-orphans` | pulito | — |
+>
+> - **Spostamenti negli E2E**: A18, G-A, G-B, G-C e G-no-memory usano ora l'estratto sintetico «a due formati», che Danske e il CSV generico leggono tutti e due. Ogni caricamento ne verifica i `compatible_plugins`.
+>   - G-real (nuovo) controlla l'estratto vero: sulla riga di cassa non c'è nessun «Leggi da solo», c'è «Togli dal set».
+>   - R1 gira sui campioni veri, con un broker senza plugin predefinito.
+> - **⚠️ Fuori pista**:
+>   - `test_generic_can_parse_any_csv` chiedeva al generico di accettare **ogni** campione CSV, cioè il contrario della decisione del developer. Il test-author l'ha rinominato in `test_generic_can_parse_every_csv_sample_with_date_and_type` e ne ha tenuto la parte che resta vera; la parte rovesciata è il nuovo test rosso sul corpus dei campioni. È una conseguenza diretta della decisione.
+>   - L'helper `_upload_main_set_and_third_cash` di `test_brim_api.py` (riga 1859) dà per scontato che il terzo estratto sintetico sia compatibile anche col generico, e dopo la correzione cadrà prima delle sue verifiche: va riparato dal test-author.
+>   - Nella corsia restano file dei test API sui broker 11–54: per i gate E2E servirà ancora un `--clean`, autorizzato dal coordinatore.
+>   - Dopo la correzione, un'analisi col generico di un CSV senza `date`/`type` risponde «Plugin 'broker_generic_csv' cannot parse file …» invece di «Required column 'date' not found». È ancora un 400, il file va ancora in `failed`, e nessun test controlla il testo.
+
+### G.4 ✅ La cura — 2026-10-05
+
+> **Note implementazione — la cura di G (2026-10-05)**:
+> - **D** (backend):
+>   - `BRIMSetRequest.exclude_file_ids` e `BRIMSetExcludeUnknown` (422, `exclude_unknown`);
+>   - `collect_members` prima raccoglie gli originali del broker e del caricamento, poi rifiuta gli id estranei, poi toglie gli esclusi;
+>   - `preview_set` e `combine_set` passano l'elenco; gli endpoint lo leggono dalla richiesta;
+>   - `api sync`.
+> - **Il CSV generico**: `can_parse` = estensione `.csv` **e** un'intestazione in cui `_detect_columns` trova `date` e `type`.
+> - **Logica pura** (`importReportSets.ts`):
+>   - `setPluginFor`: un originale `failed` non entra mai in un set; `''` = singolo senza plugin;
+>   - `combinedFileForSet` confronta i membri vivi;
+>   - `rememberedChoices` applica la regola E1/E2/E3, con gli istanti letti con `Date.parse`, e in parità vince «letto da solo»;
+>   - poi `setPluginChoices`, `readAlonePlugins`, `otherSetPlugins`, `defaultPluginNote`, `setRequest`; `setsOfFiles` usa la memoria.
+> - **`ReportSetCard.svelte`**:
+>   - la select «Letto come» nell'intestazione, col plugin rilevato marcato;
+>   - le azioni di riga `read-alone-<codice>`, visibili per file, e `remove-from-set`;
+>   - le note C1 e C2 nel corpo.
+> - **Wizard**:
+>   - `rememberedByBroker` e `choicesFor`, dove la sessione conta più della memoria;
+>   - `pickBestPlugin` parte dalla scelta in vigore;
+>   - `readSetAs`, `readFileAlone` e `removeFileFromSet`;
+>   - la cache delle preview tiene anche i membri (`memberSignature`), e `refreshChangedSetPreviews` rilegge quelle cambiate, anche dopo un'eliminazione;
+>   - preview e combine mandano `setRequest` ed `excludeFileIds`.
+> - **FilesTable**: la preview manda `setRequest`.
+> - **i18n**: 7 chiavi nuove in 4 lingue (`importWizard.reportSet.{readAs, readAsOneByOne, detected, readAloneWith, removeFromSet, defaultPluginNote, alsoRecognisedBy}`). L'argomento di C1 si chiama `{defaultPlugin}`, perché `default` è un nome a rischio in ICU.
+>
+> **Primi verdi**:
+>
+> | Verifica | Esito |
+> |---|---|
+> | `services brim-report-sets` | `255 passed` (i 23 rossi di D sono verdi) |
+> | `external brim-providers` | `595 passed`, 1 saltato. I casi sono 13 in meno perché il generico rivendica meno campioni: per esempio la matrice Windows-1252 scende a 22 casi, di cui 4 col generico, e il salto Degiro×generico non c'è più. Nessun test perso |
+> | `front check` | **0/0**. Un errore di tipo, il predicato `code is string` negato in un `filter`, corretto con un helper booleano |
+> | `front-transaction tx-unit` | `626 passed` (i 45 rossi sono verdi) |
+> | `front-utility core-unit` / `component-unit` / `onboarding-component-unit` | `2704` / `2203` / `409 passed` |
+> | `front build --debug` | ok |
+>
+> **`--clean` prima degli E2E di G**, autorizzato dal coordinatore («una volta, solo su `/private/tmp/librefolio-r2-l`»):
+> - **prima**: la cartella `broker_reports` non c'era proprio, quindi 0 file. La causa non è chiara: non sono i fixture delle suite di servizio, che lavorano in `tmp_path`;
+> - `test … db populate --force --clean`: exit 0;
+> - **dopo**: `uploaded`, `parsed` e `failed` esistono, vuote, con 0 file.
+>
+> **E2E di G, primo giro** (in corso): `tx-import-report-set`, 4 rossi e 14 verdi.
+> - **R3, difetto mio**: «Carica il file mancante» rilegge la preview passando l'oggetto del set di **prima** del caricamento. Con `setRequest`, il file appena caricato risulta un originale del caricamento che non è membro, quindi finisce fra gli esclusi, e il set resta incompleto.
+>   - Correzione: dopo il caricamento si rilegge la preview del set **attuale**, cioè quello con la stessa chiave in `allReportSets`.
+>   - Non la applico finché il giro E2E è in corso: un sorgente cambiato farebbe ricostruire il frontend al prossimo avvio del server.
+> - **G-memory (set), G-memory (alone) e G-no-memory**, difetto di test: `reopenOnStep2` clicca il pulsante Import della barra mentre l'editor (`tx-bulk-modal`), rimasto aperto dopo la chiusura del wizard, intercetta il clic. Il pulsante della pagina apre l'editor col wizard dentro, e chiudere il wizard lascia l'editor vuoto aperto.
+>   - Riparazione per il test-author: riaprire il wizard dall'editor (`tx-bulk-import`), oppure chiudere prima l'editor (`closeEditorWithoutSaving`).
+>   - In più, la premessa di `test_brim_api.py:1859` va adattata al generico più stretto: il terzo estratto è compatibile con `[DANSKE_CODE]`, cioè come il campione di cassa.
+>
+> **E2E di G, primo giro concluso** (corsia 6156, un comando per volta):
+> - **verdi**:
+>   - `-guide` 2, `tx-bulk-import-handoff` 2, `tx-import-file-selection` 2, `tx-import-upload` 9, `tx-import-flow` 10, `tx-import-resolution` 12;
+>   - `tx-import-matching` 6, `tx-import-asset-inspector` 5, `tx-import-duplicate-precedence` 6;
+>   - `tx-wac-bulk` 10, `tx-bulk-diagnostics` 2, `tx-bulk-operations` 10, `tx-paired-edit` 4;
+>   - `front-utility files` 22, `select` 17, `image-crop` 42, `onboarding-tour` 10;
+>   - `front-broker detail` 33;
+> - rossi accettati: T1 e CAC-011/012;
+> - `tx-import-report-set`: i 4 rossi analizzati sopra. **R3 è corretto** (si rilegge la preview del set attuale); `front check` resta a 0/0.
+>
+> **⚠️ Fuori pista — `front-utility files-uploader`, 6/6 rossi.** Verdetto della test-triage: **assumption** del test, che non viene da G.
+> - La spec ha un elenco chiuso di GET permessi e riceve `GET /api/v1/settings/onboarding`, l'avvio dell'onboarding (`onboardingApi.ts:81`); la pagina File non si apre mai.
+> - La spec è cambiata l'ultima volta in `ef722b552`; le modifiche di G non toccano onboarding, layout né la spec.
+> - L'ho segnalato al coordinatore: non è un mio file.
+>
+> **⚠️ Fuori pista — la corsia dopo il giro**:
+> - CAC ha lasciato file `ca-*` sui broker 9–21, gli id che `tx-import-report-set` riusa;
+> - ogni populate senza `--clean` aggiunge un'altra copia dei campioni ai broker finti 1–7 (25 copie ciascuno).
+>
+> Ho chiesto al coordinatore un `--clean` prima di ogni giro E2E di G.
+
+> **Decisioni del coordinatore (2026-10-05)**:
+> - **`--clean` prima di ogni giro E2E di G**: permesso fino alla fine di G, solo sulla corsia, con il comando esatto `… test --test-port 6156 --data-dir /private/tmp/librefolio-r2-l db populate --force --clean`, un comando alla volta e senza backend sulla 6156.
+> - **`files-uploader` assegnata a L**, solo test, in un commit separato `test(e2e): …`. La spec resta severa sulle chiamate della pagina File; la GET dell'onboarding si dichiara come contratto dell'app, con una risposta sintetica in cui le guide risultano completate. Non si toccano `onboardingApi.ts` né il layout.
+> - I file `ca-*` di CAC e le copie dei campioni: backlog di fine round del coordinatore.
+
+> **Note implementazione — la riparazione dei test (2026-10-05)**:
+> - **La corsia**: `--clean` autorizzato, da 426 file a 0.
+> - **Il test-author**:
+>   - `tx-import-report-set`: `reopenOnStep2` riapre il wizard dall'editor (`tx-bulk-import`); i tre G-memory sono verdi;
+>   - `test_brim_api.py:1859`: la premessa segue il generico più stretto;
+>   - `files-uploader.spec.ts`: `GET /api/v1/settings/onboarding` è nell'elenco come contratto dell'app, con una risposta sintetica (tutte le guide completate) validata sullo schema.
+> - **Esiti**:
+>
+> | Verifica | Esito |
+> |---|---|
+> | `tx-import-report-set` | `18 passed` a 1 worker e a 4 worker |
+> | `front-utility files-uploader` | `6 passed` |
+> | `api brim` | `72 passed` |
+> | `check-orphans` | pulito |
+>
+> - **⚠️ Fuori pista — un possibile difetto fuori da G**, visto dal test-author: `TransactionBulkModal.svelte` (~483) mette `initialOpsKey = ''` quando i tipi di transazione non sono ancora in cache, e allora un editor vuoto chiede «Scartare le modifiche?». Non riprodotto dalla pagina Transazioni. Va al backlog del coordinatore.
+
+> **Note implementazione — la documentazione di G (2026-10-05)**, dal docs-writer, solo EN, senza stamp:
+> - `user/transactions/import/danske-bank.en.md`: la sezione nuova «🔀 How the set is read» (`#how-the-set-is-read`): «Read as», il menu di riga (Read alone with / Remove from the set), le due note, la memoria dopo l'analisi; più una frase sui badge.
+> - `developer/frontend/components/features/import-wizard.md`: la tabella degli helper, le sezioni nuove `#set-read-as` e `#set-memory` (E1/E2/E3 e la precedenza), il combine con `excludeFileIds`, i badge con la memoria.
+> - `developer/architecture/patterns/brim_plugin_guide.md`: un plugin non rivendica un file che non sa leggere (la regola del generico); `exclude_file_ids`, 404 `members_not_found`, 422 `exclude_unknown`.
+> - `user/transactions/import/generic-csv.en.md`: due frasi su quando il CSV generico si propone. La pagina ha traduzioni: è **debito di traduzione**.
+> - `providers_list.md`: non toccato. «Accepts any CSV matching the Generic CSV spec» è già condizionale.
+> - **Gate**: `mkdocs build` strict ok; `check-links` 81 validi e il solo rosso D28 accettato; `translate-validate` senza problemi strutturali su generic-csv (un'ancora interna tolta perché i titoli tradotti cambiano slug).
+> - **Dal codice, cose che la doc ora dice giuste**:
+>   - un file tolto dal set si rimette nel set spuntandolo e scegliendo il plugin del set;
+>   - le due note si vedono solo a scheda aperta;
+>   - in parità di istante, nella memoria vince «letto da solo».
+> - **⚠️ Fuori pista — deriva fuori da G, per il backlog**:
+>   - il ripiego `auto` → CSV generico (`brokers.py:894`) fallisce sempre, sia prima sia dopo G;
+>   - la mappatura manuale delle colonne è descritta in `generic-csv.en.md:3,15-17`, `how-to.en.md:84` e `index.en.md:288`, ma non esiste: le colonne si riconoscono dal nome;
+>   - un file che nessun plugin riconosce può ricevere a mano un plugin di set: il wizard lo mette nel set, il server no. Viene da C2, non da G.
+> - **⚠️ Fuori pista — il messaggio d'errore del CSV generico**, che viene da G. Forzare il generico su un CSV senza `date` o `type` prima dava «Parse error: Required column 'date' not found in CSV header»; ora la guardia di `parse_file` (`brim_provider.py:1431`) risponde «Plugin 'broker_generic_csv' cannot parse file '…'». L'esito è lo stesso, il file finisce in `failed`, ma il messaggio non dice più quale colonna manca. Domanda al developer.
+
+### G.5 ✅ Il motivo del rifiuto (2026-10-05)
+
+**Decisione del developer** (ask_user, testuale): «Correggi dentro G con il metodo opzionale (Consigliato)».
+
+**Contratto**:
+1. **Il metodo del plugin**. `BRIMProvider.cannot_parse_reason(file_path) -> Optional[str]` è un metodo concreto della classe base, non astratto, che di default restituisce `None`.
+   - Dà, in una frase inglese breve, senza maiuscola iniziale né punto finale, il motivo per cui `can_parse` rifiuta il file: qualcosa che l'utente può correggere. `None` vuol dire «niente da aggiungere».
+   - Lo chiama solo la guardia del parse, dopo un `can_parse` falso. Deve costare quanto `can_parse` e non sollevare mai eccezioni.
+2. **La guardia di `parse_file`** (`brim_provider.py` ~1431). Quando rifiuta, il messaggio è `Plugin '{code}' cannot parse file '{name}'`, più `: {motivo}` se c'è un motivo.
+   - Il motivo si chiede sul percorso controllato per ultimo, cioè quello spostato se il file si è mosso.
+   - Il metodo si legge con `getattr`: i plugin duck-typed dei test e i plugin scritti sulla base vecchia restano validi.
+   - Un'eccezione del metodo si registra nel log e si ignora: resta il messaggio semplice, mai un 500.
+   - Per il resto non cambia nulla: `ValueError`, quindi 400 dall'API, e il file va in `failed` con quel messaggio.
+3. **Il CSV generico** implementa il metodo:
+
+   | Caso | Motivo |
+   |---|---|
+   | estensione diversa da `.csv` | «the Generic CSV reads only .csv files» |
+   | file illeggibile | «the file could not be read» |
+   | nessuna riga d'intestazione | «the file has no header row» |
+   | intestazione senza `date` e/o `type` | «required column 'date' not found in the CSV header», la stessa frase con 'type', oppure «required columns 'date' and 'type' not found in the CSV header» |
+   | file leggibile dal plugin | `None` |
+
+   - Invariante: `can_parse(p) is (cannot_parse_reason(p) is None)`, per costruzione, perché `can_parse` si appoggia al motivo.
+4. **Cosa vede l'utente** nel riquadro degli errori del wizard: «x.csv — Plugin 'broker_generic_csv' cannot parse file '‹id›.csv': required column 'date' not found in the CSV header».
+   - Il nome tra apici è quello salvato, `{file_id}{ext}`, e non viene da G: la guardia ha sempre usato `file_path.name`. Va al backlog, ed è fuori da G.
+
+**Test** (test-author, prima rossi):
+- `external brim-providers`: il motivo per ogni intestazione rifiutata, `None` per quelle accettate, i casi di estensione, file vuoto e file mancante, l'invariante su tutti i campioni, e il default della base.
+- `services brim-parse-race`: il messaggio della guardia con e senza motivo, il plugin senza metodo, il metodo che solleva un'eccezione, il percorso spostato, e il generico vero.
+- `api brim`: il parse forzato col generico su un CSV senza `date` risponde 400 col motivo, e il file finisce in `failed`.
+
+**Doc** (docs-writer, solo EN): `brim_plugin_guide.md` (il metodo opzionale) e `generic-csv.en.md` (la frase dell'errore).
+
+> **Note implementazione — G.5 (2026-10-05)**:
+> - **Il rosso** (test-author):
+>   - `external brim-providers`: la classe nuova `TestGenericCSVSaysWhyItRefuses`, 31 rossi per `AttributeError`; la parametrizzazione dei rifiuti ora dichiara a mano le colonne mancanti (`_HEADERS_MISSING_DATE_OR_TYPE`), e i 33 test esistenti restano verdi con gli stessi id;
+>   - `services brim-parse-race`: 7 rossi e una guardia nuova già verde (il plugin senza metodo tiene il messaggio semplice, verificato per uguaglianza);
+>   - `api brim`: RS-G05, rosso solo sulla fine di `detail`.
+> - **La cura**:
+>   - `BRIMProvider.cannot_parse_reason` (default `None`);
+>   - `_refusal_message` in `brim_provider.py`, chiamata dalla guardia di `parse_file` col percorso controllato per ultimo, metodo letto con `getattr`, eccezioni registrate e ignorate;
+>   - il CSV generico implementa il motivo, e `can_parse` è `cannot_parse_reason(p) is None`.
+> - **Verdi**:
+>
+> | Verifica | Esito |
+> |---|---|
+> | `external brim-providers` | `626 passed`, 1 saltato (595 + 31) |
+> | `services brim-parse-race` | `14 passed` |
+> | `services brim-parse-pool` / `brim-parse-error` / `brim-report-sets` | `8` / `4` / `255 passed` |
+> | `api brim` (per ultimo) | `73 passed` (72 + RS-G05) |
+> | `dev.py lint`, `black --check` | puliti |
+>
+> - **Doc di G.5** (docs-writer, solo EN, senza stamp):
+>   - `brim_plugin_guide.md`: la riga del metodo nella tabella dei metodi opzionali, la sottosezione «🗣️ Saying why a file is refused» (`#cannot-parse-reason`) e il messaggio nel flusso;
+>   - `generic-csv.en.md`: il messaggio ora dice cosa manca, più una frase su come correggere il file.
+>   - `mkdocs build` strict ok; `check-links` col solo D28; `translate-validate` senza problemi su generic-csv.
+> - **⚠️ Fuori pista — `compatible_plugins` è calcolato al caricamento** e non si ricalcola più (`brim_provider.py:711`, `:723`, `:800`). Per un CSV caricato prima di G il CSV generico resta quindi proposto; sceglierlo ora fallisce col motivo. È un limite noto, per il backlog.
+
+### G.6 ✅ Gate finali (2026-10-05), corsia 6156, un comando per volta
+
+- `front build --debug` ok (dopo R3).
+- `--clean` autorizzato prima del giro: da 46 file a 0.
+- Il giro: script `/tmp/libreFolio_l_g_final_e2e.sh`, log in `/tmp/libreFolio_l_g_final_*.log`.
+
+| Verifica | Esito |
+|---|---|
+| `tx-import-report-set` / `-guide` / `tx-bulk-import-handoff` / `tx-import-file-selection` | `18` / `2` / `2` / `2 passed` |
+| `tx-import-upload` / `-flow` / `-resolution` / `-matching` / `-duplicate-precedence` | `9` / `10` / `12` / `6` / `6 passed` |
+| `tx-wac-bulk` / `tx-bulk-diagnostics` / `tx-bulk-operations` / `tx-paired-edit` | `10` / `2` / `10` / `4 passed` |
+| `front-utility files` / `files-uploader` / `select` / `image-crop` / `onboarding-tour` / `settings` | `22` / `6` / `17` / `42` / `10` / `45 passed` |
+| `front-broker detail` | `33 passed` |
+| Vitest `tx-unit` / `component-unit` / `core-unit` / `onboarding-component-unit` | `626` / `2203` / `2704` / `409 passed` |
+| `tx-import-asset-inspector` | `4 passed`, **E2-001 rosso** (vedi sotto) |
+| `tx-brim-import` / `tx-ca-contract` | T1 e CAC-011/012, rossi già accettati; `10 passed` in CAC |
+| `front check` | **0/0** |
+| `check-orphans` | pulito: 96 E2E, 281 Vitest e 227 backend raggiungibili |
+| privacy (`/tmp/libreFolio_l_e_privacy.py 8c6853281`) | 0 collisioni su 3399 righe aggiunte |
+| `git diff --check` | pulito; 26 file tracciati modificati, 0 nuovi; porte 6156 e 6166 libere |
+
+> **⚠️ Fuori pista — E2-001 (`tx-import-asset-inspector`)**:
+> - Rosso alla riga 476. Dopo «Annulla» sulla modale di cambio valuta, il clic sul combobox della valuta non apre la listbox: nello snapshot la modale «Edit Asset» è aperta, la valuta è «USD» e il combobox è chiuso.
+> - Non viene da G. Risk lo riproduce 4 volte su 5 senza G (snapshot del coordinatore in `/tmp/lf-triage-k3/`), e G non tocca AssetModal, SearchSelect né la modale della valuta. Nel primo giro di G era verde.
+
+> **Decisione di L sulla proposta del coordinatore (CAC-011/012 ed E2-001 nel giro di G): non costano poco, quindi backlog, oppure un mini-giro dopo il commit di G.**
+> - **CAC**: la spec usa `isVisible({timeout})` 14 volte come condizione di ramo (`walkToReview`, `confirmNotices` e altri). Playwright ignora quel timeout e risponde subito, quindi renderla deterministica significa riscrivere quegli helper di una spec che non è di L.
+> - **E2-001**: serve una test-triage vera, con trace. Potrebbe essere una corsa sul focus fra modali annidate, cioè un difetto del prodotto.
+> - Lo stesso schema `isVisible({timeout})` è usato in circa 30 punti di altre spec (`tx-wac-fx`, `broker-sharing`, `brokers-detail`, `image-crop`, `tx-wac-formmodal`, `tx-bulk-suggest-ux`).
+
+### G — ✅ pronta per il checkpoint (2026-10-05)
+
+## 15. Integrazione di G (2026-10-05)
+
+### 15.1 ✅ I commit e il merge di baseline (2026-10-05)
+
+- I commit del developer, fatti con l'ORDER del coordinatore (`/tmp/libreFolio_ORDER_0510_lg.sh`) e verificati da lui; albero `5a4ed0eee`:
+  - `15c91d42a` feat(import): choose how a report set is read
+  - `a33eb243b` test(e2e): declare the onboarding GET in files-uploader
+  - `96b7a4903` docs(import): how a report set is read and when the generic CSV applies
+  - `a2dcf786f` docs(journal): Danske workstream step G
+- Il merge `361c1acbd` (`merge(l): dev_release2 into L before step G integration`): genitori `a2dcf786f` e `d9aad0ec9` (il PAC planner di D e il suo changelog); albero `e88472305`, uguale alla simulazione; worktree pulito.
+- Le correzioni ai messaggi, chieste da L prima del run e applicate dal coordinatore:
+  - C1, il punto «Memory»: la memoria non legge `combined_into` ma `derived_from`, `parsed_plugin_code` e `processed_at`. L'errore era nel mio checkpoint;
+  - C1, il punto «Wizard»;
+  - C2, la data in formato ISO;
+  - C3, il punto «Developer pages».
+- **Decisione del developer sui rossi** (testuale, tramite il coordinatore): «E2-001 da capire subito dopo G, CAC nel backlog (Consigliato)».
+
+### 15.2 ✅ Validazione della revisione unita `361c1acbd` (2026-10-05 → 2026-10-06), corsia 6156, un comando per volta — interrotta il 05/10 perché il developer stacca, ripresa il 06/10
+
+- G e D si sovrappongono solo nei cataloghi i18n ×4, che Git ha unito da solo.
+
+| Verifica | Esito |
+|---|---|
+| i18n a tre vie (`git show`, base `8c6853281`) | in ogni lingua 4505 chiavi = 3543 + 7 (G) + 955 (D); nessuna chiave mancante, in più o con valore diverso; le 7 chiavi di G ci sono tutte |
+| `api sync` / `front build --debug` / `mkdocs build` (strict) | ok / ok / ok, 0 WARNING e 0 ERROR |
+| `services brim-report-sets` / `brim-parse-race` / `brim-parse-pool` / `brim-parse-error` | `255` / `14` / `8` / `4 passed` |
+| `external brim-providers` | `626 passed`, 1 saltato |
+| `front check` | **0/0** |
+| `i18n audit` | completo (4505 chiavi). «Likely Unused» passa da 393 a 522: sono 129 chiavi `tools.*` in più, tutte di D, nessuna di G. `importWizard.reportSet.gapFix.stepTitle` resta il falso positivo già noto (§13.2) |
+| Vitest `tx-unit` / `component-unit` / `core-unit` / `onboarding-component-unit` | `626` / `2223` / `2898` / `409 passed` (crescono coi test di D) |
+| `--clean` autorizzato | ok, 0 file |
+| E2E di import | `report-set` 18, `-guide` 2, `handoff` 2, `file-selection` 2, `upload` 9, `flow` 10, `resolution` 12, `matching` 6, `duplicate-precedence` 6, `wac-bulk` 10, `bulk-diagnostics` 2, `bulk-operations` 10, `paired-edit` 4 |
+| E2E utility e broker | `files` 22, `files-uploader` 6, `select` 17, `image-crop` 42, `onboarding-tour` 10, `settings` 45; `front-broker detail` 33 |
+| Rossi | T1 e CAC-011/012, già accettati (CAC va nel backlog); **E2-001**, allo stesso punto del giro finale di G |
+
+- **Ripresa del 2026-10-06** («Riprendi» del coordinatore). Lo stato era come allo stop: HEAD `361c1acbd`, solo il piano modificato, la data-dir presente, le porte libere, `dev_release2` = `d9aad0ec9`, antenato di HEAD. La macchina è carica per i servizi di sistema; il carico (load average) è annotato prima e dopo ogni comando.
+
+| Verifica (06/10) | Esito | Carico |
+|---|---|---|
+| `api pac-planner-tool` | `7 passed` | da 17,9 a 18,2 |
+| `api brim` (per ultimo) | `73 passed` | da 17,6 a 30,1 |
+| `check-orphans` | pulito: 96 E2E, 286 Vitest, 228 backend | — |
+| `mkdocs check-links` | 81 link validi, i 3 gialli noti e il solo rosso D28 (`#rolling-return` in it/fr/es), già accettato | — |
+| `git diff --check` | pulito; l'unico file modificato è il piano | — |
+
+- La revisione unita è **pronta per l'integrazione**: l'avanzamento in fast-forward di `dev_release2`, da `d9aad0ec9` a `361c1acbd`, più il commit del journal con questo §15.
+- All'integrazione il client API va rigenerato (`api sync`), perché il client generato è ignorato.
+- I rossi restano T1 e CAC-011/012, già accettati (CAC va nel backlog), ed E2-001 (§15.3).
+- Alla fine del giro le porte 6156 e 6166 sono libere (`lsof` senza ascolto) e nessun processo del runner è attivo.
+- La pulizia di macOS può cancellare la data-dir della corsia: al rientro si ripopola con `db populate --force`, solo in `/tmp/librefolio-r2-l`.
+- Il materiale per riprendere è copiato fuori dal repo, nei file della sessione di L (`resume-g-merge/`): i log dei gate, gli script dei giri, lo scanner di privacy e gli snapshot di E2-001 presi da Risk (`/tmp/lf-triage-k3/`).
+
+### 15.3 ⏳ Dopo l'integrazione: la triage di E2-001
+
+- **Il rosso**: `tx-import-asset-inspector.spec.ts:653`, riga 476 (`chooseCurrency`), dentro la seconda `blockedSave` (riga 704), dopo «Annulla» sulla `currency-change-modal`. Il clic sul combobox della valuta non apre la listbox. Nello snapshot la modale «Edit Asset» è aperta, la valuta è «USD» e il combobox è chiuso.
+- **Frequenza**:
+  - da Risk, 4 corse su 5 senza G, con carico 8–23;
+  - nella corsia di L, verde nel primo giro di G, poi rosso nel giro finale di G e nella revisione unita.
+- **Metodo**: la skill test-triage, con la traccia di Playwright.
+  - Se la causa è nel prodotto (AssetModal, la modale della valuta o SearchSelect, tutti fuori dal perimetro di L), la diagnosi va al coordinatore **prima** di correggere.
+  - Se la causa è nel test, lo ripara il test-author, in un commit `test(e2e)` separato.
+
+## 16. Triage di E2-001 (2026-10-06)
+
+**Avvio**:
+- G è integrato: `dev_release2` = `385238e85`, cioè `bff6dea45` più il CHANGELOG (`v1.1.0-464`). Il client API è rigenerato dal coordinatore.
+- Il ramo di L è a `bff6dea45`, pulito. Corsia 6156 e `/tmp/librefolio-r2-l`.
+
+### 16.1 ✅ Le prove già raccolte, prima di rilanciare (skill §0)
+
+- Lo snapshot ARIA e lo screenshot di Risk, più il log del giro finale di G e quello della revisione unita.
+- Al fallimento la modale «Edit Asset» è aperta, la valuta è «USD $» e il trigger è chiuso (senza `[expanded]` né `[disabled]`), con lo stile di hover. Il clic dunque è arrivato al trigger, ma per 10 s `isOpen` è rimasto falso: la listbox esiste solo dentro `{#if isOpen}`, nel contenitore.
+- **Il codice**:
+  - `CurrencySearchSelect` usa `SearchSelect` con `inlineSearch={true}`;
+  - il clic sul trigger chiama `toggleDropdown()`;
+  - `openDropdown()` esce senza fare nulla se `disabled`, oppure se `Date.now() - lastClosedAt < 200`. È la guardia contro la riapertura immediata («touch event race»), ed è un orologio nel prodotto;
+  - `closeDropdown()` rimette il focus sul trigger;
+  - il clic fuori chiude la tendina con un listener di `mousedown`, attivo solo mentre è aperta;
+  - nel 409 `AssetModal` apre `AssetCurrencyChangeModal` (`ModalBase`); «Annulla» la chiude e azzera blocker e payload.
+- **Ipotesi da verificare con la traccia**, in ordine:
+  1. il clic trova la tendina già aperta, per esempio ancora in `loading`, quindi senza opzioni: `optionsClosed` passa, e il clic la chiude (`toggle`);
+  2. il clic cade entro 200 ms da una chiusura;
+  3. il trigger viene rimontato fra il clic e l'attesa;
+  4. il clic arriva mentre il componente è `disabled`.
+- **Come avere la traccia**:
+  - il runner non passa argomenti a Playwright, e in locale `retries: 0` con `trace: 'on-first-retry'` non registra nulla;
+  - `CI=1` cambia in `playwright.config.ts` soltanto `retries` (2), `forbidOnly` e il timeout del `webServer`, e nient'altro nel runner o nel backend;
+  - quindi il comando canonico con `CI=1` registra traccia e video al primo retry, senza toccare file. Il carico si annota prima e dopo.
+
+### 16.2 ✅ Le misure (2026-10-06), corsia 6156, un comando per volta
+
+| Corsa | Come | Carico | E2-001 |
+|---|---|---|---|
+| T1 | runner con `CI=1` | 8,8 | ✘ al primo tentativo (non tracciato), ✓ al retry tracciato |
+| T2 | Playwright diretto con `--trace retain-on-failure` (vedi il Fuori pista) | 6,2 | ✓, 5/5 verdi |
+| P1–P4 | runner con `DEBUG=pw:protocol`, senza traccia | 5,2 / 6,4 / 8,5 / 10,4 | ✘ / ✘ / ✓ / ✘ |
+
+- **Nessuna eccezione JS** (`Runtime.exceptionThrown` = 0) e nessun errore di console nuovo: cade l'ipotesi dell'errore di rendering.
+- **La traccia verde** (T1, retry):
+  - la modale della valuta sparisce subito dopo «Annulla», perché sta dentro `{#if open && blocker}` e non fa la transizione d'uscita;
+  - il secondo clic arriva circa 127 ms dopo «Annulla» e apre la tendina.
+- **La cronologia del protocollo** (P1–P4) va dal clic sull'opzione USD (`selectOption` → `closeDropdown` → `lastClosedAt`) al secondo clic sul trigger. La differenza di tempo coincide fra l'invio e la conferma di Chrome, con uno scarto di circa 3 ms:
+
+| Corsa | Opzione → secondo clic | «Annulla» → secondo clic | Esito |
+|---|---|---|---|
+| P1 | 191 ms | 50 ms | ✘ |
+| P2 | 189 ms | 48 ms | ✘ |
+| P3 | 316 ms | 78 ms | ✓ |
+| P4 | 191 ms | 50 ms | ✘ |
+| tracciate | oltre 600 ms | — | ✓ |
+
+- A decidere l'intervallo è la latenza del PATCH 409: dalla richiesta a «Annulla» passano 104 ms in P1 e 182 ms in P3. Il carico non decide: P1 è rosso con carico 5,2. Anche la traccia «risolve» il rosso solo perché rallenta ogni azione.
+- **⚠️ Fuori pista — gli strumenti**:
+  - il runner non passa argomenti a Playwright, quindi in T2 ho chiamato Playwright direttamente (`node_modules/.bin/playwright` via `pipenv run`), con lo stesso ambiente della corsia che imposta il runner (`TEST_PORT=6156`, `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-l`, `LIBREFOLIO_TEST_MODE=1`, `PIPENV_DONT_LOAD_ENV=1`, `LF_SETUP_DONE=1`) e con `--trace retain-on-failure`;
+  - T1 e P1–P4 usano il comando canonico, con `CI=1` (retry e traccia) oppure `DEBUG=pw:protocol`, che il backend non legge;
+  - nessun file tracciato è cambiato.
+- Un mio errore di analisi, corretto: il primo conteggio di P3 dava 171 ms, perché il parser riconosceva il trigger dalle coordinate più frequenti e in P3 c'era un pareggio. Ora riconosce la sequenza del test (trigger, opzione, Save, «Annulla», trigger).
+
+### 16.3 ✅ Il verdetto (2026-10-06): **defect** nel prodotto (`SearchSelect`), fuori dal perimetro di L
+
+- **La causa**: `openDropdown()` ignora ogni apertura che arriva meno di 200 ms dopo l'ultima chiusura (`Date.now() - lastClosedAt < 200`). La guardia viene da `f9e79d580` (17/04, «dropdown not reopening after selection on mobile») e serve contro il clic fantasma del tocco sul trigger sotto l'opzione. Però si applica a **qualunque** chiusura: mouse, tastiera, selezione.
+  - Il test seleziona USD, salva, riceve il 409, annulla e riapre la tendina in circa 190 ms. Il clic vero viene scartato in silenzio, `isOpen` resta falso e l'attesa della listbox scade dopo 10 s.
+  - Lo stato «riapertura bloccata» non si vede da nessuna parte, né per il test né per l'utente (skill §6). Un test non può aspettarlo senza un orologio.
+- **Perché non è il test**: nessuna posizione, nessun conteggio, nessuna attesa sbagliata. Il test fa ciò che può fare un utente veloce o un programma. E la guardia non ha un test unitario (`SearchSelect.test.ts` non la copre).
+- **Correzione proposta** (da approvare; `SearchSelect` è condiviso da 38 componenti):
+  - la guardia si applica solo se la chiusura è venuta da un tocco o da una penna, cioè dal `pointerType` del `pointerdown` che ha portato alla selezione o alla chiusura. Le aperture con mouse e tastiera dopo una chiusura con mouse o tastiera restano immediate;
+  - prima i test unitari rossi (test-author, Vitest): la riapertura immediata col mouse dopo una selezione col mouse; quella con la tastiera dopo una selezione con la tastiera; il clic fantasma dopo una selezione col tocco, che resta ignorato;
+  - poi la correzione. E2-001 dovrebbe diventare verde senza toccare la spec; da verificare con P1–P4 ripetuti;
+  - un'alternativa solo nel test (un ciclo `toPass` sul clic) è possibile, ma nasconderebbe il difetto.
+- Altre spec che riaprono una `SearchSelect` entro 200 ms da una selezione possono avere lo stesso rosso intermittente. È un'ipotesi, non l'ho verificata.
+
+### 16.4 ✅ La correzione di `SearchSelect` (2026-10-06)
+
+**Decisione del developer** (testuale, tramite il coordinatore): «L corregge sul suo ramo, con i test prima (Consigliato)».
+
+**Vincoli del coordinatore**:
+- i test rossi li scrive il test-author, in un **file separato**, `frontend/src/lib/components/ui/select/SearchSelect.reopen.test.ts`. La famiglia Risk ha aggiunto 127 righe a `SearchSelect.test.ts` sul suo ramo;
+- la registrazione in `component-unit` (`scripts/test_runner/_frontend_utility.py`) è **una riga**, subito dopo `SearchSelect.test.ts`, non in fondo, e la `desc=` non si tocca.
+  - Su `cda8cba1c` F inserisce `AssetPickerPanel.test.ts` dopo `AssetTypeSelect.test.ts`, cioè quattro righe più giù, e cambia le `desc=` di `core-unit` e `component-unit`;
+  - prima del checkpoint, `git merge-file -p` contro la versione di `cda8cba1c` (base `9b5291c25`), salvando subito il codice d'uscita;
+- la spec di E2-001 non si tocca;
+- i gate: `component-unit`; E2-001 ripetuto con la misura dell'intervallo; `select` e qualche `tx-import-*` con molte `SearchSelect`; `front check`.
+
+**Contratto**, cioè il comportamento che i test fissano:
+1. **Mouse**: si apre col clic sul trigger e si sceglie un'opzione col mouse (`pointerdown` con `pointerType: 'mouse'`, poi `click`). Un clic sul trigger **subito dopo, allo stesso istante**, apre la tendina.
+2. **Tastiera**: si apre con `ArrowDown` sul trigger e si sceglie con `Enter` nel campo di ricerca. Un `ArrowDown` sul trigger subito dopo apre la tendina.
+   - `Enter` subito dopo che il trigger prende il focus resta bloccato da un'altra guardia (`triggerFocusedAt`), che non cambia; il test riapre con `ArrowDown`.
+3. **Tocco** (e penna): si apre e si sceglie un'opzione col tocco (`pointerdown` con `pointerType: 'touch'`, poi `click`). Un clic sul trigger entro 200 ms, cioè il clic fantasma, viene ignorato e la tendina resta chiusa. Passati 200 ms, un nuovo tocco la apre.
+4. Senza nessun `pointerdown`, per esempio con un `click` sintetico, la chiusura non conta come tocco: l'apertura subito dopo funziona.
+
+**Progetto della correzione** (in `SearchSelect.svelte`; nessun altro file del prodotto):
+- il componente ricorda il `pointerType` dell'ultima pressione al suo interno, con un listener `pointerdown` in cattura sul contenitore, registrato in un `$effect`. Un `keydown` al suo interno lo azzera;
+- `closeDropdown()` registra se la chiusura è venuta dal tocco o dalla penna;
+- `openDropdown()` applica la guardia dei 200 ms solo in quel caso.
+
+> **Note implementazione — 16.4 (2026-10-06)**:
+> - **Il rosso** (test-author): `SearchSelect.reopen.test.ts`, 5 test × 2 layout (ricerca nella tendina e nel trigger, cioè `inlineSearch`):
+>   - mouse, tastiera, nessun puntatore: **6 rossi**, sull'ultima asserzione (il trigger resta `aria-expanded="false"`), con tutte le premesse verdi;
+>   - tocco e penna: **4 verdi**, perché proteggono la correzione mobile originale;
+>   - `component-unit`: 2223 test esistenti verdi; `check-orphans` pulito (287 file).
+> - **La registrazione**: una sola riga in `_frontend_utility.py`, subito dopo `SearchSelect.test.ts`.
+> - **La cura**: in `SearchSelect.svelte`, `lastPointerType` (listener `pointerdown` e `keydown` in cattura sul contenitore, in un `$effect`), `closedByTouch` in `closeDropdown()`, la guardia in `openDropdown()` solo se `closedByTouch`.
+> - **I gate** (corsia 6156, un comando per volta):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `front-utility component-unit` | 98 file, **2233 passed** (2223 + 10) |
+> | `front check` | **0/0** |
+> | `front build --debug` | ok |
+> | Prettier `--check` sui due file del frontend, `black --check` sul runner | puliti |
+> | E2-001 con `DEBUG=pw:protocol`, spec intera (P5–P8) | 4/4 ✓, intervalli 211–347 ms, carico 9,6–18,7: non discriminano |
+> | E2-001 da solo (P9–P12) | 4/4 ✓, intervalli **194**, 219, **203**, 312 ms dalla conferma (182, 206, 191, 298 dall'invio). P9 (182 ms) e P11 (191 ms) hanno gli stessi intervalli che prima erano sempre rossi (189–191 ms, 3 su 3) |
+> | `front-utility select` | `17 passed` |
+> | `tx-import-asset-inspector` / `-resolution` / `-matching` / `-flow` / `-upload` | `5` / `12` / `6` / `10` / `9 passed` |
+> | `tx-bulk-operations` / `tx-wac-bulk` | `10` / `10 passed` |
+>
+> - **Una firma indipendente**: Chrome conferma il secondo clic in circa 3 ms quando lo scarta (P1, P2, P4) e in 14–18 ms quando apre la lista, perché deve disegnarla (P3 e tutte le corse dopo la correzione).
+> - **`git merge-file -p`** sul runner contro `cda8cba1c` (base `9b5291c25`): **rc=0**, nessun marcatore di conflitto. Il file unito contiene sia `SearchSelect.reopen.test.ts` sia `AssetPickerPanel.test.ts` di F, e si legge senza errori.
+> - **Spec candidate allo stesso rosso** (scansione statica, una guardia per istanza):
+>   - `tx-fx-completeness.spec.ts:370→375` sceglie EUR e poi USD **nella stessa** `SearchSelect` (`tx-form-cash-to`), con solo due asserzioni rapide in mezzo. Oggi è mascherata da `openSearchSelect` (riga 82), che riclicca finché `aria-expanded="true"` (`toPass`, 3 s; introdotta in `ef722b552`). Con la correzione il ciclo non serve più: da semplificare (backlog);
+>   - `tx-commit-all-types`, `tx-fx-implied-rate` e `fx-add-pair` sono falsi positivi: scelgono in istanze diverse;
+>   - nessun'altra spec riapre la stessa istanza in fretta.
+> - Non eseguiti: `tx-import-report-set` e `tx-import-file-selection`, sensibili ai file BRIM rimasti dopo `api brim` di stamattina. Il permesso di `--clean` è scaduto con G.
+
+> **Note implementazione — la documentazione (2026-10-06)**: il docs-writer ha aggiunto un punto in `developer/frontend/components/core-ui/select.md`, sezione «🔎 SearchSelect». Dice che solo una chiusura col tocco o con la penna blocca la riapertura per 200 ms (`closedByTouch`), mentre mouse e tastiera non la bloccano mai. Ricorda anche la guardia separata e invariata su `Enter` subito dopo che il trigger prende il focus (`triggerFocusedAt`, solo con un valore impostato). `mkdocs build` strict ok; `check-links` col solo D28. Pagina senza traduzioni.
+
+### 16 — ✅ pronta per il checkpoint (2026-10-06)
+
+> **Note implementazione — il gate in più, chiesto dal coordinatore prima dello script (2026-10-06)**:
+> - un solo `db populate --force --clean`, autorizzato, sulla corsia 6156 (`/private/tmp/librefolio-r2-l`): i file della corsia passano da 854 a 0;
+> - poi, sull'albero di allora e senza toccare file: `tx-import-report-set` **18 passed** (carico 36,8) e `tx-import-file-selection` **2 passed**.
+>
+> **Integrazione**: `5df39167a` (fix), `e09ec9b47` (docs), `eade0c135` (journal), poi il merge `af5591991` (albero `b2e5e16d4`). `dev_release2` = `aa74797ff` (`v1.1.0-471`), con la riga 🐛 nel CHANGELOG. Nel backlog di fine round del coordinatore: CAC-011/012, il ciclo `toPass` di `openSearchSelect` (`tx-fx-completeness.spec.ts:82`), l'opzione `--trace` del runner e la nota su Invio e `triggerFocusedAt`.
+
+## 17. Review del passo G (2026-10-06)
+
+**Richiesta del developer** (testuale, tramite il coordinatore): «Sì, L prepari ora la review sulla 6166».
+
+### 17.1 ✅ La corsia di review (2026-10-06)
+
+- **Codice**: il worktree a `af5591991`, cioè `dev_release2` meno il CHANGELOG. `front build --debug`; il server dice `v1.1.0-470-gaf5591991`.
+- **Data-dir**: `/tmp/librefolio-r2-l-review`, nuova e separata da quella dei test. Un solo `test --test-port 6166 --data-dir /tmp/librefolio-r2-l-review db populate --force --clean`, autorizzato solo lì.
+  - Utenti di test creati con `dev.py user --test-db create` (più `promote` dell'admin) e impostazioni globali con `init-settings`, tutti con `LIBREFOLIO_TEST_DATA_DIR` sulla stessa data-dir.
+  - Verifica: cambia solo l'`app.db` della review; in questo worktree non esiste un DB di test predefinito.
+- **Server**: `dev.py server --test --host 127.0.0.1 --port 6166 --data-dir /tmp/librefolio-r2-l-review --no-reload --no-scheduler`, senza `--force`. Ascolta solo su `127.0.0.1:6166`; il login di `e2e_test_user` risponde 200.
+- **File sintetici**, fuori dal repo, in `/tmp/librefolio-r2-l-review-files/`. Vengono solo dai campioni sintetici di `sample_reports/`, nessun dato reale. Chi li legge, controllato col registro dei plugin:
+
+| File | Plugin che lo leggono | Motivo del CSV generico |
+|---|---|---|
+| `danske_bank-custody.xlsx` | Danske | «the Generic CSV reads only .csv files» |
+| `danske_bank-cash.csv` (come la spedisce la banca) | Danske | colonne `date` e `type` assenti |
+| `danske_bank-cash-both.csv` (la cassa «doppia», come `writeDualCash` della spec) | Danske e CSV generico | — |
+| `generic_simple.csv` | CSV generico | — |
+| `generico-senza-date-type.csv` | nessuno | colonne `date` e `type` assenti |
+| `generico-solo-date.csv` | nessuno | colonna `type` assente |
+
+- **Un limite della review**: la nota «riconosciuto anche da…», cioè un altro plugin a set, non si può mostrare, perché oggi Danske è l'unico plugin a set.
+
+### 17.2 ⏳ Le osservazioni del developer, primo giro (2026-10-06)
+
+**Testuali**, nella chat di L:
+
+> «il selettore read as è fatto con un select os e non uno custom fatto da noi. in oltre se faccio ce lo voglio leggere 1 ad 1 on ho modo poi di tornare indietro nella scelta, devo fare step back e poi avanti, e sono ancora in quello singolo, poi se nel primo scelgo il plugin di danske bak solo il primo passa al set, se faccio anche il secondo pure e almeno si mettono nello stesso set.
+> Poi nella riga con le barre, securities transactions è troppo corto  come spazio e la parte finale viene troncata con i ... sono su desktop, mi aspettavo di vederlo tutto.
+>
+> il cash-both non ho capito che dovrei farci nel test, nel plugin dice giustamente che manca l'xlsx, se poi scelgo il generico rileva 9 depositi e 23 prelievi, ti torna?
+>
+> l'escludi dal set funziona, ma come prima non compare la possibilità di scegliere un plugin fino a che non faccio indietro e poi avanti
+>
+> quando scrivi "apri la scheda: c'è la nota «Letto come set Danske Bank, non col plugin predefinito del broker (Generic CSV)…»;" non ho capito dove guardare, ma ho notato che solo nei csv, nel kebab menù c'è l'opzione di rimuoverlo e leggerlo con il generic csv, intendevi lui? se lo clicco però all'inizio in tabella il plugin è -
+>
+> ho poi notato nele prove, uscendo e rientrando, che la memoria resta, quindi direi che funziona.
+>
+> intanto risolvi queste cose, poi rifacciamo da capo»
+
+- Server di review spento a fine giro: porta 6166 libera (`lsof` rc=1).
+- Il prossimo passo è l'analisi di ogni punto, da mandare al coordinatore prima di correggere, come al solito.
+
+### 17.3 ✅ Analisi delle osservazioni (2026-10-06)
+
+| # | Osservazione | Causa verificata nel codice | Proposta |
+|---|---|---|---|
+| R1 | «Letto come» è una select nativa del sistema operativo | `ReportSetCard.svelte:338`, un `<select>` HTML | `SimpleSelect`, la nostra select senza ricerca (tastiera, `compact`, `testId`; già usata da 15 componenti). Vanno aggiornati i test che usano `selectOption` / `change` (test-author) |
+| R2 | Dopo «Leggi i file uno per uno» non si torna indietro | `readSetAs(set, null)` dà a ogni membro un override fuori dal set, quindi il set e la sua scheda spariscono, e con loro il menu. Si torna al set solo scegliendo Danske nella colonna Plugin di ogni file | da decidere col developer (17.4) |
+| R3 | Nella timeline «Securities transactions» è troncato con «…» su desktop | `ReportSetCard.svelte:475`: l'etichetta del ruolo ha larghezza fissa `w-26` (104 px) e `truncate`; la riga delle date si allinea con `pl-28`/`pr-44` | colonna dell'etichetta larga quanto l'etichetta più lunga (griglia `max-content` / `1fr` / `max-content`, con le date allineate alla colonna delle barre); a capo solo se lo schermo è stretto |
+| R4 | Dopo «Togli dal set» la scelta del plugin compare solo dopo Indietro/Avanti; dopo «Leggi da solo con…» il plugin in tabella è «—» | La colonna Plugin mostra la select **solo sui file spuntati** (`ImportWizardModal.svelte`, colonna `plugin`: `if (!sel) return '—'`). «Togli dal set» toglie la spunta di proposito; «Leggi da solo» e «uno per uno» tengono la spunta solo se c'era già, e con un set incompleto non c'era. Indietro/Avanti rispunta da solo i file caricati in questa sessione (`pickBestPlugin`), ed è per questo che la select «compariva» | da decidere col developer (17.4) |
+| R5 | La nota del plugin predefinito non si trova | Il broker creato, «danske bank» (id 9), ha `default_import_plugin = NULL` (verificato sul DB della review, in sola lettura). La nota esiste solo se il predefinito del broker è un altro plugin che legge un file del set (per esempio Generic CSV con `cash-both`): la sua assenza è corretta, non è un difetto. Le voci del menu ⋮ sono un'altra cosa (B) | nel prossimo giro, guida più chiara: impostare Generic CSV come predefinito; la nota è la riga blu con (i) in cima alla scheda aperta |
+| R6 | `cash-both` col generico: 9 depositi e 23 prelievi, torna? | Sì: 32 righe; la colonna `type` del file di prova viene dal segno di ogni importo (9 positivi, 23 negativi) | spiegarlo al developer: `cash-both` serve solo perché è l'unico file che leggono sia Danske sia il generico |
+| R7 | La memoria resta uscendo e rientrando | — | ✅ confermata dal developer |
+
+### 17.4 ⏳ Decisioni del developer
+
+- **R2, come si torna indietro da «uno per uno»** (testuale): «direi che per tornare indietro devo rimettere il plugin della banca in ogniuno dei file, e per farlo ovviamente deve essere possibile raggiungere il menù, levare dal set i file poi trovo corretto li faccia anche deselezionare, singolarmente sono ancora selezionati, ad essere cambiato è stato il modo di parsarli».
+  - Quindi: niente scheda ridotta né riga «Leggili come set». Si torna al set rimettendo il plugin della banca file per file, nella colonna Plugin, che dev'essere raggiungibile;
+  - «Togli dal set» toglie anche la spunta: va bene così;
+  - «Leggi i file uno per uno» **lascia spuntati tutti i file**: cambia solo come vengono letti. Un file che nessun plugin singolo legge resta spuntato, senza plugin, con la select su «Seleziona plugin…», da cui si può rimettere la banca.
+- **R4, la select del plugin sui file non spuntati** (testuale): «il select dovrebbe stare al posto del - , è un bug che non ci sia, dalla tua risposta immagino sia perchè togliendoli dal set si despuntano, se non è quella la causa trovala tu».
+  - La causa è proprio quella: la colonna Plugin mostra `—` quando il file non è in `selectedFiles`;
+  - più un difetto latente trovato nell'analisi: la tabella dei file singoli prende la selezione solo quando si monta (`initialSelectedIds`, in `untrack`). Un file che arriva dal set in una tabella già montata, per esempio con «Leggi da solo», risulta in `selectedFiles` ma senza spunta, e il primo clic su un'altra casella della tabella lo deseleziona senza dirlo.
+- **R1** (a voce nella domanda, senza obiezioni): `SimpleSelect` al posto della select nativa. **R3**: l'etichetta prende tutta la larghezza che le serve.
+
+### 17.5 ⏳ Il piano delle correzioni (H), approvato
+
+**Via del coordinatore** (2026-10-06): R1, R2 come ha deciso il developer, R3, R4 più il difetto latente, con `DataTable` intatto. `--clean` sulla 6156 prima di ogni giro E2E fino alla fine di H; per il secondo giro di review, `populate --force --clean` solo sulla data-dir di review. Nessun ramo tocca i 6 file.
+
+**La spunta alla scelta del plugin**, confermata dal developer (ask_user, testuale): «Sì: scegliere un plugin su un file non spuntato lo spunta (Consigliato)». Vale anche per «Leggi da solo con…», che è una scelta di plugin.
+
+**⚠️ Fuori pista — R4 ridefinito dal developer, dopo i rossi del primo giro** (testuale, nella chat di L): «riguardo al file non spuntato, ripeto che l'errore non è mostrare - per quelli non spuntati, è despuntare i file tolti dal set quando si chiede di trattare tutto il set come file singoli, per l'excel capisco che venga mostrato "nessun plugin disponibile" ma sui csv ni, dipende».
+- Riepilogo proposto da L e confermato (ask_user, testuale: «Sì, è così (Consigliato)»), che **sostituisce** la conferma precedente:
+  1. «Leggi i file uno per uno» non despunta più nessun file e cambia solo come vengono letti. Il file che un plugin singolo legge lo prende (`cash-both` → Generic CSV). Il file che nessun plugin singolo legge (l'Excel, la cassa come la esporta la banca) resta spuntato senza plugin, con la select su «Seleziona plugin…» che offre comunque Danske per tornare al set; finché non si sceglie, «Analizza» resta bloccato;
+  2. i file non spuntati, per esempio dopo «Togli dal set», **tengono il «—» come oggi**: per scegliere il plugin si spuntano prima;
+  3. le scelte di plugin **non cambiano la spunta**: «Leggi da solo con…» lascia il file spuntato o no com'era. Resta la correzione del difetto latente: la casella della tabella dei singoli coincide sempre con la selezione del wizard.
+- Quindi cadono la select sui file non spuntati e la spunta alla scelta. I rossi H-E3, H-E4, H-E5 e i due G-memory adattati vanno riscritti sul nuovo contratto (test-author).
+
+1. **I test rossi** (test-author):
+   - Vitest `ReportSetCard.test.ts`: «Letto come» è una `SimpleSelect` (`report-set-read-as-button`, le opzioni via `optionTestId`), e la scelta chiama `onReadAs`;
+   - E2E `tx-import-report-set.spec.ts`:
+     - «uno per uno» lascia spuntati tutti i file; l'XLSX ha la select su «Seleziona plugin…»; «Analizza» resta bloccato finché si sceglie; rimettere Danske su ogni file riforma il set;
+     - «Togli dal set» toglie la spunta e mostra la select al posto di «—»; scegliere Danske rispunta il file e lo rimette nel set;
+     - «Leggi da solo con Generic CSV» da un set incompleto mostra Generic CSV, col file spuntato;
+     - la casella della tabella coincide sempre con la selezione;
+     - l'etichetta della timeline non è troncata su desktop (`scrollWidth ≤ clientWidth`);
+   - adattare i test G che usano la select nativa.
+2. **La correzione**:
+   - `ReportSetCard.svelte`: R1 con `SimpleSelect` `compact`; R3 con la timeline a griglia;
+   - `ImportWizardModal.svelte`:
+     - `readSetAs(set, null)` conserva la selezione di ogni membro;
+     - la colonna Plugin mostra la select anche sui file non spuntati, col valore della scelta in vigore, e scegliere un plugin spunta il file (proposta di L: il developer non ha obiettato, ma va confermato nel secondo giro);
+     - la tabella dei singoli si rimonta quando cambiano i suoi file, e spunta con `toggleRowSelectionById` quando la scelta lo richiede.
+3. **I gate**: `tx-unit`, `component-unit`, `front check`, `front build --debug`; E2E `report-set` (con `--clean` prima), `-guide`, `handoff`, `file-selection`, `upload`, `flow`; `select`.
+4. **La doc** (docs-writer, solo EN): `import-wizard.md` (testid e comportamento) e `danske-bank.en.md` (come si torna al set; i file tolti hanno la select).
+5. Checkpoint, poi il **secondo giro di review** sulla 6166, da capo, con una guida più chiara per la nota (Generic CSV come predefinito).
+
+### 17.6 ✅ H: il rosso, la cura, i gate (2026-10-06)
+
+> **Note implementazione**:
+> - **Il rosso** (test-author, due giri; il secondo dopo la ridefinizione di R4):
+>   - Vitest `ReportSetCard.test.ts`: 6 rossi, cioè 5 test R1 adattati a `SimpleSelect` e il nuovo R3 sulle etichette;
+>   - E2E `tx-import-report-set.spec.ts`: 5 rossi su 24, ciascuno sul suo punto: H-E1 e H-E2 ×2 (R1, il trigger manca; poi R2), H-E6 (difetto latente: la casella «unchecked» mentre il wizard tiene il file selezionato), H-E7 (R3). Più due guardie verdi: H-E3, la via del ritorno da «Togli dal set», e H-E5, «Leggi da solo» che non cambia la spunta. H-E4 è cancellato e i G-memory sono tornati a HEAD.
+> - **La cura**:
+>   - `ReportSetCard.svelte`:
+>     - R1: `SimpleSelect` `compact`, testid `report-set-read-as`, opzioni `report-set-read-as-option-<code>` e `-one-by-one` (valore sentinella `__one_by_one__`, perché un valore vuoto vorrebbe dire «nessuna scelta»);
+>     - R3: la timeline è una griglia `fit-content(40%)` / `minmax(0,1fr)` / `max-content`; le date e la legenda stanno nella colonna delle barre; le etichette hanno `report-set-timeline-label` e `data-role`, `history` per LibreFolio;
+>   - `ImportWizardModal.svelte`:
+>     - R2: `readSetAs` cambia solo il plugin dei membri e ne conserva la spunta;
+>     - difetto latente: la tabella dei singoli è dentro un `{#key}` sugli id dei suoi file, quindi si rimonta quando un file entra o esce e rilegge `initialSelectedIds`. `DataTable` emette `onSelectionChange` solo su azioni dell'utente, quindi il rimontaggio non tocca la selezione;
+>   - Prettier sui due file, con le modifiche confinate alle zone toccate.
+> - **I gate** (corsia 6156, un comando per volta, `--clean` prima del giro):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `front-transaction tx-unit` | `627 passed` (i 6 rossi sono verdi) |
+> | `front check` | **0/0** |
+> | `front build --debug` | ok |
+> | `tx-import-report-set` | **24 passed** a 1 worker (carico 15) e **24 passed** a 4 worker |
+> | `-guide` / `tx-bulk-import-handoff` / `tx-import-file-selection` / `tx-import-upload` / `tx-import-flow` / `tx-import-resolution` | `2` / `2` / `2` / `9` / `10` / `12 passed` |
+> | `front-utility select` / `files` / `component-unit` | `17` / `22` / `2233 passed` |
+>
+> - Porta 6156 libera alla fine.
+
+> **Note implementazione — la doc di H (2026-10-06)**, dal docs-writer, solo EN:
+> - `user/transactions/import/danske-bank.en.md`, «🔀 How the set is read»: «uno per uno» cambia solo come vengono letti i file e non la spunta; un file spuntato senza plugin mostra *Select plugin…* e «Analizza» aspetta. «Leggi da solo» non cambia la spunta; solo «Togli dal set» toglie la spunta. Il file non spuntato mostra «—»: si spunta per scegliere il plugin, e Danske lo rimette nel set (dopo «uno per uno», file per file). La nota è «in cima alla scheda aperta», che risponde a R5. La pagina non ha traduzioni.
+> - `developer/frontend/components/features/import-wizard.md`: un punto nuovo sui file singoli (`handleSelectionChange`, colonna Plugin, `step2CanParse` e i due avvisi, il `{#key}` e perché); la griglia della timeline e `report-set-timeline-label`; «Read as» con `SimpleSelect` e i testid; `readSetAs`, `readFileAlone` e `removeFileFromSet` col nuovo contratto; il ritorno al set file per file.
+> - **⚠️ Fuori pista — crash dell'app verso le 14:18**, durante il lavoro del docs-writer, che non ha consegnato il rapporto:
+>   - stato ritrovato: HEAD `af5591991`, 7 file modificati, niente in stage, nessuna porta occupata e nessun processo rimasto;
+>   - i file di codice hanno l'ultima modifica alle 13:53, prima dei gate verdi, quindi i gate restano validi;
+>   - le due pagine (14:16 e 14:18) le ho rilette: sono complete, coerenti col codice e senza frasi vecchie rimaste (verificato con grep), e `importWizard.pluginRequired` e l'ordine degli avvisi esistono come la doc li descrive;
+>   - ho rifatto il passo interrotto, cioè i gate della doc: `mkdocs build` strict exit 0 con 0 WARNING/ERROR; `check-links` 81 validi, i 3 gialli noti e il solo rosso D28.
+> - **Controlli finali**: `git diff --check` pulito; Prettier `--check` sui 4 file del frontend pulito; privacy 0 collisioni su 745 righe aggiunte; porte 6156 e 6166 libere.
+
+### 17.7 ✅ H — pronta per il checkpoint (2026-10-06)
+
+- Poi il secondo giro di review sulla 6166, da capo, dopo il checkpoint.
+
+> **Commit di H** (developer, verificati dal coordinatore): `aa9c62291` fix, `c58e72368` docs, `97259ce7f` journal; `~3` = `af5591991`, albero `ddfb5a782`.
+> - Le correzioni ai messaggi, chieste da L: «every file keeps its tick» in C1, l'oggetto di C2 `docs(import): one by one keeps each file's tick`, e in C3 il gate in più del fix di `SearchSelect`.
+
+## 18. La voce 8: «scrivendo CSV il primo risultato è Generic CSV» (2026-10-06), analisi senza codice
+
+**La nota del developer** (testuale, dalle verifiche sul server nightly `049d36c8d`, senza G, tramite il coordinatore): «sui file uplodati si, quelli già analizzati mostrano solo il plugin già usato!».
+
+### 18.1 ✅ Dove e perché
+
+- **Dove**:
+  - nel wizard, «Seleziona file», la colonna Plugin è un `ImportPluginSelect` filtrato sui `compatible_plugins` del file (T5: «only show these plugins»);
+  - la select del broker, cioè il plugin predefinito di `BrokerForm`, mostra invece tutto il catalogo, e lì «CSV» → Generic CSV primo funziona (R13, ordinamento di K).
+- **La causa verificata**:
+  - `compatible_plugins` si calcola **una volta, al caricamento** (`save_uploaded_file`, `brim_provider.py:711`), col `can_parse` che ogni plugin ha in quel momento, e si salva nei metadati;
+  - **non si ricalcola mai**: né all'analisi (`_move_file` cambia `status`, `processed_at` e `parsed_plugin_code`) né alla lettura (`:800` lo restituisce com'è salvato). L'unica eccezione sono i file combinati (`:1143`), già esclusa dal coordinatore;
+  - nessuna logica del frontend riduce i file analizzati al plugin usato: la colonna Plugin del nightly (`git show 049d36c8d`) è identica a quella attuale.
+  - Quindi «un file analizzato mostra solo il plugin già usato» vuol dire che, quando è stato caricato, solo quel plugin lo accettava.
+- **Il perché più probabile, da confermare**: i file analizzati sono stati caricati con una versione più vecchia.
+  - Fino al 28/09 (`9d9c26d0d`, il lettore di base col ripiego cp1252), il `can_parse` del Generic CSV apriva il file in UTF-8 stretto e dava `False` a ogni errore. Un export Windows-1252 o Latin-1, tipico di broker e banche europee e motivo della correzione `6ea71ea8d`, non riceveva il Generic CSV;
+  - lo stesso vale per XLSX e XLS, perché il generico legge solo `.csv` (voluto);
+  - i file caricati sul nightly invece ricevono il generico: prima di G, qualunque CSV con una prima riga leggibile;
+  - i campioni sintetici sono UTF-8 e non lo mostrano: il vecchio generico rifiutava solo i 2 CSV Latin-1 di Danske.
+  - **Per confermarlo**: i `compatible_plugins` di un file analizzato (DevTools → Network → `GET /api/v1/brokers/import/files`), la sua data di caricamento e la codifica o il formato.
+
+### 18.2 ✅ Col codice attuale, con G
+
+- Il Generic CSV si propone solo se l'intestazione nomina `date` e `type` (alias multilingue).
+- Sui campioni, `/tmp/libreFolio_l_item8_samples.py` dà **49 elenchi su 56 con un solo plugin**: un export di broker appena caricato offre solo il suo plugin. Generic CSV compare per i 7 campioni generici e per 7 dei broker (bitvavo, cointracking, etoro, parqet, revolut ×2, schwab).
+- Quindi con G «un solo plugin» diventa **il caso normale** per gli export di broker, per scelta (decisione 1 di G: il generico non si propone dove non sa leggere, e se forzato dice quale colonna manca).
+- La voce 8 resta verificabile nella select del broker e, nel wizard, sui file che il generico legge.
+
+### 18.3 ✅ Voluto o difetto?
+
+- **Il filtro sui `compatible_plugins` è voluto** (T5).
+- **L'elenco congelato al caricamento è un difetto**: è la voce 7 del backlog di G, la stessa radice. Le conseguenze, con G:
+  1. i file caricati **prima di G** tengono il Generic CSV anche dove non sa leggere, e sceglierlo fallisce col motivo (G.5): chiaro, ma evitabile;
+  2. i file cp1252 caricati **prima del 28/09** non elencano il generico, anche quando con G potrebbe leggerli (cioè hanno `date` e `type`);
+  3. **il più serio per l'alpha**: un plugin arrivato **dopo** il caricamento non viene mai offerto per quel file. E siccome `setPluginFor` (frontend) e `collect_members` (server) leggono proprio `compatible_plugins`, un export Danske caricato prima del plugin Danske **non entra mai in un set**: bisogna ricaricarlo.
+
+### 18.4 ⏳ Opzioni per la correzione, da decidere col developer (niente codice adesso)
+
+| Opzione | Cosa | Superfici e costo |
+|---|---|---|
+| **A (consigliata)** | Rilevare di nuovo quando i plugin cambiano: insieme all'elenco si salva una firma del catalogo (codici più `plugin_version`); quando si elencano i file, gli originali con la firma vecchia vengono ricalcolati fuori dall'event loop e riscritti in modo atomico | `brim_provider.py` (salvataggio e lettura), forse l'endpoint della lista; test di servizio (firma vecchia → ricalcolo; firma uguale → niente) e API. Un `can_parse` per file vecchio dopo ogni cambio di plugin, trasparente per l'utente |
+| B | Un'azione manuale «Rileva di nuovo i plugin» (pagina File o wizard) | Più economica, ma l'utente deve saperlo |
+| C | Lasciare com'è e documentarlo | Nessun costo; i file vecchi restano coi loro elenchi |
+
+- **Quando** lo decide il developer: prima o dopo il taglio della release. Con A, i file caricati prima dell'aggiornamento si allineano da soli, compresi gli export Danske degli utenti alpha.
+- **Nel secondo giro sulla 6166** (DB nuovo, tutto caricato con G) il developer può vedere il comportamento attuale: Generic CSV primo nella select del broker; nel wizard, il generico solo sui CSV con `date` e `type`, e solo il loro plugin sugli export di broker. Il congelamento non si riproduce in una corsia nuova; per mostrarlo bisognerebbe ritoccare a mano i metadati sintetici della corsia di review, cosa che propongo ma non faccio senza permesso.
+
+## 19. Review del passo G, secondo giro (2026-10-06)
+
+### 19.1 ✅ La corsia di review, da capo
+
+- Codice: HEAD `97259ce7f` (H committato; c'è anche il piano, modificato). `front build --debug`; il server dice `v1.1.0-473-g97259ce7f-dirty`, dove `-dirty` è solo il piano.
+- Data-dir `/tmp/librefolio-r2-l-review`: un `test --test-port 6166 --data-dir /tmp/librefolio-r2-l-review db populate --force --clean` (autorizzato solo lì; i file passano da 14 a 0), poi gli utenti e `init-settings` come nel primo giro.
+- Server: `dev.py server --test --host 127.0.0.1 --port 6166 --data-dir /tmp/librefolio-r2-l-review --no-reload --no-scheduler`; ascolta solo su `127.0.0.1:6166`, login 200.
+- File sintetici: gli stessi del primo giro (§17.1), in `/tmp/librefolio-r2-l-review-files/`.
+
+### 19.2 ⏳ Le osservazioni del developer
+
+**Testuali** (secondo giro, prima risposta):
+
+> «piccola nota, appena connesso ho visto in period p&L:
+> +91,31 € 🇪🇺 EUR (+-16.36%)
+>
+> il +- credevo lo avevamo risolto, dobbiamo forse aggiornare la baseline di questa immagine?
+>
+> cmq appena arrivato all'upload ho caricato danske_bank-cash.csv e danske_bank-custody.xlsx ma facendo avanti mi è comparso
+>
+> Danske Bank also needs: Securities transactions (XLSX).
+>
+> Drop it here: it joins the same set. You can also continue: the set will show as incomplete. How to export it
+>
+> e mi si sono deselezionati entrambi, e xlsx ha anche perso il selettore del broker con il suo stato che è diventato: danske_bank-custody.xlsx: HTTP 500 — Internal Server Error»
+
+### 19.3 ✅ Analisi (2026-10-06)
+
+**V1 — l'upload dell'XLSX con HTTP 500: un difetto vero, non di G, nell'infrastruttura comune.**
+- Log del server di review: `POST /api/v1/brokers/import/upload` → 500, `RuntimeError: dictionary changed size during iteration` in `BRIMProviderRegistry.get_compatible_plugins` (`provider_registry.py:447`), chiamato da `save_uploaded_file` (`brim_provider.py:711`, in `asyncio.to_thread`).
+- **Il meccanismo** (lettura del codice):
+  - il wizard carica i due file in parallelo, su due thread;
+  - il catalogo era freddo: prima dell'upload non c'era stata nessuna chiamata a `/brokers/import/plugins`, e all'avvio non c'è riscaldamento;
+  - `auto_discover` (`:112`) non ha lock e imposta `_discovery_done` solo alla fine. Il secondo thread salta i moduli che il primo ha già messo in `sys.modules` (prima di `exec_module`), dichiara finita la scoperta e scorre `_providers` mentre il primo sta ancora registrando i plugin.
+- **Le conseguenze**: dopo ogni riavvio del server, il primo caricamento di più file può dare 500 su un file. Peggio, un thread può vedere un catalogo **parziale** e salvare un `compatible_plugins` incompleto, che non si ricalcola più (§18).
+- **Perché i test non l'hanno visto**: nei test il catalogo è già caldo prima di ogni concorrenza.
+- `provider_registry.py` è comune (FX, asset, BRIM; ultima modifica `d54d74189`, 10/09); `dev_release2` è identico.
+- **Proposta**:
+  - un `threading.RLock` di classe attorno alla scoperta, con doppio controllo di `_discovery_done`;
+  - scorrere una copia (`list(cls._providers.items())`) in `get_compatible_plugins`, `auto_detect_plugin` e `list_plugin_info`;
+  - facoltativo: scaldare i cataloghi all'avvio;
+  - prima il rosso (test-author): due thread su un catalogo freddo, con un modulo plugin lento in una cartella temporanea.
+  - Da decidere: il permesso, perché il file è fuori dal perimetro di L.
+- **Il «deselezionati entrambi»**: l'XLSX non è stato caricato, quindi la cassa da sola forma un set incompleto e l'avviso «Danske Bank also needs…» è corretto. Da chiarire col developer cosa ha visto deselezionarsi; il file in errore non ha un id sul server, quindi perde la select del broker.
+
+**V2 — «+-16.36%» nel «Period P&L»: un difetto vero, fuori dal perimetro di L, anche su `dev_release2`.**
+- `KpiSection.svelte`: `({pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayVsPrevTotalPct}%)`. Il segno segue il delta in denaro (+91,31 €), ma la percentuale è relativa al totale precedente: quando quel totale è negativo la percentuale è negativa, e il risultato è «+» seguito da «-16.36».
+- Il file è identico su `dev_release2` (ultima modifica `53219bc00`, 30/09), quindi aggiornare la baseline non lo risolve. Va al coordinatore, che sa se un ramo non ancora integrato lo corregge.
+- C'è anche una domanda di senso: una percentuale su una base negativa o zero ha significato?
+
+### 19.4 ⏸ Il secondo giro si ferma qui
+
+- **Decisione del developer** (ask_user, testuale): «Fermiamoci qui: prima si corregge il 500».
+- Server di review spento, porta 6166 libera (`lsof` rc=1), nessun processo rimasto.
+- **Decisione del coordinatore**: nessun ramo tocca `provider_registry.py` né `KpiSection.svelte`.
+  - **V1** lo corregge L, dentro H, in un commit a sé, dopo la chiusura del giro: prima il rosso (test-author: due thread su un catalogo freddo, con un modulo plugin lento), poi `RLock` di classe con doppio controllo e copie di `_providers` nei tre metodi che lo scorrono. **Niente riscaldamento all'avvio**: `main.py` lo toccano la famiglia Risk (lifespan) e M (middleware), e il lock basta per la correttezza. Gate: le suite `services` ed `external` dei provider (BRIM, FX, asset) e gli E2E di import. Va proposta una riga 🐛 di CHANGELOG.
+  - **V2**: passato a N (Dashboard), che porta al developer anche la domanda di senso sulla base negativa.
+- La **voce 8** (opzioni A/B/C di §18.4) aspetta la scelta del developer.
+- Dopo la correzione di V1 si ricomincia il secondo giro, da capo.
+
+### 19.5 ✅ Voce 8: la scelta del developer
+
+- Testuale (ask_user): «A — rilevare di nuovo quando i plugin cambiano (Consigliata)». Il developer non ha indicato il quando, quindi lo chiedo al coordinatore. Serve un piano proprio (analisi → via), dopo V1.
+
+### 19.6 ⏳ V1 — la scoperta dei plugin al riparo dalla concorrenza (dentro H, commit a sé)
+
+**Contratto**:
+- `AbstractPluginRegistry.auto_discover` diventa sicura fra thread. Ogni registro ha un suo `threading.RLock`, creato in `__init_subclass__`. Il doppio controllo è: `_discovery_done` letto fuori dal lock, poi di nuovo dentro; la scoperta intera avviene sotto il lock, e `_discovery_done` diventa vero solo alla fine.
+  - Un thread che arriva durante la scoperta di un altro aspetta e poi trova il catalogo completo.
+  - Il lock è rientrante, quindi un modulo che durante l'import richiama lo stesso registro non si blocca.
+  - Il lock per registro non ha rischio di ordine fra lock: nessun modulo plugin interroga un altro registro mentre viene importato (verificato con grep su `brim_providers`, `fx_providers`, `asset_source_providers`, `signal_plugins` e `tool_plugins`).
+- In `provider_registry.py` si scorre una copia di `_providers` in **tutti e cinque** i punti: `list_providers` (`:251`), `shutdown_all_providers` (`:263`), `auto_detect_plugin` (`:403`), `get_compatible_plugins` (`:447`) e `list_plugin_info` (`:467`). Il coordinatore ne aveva contati tre.
+- Niente riscaldamento all'avvio (decisione del coordinatore: `main.py` è di Risk e M).
+
+**Rosso** (test-author), in `backend/test_scripts/test_services/test_provider_registry_misc.py` (azione `services provider-registry-misc`):
+- un registro di prova con la sua cartella di plugin temporanea e un modulo lento;
+- due thread, il secondo che entra mentre il primo sta ancora importando: senza la correzione il secondo vede `RuntimeError` o un catalogo parziale; con la correzione tutti e due vedono il catalogo intero;
+- una guardia verde: la rientranza nello stesso thread non si blocca.
+
+**Gate**: `services` dei registri e dei provider (BRIM, FX, asset), `external` dei provider (BRIM, FX, asset), gli E2E di import (col `--clean` prima), `lint`.
+
+> **Via del coordinatore** (2026-10-06): d'accordo sui cinque punti a copia e sull'`RLock` per registro. I gate coprono tutti i registri: signal, risk, tool, FX, asset e BRIM, più i test del registro e gli E2E di import. Le suite `external` che vanno in rete non si eseguono e si segnalano come non eseguite. Serve una riga 🐛 di CHANGELOG, poi il checkpoint in un commit a sé.
+> - **Voce 8 (A) va nella 1.2, prima del taglio.** Il motivo del coordinatore: con la 1.2 arriva Danske, e chi aggiorna dalla 1.1.0 ha file caricati senza quel plugin, che altrimenti non entrerebbero mai in un set. Dopo V1 si scrive il piano, solo analisi; il via al codice lo porta il coordinatore al developer.
+
+> **Note implementazione — V1 (2026-10-06)**:
+> - **Il rosso** (test-author, in `test_provider_registry_misc.py`, 7 casi nuovi): la corsa, deterministica con Event e attese limitate, su un registro di prova che eredita da `BRIMProviderRegistry`, con una cartella temporanea, uno spazio dei nomi unico e moduli registrati con `@register_provider`. Il secondo chiamante dava `RuntimeError: dictionary changed size during iteration` a `provider_registry.py:447`, la stessa riga del 500 vero. Più 5 casi sulle copie, uno per punto che scorre il catalogo (rossi), e una guardia sulla rientranza (verde). Il test-author ha anche provato il contratto su sottoclassi temporanee: ogni metà della correzione è fissata da un suo test.
+> - **La cura** (`provider_registry.py`):
+>   - `import threading`; `_discovery_lock = threading.RLock()` in `__init_subclass__`;
+>   - `auto_discover` col doppio controllo, e la scoperta spostata in `_discover_modules()` sotto il lock. Gli errori si registrano prima di `_discovery_done = True`; il `raise` degli errori avviene fuori dal lock;
+>   - `list(cls._providers.items())` nei cinque punti (`:272`, `:284`, `:424`, `:468`, `:488`).
+> - **I gate** (corsia 6156, un comando per volta):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `services provider-registry-misc` / `provider-registry` / `provider-contracts` | `13` (i 6 rossi sono verdi) / `7` / `405 passed` |
+> | `services signal-registry` / `signal-contracts` / `signal-runtime` / `tools-registry` | `65` / `10` / `6` / `93 passed` |
+> | `services risk-all test_risk_registry` | `4 passed` (450 non selezionati) |
+> | `services brim-provider-base` / `brim-versioning` / `brim-parse-pool` / `brim-parse-race` / `brim-report-sets` / `asset-source` | `34` / `5` / `8` / `14` / `255` / `61 passed` |
+> | `external brim-providers` / `brim-danske-bank` (offline, sui campioni) | `626 passed`, 1 saltato / `324 passed` |
+> | `external fx-providers` / `asset-providers` / `justetf-multicurrency` | **non eseguiti**: vanno in rete (decisione del coordinatore) |
+> | `--clean` autorizzato, poi gli E2E di import | `report-set` 24, `-guide` 2, `handoff` 2, `file-selection` 2, `upload` 9, `flow` 10, `resolution` 12, tutti verdi, con carico 35–50 |
+> | **Avvio a freddo, da capo a fondo** (`/tmp/libreFolio_l_v1_coldstart_uploads.sh`): server di test sulla 6156 appena avviato, nessuna chiamata BRIM prima, poi 6 upload in parallelo come fa il wizard | 3 avvii su 3: **6 × 200**, ogni `compatible_plugins` completo e giusto, 0 righe `dictionary changed size` nel log |
+> | `api brim` (per ultimo) / `check-orphans` | `73 passed` / pulito |
+> | `black --check` e `ruff check` sui due file | puliti |
+> | `dev.py lint` | 1 errore **non di L**: C901 in `pac_allocator/normalize.py:461` (`ac18ce097`, 05/10, arrivato con D). I miei file sono puliti |
+>
+> - I server degli avvii a freddo li ho avviati in shell async collegate e fermati con `stop_bash`, senza `kill`. Dopo ogni avvio, la porta 6156 era libera.
+> - **La doc** (docs-writer, solo EN): `developer/architecture/patterns/registry_pattern.md`, un passo 5 «Thread-safe» nel processo di scoperta. `mkdocs build` strict ok; `check-links` col solo D28.
+> - **⚠️ Fuori pista — deriva della doc, trovata dal docs-writer e non toccata (per il backlog)**: `registry_pattern.md` cita un `get_provider()` che non esiste (esistono `get_plugin` e `get_provider_instance`), chiama `AbstractProviderRegistry` la base di tutti i registri (la base vera è `AbstractPluginRegistry`), e non elenca `RiskAnalyticRegistry` né `ToolPluginRegistry`. `ToolPluginRegistry` ha anche un suo lock e rifiuta con `RuntimeError` la rientranza durante l'import; `tools-registry` resta verde (93).
+> - **CHANGELOG proposto** (🐛 Fixed): `- **Uploading several reports right after LibreFolio starts no longer fails.** The first uploads after a restart could end in an *Internal Server Error* on one file, or record an incomplete list of the plugins able to read it, while the import plugins were still being loaded; loading them is now safe when uploads arrive together.`
+
+### 19.7 ✅ V1 — pronta per il checkpoint (2026-10-06)
+
+- Poi: il piano della voce 8 (A), solo analisi, e il secondo giro di review da capo.
+
+### 19.8 ✅ Il secondo giro riparte da capo (2026-10-06)
+
+- Codice: HEAD `172b8e616` (V1 committato); il server dice `v1.1.0-476-g172b8e616-dirty`, dove `-dirty` sono il piano e il piano del passo 5.
+- Il frontend non è cambiato dopo l'ultima build (`git diff 97259ce7f HEAD -- frontend/` è vuoto; build delle 14:44, con H).
+- Data-dir di review: un `populate --force --clean` (autorizzato solo lì; da 3 file a 0), poi gli utenti e `init-settings`.
+- Server su `127.0.0.1:6166`, login 200, **0 chiamate BRIM** prima della review: il catalogo è freddo, come nel caso del 500.
+
+### 19.9 ⏳ Le osservazioni del developer, secondo giro ripreso (2026-10-06)
+
+**Testuali**:
+
+> «meglio di prima, non si incarta, ma quando tolgo dal set le risorse continuano a non essere selezionati. Se poi li riselezione e scelgo il pligin di danske bak vanno su correttamete.
+>
+> il read as pra è corretto, mi pare che quasi tutto ci sia, prova anche tu a fare delle prove per far saltare fuori altri bug più tecnici»
+
+**Chiarimento chiesto da L** (la decisione del primo giro diceva che togliere dal set toglie anche la spunta). La risposta, testuale:
+
+> «credo ti sia confuso o che mi sono espresso male, lo ridico per non richiare di essere frainteso:
+> Quando tolgo un file dal set non significa necessariamente che non lo voglio usare, solo che non lo voglio fare con quel plugin.
+> Deve quindi restare selezionato, ma con plugin da scegliere.
+>
+> E anche come linea guida per il futuro, i prossimi plugin che usano i set, il comportamento deve essere questo, quando scegliamo il plugin il file entra nel set, se ci rendiamo conto di aver sbagliato e lo vogliamo portare fuori, il file non si deve deselezionare, deve solo scoparire il plugin selezionato in attesa di una nuova scelta»
+
+- **La decisione nuova (R5)**, che sostituisce quella del primo giro su «Togli dal set»:
+  - togliere un file dal set **non cambia la spunta**: il file resta com'era, senza plugin («Seleziona plugin…»), e «Analizza» aspetta una scelta;
+  - scegliere il plugin di un set fa entrare il file nel set;
+  - vale come **regola per tutti i plugin a set futuri**: va scritta nella guida dei plugin e nella pagina del wizard.
+- È una correzione di codice, quindi si fa dopo la chiusura del giro: analisi e piano al coordinatore, poi i rossi e la cura, come H.
+- **Il coordinatore, intanto**: via del developer alla voce 8, testuale «Approvo le raccomandazioni (Consigliato)» (D1 A-persist, D2 la versione dell'app, D3 il costo una volta sola in un thread). Concessione su `brokers.py` per le sole due chiamate (`:687`, `:135`). **Requisito nuovo**: il lock deve funzionare anche fra processi (`fcntl.flock` per broker, più la scrittura atomica che ricontrolla che il sidecar sia ancora al suo posto), con un test a due processi o a due thread più una prova di `flock`, scritto prima dal test-author. Ordine: prima il giro di review, poi la voce 8.
+
+### 19.10 ✅ Le prove tecniche di L, chieste dal developer (2026-10-06)
+
+Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui propri broker. Gli script sono `/tmp/libreFolio_l_review_probes.py` (47 prove), `…_probe_p15.py`, `…_probe_json.py` e `…_probe_rename.py`.
+
+**Come previsto (45 su 47)**:
+- due upload in parallelo;
+- l'anteprima del set;
+- `exclude_file_ids`: id sconosciuto → 422, di un altro broker → 422, tutti i membri → 404, non UUID → 422;
+- un plugin non a set o sconosciuto → 400/404; il batch di un altro broker → 404;
+- combine e riuso;
+- il parse del combinato (27 transazioni), mentre il parse di un membro da solo è rifiutato con 422;
+- due parse concorrenti dello stesso combinato → 200 e 200;
+- l'eliminazione di un membro e quella del combinato;
+- un CSV vuoto → 400; un XLSX corrotto e un `.txt` caricati → 200 senza plugin; un nome unicode con spazi → 200;
+- un batch non UUID → 422; un broker inesistente → 403;
+- preview, download e last-parse;
+- i corpi malformati di `gap-fix` e `duplicates` → 422; `auto` su un CSV che nessuno legge → 400.
+- **Lo stesso export due volte nello stesso set non raddoppia le transazioni**: 27 in tutti e due i casi, perché il combine toglie le righe doppie. Non è un difetto.
+
+**Difetti trovati**, nessuno viene da G. Le cause sono verificate nel codice e nei log:
+
+| # | Difetto | Causa | Gravità | Proprietà |
+|---|---|---|---|---|
+| F1 | Due **combine concorrenti** dello stesso set creano **due** file combinati | in `combine_set` il controllo di riuso e il salvataggio non sono atomici | medio-bassa: un doppio clic su «Analizza» o due schede lasciano un doppione | di L (`brim_report_sets.py`, `brim_provider.py`) |
+| F2 | L'**anteprima di un XLSX corrotto** risponde 500 «Failed to build file preview» | `file_preview.py:215` (`_read_excel_preview`): `BadZipFile` di openpyxl non è mappato su `ValueError`, quindi niente 400 | bassa | `file_preview.py` (comune) |
+| F3 | **Un upload `*.json` sovrascrive il file dell'utente coi propri metadati**: il download e l'anteprima restituiscono il sidecar. Vale anche per la rinomina (`custom_filename`) e per `.JSON` | il file salvato è `{file_id}{ext}`, con l'estensione dell'utente e senza elenco ammesso, e il sidecar è `{file_id}.json`. In più, un `_move_file` sposterebbe il sidecar come se fosse il file e non aggiornerebbe più lo stato | **media: perdita dei dati dell'utente** (alcuni exchange esportano in JSON) | `brim_provider.py` (di L) e l'upload in `brokers.py` (comune) |
+| F4 | Un **upload con un'estensione lunghissima** risponde 500 (`OSError: File name too long`) | come F3: l'estensione non è controllata | bassa | come F3 |
+
+**Proposte** (niente codice prima del via):
+- **F1**: il lock per broker della voce 8 (`flock`) copre anche il riuso e il salvataggio in `combine_set`. Quindi va con la voce 8, col suo rosso: due combine in parallelo → un solo combinato.
+- **F3 e F4**: al caricamento, un **elenco di estensioni ammesse** (l'unione delle `supported_extensions` dei plugin, eventualmente più i tipi di anteprima). Un'estensione fuori elenco si rifiuta con 422 e un messaggio chiaro, oppure si salva come `.dat` tenendo il nome originale per la visualizzazione (decisione del developer). In ogni caso mai `.json`.
+- **F2**: mappare gli errori di lettura (`BadZipFile`, `InvalidFileException`, decodifica) su `ValueError`, così l'anteprima risponde 400 «non riesco a leggere questo file».
+- Quando, prima o dopo il taglio: lo decide il developer. Consiglio prima del taglio almeno per F3 (perdita di dati).
+
+### 19.11 ✅ Il secondo giro si chiude (2026-10-06)
+
+- **Il developer** (ask_user, testuale): «Chiudi pure la review: ho visto abbastanza». Server di review spento, porta 6166 libera (`lsof` rc=1), nessun processo rimasto. Gli script delle prove sono copiati nei file della sessione.
+- **Le decisioni del coordinatore**:
+  1. **R5** prima della voce 8, in un checkpoint a sé: i rossi (i test G ed H da aggiornare), la correzione in `removeFileFromSet`, la regola nella guida dei plugin e nella pagina del wizard (EN). Una frase di CHANGELOG per la voce Danske, «You choose how a set is read»;
+  2. **F1** dentro la voce 8: lo stesso lock per broker copre `combine_set`, col rosso «due combine concorrenti → un solo combinato»;
+  3. **F3 e F4** nella 1.2, prima del taglio. Concessione su `brokers.py` per la validazione dell'estensione nell'upload; nessun ramo tocca `brokers.py` né `file_preview.py`. Prima i rossi: `.json`, `.JSON`, `custom_filename` con `.json`, un'estensione lunghissima;
+  4. **F2** è di L, in `file_preview.py`: `BadZipFile` → 400, col suo rosso. Va verificato che la mappatura valga anche in `uploads.py`, che importa dallo stesso modulo.
+  - **Ordine**: R5 → voce 8 con F1 → F2, F3 e F4 in un checkpoint di «robustezza dell'upload». Un checkpoint per volta, e una riga 🐛 di CHANGELOG per ogni punto che l'utente vede.
+- **F3 e F4, la scelta del developer** (ask_user, testuale): «422: rifiuta il file con un messaggio chiaro (Consigliato)».
+
+## 20. R5 — togliere dal set lascia la spunta (2026-10-06)
+
+**La decisione** (testuale, §19.9): «Quando tolgo un file dal set non significa necessariamente che non lo voglio usare, solo che non lo voglio fare con quel plugin. Deve quindi restare selezionato, ma con plugin da scegliere. […] il file non si deve deselezionare, deve solo scoparire il plugin selezionato in attesa di una nuova scelta».
+
+**Contratto**:
+- `removeFileFromSet(fileId)`: il file riceve `''`, cioè esce dal set senza plugin, e **la sua spunta non cambia**. Se era spuntato resta spuntato, con `pluginCode: ''`: la colonna Plugin mostra «Seleziona plugin…» con i suoi plugin compatibili (anche quello del set), e «Analizza» aspetta (`step2CanParse`). Se non era spuntato, resta non spuntato con «—».
+- Con questo, **nessun comando della scheda cambia più la spunta**: «Letto come» / «uno per uno», «Leggi da solo», «Togli dal set».
+- Scegliere di nuovo il plugin del set rimette il file nel set (`updateFilePlugin`), come oggi.
+- **La regola per i plugin a set futuri**, nella guida dei plugin: scegliere il plugin di un set fa entrare il file nel set; toglierlo dal set non cambia la spunta e lascia il file senza plugin, in attesa di una nuova scelta.
+
+**Rosso** (test-author):
+- E2E `tx-import-report-set.spec.ts`: H-E3 e gli altri test che oggi si aspettano la spunta tolta dopo «Togli dal set» (H-E3, G-memory (set) se ci passa, G-C o altri: da trovare), aggiornati al nuovo contratto. Più un caso: rimuovere un membro da un set spuntato → il file resta spuntato con la select vuota, «Analizza» è bloccato, e scegliere Danske lo rimette nel set.
+- Vitest, se esiste un test che copre la spunta di `removeFileFromSet` nella logica pura (probabilmente no: il gestore sta nel wizard).
+
+**Doc** (docs-writer, EN): `danske-bank.en.md` («Remove from the set … and is unticked» va cambiato), `import-wizard.md` (`removeFileFromSet`), `brim_plugin_guide.md` (la regola per i plugin a set).
+
+**Gate**: `tx-unit`, `front check`, `front build --debug`, `tx-import-report-set` a 1 e a 4 worker (col `--clean`), gli altri E2E di import, `component-unit`, `mkdocs build` strict e `check-links`.
+
+> **Permessi** (coordinatore, 2026-10-06): il `--clean` sulla 6156 prima di ogni giro E2E vale per R5, per la voce 8 e per la robustezza dell'upload, fino alla prossima integrazione. **Integrazione**: H, V1 e R5 entrano insieme in `dev_release2` subito dopo il checkpoint di R5. Il developer fonde il target (oggi `6addaba05`) nel ramo di L, L valida la revisione combinata, poi fast-forward e CHANGELOG (la riga V1, la riga R5 e una frase per H nella voce Danske).
+
+> **Note implementazione — R5 (2026-10-06)**:
+> - **Il rosso** (test-author, in `tx-import-report-set.spec.ts`):
+>   - adattati: H-E3 (il ritorno subito dopo «Togli dal set») e G-memory (set) (il terzo estratto tolto resta spuntato senza plugin; l'utente lo despunta);
+>   - nuovi: R5-E1 sugli export della banca, R5-E1 sulla cassa doppia (la select offre i due plugin, nessuno scelto) e R5-E2, la guardia sul set non spuntato (il file resta non spuntato con «—»);
+>   - nessun Vitest asseriva la spunta tolta.
+>   - Dopo il `--clean` autorizzato (da 226 file a 0): **4 rossi e 2 verdi**, come previsto. I 4 cadono tutti su «‹id› is selected» (`data-state` `unchecked` invece di `checked`).
+> - **La cura** (`ImportWizardModal.svelte`): `removeFileFromSet` tiene il file in `selectedFiles` con `pluginCode: ''` invece di toglierlo, nello stesso blocco sincrono di `filePluginOverrides` (consiglio del test-author: così il `{#key}` lo rimonta spuntato). Il commento dice che, come «Letto come» e «Leggi da solo», cambia il modo di lettura, mai la spunta.
+> - **I gate** (corsia 6156, un comando per volta, `--clean` prima del giro):
+>
+> | Verifica | Esito |
+> |---|---|
+> | Prettier `--check`, `front check`, `front build --debug` | puliti / **0/0** / ok |
+> | `tx-import-report-set` | **27 passed** a 1 worker (carico 161) e **27 passed** a 4 worker |
+> | `-guide` / `handoff` / `file-selection` / `upload` / `flow` / `resolution` | `2` / `2` / `2` / `9` / `10` / `12 passed` |
+> | `tx-unit` / `component-unit` | `627` / `2233 passed` |
+>
+> - **La doc** (docs-writer, EN):
+>   - `danske-bank.en.md`: «Togli dal set» lascia la spunta e toglie il plugin; nessun comando cambia la spunta; il rimedio per un set incompleto con un file tolto ancora spuntato;
+>   - `import-wizard.md`: `removeFileFromSet` e il punto «nessun comando aggiunge o toglie un file dalla selezione»;
+>   - `brim_plugin_guide.md`: la **regola per ogni plugin a set**, cioè scegliere il plugin fa entrare nel set, toglierlo non cambia la spunta e lascia il file senza plugin;
+>   - `mkdocs build` strict ok; `check-links` col solo D28.
+> - **⚠️ Fuori pista — R6, un difetto più vecchio trovato dal docs-writer e verificato da L nel codice**: un set **spuntato solo in parte** non blocca l'analisi (`setBlocksAnalysis` guarda solo la completezza). `buildParseUnits` conta solo i membri spuntati, ma il combine manda `setRequest(set, …)`, che esclude solo i file fuori dal set: **anche i membri non spuntati vengono combinati e importati**.
+>   - Ci si arriva con G, H e R5: un file spuntato esce dal set, si esclude il set, poi lo si rimette col plugin del set.
+>   - È una decisione di prodotto, e va chiesta al developer: bloccare il set spuntato in parte, con un avviso «spunta o togli la spunta a tutto il set», oppure combinare solo i membri spuntati (`exclude_file_ids`). Non fa parte di R5.
+> - **CHANGELOG proposto**, una frase per H e R5 nella voce Danske (sotto «You choose how a set is read»): `None of these commands ticks or unticks a file: reading the files one by one, reading one alone or taking it out of the set only changes how it is read, and a file left without a plugin waits for you to choose one. The set's timeline shows each export's name in full.`
+
+### 20.1 ✅ R5 — pronta per il checkpoint (2026-10-06)
+
+> **Commit di V1** (developer, verificati dal coordinatore): `104641cb1` fix, `2ef332763` docs, `172b8e616` journal; `~3` = `97259ce7f`, albero `f24ff6802`.
+>
+> **Il piano della voce 8** (opzione A, nella 1.2, solo analisi): [plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md](plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md), mandato al coordinatore il 2026-10-06.
+
+> **Commit di R5** (developer, verificati dal coordinatore): `c069bd064` fix, `ac142cb9d` docs, `b360b7b4b` journal; albero `01cec86fb`. Il corpo di C2 è stato corretto prima del commit: «no reading command (Read as, Read alone, Remove from the set)» e «keeps its tick and loses its plugin».
+
+## 21. Integrazione di H, V1 e R5: il treno 1 (2026-10-06)
+
+- **Il treno** (deciso dal coordinatore perché K aspettava con una revisione unita mai validata): `/tmp/libreFolio_order_train1.sh` fonde D in K, poi K in L. Il merge di L è `eba9e8bf1` (genitori `b360b7b4b` + `998ce67d4`, albero `a3569b83e` uguale alla simulazione). Nessun percorso in comune con H, V1 e R5; i cataloghi i18n si fondono a tre vie (4508 = 4505 + 3 del treno, nessuna chiave di L).
+- **La validazione della revisione unita** (corsia 6156, un comando per volta):
+
+| Verifica | Esito |
+|---|---|
+| i18n a tre vie (base `af5591991`) | ok: niente mancante, in più o cambiato |
+| `api sync`, `front build --debug`, `mkdocs build` | ok |
+| `front check` / `i18n audit` | **0/0** / completo, 4508 |
+| `tx-unit` / `component-unit` | `627` / `2276 passed` (101 file), exit 0 |
+| `provider-registry-misc` / `brim-report-sets` | `13` / `255 passed` |
+| `tx-import-report-set` | **27/27** a 1 worker; **27/27** a 4 worker (dopo la ripresa) |
+| `-guide` / `handoff` / `file-selection` / `upload` / `flow` / `resolution` | `2` / `2` / `2` / `9` / `10` / `12 passed` (carico 34–131) |
+| `api brim` (per ultimo) / `check-orphans` / `check-links` | `73 passed` / pulito / il solo D28 |
+
+- **⚠️ Fuori pista — lo STOP del developer (17:43) e il riavvio della macchina (circa 19:21)**:
+  - la validazione si è fermata dopo `tx-import-report-set` a 1 worker, con `stop_bash`, porte libere e nessun processo rimasto. È ripartita dal punto annotato, sulla stessa revisione;
+  - il riavvio ha svuotato `/tmp`: la data-dir della corsia (ricreata con un `populate --force --clean` completo, solo lì), gli script e i log;
+  - il log di `component-unit` è andato perso: l'exit era 0, letto a schermo prima della pausa, e l'archivio del runner tiene solo i log pytest. Per questo non si può dire se l'errore non gestito di `ChartSignalsSection.test.ts`, visto da K con exit 1, fosse presente anche qui;
+  - da allora gli script e i log dei giri stanno nei file di sessione (`files/train1-validation*`).
+- **Il riallineamento**: `dev_release2` = `a7d0b37ec` (il treno D, K, L, M, N più il CHANGELOG), e il ramo di L coincide con lui.
+- **Il CHANGELOG** del coordinatore contiene, testuali, la frase H + R5 nella voce Danske («None of these commands ticks or unticks a file…») e la riga 🐛 di V1.
+
+## 22. Le decisioni rimandate dopo l'integrazione (2026-10-06)
+
+### 22.1 Il bottone «Escludi dall'import» e R6 (il set spuntato solo in parte)
+
+**Testuali** (chat di L, dopo la mia domanda su R6 del §20):
+
+> «mi pare un overtink, non ho capito il problema poi, sarebbe che tolgo un solo file, quindi il set esistem ma monco e poi ce lo rimetto? spiegati con parole mooolto più semplici»
+
+> «credo che il punto sia il bottone "Escludi dall'import" è una cosa che ti volevo chiedere, a cosa dovrebbe servire? a rimuovere tutti i file dal set? o cosa?»
+
+> «credo che il problema sia che non è comodo affatto, se un set lo voglio escludere, ci tolgo la spunta, non faccio questo giro.»
+
+> «non ho neanche capito quando compare»
+
+- **La spiegazione di L**: il bottone compare solo quando un set spuntato è incompleto, in basso a destra della scheda aperta, e l'avviso accanto ad «Analizza» dice «…carica il file mancante o escludilo». Fa esattamente quello che fa la casella della scheda: toglie la spunta a tutti i file del set.
+- **La decisione** (ask_user, testuale): «Toglilo, e l'avviso dica di togliere la spunta al set (Consigliato)».
+- **Il perimetro** (confermato dal coordinatore: nessun altro ramo tocca queste superfici):
+  - via il bottone `report-set-exclude` e la prop `onExclude` (`ReportSetCard.svelte`), ed `excludeSet` (`ImportWizardModal.svelte`);
+  - `importWizard.reportSet.incompleteBlocks` cambia testo in 4 lingue; `importWizard.reportSet.exclude` si toglie;
+  - la doc EN di `danske-bank.en.md` e `import-wizard.md`;
+  - i test che usano `report-set-exclude`, tra cui R5-E1.
+- **R6 resta da decidere**: togliere il bottone non lo elimina, perché ci si arriva anche togliendo la spunta con la casella della scheda e poi rimettendo nel set un file spuntato. Si chiede al developer in parole semplici quando si apre il lotto.
+- **Ordine** (coordinatore): voce 8 con F1 → robustezza dell'upload, F2–F4 (con 422, già deciso) → il bottone tolto più R6. Tre checkpoint, ognuno con le sue righe 🐛.

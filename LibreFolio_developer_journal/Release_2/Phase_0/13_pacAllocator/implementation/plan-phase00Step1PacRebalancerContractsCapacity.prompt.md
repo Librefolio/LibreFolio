@@ -5,6 +5,17 @@ G5 OPEN.
 **Dipende da:** planning checkpoint, autorizzazione prodotto, handshake gruppo C.
 **Blocca:** core, shell frontend, solver e client generato.
 
+> ⚠️ **Nota 2026-09-24 (round 5).** Lane, selector e simboli P1 citati in questo piano
+> descrivono la fase in cui è stato scritto. Lo stato corrente è altrove:
+> - lane `6153` → oggi `6151` (suite) e `6161` (copia di prod);
+> - `pac-analyze`, `pac-tool` e `pac-planner-capacity` non esistono: i selector reali
+>   sono in [handoff §0.4](../../16_toolPlatform/handoff-pac-D.md);
+> - P1 `analyze` rimosso il 2026-09-21 (`b82e59ffa`).
+>
+> L'avanzamento è nella tabella del [README](README.md) e nel
+> [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md). Le note datate qui sotto
+> restano come evidenza storica. Lo **Stato** in testa non è stato rimisurato.
+
 ← Master: [piano implementativo](plan-phase00PacRebalancerImplementation.prompt.md)
 ← Autorità: [target](../plan-phase00PacRebalancerTargetDesign.prompt.md) ·
 [architettura](../plan-phase00PacRebalancerArchitecture.prompt.md)
@@ -135,6 +146,15 @@ Ogni request include `currency_specs[]`. Ogni `CurrencySpec` contiene codice e
 dominio risolve il codice tramite utility valuta backend estesa con Babel CLDR
 `get_currency_precision`; uno scenario manuale invia il codice ma non inventa
 la precisione. Metadata irrisolvibile produce `needs_input`/`unsupported`.
+
+> **Superato il 2026-09-24 (Round5, decisione Q-C0-1 del developer)**: «cambiamo la api
+> semplicemente, tanto le valute sono standard e vincolate ad essere quelle di babel».
+> `currency_specs[]` esce dalla request dei tre planner e dalla risposta della sorgente di
+> copia: il backend ricava `minor_unit = 10^-cifre` da `babel.get_currency_precision` per ogni
+> codice dello scenario, già vincolato a ISO 4217 da `CurrencyCode`. `CurrencySpec` resta come
+> riga dei cataloghi in output. Il principio sopra — quantum backend-derived, mai scritto
+> dall'utente — non cambia; cambia solo chi lo porta. Dettaglio in
+> `plan-phase00PacRound5PostMerge.prompt.md`, C0b.1.
 
 Numeri input: stringhe fixed-point finite. Numeri derivati che possono essere
 non terminanti usano una union oggetto nominata e discriminata:
@@ -665,6 +685,39 @@ tempo/memoria esplicito, non il precedente cap 16/4/32/4.
 
 Dopo ogni step aggiornare immediatamente questo file con data, nota,
 evidenza e fuori-pista.
+
+> **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
+> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
+> aperti, senza spuntarli.
+> - **4. JSON Schema e TypeScript.** Fatto, ma non come previsto qui. Lo schema e i codec li
+>   genera la piattaforma Tool con `dev.py api sync` ([handoff §0.2](../../16_toolPlatform/handoff-pac-D.md)),
+>   e i file generati sono ignorati da git. La forma del contratto è fissata dalle fixture
+>   `backend/test_scripts/fixtures/pac_allocator/*.v2.json`, compresa
+>   `pac_plan_request.compact.v2.json`, la richiesta compatta del 05/10. Un diff semantico
+>   separato non è stato fatto.
+> - **5. Esercizio MCP.** Non fatto. Il developer, il 05/10: MCP è «prematuro oltre ogni
+>   misura». Resta fuori dal round.
+> - **9. Probe bulk 4×2 e congelamento.**
+>   - Versioni, codici e fingerprint sono congelati a `1.0.0` con la compattazione
+>     (`ac18ce097`, handoff §0).
+>   - Il compute con più richieste nello stesso blocco è provato nei test API
+>     (`test_pac_planner_tool_api.py:311`, `:338`, `:387`, `:425`).
+>   - La probe di capacità con 4 richieste pesanti e 2 worker, con tempi e memoria misurati,
+>     **non risulta eseguita**.
+>   - Quanti asset regge il solver passa alla domanda (b) dell'analisi del Rebalancer, con le
+>     misure del 05/10. Il tetto predefinito delle route non c'è più dal 30/09 (R8.5 del
+>     [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md)): vuoto vuol dire nessun
+>     limite oltre alle risorse.
+> - **10. Review schema, auth e capacità.** C'è stata la review del developer, nei round
+>   2–14. Review indipendenti separate non sono state fatte, come per l'item 13 della
+>   [Step6](plan-phase00Step6PacRebalancerIntegrationTestsDocs.prompt.md).
+> - **Definition of done.**
+>   - Le fixture PAC esistono. Quella del Rebalancer
+>     (`rebalancer_plan_request.medium.v2.json`) esiste, ma il Rebalancer non è ancora
+>     implementato.
+>   - Il P1 `analyze` è stato rimosso il 21/09 (`b82e59ffa`). La rimozione dei resti è la
+>     riga 13 del [README](README.md).
+>   - La lane `6153` è storica.
 
 ### 11.1 Handoff W0 G3 — 2026-09-16
 

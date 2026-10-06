@@ -114,12 +114,15 @@ class CalendarRollingReturnPlugin(SignalPlugin):
     """Compare each resolved daily price with the resolved price N calendar days earlier."""
 
     signal_code = "ASSET_CALENDAR_ROLLING_RETURN"
-    implementation_version = "1.3.0"
+    # 1.4.0 — calendar windows by definition; a stored weekend or holiday repeat now reports as carried.
+    implementation_version = "1.4.0"
+    computes_on_quote_days = False
     display_name_key = "signals.riskRollingReturn.name"
     description_key = "signals.riskRollingReturn.description"
     semantic_id = "calendar_rolling_return"
     semantic_description = "Measures price-only return over an exact calendar-day window."
     icon = "↗️"
+    docs_path = "financial-theory/fundamentals/returns/"
     category = SignalCategory.RISK
     params_model = CalendarRollingReturnParams
     catalog_visible = False

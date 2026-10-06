@@ -207,6 +207,18 @@ const REGISTRY: Site[] = [
         status: 'not-money',
         why: 'A cash delta rendered with no currency marker, used to rank candidate matches. Judgement site in the class of MeasurePanel: catching it would mean chasing toFixed over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
     },
+    {
+        file: 'lib/features/tools/pac-allocator/planner/format.ts',
+        snippet: "return new Intl.NumberFormat('en', {style: 'currency', currency: currencyCode}).resolvedOptions().maximumFractionDigits ?? 2;",
+        status: 'not-money',
+        why: 'cldrCurrencyDigits: reads resolvedOptions().maximumFractionDigits for the arrow step of PAC planner money inputs and renders nothing — the same form-A false positive as snapshotDataRenderer. Every planner amount leaves through formatCurrencyAmountPlain/Html in the same file.',
+    },
+    {
+        file: 'lib/components/charts/PriceChartFull.svelte',
+        snippet: '`${currencyHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`',
+        status: 'public',
+        why: "The value part of a price-chart tooltip row (asset and FX detail): the price, or the percentage return, of an asset, an FX pair or an overlay signal at the hovered date — market data, never the user's holdings, so public by the rule that keeps prices, rates and percentages readable. It matches only since K step 16 (06/10) moved the currency badge out of the label and next to the value, so that a phone can shrink the label and keep both whole; before that the same value rendered as `${labelHtml}: ${Number(value).toFixed(4)}…` with no currency token beside it.",
+    },
 ];
 
 const key = (s: {file: string; snippet: string}): string => `${s.file}\u0000${s.snippet}`;
@@ -276,6 +288,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         // one is a visible decision rather than a quiet edit to the registry.
         expect(listOf('public')).toEqual([
             // one element per line: parallel removals must not touch the same line
+            'lib/components/charts/PriceChartFull.svelte',
             'lib/components/transactions/events/EventCreateMiniModal.svelte',
         ]);
     });

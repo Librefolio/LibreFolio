@@ -2,10 +2,11 @@
 
 import json
 import uuid
+from collections import defaultdict
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -19,18 +20,9 @@ from backend.app.db.models import UserRole
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
-    PortfolioAllocationSource,
-    PortfolioAllocationSourceAsset,
-    PortfolioAllocationSourceCashBalance,
-    PortfolioAllocationSourceCashSource,
-    PortfolioAllocationSourceContext,
-    PortfolioAllocationSourceQuote,
-    PortfolioPlannerSourceCurrencySpec,
     PortfolioPlannerSourceProvenance,
     PortfolioPlannerSourceResponse,
     PortfolioPlannerSourceSnapshot,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
 )
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services import user_service
@@ -47,7 +39,6 @@ settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
-AS_OF = date(2026, 9, 15)
 
 
 # ---------------------------------------------------------------------------
@@ -590,557 +581,62 @@ class TestPortfolioHistoryEndpoint:
 
 @pytest.mark.asyncio
 class TestPortfolioReportEndpoint:
-    async def test_report_allocation_source_authenticated_contract(self, test_server):
-        """Opt-in source is serialized through /report without running other views."""
-        print_section("Portfolio Report: allocation source contract")
-        broker_ids: list[int] = []
-        asset_id: int | None = None
-        user_id: int | None = None
+    async def test_report_response_has_exactly_twelve_sections(self, test_server):
+        """The report wire shape is exactly these twelve sections.
+
+        A section removed from the report must leave the wire, not linger as a null
+        key. The API serializes every unrequested section as null, so the default
+        request is enough to see the complete set of top-level keys.
+        """
+        print_section("Portfolio Report: exactly twelve sections")
+        expected_sections = {
+            "metadata",
+            "summary",
+            "history",
+            "allocation_history",
+            "data_quality",
+            "positions_contribution",
+            "broker_pnl_history",
+            "pnl_candles",
+            "income_history",
+            "cost_history",
+            "deposit_history",
+            "acquisition_funding",
+        }
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             user_id = await get_current_user_id(client)
             try:
-                broker_name = f"Allocation Broker {uuid.uuid4().hex}"
-                broker_icon_url = "https://example.test/allocation-broker.svg"
-                broker_portal_url = "https://example.test/allocation-broker"
-                broker_default_import_plugin = "allocation_source_test"
-                broker_id = await create_broker(
-                    client,
-                    broker_name,
-                    icon_url=broker_icon_url,
-                    portal_url=broker_portal_url,
-                    default_import_plugin=broker_default_import_plugin,
-                )
-                broker_ids.append(broker_id)
-
-                cash_broker_name = f"Allocation Cash Broker {uuid.uuid4().hex}"
-                cash_broker_icon_url = "https://example.test/allocation-cash-broker.svg"
-                cash_broker_portal_url = "https://example.test/allocation-cash-broker"
-                cash_broker_default_import_plugin = "allocation_cash_source_test"
-                cash_broker_id = await create_broker(
-                    client,
-                    cash_broker_name,
-                    icon_url=cash_broker_icon_url,
-                    portal_url=cash_broker_portal_url,
-                    default_import_plugin=cash_broker_default_import_plugin,
-                )
-                broker_ids.append(cash_broker_id)
-
-                asset_name = f"Allocation Asset {uuid.uuid4().hex}"
-                ticker = f"AL{uuid.uuid4().hex[:8]}".upper()
-                icon_url = "https://example.test/allocation-source.svg"
-                create_resp = await client.post(
-                    f"{API_BASE}/assets",
-                    json=[
-                        {
-                            "display_name": asset_name,
-                            "currency": "JPY",
-                            "asset_type": "STOCK",
-                            "quote_base_quantity": 100,
-                            "identifier_ticker": ticker,
-                            "icon_url": icon_url,
-                        }
-                    ],
-                    timeout=TIMEOUT,
-                )
-                assert create_resp.status_code in (200, 201), create_resp.text
-                asset_result = next(result for result in create_resp.json()["results"] if result["display_name"] == asset_name)
-                assert asset_result["success"] is True
-                asset_id = asset_result["asset_id"]
-
-                access_resp = await client.put(
-                    f"{API_BASE}/brokers/{broker_id}/access",
-                    json=[
-                        {
-                            "user_id": user_id,
-                            "role": "OWNER",
-                            "share_percentage": 0,
-                        }
-                    ],
-                    timeout=TIMEOUT,
-                )
-                assert access_resp.status_code == 200, access_resp.text
-                cash_access_resp = await client.put(
-                    f"{API_BASE}/brokers/{cash_broker_id}/access",
-                    json=[
-                        {
-                            "user_id": user_id,
-                            "role": "OWNER",
-                            "share_percentage": 0.25,
-                        }
-                    ],
-                    timeout=TIMEOUT,
-                )
-                assert cash_access_resp.status_code == 200, cash_access_resp.text
-
-                await commit_batch(
-                    client,
-                    creates=[
-                        {
-                            "broker_id": broker_id,
-                            "asset_id": asset_id,
-                            "type": "BUY",
-                            "date": "2026-08-10",
-                            "quantity": "12",
-                            "cash": {"code": "JPY", "amount": "-1200"},
-                        },
-                        {
-                            "broker_id": broker_id,
-                            "asset_id": asset_id,
-                            "type": "SELL",
-                            "date": "2026-08-20",
-                            "quantity": "-2",
-                            "cash": {"code": "JPY", "amount": "200"},
-                        },
-                        {
-                            "broker_id": broker_id,
-                            "asset_id": asset_id,
-                            "type": "BUY",
-                            "date": "2026-08-21",
-                            "quantity": "100",
-                            "cash": {"code": "JPY", "amount": "-10000"},
-                        },
-                        {
-                            "broker_id": cash_broker_id,
-                            "type": "DEPOSIT",
-                            "date": "2026-08-19",
-                            "quantity": "0",
-                            "cash": {"code": "EUR", "amount": "25"},
-                        },
-                        {
-                            "broker_id": cash_broker_id,
-                            "type": "DEPOSIT",
-                            "date": "2026-08-20",
-                            "quantity": "0",
-                            "cash": {"code": "JPY", "amount": "400"},
-                        },
-                        {
-                            "broker_id": cash_broker_id,
-                            "type": "DEPOSIT",
-                            "date": "2026-08-21",
-                            "quantity": "0",
-                            "cash": {"code": "JPY", "amount": "9999"},
-                        },
-                    ],
-                )
-                price_resp = await client.post(
-                    f"{API_BASE}/assets/prices",
-                    json=[
-                        {
-                            "asset_id": asset_id,
-                            "prices": [
-                                {
-                                    "date": "2026-08-18",
-                                    "close": "123.45",
-                                    "currency": "JPY",
-                                },
-                                {
-                                    "date": "2026-08-21",
-                                    "close": "999",
-                                    "currency": "JPY",
-                                },
-                            ],
-                        }
-                    ],
-                    timeout=TIMEOUT,
-                )
-                assert price_resp.status_code == 200, price_resp.text
-
-                resp = await post_portfolio_report(
-                    client,
-                    {
-                        "broker_ids": [broker_id],
-                        "include_summary": False,
-                        "include_history": False,
-                        "include_allocation_history": False,
-                        "include_positions_contribution": False,
-                        "allocation_source": {
-                            "as_of_date": "2026-08-20",
-                            "selected_cash_broker_ids": [cash_broker_id, broker_id],
-                        },
-                    },
-                )
-                assert resp.status_code == 200, resp.text
-                report = resp.json()
-
-                assert set(report) == {
-                    "metadata",
-                    "summary",
-                    "history",
-                    "allocation_history",
-                    "data_quality",
-                    "positions_contribution",
-                    "broker_pnl_history",
-                    "pnl_candles",
-                    "income_history",
-                    "cost_history",
-                    "deposit_history",
-                    "acquisition_funding",
-                    "allocation_source",
-                }
-                assert report["summary"] is None
-                assert report["history"] is None
-                assert report["allocation_history"] is None
-                assert report["data_quality"] is None
-                assert report["positions_contribution"] is None
-                assert report["broker_pnl_history"] is None
-                assert report["pnl_candles"] is None
-                assert report["income_history"] is None
-                assert report["cost_history"] is None
-                assert report["deposit_history"] is None
-                assert report["acquisition_funding"] is None
-                assert report["metadata"]["broker_ids"] == [broker_id]
-                assert report["metadata"]["included_features"] == ["allocation_source"]
-
-                source = report["allocation_source"]
-                assert set(source) == {
-                    "generated_at",
-                    "as_of_date",
-                    "assets",
-                    "cash_sources",
-                    "selected_cash_balances",
-                }
-                assert source["as_of_date"] == "2026-08-20"
-                asset = next(
-                    (candidate for candidate in source["assets"] if candidate["asset_id"] == asset_id),
-                    None,
-                )
-                assert asset is not None, f"Asset {asset_id} missing from allocation source"
-                assert set(asset) == {
-                    "asset_id",
-                    "instrument_key",
-                    "candidate_key",
-                    "name",
-                    "ticker",
-                    "asset_type",
-                    "icon_url",
-                    "active",
-                    "usage_scope",
-                    "quote",
-                    "contexts",
-                }
-                assert asset["instrument_key"] == f"asset:{asset_id}"
-                assert asset["candidate_key"] == f"asset:{asset_id}:candidate"
-                assert asset["name"] == asset_name
-                assert asset["ticker"] == ticker
-                assert asset["asset_type"] == "STOCK"
-                assert asset["icon_url"] == icon_url
-                assert asset["active"] is True
-                assert asset["usage_scope"] == "other_users"
-
-                assert set(asset["quote"]) == {
-                    "raw_price",
-                    "currency",
-                    "quote_base_quantity",
-                    "reference_date",
-                    "source",
-                    "days_before_requested",
-                }
-                assert Decimal(asset["quote"]["raw_price"]) == Decimal("123.45")
-                assert asset["quote"]["currency"] == "JPY"
-                assert asset["quote"]["quote_base_quantity"] == 100
-                assert asset["quote"]["reference_date"] == "2026-08-18"
-                assert asset["quote"]["source"] == "MANUAL"
-                assert asset["quote"]["days_before_requested"] == 2
-
-                contexts_by_key = {context["context_key"]: context for context in asset["contexts"]}
-                context_key = f"asset:{asset_id}:broker:{broker_id}"
-                assert context_key in contexts_by_key
-                context = contexts_by_key[context_key]
-                assert set(context) == {
-                    "context_key",
-                    "broker_id",
-                    "broker_name",
-                    "broker_icon_url",
-                    "broker_portal_url",
-                    "broker_default_import_plugin",
-                    "ownership_share_percent",
-                    "custody_quantity",
-                }
-                assert context["broker_id"] == broker_id
-                assert context["broker_name"] == broker_name
-                assert context["broker_icon_url"] == broker_icon_url
-                assert context["broker_portal_url"] == broker_portal_url
-                assert context["broker_default_import_plugin"] == broker_default_import_plugin
-                assert Decimal(context["ownership_share_percent"]) == 0
-                assert Decimal(context["custody_quantity"]) == 10
-
-                cash_sources_by_id = {cash_source["broker_id"]: cash_source for cash_source in source["cash_sources"]}
-                assert broker_id in cash_sources_by_id
-                broker_cash_source = cash_sources_by_id[broker_id]
-                assert set(broker_cash_source) == {
-                    "broker_id",
-                    "broker_name",
-                    "broker_icon_url",
-                    "broker_portal_url",
-                    "broker_default_import_plugin",
-                    "ownership_share_percent",
-                    "balances",
-                }
-                assert broker_cash_source["broker_name"] == broker_name
-                assert broker_cash_source["broker_icon_url"] == broker_icon_url
-                assert broker_cash_source["broker_portal_url"] == broker_portal_url
-                assert broker_cash_source["broker_default_import_plugin"] == broker_default_import_plugin
-                assert Decimal(broker_cash_source["ownership_share_percent"]) == 0
-                assert all(set(balance) == {"currency", "amount"} for balance in broker_cash_source["balances"])
-                assert {balance["currency"]: Decimal(balance["amount"]) for balance in broker_cash_source["balances"]} == {"JPY": Decimal("-1000")}
-
-                assert cash_broker_id in cash_sources_by_id
-                selected_cash_source = cash_sources_by_id[cash_broker_id]
-                assert set(selected_cash_source) == {
-                    "broker_id",
-                    "broker_name",
-                    "broker_icon_url",
-                    "broker_portal_url",
-                    "broker_default_import_plugin",
-                    "ownership_share_percent",
-                    "balances",
-                }
-                assert selected_cash_source["broker_name"] == cash_broker_name
-                assert selected_cash_source["broker_icon_url"] == cash_broker_icon_url
-                assert selected_cash_source["broker_portal_url"] == cash_broker_portal_url
-                assert selected_cash_source["broker_default_import_plugin"] == cash_broker_default_import_plugin
-                assert Decimal(selected_cash_source["ownership_share_percent"]) == 25
-                assert all(set(balance) == {"currency", "amount"} for balance in selected_cash_source["balances"])
-                assert {balance["currency"]: Decimal(balance["amount"]) for balance in selected_cash_source["balances"]} == {
-                    "EUR": Decimal("25"),
-                    "JPY": Decimal("400"),
-                }
-
-                assert all(set(balance) == {"currency", "amount"} for balance in source["selected_cash_balances"])
-                assert {balance["currency"]: Decimal(balance["amount"]) for balance in source["selected_cash_balances"]} == {
-                    "EUR": Decimal("25"),
-                    "JPY": Decimal("-600"),
-                }
-                print_success("Allocation source API contract OK")
-            finally:
-                if broker_ids:
-                    cleanup_broker = await client.delete(
-                        f"{API_BASE}/brokers",
-                        params={"ids": broker_ids, "force": True},
-                        timeout=TIMEOUT,
-                    )
-                    assert cleanup_broker.status_code == 200, cleanup_broker.text
-                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
-                    for created_broker_id in broker_ids:
-                        assert broker_results[created_broker_id]["success"] is True, cleanup_broker.text
-                if asset_id is not None:
-                    cleanup_asset = await client.delete(
-                        f"{API_BASE}/assets",
-                        params={"asset_ids": [asset_id]},
-                        timeout=TIMEOUT,
-                    )
-                    assert cleanup_asset.status_code == 200, cleanup_asset.text
-                    asset_results = {item["asset_id"]: item for item in cleanup_asset.json()["results"]}
-                    assert asset_results[asset_id]["success"] is True, cleanup_asset.text
-                if user_id is not None:
-                    await delete_current_test_user(client, user_id)
-
-    async def test_report_allocation_source_defaults_selected_cash_broker_ids(
-        self,
-        test_server,
-    ):
-        """Omitting selected_cash_broker_ids uses the empty-list default."""
-        print_section("Portfolio Report: allocation source cash selection default")
-
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            user_id = await get_current_user_id(client)
-            try:
-                response = await post_portfolio_report(
-                    client,
-                    {
-                        "include_summary": False,
-                        "include_history": False,
-                        "include_allocation_history": False,
-                        "include_positions_contribution": False,
-                        "allocation_source": {"as_of_date": "2026-08-20"},
-                    },
-                )
+                response = await post_portfolio_report(client)
                 assert response.status_code == 200, response.text
-                report = response.json()
-                assert report["summary"] is None
-                assert report["history"] is None
-                assert report["allocation_history"] is None
-                assert report["data_quality"] is None
-                assert report["positions_contribution"] is None
-                assert report["metadata"]["included_features"] == ["allocation_source"]
-
-                source = report["allocation_source"]
-                assert set(source) == {
-                    "generated_at",
-                    "as_of_date",
-                    "assets",
-                    "cash_sources",
-                    "selected_cash_balances",
-                }
-                assert isinstance(source["assets"], list)
-                assert source["cash_sources"] == []
-                assert source["selected_cash_balances"] == []
+                sections = set(response.json())
+                assert sections == expected_sections, f"unexpected sections: {sorted(sections - expected_sections)}; missing sections: {sorted(expected_sections - sections)}"
             finally:
                 await delete_current_test_user(client, user_id)
 
-        print_success("Allocation source cash selection defaults to empty")
+        print_success("Report carries exactly the twelve sections")
 
-    @pytest.mark.parametrize(
-        ("selected_cash_broker_ids", "expected_error_type", "expected_location"),
-        [
-            pytest.param(
-                1,
-                "list_type",
-                ["body", "allocation_source", "selected_cash_broker_ids"],
-                id="scalar",
-            ),
-            pytest.param(
-                [True],
-                "int_type",
-                ["body", "allocation_source", "selected_cash_broker_ids", 0],
-                id="bool-item",
-            ),
-            pytest.param(
-                ["1"],
-                "int_type",
-                ["body", "allocation_source", "selected_cash_broker_ids", 0],
-                id="string-item",
-            ),
-            pytest.param(
-                [1.0],
-                "int_type",
-                ["body", "allocation_source", "selected_cash_broker_ids", 0],
-                id="float-item",
-            ),
-            pytest.param(
-                [0],
-                "greater_than",
-                ["body", "allocation_source", "selected_cash_broker_ids", 0],
-                id="zero-item",
-            ),
-            pytest.param(
-                [-1],
-                "greater_than",
-                ["body", "allocation_source", "selected_cash_broker_ids", 0],
-                id="negative-item",
-            ),
-            pytest.param(
-                [1, 1],
-                "value_error",
-                ["body", "allocation_source", "selected_cash_broker_ids"],
-                id="duplicate-items",
-            ),
-        ],
-    )
-    async def test_report_allocation_source_rejects_invalid_selected_cash_broker_ids(
-        self,
-        test_server,
-        selected_cash_broker_ids,
-        expected_error_type,
-        expected_location,
-    ):
-        """selected_cash_broker_ids is a strict positive unique integer list."""
-        print_section("Portfolio Report: invalid allocation cash broker selection")
+    async def test_report_rejects_allocation_source_field(self, test_server):
+        """The report request has no allocation_source field.
+
+        The strict request model rejects it with 422 extra_forbidden instead of
+        silently ignoring it, so a stale client fails loudly. Planner data is served
+        by POST /portfolio/allocation-source.
+        """
+        print_section("Portfolio Report: allocation_source field rejected")
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             user_id = await get_current_user_id(client)
             try:
-                response = await post_portfolio_report(
-                    client,
-                    {
-                        "include_summary": False,
-                        "include_history": False,
-                        "include_allocation_history": False,
-                        "include_positions_contribution": False,
-                        "allocation_source": {
-                            "as_of_date": "2026-08-20",
-                            "selected_cash_broker_ids": selected_cash_broker_ids,
-                        },
-                    },
-                )
+                response = await post_portfolio_report(client, {"allocation_source": {"as_of_date": "2026-08-20"}})
                 assert response.status_code == 422, response.text
-                assert [(error["loc"], error["type"]) for error in response.json()["detail"]] == [(expected_location, expected_error_type)]
+                assert [(error["loc"], error["type"]) for error in response.json()["detail"]] == [(["body", "allocation_source"], "extra_forbidden")]
             finally:
                 await delete_current_test_user(client, user_id)
 
-        print_success("Invalid allocation cash broker selection rejected")
-
-    async def test_report_allocation_source_rejects_non_owner_cash_broker(
-        self,
-        test_server,
-    ):
-        """A real VIEWER broker selection is rejected with the public error contract."""
-        print_section("Portfolio Report: forbidden allocation cash broker")
-        owner_user_id: int | None = None
-        caller_user_id: int | None = None
-        broker_id: int | None = None
-
-        async with (
-            httpx.AsyncClient() as owner_client,
-            httpx.AsyncClient() as caller_client,
-        ):
-            await create_test_user(owner_client)
-            owner_user_id = await get_current_user_id(owner_client)
-            try:
-                broker_id = await create_broker(
-                    owner_client,
-                    f"Forbidden Cash Broker {uuid.uuid4().hex}",
-                )
-
-                await create_test_user(caller_client)
-                caller_user_id = await get_current_user_id(caller_client)
-
-                access_response = await owner_client.put(
-                    f"{API_BASE}/brokers/{broker_id}/access",
-                    json=[
-                        {
-                            "user_id": owner_user_id,
-                            "role": "OWNER",
-                            "share_percentage": 1,
-                        },
-                        {
-                            "user_id": caller_user_id,
-                            "role": "VIEWER",
-                            "share_percentage": 0,
-                        },
-                    ],
-                    timeout=TIMEOUT,
-                )
-                assert access_response.status_code == 200, access_response.text
-
-                response = await post_portfolio_report(
-                    caller_client,
-                    {
-                        "include_summary": False,
-                        "include_history": False,
-                        "include_allocation_history": False,
-                        "include_positions_contribution": False,
-                        "allocation_source": {
-                            "as_of_date": "2026-08-20",
-                            "selected_cash_broker_ids": [broker_id],
-                        },
-                    },
-                )
-                assert response.status_code == 403, response.text
-                assert response.json()["detail"] == {
-                    "code": "allocation_source_cash_broker_forbidden",
-                    "broker_ids": [broker_id],
-                }
-            finally:
-                if broker_id is not None:
-                    cleanup_broker = await owner_client.delete(
-                        f"{API_BASE}/brokers",
-                        params={"ids": [broker_id], "force": True},
-                        timeout=TIMEOUT,
-                    )
-                    assert cleanup_broker.status_code == 200, cleanup_broker.text
-                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
-                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
-                if caller_user_id is not None:
-                    await delete_current_test_user(caller_client, caller_user_id)
-                if owner_user_id is not None:
-                    await delete_current_test_user(owner_client, owner_user_id)
-
-        print_success("Non-OWNER allocation cash broker selection rejected")
+        print_success("allocation_source field rejected as extra_forbidden")
 
     async def test_report_serializes_typed_yield_on_cost_statuses_and_ignores_date_from(
         self,
@@ -1482,27 +978,19 @@ class TestPortfolioReportEndpoint:
             pytest.param("include_acquisition_funding", "acquisition_funding", id="acquisition_funding"),
         ],
     )
-    async def test_report_allocation_source_with_one_chart_flag_includes_exactly_that_section(
+    async def test_report_one_chart_flag_includes_exactly_that_section(
         self,
         test_server,
         flag,
         section,
     ):
-        """allocation_source plus exactly one chart-section flag returns that section too.
-
-        get_report used to answer an allocation-source request through a short branch
-        whenever none of include_summary, include_history, include_allocation_history
-        and include_positions_contribution was set: it built allocation_source alone,
-        reported included_features == ["allocation_source"] and silently ignored the six
-        chart-section flags (broker_pnl_history, pnl_candles, income_history,
-        cost_history, deposit_history, acquisition_funding), whose sections came back
-        null. Every case of this test was red before the fix.
+        """Exactly one chart-section flag returns exactly that section.
 
         included_features is compared as an exact list, not by membership: the request
-        turns on allocation_source and exactly one section, so a missing name means the
-        flag was dropped and any extra name means a view ran that nobody asked for.
+        turns on exactly one section, so a missing name means the flag was dropped and
+        any extra name means a view ran that nobody asked for.
         """
-        print_section(f"Portfolio Report: allocation source + {flag}")
+        print_section(f"Portfolio Report: only {flag}")
         broker_id: int | None = None
 
         async with httpx.AsyncClient() as client:
@@ -1532,7 +1020,6 @@ class TestPortfolioReportEndpoint:
                     "include_deposit_history": False,
                     "include_acquisition_funding": False,
                     "date_range": {"start": "2025-07-01", "end": "2025-07-31"},
-                    "allocation_source": {"as_of_date": "2025-07-31"},
                 }
                 body[flag] = True
                 response = await post_portfolio_report(client, body)
@@ -1540,8 +1027,7 @@ class TestPortfolioReportEndpoint:
                 report = response.json()
 
                 assert report[section] is not None, f"{flag}=true was ignored: included_features={report['metadata']['included_features']}"
-                assert report["metadata"]["included_features"] == ["allocation_source", section]
-                assert report["allocation_source"] is not None
+                assert report["metadata"]["included_features"] == [section]
                 # data_quality is deliberately not pinned: the engine path builds it as a by-product.
                 assert report["summary"] is None
                 assert report["history"] is None
@@ -1559,7 +1045,7 @@ class TestPortfolioReportEndpoint:
                     assert broker_results[broker_id]["success"] is True, cleanup_broker.text
                 await delete_current_test_user(client, user_id)
 
-        print_success(f"{section} returned alongside allocation_source")
+        print_success(f"{section} returned alone")
 
 
 @pytest.mark.asyncio
@@ -1893,14 +1379,8 @@ def _empty_planner_source_response() -> PortfolioPlannerSourceResponse:
             target_currency="EUR",
             generated_at=datetime(2026, 9, 15, 12, 30, tzinfo=UTC),
             requested_sections=["assets"],
-            source_revision="2.0.0",
+            source_revision="1.0.0",
         ),
-        currency_specs=[
-            PortfolioPlannerSourceCurrencySpec(
-                currency="EUR",
-                minor_unit=Decimal("0.01"),
-            )
-        ],
         provenance=[
             PortfolioPlannerSourceProvenance(
                 provenance_id="source:portfolio-ledger",
@@ -2337,145 +1817,223 @@ async def test_legacy_wac_response_remains_byte_and_semantically_compatible(
     )
 
 
-def _legacy_report_response() -> PortfolioReportResponse:
-    generated_at = datetime(2026, 9, 15, 12, 30, tzinfo=UTC)
-    allocation_source = PortfolioAllocationSource(
-        generated_at=generated_at,
-        as_of_date=AS_OF,
-        assets=[
-            PortfolioAllocationSourceAsset(
-                asset_id=11,
-                instrument_key="asset:11",
-                candidate_key="asset:11:candidate",
-                name="Legacy Asset",
-                ticker="LEG",
-                asset_type="STOCK",
-                icon_url=None,
-                active=True,
-                usage_scope="owned",
-                quote=PortfolioAllocationSourceQuote(
-                    raw_price=Decimal("123.4500"),
-                    currency="EUR",
-                    quote_base_quantity=100,
-                    reference_date=AS_OF,
-                    source="SAVED_PRICE",
-                    days_before_requested=0,
-                ),
-                contexts=[
-                    PortfolioAllocationSourceContext(
-                        context_key="asset:11:broker:7",
-                        broker_id=7,
-                        broker_name="Legacy Broker",
-                        broker_icon_url=None,
-                        broker_portal_url=None,
-                        broker_default_import_plugin=None,
-                        ownership_share_percent=Decimal("25.0000"),
-                        custody_quantity=Decimal("2.5000"),
-                    )
-                ],
-            )
-        ],
-        cash_sources=[
-            PortfolioAllocationSourceCashSource(
-                broker_id=7,
-                broker_name="Legacy Broker",
-                broker_icon_url=None,
-                broker_portal_url=None,
-                broker_default_import_plugin=None,
-                ownership_share_percent=Decimal("25.0000"),
-                balances=[
-                    PortfolioAllocationSourceCashBalance(
-                        currency="EUR",
-                        amount=Decimal("9.8700"),
-                    )
-                ],
-            )
-        ],
-        selected_cash_balances=[
-            PortfolioAllocationSourceCashBalance(
-                currency="EUR",
-                amount=Decimal("9.8700"),
-            )
-        ],
-    )
-    return PortfolioReportResponse(
-        metadata=PortfolioReportMetadata(
-            broker_ids=[7],
-            target_currency="EUR",
-            requested_date_from=None,
-            requested_date_to=AS_OF,
-            computed_date_from=None,
-            computed_date_to=AS_OF,
-            generated_at=AS_OF,
-            allocation_dimensions=["type", "sector", "geography"],
-            included_features=["allocation_source"],
-        ),
-        allocation_source=allocation_source,
-    )
+# ---------------------------------------------------------------------------
+# Planner source on the live test server (C0b.4): the copy endpoint end to end,
+# and current_distribution parity with the Allocation page's summary. Every row
+# is created by the test that reads it and deleted before it returns.
+# ---------------------------------------------------------------------------
+
+PLANNER_SOURCE_URL = f"{API_BASE}/portfolio/allocation-source"
+PLANNER_AS_OF = "2025-06-30"
+PLANNER_PRICE_DATE = "2025-06-27"
+# Far above any id a test campaign creates: stands for "does not exist".
+MISSING_PLANNER_ID = 987_654_321
+
+
+def _live_planner_source_body(
+    *,
+    broker_ids: list[int],
+    asset_ids: list[int] | None,
+    requested_sections: list[str],
+) -> dict[str, object]:
+    return {
+        "as_of": PLANNER_AS_OF,
+        "target_currency": "EUR",
+        "requested_sections": requested_sections,
+        "broker_ids": broker_ids,
+        "asset_ids": asset_ids,
+        "fx_pairs": [],
+    }
+
+
+async def _delete_planner_rows(
+    client: httpx.AsyncClient,
+    *,
+    broker_ids: list[int],
+    asset_ids: list[int],
+) -> None:
+    """Brokers first (force cascades their transactions), then the Assets."""
+    if broker_ids:
+        resp = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+        assert resp.status_code == 200, resp.text
+        assert all(row["success"] for row in resp.json()["results"]), resp.text
+    if asset_ids:
+        resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+        assert resp.status_code == 200, resp.text
+        assert all(row["success"] for row in resp.json()["results"]), resp.text
 
 
 @pytest.mark.asyncio
-async def test_legacy_report_allocation_source_remains_byte_and_semantically_compatible(
-    monkeypatch,
-):
-    expected = _legacy_report_response()
-    service = SimpleNamespace(
-        get_report=AsyncMock(return_value=expected),
-    )
-    service_factory = MagicMock(return_value=service)
-    monkeypatch.setattr(
-        portfolio_api,
-        "PortfolioService",
-        service_factory,
-    )
-    session = object()
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=41, is_superuser=False),
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/report",
-            json={
-                "broker_ids": [7],
-                "date_range": {
-                    "end": "2026-09-15",
-                },
-                "target_currency": "EUR",
-                "include_summary": False,
-                "include_history": False,
-                "include_allocation_history": False,
-                "include_breakdown": False,
-                "include_positions_contribution": False,
-                "allocation_source": {
-                    "as_of_date": "2026-09-15",
-                    "selected_cash_broker_ids": [7],
-                },
-            },
+async def test_planner_source_live_requires_authentication(test_server):
+    print_section("Planner source (live): unauthenticated")
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            PLANNER_SOURCE_URL,
+            json=_live_planner_source_body(broker_ids=[MISSING_PLANNER_ID], asset_ids=[], requested_sections=["assets"]),
+            timeout=TIMEOUT,
         )
 
-    assert response.status_code == 200
-    response_payload = response.json()
-    assert response_payload == expected.model_dump(mode="json")
-    assert response.content == expected.model_dump_json().encode()
-    assert "snapshot" not in response_payload["allocation_source"]
-    legacy_asset = next(
-        asset
-        for asset in response_payload["allocation_source"]["assets"]
-        if asset["asset_id"] == 11
-    )
-    assert legacy_asset["quote"] == {
-        "raw_price": "123.4500",
-        "currency": "EUR",
-        "quote_base_quantity": 100,
-        "reference_date": "2026-09-15",
-        "source": "SAVED_PRICE",
-        "days_before_requested": 0,
-    }
-    service_factory.assert_called_once_with(session)
-    service.get_report.assert_awaited_once()
-    assert service.get_report.await_args.kwargs["user_id"] == 41
+    assert resp.status_code == 401
+    assert resp.headers.get("cache-control") == "no-store"
+    print_success("401 no-store before any read")
+
+
+@pytest.mark.asyncio
+async def test_planner_source_live_scope_errors_are_typed_and_uncached(test_server):
+    print_section("Planner source (live): non-OWNER, missing Broker/Asset, null scenario")
+    broker_ids: list[int] = []
+    asset_ids: list[int] = []
+    owner_id = viewer_id = None
+    async with httpx.AsyncClient() as owner, httpx.AsyncClient() as viewer:
+        try:
+            await create_test_user(owner)
+            owner_id = await get_current_user_id(owner)
+            await create_test_user(viewer)
+            viewer_id = await get_current_user_id(viewer)
+            broker_id = await create_broker(owner, f"Planner scope {uuid.uuid4().hex[:12]}")
+            broker_ids.append(broker_id)
+            asset_id = await create_asset(owner)
+            asset_ids.append(asset_id)
+            share = await owner.put(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json=[
+                    {"user_id": owner_id, "role": "OWNER", "share_percentage": 1},
+                    {"user_id": viewer_id, "role": "VIEWER", "share_percentage": 0},
+                ],
+                timeout=TIMEOUT,
+            )
+            assert share.status_code == 200, share.text
+            body = _live_planner_source_body(broker_ids=[broker_id], asset_ids=[asset_id], requested_sections=["current_distribution"])
+
+            owner_resp = await owner.post(PLANNER_SOURCE_URL, json=body, timeout=TIMEOUT)
+            viewer_resp = await viewer.post(PLANNER_SOURCE_URL, json=body, timeout=TIMEOUT)
+            missing_broker_resp = await viewer.post(PLANNER_SOURCE_URL, json={**body, "broker_ids": [MISSING_PLANNER_ID]}, timeout=TIMEOUT)
+            missing_asset_resp = await owner.post(PLANNER_SOURCE_URL, json={**body, "asset_ids": [asset_id, MISSING_PLANNER_ID]}, timeout=TIMEOUT)
+            null_scenario_resp = await owner.post(PLANNER_SOURCE_URL, json={**body, "asset_ids": None}, timeout=TIMEOUT)
+        finally:
+            await _delete_planner_rows(owner, broker_ids=broker_ids, asset_ids=asset_ids)
+            if viewer_id is not None:
+                await delete_current_test_user(viewer, viewer_id)
+            if owner_id is not None:
+                await delete_current_test_user(owner, owner_id)
+
+    # The same body is valid for the OWNER: the refusals below are about scope.
+    assert owner_resp.status_code == 200, owner_resp.text
+    assert owner_resp.headers.get("cache-control") == "no-store"
+    assert owner_resp.json()["current_distribution"]["status"] == "no_holdings"
+    for refused in (viewer_resp, missing_broker_resp):
+        assert refused.status_code == 403, refused.text
+        assert refused.json() == {"detail": {"code": "portfolio_planner_source_broker_forbidden"}}
+        assert refused.headers.get("cache-control") == "no-store"
+    assert missing_asset_resp.status_code == 404, missing_asset_resp.text
+    assert missing_asset_resp.json() == {"detail": {"code": "portfolio_planner_source_asset_not_found"}}
+    assert missing_asset_resp.headers.get("cache-control") == "no-store"
+    # current_distribution weighs an explicit scenario: a null one is a request error.
+    assert null_scenario_resp.status_code == 422, null_scenario_resp.text
+    print_success("403/404 typed and no-store; null scenario is 422")
+
+
+@pytest.mark.asyncio
+async def test_planner_source_live_current_distribution_matches_the_allocation_summary(test_server):
+    print_section("Planner source (live): current_distribution parity with the summary")
+    broker_ids: list[int] = []
+    asset_ids: list[int] = []
+    user_id = None
+    async with httpx.AsyncClient() as client:
+        try:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            marker = uuid.uuid4().hex[:12]
+            broker_ids.extend([await create_broker(client, f"Planner parity A {marker}"), await create_broker(client, f"Planner parity B {marker}")])
+            asset_ids.extend([await create_asset(client) for _ in range(3)])
+            first, second = broker_ids
+            held_twice, single, small = asset_ids
+            # (broker, asset, quantity, cash): one Asset is held at both Brokers.
+            buys = (
+                (first, held_twice, "3", "-300"),
+                (second, held_twice, "2", "-200"),
+                (first, single, "7", "-420"),
+                (second, small, "11", "-99"),
+            )
+            await commit_batch(
+                client,
+                creates=[
+                    *({"broker_id": broker, "type": "DEPOSIT", "date": "2025-01-02", "quantity": "0", "cash": {"code": "EUR", "amount": "5000"}} for broker in broker_ids),
+                    *({"broker_id": broker, "asset_id": asset, "type": "BUY", "date": "2025-01-06", "quantity": quantity, "cash": {"code": "EUR", "amount": cash}} for broker, asset, quantity, cash in buys),
+                ],
+            )
+            closes = {held_twice: "123.45", single: "67.89", small: "10.01"}
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[{"asset_id": asset, "prices": [{"date": PLANNER_PRICE_DATE, "close": close, "currency": "EUR"}]} for asset, close in closes.items()],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, price_resp.text
+
+            copy_resp = await client.post(
+                PLANNER_SOURCE_URL,
+                json=_live_planner_source_body(broker_ids=broker_ids, asset_ids=asset_ids, requested_sections=["current_distribution"]),
+                timeout=TIMEOUT,
+            )
+            not_requested_resp = await client.post(
+                PLANNER_SOURCE_URL,
+                json=_live_planner_source_body(broker_ids=broker_ids, asset_ids=asset_ids, requested_sections=["assets"]),
+                timeout=TIMEOUT,
+            )
+            report_resp = await post_portfolio_report(
+                client,
+                {
+                    "broker_ids": broker_ids,
+                    "date_range": {"end": PLANNER_AS_OF},
+                    "target_currency": "EUR",
+                    "include_summary": True,
+                    "include_history": False,
+                    "include_allocation_history": False,
+                },
+            )
+        finally:
+            await _delete_planner_rows(client, broker_ids=broker_ids, asset_ids=asset_ids)
+            if user_id is not None:
+                await delete_current_test_user(client, user_id)
+
+    assert copy_resp.status_code == 200, copy_resp.text
+    assert copy_resp.headers.get("cache-control") == "no-store"
+    copy = copy_resp.json()
+    assert "currency_specs" not in copy
+    distribution = copy["current_distribution"]
+    assert distribution["status"] == "complete"
+    assert distribution["provenance_id"] == "source:portfolio-engine"
+    assert "source:portfolio-engine" in {row["provenance_id"] for row in copy["provenance"]}
+    rows = {row["asset_id"]: row for row in distribution["rows"]}
+    assert set(rows) == {f"asset:{asset}" for asset in asset_ids}
+    weights = {asset: Decimal(rows[f"asset:{asset}"]["weight"]) for asset in asset_ids}
+    assert sum(weights.values()) == 1
+    # 617.25 / 475.23 / 110.11 of 1202.59, floored to 0.0001, two units by largest remainder.
+    assert weights == {held_twice: Decimal("0.5133"), single: Decimal("0.3952"), small: Decimal("0.0915")}
+    for row in rows.values():
+        assert row["held"] is True
+        assert row["valuation_source"] == "MARKET_PRICE"
+        assert row["valuation_reference_date"] == PLANNER_PRICE_DATE
+        assert row["valuation_days_before_requested"] == 3
+
+    assert report_resp.status_code == 200, report_resp.text
+    holdings = report_resp.json()["summary"]["holdings"]
+    # The scenario covers every holding of these Brokers, so both denominators agree.
+    assert {holding["asset_id"] for holding in holdings} == set(asset_ids)
+    page_share: dict[int, Decimal] = defaultdict(Decimal)
+    page_rows: dict[int, int] = defaultdict(int)
+    for holding in holdings:
+        page_share[holding["asset_id"]] += Decimal(holding["allocation_percent"]) / 100
+        page_rows[holding["asset_id"]] += 1
+    assert page_rows[held_twice] == 2
+    for asset in asset_ids:
+        # Each page row is rounded to 0.01 % (0.0001); the copy adds one weight quantum.
+        tolerance = Decimal("0.0001") * page_rows[asset] + Decimal("0.0001")
+        assert abs(weights[asset] - page_share[asset]) <= tolerance, (asset, weights[asset], page_share[asset])
+
+    assert not_requested_resp.status_code == 200, not_requested_resp.text
+    not_requested = not_requested_resp.json()
+    assert "current_distribution" in not_requested
+    assert not_requested["current_distribution"] is None
+    assert "currency_specs" not in not_requested
+    print_success("current_distribution equals the summary's allocation_percent per Asset")

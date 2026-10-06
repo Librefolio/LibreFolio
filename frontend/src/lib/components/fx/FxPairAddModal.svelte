@@ -42,9 +42,6 @@
 
     interface Props {
         open?: boolean;
-        /** Current date range for auto-sync after creation */
-        dateStart?: string;
-        dateEnd?: string;
         /** Edit mode: pre-populates currencies (read-only) for editing providers of existing pair */
         editMode?: boolean;
         /** Pre-populated base currency (used in editMode) */
@@ -61,14 +58,14 @@
         readonlyBase?: boolean;
         /** Tour-only preview: saving is unavailable. */
         tourPreview?: boolean;
-        /** Configuration committed; does not wait for automatic rate sync. */
+        /** Configuration committed; does not wait for automatic rate sync (the pair's full history, see fxCreationSync). */
         oncreated?: (detail: FxPairCreatedDetail) => void | Promise<void>;
         /** Automatic sync settled, including partial, failed and skipped outcomes. */
         onsynced?: (detail: FxPairSyncCompleteDetail) => void | Promise<void>;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), dateStart = '', dateEnd = '', editMode = false, editBase = '', editQuote = '', editRoutes = [], initialBase = '', initialQuote = '', readonlyBase = false, tourPreview = false, oncreated, onsynced, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editBase = '', editQuote = '', editRoutes = [], initialBase = '', initialQuote = '', readonlyBase = false, tourPreview = false, oncreated, onsynced, onclose}: Props = $props();
 
     // =========================================================================
     // State
@@ -234,8 +231,6 @@
         const routes = selectedRoutes.map((route) => route.map(({from, to, provider}) => ({from, to, provider})));
         const includeIntermediates = createIntermediatePairs;
         const editing = editMode;
-        const start = dateStart;
-        const end = dateEnd;
         const createdCallback = oncreated;
         const syncedCallback = onsynced;
         const closeCallback = onclose;
@@ -311,10 +306,8 @@
 
             const hasRealProvider = routes.some((route) => route.some((step) => step.provider !== 'MANUAL'));
             const context = {
-                detail: {base, quote, slug, hasRealProvider, autoSyncStarted: !editing && hasRealProvider && !!start && !!end},
+                detail: {base, quote, slug, hasRealProvider, autoSyncStarted: !editing && hasRealProvider},
                 pairs: [slug, ...intermediateItems.map((item) => `${item.base}-${item.quote}`)],
-                start,
-                end,
                 sessionGeneration,
                 editMode: editing,
                 oncreated: (createdDetail: FxPairCreatedDetail) => {

@@ -20,6 +20,30 @@ specialistici e non è un contratto wire definitivo.
 > relativi gate. Questo documento stabilisce **che cosa** deve fare il prodotto
 > e quali invarianti non possono cambiare.
 
+> **⚠️ Aggiornamento del 2026-09-25: prevale sul testo sotto dove i due sono in conflitto.**
+> Decisioni del developer D-X1 (24/09) e QX1-b (25/09). Si eseguono nel Passo F del
+> [piano Round5](implementation/plan-phase00PacRound5PostMerge.prompt.md), che le riporta al §2.
+>
+> - **In produzione gira solo SCIP, e il suo esito fa fede (D-X1).**
+>   - `optimal` su tutti gli stage della cascata → `optimal_proven`, fonte `solver_status`.
+>   - `infeasible` sul primo stage → `infeasibility_proven`, fonte `solver_status`.
+>   - Un limite (tempo, nodi, cancel) → `not_proven`, con il miglior piano verificato o senza piano.
+>
+>   Non vale più la regola «uno status floating non viene mai promosso».
+>   - L'oracolo esaustivo esce dal flusso di produzione e resta nei test, come gate d'accordo su
+>     domini piccoli.
+>   - Il replay Decimal resta la contabilità esatta di ogni piano pubblicato.
+> - **Arrotondamenti oltre la cassa (QX1-b).** Ai pareggi esatti HALF_UP dei debiti il modello
+>   compilato resta permissivo.
+>   - Può capitare che il piano, contato dal replay, superi il saldo di una cassa (Broker × valuta).
+>     Se lo supera di al più `N` unità minime della sua valuta, esce lo stesso, con l'importo da
+>     aggiungere a quella cassa.
+>   - `N` conta gli importi arrotondati registrati nella cassa.
+>   - Oltre la soglia, o con qualunque altra violazione, è un errore del modello.
+>
+> Sezioni toccate: §2 (flusso), §9.1, §9.3 e §10. La matematica è nel
+> [nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md), in testa.
+
 ---
 
 ## 0. Mappa della suite target
@@ -98,7 +122,7 @@ non interpreta il piano come consulenza finanziaria.
 - modifica di FIFO, WAC/PMC o regime fiscale;
 - sostituzione di Riskfolio o SciPy;
 - tax-loss harvesting, compensazione minus, chiusura/consolidamento Broker;
-- FX multi-hop o cicli di arbitraggio;
+- FX multi-hop o cicli di arbitraggio; ❌ non più da fare (developer, 02/10/2026)
 - profili planner persistenti;
 - esecuzione automatica degli ordini;
 - calcoli economici autorevoli nel frontend;
@@ -126,6 +150,9 @@ flowchart LR
     GATES --> REPORTER["Reporter autorevole"]
     REPORTER --> UI
 ```
+
+> **⚠️ 2026-09-25 (D-X1).** Nel flusso di produzione l'oracolo non c'è più: lo sostituisce lo
+> status di SCIP. Resta nei test, come gate d'accordo su domini piccoli.
 
 Principi:
 
@@ -183,6 +210,12 @@ PAC/Rebalancer.
 | 7 | FX | coppie potenziali, spread, buffer e fee | stesso contratto |
 | 8 | Strategia | `proportional` / `min_fragmentation` | `invest_only` / `invest_and_sell` |
 | 9 | Rivedi | snapshot completo e immutabile | snapshot completo e immutabile |
+
+> **2026-09-24 (Round5, decisione Q-C0-4 del developer)**: in 2.0.0 il Passo 8 del PAC offre solo
+> `proportional`. `min_fragmentation` esce dal wire finché non esiste la sua cascata SCIP, e la UI
+> costruisce le card leggendo le opzioni dal contratto generato: «semplicemente non mettiamola, la ui
+> in questo deve essere dinamica». Dettaglio in
+> `implementation/plan-phase00PacRound5PostMerge.prompt.md`, C0b.2 e C3.
 
 Il risultato è fuori dallo stepper.
 
@@ -446,7 +479,7 @@ U=C_{free}+R_{physical}+L_{economic}+A_{round}.
 $$
 
 - $C_{free}$: cash raggiungibile e spendibile rimasto;
-- $R_{physical}$: buffer FX e tax `self_reserved`;
+- $R_{physical}$: buffer FX (❌ non più da fare, developer, 02/10/2026) e tax `self_reserved`;
 - $L_{economic}$: fee, spread, tax trattenuta e perdite charge/sell once-only;
 - $A_{round}$: rettifica firmata dei posting alla minor unit.
 
@@ -487,6 +520,8 @@ physical_final =
   + self_reserved_tax
 ```
 
+> ❌ non più da fare (developer, 02/10/2026): `fx_fees` e `fx_buffer_amount` nei due blocchi sopra (fee di conversione e buffer FX).
+
 Il provento SELL lordo viene accreditato una volta; fee e tax reserve vengono
 sottratte una volta. `cashNetSell` è un derivato, mai un secondo accredito.
 
@@ -523,7 +558,7 @@ $$
 $$
 
 Sono ammesse soltanto coppie dichiarate, single-hop e senza cicli attivi.
-Buffer e fee FX restano voci distinte.
+Buffer e fee FX restano voci distinte. ❌ non più da fare (developer, 02/10/2026)
 
 ### 6.4 Fee
 
@@ -708,6 +743,14 @@ architetturale non sostituisce Riskfolio o SciPy. Installazione, packaging e
 probe restano bloccati fino al gate ambiente.
 
 ### 9.3 Semantica proof/status A
+
+> **⚠️ Superata in parte il 2026-09-25 (D-X1).**
+> - `proof_source` ammette anche `solver_status`, per `optimal_proven` e per
+>   `infeasibility_proven`.
+> - L'oracolo non è più una fonte di produzione.
+> - Le ultime due regole sugli status floating non valgono più.
+>
+> Vedi la nota in testa.
 
 Campi distinti:
 

@@ -36,12 +36,12 @@ Donde ATR es una envolvente rectificada suavizada del rango de precios, NATR añ
 
 ```mermaid
 flowchart LR
- HLC["📈 Máximo / Mínimo / Cierre"] --> TR["🌡️ Rango Verdadero"]
- TR --> ATRN["🔁 SMMA(N) → ATR"]
- ATRN --> DIV["➗ ÷ Cierre"]
- C["💹 Cierre"] --> DIV
- DIV --> SCALE["✖️ ×100"]
- SCALE --> NATR["📐 NATR(t)"]
+    HLC["📈 Máximo / Mínimo / Cierre"] --> TR["🌡️ Rango Verdadero"]
+    TR --> ATRN["🔁 SMMA(N) → ATR"]
+    ATRN --> DIV["➗ ÷ Cierre"]
+    C["💹 Cierre"] --> DIV
+    DIV --> SCALE["✖️ ×100"]
+    SCALE --> NATR["📐 NATR(t)"]
 ```
 
 !!! note "Elegir ATR vs NATR"

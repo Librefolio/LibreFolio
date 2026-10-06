@@ -45,12 +45,12 @@ Matemáticamente, la mayoría de los indicadores de momento son derivadas discre
 
 ```mermaid
 flowchart LR
- P["💹 Close price"] --> RSI["💪 RSI"]
- P --> MACD["📊 MACD"]
- P --> ROC["🚀 ROC"]
- RSI --> SRSI["🎛️ Stochastic RSI"]
- MACD -->|"÷ EMA slow"| PPO["📐 PPO"]
- HLC["📈 High / Low / Close"] --> CCI["🔄 CCI"]
+    P["💹 Close price"] --> RSI["💪 RSI"]
+    P --> MACD["📊 MACD"]
+    P --> ROC["🚀 ROC"]
+    RSI --> SRSI["🎛️ Stochastic RSI"]
+    MACD -->|"÷ EMA slow"| PPO["📐 PPO"]
+    HLC["📈 High / Low / Close"] --> CCI["🔄 CCI"]
 ```
 
 !!! tip "Osciladores acotados vs no acotados"

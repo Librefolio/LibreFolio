@@ -1490,6 +1490,186 @@ async def test_list_tx_count_own_scopes_to_positively_owned_brokers(test_server)
 
 
 # ============================================================================
+# Held now: held_by_me / held_by_others follow the open quantity, not the
+# transaction count (developer's decision of 24/09/2026: "my assets" means held
+# now, not traded once). Same ownership rule as tx_count_own.
+# ============================================================================
+
+
+async def _create_broker(client: httpx.AsyncClient, name: str) -> int:
+    resp = await client.post(f"{API_BASE}/brokers", json=[{"name": name, "allow_cash_overdraft": True}], timeout=TIMEOUT)
+    assert resp.status_code == 200, f"Broker create failed: {resp.text}"
+    return resp.json()["results"][0]["broker_id"]
+
+
+async def _commit_trade(client: httpx.AsyncClient, broker_id: int, asset_id: int, kind: str, day: str, quantity: str, cash: str) -> None:
+    resp = await client.post(
+        f"{API_BASE}/transactions/commit",
+        json={"creates": [{"broker_id": broker_id, "asset_id": asset_id, "type": kind, "date": day, "quantity": quantity, "cash": {"code": "EUR", "amount": cash}}]},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"{kind} commit failed: {resp.text}"
+    body = resp.json()
+    assert body["committed"] is True, f"{kind} refused: {resp.text}"
+    assert body["results"][0]["status"] == "success", f"{kind} refused: {resp.text}"
+
+
+async def _held_flags(client: httpx.AsyncClient, asset_id: int, marker: str) -> tuple[bool, bool, int]:
+    """(held_by_me, held_by_others, tx_count_own) for THIS test's asset, found by id."""
+    resp = await client.get(f"{API_BASE}/assets/query", params={"search": marker}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    matches = [row for row in resp.json() if row["id"] == asset_id]
+    assert len(matches) == 1, f"asset {asset_id} not found by marker {marker}: {len(matches)} matches"
+    return matches[0]["held_by_me"], matches[0]["held_by_others"], matches[0]["tx_count_own"]
+
+
+@pytest.mark.asyncio
+async def test_list_held_flags_follow_the_open_quantity_not_the_transaction_count(test_server):
+    """held_by_me is true while the caller's own broker holds a positive quantity; a position sold
+    in full is traded, not held, although its transactions still count. held_by_others is true for
+    a position open in a broker of another user."""
+    print_section("GET /assets/query - held_by_me / held_by_others")
+
+    marker = unique_id("HELDNOW")
+    asset_id = None
+    broker_ids: list[tuple[httpx.AsyncClient, int]] = []
+
+    async with httpx.AsyncClient() as client_a, httpx.AsyncClient() as client_b:
+        try:
+            await create_user_and_login(client_a)
+            await create_user_and_login(client_b)
+
+            item = FAAssetCreateItem(display_name=f"Held Now {marker}", currency="EUR")
+            create_resp = await client_a.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+            assert create_resp.status_code == 201, f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
+            asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+            assert asset_id is not None
+            assert await _held_flags(client_a, asset_id, marker) == (False, False, 0)
+
+            own_broker = await _create_broker(client_a, f"Held Own {marker}")
+            broker_ids.append((client_a, own_broker))
+            await _commit_trade(client_a, own_broker, asset_id, "BUY", "2026-01-05", "2", "-200")
+            assert await _held_flags(client_a, asset_id, marker) == (True, False, 1)
+
+            # Part of it sold: still open.
+            await _commit_trade(client_a, own_broker, asset_id, "SELL", "2026-01-06", "-1", "110")
+            assert await _held_flags(client_a, asset_id, marker) == (True, False, 2)
+
+            # Sold in full: no longer "mine", although three transactions still reference it.
+            await _commit_trade(client_a, own_broker, asset_id, "SELL", "2026-01-07", "-1", "115")
+            assert await _held_flags(client_a, asset_id, marker) == (False, False, 3)
+
+            # Another user opens a position in their own broker: held by others, for A only.
+            other_broker = await _create_broker(client_b, f"Held Other {marker}")
+            broker_ids.append((client_b, other_broker))
+            await _commit_trade(client_b, other_broker, asset_id, "BUY", "2026-01-08", "1", "-100")
+            assert await _held_flags(client_a, asset_id, marker) == (False, True, 3)
+            assert await _held_flags(client_b, asset_id, marker) == (True, False, 1)
+
+            print_success("✓ held flags follow the open quantity per broker and its ownership")
+        finally:
+            # Whoever writes, cleans up: brokers (force → cascade over their transactions),
+            # then the asset this test created.
+            for owner, broker_id in broker_ids:
+                await owner.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+            if asset_id is not None:
+                await client_a.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_list_held_by_me_needs_a_positive_owned_share(test_server):
+    """A broker the caller owns at 0% is not "mine" (the tx_count_own rule): a position open
+    there reads as held by others."""
+    print_section("GET /assets/query - held_by_me needs a positive share")
+
+    marker = unique_id("HELDZERO")
+    asset_id = None
+    broker_id = None
+
+    async with httpx.AsyncClient() as client:
+        try:
+            await create_user_and_login(client)
+            item = FAAssetCreateItem(display_name=f"Held Zero {marker}", currency="EUR")
+            create_resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+            assert create_resp.status_code == 201, f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
+            asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+            assert asset_id is not None
+
+            broker_id = await _create_broker(client, f"Held Zero {marker}")
+            me_resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me_resp.status_code == 200, me_resp.text
+            access_resp = await client.put(
+                f"{API_BASE}/brokers/{broker_id}/access",
+                json=[{"user_id": me_resp.json()["user"]["id"], "role": "OWNER", "share_percentage": 0}],
+                timeout=TIMEOUT,
+            )
+            assert access_resp.status_code == 200, f"Setting a 0% OWNER share must be legal: {access_resp.text}"
+            await _commit_trade(client, broker_id, asset_id, "BUY", "2026-01-05", "1", "-100")
+
+            assert await _held_flags(client, asset_id, marker) == (False, True, 0)
+            print_success("✓ a 0%-owned broker's open position is held by others")
+        finally:
+            if broker_id is not None:
+                await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+            if asset_id is not None:
+                await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_list_held_flags_read_positions_through_the_portfolio_dust_threshold(test_server):
+    """A residue of 0.000002 — what a loan redeemed in rounded tranches leaves — is not a position,
+    for the caller's broker or anyone else's; 0.00002 is. "Held now" means exactly what the
+    portfolio lists as a holding (developer's decision of 24/09/2026)."""
+    print_section("GET /assets/query - held flags and the dust threshold")
+
+    marker = unique_id("HELDDUST")
+    asset_id = None
+    broker_ids: list[tuple[httpx.AsyncClient, int]] = []
+
+    async with httpx.AsyncClient() as client_a, httpx.AsyncClient() as client_b:
+        try:
+            await create_user_and_login(client_a)
+            await create_user_and_login(client_b)
+
+            item = FAAssetCreateItem(display_name=f"Held Dust {marker}", currency="EUR")
+            create_resp = await client_a.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+            assert create_resp.status_code == 201, f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
+            asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+            assert asset_id is not None
+
+            broker_a = await _create_broker(client_a, f"Held Dust A {marker}")
+            broker_ids.append((client_a, broker_a))
+            broker_b = await _create_broker(client_b, f"Held Dust B {marker}")
+            broker_ids.append((client_b, broker_b))
+
+            # Each user buys one and sells all but a residue of 0.000002.
+            for client, broker_id in ((client_a, broker_a), (client_b, broker_b)):
+                await _commit_trade(client, broker_id, asset_id, "BUY", "2026-01-05", "1", "-100")
+                await _commit_trade(client, broker_id, asset_id, "SELL", "2026-01-06", "-0.999998", "99.9998")
+            assert await _held_flags(client_a, asset_id, marker) == (False, False, 2)
+            assert await _held_flags(client_b, asset_id, marker) == (False, False, 2)
+
+            # A tops up to 0.00002, above the threshold: held by A, and by someone else for B.
+            await _commit_trade(client_a, broker_a, asset_id, "BUY", "2026-01-07", "0.000018", "-0.0018")
+            assert await _held_flags(client_a, asset_id, marker) == (True, False, 3)
+            assert await _held_flags(client_b, asset_id, marker) == (False, True, 2)
+
+            # B does the same: each now holds it and sees the other holding it too.
+            await _commit_trade(client_b, broker_b, asset_id, "BUY", "2026-01-07", "0.000018", "-0.0018")
+            assert await _held_flags(client_a, asset_id, marker) == (True, True, 3)
+            assert await _held_flags(client_b, asset_id, marker) == (True, True, 3)
+
+            print_success("✓ a dust residue is not held, above the threshold it is")
+        finally:
+            # Whoever writes, cleans up: brokers (force → cascade over their transactions),
+            # then the asset this test created.
+            for owner, broker_id in broker_ids:
+                await owner.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+            if asset_id is not None:
+                await client_a.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================================
 # Classification metadata PATCH regression (root cause E2) — AssetCRUDService
 # .patch_assets_bulk / prepared patch_dict must shallow-merge classification_
 # params per subfield, not fully replace it: an unrelated field patch must

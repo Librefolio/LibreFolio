@@ -524,7 +524,7 @@ It contains:
   harvesting and tax-realization minimization;
 - persistent per-user Broker operational profiles;
 - persistent configurable Asset capital-gains tax rate;
-- transfer fee/time/settlement extensions, multi-hop FX protections, dynamic
+- transfer fee/time/settlement extensions, multi-hop FX protections (❌ non più da fare, developer, 02/10/2026), dynamic
   Asset/volatility margins and optional manual-source persistence.
 
 For v1, existing Broker/domain data may prefill known facts, all remaining Broker
@@ -538,7 +538,7 @@ current product boundaries. All approved calculator deferrals are registered.
 - carried-loss buckets by category and expiry;
 - instrument compensability and complete tax rules;
 - market-specific or order-sequence-specific fee formulas;
-- multi-hop transfers or FX, transfer costs, and settlement timing;
+- multi-hop transfers or FX (FX multi-hop: ❌ non più da fare, developer, 02/10/2026), transfer costs, and settlement timing;
 - MCP server/libraries;
 - actual order execution;
 - FIFO/WAC changes, leverage, shorts, and Riskfolio integration.

@@ -241,8 +241,10 @@
 
     function openDropdown() {
         if (disabled) return;
-        // Prevent immediate reopen after close (touch event race)
-        if (Date.now() - lastClosedAt < 200) return;
+        // A tap that chooses an option can be followed by a ghost click on the trigger underneath
+        // (touch event race): ignore an opening within 200 ms of a touch or pen close. A mouse or
+        // keyboard close never blocks the next opening — a real click there is never a ghost.
+        if (closedByTouch && Date.now() - lastClosedAt < 200) return;
         updateDropdownPosition();
         isOpen = true;
         searchQuery = '';
@@ -251,11 +253,33 @@
 
     /** Timestamp of last close — used to prevent immediate reopen on touch devices */
     let lastClosedAt = 0;
+    /** Pointer type of the last press inside this select; a key press inside it clears it. */
+    let lastPointerType = '';
+    /** Whether the last close came from a touch or pen press — the only close a ghost click can follow. */
+    let closedByTouch = false;
+
+    $effect(() => {
+        const container = containerRef;
+        if (!container) return;
+        const onPointerDown = (event: PointerEvent) => {
+            lastPointerType = event.pointerType ?? '';
+        };
+        const onKeyDown = () => {
+            lastPointerType = '';
+        };
+        container.addEventListener('pointerdown', onPointerDown, true);
+        container.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            container.removeEventListener('pointerdown', onPointerDown, true);
+            container.removeEventListener('keydown', onKeyDown, true);
+        };
+    });
 
     function closeDropdown() {
         isOpen = false;
         searchQuery = '';
         lastClosedAt = Date.now();
+        closedByTouch = lastPointerType === 'touch' || lastPointerType === 'pen';
         // Return focus to the trigger so the next click works reliably
         if (containerRef) {
             const trigger = containerRef.querySelector<HTMLElement>('[role="combobox"]');

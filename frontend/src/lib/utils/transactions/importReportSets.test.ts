@@ -18,6 +18,20 @@
  * of a role come in order of start, then end; each role row gains its `gaps` (the holes between its
  * bars, never before the first or after the last); the history runs from H0 to `history_end` — no
  * longer to the end of the timeline — and carries `history_count`; `history_end` may stretch the span.
+ *
+ * Phase G (plan §14 G.2) lets the user choose how a set is read, and remembers it after an analysis:
+ * an override `''` is a single file with no plugin (`setPluginFor`), `rememberedChoices` reads the
+ * memory out of what the server keeps after an analysis, `setPluginChoices` / `readAlonePlugins` /
+ * `otherSetPlugins` / `defaultPluginNote` say what the card offers, `setRequest` builds the set
+ * request with `exclude_file_ids`, `combinedFileForSet` also compares the combined file's live
+ * members with the set's, and `setsOfFiles` applies the memory. At the end of the file, the new
+ * functions loaded through `g()`. The combined files of the C2 tests of `combinedFileForSet` now
+ * carry the members they were built from, as the server writes them, so that they keep matching.
+ *
+ * Phase G, decision 2 (rule A2): a failed original never joins a set. The server's `collect_members`
+ * skips the originals whose status is `failed`; the wizard agrees — `setPluginFor` is null for one,
+ * even when a report-set plugin is chosen for it, so `groupBrokerFiles` lists it among the singles —
+ * and `setRequest` never lists it in `exclude_file_ids` (a file no set holds is left out of none).
  */
 import {describe, expect, it} from 'vitest';
 
@@ -53,6 +67,9 @@ interface SetFileInfo {
     derived_from?: Array<{file_id: string; role?: string | null; filename: string; deleted?: boolean}> | null;
     combined_into?: string[] | null;
     combine_is_stale?: boolean | null;
+    // Read by the memory of the choices (phase G): when and with which plugin the server parsed the file.
+    processed_at?: string | null;
+    parsed_plugin_code?: string | null;
 }
 interface ReportSetGroup {
     key: string;
@@ -179,7 +196,16 @@ const ids = (files: SetFileInfo[]) => files.map((f) => f.file_id);
 // The files of broker 7, in the order the API listed them.
 const GEN_1 = file({file_id: 'gen-1', filename: 'generic_simple.csv', uploaded_at: '2026-09-30T10:00:00Z', compatible_plugins: [GENERIC]});
 const CUSTODY_NEW = file({file_id: 'custody-new', filename: 'Transactions.xlsx', uploaded_at: '2026-09-30T10:00:07Z', compatible_plugins: [DANSKE]});
-const COMBINED_OLD = file({file_id: 'combined-old', filename: 'Danske Bank — combined 2025-08-01…2026-07-31.csv', uploaded_at: '2026-08-15T09:05:00Z', batch_id: BATCH_OLD, kind: 'combined', compatible_plugins: [DANSKE]});
+// Built from the cash statement of the old batch, as the server records it (G: combinedFileForSet compares the members).
+const COMBINED_OLD = file({
+    file_id: 'combined-old',
+    filename: 'Danske Bank — combined 2025-08-01…2026-07-31.csv',
+    uploaded_at: '2026-08-15T09:05:00Z',
+    batch_id: BATCH_OLD,
+    kind: 'combined',
+    compatible_plugins: [DANSKE],
+    derived_from: [{file_id: 'cash-old', role: 'cash', filename: 'statement-2025.csv', deleted: false}],
+});
 const CASH_OLD = file({file_id: 'cash-old', filename: 'statement-2025.csv', uploaded_at: '2026-08-15T09:00:00Z', batch_id: BATCH_OLD, compatible_plugins: [DANSKE, GENERIC]});
 const CASH_NEW = file({file_id: 'cash-new', filename: 'statement.csv', uploaded_at: '2026-09-30T10:00:03Z', compatible_plugins: [DANSKE, GENERIC]});
 const LEGACY = file({file_id: 'legacy', filename: 'old-export.csv', uploaded_at: '2026-01-10T08:00:00Z', batch_id: null, compatible_plugins: [DANSKE, GENERIC]});
@@ -292,6 +318,34 @@ describe('setPluginFor', () => {
         const setPluginFor = await c2('setPluginFor');
         expect(setPluginFor(file({file_id: 'x', compatible_plugins: [GENERIC, DANSKE]}), PLUGINS, null)).toBe(DANSKE);
     });
+
+    it("G: an override '' is a single file with no plugin, even when a report-set plugin reads the file", async () => {
+        const setPluginFor = await c2('setPluginFor');
+        expect(setPluginFor(file({file_id: 'x', compatible_plugins: [DANSKE, GENERIC]}), PLUGINS, '')).toBeNull();
+        expect(setPluginFor(file({file_id: 'x', compatible_plugins: [DANSKE]}), PLUGINS, '')).toBeNull();
+        // undefined is still "no manual choice" (guard: true before G too).
+        expect(setPluginFor(file({file_id: 'x', compatible_plugins: [DANSKE, GENERIC]}), PLUGINS, undefined)).toBe(DANSKE);
+    });
+
+    it('G (A2): a failed original joins no set, as on the server — whatever reads it, whatever is chosen for it', async () => {
+        const setPluginFor = await c2('setPluginFor');
+        const failed = file({file_id: 'x', status: 'failed', compatible_plugins: [DANSKE, GENERIC]});
+
+        expect(setPluginFor(failed, PLUGINS), 'detection').toBeNull();
+        expect(setPluginFor(failed, PLUGINS, null), 'no manual choice').toBeNull();
+        expect(setPluginFor(failed, PLUGINS, DANSKE), 'the set plugin chosen for it').toBeNull();
+        expect(setPluginFor({...failed, compatible_plugins: [OTHER_SET, DANSKE]}, PLUGINS, OTHER_SET), 'another set plugin chosen for it').toBeNull();
+    });
+
+    it('G (A2): only the status says failed — the same original uploaded or parsed joins its set (guard: true before A2 too)', async () => {
+        const setPluginFor = await c2('setPluginFor');
+        const original = file({file_id: 'x', compatible_plugins: [DANSKE, GENERIC]});
+
+        for (const status of ['uploaded', 'parsed']) {
+            expect(setPluginFor({...original, status}, PLUGINS), status).toBe(DANSKE);
+            expect(setPluginFor({...original, status}, PLUGINS, DANSKE), `${status}, the set plugin chosen`).toBe(DANSKE);
+        }
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -397,6 +451,41 @@ describe('groupBrokerFiles', () => {
         const groupBrokerFiles = await c2('groupBrokerFiles');
         expect(groupBrokerFiles(BROKER, [], PLUGINS)).toEqual({sets: [], singles: []});
     });
+
+    it("G: an override '' turns a member into a single file, which no set holds", async () => {
+        const groupBrokerFiles = await c2('groupBrokerFiles');
+        const {sets, singles} = groupBrokerFiles(BROKER, [CUSTODY_NEW, CASH_NEW], PLUGINS, new Map([['cash-new', '']]));
+
+        expect(sets.map((s) => [s.key, ids(s.files)])).toEqual([[KEY_NEW, ['custody-new']]]);
+        expect(ids(singles)).toEqual(['cash-new']);
+    });
+
+    it('G (A2): a failed original is a single file, in its input position — no set holds it, not even with the set plugin chosen for it', async () => {
+        const groupBrokerFiles = await c2('groupBrokerFiles');
+        // cash-new failed its parse; uploaded at :03, before custody-new at :07.
+        const failedCash = {...CASH_NEW, status: 'failed'};
+        const files = [GEN_1, failedCash, CUSTODY_NEW];
+
+        for (const [label, overrides] of [
+            ['detection', undefined],
+            ['the set plugin chosen for it', new Map([['cash-new', DANSKE]])],
+        ] as const) {
+            const {sets, singles} = groupBrokerFiles(BROKER, files, PLUGINS, overrides);
+            // The set is custody-new alone, and dated by it: the failed file counts for nothing.
+            expect(
+                sets.map((s) => [s.key, ids(s.files), s.uploadedAt]),
+                label,
+            ).toEqual([[KEY_NEW, ['custody-new'], '2026-09-30T10:00:07Z']]);
+            expect(ids(singles), label).toEqual(['gen-1', 'cash-new']);
+        }
+    });
+
+    it('G (A2): a batch whose only original failed is no set at all', async () => {
+        const groupBrokerFiles = await c2('groupBrokerFiles');
+        const failedCustody = {...CUSTODY_NEW, status: 'failed'};
+
+        expect(groupBrokerFiles(BROKER, [failedCustody], PLUGINS)).toEqual({sets: [], singles: [failedCustody]});
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -418,7 +507,12 @@ describe('setSelectionState', () => {
 // ---------------------------------------------------------------------------
 
 describe('combinedFileForSet', () => {
-    const combined = (file_id: string, uploaded_at: string, over: Partial<SetFileInfo> = {}) => file({file_id, uploaded_at, kind: 'combined', compatible_plugins: [DANSKE], ...over});
+    // As the server writes them: built from the two members of SET_NEW (G compares the members too).
+    const SET_NEW_REFS = [
+        {file_id: 'cash-new', role: 'cash', filename: 'statement.csv', deleted: false},
+        {file_id: 'custody-new', role: 'custody', filename: 'Transactions.xlsx', deleted: false},
+    ];
+    const combined = (file_id: string, uploaded_at: string, over: Partial<SetFileInfo> = {}) => file({file_id, uploaded_at, kind: 'combined', compatible_plugins: [DANSKE], derived_from: SET_NEW_REFS, ...over});
 
     it('is the newest combined file of the same broker, batch and plugin', async () => {
         const combinedFileForSet = await c2('combinedFileForSet');
@@ -443,6 +537,33 @@ describe('combinedFileForSet', () => {
     it('finds the combined file of an older batch for that batch\u2019s set', async () => {
         const combinedFileForSet = await c2('combinedFileForSet');
         expect(combinedFileForSet(SET_OLD, BROKER_FILES)?.file_id).toBe('combined-old');
+    });
+
+    it('G: only a combined file whose live members are the set\u2019s members, the newest of them', async () => {
+        const combinedFileForSet = await c2('combinedFileForSet');
+        const ref = (file_id: string, deleted = false) => ({file_id, role: null, filename: `${file_id}.csv`, deleted});
+        const exact = combined('exact', '2026-09-30T12:00:00Z', {derived_from: [ref('custody-new'), ref('cash-new')]});
+        // Built with a third export that the user has since left out of the set: newer, and no longer the set's.
+        const wider = combined('wider', '2026-09-30T13:00:00Z', {derived_from: [ref('custody-new'), ref('cash-new'), ref('cash-left-out')]});
+        // Built before the cash statement joined the set.
+        const narrower = combined('narrower', '2026-09-30T14:00:00Z', {derived_from: [ref('custody-new')]});
+
+        expect(combinedFileForSet(SET_NEW, [wider, exact, narrower])?.file_id).toBe('exact');
+        expect(combinedFileForSet(SET_NEW, [wider, narrower])).toBeNull();
+    });
+
+    it('G, v5.3 (guard: true before G too): an original deleted after the combine keeps the set analysed — its ref is marked deleted', async () => {
+        const combinedFileForSet = await c2('combinedFileForSet');
+        // The cash statement was deleted: the set is the custody export alone, the combined file still holds both.
+        const setWithoutCash: ReportSetGroup = {...SET_NEW, files: [CUSTODY_NEW]};
+        const kept = combined('kept', '2026-09-30T12:00:00Z', {
+            derived_from: [
+                {file_id: 'custody-new', role: 'custody', filename: 'Transactions.xlsx', deleted: false},
+                {file_id: 'cash-new', role: 'cash', filename: 'statement.csv', deleted: true},
+            ],
+        });
+
+        expect(combinedFileForSet(setWithoutCash, [kept])?.file_id).toBe('kept');
     });
 });
 
@@ -1093,5 +1214,378 @@ describe('fileSetBadges', () => {
         const fileSetBadges = await c3('fileSetBadges');
         expect(fileSetBadges(SINGLE, ctx([[KEY_NEW, COMPLETE]]))).toEqual([]);
         expect(fileSetBadges(file({file_id: 'bare', batch_id: null, compatible_plugins: [GENERIC]}), ctx([]))).toEqual([]);
+    });
+});
+
+// ===========================================================================
+// Phase G — the user chooses how a set is read, and the analysis remembers it (plan §14 G.2)
+// ===========================================================================
+//
+// Pinned by the plan's contract (G.2, "Logica pura"), whose shapes these are:
+//   rememberedChoices(files, plugins) → Map<file_id, override>: the memory after an analysis, read
+//     from what the server already keeps. For each original of an upload, three events, counting only
+//     combined files whose status is 'parsed' and that share its broker and batch:
+//       E1 member    — a combined file lists it among its live `derived_from`: its `parsed_plugin_code`,
+//                      at its `processed_at`;
+//       E2 alone     — the file itself is 'parsed' by a single-file plugin: that plugin, at its own
+//                      `processed_at`;
+//       E3 left out  — a combined file does not list it, its plugin reads the file, and the file was
+//                      there when it was built (uploaded_at ≤ the combined file's): '', at its `processed_at`.
+//     The newest E1 wins when it is newer than every E2 and E3; otherwise an E2 newer than the newest
+//     E1 (or with no E1) gives its plugin — an E2 and an E3 of one analysis agree, both say "out of the
+//     set"; otherwise an E3 gives ''; with no event there is no entry, and detection decides.
+//   setPluginChoices(set, plugins) — the report-set plugins that read every member, the set's own first;
+//   readAlonePlugins(file, plugins, brokerDefault?) — the single-file plugins that read the file, the
+//     broker's default first when it is one of them, then in the order of `compatible_plugins`;
+//   otherSetPlugins(file, setPluginCode, plugins) — the other report-set plugins that read the file;
+//   defaultPluginNote(set, brokerDefault, plugins) — the broker's default when it is another plugin that
+//     reads a member, else null;
+//   setRequest(set, files) — the body of /sets/preview and /sets/combine: `exclude_file_ids` are the
+//     originals of the same broker and upload that the set's plugin reads, not failed, and no members.
+// Every entry of these lists is compared on its code and name only.
+
+interface PluginChoice {
+    code: string;
+    name: string;
+}
+interface SetRequestBody {
+    broker_id: number;
+    plugin_code: string;
+    batch_id: string;
+    exclude_file_ids: string[];
+}
+interface ReportSetChoicesModule {
+    rememberedChoices(files: SetFileInfo[], plugins: SetPluginInfo[]): Map<string, string>;
+    setPluginChoices(set: ReportSetGroup, plugins: SetPluginInfo[]): PluginChoice[];
+    readAlonePlugins(file: SetFileInfo, plugins: SetPluginInfo[], brokerDefault?: string | null): PluginChoice[];
+    otherSetPlugins(file: SetFileInfo, setPluginCode: string, plugins: SetPluginInfo[]): PluginChoice[];
+    defaultPluginNote(set: ReportSetGroup, brokerDefault: string | null, plugins: SetPluginInfo[]): PluginChoice | null;
+    setRequest(set: ReportSetGroup, files: SetFileInfo[]): SetRequestBody;
+}
+
+/** One phase-G export of the module, loaded for the test that needs it. */
+async function g<K extends keyof ReportSetChoicesModule>(name: K): Promise<ReportSetChoicesModule[K]> {
+    let mod: Partial<ReportSetChoicesModule>;
+    try {
+        mod = (await import('./importReportSets')) as unknown as Partial<ReportSetChoicesModule>;
+    } catch (error) {
+        throw new Error(`importReportSets.ts cannot be loaded: ${String(error)}`);
+    }
+    const fn = mod[name];
+    if (typeof fn !== 'function') throw new Error(`importReportSets.${name} is not implemented yet (report sets, phase G)`);
+    return fn as ReportSetChoicesModule[K];
+}
+
+/** A list of choices reduced to what identifies them, in order. */
+const choices = (list: PluginChoice[]) => list.map((choice) => [choice.code, choice.name]);
+
+/** The memory as a plain object, so a failure prints every entry. */
+const memoryOf = (map: Map<string, string>) => Object.fromEntries([...map.entries()].sort(([a], [b]) => a.localeCompare(b)));
+
+/** An instant of the analysis day, by hour and minute (and second). */
+const at = (time: string) => `2026-09-30T${time.length === 5 ? `${time}:00` : time}Z`;
+
+// The originals of one upload of broker 7, all there at 10:00.
+const M_CUSTODY = file({file_id: 'm-custody', filename: 'Transactions.xlsx', uploaded_at: at('10:00'), compatible_plugins: [DANSKE]});
+const M_CASH = file({file_id: 'm-cash', filename: 'statement.csv', uploaded_at: at('10:00'), compatible_plugins: [DANSKE, GENERIC]});
+const M_CASH_2 = file({file_id: 'm-cash-2', filename: 'statement-2021.csv', uploaded_at: at('10:00'), compatible_plugins: [DANSKE, GENERIC]});
+
+/** A combined file of broker 7 in the new upload, built at `builtAt` from `members` and parsed at `parsedAt` with `plugin`. */
+function parsedCombined(file_id: string, members: SetFileInfo[], builtAt: string, parsedAt: string, over: Partial<SetFileInfo> = {}): SetFileInfo {
+    return file({
+        file_id,
+        filename: `${file_id}.csv`,
+        kind: 'combined',
+        status: 'parsed',
+        uploaded_at: builtAt,
+        processed_at: parsedAt,
+        parsed_plugin_code: DANSKE,
+        compatible_plugins: [DANSKE],
+        derived_from: members.map((member) => ({file_id: member.file_id, role: null, filename: member.filename, deleted: false})),
+        ...over,
+    });
+}
+
+/** `original`, parsed on its own by `plugin` at `parsedAt`. */
+const parsedAlone = (original: SetFileInfo, plugin: string, parsedAt: string): SetFileInfo => ({...original, status: 'parsed', parsed_plugin_code: plugin, processed_at: parsedAt});
+
+// ---------------------------------------------------------------------------
+// rememberedChoices
+// ---------------------------------------------------------------------------
+
+describe('G — rememberedChoices', () => {
+    it('remembers nothing while the files are only uploaded, nor from a combined file never parsed', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const built = parsedCombined('c-built', [M_CUSTODY, M_CASH], at('10:05'), at('10:06'), {status: 'uploaded', processed_at: null, parsed_plugin_code: null});
+        const failed = parsedCombined('c-failed', [M_CUSTODY, M_CASH], at('10:07'), at('10:08'), {status: 'failed', parsed_plugin_code: null});
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, M_CASH_2], PLUGINS))).toEqual({});
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, M_CASH_2, built, failed], PLUGINS))).toEqual({});
+    });
+
+    it('E1: the members of a parsed combined file stay in its set, with its plugin; the combined file itself has no entry', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const combined = parsedCombined('c-1', [M_CUSTODY, M_CASH], at('10:05'), at('10:06'));
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, combined], PLUGINS))).toEqual({'m-cash': DANSKE, 'm-custody': DANSKE});
+    });
+
+    it('E3: an export the plugin reads, there when the combined file was built and not in it, stays out of every set', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const combined = parsedCombined('c-1', [M_CUSTODY, M_CASH], at('10:05'), at('10:06'));
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, M_CASH_2, combined], PLUGINS))).toEqual({'m-cash': DANSKE, 'm-cash-2': '', 'm-custody': DANSKE});
+    });
+
+    it('E2: a file parsed on its own by a single-file plugin keeps that plugin', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, parsedAlone(M_CASH, GENERIC, at('10:30'))], PLUGINS))).toEqual({'m-cash': GENERIC});
+    });
+
+    it('no E3 for a file the combined file\u2019s plugin cannot read, nor for one uploaded after it was built', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const combined = parsedCombined('c-1', [M_CUSTODY, M_CASH], at('10:05'), at('10:06'));
+        const generic = file({file_id: 'm-generic', filename: 'generic_simple.csv', uploaded_at: at('10:00'), compatible_plugins: [GENERIC]});
+        const later = file({file_id: 'm-cash-later', filename: 'statement-later.csv', uploaded_at: at('10:10'), compatible_plugins: [DANSKE, GENERIC]});
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, generic, later, combined], PLUGINS))).toEqual({'m-cash': DANSKE, 'm-custody': DANSKE});
+    });
+
+    it('only the combined files of the same broker and upload speak about a file', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        // Another upload of broker 7, analysed: it says nothing of this upload's files.
+        const otherUpload = parsedCombined('c-other-batch', [], at('10:05'), at('10:06'), {batch_id: BATCH_OLD});
+        // Another broker's combined file under the same batch id (never true in practice): it says nothing either.
+        const otherBroker = parsedCombined('c-other-broker', [M_CUSTODY], at('10:05'), at('10:06'), {target_broker_id: 8});
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, otherUpload, otherBroker], PLUGINS))).toEqual({});
+    });
+
+    it('no E2 from a parse by a report-set plugin or from a failed parse; no entry for a file without an upload batch', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const bySetPlugin = parsedAlone(M_CUSTODY, DANSKE, at('10:30'));
+        const failedParse = {...parsedAlone(M_CASH, GENERIC, at('10:30')), status: 'failed'};
+        const noBatch = parsedAlone(file({file_id: 'm-legacy', filename: 'old-export.csv', batch_id: null, compatible_plugins: [DANSKE, GENERIC]}), GENERIC, at('10:30'));
+
+        expect(memoryOf(rememberedChoices([bySetPlugin, failedParse, noBatch], PLUGINS))).toEqual({});
+    });
+
+    it('the newest event decides: a set analysis after a lone parse brings the file back into the set', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const cash = parsedAlone(M_CASH, GENERIC, at('10:30'));
+        const combined = parsedCombined('c-1', [M_CUSTODY, cash], at('10:40'), at('10:41'));
+
+        expect(rememberedChoices([M_CUSTODY, cash, combined], PLUGINS).get('m-cash')).toBe(DANSKE);
+    });
+
+    it('the newest event decides: a lone parse after the set analysis keeps the file alone, with its plugin', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const cash = parsedAlone(M_CASH, GENERIC, at('10:30'));
+        const combined = parsedCombined('c-1', [M_CUSTODY, M_CASH], at('10:05'), at('10:06'));
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, cash, combined], PLUGINS))).toEqual({'m-cash': GENERIC, 'm-custody': DANSKE});
+    });
+
+    it('the newest event decides: a later set analysis that left the file out keeps it out', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const first = parsedCombined('c-1', [M_CUSTODY, M_CASH, M_CASH_2], at('10:05'), at('10:06'));
+        const second = parsedCombined('c-2', [M_CUSTODY, M_CASH], at('10:30'), at('10:31'));
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, M_CASH_2, first, second], PLUGINS))).toEqual({'m-cash': DANSKE, 'm-cash-2': '', 'm-custody': DANSKE});
+    });
+
+    it('the newest event decides: a later set analysis that took the file back keeps it in', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const first = parsedCombined('c-1', [M_CUSTODY, M_CASH], at('10:05'), at('10:06'));
+        const second = parsedCombined('c-2', [M_CUSTODY, M_CASH, M_CASH_2], at('10:30'), at('10:31'));
+
+        expect(rememberedChoices([M_CUSTODY, M_CASH, M_CASH_2, first, second], PLUGINS).get('m-cash-2')).toBe(DANSKE);
+    });
+
+    it('the newest set analysis gives the plugin, when two report-set plugins analysed the file', async () => {
+        const rememberedChoices = await g('rememberedChoices');
+        const cash = {...M_CASH, compatible_plugins: [DANSKE, OTHER_SET, GENERIC]};
+        const danske = parsedCombined('c-danske', [M_CUSTODY, cash], at('10:05'), at('10:06'));
+        const other = parsedCombined('c-other', [cash], at('10:30'), at('10:31'), {parsed_plugin_code: OTHER_SET, compatible_plugins: [OTHER_SET]});
+
+        expect(rememberedChoices([M_CUSTODY, cash, danske, other], PLUGINS).get('m-cash')).toBe(OTHER_SET);
+    });
+
+    it.each([
+        ['just before', at('10:05:50')],
+        ['just after', at('10:06:10')],
+    ])('an E2 and an E3 of one analysis agree — out of the set, with the lone plugin (lone parse %s the set\u2019s)', async (_when, aloneAt) => {
+        const rememberedChoices = await g('rememberedChoices');
+        // One analysis: the set without the second statement, and that statement read alone.
+        const combined = parsedCombined('c-1', [M_CUSTODY, M_CASH], at('10:05'), at('10:06'));
+        const alone = parsedAlone(M_CASH_2, GENERIC, aloneAt);
+
+        expect(memoryOf(rememberedChoices([M_CUSTODY, M_CASH, alone, combined], PLUGINS))).toEqual({'m-cash': DANSKE, 'm-cash-2': GENERIC, 'm-custody': DANSKE});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// What the card offers: setPluginChoices, readAlonePlugins, otherSetPlugins, defaultPluginNote
+// ---------------------------------------------------------------------------
+
+describe('G — setPluginChoices', () => {
+    const setOf = (files: SetFileInfo[]): ReportSetGroup => ({key: KEY_NEW, brokerId: BROKER, pluginCode: DANSKE, batchId: BATCH_NEW, uploadedAt: at('10:00'), files});
+
+    it('the report-set plugins that read every member, the set\u2019s own first', async () => {
+        const setPluginChoices = await g('setPluginChoices');
+        const both = (file_id: string) => file({file_id, compatible_plugins: [OTHER_SET, GENERIC, DANSKE]});
+
+        expect(choices(setPluginChoices(setOf([both('a'), both('b')]), PLUGINS))).toEqual([
+            [DANSKE, 'Danske Bank'],
+            [OTHER_SET, 'Other Bank'],
+        ]);
+    });
+
+    it('a report-set plugin that does not read every member is no choice; a single-file plugin never is', async () => {
+        const setPluginChoices = await g('setPluginChoices');
+        const files = [file({file_id: 'a', compatible_plugins: [DANSKE, OTHER_SET, GENERIC]}), file({file_id: 'b', compatible_plugins: [DANSKE, GENERIC]})];
+
+        expect(choices(setPluginChoices(setOf(files), PLUGINS))).toEqual([[DANSKE, 'Danske Bank']]);
+    });
+});
+
+describe('G — readAlonePlugins', () => {
+    const MIXED = file({file_id: 'mixed', compatible_plugins: [DANSKE, 'broker_legacy', GENERIC, OTHER_SET, 'broker_bare']});
+
+    it('the single-file plugins that read the file, in the order of compatible_plugins', async () => {
+        const readAlonePlugins = await g('readAlonePlugins');
+
+        expect(choices(readAlonePlugins(MIXED, PLUGINS))).toEqual([
+            ['broker_legacy', 'Legacy'],
+            [GENERIC, 'Generic CSV'],
+            ['broker_bare', 'Bare'],
+        ]);
+    });
+
+    it('the broker\u2019s default first, when it is one of them', async () => {
+        const readAlonePlugins = await g('readAlonePlugins');
+
+        expect(choices(readAlonePlugins(MIXED, PLUGINS, GENERIC))).toEqual([
+            [GENERIC, 'Generic CSV'],
+            ['broker_legacy', 'Legacy'],
+            ['broker_bare', 'Bare'],
+        ]);
+        for (const other of [null, DANSKE, 'broker_not_compatible']) {
+            expect(
+                choices(readAlonePlugins(MIXED, PLUGINS, other)).map(([code]) => code),
+                `default ${String(other)}`,
+            ).toEqual(['broker_legacy', GENERIC, 'broker_bare']);
+        }
+    });
+
+    it('none for a file only report-set plugins read', async () => {
+        const readAlonePlugins = await g('readAlonePlugins');
+
+        expect(readAlonePlugins(file({file_id: 'x', compatible_plugins: [DANSKE, OTHER_SET]}), PLUGINS, GENERIC)).toEqual([]);
+    });
+});
+
+describe('G — otherSetPlugins', () => {
+    it('the other report-set plugins that read the file', async () => {
+        const otherSetPlugins = await g('otherSetPlugins');
+        const both = file({file_id: 'x', compatible_plugins: [DANSKE, GENERIC, OTHER_SET]});
+
+        expect(choices(otherSetPlugins(both, DANSKE, PLUGINS))).toEqual([[OTHER_SET, 'Other Bank']]);
+        expect(choices(otherSetPlugins(both, OTHER_SET, PLUGINS))).toEqual([[DANSKE, 'Danske Bank']]);
+    });
+
+    it('none when the set\u2019s plugin is the only report-set plugin that reads it', async () => {
+        const otherSetPlugins = await g('otherSetPlugins');
+
+        expect(otherSetPlugins(file({file_id: 'x', compatible_plugins: [DANSKE, GENERIC]}), DANSKE, PLUGINS)).toEqual([]);
+    });
+});
+
+describe('G — defaultPluginNote', () => {
+    it('the broker\u2019s default, when it is another plugin that reads a member', async () => {
+        const defaultPluginNote = await g('defaultPluginNote');
+        const note = defaultPluginNote(SET_NEW, GENERIC, PLUGINS);
+
+        expect(note && [note.code, note.name]).toEqual([GENERIC, 'Generic CSV']);
+    });
+
+    it('null without a default, with the set\u2019s own plugin, or with a default that reads no member', async () => {
+        const defaultPluginNote = await g('defaultPluginNote');
+        const custodyOnly: ReportSetGroup = {...SET_NEW, files: [CUSTODY_NEW]};
+
+        expect(defaultPluginNote(SET_NEW, null, PLUGINS)).toBeNull();
+        expect(defaultPluginNote(SET_NEW, DANSKE, PLUGINS)).toBeNull();
+        expect(defaultPluginNote(SET_NEW, 'broker_legacy', PLUGINS)).toBeNull();
+        expect(defaultPluginNote(custodyOnly, GENERIC, PLUGINS)).toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// setRequest
+// ---------------------------------------------------------------------------
+
+describe('G — setRequest', () => {
+    const R_CUSTODY = file({file_id: 'r-custody', compatible_plugins: [DANSKE]});
+    const R_CASH = file({file_id: 'r-cash', compatible_plugins: [DANSKE, GENERIC]});
+    const SET: ReportSetGroup = {key: KEY_NEW, brokerId: BROKER, pluginCode: DANSKE, batchId: BATCH_NEW, uploadedAt: at('10:00'), files: [R_CASH, R_CUSTODY]};
+
+    it('the set request: broker, plugin, upload, and the originals of the upload its plugin reads that are no members', async () => {
+        const setRequest = await g('setRequest');
+        const files = [
+            R_CUSTODY,
+            R_CASH,
+            file({file_id: 'r-removed', compatible_plugins: [DANSKE, GENERIC]}),
+            parsedAlone(file({file_id: 'r-read-alone', compatible_plugins: [DANSKE, GENERIC]}), GENERIC, at('10:30')),
+            // None of these is left out of the set: another plugin's file, a failed one, a combined one, another upload, another broker.
+            file({file_id: 'r-generic', compatible_plugins: [GENERIC]}),
+            file({file_id: 'r-failed', status: 'failed', compatible_plugins: [DANSKE]}),
+            file({file_id: 'r-combined', kind: 'combined', compatible_plugins: [DANSKE]}),
+            file({file_id: 'r-other-upload', batch_id: BATCH_OLD, compatible_plugins: [DANSKE]}),
+            file({file_id: 'r-other-broker', target_broker_id: 8, compatible_plugins: [DANSKE]}),
+        ];
+
+        const request = setRequest(SET, files);
+
+        expect({...request, exclude_file_ids: [...request.exclude_file_ids].sort()}).toEqual({broker_id: BROKER, plugin_code: DANSKE, batch_id: BATCH_NEW, exclude_file_ids: ['r-read-alone', 'r-removed']});
+    });
+
+    it('nothing left out: an empty list', async () => {
+        const setRequest = await g('setRequest');
+
+        expect(setRequest(SET, [R_CUSTODY, R_CASH, file({file_id: 'r-generic', compatible_plugins: [GENERIC]})])).toEqual({broker_id: BROKER, plugin_code: DANSKE, batch_id: BATCH_NEW, exclude_file_ids: []});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// setsOfFiles and the badges follow the memory
+// ---------------------------------------------------------------------------
+
+describe('G — setsOfFiles applies the memory', () => {
+    const CUSTODY = {...M_CUSTODY, combined_into: ['g-combined']};
+    const CASH = {...M_CASH, combined_into: ['g-combined']};
+    const LEFT_OUT = {...M_CASH_2, combined_into: []};
+    const COMBINED = parsedCombined('g-combined', [CUSTODY, CASH], at('10:05'), at('10:06'));
+    // Another upload of the same broker: its cash statement, read alone by the generic CSV.
+    const READ_ALONE = parsedAlone(file({file_id: 'g-read-alone', filename: 'statement-2025.csv', batch_id: BATCH_OLD, compatible_plugins: [DANSKE, GENERIC], combined_into: []}), GENERIC, at('09:30'));
+    const FILES = [CUSTODY, CASH, LEFT_OUT, COMBINED, READ_ALONE];
+
+    it('a file left out of the analysed set, or read alone, is no member', async () => {
+        const setsOfFiles = await c3('setsOfFiles');
+        const sets = setsOfFiles(FILES, PLUGINS);
+
+        expect([...sets.keys()].sort()).toEqual(['m-cash', 'm-custody']);
+        expect(sets.get('m-cash')?.key).toBe(KEY_NEW);
+        expect(ids(sets.get('m-cash')?.files ?? []).sort()).toEqual(['m-cash', 'm-custody']);
+    });
+
+    it('so the badges follow it: no set badge on the file left out, nor on the file read alone', async () => {
+        const setsOfFiles = await c3('setsOfFiles');
+        const fileSetBadges = await c3('fileSetBadges');
+        const badgeCtx: BadgeContext = {sets: setsOfFiles(FILES, PLUGINS), files: FILES, previews: new Map()};
+
+        expect(kinds(fileSetBadges(CUSTODY, badgeCtx)), 'a member of the analysed set (presence barrier)').toEqual(['usedInCombined', 'set']);
+        expect(kinds(fileSetBadges(LEFT_OUT, badgeCtx)), 'the statement left out of the analysed set').toEqual([]);
+        expect(kinds(fileSetBadges(READ_ALONE, badgeCtx)), 'the statement read alone').toEqual([]);
     });
 });

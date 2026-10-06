@@ -728,24 +728,37 @@ def comparison_summary(
     )
 
 
+def calendar_days_to_observations(calendar_days: int, per_year: float) -> int:
+    """Return how many observations a span of calendar days holds at an observed frequency.
+
+    The inverse of observed annualization: a series observed ``per_year`` times a
+    year holds ``calendar_days × per_year / 365`` observations over the span, and
+    never fewer than one. So a month is 30 calendar days on every series — 21
+    observations of one quoted on trading days, 30 of one quoted every day.
+    """
+    if isinstance(calendar_days, bool) or calendar_days <= 0:
+        raise ValueError("calendar_days must be a positive integer")
+    return max(1, round(calendar_days * _positive_annualization_factor(per_year) / 365))
+
+
 def horizon_compounded_returns(
     returns: Sequence[float],
-    horizon_days: int,
+    horizon_observations: int,
 ) -> list[float]:
-    """Return overlapping compounded returns over an explicit observation horizon."""
+    """Return overlapping compounded returns over a horizon counted in observations."""
     values = _finite_values(returns, name="returns")
-    if isinstance(horizon_days, bool) or horizon_days <= 0:
-        raise ValueError("horizon_days must be a positive integer")
-    if horizon_days > len(values):
+    if isinstance(horizon_observations, bool) or horizon_observations <= 0:
+        raise ValueError("horizon_observations must be a positive integer")
+    if horizon_observations > len(values):
         return []
-    return [compounded_return(values[start : start + horizon_days]) for start in range(len(values) - horizon_days + 1)]
+    return [compounded_return(values[start : start + horizon_observations]) for start in range(len(values) - horizon_observations + 1)]
 
 
 def historical_var_cvar(
     returns: Sequence[float],
     *,
     confidence_level: float,
-    horizon_days: int = 1,
+    horizon_observations: int = 1,
 ) -> HistoricalTailRisk:
     """Return empirical VaR and the *coherent* CVaR (Acerbi-Tasche / Rockafellar-Uryasev).
 
@@ -776,7 +789,7 @@ def historical_var_cvar(
     confidence_level = float(confidence_level)
     if not 0 < confidence_level < 1 or not math.isfinite(confidence_level):
         raise ValueError("confidence_level must be finite and between 0 and 1")
-    horizon_returns = horizon_compounded_returns(returns, horizon_days)
+    horizon_returns = horizon_compounded_returns(returns, horizon_observations)
     if not horizon_returns:
         raise ValueError("insufficient returns for the requested horizon")
 
@@ -907,6 +920,7 @@ __all__ = [
     "annualized_sortino",
     "annualized_volatility",
     "beta",
+    "calendar_days_to_observations",
     "comparison_summary",
     "compounded_return",
     "correlation_matrix",

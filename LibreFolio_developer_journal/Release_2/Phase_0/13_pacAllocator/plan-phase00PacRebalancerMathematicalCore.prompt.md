@@ -17,6 +17,31 @@ review indipendente della suite incorporati il 2026-09-16.
 > ordine lessicografico vengono ottimizzati i tier. Nessuno dei due può essere
 > implementato leggendo soltanto l'altro.
 
+> **⚠️ Aggiornamento del 2026-09-25: prevale sul testo sotto dove i due sono in conflitto.**
+> Decisioni del developer D-X1 (24/09) e QX1-b (25/09). Si eseguono nel Passo F del
+> [piano Round5](implementation/plan-phase00PacRound5PostMerge.prompt.md), che le riporta al §2.
+>
+> - **In produzione gira solo SCIP, e il suo esito fa fede (D-X1).**
+>   - `optimal` su tutti gli stage della cascata → `optimal_proven`, fonte `solver_status`.
+>   - `infeasible` sul primo stage → `infeasibility_proven`, fonte `solver_status`.
+>   - Un limite (tempo, nodi, cancel) → `not_proven`, con il miglior piano verificato o senza piano.
+>
+>   Non vale più la regola «uno status floating non viene mai promosso: la prova viene solo da
+>   oracolo, witness o score-lattice».
+>   - L'oracolo esaustivo esce dal codice di produzione e resta nei test, come gate d'accordo su
+>     domini piccoli.
+>   - Il replay Decimal resta la contabilità esatta di ogni piano pubblicato.
+> - **Arrotondamenti oltre la cassa (QX1-b).** Ai pareggi esatti HALF_UP dei debiti il modello
+>   compilato resta permissivo.
+>   - Può capitare che il piano, contato dal replay, superi il saldo di una cassa (Broker × valuta).
+>     Se lo supera di al più `N` unità minime della sua valuta, esce lo stesso, con l'importo da
+>     aggiungere a quella cassa.
+>   - `N` conta gli importi arrotondati registrati nella cassa: addebito e commissione di ogni
+>     ordine attivo, e crediti FX.
+>   - Oltre la soglia, o con qualunque altra violazione, è un errore del modello.
+>
+> Sezioni toccate: §2.1 (prove autorevoli), §6.2 (ledger), §15.3 (gate SELL), §19, §20 e §22.
+
 ---
 
 ## 1. Problema matematico
@@ -439,6 +464,15 @@ sul Broker×valuta. Nuovo funding e trasferimenti entrano esclusivamente tramite
 $t_{sbc}$; non sono pre-inclusi in $C^0_{bc}$. Il saldo totale non selezionato
 resta fuori.
 
+> **⚠️ 2026-09-25, QX1-b.** Il vincolo $\ge0$ resta la regola esatta.
+> - Un piano pubblicato può chiudere una cella sotto zero di al più
+>   $N_{bc}\,\mu_c$, dove $N_{bc}$ conta i posting arrotondati della cella.
+> - L'importo da aggiungere compare nel risultato.
+> - Il motivo: a un pareggio esatto il modello compilato può contare un debito
+>   $\mu_c$ sotto il valore HALF_UP.
+>
+> Vedi la nota in testa.
+
 ### 6.3 Ledger fisico
 
 $$
@@ -817,7 +851,7 @@ $$
 | Termine | Contenuto |
 |---|---|
 | $C_{free}$ | cash raggiungibile spendibile finale, incluso netto SELL non usato |
-| $R_{physical}$ | buffer FX + tax `self_reserved` |
+| $R_{physical}$ | buffer FX (❌ non più da fare, developer, 02/10/2026) + tax `self_reserved` |
 | $L_{economic}$ | fee, spread, differenze charge/sell e tax `broker_withheld`, once-only |
 | $A_{round}$ | delta firmato dei posting alla minor unit |
 
@@ -874,8 +908,8 @@ Cash non selezionato resta fuori da entrambi i lati.
 2. accredito lordo SELL;
 3. fee BUY/SELL;
 4. credito destinazione FX;
-5. fee FX;
-6. buffer FX;
+5. fee FX; ❌ non più da fare (developer, 02/10/2026)
+6. buffer FX; ❌ non più da fare (developer, 02/10/2026)
 7. tax reserve.
 
 Funding, trasferimenti e debiti FX sorgente sono già multipli validati della
@@ -1182,6 +1216,14 @@ il modello sia formalmente convesso.
 
 ## 19. Proof semantics A
 
+> **⚠️ Superata in parte il 2026-09-25 (D-X1).**
+> - Anche lo status di SCIP fa da prova: `solver_status`, per l'ottimo (§19.2) e per
+>   l'impossibilità (§19.3).
+> - Le frasi «lo status floating `optimal` è al massimo…» e «lo status floating
+>   `infeasible` senza tali prove…» non valgono più.
+>
+> Vedi la nota in testa.
+
 Tre piani indipendenti:
 
 1. **incumbent validation:** il candidato passa replay Decimal;
@@ -1268,6 +1310,9 @@ Un piano vuoto è:
 
 ## 20. Oracle esaustivo
 
+> **⚠️ 2026-09-25 (D-X1).** L'oracolo resta con questi requisiti, ma **solo nei test**.
+> Fa da gate d'accordo con SCIP sui casi piccoli, e nessun modulo di produzione lo importa.
+
 L'oracle small-domain deve:
 
 - enumerare l'intero dominio dichiarato, non usare la ricerca production;
@@ -1287,7 +1332,7 @@ Casi minimi:
 4. budget sotto minimo;
 5. required minimum incompatibile;
 6. due valute con FX;
-7. buffer e fee FX;
+7. buffer e fee FX; ❌ non più da fare (developer, 02/10/2026)
 8. cash trapped;
 9. fee fissa e activation;
 10. SELL con PMC/gain/tax;
@@ -1368,3 +1413,6 @@ primario. Il report deve mostrare il peggioramento.
 
 Qualunque modifica a $F_{ref}$, $L2_{fixed}$, ledger, fee, FX, tax, SELL o
 rounding richiede una nuova review matematica.
+
+> **2026-09-25.** QX1-b tocca ledger e rounding. La sua review matematica si fa allo STOP del
+> [piano Round5](implementation/plan-phase00PacRound5PostMerge.prompt.md), voce R3.

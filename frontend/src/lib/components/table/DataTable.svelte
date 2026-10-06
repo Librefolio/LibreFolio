@@ -87,6 +87,12 @@
          */
         onSortChange?: (state: SortState | null) => void;
         /**
+         * Called with the row ids in display order — after "show selected only", the column
+         * filters and the sort, across every page — once after mount and again whenever that
+         * order changes (not on a page change, a resize, or new data in the same order).
+         */
+        onRowOrderChange?: (rowIds: string[]) => void;
+        /**
          * Called whenever the internal "show selected only" toggle changes.
          * Consumers with external pagination can react to this to adjust
          * their displayed total count.
@@ -155,6 +161,7 @@
         stickyHeader = true,
         enableContextMenu = true,
         onSortChange,
+        onRowOrderChange,
         onShowSelectedOnlyChange,
         fullData,
         onColumnResize,
@@ -377,6 +384,19 @@
         if (!enablePagination) return sortedData;
         const start = pagination.pageIndex * pagination.pageSize;
         return sortedData.slice(start, start + pagination.pageSize);
+    });
+
+    // Report the display order (every page) when it changes. The last report is a plain variable:
+    // it is only compared, never rendered, and must not make this effect depend on itself.
+    let lastReportedRowOrder: string | null = null;
+    $effect(() => {
+        if (!onRowOrderChange) return;
+        const rowIds = sortedData.map((row) => getRowId(row));
+        const key = JSON.stringify(rowIds);
+        if (key === lastReportedRowOrder) return;
+        lastReportedRowOrder = key;
+        const report = onRowOrderChange;
+        untrack(() => report(rowIds));
     });
 
     // Selected rows

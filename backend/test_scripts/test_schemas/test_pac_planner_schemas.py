@@ -11,6 +11,7 @@ import json
 import re
 from collections.abc import Callable
 from copy import deepcopy
+from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, get_args
@@ -97,6 +98,13 @@ def _reject(adapter: TypeAdapter[Any], payload: Any) -> None:
         adapter.validate_json(_wire(payload), strict=True)
 
 
+def _reject_because(adapter: TypeAdapter[Any], payload: Any, message: str) -> None:
+    """Reject ``payload`` for the stated rule, not for whatever else happens to break first."""
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(payload), strict=True)
+    assert message in str(exc_info.value), exc_info.value
+
+
 def _assert_extra_forbidden(adapter: TypeAdapter[Any], payload: Any, field_name: str) -> None:
     with pytest.raises(ValidationError) as exc_info:
         adapter.validate_json(_wire(payload), strict=True)
@@ -151,6 +159,11 @@ def _available_ratio(numerator: str, denominator: str, display_decimal: str) -> 
 
 def _pac_request() -> JsonObject:
     return _fixture("pac_plan_request.min.v2.json")
+
+
+def _compact_pac_request() -> JsonObject:
+    """`min` in the form the UI sends: every default omitted, the all-zero fee schedule too."""
+    return _fixture("pac_plan_request.compact.v2.json")
 
 
 def _rebalancer_invest_and_sell_request() -> JsonObject:
@@ -304,6 +317,7 @@ def _rebalancer_no_op_result() -> JsonObject:
     solution["solution_id"] = "rebalancer-primary-no-op"
     solution["funding_actions"] = []
     solution["fx_actions"] = []
+    solution["conversions"] = []
     solution["order_rows"] = []
     solution["sell_irreducibility"] = []
 
@@ -395,31 +409,72 @@ def _rebalancer_no_op_with_zero_asset_result() -> JsonObject:
 
 
 def _ready_infeasible_result(product: str) -> JsonObject:
+    """A ``ready_infeasible`` payload exactly as SCIP's verdict publishes it.
+
+    The only infeasibility the product emits is SCIP closing the first, global
+    stage ``infeasible`` (D-X1): one reported stage, no primal/dual/gap, and a
+    ``solver_status`` witness naming that stage's objective and nothing else.
+    """
     payload = _pac_no_op_result() if product == "PAC" else _rebalancer_incumbent_result()
     payload["result_state"] = "ready_infeasible"
     payload["outcome"] = "infeasible_proven"
     payload.pop("primary_solution")
     payload.pop("deployment")
+    payload["stop_reason"] = "completed"
+    (stage,) = _with_only_an_infeasible_first_stage(payload)["solver_evidence"]["stages"]
     payload["proof"] = {
         "kind": "infeasibility_proven",
-        "proof_source": "exhaustive_oracle",
-        "witness": {
-            "kind": "exhaustive_oracle",
-            "enumerated_candidates": 1,
-            "feasible_candidates": 0,
-            "objective_codes": ["fixed_l2"],
-        },
+        "proof_source": "solver_status",
+        "witness": {"kind": "solver_status", "objective_codes": [stage["objective_code"]]},
     }
     return payload
 
 
+SOLVER_OBSERVATIONS = ("primal", "dual", "absolute_gap", "relative_gap")
+
+
+def _infeasible_solver_stage(payload: JsonObject, objective_code: str) -> JsonObject:
+    """The payload's own stage for ``objective_code``, closed ``infeasible`` by SCIP."""
+    stage = deepcopy(_find(payload["solver_evidence"]["stages"], "objective_code", objective_code))
+    assert stage["ordinal"] == 1 and stage["scope"] == "global", stage
+    stage["status"] = "infeasible"
+    for observation in SOLVER_OBSERVATIONS:
+        stage[observation] = None
+    return stage
+
+
+def _with_only_an_infeasible_first_stage(payload: JsonObject) -> JsonObject:
+    """Replace the payload's evidence with its first stage closed ``infeasible``: nothing runs after it."""
+    first_code = _find(payload["solver_evidence"]["stages"], "ordinal", 1)["objective_code"]
+    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_infeasible_solver_stage(payload, first_code)]}
+    return payload
+
+
+def _infeasible_stage_specimen() -> JsonObject:
+    stage = _reported_solver_stage(status="infeasible")
+    for observation in SOLVER_OBSERVATIONS:
+        stage[observation] = None
+    return stage
+
+
 def _ready_no_incumbent_result(product: str) -> JsonObject:
+    """SCIP stopped at a limit before holding any solution: nothing is published.
+
+    This is the only way to reach ``ready_no_incumbent`` since the exact replay
+    became authoritative (QX1-b): a replay rejection either publishes the plan
+    with its rounding top-ups or raises, so it never produces this state.  The
+    stop is therefore a limit (``time_limit``) and the evidence carries the
+    stage the limit interrupted (``unfinished``), as the stop-evidence rule
+    requires of every limit stop.
+    """
     payload = _pac_no_op_result() if product == "PAC" else _rebalancer_incumbent_result()
     payload["result_state"] = "ready_no_incumbent"
     payload["outcome"] = "no_incumbent"
     payload.pop("primary_solution")
     payload.pop("deployment")
     payload["proof"] = {"kind": "not_proven", "reason_code": "allocation.exact_proof_not_established"}
+    payload["stop_reason"] = "time_limit"
+    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_reported_solver_stage(status="unfinished")]}
     return payload
 
 
@@ -456,71 +511,20 @@ def _primary_objective_codes(payload: JsonObject) -> list[str]:
     return codes
 
 
-def _optimal_proven_proof(proof_source: str, objective_codes: list[str]) -> JsonObject:
-    if proof_source == "exhaustive_oracle":
-        witness = {
-            "kind": "exhaustive_oracle",
-            "enumerated_candidates": 1,
-            "feasible_candidates": 1,
-            "objective_codes": objective_codes,
-        }
-    elif proof_source == "score_lattice_closure":
-        witness = {
-            "kind": "score_lattice_closure",
-            "objective_codes": objective_codes,
-            "closed_stage_count": len(objective_codes),
-        }
-    else:
-        raise AssertionError(f"unhandled optimal proof source {proof_source!r}")
+def _optimal_proven_proof(objective_codes: list[str]) -> JsonObject:
+    """An optimum as the product wires it: SCIP's own status, over ``objective_codes``."""
     return {
         "kind": "optimal_proven",
-        "proof_source": proof_source,
-        "witness": witness,
+        "proof_source": "solver_status",
+        "witness": {"kind": "solver_status", "objective_codes": list(objective_codes)},
         "tie_break_closed": True,
     }
 
 
-def _gap_bounded_pac_result() -> JsonObject:
-    payload = _pac_no_op_result()
-    payload["stop_reason"] = "time_limit"
-    stage = _reported_solver_stage()
-    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [stage]}
-    payload["proof"] = {
-        "kind": "gap_bounded",
-        "stage_bounds": [
-            {
-                "stage": stage["stage"],
-                "objective_code": stage["objective_code"],
-                "ordinal": stage["ordinal"],
-                "scope": stage["scope"],
-                "sense": stage["sense"],
-                "unit": deepcopy(stage["unit"]),
-                "primal": stage["primal"],
-                "dual": stage["dual"],
-                "absolute_gap": stage["absolute_gap"],
-                "relative_gap": stage["relative_gap"],
-            }
-        ],
-    }
-    return payload
-
-
-def _gap_bounded_pac_result_for_sense(sense: str, primal: str, exact_value: str, dual: str) -> JsonObject:
-    payload = _gap_bounded_pac_result()
-    objective = _find(payload["primary_solution"]["objectives"]["stages"], "objective_code", "fixed_l2")
-    solver_stage = _find(payload["solver_evidence"]["stages"], "objective_code", "fixed_l2")
-    bound = _find(payload["proof"]["stage_bounds"], "objective_code", "fixed_l2")
-    absolute_gap = Fraction(primal) - Fraction(dual)
-
-    objective["sense"] = sense
-    objective["value"] = _finite(exact_value)
-    for stage in (solver_stage, bound):
-        stage["sense"] = sense
-        stage["primal"] = primal
-        stage["dual"] = dual
-        stage["absolute_gap"] = str(abs(absolute_gap))
-        stage["relative_gap"] = "0"
-    return payload
+def _finished_evidence_codes(payload: JsonObject) -> list[str]:
+    stages = payload["solver_evidence"]["stages"]
+    assert stages and all(stage["status"] == "finished" for stage in stages), stages
+    return [stage["objective_code"] for stage in stages]
 
 
 def _distinct_deployment_pac_result() -> JsonObject:
@@ -645,6 +649,24 @@ FIXTURE_CASES = (
 )
 
 
+# Contract compaction (plan-phase00PacContractCompaction §2): a request root may omit
+# exactly these fields, which validation fills with the neutral value; every other root
+# field (operation, snapshot, as_of, valuation_currency, provenance, assets, brokers,
+# order_routes, target_weights, policy, sell_context) stays required.
+ROOT_DEFAULTED_FIELDS: dict[str, Any] = {
+    "fx_rates": {},
+    "fx_spread_rate": "0",
+    "existing_cash": [],
+    "contributions": [],
+    "funding_routes": [],
+}
+REBALANCER_ROOT_DEFAULTED_FIELDS: dict[str, Any] = {**ROOT_DEFAULTED_FIELDS, "holdings": []}
+
+
+def _root_defaulted_fields(model_type: type[BaseModel]) -> dict[str, Any]:
+    return ROOT_DEFAULTED_FIELDS if model_type is PacPlannerRequest else REBALANCER_ROOT_DEFAULTED_FIELDS
+
+
 @pytest.mark.parametrize("adapter,model_type,factory", REQUEST_CASES)
 def test_all_three_request_roots_strict_roundtrip_and_reject_impossible_shapes(
     adapter: TypeAdapter[Any],
@@ -655,7 +677,8 @@ def test_all_three_request_roots_strict_roundtrip_and_reject_impossible_shapes(
     model, _emitted = _strict_roundtrip(adapter, payload)
 
     assert type(model) is model_type
-    assert all(field.is_required() for field in model_type.model_fields.values())
+    defaulted = _root_defaulted_fields(model_type)
+    assert {name for name, field in model_type.model_fields.items() if not field.is_required()} == set(defaulted)
 
     wrong_operation = deepcopy(payload)
     wrong_operation["operation"] = "analyze"
@@ -672,7 +695,13 @@ def test_all_three_request_roots_strict_roundtrip_and_reject_impossible_shapes(
     for field_name in model_type.model_fields:
         missing = deepcopy(payload)
         missing.pop(field_name)
-        _reject(adapter, missing)
+        if field_name not in defaulted:
+            _reject(adapter, missing)
+            continue
+        filled = adapter.validate_json(_wire(missing), strict=True)
+        assert type(filled) is model_type
+        assert getattr(filled, field_name) == defaulted[field_name], field_name
+        assert filled == adapter.validate_json(_wire({**missing, field_name: defaulted[field_name]}), strict=True)
 
 
 @pytest.mark.parametrize("product,state,adapter,result_type", RESULT_CASES)
@@ -956,14 +985,14 @@ def test_option_b_shape_layer_accepts_economically_invalid_but_lexically_valid_s
     model, _emitted = _strict_roundtrip(PAC_PLAN_INPUT_ADAPTER, payload)
     wire = PAC_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")
 
-    euro = _find(wire["currency_specs"], "currency", "EUR")
     asset = _find(wire["assets"], "asset_id", "asset-01")
     broker = _find(wire["brokers"], "broker_id", "broker-eur")
     cash = _find(wire["existing_cash"], "cash_id", "cash-eur")
     route = _find(wire["order_routes"], "route_id", "route-01-eur")
     target = _find(wire["target_weights"], "asset_id", "asset-01")
 
-    assert euro["minor_unit"] == "0"
+    # C0b.1: the currency quantum is no longer a wire input (babel derives it).
+    assert "currency_specs" not in wire
     assert asset["quote"]["amount"] == "-10"
     assert asset["quote"]["quote_base_quantity"] == "0"
     assert _find(asset["exposures"], "dimension", "asset_type")["weight"] == "1.25"
@@ -1066,15 +1095,14 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.classification_invalid",
     "allocation.classification_sector_missing",
     "allocation.coefficient_envelope_unsupported",
-    "allocation.currency_minor_unit_nonpositive",
     "allocation.currency_mismatch",
-    "allocation.currency_spec_missing",
     "allocation.deployment_omitted",
     "allocation.duplicate_id",
     "allocation.dynamic_fee_unsupported",
     "allocation.economic_share_out_of_range",
     "allocation.execution_margin_missing",
     "allocation.execution_margin_rate_out_of_range",
+    "allocation.exposure_total_exceeds_one",
     "allocation.exposure_weight_out_of_range",
     "allocation.fee_floor_exceeds_cap",
     "allocation.fee_rate_out_of_range",
@@ -1101,7 +1129,6 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.order_minimum_exceeds_cap",
     "allocation.order_minimum_negative",
     "allocation.planning_quantity_negative",
-    "allocation.price_date_missing",
     "allocation.price_missing",
     "allocation.price_order_invalid",
     "allocation.provenance_not_found",
@@ -1113,8 +1140,6 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
-    "allocation.stale_age_negative",
-    "allocation.stale_observation_not_accepted",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",
@@ -1159,6 +1184,18 @@ SUPERSEDED_PLANNER_ISSUE_CODES = (
     "allocation.nonpositive_valuation_rate",
     "allocation.saved_fx_missing",
     "allocation.wac_fx_missing",
+    # C0b.1: the quantum comes from babel, so no planner input can be missing or
+    # non-positive any more. The domain copy keeps its own
+    # allocation.currency_spec_missing in PortfolioPlannerSourceIssueCode.
+    "allocation.currency_minor_unit_nonpositive",
+    "allocation.currency_spec_missing",
+    # Contract compaction: the quote no longer carries a freshness or a reference
+    # date, so the planner cannot report a stale or undated price. The
+    # allocation-source API keeps its own allocation.price_date_missing in
+    # PortfolioPlannerSourceIssueCode.
+    "allocation.price_date_missing",
+    "allocation.stale_age_negative",
+    "allocation.stale_observation_not_accepted",
 )
 
 
@@ -1174,7 +1211,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 80
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 76
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(pac_schemas.PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -1226,12 +1263,6 @@ NON_ISSUE_REASON_CATALOGUE_CASES = (
         ((pac_schemas.NotProvenProof, "reason_code"),),
         id="not-proven",
     ),
-    pytest.param(
-        "SolverNotRunReasonCode",
-        ("allocation.solver_not_required",),
-        ((pac_schemas.SolverNotRunEvidence, "reason"),),
-        id="solver-not-run",
-    ),
 )
 
 REASON_ONLY_CODES = (
@@ -1239,7 +1270,6 @@ REASON_ONLY_CODES = (
     "allocation.no_actions_selected",
     "allocation.primary_is_deployment",
     "allocation.exact_proof_not_established",
-    "allocation.solver_not_required",
 )
 
 
@@ -1508,6 +1538,7 @@ def test_inactive_broker_custody_only_spec_keeps_current_facts_as_noncontrolling
     assert wire_result["primary_solution"]["asset_rows"]
     assert wire_result["primary_solution"]["funding_actions"] == []
     assert wire_result["primary_solution"]["fx_actions"] == []
+    assert wire_result["primary_solution"]["conversions"] == []
     assert wire_result["primary_solution"]["order_rows"] == []
 
 
@@ -1586,7 +1617,6 @@ def _normalizer_issue_case(code: str, availability: str, frozen_path: JsonObject
     return pytest.param(code, availability, "error", frozen_path, id=f"{availability}-{code}")
 
 
-CURRENCY_MINOR_UNIT_ISSUE_PATH = _planner_field_path("input", "currency", "EUR", "minor_unit")
 PRICE_AMOUNT_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "quote.amount")
 QUOTE_BASIS_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "quote.quote_base_quantity")
 EXPOSURE_WEIGHT_ISSUE_PATH = _planner_field_path("assets", "asset", "asset-one", "exposures.weight")
@@ -1599,10 +1629,12 @@ TAX_RATE_ISSUE_PATH = _planner_field_path("policy", "asset", "asset-one", "tax_r
 UNFROZEN_ISSUE_PATH_SPECIMEN = {"kind": "section", "section": "input"}
 
 DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
-    _normalizer_issue_case("allocation.currency_minor_unit_nonpositive", "invalid", CURRENCY_MINOR_UNIT_ISSUE_PATH),
     _normalizer_issue_case("allocation.nonpositive_price", "invalid", PRICE_AMOUNT_ISSUE_PATH),
     _normalizer_issue_case("allocation.invalid_quote_basis", "invalid", QUOTE_BASIS_ISSUE_PATH),
     _normalizer_issue_case("allocation.exposure_weight_out_of_range", "invalid", EXPOSURE_WEIGHT_ISSUE_PATH),
+    # C0b.3: same frozen path as the per-weight range issue; the real issue also
+    # names its dimension in a text param (asserted by the normalizer tests).
+    _normalizer_issue_case("allocation.exposure_total_exceeds_one", "invalid", EXPOSURE_WEIGHT_ISSUE_PATH),
     _normalizer_issue_case("allocation.target_weight_out_of_range", "invalid", TARGET_WEIGHT_ISSUE_PATH),
     _normalizer_issue_case("allocation.target_total_not_one", "invalid", TARGET_TOTAL_ISSUE_PATH),
     _normalizer_issue_case("allocation.economic_share_out_of_range", "invalid", ECONOMIC_SHARE_ISSUE_PATH),
@@ -1625,8 +1657,6 @@ DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
     _normalizer_issue_case("allocation.nonpositive_fx_rate", "invalid", FX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.identity_fx_rate_not_allowed", "invalid", FX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.fx_spread_rate_out_of_range", "invalid"),
-    _normalizer_issue_case("allocation.stale_age_negative", "invalid"),
-    _normalizer_issue_case("allocation.stale_observation_not_accepted", "invalid"),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_missing", "needs_input", TAX_RATE_ISSUE_PATH),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_out_of_range", "invalid", TAX_RATE_ISSUE_PATH),
     _normalizer_issue_case("allocation.fiscal_currency_missing", "needs_input"),
@@ -1692,12 +1722,356 @@ def test_downstream_normalizer_issue_code_precedence_map_is_frozen(
     assert not {"outcome", "primary_solution", "deployment"} & wire_result.keys()
 
 
-@pytest.mark.parametrize("policy", ("proportional", "min_fragmentation"))
-def test_pac_policy_accepts_only_its_two_named_literals(policy: str) -> None:
+def test_pac_policy_accepts_only_proportional() -> None:
     payload = _pac_request()
-    payload["policy"] = policy
+    payload["policy"] = "proportional"
     model, _emitted = _strict_roundtrip(PAC_PLAN_INPUT_ADAPTER, payload)
-    assert PAC_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")["policy"] == policy
+    assert PAC_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")["policy"] == "proportional"
+
+
+def test_pac_min_fragmentation_policy_is_wire_invalid() -> None:
+    # C0b.2: min_fragmentation survives only as an internal ExactScenario branch.
+    payload = _pac_request()
+    payload["policy"] = "min_fragmentation"
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"][-1]) for error in errors] == [("literal_error", "policy")]
+
+
+@pytest.mark.parametrize(
+    ("adapter", "payload_factory"),
+    (
+        pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, id="pac"),
+        pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, id="rebalancer-invest-and-sell"),
+        pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_only_request, id="rebalancer-invest-only"),
+    ),
+)
+def test_request_roots_reject_the_withdrawn_currency_specs_input(adapter: TypeAdapter[Any], payload_factory: Any) -> None:
+    # C0b.1: the quantum is derived from babel; the former input is now an extra field.
+    payload = payload_factory()
+    _strict_roundtrip(adapter, payload)
+    payload["currency_specs"] = [{"currency": "EUR", "minor_unit": "0.01"}]
+    _assert_extra_forbidden(adapter, payload, "currency_specs")
+
+
+# --- Contract compaction (plan-phase00PacContractCompaction §1-§2) ---------------------------
+#
+# The wire is compact: a field whose value is the neutral default may be omitted, and
+# validation fills it with that default as a model INSTANCE, never a dict.  Three inputs
+# that no longer influence a plan are withdrawn and become extra fields.
+
+_NO_SCHEMA_DEFAULT = "<no default in schema>"
+
+
+def _select(node: Any, path: tuple[Any, ...]) -> Any:
+    """Walk a payload or a validated model; a ``(field, value)`` step selects one list row by identity."""
+    for step in path:
+        if isinstance(step, tuple):
+            field, value = step
+            rows = [row for row in node if (row.get(field) if isinstance(row, dict) else getattr(row, field)) == value]
+            assert len(rows) == 1, f"expected exactly one {field}={value!r} row"
+            node = rows[0]
+        else:
+            node = node[step] if isinstance(node, (dict, list)) else getattr(node, step)
+    return node
+
+
+WITHDRAWN_PAC_INPUT_FIELD_CASES = (
+    pytest.param(("assets", 0, "quote"), "freshness", {"kind": "fresh"}, id="quote-freshness"),
+    pytest.param(("assets", 0, "quote"), "reference_date", "2026-09-15", id="quote-reference-date"),
+    pytest.param(("existing_cash", 0), "source_kind", "local_broker_cash", id="existing-cash-source-kind"),
+)
+
+
+@pytest.mark.parametrize(("container_path", "field_name", "value"), WITHDRAWN_PAC_INPUT_FIELD_CASES)
+def test_pac_request_rejects_the_withdrawn_quote_and_cash_fields_as_extra_fields(
+    container_path: tuple[str | int, ...],
+    field_name: str,
+    value: Any,
+) -> None:
+    # `min` has exactly one asset and one cash row, so index 0 is the row this test edits.
+    payload = _pac_request()
+    container = _select(payload, container_path)
+    assert field_name not in container
+    container[field_name] = value
+
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"]) for error in errors] == [("extra_forbidden", (*container_path, field_name))]
+
+
+def test_compact_pac_request_fills_every_omitted_default_as_a_model_instance() -> None:
+    twin = _compact_pac_request()
+    model = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(twin), strict=True)
+
+    assert type(model) is PacPlannerRequest
+    assert model.fx_rates == {}
+    assert model.fx_spread_rate == "0"
+    assert model.contributions == []
+    assert model.funding_routes == []
+    assert _select(model, ("brokers", ("broker_id", "broker-one"))).fee_schedules == []
+    route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
+    assert type(route.required_minimum) is pac_schemas.NoOrderMinimum
+    assert route.execution_margin_rate == "0"
+    assert route.fee_schedule_id is None
+    # What the twin does say is kept as sent.
+    assert route.priority == 1
+    assert type(route.minimum_if_active) is pac_schemas.WholeQuantityMinimum
+    assert type(route.cap) is pac_schemas.QuantityOrderCap
+    assert [row.cash_id for row in model.existing_cash] == ["cash-broker-one-eur"]
+
+    sparse = deepcopy(twin)
+    sparse.pop("existing_cash")
+    asset = _find(sparse["assets"], "asset_id", "asset-one")
+    asset.pop("exposures")
+    broker = _find(sparse["brokers"], "broker_id", "broker-one")
+    broker.pop("capabilities")
+    broker["fee_schedules"] = [{"fee_schedule_id": "fee-broker-one-buy", "capability_id": "cap-broker-one-eur-whole", "side": "buy"}]
+    sparse_route = _find(sparse["order_routes"], "route_id", "route-asset-one-broker-one-buy")
+    for key in ("priority", "minimum_if_active", "cap"):
+        sparse_route.pop(key)
+
+    model = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(sparse), strict=True)
+
+    assert model.existing_cash == []
+    assert _select(model, ("assets", ("asset_id", "asset-one"))).exposures == []
+    filled_broker = _select(model, ("brokers", ("broker_id", "broker-one")))
+    assert filled_broker.capabilities == []
+    schedule = _select(filled_broker.fee_schedules, (("fee_schedule_id", "fee-broker-one-buy"),))
+    assert schedule.fixed_fee is None
+    assert schedule.rate == "0"
+    assert schedule.variable_floor is None
+    assert type(schedule.variable_cap) is pac_schemas.NoFeeCap
+    filled_route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
+    assert filled_route.priority == 0
+    assert type(filled_route.minimum_if_active) is pac_schemas.NoOrderMinimum
+    assert type(filled_route.required_minimum) is pac_schemas.NoOrderMinimum
+    assert type(filled_route.cap) is pac_schemas.NoOrderCap
+    assert filled_route.execution_margin_rate == "0"
+
+
+def test_reduced_rebalancer_request_fills_holdings_sell_context_lists_and_funding_priority() -> None:
+    payload = _rebalancer_invest_and_sell_request()
+    payload.pop("holdings")
+    payload["sell_context"] = {}
+    for funding_route in payload["funding_routes"]:
+        funding_route.pop("priority")
+
+    model = REBALANCER_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    assert type(model) is RebalancerInvestAndSellRequest
+    assert model.holdings == []
+    assert model.sell_context.cost_bases == []
+    assert model.sell_context.asset_taxes == []
+    assert model.sell_context.broker_withholding == []
+    assert {row.funding_route_id: row.priority for row in model.funding_routes} == {"fund-contribution-alpha": 0, "fund-contribution-beta": 0}
+    # The transfer caps were sent, so they are kept.
+    assert {row.funding_route_id: row.transfer_cap.amount for row in model.funding_routes} == {"fund-contribution-alpha": "10", "fund-contribution-beta": "40"}
+
+
+OPTIONAL_INPUT_FIELD_CASES = (
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, ("assets", ("asset_id", "asset-one"), "identity"), "asset_class", id="manual-asset-class"),
+    pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, ("assets", ("asset_id", "asset-a"), "identity"), "asset_class", id="domain-asset-class"),
+    pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, ("provenance", ("provenance_id", "prov-portfolio")), "source_label", id="domain-copy-source-label"),
+    pytest.param(
+        PAC_PLAN_INPUT_ADAPTER,
+        _pac_request,
+        ("brokers", ("broker_id", "broker-one"), "fee_schedules", ("fee_schedule_id", "fee-broker-one-eur-buy")),
+        "fixed_fee",
+        id="fee-fixed-fee",
+    ),
+    pytest.param(
+        PAC_PLAN_INPUT_ADAPTER,
+        _pac_request,
+        ("brokers", ("broker_id", "broker-one"), "fee_schedules", ("fee_schedule_id", "fee-broker-one-eur-buy")),
+        "variable_floor",
+        id="fee-variable-floor",
+    ),
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")), "fee_schedule_id", id="pac-buy-fee-schedule-id"),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        _rebalancer_invest_and_sell_request,
+        ("order_routes", ("route_id", "route-a-alpha-buy")),
+        "fee_schedule_id",
+        id="rebalancer-buy-fee-schedule-id",
+    ),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        _rebalancer_invest_and_sell_request,
+        ("funding_routes", ("funding_route_id", "fund-contribution-alpha")),
+        "transfer_cap",
+        id="funding-transfer-cap",
+    ),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory", "path", "field_name"), OPTIONAL_INPUT_FIELD_CASES)
+def test_optional_input_fields_may_be_omitted_and_read_back_as_absent(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+    path: tuple[Any, ...],
+    field_name: str,
+) -> None:
+    payload = factory()
+    assert _select(payload, path)[field_name] is not None, "the fixture must state the field for its omission to mean anything"
+    _select(payload, path).pop(field_name)
+
+    model = adapter.validate_json(_wire(payload), strict=True)
+
+    assert getattr(_select(model, path), field_name) is None
+    assert field_name not in _select(adapter.dump_python(model, mode="json", exclude_defaults=True), path)
+
+
+REQUIRED_KEPT_INPUT_FIELD_CASES = (
+    pytest.param(("provenance", ("provenance_id", "prov-manual")), "label", id="manual-provenance-label"),
+    pytest.param(("order_routes", ("route_id", "route-a-alpha-sell")), "fee_schedule_id", id="sell-route-fee-schedule-id"),
+)
+
+
+@pytest.mark.parametrize(("path", "field_name"), REQUIRED_KEPT_INPUT_FIELD_CASES)
+def test_manual_provenance_label_and_sell_route_fee_schedule_stay_required(path: tuple[Any, ...], field_name: str) -> None:
+    payload = _rebalancer_invest_and_sell_request()
+    _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, payload)
+    _select(payload, path).pop(field_name)
+
+    with pytest.raises(ValidationError) as exc_info:
+        REBALANCER_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"][-1]) for error in errors] == [("missing", field_name)]
+
+
+def test_catalog_asset_class_is_required_but_nullable() -> None:
+    assert pac_schemas.PlannerCatalogAsset.model_fields["asset_class"].is_required()
+
+    result = _pac_no_op_result()
+    catalog_asset = _find(result["catalogs"]["assets"], "asset_id", "asset-one")
+    catalog_asset["asset_class"] = None
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, result)
+    assert _select(model, ("catalogs", "assets", ("asset_id", "asset-one"))).asset_class is None
+
+    catalog_asset.pop("asset_class")
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_OUTPUT_ADAPTER.validate_json(_wire(result), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert [(error["type"], error["loc"][-1]) for error in errors] == [("missing", "asset_class")]
+
+
+def test_input_defaults_are_optional_in_validation_schema_and_required_in_serialization_schema() -> None:
+    assert pac_schemas.AllocationStrictModel.model_config.get("json_schema_serialization_defaults_required") is True
+
+    validation = generate_tool_schema(PAC_PLAN_INPUT_ADAPTER, "validation")
+    serialization = generate_tool_schema(PAC_PLAN_INPUT_ADAPTER, "serialization")
+    assert validation["title"] == serialization["title"] == "PacPlannerRequest"
+
+    assert "fx_rates" not in validation["required"]
+    assert validation["properties"]["fx_rates"]["default"] == {}
+    assert "fx_rates" in serialization["required"]
+
+    validation_route = validation["$defs"]["PacOrderRouteInput"]
+    serialization_route = serialization["$defs"]["PacOrderRouteInput"]
+    for field_name, default in (("priority", 0), ("cap", {"kind": "none"})):
+        assert field_name not in validation_route["required"], field_name
+        assert validation_route["properties"][field_name]["default"] == default, field_name
+        assert field_name in serialization_route["required"], field_name
+    # A field without a default stays required in both modes.
+    assert "route_id" in validation_route["required"]
+    assert "route_id" in serialization_route["required"]
+
+
+_ROUTE_SCHEMA_DEFAULTS: dict[str, Any] = {
+    "priority": 0,
+    "minimum_if_active": {"kind": "none"},
+    "required_minimum": {"kind": "none"},
+    "cap": {"kind": "none"},
+    "execution_margin_rate": "0",
+}
+_BUY_ROUTE_SCHEMA_DEFAULTS: dict[str, Any] = {**_ROUTE_SCHEMA_DEFAULTS, "fee_schedule_id": None}
+_SHARED_INPUT_SCHEMA_DEFAULTS: dict[str, dict[str, Any]] = {
+    "PlannerAssetInput": {"exposures": []},
+    "ManualAssetIdentity": {"asset_class": None},
+    "DomainAssetIdentity": {"asset_class": None},
+    "DomainCopyProvenance": {"source_label": None},
+    "PlannerBrokerInput": {"capabilities": [], "fee_schedules": []},
+    "BrokerFeeScheduleInput": {"fixed_fee": None, "rate": "0", "variable_floor": None, "variable_cap": {"kind": "none"}},
+    "PlannerFundingRouteInput": {"priority": 0, "transfer_cap": None},
+    "PacOrderRouteInput": _BUY_ROUTE_SCHEMA_DEFAULTS,
+}
+INPUT_SCHEMA_DEFAULT_CASES = (
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, {**_SHARED_INPUT_SCHEMA_DEFAULTS, "PacPlannerRequest": ROOT_DEFAULTED_FIELDS}, id="pac"),
+    pytest.param(
+        REBALANCER_PLAN_INPUT_ADAPTER,
+        {
+            **_SHARED_INPUT_SCHEMA_DEFAULTS,
+            "RebalancerInvestOnlyRequest": REBALANCER_ROOT_DEFAULTED_FIELDS,
+            "RebalancerInvestAndSellRequest": REBALANCER_ROOT_DEFAULTED_FIELDS,
+            "PlannerSellContextInput": {"cost_bases": [], "asset_taxes": [], "broker_withholding": []},
+            "PlannerBuyOrderRouteInput": _BUY_ROUTE_SCHEMA_DEFAULTS,
+            # A SELL route keeps `fee_schedule_id` required.
+            "PlannerSellOrderRouteInput": _ROUTE_SCHEMA_DEFAULTS,
+        },
+        id="rebalancer",
+    ),
+)
+
+
+@pytest.mark.parametrize(("adapter", "expected"), INPUT_SCHEMA_DEFAULT_CASES)
+def test_input_schema_defaults_exactly_the_compaction_fields(adapter: TypeAdapter[Any], expected: dict[str, dict[str, Any]]) -> None:
+    schema = generate_tool_schema(adapter, "validation")
+    objects = {name: node for name, node in schema.get("$defs", {}).items() if isinstance(node.get("properties"), dict)}
+    if isinstance(schema.get("properties"), dict):
+        objects[schema["title"]] = schema
+
+    # Pydantic omits `required` altogether when every field of a model has a default.
+    observed = {
+        name: {
+            field: node["properties"][field].get("default", _NO_SCHEMA_DEFAULT)
+            for field in node["properties"]
+            if field not in node.get("required", [])
+        }
+        for name, node in objects.items()
+    }
+    assert {name: fields for name, fields in observed.items() if fields} == expected
+
+
+EXPLICIT_REQUEST_FIXTURE_CASES = (
+    pytest.param("pac_plan_request.min.v2.json", PAC_PLAN_INPUT_ADAPTER, id="pac-min"),
+    pytest.param("pac_plan_request.candidate-max.v2.json", PAC_PLAN_INPUT_ADAPTER, id="pac-candidate-max"),
+    pytest.param("rebalancer_plan_request.medium.v2.json", REBALANCER_PLAN_INPUT_ADAPTER, id="rebalancer-medium"),
+)
+
+
+@pytest.mark.parametrize(("name", "adapter"), EXPLICIT_REQUEST_FIXTURE_CASES)
+def test_explicit_request_fixture_survives_the_defaults_omitted_roundtrip(name: str, adapter: TypeAdapter[Any]) -> None:
+    payload = _fixture(name)
+    explicit = adapter.validate_json(_wire(payload), strict=True)
+
+    compact = explicit.model_dump(mode="json", exclude_defaults=True)
+
+    # Every explicit fixture spells out at least one default, so the compact form is a real change.
+    assert compact != explicit.model_dump(mode="json")
+    assert len(_wire(compact)) < len(_wire(payload))
+    assert adapter.validate_json(_wire(compact), strict=True) == explicit
+
+
+def test_compact_twin_is_min_without_its_defaults_and_a_fixed_point_of_the_compact_dump() -> None:
+    twin = _compact_pac_request()
+
+    expected = _pac_request()
+    for key in ("fx_rates", "fx_spread_rate", "contributions", "funding_routes"):
+        expected.pop(key)
+    _find(expected["brokers"], "broker_id", "broker-one").pop("fee_schedules")
+    route = _find(expected["order_routes"], "route_id", "route-asset-one-broker-one-buy")
+    for key in ("required_minimum", "execution_margin_rate", "fee_schedule_id"):
+        route.pop(key)
+    assert twin == expected
+
+    model = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(twin), strict=True)
+    assert model.model_dump(mode="json", exclude_defaults=True) == twin
 
 
 def test_pac_request_excludes_holdings_sell_context_and_sell_routes() -> None:
@@ -1849,6 +2223,9 @@ def test_rebalancer_ready_sell_orders_and_irreducibility_are_forbidden_only_for_
 EXACT_NUMBER_ADAPTER = TypeAdapter(ExactNumber)
 OBJECTIVE_STAGE_ADAPTER = TypeAdapter(ObjectiveStageResult)
 SOLVER_STAGE_ADAPTER = TypeAdapter(SolverStageEvidence)
+SOLVER_EVIDENCE_ADAPTER = TypeAdapter(pac_schemas.ReportedFloatingSolverEvidence)
+SOLVER_STATUS_WITNESS_ADAPTER = TypeAdapter(pac_schemas.SolverStatusWitness)
+INFEASIBILITY_PROOF_ADAPTER = TypeAdapter(pac_schemas.InfeasibilityProvenProof)
 
 VALUATION_OBJECTIVE_CASES = (
     pytest.param("fixed_l2", {"kind": "valuation_money_squared", "currency_code": "EUR"}, id="fixed-l2"),
@@ -2033,81 +2410,23 @@ def test_reported_floating_solver_evidence_uses_decimal_strings_not_exact_number
     _reject(SOLVER_STAGE_ADAPTER, exact_primal)
 
 
-@pytest.mark.parametrize("proof_kind", ("not_proven", "gap_bounded"))
-def test_ready_result_non_optimal_proof_matrix_remains_typed(proof_kind: str) -> None:
-    if proof_kind == "gap_bounded":
-        payload = _gap_bounded_pac_result()
-    else:
-        payload = _pac_no_op_result()
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+def test_ready_result_non_optimal_proof_matrix_remains_typed() -> None:
+    """A ready result that claims no optimum says so with ``not_proven``: the ready proof union has no third member."""
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result())
     wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    expected_kind = "gap_bounded" if proof_kind == "gap_bounded" else "not_proven"
-    assert wire["proof"]["kind"] == expected_kind
+    assert wire["proof"]["kind"] == "not_proven"
+
+    ready_proof_union, _discriminator = get_args(pac_schemas.ReadyPlanProof.__value__)
+    ready_proof_kinds = {get_args(member.model_fields["kind"].annotation) for member in get_args(ready_proof_union)}
+    assert ready_proof_kinds == {("optimal_proven",), ("not_proven",)}
 
 
 def test_objective_sense_schema_explicitly_preserves_min_and_max() -> None:
     expected = ("min", "max")
     assert get_args(pac_schemas.ObjectiveSense) == expected
     assert TypeAdapter(pac_schemas.ObjectiveSense).json_schema()["enum"] == list(expected)
-    for model_type in (ObjectiveStageResult, SolverStageEvidence, pac_schemas.BoundedObjectiveStage):
+    for model_type in (ObjectiveStageResult, SolverStageEvidence):
         assert get_args(model_type.model_fields["sense"].annotation) == expected
-
-
-GAP_BOUND_SENSE_CASES = (
-    pytest.param("min", "26", "25.000", "24", True, id="min-interior"),
-    pytest.param("min", "26", "24", "24", True, id="min-dual-boundary"),
-    pytest.param("min", "26", "26", "24", True, id="min-primal-boundary"),
-    pytest.param("min", "26", "27", "24", False, id="min-above-primal"),
-    pytest.param("min", "26", "23", "24", False, id="min-below-dual"),
-    pytest.param("min", "24", "25", "26", False, id="min-contradictory-order"),
-    pytest.param("max", "24", "25.000", "26", True, id="max-interior"),
-    pytest.param("max", "24", "24", "26", True, id="max-primal-boundary"),
-    pytest.param("max", "24", "26", "26", True, id="max-dual-boundary"),
-    pytest.param("max", "24", "27", "26", False, id="max-above-dual"),
-    pytest.param("max", "24", "23", "26", False, id="max-below-primal"),
-    pytest.param("max", "26", "25", "24", False, id="max-contradictory-order"),
-)
-
-
-@pytest.mark.parametrize(("sense", "primal", "exact_value", "dual", "accepted"), GAP_BOUND_SENSE_CASES)
-def test_gap_proof_bounds_contain_exact_objective_according_to_sense(
-    sense: str,
-    primal: str,
-    exact_value: str,
-    dual: str,
-    accepted: bool,
-) -> None:
-    payload = _gap_bounded_pac_result_for_sense(sense, primal, exact_value, dual)
-    if not accepted:
-        _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
-        return
-
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
-    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    objective = _find(wire["primary_solution"]["objectives"]["stages"], "objective_code", "fixed_l2")
-    solver_stage = _find(wire["solver_evidence"]["stages"], "objective_code", "fixed_l2")
-    bound = _find(wire["proof"]["stage_bounds"], "objective_code", "fixed_l2")
-    exact = _exact_wire_fraction(objective["value"])
-
-    assert (bound["stage"], bound["scope"], bound["unit"]) == (solver_stage["stage"], solver_stage["scope"], solver_stage["unit"])
-    assert all(isinstance(bound[field], str) and isinstance(solver_stage[field], str) for field in ("primal", "dual", "absolute_gap", "relative_gap"))
-    if sense == "min":
-        assert Fraction(dual) <= exact <= Fraction(primal)
-    else:
-        assert Fraction(primal) <= exact <= Fraction(dual)
-
-
-@pytest.mark.parametrize("mutation", ("stage", "scope", "unit"))
-def test_gap_proof_rejects_bound_identity_mismatches_against_solver_stage(mutation: str) -> None:
-    payload = _gap_bounded_pac_result_for_sense("min", "26", "25", "24")
-    bound = _find(payload["proof"]["stage_bounds"], "objective_code", "fixed_l2")
-    if mutation == "stage":
-        bound["stage"] = "solver-other-stage"
-    elif mutation == "scope":
-        bound["scope"] = "incumbent_face"
-    else:
-        bound["unit"] = {"kind": "valuation_money_squared", "currency_code": "USD"}
-    _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
 SELL_IRREDUCIBILITY_UNRESOLVED = "portfolio_rebalancer.sell_irreducibility_unresolved"
@@ -2138,7 +2457,8 @@ def _sell_irreducibility_not_proven_result(
     }
     payload["issues"] = [] if issue_code is None else [_sell_irreducibility_issue(issue_code, kind=issue_kind, severity=issue_severity)]
     payload["stop_reason"] = stop_reason
-    payload["solver_evidence"] = {"kind": "not_run", "reason": "allocation.solver_not_required"} if stop_reason == "completed" else {"kind": "reported_floating", "stages": [_reported_solver_stage(status="unfinished")]}
+    if stop_reason != "completed":
+        payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_reported_solver_stage(status="unfinished")]}
     return payload
 
 
@@ -2154,8 +2474,9 @@ def test_rebalancer_sell_irreducibility_not_proven_binding_is_orthogonal_to_vali
     assert wire["issues"][0]["kind"] == "proof"
     assert wire["issues"][0]["severity"] == "warning"
     assert wire["stop_reason"] == stop_reason
-    expected_solver_kind = "not_run" if stop_reason == "completed" else "reported_floating"
-    assert wire["solver_evidence"]["kind"] == expected_solver_kind
+    assert wire["solver_evidence"]["kind"] == "reported_floating"
+    statuses = {stage["status"] for stage in wire["solver_evidence"]["stages"]}
+    assert statuses == ({"finished"} if stop_reason == "completed" else {"unfinished"})
 
 
 SELL_IRREDUCIBILITY_BINDING_REJECTION_CASES = (
@@ -2195,10 +2516,6 @@ OPTIMAL_PROOF_PRODUCT_CASES = (
     pytest.param("PAC", PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, "turnover", id="pac"),
     pytest.param("Rebalancer", REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, "route_priority", id="rebalancer"),
 )
-OPTIMAL_PROOF_SOURCE_CASES = (
-    pytest.param("exhaustive_oracle", id="exhaustive-oracle"),
-    pytest.param("score_lattice_closure", id="score-lattice-closure"),
-)
 OPTIMAL_PROOF_MUTATION_CASES = (
     pytest.param("missing", id="missing-interior-code"),
     pytest.param("subset", id="prefix-subset"),
@@ -2212,37 +2529,34 @@ OPTIMAL_PROOF_MUTATION_CASES = (
 
 
 @pytest.mark.parametrize(("product", "adapter", "factory", "_extra_code"), OPTIMAL_PROOF_PRODUCT_CASES)
-@pytest.mark.parametrize("proof_source", OPTIMAL_PROOF_SOURCE_CASES)
 def test_optimal_proven_witness_covers_every_published_objective_stage_in_exact_order(
     product: str,
     adapter: TypeAdapter[Any],
     factory: PayloadFactory,
     _extra_code: str,
-    proof_source: str,
 ) -> None:
     payload = factory()
     published_codes = _primary_objective_codes(payload)
-    payload["proof"] = _optimal_proven_proof(proof_source, published_codes)
+    assert _finished_evidence_codes(payload) == published_codes, product
+    payload["proof"] = _optimal_proven_proof(published_codes)
 
     model, _emitted = _strict_roundtrip(adapter, payload)
     wire = adapter.dump_python(model, mode="json")
     witness = wire["proof"]["witness"]
 
-    assert witness["objective_codes"] == published_codes, product
+    assert wire["proof"]["proof_source"] == "solver_status"
+    assert witness == {"kind": "solver_status", "objective_codes": published_codes}, product
+    assert witness["objective_codes"] == [stage["objective_code"] for stage in wire["solver_evidence"]["stages"]]
     assert wire["proof"]["tie_break_closed"] is True
-    if proof_source == "score_lattice_closure":
-        assert witness["closed_stage_count"] == len(published_codes)
 
 
 @pytest.mark.parametrize(("product", "adapter", "factory", "extra_code"), OPTIMAL_PROOF_PRODUCT_CASES)
-@pytest.mark.parametrize("proof_source", OPTIMAL_PROOF_SOURCE_CASES)
 @pytest.mark.parametrize("mutation", OPTIMAL_PROOF_MUTATION_CASES)
 def test_optimal_proven_witness_rejects_incomplete_or_false_objective_closure(
     product: str,
     adapter: TypeAdapter[Any],
     factory: PayloadFactory,
     extra_code: str,
-    proof_source: str,
     mutation: str,
 ) -> None:
     payload = factory()
@@ -2266,7 +2580,7 @@ def test_optimal_proven_witness_rejects_incomplete_or_false_objective_closure(
     else:
         raise AssertionError(f"unhandled objective-closure mutation {mutation!r}")
 
-    payload["proof"] = _optimal_proven_proof(proof_source, witness_codes)
+    payload["proof"] = _optimal_proven_proof(witness_codes)
     if mutation == "tie-closure-missing":
         payload["proof"].pop("tie_break_closed")
     elif mutation == "tie-closure-false":
@@ -2274,106 +2588,285 @@ def test_optimal_proven_witness_rejects_incomplete_or_false_objective_closure(
     _reject(adapter, payload)
 
 
-@pytest.mark.parametrize(("product", "adapter", "factory", "_extra_code"), OPTIMAL_PROOF_PRODUCT_CASES)
-@pytest.mark.parametrize("closed_stage_count_delta", (-1, 1), ids=("too-few", "too-many"))
-def test_score_lattice_closed_stage_count_equals_full_objective_vector_length(
-    product: str,
-    adapter: TypeAdapter[Any],
-    factory: PayloadFactory,
-    _extra_code: str,
-    closed_stage_count_delta: int,
-) -> None:
-    payload = factory()
-    published_codes = _primary_objective_codes(payload)
-    payload["proof"] = _optimal_proven_proof("score_lattice_closure", published_codes)
-    payload["proof"]["witness"]["closed_stage_count"] = len(published_codes) + closed_stage_count_delta
+READY_PRODUCT_CASES = (
+    pytest.param("PAC", PAC_PLAN_OUTPUT_ADAPTER, id="pac"),
+    pytest.param("Rebalancer", REBALANCER_PLAN_OUTPUT_ADAPTER, id="rebalancer"),
+)
 
-    assert payload["proof"]["witness"]["objective_codes"] == published_codes, product
+
+def _ready_source_result(product: str) -> JsonObject:
+    return _pac_no_op_result() if product == "PAC" else _rebalancer_incumbent_result()
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+def test_infeasible_result_requires_a_matching_exact_infeasibility_witness(product: str, adapter: TypeAdapter[Any]) -> None:
+    model, _emitted = _strict_roundtrip(adapter, _ready_infeasible_result(product))
+    wire = adapter.dump_python(model, mode="json")
+    (stage,) = wire["solver_evidence"]["stages"]
+
+    assert wire["proof"] == {
+        "kind": "infeasibility_proven",
+        "proof_source": "solver_status",
+        "witness": {"kind": "solver_status", "objective_codes": [stage["objective_code"]]},
+    }
+    assert stage["objective_code"] == _primary_objective_codes(_ready_source_result(product))[0]
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+def test_ready_infeasible_is_one_infeasible_first_stage_with_a_completed_stop(product: str, adapter: TypeAdapter[Any]) -> None:
+    """SCIP's verdict ends the search: one stage, first and global, nothing observed, and ``completed``."""
+    payload = _ready_infeasible_result(product)
+    model, _emitted = _strict_roundtrip(adapter, payload)
+    wire = adapter.dump_python(model, mode="json")
+
+    assert (wire["result_state"], wire["outcome"], wire["stop_reason"]) == ("ready_infeasible", "infeasible_proven", "completed")
+    assert "primary_solution" not in wire and "deployment" not in wire
+    (stage,) = wire["solver_evidence"]["stages"]
+    assert (stage["status"], stage["ordinal"], stage["scope"]) == ("infeasible", 1, "global")
+    assert {observation: stage[observation] for observation in SOLVER_OBSERVATIONS} == dict.fromkeys(SOLVER_OBSERVATIONS)
+
+    payload["stop_reason"] = "time_limit"
     _reject(adapter, payload)
 
 
-@pytest.mark.parametrize("proof_source", ("exhaustive_oracle", "deterministic_conflict"))
-def test_infeasible_result_requires_a_matching_exact_infeasibility_witness(proof_source: str) -> None:
-    payload = _ready_infeasible_result("PAC")
-    if proof_source == "deterministic_conflict":
-        payload["proof"] = {
-            "kind": "infeasibility_proven",
-            "proof_source": "deterministic_conflict",
-            "witness": {
-                "kind": "deterministic_conflict",
-                "issue_codes": [
-                    "allocation.required_min_notional_unfunded",
-                    "allocation.no_positive_order_fundable",
-                ],
-                "summary_code": "allocation.no_positive_order_fundable",
-            },
-        }
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
-    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    assert wire["proof"]["proof_source"] == proof_source
-    if proof_source == "deterministic_conflict":
-        witness = wire["proof"]["witness"]
-        assert witness["summary_code"] in witness["issue_codes"]
-        assert set(witness["issue_codes"]) <= set(EXPECTED_PLANNER_ISSUE_CODES)
-
-
-def test_deterministic_conflict_summary_code_must_reference_a_listed_issue() -> None:
-    payload = _ready_infeasible_result("PAC")
-    payload["proof"] = {
-        "kind": "infeasibility_proven",
-        "proof_source": "deterministic_conflict",
-        "witness": {
-            "kind": "deterministic_conflict",
-            "issue_codes": ["allocation.required_min_notional_unfunded"],
-            "summary_code": "allocation.no_positive_order_fundable",
-        },
-    }
-    _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
-
-
-def test_finished_floating_solver_report_does_not_become_exact_proof() -> None:
-    payload = _pac_no_op_result()
+def _completed_no_incumbent_result(product: str) -> JsonObject:
+    """Yesterday's replay-rejected shape: every stage ``finished``, ``completed``, and no plan."""
+    payload = _ready_no_incumbent_result(product)
     payload["stop_reason"] = "completed"
-    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_reported_solver_stage(status="finished")]}
-    payload["proof"] = {"kind": "not_proven", "reason_code": "allocation.exact_proof_not_established"}
+    payload["solver_evidence"] = deepcopy(_ready_source_result(product)["solver_evidence"])
+    assert _finished_evidence_codes(payload)
+    return payload
 
-    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
-    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-    assert wire["solver_evidence"]["kind"] == "reported_floating"
-    assert wire["proof"]["kind"] == "not_proven"
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+def test_ready_no_incumbent_is_only_a_limit_stop(product: str, adapter: TypeAdapter[Any]) -> None:
+    """A search that completed always holds a plan, so "no plan" is only ever a limit stop.
+
+    Since QX1-b the exact replay no longer suppresses a plan: it publishes it
+    with its rounding top-ups or raises.  The one remaining way to publish
+    nothing is SCIP stopping at a time or node limit before holding any
+    solution, so ``completed`` must be refused by the type itself - a
+    ``literal_error`` on ``stop_reason`` - not by some later cross-field rule.
+    """
+    for stop_reason in ("time_limit", "node_limit"):
+        payload = _ready_no_incumbent_result(product)
+        payload["stop_reason"] = stop_reason
+        model, _emitted = _strict_roundtrip(adapter, payload)
+        wire = adapter.dump_python(model, mode="json")
+        assert (wire["result_state"], wire["stop_reason"]) == ("ready_no_incumbent", stop_reason)
+        assert "primary_solution" not in wire and "deployment" not in wire
+
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(_completed_no_incumbent_result(product)), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "literal_error" and error["loc"][-1] == "stop_reason" for error in errors), errors
+
+
+def _optimal_ready_result(product: str) -> JsonObject:
+    payload = _ready_source_result(product)
+    payload["proof"] = _optimal_proven_proof(_primary_objective_codes(payload))
+    return payload
+
+
+def _optimal_over_an_unfinished_stage(product: str) -> JsonObject:
+    payload = _optimal_ready_result(product)
+    last = max(payload["solver_evidence"]["stages"], key=lambda stage: stage["ordinal"])
+    last["status"] = "unfinished"
+    payload["stop_reason"] = "time_limit"
+    return payload
+
+
+def _optimal_over_reordered_evidence(product: str) -> JsonObject:
+    payload = _optimal_ready_result(product)
+    stages = payload["solver_evidence"]["stages"]
+    second, third = _find(stages, "ordinal", 2), _find(stages, "ordinal", 3)
+    second["ordinal"], third["ordinal"] = 3, 2
+    stages.sort(key=lambda stage: stage["ordinal"])
+    return payload
+
+
+def _optimal_over_evidence_missing_a_stage(product: str) -> JsonObject:
+    payload = _optimal_ready_result(product)
+    stages = payload["solver_evidence"]["stages"]
+    stages.remove(max(stages, key=lambda stage: stage["ordinal"]))
+    return payload
+
+
+def _infeasibility_over_a_finished_stage(product: str) -> JsonObject:
+    payload = _ready_infeasible_result(product)
+    finished_first = deepcopy(_find(_ready_source_result(product)["solver_evidence"]["stages"], "ordinal", 1))
+    assert finished_first["status"] == "finished"
+    payload["solver_evidence"] = {"kind": "reported_floating", "stages": [finished_first]}
+    return payload
+
+
+def _infeasibility_naming_another_stage(product: str) -> JsonObject:
+    payload = _ready_infeasible_result(product)
+    (stage,) = payload["solver_evidence"]["stages"]
+    other = next(code for code in _primary_objective_codes(_ready_source_result(product)) if code != stage["objective_code"])
+    payload["proof"]["witness"]["objective_codes"] = [other]
+    return payload
+
+
+def _state_over_only_an_infeasible_stage(state: str) -> Callable[[str], JsonObject]:
+    def build(product: str) -> JsonObject:
+        payload = _result_payload(product, state)
+        assert payload["proof"]["kind"] == "not_proven", payload["proof"]
+        return _with_only_an_infeasible_first_stage(payload)
+
+    return build
+
+
+SOLVER_STATUS_BINDING_CASES = (
+    pytest.param(_optimal_over_an_unfinished_stage, "optimal_proven requires every solver stage finished", id="optimal-over-unfinished-stage"),
+    pytest.param(_optimal_over_reordered_evidence, "Optimal proof witness must name exactly the finished solver stages in order", id="optimal-witness-order-differs-from-evidence"),
+    pytest.param(_optimal_over_evidence_missing_a_stage, "Optimal proof witness must name exactly the finished solver stages in order", id="optimal-witness-names-an-unreported-stage"),
+    pytest.param(_infeasibility_over_a_finished_stage, "infeasibility_proven requires an infeasible first solver stage", id="infeasibility-without-infeasible-stage"),
+    pytest.param(_infeasibility_naming_another_stage, "Infeasibility proof witness must name the infeasible solver stage", id="infeasibility-witness-names-another-stage"),
+    # A no-incumbent can no longer sit on an infeasible stage at all: ``completed`` is
+    # not its stop literal, and its limit stop needs an unfinished stage, which the
+    # lone infeasible stage is not.  So the stop-evidence rule, which runs before the
+    # solver-status binding, is what rejects it.
+    pytest.param(_state_over_only_an_infeasible_stage("ready_no_incumbent"), "Completed stops require no unfinished stage; limit stops require an unfinished stage", id="no-incumbent-over-infeasible-stage"),
+    pytest.param(_state_over_only_an_infeasible_stage("ready_no_op"), "An infeasible solver stage requires an infeasibility proof", id="no-op-over-infeasible-stage"),
+    pytest.param(_state_over_only_an_infeasible_stage("ready_incumbent"), "An infeasible solver stage requires an infeasibility proof", id="incumbent-over-infeasible-stage"),
+)
+
+
+@pytest.mark.parametrize(("product", "adapter"), READY_PRODUCT_CASES)
+@pytest.mark.parametrize(("build", "message"), SOLVER_STATUS_BINDING_CASES)
+def test_solver_status_proof_is_bound_to_the_solver_evidence(
+    product: str,
+    adapter: TypeAdapter[Any],
+    build: Callable[[str], JsonObject],
+    message: str,
+) -> None:
+    """The proof is SCIP's status, so the evidence must show that status - and an infeasible stage backs nothing else."""
+    _reject_because(adapter, build(product), message)
+
+
+def test_infeasible_solver_stage_is_accepted_only_as_the_first_global_stage_without_observations() -> None:
+    model, _emitted = _strict_roundtrip(SOLVER_STAGE_ADAPTER, _infeasible_stage_specimen())
+    wire = SOLVER_STAGE_ADAPTER.dump_python(model, mode="json")
+    assert (wire["status"], wire["ordinal"], wire["scope"]) == ("infeasible", 1, "global")
+    assert {observation: wire[observation] for observation in SOLVER_OBSERVATIONS} == dict.fromkeys(SOLVER_OBSERVATIONS)
+
+
+INFEASIBLE_STAGE_REJECTION_CASES = (
+    pytest.param("ordinal", 2, "Only the first, global solver stage can report infeasibility", id="second-ordinal"),
+    pytest.param("scope", "incumbent_face", "Only the first, global solver stage can report infeasibility", id="incumbent-face"),
+    pytest.param("primal", "25", "An infeasible solver stage has no primal, dual, or gap", id="primal"),
+    pytest.param("dual", "24", "An infeasible solver stage has no primal, dual, or gap", id="dual"),
+    pytest.param("absolute_gap", "1", "An infeasible solver stage has no primal, dual, or gap", id="absolute-gap"),
+    pytest.param("relative_gap", "0.04", "An infeasible solver stage has no primal, dual, or gap", id="relative-gap"),
+)
+
+
+@pytest.mark.parametrize(("field", "value", "message"), INFEASIBLE_STAGE_REJECTION_CASES)
+def test_infeasible_solver_stage_rejects_a_later_stage_a_face_or_any_observation(field: str, value: Any, message: str) -> None:
+    stage = _infeasible_stage_specimen()
+    stage[field] = value
+    _reject_because(SOLVER_STAGE_ADAPTER, stage, message)
+
+
+@pytest.mark.parametrize("other_status", ("finished", "unfinished"))
+def test_infeasible_solver_stage_must_be_the_only_reported_stage(other_status: str) -> None:
+    source = _pac_no_op_result()
+    first_code = _find(source["solver_evidence"]["stages"], "ordinal", 1)["objective_code"]
+    alone = {"kind": "reported_floating", "stages": [_infeasible_solver_stage(source, first_code)]}
+    _strict_roundtrip(SOLVER_EVIDENCE_ADAPTER, alone)
+
+    later = deepcopy(_find(source["solver_evidence"]["stages"], "ordinal", 2))
+    later["status"] = other_status
+    followed = {"kind": "reported_floating", "stages": [_infeasible_solver_stage(source, first_code), later]}
+    _reject_because(SOLVER_EVIDENCE_ADAPTER, followed, "An infeasible solver stage must be the only reported stage")
 
 
 @pytest.mark.parametrize(
-    "mutation",
+    ("objective_codes", "message"),
     (
-        "reported-floating-proof-source",
-        "mismatched-optimal-witness",
-        "zero-feasible-optimal-oracle",
-        "feasible-infeasibility-oracle",
-        "gap-without-reported-solver",
-        "gap-missing-unfinished-stage",
+        pytest.param(["fixed_l2", "fixed_l2"], "Solver-status witness objective codes must be unique", id="duplicate-codes"),
+        pytest.param([], "at least 1 item", id="empty-codes"),
     ),
 )
-def test_false_or_incomplete_exact_proof_is_rejected(mutation: str) -> None:
-    if mutation == "feasible-infeasibility-oracle":
-        payload = _ready_infeasible_result("PAC")
-        payload["proof"]["witness"]["feasible_candidates"] = 1
-    elif mutation in {"gap-without-reported-solver", "gap-missing-unfinished-stage"}:
-        payload = _gap_bounded_pac_result()
-        if mutation == "gap-without-reported-solver":
-            payload["solver_evidence"] = {"kind": "not_run", "reason": "allocation.solver_not_required"}
-            payload["stop_reason"] = "completed"
-        else:
-            payload["proof"]["stage_bounds"] = []
+def test_solver_status_witness_rejects_duplicate_or_empty_codes(objective_codes: list[str], message: str) -> None:
+    _strict_roundtrip(SOLVER_STATUS_WITNESS_ADAPTER, {"kind": "solver_status", "objective_codes": ["fixed_l2", "shortfall"]})
+    _reject_because(SOLVER_STATUS_WITNESS_ADAPTER, {"kind": "solver_status", "objective_codes": objective_codes}, message)
+
+
+def _infeasibility_proof_specimen() -> JsonObject:
+    return {"kind": "infeasibility_proven", "proof_source": "solver_status", "witness": {"kind": "solver_status", "objective_codes": ["fixed_l2"]}}
+
+
+def _optimal_proof_specimen() -> JsonObject:
+    return _optimal_proven_proof(["fixed_l2", "shortfall"])
+
+
+def test_infeasibility_proof_names_exactly_one_objective_code() -> None:
+    proof = _infeasibility_proof_specimen()
+    _strict_roundtrip(INFEASIBILITY_PROOF_ADAPTER, proof)
+    proof["witness"]["objective_codes"] = ["fixed_l2", "shortfall"]
+    _reject_because(INFEASIBILITY_PROOF_ADAPTER, proof, "An infeasibility proof names exactly the first objective stage")
+
+
+SOLVER_STATUS_PROOF_CASES = (
+    pytest.param(pac_schemas.OptimalProvenProof, _optimal_proof_specimen, id="optimal"),
+    pytest.param(pac_schemas.InfeasibilityProvenProof, _infeasibility_proof_specimen, id="infeasibility"),
+)
+
+
+@pytest.mark.parametrize(("proof_type", "factory"), SOLVER_STATUS_PROOF_CASES)
+@pytest.mark.parametrize("field", ("proof_source", "witness_kind"))
+@pytest.mark.parametrize("foreign", ("exhaustive_oracle", "deterministic_conflict", "reported_floating"))
+def test_solver_status_is_the_only_proof_source_and_witness_kind(
+    proof_type: type[BaseModel],
+    factory: PayloadFactory,
+    field: str,
+    foreign: str,
+) -> None:
+    assert get_args(proof_type.model_fields["proof_source"].annotation) == ("solver_status",)
+    assert get_args(pac_schemas.SolverStatusWitness.model_fields["kind"].annotation) == ("solver_status",)
+    adapter = TypeAdapter(proof_type)
+    proof = factory()
+    _strict_roundtrip(adapter, proof)
+
+    if field == "proof_source":
+        proof["proof_source"] = foreign
     else:
-        payload = _pac_no_op_result()
-        payload["proof"] = _optimal_proven_proof("exhaustive_oracle", _primary_objective_codes(payload))
-        if mutation == "reported-floating-proof-source":
-            payload["proof"]["proof_source"] = "reported_floating"
-        elif mutation == "mismatched-optimal-witness":
-            payload["proof"]["proof_source"] = "score_lattice_closure"
-        else:
-            payload["proof"]["witness"]["feasible_candidates"] = 0
+        proof["witness"]["kind"] = foreign
+    _reject(adapter, proof)
+
+
+EXACT_PROOF_MUTATION_CASES = (
+    pytest.param("optimal", "reported-floating-proof-source", id="reported-floating-proof-source"),
+    pytest.param("optimal", "foreign-witness-kind", id="foreign-optimal-witness-kind"),
+    pytest.param("optimal", "oracle-counts-on-witness", id="oracle-counts-on-optimal-witness"),
+    pytest.param("infeasibility", "foreign-proof-source", id="foreign-infeasibility-proof-source"),
+    pytest.param("infeasibility", "oracle-counts-on-witness", id="oracle-counts-on-infeasibility-witness"),
+    pytest.param("infeasibility", "second-code", id="infeasibility-witness-with-two-codes"),
+)
+
+
+@pytest.mark.parametrize(("proof_kind", "mutation"), EXACT_PROOF_MUTATION_CASES)
+def test_false_or_incomplete_exact_proof_is_rejected(proof_kind: str, mutation: str) -> None:
+    payload = _optimal_ready_result("PAC") if proof_kind == "optimal" else _ready_infeasible_result("PAC")
+    _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+    proof = payload["proof"]
+
+    if mutation == "reported-floating-proof-source":
+        proof["proof_source"] = "reported_floating"
+    elif mutation == "foreign-proof-source":
+        proof["proof_source"] = "deterministic_conflict"
+    elif mutation == "foreign-witness-kind":
+        proof["witness"]["kind"] = "exhaustive_oracle"
+    elif mutation == "oracle-counts-on-witness":
+        proof["witness"].update({"enumerated_candidates": 1, "feasible_candidates": 1 if proof_kind == "optimal" else 0})
+        _assert_extra_forbidden(PAC_PLAN_OUTPUT_ADAPTER, payload, "feasible_candidates")
+        return
+    elif mutation == "second-code":
+        proof["witness"]["objective_codes"] = [*proof["witness"]["objective_codes"], "shortfall"]
+    else:
+        raise AssertionError(f"unhandled exact-proof mutation {mutation!r}")
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
@@ -2408,6 +2901,675 @@ def test_exact_accounting_ledger_projection_and_objective_identities_are_enforce
     else:
         _find(solution["objectives"]["stages"], "objective_code", "shortfall")["value"] = _finite("1")
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
+
+
+def _top_up_row(amount: str, *, rounded_postings: int = 1, valuation: JsonObject | None = None) -> JsonObject:
+    """One broker-one/EUR rounding top-up, valued at its own amount unless told otherwise."""
+    return {
+        "broker_id": "broker-one",
+        "currency": "EUR",
+        "amount": amount,
+        "rounded_postings": rounded_postings,
+        "valuation_amount": _money(amount) if valuation is None else valuation,
+    }
+
+
+def _pac_top_up_result(deficit: str = "0.01", *, rounded_postings: int = 1) -> JsonObject:
+    """The €5 PAC incumbent bought with ``deficit`` less cash, published with the top-up that covers it.
+
+    This is the shape the exact replay produces when HALF_UP posting leaves a
+    pool a few minor units short (QX1-b): the plan stands, the pool goes
+    negative, and the top-up tells the user what to add.  Every field that
+    reports the selected cash moves with it - the scenario basis and the
+    accounting (selected, reachable, fixed reference ``5 - deficit``; shortfall
+    and free cash ``-deficit``), the Asset's fixed-reference target and
+    residual, the ledger row (initial ``5 - deficit``, final balances
+    ``-deficit``) and the shortfall and fixed-L2 objectives - so the negative
+    pool is the only unusual thing in the payload, and the top-up the only
+    thing that excuses it.  The payload is derived from the JSON fixture
+    (through ``_pac_incumbent_result``), whose ``rounding_top_ups`` is ``[]``
+    because every pool there balances; the helper sets the top-up rows
+    itself, one row covering ``deficit`` over ``rounded_postings``.
+    """
+    gap = Decimal(deficit)
+    cash = str(Decimal("5") - gap)
+    payload = _pac_incumbent_result()
+    for field in ("selected_funding", "reachable_funding", "fixed_reference"):
+        payload["scenario_basis"][field] = _money(cash)
+
+    solution = payload["primary_solution"]
+    accounting = solution["accounting"]
+    for field in ("current_invested", "selected_funding", "reachable_funding", "trapped_funding", "fixed_reference"):
+        accounting[field] = deepcopy(payload["scenario_basis"][field])
+    accounting["final_invested"] = _money("5")
+    accounting["shortfall"] = _money(str(-gap))
+    accounting["free_cash"] = _money(str(-gap))
+    accounting["rounding_delta"] = _money("0")
+
+    asset = _find(solution["asset_rows"], "asset_id", "asset-one")
+    asset["target_value"] = _money(cash)
+    asset["residual"] = _money(deficit)
+
+    ledger = _find(solution["ledger_rows"], "broker_id", "broker-one")
+    ledger["initial_selected"] = cash
+    ledger["final_spendable"] = str(-gap)
+    ledger["final_physical"] = str(-gap)
+
+    _find(solution["objectives"]["stages"], "objective_code", "shortfall")["value"] = _finite(str(-gap))
+    _find(solution["objectives"]["stages"], "objective_code", "fixed_l2")["value"] = _finite(str(gap * gap))
+    solution["rounding_top_ups"] = [_top_up_row(deficit, rounded_postings=rounded_postings)]
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("deficit", "rounded_postings"),
+    (
+        pytest.param("0.01", 1, id="one-cent-over-one-posting"),
+        pytest.param("0.02", 2, id="two-cents-over-two-postings"),
+    ),
+)
+def test_pac_rounding_top_up_publishes_the_negative_pool_it_covers(deficit: str, rounded_postings: int) -> None:
+    """A negative pool is publishable when a top-up names it, to the cent, within its rounded postings.
+
+    The ledger row keeps its negative balances instead of the schema refusing
+    them, and the top-up travels unchanged: the wire is a projection of what
+    the classifier decided.  The two-cent case is what the one-cent case
+    cannot tell apart from a flat one-minor-unit cap: the threshold is
+    ``rounded_postings`` minor units (an order can round twice, debit and
+    fee).
+    """
+    payload = _pac_top_up_result(deficit, rounded_postings=rounded_postings)
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
+
+    assert type(model) is PacPlannerReadyIncumbentResult
+    solution = wire["primary_solution"]
+    (top_up,) = solution["rounding_top_ups"]
+    assert (top_up["broker_id"], top_up["currency"], top_up["rounded_postings"]) == ("broker-one", "EUR", rounded_postings)
+    assert Fraction(top_up["amount"]) == Fraction(deficit)
+    assert top_up["valuation_amount"]["currency"] == wire["scenario_basis"]["valuation_currency"]
+    assert _money_wire_fraction(top_up["valuation_amount"]) == Fraction(deficit)
+    ledger = _find(solution["ledger_rows"], "broker_id", "broker-one")
+    assert Fraction(ledger["final_spendable"]) == Fraction(ledger["final_physical"]) == -Fraction(deficit)
+    assert _money_wire_fraction(solution["accounting"]["free_cash"]) == -Fraction(deficit)
+
+
+def _negative_pool_without_top_up() -> JsonObject:
+    """The nonnegative incumbent with only its ledger pool one cent short, and no top-up for it.
+
+    Nothing else reports the deficit - the accounting stays nonnegative - so
+    the cover rule is the only one this payload breaks.
+    """
+    payload = _pac_incumbent_result()
+    ledger = _find(payload["primary_solution"]["ledger_rows"], "broker_id", "broker-one")
+    ledger.update({"initial_selected": "4.99", "final_spendable": "-0.01", "final_physical": "-0.01"})
+    payload["primary_solution"]["rounding_top_ups"] = []
+    return payload
+
+
+def _top_up_without_negative_pool() -> JsonObject:
+    payload = _pac_incumbent_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01")]
+    return payload
+
+
+def _top_up_larger_than_its_deficit() -> JsonObject:
+    # Valued at its own amount and within 2 x 0.01, so only the cover rule breaks.
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.02", rounded_postings=2)]
+    return payload
+
+
+def _duplicate_top_up_scope() -> JsonObject:
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01"), _top_up_row("0.01")]
+    return payload
+
+
+def _more_rounded_postings_than_the_scope_carries() -> JsonObject:
+    # broker-one/EUR carries one order row (BUY debit and fee: 2) and no FX credit.
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", rounded_postings=3)]
+    return payload
+
+
+def _deficit_beyond_its_rounded_postings() -> JsonObject:
+    # A coherent two-cent pool, but one rounded posting only excuses one cent.
+    return _pac_top_up_result("0.02", rounded_postings=1)
+
+
+def _zero_valued_top_up() -> JsonObject:
+    # The cent is booked as rounding (inside a one-cent bound), so neither the free-cash
+    # nor the shortfall rule needs the valuation: only the valuation's own rules remain.
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", valuation=_money("0"))]
+    accounting = payload["primary_solution"]["accounting"]
+    accounting["free_cash"] = _money("0")
+    accounting["rounding_delta"] = _money("-0.01")
+    accounting["rounding_bound"] = _money("0.01")
+    return payload
+
+
+def _top_up_valued_off_its_own_amount() -> JsonObject:
+    payload = _pac_top_up_result()
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", valuation=_money("0.02"))]
+    return payload
+
+
+def _free_cash_negative_beyond_the_top_ups() -> JsonObject:
+    # Two cents of negative free cash, one reported as economic loss so the decomposition
+    # and the shortfall (-0.01 + 0.01 >= 0) still hold: one cent is left uncovered.
+    payload = _pac_top_up_result()
+    accounting = payload["primary_solution"]["accounting"]
+    accounting["free_cash"] = _money("-0.02")
+    accounting["economic_losses"] = _money("0.01")
+    return payload
+
+
+def _shortfall_beyond_the_top_ups() -> JsonObject:
+    # The shortfall and everything that reports it (fixed reference, target, residual,
+    # objective) move to -0.02 while free cash, the pool and its top-up stay at one cent.
+    # No coherent payload breaks this rule alone - free cash + top-ups >= 0, the
+    # decomposition and |rounding| <= bound together imply it - so the decomposition,
+    # checked after it as today, is the one other rule broken here.
+    payload = _pac_top_up_result()
+    for field in ("selected_funding", "reachable_funding", "fixed_reference"):
+        payload["scenario_basis"][field] = _money("4.98")
+    solution = payload["primary_solution"]
+    for field in ("selected_funding", "reachable_funding", "fixed_reference"):
+        solution["accounting"][field] = deepcopy(payload["scenario_basis"][field])
+    solution["accounting"]["shortfall"] = _money("-0.02")
+    asset = _find(solution["asset_rows"], "asset_id", "asset-one")
+    asset["target_value"] = _money("4.98")
+    asset["residual"] = _money("0.02")
+    _find(solution["objectives"]["stages"], "objective_code", "shortfall")["value"] = _finite("-0.02")
+    _find(solution["objectives"]["stages"], "objective_code", "fixed_l2")["value"] = _finite("0.0004")
+    return payload
+
+
+def _top_up_valued_in_another_currency() -> JsonObject:
+    # USD joins the catalogue so the catalogue rules pass and the valuation-currency rule speaks.
+    payload = _pac_top_up_result()
+    payload["catalogs"]["currencies"].append({"currency": "USD", "minor_unit": "0.01"})
+    payload["scenario_basis"]["counts"]["currencies"] = len(payload["catalogs"]["currencies"])
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01", valuation=_money("0.01", "USD"))]
+    return payload
+
+
+PAC_ROUNDING_TOP_UP_REJECTION_CASES = (
+    pytest.param(_top_up_larger_than_its_deficit, "PAC rounding top-ups must cover exactly the negative ledger balances", id="amount-differs-from-the-deficit"),
+    pytest.param(_negative_pool_without_top_up, "PAC rounding top-ups must cover exactly the negative ledger balances", id="negative-pool-without-top-up"),
+    pytest.param(_top_up_without_negative_pool, "PAC rounding top-ups must cover exactly the negative ledger balances", id="top-up-without-negative-pool"),
+    pytest.param(_duplicate_top_up_scope, "PAC rounding top-up scopes must be unique", id="duplicate-scope"),
+    pytest.param(_more_rounded_postings_than_the_scope_carries, "A PAC rounding top-up cannot count more rounded postings than its ledger scope carries", id="more-postings-than-the-scope"),
+    pytest.param(_deficit_beyond_its_rounded_postings, "A PAC rounding top-up cannot exceed its rounded postings times the currency minor unit", id="beyond-postings-times-minor-unit"),
+    pytest.param(_zero_valued_top_up, "PAC rounding top-up valuations must be positive", id="zero-valuation"),
+    pytest.param(_top_up_valued_off_its_own_amount, "A PAC rounding top-up in the valuation currency must be valued at its own amount", id="valued-off-its-own-amount"),
+    pytest.param(_free_cash_negative_beyond_the_top_ups, "Free cash cannot be negative beyond the rounding top-ups", id="free-cash-beyond-top-ups"),
+    pytest.param(_shortfall_beyond_the_top_ups, "Shortfall cannot exceed the favorable rounding bound", id="shortfall-beyond-top-ups"),
+    pytest.param(_top_up_valued_in_another_currency, "Asset, accounting, and cost projections must use the valuation currency", id="valued-in-another-currency"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), PAC_ROUNDING_TOP_UP_REJECTION_CASES)
+def test_pac_rounding_top_up_rejects_a_top_up_the_ledger_does_not_justify(build: PayloadFactory, message: str) -> None:
+    """A top-up excuses exactly its own pool's rounding deficit, and nothing else.
+
+    Each payload breaks one rule (or, where no coherent payload can, the one
+    the comment names) and the test pins that rule's message, since a bare
+    rejection would also pass for whatever else breaks first.  The contract:
+    every PAC solution requires ``rounding_top_ups`` - empty when every pool
+    balances, pinned empty by ``PacNoOpSolution`` - while Rebalancer
+    solutions forbid it as an extra field.
+    """
+    _reject_because(PAC_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def test_pac_no_op_publishes_no_rounding_top_up() -> None:
+    """A no-op posts nothing, so nothing rounds: its top-up list exists and is empty by type."""
+    payload = _pac_no_op_result()
+    payload["primary_solution"]["rounding_top_ups"] = []
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+    assert PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]["rounding_top_ups"] == []
+
+    payload["primary_solution"]["rounding_top_ups"] = [_top_up_row("0.01")]
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_OUTPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "too_long" and error["loc"][-1] == "rounding_top_ups" for error in errors), errors
+
+
+def test_rebalancer_ledger_cannot_go_negative_and_has_no_top_up() -> None:
+    """The Rebalancer has no rounding top-ups, so its own validator keeps refusing negative pools.
+
+    The ledger row stopped refusing negative balances by itself when the PAC
+    started publishing covered ones; the Rebalancer solution now carries that
+    rule.  The negative row is internally reconciled (a one-cent larger BUY
+    debit), so only the sign is wrong.
+    """
+    carrying = _rebalancer_incumbent_result()
+    carrying["primary_solution"]["rounding_top_ups"] = []
+    _assert_extra_forbidden(REBALANCER_PLAN_OUTPUT_ADAPTER, carrying, "rounding_top_ups")
+
+    payload = _rebalancer_incumbent_result()
+    ledger = next(row for row in payload["primary_solution"]["ledger_rows"] if (row["broker_id"], row["currency"]) == ("broker-alpha", "EUR"))
+    assert (Fraction(ledger["buy_debit"]), Fraction(ledger["final_spendable"]), Fraction(ledger["final_physical"])) == (40, 0, 0)
+    ledger.update({"buy_debit": "40.01", "final_spendable": "-0.01", "final_physical": "-0.01"})
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "Rebalancer ledger balances cannot be negative")
+
+
+# R4.9 - conversions.  An FX action is an engine decision keyed by order route; what
+# the user executes is its Broker x currency-pair conversion, numbered only when the
+# Broker converts manually.  The medium Rebalancer fixture carries one of each: the
+# beta EUR->USD action and its manual conversion, step 3 between funding (1-2) and
+# orders (4-7).  Every rejection below starts from that coherent pair and breaks one
+# rule, so the pinned message is the rule under test, not whatever broke first.
+
+BETA_FX_ACTION_ID = "fx-action-beta-eur-usd"
+BETA_CONVERSION_ID = "conversion-beta-eur-usd"
+REQUEST_BROKER_CONVERSION_MODE_CASES = (
+    pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, "broker-one", id="pac"),
+    pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, "broker-beta", id="rebalancer"),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory", "broker_id"), REQUEST_BROKER_CONVERSION_MODE_CASES)
+@pytest.mark.parametrize("mode", ("manual", "automatic"))
+def test_request_broker_conversion_mode_accepts_manual_and_automatic(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+    broker_id: str,
+    mode: str,
+) -> None:
+    payload = factory()
+    _find(payload["brokers"], "broker_id", broker_id)["conversion_mode"] = mode
+    model, _emitted = _strict_roundtrip(adapter, payload)
+    wire = adapter.dump_python(model, mode="json")
+    assert _find(wire["brokers"], "broker_id", broker_id)["conversion_mode"] == mode
+
+
+_MISSING = object()
+
+
+@pytest.mark.parametrize(("adapter", "factory", "broker_id"), REQUEST_BROKER_CONVERSION_MODE_CASES)
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    (
+        pytest.param(_MISSING, "missing", id="missing"),
+        pytest.param(None, "literal_error", id="null"),
+        pytest.param("Manual", "literal_error", id="capitalised"),
+        pytest.param("auto", "literal_error", id="unknown"),
+    ),
+)
+def test_request_broker_conversion_mode_is_required_and_closed(
+    adapter: TypeAdapter[Any],
+    factory: PayloadFactory,
+    broker_id: str,
+    value: Any,
+    error_type: str,
+) -> None:
+    """The mode is a Broker input with no default: the planner never guesses how a Broker converts."""
+    payload = factory()
+    broker = _find(payload["brokers"], "broker_id", broker_id)
+    if value is _MISSING:
+        broker.pop("conversion_mode")
+    else:
+        broker["conversion_mode"] = value
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == error_type and error["loc"][-1] == "conversion_mode" for error in errors), errors
+
+
+def _beta_fx_action(solution: JsonObject) -> JsonObject:
+    return _find(solution["fx_actions"], "action_id", BETA_FX_ACTION_ID)
+
+
+def _beta_conversion(solution: JsonObject) -> JsonObject:
+    return _find(solution["conversions"], "conversion_id", BETA_CONVERSION_ID)
+
+
+def _fx_rate(source_currency: str, destination_currency: str, value: JsonObject) -> JsonObject:
+    return {"source_currency": source_currency, "destination_currency": destination_currency, "value": value}
+
+
+def _with_beta_conversion(**fields: Any) -> PayloadFactory:
+    """The medium fixture with fields of the beta conversion replaced, its FX action untouched."""
+
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        _beta_conversion(payload["primary_solution"]).update(deepcopy(fields))
+        return payload
+
+    return build
+
+
+def _with_beta_fx_action(**fields: Any) -> PayloadFactory:
+    """The medium fixture with fields of the beta FX action replaced, its conversion untouched."""
+
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        _beta_fx_action(payload["primary_solution"]).update(deepcopy(fields))
+        return payload
+
+    return build
+
+
+def _with_beta_conversion_renamed(conversion_id: str) -> PayloadFactory:
+    """Rename the conversion and its action's reference together, so only the ID itself can collide."""
+
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        solution = payload["primary_solution"]
+        _beta_conversion(solution)["conversion_id"] = conversion_id
+        _beta_fx_action(solution)["conversion_id"] = conversion_id
+        return payload
+
+    return build
+
+
+def _add_usd_to_eur_conversion(solution: JsonObject, *, mode: str, sequence: int | None) -> None:
+    """Publish a second conversion at broker-beta, for the opposite pair, backed by its own FX action.
+
+    12.50 USD back to 10 EUR at 4/5 with no spread: a coherent row pair that collides
+    with nothing in the fixture, so a case can break one conversion rule on top of it.
+    """
+    rate = _fx_rate("USD", "EUR", _finite("0.8"))
+    action = {
+        "action_id": "fx-action-beta-usd-eur",
+        "conversion_id": "conversion-beta-usd-eur",
+        "order_route_id": "route-b-beta-buy",
+        "broker_id": "broker-beta",
+        "source_debit": {"amount": "12.50", "currency": "USD"},
+        "destination_credit": {"amount": "10", "currency": "EUR"},
+        "spot_rate": deepcopy(rate),
+        "effective_rate": deepcopy(rate),
+        "spread_loss": _money("0"),
+        "provenance_ids": ["prov-market", "prov-manual"],
+    }
+    solution["fx_actions"].append(action)
+    solution["conversions"].append(
+        {
+            "conversion_id": action["conversion_id"],
+            "mode": mode,
+            "sequence": sequence,
+            "broker_id": "broker-beta",
+            "source_debit": deepcopy(action["source_debit"]),
+            "destination_credit": deepcopy(action["destination_credit"]),
+            "spot_rate": deepcopy(rate),
+            "effective_rate": deepcopy(rate),
+            "spread_loss": _money("0"),
+            "fx_action_ids": [action["action_id"]],
+            "provenance_ids": ["prov-manual", "prov-market"],
+        }
+    )
+
+
+def _split_beta_fx_action(solution: JsonObject) -> tuple[JsonObject, JsonObject]:
+    """Split the beta EUR->USD decision into two routes of one pair, 4 + 6 EUR, under the same conversion."""
+    first = _beta_fx_action(solution)
+    second = deepcopy(first)
+    first["source_debit"]["amount"] = "4"
+    first["destination_credit"]["amount"] = "5"
+    second.update(action_id="fx-action-beta-eur-usd-route-b", order_route_id="route-b-beta-buy")
+    second["source_debit"]["amount"] = "6"
+    second["destination_credit"]["amount"] = "7.50"
+    solution["fx_actions"].append(second)
+    _beta_conversion(solution)["fx_action_ids"] = [first["action_id"], second["action_id"]]
+    return first, second
+
+
+def _conversion_over_two_fx_actions() -> JsonObject:
+    payload = _rebalancer_incumbent_result()
+    _split_beta_fx_action(payload["primary_solution"])
+    return payload
+
+
+def _conversion_rates_in_another_exact_form() -> JsonObject:
+    # 5/4 and 12.5 are the action's 1.25 and 12.50: the binding compares numbers, not text.
+    payload = _rebalancer_incumbent_result()
+    conversion = _beta_conversion(payload["primary_solution"])
+    for field in ("spot_rate", "effective_rate"):
+        conversion[field]["value"] = _ratio("5", "4", "1.25")
+    conversion["destination_credit"]["amount"] = "12.5"
+    return payload
+
+
+def _automatic_conversions_take_no_step() -> JsonObject:
+    # Two automatic conversions both publish a null sequence - which must not collide -
+    # and the orders follow the funding directly, as the planner numbers them.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _beta_conversion(solution).update(mode="automatic", sequence=None)
+    _add_usd_to_eur_conversion(solution, mode="automatic", sequence=None)
+    for sequence, order in enumerate(sorted(solution["order_rows"], key=lambda row: row["sequence"]), start=3):
+        order["sequence"] = sequence
+    return payload
+
+
+CONVERSION_ACCEPTED_CASES = (
+    pytest.param(_rebalancer_incumbent_result, id="fixture-manual-conversion"),
+    pytest.param(_conversion_over_two_fx_actions, id="two-fx-actions-one-conversion"),
+    pytest.param(_conversion_rates_in_another_exact_form, id="exact-not-lexical-binding"),
+    pytest.param(_automatic_conversions_take_no_step, id="automatic-conversions-take-no-step"),
+)
+
+
+@pytest.mark.parametrize("build", CONVERSION_ACCEPTED_CASES)
+def test_conversion_shapes_the_contract_accepts(build: PayloadFactory) -> None:
+    payload = build()
+    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, payload)
+    assert type(model) is RebalancerPlannerReadyIncumbentResult
+    solution = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]
+    assert solution["conversions"] == payload["primary_solution"]["conversions"]
+    assert solution["fx_actions"] == payload["primary_solution"]["fx_actions"]
+    assert all("sequence" not in action for action in solution["fx_actions"])
+
+
+def test_medium_fixture_numbers_its_manual_conversion_between_funding_and_orders() -> None:
+    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result())
+    solution = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]
+
+    action = _beta_fx_action(solution)
+    conversion = _beta_conversion(solution)
+    assert action["conversion_id"] == conversion["conversion_id"]
+    assert (conversion["mode"], conversion["broker_id"]) == ("manual", action["broker_id"])
+    assert conversion["fx_action_ids"] == [action["action_id"]]
+    assert set(conversion["provenance_ids"]) == set(action["provenance_ids"])
+    assert [row["sequence"] for row in solution["funding_actions"]] == [1, 2]
+    assert [row["sequence"] for row in solution["conversions"]] == [3]
+    assert [row["sequence"] for row in solution["order_rows"]] == [4, 5, 6, 7]
+
+
+@pytest.mark.parametrize("field", ("fx_action_ids", "provenance_ids"))
+def test_conversion_lists_at_least_one_fx_action_and_provenance(field: str) -> None:
+    payload = _rebalancer_incumbent_result()
+    _beta_conversion(payload["primary_solution"])[field] = []
+    with pytest.raises(ValidationError) as exc_info:
+        REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "too_short" and error["loc"][-1] == field for error in errors), errors
+
+
+CONVERSION_ROW_REJECTION_CASES = (
+    pytest.param(_with_beta_conversion(sequence=None), "A conversion has an execution sequence exactly when it is manual", id="manual-without-sequence"),
+    pytest.param(_with_beta_conversion(mode="automatic"), "A conversion has an execution sequence exactly when it is manual", id="automatic-with-sequence"),
+    pytest.param(_with_beta_conversion(spot_rate=_fx_rate("USD", "EUR", _finite("0.8"))), "Conversion rates must follow the source-to-destination direction", id="spot-rate-reversed"),
+    pytest.param(_with_beta_conversion(effective_rate=_fx_rate("USD", "EUR", _finite("0.8"))), "Conversion rates must follow the source-to-destination direction", id="effective-rate-reversed"),
+    pytest.param(_with_beta_conversion(effective_rate=_fx_rate("EUR", "USD", _finite("1.26"))), "Effective conversion rate cannot exceed the approved spot rate", id="effective-above-spot"),
+    pytest.param(_with_beta_conversion(spread_loss=_money("-0.01")), "Conversion spread loss cannot be negative", id="negative-spread"),
+    pytest.param(_with_beta_conversion(fx_action_ids=[BETA_FX_ACTION_ID, BETA_FX_ACTION_ID]), "Conversion FX action IDs must be unique", id="duplicate-fx-action-id"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), CONVERSION_ROW_REJECTION_CASES)
+def test_conversion_row_rejects_an_inconsistent_conversion(build: PayloadFactory, message: str) -> None:
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def _second_conversion_with_the_beta_id() -> JsonObject:
+    # The action-ID rule runs first and already spans conversion IDs, so it is the one
+    # that speaks; the conversion-ID uniqueness check inside the conversion binding is
+    # a second guard this payload cannot reach.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _add_usd_to_eur_conversion(solution, mode="manual", sequence=8)
+    solution["conversions"][-1]["conversion_id"] = BETA_CONVERSION_ID
+    solution["fx_actions"][-1]["conversion_id"] = BETA_CONVERSION_ID
+    return payload
+
+
+def _manual_conversions_out_of_order() -> JsonObject:
+    # Step 8 is free (orders end at 7): only the order inside the conversion section is wrong.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _add_usd_to_eur_conversion(solution, mode="manual", sequence=8)
+    solution["conversions"].reverse()
+    return payload
+
+
+ACTION_ID_AND_SEQUENCE_REJECTION_CASES = (
+    pytest.param(_with_beta_conversion_renamed("order-buy-b-beta"), "Rebalancer action IDs must be unique", id="conversion-id-is-an-order-id"),
+    pytest.param(_with_beta_conversion_renamed("funding-action-beta"), "Rebalancer action IDs must be unique", id="conversion-id-is-a-funding-id"),
+    pytest.param(_with_beta_conversion_renamed(BETA_FX_ACTION_ID), "Rebalancer action IDs must be unique", id="conversion-id-is-an-fx-action-id"),
+    pytest.param(_second_conversion_with_the_beta_id, "Rebalancer action IDs must be unique", id="duplicate-conversion-id"),
+    pytest.param(_with_beta_conversion(sequence=2), "Rebalancer action sequences must be unique", id="manual-conversion-on-a-funding-step"),
+    pytest.param(_with_beta_conversion(sequence=4), "Rebalancer action sequences must be unique", id="manual-conversion-on-an-order-step"),
+    pytest.param(_manual_conversions_out_of_order, "Rebalancer action sections must be sequence-ordered", id="conversion-section-out-of-order"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), ACTION_ID_AND_SEQUENCE_REJECTION_CASES)
+def test_conversions_share_the_action_id_space_and_manual_ones_the_step_numbering(build: PayloadFactory, message: str) -> None:
+    """Conversion IDs collide with every action ID; only a manual conversion holds an execution step.
+
+    The positive half - automatic conversions publish no step, even two of them -
+    is ``automatic-conversions-take-no-step`` in ``CONVERSION_ACCEPTED_CASES``.
+    """
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def _second_conversion_for_the_beta_pair() -> JsonObject:
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    action = deepcopy(_beta_fx_action(solution))
+    conversion = deepcopy(_beta_conversion(solution))
+    action.update(action_id="fx-action-beta-eur-usd-route-b", conversion_id="conversion-beta-eur-usd-route-b", order_route_id="route-b-beta-buy")
+    conversion.update(conversion_id=action["conversion_id"], sequence=8, fx_action_ids=[action["action_id"]])
+    solution["fx_actions"].append(action)
+    solution["conversions"].append(conversion)
+    return payload
+
+
+def _broker_with_manual_and_automatic_conversions() -> JsonObject:
+    payload = _rebalancer_incumbent_result()
+    _add_usd_to_eur_conversion(payload["primary_solution"], mode="automatic", sequence=None)
+    return payload
+
+
+def _conversion_missing_one_of_its_fx_actions() -> JsonObject:
+    # Both actions reference the conversion and its totals cover both: only the list is short.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    first, _second = _split_beta_fx_action(solution)
+    _beta_conversion(solution)["fx_action_ids"] = [first["action_id"]]
+    return payload
+
+
+def _pac_fx_action_without_conversion() -> JsonObject:
+    payload = _pac_incumbent_result()
+    payload["primary_solution"]["fx_actions"] = [deepcopy(_beta_fx_action(_rebalancer_incumbent_result()["primary_solution"]))]
+    return payload
+
+
+CONVERSION_BINDING_REJECTION_CASES = (
+    pytest.param(_second_conversion_for_the_beta_pair, "Rebalancer conversion pairs must be unique", id="two-conversions-for-one-pair"),
+    pytest.param(_broker_with_manual_and_automatic_conversions, "Rebalancer conversions must use one mode per Broker", id="two-modes-for-one-broker"),
+    pytest.param(_with_beta_fx_action(conversion_id="conversion-unpublished"), "Rebalancer FX actions must reference a published conversion", id="dangling-conversion-reference"),
+    pytest.param(_with_beta_fx_action(broker_id="broker-alpha"), "Rebalancer FX actions must match their conversion's Broker and currency pair", id="action-at-another-broker"),
+    pytest.param(
+        _with_beta_fx_action(
+            source_debit={"amount": "12.50", "currency": "USD"},
+            destination_credit={"amount": "10", "currency": "EUR"},
+            spot_rate=_fx_rate("USD", "EUR", _finite("0.8")),
+            effective_rate=_fx_rate("USD", "EUR", _finite("0.8")),
+        ),
+        "Rebalancer FX actions must match their conversion's Broker and currency pair",
+        id="action-for-another-pair",
+    ),
+    pytest.param(_with_beta_fx_action(spot_rate=_fx_rate("EUR", "USD", _finite("1.30"))), "Rebalancer FX actions must use their conversion's rates", id="action-spot-rate-differs"),
+    pytest.param(_with_beta_fx_action(effective_rate=_fx_rate("EUR", "USD", _finite("1.20"))), "Rebalancer FX actions must use their conversion's rates", id="action-effective-rate-differs"),
+    pytest.param(_conversion_missing_one_of_its_fx_actions, "Rebalancer conversions must list exactly the FX actions that reference them", id="fx-action-ids-missing-a-member"),
+    pytest.param(_with_beta_conversion(fx_action_ids=[BETA_FX_ACTION_ID, "fx-action-unpublished"]), "Rebalancer conversions must list exactly the FX actions that reference them", id="fx-action-ids-with-an-extra-id"),
+    pytest.param(_with_beta_conversion(source_debit={"amount": "10.01", "currency": "EUR"}), "Rebalancer conversion totals must equal the exact sums of their FX actions", id="source-debit-total"),
+    pytest.param(_with_beta_conversion(destination_credit={"amount": "12.51", "currency": "USD"}), "Rebalancer conversion totals must equal the exact sums of their FX actions", id="destination-credit-total"),
+    pytest.param(_with_beta_conversion(spread_loss=_money("0.01")), "Rebalancer conversion totals must equal the exact sums of their FX actions", id="spread-loss-total"),
+    pytest.param(_with_beta_conversion(provenance_ids=["prov-manual"]), "Rebalancer conversion provenance must be the union of its FX actions' provenance", id="provenance-missing-an-action-source"),
+    pytest.param(_with_beta_conversion(provenance_ids=["prov-manual", "prov-market", "prov-portfolio"]), "Rebalancer conversion provenance must be the union of its FX actions' provenance", id="provenance-beyond-its-actions"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), CONVERSION_BINDING_REJECTION_CASES)
+def test_conversions_aggregate_exactly_the_fx_actions_that_reference_them(build: PayloadFactory, message: str) -> None:
+    """A conversion is a pure aggregate: one per Broker x pair, one mode per Broker, exact sums."""
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def test_pac_solution_binds_fx_actions_to_conversions_under_its_own_label() -> None:
+    _reject_because(PAC_PLAN_OUTPUT_ADAPTER, _pac_fx_action_without_conversion(), "PAC FX actions must reference a published conversion")
+
+
+def _buy_order_with_fx_cost(value: str) -> PayloadFactory:
+    def build() -> JsonObject:
+        payload = _rebalancer_incumbent_result()
+        _find(payload["primary_solution"]["order_rows"], "order_id", "order-buy-b-beta")["fx_cost"] = _money(value)
+        return payload
+
+    return build
+
+
+def _conversion_provenance_outside_the_result() -> JsonObject:
+    # The union rule makes a conversion's provenance a copy of its actions', so the
+    # unpublished ID has to ride on both rows: the binding holds, the catalogue does not.
+    payload = _rebalancer_incumbent_result()
+    solution = payload["primary_solution"]
+    _beta_fx_action(solution)["provenance_ids"].append("prov-unpublished")
+    _beta_conversion(solution)["provenance_ids"].append("prov-unpublished")
+    return payload
+
+
+CONVERSION_READY_REJECTION_CASES = (
+    pytest.param(_buy_order_with_fx_cost("0.01"), "BUY FX cost must be zero: conversion spreads are published on the conversion", id="buy-fx-cost-positive"),
+    pytest.param(_buy_order_with_fx_cost("-0.01"), "BUY FX cost must be zero: conversion spreads are published on the conversion", id="buy-fx-cost-negative"),
+    pytest.param(_with_beta_conversion(spread_loss=_money("0", "USD")), "Asset, accounting, and cost projections must use the valuation currency", id="spread-outside-the-valuation-currency"),
+    pytest.param(_conversion_provenance_outside_the_result, "Solution rows must reference top-level provenance IDs", id="provenance-not-published"),
+    pytest.param(_with_beta_conversion(provenance_ids=["prov-manual", "prov-market", "prov-manual"]), "Result-row provenance IDs must be unique", id="duplicate-provenance-in-the-row"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), CONVERSION_READY_REJECTION_CASES)
+def test_ready_result_holds_conversions_to_valuation_currency_and_provenance(build: PayloadFactory, message: str) -> None:
+    """The spread is valued on the conversion, never on a BUY row, and in the valuation currency."""
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+NO_OP_CONVERSION_CASES = (
+    pytest.param(PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, id="pac"),
+    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_no_op_result, id="rebalancer"),
+)
+
+
+@pytest.mark.parametrize(("adapter", "factory"), NO_OP_CONVERSION_CASES)
+def test_no_op_publishes_no_conversion(adapter: TypeAdapter[Any], factory: PayloadFactory) -> None:
+    payload = factory()
+    model, _emitted = _strict_roundtrip(adapter, payload)
+    assert adapter.dump_python(model, mode="json")["primary_solution"]["conversions"] == []
+
+    payload["primary_solution"]["conversions"] = [deepcopy(_beta_conversion(_rebalancer_incumbent_result()["primary_solution"]))]
+    with pytest.raises(ValidationError) as exc_info:
+        adapter.validate_json(_wire(payload), strict=True)
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["type"] == "too_long" and error["loc"][-1] == "conversions" for error in errors), errors
 
 
 def _assert_available_weight_identities(rows: list[JsonObject], weight_field: str, value_field: str, total: Fraction, zero_reason: str) -> None:
@@ -2600,13 +3762,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "e2b70735f589d376d5c105416b5b9e30c3a0b927bf7713222af21dcfdb0eaa28",
+        "4f061103f96ac9f4fc2fbe69d94beed7381e2dce6e4fea2c57b2eb97f27b58bb",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "61ed6bdeaef112cf0df461468da3f536033d51f34d0abafea9ca22c645a7c12b",
+        "be2bb19d144e07fb208ae08a26f31433ac418b722786aeab62b1021b82b18e62",
         id="rebalancer",
     ),
 )
@@ -2681,6 +3843,17 @@ def _open_map_property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
     return frozenset(node_ids)
 
 
+def _property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
+    """Node identities of every property schema: the only place a `default` may be published."""
+    return frozenset(
+        id(value)
+        for node in walk_schema(schema)
+        if isinstance(node.get("properties"), dict)
+        for value in node["properties"].values()
+        if isinstance(value, dict)
+    )
+
+
 @pytest.mark.parametrize("_label,adapter,mode,expected_roots,_root_discriminator", PLANNER_SCHEMA_CASES)
 def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_shapes(
     _label: str,
@@ -2695,9 +3868,11 @@ def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_s
     assert len(list(root_models(schema))) == expected_roots
     _assert_acyclic_local_references(schema)
     open_map_node_ids = _open_map_property_schema_node_ids(schema)
+    property_schema_ids = _property_schema_node_ids(schema)
 
     for node in walk_schema(schema):
-        assert "default" not in node
+        # Contract compaction: a neutral default is published on the property that has it, never on a type.
+        assert "default" not in node or id(node) in property_schema_ids
         assert "prefixItems" not in node
         assert "patternProperties" not in node
         assert "$dynamicRef" not in node
@@ -2720,13 +3895,21 @@ def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_s
             else:
                 assert node.get("additionalProperties") is False
                 properties = node.get("properties")
-                required = node.get("required")
                 assert isinstance(properties, dict)
-                assert isinstance(required, list)
-                assert set(required) == set(properties)
-                for property_schema in properties.values():
-                    assert isinstance(property_schema, dict)
-                    assert "default" not in property_schema
+                assert all(isinstance(property_schema, dict) for property_schema in properties.values())
+                if mode == "validation":
+                    # An input property is either required or carries its neutral default: never
+                    # both, never neither.  Pydantic omits `required` when it would be empty.
+                    required = node.get("required", [])
+                    assert isinstance(required, list)
+                    assert set(required) <= set(properties)
+                    for name, property_schema in properties.items():
+                        assert (name in required) != ("default" in property_schema), name
+                else:
+                    # json_schema_serialization_defaults_required: an emitted object carries every field.
+                    required = node.get("required")
+                    assert isinstance(required, list)
+                    assert set(required) == set(properties)
 
         pattern = node.get("pattern")
         if isinstance(pattern, str):

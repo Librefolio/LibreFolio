@@ -68,6 +68,7 @@ PROVIDER_ERROR_TEST_PATHS = (
 
 RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_quantlib_smoke.py",
+    "backend/test_scripts/test_services/test_market_calendar.py",
     "backend/test_scripts/test_services/test_series_preparation.py",
     "backend/test_scripts/test_services/test_risk_metrics.py",
     "backend/test_scripts/test_services/test_risk_metrics_oracle.py",
@@ -80,6 +81,10 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_simulation.py",
     "backend/test_scripts/test_services/test_risk_optimization.py",
     "backend/test_scripts/test_services/test_risk_spawn_worker.py",
+    "backend/test_scripts/test_services/test_data_quality_thresholds.py",
+    "backend/test_scripts/test_services/test_risk_warnings_i18n.py",
+    "backend/test_scripts/test_services/test_risk_eligibility.py",
+    "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
@@ -113,7 +118,7 @@ def services_pac_planner_evaluator(verbose: bool = False, test_names: list = Non
 
 
 def services_pac_planner_oracle(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the zero-SCIP-dependency exhaustive oracle over one policy view's discrete domain."""
+    """Test the exhaustive oracle, a test-only referee with zero SCIP dependency, over one policy view's discrete domain."""
     print_section("Services: PAC/Rebalancer Exhaustive Oracle")
     cmd = _build_pytest_cmd(PAC_PLANNER_ORACLE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer exhaustive oracle tests", verbose=verbose)
@@ -134,7 +139,7 @@ def services_pac_planner_solver(verbose: bool = False, test_names: list = None) 
 
 
 def services_pac_planner_proof(verbose: bool = False, test_names: list = None) -> bool:
-    """Test that a floating solve structurally cannot express a proven outcome."""
+    """Test that a proof comes only from SCIP's own closed statuses, through a sealed witness."""
     print_section("Services: PAC/Rebalancer Proof Semantics")
     cmd = _build_pytest_cmd(PAC_PLANNER_PROOF_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer proof semantics tests", verbose=verbose)
@@ -944,7 +949,7 @@ Note: No backend server required.
         "pac-planner-oracle",
         services_pac_planner_oracle,
         name="PAC/Rebalancer Exhaustive Oracle",
-        desc="Exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
+        desc="Test-only referee: exhaustive candidate enumeration, domain-size estimation and cap, lexicographic best-candidate selection and checkpoint cancellation",
         isolation="pure",
     )
     add_test(
@@ -960,7 +965,7 @@ Note: No backend server required.
         "pac-planner-solver",
         services_pac_planner_solver,
         name="PAC/Rebalancer Lexicographic Solver",
-        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and floating infeasibility",
+        desc="Lexicographic SCIP cascade adapter: exhaustive-oracle agreement, stage scoping, evidence shape, honest limits and the first-stage infeasible verdict",
         isolation="pure",
     )
     add_test(
@@ -968,7 +973,7 @@ Note: No backend server required.
         "pac-planner-proof",
         services_pac_planner_proof,
         name="PAC/Rebalancer Proof Semantics",
-        desc="Sealed witnesses, oracle-only promotion and the structural impossibility of a floating solve claiming a proof",
+        desc="Sealed solver-status witnesses: optimal only when every stage closed, infeasible only at the first stage, limits and anomalies never proven",
         isolation="pure",
     )
     add_test(
@@ -992,7 +997,7 @@ Note: No backend server required.
         "pac-planner-service",
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
-        desc="plan_pac_allocation end to end: ready states, failure availabilities, oracle-settled evidence and SCIP import isolation",
+        desc="plan_pac_allocation end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
@@ -1010,7 +1015,7 @@ Note: No backend server required.
     add_test(cat, "risk-optimization", services_risk_optimization, name="Risk Optimization", desc="Riskfolio objectives, estimators, constraints, frontier and cache")
     add_test(cat, "risk-workers", services_risk_workers, name="Risk Workers", desc="Spawn lifecycle, queue bounds, timeout, recycle and cancellation")
     add_test(cat, "risk-oracle", services_risk_oracle, name="Risk Metrics Oracle", desc="riskfolio/NumPy/SciPy reference pins, name traps, undefined windows and matrix consistency", isolation="pure")
-    add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite")
+    add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite, plus data-quality thresholds, translatable warnings, per-window eligibility/replay coverage and exclusion reasons")
     add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
     add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
     add_test(cat, "signal-runtime", services_signal_runtime, name="Signal Runtime", desc="Composite-stack fail-fast and startup integration")

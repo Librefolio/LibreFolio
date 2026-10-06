@@ -191,31 +191,47 @@ financial calculations.
 
 ## 🔥 Calculation Range, Exported Range, and Warm-up
 
-Indicators calculate from observation-level input with plugin-owned,
-parameter-aware warm-up. States and annotations are also derived before numeric
-bucket aggregation.
+Indicators calculate on **sessions** — the quote days of a warm-up-inclusive
+input — with plugin-owned, parameter-aware warm-up. The loaded series keeps one
+point per calendar day. A day filled with an earlier price or rate carries
+`backward_fill_info`, and an Asset's stored weekend or market-holiday row that
+repeats the previous close exactly is marked as carried before the signals run
+(`mark_market_closed_carries`, the rule the Risk series use). For every plugin
+with `computes_on_quote_days` — the 17 technical indicators, so every curated
+instance — `SignalService` keeps only the quote days of the selected points
+(`quote_day_points`): points whose price was quoted on their own date, even when
+their exchange rate was carried. Periods, warm-up, minimum history, and visible
+points therefore count sessions, and indicator values are dated on sessions.
+States and annotations are also derived before numeric bucket aggregation.
 
 Only the requested exported period is serialized:
 
 ```text
-warm-up-inclusive calculation input
-→ full observation-level indicator and event calculation
+warm-up-inclusive calendar input
+→ keep its sessions (quote days)
+→ full session-level indicator and event calculation
 → slice to exported period
 → aggregate numeric history
 ```
 
-Asset loading delegates warm-up to `SignalService` through
-`AssetSourceManager`. FX explicitly loads the required earlier daily rate range.
-The component response declares `warmup_policy: component_owned`; the current
-aggregate `calculation_range` and `earliest_calculation_date` metadata fields are
-not populated.
+The load window is counted in calendar days:
+`SignalExecutionPlan.max_history_days_before_visible` is the largest warm-up of
+the requested instances, in sessions, times `SESSION_WARMUP_DAY_MULTIPLIER` (two
+calendar days per session). Asset loading delegates warm-up to `SignalService`
+through `AssetSourceManager`, which loads that window before the requested
+start. FX sizes its own load of earlier daily rates with the same plan value
+(`_fx_warmup_days`); a day without a published rate is backward-filled, carries
+`backward_fill_info`, and is not a session. The component response declares
+`warmup_policy: component_owned`; the current aggregate `calculation_range` and
+`earliest_calculation_date` metadata fields are not populated.
 
 FX source history may begin after the requested start. Dates before the first
 stored rate are omitted from the warm-up input rather than failing the entire
 snapshot. SignalService then includes calculable `ok`/`partial` instances and
-reports unavailable instances through technical coverage. The snapshot metadata
-publishes requested/available ranges and calendar-day coverage. No future rate is
-ever used.
+reports unavailable instances through technical coverage. Coverage stays on the
+calendar although indicators count sessions: the snapshot metadata publishes
+requested/available ranges and calendar-day coverage, with the counts of observed
+and backward-filled days. No future rate is ever used.
 
 ## 🎯 Event Selection
 

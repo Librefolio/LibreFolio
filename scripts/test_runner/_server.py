@@ -43,7 +43,8 @@ SHARED_SERVER_ENV = "LIBREFOLIO_TEST_SHARED_SERVER"
 #: Generous on purpose. `dev.py server` first rebuilds a stale frontend and MkDocs (about 130 s
 #: after a large merge), and a loaded machine slows the Python start-up too. A server that exits
 #: is caught at once by the poll in start(), so only a start that hangs waits this long.
-#: LIBREFOLIO_TEST_STARTUP_TIMEOUT overrides it, in seconds.
+#: LIBREFOLIO_TEST_STARTUP_TIMEOUT overrides it, in seconds. frontend/playwright.config.ts
+#: (STARTUP_TIMEOUT_S) applies the same default and override to the webServer Playwright starts.
 STARTUP_TIMEOUT = int(os.environ.get("LIBREFOLIO_TEST_STARTUP_TIMEOUT", "300"))
 #: Flushing coverage takes real time; a SIGKILL during it loses everything.
 SHUTDOWN_GRACE_COVERAGE = 30
