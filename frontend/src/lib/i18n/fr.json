@@ -780,9 +780,8 @@
       "unrecognised": "Non reconnus",
       "historyFirst": "Premier import de ce courtier : à la fin, nous proposons le solde et les positions au {date} ; ensuite, chaque mouvement est importé.",
       "historyLater": "LibreFolio a déjà l'historique de ce courtier depuis le {date} : les mouvements déjà présents apparaîtront comme doublons, et les précédents ne sont pas réimportés.",
-      "exclude": "Exclure de l'import",
       "selectedCount": "{sets} lot(s) et {n} fichier(s) sélectionné(s) de {b} courtier(s)",
-      "incompleteBlocks": "Continuer est désactivé tant qu'un lot sélectionné est incomplet : téléversez le fichier manquant ou excluez-le.",
+      "incompleteBlocks": "Continuer est désactivé tant qu'un lot sélectionné est incomplet : téléversez le fichier manquant ou désélectionnez le lot.",
       "step1Missing": "{plugin} a aussi besoin de : {role} ({ext}).",
       "step1MissingHint": "Déposez-le ici : il rejoint le même lot. Vous pouvez aussi continuer : le lot apparaîtra incomplet.",
       "analyzeRowLabel": "Lot du {date} · combiné ({n} fichiers)",
@@ -899,7 +898,8 @@
       "readAloneWith": "Lire seul avec {plugin}",
       "removeFromSet": "Retirer du lot",
       "defaultPluginNote": "Lu comme lot {plugin}, et non avec le plugin par défaut du courtier ({defaultPlugin}). Pour le changer, utilisez « Lu comme » ou le menu ⋮ d'un fichier.",
-      "alsoRecognisedBy": "{file} est aussi reconnu par : {plugins}"
+      "alsoRecognisedBy": "{file} est aussi reconnu par : {plugins}",
+      "partlySelectedBlocks": "Continuer est désactivé tant qu'un lot n'est sélectionné qu'en partie : sélectionnez tout le lot ou désélectionnez-le."
     },
     "parseDetail": {
       "sourceRow": "Ligne du fichier",

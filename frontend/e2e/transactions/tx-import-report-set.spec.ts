@@ -8,9 +8,10 @@
  *   ① Upload  — after the upload the wizard previews each set; an incomplete one keeps the
  *               wizard on step 1 with a warning per missing role, and a second Next goes on.
  *   ② Select  — the set is one card (`report-set-card`): its members, what is missing, the
- *               note on the broker history, the timeline; "upload the missing file" (same
- *               batch) and "exclude from the import". A selected set that is not complete
- *               blocks the analysis (`import-wizard-set-blocks`).
+ *               note on the broker history, the timeline, and "upload the missing file" (same
+ *               batch). A selected set that is not complete blocks the analysis
+ *               (`import-wizard-set-blocks`); its own checkbox (`report-set-select`) leaves it
+ *               out — the card's "exclude from the import" button is gone (step 7, below).
  *   ③ Analyze — the set is ONE row: combined first (`POST /sets/combine`), then the combined
  *               file is parsed; its detail shows the pairing counts of the combine.
  *   ④ Review  — the rows dated before the broker history (H0) are already represented in
@@ -180,8 +181,9 @@
  *
  *   R5-E1 the set ticked (`removeKeepsTheTick`): the statement removed stays ticked, its select empty and offering exactly
  *         the plugins that read it. Parse waits — first behind the set-blocks hint, the custody export alone being an
- *         incomplete set, still ticked; then, the custody export excluded, on the statement's missing plugin alone: no
- *         set-blocks hint, the statement still ticked, Parse still disabled. The custody export ticked again and Danske
+ *         incomplete set, still ticked; then, the custody export unticked with its set's checkbox (step 7), on the
+ *         statement's missing plugin alone: no set-blocks hint, the statement still ticked, Parse still disabled. The
+ *         custody export ticked again — before the statement comes back, so the set is never ticked only in part — and Danske
  *         chosen in the statement's select: the set complete, ticked whole, Parse enabled. Twice, as H-E2: on the bank's
  *         own exports (the statement's select offers Danske alone), and on the dual statement, where the generic CSV reads
  *         the statement too — "no plugin" is then a choice, not the only option: removing is not reading it alone, and the
@@ -195,6 +197,27 @@
  *
  * The plugin-required hint (`importWizard.pluginRequired`) has no testid: where a scenario needs that state alone, it is
  * read by elimination — Parse disabled, no `import-wizard-set-blocks`, and a ticked file whose select holds no plugin.
+ *
+ * Step 7 — the developer's decisions on the card's button and on R6 (plan Step7ButtonAndR6, §0 and §2), written red first:
+ *
+ *   Button  «Exclude from the import» (`report-set-exclude`) is gone. A set that cannot be analysed is left out with its own
+ *           checkbox (`report-set-select`): from 'all' or 'some' one click unticks every member. R4, R5-E1 (both), G-memory
+ *           (alone) and H-E6 untick the set there (`untickSet`) where they clicked the button; what they prove is unchanged,
+ *           and they pass before step 7 too — the checkbox already did this.
+ *   Hint    `import-wizard-set-blocks` stays one element and says why it is there: `data-reason="partly-selected"` while a
+ *           set is ticked only in part (it takes precedence), `"incomplete"` otherwise. R3 reads `incomplete`.
+ *   R6      a set ticked only in part blocks the analysis whatever its preview says: the preview and the combine read the
+ *           set whole, so half of it is never analysed. The user ticks it whole or unticks it; nothing ticks for them.
+ *     R6-E1 a complete pair, ticked; the statement removed from the set (ticked, no plugin: R5); the set unticked, the custody
+ *           export with it; Danske chosen again for the statement, which comes back ticked beside the custody export
+ *           unticked — 'some'. Parse disabled, the hint on `partly-selected`. One click on the set's checkbox unticks it
+ *           whole (no hint); a second ticks it whole (no hint, Parse enabled).
+ *     No R6-E2: the other way into 'some' — an unticked file back into a ticked set — has no path in the wizard. Only a
+ *           ticked single file has a plugin select (step H, R4), a file ticked to get one comes back ticked, and Danske is
+ *           the only report-set plugin, so no other card's «Read as» can move a file into this set.
+ *   No other scenario here brings a file back into a set with a tick different from the set's: G-B, H-E2 (both), H-E3 and
+ *   R5-E1 (both) bring a ticked file into a ticked set, R3's uploaded export follows the set's tick, and a reopened
+ *   wizard (G-memory, G-no-memory) ticks nothing.
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
@@ -521,6 +544,17 @@ async function foldCard(card: Locator) {
     const toggle = card.getByTestId('report-set-toggle');
     if ((await toggle.getAttribute('aria-expanded')) === 'true') await toggle.click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+}
+
+/**
+ * Leave a set out of the import with its own checkbox (`report-set-select`) — the only way since step 7 took the card's
+ * "exclude from the import" button away. The checkbox is a toggle: from 'all' or 'some' one click unticks every member,
+ * from 'none' it would tick them all, so the state is asked first (rule 14), and the call ends on the state it promises.
+ */
+async function untickSet(card: Locator, message = 'the set is unticked, every member with it') {
+    await expect(card, 'the set is ticked, at least in part, before it is unticked').toHaveAttribute('data-selected', /^(all|some)$/);
+    await card.getByTestId('report-set-select').click();
+    await expect(card, message).toHaveAttribute('data-selected', 'none', {timeout: 5_000});
 }
 
 function currentStep(page: Page): Locator {
@@ -981,9 +1015,9 @@ async function runMemberAction(page: Page, card: Locator, role: string, fileId: 
  * statement. It leaves the card and stays ticked with no plugin — not even one a single-file plugin could give it — and its
  * select offers exactly the plugins that read it, its `compatible_plugins`, the set's own among them. Parse waits: first
  * behind the set-blocks hint (the custody export alone is an incomplete set, still ticked), then — the custody export
- * excluded — on the statement's missing plugin alone: no set-blocks hint, the statement still ticked, Parse still disabled.
- * The custody export ticked again, Danske chosen in the statement's select puts it back: the set complete, ticked whole,
- * Parse enabled.
+ * unticked with its set's checkbox (step 7) — on the statement's missing plugin alone: no set-blocks hint, the statement
+ * still ticked, Parse still disabled. The custody export ticked again, Danske chosen in the statement's select puts it
+ * back: the set complete, ticked whole, Parse enabled.
  */
 async function removeKeepsTheTick(page: Page, brokerId: number, custody: UploadedInfo, cash: UploadedInfo, names: PluginNames) {
     const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
@@ -1007,16 +1041,16 @@ async function removeKeepsTheTick(page: Page, brokerId: number, custody: Uploade
     await expect(page.getByTestId('import-wizard-set-blocks'), 'a ticked set that is not complete blocks the analysis').toBeVisible();
     await expect(parse).toBeDisabled();
 
-    // Then on the statement alone. The custody export excluded, no set blocks — and Parse still waits: the only ticked file
-    // has no plugin. The plugin-required hint has no testid, so that state is read by elimination.
-    await card.getByTestId('report-set-exclude').click();
-    await expect(card, 'the custody export is excluded from the import').toHaveAttribute('data-selected', 'none', {timeout: 5_000});
+    // Then on the statement alone. The custody export unticked with its set's checkbox, no set blocks — and Parse still
+    // waits: the only ticked file has no plugin. The plugin-required hint has no testid, so that state is read by elimination.
+    await untickSet(card, 'the custody export is unticked, its set with it');
     await expect(page.getByTestId('import-wizard-set-blocks'), 'no ticked set blocks any more').toHaveCount(0);
-    await expect(cashCheckbox, 'excluding the set leaves the statement ticked').toHaveAttribute('data-state', 'checked');
+    await expect(cashCheckbox, 'unticking the set leaves the statement ticked').toHaveAttribute('data-state', 'checked');
     await expect(parse, 'a ticked file with no plugin holds the analysis back').toBeDisabled();
 
-    // The custody export ticked again. The statement's select offers exactly what reads it — the set's plugin among them —
-    // and Danske chosen there puts the statement back in the set.
+    // The custody export ticked again — first: the statement coming back into an unticked set would leave it ticked only
+    // in part, which blocks the analysis (R6-E1). The statement's select offers exactly what reads it — the set's plugin
+    // among them — and Danske chosen there puts the statement back in the set.
     await card.getByTestId('report-set-select').click();
     await expect(card, 'the custody export is ticked again').toHaveAttribute('data-selected', 'all', {timeout: 5_000});
     const select = singleRow(page, brokerId, cash.file_id).getByTestId('import-plugin-select');
@@ -1461,7 +1495,10 @@ test.describe('Import Wizard — report sets', () => {
         await expect(card.getByTestId('report-set-upload-missing')).toBeVisible();
         const parse = page.getByTestId('import-wizard-parse');
         await expect(parse).toBeDisabled();
-        await expect(page.getByTestId('import-wizard-set-blocks')).toBeVisible();
+        const setBlocks = page.getByTestId('import-wizard-set-blocks');
+        await expect(setBlocks).toBeVisible();
+        // Step 7: the hint says why it is there — a ticked set that is not complete, nothing ticked only in part.
+        await expect(setBlocks, 'the set-blocks hint names its reason: an incomplete set').toHaveAttribute('data-reason', 'incomplete');
 
         // "Upload the missing file": same broker, same batch.
         const input = card.getByTestId('report-set-upload-input');
@@ -1483,7 +1520,7 @@ test.describe('Import Wizard — report sets', () => {
         await expect(parse).toBeEnabled();
     });
 
-    test('R4: excluding an incomplete set unblocks the analysis of the file uploaded with it', async ({page}) => {
+    test('R4: unticking an incomplete set unblocks the analysis of the file uploaded with it', async ({page}) => {
         test.setTimeout(90_000);
         const brokerId = await startOnOwnedBroker(page, 'R4');
 
@@ -1529,8 +1566,8 @@ test.describe('Import Wizard — report sets', () => {
         await expect(parse).toBeDisabled();
         await expect(page.getByTestId('import-wizard-set-blocks')).toBeVisible();
 
-        await card.getByTestId('report-set-exclude').click();
-        await expect(card).toHaveAttribute('data-selected', 'none', {timeout: 5_000});
+        // Step 7: the set's own checkbox leaves it out — the card has no "exclude from the import" button any more.
+        await untickSet(card);
         await expect(page.getByTestId('import-wizard-set-blocks')).toHaveCount(0);
         await expect(parse).toBeEnabled();
         await expect(genericCheckbox).toHaveAttribute('data-state', 'checked');
@@ -2017,12 +2054,12 @@ test.describe('Import Wizard — report sets', () => {
         await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
         await openCard(card);
 
-        // B: the statement read alone with the generic CSV; the custody export alone is excluded from this import.
+        // B: the statement read alone with the generic CSV; the custody export alone, an incomplete set, is left out of this
+        // import with its set's checkbox (step 7).
         await runMemberAction(page, card, 'cash', cash.file_id, `read-alone-${GENERIC}`);
         await expect(card.locator('[data-testid="report-set-missing"][data-role="cash"]')).toBeVisible({timeout: 15_000});
         await expectSelectedSingle(page, brokerId, cash.file_id, names.generic, names.danske);
-        await card.getByTestId('report-set-exclude').click();
-        await expect(card).toHaveAttribute('data-selected', 'none', {timeout: 5_000});
+        await untickSet(card);
 
         // The analysis: one parse, of the statement alone, with the generic CSV; no combine.
         const parse = page.getByTestId('import-wizard-parse');
@@ -2230,10 +2267,10 @@ test.describe('Import Wizard — report sets', () => {
         await expect(otherCheckbox, 'the other file is unticked').toHaveAttribute('data-state', 'unchecked');
         await expect(page.getByTestId(`dt-row-checkbox-${cash.file_id}`), 'the statement stays ticked').toHaveAttribute('data-state', 'checked');
 
-        // The wizard agrees. The custody export, an incomplete set by itself, is excluded; what is analysed is the statement, alone.
+        // The wizard agrees. The custody export, an incomplete set by itself, is unticked with its set's checkbox (step 7);
+        // what is analysed is the statement, alone.
         await expect(card).toHaveAttribute('data-set-status', 'incomplete', {timeout: 15_000});
-        await card.getByTestId('report-set-exclude').click();
-        await expect(card).toHaveAttribute('data-selected', 'none', {timeout: 5_000});
+        await untickSet(card);
         const parse = page.getByTestId('import-wizard-parse');
         await expect(parse, 'the statement is still selected, with its plugin').toBeEnabled({timeout: 10_000});
         const stopRecording = recordJsonPosts(page, (pathname) => pathname === COMBINE_PATH || PARSE_PATH.test(pathname));
@@ -2327,5 +2364,64 @@ test.describe('Import Wizard — report sets', () => {
         await expect(card).toHaveAttribute('data-set-status', 'incomplete', {timeout: 15_000});
         await expect(card, 'the set left keeps its tick: none').toHaveAttribute('data-selected', 'none');
         await expect(page.getByTestId('import-wizard-parse'), 'nothing is ticked: nothing to analyse').toBeDisabled();
+    });
+
+    // -----------------------------------------------------------------------
+    // Step 7 — R6: a set ticked only in part waits (plan Step7ButtonAndR6, §0 and §2)
+    // -----------------------------------------------------------------------
+
+    test('R6-E1 (step 7): a set ticked only in part blocks the analysis, complete as it is — the statement back, ticked, in its unticked set; the hint names the reason; the set’s checkbox unticks it whole, then ticks it whole', async ({page}) => {
+        test.setTimeout(120_000);
+        const names = await pluginNames(page);
+        // The samples themselves: the custody export, and the statement as the bank exports it, which only Danske reads.
+        const brokerId = await startOnOwnedBroker(page, 'R6-E1');
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, CASH_CSV]);
+        const custody = uploadNamed(uploaded, 'danske_bank-custody.xlsx');
+        const cash = uploadNamed(uploaded, 'danske_bank-cash.csv');
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        expect(cash.compatible_plugins ?? [], 'premise: Danske reads the statement, so its select can bring it back').toContain(DANSKE);
+        const card = setCard(page, brokerId, batchId);
+        await expect(card).toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await expect(card, 'premise: the set is ticked whole').toHaveAttribute('data-selected', 'all');
+        const parse = page.getByTestId('import-wizard-parse');
+        await expect(parse, 'premise: the complete set, ticked, can be analysed').toBeEnabled({timeout: 5_000});
+        await openCard(card);
+
+        // Removed from the set, the statement keeps its tick with no plugin (R5); the custody export alone is an incomplete set.
+        await runMemberAction(page, card, 'cash', cash.file_id, 'remove-from-set');
+        await expect(card.locator(`tr[data-row-id="${cash.file_id}"]`), 'the card no longer lists the statement').toHaveCount(0, {timeout: 15_000});
+        await expectSelectedSingleWithoutPlugin(page, brokerId, cash.file_id, names);
+        await expect(card, 'the custody export alone: the set misses its statement').toHaveAttribute('data-set-status', 'incomplete', {timeout: 15_000});
+
+        // The set unticked with its own checkbox: the custody export goes with it, the statement stays ticked.
+        await untickSet(card, 'the custody export is unticked, its set with it');
+        const cashCheckbox = page.getByTestId(`dt-row-checkbox-${cash.file_id}`);
+        await expect(cashCheckbox, 'unticking the set leaves the statement ticked').toHaveAttribute('data-state', 'checked');
+
+        // Danske chosen again for the statement: back in the set, ticked as it was, beside the custody export still unticked.
+        await chooseSinglePlugin(page, brokerId, cash.file_id, DANSKE);
+        await expect(roleRow(card, 'cash', cash.file_id), 'the statement is back in the cash table of the card').toBeVisible({timeout: 15_000});
+        await expect(roleRow(card, 'custody', custody.file_id), 'beside the custody export').toBeVisible();
+        await expect(cashCheckbox, 'and the statement is no single file').toHaveCount(0);
+        // Barrier: the preview of the set as it is now — both members — is in, so nothing below reads a preview in flight.
+        await expect(card, 'with both members the set is complete again').toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        await expect(card, 'nothing ticked the custody export for the user: the set is ticked only in part').toHaveAttribute('data-selected', 'some');
+
+        // R6: the preview and the combine read a set whole, so half a set is never analysed. Parse waits, and the hint says why.
+        await expect(parse, 'a set ticked only in part holds the analysis back, complete as it is').toBeDisabled();
+        const setBlocks = page.getByTestId('import-wizard-set-blocks');
+        await expect(setBlocks, 'the set-blocks hint is shown').toBeVisible();
+        await expect(setBlocks, 'it names its reason: a set ticked only in part').toHaveAttribute('data-reason', 'partly-selected');
+
+        // The set's checkbox resolves it. From 'some' one click unticks the whole set: nothing blocks, nothing to analyse.
+        await untickSet(card);
+        await expect(setBlocks, 'no ticked set blocks any more').toHaveCount(0);
+        await expect(parse, 'nothing is ticked: nothing to analyse').toBeDisabled();
+
+        // A second click ticks it whole: nothing blocks, and the set can be analysed.
+        await card.getByTestId('report-set-select').click();
+        await expect(card, 'the set is ticked whole').toHaveAttribute('data-selected', 'all', {timeout: 5_000});
+        await expect(parse, 'the set, whole and ticked, can be analysed').toBeEnabled({timeout: 10_000});
+        await expect(setBlocks).toHaveCount(0);
     });
 });

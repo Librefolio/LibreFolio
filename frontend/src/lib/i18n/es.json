@@ -780,9 +780,8 @@
       "unrecognised": "No reconocidos",
       "historyFirst": "Primera importación de este broker: al final proponemos el saldo y las posiciones al {date}; a partir de ahí se importa cada movimiento.",
       "historyLater": "LibreFolio ya tiene el historial de este broker desde el {date}: los movimientos ya presentes aparecerán como duplicados, y los anteriores no se vuelven a importar.",
-      "exclude": "Excluir de la importación",
       "selectedCount": "{sets} conjunto(s) y {n} archivo(s) seleccionado(s) de {b} broker(s)",
-      "incompleteBlocks": "Continuar está desactivado mientras un conjunto seleccionado esté incompleto: sube el archivo que falta o exclúyelo.",
+      "incompleteBlocks": "Continuar está desactivado mientras un conjunto seleccionado esté incompleto: sube el archivo que falta o deselecciona el conjunto.",
       "step1Missing": "{plugin} también necesita: {role} ({ext}).",
       "step1MissingHint": "Suéltalo aquí: se une al mismo conjunto. También puedes continuar: el conjunto aparecerá incompleto.",
       "analyzeRowLabel": "Conjunto del {date} · combinado ({n} archivos)",
@@ -899,7 +898,8 @@
       "readAloneWith": "Leer solo con {plugin}",
       "removeFromSet": "Quitar del conjunto",
       "defaultPluginNote": "Leído como conjunto {plugin}, no con el plugin predeterminado del bróker ({defaultPlugin}). Para cambiarlo, usa «Leído como» o el menú ⋮ de un archivo.",
-      "alsoRecognisedBy": "{file} también es reconocido por: {plugins}"
+      "alsoRecognisedBy": "{file} también es reconocido por: {plugins}",
+      "partlySelectedBlocks": "Continuar está desactivado mientras un conjunto esté seleccionado solo en parte: selecciona todo el conjunto o deselecciónalo."
     },
     "parseDetail": {
       "sourceRow": "Línea del archivo",

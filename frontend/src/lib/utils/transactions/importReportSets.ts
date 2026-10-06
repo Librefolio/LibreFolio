@@ -231,9 +231,15 @@ export function buildParseUnits(selected: SelectedFileLike[], sets: ReportSetGro
     return units;
 }
 
-/** True when a selected set cannot be analysed yet: its preview is still running, failed, or says it is incomplete. */
+/**
+ * True when a selected set cannot be analysed yet: it is ticked only in part (R6 — it waits until it
+ * is ticked whole or unticked, nothing ticks it for the user), or its preview is still running,
+ * failed, or says it is incomplete.
+ */
 export function setBlocksAnalysis(set: ReportSetGroup, selectedIds: ReadonlySet<string>, state?: SetPreviewState): boolean {
-    if (setSelectionState(set, selectedIds) === 'none') return false;
+    const selection = setSelectionState(set, selectedIds);
+    if (selection === 'none') return false;
+    if (selection === 'some') return true;
     return !(state?.status === 'ready' && state.preview?.complete === true);
 }
 

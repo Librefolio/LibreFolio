@@ -6,8 +6,9 @@
   row with its card: the files of each role in a table, ordered by the period they cover; what
   is missing and for which period; a timeline of the files, of the gaps between them and of the
   broker history LibreFolio already holds, each with an infobox; the plugin's notices; and the
-  actions that make the set importable — upload the missing export into the same set, or
-  exclude the set from this import.
+  actions that make the set importable — upload the missing export into the same set. To leave a
+  set out of this import the user unticks it; a set ticked only in part blocks the analysis until
+  it is ticked whole or unticked (R6), and nothing ticks it for the user.
 
   The user chooses how the set is read (phase G): «Read as» in the header switches to another
   report-set plugin that reads every member, or reads the files one by one; a file's row menu
@@ -59,7 +60,6 @@
         onToggleSelected: () => void;
         onToggleExpanded: () => void;
         onUploadMissing: (roleCode: string, file: globalThis.File) => void;
-        onExclude: () => void;
         onPreviewFile: (fileId: string) => void;
         onDeleteFile: (file: SetFileInfo) => void;
         /** The plugin catalogue: names, and which plugins read report sets. */
@@ -74,13 +74,12 @@
         onRemoveFromSet: (fileId: string) => void;
     }
 
-    let {set, plugin, previewState, selection, expanded, analysed, uploadingRole, onToggleSelected, onToggleExpanded, onUploadMissing, onExclude, onPreviewFile, onDeleteFile, plugins, brokerDefaultPlugin, onReadAs, onReadAlone, onRemoveFromSet}: Props = $props();
+    let {set, plugin, previewState, selection, expanded, analysed, uploadingRole, onToggleSelected, onToggleExpanded, onUploadMissing, onPreviewFile, onDeleteFile, plugins, brokerDefaultPlugin, onReadAs, onReadAlone, onRemoveFromSet}: Props = $props();
 
     let preview = $derived(previewState?.preview ?? null);
     let status = $derived<'loading' | 'complete' | 'incomplete' | 'error'>(!previewState || previewState.status === 'loading' ? 'loading' : previewState.status === 'error' ? 'error' : previewState.preview?.complete ? 'complete' : 'incomplete');
     let roles = $derived<SetRoleInfo[]>(plugin?.report_roles ?? []);
     let missingByRole = $derived(new Map((preview?.missing ?? []).map((item) => [item.role, item])));
-    let blocks = $derived(selection !== 'none' && status !== 'complete');
     let unrecognised = $derived((preview?.members ?? []).filter((member) => !member.role));
     let timeline = $derived(
         preview
@@ -117,14 +116,18 @@
 
     const inputs: Record<string, HTMLInputElement | undefined> = $state({});
 
-    /** `indeterminate` is a DOM property, not an attribute: a partly selected set shows the dash. */
-    function indeterminate(node: HTMLInputElement, value: boolean) {
-        node.indeterminate = value;
-        return {
-            update(next: boolean) {
-                node.indeterminate = next;
-            },
+    /**
+     * `checked` and `indeterminate` are DOM properties, written here on every change of the selection:
+     * a partly selected set shows the dash, and the tick the browser draws on a click never outlives
+     * the wizard's answer (from 'some' the click unticks the whole set, R6).
+     */
+    function selectionState(node: HTMLInputElement, value: 'all' | 'some' | 'none') {
+        const apply = (next: 'all' | 'some' | 'none') => {
+            node.checked = next === 'all';
+            node.indeterminate = next === 'some';
         };
+        apply(value);
+        return {update: apply};
     }
 
     const formatDay = formatIsoDay;
@@ -318,15 +321,7 @@
     data-busy={status === 'loading' || uploadingRole !== null ? 'true' : 'false'}
 >
     <div class="flex items-center gap-2 px-3 py-2">
-        <input
-            type="checkbox"
-            class="h-4 w-4 rounded border-gray-300 text-libre-green focus:ring-libre-green dark:border-gray-600"
-            checked={selection === 'all'}
-            use:indeterminate={selection === 'some'}
-            onchange={onToggleSelected}
-            aria-label={$t('importWizard.reportSet.selectSet')}
-            data-testid="report-set-select"
-        />
+        <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-libre-green focus:ring-libre-green dark:border-gray-600" use:selectionState={selection} onchange={onToggleSelected} aria-label={$t('importWizard.reportSet.selectSet')} data-testid="report-set-select" />
         <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" onclick={onToggleExpanded} aria-expanded={expanded} data-testid="report-set-toggle">
             {#if expanded}
                 <ChevronDown size={14} class="shrink-0 text-gray-400" />
@@ -547,14 +542,6 @@
                         <a class="ml-1 text-libre-green hover:underline" href={plugin.docs_url} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExportBoth')}</a>
                     {/if}
                 </p>
-            {/if}
-
-            {#if blocks}
-                <div class="flex items-center justify-end">
-                    <button type="button" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-slate-800" onclick={onExclude} data-testid="report-set-exclude">
-                        {$t('importWizard.reportSet.exclude')}
-                    </button>
-                </div>
             {/if}
         </div>
     {/if}
