@@ -39,7 +39,7 @@ With $k = 2$, if returns were normally distributed the price would stay inside t
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 20 | SMA window for expected value. |
+| Period ($N$) | `period` | 20 | SMA window for expected value, in sessions. |
 | Multiplier ($k$) | `multiplier` | 2 | Number of standard deviations. |
 
 ---

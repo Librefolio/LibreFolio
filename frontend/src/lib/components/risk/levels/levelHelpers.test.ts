@@ -1,5 +1,10 @@
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
 
+import {setupI18n} from '$test/component';
+import {CODE_EQUAL_ICU_WARNING_KEYS, icuWarningKeys, plausibleParams, type WarningParams} from '$test/riskWarningCatalogue';
+import {_} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
@@ -15,11 +20,13 @@ import {
     degradedResults,
     resultErrorCodes,
     resultReasons,
+    type ResultReason,
     translateErrorCode,
     leadDivergence,
     lossMagnitude,
     requiredRecovery,
     uncoveredWeight,
+    warningSentence,
 } from './levelHelpers';
 
 /** A successful result carrying `output`, shaped like the API's. */
@@ -275,8 +282,153 @@ describe('buildConcentration', () => {
 });
 
 describe('uncoveredWeight', () => {
-    it('reads the residual that absorbs cash and every unpriceable holding', () => {
-        expect(uncoveredWeight(ok('contribution', {kind: 'contribution', cash_weight: 0.17}))).toBeCloseTo(0.17, 10);
+    /**
+     * A `risk_contribution` answer as L2 receives it; `partial` is what an exclusion makes it.
+     *
+     * `cash_weight` is the zero-return residual — true cash, value in transit, and every
+     * holding left without a price series — and `excluded_weight` is that last part alone.
+     * The card splits the one into the other, so the reader can tell an allocation from a
+     * modelling gap. Every weight here is invented.
+     */
+    function contribution(output: Record<string, unknown>, status: 'ok' | 'partial' | 'unavailable' | 'failed' = 'ok'): RiskAnalyticResult {
+        return {analytic_code: 'risk_contribution', instance_id: 'base-current_composition-risk_contribution', status, output: {kind: 'contribution', ...output}} as unknown as RiskAnalyticResult;
+    }
+
+    /** The same two fields as `asset_risk_return` publishes them: L3 reads its residual through this helper too. */
+    function riskReturn(output: Record<string, unknown>, status: 'ok' | 'partial' = 'ok'): RiskAnalyticResult {
+        return {analytic_code: 'asset_risk_return', instance_id: 'base-current_composition-asset_risk_return', status, output: {kind: 'risk_return', ...output}} as unknown as RiskAnalyticResult;
+    }
+
+    it('splits the uncovered share into the holdings left without a price and the cash that remains', () => {
+        expect(uncoveredWeight(contribution({cash_weight: 0.25, excluded_weight: 0.1})), 'the residual was not split: the holdings the model could not price still read as cash').toStrictEqual({total: 0.25, unpriced: 0.1, cash: expect.closeTo(0.15, 12)});
+        // A residual made only of unpriced holdings — a slice carries no cash — is none of it cash.
+        expect(uncoveredWeight(contribution({cash_weight: 0.1, excluded_weight: 0.1})), 'the whole residual is unpriced, yet part of it was called cash').toStrictEqual({total: 0.1, unpriced: 0.1, cash: 0});
+    });
+
+    it("states the total as the backend's residual itself, never as the sum of its parts", () => {
+        // In binary floating point 0.1 + (0.45 − 0.1) is 0.44999999999999996: a total rebuilt
+        // from its parts would contradict the residual the backend published, by one bit.
+        expect(0.1 + (0.45 - 0.1), 'guard: these weights add back exactly, so the pin below could not tell the residual from a sum').not.toBe(0.45);
+        expect(uncoveredWeight(contribution({cash_weight: 0.45, excluded_weight: 0.1}))).toStrictEqual({total: 0.45, unpriced: 0.1, cash: expect.closeTo(0.35, 12)});
+    });
+
+    it('reads a partial contribution — what an exclusion makes it — exactly like an ok one', () => {
+        // Refusing `partial` would blank the card in the one case it exists for.
+        expect(uncoveredWeight(contribution({cash_weight: 0.25, excluded_weight: 0.1}, 'partial'))).toStrictEqual({total: 0.25, unpriced: 0.1, cash: expect.closeTo(0.15, 12)});
+    });
+
+    it('takes a zero excluded weight as a known zero: all of the uncovered share is cash', () => {
+        // Zero is a measurement here, not a missing value — and the only case the card may caption "all cash".
+        expect(uncoveredWeight(contribution({cash_weight: 0.25, excluded_weight: 0}))).toStrictEqual({total: 0.25, unpriced: 0, cash: 0.25});
+        expect(uncoveredWeight(contribution({cash_weight: 0, excluded_weight: 0}))).toStrictEqual({total: 0, unpriced: 0, cash: 0});
+    });
+
+    it('never states a negative cash when the excluded weight overshoots the residual by float noise', () => {
+        // Σ excluded weights and 1 − Σ usable weights are summed apart, so they can disagree
+        // in the last bit. A negative cash would render as "−0%", or worse.
+        const overshoot = 0.1 + 0.2;
+        expect(overshoot, 'guard: the excluded weight does not overshoot the residual, so the clamp below is not exercised').toBeGreaterThan(0.3);
+        expect(uncoveredWeight(contribution({cash_weight: 0.3, excluded_weight: overshoot}))).toStrictEqual({total: 0.3, unpriced: expect.closeTo(0.3, 12), cash: 0});
+    });
+
+    /*
+     * The derived cash is cleaned at the risk service's own weight tolerance, 1e-9
+     * (`services/risk/service.py:515` and `:524`): a difference thinner than that is
+     * float noise, and a card stating it would caption a sliver of cash nobody holds.
+     * Only the derived figure is cleaned — `total` and `unpriced` are published
+     * numbers and stay exactly as the payload states them.
+     */
+    it('reads what the excluded holdings leave of the residual, thinner than the tolerance, as no cash at all', () => {
+        // 1 − Σ usable weights and Σ excluded weights, summed apart, disagree by 5.55e-17.
+        expect(uncoveredWeight(contribution({cash_weight: 0.30000000000000004, excluded_weight: 0.3}))).toStrictEqual({total: 0.30000000000000004, unpriced: 0.3, cash: 0});
+    });
+
+    it('reads the float residue of a fully invested portfolio as no cash, and still states the total exactly', () => {
+        // 1 − 0.9999999999999999 is 2⁻⁵³: weights that sum to one leave this behind.
+        expect(uncoveredWeight(contribution({cash_weight: 1.1102230246251565e-16, excluded_weight: 0}))).toStrictEqual({total: 1.1102230246251565e-16, unpriced: 0, cash: 0});
+    });
+
+    it('draws the line at the tolerance itself: just above 1e-9 is cash, just under it is noise', () => {
+        expect(uncoveredWeight(contribution({cash_weight: 1.1e-9, excluded_weight: 0})), 'just above the tolerance').toStrictEqual({total: 1.1e-9, unpriced: 0, cash: 1.1e-9});
+        expect(uncoveredWeight(contribution({cash_weight: 9e-10, excluded_weight: 0})), 'just under the tolerance').toStrictEqual({total: 9e-10, unpriced: 0, cash: 0});
+    });
+
+    it("keeps a residual of exactly 1e-9 as cash: the line is strict, as in the service's in-transit check", () => {
+        // `service.py` reads `abs(...) < 1e-9` as noise, so exactly 1e-9 is not.
+        expect(uncoveredWeight(contribution({cash_weight: 1e-9, excluded_weight: 0}))).toStrictEqual({total: 1e-9, unpriced: 0, cash: 1e-9});
+    });
+
+    it('keeps real cash above the tolerance: the cleaning must not eat an allocation', () => {
+        expect(uncoveredWeight(contribution({cash_weight: 0.001, excluded_weight: 0}))).toStrictEqual({total: 0.001, unpriced: 0, cash: 0.001});
+    });
+
+    it('states both published weights as published — the excluded one uncapped, even above the residual — and cleans only the derived cash', () => {
+        // Negative true cash, which the service refuses upstream: the two weights are then not
+        // nested, and capping the excluded one at the residual would rewrite a published number.
+        const split = uncoveredWeight(contribution({cash_weight: 0.2, excluded_weight: 0.25}));
+        expect(split?.total, 'total').toBe(0.2);
+        expect(split?.unpriced, 'unpriced, as published').toBe(0.25);
+        expect(split?.cash, 'cash').toBe(0);
+    });
+
+    it('states a dust holding without a price as published, however thin: the card must not deny the asset the notice badges', () => {
+        // Both published weights sit under the tolerance and stay exactly as published;
+        // only the cash derived from them is cleaned.
+        expect(uncoveredWeight(contribution({cash_weight: 5e-10, excluded_weight: 5e-10}))).toStrictEqual({total: 5e-10, unpriced: 5e-10, cash: 0});
+    });
+
+    // L3 reads the same residual off `asset_risk_return` (developer's decision of 29/09,
+    // 23:35: one helper, the twins deleted). A check on `kind` would blank that card.
+    it('reads an asset_risk_return output exactly like a risk_contribution one, total and split included', () => {
+        expect(uncoveredWeight(riskReturn({portfolio_volatility: 0.13, portfolio_expected_annual_return: 0.07, cash_weight: 0.25, excluded_weight: 0.1, items: []})), 'the risk/return residual was not read').toStrictEqual({
+            total: 0.25,
+            unpriced: 0.1,
+            cash: expect.closeTo(0.15, 12),
+        });
+        const outputs: Array<[string, Record<string, unknown>]> = [
+            ['a known split', {cash_weight: 0.25, excluded_weight: 0.1}],
+            ['an unknown split', {cash_weight: 0.25}],
+            ['a residual of excluded holdings only', {cash_weight: 0.1, excluded_weight: 0.1}],
+        ];
+        for (const [label, output] of outputs) {
+            expect(uncoveredWeight(riskReturn(output)), label).toStrictEqual(uncoveredWeight(contribution(output)));
+            expect(uncoveredWeight(riskReturn(output, 'partial')), `${label}, partial`).toStrictEqual(uncoveredWeight(contribution(output, 'partial')));
+        }
+    });
+
+    it('keeps the total but will not split it when the excluded weight is missing or unusable', () => {
+        // An unknown split is not "all cash": captioned so, it would hide exactly the
+        // holdings the split exists to name.
+        const unusable: Array<[string, Record<string, unknown>]> = [
+            ['missing', {}],
+            ['null', {excluded_weight: null}],
+            ['text', {excluded_weight: '0.1'}],
+            ['NaN', {excluded_weight: Number.NaN}],
+            ['infinite', {excluded_weight: Number.POSITIVE_INFINITY}],
+            ['negative', {excluded_weight: -0.05}],
+        ];
+        for (const [label, extra] of unusable) {
+            expect(uncoveredWeight(contribution({cash_weight: 0.25, ...extra})), `excluded_weight ${label}`).toStrictEqual({total: 0.25, unpriced: null, cash: null});
+        }
+    });
+
+    it('is still null when the residual itself is unusable or the answer is not one, however usable the excluded weight', () => {
+        // The barrier first: every null below would also hold for a helper that never answers.
+        expect(uncoveredWeight(contribution({cash_weight: 0.25, excluded_weight: 0.1})), 'presence barrier: a usable pair was not split, so the nulls below would prove nothing').toStrictEqual({total: 0.25, unpriced: 0.1, cash: expect.closeTo(0.15, 12)});
+        const refused: Array<[string, RiskAnalyticResult | null]> = [
+            ['no result', null],
+            ['cash_weight missing', contribution({excluded_weight: 0.1})],
+            ['cash_weight null', contribution({cash_weight: null, excluded_weight: 0.1})],
+            ['cash_weight text', contribution({cash_weight: '0.25', excluded_weight: 0.1})],
+            ['cash_weight NaN', contribution({cash_weight: Number.NaN, excluded_weight: 0.1})],
+            ['cash_weight infinite', contribution({cash_weight: Number.POSITIVE_INFINITY, excluded_weight: 0.1})],
+            ['cash_weight negative', contribution({cash_weight: -0.05, excluded_weight: 0.1})],
+            ['a stale output on an unavailable result', contribution({cash_weight: 0.25, excluded_weight: 0.1}, 'unavailable')],
+            ['a stale output on a failed result', contribution({cash_weight: 0.25, excluded_weight: 0.1}, 'failed')],
+        ];
+        for (const [label, result] of refused) {
+            expect(uncoveredWeight(result), label).toBeNull();
+        }
     });
 
     it('is absent, not zero, when the analytic never ran', () => {
@@ -470,6 +622,544 @@ describe('resultReasons', () => {
     it('leaves an outright failure out of the verbatim list', () => {
         const failed = {analytic_code: 'correlation', instance_id: 'a', status: 'failed', error: {code: 'incompatible_scope', message: 'Not supported.'}} as unknown as RiskAnalyticResult;
         expect(resultReasons([failed])).toEqual([]);
+    });
+
+    /**
+     * The notice above the levels draws one badge per excluded asset, in a tone set by
+     * the cause: informative for a permanent one (`no_price_source`), amber otherwise.
+     * Both come from the warning's `details` — `reason`, and the ids the backend names
+     * the assets from (`asset_ids`, or a lone `asset_id`) — and the grouping by
+     * sentence must not lose them. A field the helper cannot state for certain is
+     * **absent**, never `undefined`, so an entry without one keeps the exact shape the
+     * one-argument callers pin today.
+     *
+     * Every absence below comes with a presence barrier in the same call: "absent" also
+     * holds for a helper that never reads `details` at all.
+     */
+    describe('the cause and the assets behind each sentence', () => {
+        /** The backend's one English sentence for every `assets_excluded` warning, whatever its cause. */
+        const EXCLUDED_SENTENCE = 'One or more scope assets were excluded from risk calculations.';
+        /** The backend's one English sentence for every asset a hypothetical shock treated as "Other". */
+        const FALLBACK_SENTENCE = 'Sector or geography metadata was unavailable; the asset was treated as Other at 100%.';
+
+        function excluded(details: unknown, message = EXCLUDED_SENTENCE): unknown {
+            return {code: 'assets_excluded', message, details};
+        }
+
+        /** The entry of one sentence, found by its sentence rather than by its position. */
+        function entryOf(reasons: ResultReason[], message: string): ResultReason | undefined {
+            return reasons.find((reason) => reason.message === message);
+        }
+
+        /** The one entry that warnings sharing a sentence collapse into, each carried by its own result. */
+        function mergedEntry(detailsList: unknown[]): ResultReason | undefined {
+            const reasons = resultReasons(detailsList.map((details, index) => warned(`r${index}`, [excluded(details)])));
+            expect(reasons, 'guard: the warnings did not share one sentence, so nothing was merged').toHaveLength(1);
+            return reasons[0];
+        }
+
+        it('carries the cause and the assets of a warning beside its sentence, the ids in the order they came', () => {
+            const reasons = resultReasons([warned('a', [excluded({asset_ids: [12, 11], reason: 'no_price_source'})])]);
+            expect(reasons, 'the cause (which picks the tone) or the ids (one badge each) were lost to the grouping').toStrictEqual([{key: `assets_excluded:${EXCLUDED_SENTENCE}`, message: EXCLUDED_SENTENCE, occurrences: 1, reason: 'no_price_source', assetIds: [12, 11]}]);
+        });
+
+        it('reads the one asset a warning names under asset_id, and prefers the list when a warning carries both', () => {
+            // The backend's own rule for the names in the sentence (`_warning_asset_ids`).
+            const single = 'Synthetic: one asset, named alone.';
+            const both = 'Synthetic: a list and a single id at once.';
+            const reasons = resultReasons([warned('a', [excluded({asset_id: 7}, single), excluded({asset_ids: [11, 12], asset_id: 7}, both)])]);
+            expect(reasons).toStrictEqual([
+                {key: `assets_excluded:${single}`, message: single, occurrences: 1, assetIds: [7]},
+                {key: `assets_excluded:${both}`, message: both, occurrences: 1, assetIds: [11, 12]},
+            ]);
+        });
+
+        it('states no cause it cannot read: missing, empty, blank or not text, the reason is left out — not set to undefined', () => {
+            const readable = 'Synthetic: a readable reason.';
+            const unreadable: Array<[string, unknown]> = [
+                ['no reason at all', {}],
+                ['an empty reason', {reason: ''}],
+                ['a blank reason', {reason: '   '}],
+                ['a numeric reason', {reason: 3}],
+                ['a null reason', {reason: null}],
+                ['a boolean reason', {reason: true}],
+                ['a reason in a list', {reason: ['no_price_source']}],
+                ['details that are not an object', null],
+            ];
+            const reasons = resultReasons([warned('a', [excluded({reason: 'no_price_source'}, readable), ...unreadable.map(([label, details]) => excluded(details, `Synthetic: ${label}.`))])]);
+
+            expect(entryOf(reasons, readable), 'presence barrier: a readable reason was not carried, so the absences below would prove nothing').toStrictEqual({key: `assets_excluded:${readable}`, message: readable, occurrences: 1, reason: 'no_price_source'});
+            for (const [label] of unreadable) {
+                const message = `Synthetic: ${label}.`;
+                expect(entryOf(reasons, message), label).toStrictEqual({key: `assets_excluded:${message}`, message, occurrences: 1});
+            }
+        });
+
+        it('stores the cause trimmed, so padding neither misses the tone nor splits a merged sentence', () => {
+            // The notice picks its tone by comparing the cause with `no_price_source`: a padded one would miss it.
+            const padded = 'Synthetic: a padded reason.';
+            const reasons = resultReasons([warned('a', [excluded({reason: '  no_price_source '}, padded)])]);
+            expect(entryOf(reasons, padded)).toStrictEqual({key: `assets_excluded:${padded}`, message: padded, occurrences: 1, reason: 'no_price_source'});
+            expect(mergedEntry([{reason: ' no_price_source'}, {reason: 'no_price_source  '}]), 'two paddings of one cause were read as two causes').toStrictEqual({key: `assets_excluded:${EXCLUDED_SENTENCE}`, message: EXCLUDED_SENTENCE, occurrences: 2, reason: 'no_price_source'});
+        });
+
+        it('draws no badge from ids it cannot trust: all or nothing, and no fallback past a list that is there but unusable', () => {
+            const usable = 'Synthetic: a usable list.';
+            const unusable: Array<[string, unknown]> = [
+                ['no ids at all', {}],
+                ['an empty list', {asset_ids: []}],
+                ['a list with a fraction in it', {asset_ids: [11, 1.5]}],
+                ['a list with an id sent as text', {asset_ids: [11, '3']}],
+                ['a list with a boolean in it', {asset_ids: [11, true]}],
+                ['a list with a null in it', {asset_ids: [11, null]}],
+                ['a list that is not a list', {asset_ids: '11, 12'}],
+                ['an unusable list beside a usable single id', {asset_ids: [11, 1.5], asset_id: 7}],
+                ['an empty list beside a usable single id', {asset_ids: [], asset_id: 7}],
+                ['a single id that is a fraction', {asset_id: 7.5}],
+                ['a single id sent as text', {asset_id: '7'}],
+                ['a single id that is null', {asset_id: null}],
+                ['details that are not an object', null],
+            ];
+            const reasons = resultReasons([warned('a', [excluded({asset_ids: [11, 12]}, usable), ...unusable.map(([label, details]) => excluded(details, `Synthetic: ${label}.`))])]);
+
+            expect(entryOf(reasons, usable), 'presence barrier: a usable list was not carried, so the absences below would prove nothing').toStrictEqual({key: `assets_excluded:${usable}`, message: usable, occurrences: 1, assetIds: [11, 12]});
+            for (const [label] of unusable) {
+                const message = `Synthetic: ${label}.`;
+                // Filtering would badge 11 alone and hide the asset the list could not name.
+                expect(entryOf(reasons, message), label).toStrictEqual({key: `assets_excluded:${message}`, message, occurrences: 1});
+            }
+        });
+
+        it('reads a null list as no list at all, as the backend does, and falls back to the single id', () => {
+            // `_warning_asset_ids`: `raw is None` → the single `asset_id`. A list that is there but
+            // unusable, the empty one included, still stops the fallback (pinned just above).
+            const nullList = 'Synthetic: a null list beside a single id.';
+            const reasons = resultReasons([warned('a', [excluded({asset_ids: null, asset_id: 7}, nullList)])]);
+            expect(entryOf(reasons, nullList)).toStrictEqual({key: `assets_excluded:${nullList}`, message: nullList, occurrences: 1, assetIds: [7]});
+        });
+
+        it('keeps the cause and the assets every warning of a merged sentence agrees on, the list as the first one gave it', () => {
+            // The ordinary case: one exclusion, repeated on every result that inherited it.
+            // Same set, told in another order after the first: the entry keeps the first as it came.
+            const entry = mergedEntry([
+                {asset_ids: [12, 11], reason: 'missing_price'},
+                {asset_ids: [11, 12], reason: 'missing_price'},
+                {asset_ids: [11, 12], reason: 'missing_price'},
+            ]);
+            expect(entry, 'a cause or a set of assets that every merged warning shares was dropped, or the list was not the first one as given').toStrictEqual({key: `assets_excluded:${EXCLUDED_SENTENCE}`, message: EXCLUDED_SENTENCE, occurrences: 3, reason: 'missing_price', assetIds: [12, 11]});
+        });
+
+        it('drops the cause of a merged sentence as soon as one warning states another or none, and never takes it back', () => {
+            expect(mergedEntry([{reason: 'missing_price'}, {reason: 'missing_price'}]), 'presence barrier: a cause both warnings agree on was not kept, so the absences below would prove nothing').toStrictEqual({
+                key: `assets_excluded:${EXCLUDED_SENTENCE}`,
+                message: EXCLUDED_SENTENCE,
+                occurrences: 2,
+                reason: 'missing_price',
+            });
+            const disagreements: Array<[string, unknown[]]> = [
+                ['another cause', [{reason: 'no_price_source'}, {reason: 'missing_price'}]],
+                ['a later warning without one', [{reason: 'missing_price'}, {}]],
+                ['a first warning without one', [{}, {reason: 'missing_price'}]],
+                ['a later warning with a blank one', [{reason: 'missing_price'}, {reason: '   '}]],
+                ['agreement again after a warning without one', [{reason: 'missing_price'}, {}, {reason: 'missing_price'}]],
+                ['agreement again after another cause', [{reason: 'missing_price'}, {reason: 'no_price_source'}, {reason: 'missing_price'}]],
+            ];
+            for (const [label, detailsList] of disagreements) {
+                expect(mergedEntry(detailsList), label).toStrictEqual({key: `assets_excluded:${EXCLUDED_SENTENCE}`, message: EXCLUDED_SENTENCE, occurrences: detailsList.length});
+            }
+        });
+
+        it('drops the badges of a merged sentence as soon as one warning names other assets or none, and never takes them back', () => {
+            expect(mergedEntry([{asset_ids: [11, 12]}, {asset_ids: [11, 12]}]), 'presence barrier: a set both warnings agree on was not kept, so the absences below would prove nothing').toStrictEqual({
+                key: `assets_excluded:${EXCLUDED_SENTENCE}`,
+                message: EXCLUDED_SENTENCE,
+                occurrences: 2,
+                assetIds: [11, 12],
+            });
+            const disagreements: Array<[string, unknown[]]> = [
+                ['another set', [{asset_ids: [11, 12]}, {asset_ids: [11, 13]}]],
+                ['a subset', [{asset_ids: [11, 12]}, {asset_ids: [11]}]],
+                ['a superset', [{asset_ids: [11]}, {asset_ids: [11, 12]}]],
+                ['a later warning without ids', [{asset_ids: [11, 12]}, {}]],
+                ['a first warning without ids', [{}, {asset_ids: [11, 12]}]],
+                ['a later warning with an unusable list', [{asset_ids: [11, 12]}, {asset_ids: [11, 1.5]}]],
+                ['agreement again after a warning without ids', [{asset_ids: [11, 12]}, {}, {asset_ids: [11, 12]}]],
+                ['agreement again after another set', [{asset_ids: [11, 12]}, {asset_ids: [13]}, {asset_ids: [11, 12]}]],
+            ];
+            for (const [label, detailsList] of disagreements) {
+                expect(mergedEntry(detailsList), label).toStrictEqual({key: `assets_excluded:${EXCLUDED_SENTENCE}`, message: EXCLUDED_SENTENCE, occurrences: detailsList.length});
+            }
+        });
+
+        it('compares the assets of a merged sentence as a set: a list naming one asset twice still agrees, and the first list is kept as given', () => {
+            // All or nothing takes a list with a repeated id as it is: every element is an integer.
+            expect(mergedEntry([{asset_ids: [11, 11, 12]}, {asset_ids: [12, 11]}]), 'the repeat first').toStrictEqual({key: `assets_excluded:${EXCLUDED_SENTENCE}`, message: EXCLUDED_SENTENCE, occurrences: 2, assetIds: [11, 11, 12]});
+            expect(mergedEntry([{asset_ids: [12, 11]}, {asset_ids: [11, 11, 12]}]), 'the repeat second').toStrictEqual({key: `assets_excluded:${EXCLUDED_SENTENCE}`, message: EXCLUDED_SENTENCE, occurrences: 2, assetIds: [12, 11]});
+        });
+
+        it('decides the cause and the badges apart: verbatim, one fallback sentence per asset keeps its cause and loses its badges', () => {
+            // `hypothetical_metadata_other_fallback` is emitted once per asset under one English
+            // sentence: the cause is the same for all of them, the assets are not.
+            const fallback = (assetId: number) => ({code: 'hypothetical_metadata_other_fallback', message: FALLBACK_SENTENCE, degrades_result: false, details: {asset_id: assetId, dimension: 'sector', reason: 'missing_classification_metadata'}});
+            const reasons = resultReasons([warned('a', [fallback(31), fallback(32)], 'ok')]);
+            expect(reasons).toStrictEqual([{key: `hypothetical_metadata_other_fallback:${FALLBACK_SENTENCE}`, message: FALLBACK_SENTENCE, occurrences: 2, reason: 'missing_classification_metadata'}]);
+        });
+    });
+});
+
+/* ------------------------------------------------- keyed warning sentences --- */
+
+/**
+ * A warning now travels in two forms: the backend's English `message`, and the
+ * same sentence as a catalogue key (`message_i18n_key`) with the values it needs
+ * (`message_params`: names, counts, days). `warningSentence` chooses between the
+ * two, and `resultReasons` lists what it chose.
+ *
+ * **How a worded sentence is asserted without writing one down.** Every expected
+ * sentence is resolved from the *shipped catalogue* through the same `$_`
+ * formatter the components hand in, with the same values — the pattern of
+ * `L4Replay.test.ts`. No English is pinned, so rewording `en.json` moves both
+ * sides together. That makes each comparison only as honest as the lookup behind
+ * it, so the first case guards the two ways it could go vacuous: a key missing
+ * from the catalogue (svelte-i18n echoes the id back, and a helper echoing it too
+ * would "agree"), and a sentence that never received its values (svelte-i18n then
+ * returns the raw ICU source, braces included).
+ *
+ * The named cases below pin one sentence each; the block after them states the
+ * same rule over *every* `risk.warnings` sentence that takes arguments, with the
+ * list and plausible values read off `en.json` at test time by
+ * `$test/riskWarningCatalogue` — the same list `RiskResultFrame.test.ts` renders.
+ */
+type Warning = NonNullable<RiskAnalyticResult['warnings']>[number];
+
+interface KeyedCase {
+    code: string;
+    key: string;
+    params: WarningParams;
+    /** The backend's English sentence for this code, as `message` carries it. */
+    message: string;
+    /** What the worded sentence must visibly carry: the names, and any count, days or share. */
+    carries: string[];
+}
+
+const HOLDING_A = 'Synthetic Holding A';
+const HOLDING_B = 'Synthetic Holding B';
+const HOLDING_C = 'Synthetic Holding C';
+
+/** Emitted once per asset, with the same English sentence for every one of them. */
+const FALLBACK_CASE: KeyedCase = {
+    code: 'hypothetical_metadata_other_fallback',
+    key: 'risk.warnings.hypothetical_metadata_other_fallback',
+    params: {names: HOLDING_A, dimension: 'sector', count: 1},
+    message: 'Sector or geography metadata was unavailable; the asset was treated as Other at 100%.',
+    carries: [HOLDING_A],
+};
+const SLICE_CASE: KeyedCase = {
+    code: 'slice_assets_not_held',
+    key: 'risk.warnings.slice_assets_not_held',
+    params: {count: 2, names: `${HOLDING_A}, ${HOLDING_B}`},
+    message: 'Some requested assets are not held in the selected portfolio scope and were ignored.',
+    carries: [`${HOLDING_A}, ${HOLDING_B}`, '2'],
+};
+/** The code says only `assets_excluded`: the reason lives in the key alone. */
+const EXCLUDED_CASE: KeyedCase = {
+    code: 'assets_excluded',
+    key: 'risk.warnings.assets_excluded_missing_price',
+    params: {count: 3, names: `${HOLDING_A}, ${HOLDING_B}, ${HOLDING_C}`},
+    message: 'One or more scope assets were excluded from risk calculations.',
+    carries: [`${HOLDING_A}, ${HOLDING_B}, ${HOLDING_C}`, '3'],
+};
+const STALE_CASE: KeyedCase = {
+    code: 'historical_replay_assets_excluded',
+    key: 'risk.warnings.historical_replay_excluded_stale_at_start',
+    params: {names: HOLDING_C, treatment: 'omitted_from_replay', days: 37, count: 1},
+    message: 'Historical replay excluded assets quoted before the replay window but with no price in the 37 days before it begins.',
+    carries: [HOLDING_C, '37'],
+};
+/** The one argument formatted as a number (`{covered, number, percent}`), not interpolated as text. */
+const MOSTLY_EXCLUDED_CASE: KeyedCase = {
+    code: 'historical_replay_mostly_excluded',
+    key: 'risk.warnings.historical_replay_mostly_excluded',
+    params: {covered: 0.37},
+    message: 'Historical replay describes only 37% of the portfolio: the rest is excluded.',
+    carries: ['37'],
+};
+const KEYED_CASES: KeyedCase[] = [FALLBACK_CASE, SLICE_CASE, EXCLUDED_CASE, STALE_CASE, MOSTLY_EXCLUDED_CASE];
+
+/** A key no catalogue ships: svelte-i18n answers it with the id itself. */
+const ABSENT_KEY = 'risk.warnings.synthetic_key_added_after_this_build';
+const UNKEYED_CODE = 'synthetic_unkeyed_notice';
+const UNKEYED_MESSAGE = 'A synthetic notice the backend sent without a key.';
+
+function warning(code: string, message: string, key?: string | null, params?: WarningParams, details?: Record<string, unknown>): Warning {
+    return {code, message, ...(key === undefined ? {} : {message_i18n_key: key}), ...(params === undefined ? {} : {message_params: params}), ...(details === undefined ? {} : {details})};
+}
+
+function keyedWarning({code, message, key, params}: KeyedCase, overrides: WarningParams = {}, details?: Record<string, unknown>): Warning {
+    return warning(code, message, key, {...params, ...overrides}, details);
+}
+
+/** A catalogue sentence formatted exactly as a component formats it: `$_` with the warning's values. */
+function resolve(key: string, values: WarningParams): string {
+    return get(_)(key, {values});
+}
+
+/** The catalogue leaf behind a dotted key, read from `en.json` on disk. */
+function enLeaf(key: string): unknown {
+    return key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), en);
+}
+
+describe('warningSentence', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    it('is pinned against keys that exist, resolve, and leak ICU braces when formatted without values', () => {
+        for (const {key, params} of KEYED_CASES) {
+            expect(typeof enLeaf(key), `${key} is missing from en.json`).toBe('string');
+            // On disk is not the same as loaded: a catalogue that never finished
+            // loading echoes every id back, and so would the helper.
+            expect(get(_)(key), `${key} does not resolve through svelte-i18n: the catalogue is not loaded`).not.toBe(key);
+            // The defect's premise, and why these keys were chosen: called without
+            // values, svelte-i18n hands back the raw ICU source.
+            expect(get(_)(key), `${key} has no ICU argument: a raw sentence could not be told from a formatted one`).toContain('{');
+            expect(resolve(key, params), `${key} still carries braces once formatted with its values`).not.toContain('{');
+        }
+        expect(get(_)(ABSENT_KEY), `${ABSENT_KEY} exists after all: the fallback cases below would not be exercised`).toBe(ABSENT_KEY);
+    });
+
+    // `%s` and not `$key`: an object attribute in the title is cut at 40 characters.
+    it.each(KEYED_CASES.map((keyed) => [keyed.key, keyed] as const))('words %s with the names, counts and days the warning carries', (_key, keyed) => {
+        const expected = resolve(keyed.key, keyed.params);
+        for (const value of keyed.carries) {
+            expect(expected, `the ${keyed.key} sentence does not show "${value}": its values never reached the formatter`).toContain(value);
+        }
+        expect(expected, `${keyed.key} formats to the backend sentence itself: nothing here could tell the two branches apart`).not.toBe(keyed.message);
+
+        expect(warningSentence(keyedWarning(keyed), get(_))).toBe(expected);
+    });
+
+    it('falls back to the backend sentence for a key this build does not ship, never to the key', () => {
+        const sentence = warningSentence(warning('synthetic_code_added_later', 'A synthetic sentence only the backend knows.', ABSENT_KEY, {names: HOLDING_A, count: 1}), get(_));
+        expect(sentence).toBe('A synthetic sentence only the backend knows.');
+        expect(sentence).not.toContain('risk.warnings.');
+    });
+
+    it('falls back to the backend sentence, not to raw ICU, when a value the sentence needs is missing', () => {
+        const incomplete: WarningParams = {count: 2}; // `names` is missing
+        // svelte-i18n logs the failed format: the log is the premise, not the subject.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            // What the fallback rests on: a missing value does not throw, it hands
+            // back the raw ICU source — which is what would reach the screen.
+            expect(get(_)(EXCLUDED_CASE.key, {values: incomplete}), 'svelte-i18n no longer returns the raw source on a missing value: re-read the fallback rule').toContain('{');
+
+            const sentence = warningSentence(warning(EXCLUDED_CASE.code, EXCLUDED_CASE.message, EXCLUDED_CASE.key, incomplete), get(_));
+            expect(sentence).toBe(EXCLUDED_CASE.message);
+            expect(sentence).not.toContain('{');
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    // The backend joins its own lists (`", ".join(...)`) before they reach the wire.
+    // One it did not join must read exactly like one it did, not vanish into the
+    // fallback because the formatter found no value.
+    it('joins a list the backend did not join, exactly as the backend joins its own', () => {
+        const listed: Warning = {code: EXCLUDED_CASE.code, message: EXCLUDED_CASE.message, message_i18n_key: EXCLUDED_CASE.key, message_params: {count: 2, names: [HOLDING_A, HOLDING_B]}};
+        expect(warningSentence(listed, get(_))).toBe(resolve(EXCLUDED_CASE.key, {count: 2, names: `${HOLDING_A}, ${HOLDING_B}`}));
+    });
+
+    it('leaves out a value that is neither a scalar nor a list, so the sentence falls back instead of printing it', () => {
+        const nested: Warning = {code: EXCLUDED_CASE.code, message: EXCLUDED_CASE.message, message_i18n_key: EXCLUDED_CASE.key, message_params: {count: 2, names: {first: HOLDING_A}}};
+        // The value is left out, so svelte-i18n logs a failed format: the premise again.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const sentence = warningSentence(nested, get(_));
+            expect(sentence).toBe(EXCLUDED_CASE.message);
+            expect(sentence).not.toContain('[object');
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('shows the backend sentence, trimmed, for a warning that carries no key', () => {
+        for (const key of [undefined, null, '']) {
+            expect(warningSentence(warning(UNKEYED_CODE, `  ${UNKEYED_MESSAGE}  `, key), get(_)), `message_i18n_key: ${JSON.stringify(key)}`).toBe(UNKEYED_MESSAGE);
+        }
+    });
+
+    it('keeps the backend sentence when no translator is handed in', () => {
+        for (const keyed of KEYED_CASES) {
+            expect(warningSentence(keyedWarning(keyed)), keyed.key).toBe(keyed.message);
+        }
+    });
+
+    it('says nothing for a warning that is not there', () => {
+        expect(warningSentence(null, get(_))).toBe('');
+        expect(warningSentence(undefined, get(_))).toBe('');
+        expect(warningSentence(null)).toBe('');
+    });
+
+    it('says nothing, rather than the key, when there is neither a translation nor a sentence', () => {
+        expect(warningSentence(warning(UNKEYED_CODE, '   '), get(_))).toBe('');
+        expect(warningSentence(warning(UNKEYED_CODE, '   '))).toBe('');
+        expect(warningSentence(warning(UNKEYED_CODE, '   ', ABSENT_KEY), get(_))).toBe('');
+    });
+});
+
+describe('warningSentence — every sentence with arguments in the catalogue', () => {
+    /** Stands in for the English `message`; no catalogue sentence reads like it. */
+    const BACKEND_SENTENCE = 'A synthetic backend sentence standing in for the English message.';
+
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    // The case below is what stops the list from passing vacuously: `it.each([])`
+    // collects no test at all, and a property over nothing is green by definition.
+    it('reads its list off the catalogue: never empty, every sentence with braces, the code-equal keys', () => {
+        const keys = icuWarningKeys();
+        expect(keys.length, 'no risk.warnings sentence with arguments was found: the scan reads the wrong node').toBeGreaterThan(0);
+        for (const key of [...CODE_EQUAL_ICU_WARNING_KEYS, ...KEYED_CASES.map((keyed) => keyed.key)]) {
+            expect(keys, `${key} is missing from the scanned list`).toContain(key);
+        }
+        // Completeness: a sentence carrying a brace that the parse found no argument
+        // in would otherwise drop out of the property in silence.
+        for (const [leaf, text] of Object.entries(en.risk.warnings as Record<string, unknown>)) {
+            if (typeof text === 'string' && text.includes('{')) {
+                expect(keys, `risk.warnings.${leaf} has braces but the scan found no argument in it`).toContain(`risk.warnings.${leaf}`);
+            }
+        }
+    });
+
+    // Collected when the file loads, so the list is the catalogue's own on every run
+    // and a key added tomorrow gets its own case without anyone writing one.
+    it.each(icuWarningKeys())('%s is worded with its values, and falls back to the backend sentence without them — never a brace, never a key', (key) => {
+        const params = plausibleParams(key);
+        const expected = resolve(key, params);
+        // The harness first: values that do not complete the sentence would send the
+        // helper to its fallback, and the red would belong to this file, not to it.
+        expect(expected, `the values built for ${key} do not complete its sentence: ${JSON.stringify(params)}`).not.toContain('{');
+        expect(expected, `${key} does not resolve through svelte-i18n`).not.toBe(key);
+
+        const worded = warningSentence(warning('synthetic_code', BACKEND_SENTENCE, key, params), get(_));
+        expect(worded, 'with its values').toBe(expected);
+        expect(worded, 'with its values').not.toContain('{');
+        expect(worded, 'with its values').not.toContain('risk.warnings.');
+
+        const missing: (WarningParams | undefined)[] = [{}, undefined];
+        // svelte-i18n logs every failed format: the log is the premise, not the subject.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            for (const params of missing) {
+                const label = `without values (message_params ${JSON.stringify(params)})`;
+                const fallback = warningSentence(warning('synthetic_code', BACKEND_SENTENCE, key, params), get(_));
+                expect(fallback, label).toBe(BACKEND_SENTENCE);
+                expect(fallback, label).not.toContain('{');
+                expect(fallback, label).not.toContain('risk.warnings.');
+            }
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});
+
+describe('resultReasons — keyed warnings', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    function stressResult(instanceId: string, warnings: Warning[]): RiskAnalyticResult {
+        return {analytic_code: 'stress', instance_id: instanceId, status: 'partial', warnings, output: {kind: 'stress', method: 'hypothetical'}} as unknown as RiskAnalyticResult;
+    }
+
+    /** A result read off the scope's own series (correlation, contribution): the kind that inherits an exclusion. */
+    function scopeResult(instanceId: string, analyticCode: string, warnings: Warning[]): RiskAnalyticResult {
+        return {analytic_code: analyticCode, instance_id: instanceId, status: 'partial', warnings, output: {kind: 'synthetic'}} as unknown as RiskAnalyticResult;
+    }
+
+    it('words each keyed warning through the catalogue and keeps the backend sentence for the rest', () => {
+        const fallback = resolve(FALLBACK_CASE.key, FALLBACK_CASE.params);
+        const excluded = resolve(EXCLUDED_CASE.key, EXCLUDED_CASE.params);
+        const reasons = resultReasons([stressResult('a', [keyedWarning(FALLBACK_CASE), warning(UNKEYED_CODE, UNKEYED_MESSAGE)]), stressResult('b', [keyedWarning(EXCLUDED_CASE)])], get(_));
+        expect(reasons).toStrictEqual([
+            {key: `${FALLBACK_CASE.code}:${fallback}`, message: fallback, occurrences: 1},
+            {key: `${UNKEYED_CODE}:${UNKEYED_MESSAGE}`, message: UNKEYED_MESSAGE, occurrences: 1},
+            {key: `${EXCLUDED_CASE.code}:${excluded}`, message: excluded, occurrences: 1},
+        ]);
+    });
+
+    it('says one worded sentence once, and counts the results that carried it', () => {
+        const slice = resolve(SLICE_CASE.key, SLICE_CASE.params);
+        const reasons = resultReasons([stressResult('a', [keyedWarning(SLICE_CASE)]), stressResult('b', [keyedWarning(SLICE_CASE)])], get(_));
+        expect(reasons).toStrictEqual([{key: `${SLICE_CASE.code}:${slice}`, message: slice, occurrences: 2}]);
+    });
+
+    // The backend emits one fallback warning per asset, each carrying the same
+    // English sentence. Deduplicated verbatim they collapse into a single line and
+    // the reader loses *which* assets were treated as "Other"; worded, the names
+    // differ, so the lines must differ too.
+    it('keeps two assets apart when one key names each of them under the same backend sentence', () => {
+        const first = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_A});
+        const second = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_B});
+        expect(first, 'the two names format alike: the split asserted below would prove nothing').not.toBe(second);
+
+        const reasons = resultReasons([stressResult('a', [keyedWarning(FALLBACK_CASE, {names: HOLDING_A}), keyedWarning(FALLBACK_CASE, {names: HOLDING_B})])], get(_));
+        expect(reasons).toStrictEqual([
+            {key: `${FALLBACK_CASE.code}:${first}`, message: first, occurrences: 1},
+            {key: `${FALLBACK_CASE.code}:${second}`, message: second, occurrences: 1},
+        ]);
+    });
+
+    // The Asset Global callers still pass one argument until a later integration.
+    // The catalogue is loaded here on purpose — a helper that reached for the store
+    // by itself would be caught — and their output must not move by a byte:
+    // verbatim, trimmed, deduplicated by the English sentence, keyed `code:message`.
+    it('without a translator, returns exactly the verbatim reasons the one-argument callers get today', () => {
+        const reasons = resultReasons([stressResult('a', [keyedWarning(FALLBACK_CASE, {names: HOLDING_A}), keyedWarning(FALLBACK_CASE, {names: HOLDING_B}), warning(UNKEYED_CODE, `  ${UNKEYED_MESSAGE}  `)]), stressResult('b', [keyedWarning(EXCLUDED_CASE), keyedWarning(EXCLUDED_CASE)])]);
+        expect(reasons).toStrictEqual([
+            {key: `${FALLBACK_CASE.code}:${FALLBACK_CASE.message}`, message: FALLBACK_CASE.message, occurrences: 2},
+            {key: `${UNKEYED_CODE}:${UNKEYED_MESSAGE}`, message: UNKEYED_MESSAGE, occurrences: 1},
+            {key: `${EXCLUDED_CASE.code}:${EXCLUDED_CASE.message}`, message: EXCLUDED_CASE.message, occurrences: 2},
+        ]);
+    });
+
+    // Without a translator every `assets_excluded` warning falls back to the backend's one
+    // English sentence, whatever its cause: a permanent and an occasional exclusion merge
+    // there, and the merged line can claim neither cause nor one set of badges. Worded,
+    // the two causes are two sentences, and each keeps its own.
+    it('words a permanent and an occasional exclusion apart, each with its own cause and badges — and verbatim merges them into one sentence that claims neither', () => {
+        const noSourceKey = 'risk.warnings.assets_excluded_no_price_source';
+        const noSourceParams = {count: 1, names: 'Synthetic Holding D'};
+        const missing = resolve(EXCLUDED_CASE.key, EXCLUDED_CASE.params);
+        const noSource = resolve(noSourceKey, noSourceParams);
+        expect(noSource, `guard: ${noSourceKey} does not resolve through svelte-i18n`).not.toBe(noSourceKey);
+        expect(noSource, `guard: ${noSourceKey} still carries braces once formatted with its values`).not.toContain('{');
+        expect(noSource, 'guard: the two causes word alike, so the split asserted below would prove nothing').not.toBe(missing);
+
+        // One warning per cause, in the backend's order (sorted by reason), on every result that inherited the exclusion.
+        const exclusions = (): Warning[] => [keyedWarning(EXCLUDED_CASE, {}, {asset_ids: [22, 23, 24], reason: 'missing_price'}), warning(EXCLUDED_CASE.code, EXCLUDED_CASE.message, noSourceKey, noSourceParams, {asset_ids: [21], reason: 'no_price_source'})];
+        const results = [scopeResult('base-historical-correlation', 'correlation', exclusions()), scopeResult('base-current_composition-risk_contribution', 'risk_contribution', exclusions())];
+
+        expect(resultReasons(results, get(_)), 'worded: a cause or its assets were lost, so the notice could neither pick the tone nor draw the badges').toStrictEqual([
+            {key: `${EXCLUDED_CASE.code}:${missing}`, message: missing, occurrences: 2, reason: 'missing_price', assetIds: [22, 23, 24]},
+            {key: `${EXCLUDED_CASE.code}:${noSource}`, message: noSource, occurrences: 2, reason: 'no_price_source', assetIds: [21]},
+        ]);
+        expect(resultReasons(results), 'verbatim: one sentence standing for two causes claimed one of them, or badged one set of assets for both').toStrictEqual([{key: `${EXCLUDED_CASE.code}:${EXCLUDED_CASE.message}`, message: EXCLUDED_CASE.message, occurrences: 4}]);
+    });
+
+    // `stress.py` emits one fallback per asset, naming it under `details.asset_id` beside the
+    // cause. Worded, the names split the sentence, so each asset's line keeps its own badge.
+    it('carries the one asset and the cause of each hypothetical fallback, which names its asset under asset_id', () => {
+        const first = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_A});
+        const second = resolve(FALLBACK_CASE.key, {...FALLBACK_CASE.params, names: HOLDING_B});
+        const fallback = (names: string, assetId: number): Warning => ({...keyedWarning(FALLBACK_CASE, {names}, {asset_id: assetId, dimension: 'sector', reason: 'missing_classification_metadata'}), degrades_result: false});
+
+        expect(resultReasons([stressResult('a', [fallback(HOLDING_A, 31), fallback(HOLDING_B, 32)])], get(_))).toStrictEqual([
+            {key: `${FALLBACK_CASE.code}:${first}`, message: first, occurrences: 1, reason: 'missing_classification_metadata', assetIds: [31]},
+            {key: `${FALLBACK_CASE.code}:${second}`, message: second, occurrences: 1, reason: 'missing_classification_metadata', assetIds: [32]},
+        ]);
     });
 });
 

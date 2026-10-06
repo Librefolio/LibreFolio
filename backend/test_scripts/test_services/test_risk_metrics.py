@@ -7,6 +7,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from backend.app.services.risk import metrics as risk_metrics_module
 from backend.app.services.risk.metrics import (
     annualized_expected_return,
     annualized_sharpe,
@@ -234,7 +235,7 @@ def test_historical_var_cvar_uses_positive_observed_loss_magnitudes():
     two_day = historical_var_cvar(
         [-0.1, 0.0, -0.2],
         confidence_level=0.5,
-        horizon_days=2,
+        horizon_observations=2,
     )
     # m = 0.5 * 2 = 1: again the single worst two-day loss.
     assert two_day.horizon_returns == pytest.approx((-0.1, -0.2))
@@ -379,3 +380,27 @@ def test_drawdown_episodes_rejects_baseline_not_before_first_date():
 def test_drawdown_episodes_requires_at_least_one_return():
     with pytest.raises(ValueError, match="at least one return"):
         drawdown_episodes([], dates=[], baseline_date=_BASELINE)
+
+
+# One conversion from calendar days to the observations a series holds, shared by the VaR horizons,
+# the simulation's drift and block guard and the resampler's steps, blocks and regimes (developer's
+# decision of 30/09/2026). Read from the module when the test runs, so that until it exists each pin
+# fails on its own instead of breaking the collection of the whole risk suite.
+
+
+@pytest.mark.parametrize(
+    ("calendar_days", "per_year", "observations"),
+    [
+        pytest.param(30, 252.0, 21, id="a-month-of-a-252-a-year-series"),
+        pytest.param(30, 365.0, 30, id="a-month-of-a-series-quoted-every-day"),
+        pytest.param(1, 252.0, 1, id="a-day-of-a-252-a-year-series"),
+        pytest.param(1, 100.0, 1, id="never-fewer-than-one"),
+        pytest.param(426, 252.0, 294, id="the-prolonged-crisis-in-252-a-year-steps"),
+        pytest.param(5, 252.0, 3, id="a-five-day-block-in-252-a-year-steps"),
+    ],
+)
+def test_calendar_days_convert_to_the_observations_a_series_holds(calendar_days, per_year, observations):
+    converted = risk_metrics_module.calendar_days_to_observations(calendar_days, per_year)
+
+    assert converted == observations
+    assert isinstance(converted, int)

@@ -57,12 +57,15 @@ class RollingReturnPlugin(SignalPlugin):
     """Compound canonical simple returns inside each rolling window."""
 
     signal_code = "RISK_ROLLING_RETURN"
-    implementation_version = "1.0.0"
+    # 1.1.0 — the prepared series drop stored carries and read the market holidays.
+    implementation_version = "1.1.0"
+    computes_on_quote_days = False
     display_name_key = "signals.riskRollingReturn.name"
     description_key = "signals.riskRollingReturn.description"
     semantic_id = "rolling_compounded_return"
     semantic_description = "Compounds canonical simple returns over a rolling window."
     icon = "↗️"
+    docs_path = "financial-theory/fundamentals/returns/"
     category = SignalCategory.RISK
     params_model = RollingReturnParams
     input_requirements = SignalInputRequirements(

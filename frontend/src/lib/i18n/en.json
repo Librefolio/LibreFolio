@@ -357,11 +357,11 @@
     "lastPrice": "Last Price",
     "panels": {
       "own": "Your assets",
-      "ownHint": "With transactions in brokers you own",
+      "ownHint": "Held now in brokers you own",
       "others": "Other users' assets",
-      "othersHint": "With transactions you do not own",
+      "othersHint": "Held now only by other users",
       "analysis": "Watched",
-      "analysisHint": "Saved but with no transactions — kept on the radar"
+      "analysisHint": "Held by no one now — never bought or already sold, kept on the radar"
     },
     "providerParams": {
       "borsa_italiana": {
@@ -1331,15 +1331,16 @@
       "period": "Memory length of the filter in days. Higher values = smoother but slower response.",
       "offset": "Vertical offset as percentage of the base value. Shifts the signal up or down.",
       "currencyPair": "Select an FX pair to overlay its exchange rate data on the chart.",
-      "emaPeriod": "Lookback window in days. Maps to filter coefficient $\\alpha = 2/(N+1)$. Shorter = faster reaction, longer = smoother.",
-      "fastPeriod": "Short-term EMA lookback for the MACD fast line. Standard: 12 days. Lower values react faster to price changes.",
-      "slowPeriod": "Long-term EMA lookback for the MACD slow line. Standard: 26 days. Higher values capture the broader trend.",
-      "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 days. Reduces noise in crossover signals.",
+      "emaPeriod": "Lookback window in sessions, the days with a quote. Maps to filter coefficient $\\alpha = 2/(N+1)$. Shorter = faster reaction, longer = smoother.",
+      "fastPeriod": "Short-term EMA lookback for the MACD fast line. Standard: 12 sessions. Lower values react faster to price changes.",
+      "slowPeriod": "Long-term EMA lookback for the MACD slow line. Standard: 26 sessions. Higher values capture the broader trend.",
+      "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 sessions. Reduces noise in crossover signals.",
       "multiplier": "Number of standard deviations ($k \\cdot \\sigma$). $k=2$ covers ~95% of values assuming normal distribution.",
       "overbought": "Level above which the asset is considered overbought. Standard: 70. Values near 100 indicate strong buying pressure.",
       "oversold": "Level below which the asset is considered oversold. Standard: 30. Values near 0 indicate strong selling pressure.",
       "assetComparison": "Select an asset to overlay its price on this chart. In percentage mode, both curves start at 0%.",
-      "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%."
+      "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%.",
+      "sessionPeriod": "Lookback window in sessions, the days with a quote. Higher values = smoother but slower response."
     },
     "macdLineColor": "MACD Line Color",
     "noDataAvailable": "No data available. Try syncing this asset/pair.",
@@ -1661,7 +1662,8 @@
     "pnlSubmodeIncome": "Income",
     "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous",
     "pnlAcqNewCapital": "New capital",
-    "pnlAcqReinvested": "Reinvested"
+    "pnlAcqReinvested": "Reinvested",
+    "allocationGeneric": "Generic {type}"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
@@ -2175,7 +2177,8 @@
   "sharedResource": {
     "syncAll": "Sync All",
     "refreshAll": "Reload All",
-    "settings": "Settings"
+    "settings": "Settings",
+    "syncSelection": "Sync selection"
   },
   "table": {
     "columns": "Columns",
@@ -2606,7 +2609,8 @@
       "riskFullHistory": "Measure drawdown against the highest peak of the entire available history, not just the visible window. Disable for a faster, window-relative view."
     },
     "units": {
-      "days": "days"
+      "days": "days",
+      "sessions": "sessions"
     },
     "visual": {
       "components": "Components",
@@ -3103,7 +3107,8 @@
       },
       "correlation": {
         "name": "Correlation",
-        "description": "Pearson correlation matrix on target-currency returns."
+        "description": "Pearson correlation matrix on target-currency returns.",
+        "help": "This panel analyses the pairwise correlations of all the assets under review, computed over the chosen period and taking any currency conversions into account. A high value, close to +1, means two assets move together and diversify each other little; close to 0, that they move independently; negative, that one cushions the other. Click the icon for the guide."
       },
       "historicalVar": {
         "name": "Historical VaR / CVaR",
@@ -3219,28 +3224,24 @@
       "carried_forward": "Carried forward",
       "partial": "Partial",
       "carriedPrices": "Carried price points",
-      "carriedFx": "Carried FX points"
+      "carriedFx": "Carried FX points",
+      "missingPrice": "{count} asset(s) have no price in this period — left out of the analysis",
+      "missingFx": "{count} currency pair(s) have no exchange-rate source — the assets quoted in them are left out",
+      "missingFxRates": "Exchange rates missing or older than {days} days for {count} pair(s) — sync to complete the analysis",
+      "missingFxRatesManual": "Exchange rates missing for {count} manual pair(s) — add them by hand"
     },
     "assetSet": {
       "assetsTab": "Assets",
       "correlationTab": "Correlation",
       "addAsset": "Add asset to matrix",
       "maxAssets": "The API limit of 100 assets has been reached.",
-      "presetBroker": "Preload the assets of…",
-      "presetNone": "Choose a broker…",
-      "panelTitle": "Relationships and scenarios",
-      "selectedCount": "{selected} selected of {total}",
+      "selectedCount": "{selected} in the analysis, of {total} that can be analysed",
       "nearIdentical": "near-identical",
       "bulk": {
         "selectAll": "Select all",
         "selectNone": "Deselect all",
         "invert": "Invert",
         "mine": "My assets"
-      },
-      "filters": {
-        "type": "Type",
-        "currency": "Currency",
-        "clear": "Clear filters"
       },
       "band": {
         "high": "they move together",
@@ -3251,22 +3252,28 @@
       "ordering": {
         "label": "Matrix order",
         "similarity": "By similarity",
-        "original": "By name"
+        "name": "By name",
+        "type": "By type",
+        "sector": "By sector",
+        "region": "By region"
       },
       "pairs": {
         "correlatedTitle": "The most alike",
-        "correlatedHint": "Pairs that move together: holding both adds little.",
+        "correlatedHint": "Pairs with ρ > 0.70: they move together, holding both adds little.",
         "offsettingTitle": "The ones that offset",
-        "offsettingHint": "Pairs that move in opposite directions: one cushions the other.",
+        "offsettingHint": "Pairs with ρ ≤ −0.30: they move in opposite directions, one cushions the other.",
         "noneCorrelated": "No pair moves clearly together.",
-        "noneOffsetting": "No pair offsets another: nothing here cushions anything else."
+        "noneOffsetting": "No pair offsets another: nothing here cushions anything else.",
+        "tagSimilar": "very similar",
+        "tagOffsetting": "offsetting",
+        "tagOpposite": "opposite"
       },
       "levels": {
         "asset": "Asset",
         "blankNote": "An em-dash means the measurement could not be made for that asset over this window — it does not mean zero.",
         "l1": {
           "title": "How much did each of these hurt?",
-          "description": "The same scale of harm, asked of every selected asset. Percentages only: a set of assets has no weights, so there is no amount to put beside them.",
+          "description": "For each selected asset, how much it lost at the worst moments of the period: the bad day, the bad month, the deepest fall, and how far it still stands below its peak.",
           "lastedDays": "lasted {days} d",
           "columns": {
             "badDay": "Bad day",
@@ -3274,16 +3281,74 @@
             "worstFall": "Worst fall",
             "currentFall": "Below peak now",
             "toPeak": "Rise to peak"
+          },
+          "columnHelp": {
+            "badDay": "The average loss on the worst 5% of days in the window (historical CVaR at 95%).",
+            "badMonth": "Like the bad day, over a longer run of consecutive days: the average loss on the worst 5% of those runs (historical CVaR at 95%).",
+            "worstFall": "The deepest fall from a peak to the lowest point that followed it within the window, and how long it lasted.",
+            "currentFall": "How far below its highest point in the window the asset stands on the last day.",
+            "toPeak": "How much it must rise to get back to that highest point: after a 20% fall it takes +25%."
           }
         },
         "l3": {
           "title": "What did each of these pay for its risk?",
-          "description": "Risk against reward, one point per asset. No line is drawn through them: a selection has no whole, so there is nothing to be above or below.",
-          "expectedReturn": "Expected return",
+          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the table and in the chart; with a benchmark chosen just above, also how much it moved along with it.",
+          "expectedReturn": "Average annual return",
           "correlation": "Correlation",
-          "noBenchmark": "Choose a benchmark on the Dashboard to add beta and correlation. A benchmark that is itself in the selection cannot be used as its own yardstick.",
-          "scatterNote": "The dots show the mean-variance expected return: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding."
+          "columnHelp": {
+            "volatility": "How much the asset's returns swing, on a yearly basis: the standard deviation of the period's returns, annualised.",
+            "expectedReturn": "The average of the period's returns, scaled to a year by how often the asset is quoted. It describes the past, not a forecast. For a very volatile asset it is higher than what the asset actually returned, because swings erode the compounded return.",
+            "sortino": "How much average annual return for each unit of downward swing: it looks at the falls only, not at the rises.",
+            "sharpe": "How much average annual return for each unit of volatility: the pay for the risk taken, rises and falls alike.",
+            "beta": "How much the asset moved when the benchmark moved: 1 means as much, 2 twice as much, 0 independently of it.",
+            "correlation": "How closely the asset and the benchmark moved together, from −1 (always opposite) to +1 (always together)."
+          },
+          "axisReturn": "Average annual return",
+          "period": {
+            "window": "Period: {start} – {end} ({length}).",
+            "narrowed": "Shorter than the selected period ({selectedStart} – {selectedEnd}).",
+            "annualized": "Volatility and average return are annualised; Sharpe and Sortino derive from them.",
+            "years": "{count, plural, one {# year} other {# years}}",
+            "months": "{count, plural, one {# month} other {# months}}",
+            "days": "{count, plural, one {# day} other {# days}}"
+          },
+          "referenceItself": "Not applicable: this asset is the benchmark itself, and it is not compared with itself."
         }
+      },
+      "legend": {
+        "negative": "Negative",
+        "none": "None",
+        "positive": "Positive"
+      },
+      "group": {
+        "diversified": "Diversified",
+        "unclassified": "Unclassified"
+      },
+      "exposure": {
+        "sector": "Sector",
+        "region": "Region"
+      },
+      "syncSelectionHint": "Sync the prices of the selected assets and the exchange rates that convert them",
+      "reloadHint": "Reload every analysis of the selection",
+      "preset": {
+        "allMine": "All my holdings",
+        "byBroker": "By broker",
+        "hint": "Replaces the selection with the assets held on the last day of the period.",
+        "noneHeld": "Nothing is held there on the last day of the period: the selection is unchanged."
+      },
+      "picker": {
+        "notAnalysable": "Cannot be analysed in the period"
+      },
+      "selectedCountHint": "The first number counts the assets the laboratory is analysing right now. The second counts how many it could analyse in the chosen period: every asset in LibreFolio, not only the ones you hold, as long as it has enough prices in that period. The assets that do not are still listed in the “+”, read-only, with the reason.",
+      "parkedNote": "{count, plural, one {# selected asset cannot be analysed in the period and stays out of the analysis.} other {# selected assets cannot be analysed in the period and stay out of the analysis.}}",
+      "eligibilityFailed": "Eligibility could not be checked: every asset stays selectable.",
+      "fitPeriod": {
+        "banner": "With the chosen period, {count, plural, one {# selected asset has} other {# selected assets have}} no prices for part of it.",
+        "button": "Use the period in which all have prices ({start} – {end})",
+        "hint": "Moves the period at the top to the span in which every selected asset with prices is quoted. Back in the analysis: {names}."
+      },
+      "benchmark": {
+        "help": "The reference asset, the \"baseline risk\": beta tells, asset by asset, whether each moved more (above 1) or less (below 1) than it; correlation, how closely they moved together."
       }
     },
     "metrics": {
@@ -3397,16 +3462,45 @@
       "worker_busy": "The calculation service is busy. Try again shortly.",
       "execution_timeout": "The calculation took too long and was stopped.",
       "optimization_infeasible": "No allocation satisfies the requested constraints.",
-      "unknown": "This measurement did not return a result."
+      "unknown": "This measurement did not return a result.",
+      "answer_discarded": "The answer was set aside because the data changed while it was arriving. Run the analysis again."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",
       "sortino_undefined": "Sortino is undefined because downside deviation is zero.",
-      "insufficient_pair_history": "Some correlation pairs have insufficient common history.",
+      "insufficient_pair_history": "The common history is too short for a correlation.",
       "flat_series": "Some values are undefined because a series is flat.",
-      "low_pair_coverage": "Some correlation pairs have low coverage.",
+      "low_pair_coverage": "The common window covers too little of the period.",
       "comparison_beta_undefined": "Beta is undefined because the comparison asset has zero variance.",
-      "comparison_correlation_undefined": "Correlation is undefined because one series has zero variance."
+      "comparison_correlation_undefined": "Correlation is undefined because one series has zero variance.",
+      "slice_assets_not_held": "{count, plural, one {# requested asset is not held} other {# requested assets are not held}} in the selected scope and {count, plural, one {was} other {were}} ignored: {names}.",
+      "zero_risk_residual_includes_in_transit": "The part counted at zero return includes value in transit, which has no return series.",
+      "assets_excluded_missing_price": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: no market prices in the period — {names}.",
+      "assets_excluded_missing_fx": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: the exchange rate to your currency is missing — {names}.",
+      "assets_excluded_invalid_currency": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: the currency of their prices is not valid — {names}.",
+      "assets_excluded_insufficient_history": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: not enough history in the period — {names}.",
+      "data_quality_stale_prices": "Prices older than {days} days for {count, plural, one {# asset} other {# assets}}: {names}.",
+      "data_quality_stale_fx_rates": "Exchange rates older than {days} days: {pairs}.",
+      "data_quality_missing_prices": "Missing market prices for {count, plural, one {# asset} other {# assets}}: {names}.",
+      "data_quality_missing_fx_rates": "Missing exchange rates: {pairs}.",
+      "data_quality_incomplete_dates": "{count, plural, one {# day} other {# days}} of the period could not be valued in full.",
+      "data_quality_degraded": "Part of the source data is incomplete.",
+      "comparison_beta_undefined_assets": "Beta is undefined for {names}: the comparison asset has zero variance.",
+      "comparison_correlation_undefined_assets": "Correlation is undefined for {names}: a series has zero variance.",
+      "sharpe_undefined_assets": "Sharpe is undefined for {names}: volatility is zero.",
+      "sortino_undefined_assets": "Sortino is undefined for {names}: downside deviation is zero.",
+      "worst_realization_undefined_assets": "No losing observation in the period for {names}.",
+      "worst_realization_undefined": "No losing observation in the period.",
+      "hypothetical_metadata_other_fallback": "{names}: {dimension, select, sector {sector} other {geography}} data is missing — treated as “Other” at 100%.",
+      "historical_replay_proxies_used": "The replay used a stand-in return series for: {names}.",
+      "historical_replay_excluded_manual": "Excluded by you: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
+      "historical_replay_excluded_no_prices": "No prices in the replay window: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
+      "historical_replay_excluded_starts_late": "First quote after the replay window began: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
+      "historical_replay_excluded_missing_fx": "No exchange rate to your currency over the replay window: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
+      "historical_replay_excluded_stale_at_start": "No price in the {days} days before the replay window began: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
+      "historical_replay_excluded_stale_at_end": "No price in the last {days} days of the replay window: {names} — {treatment, select, zero_return_residual {weight counted as cash at zero return} other {left out of the replay}}.",
+      "historical_replay_mostly_excluded": "The result describes only part of your portfolio ({covered, number, percent}): the rest is left out of the replay.",
+      "assets_excluded_no_price_source": "{count, plural, one {# asset excluded} other {# assets excluded}} from the calculation: no price source is assigned and no price has ever been recorded — {names}."
     },
     "assetDetail": {
       "overviewTab": "Overview",
@@ -3511,7 +3605,10 @@
         "uncovered": {
           "label": "How much of me is not measured here?",
           "caption": "Cash, plus every holding without a usable price series",
-          "residual": "The rows below describe the rest of the portfolio; {share} is not among them"
+          "residual": "The rows below describe the rest of the portfolio; {share} is not among them",
+          "split": "{cash} cash · {unpriced} without prices",
+          "allUnpriced": "All in holdings without prices",
+          "allCash": "All in cash"
         },
         "rowsCaption": "The bar shows the gap between weight and risk: right means more risk than weight, left means less. Weights are shares of the whole portfolio.",
         "correlation": {
@@ -3526,9 +3623,6 @@
         "sharpe": "Sharpe",
         "volatility": "Volatility",
         "beta": "Beta",
-        "sortinoHelp": "Return per unit of downside risk. Unlike Sharpe, it does not penalise violent rises.",
-        "sharpeHelp": "Return per unit of total volatility, so it penalises rises as well as falls.",
-        "betaHelp": "How much this moves when the benchmark moves.",
         "benchmark": "Compared with",
         "perimeter": {
           "current_composition": "on the current composition",
@@ -3538,10 +3632,36 @@
           "title": "Risk against return, asset by asset",
           "portfolio": "Portfolio",
           "axisVolatility": "Annualised volatility",
-          "axisReturn": "Expected annualised return",
+          "axisReturn": "Average annual return",
           "line": "Risk-return line",
-          "note": "Above the line means better paid for the risk taken. The dots show the mean-variance expected return, the quantity in which the line's slope is the Sharpe ratio: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding.",
-          "cash": "Cash ({share} of net worth) is not a dot: under the model it returns exactly zero, and drawing it would turn that into a measurement."
+          "notes": {
+            "above": "Above the line: better paid for the risk taken.",
+            "line": "The line starts at the risk-free rate and, with no benchmark chosen, runs through the portfolio: its slope is the portfolio's Sharpe ratio.",
+            "expected": "The dots use the average annual return:",
+            "size": "A dot's size is its weight in the portfolio: the big dots are the ones that move the result the most.",
+            "outside": "Not plotted:",
+            "outsideCash": "cash {share}",
+            "outsideUnpriced": "holdings without prices {share}",
+            "expectedWarning": "on a very volatile asset, the return actually lived through is lower.",
+            "lineBenchmark": "The line starts at the risk-free rate and runs through the benchmark: its slope is the benchmark's Sharpe ratio.",
+            "priceOnly": "The return comes from prices alone: coupons and dividends are not included yet.",
+            "lineDocs": "Where the line comes from, and which benchmark to choose"
+          },
+          "tooltip": {
+            "weight": "Weight in the portfolio: {share}",
+            "benchmark": "Benchmark",
+            "heldBenchmark": "Benchmark · in the portfolio, weight {share}"
+          }
+        },
+        "rows": {
+          "kpi": "Sortino, Sharpe and volatility"
+        },
+        "table": {
+          "weight": "Weight",
+          "weightHelp": "The share of net worth in this holding, today. It is also the size of its dot in the chart.",
+          "notHeld": "Not in the portfolio: the benchmark is shown for comparison.",
+          "expectedReturnShort": "Ann. return",
+          "namedHelp": "{name}\n{help}"
         }
       },
       "l4": {
@@ -3592,19 +3712,64 @@
           },
           "truncation": "Declared over {declared} days, applied over {applied}: the cone answers the shorter question."
         },
-        "replayExcluded": "Left out:",
-        "replayNeedsChoice": "{name} has no usable history in this period. Leave it out, or give it a stand-in — a stand-in is an opinion about what it would have done.",
-        "replayProxyUnusable": "The stand-in chosen for {name} has no usable history either. Pick a different one.",
-        "replayExcludeAndRetry": "Leave it out and run again",
         "replayTotal": "This composition would have ended the period at {percent} {amount}",
-        "replayAudit": "Stand-ins: {proxies} · Left out: {excluded} ({weight} of the scope, carried at zero return)",
-        "replayAuditOmitted": "Stand-ins: {proxies} · Left out: {excluded} (omitted from the replay: the figures speak for the rest)",
         "shockShowDetail": "Show the shock per bucket",
         "shockHideDetail": "Hide the shock per bucket",
         "shockTotal": "This scenario would move the scope by {percent} {amount}",
-        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone."
+        "shockCoverage": "Only {percent} of the scope could be classified, so the total speaks for that part alone.",
+        "replayPeriod": "Period",
+        "replayExcludedResidual": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; {weight} of the value counts as cash at zero return.",
+        "replayExcludedOmitted": "Left out of the replay: {count, plural, one {# asset} other {# assets}}; the figures speak for the others.",
+        "replayReasonNoPrices": "No prices in the period",
+        "replayReasonStartsLate": "First quoted after the period began",
+        "replayReasonStaleAtStart": "No recent price when the period began",
+        "replayReasonStaleAtEnd": "No recent price at the end of the period",
+        "replayReasonMissingFx": "No exchange rate to your currency",
+        "replayReasonManual": "Left out by you",
+        "replayReasonOther": "Other reason",
+        "replayNothing": "Nothing to replay: no asset has usable prices over this period.",
+        "replaySuggested": "Replay from {start} to {end}: {count, plural, one {# asset comes back} other {# assets come back}}",
+        "replaySuggestedPartial": "Only part of the crisis.",
+        "replayPresetNone": "No preset",
+        "tools": {
+          "empty": "Choose a tool: the historical replay shows what really happened, the hypothetical shock applies an assumption of yours, the simulation runs a model.",
+          "add": "Add:",
+          "close": "Close {tool}"
+        },
+        "table": {
+          "asset": "Asset",
+          "weight": "Weight",
+          "return": "Return",
+          "contribution": "Contribution",
+          "impact": "Impact",
+          "bar": "Effect"
+        }
       },
-      "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went."
+      "backtestNotice": "With a slice active, these figures are rebuilt from today’s composition: they say how it *would* have gone, not how it actually went.",
+      "notice": {
+        "partialTitle": "Some results are partial",
+        "notesTitle": "Worth knowing about these results",
+        "noPriceSourceTitle": "Holdings without prices, left out of some measurements",
+        "affected": "Measurements affected"
+      }
+    },
+    "eligibility": {
+      "reasons": {
+        "no_prices": "No prices in the period",
+        "too_few_quotes": "Fewer than {minQuotes} quotes in the period ({count})",
+        "missing_fx": "No exchange rate to {currency} at the start or end of the period",
+        "starts_late": "First quote on {date}, after the start of the period",
+        "stale_at_end": "Last price on {date}, more than {days} days before the end",
+        "no_price_history": "No price has ever been recorded for this asset"
+      },
+      "levels": {
+        "ineligible": "Cannot be analysed in the period",
+        "warning": "Can be analysed, with a warning"
+      }
+    },
+    "benchmark": {
+      "measuredHere": "This benchmark is also an asset measured here and cannot be its own yardstick: choose another one for the comparison.",
+      "blocked": "Not usable over this period"
     }
   },
   "updateCheck": {
@@ -3811,198 +3976,6 @@
     "pacAllocator": {
       "name": "PAC allocator",
       "description": "Plan the purchases that bring a new investment as close as possible to its target allocation, in whole units or amounts, without placing orders.",
-      "scenario": "Scenario",
-      "reportCurrency": "Reporting currency",
-      "asOfDate": "As-of date (optional)",
-      "rows": {
-        "empty": "Add at least one row. The backend will report missing rows until then.",
-        "initialQuantity": "Initial quantity",
-        "price": "Native price",
-        "quoteBasis": "Quote base quantity",
-        "target": "Target (%)",
-        "gridMode": "Purchase grid",
-        "whole": "Whole quantities",
-        "fractional": "Fractional quantities",
-        "quantityStep": "Purchase quantity step",
-        "quoteDate": "Quote date (optional)",
-        "addAsset": "New local asset",
-        "description": "Each row is one asset in one context. Use the dedicated action to preserve instrument identity across contexts.",
-        "identity": "Local instrument identity",
-        "rowNumber": "Row {number}",
-        "sameAsset": "Same asset, another context",
-        "title": "Assets and custody contexts"
-      },
-      "cash": {
-        "existing": "Existing cash",
-        "notSupplied": "Not supplied",
-        "noneExisting": "Explicitly no existing cash",
-        "amount": "Amount",
-        "addCurrency": "Add currency",
-        "contributions": "New contributions",
-        "noneContributions": "Explicitly no new contributions",
-        "existingHint": "Native cash already held, grouped by currency.",
-        "contributionsHint": "New money for this scenario, separate from existing cash.",
-        "enterAmounts": "Enter amounts",
-        "addContribution": "Add contribution",
-        "backToBrokers": "Use Broker reserves",
-        "backendAggregate": "Backend aggregate",
-        "fromBrokers": "From brokers",
-        "fullNativeReserve": "Full native reserve",
-        "loadingBrokerCash": "Loading Broker reserves…",
-        "markNoneContributions": "No new contributions",
-        "markNoneExisting": "No existing cash",
-        "markNotSupplied": "Mark as not supplied",
-        "monetaryStep": "Amount increment",
-        "monetaryStepHint": "Smallest accepted increment for this contribution, for example 0.01 for cents.",
-        "noNativeBalances": "No native reserve",
-        "noOwnerBrokers": "No OWNER Broker is available. Enter cash manually.",
-        "noSelectedBalances": "No selected broker balance.",
-        "refreshingSelection": "Updating selected native reserves…",
-        "selectedReserves": "Selected native reserves",
-        "sourceStale": "Waiting for current broker balances. The previous snapshot will not be submitted."
-      },
-      "rates": {
-        "title": "Valuation exchange rates",
-        "description": "Compare values in the reporting currency. No cash is exchanged, transferred, or merged.",
-        "add": "Add rate",
-        "value": "Rate to reporting currency",
-        "date": "Rate date (optional)",
-        "noCashConversion": "Valuation only: cash is not exchanged, transferred, or merged.",
-        "copySaved": "Copy rate",
-        "copyUnavailable": "No saved {currency} to {reportCurrency} rate is available for {date}.",
-        "enterManually": "Enter manually",
-        "equationHint": "Example: 1 USD = 0.90 EUR means one USD is valued at 0.90 EUR in this report.",
-        "nativeCurrency": "Native currency",
-        "reason": "{currency} facts must be valued in {reportCurrency}.",
-        "reasonAssets": "Asset prices: {assets}",
-        "reasonCash": "Selected existing cash uses this currency.",
-        "reasonContribution": "A new contribution uses this currency.",
-        "titleNumbered": "3. Valuation exchange rates"
-      },
-      "revision": "Draft revision",
-      "noOrders": "Orders, feasibility, and optimization are not included in this pilot.",
-      "stopWaiting": "Stop waiting",
-      "analyzing": "Analyzing revision {revision}…",
-      "analyze": "Analyze PAC allocation",
-      "stale": {
-        "pending": "Request revision {requestRevision} is still running, but the draft is now revision {draftRevision}. Its response will be ignored.",
-        "ignored": "Response for revision {revision} was ignored because the draft or account changed.",
-        "result": "This result belongs to an older draft revision."
-      },
-      "draftPreserved": "Your draft was preserved.",
-      "platformErrorTitle": "Analysis not completed",
-      "platformError": "The backend could not complete this analysis. Your draft was preserved.",
-      "state": {
-        "ready": "Ready · initial state is evaluable",
-        "needsInput": "Needs input",
-        "invalid": "Invalid scenario",
-        "unsupported": "Outside the P1 domain"
-      },
-      "resultMeaning": "This is an initial-state analysis. It does not certify trade feasibility, target attainment, or optimality.",
-      "exactView": "Exact",
-      "formattedView": "Formatted",
-      "totals": {
-        "invested": "Initial invested value",
-        "existingCash": "Existing cash",
-        "contributions": "New contributions",
-        "combinedCash": "Cash plus contributions",
-        "maxGap": "Maximum absolute gap (pp)",
-        "squaredGap": "Squared gap (pp²)"
-      },
-      "result": {
-        "row": "Row",
-        "value": "Reporting value",
-        "weight": "Current weight",
-        "target": "Target",
-        "gap": "Gap (pp)"
-      },
-      "cashPools": "Native cash pools",
-      "issues": "Backend findings",
-      "normalizedInput": "Normalized input and units",
-      "addManualAsset": "New manual asset",
-      "loadingOwnedAssets": "Loading Asset catalog…",
-      "noOwnedAssetsHint": "You can still add a manual Asset.",
-      "custodyContext": "custody context",
-      "custodyContexts": "custody contexts",
-      "missingPrice": "Price missing",
-      "modified": "Modified",
-      "staleLabel": "Outdated",
-      "noAssetMatches": "No Asset candidates match the current filters.",
-      "fullCustody": "Full custody quantity",
-      "personalShare": "personal share",
-      "manual": "Manual",
-      "snapshotAt": "Portfolio snapshot",
-      "priceAt": "price dated",
-      "duplicate": "Duplicate as manual row",
-      "identityAndCustody": "Identity and custody",
-      "instrumentId": "Instrument ID",
-      "selectedContexts": "Selected Asset contexts",
-      "selectedContextsHint": "Imported source facts are read-only. Targets and purchase grids remain editable; manual rows are fully editable.",
-      "emptyRowsHint": "Select an Asset candidate above or add a manual Asset.",
-      "confirmDeselectTitle": "Remove imported Asset contexts?",
-      "confirmDeselectMessage": "Some linked rows were edited. Deselecting the Asset removes every linked imported context listed below. Independent manual copies remain.",
-      "assets": {
-        "hint": "Choose canonical Assets. Current prices are source context only and do not affect the P1 split.",
-        "title": "2. Assets to fund"
-      },
-      "brokerCustody": "Broker custody",
-      "cashPoolsHint": "Native balances remain separate by currency. This report does not exchange, transfer, or merge cash.",
-      "customizedRemovalItems": "Settings that will be lost",
-      "customizedRemovalMessage": "Removing this Asset will discard its target and custom settings.",
-      "customizedRemovalTitle": "Remove customized Asset?",
-      "denominatorHint": "Current weights and gaps use invested Asset value only. Existing cash and new contributions stay separate and do not change these P1 percentages.",
-      "economicShare": "Personal economic share",
-      "economicShareHint": "Informational ownership share. Imported custody quantities remain whole and are never scaled.",
-      "fundsHint": "Copy native OWNER Broker cash or enter exact amounts. New contributions remain separate.",
-      "fundsTitle": "1. Available funds",
-      "gallery": {
-        "empty": "No Asset candidates found",
-        "hint": "Select canonical Assets or add a manual one.",
-        "inactive": "Inactive",
-        "observed": "Observed",
-        "otherUsers": "Other users",
-        "owned": "Owned",
-        "search": "Search Assets or Brokers",
-        "title": "2. Assets",
-        "zeroPosition": "initial quantity 0"
-      },
-      "gridModeHint": "Controls only the quantity increment of future purchases. Existing fractional inventory is never rounded.",
-      "importedSnapshot": "Imported custody snapshot",
-      "initialState": "Initial state",
-      "manualCopy": "Independent manual copy",
-      "nativePrice": "Native price",
-      "newManualAsset": "Manual Asset",
-      "noCurrentCustody": "No current custody",
-      "p1": {
-        "description": "Distributes available liquidity by target percentage. It does not inspect the current portfolio or generate orders.",
-        "title": "PAC Allocator P1"
-      },
-      "pilotNotice": "Manual initial-state analysis only. No portfolio data is read, no orders are proposed, and nothing is saved.",
-      "quantityStepHint": "Minimum quantity increment for new purchases. This is separate from contribution monetary step.",
-      "quoteBasisHint": "Number of Asset units represented by the quoted price.",
-      "readOnlyFacts": "source facts read-only",
-      "results": {
-        "boundary": "These are theoretical money amounts. No price, quantity, Broker route, FX transfer or order has been selected.",
-        "budget": "Investable budget",
-        "contributions": "New contributions",
-        "empty": "Run the analysis to calculate the theoretical monetary allocation.",
-        "existingCash": "Existing cash",
-        "hint": "P1 splits the available liquidity by target percentage. It does not calculate units, orders, feasibility or an optimum.",
-        "idealAllocation": "Theoretical allocation",
-        "title": "4. PAC analysis"
-      },
-      "rowLimitHint": "Maximum {count} contexts. Adding an Asset with multiple custody contexts is always all-or-nothing.",
-      "rowLimitWarning": "Remaining slots: {count}",
-      "selectedContextCount": "Selected contexts: {count}",
-      "target": "Target",
-      "targetEditor": {
-        "hint": "Set how the investable liquidity should be split. These percentages do not describe the current portfolio.",
-        "title": "3. Liquidity distribution"
-      },
-      "units": "units",
-      "valuationSettings": "Valuation settings",
-      "valuationSettingsHint": "Reporting currency values assets, cash, and contributions. The date is the inclusive cutoff for saved facts.",
-      "valuationSettingsInfo": "These settings define one comparison unit and fact cutoff. They do not move cash or execute trades.",
       "planner": {
         "actions": {
           "editConfiguration": "Edit configuration",
@@ -4018,10 +3991,6 @@
           "unknown": "Date unknown"
         },
         "applyToDraft": "Apply to the draft",
-        "assetCopy": {
-          "empty": "No Asset of the database is in the draft: nothing to copy.",
-          "manual": "manual, not copied"
-        },
         "assetEditor": {
           "categoryId": "Category ID",
           "categoryLabel": "Label",
@@ -4182,26 +4151,12 @@
           "useAllHint": "Use the whole available amount",
           "selectedAll": "It starts from the whole available amount: lower it if you want to invest less."
         },
-        "classificationsCopy": {
-          "source": "Source: the Asset classifications (type, sector, geography) stored in LibreFolio.",
-          "title": "Copy classifications"
-        },
         "conflict": {
           "cashIncoming": "Balance from the system · {date}",
           "cashPrevious": "Balance copied in the draft · {date}",
           "cashSelected": "Amount to use (yours) · does not change",
-          "exposuresIncoming": "Classification from the system · {date}",
-          "exposuresPrevious": "Classification copied · {date}",
-          "exposuresYours": "your rows do not change",
-          "fxCurrent": "Rate in the draft (yours) · does not change",
-          "fxIncoming": "Rate from the system · {date}",
-          "fxPrevious": "Rate copied in the draft · {date}",
           "intro": "You asked to copy again. These facts are different now:",
           "keep": "Keep previous copy",
-          "priceCurrent": "Price in the draft (yours) · does not change",
-          "priceIncoming": "Price from the system · {date}",
-          "priceLine": "{price} per {units} · {date}",
-          "pricePrevious": "Price copied in the draft · {date}",
           "rule": "Updating changes only the copied fact and its date. Your fields stay as they are.",
           "titleMany": "{count} copied facts changed since the last copy",
           "titleOne": "{name} changed since the last copy",
@@ -4217,15 +4172,10 @@
         },
         "copy": {
           "alreadyInDraft": "Already in the draft: copying again updates it",
-          "apply": "{count, plural, one {Copy # item} other {Copy # items}}",
           "needsCurrency": "Choose the valuation currency in the Scenario step to copy from the system.",
           "noOwner": "Copying needs at least one Broker you own. Enter the values by hand instead.",
-          "ownerScope": "The Portfolio API reads through the Brokers you own; these values do not depend on the Broker.",
-          "reading": "Reading the snapshot…",
-          "rule": "Nothing is live: a copy is a snapshot you can edit. Copying again updates only what you have not changed and lists the rest.",
           "scopeError": "The Broker list could not be loaded. Nothing was copied.",
           "sourcePortfolio": "You can copy only from Brokers you own.",
-          "stop": "Stop",
           "allInPlan": "{kind, select, liquidity {The liquidity of every Broker you can copy is already in the plan.} other {Every Broker you can copy is already in the plan.}}"
         },
         "copyNotice": {
@@ -4310,11 +4260,6 @@
           "syncRates": "Download the rates",
           "openPair": "Open the pair",
           "limitsHelp": "Not in this version:\n• a different rate or spread for each Broker;\n• a safety margin on the rate;\n• a conversion fee on top of the spread;\n• conversions in more than one step (EUR → USD → CHF)."
-        },
-        "fxCopy": {
-          "empty": "No currency pair is needed yet.",
-          "source": "Source: the latest FX rates stored in LibreFolio. No provider is called.",
-          "title": "Copy FX rates"
         },
         "issues": {
           "allocation": {
@@ -4472,10 +4417,6 @@
         },
         "policies": {
           "proportional": "Proportional"
-        },
-        "pricesCopy": {
-          "source": "Source: the latest prices stored in LibreFolio. No provider is called.",
-          "title": "Copy prices"
         },
         "problems": {
           "assetClassInvalid": "The Asset class must be a lowercase code of at least 3 characters.",
@@ -5174,131 +5115,10 @@
       }
     },
     "version": "Version",
-    "allocation": {
-      "asset": {
-        "custodyCount": "{count} custody contexts",
-        "futureConstraints": "Future purchase constraints",
-        "futureConstraintsHint": "Recorded for the future solver. P1 does not quantize this theoretical monetary allocation."
-      },
-      "diagnostics": {
-        "invalid": "Correct the scenario",
-        "needsInput": "Complete the scenario",
-        "noIssues": "All required inputs are valid for this P1 analysis.",
-        "ready": "Scenario ready",
-        "technical": "Technical details",
-        "unsupported": "Scenario outside P1 boundaries"
-      },
-      "fundingSummary": {
-        "afterAnalysis": "after analysis",
-        "available": "Available",
-        "contributions": "Contributions",
-        "empty": "No cash or contribution entered.",
-        "existing": "Existing",
-        "hint": "Existing cash and new contributions remain separate facts. Combined totals are shown only after backend analysis.",
-        "title": "Available funds by currency",
-        "updating": "Updating…"
-      },
-      "issues": {
-        "assetsRequired": "Select at least one Asset.",
-        "cashRequired": "Enter cash rows, or keep an explicit empty list.",
-        "contributionStep": "The contribution must be a multiple of its monetary step.",
-        "currencyDomain": "This scenario contains more currencies than the P1 limit of {limit}.",
-        "duplicateCurrency": "{currency} appears more than once where only one row per currency is allowed.",
-        "duplicateInstrument": "This Asset is selected more than once.",
-        "duplicateRow": "Two custody rows have the same technical identity.",
-        "duplicateTarget": "This Asset has more than one target.",
-        "fieldRequired": "Complete this required field.",
-        "generic": "Review this scenario input.",
-        "holdingsRequired": "Select at least one portfolio holding.",
-        "identityRate": "The report currency {currency} must use an identity valuation rate of 1.",
-        "identityRateRedundant": "The report-currency rate is redundant and was treated as 1.",
-        "incompleteDecimal": "Complete the decimal value.",
-        "initialDebt": "Negative existing cash is outside this P1 analysis.",
-        "invalidCurrency": "Choose a valid three-letter currency.",
-        "invalidDate": "Enter a valid date.",
-        "invalidDecimal": "Enter a valid decimal number.",
-        "invalidQuoteBasis": "The quoted unit basis must be a positive whole number.",
-        "inventoryOffGrid": "Existing fractional custody does not match the future purchase step. It was preserved exactly.",
-        "negativeContribution": "A new contribution cannot be negative.",
-        "nonintegerWholeStep": "A whole-unit purchase step must be a whole number.",
-        "nonpositiveFxRate": "The valuation rate must be greater than zero.",
-        "nonpositiveMonetaryStep": "The monetary step must be greater than zero.",
-        "nonpositivePrice": "The current price must be greater than zero.",
-        "nonpositiveQuantityStep": "The purchase quantity step must be greater than zero.",
-        "numericDomain": "A number exceeds the supported exact numeric domain.",
-        "quoteRequired": "Enter the current price and its currency.",
-        "referenceAfterAsOf": "The source date cannot be after the analysis date.",
-        "referenceDateUnspecified": "A reference date was not provided; review data freshness manually.",
-        "shortInventory": "Short positions are outside this P1 analysis.",
-        "targetOutOfRange": "Each target must be between 0% and 100%.",
-        "targetRequired": "Every selected Asset needs a target percentage.",
-        "targetTotal": "Target percentages must total exactly 100%.",
-        "targetsRequired": "Set a target allocation for the selected Assets.",
-        "unselectedTarget": "A target refers to an Asset that is no longer selected.",
-        "unusedValuation": "The valuation rate for {currency} is not used by this scenario.",
-        "valuationRateRequired": "Enter a valuation rate for {currency}."
-      },
-      "path": {
-        "cash": "Existing cash",
-        "contributions": "Contributions",
-        "holdings": "Holdings",
-        "targets": "Targets",
-        "valuationRates": "Valuation rates"
-      },
-      "results": {
-        "stale": "Inputs changed after this result. Run the analysis again before using it."
-      },
-      "target": {
-        "remaining": "Remaining",
-        "selectAssetsFirst": "Select at least one Asset before setting targets.",
-        "total": "Total",
-        "visual": "Distribution"
-      }
-    },
     "backendVersion": "Backend/API",
     "contractVersion": "Contract",
     "implementationVersion": "Implementation",
     "open": "Open tool",
-    "portfolioRebalancer": {
-      "analyze": "Analyze target gaps",
-      "custodyContext": "Custody context",
-      "customizedRemovalMessage": "Removing this holding will discard its scenario settings.",
-      "customizedRemovalTitle": "Remove customized holding?",
-      "description": "Compare current invested allocation with a final target.",
-      "funding": {
-        "hint": "Cash and contributions are reported separately. P1 does not use them to infer executable trades.",
-        "title": "Optional liquidity context"
-      },
-      "holdings": {
-        "hint": "Select Assets to copy all their custody contexts, or add a manual holding.",
-        "title": "1. Portfolio holdings"
-      },
-      "name": "Portfolio rebalancer",
-      "p1": {
-        "description": "Compares current invested allocation with a final target. It does not recommend or generate trades.",
-        "title": "Portfolio Rebalancer P1"
-      },
-      "results": {
-        "availableCash": "Cash and new contributions (context only)",
-        "boundary": "A positive or negative gap is descriptive, not a buy or sell instruction. No order, Broker route, FX transfer or tax action is generated.",
-        "currentValue": "Current value",
-        "currentWeight": "Current %",
-        "custodyContexts": "Custodies",
-        "empty": "Run the analysis to compare current and target allocation.",
-        "hint": "P1 compares current invested value with the final target. It does not propose trades or prove feasibility.",
-        "investedTotal": "Current invested value",
-        "targetValue": "Target value",
-        "title": "3. Allocation gaps",
-        "valueGap": "Value gap",
-        "zeroInvested": "Current invested value is zero, so current weights and percentage-point gaps are unavailable."
-      },
-      "targetEditor": {
-        "copyCurrent": "Use current distribution",
-        "hint": "Set the desired final allocation of the invested portfolio. Cash remains separate context.",
-        "title": "2. Final target allocation"
-      },
-      "uncustodied": "No custody"
-    },
     "uiVersion": "UI"
   },
   "onboarding": {
@@ -5766,5 +5586,16 @@
       "dark": "Dark mode",
       "light": "Light mode"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Type",
+      "currency": "Currency",
+      "clear": "Clear filters"
+    },
+    "selectVisible": "Select visible",
+    "deselectVisible": "Deselect visible",
+    "confirm": "Add {count}",
+    "allSelected": "Every asset is already in the selection."
   }
 }
