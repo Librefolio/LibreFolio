@@ -2006,3 +2006,129 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
 - **Metodo**: la skill test-triage, con la traccia di Playwright.
   - Se la causa è nel prodotto (AssetModal, la modale della valuta o SearchSelect, tutti fuori dal perimetro di L), la diagnosi va al coordinatore **prima** di correggere.
   - Se la causa è nel test, lo ripara il test-author, in un commit `test(e2e)` separato.
+
+## 16. Triage di E2-001 (2026-10-06)
+
+**Avvio**:
+- G è integrato: `dev_release2` = `385238e85`, cioè `bff6dea45` più il CHANGELOG (`v1.1.0-464`). Il client API è rigenerato dal coordinatore.
+- Il ramo di L è a `bff6dea45`, pulito. Corsia 6156 e `/tmp/librefolio-r2-l`.
+
+### 16.1 ✅ Le prove già raccolte, prima di rilanciare (skill §0)
+
+- Lo snapshot ARIA e lo screenshot di Risk, più il log del giro finale di G e quello della revisione unita.
+- Al fallimento la modale «Edit Asset» è aperta, la valuta è «USD $» e il trigger è chiuso (senza `[expanded]` né `[disabled]`), con lo stile di hover. Il clic dunque è arrivato al trigger, ma per 10 s `isOpen` è rimasto falso: la listbox esiste solo dentro `{#if isOpen}`, nel contenitore.
+- **Il codice**:
+  - `CurrencySearchSelect` usa `SearchSelect` con `inlineSearch={true}`;
+  - il clic sul trigger chiama `toggleDropdown()`;
+  - `openDropdown()` esce senza fare nulla se `disabled`, oppure se `Date.now() - lastClosedAt < 200`. È la guardia contro la riapertura immediata («touch event race»), ed è un orologio nel prodotto;
+  - `closeDropdown()` rimette il focus sul trigger;
+  - il clic fuori chiude la tendina con un listener di `mousedown`, attivo solo mentre è aperta;
+  - nel 409 `AssetModal` apre `AssetCurrencyChangeModal` (`ModalBase`); «Annulla» la chiude e azzera blocker e payload.
+- **Ipotesi da verificare con la traccia**, in ordine:
+  1. il clic trova la tendina già aperta, per esempio ancora in `loading`, quindi senza opzioni: `optionsClosed` passa, e il clic la chiude (`toggle`);
+  2. il clic cade entro 200 ms da una chiusura;
+  3. il trigger viene rimontato fra il clic e l'attesa;
+  4. il clic arriva mentre il componente è `disabled`.
+- **Come avere la traccia**:
+  - il runner non passa argomenti a Playwright, e in locale `retries: 0` con `trace: 'on-first-retry'` non registra nulla;
+  - `CI=1` cambia in `playwright.config.ts` soltanto `retries` (2), `forbidOnly` e il timeout del `webServer`, e nient'altro nel runner o nel backend;
+  - quindi il comando canonico con `CI=1` registra traccia e video al primo retry, senza toccare file. Il carico si annota prima e dopo.
+
+### 16.2 ✅ Le misure (2026-10-06), corsia 6156, un comando per volta
+
+| Corsa | Come | Carico | E2-001 |
+|---|---|---|---|
+| T1 | runner con `CI=1` | 8,8 | ✘ al primo tentativo (non tracciato), ✓ al retry tracciato |
+| T2 | Playwright diretto con `--trace retain-on-failure` (vedi il Fuori pista) | 6,2 | ✓, 5/5 verdi |
+| P1–P4 | runner con `DEBUG=pw:protocol`, senza traccia | 5,2 / 6,4 / 8,5 / 10,4 | ✘ / ✘ / ✓ / ✘ |
+
+- **Nessuna eccezione JS** (`Runtime.exceptionThrown` = 0) e nessun errore di console nuovo: cade l'ipotesi dell'errore di rendering.
+- **La traccia verde** (T1, retry):
+  - la modale della valuta sparisce subito dopo «Annulla», perché sta dentro `{#if open && blocker}` e non fa la transizione d'uscita;
+  - il secondo clic arriva circa 127 ms dopo «Annulla» e apre la tendina.
+- **La cronologia del protocollo** (P1–P4) va dal clic sull'opzione USD (`selectOption` → `closeDropdown` → `lastClosedAt`) al secondo clic sul trigger. La differenza di tempo coincide fra l'invio e la conferma di Chrome, con uno scarto di circa 3 ms:
+
+| Corsa | Opzione → secondo clic | «Annulla» → secondo clic | Esito |
+|---|---|---|---|
+| P1 | 191 ms | 50 ms | ✘ |
+| P2 | 189 ms | 48 ms | ✘ |
+| P3 | 316 ms | 78 ms | ✓ |
+| P4 | 191 ms | 50 ms | ✘ |
+| tracciate | oltre 600 ms | — | ✓ |
+
+- A decidere l'intervallo è la latenza del PATCH 409: dalla richiesta a «Annulla» passano 104 ms in P1 e 182 ms in P3. Il carico non decide: P1 è rosso con carico 5,2. Anche la traccia «risolve» il rosso solo perché rallenta ogni azione.
+- **⚠️ Fuori pista — gli strumenti**:
+  - il runner non passa argomenti a Playwright, quindi in T2 ho chiamato Playwright direttamente (`node_modules/.bin/playwright` via `pipenv run`), con lo stesso ambiente della corsia che imposta il runner (`TEST_PORT=6156`, `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-l`, `LIBREFOLIO_TEST_MODE=1`, `PIPENV_DONT_LOAD_ENV=1`, `LF_SETUP_DONE=1`) e con `--trace retain-on-failure`;
+  - T1 e P1–P4 usano il comando canonico, con `CI=1` (retry e traccia) oppure `DEBUG=pw:protocol`, che il backend non legge;
+  - nessun file tracciato è cambiato.
+- Un mio errore di analisi, corretto: il primo conteggio di P3 dava 171 ms, perché il parser riconosceva il trigger dalle coordinate più frequenti e in P3 c'era un pareggio. Ora riconosce la sequenza del test (trigger, opzione, Save, «Annulla», trigger).
+
+### 16.3 ✅ Il verdetto (2026-10-06): **defect** nel prodotto (`SearchSelect`), fuori dal perimetro di L
+
+- **La causa**: `openDropdown()` ignora ogni apertura che arriva meno di 200 ms dopo l'ultima chiusura (`Date.now() - lastClosedAt < 200`). La guardia viene da `f9e79d580` (17/04, «dropdown not reopening after selection on mobile») e serve contro il clic fantasma del tocco sul trigger sotto l'opzione. Però si applica a **qualunque** chiusura: mouse, tastiera, selezione.
+  - Il test seleziona USD, salva, riceve il 409, annulla e riapre la tendina in circa 190 ms. Il clic vero viene scartato in silenzio, `isOpen` resta falso e l'attesa della listbox scade dopo 10 s.
+  - Lo stato «riapertura bloccata» non si vede da nessuna parte, né per il test né per l'utente (skill §6). Un test non può aspettarlo senza un orologio.
+- **Perché non è il test**: nessuna posizione, nessun conteggio, nessuna attesa sbagliata. Il test fa ciò che può fare un utente veloce o un programma. E la guardia non ha un test unitario (`SearchSelect.test.ts` non la copre).
+- **Correzione proposta** (da approvare; `SearchSelect` è condiviso da 38 componenti):
+  - la guardia si applica solo se la chiusura è venuta da un tocco o da una penna, cioè dal `pointerType` del `pointerdown` che ha portato alla selezione o alla chiusura. Le aperture con mouse e tastiera dopo una chiusura con mouse o tastiera restano immediate;
+  - prima i test unitari rossi (test-author, Vitest): la riapertura immediata col mouse dopo una selezione col mouse; quella con la tastiera dopo una selezione con la tastiera; il clic fantasma dopo una selezione col tocco, che resta ignorato;
+  - poi la correzione. E2-001 dovrebbe diventare verde senza toccare la spec; da verificare con P1–P4 ripetuti;
+  - un'alternativa solo nel test (un ciclo `toPass` sul clic) è possibile, ma nasconderebbe il difetto.
+- Altre spec che riaprono una `SearchSelect` entro 200 ms da una selezione possono avere lo stesso rosso intermittente. È un'ipotesi, non l'ho verificata.
+
+### 16.4 ✅ La correzione di `SearchSelect` (2026-10-06)
+
+**Decisione del developer** (testuale, tramite il coordinatore): «L corregge sul suo ramo, con i test prima (Consigliato)».
+
+**Vincoli del coordinatore**:
+- i test rossi li scrive il test-author, in un **file separato**, `frontend/src/lib/components/ui/select/SearchSelect.reopen.test.ts`. La famiglia Risk ha aggiunto 127 righe a `SearchSelect.test.ts` sul suo ramo;
+- la registrazione in `component-unit` (`scripts/test_runner/_frontend_utility.py`) è **una riga**, subito dopo `SearchSelect.test.ts`, non in fondo, e la `desc=` non si tocca.
+  - Su `cda8cba1c` F inserisce `AssetPickerPanel.test.ts` dopo `AssetTypeSelect.test.ts`, cioè quattro righe più giù, e cambia le `desc=` di `core-unit` e `component-unit`;
+  - prima del checkpoint, `git merge-file -p` contro la versione di `cda8cba1c` (base `9b5291c25`), salvando subito il codice d'uscita;
+- la spec di E2-001 non si tocca;
+- i gate: `component-unit`; E2-001 ripetuto con la misura dell'intervallo; `select` e qualche `tx-import-*` con molte `SearchSelect`; `front check`.
+
+**Contratto**, cioè il comportamento che i test fissano:
+1. **Mouse**: si apre col clic sul trigger e si sceglie un'opzione col mouse (`pointerdown` con `pointerType: 'mouse'`, poi `click`). Un clic sul trigger **subito dopo, allo stesso istante**, apre la tendina.
+2. **Tastiera**: si apre con `ArrowDown` sul trigger e si sceglie con `Enter` nel campo di ricerca. Un `ArrowDown` sul trigger subito dopo apre la tendina.
+   - `Enter` subito dopo che il trigger prende il focus resta bloccato da un'altra guardia (`triggerFocusedAt`), che non cambia; il test riapre con `ArrowDown`.
+3. **Tocco** (e penna): si apre e si sceglie un'opzione col tocco (`pointerdown` con `pointerType: 'touch'`, poi `click`). Un clic sul trigger entro 200 ms, cioè il clic fantasma, viene ignorato e la tendina resta chiusa. Passati 200 ms, un nuovo tocco la apre.
+4. Senza nessun `pointerdown`, per esempio con un `click` sintetico, la chiusura non conta come tocco: l'apertura subito dopo funziona.
+
+**Progetto della correzione** (in `SearchSelect.svelte`; nessun altro file del prodotto):
+- il componente ricorda il `pointerType` dell'ultima pressione al suo interno, con un listener `pointerdown` in cattura sul contenitore, registrato in un `$effect`. Un `keydown` al suo interno lo azzera;
+- `closeDropdown()` registra se la chiusura è venuta dal tocco o dalla penna;
+- `openDropdown()` applica la guardia dei 200 ms solo in quel caso.
+
+> **Note implementazione — 16.4 (2026-10-06)**:
+> - **Il rosso** (test-author): `SearchSelect.reopen.test.ts`, 5 test × 2 layout (ricerca nella tendina e nel trigger, cioè `inlineSearch`):
+>   - mouse, tastiera, nessun puntatore: **6 rossi**, sull'ultima asserzione (il trigger resta `aria-expanded="false"`), con tutte le premesse verdi;
+>   - tocco e penna: **4 verdi**, perché proteggono la correzione mobile originale;
+>   - `component-unit`: 2223 test esistenti verdi; `check-orphans` pulito (287 file).
+> - **La registrazione**: una sola riga in `_frontend_utility.py`, subito dopo `SearchSelect.test.ts`.
+> - **La cura**: in `SearchSelect.svelte`, `lastPointerType` (listener `pointerdown` e `keydown` in cattura sul contenitore, in un `$effect`), `closedByTouch` in `closeDropdown()`, la guardia in `openDropdown()` solo se `closedByTouch`.
+> - **I gate** (corsia 6156, un comando per volta):
+>
+> | Verifica | Esito |
+> |---|---|
+> | `front-utility component-unit` | 98 file, **2233 passed** (2223 + 10) |
+> | `front check` | **0/0** |
+> | `front build --debug` | ok |
+> | Prettier `--check` sui due file del frontend, `black --check` sul runner | puliti |
+> | E2-001 con `DEBUG=pw:protocol`, spec intera (P5–P8) | 4/4 ✓, intervalli 211–347 ms, carico 9,6–18,7: non discriminano |
+> | E2-001 da solo (P9–P12) | 4/4 ✓, intervalli **194**, 219, **203**, 312 ms dalla conferma (182, 206, 191, 298 dall'invio). P9 (182 ms) e P11 (191 ms) hanno gli stessi intervalli che prima erano sempre rossi (189–191 ms, 3 su 3) |
+> | `front-utility select` | `17 passed` |
+> | `tx-import-asset-inspector` / `-resolution` / `-matching` / `-flow` / `-upload` | `5` / `12` / `6` / `10` / `9 passed` |
+> | `tx-bulk-operations` / `tx-wac-bulk` | `10` / `10 passed` |
+>
+> - **Una firma indipendente**: Chrome conferma il secondo clic in circa 3 ms quando lo scarta (P1, P2, P4) e in 14–18 ms quando apre la lista, perché deve disegnarla (P3 e tutte le corse dopo la correzione).
+> - **`git merge-file -p`** sul runner contro `cda8cba1c` (base `9b5291c25`): **rc=0**, nessun marcatore di conflitto. Il file unito contiene sia `SearchSelect.reopen.test.ts` sia `AssetPickerPanel.test.ts` di F, e si legge senza errori.
+> - **Spec candidate allo stesso rosso** (scansione statica, una guardia per istanza):
+>   - `tx-fx-completeness.spec.ts:370→375` sceglie EUR e poi USD **nella stessa** `SearchSelect` (`tx-form-cash-to`), con solo due asserzioni rapide in mezzo. Oggi è mascherata da `openSearchSelect` (riga 82), che riclicca finché `aria-expanded="true"` (`toPass`, 3 s; introdotta in `ef722b552`). Con la correzione il ciclo non serve più: da semplificare (backlog);
+>   - `tx-commit-all-types`, `tx-fx-implied-rate` e `fx-add-pair` sono falsi positivi: scelgono in istanze diverse;
+>   - nessun'altra spec riapre la stessa istanza in fretta.
+> - Non eseguiti: `tx-import-report-set` e `tx-import-file-selection`, sensibili ai file BRIM rimasti dopo `api brim` di stamattina. Il permesso di `--clean` è scaduto con G.
+
+> **Note implementazione — la documentazione (2026-10-06)**: il docs-writer ha aggiunto un punto in `developer/frontend/components/core-ui/select.md`, sezione «🔎 SearchSelect». Dice che solo una chiusura col tocco o con la penna blocca la riapertura per 200 ms (`closedByTouch`), mentre mouse e tastiera non la bloccano mai. Ricorda anche la guardia separata e invariata su `Enter` subito dopo che il trigger prende il focus (`triggerFocusedAt`, solo con un valore impostato). `mkdocs build` strict ok; `check-links` col solo D28. Pagina senza traduzioni.
+
+### 16 — ✅ pronta per il checkpoint (2026-10-06)
