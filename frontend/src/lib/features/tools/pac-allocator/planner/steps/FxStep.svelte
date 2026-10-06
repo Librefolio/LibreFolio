@@ -112,8 +112,9 @@
     // -- R13.2: a pair with no stored rate is added, or its rates downloaded, here --------------
 
     /**
-     * Days of rates «Add the pair» and «Download the rates» ask for, ending today: enough to
-     * cover a long weekend or a holiday of the source. Both dialogs show the dates.
+     * Days of rates «Download the rates» asks for, ending today: enough to cover a long weekend
+     * or a holiday of the source. The dialog shows the dates. «Add the pair» downloads the
+     * pair's whole history instead (`fxCreationSync`).
      */
     const SYNC_WINDOW_DAYS = 7;
 
@@ -195,8 +196,8 @@
     function setupHelp(setup: PairSetup): string {
         if (setup === 'absent') {
             return $t(`${KEY}.pairAbsentHelp`, {
-                default: '«Add the pair» opens the window of the FX page, with the two currencies already chosen. With a provider, LibreFolio then downloads the rates of the last {days} days and this step reads the latest; with «Manual» as the only provider nothing is downloaded, and the rates are typed on the pair’s page.',
-                values: {days: SYNC_WINDOW_DAYS},
+                default:
+                    '«Add the pair» opens the window of the FX page, with the two currencies already chosen. With a provider, LibreFolio then downloads the pair’s whole rate history and this step reads the latest; with «Manual» as the only provider nothing is downloaded, and the rates are typed on the pair’s page.',
             });
         }
         if (setup === 'provider') {
@@ -355,8 +356,6 @@
         bind:open={addOpen}
         initialBase={adding.base}
         initialQuote={adding.quote}
-        dateStart={adding.start}
-        dateEnd={adding.end}
         oncreated={afterCreation(adding.pair)}
         onsynced={afterDownload(adding.pair)}
         onclose={() => (adding = null)}

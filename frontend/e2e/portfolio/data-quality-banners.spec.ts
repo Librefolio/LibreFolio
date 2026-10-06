@@ -15,12 +15,14 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
-import {expect, test} from '../fixtures/playwright';
+import {expect, test, type Page, type Request} from '../fixtures/playwright';
+import {schemas} from '../../src/lib/api/generated';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage} from '../assets/assets-helpers';
 import {goToFxDetailPage} from '../fx/fx-helpers';
-import {waitForSettled} from '../fixtures/app-events';
+import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
+import {daysAgoIso, todayIso} from '../fixtures/dates';
 
 // ============================================================================
 // Helpers
@@ -106,6 +108,113 @@ async function injectDashboardIssues(page: import('@playwright/test').Page, issu
         }
         await route.fulfill({response, json: body});
     });
+}
+
+// ----------------------------------------------------------------------------
+// MISSING_FX_RATES «Sync rates» — what the dashboard CTA asks the provider for
+// ----------------------------------------------------------------------------
+
+const REPORT_PATH = '/api/v1/portfolio/report';
+const FX_SYNC_PATH = '/api/v1/fx/currencies/sync';
+
+type FxSyncBody = {pairs: string[]; start: string; end: string};
+
+/**
+ * The issue portfolio_engine emits for a configured real-provider pair whose rates are missing
+ * on some dates: `date_from`/`date_to` span every missing date of every affected pair.
+ */
+function missingFxRatesIssue(dateFrom: string, dateTo: string, datesCount: number) {
+    return {
+        domain: 'portfolio',
+        code: 'MISSING_FX_RATES',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.missingFxRates',
+        message_params: {count: 1, date_from: dateFrom, date_to: dateTo, dates_count: datesCount},
+        count: 1,
+        affected_fx_pairs: ['EUR-USD'],
+        cta_action: 'sync_fx_pair',
+        cta_target: 'EUR-USD',
+        group_key: 'missing_fx_rates',
+    };
+}
+
+type FxSyncProbe = {
+    bodies: FxSyncBody[];
+    /** Set just before the held sync is answered: a report requested after it is the reload. */
+    answered: boolean;
+    release: () => void;
+};
+
+/**
+ * Hold every FX sync this page sends until `release()`, then answer it with a canned success.
+ *
+ * No provider is ever reached and no rate is written: the dashboard is shared, and what is
+ * under test is the request the CTA builds and what the page does with the answer. Holding
+ * the request is what makes the busy state observable without a clock.
+ */
+async function holdFxSync(page: Page): Promise<FxSyncProbe> {
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+        open = resolve;
+    });
+    const probe: FxSyncProbe = {bodies: [], answered: false, release: () => open()};
+    await page.route(`**${FX_SYNC_PATH}`, async (route) => {
+        const body = route.request().postDataJSON() as FxSyncBody;
+        probe.bodies.push(body);
+        await gate;
+        const answer = {
+            results: [{pair: 'EUR-USD', status: 'ok', points_fetched: 5, points_changed: 5, provider_used: 'ECB'}],
+            success_count: 1,
+            date_range: {start: body.start, end: body.end},
+            total_points_changed: 5,
+        };
+        schemas.FXSyncBulkResponse.parse(answer);
+        probe.answered = true;
+        await route.fulfill({json: answer});
+    });
+    return probe;
+}
+
+/**
+ * Own the MISSING_FX_RATES rows of every dashboard report this page receives.
+ *
+ * Whatever the backend reported under that code is stripped first. The grouped banner keys its
+ * rows by code + group_key, so a second row with our key would crash the list; and the CTA test
+ * id carries the code alone, so a second MISSING_FX_RATES row (the MANUAL group) would make the
+ * CTA ambiguous. `issue` is then appended to every report requested before the sync was answered
+ * — and to the reload too when `keepAfterSync`: the provider had nothing for those dates.
+ */
+async function serveMissingFxRates(page: Page, issue: ReturnType<typeof missingFxRatesIssue>, sync: FxSyncProbe, keepAfterSync: boolean): Promise<void> {
+    await page.route(`**${REPORT_PATH}`, async (route) => {
+        // Decided when the request leaves the page, not when its answer comes back.
+        const inject = !sync.answered || keepAfterSync;
+        const response = await route.fetch();
+        const body = await response.json();
+        const summary = body?.summary;
+        if (summary) {
+            summary.data_quality = summary.data_quality ?? {issues: []};
+            const kept = ((summary.data_quality.issues ?? []) as Array<{code?: string}>).filter((existing) => existing.code !== issue.code);
+            summary.data_quality.issues = inject ? [...kept, issue] : kept;
+        }
+        await route.fulfill({response, json: body});
+    });
+}
+
+/** The dashboard's own report load: the one request that carries the summary (and its issues). */
+function isSummaryReport(req: Request): boolean {
+    if (req.method() !== 'POST' || new URL(req.url()).pathname !== REPORT_PATH) return false;
+    return (req.postDataJSON() as {include_summary?: boolean} | null)?.include_summary === true;
+}
+
+/** Open the dashboard on its own banner, and return the one MISSING_FX_RATES CTA this test owns. */
+async function openMissingFxRatesCta(page: Page) {
+    await goToDashboard(page);
+    await expandDataQualityBannerStrict(page);
+    const row = page.getByTestId('data-quality-issue-MISSING_FX_RATES');
+    await expect(row, 'every other MISSING_FX_RATES row is stripped: this one is ours').toHaveCount(1);
+    const cta = row.getByTestId('data-quality-cta-MISSING_FX_RATES');
+    await expect(cta).toBeEnabled();
+    return cta;
 }
 
 /** First active asset, with its currency — the anchor for the event-currency FX branch. */
@@ -300,6 +409,90 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         const navLinks = page.locator('[data-testid^="data-quality-nav-asset-"]');
         await expect(navLinks).toHaveCount(2);
         await expect(navLinks.first()).toBeVisible();
+    });
+
+    // «Sync rates» on MISSING_FX_RATES. The missing dates all precede the first stored rate of
+    // the pair (the conversion backfills without limit, so a date is missing only when nothing
+    // exists before it), which is why syncing the period on screen never reached them. The CTA
+    // syncs the dates the issue carries instead, a week either side so a weekend or a holiday
+    // at an edge resolves to the previous working day, and never past today (the backend
+    // rejects a future end with a 400).
+
+    test('MISSING_FX_RATES «Sync rates» syncs the missing dates a week either side, then reloads and reports', async ({page}) => {
+        test.setTimeout(90_000);
+        const sync = await holdFxSync(page);
+        await serveMissingFxRates(page, missingFxRatesIssue('2022-11-03', '2023-06-27', 9), sync, false);
+        try {
+            const cta = await openMissingFxRatesCta(page);
+            expect(sync.bodies, 'nothing syncs before the user asks').toEqual([]);
+
+            const since = await eventSeq(page);
+            await cta.click();
+            await expect.poll(() => sync.bodies.length).toBe(1);
+            expect(sync.bodies[0]).toEqual({pairs: ['EUR-USD'], start: '2022-10-27', end: '2023-07-04'});
+            await expect(cta, 'the CTA is busy while its sync runs').toBeDisabled();
+            await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'true');
+
+            const reload = page.waitForRequest((req) => sync.answered && isSummaryReport(req), {timeout: 30_000});
+            sync.release();
+            await reload;
+            const synced = await waitForEvent(page, 'fx.rates.synced', {since, timeout: 30_000});
+            expect(synced.detail).toMatchObject({origin: 'dashboard-banner', pairs: ['EUR-USD'], start: '2022-10-27', end: '2023-07-04', outcome: 'ok', stillMissing: false});
+            await waitForSettled(page.getByTestId('dashboard-page'), 25_000);
+            expect(sync.bodies, 'one click, one sync').toHaveLength(1);
+        } finally {
+            sync.release();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('MISSING_FX_RATES «Sync rates» caps a recent last missing date at today', async ({page}) => {
+        test.setTimeout(90_000);
+        const sync = await holdFxSync(page);
+        await serveMissingFxRates(page, missingFxRatesIssue(daysAgoIso(30), daysAgoIso(2), 2), sync, false);
+        try {
+            const cta = await openMissingFxRatesCta(page);
+
+            const since = await eventSeq(page);
+            await cta.click();
+            await expect.poll(() => sync.bodies.length).toBe(1);
+            const expected = {pairs: ['EUR-USD'], start: daysAgoIso(37), end: todayIso()};
+            expect(sync.bodies[0]).toEqual(expected);
+
+            sync.release();
+            const synced = await waitForEvent(page, 'fx.rates.synced', {since, timeout: 30_000});
+            expect(synced.detail).toMatchObject({origin: 'dashboard-banner', ...expected, outcome: 'ok', stillMissing: false});
+        } finally {
+            sync.release();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('MISSING_FX_RATES dates still missing after the sync are reported, with a warning', async ({page}) => {
+        test.setTimeout(90_000);
+        const sync = await holdFxSync(page);
+        // The reload still carries the issue: the provider published nothing for those dates.
+        await serveMissingFxRates(page, missingFxRatesIssue('2022-11-03', '2023-06-27', 9), sync, true);
+        try {
+            const cta = await openMissingFxRatesCta(page);
+
+            const since = await eventSeq(page);
+            await cta.click();
+            await expect.poll(() => sync.bodies.length).toBe(1);
+            expect(sync.bodies[0]?.pairs).toEqual(['EUR-USD']);
+
+            const reload = page.waitForRequest((req) => sync.answered && isSummaryReport(req), {timeout: 30_000});
+            sync.release();
+            await reload;
+            const synced = await waitForEvent(page, 'fx.rates.synced', {since, timeout: 30_000});
+            expect(synced.detail).toMatchObject({origin: 'dashboard-banner', pairs: ['EUR-USD'], outcome: 'ok', stillMissing: true});
+            // The variant is the contract, not the sentence. Any warning will do: a per-pair
+            // toast may be on screen beside it.
+            await expect(page.getByTestId('toast-warning').first()).toBeVisible();
+        } finally {
+            sync.release();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
     });
 });
 

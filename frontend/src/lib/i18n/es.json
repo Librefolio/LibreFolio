@@ -1695,7 +1695,8 @@
     "missingFxRates": "Faltan tasas FX para {count} par(es) entre {date_from} y {date_to} ({dates_count} fecha(s)) — sincroniza para completar los totales",
     "missingFxRatesManual": "Faltan tasas FX para {count} par(es) manual(es) — añade las tasas manualmente",
     "assetIncomeNoEligibleLots": "Ningún lote abierto elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — ingreso sin asignar",
-    "assetCostNoEligibleLots": "Ningún lote elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — coste sin asignar"
+    "assetCostNoEligibleLots": "Ningún lote elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — coste sin asignar",
+    "missingFxRatesAfterSync": "Siguen faltando tasas FX para {pairs} entre {date_from} y {date_to} ({dates_count} fecha(s)): el proveedor no devolvió ninguna para esas fechas. Introdúcelas a mano en la página del par."
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",
@@ -1837,8 +1838,7 @@
       "legBreakdown": "Detalle por tramo",
       "legNoData": "0 fechas — sin datos",
       "legDates": "fechas",
-      "inProgress": "Sincronizando tasas FX…",
-      "noNewData": "No hay nuevas tasas disponibles del proveedor para este período"
+      "inProgress": "Sincronizando tasas FX…"
     },
     "route": {
       "title": "Rutas de Conversión",
@@ -4296,7 +4296,7 @@
           "manualHelp": "Tu tipo: el cálculo lo usa tal como lo escribes y nunca lo vuelve a leer. {hasCopy, select, yes {LibreFolio tiene {rate}, del {date}: «Auto» lo restablece.} other {En «Auto» el cálculo usa el tipo guardado en LibreFolio, cuando lo hay.}}",
           "pairMissing": "LibreFolio no tiene un tipo guardado para este par.",
           "pairAbsent": "LibreFolio aún no sigue este par: añádelo aquí, o cambia a «Manual» y escribe el tipo.",
-          "pairAbsentHelp": "«Añadir el par» abre la ventana de la página FX, con las dos divisas ya elegidas. Con un proveedor, LibreFolio descarga luego los tipos de los últimos {days} días y este paso lee el más reciente; con «Manual» como único proveedor no se descarga nada, y los tipos se escriben en la página del par.",
+          "pairAbsentHelp": "«Añadir el par» abre la ventana de la página FX, con las dos divisas ya elegidas. Con un proveedor, LibreFolio descarga luego todo el historial de tipos del par y este paso lee el más reciente; con «Manual» como único proveedor no se descarga nada, y los tipos se escriben en la página del par.",
           "pairNoRates": "LibreFolio sigue este par pero no tiene ningún tipo hasta hoy: descarga los tipos aquí, o cambia a «Manual» y escribe el tipo.",
           "pairNoRatesHelp": "«Descargar los tipos» abre la ventana de descarga de la página FX para este par, ajustada a los últimos {days} días; cuando termina la descarga, este paso lee el tipo más reciente. No se llama a ningún proveedor hasta que inicias la descarga.",
           "pairManualOnly": "LibreFolio sigue este par solo con tipos manuales, y no tiene ninguno hasta hoy: añade uno en la página del par, o cambia a «Manual» y escríbelo aquí.",
