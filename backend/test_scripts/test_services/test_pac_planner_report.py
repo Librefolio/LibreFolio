@@ -44,11 +44,13 @@ them, with exposure variants built via ``dataclasses.replace``.
 
 from __future__ import annotations
 
+import random
 from dataclasses import replace
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Context, Decimal
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from backend.app.schemas.pac_allocator import (
     DeploymentUnavailable,
@@ -954,3 +956,244 @@ def test_full_ready_incumbent_result_validates_end_to_end_with_uncategorised_ass
 
     # The accounting identity closes exactly.
     assert _exact_fraction(full.primary_solution.accounting.identity_delta.value) == Fraction(0)
+
+
+# --------------------------------------------------------------------------
+# Solver robustness — an unfinished tie-break stays visible in the evidence,
+# and the stop cause is read from the first stage that decided it.
+# Solver robustness slice, 2026-10.
+# --------------------------------------------------------------------------
+
+
+def _two_asset_full_run():
+    """A genuine ``two_asset_pac`` run on a 30 s budget, every stage finished."""
+    scenario = _two_asset_pac_scenario()
+    view = build_exact_policy_view(scenario, purpose="primary")
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=30.0)
+    assert all(stage.status == "finished" for stage in result.stages), f"PREMISE: every stage finished, got {[(stage.stage, stage.status, stage.scip_status) for stage in result.stages]}"
+    return scenario, view, result
+
+
+def test_an_unfinished_tie_stage_marks_the_last_objective_row_unfinished() -> None:
+    """Tie stages have no evidence row (the wire ``ObjectiveCode`` has no
+    ``tie:*``), so a limit hit inside the tie-breaks would vanish from the
+    evidence while the stop reason names it. The named row with the highest
+    ordinal carries it: its status becomes ``unfinished``, every observation it
+    holds stays as SCIP reported it, and no other row changes.
+    """
+    scenario, view, result = _two_asset_full_run()
+    last = result.stages[-1]
+    assert last.stage.startswith("tie:"), f"PREMISE: the last stage is a tie, got {last.stage}"
+    cut = replace(last, status="unfinished", scip_status="budget_exhausted", primal=None, dual=None, absolute_gap=None, relative_gap=None, solving_seconds=0.0, nodes=0)
+    doctored = replace(result, stages=(*result.stages[:-1], cut), finished_stage_count=result.finished_stage_count - 1)
+
+    original_rows = list(PR.build_solver_evidence(scenario, view, result).stages)
+    doctored_rows = list(PR.build_solver_evidence(scenario, view, doctored).stages)
+    assert len(doctored_rows) == len(original_rows)
+    top = max(range(len(original_rows)), key=lambda index: original_rows[index].ordinal)
+    assert doctored_rows[top].status == "unfinished", doctored_rows[top]
+    assert doctored_rows[top].model_copy(update={"status": original_rows[top].status}) == original_rows[top]
+    assert doctored_rows[:top] + doctored_rows[top + 1 :] == original_rows[:top] + original_rows[top + 1 :]
+    assert PR.build_stop_reason(doctored) == "time_limit"
+
+
+@pytest.mark.parametrize(
+    ("scip_statuses", "expected"),
+    [
+        pytest.param((None,) * 7, "completed", id="C1-all-finished"),
+        pytest.param(("nodelimit", *("optimal",) * 6), "node_limit", id="C2-node-limit-on-stage-one"),
+        pytest.param(("timelimit", "optimal", "nodelimit", *("optimal",) * 4), "time_limit", id="C3-clock-before-a-later-node-limit"),
+        pytest.param(("timelimit", "optimal", "nodelimit", *("not_reached",) * 4), "time_limit", id="C4-clock-before-node-limit-and-not-reached"),
+        pytest.param((None, "optimal", "nodelimit", *("optimal",) * 4), "node_limit", id="C5-node-limit-in-the-tail"),
+        pytest.param((*(None,) * 6, "budget_exhausted"), "time_limit", id="C6-budget-gone-in-the-last-tie"),
+        pytest.param((None, "infeasible", *("not_reached",) * 5), "time_limit", id="C7-empty-face"),
+        pytest.param((None, *("optimal",) * 6), "time_limit", id="C8-no-deciding-stage"),
+    ],
+)
+def test_stop_reason_is_read_from_the_first_deciding_stage(scip_statuses: tuple[str | None, ...], expected: str) -> None:
+    """The stop is ``completed`` iff no stage is unfinished. Otherwise the
+    first unfinished stage, ties included, that SCIP did not close
+    ``optimal`` decided it: ``node_limit`` if it stopped on ``nodelimit``,
+    else ``time_limit``; with no such stage, ``time_limit``.
+
+    A node limit met by a later stage, after stage 1 already ran out of time,
+    is not the cause: the clock is. Each case doctors one genuine
+    7-stage run; ``None`` leaves a stage finished.
+    """
+    _scenario, _view, result = _two_asset_full_run()
+    assert len(result.stages) == 7, f"PREMISE: two_asset_pac runs 5 named stages and 2 ties, got {len(result.stages)}"
+    stages = tuple(stage if status is None else replace(stage, status="unfinished", scip_status=status) for stage, status in zip(result.stages, scip_statuses, strict=True))
+    doctored = replace(result, stages=stages, finished_stage_count=sum(stage.status == "finished" for stage in stages))
+
+    assert PR.build_stop_reason(doctored) == expected
+
+
+# --------------------------------------------------------------------------
+# Solver robustness — the published absolute gap is the exact difference of
+# the published bounds, so the schema's exact check holds by construction.
+# Solver robustness slice, 2026-10.
+# --------------------------------------------------------------------------
+
+_GAP_SWEEP_SEED = 20261006
+_GAP_SWEEP_SIZE = 1000
+
+
+def _last_named_stage(view, result):
+    """The named stage with the highest ordinal: the last row the evidence publishes.
+
+    Named means its code is one of the view's objectives, the very filter
+    ``build_solver_evidence`` applies; a tie-break stage never qualifies.
+    """
+    named = {ref.code for ref in view.objectives}
+    return max((stage for stage in result.stages if stage.objective_code in named), key=lambda stage: stage.ordinal)
+
+
+def _clock_cut_last_named_stage(view, result, *, primal: float | None, dual: float | None):
+    """``result`` as if the clock had stopped its last named stage on ``primal`` and ``dual``.
+
+    The gaps are read the way the solver reads them off SCIP: the absolute one
+    is the float ``abs(primal - dual)``, the relative one a nonnegative float,
+    and both are absent unless both bounds are present. Earlier stages stay as
+    SCIP finished them; every later one, the tie-breaks, is cut short as a
+    budget spent in the tail leaves it, so finished stages still precede
+    unfinished ones across the whole cascade.
+    """
+    target = _last_named_stage(view, result)
+    absolute_gap = relative_gap = None
+    if primal is not None and dual is not None:
+        absolute_gap = abs(primal - dual)
+        relative_gap = absolute_gap / max(abs(primal), abs(dual), 1.0)
+    cut = {"status": "unfinished", "scip_status": "timelimit", "primal": primal, "dual": dual, "absolute_gap": absolute_gap, "relative_gap": relative_gap}
+    spent = {"status": "unfinished", "scip_status": "budget_exhausted", "primal": None, "dual": None, "absolute_gap": None, "relative_gap": None, "solving_seconds": 0.0, "nodes": 0}
+    stages = tuple(stage if stage.ordinal < target.ordinal else replace(stage, **(cut if stage.ordinal == target.ordinal else spent)) for stage in result.stages)
+    return replace(result, stages=stages, finished_stage_count=sum(stage.status == "finished" for stage in stages))
+
+
+def _evidence_row(evidence, stage):
+    """The evidence row of ``stage``, found by code and ordinal, never by position."""
+    row = next((candidate for candidate in evidence.stages if (candidate.objective_code, candidate.ordinal) == (stage.objective_code, stage.ordinal)), None)
+    assert row is not None, f"no evidence row for {stage.stage} (ordinal {stage.ordinal})"
+    return row
+
+
+def _fixed_point_text(value: float) -> str:
+    """The text a float bound publishes as, rebuilt without ``planner_report``.
+
+    Its shortest repr in positional notation, trailing zeros and a bare
+    trailing dot dropped, so a premise built on it does not lean on the code
+    under test.
+    """
+    text = format(Decimal(str(value)), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _gap_sweep_pairs() -> list[tuple[float, float]]:
+    """Deterministic ``(primal, dual)`` bounds of a minimisation stage, ``0 <= dual <= primal``.
+
+    ``dual`` spans about 1e-9 to 1e6 and ``primal - dual`` about 1e-12 to 1e3,
+    log-uniformly; every tenth pair has ``primal == dual`` and every fiftieth
+    a zero dual. Every published text stays far below the schema's
+    96-character limit.
+    """
+    rng = random.Random(_GAP_SWEEP_SEED)
+    pairs = []
+    for index in range(_GAP_SWEEP_SIZE):
+        dual = 0.0 if index % 50 == 25 else 10 ** rng.uniform(-9, 6)
+        delta = 0.0 if index % 10 == 0 else 10 ** rng.uniform(-12, 3)
+        pairs.append((dual + delta, dual))
+    return pairs
+
+
+@pytest.mark.parametrize(
+    ("primal", "dual", "primal_text", "dual_text", "gap_text"),
+    [
+        pytest.param(7.965, 7.770482487229448, "7.965", "7.770482487229448", "0.194517512770552", id="explicit-cost-pair"),
+        pytest.param(18.000000000026, 11.817996292140588, "18.000000000026", "11.817996292140588", "6.182003707885412", id="route-priority-pair"),
+    ],
+)
+def test_published_absolute_gap_is_the_exact_difference_of_the_published_bounds(primal: float, dual: float, primal_text: str, dual_text: str, gap_text: str) -> None:
+    """The evidence publishes each bound as its shortest float text and the
+    absolute gap as the exact difference of those two texts, so the schema's
+    exact check ``absolute_gap >= |primal - dual|`` holds by construction.
+
+    The float ``abs(primal - dual)`` is not that number: its own shortest
+    text can fall about 1e-15 short of the difference of the texts, and the
+    schema then rejects the whole evidence. Both pairs were observed on real
+    SCIP runs of the PAC grids, on the stages their ids name; here each sits
+    on the last named stage, stopped by the clock.
+    """
+    exact = abs(Fraction(Decimal(primal_text)) - Fraction(Decimal(dual_text)))
+    assert (str(primal), str(dual), Fraction(Decimal(gap_text))) == (primal_text, dual_text, exact), "PREMISE: the bounds print as the real run published them, and the expected gap is their exact difference"
+    assert Fraction(Decimal(str(abs(primal - dual)))) < exact, f"PREMISE: the float gap {abs(primal - dual)!r} prints below the exact difference {gap_text}"
+    scenario, view, result = _two_asset_full_run()
+    target = _last_named_stage(view, result)
+
+    evidence = PR.build_solver_evidence(scenario, view, _clock_cut_last_named_stage(view, result, primal=primal, dual=dual))
+
+    row = _evidence_row(evidence, target)
+    assert (row.status, row.primal, row.dual, row.absolute_gap) == ("unfinished", primal_text, dual_text, gap_text)
+    assert Fraction(Decimal(row.absolute_gap)) == abs(Fraction(Decimal(row.primal)) - Fraction(Decimal(row.dual)))
+
+
+def test_published_absolute_gap_keeps_every_digit_of_a_long_difference() -> None:
+    """The published absolute gap keeps every digit of the difference of the
+    published bounds, however many it takes: a bound near 18 against a
+    17-digit float near 1.2e-12 differ by a number of 30 significant digits.
+
+    It guards the precision of that subtraction: a fix that subtracts the two
+    texts in the default 28-digit Decimal context would still publish a
+    rounded, too-small gap here.
+    """
+    primal, dual = 18.000000000026, 1.2345678901234567e-12
+    primal_text, dual_text, gap_text = "18.000000000026", "0.0000000000012345678901234567", "18.0000000000247654321098765433"
+    published = (_fixed_point_text(primal), _fixed_point_text(dual))
+    assert published == (primal_text, dual_text), f"PREMISE: the bounds publish as {primal_text} and {dual_text}, got {published}"
+    assert Fraction(Decimal(gap_text)) == abs(Fraction(Decimal(primal_text)) - Fraction(Decimal(dual_text))), "PREMISE: the expected gap is the exact difference of the published bounds"
+    rounded = Context(prec=28, rounding=ROUND_HALF_EVEN).subtract(Decimal(primal_text), Decimal(dual_text))
+    assert rounded < Decimal(gap_text), f"PREMISE: a 28-digit Decimal subtraction rounds the difference down, to {rounded}"
+    scenario, view, result = _two_asset_full_run()
+    target = _last_named_stage(view, result)
+
+    evidence = PR.build_solver_evidence(scenario, view, _clock_cut_last_named_stage(view, result, primal=primal, dual=dual))
+
+    row = _evidence_row(evidence, target)
+    assert (row.status, row.primal, row.dual, row.absolute_gap) == ("unfinished", primal_text, dual_text, gap_text)
+    assert Fraction(Decimal(row.absolute_gap)) == abs(Fraction(Decimal(row.primal)) - Fraction(Decimal(row.dual)))
+
+
+def test_published_absolute_gap_is_exact_across_a_deterministic_sweep() -> None:
+    """The same contract over a deterministic sweep of bounds: every pair
+    publishes, and its absolute gap equals the difference of its published
+    bounds exactly, not merely to within a float's reach of it.
+    """
+    scenario, view, result = _two_asset_full_run()
+    target = _last_named_stage(view, result)
+    pairs = _gap_sweep_pairs()
+    rejected = []
+    inexact = []
+    for primal, dual in pairs:
+        try:
+            evidence = PR.build_solver_evidence(scenario, view, _clock_cut_last_named_stage(view, result, primal=primal, dual=dual))
+        except ValidationError as error:
+            rejected.append((str(primal), str(dual), str(abs(primal - dual)), error.title, "; ".join(item["msg"] for item in error.errors())))
+        else:
+            row = _evidence_row(evidence, target)
+            if Fraction(Decimal(row.absolute_gap)) != abs(Fraction(Decimal(row.primal)) - Fraction(Decimal(row.dual))):
+                inexact.append((row.primal, row.dual, row.absolute_gap))
+    assert not rejected and not inexact, f"{len(rejected)} of {len(pairs)} pairs rejected and {len(inexact)} published an inexact absolute gap; first rejected (primal, dual, float gap, model, error): {rejected[:3]}; first inexact (primal, dual, published gap): {inexact[:3]}"
+
+
+def test_absolute_gap_stays_absent_when_the_stage_has_no_primal() -> None:
+    """A stage stopped before it found a plan reports a dual bound but no
+    primal, hence no gap: the evidence keeps ``absolute_gap`` absent rather
+    than deriving one from the dual alone.
+    """
+    scenario, view, result = _two_asset_full_run()
+    target = _last_named_stage(view, result)
+
+    evidence = PR.build_solver_evidence(scenario, view, _clock_cut_last_named_stage(view, result, primal=None, dual=7.770482487229448))
+
+    row = _evidence_row(evidence, target)
+    assert (row.status, row.primal, row.dual, row.absolute_gap, row.relative_gap) == ("unfinished", None, "7.770482487229448", None, None)
