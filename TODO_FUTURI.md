@@ -2277,3 +2277,31 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   (`LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v1/high-level-plan_v1-feasibility-report.md:300`)
   dà la PK per «autoincrementante mai riusata». Non è vero. Lì l'identità del lotto si calcola a ogni
   esecuzione e non si salva, quindi oggi non fa danni.
+
+## 🧺 Asset Global — modificare insieme più asset selezionati
+
+**Data aggiunta**: 6 Ottobre 2026 · **Status**: 📋 DA PIANIFICARE · **Priorità**: Media
+
+### Contesto
+- Richiesta del developer del 06/10/2026, testuale: «In asset global, sarebbe utile far selezionare più asset e
+  fare modifica, ma in questa modifica non modificare il grafico e i segnali, bensì l'asset, ad esempio selezionare i
+  vari asset etf e renderli etf azionari, con una botta, o tutti benchmark e così via, ovviamente se si cambia un
+  parametro esso diventa uguale per tutti, ma se è quello lo scopo, si fa molto prima».
+- Oggi un asset si modifica solo uno alla volta, dalla sua modale.
+
+### Obiettivo
+- Selezione multipla nella lista di Asset Global, sia nella griglia sia nella tabella.
+- Un'azione «Modifica selezionati» che apre una modale con i soli campi dell'asset, per esempio il tipo (con il menu a
+  due livelli) e il flag benchmark. Niente grafico e niente segnali.
+- Cambiano solo i campi che l'utente tocca, e diventano uguali per tutti gli asset selezionati. Gli altri restano
+  come sono.
+- Prima di salvare, un riepilogo: quanti asset cambiano e quali campi.
+
+### Note per chi la pianifica
+- Riusare lo schema create/edit → bulk già deciso per le transazioni (decisione duplicate-mode del 07/09 in
+  `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/01_ux_dashboard.md`) e la selezione di `DataTable`.
+- Backend: un aggiornamento per lista di id in una sola transazione, oppure le PATCH esistenti una per asset, con
+  un esito per ciascuno. I campi che dipendono dal tipo vanno validati per tipo.
+- Attenzione ai campi legati al tipo (famiglie ETF e Crowdfunding) e a quelli che un provider sovrascrive alla
+  sincronizzazione successiva.
+- Candidato naturale: K (tassonomia, select, modale asset).
