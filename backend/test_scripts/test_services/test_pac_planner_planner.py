@@ -80,6 +80,7 @@ import copy
 import importlib.util
 import math
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -111,6 +112,7 @@ from backend.app.services.pac_allocator.evaluator import build_exact_policy_view
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
+from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scaled
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -1342,3 +1344,125 @@ def test_rate_only_schedule_charges_like_its_explicit_eur_twin():
     assert all(Fraction(row["fee"]["amount"]) > 0 for row in order_rows), order_rows
     assert _wire_exact(reference["primary_solution"]["costs"]["buy_fees"]["value"]) > 0
     _assert_same_plan_figures(rate_only, reference)
+
+
+# --------------------------------------------------------------------------
+# Item 12 — solver robustness: a limit inside the tie-breaks is visible on the
+# wire, and a solver "infeasible" the exact zero plan contradicts is an error.
+# Solver robustness slice, 2026-10.
+# --------------------------------------------------------------------------
+def _cut_last_tie_stage(run):
+    """The same SCIP run, its last stage — a tie-break — never reached by the budget."""
+    assert all(stage.status == "finished" for stage in run.stages), f"PREMISE: every stage finished, got {[(stage.stage, stage.status, stage.scip_status) for stage in run.stages]}"
+    last = run.stages[-1]
+    assert last.stage.startswith("tie:"), f"PREMISE: the last stage is a tie, got {last.stage}"
+    cut = replace(last, status="unfinished", scip_status="budget_exhausted", primal=None, dual=None, absolute_gap=None, relative_gap=None, solving_seconds=0.0, nodes=0)
+    return replace(run, stages=(*run.stages[:-1], cut), finished_stage_count=run.finished_stage_count - 1)
+
+
+def test_unfinished_tie_stage_reaches_the_wire_as_an_unfinished_objective_row(monkeypatch):
+    """A budget that runs out inside the tie-breaks is a ``time_limit`` stop
+    the wire can carry: the last named objective row reports ``unfinished``,
+    keeping the observations SCIP made for it, the proof is ``not_proven``,
+    and the result survives the wire union.
+
+    Tie stages have no evidence row of their own. Without that row the
+    stop/evidence invariant would reject the very stop the planner derived,
+    and a plan SCIP did find would be lost to a validation error.
+
+    Seam: the real SCIP run, its last stage replaced by one the budget never
+    reached; the replay, the proof and the report stay real.
+    """
+    real_solve = planner.solve_policy_program
+    runs = []
+
+    def solve_then_cut_the_last_tie(program, *args, **kwargs):
+        run = _cut_last_tie_stage(real_solve(program, *args, **kwargs))
+        runs.append(run)
+        return run
+
+    monkeypatch.setattr(planner, "solve_policy_program", solve_then_cut_the_last_tie)
+    try:
+        outcome = plan_pac_allocation(_validated(_incumbent_payload()), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    except ValueError as error:  # a stop the evidence cannot carry fails the wire validator, a ValueError
+        outcome = error
+
+    assert len(runs) == 1, "the planner must run SCIP exactly once"
+    assert isinstance(outcome, PacPlannerReadyIncumbentResult), f"{type(outcome).__name__}: {outcome}"
+    assert (outcome.stop_reason, outcome.proof.kind) == ("time_limit", "not_proven")
+    top = max(outcome.solver_evidence.stages, key=lambda stage: stage.ordinal)
+    assert top.status == "unfinished", top
+    assert top.primal is not None, top
+    _revalidate(outcome)
+
+
+def test_solver_infeasibility_contradicted_by_the_exact_zero_plan_raises(monkeypatch):
+    """SCIP's ``infeasible`` on stage 1 proves nothing the exact replay
+    refutes. Every no-incumbent result replays the do-nothing plan anyway; when
+    that replay is valid and feasible the scenario is feasible, so the verdict
+    is SCIP's error: ``plan_pac_allocation`` raises
+    ``SolverInfeasibilityContradictedError`` rather than publish an
+    ``infeasibility_proven`` the exact arithmetic contradicts. The message
+    names no amount.
+
+    Seam: the real SCIP run, reported back as the single infeasible first
+    stage of an infeasible scenario.
+    """
+    request = _validated(_incumbent_payload())
+    normalized = normalize_pac_plan(request)
+    assert normalized.ready, f"PREMISE: the request normalizes, issues {[issue.code for issue in normalized.issues]}"
+    scenario = normalized.normalized
+    zero = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    assert (zero.candidate_valid, zero.feasible) == (True, True), f"PREMISE: the do-nothing plan is valid and feasible, conflicts {zero.conflict_codes}"
+
+    real_solve = planner.solve_policy_program
+
+    def solve_then_report_infeasible(program, *args, **kwargs):
+        real = real_solve(program, *args, **kwargs)
+        first = replace(real.stages[0], status="infeasible", scip_status="infeasible", primal=None, dual=None, absolute_gap=None, relative_gap=None)
+        return replace(real, outcome="reported_infeasible", candidate=None, stages=(first,), finished_stage_count=0, anomaly=None)
+
+    monkeypatch.setattr(planner, "solve_policy_program", solve_then_report_infeasible)
+    try:
+        outcome = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    except ValueError as error:  # the contradiction is an ExactEvaluatorError, a ValueError
+        outcome = error
+
+    assert not isinstance(outcome, PacPlannerReadyInfeasibleResult), f"a feasible do-nothing plan was published as {outcome.result_state} / {outcome.proof.kind}"
+    from backend.app.services.pac_allocator.planner import SolverInfeasibilityContradictedError  # noqa: PLC0415 — added by S3
+
+    assert isinstance(outcome, SolverInfeasibilityContradictedError), repr(outcome)
+    assert isinstance(outcome, EV.ExactEvaluatorError)
+    assert re.search(r"\d+\.\d+", str(outcome)) is None, str(outcome)
+
+
+def test_huge_amounts_never_turn_a_feasible_zero_plan_into_proven_infeasibility():
+    """SCIP's float tolerances do not scale with the amounts: on large enough
+    money it can close a feasible stage 1 ``infeasible``. The exact do-nothing
+    plan, feasible here, keeps that from ever being published as
+    ``infeasibility_proven``: the plan raises
+    ``SolverInfeasibilityContradictedError`` or returns a result the wire
+    union accepts.
+
+    The synthetic 5x1 grid with every money amount ×10**8: prices from 2e9 to
+    5e9, cash 1.5e11. Real SCIP, no seam.
+    """
+    request = _validated(scaled(make(**V["5x1"]), 8))
+    normalized = normalize_pac_plan(request)
+    assert normalized.ready, f"PREMISE: the scaled request normalizes, issues {[issue.code for issue in normalized.issues]}"
+    scenario = normalized.normalized
+    zero = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    assert (zero.candidate_valid, zero.feasible) == (True, True), f"PREMISE: the do-nothing plan is valid and feasible, conflicts {zero.conflict_codes}"
+
+    try:
+        outcome = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    except ValueError as error:  # the contradiction is an ExactEvaluatorError, a ValueError
+        outcome = error
+
+    assert not isinstance(outcome, PacPlannerReadyInfeasibleResult), f"a feasible do-nothing plan was published as {outcome.result_state} / {outcome.proof.kind} / {outcome.stop_reason}"
+    if isinstance(outcome, Exception):
+        from backend.app.services.pac_allocator.planner import SolverInfeasibilityContradictedError  # noqa: PLC0415 — added by S3
+
+        assert isinstance(outcome, SolverInfeasibilityContradictedError), repr(outcome)
+    else:
+        _revalidate(outcome)
