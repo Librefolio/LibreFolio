@@ -1218,7 +1218,7 @@
 />
 
 <!-- Add Pair Modal -->
-<FxPairAddModal bind:open={addModalOpen} {dateEnd} {dateStart} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
+<FxPairAddModal bind:open={addModalOpen} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
 <FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />

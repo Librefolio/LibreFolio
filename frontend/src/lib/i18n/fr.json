@@ -1695,7 +1695,8 @@
     "missingFxRates": "Taux FX manquants pour {count} paire(s) entre {date_from} et {date_to} ({dates_count} date(s)) — synchronisez pour compléter les totaux",
     "missingFxRatesManual": "Taux FX manquants pour {count} paire(s) manuelle(s) — ajoutez les taux manuellement",
     "assetIncomeNoEligibleLots": "Aucun lot ouvert éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — revenu non alloué",
-    "assetCostNoEligibleLots": "Aucun lot éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — coût non alloué"
+    "assetCostNoEligibleLots": "Aucun lot éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — coût non alloué",
+    "missingFxRatesAfterSync": "Il manque encore des taux FX pour {pairs} entre {date_from} et {date_to} ({dates_count} date(s)) : le fournisseur n’en a renvoyé aucun pour ces dates. Saisissez-les à la main sur la page de la paire."
   },
   "dataEditor": {
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",
@@ -1837,8 +1838,7 @@
       "legBreakdown": "Détail par étape",
       "legNoData": "0 dates — aucune donnée",
       "legDates": "dates",
-      "inProgress": "Synchronisation des taux FX…",
-      "noNewData": "Aucun nouveau taux disponible chez le fournisseur pour cette période"
+      "inProgress": "Synchronisation des taux FX…"
     },
     "route": {
       "title": "Routes de Conversion",
@@ -4296,7 +4296,7 @@
           "manualHelp": "Votre taux : le calcul l’utilise tel que vous l’écrivez et ne le relit jamais. {hasCopy, select, yes {LibreFolio a {rate}, du {date} : « Auto » le rétablit.} other {En « Auto », le calcul utilise le taux enregistré dans LibreFolio, s’il existe.}}",
           "pairMissing": "LibreFolio n’a aucun taux enregistré pour cette paire.",
           "pairAbsent": "LibreFolio ne suit pas encore cette paire : ajoutez-la ici, ou passez à « Manuel » et saisissez le taux.",
-          "pairAbsentHelp": "« Ajouter la paire » ouvre la fenêtre de la page FX, avec les deux devises déjà choisies. Avec un fournisseur, LibreFolio télécharge ensuite les taux des {days} derniers jours et cette étape lit le plus récent ; avec « Manuel » comme seul fournisseur, rien n’est téléchargé, et les taux se saisissent sur la page de la paire.",
+          "pairAbsentHelp": "« Ajouter la paire » ouvre la fenêtre de la page FX, avec les deux devises déjà choisies. Avec un fournisseur, LibreFolio télécharge ensuite tout l’historique des taux de la paire et cette étape lit le plus récent ; avec « Manuel » comme seul fournisseur, rien n’est téléchargé, et les taux se saisissent sur la page de la paire.",
           "pairNoRates": "LibreFolio suit cette paire mais n’a aucun taux jusqu’à aujourd’hui : téléchargez les taux ici, ou passez à « Manuel » et saisissez le taux.",
           "pairNoRatesHelp": "« Télécharger les taux » ouvre la fenêtre de téléchargement de la page FX pour cette paire, réglée sur les {days} derniers jours ; à la fin du téléchargement, cette étape lit le taux le plus récent. Aucun fournisseur n’est appelé tant que vous ne lancez pas le téléchargement.",
           "pairManualOnly": "LibreFolio suit cette paire uniquement avec des taux manuels, et n’en a aucun jusqu’à aujourd’hui : ajoutez-en un sur la page de la paire, ou passez à « Manuel » et saisissez-le ici.",

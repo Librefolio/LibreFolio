@@ -10,6 +10,7 @@
 
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
+import {todayIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage, openAddPairModal, selectCurrency} from './fx-helpers';
 
@@ -22,6 +23,10 @@ test.describe('FX Add Pair Modal', () => {
         // The entire FX configuration/rate surface below is browser-context local.
         // No POST reaches the shared database, and no real provider is contacted.
         const slug = 'EUR-GBP';
+        // The FX page is opened on this period, and its conversion reads use it.
+        // Creation must NOT: a new pair syncs everything the provider publishes, up
+        // to today, so that no transaction older than the period on screen is left
+        // without a rate. Opening the page on a range is what proves it is ignored.
         const range = {start: '2024-03-01', end: '2024-03-31'};
 
         for (const {mode, leaveBeforeSync, detailRace} of [
@@ -34,6 +39,8 @@ test.describe('FX Add Pair Modal', () => {
         ] as const) {
             test(`${mode} creation closes promptly and links to its owned pair${leaveBeforeSync ? ' after leaving FX' : ''}${detailRace !== 'none' ? ` with early detail ${detailRace}` : ''}`, async ({page}) => {
                 const {eventSeq, waitForEvent} = await import('../fixtures/app-events');
+                /** What creation syncs: the provider's whole history, up to today on the user's calendar. */
+                const fullHistory = {start: 'min', end: todayIso()};
                 const routeItem = {
                     base: 'EUR',
                     quote: 'GBP',
@@ -91,14 +98,14 @@ test.describe('FX Add Pair Modal', () => {
                 await page.route('**/api/v1/fx/currencies/sync', async (route) => {
                     const body = route.request().postDataJSON();
                     syncBodies.push(body);
-                    expect(body).toEqual({pairs: [slug], ...range});
+                    expect(body).toEqual({pairs: [slug], ...fullHistory});
                     await syncGate;
                     syncReleased = true;
                     await route.fulfill({
                         json: {
                             results: [{pair: slug, status: 'ok', points_fetched: 1, points_changed: 1, provider_used: 'MOCKFX'}],
                             success_count: 1,
-                            date_range: range,
+                            date_range: fullHistory,
                             total_points_changed: 1,
                         },
                     });
@@ -197,6 +204,8 @@ test.describe('FX Add Pair Modal', () => {
                     const completionToast = detailRace === 'refresh-error' ? page.getByTestId('toast-warning').filter({has: page.getByTestId('toast-fx-link').filter({hasText: 'EUR / GBP'})}) : success;
                     if (mode === 'provider') {
                         await expect.poll(() => syncBodies.length).toBe(1);
+                        // The page shows March 2024; the sync asks for the full history.
+                        expect(syncBodies).toEqual([{pairs: [slug], ...fullHistory}]);
                         // The request is blocked by this test, not merely slow.
                         // Creation is already visible while no synced toast exists.
                         await expect(page.getByTestId(`fx-card-${slug}`)).toBeVisible();
@@ -231,7 +240,7 @@ test.describe('FX Add Pair Modal', () => {
                         releaseSync();
                         await expect(completionToast).toBeVisible();
                         const synced = await waitForEvent(page, 'fx.pair.creation-sync-completed', {since});
-                        expect(synced.detail).toMatchObject({slug, pairs: [slug], ...range, outcome: 'ok', configurationSaved: true});
+                        expect(synced.detail).toMatchObject({slug, pairs: [slug], ...fullHistory, outcome: 'ok', configurationSaved: true});
                         if (detailRace === 'refresh-error') {
                             expect(synced.detail).toMatchObject({
                                 callbackErrors: expect.arrayContaining([expect.objectContaining({phase: 'completion', message: expect.any(String)})]),
@@ -255,7 +264,7 @@ test.describe('FX Add Pair Modal', () => {
                             await expect(detail).toHaveAttribute('data-busy', 'false');
                             await expect(completionToast).toHaveCount(1);
                             await expect(completionToast.getByTestId('toast-fx-link')).toHaveAttribute('href', `/fx/${slug}`);
-                            expect(syncBodies).toEqual([{pairs: [slug], ...range}]);
+                            expect(syncBodies).toEqual([{pairs: [slug], ...fullHistory}]);
                             expect(rateReads.filter((read) => read.afterSync)).toHaveLength(1);
                             releaseOldDetail();
                             // Response-finished alone is not an application
@@ -297,7 +306,7 @@ test.describe('FX Add Pair Modal', () => {
                     );
                     expect(ownedCreationEvents).toBe(1);
                     expect(createdBodies).toEqual([[routeItem]]);
-                    expect(syncBodies).toEqual(mode === 'provider' ? [{pairs: [slug], ...range}] : []);
+                    expect(syncBodies).toEqual(mode === 'provider' ? [{pairs: [slug], ...fullHistory}] : []);
                     if (detailRace === 'none') {
                         await expect(success).toHaveCount(1);
                         const link = success.getByTestId('toast-fx-link');

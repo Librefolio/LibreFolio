@@ -1695,7 +1695,8 @@
     "missingFxRates": "Mancano tassi FX per {count} coppia/e tra {date_from} e {date_to} ({dates_count} date) — sincronizza per completare i totali",
     "missingFxRatesManual": "Mancano tassi FX per {count} coppia/e manuale/i — inserisci i tassi manualmente",
     "assetIncomeNoEligibleLots": "Nessun lotto aperto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — provento non allocato",
-    "assetCostNoEligibleLots": "Nessun lotto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — costo non allocato"
+    "assetCostNoEligibleLots": "Nessun lotto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — costo non allocato",
+    "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia."
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",
@@ -1837,8 +1838,7 @@
       "legBreakdown": "Dettaglio per tratta",
       "legNoData": "0 date — nessun dato",
       "legDates": "date",
-      "inProgress": "Sincronizzazione tassi FX…",
-      "noNewData": "Nessun nuovo tasso disponibile dal provider per questo periodo"
+      "inProgress": "Sincronizzazione tassi FX…"
     },
     "route": {
       "title": "Percorsi di Conversione",
@@ -4296,7 +4296,7 @@
           "manualHelp": "Il tuo tasso: il calcolo lo usa così come lo scrivi e non lo rilegge mai. {hasCopy, select, yes {LibreFolio ha {rate}, del {date}: «Auto» lo ripristina.} other {In «Auto» il calcolo usa il tasso memorizzato in LibreFolio, quando c’è.}}",
           "pairMissing": "LibreFolio non ha un tasso memorizzato per questa coppia.",
           "pairAbsent": "LibreFolio non segue ancora questa coppia: aggiungila qui, oppure passa a «Manuale» e scrivi il tasso.",
-          "pairAbsentHelp": "«Aggiungi la coppia» apre la finestra della pagina FX, con le due valute già scelte. Con un provider, LibreFolio scarica poi i tassi degli ultimi {days} giorni e questo passo legge il più recente; con «Manuale» come unico provider non si scarica nulla, e i tassi si scrivono nella pagina della coppia.",
+          "pairAbsentHelp": "«Aggiungi la coppia» apre la finestra della pagina FX, con le due valute già scelte. Con un provider, LibreFolio scarica poi tutta la storia dei tassi della coppia e questo passo legge il più recente; con «Manuale» come unico provider non si scarica nulla, e i tassi si scrivono nella pagina della coppia.",
           "pairNoRates": "LibreFolio segue questa coppia ma non ha nessun tasso fino a oggi: scarica i tassi qui, oppure passa a «Manuale» e scrivi il tasso.",
           "pairNoRatesHelp": "«Scarica i tassi» apre la finestra di download della pagina FX per questa coppia, impostata sugli ultimi {days} giorni; quando il download finisce, questo passo legge il tasso più recente. Nessun provider viene interrogato finché non avvii il download.",
           "pairManualOnly": "LibreFolio segue questa coppia solo con tassi manuali, e non ne ha nessuno fino a oggi: aggiungine uno nella pagina della coppia, oppure passa a «Manuale» e scrivilo qui.",

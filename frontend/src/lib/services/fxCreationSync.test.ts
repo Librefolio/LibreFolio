@@ -2,6 +2,13 @@
  * Browser-background creation completion, without a browser/backend.
  * API promises and host refresh promises are independently released by the test.
  * The real formatter runs with an injected translator, not catalogue strings.
+ *
+ * A new pair with a real provider always syncs the provider's whole history
+ * (`start: 'min'`) up to today on the user's calendar, whatever period the page
+ * that opened the modal shows: a page range left a hole before its first day that
+ * every older transaction then fell into. "Today" is frozen per test, and the
+ * request options are part of the contract — a full history outlasts the client's
+ * 30 s default timeout.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {Writable} from 'svelte/store';
@@ -37,7 +44,13 @@ import {buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
 const syncRates = vi.mocked(zodiosApi.sync_rates_api_v1_fx_currencies_sync_post);
 type Response = Awaited<ReturnType<typeof zodiosApi.sync_rates_api_v1_fx_currencies_sync_post>>;
 type Result = Response['results'][number];
-const RANGE = {start: '2024-03-01', end: '2024-03-31'};
+/** Local noon on the frozen day, so no time zone can move it across midnight. */
+const FROZEN_NOW = new Date(2024, 2, 31, 12, 0, 0);
+const TODAY = '2024-03-31';
+/** Creation asks for everything the provider publishes, up to today — never a page range. */
+const FULL_HISTORY = {start: 'min', end: TODAY};
+/** Same budget as the other full syncs (FxSyncModal, PageSyncModal). */
+const SYNC_OPTIONS = {timeout: 120_000};
 const MAIN = 'EUR-GBP';
 const INTERMEDIATE = 'EUR-USD';
 const invalidations = new Map<string, ReturnType<typeof vi.fn>>();
@@ -67,7 +80,7 @@ function response(results: Result[], errors: string[] = []): Response {
     return {
         results,
         success_count: results.filter((item) => item.status === 'ok').length,
-        date_range: RANGE,
+        date_range: FULL_HISTORY,
         total_points_changed: results.reduce((sum, item) => sum + (item.points_changed ?? 0), 0),
         errors,
     };
@@ -77,13 +90,22 @@ function context(overrides: Partial<FxPairCreationContext> = {}) {
     return {
         detail: {base: 'EUR', quote: 'GBP', slug: MAIN, hasRealProvider: true, autoSyncStarted: true},
         pairs: [MAIN],
-        ...RANGE,
         sessionGeneration: getClientSessionGeneration(),
         oncreated: vi.fn(),
         onclose: vi.fn(),
         onsynced: vi.fn(),
         ...overrides,
     };
+}
+
+/** Every sync the service sent, with the request options it passed alongside the body. */
+function syncRequests() {
+    return syncRates.mock.calls.map(([body, options]) => ({body, options}));
+}
+
+/** The one request a creation sends for these pairs: their full history, with the long timeout. */
+function fullHistorySync(...pairs: string[]) {
+    return {body: {pairs, ...FULL_HISTORY}, options: SYNC_OPTIONS};
 }
 
 function events(): NotifyOptions[] {
@@ -103,6 +125,9 @@ function toastEvents() {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    // Only `Date` is faked: promises and the real timers behind vi.waitFor keep running.
+    vi.useFakeTimers({toFake: ['Date']});
+    vi.setSystemTime(FROZEN_NOW);
     invalidations.clear();
     vi.stubGlobal('window', {});
     transitionClientSession('owned-fx-sync-context');
@@ -117,6 +142,7 @@ afterEach(() => {
     for (const unsubscribe of listenerCleanups) unsubscribe();
     listenerCleanups.clear();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
 });
 
 describe('finishFxPairCreation — response identity and honest feedback', () => {
@@ -127,7 +153,7 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
         const ctx = context({pairs: [MAIN, INTERMEDIATE]});
         await finishFxPairCreation(ctx);
 
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN, INTERMEDIATE], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN, INTERMEDIATE)]);
         expect(ctx.oncreated).toHaveBeenCalledExactlyOnceWith(ctx.detail);
         expect(ctx.onclose).toHaveBeenCalledTimes(1);
         expect(ctx.onsynced).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN, pairs: [MAIN, INTERMEDIATE], outcome: 'ok', missingPairs: []}));
@@ -150,7 +176,7 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
         syncRates.mockResolvedValue(response([result(MAIN, status)]));
         const ctx = context();
         await finishFxPairCreation(ctx);
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
         expect(ctx.onsynced).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({outcome}));
         expect(toastEvents()).toHaveLength(1);
         expect(completionEvent().toast?.variant).toBe(variant);
@@ -166,7 +192,7 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
         syncRates.mockResolvedValue(response([result(INTERMEDIATE, status), result(MAIN)]));
         const ctx = context({pairs: [MAIN, INTERMEDIATE]});
         await finishFxPairCreation(ctx);
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN, INTERMEDIATE], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN, INTERMEDIATE)]);
         expect(completionEvent().detail).toMatchObject({outcome, pairs: [MAIN, INTERMEDIATE], missingPairs: []});
         expect(completionEvent().toast?.variant).toBe(variant);
         expect(toastEvents()).toHaveLength(1);
@@ -181,7 +207,7 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
         syncRates.mockResolvedValue(response(rows));
         const ctx = context({pairs: [MAIN, INTERMEDIATE]});
         await finishFxPairCreation(ctx);
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN, INTERMEDIATE], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN, INTERMEDIATE)]);
         expect(completionEvent().detail).toMatchObject({outcome: 'failed', missingPairs: missing, configurationSaved: true});
         expect(completionEvent().toast?.variant).toBe('error');
         expect(toastEvents()).toHaveLength(1);
@@ -192,7 +218,7 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
         syncRates.mockResolvedValue(undefined as never);
         const ctx = context();
         await finishFxPairCreation(ctx);
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
         expect(completionEvent().detail).toMatchObject({outcome: 'failed', missingPairs: [MAIN]});
         expect(completionEvent().toast?.variant).toBe('error');
         expect(ctx.onsynced).toHaveBeenCalledTimes(1);
@@ -202,7 +228,7 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
     it('reports operation-level errors even when the pair row says ok', async () => {
         syncRates.mockResolvedValue(response([result(MAIN)], ['owned-operation-error']));
         await finishFxPairCreation(context());
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
         expect(completionEvent().detail).toMatchObject({outcome: 'failed', operationErrors: ['owned-operation-error']});
         expect(completionEvent().toast?.variant).toBe('error');
         expect(toastEvents()).toHaveLength(1);
@@ -212,7 +238,7 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
         syncRates.mockRejectedValue(new Error('owned-transport-failure'));
         const ctx = context();
         await finishFxPairCreation(ctx);
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
         expect(ctx.oncreated).toHaveBeenCalledTimes(1);
         expect(ctx.onclose).toHaveBeenCalledTimes(1);
         expect(ctx.onsynced).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({outcome: 'transport-error'}));
@@ -220,6 +246,28 @@ describe('finishFxPairCreation — response identity and honest feedback', () =>
         expect(completionEvent().detail).toMatchObject({configurationSaved: true, transportError: 'owned-transport-failure'});
         expect(completionEvent().toast?.variant).toBe('error');
         expect(completionEvent().toast?.message).toContain(`href="/fx/${MAIN}"`);
+    });
+});
+
+describe('finishFxPairCreation — a new pair syncs its full provider history', () => {
+    it('asks for everything since the provider began, up to today, with no page range anywhere', async () => {
+        const ctx = context();
+        await finishFxPairCreation(ctx);
+
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
+        expect(ctx.oncreated).toHaveBeenCalledExactlyOnceWith({base: 'EUR', quote: 'GBP', slug: MAIN, hasRealProvider: true, autoSyncStarted: true});
+        expect(ctx.onsynced).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN, pairs: [MAIN], ...FULL_HISTORY, outcome: 'ok'}));
+        expect(completionEvent().detail).toMatchObject({slug: MAIN, pairs: [MAIN], ...FULL_HISTORY, outcome: 'ok', configurationSaved: true});
+        expect(completionEvent().toast?.variant).toBe('success');
+    });
+
+    it('ignores a page range a caller still hands over: the period on screen is not the history a pair needs', async () => {
+        // A caller written against the old contract still spreads its page range in.
+        const legacy = {...context(), start: '2024-03-01', end: '2024-03-15'};
+        await finishFxPairCreation(legacy);
+
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
+        expect(completionEvent().detail).toMatchObject({slug: MAIN, ...FULL_HISTORY, outcome: 'ok'});
     });
 });
 
@@ -233,7 +281,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
         try {
             expect(ctx.oncreated).toHaveBeenCalledTimes(1);
             expect(ctx.onclose).toHaveBeenCalledTimes(1);
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+            expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
             expect(ctx.onsynced).not.toHaveBeenCalled();
             expect(toastEvents()).toEqual([]);
 
@@ -275,7 +323,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
             // A detail route need not exist at configuration commit time.
             listen(listener);
             try {
-                expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN, INTERMEDIATE], ...RANGE}]);
+                expect(syncRequests()).toEqual([fullHistorySync(MAIN, INTERMEDIATE)]);
                 expect(listener).not.toHaveBeenCalled();
                 pending.resolve(response([result(INTERMEDIATE), result(MAIN)]));
                 await vi.waitFor(() => expect(invalidations.get(MAIN)).toHaveBeenCalledTimes(1));
@@ -286,7 +334,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
                     {
                         ...ctx.detail,
                         pairs: [MAIN, INTERMEDIATE],
-                        ...RANGE,
+                        ...FULL_HISTORY,
                         sessionGeneration: ctx.sessionGeneration,
                         outcome: 'ok',
                         results: [result(INTERMEDIATE), result(MAIN)],
@@ -321,7 +369,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
                 unsubscribe(); // Component teardown may defensively repeat cleanup.
                 pending.resolve(response([result(MAIN)]));
                 await done;
-                expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+                expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
                 expect(live).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN, outcome: 'ok'}));
                 expect(departed).not.toHaveBeenCalled();
                 expect(completionEvent().toast?.variant).toBe('success');
@@ -346,11 +394,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
             syncRates.mockResolvedValue(response([result(MAIN)]));
             await finishFxPairCreation(context());
             expect(listener).toHaveBeenCalledTimes(1);
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([
-                {pairs: [MAIN], ...RANGE},
-                {pairs: [INTERMEDIATE], ...RANGE},
-                {pairs: [MAIN], ...RANGE},
-            ]);
+            expect(syncRequests()).toEqual([fullHistorySync(MAIN), fullHistorySync(INTERMEDIATE), fullHistorySync(MAIN)]);
         });
 
         it.each([
@@ -364,7 +408,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
             syncRates.mockResolvedValue(response(rows));
             await finishFxPairCreation(context({pairs: [MAIN, INTERMEDIATE]}));
             expect(listener).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN, pairs: [MAIN, INTERMEDIATE], results: rows, outcome, missingPairs}));
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN, INTERMEDIATE], ...RANGE}]);
+            expect(syncRequests()).toEqual([fullHistorySync(MAIN, INTERMEDIATE)]);
             expect(toastEvents()).toHaveLength(1);
         });
 
@@ -374,7 +418,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
             syncRates.mockRejectedValue(new Error('owned-subscriber-transport-failure'));
             await finishFxPairCreation(context());
             expect(listener).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN, pairs: [MAIN], outcome: 'transport-error', results: [], missingPairs: [MAIN]}));
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+            expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
             expect(completionEvent().toast?.variant).toBe('error');
         });
 
@@ -400,7 +444,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
                 expect(toastEvents()).toEqual([]);
                 pendingListener.resolve();
                 await done;
-                expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+                expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
                 expect(ctx.onsynced).toHaveBeenCalledTimes(1);
                 expect(toastEvents()).toHaveLength(1);
                 expect(completionEvent().detail).toMatchObject({
@@ -436,10 +480,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
                 const current = context();
                 await finishFxPairCreation(current);
                 expect(listener).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({sessionGeneration: current.sessionGeneration}));
-                expect(syncRates.mock.calls.map(([body]) => body)).toEqual([
-                    {pairs: [MAIN], ...RANGE},
-                    {pairs: [MAIN], ...RANGE},
-                ]);
+                expect(syncRequests()).toEqual([fullHistorySync(MAIN), fullHistorySync(MAIN)]);
             } finally {
                 pending.resolve(response([result(MAIN)]));
                 await done;
@@ -460,7 +501,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
                 expect(ctx.onsynced).not.toHaveBeenCalled();
                 expect(toastEvents()).toEqual([]);
                 expect(events().filter((event) => event.name === 'fx.pair.creation-sync-completed')).toEqual([]);
-                expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+                expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
             } finally {
                 pendingListener.resolve();
                 await done;
@@ -469,7 +510,6 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
 
         it.each([
             {name: 'manual creation', overrides: {detail: {base: 'EUR', quote: 'GBP', slug: MAIN, hasRealProvider: false, autoSyncStarted: false}}},
-            {name: 'missing date', overrides: {start: ''}},
             {name: 'configuration edit', overrides: {editMode: true}},
         ])('does not broadcast rate completion for $name', async ({overrides}) => {
             const listener = vi.fn();
@@ -483,7 +523,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
         });
     });
 
-    it('captures pair/range/callback identity and deduplicates pairs before the draft can change', async () => {
+    it('captures pair/callback identity and deduplicates pairs before the draft can change', async () => {
         const pending = deferred<Response>();
         syncRates.mockReturnValue(pending.promise);
         const ctx = context({pairs: [INTERMEDIATE, MAIN, INTERMEDIATE]});
@@ -495,15 +535,13 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
         try {
             ctx.pairs = ['JPY-USD'];
             mutableDraftDetail.slug = 'JPY-USD';
-            ctx.start = '2022-01-01';
-            ctx.end = '2022-01-31';
             ctx.oncreated = vi.fn();
             ctx.onsynced = vi.fn();
             pending.resolve(response([result(INTERMEDIATE), result(MAIN)]));
             await done;
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN, INTERMEDIATE], ...RANGE}]);
+            expect(syncRequests()).toEqual([fullHistorySync(MAIN, INTERMEDIATE)]);
             expect(capturedCreated).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN}));
-            expect(capturedSynced).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN, pairs: [MAIN, INTERMEDIATE], ...RANGE}));
+            expect(capturedSynced).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({slug: MAIN, pairs: [MAIN, INTERMEDIATE], ...FULL_HISTORY}));
             expect(ctx.oncreated).not.toHaveBeenCalled();
             expect(ctx.onsynced).not.toHaveBeenCalled();
             expect(completionEvent().toast?.message).not.toContain('JPY-USD');
@@ -524,7 +562,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
         syncRates.mockReturnValue(pending.promise);
         const done = finishFxPairCreation(ctx);
         try {
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+            expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
             if (phase !== 'response') {
                 pending.resolve(response([result(MAIN)]));
                 if (phase === 'creation refresh') await vi.waitFor(() => expect(invalidations.get(MAIN)).toHaveBeenCalledTimes(1));
@@ -566,7 +604,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
         const failed = vi.fn().mockRejectedValue(new Error('owned-refresh-rejected'));
         const ctx = context(phase === 'creation' ? {oncreated: failed} : {onsynced: failed});
         await finishFxPairCreation(ctx);
-        expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+        expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
         expect(ctx.oncreated).toHaveBeenCalledTimes(1);
         expect(ctx.onclose).toHaveBeenCalledTimes(1);
         expect(ctx.onsynced).toHaveBeenCalledTimes(1);
@@ -587,7 +625,7 @@ describe('finishFxPairCreation — lifecycle and host refresh ordering', () => {
             translator.set(currentTr);
             pending.resolve(response([result(MAIN)]));
             await done;
-            expect(syncRates.mock.calls.map(([body]) => body)).toEqual([{pairs: [MAIN], ...RANGE}]);
+            expect(syncRequests()).toEqual([fullHistorySync(MAIN)]);
             expect(buildFxSyncToast).toHaveBeenCalledWith(expect.objectContaining({pair: MAIN}), MAIN, currentTr, undefined, expect.any(Function), {outerFlags: true, linkToDetail: true});
             expect(currentTr).toHaveBeenCalledWith('fx.sync.synced');
             expect(launchTr).not.toHaveBeenCalled();
