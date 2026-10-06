@@ -94,8 +94,9 @@
         /** Bumped by the panel after an accepted sync (R2-128). Default: never. */
         refreshVersion?: number;
         /**
-         * The picker has not yet confirmed a stored benchmark: L3° waits, and asks once
-         * it has (see above). Default: nothing to wait for.
+         * L3° must wait before it asks: the picker has not yet confirmed a stored benchmark, or
+         * the verdicts that decide whether it can be measured have not come (`labL3Waits`; see
+         * above). L3° asks once the wait ends. Default: nothing to wait for.
          */
         benchmarkPending?: boolean;
         /** The benchmark picker, drawn at the top of L3°'s frame, above its table. */
