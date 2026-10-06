@@ -35,8 +35,12 @@ export interface TornadoRow {
     assetId?: number;
     /** Bucket id when the row is a configured bucket. */
     bucketId?: string;
-    /** Signed fraction: negative is a loss. */
+    /** Signed fraction: negative is a loss. What the bar draws: the contribution when the scope has weights, else the row's own return. */
     value: number;
+    /** The row's own return over the window: an asset's `shock_return`, a bucket's `shock` (D376). */
+    ownReturn: number | null;
+    /** What the row did to the whole, `contribution_return`; null on a scope without weights. */
+    contribution: number | null;
     /** Signed amount in the scope currency, when the payload carried one. */
     amount: number | null;
     /** How much of the scope this row speaks for, when known. */
@@ -140,16 +144,18 @@ export function tornadoRows(output: unknown): TornadoRow[] {
             // first would make a 1%-weight bucket look as damaging as a 60% one.
             const value = toNumber(bucket.contribution_return);
             if (value === null) continue;
-            rows.push({key: `bucket:${bucketId}`, bucketId, value, amount: null, weight: toNumber(bucket.asset_exposure_total)});
+            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight: toNumber(bucket.asset_exposure_total)});
         }
     } else {
         for (const raw of Array.isArray(stress.impacts) ? stress.impacts : []) {
             const impact = raw as Record<string, unknown>;
             const assetId = toNumber(impact.asset_id);
             if (assetId === null) continue;
-            const value = toNumber(impact.contribution_return) ?? toNumber(impact.shock_return);
+            const ownReturn = toNumber(impact.shock_return);
+            const contribution = toNumber(impact.contribution_return);
+            const value = contribution ?? ownReturn;
             if (value === null) continue;
-            rows.push({key: `asset:${assetId}`, assetId, value, amount: toNumber(impact.impact_amount), weight: toNumber(impact.weight)});
+            rows.push({key: `asset:${assetId}`, assetId, value, ownReturn, contribution, amount: toNumber(impact.impact_amount), weight: toNumber(impact.weight)});
         }
     }
 
