@@ -3143,17 +3143,96 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > **Il checkpoint**: 18 percorsi in 6 commit (impatti del replay, TODO, props condivise, blocco del replay, doc, diario),
 > in `ORDER-risk-k5a.sh` su HEAD `c65b52576`. **Stato: FROZEN**, consegnato al coordinator.
 
-### Checkpoint 6: i valori per posizione nella L3 e i rapporti del benchmark · ⏳ dopo k5a
+### Checkpoint 6: i valori per posizione nella L3 e i rapporti del benchmark · ✅ 06/10/2026 (FROZEN)
 
 > Concordato con A il 06/10 (revisione del developer: «devi mettere tutto!»).
 > - **Sharpe e Sortino** stanno sugli item di `asset_risk_return`, calcolati sugli stessi rendimenti e con la stessa
->   annualizzazione del punto, con il tasso privo di rischio della richiesta: la pendenza passa esattamente per il punto.
->   Una richiesta `asset_set` a parte non lo garantisce, perché il calendario comune dipende dall'elenco degli asset.
-> - **Beta e correlazione**: un'opzione nuova del controller, cioè dopo l'onda di base una richiesta
->   `asset_set_comparison` sulle posizioni contro il benchmark condiviso, con il suo stato dichiarato a `l3Results`.
+>   annualizzazione del punto, con il tasso privo di rischio e l'obiettivo (MAR) della richiesta, come `historical_kpi`.
+>   Una richiesta `asset_set` a parte non lo garantirebbe, perché il calendario comune dipende dall'elenco degli asset.
+> - **Beta e correlazione** (variante (iii), proposta da me e accettata da A alle 11:5x): `comparison` pubblica
+>   `items: [{asset_id, beta, correlation}]`, una voce per posizione del perimetro portafoglio, nella stessa richiesta.
+>   Il servizio prepara il benchmark insieme al perimetro (`service.py:187-199`), quindi ogni posizione si misura sullo
+>   stesso calendario e con lo stesso accoppiamento del beta del portafoglio. Il benchmark stesso è saltato (D371, con
+>   un validatore come nel laboratorio); su un perimetro `asset` la lista è vuota. Lo stato è quello di
+>   `comparisonResult`, che A ha già nell'avviso della L3.
+>   La variante concordata prima, una richiesta `asset_set_comparison` sulle posizioni dopo l'onda di base, avrebbe
+>   portato le regole di `asset_set`, una seconda richiesta e uno stato nuovo da cablare.
 > - **`comparison` e `asset_set_comparison`**: in più `comparison_sharpe` e `comparison_sortino` del benchmark sulla
->   finestra comune.
-> - Poi `api sync`. L'interfaccia è di A.
+>   finestra comune, e i due parametri del tasso.
+> - A aggiunge i due parametri alla richiesta di `L3Benchmark` solo nel giro che fonde k6: oggi `ComparisonParams` è
+>   `extra="forbid"`, e un parametro sconosciuto diventa `invalid_parameters`.
+> - `api sync`: il client generato è ignorato da git, quindi ogni ramo lo rigenera dopo la fusione. L'interfaccia è
+>   di A.
+>
+> **⚠️ Fuori pista**: avevo scritto che la retta dal tasso privo di rischio con pendenza Sharpe passa «esattamente» per
+> il punto. È esatto solo a tasso zero. Sharpe toglie a ogni osservazione `rf_p = expm1(log1p(rf)/f)`, quindi la retta
+> che passa per il punto incrocia l'asse a `f·rf_p` (circa `ln(1+rf)`), non a `rf`. L'ho detto ad A per la retta dello
+> scatter, nel giro del tasso modificabile.
+>
+> **Passi**: rossi (test-author) → backend → `buildBaseAnalytics` (parametri a `asset_risk_return` e
+> `asset_set_comparison`) → cancelli e mutanti → doc → checkpoint.
+>
+> **I rossi** (test-author, 06/10): 59, tutti per i motivi di k6, e nessun altro test ha cambiato colore.
+> - Backend: `services risk-all` 33 rossi su 853, `schemas risk` 17 su 64, `api risk` 1 su 15.
+> - Frontend: 8 rossi su 190 nei due file (`riskAnalysisHelpers.test.ts`, `riskPanelController.test.ts`).
+> - Ha trovato due perni di versione e un perno di byte che il brief non elencava (`test_risk_analytics.py:519`,
+>   `riskPanelController.test.ts:1305`).
+> - Due regole per l'implementazione: una posizione senza serie si salta, non solleva; i parametri nel frontend
+>   vanno nell'ordine `{comparison_asset_id, risk_free_annual_rate, target_annual_return}`.
+>
+> **Il codice** (applicato da uno script di 25 sostituzioni esatte, provato a secco prima):
+> - `asset_risk_return` 1.2.0, `comparison` 1.2.0, `asset_set_comparison` 1.2.0, gli schemi e
+>   `RiskComparisonHoldingItem`, e `buildBaseAnalytics`;
+> - un rapporto non definito è `None` con un avviso che nomina l'asset (chiavi `_assets` esistenti, nessuna chiave
+>   i18n nuova) e rende il risultato «parziale», come già fa `historical_kpi`;
+> - un benchmark piatto annulla tutti i beta e le correlazioni: lo dicono i due avvisi singolari che ci sono già,
+>   senza ripeterlo per ogni posizione.
+>
+> Al primo giro tutto verde: `risk-all` 853, `schemas` 64, `api risk` 15, vitest 190; ruff, black e prettier puliti.
+>
+> **⚠️ Fuori pista**: la mia bozza leggeva ogni posizione con `prepared_asset_return_points`, che solleva un errore per
+> una posizione senza serie: avrebbe fatto fallire tutto il confronto per una sola posizione. test-author l'aveva già
+> fissato con un test. L'ho corretto prima di applicare, cercando la serie in una mappa e saltando la posizione.
+>
+> **La modalità storica**: il TWRR del portafoglio si legge sui suoi giorni di osservazione, mentre le posizioni restano
+> sul calendario comune della richiesta. Oggi nessuna pagina chiede il confronto storico su un portafoglio (la
+> Dashboard usa `current_composition`), ma la scelta è scritta nel codice e test-author l'ha fissata: il beta di una
+> posizione accoppiata sugli intervalli del TWRR sarebbe un altro numero, e il test lo dimostra sullo stesso fixture.
+> Ha fissato anche lo stato: un rapporto non definito rende il risultato «parziale», sia in `asset_risk_return` sia
+> in `comparison`.
+>
+> **Mutanti**: 27 sul prodotto vero, con il ripristino verificato dallo sha256 ogni volta. Al primo giro ne muoiono 23
+> su 26; tre sopravvivono, e test-author aggiunge un test per ciascuno:
+> - K7: i rapporti del benchmark calcolati con il fattore della richiesta invece che con quello proprio del confronto;
+> - K14 e K24: `comparison` e `asset_set_comparison` che non dichiarano il tasso applicato.
+>
+> Dopo i tre test: 26/26, più K27 (Sortino del benchmark con il fattore della richiesta), ucciso dal test di K7. Altri
+> tre mutanti di test-author (accoppiamento storico, stato «parziale») muoiono sui suoi test. `services risk-all`
+> passa a 863.
+>
+> **⚠️ Fuori pista**: per K7 avevo indicato il fixture storico come prova, pensando che lì il fattore della richiesta
+> fosse quello del calendario preparato. In modalità storica, però, `require_annualization_factor` restituisce il
+> fattore del TWRR, e su quel fixture tutti i 23 giorni del TWRR trovano il benchmark: i due fattori coincidono e il
+> mutante sopravvive. test-author se n'è accorto e ha spostato di due giorni l'inizio del benchmark: 21 coppie, fattore
+> 255,5 contro 262,34. Avevo indicato il fattore senza leggere il codice che lo produce.
+>
+> **La doc**: le pagine di teoria spiegano già la conversione del tasso (`sharpe-ratio.en.md`, Formula). I numeri
+> nuovi arrivano all'utente con l'interfaccia di A, quindi la doc della riga del benchmark e delle colonne per
+> posizione va con il suo giro.
+>
+> **Verifica** (corsia 6152, un comando alla volta, carico fra 4 e 13):
+> - ruff e black puliti; `services risk-all` 863, `schemas risk` 64, `api risk` 15 (dopo `db populate --force`);
+> - `api sync`: rigenera solo i file ignorati da git; nessun percorso tracciato cambia;
+> - `risk-controller-unit` 96, `risk-levels-unit` 297, `risk-levels-component` 106, `risk-request-unit` 26,
+>   `risk-unit` 20, `risk-benchmark-unit` 13, `risk-frame-component` 13, `core-unit` 2992, `component-unit` 2510;
+> - `front check` 0/0, orfani a posto, audit i18n 3521 chiavi e 0 incomplete;
+> - E2E `risk` 14, `risk-lab` 41, `risk-benchmark-shared` 4, `risk-asset-detail` 2; alla fine la 6152 è libera.
+>
+> **Previsione**: nessun percorso di k6 è cambiato da A, da F o in `dev_release2`.
+>
+> **Il checkpoint**: 13 percorsi in 3 commit (backend e test, frontend e test, diario), in `ORDER-risk-k6.sh` su HEAD
+> `2a4364724`. Nessuna voce di CHANGELOG da sola: l'utente vede i numeri con l'interfaccia di A, e la voce va con il
+> suo giro. **Stato: FROZEN**, consegnato al coordinator.
 
 ### Checkpoint 5b, dopo k6: la tabella e il selettore degli strumenti (D376) · ⏳
 
