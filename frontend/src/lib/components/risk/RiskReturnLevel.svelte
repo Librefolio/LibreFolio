@@ -230,9 +230,9 @@
     }
 
     /**
-     * The lab's asset column (`assetSetTable`), whose cell a reference row replaces with its own.
-     * Not pinned here (developer's review of 06/10/2026: «non li volevo fissi»): the names scroll
-     * with their figures.
+     * The lab's asset column (`assetSetTable`: not pinned, so the names scroll with their figures —
+     * developer's review of 06/10/2026, «non li volevo fissi»), whose cell a reference row replaces
+     * with its own.
      */
     let nameColumn = $derived.by<ColumnDef<T>>(() => {
         const base = assetNameColumn<T>(
@@ -240,7 +240,7 @@
             () => assetIcons,
             cellPrefix,
         );
-        return {...base, pinned: undefined, cell: (row: T) => (row.role ? {type: 'html', html: referenceNameHtml(row, row.role)} : base.cell(row))};
+        return {...base, cell: (row: T) => (row.role ? {type: 'html', html: referenceNameHtml(row, row.role)} : base.cell(row))};
     });
 
     let columns = $derived<ColumnDef<T>[]>([
@@ -391,14 +391,5 @@
 
     :global(.dark div.risk-return-table table tbody tr.clickable.selected) {
         background: rgb(74 222 128 / 0.14);
-    }
-
-    /*
-     * The asset cell caps its content at 14rem (`assetSetTable`), for an `auto` table that would
-     * otherwise widen to the longest name. This table is `fixed`: the column is as wide as the
-     * reader made it, and a name may use all of it.
-     */
-    :global(div.risk-return-table td [data-testid$='-name']) {
-        max-width: none;
     }
 </style>

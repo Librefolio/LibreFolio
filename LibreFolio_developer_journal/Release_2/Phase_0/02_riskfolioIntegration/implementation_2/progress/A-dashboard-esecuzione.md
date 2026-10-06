@@ -2552,3 +2552,127 @@ commit del checkpoint 1.
 > lo prepara il coordinator: il mio commit, poi la fusione di F `b7e70a949`, poi quella di Risk `eda37b8de`, tutto
 > simulato. **Stato: FROZEN**. Dopo la fusione si valida la revisione combinata, e il prossimo giro parte con la
 > barriera di `:1717`.
+
+### Checkpoint 8 committato, le punte di F e di Risk fuse · ✅ 06/10
+
+> **Coordinator (16:20)**, verificato: commit `d8abd2d27` (albero `d2798c4d0`); merge di F `62039e616` (albero
+> `05b92dc14`, 13-A + 13-B); merge di Risk `9ce2efaed` (albero `2d6a2d605`, k5b). Genitori, file e messaggi tornano con
+> il registro, e il worktree è pulito.
+
+### Passo 22 — la revisione combinata `9ce2efaed`, validata · ✅ 06/10
+
+> **Verificato prima**: HEAD `9ce2efaed`, albero `2d6a2d605`, 0 percorsi in corso. Le fusioni portano 29 file, tra cui
+> i test di F (`AssetSetComparisonLevels`, `AssetSetLossComparisonSection`) e di Risk (`L4WhatIf`, `TornadoChart`,
+> `scenarioHelpers`), e 3 pagine della documentazione.
+>
+> **Note implementazione** (corsia 6153, un comando alla volta):
+> - `front build --debug` OK; `front check` 0/0;
+> - vitest: `risk-levels-unit` 376, `risk-levels-component` 203, `core-unit` 2978, `component-unit` 2623. Insieme
+>   coprono tutti i test portati dalle fusioni;
+> - `check-orphans` OK; i18n 3549 chiavi, nessuna traduzione mancante;
+> - `mkdocs build` strict OK; `check-links`: solo `#rolling-return`, ereditato;
+> - E2E `risk` **33 passed** (14:25–14:26 UTC, compreso il test del selettore di L4 di Risk), `risk-lab` **41 passed**
+>   (14:26–14:28); 0 chiamate ai provider in tutte e due le finestre;
+> - esiti mandati al coordinator, che fa fare il fast-forward a F e a Risk.
+>
+> **I due rossi noti: chi li chiude e quando** (vanno chiusi prima dell'integrazione della famiglia, come chiede il
+> coordinator):
+>
+> | rosso | di chi | causa | chi lo chiude, quando |
+> |---|---|---|---|
+> | `risk-analysis.spec.ts:1717`, solo a 4 worker | A | il pulsante Sync è atteso senza barriera sull'arrivo del report della Dashboard | **A**, nel giro che parte adesso, prima dell'integrazione: la barriera, provata con più passate a `--workers 4`. Se cade in un blocco di Risk (k5b), prima gli chiedo il permesso |
+> | `risk-lab.spec.ts:6041`, intermittente (in questa validazione è passato) | F | l'oracolo `pageCatalogue()` legge l'ultima chiamata a `/risk/eligibility`, ma il lab la chiama anche per la selezione | **F**, nel suo prossimo giro: usare l'unione di tutte le chiamate registrate. Glielo ho girato con la diagnosi alle 16:20 |
+>
+> **Prossimo giro (A)**:
+> 1. la barriera di `:1717`;
+> 2. togliere da `RiskReturnLevel.svelte` gli override diventati inutili dopo il 13-B di F, che ha tolto `pinned` e
+>    `max-w-56` da `assetNameColumn`: `pinned: undefined` e la regola `max-width: none`;
+> 3. alla prossima review il developer vede anche il selettore del lab in L3 (il 13-A di F, ora nel mio ramo).
+
+### Passo 23 — il rosso di `:1717` e la pulizia degli override · ✅ 06/10
+
+> **Note implementazione**:
+> - **Pulizia** (`RiskReturnLevel.svelte`, nessun effetto visibile): il 13-B di F ha tolto `pinned: 'left'` e
+>   `max-w-56` da `assetNameColumn` (`assetSetTable.ts` ora li cita solo nei commenti), quindi sono tolti il mio
+>   `pinned: undefined` in `nameColumn` e la regola CSS `max-width: none` sui nomi. Il commento della colonna dice che
+>   è `assetSetTable` a non fissarla. Prettier ok; vitest `L3RiskAdjusted`, `AssetSetRiskReturnSection` e
+>   `riskReturnLevel` → 165 passed.
+> - **Il rosso a 4 worker** (il test della Dashboard, ora `:1752`, blocco Sync `:1959-1963`): il pulsante si abilita
+>   solo quando il report della Dashboard ha dato `syncAssets`/`syncFxPairs`. Il test passa da `openDashboardRisk`,
+>   che non aspetta il report, quindi sotto carico i 3 s di default non bastano. La riparazione è la barriera della
+>   pagina, `dashboard-page[data-busy="false"]` (la stessa di `openDashboardRiskWithHoldings`), prima di
+>   `toBeEnabled()`.
+> - Affidata a test-author (`ta-k6-labline`, giro successivo): rosso dimostrato con una sonda che ritarda il report
+>   (poi tolta, con la prova), 2 passate a `--workers 4` più una a 1 worker; e la prova che la pulizia non cambia nulla
+>   (`risk-levels-component`, `component-unit`, `risk-lab`, e i suoi E2/E4 nel `risk`).
+>
+> **Risk (16:34): fase 2**. `BenchmarkSelect` passa al selettore di asset condiviso di F.
+> - **Per me**, nel giro dopo che la fase 2 arriva nel mio ramo: `L3Benchmark` passa `period={{start: dateStart, end:
+>   dateEnd}}` e `currency={targetCurrency}` al suo `BenchmarkSelect`. Così il selettore chiede da solo
+>   `POST /risk/eligibility` (con debounce, cache per periodo, risposte superate scartate) e mostra in una sezione di
+>   sola lettura i benchmark non misurabili nella finestra, con i motivi del motore. Una chiamata fallita non blocca
+>   niente. Senza le due prop non cambia nulla.
+> - **Ho risposto sì in linea di principio** (la riga `RiskLevelsPanel.svelte:341` è mia) e gli ho chiesto quattro
+>   cose:
+>   1. se il developer ha già approvato quella sezione; altrimenti gliela mostro sui suoi dati prima dei test;
+>   2. quale `state` pubblica il selettore per un benchmark salvato che non si può misurare: con `set`, L3 chiede
+>      comunque; con un altro stato, non chiede nulla e la riga del benchmark sparisce;
+>   3. i testid della sezione;
+>   4. la forma della risposta, per lo stub negli E2E.
+>
+> **Risk (16:41), le risposte del developer (D378, 06/10)**:
+> 1. «Sì, uguale su tutte le pagine: il selettore del benchmark è uno solo»: la sezione di sola lettura c'è su tutte le
+>    pagine, calcolata sul periodo della pagina (D371 copriva solo il lab). Glielo mostro comunque sui suoi dati.
+> 2. Il benchmark salvato non misurabile → **nuovo stato `blocked`** («Non lo prova: la riga del benchmark sparisce, e
+>    il motivo lo dice solo il selettore»):
+>    - `value` resta l'id, la scelta resta nel trigger e nella sezione, segnata come corrente;
+>    - con `period`, finché non arriva il verdetto per periodo e valuta della pagina lo stato è `pending`, anche dopo
+>      un cambio di finestra; una chiamata fallita dà `set`.
+>
+>    `L3Benchmark` lancia solo su `set`, come oggi, e **quando lo stato lascia `set` azzera la comparazione**
+>    (`resetAnalysis('comparison')`), così la riga sparisce.
+> 3. Testid (pannello di F, modalità singola):
+>    - la sezione è `{testid}-blocked` (`role="group"`, `aria-label` = il titolo);
+>    - ogni voce è `search-select-option-{id}`, disabilitata, con `aria-disabled="true"`, `data-level="ineligible"` e
+>      `data-reasons` (i codici del motore). La scelta corrente ha `aria-selected="true"`;
+>    - `{testid}-control` tiene `data-benchmark-state` (anche `blocked`) e aggiunge `data-eligibility`
+>      (`none|given|pending|ready|failed`).
+> 4. Lo stub di `POST /risk/eligibility` usa `RiskEligibilityResponse` (`schemas/risk.py:1733-1750`), sul modello di
+>    `answerEligibility` di F (`risk-lab.spec.ts:1299`). Il percorso del fallimento è un 500, che deve dare
+>    `data-eligibility="failed"`, tutto selezionabile e stato `set`.
+>
+> **Passo 24, da fare quando la fase 2 di Risk arriva nel mio ramo**:
+> - `RiskLevelsPanel.svelte:341`: passare `dateStart`, `dateEnd`, `targetCurrency` a `L3Benchmark`;
+> - `L3Benchmark`: `period` e `currency` al `BenchmarkSelect`, e un effetto che azzera la comparazione quando lo stato
+>   lascia `set`;
+> - review sui dati veri, poi test-author:
+>   - lo stub di eligibility;
+>   - `blocked` → nessuna richiesta e nessuna riga del benchmark;
+>   - `pending` → nessuna richiesta prima del verdetto;
+>   - 500 → `set`, con la richiesta;
+>   - la sezione, con i suoi testid.
+>
+> **test-author (giro successivo, 16:50)**:
+> - **la barriera**: `risk-analysis.spec.ts` `@@ -1959,0 +1960,4`, tre righe di commento più
+>   `dashboard-page[data-busy="false"]` prima del pulsante Sync. Ha verificato nel codice che è la barriera giusta:
+>   `assetIds` viene da `summary`, che la Dashboard assegna nello stesso passo in cui mette `reportLoading = false`;
+> - **rosso deterministico**: una sonda temporanea `PROBE(ta3)` trattiene ogni report della Dashboard per 5 s, più dei
+>   3 s di default:
+>   - blocco vecchio → rosso a `toBeEnabled()` («Received: disabled, Timeout: 3000ms»);
+>   - blocco nuovo → verde (7 s);
+>
+>   poi la sonda è stata tolta: sha uguale a quello di prima, 0 residui, il diff è solo +4 righe;
+> - **passate**: `risk --workers 4` 33/33 per due volte, `risk` a 1 worker 33/33. Il test riparato e i due test nuovi
+>   di k6 passano tutte e tre le volte;
+> - **la pulizia non cambia nulla**: `risk-levels-component` 203, `component-unit` 2623, `risk-lab` 41/41 (sulla build
+>   ricostruita dopo la pulizia). I suoi E2/E4 (nome non fisso e trasparente, larghezze e trascinamento) restano verdi;
+> - prettier, `front check` 0/0 e `check-orphans` puliti; la 6153 è libera.
+>
+> **Verificato io**: gli sha di spec e componente uguali al resoconto, 0 residui della sonda, 3 percorsi in corso,
+> `diff --check` pulito.
+>
+> **Il rosso di A (`:1717`) è chiuso.** Resta quello di F (`risk-lab.spec.ts:6041`), che in queste passate è uscito
+> verde: è una corsa, non una correzione.
+>
+> **Checkpoint 9 consegnato al coordinator** (~16:55): `CHECKPOINT READY` con 3 percorsi, i blob in
+> `files/ckpt9-blobs.txt` e il messaggio in `/tmp/libreFolio_commit_ckpt9.txt`. **Stato: FROZEN.**
