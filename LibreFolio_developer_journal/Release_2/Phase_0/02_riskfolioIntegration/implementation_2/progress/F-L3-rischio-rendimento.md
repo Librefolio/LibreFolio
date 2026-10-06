@@ -2141,3 +2141,150 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 > - Strumenti: `/tmp/libreFolio_f4/l10_msgs.py`, `l10_record.sh` e `verify_l10.sh`.
 > - CHANGELOG: niente, perché nulla cambia per l'utente.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### Giro 10 committato, e la chiusura della sessione · 2026-10-05, sera
+
+> - Commit del developer: `875e06589` (G1) e `174c467df` (G2), albero `d1e0afe3e`. `/tmp/libreFolio_f4/verify_l10.sh`:
+>   **PASS** (2 commit lineari su `0da41fb11`, messaggi, percorsi e blob identici al record). Worktree pulito prima di
+>   questa nota.
+> - **Il developer chiude la sessione** (coordinatore): niente di nuovo. Nessun server avviato in questo giro; 6154 e 6164
+>   libere.
+> - **`/tmp`**: macOS toglie i file non toccati da 3-4 giorni. Ho copiato `/tmp/libreFolio_f4/` e i miei record
+>   `/tmp/libreFolio_commits/f-*` nei file della mia sessione, fuori dal repo.
+>   - Esclusi apposta: i tre script della correzione di privacy, la prima scansione e un vecchio estratto del journal.
+>     Contengono proprio i dati tolti dai journal. In `/tmp` sono leggibili solo dall'utente (file 600, cartella 700), e
+>     la pulizia di macOS li toglierà.
+>   - Il DB della corsia (`/tmp/librefolio-r2-f`) non serve copiarlo: ogni E2E lo ricrea.
+> - **Concessione per il prossimo giro** (dal coordinatore, via Risk): in `scripts/test_runner/_frontend_utility.py:532`
+>   solo la frase della descrizione di `component-unit` «a replay answer discarded twice running» passa ai tre
+>   tentativi. Nient'altro nel file.
+>
+> **Da A (18:40), la richiesta del developer dalla sua review visiva di oggi**, alla lettera: «le label che sono
+> applicabili scrivile anche là, e fallo a livello di componente, non di wrapper se possibile, e sì fai la stessa cosa
+> anche con la tabella, rendi il tutto un componente così che nel tempo se aggiorniamo uno aggiorniamo entrambi. […]
+> nella tabella metti la paginazione se ci sono più di 5 righe […]. Sul come farlo mettetevi d'accordo tra di voi».
+> - **La proposta di A**:
+>   - un componente condiviso `components/risk/RiskReturnLevel.svelte`, con aiutanti e test; il mio
+>     `AssetSetRiskReturnSection` e il suo `L3RiskAdjusted` diventano involucri che costruiscono le righe dal proprio
+>     payload;
+>   - dentro: prima la tabella (la mia DataTable, `assetNameColumn`, le colonne con i tooltip, la selezione singola
+>     legata ai punti), poi il grafico;
+>   - una colonna compare solo se le righe la portano; paginazione sopra 5 righe (`[5, 10, 25, 0]`, come
+>     `DistributionEditor`);
+>   - le note per capacità e non per pagina: quelle sulla retta solo dove c'è la retta, mai nel laboratorio;
+>   - un `testIdPrefix`, così i miei testid restano;
+>   - A scrive il componente; la migrazione della mia sezione la faccio io, oppure A con una mia concessione.
+> - **Le sue tre domande**:
+>   1. il nome del rendimento: il mio «rendimento medio annuo» (developer, 30/09) su entrambe le pagine;
+>   2. le colonne per asset che la Dashboard non ha (Sortino, Sharpe, beta, correlazione): dipendono dal controller di
+>      Risk, quindi la prima versione mostra solo ciò che c'è;
+>   3. come si incastra col mio lavoro, e quali file evitare.
+> - **Fatti già verificati** (in sola lettura, su `0da41fb11`):
+>   - la sezione ha 356 righe, e tutti i suoi testid hanno il prefisso `risk-asset-set-l3` (14, più il `testId` del
+>     grafico); il suo test ha 1859 righe;
+>   - `assetNameColumn` sta in `assetSetTable.ts:54`, mio;
+>   - `assetSetI18n.test.ts` legge il sorgente della sezione per trovare la nota che rende, quindi deve seguire lo
+>     spostamento.
+> - **Da verificare prima di rispondere**:
+>   - come si decidono oggi le colonne Beta e Correlazione. Devono restare legate alla capacità (c'è un benchmark),
+>     non a «qualche riga ha un valore»: con un benchmark e beta tutti indefiniti la colonna c'è, con i trattini;
+>   - quante righe usano i test di L3, unitari ed E2E: a 5 per pagina le righe oltre la prima pagina spariscono;
+>   - se `DataTable` sa portarsi alla pagina della riga scelta da un punto del grafico;
+>   - se `warningTranslatorSites.test.ts` legge il sorgente della sezione.
+> - **Bozza della risposta (non ancora inviata)**:
+>   - due passi: prima lo spostamento puro, col laboratorio identico e i miei test invariati come guardia; poi la
+>     paginazione, con i rossi prima;
+>   - sì al nome «rendimento medio annuo» su entrambe;
+>   - colonne per capacità esplicita;
+>   - nessun importo nel laboratorio, e la rete E2E lo guarda;
+>   - chi migra la mia sezione e chi è il writer del file nuovo condiviso si decide col coordinatore.
+>
+> **Prossimo passo, in ordine**:
+> 1. le verifiche sopra, poi la risposta ad A, con il coordinatore informato per la proprietà del file nuovo e per le
+>    concessioni;
+> 2. la concessione di `_frontend_utility.py:532`;
+> 3. in attesa:
+>    - il rombo di A, poi `correlation.en.md:117` («its dot»);
+>    - il contratto della tappa 2 di Risk dopo il suo k4, poi l'adozione in `AssetSetRiskPanel`;
+>    - la review unica sulla 6164, con una copia di prod nuova e l'OK del developer.
+
+## Ripresa · 2026-10-06, dalle 09:2x
+
+> - Stato: `174c467df`, un file sporco (la nota di chiusura qui sopra); 6154 e 6164 libere; `/tmp/libreFolio_f4/` intatto.
+>   Carico della macchina alto (19-21), da ricordare per gli E2E sensibili ai tempi.
+> - **Arrivato da A dopo la chiusura (05/10, 18:46)**, annotato solo nelle note private perché ero FROZEN:
+>   - il developer ha chiesto che la retta passi dal benchmark quando c'è. `capitalMarketLine` si ancora al benchmark e
+>     ripiega sul portafoglio; `capitalMarketLineAnchor()` dà `'benchmark' | 'portfolio' | null`, e `null` senza un
+>     punto del portafoglio. Nel laboratorio quindi niente retta, e i miei due test del grafico passano invariati;
+>   - la mia guida: `correlation.en.md:116` («On a portfolio, a line through the portfolio's own point separates…»)
+>     diventa inesatta sulle pagine col portafoglio quando c'è un benchmark. La correggo insieme a `:117` (il rombo)
+>     quando il cambiamento di A arriva nel mio ramo, spiegando anche perché il laboratorio, che un benchmark ce l'ha,
+>     non disegna la retta.
+>
+> **Le quattro verifiche per la proposta di A** (`RiskReturnLevel`), su `174c467df`:
+> 1. **Colonne Beta e Correlazione**: le decide una prop esplicita, `benchmarkApplies`, non i valori. Con un benchmark e
+>    beta tutti indefiniti la colonna c'è, coi trattini. Sulla riga del riferimento (D371) le due celle hanno un
+>    trattino col suo tooltip (`referenceItself`). Quindi «una colonna compare se le righe la portano» deve essere una
+>    capacità esplicita.
+> 2. **Paginazione a 5**: non è neutra per i miei test.
+>    - Unitari: `SELECTION` ha 5 righe e non pagina; `SELECTION_WITH_REFERENCE` (D371) ne ha 6, `WIDE_SELECTION` 12.
+>    - E2E: una decina di asserzioni contano le celle di L3° contro `selected.length` o `covered.length`, con selezioni
+>      «almeno N» prese dal seed.
+> 3. **`DataTable.navigateToRowId()`** porta già alla pagina della riga, ma la evidenzia e la scorre in vista
+>    (`scrollIntoView` smooth, al centro). Il grafico sta sotto la tabella, quindi un clic su un punto tirerebbe la
+>    pagina in su. Serve una via «solo pagina», e `table/` è condiviso.
+> 4. **Chi legge il sorgente della sezione**: solo `assetSetI18n.test.ts:208-212` (la chiave della nota sotto il
+>    grafico), dentro il blocco già concesso ad A. `warningTranslatorSites.test.ts` scandisce ogni `.svelte` in modo
+>    generico. Il resto di `assetSetI18n.test.ts` controlla l'intero sottoalbero `risk.assetSet`: se le chiavi di L3°
+>    ne escono, il mio test non si rompe ma ne copre meno, e il controllo deve passare ai test del componente.
+> - Altri pezzi del laboratorio che il componente deve permettere senza conoscerli: la descrizione, i quattro stati col
+>   riprova, il blocco del periodo sotto la tabella, `tableRef` (il menu delle colonne di `AssetSetComparisonLevels`),
+>   `storageKey`, `data-row-count` e `data-benchmark`, lo scorrimento dei nomi lunghi.
+>
+> **La risposta ad A (09:4x)**:
+> - **sì al componente unico**. A ne è il writer e, nella stessa modifica, fa della mia sezione il suo involucro con una
+>   mia concessione, così i miei test fanno da guardia subito;
+> - **passo 1, solo lo spostamento, senza paginazione**:
+>   - Props, testid e attributi invariati, e quindi `AssetSetComparisonLevels` non si tocca;
+>   - i miei test passano invariati, compreso `risk-lab`;
+>   - nel mio involucro restano righe e punti (D371), la descrizione, gli stati e il periodo;
+>   - nessun importo;
+>   - rivedo il diff dei miei file prima del suo checkpoint;
+> - le colonne per capacità esplicita;
+> - la paginazione è il passo 2, da pianificare insieme dopo il passo 1;
+> - sì a «rendimento medio annuo» su entrambe le pagine; colonne della Dashboard solo da ciò che il payload ha.
+> - Al coordinatore: il writer del file nuovo condiviso e la concessione sulla mia sezione. In attesa.
+
+## Giro 11 · la frase del runner, e la guida dopo i cambi di A · 2026-10-06
+
+| # | passo | stato |
+|---|---|---|
+| L11-1 | `scripts/test_runner/_frontend_utility.py:532`, concessione del coordinatore via Risk: nella descrizione di `component-unit` solo «a replay answer discarded twice running» passa a «three times running», le parole del `describe` di `AssetSetReplaySection.test.ts:367` (k3). Nient'altro nel file | ✅ 2026-10-06 |
+| L11-2 | la guida `correlation.en.md:116-117` (la retta dal benchmark, il rombo), quando i cambi di A arrivano nel mio ramo | in attesa |
+| L11-3 | il passo 1 di A (`RiskReturnLevel`): rivedere il diff dei miei file prima del suo checkpoint | in attesa |
+
+> **Il coordinatore (09:5x) approva entrambe le decisioni**:
+> - A scrive `components/risk/RiskReturnLevel.svelte`, con aiutanti e test: file nuovi condivisi della famiglia, di A
+>   finché il passo 1 non arriva;
+> - la mia concessione ad A per il passo 1 resta com'è scritta. Il mio `risk-lab` è nei cancelli di A, e io rivedo il
+>   diff di A sui miei file prima del suo checkpoint;
+> - **paginazione (passo 2)**: la via «solo pagina» nel `DataTable` condiviso è fuori dalla famiglia. Prima di toccarlo
+>   serve un'analisi breve (chi lo chiama, come si comporta `navigateToRowId`, i test) e una sua concessione.
+
+### L11-1 · la frase del runner ✅ 2026-10-06, 09:5x
+
+> **Note implementazione**
+> - Una sola sostituzione esatta, trovata una volta: nella descrizione di `component-unit` (`:532`) «a replay answer
+>   discarded twice running» diventa «a replay answer discarded three times running». Il word-diff mostra solo
+>   `[-twice-]{+three times+}`; `--numstat` dà 1/1.
+> - Prove: `python3 -m py_compile` passa; `dev.py test check-orphans` esce 0 (registrati 94 E2E, 297 unitari e 229
+>   backend, tutti raggiungibili da `all`).
+
+### Checkpoint del giro 11 · 2026-10-06 (verso Risk)
+
+> - Base `174c467df`, 2 percorsi modificati: **G1** la frase del runner, **G2** questo journal (la chiusura del 05/10,
+>   la ripresa, le verifiche e l'accordo con A, il giro 11).
+> - L11-2 (la guida) e L11-3 (la revisione del passo 1 di A) restano aperti: aspettano i cambiamenti di A.
+> - Strumenti: `/tmp/libreFolio_f4/l11_msgs.py`, `l11_record.sh` e `verify_l11.sh`.
+> - CHANGELOG: niente, perché nulla cambia per l'utente.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
