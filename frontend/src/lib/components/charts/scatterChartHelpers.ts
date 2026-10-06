@@ -77,8 +77,10 @@ export interface ScatterOptionInput {
         capitalMarketLine: string;
     };
     /**
-     * Id of the point the caller has selected, or `null`. That point is drawn larger,
-     * opaque and in the selection green; nothing else changes. An id that names no
+     * Id of the point the caller has selected, or `null`. That point is drawn larger and
+     * opaque; an asset also turns the selection green, while the portfolio and the benchmark
+     * keep their own colour, which is what names them (developer's review of 06/10/2026: «il
+     * simbolo nel grafico non deve cambiare colore»). Nothing else changes. An id that names no
      * placed point highlights nothing, so the result is then the unselected one.
      */
     selectedId?: string | null;
@@ -237,7 +239,7 @@ export function buildScatterOption(input: ScatterOptionInput): ScatterOptionResu
                     name: point.name,
                     symbol,
                     symbolSize: selected ? size * SELECTED_SYMBOL_SCALE : size,
-                    itemStyle: selected ? {color: selectedColor(dark), opacity: 1} : {color: colorForRole(role, dark), opacity: role === 'asset' ? 0.75 : 1},
+                    itemStyle: selected ? {color: role === 'asset' ? selectedColor(dark) : colorForRole(role, dark), opacity: 1} : {color: colorForRole(role, dark), opacity: role === 'asset' ? 0.75 : 1},
                     role,
                     id: point.id,
                     ...(point.detail === undefined ? {} : {detail: point.detail}),

@@ -3130,7 +3130,6 @@
           "description": "Para cada activo seleccionado, cuánto osciló y cuánto rindió de media al año, en la tabla y en el gráfico; con un índice de referencia elegido en la parte superior de la pestaña, también cuánto se movió junto a él.",
           "expectedReturn": "Rentabilidad media anual",
           "correlation": "Correlación",
-          "scatterNote": "Cada punto es un activo: el eje horizontal muestra cuánto osciló y el vertical cuánto rindió de media al año. En un activo muy volátil, la media es más alta que lo que rindió de verdad.",
           "columnHelp": {
             "volatility": "Cuánto oscilan las rentabilidades del activo, en base anual: la desviación típica de las rentabilidades del periodo, anualizada.",
             "expectedReturn": "La media de las rentabilidades del periodo, llevada a un año según la frecuencia de las cotizaciones. Describe el pasado, no es una previsión. En un activo muy volátil es más alta que lo que rindió de verdad, porque las oscilaciones erosionan la rentabilidad compuesta.",
@@ -3459,9 +3458,6 @@
         "sharpe": "Sharpe",
         "volatility": "Volatilidad",
         "beta": "Beta",
-        "sortinoHelp": "Rendimiento por unidad de riesgo a la baja. A diferencia del Sharpe, no penaliza las subidas violentas.",
-        "sharpeHelp": "Rendimiento por unidad de volatilidad total: penaliza las subidas igual que las bajadas.",
-        "betaHelp": "Cuánto se mueve respecto al índice de referencia.",
         "benchmark": "Comparado con",
         "perimeter": {
           "current_composition": "sobre la composición actual",
@@ -3473,7 +3469,6 @@
           "axisVolatility": "Volatilidad anualizada",
           "axisReturn": "Rentabilidad media anual",
           "line": "Recta riesgo-rentabilidad",
-          "note": "Por encima de la recta significa mejor pagado por el riesgo asumido. Los puntos muestran la rentabilidad esperada en media-varianza, la magnitud en la que la pendiente de la recta es el ratio de Sharpe: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización.",
           "notes": {
             "above": "Por encima de la recta: mejor pagado por el riesgo asumido.",
             "line": "La recta parte del tipo sin riesgo y, sin índice de referencia, pasa por la cartera: su pendiente es el ratio de Sharpe de la cartera.",
@@ -3496,12 +3491,12 @@
         "rows": {
           "kpi": "Sortino, Sharpe y volatilidad"
         },
-        "volatilityHelp": "Cuánto oscila el rendimiento en un año, al alza y a la baja: mide la amplitud de los movimientos, no su dirección.",
-        "measures": {
-          "sortino": "rendimiento por riesgo a la baja",
-          "sharpe": "rendimiento por volatilidad total",
-          "volatility": "σ anualizada",
-          "beta": "sensibilidad al índice de referencia"
+        "table": {
+          "weight": "Peso",
+          "weightHelp": "La parte del patrimonio en esta posición, hoy. Es también el tamaño de su punto en el gráfico.",
+          "notHeld": "No está en la cartera: el índice de referencia está aquí para la comparación.",
+          "expectedReturnShort": "Rent. anual",
+          "namedHelp": "{name}\n{help}"
         }
       },
       "l4": {

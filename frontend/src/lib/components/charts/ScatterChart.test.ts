@@ -405,4 +405,49 @@ describe('ScatterChart', () => {
             expect(onpointclick.mock.calls).toEqual([['asset-1']]);
         });
     });
+
+    /**
+     * The point's tooltip (T11, developer's review of 05/10/2026): the caller's extra line — what the
+     * dot weighs, or that it is the benchmark, already translated — sits under the name, because it
+     * says what the dot is before where it is. The line is the caller's text, and an asset's name or a
+     * benchmark's can carry anything a provider or a user typed, so it is escaped like the name.
+     *
+     * Read through the formatter the component hands ECharts, called with the very datum it drew, and
+     * parsed back into a DOM: what is asserted is what a reader would see, line by line.
+     */
+    describe('the tooltip', () => {
+        /** The tooltip's lines for the dot carrying `id`, as the drawn formatter renders them. */
+        async function tooltipLines(points: RiskReturnPoint[], id: string): Promise<{lines: (string | null)[]; box: HTMLElement}> {
+            mount({points});
+            const chart = await firstDraw();
+            const tooltip = chart.setOptionCalls.at(-1)?.option.tooltip as {formatter?: (params: unknown) => string} | undefined;
+            expect(typeof tooltip?.formatter, 'ScatterChart handed ECharts no tooltip formatter').toBe('function');
+            const box = document.createElement('div');
+            box.innerHTML = tooltip!.formatter!({data: locate(lastOption(chart).series, id).datum});
+            return {lines: [...box.children].map((line) => line.textContent), box};
+        }
+
+        it("puts the caller's line under the name, as text: markup in it is shown, never run", async () => {
+            const detail = 'Weighs <b>35%</b> & more <img src=x onerror="window.__lfTooltipHit=1">';
+            const {lines, box} = await tooltipLines(
+                POINTS.map((point) => (point.id === 'asset-1' ? {...point, detail} : point)),
+                'asset-1',
+            );
+
+            expect(lines, 'four lines: the name, the caller’s line, then where the dot sits').toHaveLength(4);
+            expect(lines[0]).toBe('Asset One');
+            expect(lines[1], 'the caller’s line comes right under the name, whole').toBe(detail);
+            expect(lines[2]).toContain('Volatility (fixture)');
+            expect(lines[3]).toContain('Return (fixture)');
+            expect(box.querySelector('b, img'), 'markup in the caller’s line reached the tooltip as markup').toBeNull();
+        });
+
+        it('adds no line to a dot whose caller gave none', async () => {
+            const {lines} = await tooltipLines(POINTS, 'asset-2');
+
+            // Presence first: the name and both coordinates are there, so the count is about the extra line.
+            expect(lines[0]).toBe('Asset Two');
+            expect(lines, 'the name and where the dot sits, and nothing else').toHaveLength(3);
+        });
+    });
 });

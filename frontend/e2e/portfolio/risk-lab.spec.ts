@@ -4972,8 +4972,9 @@ test.describe('Asset Global risk laboratory', () => {
      * rested on. Its words are not read: the component test proves each title shows its own key's
      * message; what only a browser can prove is that resting the pointer on the title opens it.
      *
-     * And the titles fit: the table is laid out `auto`, so every column widens to its own title in
-     * whatever language. DataTable draws its titles upper-case on one line, and a fixed layout sized
+     * And the titles fit: the table is laid out `fixed`, so a width the reader drags holds, and every
+     * figure column opens exactly as wide as its own title in the reader's language, and no narrower
+     * (`headerWidth`). DataTable draws its titles upper-case on one line, and a fixed layout sized
      * for Italian let a French title spill out of its column on L1°.
      */
     test("L3°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
@@ -4990,7 +4991,51 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(paidTable(page).locator('thead a'), "a link in L3°'s header row: the documentation belongs to the frame's manual icon").toHaveCount(0);
         await expect(paidTable(page).locator('[data-testid^="dt-header-tooltip-"]'), 'an ⓘ beside a title: the help is the title itself').toHaveCount(0);
         await expect(page.locator('[data-testid^="risk-asset-set-l3-docs-"]')).toHaveCount(0);
-        await expect(paidTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L3°'s table is not laid out auto: a title longer than its column spills out of it").toHaveCSS('table-layout', 'auto');
+        // Laid out `fixed` since the developer's review of 06/10/2026, the only layout in which a dragged width holds:
+        // under `auto` a drag wrote a width the column ignored. What `auto` used to give still holds, because each figure
+        // column opens as wide as its own title in the reader's language (`headerWidth`): every title fits inside its th,
+        // as drawn, and at the column's own width — the one it is drawn at when the table has no room to spare.
+        await expect(paidTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L3°'s table is not laid out fixed: a dragged width would not hold").toHaveCSS('table-layout', 'fixed');
+        await expect
+            .poll(
+                () =>
+                    paidTable(page).evaluate(
+                        (root, columns) =>
+                            columns.filter((column) => {
+                                const cell = root.querySelector<HTMLElement>(`thead th[data-testid="dt-header-${column}"]`);
+                                const title = cell?.querySelector<HTMLElement>(`[data-testid="dt-sort-${column}"]`);
+                                if (!cell || !title) return true;
+                                const style = getComputedStyle(cell);
+                                const box = cell.getBoundingClientRect();
+                                const drawn = title.getBoundingClientRect();
+                                const inside = drawn.left >= box.left + parseFloat(style.paddingLeft) - 0.5 && drawn.right <= box.right - parseFloat(style.paddingRight) + 0.5;
+                                const own = parseFloat(cell.style.width) - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+                                return !inside || Math.max(title.scrollWidth, drawn.width) > own + 0.5;
+                            }),
+                        [...L3_CELLS],
+                    ),
+                {message: 'a title spills out of its th: its column opened narrower than its title'},
+            )
+            .toEqual([]);
+        // And the reader sizes the columns: a drag on a figure column's edge changes its width. The edge is DataTable's
+        // resize handle, the last 6 px of the title cell, found by what it is to the pointer — `col-resize` — not by a class.
+        const volatility = paidTable(page).getByTestId('dt-header-volatility');
+        const volatilityWidth = () => volatility.evaluate((cell) => cell.getBoundingClientRect().width);
+        const widthBefore = await volatilityWidth();
+        await volatility.scrollIntoViewIfNeeded();
+        const edge = await volatility.evaluate((cell) => {
+            const box = cell.getBoundingClientRect();
+            const hit = document.elementFromPoint(box.right - 3, box.top + box.height / 2);
+            return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
+        });
+        expect(edge.handle, 'no resize handle under the right edge of the volatility title').toBe(true);
+        await page.mouse.move(edge.x, edge.y);
+        await page.mouse.down();
+        await page.mouse.move(edge.x + 60, edge.y, {steps: 8});
+        await page.mouse.up();
+        await expect.poll(volatilityWidth, {message: "a drag on the volatility column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
+        // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
+        await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // The help itself, where the pointer rests. The Tooltip opens after its own hover delay,
         // which the retrying assertion absorbs: nothing here waits on a clock.

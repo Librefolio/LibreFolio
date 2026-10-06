@@ -3,6 +3,10 @@
     import type {RiskAnalyticResult, RiskScope} from '$lib/stores/risk/riskStore.svelte';
     import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES} from '$lib/stores/risk/riskPanelController.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import type DataTable from '$lib/components/table/DataTable.svelte';
+    import type {RiskReturnRow} from '../riskReturnLevel';
 
     import L1HowMuchItHurts from './L1HowMuchItHurts.svelte';
     import L2Diversification from './L2Diversification.svelte';
@@ -271,6 +275,28 @@
         return names;
     });
 
+    /**
+     * L3's table, for its column menu beside the level's manual icon — the lab's place for it
+     * (developer's review of 06/10/2026: «nello stesso punto»). Set only while the table is on screen.
+     */
+    let l3Table = $state<DataTable<RiskReturnRow>>();
+
+    /**
+     * Each asset's icon, for L3's table: its own, or its type's, by the lab's rule — the benchmark's
+     * too, whose row the table adds when nobody holds it.
+     */
+    let assetIcons = $derived.by(() => {
+        void $assetStoreVersion;
+        const icons = new Map<number, string>();
+        const benchmarkId = comparedAssetId(controller.comparisonResult);
+        const ids = [...Object.keys(assetNames).map(Number), ...(benchmarkId === null ? [] : [benchmarkId])];
+        for (const assetId of ids) {
+            const info = getAssetInfo(assetId);
+            if (info) icons.set(assetId, info.icon_url || getAssetTypeIconUrl(info.asset_type));
+        }
+        return icons;
+    });
+
     /** L2's headline, generated from the data — or empty when nothing stands out. */
     let l2Lead = $derived.by(() => {
         if (!lead) return '';
@@ -307,9 +333,13 @@
             <L2Diversification {contributionResult} {correlationResult} {assetNames} loading={initialLoading} />
         </RiskLevelSection>
 
-        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata}>
+        {#snippet l3Actions()}
+            <ColumnVisibilityToggle tableRef={l3Table} />
+        {/snippet}
+
+        <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata} actions={l3Table ? l3Actions : undefined}>
             <L3Benchmark {controller} />
-            <L3RiskAdjusted {historicalResults} {currentResults} {assetNames} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
+            <L3RiskAdjusted bind:tableRef={l3Table} {historicalResults} {currentResults} {assetNames} {assetIcons} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
 
         <!-- Closed until asked for, and the scenario catalogue is fetched on that

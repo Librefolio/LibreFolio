@@ -3130,7 +3130,6 @@
           "description": "For each selected asset, how much it swung and how much it returned on average per year, in the table and in the chart; with a benchmark chosen at the top of the tab, also how much it moved along with it.",
           "expectedReturn": "Average annual return",
           "correlation": "Correlation",
-          "scatterNote": "Each dot is an asset: the horizontal axis shows how much it swung, the vertical one how much it returned on average per year. For a very volatile asset the average is higher than what it actually returned.",
           "columnHelp": {
             "volatility": "How much the asset's returns swing, on a yearly basis: the standard deviation of the period's returns, annualised.",
             "expectedReturn": "The average of the period's returns, scaled to a year by how often the asset is quoted. It describes the past, not a forecast. For a very volatile asset it is higher than what the asset actually returned, because swings erode the compounded return.",
@@ -3459,9 +3458,6 @@
         "sharpe": "Sharpe",
         "volatility": "Volatility",
         "beta": "Beta",
-        "sortinoHelp": "Return per unit of downside risk. Unlike Sharpe, it does not penalise violent rises.",
-        "sharpeHelp": "Return per unit of total volatility, so it penalises rises as well as falls.",
-        "betaHelp": "How much this moves when the benchmark moves.",
         "benchmark": "Compared with",
         "perimeter": {
           "current_composition": "on the current composition",
@@ -3473,7 +3469,6 @@
           "axisVolatility": "Annualised volatility",
           "axisReturn": "Average annual return",
           "line": "Risk-return line",
-          "note": "Above the line means better paid for the risk taken. The dots show the mean-variance expected return, the quantity in which the line's slope is the Sharpe ratio: on a very volatile asset the return actually lived through is lower, because volatility erodes compounding.",
           "notes": {
             "above": "Above the line: better paid for the risk taken.",
             "line": "The line starts at the risk-free rate and, with no benchmark chosen, runs through the portfolio: its slope is the portfolio's Sharpe ratio.",
@@ -3496,12 +3491,12 @@
         "rows": {
           "kpi": "Sortino, Sharpe and volatility"
         },
-        "volatilityHelp": "How widely the return swings over a year, up and down alike: it measures the size of the moves, not their direction.",
-        "measures": {
-          "sortino": "return per unit of downside risk",
-          "sharpe": "return per unit of total volatility",
-          "volatility": "annualised σ",
-          "beta": "how much it moves with the benchmark"
+        "table": {
+          "weight": "Weight",
+          "weightHelp": "The share of net worth in this holding, today. It is also the size of its dot in the chart.",
+          "notHeld": "Not in the portfolio: the benchmark is shown for comparison.",
+          "expectedReturnShort": "Ann. return",
+          "namedHelp": "{name}\n{help}"
         }
       },
       "l4": {

@@ -1751,3 +1751,537 @@ commit del checkpoint 1.
 > - **Previsione di fusione con la punta di F `174c467df`** (base comune `2e2d21e76`): dei file che toccano entrambi i
 >   lati restano solo i 4 cataloghi. Simulati con `git merge-file`: **0 conflitti**, JSON valido, parità, 3544 chiavi,
 >   cioè l'unione dei due lati meno le chiavi tolte.
+
+### Checkpoint 6 committato, e la punta di F fusa · ✅ 06/10
+
+- **09:51 — Risk ha verificato il checkpoint 6** e l'ha passato al coordinator:
+  - blob 14/14, privacy pulita;
+  - la sezione del manuale è esattamente la concessione, con la formulazione giusta sul tasso senza rischio;
+  - i miei file di test sull'albero congelato: 94 passed;
+  - fusione pulita contro Risk, F e `dev_release2`: si sovrappongono solo i cataloghi.
+- **Correzione di Risk al mio resoconto**: le chiavi aggiunte sono **19**, non 17. Sono 4 `l3.measures.*`, 11
+  `l3.scatter.notes.*`, 3 `l3.scatter.tooltip.*` e `l3.volatilityHelp`; in più 2 tolte e `l3.scatter.axisReturn`
+  cambiata, per un totale di 3536. L'errore era solo nel messaggio di consegna, perché dopo le 15 del primo lotto ne
+  ho aggiunte 4.
+- **Committato e fuso** (verificato dal coordinator e da me):
+  - `fa18eace8` sopra `01bc97106`, albero `4e04ef68b`;
+  - poi la fusione `f6b7273f8`: genitori `fa18eace8` e la punta di F `cda8cba1c` (con il suo giro 11 e k3 di Risk),
+    albero `4822ee011`, uguale alla simulazione; albero di lavoro pulito.
+  - La fusione porta 49 file: nessuno del backend (quindi niente `api sync`), 3 pagine del manuale e la frase di F nel
+    runner (`_frontend_utility.py`).
+
+### Passo 16 — la revisione combinata, validata · ✅ 06/10
+
+> **Note implementazione** (6153, un comando alla volta, script `/tmp/libreFolio_A_validate_combined.sh`, carico 6–11):
+> - `front check` → **0/0**;
+> - `risk-levels-unit` → 329; `risk-levels-component` → 126;
+> - `core-unit` → 2966 e `component-unit` → 2584, che comprendono i test del lab di F;
+> - `check-orphans` OK; i18n → 3544 chiavi, complete;
+> - `mkdocs build` → 0 avvisi; `check-links` → l'unico rotto resta `#rolling-return`, ereditato;
+> - E2E `risk` → **24 passed**, **0 chiamate ai provider** (08:09:57–08:12:23 UTC);
+> - E2E `risk-lab` → **41 passed**, con i test nuovi di F. Una sola chiamata, la SNB del suo spec, già segnalata.
+
+### Passo 17 — il componente condiviso, passo 1 (spostamento puro) · 🔶 06/10
+
+> **F (06/10)**:
+> - **sceglie (a)**: `risk.assetSet.levels.l3.scatterNote` si ritira. Con (b) ci sarebbero due frasi di fila sull'asse
+>   verticale, e del testo resterebbe nell'involucro. Quello che si perde, la lettura dell'asse orizzontale, lo portano
+>   già il nome dell'asse e il tooltip della colonna Volatilità.
+> - **Condizioni**:
+>   1. `risk-asset-set-l3-scatter-note` resta sull'elemento che contiene le note del lab;
+>   2. la chiave esce dai 4 cataloghi nello stesso cambiamento, con `dev.py i18n` (sua concessione), ed è elencata
+>      nella consegna;
+>   3. la guardia (`:208-212`, blocco concesso) controlla che nessuna nota resa dal lab, in 4 lingue, nomini una retta.
+> - **Avviso**: il suo giro 12 tocca `risk-lab.spec.ts` ma nessun test di L3, e risolve la chiamata SNB. La causa era
+>   `getCurrencyGraph()` all'apertura della finestra di sincronizzazione: `GET /fx/providers` interroga ogni provider
+>   in rete. La lettura di `/fx/providers/routes` è solo DB.
+> - **Per il mio `holdFxProviderCatalog`**: una richiesta trattenuta viene rifiutata dopo i 30 s di axios, e
+>   `getCurrencyGraph()` non ha catch né viene atteso da `PageSyncModal`. Così il rifiuto resta non gestito nella
+>   pagina, se un test dura tanto; rispondere `[]` è inerte. **Da fare con test-author**, nella fase dei test.
+
+> **Note implementazione**:
+> - **`riskReturnLevel.ts`** (nuovo), le decisioni pure:
+>   - `RiskReturnRow` (l'`AssetSetPaidRow` del lab va così com'è, più `weight?`);
+>   - `RiskReturnCapabilities` `{weight, ratios, benchmark}`, **dichiarate e mai dedotte dai valori**;
+>   - `riskReturnNotes()`: le righe nell'ordine di lettura — fuori dal grafico, sopra la retta, rendimento, solo
+>     prezzi, retta, grandezza. Le due righe sulla retta compaiono solo con un'ancora, quindi mai nel lab;
+>   - `outsideParts()`.
+> - **`RiskReturnLevel.svelte`** (nuovo, generico su `T extends RiskReturnRow`):
+>   - la sezione di F spostata intera: tabella (`assetNameColumn`, colonne con tooltip, `figureCell`, trattino D371
+>     `referenceItself`), selezione legata ai punti, marquee, scatter;
+>   - in più la colonna del peso (`formatShare`) con la capacità `weight`, le note per capacità, `title`, `outside`,
+>     lo slot `afterTable` (il periodo di F) e `tableRef` legabile;
+>   - **due prefissi dei testid**: i blocchi prendono `testIdPrefix`, le celle `cellTestIdPrefix`. Sulla Dashboard
+>     `risk-l3-volatility` è già della card, quindi le celle diventano `risk-l3-row-*`.
+> - **`AssetSetRiskReturnSection.svelte`** (di F, sua concessione): da 356 a 202 righe.
+>   - Restano: `Props` invariati, righe e punti, descrizione, i quattro stati e il periodo (nello slot).
+>   - Passa `capabilities={{ratios: true, benchmark: benchmarkApplies}}`, il suo asse, `height="360px"`,
+>     `bind:tableRef`.
+> - **Dashboard**:
+>   - `l3Helpers.buildRiskReturnRows()`: le righe da `asset_risk_return` (peso, volatilità, rendimento), dalla più
+>     pesante, con `isReference` sul benchmark posseduto;
+>   - il benchmark posseduto tiene l'id **`asset-<id>`**, come D371, così seleziona la sua riga;
+>   - `RiskLevelsPanel`: `assetIcons`, con la regola del lab (`icon_url` oppure l'icona del tipo);
+>   - `L3RiskAdjusted`: le card, poi `RiskReturnLevel` con la capacità `weight`, il titolo sopra tabella e grafico,
+>     `outside` e il tasso.
+> - **i18n**: `risk.levels.l3.table.weight` e `.weightHelp`, 4 lingue.
+> - **Verdi** (06/10):
+>   - `front check` → 0/0;
+>   - vitest su 9 file (i 4 di F, `l3Helpers`, scatter, `ScatterChart`, card, L2) → **372 passed, 2 failed**: sono i due
+>     casi attesi della guardia di F, che legge la chiave della nota dal sorgente della sezione. Li ripara test-author
+>     dopo il via libera visivo, nello stesso cambiamento che toglie `risk.levels.l3.scatter.note` e
+>     `risk.assetSet.levels.l3.scatterNote`;
+>   - **i test di F passano senza modifiche**: `AssetSetRiskReturnSection`, `AssetSetComparisonLevels`,
+>     `assetSetLevels`;
+>   - E2E `risk` → **24 passed**, 0 chiamate ai provider; E2E `risk-lab` → **41 passed**.
+> - **Controllo a occhio sui dati di prova** (6153, server su `127.0.0.1`, utente di test), prima della review. Nella
+>   Dashboard, livello 3:
+>   - ordine: card (2 per riga a 1280 px), titolo, tabella, grafico;
+>   - tabella con le colonne Asset, Peso, Volatilità, Rendimento medio annuo, righe dalla più pesante, nessuno
+>     sforamento orizzontale (923/923 px), celle `risk-l3-row-*`;
+>   - lo scatter ha il portafoglio e gli asset; le note sono nell'ordine giusto.
+>
+>   Il lab non l'ho aperto: `/assets` interroga i provider e il suo E2E è verde. Server fermato, 6153 libera.
+> - **Coordinator avvisato prima della copia** dei dati veri, con la procedura completa. Aspetto il suo OK.
+
+### Review visiva 3 sui dati veri (6163) · 06/10
+
+> **Coordinator (10:37)**: via libera. Il developer, testuale: «si facciamolo, ma di ad A che gli parlo direttamente
+> nella sua chat e che vorrei che mi scrivesse la lista delle cose su cui sta lavorando».
+> **Copia**: impronta dello snapshot ricontrollata (uguale), `umask 077` e `mkdir -m 700` prima di copiare, 0 voci
+> leggibili da altri, niente marcatore. Server `--host 127.0.0.1 --port 6163`; ascolta solo su 127.0.0.1, log `600`
+> dentro la copia, il database è quello della copia, la build è il mio albero di lavoro.
+>
+> **Lista inviata al developer, come ha chiesto**: fatto (checkpoint 6), nuovo in questa review (passo 1), dopo.
+>
+> **Risposte del developer (06/10)**, testuali:
+> - «manca il selettore delle colonne in rischio L3, lo metterei nello stesso punto, poi mi chiedevo perchè mancassero
+>   le altre colonne per gli asset, hai messo solo le coordinate del grafico, devi mettere tutto!»
+> - «E anzi pensavo, se in tabella mettiamo il portafoglio in cima con lo sfondo dello stesso colore del grafico e stessa
+>   cosa per l'asset di confronto in 2° posizione? e leviamo le 4 card perchè si assorbono nella tabella.»
+> - «Riguardo asset correlazione, hai fatto bene a mettere le note, riguardo a cedole e dividendi, mi raccomando,
+>   mettiamolo nei todo futuri e anche in un todo nel codice per non dimenticarlo»
+> - Righe del portafoglio e del benchmark quando si ordina: **«No, si ordinano insieme agli altri»**. Quindi niente
+>   righe fisse e niente modifica a `DataTable`.
+> - Lab: **«Sì, anche nel lab il benchmark diventa una riga in cima (consigliato)»**.
+> - «Chiudi pure la copia».
+
+> **Decisioni, quindi** (passo 1b, da fare e poi da rimostrare su una copia nuova):
+> 1. **selettore delle colonne** in L3 della Dashboard, nello stesso punto del lab: `ColumnVisibilityToggle` nello slot
+>    `actions` di `RiskLevelSection`, con `tableRef` legato;
+> 2. **righe di riferimento**:
+>    - nella tabella il portafoglio è la prima riga e il benchmark la seconda, ciascuno con lo sfondo del colore del
+>      suo punto (`colorForRole`, più tenue);
+>    - nell'ordine di partenza; quando si ordina, si spostano come le altre;
+>    - **le 4 card di L3 spariscono**: Sortino, Sharpe, Volatilità e Beta vanno nella riga del portafoglio, e il
+>      perimetro («sulla composizione attuale») nel titolo della tabella;
+>    - **nel lab**, il benchmark diventa una riga in cima, da concordare con F, perché i suoi test contano righe e celle;
+> 3. **tutte le colonne anche per le singole posizioni** (Sortino, Sharpe, Beta, Correlazione): i numeri per posizione
+>    li deve calcolare Risk, con un'opzione del suo controller. Fino ad allora c'è un trattino che si spiega nel
+>    tooltip;
+> 4. **cedole e dividendi**:
+>    - un TODO nel codice accanto alla riga «solo prezzi»;
+>    - una voce nei todo futuri (sotto) e una al coordinator;
+>    - una richiesta a Risk, che metta lo stesso TODO nel backend dove si calcolano i rendimenti.
+
+> **Chiusura**: server fermato, 6163 libera. **Copia cancellata**, log compreso: `lsof +D` vuoto prima, poi `ls` →
+> «No such file or directory». Lo snapshot del coordinator resta.
+
+#### Todo futuri (non di questo giro)
+- **Rendimento totale, con cedole e dividendi** (Risk, backend): quando arriva, si toglie la riga «solo prezzi»
+  (`riskReturnNotes`, `notes.priceOnly`) e si aggiorna l'avviso «Prices only, for now» del manuale.
+- **Il tasso senza rischio modificabile**: con l'analisi a Risk prima, perché lo store condiviso è suo. Quando arriva,
+  si aggiorna la frase del manuale sul tasso.
+
+### Passo 18 — passo 1b: righe di riferimento, via le card di L3, selettore delle colonne · 🔶 06/10
+
+> **Accordi (06/10)**:
+> - **F**: la forma va bene, con tre precisazioni.
+>   1. Una riga di riferimento **aggiunta** ha un id non numerico: `ref-<assetId>` (sulla Dashboard anche
+>      `ref-portfolio`).
+>   2. Un riferimento che è già una delle righe (D371 nel lab, il benchmark posseduto sulla Dashboard) resta una riga
+>      normale: tiene id, celle e `data-reference="true"` su Beta e Correlazione, e cambiano solo posizione e sfondo.
+>   3. Le celle della riga aggiunta sono `-ref-<colonna>`, e `data-reference-count` conta solo le righe aggiunte.
+>
+>   **Ordine**: io porto la capacità nel componente e la adotto sulla Dashboard, e il lab resta identico, perché il suo
+>   involucro non passa righe di riferimento. Lui la adotta nel lab dopo la fusione nel suo ramo, con i suoi test
+>   (rossi prima) e la guida.
+> - **Risk (k6, dopo k5a)**:
+>   - **Sharpe e Sortino per posizione**: campi nuovi sugli item di `asset_risk_return`, calcolati sugli stessi
+>     rendimenti e con la stessa annualizzazione del punto, con il tasso senza rischio della richiesta. Arrivano con la
+>     prima ondata, senza uno stato in più;
+>   - **beta e correlazione per posizione**: da una query `asset_set_comparison` sulle posizioni, con il suo stato,
+>     dichiarato a `l3Results`;
+>   - **riga del benchmark**: `comparison_sharpe` e `comparison_sortino` in `comparison`, e la stessa coppia in
+>     `asset_set_comparison` per il lab;
+>   - **2a confermata**: le volatilità di `historical_kpi` e di `asset_risk_return` sono identiche (stessi
+>     `require_primary_returns`, stessa annualizzazione). La riga del portafoglio prende volatilità e rendimento dal
+>     punto, Sharpe e Sortino dal KPI;
+>   - le mie regole delle celle restano mie; contratto e rossi dopo k5a.
+> - **Coordinator**: «💰 Rischio — rendimento totale con cedole e dividendi» è in `TODO_FUTURI.md`, con le parole del
+>   developer. **TODO nel codice**:
+>   - frontend: `frontend/src/lib/components/risk/riskReturnLevel.ts`, il commento `TODO(total-return)` in
+>     `riskReturnNotes`, accanto alla riga `priceOnly`;
+>   - backend: di Risk, in `backend/app/services/series_preparation.py`, sopra la riga che costruisce i rendimenti dai
+>     soli prezzi (k5a). La riga esatta la scrivo dopo la fusione della sua punta.
+
+> **Note implementazione**:
+> - **`riskReturnLevel.ts`**:
+>   - `RiskReturnRow` acquista `role` (`portfolio`/`benchmark`) e `added`;
+>   - i rapporti si leggono in tre modi: numero; `null`, cioè misurato ma non misurabile (il trattino con la nota del
+>     lab); `undefined`, cioè non calcolato qui (un trattino che lo dice);
+>   - funzioni nuove: `rowIdOf`, `pointIdOf`, `rowIdForPoint`, `referenceRowsFirst`.
+> - **`RiskReturnLevel.svelte`**:
+>   - le righe di riferimento aprono la tabella; lo sfondo viene da `getRowClass`, sky per il portafoglio e amber per
+>     il benchmark come i loro punti, e sopra restano hover e selezione;
+>   - gli id e le celle `ref-`; `data-row-count` conta solo gli asset, `data-reference-count` le righe aggiunte;
+>   - la selezione lega righe e punti attraverso le funzioni nuove;
+>   - le celle del peso del benchmark non posseduto dicono `notHeld`; quelle dei rapporti `undefined` dicono
+>     `notCalculated`; con `pendingColumns` mostrano «…».
+> - **`l3Helpers.buildRiskReturnRows()`**:
+>   - **portafoglio** (aggiunto, peso 1): volatilità e rendimento dal punto (`asset_risk_return`); Sortino e Sharpe da
+>     `historical_kpi`; beta e correlazione da `comparison`. Senza `asset_risk_return`, la volatilità del KPI;
+>   - **benchmark**: se è posseduto, la riga della posizione con `role`; altrimenti una riga aggiunta da `comparison`
+>     (volatilità, rendimento, `comparison_sortino`/`_sharpe` quando arriveranno);
+>   - **posizioni**: dalla più pesante, con `sortino`/`sharpe` dagli item quando ci saranno (k6).
+> - **`L3RiskAdjusted.svelte`**: **le 4 card non ci sono più**. Il perimetro va nel titolo della tabella
+>   («Rischio contro rendimento, asset per asset · sulla composizione attuale»), e `data-perimeter` resta sulla radice.
+>   Capacità: peso, rapporti, e beta/correlazione con un benchmark misurato.
+> - **Selettore delle colonne**: `ColumnVisibilityToggle` nello slot `actions` della sezione L3 di `RiskLevelsPanel`,
+>   con `tableRef` legato attraverso L3, come nel lab.
+> - i18n: `risk.levels.l3.table.notHeld` e `.notCalculated`, 4 lingue.
+> - **Verdi**:
+>   - `front check` → 0/0;
+>   - vitest → 372 passed, più i 2 rossi attesi della guardia di F;
+>   - E2E `risk-lab` → **41 passed**.
+> - **E2E `risk` → 16 passed, 8 failed, tutti per le card tolte**: 7 leggono `risk-l3-sortino-value` (`:1557`, `:1767`,
+>   `:1844`, `:2546`, `:3098`, `:3125`, `:3257`) e 1 legge `risk-l3-beta-benchmark` (`:2458`).
+>   - Sono rossi attesi, decisi dal developer: **test-author li sposta sulle righe del portafoglio e del benchmark**
+>     dopo il via libera visivo.
+>   - ⚠️ Ognuno si ferma alla prima asserzione, quindi le asserzioni che seguono in quegli 8 non sono verificate fino
+>     alla riscrittura.
+> - **Controllo a occhio sui dati di prova** (6153, `127.0.0.1`, utente di test), Dashboard, livello 3:
+>   - **senza benchmark**: il portafoglio è la prima riga, con lo sfondo sky; poi le posizioni dalla più pesante. Le
+>     colonne sono Asset, Peso, Volatilità, Rendimento medio annuo, Sortino e Sharpe. Le card non ci sono più e il
+>     titolo porta il perimetro. Il selettore delle colonne (`column-visibility-toggle`) è nell'intestazione di L3. I
+>     rapporti delle posizioni sono trattini `data-calculated="false"`, con il loro tooltip;
+>   - **con un benchmark non posseduto**: è la seconda riga, sfondo amber, peso «—» (`notHeld`), Beta e Correlazione
+>     `referenceItself`, celle `ref-`. Ci sono le colonne Beta e Correlazione, `data-row-count` 7 e
+>     `data-reference-count` 2, la retta passa per il benchmark (`data-anchor="benchmark"`);
+>   - **con un benchmark posseduto**: la riga della posizione sale al secondo posto con lo sfondo amber, tiene le sue
+>     celle (`risk-l3-row-*`) e `data-reference="true"` su Beta; `data-reference-count` 1; 8 punti.
+>   - ⚠️ **Trovato e sistemato**: la riga del benchmark non posseduto non aveva l'icona, perché la mappa copriva solo
+>     gli asset in portafoglio. Ora `assetIcons` include anche l'asset confrontato (`comparedAssetId`).
+>     `front check` → 0/0.
+>   - I numeri del benchmark di prova sono assurdi (la sua serie nel database di prova); non è il codice.
+
+### Review visiva 4 sui dati veri (6163): il passo 1b · 06/10
+
+> **Developer**: «Rivediamola adesso (consigliato)», cioè subito, mentre i numeri per posizione arrivano con k6.
+> **Coordinator (11:32)**: via libera alla copia, con la procedura di stamattina.
+> **Copia**: impronta dello snapshot ricontrollata (uguale), `umask 077` e `mkdir -m 700`, 0 voci leggibili da altri,
+> niente marcatore. Server su `127.0.0.1:6163`, log `600` dentro la copia, database della copia; la build è stata
+> ricostruita dal mio albero di lavoro, compresa la correzione dell'icona.
+
+> **Cosa ha visto il developer** (le sue parole tra virgolette, i dati sostituiti da […]):
+> 1. gli sfondi del portafoglio e del benchmark non si vedono, e «benchmark manco compare nella tabella!»;
+> 2. vuole un cerchio blu prima del nome del portafoglio e un rombo arancione prima del benchmark, come nel grafico;
+> 3. il verde della riga selezionata va bene, ma «serve sia più trasparente»;
+> 4. un clic sul portafoglio o sul benchmark non deve cambiare il colore del loro simbolo nel grafico;
+> 5. il punto 5 resta, ma il tooltip «non calcolato» sui trattini va tolto: «aggiunta inutile»;
+> 6. nel lab, il selettore del benchmark va sopra la tabella, come in Dashboard → è lavoro di F.
+>
+> **Diagnosi** (letta nella sua sessione: solo stili e attributi, nessuna cifra e nessun nome):
+> - `DataTable` dipinge di bianco ogni riga (`tbody tr`, CSS con scope, specificità 0,2,2), quindi una classe utility
+>   sulla riga perde. Il controllo a occhio del passo 18 aveva verificato la **classe**, non il **colore calcolato**.
+> - La riga del benchmark **c'era**: era una sua posizione, seconda riga con `data-reference="true"`. Senza la tinta
+>   sembrava una riga qualunque.
+>
+> **Correzioni**:
+> - `RiskReturnLevel.svelte`: le tinte stanno in `:global(div.risk-return-table table tbody tr.risk-return-row-*)`
+>   (0,2,4), chiaro e scuro, e `getRowClass` dà `risk-return-row-portfolio` / `-benchmark`. La riga selezionata è
+>   `tr.clickable.selected` a 0,3,4, cioè lo stesso verde più trasparente, solo per questa tabella.
+> - Prima del nome c'è un segno di ruolo senza testo (`data-role-mark`): un cerchio sky per il portafoglio e un rombo
+>   amber per il benchmark.
+> - `scatterChartHelpers.ts`: un `portfolio` o `benchmark` selezionato tiene `colorForRole` (diventa solo più grande e
+>   opaco), mentre gli asset diventano ancora verdi. Così i casi `benchmark`/`portfolio` dell'`it.each` di F
+>   (`scatterChartHelpers.test.ts:296-322`) sono rossi attesi.
+> - Un rapporto `undefined` è un trattino semplice senza tooltip. Tolti `risk.levels.l3.table.notCalculated` (4 lingue)
+>   e `pendingColumns`.
+> - `front check` → 0/0. La build (11:55) è più recente delle modifiche, e il CSS servito contiene le regole. Il server
+>   è stato riavviato su `127.0.0.1:6163`, unico listener. Il riavvio ha chiuso la sessione del developer, che vede il
+>   login.
+>
+> **⚠️ Fuori pista**: il controllo a occhio del passo 18 diceva «sfondo sky», ma aveva letto la classe, non il colore.
+> Da qui in poi i controlli visivi leggono `getComputedStyle`.
+>
+> **Messaggi ricevuti nel frattempo**:
+> - **F**:
+>   - concede a test-author `scatterChartHelpers.test.ts:296-322` e nient'altro. Lo split: gli asset (`asset-1`,
+>     `asset-3`) restano «più grandi, verdi e opachi», `portfolio` e `benchmark` diventano «più grandi e opachi, nel
+>     colore del ruolo»; i controlli «stesso punto, nient'altro cambia» restano. Rossi prima, nello stesso cambio
+>     dell'helper;
+>   - lo spostamento del selettore nel lab lo fa lui, nel giro di adozione con l'1b;
+>   - gli ho risposto che in Dashboard `L3Benchmark` è un fratello sopra `L3RiskAdjusted`, sempre montato, senza un
+>     gate `pending`. Ho sconsigliato uno slot dentro `RiskReturnLevel`: starebbe sotto i rami di caricamento e vuoto di
+>     L3, e il selettore si smonterebbe.
+> - **Risk**:
+>   - `ComparisonParams` è `extra="forbid"` (`comparison.py:112`, `service.py:168-171`). Quindi
+>     `risk_free_annual_rate` e `target_annual_return` vanno nella richiesta di `L3Benchmark` solo nel giro che fonde
+>     k6;
+>   - k5a è committato (`bc0e67533` … `2a4364724`, albero `d57703dca`), e k6 parte con (iii).
+>
+> **Seconda passata (12:00–12:25)**, dopo il riavvio: il developer rientra e guarda.
+> - **Cosa vede**:
+>   - i nomi «più intensi», e «li hai resi fissi, ma non li volevo fissi»;
+>   - la larghezza delle colonne non si cambia, e «peso è troppo larga»;
+>   - «Rendimento medio annuo» va accorciato con una sigla, con il nome completo nel tooltip;
+>   - «stessi errori in risk lab», e lì il selettore del benchmark è ancora in cima, cosa che spetta a F.
+> - **Misure sulla sua pagina** (solo stili):
+>   - le tinte ora si vedono (sky e amber a 0,1);
+>   - la cella del nome è `sticky` (`pinned: 'left'` di `assetNameColumn`) con `background: inherit`, quindi ripete
+>     sopra la riga la stessa tinta traslucida: per questo il nome sembra «più intenso»;
+>   - i nomi delle righe di riferimento erano anche `font-medium text-gray-800`;
+>   - con `tableLayout="auto"` un trascinamento scrive `width: 170px` ma la colonna resta a 90, perché in una tabella
+>     più larga del suo box ogni colonna resta al minimo. In più `handleResize` si ferma a `minWidth` 90;
+>   - con `fixed` lo stesso trascinamento funziona.
+> - **Correzioni** in `RiskReturnLevel.svelte` e `riskReturnLevel.ts`:
+>   - layout `fixed`, il default di DataTable;
+>   - `headerWidth(title, measure)` misura il titolo in maiuscolo nel font della testata (`HEADER_FONT`, con un
+>     `OffscreenCanvas`; senza canvas usa una stima per lettere). Il risultato è sia `width` sia `minWidth` di ogni
+>     colonna di cifre;
+>   - nomi non più fissati (`pinned: undefined`); il tetto `max-w-56` è tolto solo dentro questa tabella; i nomi dei
+>     riferimenti sono scritti come gli altri;
+>   - il titolo è `risk.levels.l3.table.expectedReturnShort` («Rend. annuo»). Il nome completo resta nel menu delle
+>     colonne (`displayName`) e apre il tooltip, con `risk.levels.l3.table.namedHelp` = «{name}\n{help}» (il Tooltip è
+>     `pre-line`);
+>   - ho aggiornato il commento di testata, comprese due righe superate dall'1b («un punto senza riga», «le card
+>     sopra»).
+> - **Verifica sulla sua pagina**:
+>   - `fixed`, larghezze 220/70/109/125/94/87/69/135, nessun titolo tagliato;
+>   - un trascinamento porta Peso da 70 a 110, e allargando all'indietro si ferma al titolo (70);
+>   - il nome ha una sola tinta, la sua cella è trasparente;
+>   - il tooltip è su due righe.
+>   - Prima ho azzerato le larghezze salvate in quella copia (solo `…risk-l3_columnWidths`), per mostrargli i default.
+> - **Build**: `front build --debug` sul posto. Il backend legge la build dal disco a ogni richiesta, quindi nessun
+>   riavvio e nessun nuovo login.
+> - `front check` → 0/0.
+> - **Esito: «tutto perfetto eccetto il "Confrontato con" in lab»**. Quello è di F, e gli ho girato la domanda.
+>   Gli ho segnalato anche la sua tabella L1°, che ha gli stessi nomi fissi e lo stesso layout `auto`.
+> - Copia cancellata con la prova (`lsof +D` 0, `ls` «No such file»). 6163 e 6153 libere, riga al coordinatore.
+> - ⚠️ **Fuori pista**: la domanda di verifica gliel'ho scritta in inglese. Il developer chiede di scrivergli **in
+>   italiano**, sempre.
+
+### Passo 19 — dopo la review 4: pulizia, cancelli, concessioni, test-author · ✅ 06/10
+
+> **F**:
+> - anticipa lo spostamento del «Confrontato con» (il suo giro 13), poi corregge i tempi su indicazione del
+>   coordinatore: il codice del selettore aspetta che il mio 1b sia committato e fuso nel suo ramo, insieme alla
+>   correzione di L1°. I rossi li scrive adesso e li tiene da parte. Il developer è stato informato della correzione;
+> - per L1° farà la stessa correzione di L3, riusando `headerWidth` da `riskReturnLevel.ts`, nel suo giro di adozione;
+> - **concessioni a test-author**, una volta sola, nello stesso cambio del layout e con i rossi provati sul codice di
+>   prima:
+>   - G1: `scatterChartHelpers.test.ts:296-322`, lo split;
+>   - G2: `assetSetI18n.test.ts:194-233`, la guardia;
+>   - G3: `AssetSetRiskReturnSection.test.ts:965-973` (solo il caso `expectedReturn`), `:992-996` e il commento
+>     `:29-32`;
+>   - G4: `risk-lab.spec.ts:4993` (nel suo albero è `:5057`): `fixed`, ogni titolo sta nel suo `th`, e il pin del
+>     trascinamento nello stesso test.
+>
+> **Risk**:
+> - i due parametri del rischio vanno in `L3Benchmark` solo con k6: `ComparisonParams` è `extra="forbid"`;
+> - via libera a togliere **esattamente 10 chiavi** con `dev.py i18n remove`, nel checkpoint 7: le 4 `l3.measures.*`,
+>   `l3.{volatility,sortino,sharpe,beta}Help`, `l3.scatter.note`, `risk.assetSet.levels.l3.scatterNote`. Le ha
+>   controllate anche lui su Risk, su F, su `dev_release2` e sul mio albero, comprese le chiavi composte;
+> - `docsHint` è mio (`RiskMetricCard` è di A nella tabella dei proprietari).
+>
+> **Note implementazione**:
+> - Le 10 chiavi sono tolte: 3539 chiavi per lingua, parità ok, nessuna delle 10 rimasta. Il diff dei cataloghi
+>   rispetto a HEAD è +6 −11 per lingua.
+> - `RiskMetricCard`: tolto `docsHint` (prop, destrutturazione, `DocsLink` di nuovo `{label}` come prima del checkpoint
+>   6). Prettier ok, `front check` → 0/0.
+> - **Cancelli prima di test-author**:
+>   - vitest sui file di rischio e dello scatter → 1290 passed, 6 failed. Sono 2 di G1 (attesi), 2 di G2 (attesi) e 2 di
+>     G3, causati dal titolo corto, ora concessi;
+>   - E2E `risk-lab` → 40 passed, 1 failed (G4, `:4993`, `table-layout` atteso `auto`). Nella finestra c'è una
+>     chiamata `fx_providers.snb` («SNB dimensions loaded»): è il problema noto della spec del lab, che il giro 12 di F
+>     risolve e che nel mio albero ancora non c'è;
+>   - E2E `risk` → 16 passed, **8 failed, esattamente gli 8 attesi** delle card tolte.
+> - ⚠️ **Fuori pista**: il log del backend è JSON (structlog). La scansione dei provider va fatta sui campi
+>   `timestamp`/`logger`, non con un'espressione regolare su righe di testo.
+> - **test-author avviato** (`ta-l3-review4`, in background), con il mandato completo:
+>   - U1 `riskReturnLevel.test.ts` (nuovo);
+>   - U2 `levels/L3RiskAdjusted.test.ts` (nuovo);
+>   - U3 `l3Helpers`;
+>   - U5 scatter (T11–T15, solo aggiunte);
+>   - G1–G4;
+>   - E1, la riscrittura degli 8 sulla riga del portafoglio (`tr[data-row-id="ref-portfolio"]`);
+>   - E2–E5: tinte, selezione, colonne ridimensionabili, titolo corto;
+>   - E6, V3 sulle card L1/L2 (T6–T9 adattati);
+>   - E7, le etichette di L4 (T16–T17);
+>   - E8, `holdFxProviderCatalog` che risponde `[]`.
+>
+>   I rossi si provano con mutanti mirati e ripristino verificato per sha256.
+> - **Runner**: chiesta a Risk la concessione per `riskReturnLevel.test.ts` in `risk-levels-unit`. Ho fatto
+>   riconfermare quella del 05/10 per `L3RiskAdjusted.test.ts` in `risk-levels-component`.
+>   - **12:40**: Risk ha girato la richiesta al coordinator con il suo OK sul contenuto. Il runner è del
+>     coordinator, e la risposta arriva da lui.
+>   - **13:33, concessione del coordinator**, solo `_frontend_portfolio.py`. Per ciascuno dei due file: la lista di
+>     vitest, `tests=` e una frase in `desc`. Ha verificato che nessun worktree tocca il file, e che la riga `:348` del
+>     k4 di Risk si fonde senza conflitti (`merge-file`).
+>   - **Applicata**:
+>     - 4 righe (`:172`, `:191`, `:344`, `:346`), `numstat` 4/4, sintassi Python ok;
+>     - `risk-levels-unit` sale a 11 file, l'ultimo `riskReturnLevel.test.ts`;
+>     - `risk-levels-component` sale a 6, l'ultimo `L3RiskAdjusted.test.ts`.
+>
+>     `check-orphans` lo lancio dopo test-author, perché ora la corsia è sua. Le frasi di `desc` le ho scritte sui
+>     titoli dei casi già scritti, e le riallineo al resoconto finale se cambia qualcosa.
+>
+> **Risk, 13:44: k6 è dentro**. I commit sono `61eda42d8` `331b07b46` `4b296dff6`, albero `f80a7ef15`. Si fonde nel mio
+> giro, dopo il checkpoint 7, ed è il coordinator a fondere: io non tocco Git. Contratto (ogni cifra è `number | null`):
+> - `asset_risk_return.items[].sharpe`/`.sortino`, sui rendimenti e sul fattore del punto stesso;
+> - `comparison.comparison_sharpe`/`.comparison_sortino` del benchmark, sulle stesse osservazioni di
+>   `comparison_volatility` e `comparison_expected_annual_return`;
+> - `comparison.items[] = {asset_id, beta, correlation}`, ordinati per `asset_id`:
+>   - solo per lo scope di portafoglio (con un asset la lista è vuota);
+>   - il benchmark non c'è mai: è il mio trattino `referenceItself`;
+>   - non c'è nemmeno una posizione senza serie preparata o con meno di 2 coppie, e **un item mancante vuol dire «non
+>     misurato»**, quindi il trattino con la nota;
+> - un valore indefinito è `null`, mai 0, con un avviso che nomina l'asset (`sharpe_undefined_assets`,
+>   `sortino_undefined_assets`, `comparison_correlation_undefined_assets`). Con questi avvisi il risultato è `partial`;
+> - una posizione piatta ha beta 0 e correlazione `null`; un benchmark piatto rende `null` tutti i beta e le
+>   correlazioni, e parlano solo gli avvisi singolari che ci sono già;
+> - i numeri pubblicati prima non cambiano, e nei mock E2E i campi nuovi sono facoltativi.
+>
+> **Da fare dopo la fusione di k6** (stato misurato oggi su `l3Helpers.ts`: Sharpe e Sortino delle posizioni e del
+> benchmark aggiunto si leggono già con `carried()`, il beta e la correlazione delle posizioni no):
+> 1. `api sync`;
+> 2. `L3Benchmark`: `risk_free_annual_rate: appliedRiskFreePercent / 100` e `target_annual_return: 0` nella
+>    richiesta. Oggi `appliedRiskFreePercent` è nel contesto del controller (`RiskLevelsPanel.svelte:75-77`) e non
+>    arriva a `L3Benchmark`;
+> 3. `buildRiskReturnRows`: il beta e la correlazione di ogni posizione da `comparison.items` per `asset_id`:
+>    - senza `items` (payload di prima), `undefined`;
+>    - `items` presente ma l'asset assente, `null`;
+>    - il benchmark posseduto resta `referenceItself`;
+> 4. i test (rossi sul codice di prima) e, se il developer lo vuole, un'occhiata sui suoi dati alle colonne piene.
+>
+> **test-author ha finito** (`ta-l3-review4`). Ogni asserzione nuova o cambiata è stata vista rossa su un mutante
+> mirato, poi verde. Gli 8 sorgenti mutati sono stati ripristinati, con lo sha256 uguale a quello di partenza.
+> - **File e casi**:
+>   - `riskReturnLevel.test.ts`, nuovo, 23 test: `headerWidth`, gli id, `referenceRowsFirst`, le note, `outsideParts`;
+>   - `levels/L3RiskAdjusted.test.ts`, nuovo, 15 test: niente card, titolo e perimetro, righe di riferimento, fonte di
+>     ogni cifra, trattini, colonne, titolo corto, larghezze, selezione riga ↔ punto, note (T10);
+>   - `l3Helpers.test.ts`, +13 (26);
+>   - `scatterChartHelpers.test.ts`: G1 più T11–T15 (rombo, area del rombo pesato, misura fissa, V6). Prima nessuno
+>     li fissava;
+>   - `ScatterChart.test.ts`, +2: la riga di dettaglio del tooltip;
+>   - `assetSetI18n.test.ts` (G2), `AssetSetRiskReturnSection.test.ts` (G3), `RiskMetricCard.test.ts` (+2, V3: niente
+>     `title` nativo);
+>   - `risk-analysis.spec.ts`: E1 (gli 8 spostati sulla riga `ref-portfolio`), E2–E5, E6 (V3 sulle card L1/L2), E7
+>     (T16–T17), E8 (`emptyFxProviderCatalog` risponde `[]`; prima si chiamava `holdFxProviderCatalog`);
+>   - `risk-lab.spec.ts`: G4.
+> - **Cancelli** (corsia 6153, uno alla volta):
+>   - vitest sugli 8 file unitari → 265;
+>   - `risk-levels-unit` 365, `risk-levels-component` 141, `core-unit` 2970, `component-unit` 2588;
+>   - E2E `risk` 30 passed (12:05–12:08 UTC), `risk-lab` 41 (12:08–12:10), `risk --workers 4` 30 (12:12–12:13);
+>   - prettier pulito; `front check` 0/0; `check-orphans` pulito.
+> - **Punti segnalati, e cosa ho deciso**:
+>   1. In E1 la volatilità della riga del portafoglio nel test della Dashboard ha cambiato valore atteso. Ora viene da
+>      `asset_risk_return`, non dal KPI. È la fonte concordata con Risk, che il 06/10 ha confermato che nei calcoli veri
+>      le due coincidono; nello stub sono diverse apposta, ed è per questo che il mutante «volatilità dal KPI» diventa
+>      rosso. **Approvato.**
+>   2. E7 sul codice vero di prima (mutante M3) diventa rosso sul conteggio (2 invece di 3: replay e shock avevano la
+>      stessa chiave `single-stress`). Il rosso sull'ordine delle etichette arriva con M3′. Va bene così.
+>   3. E4 lavora a 1024 px: a 1280 la tabella ha spazio e anche con `auto` un trascinamento sposterebbe la colonna,
+>      quindi il caso del developer non si riprodurrebbe. Prima dei trascinamenti c'è un controllo della premessa, che
+>      fallisce se il riquadro non è più stretto delle colonne.
+>   4. **G2 sfora la concessione**: il blocco concesso era `:194-233`, ma l'ultimo caso (`:235-242`) leggeva
+>      `renderedNoteKey()`, che non esiste più. test-author ha riscritto il blocco della guardia fino alla fine (nuovo
+>      `:195-278`), e nient'altro. → **chiesto l'OK a F**.
+>   5. Due commenti nei file di F, fuori dalle concessioni, ora sono falsi: `scatterChartHelpers.test.ts:230` («the
+>      selection green») e `risk-lab.spec.ts:4975-4977` («laid out `auto`»). → **ho proposto a F il nuovo testo**, da
+>      fare nel checkpoint 7 con la sua concessione oppure nel suo giro di adozione.
+>   6. Nelle finestre di `risk` nessuna chiamata ai provider. In `risk-lab` c'è una chiamata SNB (12:09:35 UTC), il
+>      problema noto della spec del lab che il giro 12 di F risolve. **L'ho riletta io**, sui campi JSON del log.
+>
+> **Crash dell'app (~14:18) e ripresa**. Il coordinator ha trovato HEAD `f6b7273f8`, 24 percorsi in corso, niente in
+> stage, nessuna porta occupata e nessun processo rimasto. L'ultimo comando prima del crash, la lettura dei due
+> commenti, era già finito. Ho ricontrollato io:
+> - 20 M + 4 nuovi, niente in stage;
+> - 6153 libera;
+> - i 18 sha256 (10 file di test, 8 sorgenti) uguali al resoconto di test-author;
+> - `git diff --check` pulito;
+> - nessun residuo dei mutanti (`tableLayout` 0, `font-medium` 0, `docsHint` 0).
+>
+> Poi ho rilanciato i controlli rapidi: `check-orphans` OK; `i18n audit` 3539 chiavi, nessuna traduzione mancante;
+> vitest sui 2 file nuovi → 38 passed.
+>
+> **Richiesta di review a F** (prima del checkpoint 7, come concordato): l'elenco dei suoi file con gli intervalli, lo
+> sforamento di G2 e i due commenti. Il checkpoint lo consegno al coordinator dopo l'OK di F.
+>
+> **F (14:25)**:
+> - non può leggere il mio worktree, quindi chiede una patch per ogni suo file;
+> - **OK allo sforamento di G2**, a patto che il resto di `assetSetI18n.test.ts` resti identico byte per byte, cosa che
+>   verifica sulla patch;
+> - **sì ai due commenti nel checkpoint 7, con il mio testo**.
+>
+> **Note implementazione**:
+> - I due commenti sono applicati:
+>   - `scatterChartHelpers.test.ts:229-231`: «larger and fully opaque; an asset in the selection green, the portfolio
+>     and the benchmark in their own role colour»;
+>   - `risk-lab.spec.ts:4975-4978`: «laid out `fixed`, so a width the reader drags holds, and every figure column
+>     opens exactly as wide as its own title … and no narrower (`headerWidth`)», con la frase sul titolo francese di L1°
+>     che resta.
+>
+>   Prettier è pulito. Sono solo commenti, quindi la prova E2E vale ancora; cambiano solo gli hash dei due file.
+> - **Export per F** in `/tmp/libreFolio_A_for_F/` (cartella `700`, file `600`):
+>   - 6 patch (`git diff -- <file>` contro HEAD `f6b7273f8`, ognuna verificata con `git apply --check -R`);
+>   - il file intero `AssetSetRiskReturnSection.svelte`;
+>   - `SHA256SUMS.txt`, con lo sha256 di ogni file nel worktree, il blob in HEAD e gli sha256 dell'export.
+> - **Bozza della consegna**:
+>   - i18n rispetto a HEAD, in tutte e 4 le lingue: +5 −10, nessun valore cambiato, 3544 → 3539;
+>   - elenco dei blob in `files/ckpt7-blobs.txt`, 24 percorsi;
+>   - privacy: nessuna percentuale, ISIN, importo o nome di fondo nelle righe aggiunte al journal.
+>
+> **F (14:28): review dei suoi 6 file APPROVATA per il checkpoint 7**:
+> - ha verificato l'export con un suo script (PASS): ogni patch, applicata al blob di `f6b7273f8`, dà lo sha dichiarato;
+> - 01, l'involucro: Props, `tableRef`, righe e punti (D371), descrizione, 4 stati e periodo restano suoi; le capacità
+>   sono esplicite, e non passa nessun peso;
+> - 02: solo gli intervalli concessi;
+> - 04: tolti solo i casi `benchmark`/`portfolio` e il commento di `:230`; il resto sono aggiunte;
+> - 05: 46 righe aggiunte, nessuna tolta;
+> - 06: lo sforamento è accettato, perché resta dentro il blocco della guardia, che fallisce chiuso;
+> - 03, un'osservazione **non bloccante**: un `th` senza larghezza inline dà `own` = `NaN`, e la clausola «at its own
+>   width» passa in silenzio. La rende «fail closed» lui nel suo giro di adozione; qui non la tocco, così i cancelli
+>   non ripartono.
+> - Chiede che la consegna elenchi le chiavi i18n tolte e aggiunte e i conteggi dei suoi file unitari.
+>
+> **Conteggi misurati** (vitest con reporter JSON, 14:29), 336 passed, 0 failed:
+> - `AssetSetRiskReturnSection.test.ts` 125, `AssetSetComparisonLevels.test.ts` 50, `assetSetLevels.test.ts` 101,
+>   `assetSetI18n.test.ts` 11;
+> - `scatterChartHelpers.test.ts` 36, ancora verde dopo la modifica al commento;
+> - `ScatterChart.test.ts` 13.
+>
+> **Previsione dei conflitti**, misurata leggendo la storia committata (nessun worktree altrui):
+> - punta di Risk `4b296dff6` (k5a + k6): merge-base `bb8d68ad2`, 13 commit e 37 file. Si sovrappone ai miei percorsi
+>   in `risk-analysis.spec.ts`, nei 4 cataloghi e in `_frontend_portfolio.py`;
+> - punta di F `9008b21c2` (giro 12): 2 file, si sovrappone in `risk-lab.spec.ts`.
+>
+> **Simulazione a tre vie** (`git merge-file -p` su copie in `/tmp`; il repo non è stato toccato):
+> - 0 conflitti su tutti e 7 i file;
+> - cataloghi fusi validi, 3540 chiavi con parità nelle 4 lingue: le mie 5 ci sono, nessuna delle 10 tolte torna, e
+>   Risk aggiunge 1 chiave e non tocca le 10;
+> - runner fuso con la sintassi a posto e i miei due file registrati;
+> - nella spec di Risk fusa `holdFxProviderCatalog` compare 0 volte (il lato di Risk non lo usa), e
+>   `risk-l3-beta-benchmark` resta solo nel mio commento di `:2654`;
+> - nella spec del lab fusa c'è `fixed` e nessun `auto`.
+>
+> **Checkpoint 7 consegnato al coordinator** (06/10, ~14:35): `CHECKPOINT READY` con baseline, 24 percorsi e i loro
+> blob (`files/ckpt7-blobs.txt`), esclusioni, prova, previsione dei conflitti e messaggio proposto
+> (`/tmp/libreFolio_commit_ckpt7.txt`). Ho proposto un solo ORDINE: prima il commit del checkpoint 7, poi
+> `merge --no-ff` della punta di Risk `4b296dff6` (k5a + k6, che serve al passo successivo). Fondere anche la punta di F
+> `9008b21c2` lo decide il coordinator. **Stato: FROZEN.**
+>
+> **Dopo la fusione** (passo 20): validare la revisione combinata (i miei cancelli più l'E2E `risk-lab`), poi
+> `api sync` e il lavoro di k6 elencato sopra (parametri su `L3Benchmark`, beta e correlazione per posizione da
+> `comparison.items`, test con i rossi provati sul codice di prima).

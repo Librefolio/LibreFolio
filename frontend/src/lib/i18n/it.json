@@ -3130,7 +3130,6 @@
           "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nella tabella e nel grafico; con un benchmark scelto in cima alla scheda, anche quanto si è mosso insieme a lui.",
           "expectedReturn": "Rendimento medio annuo",
           "correlation": "Correlazione",
-          "scatterNote": "Ogni punto è un asset: l'asse orizzontale dice quanto ha oscillato, quello verticale quanto ha reso in media all'anno. Per un asset molto volatile la media è più alta di quanto ha reso davvero.",
           "columnHelp": {
             "volatility": "Quanto oscillano i rendimenti dell'asset, su base annua: la deviazione standard dei rendimenti del periodo, annualizzata.",
             "expectedReturn": "La media dei rendimenti del periodo, riportata a un anno con la frequenza delle quotazioni. Descrive il passato, non è una previsione. Per un asset molto volatile è più alta di quanto ha reso davvero, perché le oscillazioni erodono il rendimento composto.",
@@ -3459,9 +3458,6 @@
         "sharpe": "Sharpe",
         "volatility": "Volatilità",
         "beta": "Beta",
-        "sortinoHelp": "Rendimento per unità di rischio al ribasso. A differenza dello Sharpe non penalizza le salite violente.",
-        "sharpeHelp": "Rendimento per unità di volatilità totale: penalizza le salite quanto le discese.",
-        "betaHelp": "Quanto si muove rispetto al benchmark.",
         "benchmark": "Confrontato con",
         "perimeter": {
           "current_composition": "sulla composizione attuale",
@@ -3473,7 +3469,6 @@
           "axisVolatility": "Volatilità annualizzata",
           "axisReturn": "Rendimento medio annuo",
           "line": "Retta rischio-rendimento",
-          "note": "Sopra la retta significa pagato meglio per il rischio preso. I punti mostrano il rendimento atteso in media-varianza, la grandezza in cui la pendenza della retta è lo Sharpe: su un asset molto volatile il rendimento realmente vissuto è più basso, perché la volatilità erode il composto.",
           "notes": {
             "above": "Sopra la retta: pagato meglio per il rischio preso.",
             "line": "La retta parte dal tasso senza rischio e, senza un benchmark, passa per il portafoglio: la sua pendenza è lo Sharpe del portafoglio.",
@@ -3496,12 +3491,12 @@
         "rows": {
           "kpi": "Sortino, Sharpe e volatilità"
         },
-        "volatilityHelp": "Quanto oscilla il rendimento in un anno, in su e in giù: misura l'ampiezza dei movimenti, non la loro direzione.",
-        "measures": {
-          "sortino": "rendimento per rischio al ribasso",
-          "sharpe": "rendimento per volatilità totale",
-          "volatility": "σ annualizzata",
-          "beta": "quanto segue il benchmark"
+        "table": {
+          "weight": "Peso",
+          "weightHelp": "La quota del patrimonio in questa posizione, oggi. È anche la grandezza del suo punto nel grafico.",
+          "notHeld": "Non è in portafoglio: il benchmark è qui per il confronto.",
+          "expectedReturnShort": "Rend. annuo",
+          "namedHelp": "{name}\n{help}"
         }
       },
       "l4": {

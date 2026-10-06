@@ -2,6 +2,7 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
+import {t as catalogueText} from '../fixtures/i18n-data';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage} from '../assets/assets-helpers';
 
@@ -1071,7 +1072,7 @@ async function holdLivePricePoll(page: Page): Promise<void> {
 }
 
 /**
- * Hold the FX provider catalogue, unanswered, for the whole test.
+ * Answer the FX provider catalogue with an empty list, for the whole test.
  *
  * Matches `/api/v1/fx/providers` with or without a query string — GET is the only
  * method on that path — and never `/fx/providers/routes`, a different endpoint
@@ -1089,35 +1090,35 @@ async function holdLivePricePoll(page: Page): Promise<void> {
  * request. It writes nothing to the database; it is still an external dependency
  * of the suite, paid for by a test that only asserts that the modal is visible.
  *
- * Held rather than stubbed — not because a stub would invalidate anything, a GET
- * is never a portfolio mutation, but for one rule in this file: what these tests
- * do not need is held, and a held request does nothing at all. The modal fires
- * `getCurrencyGraph()` without awaiting it and nothing in the modal waits on the
- * answer, so the only trace a hold leaves is an empty FX provider cache: an FX
- * provider badge would show its code instead of its icon. None is drawn here —
- * those badges belong to sync results, and no test in this file starts a sync.
- * The currencies fetched beside it come from their own request and still load.
- * The one test that opens the modal ends on it, so the held call goes down with
- * the page long before axios's 30 s timeout could reject it. The handler calls no
- * route method, so nothing can throw when the context closes.
+ * Answered, no longer held (06/10/2026). A held request is not inert for ever:
+ * axios rejects it after its 30 s timeout, and `getCurrencyGraph()` has no catch
+ * and is not awaited by `PageSyncModal`, so a test that outlived the timeout would
+ * leave an unhandled rejection on its page. An empty list is inert from the first
+ * millisecond: a GET is never a portfolio mutation, so its answer invalidates
+ * nothing (`isPortfolioAffectingMutation`); the graph is built from the currencies
+ * alone, with no provider edge, and nothing here reads it; and the only trace is
+ * an empty FX provider cache — an FX provider badge would show its code instead of
+ * its icon. None is drawn here: those badges belong to sync results, and no test in
+ * this file starts a sync. The currencies fetched beside it come from their own
+ * request and still load.
  *
  * Installed by `installRiskMocks` beside the price poll, so every test in this
- * file holds it; the only one that ever sends it is the one that opens the modal.
+ * file answers it; the only one that ever sends it is the one that opens the modal.
  *
  * ⚠️ This isolates the tests; it repairs nothing. Outside this file, opening the
  * sync modal still asks SNB whenever the backend process has not loaded its map
  * yet. All this does is keep a call to a third party out of tests that never
  * needed one.
  */
-async function holdFxProviderCatalog(page: Page): Promise<void> {
-    await page.route(/\/api\/v1\/fx\/providers(?:\?|$)/, () => {
-        // Deliberately neither fulfilled nor continued: see above.
+async function emptyFxProviderCatalog(page: Page): Promise<void> {
+    await page.route(/\/api\/v1\/fx\/providers(?:\?|$)/, async (route) => {
+        await route.fulfill({status: 200, contentType: 'application/json', body: '[]'});
     });
 }
 
 async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Promise<RiskRequest[]> {
     await holdLivePricePoll(page);
-    await holdFxProviderCatalog(page);
+    await emptyFxProviderCatalog(page);
 
     const requests: RiskRequest[] = [];
 
@@ -1544,6 +1545,125 @@ async function closeBenchmarkPicker(picker: Locator): Promise<void> {
     await expect(picker.getByTestId('risk-l3-benchmark-select-trigger')).toBeVisible();
 }
 
+/**
+ * L3's table: one row per holding, and the references it opens with (developer's reviews 3 and 4,
+ * 06/10/2026). The four L3 cards are gone — «si assorbono nella tabella» — and their figures are the
+ * portfolio's row, `ref-portfolio`, whose cells are `risk-l3-row-ref-<column>`.
+ *
+ * A benchmark nobody holds is a row added too, `ref-<assetId>`, and its cells share the portfolio's
+ * testids: a cell is therefore always read inside its own row, never by testid alone.
+ */
+function l3Table(scope: Locator): Locator {
+    return scope.getByTestId('risk-l3-table');
+}
+
+/** The portfolio's row of L3's table. */
+function l3PortfolioRow(scope: Locator): Locator {
+    return l3Table(scope).locator('tbody tr[data-row-id="ref-portfolio"]');
+}
+
+/** One figure of the portfolio's row: `weight`, `volatility`, `expectedReturn`, `sortino`, `sharpe`, `beta`, `correlation`. */
+function l3PortfolioCell(scope: Locator, column: string): Locator {
+    return l3PortfolioRow(scope).getByTestId(`risk-l3-row-ref-${column}`);
+}
+
+/**
+ * The benchmark's row of L3's table, whichever it is: added (`ref-<id>`) when nobody holds it, the
+ * holding's own (`<id>`) when someone does — the one of the two carrying the benchmark's mark.
+ */
+function l3BenchmarkRow(scope: Locator, assetId: number): Locator {
+    return l3Table(scope)
+        .locator(`tbody tr[data-row-id="ref-${assetId}"], tbody tr[data-row-id="${assetId}"]`)
+        .filter({has: scope.page().locator('[data-role-mark="benchmark"]')});
+}
+
+/** The holdings `asset_risk_return` reports in this file's stub (`resultFor`): ids 1 and 2, nothing else. */
+const STUB_HOLDINGS: readonly number[] = [1, 2];
+
+/**
+ * An asset the stub's portfolio does not hold, to stand as a benchmark nobody holds: L3 adds a row of
+ * its own for it, `ref-<id>`. Read from the list the picker is built from, so the stored id is one the
+ * page can put in force (`set`), and never one of `STUB_HOLDINGS`, which would be a held benchmark.
+ */
+async function unheldBenchmarkId(page: Page): Promise<number> {
+    const names = await assetDisplayNames(page);
+    const candidate = [...names].find(([assetId, name]) => !STUB_HOLDINGS.includes(assetId) && name !== '');
+    if (!candidate) throw new Error(`No asset outside ${STUB_HOLDINGS.join(', ')} to stand as a benchmark nobody holds. Check populate_mock_data.py.`);
+    return candidate[0];
+}
+
+/**
+ * The catalogue's sentence for `key`, in the language the page is drawn in.
+ *
+ * Read from `<html lang>`, which the root layout keeps on the language actually shown — the same reading
+ * as `risk-lab.spec.ts`'s, replicated rather than imported because a spec does not reach into another
+ * spec's helpers. A key the catalogue lacks fails here, by name.
+ */
+async function catalogueSentence(page: Page, key: string): Promise<string> {
+    const lang = ((await page.locator('html').getAttribute('lang')) ?? '').split('-')[0];
+    const sentence = catalogueText(lang, key);
+    expect(sentence, `the "${lang}" catalogue has no message for ${key}`).not.toBe(key);
+    return sentence;
+}
+
+/**
+ * Drag a column's right edge by `dx` pixels, the way a reader does.
+ *
+ * DataTable's resize handle is the last 6 px of the title cell: absolutely placed on its right edge,
+ * shown only while the pointer is over the cell, and listened to on `mousedown`, after which the
+ * document follows the pointer until `mouseup`. It carries no testid, so it is found by what it is to
+ * the pointer — the element under the cell's right edge, whose cursor is `col-resize` — and never by
+ * a class. A handle that is not there fails here, by name, instead of a drag that silently did nothing.
+ */
+async function dragColumnEdge(page: Page, header: Locator, dx: number): Promise<void> {
+    await header.scrollIntoViewIfNeeded();
+    const edge = await header.evaluate((cell) => {
+        const box = cell.getBoundingClientRect();
+        const x = box.right - 3;
+        const y = box.top + box.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {x, y, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
+    });
+    expect(edge.handle, `no resize handle under the right edge of ${await header.getAttribute('data-testid')}`).toBe(true);
+    await page.mouse.move(edge.x, edge.y);
+    await page.mouse.down();
+    await page.mouse.move(edge.x + dx / 2, edge.y, {steps: 4});
+    await page.mouse.move(edge.x + dx, edge.y, {steps: 4});
+    await page.mouse.up();
+}
+
+/**
+ * The figure titles of a DataTable that do not fit their column, each said with how; empty when every
+ * one fits.
+ *
+ * A title is cut two ways. As drawn now: it spills out of its cell's content box — DataTable writes its
+ * titles on one line and does not clip them, so a narrow column lets its title run into the next one.
+ * And at the column's own width — the `width` DataTable sets on the cell, what the column is drawn at
+ * when the table has no room to spare — when that width cannot hold the title and the cell's padding:
+ * a table with room to spare stretches its columns and would hide that.
+ */
+async function cutTitles(table: Locator, columns: readonly string[]): Promise<string[]> {
+    return table.evaluate(
+        (root, ids) =>
+            ids.flatMap((id) => {
+                const cell = root.querySelector<HTMLElement>(`thead th[data-testid="dt-header-${id}"]`);
+                const title = cell?.querySelector<HTMLElement>(`[data-testid="dt-sort-${id}"]`);
+                if (!cell || !title) return [`${id}: no title drawn`];
+                const style = getComputedStyle(cell);
+                const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+                const box = cell.getBoundingClientRect();
+                const drawn = title.getBoundingClientRect();
+                const needs = Math.max(title.scrollWidth, drawn.width);
+                const own = parseFloat(cell.style.width) - padding;
+                const problems: string[] = [];
+                if (drawn.left < box.left + parseFloat(style.paddingLeft) - 0.5 || drawn.right > box.right - parseFloat(style.paddingRight) + 0.5) problems.push(`spills out of its cell (title ${drawn.left.toFixed(1)}–${drawn.right.toFixed(1)}, cell ${box.left.toFixed(1)}–${box.right.toFixed(1)})`);
+                if (!(needs <= own + 0.5)) problems.push(`needs ${needs.toFixed(1)} px, its column's own width holds ${own.toFixed(1)}`);
+                return problems.length > 0 ? [`${id}: ${problems.join('; ')}`] : [];
+            }),
+        [...columns],
+    );
+}
+
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind
 // them. Verified by a green run of the whole category at 4 workers.
@@ -1665,10 +1785,14 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l2-uncovered')).toHaveAttribute('data-uncovered', '0.05');
 
         // --- L3: is the risk being paid for -----------------------------------
+        // The four cards are the table's portfolio row since the developer's review of 06/10/2026.
+        // Its Sortino and Sharpe are the KPI's; its volatility is its dot's — `asset_risk_return`'s
+        // 0.118, not the KPI's 0.142, which this stub sets apart on purpose — so the row and the
+        // dot it stands for always agree.
         await expect(panel.getByTestId('risk-level-3')).toBeVisible();
-        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
-        await expect(panel.getByTestId('risk-l3-sharpe-value')).toHaveText('1.21');
-        await expect(panel.getByTestId('risk-l3-volatility-value')).toHaveText('14.2%');
+        await expect(l3PortfolioCell(panel, 'sortino')).toHaveText('1.68');
+        await expect(l3PortfolioCell(panel, 'sharpe')).toHaveText('1.21');
+        await expect(l3PortfolioCell(panel, 'volatility')).toHaveText('11.8%');
 
         // --- Provenance: what the figures were computed over -------------------
         // `RiskResultFrame` publishes this and only the legacy panel uses it, so
@@ -1813,7 +1937,7 @@ test.describe('Risk analysis functional integration', () => {
         // and the failure did not escalate into a whole-panel error.
         await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
         await expect(panel.getByTestId('risk-l2-divergence-1')).toHaveText('+5.0pp');
-        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+        await expect(l3PortfolioCell(panel, 'sortino')).toHaveText('1.68');
         await expect(panel.getByTestId('risk-l1-card-current-value')).toHaveText(loss('3.2%'));
         await expect(panel.getByTestId('risk-load-error')).toHaveCount(0);
         await expect(panel).toHaveAttribute('data-catalog', 'ready');
@@ -1869,7 +1993,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l1-card-month-value')).toHaveText(loss('9.4%'));
         await expect(panel.getByTestId('risk-l1-card-worst-value')).toHaveText(loss('8.7%'));
         await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
-        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+        await expect(l3PortfolioCell(panel, 'sortino')).toHaveText('1.68');
 
         await expect.poll(() => requests.some((request) => request.scope.kind === 'portfolio' && request.scope.broker_ids?.length === 1 && request.scope.broker_ids[0] === brokerId), {timeout: 15_000}).toBe(true);
 
@@ -2362,6 +2486,50 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l4-shock')).toBeVisible();
     });
 
+    /**
+     * L4's status line names each step by the title its block wears, in the blocks' order (T16–T17,
+     * developer's decision of 05/10/2026: «Replay storico: Parziale», not «Stress test: Parziale»).
+     *
+     * The shock and the replay are both the `stress` analytic, asked one at a time, so both answer as
+     * `single-stress`: a line that named a step by its analytic called the replay a stress test nobody
+     * ran, and listed the steps in the order the controller holds them. Degraded here by instance
+     * (`instanceStatus`), each of the two comes back partial when it is run, and the simulation does not
+     * come back at all — three entries, one per block.
+     *
+     * The expected line is built from the page, not written down: the blocks' order as L4 draws them
+     * (`data-distance`, whose own order the level-4 test pins), each block's title and each state as the
+     * catalogue words them in the page's language.
+     */
+    test("L4's status line names each step by its block's title, in the blocks' order", async ({page}) => {
+        await installRiskMocks(page, {instanceStatus: {'single-stress': 'partial'}, unavailableSimulation: true});
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+
+        // Each step run to its own end — a figure, or for the simulation the state the line reports.
+        const shockPreset = panel.locator('[data-testid="risk-shock-preset"][data-preset-id="global_risk_off"]');
+        await expect(shockPreset).toBeVisible({timeout: 8_000});
+        await shockPreset.click();
+        await expect(panel.getByTestId('risk-shock-total')).toBeVisible({timeout: 10_000});
+        await panel.getByTestId('risk-replay-run').click();
+        await expect(panel.getByTestId('risk-replay-total')).toBeVisible({timeout: 10_000});
+        await expect(panel.getByTestId('risk-simulation-run')).toBeEnabled({timeout: 8_000});
+        await panel.getByTestId('risk-simulation-run').click();
+
+        const health = level4.getByTestId('risk-level-4-health');
+        await expect(health, 'one entry per degraded step').toHaveAttribute('data-count', '3', {timeout: 10_000});
+
+        const states: Record<string, string> = {replay: 'partial', shock: 'partial', simulation: 'unavailable'};
+        const steps = await panel
+            .getByTestId('risk-l4')
+            .locator('[data-distance]')
+            .evaluateAll((blocks) => blocks.map((block) => (block.getAttribute('data-testid') ?? '').replace(/^risk-l4-/, '')));
+        expect([...steps].sort(), 'premise: L4 draws its three blocks, and the stub degraded each').toEqual(Object.keys(states).sort());
+        const entries: string[] = [];
+        for (const step of steps) entries.push(`${await catalogueSentence(page, `risk.levels.l4.${step}`)}: ${await catalogueSentence(page, `risk.states.${states[step]}`)}`);
+
+        await expect(health, "L4's status line does not name each step by its block's title, in the blocks' order").toHaveText(entries.join(' · '));
+    });
+
     test('a benchmark chosen on the Dashboard is the benchmark in force on Broker Detail', async ({page}) => {
         const requests = await installRiskMocks(page);
 
@@ -2477,18 +2645,22 @@ test.describe('Risk analysis functional integration', () => {
 
             const benchmarkId = await chooseBenchmark(page, dashboard);
 
-            // The barrier the whole test turns on, and the reason it is this
-            // locator and not the picker's attribute. `risk-l3-beta-benchmark` is
-            // rendered from `comparedAssetId(controller.comparisonResult)` — the
-            // *answer* — so it is on screen only once the comparison has come
-            // back. The property below only exists for an analysis that has
-            // already finished: `discardOnDemand` re-issues whatever was still in
-            // flight, so a comparison still on the wire when the period moves is
-            // relaunched by the controller itself and nothing is lost. Moving the
-            // period before this line would exercise that other branch and go
-            // green over a benchmark that never re-asks.
-            const betaBenchmark = dashboard.getByTestId('risk-l3-beta-benchmark');
-            await expect(betaBenchmark).toBeVisible({timeout: 15_000});
+            // The barrier the whole test turns on, and the reason it is these
+            // two and not the picker's attribute. The portfolio row's beta and
+            // the benchmark's own row are drawn from `controller.comparisonResult`
+            // — the *answer*: the beta is its `beta`, and the row is built from
+            // its `comparison_asset_id` (`buildRiskReturnRows`) — so both are on
+            // screen only once the comparison has come back. (They replace
+            // `risk-l3-beta-benchmark`, the hidden name under the beta card, which
+            // left with the cards on 06/10/2026.) The property below only exists
+            // for an analysis that has already finished: `discardOnDemand`
+            // re-issues whatever was still in flight, so a comparison still on the
+            // wire when the period moves is relaunched by the controller itself and
+            // nothing is lost. Moving the period before this line would exercise
+            // that other branch and go green over a benchmark that never re-asks.
+            const portfolioBeta = l3PortfolioCell(dashboard, 'beta');
+            await expect(portfolioBeta).toHaveText('0.91', {timeout: 15_000});
+            await expect(l3BenchmarkRow(dashboard, benchmarkId), "the benchmark's row is missing from L3's table").toHaveCount(1);
 
             // Sampled before the click, for the reason the test above samples
             // before its reload: choosing a benchmark legitimately sends its own
@@ -2525,9 +2697,11 @@ test.describe('Risk analysis functional integration', () => {
             expect(fresh[fresh.length - 1]?.date_range.start).not.toBe(windowBefore);
 
             // The reader's half of the same fact, and the state the defect leaves
-            // behind: a benchmark named in the picker standing over an em dash,
-            // because the label under beta is drawn from an answer nobody re-asked.
-            await expect(betaBenchmark).toBeVisible({timeout: 15_000});
+            // behind: a benchmark named in the picker standing over a table that
+            // measures nothing against it, because the portfolio's beta and the
+            // benchmark's row are drawn from an answer nobody re-asked.
+            await expect(portfolioBeta).toHaveText('0.91', {timeout: 15_000});
+            await expect(l3BenchmarkRow(dashboard, benchmarkId), "the benchmark's row did not come back with the new answer").toHaveCount(1);
         } finally {
             await clearRiskBenchmark(page);
         }
@@ -2584,7 +2758,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-l1-card-day-value')).toHaveText(loss('3.1%'));
         await expect(panel.getByTestId('risk-l1-card-month-value')).toHaveText(loss('9.4%'));
         await expect(panel.getByTestId('risk-l2-weight-1')).toHaveText('60.0%');
-        await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+        await expect(l3PortfolioCell(panel, 'sortino')).toHaveText('1.68');
 
         // ONE notice, and above the levels: one notice per level, or one below them,
         // would each still show every sentence — and each would be the wrong design.
@@ -2941,6 +3115,223 @@ test.describe('Risk analysis functional integration', () => {
     });
 
     /**
+     * L3 is one table, the portfolio first (developer's visual reviews 3 and 4, 06/10/2026: «tutto
+     * perfetto»). What only a browser can show is measured here — computed colours, positions and
+     * widths, a drag, a hover; what a DOM can show is `L3RiskAdjusted.test.ts`'s.
+     *
+     * Review 4 found the reference rows white on screen while the check before it had read their
+     * class: DataTable paints every row white with a selector the class lost to. So every colour below
+     * is the computed one, read in the light theme and with the pointer away from the table, since a
+     * hovered row is painted the hover's colour. The tints are the dots' hues at a tenth
+     * (`colorForRole`: sky 2 132 199, amber 217 119 6); the selected row is the table's green, lighter.
+     *
+     * The benchmark is one nobody holds in the stub (`unheldBenchmarkId`), stored before the page loads:
+     * its row is added, `ref-<id>`, second, and its comparison brings beta and correlation, so the table
+     * has every column it can have.
+     */
+    test.describe("L3's table, as the developer approved it on 06/10/2026", () => {
+        /** Every figure column with a benchmark in force, in order. */
+        const L3_FIGURE_COLUMNS = ['weight', 'volatility', 'expectedReturn', 'sortino', 'sharpe', 'beta', 'correlation'] as const;
+
+        /** Opens L3 with a benchmark nobody holds already in force, and hands it back once every row is drawn. */
+        async function openWithUnheldBenchmark(page: Page): Promise<{panel: Locator; benchmarkId: number}> {
+            const benchmarkId = await unheldBenchmarkId(page);
+            await installRiskMocks(page);
+            await seedRiskBenchmark(page, benchmarkId);
+            const panel = await openDashboardRisk(page);
+            // Barriers: the portfolio's row, the benchmark's — added only once the comparison has answered — and both holdings.
+            await expect(l3PortfolioRow(panel)).toBeVisible({timeout: 10_000});
+            await expect(l3Table(panel).locator(`tbody tr[data-row-id="ref-${benchmarkId}"]`)).toBeVisible({timeout: 15_000});
+            for (const assetId of STUB_HOLDINGS) await expect(l3Table(panel).locator(`tbody tr[data-row-id="${assetId}"]`)).toBeVisible();
+            return {panel, benchmarkId};
+        }
+
+        /** The light theme is the one the colours below are written for; `ScatterChart` reads the same class. */
+        async function expectLightTheme(page: Page): Promise<void> {
+            expect(await page.evaluate(() => document.documentElement.classList.contains('dark')), 'premise: the page is drawn in the light theme').toBe(false);
+        }
+
+        test('the portfolio and the benchmark open the table, tinted like their dots and marked by their shape, their names written like any holding’s', async ({page}) => {
+            try {
+                const {panel, benchmarkId} = await openWithUnheldBenchmark(page);
+                const table = l3Table(panel);
+                const portfolioRow = l3PortfolioRow(panel);
+                const benchmarkRow = table.locator(`tbody tr[data-row-id="ref-${benchmarkId}"]`);
+                const holdingRow = table.locator('tbody tr[data-row-id="1"]');
+                const names = {portfolio: portfolioRow.getByTestId('risk-l3-row-ref-name'), benchmark: benchmarkRow.getByTestId('risk-l3-row-ref-name'), holding: holdingRow.getByTestId('risk-l3-row-name')};
+
+                // The references open the table, the holdings follow, heaviest first.
+                await expect.poll(() => table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id')))).toEqual(['ref-portfolio', `ref-${benchmarkId}`, '1', '2']);
+
+                await expectLightTheme(page);
+                await page.mouse.move(0, 0);
+
+                // 1. The tints, computed. Red: the rows are white again — the review-4 defect.
+                await expect.soft(portfolioRow, 'the portfolio row is not tinted like its dot (sky, at a tenth)').toHaveCSS('background-color', 'rgba(2, 132, 199, 0.1)');
+                await expect.soft(benchmarkRow, 'the benchmark row is not tinted like its dot (amber, at a tenth)').toHaveCSS('background-color', 'rgba(217, 119, 6, 0.1)');
+                await expect.soft(holdingRow, 'a holding row is tinted: only the references are').toHaveCSS('background-color', 'rgb(255, 255, 255)');
+
+                // 2. The name cell scrolls with its row and paints nothing of its own, so the tint shows
+                //    once. Red: the names are pinned again — a sticky cell with an inherited background,
+                //    which repaints the translucent tint over itself («li hai resi fissi, ma non li volevo fissi»).
+                for (const [what, name] of Object.entries(names)) {
+                    await expect.soft
+                        .poll(
+                            () =>
+                                name.evaluate((element) => {
+                                    const cell = element.closest('td');
+                                    if (!cell) return 'no cell';
+                                    const style = getComputedStyle(cell);
+                                    return `${style.position} ${style.backgroundColor}`;
+                                }),
+                            {message: `${what}: the name cell is pinned, or paints the row's tint a second time`},
+                        )
+                        .toBe('static rgba(0, 0, 0, 0)');
+                }
+
+                // 3. The marks: a circle before the portfolio, a diamond before the benchmark, each in a
+                //    colour of its own and with no text. Red: no mark, or one shape for both. Read in one
+                //    pass over every mark in the table, so a missing one is an absence in the list.
+                const marks = await table.locator('[data-role-mark]').evaluateAll((elements) =>
+                    elements.map((element) => {
+                        const style = getComputedStyle(element);
+                        const matrix = /^matrix\(([^,]+), ([^,]+)/.exec(style.transform);
+                        const turned = style.rotate === '45deg' || (matrix !== null && Math.abs((Math.atan2(Number(matrix[2]), Number(matrix[1])) * 180) / Math.PI - 45) < 0.5);
+                        return {
+                            at: `${element.closest('tr')?.getAttribute('data-row-id')}:${element.getAttribute('data-role-mark')}`,
+                            round: parseFloat(style.borderTopLeftRadius) >= element.getBoundingClientRect().width / 2,
+                            turned,
+                            colour: style.backgroundColor,
+                            text: element.textContent ?? '',
+                            first: element.parentElement?.firstElementChild === element,
+                        };
+                    }),
+                );
+                expect
+                    .soft(
+                        marks.map((mark) => mark.at),
+                        'one mark before each reference, and none before a holding',
+                    )
+                    .toEqual(['ref-portfolio:portfolio', `ref-${benchmarkId}:benchmark`]);
+                const portfolioMark = marks.find((mark) => mark.at.endsWith(':portfolio'));
+                const benchmarkMark = marks.find((mark) => mark.at.endsWith(':benchmark'));
+                expect.soft({round: portfolioMark?.round, turned: portfolioMark?.turned}, "the portfolio's mark is not a circle").toEqual({round: true, turned: false});
+                expect.soft({round: benchmarkMark?.round, turned: benchmarkMark?.turned}, "the benchmark's mark is not a square turned on its corner").toEqual({round: false, turned: true});
+                expect.soft([portfolioMark?.colour, benchmarkMark?.colour], 'a mark is transparent').not.toContain('rgba(0, 0, 0, 0)');
+                expect.soft(portfolioMark?.colour, 'the two marks share a colour').not.toBe(benchmarkMark?.colour);
+                expect.soft([portfolioMark?.text, benchmarkMark?.text], 'a mark carries text: the cell would no longer read as the name alone').toEqual(['', '']);
+                expect.soft([portfolioMark?.first, benchmarkMark?.first], 'a mark does not come first in its name cell').toEqual([true, true]);
+
+                // 4. The references' names are written as any holding's. Red: they stand out again — the
+                //    weight and the darker grey review 4 took away («i nomi più intensi»).
+                const writing = (name: Locator) =>
+                    name.evaluate((element) => {
+                        const text = element.lastElementChild;
+                        if (!text) return null;
+                        const style = getComputedStyle(text);
+                        return {colour: style.color, weight: style.fontWeight};
+                    });
+                const ordinary = await writing(names.holding);
+                expect(ordinary, "premise: the holding's name is drawn").not.toBeNull();
+                expect.soft(await writing(names.portfolio), "the portfolio's name is written apart from the holdings'").toEqual(ordinary);
+                expect.soft(await writing(names.benchmark), "the benchmark's name is written apart from the holdings'").toEqual(ordinary);
+            } finally {
+                await clearRiskBenchmark(page);
+            }
+        });
+
+        test("a selected row is the table's green, lighter, over a reference's tint too", async ({page}) => {
+            await installRiskMocks(page);
+            const panel = await openDashboardRisk(page);
+            const holdingRow = l3Table(panel).locator('tbody tr[data-row-id="1"]');
+            await expect(holdingRow).toHaveAttribute('data-selected', 'false', {timeout: 10_000});
+            await expectLightTheme(page);
+
+            // A click on a figure — a measured one, which sits in no tooltip — selects the row.
+            await holdingRow.getByTestId('risk-l3-row-volatility').click();
+            await expect(holdingRow).toHaveAttribute('data-selected', 'true');
+            await page.mouse.move(0, 0);
+            // Red: DataTable's own selection green, the one review 4 asked to make lighter.
+            await expect.soft(holdingRow, 'the selected row is not the lighter green').toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+
+            // The selection shows over a reference's tint as well.
+            const portfolioRow = l3PortfolioRow(panel);
+            await l3PortfolioCell(panel, 'volatility').click();
+            await expect(portfolioRow).toHaveAttribute('data-selected', 'true');
+            await expect(holdingRow).toHaveAttribute('data-selected', 'false');
+            await page.mouse.move(0, 0);
+            await expect.soft(portfolioRow, "the selected portfolio row keeps its tint instead of the selection's green").toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+        });
+
+        /**
+         * The developer's situation in review 4 was a table wider than its box: under an `auto` layout
+         * every column then sits at its minimum, and a drag wrote a width the column ignored. At 1280 px
+         * this stub's table has room to spare, and a table with room to spare stretches its columns —
+         * which moves a dragged column under either layout. So the page is narrowed to 1024 px, where
+         * the box is narrower than the columns' own widths, and that premise is checked, not assumed,
+         * before the drags it is for. The layout and the titles are read first: they do not depend on it,
+         * since a title is checked both as drawn and at its column's own width.
+         */
+        test("its figure columns are the reader's to size: laid out fixed, every title inside its column, a drag widens one, and no drag cuts its title", async ({page}) => {
+            await page.setViewportSize({width: 1024, height: 768});
+            try {
+                const {panel} = await openWithUnheldBenchmark(page);
+                const table = l3Table(panel);
+                for (const column of L3_FIGURE_COLUMNS) await expect(table.getByTestId(`dt-header-${column}`)).toBeVisible();
+
+                const weight = table.getByTestId('dt-header-weight');
+                const drawnWidth = () => weight.evaluate((cell) => cell.getBoundingClientRect().width);
+                const atRest = await drawnWidth();
+
+                // 1. Laid out fixed, the only layout in which a dragged width holds. Red: `auto`.
+                await expect.soft(table.locator('table'), "L3's table is not laid out fixed: under auto a drag writes a width the column ignores").toHaveCSS('table-layout', 'fixed');
+
+                // 2. Every title inside its column, as drawn and at the column's own width. Red: a column
+                //    opened narrower than its title in the reader's language (`headerWidth`).
+                await expect.soft.poll(() => cutTitles(table, L3_FIGURE_COLUMNS), {message: 'a figure title does not fit its column'}).toEqual([]);
+
+                // The premise of the drags: the developer's situation, a box narrower than the columns' own widths.
+                const premise = await table.evaluate((root) => {
+                    const element = root.querySelector('table');
+                    const box = element?.parentElement;
+                    const own = [...root.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')].reduce((sum, cell) => sum + parseFloat(cell.style.width), 0);
+                    return {box: box?.clientWidth ?? null, own};
+                });
+                expect(premise.box !== null && premise.own > premise.box, `premise: the columns' own widths (${premise.own} px) must be wider than the table's box (${premise.box} px) — the developer's situation`).toBe(true);
+
+                // 3. A drag on a figure column's edge widens it — by about as much as the pointer moved.
+                await dragColumnEdge(page, weight, 60);
+                await expect.soft.poll(drawnWidth, {message: "a drag on the weight column's edge did not widen it"}).toBeGreaterThan(atRest + 45);
+
+                // 4. Dragged far narrower, it stops at its title: back where it opened, the title whole.
+                //    Red: DataTable's floor of 50 px, below the title.
+                await dragColumnEdge(page, weight, -500);
+                await expect.soft.poll(drawnWidth, {message: 'dragged far narrower, the weight column did not stop where it opened, at its title'}).toBeGreaterThanOrEqual(atRest - 0.5);
+                await expect.soft.poll(() => cutTitles(table, ['weight']), {message: 'a drag cut the weight title'}).toEqual([]);
+            } finally {
+                await clearRiskBenchmark(page);
+            }
+        });
+
+        test("the return's title is the short name, and resting on it opens the full name first", async ({page}) => {
+            await installRiskMocks(page);
+            const panel = await openDashboardRisk(page);
+            const title = l3Table(panel).getByTestId('dt-sort-expectedReturn');
+            await expect(title).toBeVisible({timeout: 10_000});
+
+            // As written, before the header's style writes it in capitals: the text, not its rendering.
+            await expect(title, "the return's title is not the short name (review 4: «va accorciato»)").toHaveText(await catalogueSentence(page, 'risk.levels.l3.table.expectedReturnShort'));
+
+            // The tooltip opens after its own hover delay, which the retrying assertions absorb.
+            await title.hover();
+            const help = page.getByTestId('tooltip-content');
+            await expect(help, "resting on the return's title must open its help").toBeVisible();
+            const fullName = await catalogueSentence(page, 'risk.assetSet.levels.l3.expectedReturn');
+            await expect.poll(() => help.evaluate((element) => (element.textContent ?? '').split('\n')[0].trim()), {message: "the help does not open with the return's full name, on a line of its own"}).toBe(fullName);
+        });
+    });
+
+    /**
      * L2's uncovered card is read whole: its caption wraps instead of being cut, stops at
      * two lines, and carries no native tooltip (developer's decision of 05/10/2026).
      *
@@ -3040,6 +3431,61 @@ test.describe('Risk analysis functional integration', () => {
     });
 
     /**
+     * V3, on the cards L1 and L2 still draw (developer's decision of 05/10/2026, «a capo come la
+     * didascalia»): a card's title and subtitle are read whole, as its caption is (the test above) —
+     * they wrap, stop at two lines, and carry no native tooltip. They were cut to one line, the rest
+     * left to a `title` a reader has no reason to hover and a touch screen never offers. The L3 cards
+     * this was first written for are gone (06/10/2026); the rule stays with `RiskMetricCard`.
+     *
+     * The four checks of the caption test, on every title and subtitle of both levels: not cut, at
+     * most two lines, no native title — and the computed style, which declares the wrap and the bound
+     * whatever the text's length, since most of today's titles fit their card on one line. `concentration`
+     * gives L2 the two cards a real answer gives it. Nothing reads the text, which is translated.
+     */
+    test('the cards of L1 and L2 wrap their title and subtitle within two lines, and carry no native tooltip', async ({page}) => {
+        await installRiskMocks(page, {concentration: true});
+        const panel = await openDashboardRisk(page);
+
+        const cards = ['risk-l1-card-day', 'risk-l1-card-month', 'risk-l1-card-worst', 'risk-l1-card-current', 'risk-l2-card-effective-assets', 'risk-l2-card-diversification-ratio', 'risk-l2-card-uncovered'];
+        // Barriers: every card drawn, so every node read below belongs to a card that finished drawing.
+        for (const card of cards) await expect(panel.getByTestId(card)).toBeVisible({timeout: 10_000});
+
+        for (const card of cards) {
+            for (const part of ['label', 'technical']) {
+                const node = panel.getByTestId(`${card}-${part}`);
+                const name = `${card}-${part}`;
+                await expect(node, `${name} is not drawn`).toBeVisible();
+                await expect(node, `${name} is empty: every check below would pass on nothing`).not.toBeEmpty();
+
+                // 1. Not cut: the text asks for no more width than its box gives it.
+                await expect.soft.poll(() => node.evaluate((element) => element.scrollWidth - element.clientWidth), {message: `${name} is cut: its text is wider than the card and does not wrap`}).toBeLessThanOrEqual(1);
+                // 2. At most two lines, a `normal` line height measured as 1.2 × the font size.
+                await expect.soft
+                    .poll(
+                        () =>
+                            node.evaluate((element) => {
+                                const style = getComputedStyle(element);
+                                const lineHeight = style.lineHeight === 'normal' ? parseFloat(style.fontSize) * 1.2 : parseFloat(style.lineHeight);
+                                return element.getBoundingClientRect().height - 2 * lineHeight;
+                            }),
+                        {message: `${name} runs past two lines`},
+                    )
+                    .toBeLessThanOrEqual(1);
+                // 3. No native tooltip: the whole text is on the card.
+                await expect.soft(node, `${name} still carries a native title`).not.toHaveAttribute('title');
+                // 4. Declared to wrap, and to stop at two lines. Red on `white-space`: held on one line, the
+                //    way `truncate` holds it. Red on the clamp: nothing stops it at two lines.
+                const style = await node.evaluate((element) => {
+                    const computed = getComputedStyle(element);
+                    return {whiteSpace: computed.whiteSpace, lineClamp: computed.getPropertyValue('-webkit-line-clamp') || computed.webkitLineClamp};
+                });
+                expect.soft(style.whiteSpace, `${name} is held on one line: its style does not let it wrap`).not.toBe('nowrap');
+                expect.soft(style.lineClamp, `${name} has no two-line clamp`).toBe('2');
+            }
+        }
+    });
+
+    /**
      * L3 discloses what it draws (F2b).
      *
      * L3 draws two measurements out of the current composition wave — the KPI
@@ -3101,10 +3547,10 @@ test.describe('Risk analysis functional integration', () => {
 
             // Barrier, and the premise: L3 still draws this KPI. `selectKpiWave` accepts a
             // partial answer, so the perimeter stays the current composition's — read from
-            // the payload's own `metadata.mode` — and the Sortino on screen is this result's.
+            // the payload's own `metadata.mode` — and the Sortino on screen, the portfolio row's, is this result's.
             const level3 = panel.getByTestId('risk-level-3');
             await expect(level3.getByTestId('risk-l3')).toHaveAttribute('data-perimeter', 'current_composition', {timeout: 10_000});
-            await expect(level3.getByTestId('risk-l3-sortino-value')).toHaveText('1.68');
+            await expect(l3PortfolioCell(level3, 'sortino')).toHaveText('1.68');
 
             const notice = panel.getByTestId('risk-partial-notice');
             const level3Group = group(notice, '3');
@@ -3126,9 +3572,10 @@ test.describe('Risk analysis functional integration', () => {
             await installRiskMocks(page, {instanceStatus: {[RISK_RETURN]: 'unavailable'}});
             const panel = await openDashboardRisk(page);
 
-            // Barrier: L3 rendered out of this wave — its KPI came back whole and is drawn.
+            // Barrier: L3 rendered out of this wave — its KPI came back whole and is drawn, in the
+            // portfolio's row, which stands without the scatter's pair.
             const level3 = panel.getByTestId('risk-level-3');
-            await expect(level3.getByTestId('risk-l3-sortino-value')).toHaveText('1.68', {timeout: 10_000});
+            await expect(l3PortfolioCell(level3, 'sortino')).toHaveText('1.68', {timeout: 10_000});
 
             // What did not come back at all is disclosed where it is missing: one entry,
             // the one measurement of L3 this test took away…
@@ -3265,8 +3712,8 @@ test.describe('Risk analysis functional integration', () => {
                 await seedRiskBenchmark(page, DEAD_ASSET_ID);
                 const panel = await openDashboardRisk(page);
 
-                // Barrier 1: the levels rendered out of this wave — L3's own KPI is drawn.
-                await expect(panel.getByTestId('risk-l3-sortino-value')).toHaveText('1.68', {timeout: 10_000});
+                // Barrier 1: the levels rendered out of this wave — L3's own KPI is drawn, in the portfolio's row.
+                await expect(l3PortfolioCell(panel, 'sortino')).toHaveText('1.68', {timeout: 10_000});
 
                 // Barrier 2: the asset list has loaded — an option was drawn — and the picker is
                 // closed again, so the trigger is back at rest rather than showing its search box.
