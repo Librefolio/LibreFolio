@@ -2392,6 +2392,47 @@ async function waitForLossTable(page: Page): Promise<void> {
 }
 
 /**
+ * L1°'s names as the reader meets them, as two lists of offenders — both empty when every name
+ * scrolls with its figures and may use its column's whole width (the developer's review 4 of
+ * 06/10/2026, «non li volevo fissi»):
+ *
+ *  - `pinned`: the assets whose name cell is drawn `position: sticky`, which is what DataTable's
+ *    `pinned: 'left'` is in a browser — the cell staying put while the row scrolls under it;
+ *  - `capped`: the assets whose name carries a computed `max-width` other than `none`, with the
+ *    value it carries — the 14rem an `auto` table needed so that its longest name would not set the
+ *    column's width, and which a `fixed` table, sized by the reader, does not.
+ *
+ * Read on the body cells only. The header row is sticky to the top on purpose (DataTable's
+ * `stickyHeader`), so a title cell's `position` says nothing about pinning: whether the asset title
+ * is pinned is the component test's, which reads the inline `left` DataTable writes on a pinned cell.
+ *
+ * It fails closed: an asset with no name cell of its own, in its own row, is listed in both.
+ * One read, not a retry: a caller polls it.
+ */
+async function lossNameOffenders(page: Page, assetIds: readonly number[]): Promise<{pinned: string[]; capped: string[]}> {
+    return lossTable(page).evaluate(
+        (root, ids) => {
+            const pinned: string[] = [];
+            const capped: string[] = [];
+            for (const id of ids) {
+                const names = root.querySelectorAll<HTMLElement>(`tbody tr[data-row-id="${id}"] [data-testid="risk-asset-set-l1-name"][data-asset-id="${id}"]`);
+                const cell = names.length === 1 ? names[0].closest('td') : null;
+                if (cell === null) {
+                    pinned.push(`asset ${id}: no name cell of its own`);
+                    capped.push(`asset ${id}: no name cell of its own`);
+                    continue;
+                }
+                if (getComputedStyle(cell).position === 'sticky') pinned.push(`asset ${id}`);
+                const maxWidth = getComputedStyle(names[0]).maxWidth;
+                if (maxWidth !== 'none') capped.push(`asset ${id}: max-width ${maxWidth}`);
+            }
+            return {pinned, capped};
+        },
+        [...assetIds],
+    );
+}
+
+/**
  * ─── L3° — "what did each of these pay for its risk?" ──────────────────────
  *
  * Since the developer's review of 30/09 L3°'s table is the project's DataTable, as L1°'s is, and
@@ -2443,6 +2484,71 @@ async function paidHeaderIds(page: Page): Promise<string[]> {
 async function waitForPaidTable(page: Page): Promise<void> {
     await expect(paidTable(page)).toBeVisible({timeout: 20_000});
     await expect(page.getByTestId('risk-asset-set-l3-loading')).toHaveCount(0);
+}
+
+/**
+ * ─── Both level tables: the reader sizes the columns (the developer's reviews of 06/10/2026) ───
+ *
+ * One rule for L1° and L3° since review 4, «stessi errori in risk lab»: the table is laid out
+ * `fixed` — DataTable's default, and the only layout in which a dragged width holds: under `auto` a
+ * table wider than its box keeps every column at its minimum, and a drag moved nothing — and every
+ * figure column opens exactly as wide as its own title in the reader's language, and no narrower
+ * (`headerWidth`). The reads below serve both levels' cases, so one piece of code holds the two
+ * tables to one rule.
+ */
+
+/**
+ * The figure columns of a level table whose title does not fit inside its `th`, by id; empty when
+ * every title fits. A title fits when it lies inside the cell's padding as drawn, and when it would
+ * fit at the column's own width too — the inline `width` DataTable writes on the cell, the width it
+ * is drawn at when the table has no room to spare.
+ *
+ * It fails closed: a column whose title cell is missing, or whose cell carries no inline width to
+ * hold the title against, is listed. Without that guard the own width is `NaN`, every comparison
+ * with it is false, and such a cell would pass for one its title fits.
+ *
+ * One read, not a retry: a caller polls it.
+ */
+async function titlesSpillingOut(table: Locator, columns: readonly string[]): Promise<string[]> {
+    return table.evaluate(
+        (root, ids) =>
+            ids.filter((column) => {
+                const cell = root.querySelector<HTMLElement>(`thead th[data-testid="dt-header-${column}"]`);
+                const title = cell?.querySelector<HTMLElement>(`[data-testid="dt-sort-${column}"]`);
+                if (!cell || !title) return true;
+                const style = getComputedStyle(cell);
+                const box = cell.getBoundingClientRect();
+                const drawn = title.getBoundingClientRect();
+                const inside = drawn.left >= box.left + parseFloat(style.paddingLeft) - 0.5 && drawn.right <= box.right - parseFloat(style.paddingRight) + 0.5;
+                const own = parseFloat(cell.style.width) - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+                if (!Number.isFinite(own)) return true;
+                return !inside || Math.max(title.scrollWidth, drawn.width) > own + 0.5;
+            }),
+        [...columns],
+    );
+}
+
+/**
+ * The point on a column's right edge where DataTable draws its resize handle — the last 6 px of the
+ * title cell — and whether the pointer there meets that handle, found by what it is to the pointer,
+ * `col-resize`, not by a class. The cell is scrolled into view first: the point is read off the
+ * screen. One read, not a retry.
+ */
+async function columnEdge(header: Locator): Promise<{x: number; y: number; handle: boolean}> {
+    await header.scrollIntoViewIfNeeded();
+    return header.evaluate((cell) => {
+        const box = cell.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.right - 3, box.top + box.height / 2);
+        return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
+    });
+}
+
+/** Press at `from`, drag `by` px to the right in small steps, as a hand does, and let go. */
+async function dragRight(page: Page, from: {x: number; y: number}, by: number): Promise<void> {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + by, from.y, {steps: 8});
+    await page.mouse.up();
 }
 
 /**
@@ -2601,9 +2707,13 @@ async function pickUnselectedAssetId(page: Page): Promise<number> {
  * Developer decision, 01/10/2026: wherever a page measures against a benchmark there is a
  * picker, it opens on the current benchmark, and it is empty only when nothing is set. The lab
  * mounts Risk's one primitive for it, `BenchmarkSelect`, under the testid below, in a row of its
- * own — the label, an ⓘ help, the picker — and mounts the levels only once the picker is no
- * longer `pending`. Since 02/10/2026 that row is the selection card's last, below the chips and
- * their «+»: a parameter common to the whole lab sits beside the choice of what to analyse.
+ * own — the label, an ⓘ help, the picker. Since the developer's review of 06/10/2026 that row sits
+ * in L3°'s frame, the one level that measures against a benchmark, as the first thing in its body:
+ * below the frame's title, above L3°'s table — «non in cima ma sopra la tabella, esattamente come in
+ * dashboard», where the picker is likewise the first child of L3's body. From 02/10 it had been the
+ * selection card's last row. So the picker exists only while the levels are on screen — with a
+ * non-empty selection — and only L3°'s question waits for it to stop saying `pending`: L1° never
+ * reads the benchmark, and asks at once.
  *
  * Every case reads what the primitive publishes on its root, `<testid>-control`:
  * `data-benchmark-id` (`''` when there is none), `data-benchmark-state`
@@ -2853,13 +2963,22 @@ async function expectLossWithoutComparison(page: Page, requests: readonly RiskRe
 }
 
 /**
- * Where the lab's benchmark row sits, as one verdict: `'in the selection card'` when its help and
- * its picker sit inside the selection card, after its row of chips and «+» and outside that row,
- * and come before the correlation section and both comparison levels, inside none of those three
- * frames, the help before the picker.
+ * Where the lab's benchmark row sits, as one verdict: `"above L3°'s table"` when its help and its
+ * picker sit inside L3°'s frame and inside none of the selection card, its chips row, the
+ * correlation section and L1°; below the frame's title row; the help before the picker; and both
+ * before L3°'s section, so before the table it opens on. Otherwise, what is wrong.
  *
- * Document order, not pixels: the row may wrap on a narrow screen, and what the developer
- * decided is the order a reader meets things in. One read, not a retry: a caller polls it.
+ * "Below the title row" is read off the two marks `RiskLevelSection` draws, never a class or a
+ * tag: after its title (`<testId>-title`, the heading itself), and inside its body (`<testId>-body`),
+ * which the frame draws under its whole header. The title alone is not enough: it marks the heading,
+ * not its row, so a picker squeezed onto the heading's own line — beside the column toggle and the
+ * manual icon — would follow it too. And the table must be drawn for the verdict to be given at
+ * all: "above the table" is never said about one still loading.
+ *
+ * Document order, not pixels: the row may wrap on a narrow screen, and what the developer decided
+ * is where a reader meets it — inside the one level that measures against it, after that level's
+ * question and before its figures, as on the Dashboard — not how far down the page it is drawn.
+ * One read, not a retry: a caller polls it.
  */
 async function benchmarkRowPlacement(page: Page): Promise<string> {
     return page.getByTestId('asset-global-risk-panel').evaluate((panel) => {
@@ -2871,26 +2990,38 @@ async function benchmarkRowPlacement(page: Page): Promise<string> {
         const correlation = find('risk-correlation-section');
         const loss = find('risk-asset-set-loss');
         const paid = find('risk-asset-set-paid');
-        if (!card || !chips || !control || !help || !correlation || !loss || !paid) return `missing: card=${card !== null} chips=${chips !== null} picker=${control !== null} help=${help !== null} correlation=${correlation !== null} L1°=${loss !== null} L3°=${paid !== null}`;
-        if (!card.contains(control)) return 'the picker is outside the selection card';
-        if (!card.contains(help)) return 'the help is outside the selection card';
-        const frames: Array<[string, Element]> = [
+        const title = find('risk-asset-set-paid-title');
+        const body = find('risk-asset-set-paid-body');
+        const section = find('risk-asset-set-l3');
+        const table = find('risk-asset-set-l3-table');
+        if (!card || !chips || !control || !help || !correlation || !loss || !paid || !title || !body || !section || !table) {
+            return `missing: card=${card !== null} chips=${chips !== null} picker=${control !== null} help=${help !== null} correlation=${correlation !== null} L1°=${loss !== null} L3°=${paid !== null} L3°-title=${title !== null} L3°-body=${body !== null} L3°-section=${section !== null} L3°-table=${table !== null}`;
+        }
+        // Where the row must not be — the chips row before the card that holds it: the narrower frame is the better diagnosis.
+        const outside: Array<[string, Element]> = [
             ['the chips row', chips],
+            ['the selection card', card],
             ['the correlation section', correlation],
             ['L1°', loss],
-            ['L3°', paid],
         ];
-        for (const [name, frame] of frames) {
+        for (const [name, frame] of outside) {
             if (frame.contains(control)) return `the picker is inside ${name}`;
             if (frame.contains(help)) return `the help is inside ${name}`;
         }
+        if (!paid.contains(control)) return "the picker is outside L3°'s frame";
+        if (!paid.contains(help)) return "the help is outside L3°'s frame";
+        if (!body.contains(control)) return "the picker is in L3°'s frame but outside its body, so not below its title row";
+        if (!body.contains(help)) return "the help is in L3°'s frame but outside its body, so not below its title row";
         const precedes = (first: Element, second: Element) => !first.contains(second) && !second.contains(first) && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-        if (!precedes(chips, help)) return 'the help is above the chips row';
+        if (!precedes(title, help)) return "the help is not below L3°'s title";
+        if (!precedes(title, control)) return "the picker is not below L3°'s title";
         if (!precedes(help, control)) return 'the help comes after the picker';
-        if (!precedes(control, correlation)) return 'the picker is below the correlation section';
-        if (!precedes(control, loss)) return 'the picker is below L1°';
-        if (!precedes(control, paid)) return 'the picker is below L3°';
-        return 'in the selection card';
+        if (section.contains(help)) return "the help is inside L3°'s section";
+        if (section.contains(control)) return "the picker is inside L3°'s section";
+        // L3°'s table is inside its section, so a row before the section is a row before the table.
+        if (!precedes(help, section)) return "the help is below L3°'s section";
+        if (!precedes(control, section)) return "the picker is below L3°'s section";
+        return "above L3°'s table";
     });
 }
 
@@ -4797,6 +4928,16 @@ test.describe('Asset Global risk laboratory', () => {
      * The tooltip's words are not read: they are translated, and the component test
      * already proves each title shows its own key's message. What only a browser can
      * prove is that resting the pointer on the title opens it.
+     *
+     * And the reader sizes the columns — L3°'s rule, brought here by the developer's review 4
+     * of 06/10/2026, «stessi errori in risk lab»: the table is laid out `fixed`, the only layout
+     * in which a dragged width holds — under `auto` a table wider than its box kept every column
+     * at its minimum, and a drag moved nothing — and every figure column opens exactly as wide as
+     * its own title in the reader's language, and no narrower (`headerWidth`), which is what the
+     * `auto` layout was there for: DataTable draws its titles upper-case on one line, and a fixed
+     * width sized for Italian once let a French title spill out of its column. The reads are
+     * L3°'s own ({@link titlesSpillingOut}, {@link columnEdge}), so the two levels answer to one
+     * piece of code.
      */
     test("L1°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
         await installRiskMocks(page);
@@ -4812,6 +4953,22 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(lossTable(page).locator('thead a'), "a link in L1°'s header row: the documentation belongs to the frame's manual icon").toHaveCount(0);
         await expect(lossTable(page).locator('[data-testid^="dt-header-tooltip-"]'), 'an ⓘ beside a title: the help is the title itself').toHaveCount(0);
         await expect(page.locator('[data-testid^="risk-asset-set-l1-docs-"]')).toHaveCount(0);
+        // Laid out `fixed` since review 4, as L3° is: under `auto` a drag wrote a width the column ignored. What `auto`
+        // gave still holds, because each figure column opens as wide as its own title in the reader's language
+        // (`headerWidth`): every title fits inside its th, as drawn, and at the column's own width — the one it is
+        // drawn at when the table has no room to spare.
+        await expect(lossTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L1°'s table is not laid out fixed: a dragged width would not hold").toHaveCSS('table-layout', 'fixed');
+        await expect.poll(() => titlesSpillingOut(lossTable(page), L1_CELLS), {message: 'a title spills out of its th: its column opened narrower than its title'}).toEqual([]);
+        // And the reader sizes the columns: a drag on a figure column's edge changes its width, the edge found as on L3°.
+        const badDay = lossTable(page).getByTestId('dt-header-badDay');
+        const badDayWidth = () => badDay.evaluate((cell) => cell.getBoundingClientRect().width);
+        const widthBefore = await badDayWidth();
+        const edge = await columnEdge(badDay);
+        expect(edge.handle, 'no resize handle under the right edge of the bad-day title').toBe(true);
+        await dragRight(page, edge, 60);
+        await expect.poll(badDayWidth, {message: "a drag on the bad-day column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
+        // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
+        await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // The help itself, where the pointer rests. The Tooltip opens after its own hover
         // delay, which the retrying assertion absorbs: nothing here waits on a clock.
@@ -4918,6 +5075,13 @@ test.describe('Asset Global risk laboratory', () => {
      * name sits in the span the marquee attaches to — found by the marquee's own selector,
      * a hook rather than a style — and does not wrap: a long name scrolls instead of
      * pushing its row onto two lines, which is the point of the pattern.
+     *
+     * And the name scrolls with its figures (the developer's review 4 of 06/10/2026, «non li
+     * volevo fissi»): no name cell is pinned on the left, and no name is capped under its
+     * column — the 14rem cap was there for the `auto` layout, so that the longest name would
+     * not set the column's width; in a `fixed` table the reader sets it, and a name may use
+     * all of it. Both are read for every asset in one pass ({@link lossNameOffenders}),
+     * behind the barriers of the loop, so a red names every offender of both faults at once.
      */
     test('L1° names each asset with its type icon and a name that stays on one line', async ({page}) => {
         await installRiskMocks(page);
@@ -4941,6 +5105,8 @@ test.describe('Asset Global risk laboratory', () => {
             await expect(name, `asset ${assetId}: the name is empty`).not.toHaveText(/^\s*$/);
             await expect(name, `asset ${assetId}: the name wraps instead of scrolling`).toHaveCSS('white-space', 'nowrap');
         }
+
+        await expect.poll(() => lossNameOffenders(page, selected), {message: "L1°'s names must scroll with their figures and use their column's whole width: none pinned on the left, none capped"}).toEqual({pinned: [], capped: []});
     });
 
     /**
@@ -5039,7 +5205,8 @@ test.describe('Asset Global risk laboratory', () => {
      * And the titles fit: the table is laid out `fixed`, so a width the reader drags holds, and every
      * figure column opens exactly as wide as its own title in the reader's language, and no narrower
      * (`headerWidth`). DataTable draws its titles upper-case on one line, and a fixed layout sized
-     * for Italian let a French title spill out of its column on L1°.
+     * for Italian let a French title spill out of its column on L1°. The reads ({@link titlesSpillingOut},
+     * {@link columnEdge}) are shared with L1°'s case, held to the same rule since review 4.
      */
     test("L3°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
         await installRiskMocks(page);
@@ -5060,43 +5227,15 @@ test.describe('Asset Global risk laboratory', () => {
         // column opens as wide as its own title in the reader's language (`headerWidth`): every title fits inside its th,
         // as drawn, and at the column's own width — the one it is drawn at when the table has no room to spare.
         await expect(paidTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L3°'s table is not laid out fixed: a dragged width would not hold").toHaveCSS('table-layout', 'fixed');
-        await expect
-            .poll(
-                () =>
-                    paidTable(page).evaluate(
-                        (root, columns) =>
-                            columns.filter((column) => {
-                                const cell = root.querySelector<HTMLElement>(`thead th[data-testid="dt-header-${column}"]`);
-                                const title = cell?.querySelector<HTMLElement>(`[data-testid="dt-sort-${column}"]`);
-                                if (!cell || !title) return true;
-                                const style = getComputedStyle(cell);
-                                const box = cell.getBoundingClientRect();
-                                const drawn = title.getBoundingClientRect();
-                                const inside = drawn.left >= box.left + parseFloat(style.paddingLeft) - 0.5 && drawn.right <= box.right - parseFloat(style.paddingRight) + 0.5;
-                                const own = parseFloat(cell.style.width) - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-                                return !inside || Math.max(title.scrollWidth, drawn.width) > own + 0.5;
-                            }),
-                        [...L3_CELLS],
-                    ),
-                {message: 'a title spills out of its th: its column opened narrower than its title'},
-            )
-            .toEqual([]);
+        await expect.poll(() => titlesSpillingOut(paidTable(page), L3_CELLS), {message: 'a title spills out of its th: its column opened narrower than its title'}).toEqual([]);
         // And the reader sizes the columns: a drag on a figure column's edge changes its width. The edge is DataTable's
         // resize handle, the last 6 px of the title cell, found by what it is to the pointer — `col-resize` — not by a class.
         const volatility = paidTable(page).getByTestId('dt-header-volatility');
         const volatilityWidth = () => volatility.evaluate((cell) => cell.getBoundingClientRect().width);
         const widthBefore = await volatilityWidth();
-        await volatility.scrollIntoViewIfNeeded();
-        const edge = await volatility.evaluate((cell) => {
-            const box = cell.getBoundingClientRect();
-            const hit = document.elementFromPoint(box.right - 3, box.top + box.height / 2);
-            return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
-        });
+        const edge = await columnEdge(volatility);
         expect(edge.handle, 'no resize handle under the right edge of the volatility title').toBe(true);
-        await page.mouse.move(edge.x, edge.y);
-        await page.mouse.down();
-        await page.mouse.move(edge.x + 60, edge.y, {steps: 8});
-        await page.mouse.up();
+        await dragRight(page, edge, 60);
         await expect.poll(volatilityWidth, {message: "a drag on the volatility column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
         // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
         await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
@@ -5380,7 +5519,7 @@ test.describe('Asset Global risk laboratory', () => {
         const userId = await currentUserId(page);
         // Seeded through `localStorage` under the store's own key rather than
         // through the lab's picker — Risk's shared `BenchmarkSelect`, mounted
-        // above L1° and L3° as `risk-asset-set-benchmark` — because that picker
+        // in L3°'s frame as `risk-asset-set-benchmark` — because that picker
         // opens on the choice this key holds, the one shared with Dashboard and
         // Broker Detail, and this case is about the columns rather than about
         // choosing: the benchmark picker cases below drive the control itself.
@@ -5392,7 +5531,7 @@ test.describe('Asset Global risk laboratory', () => {
         // needed. The panel no longer reads the store: it binds `benchmarkValue`
         // and `benchmarkState` from `BenchmarkSelect`, derives `benchmarkId` from
         // them (`labBenchmarkId`) — the confirmed choice, whether or not the
-        // selection holds it (D371), or null — and mounts the levels only
+        // selection holds it (D371), or null — and lets L3° ask only
         // once the state is no longer `pending`. The picker is the store's one
         // reader here: `riskBenchmark.assetId` synchronously for its opening state,
         // then `resolveRiskBenchmark()` on mount, which confirms the id against the
@@ -5481,10 +5620,12 @@ test.describe('Asset Global risk laboratory', () => {
      *
      * The developer's decision of 01/10/2026: wherever a page measures against a benchmark there
      * is a picker, it opens on the current benchmark, and it is empty only when nothing is set. In
-     * the lab it is a row of its own — label, ⓘ help, picker — and, revised on 02/10/2026, it sits
-     * beside the choice of the assets to analyse, a parameter common to the whole lab: the
-     * selection card's last row, below the chips and their «+», outside that row. So it comes
-     * before the correlation section and both comparison levels, inside none of them.
+     * the lab it is a row of its own — label, ⓘ help, picker. Revised on 06/10/2026, «non in cima ma
+     * sopra la tabella, esattamente come in dashboard»: it leaves the selection card, whose last row
+     * it was from 02/10, for the one level that measures against it — L3°'s frame, as the first thing
+     * in its body: below the frame's title row, before L3°'s section and so above its table, as the
+     * Dashboard mounts its own above L3's. So it sits inside none of the selection card, its chips
+     * row, the correlation section and L1°.
      *
      * Opened on a stored benchmark the asset list confirms, one the selection does not hold (a
      * selected one is (c)'s): the root says `set`, with that id and nothing measured; an L3° request
@@ -5493,11 +5634,10 @@ test.describe('Asset Global risk laboratory', () => {
      * held on to — they are translated — but they must be the lab's own sentence, read from the
      * catalogue in the language the page is drawn in.
      *
-     * Red until the row moves into the selection card: today it sits after the card, between the
-     * correlation section and the two levels. Its L1° half is red until the levels ask apart: today
-     * the comparison rides in the one request both levels share.
+     * Red until the row moves into L3°'s frame: today it is still the selection card's last row, and
+     * the verdict says so — «the picker is inside the selection card».
      */
-    test('the benchmark picker sits in the selection card, before the correlation section and both comparison levels, with its help, and opens on the stored benchmark', async ({page}) => {
+    test("the benchmark picker sits in L3°'s frame, below its title and above its table as on the Dashboard, with its help, and opens on the stored benchmark", async ({page}) => {
         test.setTimeout(BENCHMARK_CASE_BUDGET);
         const requests = await installRiskMocks(page);
         const {selection, reference} = await castBenchmark(page);
@@ -5515,7 +5655,9 @@ test.describe('Asset Global risk laboratory', () => {
         // Where it sits, read once both levels are drawn to be placed against.
         await waitForLossTable(page);
         await waitForPaidTable(page);
-        await expect.poll(() => benchmarkRowPlacement(page), {message: 'the benchmark row must sit in the selection card, after the chips row, before the correlation section, L1° and L3°, inside none of them, its help before its picker'}).toBe('in the selection card');
+        await expect
+            .poll(() => benchmarkRowPlacement(page), {message: "the benchmark row must sit in L3°'s frame, in its body below its title row, before L3°'s section and its table, inside none of the selection card, its chips row, the correlation section and L1°, its help before its picker"})
+            .toBe("above L3°'s table");
 
         await expectComparisonWith(page, requests, selection, reference.id);
         // …in L3° alone: L1° is measured without it, read once L3°'s answer with the benchmark is drawn.

@@ -79,6 +79,14 @@
  * portalled to `document.body`. Red first: the wrapper cases and the note's absence under the table
  * fail on the section as it stands; its absence from the other states, and the catalogue case, pass on
  * both.
+ *
+ * ── The reader sizes the columns (the developer's review 4, 2026-10-06) ──────────────────────────
+ *
+ * «stessi errori in risk lab»: L1° takes L3°'s rule. The table is laid out `fixed`, so a dragged width
+ * holds; every value column opens exactly as wide as its own title in the reader's language
+ * (`headerWidth`, `width` = `minWidth`); the asset column is pinned on no side, and its name is no
+ * longer capped. The cases at the end of the file read what jsdom can see of that — the sizes and the
+ * sides DataTable writes inline on each cell — and say why; the layout itself is `risk-lab.spec.ts`'s.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import {get} from 'svelte/store';
@@ -94,6 +102,7 @@ import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import AssetSetLossComparisonSection from './AssetSetLossComparisonSection.svelte';
+import {headerWidth, measureHeaderTitle} from './riskReturnLevel';
 
 type VarCvarOutput = z.infer<typeof schemas.RiskAssetSetVarCvarOutput>;
 type DrawdownOutput = z.infer<typeof schemas.RiskAssetSetDrawdownOutput>;
@@ -619,14 +628,15 @@ function explainerOf(cell: HTMLElement): HTMLElement | null {
 /**
  * DataTable keeps widths and order in `localStorage`. Stubbed per case — as
  * `DataTableHeaderTooltip.test.ts` does — so no case inherits another's layout, and so the keys the
- * table reads can be seen.
+ * table reads can be seen. The block mounts in `locale`, English unless a block measures something
+ * that depends on the language.
  */
 const storage = new Map<string, string>();
 const storageReads: string[] = [];
 
-function dataTableHarness(): void {
+function dataTableHarness(locale: SupportedLocale = 'en'): void {
     beforeAll(async () => {
-        await setupI18n('en');
+        await setupI18n(locale);
     });
 
     beforeEach(() => {
@@ -966,5 +976,110 @@ describe('AssetSetLossComparisonSection — a dash explains itself', () => {
         expect(typeof at(catalogue, 'risk.assetSet.levels.asset'), `${locale}.json: the walk never reached risk.assetSet.levels`).toBe('string');
         const message = at(catalogue, BLANK_NOTE_KEY);
         expect(typeof message === 'string' && message.trim() !== '', `${locale}.json: ${BLANK_NOTE_KEY} is missing or empty — the note left the page, its message did not: every dash still says it`).toBe(true);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// The reader sizes the columns, and the names scroll with their figures (review 4, 2026-10-06)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * «stessi errori in risk lab» — the developer's review 4 of 06/10/2026, on this table: the two faults
+ * L3°'s shared table (`RiskReturnLevel`) had just had fixed, found again on L1°.
+ *
+ *  1. «non li volevo fissi»: the asset names are pinned on the left. The column is `assetNameColumn`
+ *     (`assetSetTable.ts`), declared `pinned: 'left'`, its content capped at 14rem (`max-w-56`).
+ *  2. A dragged width does not hold: the table is laid out `auto` (`tableLayout="auto"`), and an
+ *     `auto` table wider than its box keeps every column at its minimum, so a drag moves nothing.
+ *
+ * The fix is L3°'s rule, one for both tables. The table is laid out `fixed`, DataTable's default, and
+ * every value column opens as wide as its own title in the reader's language, and no narrower:
+ * `width` and `minWidth` both `headerWidth(title, measureHeaderTitle)`, the two helpers
+ * `riskReturnLevel.ts` exports. That is what `auto` was there for — DataTable draws its titles
+ * upper-case on one line, and a fixed 110 px once let a French title spill out of its column. And the
+ * asset column is not pinned — `assetNameColumn` itself loses `pinned`, for both tables — nor its
+ * content capped, the column being as wide as the reader makes it.
+ *
+ * What jsdom can see of it is what DataTable writes inline on each cell: `width: Npx; min-width: Mpx;`
+ * on every title (`th`), and a pinned column's side — `left: 0;` — on its title and on each of its
+ * cells. It is read through the CSSOM (`style.width`, `style.minWidth`, `style.left`, `style.right`),
+ * never through a class. The rest is a browser's — `table-layout`, `position: sticky`, the name's
+ * computed `max-width`, a drag — and `risk-lab.spec.ts` reads it there.
+ *
+ * The expected width is no number written here: it is computed with the two helpers the component is
+ * to call, from the title `$_()` gives in the locale of the mount, so the case pins the rule and not a
+ * figure. A rule compared with itself agrees on any input, so the input is checked first: the title
+ * must be the message of that locale's own catalogue, read directly — a missing key, or a mount in
+ * another language, would otherwise be measured on both sides and pass. jsdom has no canvas, so
+ * `measureHeaderTitle` counts 8.5 px a letter there; the rule is the same.
+ *
+ * Red first: today every value column opens at 110 px with a 90 px minimum, whatever its title, and
+ * the asset column is pinned — its title and its cells carry `left: 0`.
+ */
+
+/** The key of a value column's title: what DataTable draws in its `th`, and what its width is measured on. */
+function titleKey(column: ValueColumn): string {
+    return `risk.assetSet.levels.l1.columns.${column}`;
+}
+
+/** The sizes DataTable wrote inline on a title cell, as the CSSOM reads them back. */
+function inlineSize(header: HTMLElement): {width: string; minWidth: string} {
+    return {width: header.style.width, minWidth: header.style.minWidth};
+}
+
+/** The sides DataTable wrote inline on a cell: a pinned column's `left: 0;` (or `right: 0;`), empty otherwise. */
+function inlineSides(cell: HTMLElement): {left: string; right: string} {
+    return {left: cell.style.left, right: cell.style.right};
+}
+
+/** The table cell around an asset's name: the asset column's cell in that asset's row. */
+function nameColumnCell(assetId: number): HTMLElement {
+    const cell = nameCell(assetId).closest('td');
+    expect(cell, `asset ${assetId}: its name sits in no cell of the table`).not.toBeNull();
+    return cell as HTMLElement;
+}
+
+describe.each([...SUPPORTED_LOCALES])('AssetSetLossComparisonSection — every value column opens as wide as its own title, in %s', (locale) => {
+    dataTableHarness(locale);
+
+    it('writes width and min-width both at headerWidth(title), the title in the language of the mount', () => {
+        mount();
+
+        const expected: Partial<Record<ValueColumn, {width: string; minWidth: string}>> = {};
+        const drawn: Partial<Record<ValueColumn, {width: string; minWidth: string}>> = {};
+        for (const column of VALUE_COLUMNS) {
+            const title = get(_)(titleKey(column));
+            expect(title, `premise: ${titleKey(column)} is not ${locale}.json's own message — the width would be measured on the wrong text`).toBe(at(CATALOGUES[locale], titleKey(column)));
+            const width = headerWidth(title, measureHeaderTitle);
+            expect(Number.isFinite(width) && width > 0, `premise: headerWidth gave ${width} px for ${JSON.stringify(title)}`).toBe(true);
+            expected[column] = {width: `${width}px`, minWidth: `${width}px`};
+            drawn[column] = inlineSize(screen.getByTestId(`dt-header-${column}`));
+        }
+
+        expect(drawn, `${locale}: a value column does not open exactly as wide as its own title — width and min-width must both be headerWidth(title, measureHeaderTitle)`).toEqual(expected);
+    });
+});
+
+describe('AssetSetLossComparisonSection — the names scroll with their figures', () => {
+    dataTableHarness();
+
+    it('pins no side of the asset column: neither its title nor any of its cells carries an inline left or right', () => {
+        mount();
+
+        // Presence first, and a control on the reading itself: DataTable writes an inline style on every cell it
+        // draws — a width on each title, the alignment on each right-aligned figure — so the empty sides below are
+        // about styles that were written and read back, not about cells nobody styled.
+        const title = screen.getByTestId('dt-header-name');
+        expect(title.style.width, 'premise: the asset title carries the inline width DataTable writes on every title').not.toBe('');
+        for (const assetId of SELECTION) {
+            const figure = within(rowById(assetId)).getByTestId('risk-asset-set-l1-badDay').closest('td');
+            expect(figure?.style.textAlign, `premise: asset ${assetId}: its bad-day cell carries the alignment DataTable writes inline`).toBe('right');
+        }
+
+        // One comparison for the title and every cell, so a red names each pinned one at once.
+        const unpinned = {left: '', right: ''};
+        const drawn = Object.fromEntries([['title', inlineSides(title)], ...SELECTION.map((assetId) => [`asset ${assetId}`, inlineSides(nameColumnCell(assetId))])]);
+        const expected = Object.fromEntries([['title', unpinned], ...SELECTION.map((assetId) => [`asset ${assetId}`, unpinned])]);
+        expect(drawn, "the asset column is pinned: DataTable writes a pinned column's side inline, on its title and on each of its cells, and the names stay put while their figures scroll under them — «non li volevo fissi»").toEqual(expected);
     });
 });
