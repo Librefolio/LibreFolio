@@ -35,8 +35,9 @@ The system calls plugin methods in two distinct phases:
 
 ```mermaid
 graph TD
-    subgraph "Phase 1 — Detection (file uploaded)"
+    subgraph "Phase 1 — Detection (upload, and first read after an update)"
         D1["File uploaded"] --> D2["can_parse(file_path)<br/><small>Quick header/extension check</small>"]
+        D0["Original read after an update<br/><small>plugins_signature ≠ app version</small>"] --> D2
         D2 -->|true| D3["Plugin listed as<br/>compatible option"]
         D2 -->|false| D4["Skip"]
     end
@@ -49,6 +50,7 @@ graph TD
 
     D3 ~~~ P1
 
+    style D0 fill:#e3f2fd,stroke:#1565c0
     style D1 fill:#e3f2fd,stroke:#1565c0
     style D2 fill:#e3f2fd,stroke:#1565c0
     style D3 fill:#e3f2fd,stroke:#1565c0
@@ -58,7 +60,7 @@ graph TD
     style P4 fill:#f3e5f5,stroke:#7b1fa2
 ```
 
-**Phase 1** runs automatically when a file is uploaded — every registered plugin is asked if it can parse the file. Compatible plugins are listed for the user.
+**Phase 1** runs automatically when a file is uploaded — every registered plugin is asked if it can parse the file. Compatible plugins are listed for the user. It runs again, once per app version, when an original detected by another version is read: see [The lifecycle of `compatible_plugins`](#compatible-plugins-lifecycle).
 
 A file's `compatible_plugins` are what the import wizard offers for it, so `can_parse` must not claim a file that `parse` would refuse, fallback plugins included: the Generic CSV (`broker_generic_csv`, `detection_priority` 0) says `True` only for a `.csv` whose header row names both required columns, `date` and `type`, directly or through its multilingual aliases (`HEADER_MAPPINGS`: `data`, `fecha`, `datum`…; `tipo`, `operazione`, `action`…) — it used to claim any CSV with a header, then fail at parse. A file no plugin recognises is offered every plugin; parsing it with a single-file plugin whose `can_parse` says no answers 400 `Plugin '<code>' cannot parse file '<file_id><ext>'`, followed by `: <reason>` when the plugin says why ([`cannot_parse_reason`](#cannot-parse-reason)), and moves the file to `failed` with that message as its error.
 
@@ -71,6 +73,74 @@ A bank that splits one account across several exports (Danske Bank: a custody XL
 CSV) adds a step between the two phases: the exports uploaded together form a **report set**,
 the plugin combines them, and phase 2 parses the combined file. See
 [Multi-report plugins (report sets)](#report-sets).
+
+### ♻️ The lifecycle of `compatible_plugins` {: #compatible-plugins-lifecycle }
+
+A file's `compatible_plugins` is detected once per app version, not once for the file's whole life
+(`brim_provider.py`):
+
+1. **At upload**, `save_uploaded_file` asks every plugin
+   (`BRIMProviderRegistry.get_compatible_plugins`) and stores the list in the file's sidecar with
+   `plugins_signature`, the signature of the plugin catalogue that detected it:
+   `detection_signature()`, which is the app version (`get_version()`).
+2. **On read** — `get_file_info` and `list_files`, so also the wizard's Plugin column, its set
+   grouping (`setPluginFor`) and `collect_members` — an original whose stored signature is missing
+   (a file uploaded before 1.2) or differs from the running version's is detected again, on the
+   data file beside its sidecar, whatever its status. The read returns the new list and saves it
+   with the current signature, once per version; under the current signature the stored list is
+   trusted as it is.
+3. **Kept as stored**: a combined file is never detected again — its list is the plugin that built
+   it. An original whose data file is gone, or whose detection fails, keeps its stored list and
+   nothing is saved: the next read tries again.
+
+The effect: after an update, a plugin added or changed since a file's upload is offered for it, and
+one that no longer reads it drops out — the Generic CSV, stricter since 1.2, drops from the CSVs
+that lack its `date` or `type` column, which 1.1.0 offered it for. Files uploaded together (one
+`batch_id`) before a [report-set](#report-sets) plugin could read them form their set after the
+update, without a new upload. Files uploaded with 1.1.0 or earlier are the exception: those
+versions recorded no `batch_id`, so the files belong to no set — each is offered the set plugin,
+whose parse answers 422 `set_required` — and must be uploaded again, together.
+
+**For a plugin author** there is nothing to implement, but `can_parse` answers are cached per app
+version and evaluated again after an update:
+
+- a change to `can_parse` reaches the files already uploaded with the next app version, and needs
+  no `plugin_version` bump: that version covers what `parse` and `combine` output, not detection;
+- a `can_parse` that raises counts as `False` (`get_compatible_plugins` skips the plugin), and that
+  answer is cached like any other until the next version — never raise;
+- in a development checkout the version is `git describe --tags --always --dirty`, read once per
+  process: an edited `can_parse` reaches the files already uploaded only once that string changes
+  (a commit) and the server restarts — or upload the file again.
+
+The detection itself takes no lock, because it reads the file. The save takes the
+[broker metadata lock](#broker-metadata-lock), reads the sidecar again under it and writes only if
+the sidecar is still where it was read and still lacks the current signature, changing only
+`compatible_plugins` and `plugins_signature`: a move, a deletion or another write made meanwhile is
+never undone. Because a read may now open the file, the API calls `list_files` and `get_file_info`
+(in `_get_brim_file_with_access`) through `asyncio.to_thread`.
+
+### 🔒 The broker metadata lock {: #broker-metadata-lock }
+
+Every write of a broker's sidecars holds that broker's lock, `broker_metadata_lock(broker_id)`
+(`_broker_metadata_lock` inside `brim_provider.py`). A plugin never takes it: the core does, around
+its own writes.
+
+- **Two layers.** In the process, a re-entrant `threading.RLock` per broker; across processes, an
+  advisory `fcntl.flock` on `broker_reports/.locks/broker_<id>.lock` (`broker_none.lock` for the
+  legacy files at the root of a status folder). The file lock is taken once, by the outermost block
+  of a thread, and released when that block ends, on an exception too. It must hold across
+  processes because a server may run several uvicorn workers (`./dev.py server --workers N`); the
+  Docker image runs one.
+- **Holders**: the upload (`save_uploaded_file`, around its sidecar write), `_update_metadata`,
+  `save_combined_file`, `save_parse_result`, `_move_file` (`move_to_parsed`, `move_to_failed`),
+  `delete_file`, and the save of a re-detection. The key is the broker of the sidecar's folder,
+  `<status>/broker_<id>/`; a move changes only the status folder, so every writer of a file takes
+  the same lock.
+- **Reads take no lock**: every write is an atomic rename (`_write_metadata_atomic`), so a reader
+  sees the old sidecar or the new one.
+- **Never across an `await`**: re-entrant within a thread, the lock would let two coroutines of the
+  event loop in together. `combine_set` holds it in a worker thread, from the reuse check to the
+  save ([`POST /sets/combine`](#report-sets)).
 
 ---
 
@@ -859,7 +929,8 @@ All routes live under `/api/v1/brokers/import` and require EDITOR or OWNER acces
 - **`POST /sets/preview`** — body `BRIMSetRequest`
   `{broker_id, plugin_code, batch_id, exclude_file_ids}`, the last one defaulting to `[]` —
   collects the members with `collect_members` (the original, non-failed files of that batch and
-  broker that the plugin can read, minus `exclude_file_ids`), asks the plugin for `detect_role`,
+  broker whose [`compatible_plugins`](#compatible-plugins-lifecycle) name the plugin, minus
+  `exclude_file_ids`), asks the plugin for `detect_role`,
   `describe_member` and `describe_set`, reads the broker history from the database, and returns
   `BRIMSetPreview`: the members with role, rows and coverage; one
   status per role (`present`, `missing` or `excess`); `missing`, with the period the missing export
@@ -885,9 +956,13 @@ All routes live under `/api/v1/brokers/import` and require EDITOR or OWNER acces
   `plugin.combine` off the event loop, writes the table with `write_combined_csv` (UTF-8 with BOM,
   `;`-separated) and its sidecar with `save_combined_file` (`kind: "combined"`, `derived_from`,
   `combine_plugin_code`, `combine_plugin_version`, `combine_summary`), and adds the new file to the
-  `combined_into` of each original. The answer is `BRIMSetCombineResponse` `{combined, summary,
-  reused}`. A `BRIMParseError` or `ValueError` raised by the plugin becomes a 422 `combine_failed`,
-  and the members stay as they are.
+  `combined_into` of each original. The reuse check, the combine and the save are one step under
+  the broker's [metadata lock](#broker-metadata-lock), in a worker thread
+  (`_combine_under_broker_lock`): two analyses of one set at once — a double click, two tabs — leave
+  one combined file, because the second waits for the lock, finds the first one's file and answers
+  `reused: true`. The broker's other metadata writes wait while `plugin.combine` runs. The answer is
+  `BRIMSetCombineResponse` `{combined, summary, reused}`. A `BRIMParseError` or `ValueError` raised
+  by the plugin becomes a 422 `combine_failed`, and the members stay as they are.
 - **`POST /files/{file_id}/parse`** on a member alone answers 422 (`code: "set_required"`, with
   `missing_roles`) and does **not** move the file to `failed`. On the combined file it adds
   `checkpoints`, `verifications` and `history_start` to `BRIMParseResponse`.

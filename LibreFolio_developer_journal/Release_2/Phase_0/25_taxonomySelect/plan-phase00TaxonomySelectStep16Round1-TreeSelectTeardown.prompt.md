@@ -110,3 +110,8 @@
 2. `component-unit` ripetuta esce con codice 0 a ogni corsa, senza eccezioni non gestite attribuite a TreeSelect.
 3. `front check` resta a 0/0.
 4. Porte libere, nessun venv del worktree, nel worktree solo i file previsti.
+
+## Seguito
+
+- Lo step 17 riguarda le note del developer dai dispositivi:
+  [`plan-phase00TaxonomySelectStep17DeviceNotes.prompt.md`](plan-phase00TaxonomySelectStep17DeviceNotes.prompt.md).

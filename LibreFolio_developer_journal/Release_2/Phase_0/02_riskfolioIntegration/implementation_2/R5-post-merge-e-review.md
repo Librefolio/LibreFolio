@@ -3491,3 +3491,47 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > **Dopo**: A (`L3Benchmark` passa `period`/`currency`, e lascia cadere il confronto quando lo stato non è più
 > `set`) e F (`verdicts={eligibilityView}`, con l'attesa di L3° che copre anche il caricamento dell'idoneità), ognuno
 > nel suo giro. Poi la fase 3 («Confronto Asset» e/o `SignalAssetParamControl`) e la proposta del rendimento totale.
+
+### Igiene: lo spec di Asset Detail non chiama più i provider veri · ✅ 06/10/2026 (FROZEN)
+
+> **La segnalazione** (coordinator, 06/10 sera, dopo la validazione della famiglia di A): `risk-asset-detail.spec.ts`,
+> mio dalla fase 2, faceva chiamate vere ai provider. Nel log della corsia di A: i feed live di JustETF, il prezzo
+> corrente di Yahoo e la cache di `scheduled_investment`.
+>
+> **La causa** (misurata nella 6152, a partire da `ebf4752e2`): il polling dei prezzi correnti della pagina
+> (`POST /api/v1/assets/prices/current`, `livePriceService.ts:28`) chiede il prezzo ai provider e lo scrive nel
+> database della corsia. Lo chiamano sia la pagina Assets sia Asset Detail. I due test dello stadio 2 lo trattenevano
+> già (`holdLivePricePoll`); i due test originali, la «rete» di Asset Detail, no.
+>
+> **La cura** (test-author, solo nello spec): il polling si trattiene anche nel `beforeEach` dei test originali. È un
+> input, non un'asserzione, come la risposta di idoneità data nella fase 2, e l'intestazione dice che gli input
+> fissati ora sono due. Le asserzioni dei due test originali sono identiche byte per byte. La copia di
+> `holdLivePricePoll` di questo file ora ricorda anche le richieste che ha trattenuto.
+>
+> **Il test che lo fissa**, scritto prima: è il terzo del blocco originale, perché quello che dimostra è il suo
+> `beforeEach`. Percorre lo stesso flusso (pagina Assets, Asset Detail, scheda Rischio) e confronta le richieste di
+> polling viste dal browser con quelle trattenute. Il controllo positivo verifica che almeno un polling sia partito;
+> l'asserzione, che nessuno sia sfuggito. Il conto si fa nel browser e non nel log della corsia: dopo la prima visita
+> la cache dei prezzi correnti del backend risponde senza chiamare i provider, quindi il numero di righe nel log
+> dipende dall'ordine dei test.
+>
+> **Verifica**:
+> - rosso prima: con il file senza le tre righe della cura, 4 test passano e il nuovo cade, con tre polling sfuggiti
+>   (la pagina Assets con 17 id, poi Asset Detail due volte);
+> - con la cura: 5/5, e 5/5 anche con `--workers 4`. La fetta del log della corsia ha 0 righe di provider: niente
+>   feed, `current_value`, `scheduled_investment`, scrittura di prezzi o pagina web letta. Prima ne aveva 19, più due
+>   pagine web e 46 prezzi scritti;
+> - la mia prova del mutante: tolta la cura, cade solo il test nuovo (`:227`); ripristino verificato dallo sha256;
+> - la mia corsa finale: 5/5, 0 righe di provider, carico 8.
+>
+> **⚠️ Fuori pista**:
+> - Nella mia prima misura avevo contato 25 righe di provider con un'espressione più larga (prendeva anche le righe
+>   della cache di JustETF). Con quella del brief sono 19, più due pagine web lette dal provider scraper (Borsa
+>   Italiana e Kitco), che la mia espressione non vedeva. Anche quelle sono a 0 dopo la cura.
+> - Un'osservazione da portare al triage, non verificata: nella corsa rossa il backend ha ignorato il SIGTERM per 5
+>   secondi ed è stato ucciso; nelle corse curate si è chiuso pulito. I thread dei feed live di JustETF sono il
+>   sospetto più probabile: un backend che apre un feed potrebbe chiudersi male.
+> - Non incluso: la `desc` del runner per `risk-asset-detail` non nomina il test nuovo. Il file non è mio, e la
+>   concessione della fase 2 era per quella fase sola.
+>
+> **Il checkpoint**: 2 percorsi in 2 commit (lo spec e il diario), su HEAD `ebf4752e2`.
