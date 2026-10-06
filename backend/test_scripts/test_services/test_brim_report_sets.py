@@ -67,17 +67,30 @@ red-first at the end of this file, through ``_excluding`` and ``_exclude_request
 ``TestSetSchemas.test_request_fields_are_required`` now compares the three fields it
 sends, so the new default does not turn it red.
 
+Step 5 (plan-phase00BrimDanskeBankStep5PluginRedetection, §4), red-first after phase G:
+item 8, a Danske pair uploaded together but detected before item 8 (sidecars that keep
+their ``batch_id`` but have no ``plugins_signature`` and no plugin recorded) is detected
+again on read and forms its set (``collect_members``, the preview); F1, two concurrent
+``combine_set`` of one set leave one combined file, the second answering ``reused=True``.
+A guard written afterwards, from 1.1.0's own sidecar, pins the limitation of a pair
+uploaded with 1.1.0, which recorded no ``batch_id``: detected again, it forms no set and
+must be uploaded again, together. The rules of the detection and of the broker lock are
+in ``test_brim_parse_race.py``.
+
 Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.1–§3.5 and §3.8
 Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1 and A2
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import csv
 import importlib
 import inspect
 import json
 import shutil
+import threading
 import uuid
 from collections.abc import AsyncIterator, Iterator, Sequence
 from datetime import UTC, date, datetime, timedelta
@@ -1032,12 +1045,12 @@ class TestUploadBatchId:
             assert (info.batch_id, info.kind, info.derived_from, info.combined_into, info.combine_is_stale) == (None, "original", [], [], False)
 
     def test_legacy_sidecar_reads_with_defaults(self, isolated_brim_dir: Path) -> None:
-        """A sidecar written before A1, with none of the new keys, still builds, as an unlinked original."""
+        """A sidecar written before A1, with none of the new keys, still builds, as an unlinked original; having no ``plugins_signature``, its plugin list is detected again from its data file (item 8)."""
         legacy = _info(_write_legacy_file(isolated_brim_dir))  # precondition, true before A1 too
         _require_fields(BRIMFileInfo, *NEW_FILE_INFO_FIELDS)
 
         assert (legacy.batch_id, legacy.kind, legacy.derived_from, legacy.combined_into, legacy.combine_is_stale) == (None, "original", [], [], False)
-        assert (legacy.filename, legacy.target_broker_id, legacy.compatible_plugins) == ("legacy.csv", BROKER_ID, ["broker_generic_csv"])
+        assert (legacy.filename, legacy.target_broker_id, legacy.compatible_plugins) == ("legacy.csv", BROKER_ID, BRIMProviderRegistry.get_compatible_plugins(brim_provider.get_file_path(legacy.file_id)))
 
 
 class TestWriteCombinedCsv:
@@ -3019,3 +3032,243 @@ class TestCombineSetExclusions:
 
         assert (caught.value.status_code, caught.value.code) == EXCLUDE_UNKNOWN
         assert _combined_files() == []
+
+
+# =============================================================================
+# STEP 5 — a set detected before item 8, a pair uploaded with 1.1.0, and one combined file per set (F1)
+# =============================================================================
+#
+# Written red-first (plan-phase00BrimDanskeBankStep5PluginRedetection, §4). Item 8: ``compatible_plugins`` was computed
+# once, at upload. A pair uploaded together (one ``batch_id``) by a build before item 8, whose catalogue did not read
+# it, keeps sidecars without ``plugins_signature`` and with ``[]``, so ``collect_members`` never finds it. Read again
+# after the update, its files are detected again and the pair forms its set without a new upload. The rules of the
+# detection (signature, combined files, missing data file) and of the broker lock are in test_brim_parse_race.py.
+#
+# That model keeps the ``batch_id``: the 1.2 development builds before item 8 already stored it; 1.1.0 did not, it came
+# with report sets, after 1.1.0. A pair uploaded with 1.1.0 is detected again too, but belongs to no set: such exports
+# must be uploaded again, together. ``TestDanskePairUploadedWith1_1_0`` pins that documented limitation with sidecars
+# written as 1.1.0's ``save_uploaded_file`` wrote them; it was written after the product, and pins a limit, not a cure.
+#
+# F1 (plan §0; step 4, §19.10): two ``combine_set`` of the same set at once each found nothing to reuse, and each saved
+# a combined file. With the broker lock around reuse → build → save, the second waits, finds the first one's file and
+# answers ``reused=True``. The first combine is parked inside the plugin until the second reaches the plugin too (the
+# defect: it found nothing to reuse) or a grace runs out (the cure: it is waiting for the lock).
+
+DANSKE_CODE = "broker_danske_bank"
+DANSKE_SAMPLE_DIR = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports"
+DANSKE_PAIR = (("danske_bank-custody.xlsx", "custody"), ("danske_bank-cash.csv", "cash"))
+# Every wait for something that must happen is bounded by this: a regression fails the test, it never hangs the suite.
+_WAIT_SECONDS = 30.0
+# How long the second combine is given to reach the plugin while the first is parked inside it. It only bounds the
+# chance the DEFECT gets to show itself (the second combine's preview and reuse check take milliseconds); with the cure
+# the second combine waits for the broker lock, the grace runs out and the first is released whatever the value.
+_OVERLAP_GRACE_SECONDS = 3.0
+
+
+def _as_detected_before_item_8(root: Path, file_id: str) -> None:
+    """The sidecar as a build before item 8 left it, its catalogue not reading the export: no ``plugins_signature``, and no plugin.
+
+    Its ``batch_id`` stays: those builds already stored it. Not 1.1.0's sidecar, which had none: see ``_store_as_1_1_0_did``.
+    """
+    path = root / BRIMFileStatus.UPLOADED.value / f"broker_{BROKER_ID}" / f"{file_id}.json"
+    metadata = json.loads(path.read_text())
+    metadata.pop("plugins_signature", None)
+    metadata["compatible_plugins"] = []
+    path.write_text(json.dumps(metadata, indent=2))
+
+
+def _danske_pair_detected_before_item_8(root: Path) -> Tuple[str, Dict[str, BRIMFileInfo]]:
+    """The synthetic Danske main pair, uploaded in one batch on ``BROKER_ID``, then left as a build before item 8 left it."""
+    batch = str(uuid.uuid4())
+    uploaded: Dict[str, BRIMFileInfo] = {}
+    for name, role in DANSKE_PAIR:
+        info = _member((DANSKE_SAMPLE_DIR / name).read_bytes(), name, batch_id=batch)
+        assert DANSKE_CODE in info.compatible_plugins, f"premise: today's catalogue reads {name} as Danske: {info.compatible_plugins}"
+        _as_detected_before_item_8(root, info.file_id)
+        uploaded[role] = info
+    return batch, uploaded
+
+
+def _plugins_on_record() -> Dict[str, List[str]]:
+    """The plugins each file of ``BROKER_ID`` is read with now, for a failure message."""
+    return {info.filename: info.compatible_plugins for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID}
+
+
+class TestDanskePairDetectedBeforeItem8:
+    """Item 8 — a Danske pair uploaded together, but detected before item 8, forms its set after the update without being uploaded again."""
+
+    def test_collect_members_finds_both_files(self, set_storage: Path) -> None:
+        collect_members, members_not_found = _sets("collect_members"), _sets("BRIMSetMembersNotFound")
+        batch, uploaded = _danske_pair_detected_before_item_8(set_storage)
+
+        try:
+            members = collect_members(broker_id=BROKER_ID, plugin_code=DANSKE_CODE, batch_id=batch)
+        except members_not_found as caught:
+            pytest.fail(f"the set does not form ({caught.message}): its files are still read with the plugins stored before item 8: {_plugins_on_record()}", pytrace=False)
+
+        assert _ids(members) == _ids(uploaded.values())
+        assert all(DANSKE_CODE in member.compatible_plugins for member in members), [member.compatible_plugins for member in members]
+
+    @pytest.mark.asyncio
+    async def test_the_set_preview_is_complete(self, set_storage: Path, db_session: AsyncSession) -> None:
+        preview_set, members_not_found = _sets("preview_set"), _sets("BRIMSetMembersNotFound")
+        batch, uploaded = _danske_pair_detected_before_item_8(set_storage)
+
+        try:
+            preview = await preview_set(db_session, broker_id=BROKER_ID, plugin_code=DANSKE_CODE, batch_id=batch)
+        except members_not_found as caught:
+            pytest.fail(f"the set does not form ({caught.message}): its files are still read with the plugins stored before item 8: {_plugins_on_record()}", pytrace=False)
+
+        assert {member.file_id: member.role for member in preview.members} == {uploaded["custody"].file_id: "custody", uploaded["cash"].file_id: "cash"}
+        assert (preview.complete, preview.missing) == (True, []), (preview.missing, _codes(preview))
+
+
+# An upload made while 1.1.0 (2026-09-07) was the release.
+UPLOADED_WITH_1_1_0_AT = "2026-09-15T09:30:00+00:00"
+
+
+def _store_as_1_1_0_did(root: Path, name: str) -> str:
+    """One Danske sample, stored on ``BROKER_ID`` as 1.1.0's ``save_uploaded_file`` stored an upload; returns its file id.
+
+    The data file, then a sidecar with the twelve keys 1.1.0 wrote and no other: no ``batch_id``, no
+    ``plugins_signature``, no ``kind`` (``git show v1.1.0:backend/app/services/brim_provider.py``).
+    ``compatible_plugins`` is what 1.1.0's catalogue detected: nothing, it had no Danske plugin.
+    """
+    content = (DANSKE_SAMPLE_DIR / name).read_bytes()
+    file_id = str(uuid.uuid4())
+    ext = Path(name).suffix.lower() or ".dat"
+    folder = root / BRIMFileStatus.UPLOADED.value / f"broker_{BROKER_ID}"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{file_id}{ext}").write_bytes(content)
+    sidecar = {
+        "file_id": file_id,
+        "filename": name,
+        "extension": ext,
+        "size_bytes": len(content),
+        "status": BRIMFileStatus.UPLOADED.value,
+        "uploaded_at": UPLOADED_WITH_1_1_0_AT,
+        "processed_at": None,
+        "compatible_plugins": [],
+        "error_message": None,
+        "uploaded_by_user_id": USER_ID,
+        "target_broker_id": BROKER_ID,
+        "last_parse_result": None,
+    }
+    (folder / f"{file_id}.json").write_text(json.dumps(sidecar, indent=2))
+    return file_id
+
+
+class TestDanskePairUploadedWith1_1_0:
+    """Limitation — a Danske pair uploaded with 1.1.0 is detected again after the update, but forms no set: it must be uploaded again, together.
+
+    1.1.0 recorded no ``batch_id``, so its uploads are linked to nothing. Each file is offered Danske again, yet no
+    batch's ``collect_members`` takes it (a set request names its batch, a string), and Danske's parse of one file
+    alone answers 422 ``set_required``. Documented for users in danske-bank.en.md and for developers in
+    brim_plugin_guide.md (the lifecycle of ``compatible_plugins``). Should this turn red because these files now
+    belong to a set, the limitation is gone: update both pages with this test.
+    """
+
+    def test_is_detected_again_but_forms_no_set_and_must_be_uploaded_again_together(self, set_storage: Path) -> None:
+        """The pair stored as 1.1.0 stored it, beside the same two exports uploaded again, together, after the update."""
+        collect_members = _sets("collect_members")
+        from_1_1_0 = {role: _store_as_1_1_0_did(set_storage, name) for name, role in DANSKE_PAIR}
+        again = str(uuid.uuid4())
+        uploaded_again = {role: _member((DANSKE_SAMPLE_DIR / name).read_bytes(), name, batch_id=again) for name, role in DANSKE_PAIR}
+        assert all(DANSKE_CODE in info.compatible_plugins for info in uploaded_again.values()), f"premise: today's catalogue reads the pair as Danske: {[info.compatible_plugins for info in uploaded_again.values()]}"
+
+        read = {role: _info(file_id) for role, file_id in from_1_1_0.items()}
+        batches = sorted({info.batch_id for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.batch_id is not None})
+        sets = {batch: _ids(collect_members(broker_id=BROKER_ID, plugin_code=DANSKE_CODE, batch_id=batch)) for batch in batches}
+
+        assert {role: info.compatible_plugins for role, info in read.items()} == {"custody": [DANSKE_CODE], "cash": [DANSKE_CODE]}, "the files uploaded with 1.1.0 are not offered Danske after the update"
+        assert {role: info.batch_id for role, info in read.items()} == {"custody": None, "cash": None}, "a file uploaded with 1.1.0 reads with a batch, though 1.1.0 recorded none: see the class docstring"
+        stored_by_1_1_0 = set(from_1_1_0.values())
+        joined = {batch: members & stored_by_1_1_0 for batch, members in sets.items() if members & stored_by_1_1_0}
+        assert not joined, f"a file uploaded with 1.1.0 joined a set, by batch: {joined}; the limitation is gone, see the class docstring"
+        assert sets == {again: _ids(uploaded_again.values())}, f"uploaded again, together, the pair does not form exactly its own set; the sets on the broker, by batch: {sets}"
+
+
+class _CombineGate:
+    """Parks the first ``combine`` of the fake until it is released; marks the arrival of a second one."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._calls = 0
+        self.first_inside = threading.Event()
+        self.second_inside = threading.Event()
+        self.release_first = threading.Event()
+
+    def enter(self) -> None:
+        with self._lock:
+            self._calls += 1
+            first = self._calls == 1
+        if first:
+            self.first_inside.set()
+            self.release_first.wait(timeout=_WAIT_SECONDS)
+        else:
+            self.second_inside.set()
+
+    def release_everything(self) -> None:
+        """Never leave a thread parked on the gate, whatever happened to the test."""
+        self.release_first.set()
+        self.first_inside.set()
+        self.second_inside.set()
+
+
+def _gated_fake(gate: _CombineGate) -> type:
+    """The two-role fake whose ``combine`` passes ``gate`` first (the registry builds an instance per call: the gate is shared)."""
+
+    class _GatedCombineProvider(_FakeTwoRoleProvider):
+        def combine(self, members: Dict[str, List[Path]]) -> Any:
+            gate.enter()
+            return super().combine(members)
+
+    return _GatedCombineProvider
+
+
+@contextlib.asynccontextmanager
+async def _second_db_session() -> AsyncIterator[AsyncSession]:
+    """Another private in-memory database, like ``db_session``: two requests at once have a session each."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(SQLModel.metadata.create_all)
+    session = AsyncSession(engine, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await engine.dispose()
+
+
+class TestConcurrentCombine:
+    """F1 — two ``combine_set`` of one set at once leave one combined file; the second answers ``reused=True`` with it."""
+
+    @pytest.mark.asyncio
+    async def test_two_concurrent_combines_of_one_set_build_one_combined_file(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession) -> None:
+        """The count is the subject: the combined files of this test's own broker and upload, in its own storage."""
+        combine_set = _sets("combine_set")
+        batch, custody, cash = _two_member_set()
+        gate = _CombineGate()
+        # Same code, a fake whose combine is gated. `fake_plugin` restores the whole registry afterwards.
+        BRIMProviderRegistry._providers[FAKE_CODE] = _gated_fake(gate)
+        request = {"broker_id": BROKER_ID, "plugin_code": FAKE_CODE, "batch_id": batch, "user_id": USER_ID}
+        first_inside = overlapped = False
+        async with _second_db_session() as second_session:
+            calls = [asyncio.create_task(combine_set(db_session, **request))]
+            try:
+                first_inside = await asyncio.to_thread(gate.first_inside.wait, _WAIT_SECONDS)
+                if first_inside:
+                    calls.append(asyncio.create_task(combine_set(second_session, **request)))
+                    overlapped = await asyncio.to_thread(gate.second_inside.wait, _OVERLAP_GRACE_SECONDS)
+            finally:
+                gate.release_everything()
+                outcomes = await asyncio.wait_for(asyncio.gather(*calls, return_exceptions=True), timeout=_WAIT_SECONDS)
+
+        assert first_inside, f"premise: the first combine never reached the plugin: {outcomes!r}"
+        failures = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
+        assert not failures, f"a concurrent combine failed: {failures!r}"
+        combined = [info for info in _combined_files() if info.batch_id == batch]
+        assert len(combined) == 1, f"two combines of one set at once built {len(combined)} combined files (the second reached the plugin while the first was inside it: {overlapped}): {[info.file_id for info in combined]}"
+        assert sorted(outcome.reused for outcome in outcomes) == [False, True], [(outcome.reused, outcome.combined.file_id) for outcome in outcomes]
+        assert {outcome.combined.file_id for outcome in outcomes} == {combined[0].file_id}
+        assert (_info(custody.file_id).combined_into, _info(cash.file_id).combined_into) == ([combined[0].file_id], [combined[0].file_id])
