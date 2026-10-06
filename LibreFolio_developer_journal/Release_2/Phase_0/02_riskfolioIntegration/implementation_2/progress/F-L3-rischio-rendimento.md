@@ -2288,3 +2288,190 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 > - Strumenti: `/tmp/libreFolio_f4/l11_msgs.py`, `l11_record.sh` e `verify_l11.sh`.
 > - CHANGELOG: niente, perché nulla cambia per l'utente.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### Giro 11 committato ✅ 2026-10-06, 09:4x
+
+> - Commit del developer: `6d8476f91` (G1) e `cda8cba1c` (G2); `HEAD~2` = `174c467df`, albero `231a635c9`.
+>   `/tmp/libreFolio_f4/verify_l11.sh`: **PASS**. Worktree pulito.
+> - **A (09:33) accetta tutte le condizioni del passo 1.** Una dipendenza: il mio `174c467df` non è nel suo ramo, e la
+>   mia sezione ha 91 righe in più dalla nostra base comune. Il suo ordine, chiesto al coordinatore: il suo checkpoint 6,
+>   poi la fusione della mia punta nel suo ramo, poi il passo 1.
+> - **Mio impegno con A**: finché il passo 1 non arriva, gli dico prima di committare qualunque cosa sui miei file di
+>   L3°. Non ne ho in programma.
+
+## Giro 12 · in attesa di A, e l'analisi del `DataTable` per il passo 2 · 2026-10-06
+
+| # | passo | stato |
+|---|---|---|
+| L12-1 | analisi breve della via «solo pagina» nel `DataTable` condiviso, chiesta dal coordinatore prima di ogni concessione: chi lo chiama, come si comporta `navigateToRowId`, i test | ✅ 2026-10-06, in sola lettura |
+| L12-2 | la guida `correlation.en.md:116-117` (la retta dal benchmark, il rombo), quando i cambi di A arrivano nel mio ramo | in attesa |
+| L12-3 | il passo 1 di A: rivedere il diff dei miei file prima del suo checkpoint | in attesa |
+| L12-4 | `DataTable`: l'opzione «solo pagina» di `navigateToRowId`, rossi prima; commit a parte `feat(ui): …`, prima della paginazione di A | approvata in linea di principio; parte col passo 2, dopo la conferma della UX dal developer |
+| L12-5 | `risk-lab` raggiunge i provider di cambio veri (segnalato da A): la modale di sincronizzazione chiede `GET /fx/providers`. Correzione nello spec (test-author), prova nel log della corsia | ✅ 2026-10-06, 10:1x |
+
+### L12-1 · `DataTable.navigateToRowId`: la via «solo pagina» (su `cda8cba1c`, solo lettura)
+
+> - **Cosa fa oggi** (`table/DataTable.svelte:856-881`), in quest'ordine:
+>   1. trova la riga in `sortedData`, quindi tiene conto dell'ordinamento attivo;
+>   2. se c'è la paginazione, passa alla sua pagina;
+>   3. la evidenzia (`highlightedRowId`: `data-highlighted="true"` e la classe `highlighted`). L'evidenza si spegne al
+>      clic su una riga o a un tasto nella tabella;
+>   4. dopo un `tick()`, la porta in vista con `scrollIntoView({behavior: 'smooth', block: 'center'})`, cercandola solo
+>      nel proprio contenitore (Bugfix-4 §C15).
+> - **Chi la chiama**: 13 chiamate in 6 posti, tutti fuori dalla famiglia, e tutti la usano per «vai a quella riga e
+>   mostramela», quindi lo scorrimento lo vogliono:
+>   - `ui/data-editor/DataEditor.svelte` (3);
+>   - `brokers/lots/LotsAnalysisPanel.svelte`, tramite `UnifiedLotsTable.svelte`, che la riesporta;
+>   - `transactions/modals/TransactionBulkModal.svelte` (5);
+>   - `transactions/TransactionsTable.svelte`, in modalità piatta;
+>   - `routes/(app)/transactions/+page.svelte`.
+> - **Test** (`table/DataTable.test.ts:517-556`):
+>   - salta alla pagina della riga e la segna;
+>   - tiene conto dell'ordinamento;
+>   - ignora un id che non ha.
+>   Nessuno fissa lo scorrimento: jsdom non ha layout.
+> - **Non c'è un controllo esterno della pagina**: nessuna prop `$bindable` per l'indice di pagina, nessun callback.
+>   Esistono `getPageRowIds()` e `getSortedRowIds()`. L'ultima modifica al file è dell'11/09.
+> - **Il problema per L3°**: con la paginazione, un clic su un punto la cui riga sta su un'altra pagina deve portare la
+>   tabella su quella pagina. `navigateToRowId` lo fa, ma scorre anche la vista per centrare la riga. Il grafico sta
+>   sotto la tabella, quindi la vista salterebbe in su, via dal punto appena cliccato. In più l'evidenza ripeterebbe la
+>   selezione, che la riga mostra già.
+> - **La modifica più piccola** (additiva):
+>   - `navigateToRowId(rowId, {scroll = true, highlight = true} = {})`, con valori di difetto che lasciano identiche
+>     tutte e 13 le chiamate;
+>   - il componente condiviso chiamerebbe `navigateToRowId(id, {scroll: false, highlight: false})` e poi
+>     `toggleRowSelectionById(id)`;
+>   - l'alternativa è un metodo nuovo, `showRowPage(id)`.
+> - **Rossi prima**, in `DataTable.test.ts` (fuori famiglia, serve la concessione):
+>   - con `{scroll: false, highlight: false}` cambia pagina, non segna nulla e non chiama `scrollIntoView`;
+>   - il difetto evidenzia e chiama `scrollIntoView` con `smooth` e `center`. Oggi nessun test lo fissa.
+> - **Da confermare col developer quando pianifichiamo il passo 2 con A**: un clic su un punto cambia la pagina della
+>   tabella senza spostare la vista.
+>
+> **Il coordinatore (09:45) approva in linea di principio, per quando parte il passo 2**:
+> - l'opzione additiva `navigateToRowId(rowId, {scroll = true, highlight = true} = {})`, con difetti che lasciano
+>   identiche le 13 chiamate;
+> - i rossi prima in `DataTable.test.ts`, come li ho elencati. Il test del difetto, che fissa lo scorrimento `smooth` al
+>   centro, è obbligatorio;
+> - **il writer sono io**, con un commit piccolo e a parte (`feat(ui): …`) prima del passo di paginazione di A, che lo
+>   usa;
+> - oggi nessun ramo tocca `DataTable.svelte`, committato o no;
+> - la UX (un punto cambia la pagina senza spostare la vista) va al developer quando si pianifica il passo 2. Fino ad
+>   allora non scrivo nulla: un'opzione che il developer potrebbe non volere sarebbe codice morto.
+
+### L12-5 · `risk-lab` chiama i provider di cambio veri · analisi (skill test-triage), 2026-10-06
+
+> - **Il reperto di A** (09:48): sul suo albero, a fine giro, il backend ha scritto «SNB dimensions loaded»
+>   (`fx_providers.snb`), cioè una GET vera all'API della SNB.
+> - **Confermato nella mia corsia** (`/tmp/librefolio-r2-f/logs/librefolio.log`): una riga per giro dentro le finestre
+>   di `risk-lab` di ieri (15:47:52Z in `l9final`, 16:03:11Z in `l9ff`). Le altre due righe cadono nelle finestre di
+>   `risk`, lo spec di A, che A ha già curato.
+> - **La causa, nel codice**:
+>   1. la modale di sincronizzazione del laboratorio (`PageSyncModal.svelte:55-64`), quando si apre, chiama
+>      `getCurrencyGraph()` per avere le icone dei provider;
+>   2. `getCurrencyGraph()` chiede `GET /api/v1/fx/providers`;
+>   3. lato backend, `list_providers` (`api/v1/fx.py`) chiama `get_supported_currencies()` su ogni provider;
+>   4. la SNB (`_ensure_currency_map`, `snb.py:138`) scarica le sue dimensioni dalla rete.
+>   Lo fa anche la BCE: lo stesso log ha i suoi «Failed to fetch available currencies from ECB» (senza rete, di notte).
+>   La perdita quindi riguarda tutti i provider, e solo la SNB scrive i successi.
+> - **Non è la causa**: la lettura di `/fx/providers/routes` a `:3186`, l'altra ipotesi di A. Quell'endpoint legge solo
+>   il DB (`list_routes`, una `select`).
+> - **Chi apre la modale**: `:3090` (un aiutante), `:4706` (il Sync del banner), `:6245` e `:6325` (la sincronizzazione
+>   della barra).
+> - **Verdetto (test-triage §8)**: assumption. I test presumevano che aprire la modale non chiamasse nulla fuori, e la
+>   correzione va nello spec.
+> - **Come correggere**:
+>   - in `installRiskMocks` dello spec, accanto a `holdLivePricePoll`, si ferma `GET /api/v1/fx/providers` (solo il
+>     percorso nudo, mai `/routes`);
+>   - trattenerla è ciò che ha fatto A (`holdFxProviderCatalog`), ma `getCurrencyGraph()` ha `try/finally` senza
+>     `catch` e la modale non la attende. Dopo i 30 s di axios ne verrebbe un rifiuto non gestito nella pagina.
+>     Nessun test lo guarda oggi, ma resta rumore;
+>   - rispondere con un catalogo vuoto è inerte: una GET su `/fx/providers` non è una mutazione
+>     (`portfolioMutation.ts:58` riconosce solo POST e DELETE su `/routes`), e la modale usa il grafo solo per le icone;
+>   - la scelta tocca a test-author, che deve dimostrare che nessuna asserzione cambia;
+>   - in più, un test che apre la modale controlla che la richiesta sia stata intercettata, così un URL cambiato non
+>     riapre la perdita in silenzio.
+> - **Prova richiesta**: `risk-lab` 41/41 nella corsia 6154, e zero righe `fx_providers` nel log della corsia nella
+>   finestra del giro.
+> - **Il mio cancello**: anche lo schema delle perdite nei miei script (`/tmp/libreFolio_f4/l*_gates.sh`) non conta le
+>   righe `fx_providers`; lo aggiungo.
+
+### L12-5 · la correzione (test-author `fx-provider-leak`) ✅ 2026-10-06, 10:0x-10:1x
+
+> **Note implementazione** (`risk-lab.spec.ts`, +70 −1, nessun altro file):
+> - `answerFxProviderCatalog(page)`, subito dopo `holdLivePricePoll`:
+>   - instrada solo il percorso nudo `/\/api\/v1\/fx\/providers(?:\?|$)/`, con o senza query. Test-author ha verificato
+>     che non prende `/routes`, `/routes?…`, `/providers/` né `/providersX`;
+>   - risponde `200 []` a una GET e la registra; ogni altro metodo passa con `route.fallback()`;
+>   - nulla toglie la route alla fine, come per `holdLivePricePoll`.
+> - La chiama `installRiskMocks`, che usano tutti e cinque i test che aprono la modale; l'unico test senza mock (la
+>   guardia del catalogo) non carica pagine. L'intestazione del file dice che la modale non raggiunge più i provider.
+> - **Risposta e non trattenuta**: una GET su quel percorso non è una mutazione (`isPortfolioAffectingMutation`), e una
+>   richiesta trattenuta diventerebbe, dopo i 30 s di axios, un rifiuto non gestito dentro i test più lunghi. `[]` è
+>   valido per lo schema, e la modale lo usa solo per le icone.
+> - **La guardia si controlla da sé**: il test della sincronizzazione della barra verifica che almeno una richiesta del
+>   catalogo sia stata intercettata. Lo verifica come «almeno una» e mai come conteggio, perché il grafo resta in cache.
+> - **Ho verificato due affermazioni del docblock**:
+>   - la BCE interroga la rete a ogni chiamata (`ecb.py:92-135`, nessuna cache);
+>   - `isPortfolioAffectingMutation` esiste (`portfolioMutation.ts:19`).
+>
+> **Prove** (corsia 6154, un comando per volta):
+> - prettier pulito; `tsc -p tsconfig.e2e.json` 2 errori, il pavimento, in altri file; `front build --debug` passa, con
+>   svelte-check 0/0;
+> - **giro 1**: 40/41; **giro 2**: **41/41**;
+> - righe `fx_providers` nel log della corsia: **0** in entrambe le finestre (08:06:44-08:09:41Z e 08:11:57-08:14:01Z).
+>   Il log DEBUG è acceso e la SNB scrive alla prima richiesta del catalogo, riuscita o fallita, quindi zero vuol dire
+>   che nessuna richiesta è arrivata;
+> - 6154 libera alla fine.
+>
+> **⚠️ Fuori pista: il rosso del giro 1 (skill test-triage).**
+> - **Il fatto**: il test del selettore del benchmark, ora a `:5455`, si ferma a `:5490`: il tooltip della ⓘ non è
+>   visibile entro i 3 s di `expect` del progetto. Lo screenshot preso subito dopo lo mostra aperto e con la frase
+>   giusta.
+> - Il test attende la condizione giusta (il tooltip visibile, con asserzioni che riprovano) e nessun orologio. Non apre
+>   la modale, quindi la correzione non passa da lì.
+> - Carico durante il giro: 54,7 (1 minuto) e 37,1 (5 minuti) su 10 core. I test duravano 3-5 s contro ~2,5 s del
+>   05/10, questo 9,7 s. Al giro 2, con carico da 29,8 a 21,8, è verde.
+> - **Verdetto (§8): slowness**, cioè lentezza causata dall'ambiente: la macchina è sovraccarica di servizi di sistema,
+>   come ha detto il coordinatore. Niente da cambiare; se torna rosso a carico normale, si fa il triage vero.
+>
+> **⚠️ Fuori pista: il log della corsia è ruotato** all'avvio del backend del giro 1. Il file da 116 MB, con le righe
+> SNB del 05/10, è ora `logs/librefolio.log.2026-09-29.gz`. Test-author l'ha controllato: niente delle sue finestre è lì.
+> I miei script delle perdite contano anche `fx_providers` (`/tmp/libreFolio_f4/l12_gates.sh`).
+
+### Il passo 1 di A è partito, e la nota sotto il grafico · 2026-10-06, 10:2x
+
+> - A parte dalla base fusa `f6b7273f8` (la mia punta nel suo ramo), su cui ha validato `risk-lab`, 41 passati.
+> - **La domanda di A**: nel componente le note vengono dalle capacità. Nel laboratorio sono due righe condivise:
+>   «I punti usano il rendimento medio annuo: su un asset molto volatile, quello vissuto davvero è più basso.» e «Il
+>   rendimento viene dai soli prezzi: cedole e dividendi non sono ancora inclusi» (chiesta da Risk). La seconda frase del
+>   mio `risk.assetSet.levels.l3.scatterNote` ripete la prima riga. A propone due strade:
+>   - (a) ritirare la mia nota;
+>   - (b) una `leadNote` passata dal mio involucro, con la nota accorciata alla frase sugli assi.
+> - **La mia scelta, (a)**:
+>   - (b) direbbe due volte di seguito che l'asse verticale è il rendimento medio annuo, e terrebbe del testo
+>     nell'involucro, contro la richiesta del developer («a livello di componente, non di wrapper se possibile»);
+>   - quello che (a) perde, la lettura in parole dell'asse orizzontale, lo dicono già il nome dell'asse («Volatilità
+>     annualizzata») e il tooltip della colonna Volatilità.
+> - **Condizioni date ad A**:
+>   - il testid `risk-asset-set-l3-scatter-note` resta sull'elemento che contiene le note del laboratorio, così
+>     `AssetSetRiskReturnSection.test.ts:1159`, che chiede solo un testo non vuoto, passa invariato;
+>   - la chiave si toglie dai 4 cataloghi nella stessa modifica, con `dev.py i18n`, sotto la mia concessione, e va
+>     elencata nella consegna;
+>   - la guardia (`assetSetI18n.test.ts:208-212`, nel blocco concesso) controlla che nessuna nota resa dal laboratorio
+>     nomini una retta, nelle 4 lingue.
+> - **Verificato prima di rispondere**: il mio E2E non legge la nota, e la mia guida non la cita.
+> - **Per la mia guida, quando il passo 1 arriva**: dire che il rendimento viene dai soli prezzi, senza cedole né
+>   dividendi. Per chi legge il laboratorio è una notizia. Va con L12-2.
+> - Ad A ho detto anche che lo spec cambia nel giro 12 senza toccare i test di L3°. Gli ho segnalato il rifiuto non
+>   gestito che darebbe una richiesta trattenuta: riguarda il suo `holdFxProviderCatalog`.
+
+### Checkpoint del giro 12 · 2026-10-06 (verso Risk)
+
+> - Base `cda8cba1c`, 2 percorsi modificati: **G1** lo spec (la perdita verso i provider), **G2** questo journal (il
+>   giro 11 committato, l'accordo e la dipendenza con A, l'analisi del `DataTable`, la revisione della tappa 2, la
+>   perdita).
+> - Strumenti: `/tmp/libreFolio_f4/l12_msgs.py`, `l12_record.sh` e `verify_l12.sh`.
+> - CHANGELOG: niente, perché nulla cambia per l'utente.
+> - Ad A, prima del commit (il mio impegno): fatto, lo spec cambia senza toccare i test di L3°.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
