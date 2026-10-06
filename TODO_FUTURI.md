@@ -2305,3 +2305,24 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Attenzione ai campi legati al tipo (famiglie ETF e Crowdfunding) e a quelli che un provider sovrascrive alla
   sincronizzazione successiva.
 - Candidato naturale: K (tassonomia, select, modale asset).
+
+## 💰 Rischio — rendimento totale con cedole e dividendi
+
+**Data aggiunta**: 6 Ottobre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Media
+
+### Contesto
+- Review del developer del 06/10/2026 con A (Dashboard, livello L3 rischio/rendimento). Testuale: «mettiamolo nei todo
+  futuri e anche in un todo nel codice per non dimenticarlo».
+- Oggi i rendimenti dell'analisi del rischio vengono dalle sole serie di prezzo: cedole e dividendi non entrano. Un asset
+  che paga gran parte del suo rendimento come reddito sta più in basso di dove lo metterebbe il rendimento totale, e
+  quando succede al benchmark la retta rischio/rendimento si inclina verso il basso.
+- Il manuale lo dichiara nell'avviso «Prices only, for now»
+  (`mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/benchmark-selection.en.md`, sezione
+  `#the-risk-return-line`, sul ramo della famiglia Risk fino alla sua integrazione).
+- Un TODO nel codice segna il punto, aggiunto dalla famiglia Risk nel giro in corso.
+
+### Azione Futura
+- Backend (Risk): una serie di rendimento totale per asset, che aggiunga ai prezzi i flussi di cedole e dividendi.
+  Prima di scriverla va deciso se i flussi si reinvestono nell'asset o si sommano come cassa.
+- Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
+- Quando arriva: togliere la riga «solo prezzi» dall'interfaccia, l'avviso dal manuale e il TODO dal codice.
