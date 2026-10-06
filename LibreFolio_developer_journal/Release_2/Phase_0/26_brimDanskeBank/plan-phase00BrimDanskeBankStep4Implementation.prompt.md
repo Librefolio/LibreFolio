@@ -2570,3 +2570,53 @@ Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui prop
 > **Commit di V1** (developer, verificati dal coordinatore): `104641cb1` fix, `2ef332763` docs, `172b8e616` journal; `~3` = `97259ce7f`, albero `f24ff6802`.
 >
 > **Il piano della voce 8** (opzione A, nella 1.2, solo analisi): [plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md](plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md), mandato al coordinatore il 2026-10-06.
+
+> **Commit di R5** (developer, verificati dal coordinatore): `c069bd064` fix, `ac142cb9d` docs, `b360b7b4b` journal; albero `01cec86fb`. Il corpo di C2 è stato corretto prima del commit: «no reading command (Read as, Read alone, Remove from the set)» e «keeps its tick and loses its plugin».
+
+## 21. Integrazione di H, V1 e R5: il treno 1 (2026-10-06)
+
+- **Il treno** (deciso dal coordinatore perché K aspettava con una revisione unita mai validata): `/tmp/libreFolio_order_train1.sh` fonde D in K, poi K in L. Il merge di L è `eba9e8bf1` (genitori `b360b7b4b` + `998ce67d4`, albero `a3569b83e` uguale alla simulazione). Nessun percorso in comune con H, V1 e R5; i cataloghi i18n si fondono a tre vie (4508 = 4505 + 3 del treno, nessuna chiave di L).
+- **La validazione della revisione unita** (corsia 6156, un comando per volta):
+
+| Verifica | Esito |
+|---|---|
+| i18n a tre vie (base `af5591991`) | ok: niente mancante, in più o cambiato |
+| `api sync`, `front build --debug`, `mkdocs build` | ok |
+| `front check` / `i18n audit` | **0/0** / completo, 4508 |
+| `tx-unit` / `component-unit` | `627` / `2276 passed` (101 file), exit 0 |
+| `provider-registry-misc` / `brim-report-sets` | `13` / `255 passed` |
+| `tx-import-report-set` | **27/27** a 1 worker; **27/27** a 4 worker (dopo la ripresa) |
+| `-guide` / `handoff` / `file-selection` / `upload` / `flow` / `resolution` | `2` / `2` / `2` / `9` / `10` / `12 passed` (carico 34–131) |
+| `api brim` (per ultimo) / `check-orphans` / `check-links` | `73 passed` / pulito / il solo D28 |
+
+- **⚠️ Fuori pista — lo STOP del developer (17:43) e il riavvio della macchina (circa 19:21)**:
+  - la validazione si è fermata dopo `tx-import-report-set` a 1 worker, con `stop_bash`, porte libere e nessun processo rimasto. È ripartita dal punto annotato, sulla stessa revisione;
+  - il riavvio ha svuotato `/tmp`: la data-dir della corsia (ricreata con un `populate --force --clean` completo, solo lì), gli script e i log;
+  - il log di `component-unit` è andato perso: l'exit era 0, letto a schermo prima della pausa, e l'archivio del runner tiene solo i log pytest. Per questo non si può dire se l'errore non gestito di `ChartSignalsSection.test.ts`, visto da K con exit 1, fosse presente anche qui;
+  - da allora gli script e i log dei giri stanno nei file di sessione (`files/train1-validation*`).
+- **Il riallineamento**: `dev_release2` = `a7d0b37ec` (il treno D, K, L, M, N più il CHANGELOG), e il ramo di L coincide con lui.
+- **Il CHANGELOG** del coordinatore contiene, testuali, la frase H + R5 nella voce Danske («None of these commands ticks or unticks a file…») e la riga 🐛 di V1.
+
+## 22. Le decisioni rimandate dopo l'integrazione (2026-10-06)
+
+### 22.1 Il bottone «Escludi dall'import» e R6 (il set spuntato solo in parte)
+
+**Testuali** (chat di L, dopo la mia domanda su R6 del §20):
+
+> «mi pare un overtink, non ho capito il problema poi, sarebbe che tolgo un solo file, quindi il set esistem ma monco e poi ce lo rimetto? spiegati con parole mooolto più semplici»
+
+> «credo che il punto sia il bottone "Escludi dall'import" è una cosa che ti volevo chiedere, a cosa dovrebbe servire? a rimuovere tutti i file dal set? o cosa?»
+
+> «credo che il problema sia che non è comodo affatto, se un set lo voglio escludere, ci tolgo la spunta, non faccio questo giro.»
+
+> «non ho neanche capito quando compare»
+
+- **La spiegazione di L**: il bottone compare solo quando un set spuntato è incompleto, in basso a destra della scheda aperta, e l'avviso accanto ad «Analizza» dice «…carica il file mancante o escludilo». Fa esattamente quello che fa la casella della scheda: toglie la spunta a tutti i file del set.
+- **La decisione** (ask_user, testuale): «Toglilo, e l'avviso dica di togliere la spunta al set (Consigliato)».
+- **Il perimetro** (confermato dal coordinatore: nessun altro ramo tocca queste superfici):
+  - via il bottone `report-set-exclude` e la prop `onExclude` (`ReportSetCard.svelte`), ed `excludeSet` (`ImportWizardModal.svelte`);
+  - `importWizard.reportSet.incompleteBlocks` cambia testo in 4 lingue; `importWizard.reportSet.exclude` si toglie;
+  - la doc EN di `danske-bank.en.md` e `import-wizard.md`;
+  - i test che usano `report-set-exclude`, tra cui R5-E1.
+- **R6 resta da decidere**: togliere il bottone non lo elimina, perché ci si arriva anche togliendo la spunta con la casella della scheda e poi rimettendo nel set un file spuntato. Si chiede al developer in parole semplici quando si apre il lotto.
+- **Ordine** (coordinatore): voce 8 con F1 → robustezza dell'upload, F2–F4 (con 422, già deciso) → il bottone tolto più R6. Tre checkpoint, ognuno con le sue righe 🐛.
