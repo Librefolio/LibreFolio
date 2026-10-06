@@ -65,7 +65,12 @@
     "openFxPair": "Apri dettaglio coppia FX",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "aiExport": "Export AI"
+    "aiExport": "Export AI",
+    "browse": {
+      "previous": "Asset precedente",
+      "next": "Asset successivo",
+      "position": "Asset {current} di {total}"
+    }
   },
   "assets": {
     "create": "Nuovo asset",
@@ -3652,26 +3657,26 @@
     "share": {
       "titleLabel": "Titolo suggerito",
       "x": {
-        "message": "Hey! Sto usando LibreFolio per seguire i miei investimenti e mi trovo benissimo. Provala anche tu!\n#LibreFolio #OpenSource #SelfHosted #Investimenti #Privacy",
+        "message": "Hey! Sto usando LibreFolio per seguire i miei investimenti e mi trovo benissimo. Provala anche tu!",
         "hint": "Il link al progetto viene aggiunto alla copia e al post. X si apre in una nuova scheda."
       },
       "reddit": {
-        "title": "Sto provando LibreFolio per seguire gli investimenti sul mio server",
-        "message": "Da un po' cercavo un modo più semplice per seguire i miei investimenti senza affidare tutti i dati del portafoglio a un servizio esterno. In questi giorni sto provando LibreFolio e mi sta piacendo avere tutto in un unico posto.\n\nÈ un programma open source che puoi installare sul tuo server per organizzare il portafoglio e analizzarne l'andamento, mantenendo i dati sotto il tuo controllo. Se cerchi qualcosa di simile, dagli un'occhiata!",
+        "title": "Sto provando LibreFolio, un gestore di portafoglio open source",
+        "message": "Da un po' cercavo un modo più semplice per seguire i miei investimenti senza affidare tutti i dati del portafoglio a un servizio esterno. In questi giorni sto provando LibreFolio e mi sta piacendo avere tutto in un unico posto.\n\nÈ un programma open source per organizzare il portafoglio e analizzarne l'andamento, mantenendo i dati sotto il tuo controllo. Se cerchi qualcosa di simile, dagli un'occhiata!",
         "hint": "Apriamo un post di testo con titolo e corpo separati. Se Reddit non compila il corpo, incolla il testo già copiato."
       },
       "facebook": {
-        "message": "Ultimamente sto usando LibreFolio per tenere d'occhio i miei investimenti e mi piace avere tutto in un unico posto senza rinunciare al controllo dei miei dati.\n\nSe cercate un gestore di portafoglio open source da installare sul vostro server, dateci un'occhiata!",
+        "message": "Ultimamente sto usando LibreFolio per tenere d'occhio i miei investimenti e mi piace avere tutto in un unico posto senza rinunciare al controllo dei miei dati.\n\nSe cercate un gestore di portafoglio open source che lasci i dati sotto il vostro controllo, dateci un'occhiata!",
         "hint": "Facebook prepara solo l'anteprima del link. Dopo l'apertura, incolla il testo copiato nel campo del messaggio del post.",
         "afterCopy": "Testo e link copiati. Incolla il testo nel messaggio del post su Facebook."
       },
       "instagram": {
-        "message": "Un po' più di ordine nei miei investimenti, senza lasciare i miei dati altrove. Sto provando LibreFolio: un gestore di portafoglio open source da ospitare sul proprio server.\n\n#LibreFolio #OpenSource #SelfHosted #Investimenti #Privacy",
+        "message": "Un po' più di ordine nei miei investimenti, senza lasciare i miei dati altrove. Sto provando LibreFolio, un gestore di portafoglio open source.",
         "hint": "Instagram non prepara un post da questo link. Dopo l'apertura scegli Crea (+), seleziona una foto o un video, poi incolla la didascalia copiata.",
         "afterCopy": "Didascalia e link copiati. Su Instagram: Crea (+), scegli foto/video e incolla la didascalia."
       },
       "tiktok": {
-        "message": "Il mio nuovo alleato per tenere d'occhio il portafoglio: LibreFolio. Open source, sul mio server, con i miei dati sotto controllo. Se ti piace smanettare, dagli un'occhiata!\n\n#LibreFolio #OpenSource #SelfHosted #FinanzaPersonale",
+        "message": "Il mio nuovo alleato per tenere d'occhio il portafoglio: LibreFolio. Open source, con i miei dati sotto controllo. Se ti piace smanettare, dagli un'occhiata!",
         "hint": "Apriamo la pagina Carica di TikTok; accedi se richiesto. Seleziona il tuo video, poi incolla la didascalia copiata. Non carichiamo video o testi automaticamente.",
         "afterCopy": "Didascalia e link copiati. Nella pagina Carica di TikTok scegli il video e incolla la didascalia."
       }
@@ -4561,7 +4566,7 @@
             "help": {
               "planAvailable": "Un piano che rispetta tutti i vincoli: le sezioni qui sotto lo dettagliano.",
               "decimalVerified": "Il backend ha ricontrollato il piano in aritmetica decimale esatta, a parte dal solver: ogni vincolo è rispettato e i valori degli obiettivi sono esatti.",
-              "optimalProven": "Il solver ha dimostrato che non esiste un piano migliore, obiettivo per obiettivo, nell’ordine scelto in Strategia.",
+              "optimalProven": "Il solver ha dimostrato che non esiste un piano migliore, obiettivo per obiettivo nell’ordine scelto in Strategia, e il controllo esatto del piano torna con i suoi numeri. La prova vale entro il piccolo margine di calcolo del solver, che cresce con gli importi.",
               "completed": "Il solver ha concluso la ricerca da solo, senza raggiungere un limite.",
               "timeLimit": "Il solver ha raggiunto il limite di tempo prima di concludere la ricerca.",
               "nodeLimit": "Il solver ha raggiunto il limite di nodi, il numero di tentativi che può fare, prima di concludere la ricerca."
@@ -4778,7 +4783,7 @@
             "decimalVerified": "piano verificato in Decimal esatto dal backend",
             "dual": "Duale",
             "exactObjectives": "Valori esatti degli obiettivi (backend, Decimal)",
-            "floatingFinished": "Il solver ha chiuso ogni stadio, ma il suo piano non ha superato la verifica in Decimal esatto.",
+            "floatingFinished": "Il solver ha finito la ricerca, ma i suoi numeri non tornano con il controllo esatto di questo piano, quindi la prova non regge. Il piano rispetta tutti i vincoli: è il migliore trovato, ma non è dimostrato che sia il migliore.",
             "floatingUnfinished": "Il solver si è fermato prima di chiudere ogni stadio: questo è il miglior piano trovato, non uno dimostrato.",
             "infeasible": "Infattibilità dimostrata",
             "notProven": "Non dimostrato",
@@ -4800,8 +4805,8 @@
             "reportedFloating": "riportato in virgola mobile",
             "scope": "Ambito",
             "scopes": {
-              "global": "ambito globale",
-              "incumbent_face": "faccia dell’incumbent"
+              "global": "tutti i piani",
+              "incumbent_face": "solo piani buoni quanto quello trovato"
             },
             "solverStages": "Stadi del solver",
             "sources": {
@@ -4820,10 +4825,10 @@
             "solverInfeasibleWitness": "Il solver ha chiuso il primo stadio come infattibile: nessun piano rispetta tutti i vincoli rigidi.",
             "exactValue": "Valore esatto",
             "help": {
-              "status": "Se il solver ha chiuso questo stadio: «terminato» vuol dire che ha dimostrato il valore migliore.",
+              "status": "Se il solver ha chiuso questo stadio. «Terminato»: ha dimostrato il valore migliore. «Non terminato»: si è fermato a un limite. Dopo uno stadio che si è fermato, i successivi hanno cercato solo fra i piani buoni quanto quello già trovato, quindi lì anche un gap 0 non dimostra niente.",
               "primal": "Il valore del miglior piano trovato dal solver per questo stadio.",
-              "dual": "Il limite dimostrato dal solver: nessun piano può fare meglio di così.",
-              "absoluteGap": "Distanza fra i due valori. 0 vuol dire che lo stadio è chiuso all’ottimo.",
+              "dual": "Il limite che il solver ha dimostrato per questo stadio: nessuno dei piani cercati può fare meglio. Dal secondo stadio in poi ha cercato solo fra i piani buoni quanto quello scelto negli stadi sopra.",
+              "absoluteGap": "Distanza fra i due valori. Un gap di 0 dimostra il valore migliore solo se lo stadio è terminato.",
               "relativeGap": "La stessa distanza, come frazione del valore."
             }
           },
@@ -5043,7 +5048,7 @@
           "l2Help": "Distanza dagli obiettivi: per ogni Asset, la differenza fra il suo valore dopo il piano e la sua quota obiettivo di R, al quadrato, poi sommata su tutti gli Asset. R è quanto è già investito in questi Asset più la liquidità che puoi usare. Vince il piano con la somma più bassa; il quadrato fa pesare di più gli scarti grandi. Valori al prezzo di quotazione, senza commissioni né margine.",
           "priorityHelp": "I numeri li scegli nel passo Route, per gli Asset che più Broker possono comprare, e nel passo Broker, per le fonti di liquidità: vince il più basso. Tutti a 0 = nessuna preferenza.",
           "tieBreakTitle": "Spareggio finale",
-          "tieBreak": "Se resta ancora un pareggio, decide un ordine fisso di Asset e Broker: con gli stessi dati esce sempre lo stesso piano.",
+          "tieBreak": "Se resta ancora un pareggio, decide un ordine fisso di Asset e Broker. Una ricerca che finisce da sola dà sempre lo stesso piano con gli stessi dati; una fermata da un limite di tempo o di nodi può darne un altro.",
           "l2Formula": "Distanza dagli obiettivi:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: valore dell’Asset dopo il piano\n• $p_i$: il suo obiettivo\n• $R$: già investito più liquidità utilizzabile\nFra i piani possibili vince quello con la somma più bassa: il quadrato fa pesare di più gli scarti grandi. Al prezzo di quotazione, senza commissioni né margine."
         },
         "summary": {

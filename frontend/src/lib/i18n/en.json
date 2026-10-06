@@ -65,7 +65,12 @@
     "openFxPair": "Open FX pair detail",
     "editorTipDesktop": "Double-click on the chart to jump to that date",
     "editorTipMobile": "Long-press on the chart to jump to that date",
-    "aiExport": "AI Export"
+    "aiExport": "AI Export",
+    "browse": {
+      "previous": "Previous asset",
+      "next": "Next asset",
+      "position": "Asset {current} of {total}"
+    }
   },
   "assets": {
     "create": "New asset",
@@ -3652,26 +3657,26 @@
     "share": {
       "titleLabel": "Suggested title",
       "x": {
-        "message": "Hey! I'm using LibreFolio to track my investments and I'm loving it. Give it a try!\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "message": "Hey! I'm using LibreFolio to track my investments and I'm loving it. Give it a try!",
         "hint": "The project link is added to the copy and the post. X opens in a new tab."
       },
       "reddit": {
-        "title": "Trying LibreFolio to track my portfolio on my own server",
-        "message": "I've been looking for a simpler way to follow my investments without handing all my portfolio data to an external service. Lately I've been trying LibreFolio, and I'm enjoying having everything in one place.\n\nIt's an open-source portfolio tracker you can install on your own server to organize your holdings and explore their performance while keeping your data under your control. If that sounds useful, take a look!",
+        "title": "Trying LibreFolio, an open-source portfolio tracker",
+        "message": "I've been looking for a simpler way to follow my investments without handing all my portfolio data to an external service. Lately I've been trying LibreFolio, and I'm enjoying having everything in one place.\n\nIt's an open-source portfolio tracker to organize your holdings and explore their performance, while keeping your data under your control. If that sounds useful, take a look!",
         "hint": "We open a text post with a separate title and body. If Reddit leaves the body empty, paste the text already copied."
       },
       "facebook": {
-        "message": "Lately I've been using LibreFolio to keep an eye on my investments, and I like having everything in one place without giving up control of my data.\n\nIf you're looking for an open-source portfolio tracker you can run on your own server, give it a look!",
+        "message": "Lately I've been using LibreFolio to keep an eye on my investments, and I like having everything in one place without giving up control of my data.\n\nIf you're looking for an open-source portfolio tracker that keeps your data under your control, give it a look!",
         "hint": "Facebook prepares only the link preview. After opening it, paste the copied text into the post's message field.",
         "afterCopy": "Text and link copied. Paste the text into Facebook's post message."
       },
       "instagram": {
-        "message": "A little more order in my investments, without leaving my data elsewhere. I'm trying LibreFolio: an open-source portfolio tracker you can host on your own server.\n\n#LibreFolio #OpenSource #SelfHosted #Investing #Privacy",
+        "message": "A little more order in my investments, without leaving my data elsewhere. I'm trying LibreFolio, an open-source portfolio tracker.",
         "hint": "Instagram cannot prepare a post from this link. After opening it, choose Create (+), select a photo or video, then paste the copied caption.",
         "afterCopy": "Caption and link copied. On Instagram: Create (+), choose your photo/video, then paste the caption."
       },
       "tiktok": {
-        "message": "My new sidekick for tracking my portfolio: LibreFolio. Open source, on my own server, with my data under my control. If you like tinkering, check it out!\n\n#LibreFolio #OpenSource #SelfHosted #PersonalFinance",
+        "message": "My new sidekick for tracking my portfolio: LibreFolio. Open source, with my data under my control. If you like tinkering, check it out!",
         "hint": "We open TikTok's upload page; sign in if asked. Select your video, then paste the copied caption. No video or caption is uploaded automatically.",
         "afterCopy": "Caption and link copied. On TikTok's upload page, select your video and paste the caption."
       }
@@ -4561,7 +4566,7 @@
             "help": {
               "planAvailable": "A plan that respects every constraint: the sections below detail it.",
               "decimalVerified": "The backend checked the plan again in exact decimal arithmetic, apart from the solver: every constraint holds and the values of the objectives are exact.",
-              "optimalProven": "The solver proved that no better plan exists, objective by objective, in the order chosen in Strategy.",
+              "optimalProven": "The solver proved that no better plan exists, objective by objective in the order chosen in Strategy, and the exact check of the plan matches its numbers. The proof holds within the solver's small calculation margin, which grows with the amounts.",
               "completed": "The solver ended its search by itself, without reaching a limit.",
               "timeLimit": "The solver reached its time limit before ending the search.",
               "nodeLimit": "The solver reached its node limit, the number of attempts it may make, before ending the search."
@@ -4778,7 +4783,7 @@
             "decimalVerified": "plan verified in exact Decimal by the backend",
             "dual": "Dual",
             "exactObjectives": "Exact objective values (backend, Decimal)",
-            "floatingFinished": "The solver closed every stage, but its plan did not pass the exact Decimal check.",
+            "floatingFinished": "The solver finished its search, but its own numbers do not match the exact check of this plan, so the proof does not hold. The plan respects every constraint: it is the best plan found, but it is not proven to be the best.",
             "floatingUnfinished": "The solver stopped before closing every stage: this is the best plan found, not a proven one.",
             "infeasible": "Infeasibility proven",
             "notProven": "Not proven",
@@ -4800,8 +4805,8 @@
             "reportedFloating": "reported in floating point",
             "scope": "Scope",
             "scopes": {
-              "global": "global scope",
-              "incumbent_face": "incumbent face"
+              "global": "all plans",
+              "incumbent_face": "only plans as good as the one found"
             },
             "solverStages": "Solver stages",
             "sources": {
@@ -4820,10 +4825,10 @@
             "solverInfeasibleWitness": "The solver closed the first stage as infeasible: no plan meets every hard constraint.",
             "exactValue": "Exact value",
             "help": {
-              "status": "Whether the solver closed this stage: finished means it proved the best value.",
+              "status": "Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at a limit. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing.",
               "primal": "The value of the best plan the solver found for this stage.",
-              "dual": "The bound the solver proved: no plan can do better than this.",
-              "absoluteGap": "Distance between the two values. 0 means the stage is closed at the optimum.",
+              "dual": "The bound the solver proved for this stage: none of the plans it searched can do better. From the second stage on, it searched only among plans as good as the chosen one on the stages above.",
+              "absoluteGap": "Distance between the two values. A gap of 0 proves the best value only when the stage is finished.",
               "relativeGap": "The same distance, as a fraction of the value."
             }
           },
@@ -5043,7 +5048,7 @@
           "l2Help": "Distance from the targets: for each Asset, the difference between its value after the plan and its target share of R, squared, then summed over the Assets. R is what is already invested in these Assets plus the cash you can use. The plan with the lowest sum wins; squaring makes big gaps weigh more. Values at the quote price, without fees or margin.",
           "priorityHelp": "You choose the numbers in the Routing step, for the Assets that more than one Broker can buy, and in the Brokers step, for the cash sources: the lowest wins. All at 0 = no preference.",
           "tieBreakTitle": "Final tie-break",
-          "tieBreak": "If a tie is still left, a fixed order of Assets and Brokers decides: the same data always give the same plan.",
+          "tieBreak": "If a tie is still left, a fixed order of Assets and Brokers decides. A search that ends by itself always gives the same plan for the same data; one stopped by a time or node limit may give a different plan.",
           "l2Formula": "Distance from the targets:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: value of the Asset after the plan\n• $p_i$: its target\n• $R$: already invested plus usable cash\nThe plan with the lowest sum wins: the square makes big gaps weigh more. At the quote price, without fees or margin."
         },
         "summary": {

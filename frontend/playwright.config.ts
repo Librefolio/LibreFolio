@@ -72,6 +72,17 @@ if (process.env.E2E_FORCE_PARALLEL) {
 // used" and takes the whole frontend phase down with it. Measured: exit 1.
 const SHARED_SERVER = !!process.env.LIBREFOLIO_TEST_SHARED_SERVER;
 
+// How long Playwright waits for its own `dev.py server --test` to answer: the same contract as
+// STARTUP_TIMEOUT in scripts/test_runner/_server.py, which waits for the runner's shared backend.
+// 300 s everywhere, overridable with LIBREFOLIO_TEST_STARTUP_TIMEOUT (whole seconds). The server
+// first rebuilds a stale frontend and MkDocs (about 130 s after a large merge, longer on a loaded
+// machine or a cold CI cache); a server that exits fails at once, so only a hung start waits this long.
+const STARTUP_TIMEOUT_RAW = process.env.LIBREFOLIO_TEST_STARTUP_TIMEOUT ?? '300';
+if (!/^\s*\d+\s*$/.test(STARTUP_TIMEOUT_RAW)) {
+    throw new Error(`LIBREFOLIO_TEST_STARTUP_TIMEOUT must be a whole number of seconds, got ${JSON.stringify(STARTUP_TIMEOUT_RAW)}`);
+}
+const STARTUP_TIMEOUT_S = Number(STARTUP_TIMEOUT_RAW);
+
 export default defineConfig({
     globalSetup: './e2e/global-setup.ts',
     testDir: './e2e',
@@ -174,11 +185,8 @@ export default defineConfig({
         // Only the runner-owned shared backend may be reused. Any other process
         // on the lane's port is a collision and Playwright must fail closed.
         reuseExistingServer: SHARED_SERVER,
-        // CI runners also build the MkDocs site from the test server on a cold
-        // cache; 120s proved too tight there (gallery webServer timeout on
-        // 2026-09-04 after the docs growth). Locally a warm reuse makes the
-        // short timeout fine.
-        timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
+        // Same wait as the runner's shared backend: see STARTUP_TIMEOUT_S above.
+        timeout: STARTUP_TIMEOUT_S * 1000,
         // Send SIGTERM instead of SIGKILL so coverage run can flush .coverage.<pid>.
         // In coverage mode the flush itself takes time (writing the coverage data file), and a
         // SIGKILL there silently discards the whole run's backend coverage — so the grace
