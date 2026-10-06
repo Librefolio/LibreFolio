@@ -7,6 +7,7 @@
 **Runtime lane**: ports `6158`/`6168`, data dir `/tmp/librefolio-r2-m`; results outside the repo in `LibreFolio-cloud-sizing/release-images/`
 **Origin**: the two release blockers found by the cloud sizing study (`LibreFolio-cloud-sizing/REPORT.md`, items 1 and 7)
 **Autorizzazione developer**: plan approved in M's session on 2026-10-06 14:27 (exit from plan mode); D9 and O3 relayed by the coordinator at 14:37.
+**Follow-up**: the coordinator's «passo 8» (flattened code blocks in IT/FR/ES translations, the cause behind the step-6 hand fix) → [plan-phase00TranslatedCodeIndent.prompt.md](plan-phase00TranslatedCodeIndent.prompt.md)
 
 ## 0. Decisions (developer verbatim where quoted; relayed by the coordinator)
 
@@ -472,3 +473,6 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
 > - The first E2E attempt stopped **before Playwright** with `no such table: users`. My step-7 cleanup had deleted the lane data dir `/tmp/librefolio-r2-m/ri-test`, and `--no-shared-server` runs create no schema. Fixed by `db create` + `db populate --force --with-reports` on the lane's own data dir, then the run passed. Infrastructure, not product.
 > - `dev.py:396` still says "gallery/E2E 120s timeout" in a comment. `dev.py` is outside this step, so it is flagged only.
 > - Overrides are not parsed identically, and this is not pinned. Python `int()` also accepts `+45`, `4_5` and `-5`, which the TS guard rejects; both reject `abc` and `""`.
+
+### 9. ➡️ Translated code-block indentation (the coordinator's «passo 8») — 2026-10-06
+- Analysis approved (B + C, ERROR `code-block-indent`, repair only of the pages the next alignment does not re-translate). Executed in [plan-phase00TranslatedCodeIndent.prompt.md](plan-phase00TranslatedCodeIndent.prompt.md).
