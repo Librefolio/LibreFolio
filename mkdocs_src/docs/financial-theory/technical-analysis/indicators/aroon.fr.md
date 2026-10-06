@@ -48,14 +48,14 @@ Aroon est inhabituel parmi ces indicateurs : ce n'est pas du tout un filtre sur 
 
 ```mermaid
 flowchart LR
- H["📈 Haut"] --> MAXW["🏔️ Maximum glissant sur N barres"]
- MAXW --> AGEH["⏱️ Barres depuis le dernier nouveau haut"]
- AGEH --> UP["⬆️ Aroon Up = 100·(N−age)/N"]
- L["📉 Bas"] --> MINW["🕳️ Minimum glissant sur N barres"]
- MINW --> AGEL["⏱️ Barres depuis le dernier nouveau bas"]
- AGEL --> DOWN["⬇️ Aroon Down = 100·(N−age)/N"]
- UP --> OSC["🔄 Oscillateur = Up − Down"]
- DOWN --> OSC
+    H["📈 Haut"] --> MAXW["🏔️ Maximum glissant sur N barres"]
+    MAXW --> AGEH["⏱️ Barres depuis le dernier nouveau haut"]
+    AGEH --> UP["⬆️ Aroon Up = 100·(N−age)/N"]
+    L["📉 Bas"] --> MINW["🕳️ Minimum glissant sur N barres"]
+    MINW --> AGEL["⏱️ Barres depuis le dernier nouveau bas"]
+    AGEL --> DOWN["⬇️ Aroon Down = 100·(N−age)/N"]
+    UP --> OSC["🔄 Oscillateur = Up − Down"]
+    DOWN --> OSC
 ```
 
 !!! info "Complémentaire à l'ADX"
