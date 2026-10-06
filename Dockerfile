@@ -2,7 +2,7 @@
 # LibreFolio — Runtime-only Docker Image
 # =============================================================================
 # Build frontend and docs on host BEFORE building the Docker image:
-#   ./dev.py front build
+#   ./dev.py front build      (production build: a debug one fails the build)
 #   ./dev.py mkdocs build
 #   docker build -t librefolio .
 #
@@ -10,7 +10,8 @@
 # VERSION (used below) automatically, on top of the above.
 #
 # Variants (build-arg DOCS_VARIANT=full|light, default: full):
-#   full  — complete image, documentation images included (docs work offline)
+#   full  — complete image, documentation images included (docs work offline),
+#           provided the gallery screenshots were generated before the docs build
 #   light — documentation text pages only; doc images (gallery screenshots,
 #           hundreds of MB) are excluded and loaded on demand from the online
 #           docs site → viewing them requires an internet connection.
@@ -39,6 +40,17 @@ RUN find /site/gallery -type f \( \
     \) -delete
 
 FROM docs-${DOCS_VARIANT} AS docs
+
+# --- Frontend check stage ----------------------------------------------------
+# The image must ship the production SvelteKit build. `./dev.py server --test`
+# (the docs gallery runs one) rebuilds frontend/build/ in debug mode — no
+# minification, sourcemaps, ~2.7x the size — and that build used to reach the
+# published images. The check runs in its own stage, so it adds nothing to the
+# final image: the final stage copies the verified files from here.
+FROM python:3.13-slim AS frontend
+COPY scripts/docker/check_frontend_build.sh /check_frontend_build.sh
+COPY frontend/build/ /build/
+RUN sh /check_frontend_build.sh /build
 
 # --- Python builder stage ----------------------------------------------------
 # pip builds some packages from source (gcc, libffi headers) and installs one
@@ -98,8 +110,9 @@ COPY --chown=${UID}:${GID} Pipfile ./
 COPY --chown=${UID}:${GID} frontend/package.json ./frontend/package.json
 COPY --chown=${UID}:${GID} VERSION ./
 
-# Copy pre-built frontend (must run ./dev.py front build on host first)
-COPY --chown=${UID}:${GID} frontend/build/ ./frontend/build/
+# Copy pre-built frontend (must run ./dev.py front build on host first),
+# verified as a production build by the frontend stage above.
+COPY --chown=${UID}:${GID} --from=frontend /build/ ./frontend/build/
 
 # Copy pre-built docs (must run ./dev.py mkdocs build on host first).
 # Comes from the DOCS_VARIANT-selected stage above: "light" has no doc images.
