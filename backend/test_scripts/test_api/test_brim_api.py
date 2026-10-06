@@ -14,6 +14,8 @@ Tests for Broker Report Import Manager API endpoints:
   before item 8, whose sidecar has no detection signature (step 5, item 8: Category 13)
 - DELETE /brokers/import/files/{id} waiting for the broker's metadata lock leaves its backend
   process responsive (step 5, item 8 + F1: Category 14)
+- GET /brokers/import/files/{id}/preview of a damaged Excel workbook answers 400, not 500
+  (step 6, F2: Category 15)
 
 See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
@@ -28,6 +30,7 @@ import os
 import threading
 import time
 import uuid
+import zipfile
 from decimal import Decimal
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, TextIO, Tuple
@@ -2360,6 +2363,86 @@ class TestBrokerLockOffTheEventLoop:
                     delete.done.wait(_WAIT_SECONDS)
                 for pinned in opened:
                     pinned.close()
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
+# CATEGORY 15: THE PREVIEW OF A DAMAGED EXCEL WORKBOOK ANSWERS 400 (step 6, F2)
+# ============================================================================
+#
+# ``GET /files/{id}/preview`` reads an ``.xlsx`` with pandas and openpyxl, answers a ``ValueError`` with 400 and anything
+# else with 500 "Failed to build file preview". A damaged workbook made the reader raise ``zipfile.BadZipFile``,
+# ``KeyError``, ``xml.etree.ElementTree.ParseError`` or ``xlrd.XLRDError``, none of them a ``ValueError``: the user's
+# broken file answered as a fault of the server. The coordinator's decision, verbatim: «le 4 famiglie, prese solo attorno
+# alle due chiamate pandas, in `UnreadablePreviewError(ValueError)`. API invariate; un rosso anche via `uploads.py`.» So
+# the endpoint is unchanged and answers 400, with a ``detail``. Two synthetic files, uploaded on the test's broker: bytes
+# that are not even a zip, named ``damaged.xlsx``, and a valid workbook whose first sheet's XML is replaced by
+# ``<not-xml``. Which exception each damage raises, and the cause the new error keeps, is tested at service level, in
+# test_services/test_file_preview.py; the generic uploads' preview in test_api/test_uploads_api.py (UPLOAD-005H). The
+# test deletes the file and the broker it created.
+
+# Bytes that are no workbook and not even a zip archive.
+NOT_A_WORKBOOK = b"LibreFolio F2 synthetic bytes: not an Excel workbook and not a zip archive.\n" * 16
+# The member openpyxl writes a workbook's first sheet to.
+FIRST_SHEET_XML = "xl/worksheets/sheet1.xml"
+
+
+def _workbook_with_unparseable_sheet() -> bytes:
+    """A valid workbook, built with openpyxl, whose first sheet's XML is replaced by ``<not-xml``, every other member copied unchanged: it opens, its first sheet does not parse."""
+    openpyxl = pytest.importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Statement"
+    sheet["A1"] = "date"
+    sheet["B1"] = "amount"
+    sheet["A2"] = "2025-01-01"
+    sheet["B2"] = 1000
+    valid = io.BytesIO()
+    workbook.save(valid)
+    rebuilt = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(valid.getvalue())) as original, zipfile.ZipFile(rebuilt, "w") as damaged:
+        assert FIRST_SHEET_XML in original.namelist(), f"premise: openpyxl writes the first sheet as {FIRST_SHEET_XML}: {original.namelist()}"
+        for member in original.infolist():
+            damaged.writestr(member, b"<not-xml" if member.filename == FIRST_SHEET_XML else original.read(member))
+    return rebuilt.getvalue()
+
+
+# (name the file is uploaded under, how its bytes are built)
+DAMAGED_WORKBOOKS = (
+    pytest.param("damaged.xlsx", lambda: NOT_A_WORKBOOK, id="not-a-zip"),
+    pytest.param("broken_sheet.xlsx", _workbook_with_unparseable_sheet, id="unparseable-sheet-xml"),
+)
+
+
+class TestDamagedWorkbookPreview:
+    """F2 — ``GET /files/{id}/preview`` of a damaged Excel workbook answers 400 with a ``detail``: the file is the user's, the fault is not the server's."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("filename", "build"), DAMAGED_WORKBOOKS)
+    async def test_the_preview_of_a_damaged_workbook_answers_400(self, test_server, filename, build):
+        """RS-F201: a damaged ``.xlsx`` uploaded on the test's broker — bytes that are not even a zip, or a workbook whose
+        first sheet's XML does not parse: its preview answers 400 with a non-empty ``detail`` (500 before F2)."""
+        print_section(f"RS-F201: the preview of a damaged workbook, {filename}, answers 400")
+        content = build()
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                files = {"file": (filename, io.BytesIO(content), XLSX_MEDIA_TYPE)}
+                upload = await client.post(f"{API_BASE}/brokers/import/upload", files=files, data={"broker_id": broker_id}, timeout=TIMEOUT)
+                assert upload.status_code == 200, upload.text
+                file_id = upload.json()["file_id"]
+                file_ids.append(file_id)
+
+                response = await client.get(f"{API_BASE}/brokers/import/files/{file_id}/preview", timeout=TIMEOUT)
+
+                assert response.status_code == 400, f"the preview of the damaged {filename} answers {response.status_code} {response.text}: a damaged workbook is the user's file, not a fault of the server (F2)"
+                detail = response.json().get("detail")
+                assert isinstance(detail, str) and detail.strip(), f"the 400 says why, in a detail: {response.text}"
+                print_success(f"✓ the preview of the damaged {filename} answers 400")
+            finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
 
