@@ -1232,23 +1232,58 @@ async function openDashboardRisk(page: Page): Promise<Locator> {
 }
 
 /**
- * Open L4 and leave it demonstrably open, whichever state it was in.
+ * Open L4's drawer and leave it demonstrably open, whichever state it was in — and nothing more.
  *
  * Asks before clicking rather than toggling blind: L4 starts closed today, but a
  * helper that assumes so would *close* it the day the panel remembers the
  * reader's last drawer, and the caller would then be asserting on an absence it
  * caused itself.
  *
- * Ends on the rungs being on screen, not merely on the section's attribute:
+ * Ends on L4's body being on screen, not merely on the section's attribute:
  * `data-open` flips synchronously with the click, so it says the drawer was
- * asked to open, not that anything inside it mounted.
+ * asked to open, not that anything inside it mounted. Which tools are open is
+ * left as the reader's storage says (D377): the selector's own test reads the
+ * first visit through this helper, and every other caller goes through
+ * `openLevel4`.
  */
-async function openLevel4(panel: Locator): Promise<Locator> {
+async function openLevel4Drawer(panel: Locator): Promise<Locator> {
     const level4 = panel.getByTestId('risk-level-4');
     await expect(level4).toBeVisible({timeout: 10_000});
     if ((await level4.getAttribute('data-open')) !== 'true') await panel.getByTestId('risk-level-4-toggle').click();
     await expect(level4).toHaveAttribute('data-open', 'true');
     await expect(panel.getByTestId('risk-l4')).toBeVisible({timeout: 8_000});
+    return level4;
+}
+
+/** L4's tools, in the one order they are ever drawn in: observed, assumed, modelled. */
+const L4_TOOLS = ['replay', 'shock', 'simulation'] as const;
+
+/**
+ * Open L4 with its three tools on screen, whichever of them were open before.
+ *
+ * Since D377 the reader picks L4's tools: none is open on a first visit, and the
+ * ones left open come back from per-user storage. Every caller reads the three
+ * rungs, so this adds each tool still closed — and only those: a tool remembered
+ * from earlier in the same test is already open, and a click on it would be a
+ * click on nothing.
+ *
+ * Not decided by a probe. Each tool is first seen settled into exactly one of its
+ * two states, its box or its add button, so the click is chosen on a selector that
+ * has rendered rather than on a read that may have arrived before it. Neither, or
+ * both at once, fails here by name.
+ *
+ * Ends on what it promises: the three boxes on screen, and nothing left to add.
+ */
+async function openLevel4(panel: Locator): Promise<Locator> {
+    const level4 = await openLevel4Drawer(panel);
+    for (const tool of L4_TOOLS) {
+        const box = level4.getByTestId(`risk-l4-${tool}`);
+        const add = level4.getByTestId(`risk-l4-add-${tool}`);
+        await expect(box.or(add), `L4 must show the ${tool} either open or offered, exactly once`).toHaveCount(1);
+        if ((await add.count()) > 0) await add.click();
+        await expect(box, `the ${tool} did not open`).toBeVisible({timeout: 8_000});
+    }
+    await expect(level4.locator('[data-testid^="risk-l4-add-"]'), 'a tool is still offered with all three open').toHaveCount(0);
     return level4;
 }
 
@@ -2572,6 +2607,73 @@ test.describe('Risk analysis functional integration', () => {
         for (const step of steps) entries.push(`${await catalogueSentence(page, `risk.levels.l4.${step}`)}: ${await catalogueSentence(page, `risk.states.${states[step]}`)}`);
 
         await expect(health, "L4's status line does not name each step by its block's title, in the blocks' order").toHaveText(entries.join(' · '));
+    });
+
+    /**
+     * L4's tool selector (D377): the reader picks L4's tools, and the pick is theirs to keep.
+     *
+     * The first visit is read in this test's own browser context — Playwright gives every test a
+     * fresh one — and that is checked, not assumed: no L4 set is remembered in it yet. Nothing is
+     * cleared, so no other test's storage is ever touched.
+     *
+     * One tool is then added, and comes back after a reload while the two others stay closed: the
+     * set is remembered per user in this browser. And closing a tool drops its answer with it. The
+     * replay is run until the level's status line names it — `instanceStatus` brings it back
+     * partial, as in the status-line test above — then closed, and the line stops naming it.
+     *
+     * The line is one sentence whose only handle is `data-count`, so the step it names is read the
+     * way the status-line test reads it: the block's title and its state resolved from the catalogue
+     * in the page's language, never written down here.
+     */
+    test('L4 opens no tool on a first visit, keeps the one added across a reload, and drops its answer when it is closed (D377)', async ({page}) => {
+        await installRiskMocks(page, {instanceStatus: {'single-stress': 'partial'}});
+        const panel = await openDashboardRisk(page);
+        const remembered = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.endsWith('_risk.l4.openTools')));
+        expect(remembered, 'this browser context already remembers an L4 set: the first visit cannot be read in it').toEqual([]);
+
+        // --- The first visit: no tool, the hint, and each tool offered in the fixed order ---
+        let level4 = await openLevel4Drawer(panel);
+        const offered = () => level4.locator('[data-testid^="risk-l4-add-"]').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-testid')));
+        await expect(level4.getByTestId('risk-l4-empty'), 'a first visit does not say that no tool is open').toBeVisible();
+        await expect.poll(offered, {message: 'a first visit does not offer the three tools, in the fixed order'}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
+        for (const tool of L4_TOOLS) await expect(level4.getByTestId(`risk-l4-${tool}`), `the ${tool} is open on a first visit`).toHaveCount(0);
+
+        // --- Adding the replay opens its box, and leaves the two others offered ---
+        await level4.getByTestId('risk-l4-add-replay').click();
+        await expect(level4.getByTestId('risk-l4-replay'), 'adding the replay did not open its box').toBeVisible();
+        await expect.poll(offered, {message: 'the replay is still offered once open, or another tool stopped being offered'}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
+        await expect(level4.getByTestId('risk-l4-empty'), 'L4 says it is empty with the replay open').toHaveCount(0);
+
+        // --- A reload brings the replay back open, and only the replay ---
+        // A document load, so the set can only come from storage. The Dashboard keeps its
+        // tab in the URL, so the reload lands on Risk again — checked, not assumed — and
+        // L4's drawer starts closed there, as on any visit.
+        await page.reload();
+        await page.waitForSelector('html[data-i18n-ready="true"]', {timeout: 15_000});
+        await expect(page.getByTestId('dashboard-risk-tab')).toBeVisible({timeout: 10_000});
+        level4 = await openLevel4Drawer(await waitForRiskLevels(page));
+        const replayBox = level4.getByTestId('risk-l4-replay');
+        await expect(replayBox, 'the replay added before the reload is not open after it: the set was not remembered').toBeVisible();
+        await expect.poll(offered, {message: 'after the reload the shock and the simulation are not both still offered'}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
+        await expect(level4.getByTestId('risk-l4-shock')).toHaveCount(0);
+        await expect(level4.getByTestId('risk-l4-simulation')).toHaveCount(0);
+
+        // --- The replay, run until the status line names it ---
+        const run = replayBox.getByTestId('risk-replay-run');
+        await expect(run).toBeEnabled({timeout: 8_000});
+        await run.click();
+        await expect(replayBox.getByTestId('risk-replay-total')).toBeVisible({timeout: 10_000});
+        const health = level4.getByTestId('risk-level-4-health');
+        await expect(health, 'the replay came back partial and the status line does not say so').toHaveAttribute('data-count', '1', {timeout: 10_000});
+        const replayEntry = `${await catalogueSentence(page, 'risk.levels.l4.replay')}: ${await catalogueSentence(page, 'risk.states.partial')}`;
+        await expect(health, 'the status line does not name the replay by its block title').toHaveText(replayEntry);
+
+        // --- Closed: the box goes, and the line stops naming the replay ---
+        await replayBox.getByTestId('risk-l4-replay-close').click();
+        await expect(replayBox, 'the closed replay is still on screen').toHaveCount(0);
+        await expect(level4.getByTestId('risk-l4-empty'), 'with its one tool closed, L4 does not say it is empty').toBeVisible();
+        await expect.poll(offered, {message: 'the closed replay is not offered again beside the two others'}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
+        await expect(health, 'the status line still names the replay the reader closed: its answer was kept').toHaveCount(0);
     });
 
     test('a benchmark chosen on the Dashboard is the benchmark in force on Broker Detail', async ({page}) => {

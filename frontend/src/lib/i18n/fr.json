@@ -3565,7 +3565,20 @@
         "replayNothing": "Rien à rejouer : aucun actif n'a de prix utilisables sur cette période.",
         "replaySuggested": "Rejouer du {start} au {end} : {count, plural, one {# actif revient} other {# actifs reviennent}}",
         "replaySuggestedPartial": "Seulement une partie de la crise.",
-        "replayPresetNone": "Aucun préréglage"
+        "replayPresetNone": "Aucun préréglage",
+        "tools": {
+          "empty": "Choisissez un outil : le rejeu historique montre ce qui s’est réellement passé, le choc hypothétique applique une hypothèse de votre part, la simulation utilise un modèle.",
+          "add": "Ajouter :",
+          "close": "Fermer {tool}"
+        },
+        "table": {
+          "asset": "Actif",
+          "weight": "Poids",
+          "return": "Rendement",
+          "contribution": "Contribution",
+          "impact": "Impact",
+          "bar": "Effet"
+        }
       },
       "backtestNotice": "Avec un sous-ensemble actif, ces chiffres sont reconstruits à partir de la composition actuelle : ils disent ce qui *se serait* passé, pas ce qui s’est réellement passé.",
       "notice": {
