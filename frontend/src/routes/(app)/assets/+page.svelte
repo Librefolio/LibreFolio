@@ -22,6 +22,7 @@
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
+    import AssetBrowseOrder from '$lib/components/assets/AssetBrowseOrder.svelte';
     import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
@@ -1617,6 +1618,7 @@
                             dateStart={urlDateStart}
                             dateEnd={urlDateEnd}
                             storageKey="assetsTable-{panel.id}"
+                            browseSegment={panel.id}
                             onsync={handleSyncAsset}
                             onrefresh={handleRefreshAsset}
                             ondelete={handleDeleteAsset}
@@ -1633,6 +1635,7 @@
     {/if}
 </div>
 
+<AssetBrowseOrder view={viewMode} panels={assetPanels} />
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
     axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}
