@@ -21,7 +21,7 @@
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
-    import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
+    import {buildFittedTooltipRow, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {truncateName} from '$lib/utils/text';
@@ -44,6 +44,7 @@
         getVisibleDailyPoints,
         resolveActivePointIndex,
         resolveZoomBounds,
+        splitGhostLabel,
         synthesizeDailyOHLC,
         toAbsoluteValue,
         toDisplaySeries,
@@ -951,49 +952,63 @@
                         const axisLabel = signalAxisLabelMap.get(axisIdx);
                         const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
 
-                        // Use signalLabelToHtml for proper icon rendering
+                        // Use signalLabelToHtml for proper icon rendering. The label (crown, icon, name)
+                        // gives way on a narrow chart, ending in an ellipsis; the currency travels with
+                        // the value and both stay whole (buildFittedTooltipRow). `&nbsp;`, not a space:
+                        // the value part starts its own flex item, where a leading space collapses.
                         let labelHtml: string;
+                        let currencyHtml = '';
                         let isGhostRow = false;
                         if (isGhost) {
-                            // Ghost label: "💱 Name (flag CUR)" — keep currency suffix visible.
+                            // Ghost label: "💱 Name (flag CUR)" — the name may shrink, the currency stays.
                             const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                            const truncatedGhost = formatTruncatedGhostLabel(ghostLabel);
-                            labelHtml = `${ghostDot}<span title="${escapeHtml(ghostLabel)}">${escapeHtml(truncatedGhost)}</span>`;
+                            const ghostParts = splitGhostLabel(formatTruncatedGhostLabel(ghostLabel));
+                            labelHtml = `${ghostDot}<span title="${escapeHtml(ghostLabel)}">${escapeHtml(ghostParts.name)}</span>`;
+                            if (ghostParts.currency) currencyHtml = `&nbsp;${escapeHtml(ghostParts.currency)}`;
                             isGhostRow = true;
                         } else {
                             const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
                             if (sigInfo) {
-                                // Append (flag currency) to overlay signal labels
-                                // Skip for ghost signals — currency is already embedded in their label
-                                const currSuffix = sigInfo.currency && !sigInfo.isGhost ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${escapeHtml(sigInfo.currency)})</span>` : '';
-                                labelHtml = signalLabelToHtml({...sigInfo, label: truncateName(sigInfo.label)}) + currSuffix;
+                                // Append (flag currency) to overlay signal labels. A ghost signal carries
+                                // its currency in its label: split it off, so it stays whole too.
+                                let overlayLabel = truncateName(sigInfo.label);
+                                if (sigInfo.isGhost) {
+                                    const ghostParts = splitGhostLabel(formatTruncatedGhostLabel(sigInfo.label));
+                                    overlayLabel = ghostParts.name;
+                                    if (ghostParts.currency) currencyHtml = `&nbsp;${escapeHtml(ghostParts.currency)}`;
+                                } else if (sigInfo.currency) {
+                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${escapeHtml(sigInfo.currency)})</span>`;
+                                }
+                                labelHtml = signalLabelToHtml({...sigInfo, label: overlayLabel}, undefined, {inline: true});
                                 if (sigInfo.isGhost) isGhostRow = true;
                             } else if (p.seriesName === mainSeriesName) {
                                 // Main signal: 💱(flag currency) when conversion active, (flag currency) when not
                                 let mainLabel: string;
-                                let currSuffix = '';
                                 if (conversionActive) {
                                     mainLabel = mainSeriesName;
-                                    currSuffix = ` <span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
                                 } else if (mainCurrencyProp) {
                                     mainLabel = mainSeriesName;
-                                    currSuffix = ` <span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
                                 } else {
                                     mainLabel = mainSeriesName;
                                 }
-                                labelHtml =
-                                    signalLabelToHtml({
+                                labelHtml = signalLabelToHtml(
+                                    {
                                         label: truncateName(mainLabel),
                                         iconUrl: mainIconUrl,
                                         assetType: mainAssetType,
                                         isCrown: true,
-                                    }) + currSuffix;
+                                    },
+                                    undefined,
+                                    {inline: true},
+                                );
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                                 labelHtml = `${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}`;
                             }
                         }
-                        let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`;
+                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`);
                         if (p.seriesName === mainSeriesName) {
                             const context = mainPointContext?.get(date);
                             if (context) {
@@ -1021,7 +1036,10 @@
                         }
                     }
                     html += buildStaleTooltipHtml(staleLookup.get(date), fxStaleLookup.get(date), staleLabel, fxStaleLabel);
-                    return html;
+                    // No wider than the chart, minus ECharts' padding and tooltipPositionSide's 8 px
+                    // margins: on a phone a long name otherwise pushed the value off-screen.
+                    const chartWidth = chartInstance?.getWidth() ?? 0;
+                    return chartWidth > 0 ? fitTooltipToWidth(html, chartWidth - 32) : html;
                 },
             },
             series,
