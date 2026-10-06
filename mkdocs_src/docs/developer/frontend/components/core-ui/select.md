@@ -98,6 +98,9 @@ are **ranked**, best match first.
 - Keyboard: ↑/↓ skip titles and disabled rows and stop at the ends (no wrap-around), Enter picks the
   highlighted row, Escape closes; a printable key on the closed trigger opens it and starts the
   search.
+- Reopening: only a touch or pen close blocks it for 200 ms (`closedByTouch`), as a ghost click on
+  the trigger can follow the tap; a mouse or keyboard close never does. Separately, with a value
+  set, Enter is ignored for 200 ms after the trigger takes focus (`triggerFocusedAt`).
 
 **Used in**: the `SearchSelect`-based wrappers below, plus direct uses such as the import wizard's
 `ImportAssetPicker`.

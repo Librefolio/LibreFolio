@@ -45,6 +45,9 @@ export interface SetFileInfo {
     derived_from?: unknown;
     combined_into?: unknown;
     combine_is_stale?: unknown;
+    // Read by the memory of the last analysis (rememberedChoices).
+    processed_at?: unknown;
+    parsed_plugin_code?: unknown;
 }
 
 /** The files of one broker uploaded together and recognised by one report-set plugin. */
@@ -123,14 +126,16 @@ export function isReportSetPlugin(plugin: SetPluginInfo | null | undefined): boo
  *
  * A combined file is derived from a set and never a member; a file uploaded without a batch
  * cannot be told apart from the others of its broker, so it stays a single file (its parse
- * then explains that the set needs its files uploaded together). A file a report-set plugin
- * recognises joins that plugin's set even when a generic plugin could read it too (A18); a
- * manual choice wins, and a non-set choice keeps the file out of every set.
+ * then explains that the set needs its files uploaded together); a failed original is no member
+ * either, as on the server (A2). A file a report-set plugin recognises joins that plugin's set
+ * even when a generic plugin could read it too (A18). A manual choice wins: a report-set plugin
+ * puts the file in that set, any other plugin keeps it out of every set, and `''` keeps it out
+ * with no plugin at all (removed from its set). `null`/`undefined` mean no choice.
  */
 export function setPluginFor(file: SetFileInfo, plugins: SetPluginInfo[], override?: string | null): string | null {
-    if (file.kind === 'combined' || typeof file.batch_id !== 'string' || file.batch_id === '') return null;
+    if (file.kind === 'combined' || typeof file.batch_id !== 'string' || file.batch_id === '' || file.status === 'failed') return null;
     const isSet = (code: string) => isReportSetPlugin(plugins.find((plugin) => plugin.code === code));
-    if (override) return isSet(override) ? override : null;
+    if (override !== undefined && override !== null) return isSet(override) ? override : null;
     return (file.compatible_plugins ?? []).find(isSet) ?? null;
 }
 
@@ -173,9 +178,28 @@ export function setSelectionState(set: ReportSetGroup, selectedIds: ReadonlySet<
     return selected === set.files.length ? 'all' : 'some';
 }
 
-/** The combined file built from a set (same broker, batch and plugin), the newest one; null when none exists. */
+/** The ids of a combined file's originals that still exist (a deleted one keeps its ref, marked deleted). */
+function liveMemberIds(combined: SetFileInfo): Set<string> {
+    const refs = Array.isArray(combined.derived_from) ? combined.derived_from : [];
+    const ids = new Set<string>();
+    for (const ref of refs) {
+        if (isRecordValue(ref) && typeof ref.file_id === 'string' && ref.deleted !== true) ids.add(ref.file_id);
+    }
+    return ids;
+}
+
+/**
+ * The combined file built from a set — same broker, batch and plugin, and exactly the set's members
+ * among its live originals — the newest one; null when none exists. A combined file built before a
+ * member was left out, or before one was added, is another set's.
+ */
 export function combinedFileForSet(set: ReportSetGroup, files: SetFileInfo[]): SetFileInfo | null {
-    const combined = files.filter((file) => file.kind === 'combined' && file.target_broker_id === set.brokerId && file.batch_id === set.batchId && (file.compatible_plugins ?? []).includes(set.pluginCode));
+    const memberIds = new Set(set.files.map((file) => file.file_id));
+    const sameMembers = (combined: SetFileInfo) => {
+        const live = liveMemberIds(combined);
+        return live.size === memberIds.size && [...live].every((id) => memberIds.has(id));
+    };
+    const combined = files.filter((file) => file.kind === 'combined' && file.target_broker_id === set.brokerId && file.batch_id === set.batchId && (file.compatible_plugins ?? []).includes(set.pluginCode) && sameMembers(file));
     combined.sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at));
     return combined[0] ?? null;
 }
@@ -336,7 +360,10 @@ function isRecordValue(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Every member of a report set, mapped to its set: the sets `groupBrokerFiles` builds, broker by broker. Files without a broker belong to none. */
+/**
+ * Every member of a report set, mapped to its set: the sets `groupBrokerFiles` builds, broker by
+ * broker, with the memory of the last analysis (`rememberedChoices`). Files without a broker belong to none.
+ */
 export function setsOfFiles<F extends SetFileInfo>(files: F[], plugins: SetPluginInfo[]): Map<string, ReportSetGroup> {
     const byBroker = new Map<number, F[]>();
     for (const file of files) {
@@ -347,7 +374,7 @@ export function setsOfFiles<F extends SetFileInfo>(files: F[], plugins: SetPlugi
     }
     const setOfFile = new Map<string, ReportSetGroup>();
     for (const [brokerId, brokerFiles] of byBroker) {
-        for (const set of groupBrokerFiles(brokerId, brokerFiles, plugins).sets) {
+        for (const set of groupBrokerFiles(brokerId, brokerFiles, plugins, rememberedChoices(brokerFiles, plugins)).sets) {
             for (const file of set.files) setOfFile.set(file.file_id, set);
         }
     }
@@ -384,4 +411,118 @@ export function fileSetBadges(file: SetFileInfo, ctx: FileSetBadgeContext): File
     const missing = Array.isArray(preview.missing) ? preview.missing.filter(isRecordValue) : [];
     badges.push({kind: 'incomplete', roles: missing.map((item) => String(item.role ?? '')).filter((role) => role !== '')});
     return badges;
+}
+
+// ---------------------------------------------------------------------------
+// The user's choice of how a set is read (phase G): the memory of the last analysis, what the
+// card offers, and the request that tells the server which originals were left out
+// ---------------------------------------------------------------------------
+
+/** A plugin as the card offers it. */
+export interface PluginChoice {
+    code: string;
+    name: string;
+}
+
+function choiceOf(code: string, plugins: SetPluginInfo[]): PluginChoice {
+    return {code, name: plugins.find((plugin) => plugin.code === code)?.name ?? code};
+}
+
+function isSetPluginCode(code: unknown, plugins: SetPluginInfo[]): boolean {
+    return typeof code === 'string' && isReportSetPlugin(plugins.find((plugin) => plugin.code === code));
+}
+
+/** An ISO instant in milliseconds; NaN when absent or unreadable (such an event is ignored). */
+function instant(value: unknown): number {
+    return typeof value === 'string' ? Date.parse(value) : Number.NaN;
+}
+
+/**
+ * The memory of the last analysis: for each original of an upload, the choice it implies — a
+ * report-set plugin (in that set), another plugin (read alone with it), or `''` (left out of the
+ * set, no plugin). Files never analysed have no entry, and detection decides for them.
+ *
+ * Nothing is remembered while files are only uploaded. An analysis leaves three kinds of events,
+ * read from what the server already saves:
+ * - E1, member: a parsed combined file of the same broker and upload lists the file among its
+ *   originals — its plugin, at the combined file's `processed_at`;
+ * - E2, alone: the file itself was parsed by a single-file plugin — that plugin, at its own `processed_at`;
+ * - E3, left out: a parsed combined file of the same broker and upload does not list it, although
+ *   its plugin reads the file and the file was already there when it was built — `''`, at the
+ *   combined file's `processed_at`.
+ * The newest member event wins when it is newer than every other; otherwise a lone parse newer
+ * than it gives its plugin (a lone parse and a set analysis that left the file out say the same
+ * thing: out of the set); otherwise being left out gives `''`.
+ */
+export function rememberedChoices(files: SetFileInfo[], plugins: SetPluginInfo[]): Map<string, string> {
+    const analysed = files.filter((file) => file.kind === 'combined' && file.status === 'parsed' && typeof file.batch_id === 'string' && file.batch_id !== '' && isSetPluginCode(file.parsed_plugin_code, plugins) && !Number.isNaN(instant(file.processed_at)));
+    const memory = new Map<string, string>();
+    for (const file of files) {
+        if (file.kind === 'combined' || typeof file.batch_id !== 'string' || file.batch_id === '') continue;
+        let member: {plugin: string; at: number} | null = null;
+        let leftOut: number | null = null;
+        for (const combined of analysed) {
+            if (combined.batch_id !== file.batch_id || combined.target_broker_id !== file.target_broker_id) continue;
+            const at = instant(combined.processed_at);
+            const plugin = combined.parsed_plugin_code as string;
+            if (liveMemberIds(combined).has(file.file_id)) {
+                if (member === null || at > member.at) member = {plugin, at};
+            } else if ((file.compatible_plugins ?? []).includes(plugin) && instant(file.uploaded_at) <= instant(combined.uploaded_at)) {
+                if (leftOut === null || at > leftOut) leftOut = at;
+            }
+        }
+        const aloneAt = instant(file.processed_at);
+        const alone = file.status === 'parsed' && typeof file.parsed_plugin_code === 'string' && file.parsed_plugin_code !== '' && !isSetPluginCode(file.parsed_plugin_code, plugins) && !Number.isNaN(aloneAt) ? {plugin: file.parsed_plugin_code, at: aloneAt} : null;
+
+        if (member !== null && (alone === null || member.at > alone.at) && (leftOut === null || member.at > leftOut)) memory.set(file.file_id, member.plugin);
+        else if (alone !== null && (member === null || alone.at >= member.at)) memory.set(file.file_id, alone.plugin);
+        else if (leftOut !== null) memory.set(file.file_id, '');
+    }
+    return memory;
+}
+
+/** «Read as»: the report-set plugins that read every member of the set, the set's own first. */
+export function setPluginChoices(set: ReportSetGroup, plugins: SetPluginInfo[]): PluginChoice[] {
+    const readsEvery = (code: string) => set.files.length > 0 && set.files.every((file) => (file.compatible_plugins ?? []).includes(code));
+    const codes = plugins.filter((plugin) => isReportSetPlugin(plugin) && readsEvery(plugin.code)).map((plugin) => plugin.code);
+    const ordered = codes.includes(set.pluginCode) ? [set.pluginCode, ...codes.filter((code) => code !== set.pluginCode)] : codes;
+    return ordered.map((code) => choiceOf(code, plugins));
+}
+
+/** «Read alone with»: the single-file plugins that read the file, the broker's default first when it is one of them. */
+export function readAlonePlugins(file: SetFileInfo, plugins: SetPluginInfo[], brokerDefault?: string | null): PluginChoice[] {
+    const codes = (file.compatible_plugins ?? []).filter((code) => !isSetPluginCode(code, plugins));
+    const ordered = brokerDefault && codes.includes(brokerDefault) ? [brokerDefault, ...codes.filter((code) => code !== brokerDefault)] : codes;
+    return ordered.map((code) => choiceOf(code, plugins));
+}
+
+/** The other report-set plugins that read the file: the set could be read another way. */
+export function otherSetPlugins(file: SetFileInfo, setPluginCode: string, plugins: SetPluginInfo[]): PluginChoice[] {
+    return (file.compatible_plugins ?? []).filter((code) => code !== setPluginCode && isSetPluginCode(code, plugins)).map((code) => choiceOf(code, plugins));
+}
+
+/** The broker's default plugin, when it is another plugin that reads a member: the set is not read the broker's usual way. */
+export function defaultPluginNote(set: ReportSetGroup, brokerDefault: string | null, plugins: SetPluginInfo[]): PluginChoice | null {
+    if (!brokerDefault || brokerDefault === set.pluginCode) return null;
+    if (!set.files.some((file) => (file.compatible_plugins ?? []).includes(brokerDefault))) return null;
+    return choiceOf(brokerDefault, plugins);
+}
+
+/** The body of `/sets/preview` and `/sets/combine`. */
+export interface SetRequest {
+    broker_id: number;
+    plugin_code: string;
+    batch_id: string;
+    exclude_file_ids: string[];
+}
+
+/**
+ * The set as the server must read it: the originals of the same broker and upload that the set's
+ * plugin reads but that are no members — read alone, or removed from the set — are left out
+ * (`exclude_file_ids`). A failed original is no member on the server anyway, and is not listed.
+ */
+export function setRequest(set: ReportSetGroup, files: SetFileInfo[]): SetRequest {
+    const members = new Set(set.files.map((file) => file.file_id));
+    const excluded = files.filter((file) => file.kind !== 'combined' && file.target_broker_id === set.brokerId && file.batch_id === set.batchId && file.status !== 'failed' && (file.compatible_plugins ?? []).includes(set.pluginCode) && !members.has(file.file_id)).map((file) => file.file_id);
+    return {broker_id: set.brokerId, plugin_code: set.pluginCode, batch_id: set.batchId, exclude_file_ids: excluded};
 }

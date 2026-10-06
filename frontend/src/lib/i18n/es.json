@@ -887,7 +887,14 @@
         "gapInfo": "Ninguna exportación de este tipo cubre estos días",
         "historyCount": "{n, plural, one {# transacción ya en LibreFolio} other {# transacciones ya en LibreFolio}}"
       },
-      "previewCombined": "Vista previa del archivo combinado"
+      "previewCombined": "Vista previa del archivo combinado",
+      "readAs": "Leído como",
+      "readAsOneByOne": "Leer los archivos uno a uno",
+      "detected": "detectado",
+      "readAloneWith": "Leer solo con {plugin}",
+      "removeFromSet": "Quitar del conjunto",
+      "defaultPluginNote": "Leído como conjunto {plugin}, no con el plugin predeterminado del bróker ({defaultPlugin}). Para cambiarlo, usa «Leído como» o el menú ⋮ de un archivo.",
+      "alsoRecognisedBy": "{file} también es reconocido por: {plugins}"
     },
     "parseDetail": {
       "sourceRow": "Línea del archivo",
@@ -3645,26 +3652,26 @@
     "share": {
       "titleLabel": "Título sugerido",
       "x": {
-        "message": "¡Hola! Estoy siguiendo mis inversiones con LibreFolio y me encanta. ¡Pruébala tú también!\n#LibreFolio #CodigoAbierto #Autoalojado #Inversiones #Privacidad",
+        "message": "¡Hola! Estoy siguiendo mis inversiones con LibreFolio y me encanta. ¡Pruébala tú también!",
         "hint": "El enlace del proyecto se añade a la copia y a la publicación. X se abre en una nueva pestaña."
       },
       "reddit": {
-        "title": "Estoy probando LibreFolio para seguir mi cartera en mi propio servidor",
-        "message": "Llevaba un tiempo buscando una forma más sencilla de seguir mis inversiones sin entregar todos los datos de mi cartera a un servicio externo. Estos días estoy probando LibreFolio y me está gustando tenerlo todo en un mismo sitio.\n\nEs un programa de código abierto que puedes instalar en tu propio servidor para organizar tu cartera y analizar su evolución, manteniendo el control de tus datos. Si buscas algo parecido, ¡échale un vistazo!",
+        "title": "Estoy probando LibreFolio, un gestor de carteras de código abierto",
+        "message": "Llevaba un tiempo buscando una forma más sencilla de seguir mis inversiones sin entregar todos los datos de mi cartera a un servicio externo. Estos días estoy probando LibreFolio y me está gustando tenerlo todo en un mismo sitio.\n\nEs un programa de código abierto para organizar tu cartera y analizar su evolución, manteniendo el control de tus datos. Si buscas algo parecido, ¡échale un vistazo!",
         "hint": "Abrimos una publicación de texto con título y cuerpo separados. Si Reddit deja el cuerpo vacío, pega el texto ya copiado."
       },
       "facebook": {
-        "message": "Últimamente estoy usando LibreFolio para seguir mis inversiones y me gusta tenerlo todo en un mismo sitio sin perder el control de mis datos.\n\nSi buscas un gestor de carteras de código abierto que puedas alojar en tu propio servidor, ¡échale un vistazo!",
+        "message": "Últimamente estoy usando LibreFolio para seguir mis inversiones y me gusta tenerlo todo en un mismo sitio sin perder el control de mis datos.\n\nSi buscas un gestor de carteras de código abierto que deje tus datos bajo tu control, ¡échale un vistazo!",
         "hint": "Facebook prepara solo la vista previa del enlace. Cuando se abra, pega el texto copiado en el mensaje de la publicación.",
         "afterCopy": "Texto y enlace copiados. Pega el texto en el mensaje de tu publicación de Facebook."
       },
       "instagram": {
-        "message": "Un poco más de orden en mis inversiones, sin dejar mis datos en otro sitio. Estoy probando LibreFolio: un gestor de carteras de código abierto para alojar en tu propio servidor.\n\n#LibreFolio #CodigoAbierto #Autoalojado #Inversiones #Privacidad",
+        "message": "Un poco más de orden en mis inversiones, sin dejar mis datos en otro sitio. Estoy probando LibreFolio, un gestor de carteras de código abierto.",
         "hint": "Instagram no prepara una publicación desde este enlace. Cuando se abra, elige Crear (+), selecciona una foto o un vídeo y pega el pie de foto copiado.",
         "afterCopy": "Pie de foto y enlace copiados. En Instagram: Crear (+), elegir foto/vídeo y pegar el pie de foto."
       },
       "tiktok": {
-        "message": "Mi nuevo aliado para seguir mi cartera: LibreFolio. Código abierto, en mi servidor y con mis datos bajo control. Si te gusta trastear, ¡descúbrelo!\n\n#LibreFolio #CodigoAbierto #Autoalojado #FinanzasPersonales",
+        "message": "Mi nuevo aliado para seguir mi cartera: LibreFolio. Código abierto y con mis datos bajo control. Si te gusta trastear, ¡descúbrelo!",
         "hint": "Abrimos la página de subida de TikTok; inicia sesión si se solicita. Selecciona tu vídeo y pega la descripción copiada. No subimos vídeos ni textos automáticamente.",
         "afterCopy": "Descripción y enlace copiados. En la página de subida de TikTok, selecciona el vídeo y pega la descripción."
       }

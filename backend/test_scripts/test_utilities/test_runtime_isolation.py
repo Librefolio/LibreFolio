@@ -1279,17 +1279,115 @@ def test_runner_port_holders_queries_listening_pids_only(monkeypatch):
     assert calls == [(["lsof", "-nP", "-iTCP:6125", "-sTCP:LISTEN", "-t"], True, True, 10)]
 
 
-@pytest.mark.parametrize(("ci_env_value", "expected_timeout"), [(None, 120), ("true", 300)], ids=["ci-absent", "ci-present"])
-def test_startup_timeout_matches_the_playwright_ci_contract(ci_env_value, expected_timeout):
-    # STARTUP_TIMEOUT is computed once at import from os.environ["CI"], so only a
-    # freshly loaded module in a controlled environment exercises both branches.
-    probe_env = {name: value for name, value in os.environ.items() if name != "CI"}
-    if ci_env_value is not None:
-        probe_env["CI"] = ci_env_value
-    result = subprocess.run([sys.executable, "-c", "from scripts.test_runner import _server as m; print(m.STARTUP_TIMEOUT)"], cwd=test_runner_common.PROJECT_ROOT, env=probe_env, capture_output=True, text=True, timeout=60)
+# The runner's STARTUP_TIMEOUT (its wait for the shared backend) and Playwright's
+# webServer.timeout (its wait for the backend it starts itself) wait for the same
+# `dev.py server --test`, so they are one contract: 300 s whether CI is set or not,
+# and LIBREFOLIO_TEST_STARTUP_TIMEOUT (whole seconds) overrides both. They drifted
+# once already: Playwright kept `CI ? 300 : 120` after the runner moved to 300
+# everywhere. Playwright's half is checked as text, so no node_modules is needed.
+STARTUP_TIMEOUT_ENV = "LIBREFOLIO_TEST_STARTUP_TIMEOUT"
+DOCUMENTED_STARTUP_TIMEOUT_S = 300
+PLAYWRIGHT_CONFIG = test_runner_common.PROJECT_ROOT / "frontend" / "playwright.config.ts"
+
+
+def runner_startup_timeout(*, ci: str | None, override: str | None) -> int:
+    """``_server.STARTUP_TIMEOUT`` as a fresh interpreter computes it with exactly this CI and override.
+
+    The value is fixed at import from the environment, so neither the module this
+    process already imported nor an override a developer exported can stand in for it.
+    """
+    probe_env = {name: value for name, value in os.environ.items() if name not in ("CI", STARTUP_TIMEOUT_ENV)}
+    probe_env.update({name: value for name, value in (("CI", ci), (STARTUP_TIMEOUT_ENV, override)) if value is not None})
+    result = subprocess.run([sys.executable, "-c", "from scripts.test_runner import _server as m; print(repr(m.STARTUP_TIMEOUT))"], cwd=test_runner_common.PROJECT_ROOT, env=probe_env, capture_output=True, text=True, timeout=60)
 
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
-    assert result.stdout.strip() == str(expected_timeout)
+    printed = result.stdout.strip()
+    assert printed.isdigit(), f"STARTUP_TIMEOUT is {printed}, not a whole number of seconds"
+    return int(printed)
+
+
+def webserver_own_timeouts(code: str) -> list[str]:
+    """Each ``timeout:`` expression declared on Playwright's ``webServer`` object itself.
+
+    Brace depth inside ``webServer: {…}`` separates its own property from the
+    ``timeout`` of the ``gracefulShutdown: {…}`` nested in it.
+    """
+    opening = re.search(r"\bwebServer\s*:\s*\{", code)
+    if opening is None:
+        return []
+    depth, end = 0, len(code)
+    for index in range(opening.end() - 1, len(code)):
+        depth += {"{": 1, "}": -1}.get(code[index], 0)
+        if depth == 0:
+            end = index
+            break
+    body = code[opening.end() : end]
+    return [match[1].strip() for match in re.finditer(r"\btimeout\s*:\s*([^,\n}]+)", body) if body.count("{", 0, match.start()) == body.count("}", 0, match.start())]
+
+
+def playwright_startup_timeout_drift(config_text: str, runner_default_s: int) -> list[str]:
+    """Every way playwright.config.ts's webServer wait departs from the runner's ([] = none).
+
+    Pure on text, so a control can feed it a drifted config. It anchors on the chain
+    ``const RAW = process.env.<env> ?? '<N>'`` → ``const S = Number(RAW)`` →
+    ``webServer.timeout: S * 1000``, whatever RAW and S are called.
+    """
+    code = re.sub(r"^[ \t]*//.*$", "", config_text, flags=re.M)  # full-line comments may quote the old expression
+    reads = len(re.findall(rf"process\.env\.{STARTUP_TIMEOUT_ENV}\b", code))
+    raw = re.search(rf"^[ \t]*const\s+(\w+)\s*=\s*process\.env\.{STARTUP_TIMEOUT_ENV}\s*\?\?\s*'(\d+)'\s*;?[ \t]*$", code, re.M)
+    raw_name = raw[1] if raw else "STARTUP_TIMEOUT_RAW"
+    seconds = re.search(rf"^[ \t]*const\s+(\w+)\s*=\s*Number\(\s*{raw_name}\s*\)\s*;?[ \t]*$", code, re.M)
+    seconds_name = seconds[1] if seconds else "STARTUP_TIMEOUT_S"
+    timeouts = webserver_own_timeouts(code)
+    checks = [
+        (reads == 1, f"process.env.{STARTUP_TIMEOUT_ENV} is read {reads} times: its default and its override must come from one declaration"),
+        (raw is not None, f"no `const … = process.env.{STARTUP_TIMEOUT_ENV} ?? '<seconds>';` declaration"),
+        (raw is None or int(raw[2]) == runner_default_s, f"Playwright defaults to {raw[2] if raw else '?'} s, the runner's STARTUP_TIMEOUT to {runner_default_s} s"),
+        (seconds is not None, f"no `const … = Number({raw_name});`: the webServer wait is not derived from the override"),
+        (len(timeouts) == 1, f"webServer declares {len(timeouts)} timeout properties of its own, not 1"),
+        (not any(re.search(r"\bprocess\.env\.CI\b", timeout) for timeout in timeouts), f"webServer timeout branches on process.env.CI again: {timeouts}"),
+        (any(re.fullmatch(rf"{seconds_name}\s*\*\s*1000", timeout) for timeout in timeouts), f"webServer timeout is {timeouts}, not `{seconds_name} * 1000`"),
+    ]
+    return [reason for holds, reason in checks if not holds]
+
+
+@pytest.mark.parametrize(("ci", "override", "expected_s"), [(None, None, DOCUMENTED_STARTUP_TIMEOUT_S), ("true", None, DOCUMENTED_STARTUP_TIMEOUT_S), (None, "45", 45), ("true", "45", 45)], ids=["default-ci-absent", "default-ci-present", "override-ci-absent", "override-ci-present"])
+def test_startup_timeout_ignores_ci_and_honours_the_override(ci, override, expected_s):
+    assert runner_startup_timeout(ci=ci, override=override) == expected_s
+
+
+def test_playwright_webserver_waits_exactly_as_long_as_the_runner():
+    # Playwright's default is compared with the runner's own, read from a fresh
+    # import, not with a second literal 300: moving either side alone fails here.
+    runner_default_s = runner_startup_timeout(ci=None, override=None)
+
+    assert runner_default_s == DOCUMENTED_STARTUP_TIMEOUT_S
+    assert playwright_startup_timeout_drift(PLAYWRIGHT_CONFIG.read_text(encoding="utf-8"), runner_default_s) == []
+
+
+@pytest.mark.parametrize(
+    ("edit", "runner_default_s", "expected_reason"),
+    [
+        pytest.param(("timeout: STARTUP_TIMEOUT_S * 1000,", "timeout: process.env.CI ? 300 * 1000 : 120 * 1000,"), DOCUMENTED_STARTUP_TIMEOUT_S, "branches on process.env.CI", id="old-ci-ternary"),
+        pytest.param(("?? '300'", "?? '120'"), DOCUMENTED_STARTUP_TIMEOUT_S, "Playwright defaults to 120 s", id="playwright-default-120"),
+        pytest.param(None, 120, "the runner's STARTUP_TIMEOUT to 120 s", id="runner-default-moved"),
+        pytest.param(("Number(STARTUP_TIMEOUT_RAW)", "120"), DOCUMENTED_STARTUP_TIMEOUT_S, "not derived from the override", id="override-ignored"),
+        pytest.param(("timeout: STARTUP_TIMEOUT_S * 1000,", f"timeout: Number(process.env.{STARTUP_TIMEOUT_ENV} || 120) * 1000,"), DOCUMENTED_STARTUP_TIMEOUT_S, "is read 2 times", id="override-read-twice"),
+        pytest.param(("timeout: STARTUP_TIMEOUT_S * 1000,", ""), DOCUMENTED_STARTUP_TIMEOUT_S, "declares 0 timeout properties", id="webserver-timeout-dropped"),
+    ],
+)
+def test_playwright_wait_check_rejects_a_drifted_config(edit, runner_default_s, expected_reason):
+    # The control for the check above: the real config, drifted the way it could
+    # drift, must be rejected — otherwise an empty drift list would prove nothing.
+    config_text = PLAYWRIGHT_CONFIG.read_text(encoding="utf-8")
+    if edit is not None:
+        anchor, replacement = edit
+        assert config_text.count(anchor) == 1, f"control anchor {anchor!r} is not in playwright.config.ts exactly once: re-anchor this control"
+        config_text = config_text.replace(anchor, replacement)
+
+    drift = playwright_startup_timeout_drift(config_text, runner_default_s)
+
+    assert any(expected_reason in reason for reason in drift), f"{expected_reason!r} not reported, drift={drift}"
 
 
 # ── Contract 7 — the exec_unmasked spawn wrapper (and the masking around it) ──
