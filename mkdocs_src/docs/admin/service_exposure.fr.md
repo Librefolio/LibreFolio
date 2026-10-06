@@ -428,39 +428,49 @@ Nous suggérons de définir et déclarer le service Tailscale **dans le même fi
 
 ```yaml
 services:
- tailscale-librefolio:
- image: tailscale/tailscale:latest
- container_name: tailscale-librefolio
- hostname: tailscale-librefolio
- restart: unless-stopped
- privileged: false
- network_mode: bridge
- cap_add:
+  tailscale-librefolio:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-librefolio
+    hostname: tailscale-librefolio
+    restart: unless-stopped
+    privileged: false
+    network_mode: bridge
+    cap_add:
 
- - NET_ADMIN
- - NET_RAW
- devices:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
 
- - /dev/net/tun:/dev/net/tun
- command:
+      - /dev/net/tun:/dev/net/tun
+    command:
 
- - /custom_startup.sh
- environment:
+      - /custom_startup.sh
+    environment:
 
- - HOST_IP=192.168.1.10 # IP locale du service à exposer (ex. Serveur 1)
- - HOST_PORT=6040 # Port réel du service à exposer
- - TAILSCALE_FUNNEL_PORT=6040 # Port interne du Funnel
- - TS_HOSTNAME=librefolio # Nom d'hôte public personnalisé (ex. librefolio)
- - TS_AUTHKEY=tskey-auth-... # Clé d'authentification générée par Tailscale
- - TS_ACCEPT_DNS=true
- - TS_STATE_DIR=/var/lib/tailscale
- - TS_USERSPACE=false
- volumes:
+      - HOST_IP=192.168.1.10 # IP locale du service à exposer (ex. Serveur 1)
+      - HOST_PORT=6040 # Port réel du service à exposer
+      - TAILSCALE_FUNNEL_PORT=6040 # Port interne du Funnel
+      - TS_HOSTNAME=librefolio # Nom d'hôte public personnalisé (ex. librefolio)
+      - TS_AUTHKEY=tskey-auth-... # Clé d'authentification générée par Tailscale
+      - TS_ACCEPT_DNS=true
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+      - TS_ENABLE_HEALTH_CHECK=true  # Expose /healthz pour le healthcheck ci-dessous (Tailscale ≥ 1.78)
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002  # Où écoute /healthz : uniquement dans le conteneur
+      - STARTUP_TIMEOUT=180  # Facultatif : secondes pour atteindre l'état Running (180 par défaut)
+    volumes:
 
- - <path_chosen>/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
- - <path_chosen>/tailscale-nodes/custom_startup.sh:/custom_startup.sh
- - /etc/localtime:/etc/localtime:ro
- - /etc/timezone:/etc/timezone:ro
+      - <path_chosen>/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
+      - <path_chosen>/tailscale-nodes/custom_startup.sh:/custom_startup.sh
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    # Affiche healthy/unhealthy dans Docker, Portainer ou CasaOS ; le redémarrage lui-même vient de la sortie de custom_startup.sh
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
 ```
 
 #### Description des Paramètres de Configuration
@@ -521,61 +531,71 @@ services:
     # =============================================================================
 
     services:
-    librefolio:
-    image: ghcr.io/librefolio/librefolio:nightly
-    container_name: librefolio
-    restart: unless-stopped
-    ports:
+      librefolio:
+        image: ghcr.io/librefolio/librefolio:nightly
+        container_name: librefolio
+        restart: unless-stopped
+        ports:
 
-    - "${PORT:-6040}:6040"
-    volumes:
+          - "${PORT:-6040}:6040"
+        volumes:
 
-    - ./LibreFolio-data:/app/backend/data/prod-docker
-    env_file: .env
-    environment:
+          - ./LibreFolio-data:/app/backend/data/prod-docker
+        env_file: .env
+        environment:
 
-    - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
-    - HOST=0.0.0.0
-    healthcheck:
-    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
-    interval: 30s
-    timeout: 10s
-    start_period: 15s
-    retries: 3
+          - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
+          - HOST=0.0.0.0
+        healthcheck:
+          test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
+          interval: 30s
+          timeout: 10s
+          start_period: 15s
+          retries: 3
 
-    tailscale-librefolio:
-    image: tailscale/tailscale:latest
-    container_name: tailscale-librefolio
-    hostname: tailscale-librefolio
-    restart: unless-stopped
-    privileged: false
-    network_mode: bridge
-    cap_add:
+      tailscale-librefolio:
+        image: tailscale/tailscale:latest
+        container_name: tailscale-librefolio
+        hostname: tailscale-librefolio
+        restart: unless-stopped
+        privileged: false
+        network_mode: bridge
+        cap_add:
 
-    - NET_ADMIN
-    - NET_RAW
-    devices:
+          - NET_ADMIN
+          - NET_RAW
+        devices:
 
-    - /dev/net/tun:/dev/net/tun
-    command:
+          - /dev/net/tun:/dev/net/tun
+        command:
 
-    - /custom_startup.sh
-    environment:
+          - /custom_startup.sh
+        environment:
 
-    - HOST_IP=192.168.1.10 # IP locale du service à exposer (ex. Serveur 1)
-    - HOST_PORT=6040 # Port réel du service à exposer
-    - TAILSCALE_FUNNEL_PORT=6040 # Port interne du Funnel
-    - TS_HOSTNAME=librefolio # Nom d'hôte public personnalisé (ex. librefolio)
-    - TS_AUTHKEY=tskey-auth-... # Remplacez par votre clé générée
-    - TS_ACCEPT_DNS=true
-    - TS_STATE_DIR=/var/lib/tailscale
-    - TS_USERSPACE=false
-    volumes:
+          - HOST_IP=192.168.1.10 # IP locale du service à exposer (ex. Serveur 1)
+          - HOST_PORT=6040 # Port réel du service à exposer
+          - TAILSCALE_FUNNEL_PORT=6040 # Port interne du Funnel
+          - TS_HOSTNAME=librefolio # Nom d'hôte public personnalisé (ex. librefolio)
+          - TS_AUTHKEY=tskey-auth-... # Remplacez par votre clé générée
+          - TS_ACCEPT_DNS=true
+          - TS_STATE_DIR=/var/lib/tailscale
+          - TS_USERSPACE=false
+          - TS_ENABLE_HEALTH_CHECK=true  # Expose /healthz pour le healthcheck ci-dessous (Tailscale ≥ 1.78)
+          - TS_LOCAL_ADDR_PORT=127.0.0.1:9002  # Où écoute /healthz : uniquement dans le conteneur
+          - STARTUP_TIMEOUT=180  # Facultatif : secondes pour atteindre l'état Running (180 par défaut)
+        volumes:
 
-    - /DATA/AppData/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
-    - /DATA/AppData/tailscale-nodes/custom_startup.sh:/custom_startup.sh
-    - /etc/localtime:/etc/localtime:ro
-    - /etc/timezone:/etc/timezone:ro
+          - /DATA/AppData/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
+          - /DATA/AppData/tailscale-nodes/custom_startup.sh:/custom_startup.sh
+          - /etc/localtime:/etc/localtime:ro
+          - /etc/timezone:/etc/timezone:ro
+        # Affiche healthy/unhealthy dans Docker, Portainer ou CasaOS ; le redémarrage lui-même vient de la sortie de custom_startup.sh
+        healthcheck:
+          test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9002/healthz"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 120s
     ```
 
 ### 3. Démarrage et Approbation
