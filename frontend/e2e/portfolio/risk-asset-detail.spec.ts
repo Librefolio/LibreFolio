@@ -8,17 +8,27 @@
  *
  * The net's rule stands: do not adapt those two tests to make them pass. Adapting them
  * deletes the very evidence they exist to produce. If one of them goes red, the page
- * changed — that is a finding, not a maintenance chore. The one edit they took fixes an
- * input, not an assertion: the second answers the eligibility question itself, every
- * asked asset admitted, because the lane's engine judges the seed's prices against
- * today's date, and its verdicts — and when they land — would decide whether the option
- * that test picks can be compared against at all. The stage-2 tests below pin the rest.
+ * changed — that is a finding, not a maintenance chore. The edits they took fix two
+ * inputs, never an assertion:
+ *   1. the second answers the eligibility question itself, every asked asset admitted,
+ *      because the lane's engine judges the seed's prices against today's date, and its
+ *      verdicts — and when they land — would decide whether the option that test picks
+ *      can be compared against at all;
+ *   2. both hold the live-price poll (06/10/2026), from their `beforeEach`, before any
+ *      page opens. The Assets page and Asset Detail poll `POST /assets/prices/current`,
+ *      and an answered poll asks the real price providers — JustETF's live quote feed,
+ *      Yahoo, the scheduled-investment provider, the page scrapers — and writes today's
+ *      prices into the lane. So the net depended on the market and on the network, moved
+ *      the very prices the eligibility engine judges, and dropped the risk cache under the
+ *      requests it reads: every answer is a portfolio mutation. Held, the poll reaches nothing.
+ * The third test of their block is not part of the net: it pins input 2 — the net's flow
+ * does poll, and every poll it sends is held. The stage-2 tests below pin the rest.
  *
  * `openFirstAssetDetail` lives here rather than in `risk-mocks.ts` because this
  * file is its only consumer: it keeps the surface shared with the redesign as
  * small as it can honestly be.
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Page, type Request} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
@@ -40,6 +50,36 @@ async function openFirstAssetDetail(page: Page): Promise<number> {
     return assetId;
 }
 
+/** Every live-price poll each page's hold has held, in order: what the net's hygiene pin compares with what the page sent. */
+const heldLivePricePolls = new WeakMap<Page, Request[]>();
+
+/**
+ * Hold the live-price poll, unanswered, for the whole test: a copy, with the same behaviour, of
+ * `holdLivePricePoll` in `risk-benchmark-shared.spec.ts`, which says why. In short: an answered
+ * poll asks the real price providers, writes today's price into the lane's database and, through
+ * `zodios-client`, invalidates the risk cache — eligibility answers included — while these tests
+ * read them. Held, never answered, and never unrouted: removing the route would release what it
+ * holds. Unlike its siblings this copy also keeps what it held, for the net's hygiene pin to read.
+ */
+async function holdLivePricePoll(page: Page): Promise<void> {
+    const held: Request[] = [];
+    heldLivePricePolls.set(page, held);
+    await page.route(/\/api\/v1\/assets\/prices\/current(?:\?|$)/, (route) => {
+        // Deliberately neither fulfilled nor continued: only kept.
+        held.push(route.request());
+    });
+}
+
+/** A live-price poll, told by its path alone — not by the hold's pattern, so the pin also sees a poll that pattern would miss. */
+function isLivePricePoll(request: Request): boolean {
+    return new URL(request.url()).pathname.replace(/\/+$/, '') === '/api/v1/assets/prices/current';
+}
+
+/** One poll as the pin reports it: method, path, and the asset ids it asked about. */
+function describePoll(request: Request): string {
+    return `${request.method()} ${new URL(request.url()).pathname} ${request.postData() ?? ''}`;
+}
+
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind
 // them. Verified by a green run of the whole category at 4 workers.
@@ -47,6 +87,9 @@ test.describe.configure({mode: 'parallel'});
 
 test.describe('Risk analysis functional integration', () => {
     test.beforeEach(async ({page}) => {
+        // Input 2 (header), not an assertion: held before any page opens, or the Assets page and
+        // Asset Detail ask the real providers and write today's prices into the lane.
+        await holdLivePricePoll(page);
         await login(page, TEST_USER);
     });
 
@@ -172,14 +215,47 @@ test.describe('Risk analysis functional integration', () => {
         });
         expect(simulationRequest?.parameters).not.toHaveProperty('seed');
     });
+
+    /**
+     * Not part of the net: the pin of its input 2 (header). The net walks Assets page → Asset Detail
+     * → Risk tab, and both pages poll the current price. This walks the same flow under the same
+     * `beforeEach` and compares what the page sent — every request to the poll's path, seen by the
+     * browser — with what the hold held:
+     *   - the page did poll, so the hold is in the flow's path and «none escaped» is not vacuous;
+     *   - every poll it sent was held: none continued to the backend, which would have asked the
+     *     providers, and none was answered by anything else.
+     * It lives in this block, not in its own, because what it proves is this block's `beforeEach`.
+     * Nothing to restore: nothing is written.
+     */
+    test('the net’s flow reaches no price provider: it does poll, and every live-price poll it sends is held', async ({page}, testInfo) => {
+        const sent: Request[] = [];
+        page.on('request', (request) => {
+            if (isLivePricePoll(request)) sent.push(request);
+        });
+        await installRiskMocks(page);
+        await openFirstAssetDetail(page);
+        await page.getByTestId('asset-detail-tab-risk').click();
+        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
+        await waitForRiskCatalog(page);
+
+        await expect.poll(() => sent.length, {timeout: 10_000, message: 'the flow sent no live-price poll, so «every poll was held» would be true of nothing'}).toBeGreaterThan(0);
+        const held = heldLivePricePolls.get(page) ?? [];
+        await expect
+            .poll(() => sent.filter((request) => !held.includes(request)).map(describePoll), {
+                timeout: 5_000,
+                message: 'a live-price poll the page sent was not held: it reached the backend, which asks the real providers and writes today’s prices into the lane',
+            })
+            .toEqual([]);
+        testInfo.annotations.push({type: 'held live-price polls', description: `${sent.length} sent, all held: ${sent.map(describePoll).join(' · ')}`});
+    });
 });
 
 /**
  * ─── Stage 2 (D378): the comparison's benchmark picker knows what the engine can measure ───
  *
- * Owner: the Risk workstream, 06/10/2026. **Not part of the net above**: the two tests above
- * keep every assertion they had (the second only has its eligibility question answered, see
- * the header), and what follows pins what stage 2 adds to this tab. The page hands its window
+ * Owner: the Risk workstream, 06/10/2026. **Not part of the net above**: the net's two tests
+ * keep every assertion they had (two of their inputs are fixed, not their checks: see the
+ * header), and what follows pins what stage 2 adds to this tab. The page hands its window
  * and target currency to its `BenchmarkSelect` (`period`, `currency`), so the picker asks the
  * eligibility engine itself, and:
  *
@@ -364,18 +440,6 @@ function comparisonIdsFor(requests: RiskRequest[], assetId: number): number[] {
         .flatMap((request) => request.analytics)
         .filter((analytic) => analytic.analytic_code === 'comparison')
         .map((analytic) => Number(analytic.parameters?.comparison_asset_id));
-}
-
-/**
- * Hold the asset page's live-price poll, unanswered, for the whole test: a copy of
- * `holdLivePricePoll` in `risk-benchmark-shared.spec.ts`, which says why. In short: an answered
- * poll writes today's price into the lane's database and, through `zodios-client`, invalidates the
- * risk cache — eligibility answers included — while these tests read them. Held, never answered.
- */
-async function holdLivePricePoll(page: Page): Promise<void> {
-    await page.route(/\/api\/v1\/assets\/prices\/current(?:\?|$)/, () => {
-        // Deliberately neither fulfilled nor continued.
-    });
 }
 
 test.describe('Asset Risk tab — the benchmark picker knows what the engine can measure (stage 2, D378)', () => {

@@ -40,11 +40,11 @@ Prendre le $\max(\cdot)$ de trois candidats de différence absolue est une forme
 
 ```mermaid
 flowchart LR
- H["📈 Haut"] --> TR["🌡️ Plage Réelle = max(H−L, |H−C_prev|, |L−C_prev|)"]
- L["📉 Bas"] --> TR
- Cp["💹 Clôture Précédente"] --> TR
- TR --> SMMA["🔁 SMMA(N)"]
- SMMA --> ATR["🌡️ ATR(t)"]
+    H["📈 Haut"] --> TR["🌡️ Plage Réelle = max(H−L, |H−C_prev|, |L−C_prev|)"]
+    L["📉 Bas"] --> TR
+    Cp["💹 Clôture Précédente"] --> TR
+    TR --> SMMA["🔁 SMMA(N)"]
+    SMMA --> ATR["🌡️ ATR(t)"]
 ```
 
 !!! tip "L'ATR n'a pas de limite supérieure"

@@ -5,7 +5,7 @@
 Verificata il 2026-10-05 alle 18:11: albero pulito, stage vuoto, porta 6151 libera.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacSolverRobustness.prompt.md`
 ← Precedente: [`plan-phase00PacContractCompaction.prompt.md`](plan-phase00PacContractCompaction.prompt.md) (riga 11 del README).
-→ Seguente: `plan-phase00PacP1FinalRemoval.prompt.md` (riga 13 del README), da creare.
+→ Seguente: [`plan-phase00PacP1FinalRemoval.prompt.md`](plan-phase00PacP1FinalRemoval.prompt.md) (riga 13 del README).
 **Corsia:** suite `6151` + `/tmp/librefolio-r2-d`, un comando per volta. Nessun server di review.
 
 Le righe citate sono misurate alla baseline. Se il codice cambia, prevale il codice.
@@ -1474,7 +1474,7 @@ Tutti con questo prefisso, un comando per volta:
   >      (`/tmp/libreFolio_commit_d_slice_1_chore.txt`);
   >   2. `fix(pac): harden the solver cascade and its proofs`: backend, test, frontend, i18n ×4, la
   >      pagina EN e la riga del runner (`/tmp/libreFolio_commit_d_slice_2_fix.txt`);
-  >   3. `docs(journal): close the PAC solver robustness slice`: README, questo piano e la nota della
+  >   3. `docs(journal): close the solver robustness slice`: README, questo piano e la nota della
   >      voce 13 nello Step 3 (`/tmp/libreFolio_commit_d_slice_3_journal.txt`);
   > - **i18n**: cambiano 8 chiavi, le stesse nelle 4 lingue; nessuna aggiunta e nessuna tolta; 4 498
   >   chiavi per lingua. Sono `badges.help.optimalProven`, `proof.floatingFinished`,

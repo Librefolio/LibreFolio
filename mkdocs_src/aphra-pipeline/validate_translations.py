@@ -8,6 +8,7 @@ and reports structural discrepancies:
   - Heading level mismatches (different # count)
   - Missing or altered links/URLs
   - Modified code blocks
+  - Code blocks that lost the source indentation (code-block-indent)
   - Artifact remnants (Translator's Notes, <translation> tags, etc.)
   - Missing emojis in headings
   - Abnormal file size ratio
@@ -28,6 +29,9 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Sibling modules: dev.py and a standalone run both put this directory on sys.path.
+from code_blocks import FencedBlock, code_indent_issues
 
 # Import shared infrastructure from translate_docs
 from translate_docs import (
@@ -278,12 +282,12 @@ def check_code_blocks(
             for line_idx, (sl, tl) in enumerate(zip(src_lines, tr_lines)):
                 if sl != tl:
                     issues.append(Issue(
-                        severity=Severity.LOCALIZED,  # shell comments translated or alignment stripped
+                        severity=Severity.LOCALIZED,  # code comments translated
                         file=cache_key, lang=lang,
                         check="code-block-modified",
                         message=(
                             f"Code block #{idx + 1}, line {line_idx + 1} altered "
-                            f"(check: comments translated or alignment stripped):\n"
+                            f"(check: comments translated):\n"
                             f"    SRC: {sl[:80]}\n"
                             f"    TRN: {tl[:80]}"
                         ),
@@ -299,6 +303,39 @@ def check_code_blocks(
                             f"({len(src_lines)} vs {len(tr_lines)})",
                 ))
 
+    return issues
+
+
+def _indent_levels(block: FencedBlock) -> list[int]:
+    """Distinct leading-space counts of the block's non-blank lines, relative to the shallowest."""
+    widths = [len(line) - len(line.lstrip()) for line in block.lines if line.strip()]
+    base = min(widths, default=0)
+    return sorted({width - base for width in widths})
+
+
+def check_code_block_indent(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Verify translated code blocks keep the source indentation, line by line (fences included).
+    Blocks pair by content, so a block added or missing on one side does not shift the others.
+    Translation never has a reason to move code: flattened YAML is a different (or invalid)
+    document, and a fence that leaves its list item or content tab breaks the page layout.
+    """
+    issues = []
+    for drift in code_indent_issues(source, translated):
+        block = drift.translated_block
+        issues.append(Issue(
+            severity=Severity.ERROR,
+            file=cache_key, lang=lang,
+            check="code-block-indent",
+            line=drift.lines[0] + 1,
+            message=(
+                f"Code block ({block.lang or 'plain'}, lines {block.start + 1}-{block.end + 1}): "
+                f"indentation differs from the source on {len(drift.lines)} of {len(block.lines)} lines "
+                f"(source levels {_indent_levels(drift.source_block)} vs translation {_indent_levels(block)})"
+            ),
+        ))
     return issues
 
 
@@ -1122,6 +1159,7 @@ ALL_CHECKS = [
     ("heading-structure", check_heading_structure, True),   # needs source + translated
     ("links", check_links, True),
     ("code-blocks", check_code_blocks, True),
+    ("code-block-indent", check_code_block_indent, True),   # pairs blocks by content, not position
     ("list-structure", check_list_structure, True),
     ("admonitions", check_admonitions, True),
     ("html-blocks", check_html_blocks, True),

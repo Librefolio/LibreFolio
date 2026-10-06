@@ -52,14 +52,14 @@ Los traders a menudo combinan el ADX con un sistema de seguimiento de tendencia 
 
 ```mermaid
 flowchart LR
- HL["📈 Máximo / Mínimo"] --> DM["➕➖ +DM / -DM"]
- HLC["📊 Máximo / Mínimo / Cierre"] --> TR["🌡️ Rango Verdadero"]
- DM --> SMMA1["🔁 SMMA(N)"]
- TR --> SMMA2["🔁 SMMA(N)"]
- SMMA1 --> DI["📐 +DI / -DI"]
- SMMA2 --> DI
- DI --> DX["🔄 DX = |+DI−-DI| / (+DI+-DI)"]
- DX --> ADX["💹 ADX = SMMA(N, DX)"]
+    HL["📈 Máximo / Mínimo"] --> DM["➕➖ +DM / -DM"]
+    HLC["📊 Máximo / Mínimo / Cierre"] --> TR["🌡️ Rango Verdadero"]
+    DM --> SMMA1["🔁 SMMA(N)"]
+    TR --> SMMA2["🔁 SMMA(N)"]
+    SMMA1 --> DI["📐 +DI / -DI"]
+    SMMA2 --> DI
+    DI --> DX["🔄 DX = |+DI−-DI| / (+DI+-DI)"]
+    DX --> ADX["💹 ADX = SMMA(N, DX)"]
 ```
 
 !!! warning "ADX no es direccional"

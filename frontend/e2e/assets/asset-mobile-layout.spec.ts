@@ -24,7 +24,10 @@
  *   16.1    (K step 16, item 1 — 06/10.) The price chart's tooltip at phone width: with a long asset
  *           name ECharts' tooltip box is wider than the chart, and the value is cut at the screen
  *           edge. Approved fix: truncate, never wrap — the label ellipsizes, the currency suffix and
- *           the value stay whole. Control: at 1280 px nothing is truncated. Last section of the file.
+ *           the value stay whole. Control: at 1280 px nothing is truncated.
+ *   17.15   (K step 17, item 15 — 06/10.) AssetModal at phone width: Chromium draws and hit-tests the end of the form
+ *           under the footer, and the switches are not justified. Approved fix: the form scrolls in a wrapper, Benchmark
+ *           flush right. Control: at 1280 px the form's window is 70vh, nothing under the footer. Last section of the file.
  *
  * Widths are set with `page.setViewportSize` inside each test, as the dashboard's F1 guard does,
  * so the spec means the same thing whichever project runs it; the runner runs `desktop`.
@@ -51,9 +54,9 @@
  */
 
 import {expect, test as base, type Locator, type Page} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {daysAgoIso} from '../fixtures/dates';
-import {TEST_USER} from '../fixtures/test-users';
+import {TEST_USER, type Language} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 import {schemas} from '../../src/lib/api/generated';
 import {goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
@@ -238,14 +241,19 @@ async function sidewaysScroll(target: Locator): Promise<number> {
  * Create: the assets page's own add-asset flow. Save stays disabled on an empty form and a trial
  * click refuses a disabled control, so a display name — the minimum that enables Save — is filled.
  * It is never saved. Edit: an asset this test owns, from its detail page.
+ *
+ * `lang`, when given, is chosen in the header once the page is up, before the modal's backdrop
+ * covers it. `setLanguage` writes only this context's localStorage: there is nothing to restore.
  */
-async function openAssetModal(page: Page, owned: Owned, mode: Mode): Promise<void> {
+async function openAssetModal(page: Page, owned: Owned, mode: Mode, lang?: Language): Promise<void> {
     if (mode === 'create') {
         await goToAssetsPage(page);
+        if (lang) await setLanguage(page, lang);
         await openCreateAssetModal(page);
     } else {
         const assetId = await createOwnedAsset(page, owned, 'E2E mobile footer');
         await goToAssetDetailPage(page, String(assetId));
+        if (lang) await setLanguage(page, lang);
         await openEditAssetModal(page);
     }
     await expect(page.getByTestId('asset-modal-form'), 'the modal has populated its form and taken its opening snapshot').toHaveAttribute('data-snapshot-ready', 'true');
@@ -880,5 +888,336 @@ test.describe('Price chart tooltip at phone width — the asset name never pushe
         expect(clipped.map(clipperReport), `with room to spare nothing truncates the name "${reading.name?.text}": ${reading.nameClippers.length} clipping box(es) around it — ${reading.nameClippers.map(clipperReport).join('; ') || 'none'}`).toEqual([]);
         expect(hiddenPx(value), runReport("the main row's value", value)).toBeLessThanOrEqual(TOOLTIP_EDGE_PX);
         expect(hiddenPx(suffix), runReport("the main row's currency suffix", suffix)).toBeLessThanOrEqual(TOOLTIP_EDGE_PX);
+    });
+});
+
+// =============================================================================
+// Step 17, item 15 — AssetModal at phone width: the form under the footer, the switches' row
+// =============================================================================
+
+/*
+ * The defects (measured by K on 06/10, Chromium and WebKit).
+ *   1. ModalBase's content box is a flex column capped at 90vh with `overflow: visible` (`allowOverflow`), and the form is
+ *      the `<fieldset>` itself, `max-h-[70vh] overflow-y-auto`. On a phone the header (61 px), 70vh and the footer add up
+ *      to more than 90vh: flex shrinks the fieldset's box, but Chromium keeps painting — and hit-testing — its scrolled
+ *      content down to 70vh, under the footer, which is transparent. At 360×640 a 376 px box against 448 px of 70vh: 72 px
+ *      of form under the footer, the last of it seen only through it. WebKit clips.
+ *   2. The switches are one `flex-wrap` row of seven items (info, label, switch, separator, info, label, switch). At 360 px
+ *      in Italian and Spanish the Benchmark switch wraps alone, a row below its label; at 390 px both fit, packed left,
+ *      Benchmark ~24 px short of Save's right edge. At 320 px in Spanish, with macOS' fonts, the label goes down with its
+ *      switch and leaves its info icon behind: ~118 px short of Save. The developer: «attivo e benchmark distribuiti sulla
+ *      riga con logica giustificata».
+ *
+ * Approved cure (06/10): the fieldset scrolls inside a plain wrapper (`min-h-0 max-h-[70vh] overflow-y-auto`); the switches
+ * are two groups that never break — info, label, switch — the Benchmark one `ml-auto`, flush right on its row and when it
+ * wraps; desktop unchanged. No new test id: everything below reads today's.
+ *
+ * Fonts. Inter is not self-hosted, so the labels are as wide as the machine's system-ui makes them (SF on macOS, Roboto on
+ * Android, DejaVu in CI). Nothing here asserts that both switches share a row, nor any absolute x: only relations that
+ * hold with every font — nothing of the form under the footer; each switch on the row of the label that names it; the
+ * Benchmark switch flush with Save, on one row or wrapped.
+ *
+ * The measures, read once the modal has stopped moving (it opens with a 200 ms scale transition), the pointer parked on
+ * the backdrop's corner where it hovers nothing, the form filled with a draft name and never saved:
+ *   - the band: the box spanning the four footer controls. `document.elementsFromPoint` on a grid over it (points at most
+ *     12 × 6 px apart, 1 px inside its edges) returns nothing that is the form or inside it. Not `elementFromPoint`: the
+ *     content that leaks is painted below the footer's own, and only its positioned part wins the topmost hit;
+ *   - two positive controls, so that the zero means something: the form's window — the first scroll container from the
+ *     form up, the form included: the fieldset today, the cure's wrapper after it — holds more than it shows
+ *     (scrollHeight > clientHeight); and the middle of that window, above the band, hits a form descendant;
+ *   - the switches: each one's centre y against that of its label, the element its `aria-labelledby` names, ±2 px; the
+ *     Benchmark switch's right edge against Save's, ±1 px. Soft, so one run reports all three. Active is turned off where
+ *     its label is the longest (Inattivo, Inactivo): clicked, then `aria-checked` read.
+ * Control at 1280×720: the form's window is 70vh and scrolls, and nothing of the form is under the footer — today and after.
+ */
+
+const SHORT_PHONE_360: Viewport = {width: 360, height: 640};
+const SHORT_PHONE_320: Viewport = {width: 320, height: 640};
+/** Where the form leaks today: 72 px at 360×640, about 40 at 360×800. */
+const UNDER_FOOTER_PHONES: readonly Viewport[] = [SHORT_PHONE_360, PHONE_360];
+const MODAL_FORM = 'asset-modal-form';
+/** The grid laid over the footer band: points at most this far apart, this far inside its edges. */
+const BAND_STEP_X_PX = 12;
+const BAND_STEP_Y_PX = 6;
+const BAND_INSET_PX = 1;
+/** "On the row of its label": centre to centre, within 2 px. */
+const ROW_TOLERANCE_PX = 2;
+/** The form's window is capped at 70vh, which nothing shrinks at 1280×720; ±1 px of rounding. */
+const FORM_WINDOW_VH = 0.7;
+const FORM_WINDOW_TOLERANCE_PX = 1;
+
+/** A language, a width, and the Active switch — off where its label is the longest. */
+interface SwitchCase {
+    lang: Language;
+    viewport: Viewport;
+    active: boolean;
+}
+
+const SWITCH_CASES: readonly SwitchCase[] = [
+    {lang: 'it', viewport: PHONE_390, active: true},
+    {lang: 'it', viewport: PHONE_360, active: false},
+    {lang: 'es', viewport: PHONE_360, active: false},
+    {lang: 'es', viewport: SHORT_PHONE_320, active: false},
+];
+
+type Edges = {left: number; top: number; right: number; bottom: number};
+
+/** The first scroll container from the form up, the form included: the window the user sees the form through. */
+interface FormWindow extends Edges {
+    element: string;
+    clientHeight: number;
+    scrollHeight: number;
+}
+
+/** What lies under the footer, in one reading. Crosses `evaluate`: plain data only. */
+interface UnderFooterReading {
+    innerHeight: number;
+    form: Edges;
+    /** The box spanning the four footer controls. */
+    band: Edges;
+    formWindow: FormWindow | null;
+    /** Positive control B: the middle of the form's window above the band, and the form descendant hit there. */
+    probe: {x: number; y: number; hit: string | null} | null;
+    points: number;
+    /** Every grid point where something of the form is hit, with the topmost such element. */
+    offenders: Array<{element: string; x: number; y: number}>;
+}
+
+/** A switch and the label its `aria-labelledby` names. */
+interface SwitchRow {
+    testId: string;
+    labelledBy: string | null;
+    toggle: Edges | null;
+    label: Edges | null;
+}
+
+interface SwitchesReading {
+    active: SwitchRow;
+    benchmark: SwitchRow;
+    save: Edges | null;
+}
+
+/**
+ * Resolves once the modal has stopped moving: ModalBase opens it with a 200 ms scale transition, and a box read half-way
+ * is up to 5 % small. The form and the four footer controls keep the same boxes over two animation frames, no animation
+ * runs on any of them or on an ancestor, every font is loaded. The pointer is parked first on the backdrop's corner, where
+ * it hovers nothing: resting on a tooltip's trigger it would hang a fixed box over the modal. Read frame by frame, no clock.
+ */
+async function settleModal(page: Page): Promise<void> {
+    await page.mouse.move(1, 1);
+    const verdict = await page.evaluate(
+        ({testIds, budgetMs}) =>
+            new Promise<string>((resolve) => {
+                const started = performance.now();
+                let last = '';
+                let same = 0;
+                const frame = () => {
+                    const elements = testIds.map((testId) => document.querySelector(`[data-testid="${testId}"]`));
+                    const boxes = elements
+                        .map((element) => {
+                            if (!element) return 'missing';
+                            const rect = element.getBoundingClientRect();
+                            return `${rect.left},${rect.top},${rect.width},${rect.height}`;
+                        })
+                        .join(' ');
+                    const running = document.getAnimations().filter((animation) => {
+                        const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
+                        return animation.playState === 'running' && target !== null && elements.some((element) => element !== null && target.contains(element));
+                    }).length;
+                    same = elements.every((element) => element !== null) && running === 0 && document.fonts.status === 'loaded' && boxes === last ? same + 1 : 0;
+                    last = boxes;
+                    if (same >= 2) {
+                        resolve('');
+                    } else if (performance.now() - started > budgetMs) {
+                        resolve(`still moving after ${Math.round(performance.now() - started)} ms: ${running} animation(s) running on the modal, fonts ${document.fonts.status}, boxes ${boxes}`);
+                    } else {
+                        requestAnimationFrame(frame);
+                    }
+                };
+                requestAnimationFrame(frame);
+            }),
+        {testIds: [MODAL_FORM, ...FOOTER_CONTROLS], budgetMs: 5_000},
+    );
+    expect(verdict, 'the modal settles: the same boxes over two animation frames, no transition running on it').toBe('');
+}
+
+/** Reads what lies under the footer, inside the page, in one go. Serialised by `evaluate`: it references nothing outside itself. */
+function readUnderFooterInPage({formTestId, controlTestIds, stepX, stepY, inset}: {formTestId: string; controlTestIds: readonly string[]; stepX: number; stepY: number; inset: number}): UnderFooterReading {
+    const byTestId = (testId: string): Element => {
+        const element = document.querySelector(`[data-testid="${testId}"]`);
+        if (!element) throw new Error(`[data-testid="${testId}"] is not in the page`);
+        return element;
+    };
+    const edges = (element: Element): Edges => {
+        const rect = element.getBoundingClientRect();
+        return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom};
+    };
+    const describe = (element: Element): string => {
+        const name = (node: Element): string => {
+            const testId = node.getAttribute('data-testid');
+            return testId ? ` data-testid="${testId}"` : node.id ? ` id="${node.id}"` : '';
+        };
+        const own = `<${element.tagName.toLowerCase()}${name(element)}>`;
+        if (name(element)) return own;
+        // Nameless: placed by its nearest ancestor that has a test id or an id.
+        const named = element.parentElement?.closest('[data-testid], [id]');
+        return named ? `${own} in <${named.tagName.toLowerCase()}${name(named)}>` : own;
+    };
+    // Evenly spaced from `from` to `to`, both included, at most `step` apart.
+    const ticks = (from: number, to: number, step: number): number[] => {
+        const intervals = Math.max(1, Math.ceil((to - from) / step));
+        return Array.from({length: intervals + 1}, (_, i) => from + ((to - from) * i) / intervals);
+    };
+
+    const form = byTestId(formTestId);
+    const controls = controlTestIds.map((testId) => edges(byTestId(testId)));
+    const band: Edges = {
+        left: Math.min(...controls.map((box) => box.left)),
+        top: Math.min(...controls.map((box) => box.top)),
+        right: Math.max(...controls.map((box) => box.right)),
+        bottom: Math.max(...controls.map((box) => box.bottom)),
+    };
+
+    let formWindow: FormWindow | null = null;
+    for (let element: Element | null = form; element; element = element.parentElement) {
+        const overflowY = getComputedStyle(element).overflowY;
+        if (overflowY !== 'auto' && overflowY !== 'scroll') continue;
+        formWindow = {...edges(element), element: describe(element), clientHeight: element.clientHeight, scrollHeight: element.scrollHeight};
+        break;
+    }
+
+    let probe: UnderFooterReading['probe'] = null;
+    if (formWindow) {
+        const x = (formWindow.left + formWindow.right) / 2;
+        const y = (formWindow.top + band.top) / 2;
+        const hit = document.elementsFromPoint(x, y).find((element) => element !== form && form.contains(element));
+        probe = {x, y, hit: hit ? describe(hit) : null};
+    }
+
+    const offenders: UnderFooterReading['offenders'] = [];
+    let points = 0;
+    for (const y of ticks(band.top + inset, band.bottom - inset, stepY)) {
+        for (const x of ticks(band.left + inset, band.right - inset, stepX)) {
+            points += 1;
+            const hit = document.elementsFromPoint(x, y).find((element) => element === form || form.contains(element));
+            if (hit) offenders.push({element: describe(hit), x, y});
+        }
+    }
+    return {innerHeight: window.innerHeight, form: edges(form), band, formWindow, probe, points, offenders};
+}
+
+async function readUnderFooter(page: Page): Promise<UnderFooterReading> {
+    return page.evaluate(readUnderFooterInPage, {formTestId: MODAL_FORM, controlTestIds: FOOTER_CONTROLS, stepX: BAND_STEP_X_PX, stepY: BAND_STEP_Y_PX, inset: BAND_INSET_PX});
+}
+
+/** The two switches, the labels their `aria-labelledby` names, and Save, in one reading. Serialised by `evaluate`. */
+function readSwitchesInPage({activeTestId, benchmarkTestId, saveTestId}: {activeTestId: string; benchmarkTestId: string; saveTestId: string}): SwitchesReading {
+    const edges = (element: Element | null): Edges | null => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom};
+    };
+    const row = (testId: string): SwitchRow => {
+        const toggle = document.querySelector(`[data-testid="${testId}"]`);
+        const labelledBy = toggle?.getAttribute('aria-labelledby') ?? null;
+        return {testId, labelledBy, toggle: edges(toggle), label: edges(labelledBy ? document.getElementById(labelledBy) : null)};
+    };
+    return {active: row(activeTestId), benchmark: row(benchmarkTestId), save: edges(document.querySelector(`[data-testid="${saveTestId}"]`))};
+}
+
+async function readSwitches(page: Page): Promise<SwitchesReading> {
+    return page.evaluate(readSwitchesInPage, {activeTestId: 'asset-active-toggle', benchmarkTestId: 'asset-benchmark-toggle', saveTestId: 'asset-modal-save'});
+}
+
+function edgesReport(box: Edges): string {
+    return `x ${px(box.left)} → ${px(box.right)}, y ${px(box.top)} → ${px(box.bottom)}`;
+}
+
+function underFooterReport(reading: UnderFooterReading): string {
+    const {form, band, formWindow, probe, innerHeight} = reading;
+    const seenThrough = formWindow ? `its window ${formWindow.element} y ${px(formWindow.top)} → ${px(formWindow.bottom)} (${px(formWindow.bottom - formWindow.top)} tall; clientHeight ${formWindow.clientHeight}, scrollHeight ${formWindow.scrollHeight})` : 'no scroll container from the form up';
+    const middle = probe ? `; the window's middle above the band, x ${px(probe.x)} y ${px(probe.y)}, hits ${probe.hit ?? 'nothing of the form'}` : '';
+    return `form box y ${px(form.top)} → ${px(form.bottom)} (${px(form.bottom - form.top)} tall), ${seenThrough}; 70vh = ${px(FORM_WINDOW_VH * innerHeight)}; footer band ${edgesReport(band)}${middle}`;
+}
+
+/** The two positive controls, then the band: nothing that is the form or inside it under the footer. */
+function expectNothingOfTheFormUnderTheFooter(reading: UnderFooterReading, where: string): void {
+    const {formWindow, probe, offenders, points} = reading;
+    if (!formWindow || !probe) throw new Error(`${where}: the form's window — the first scroll container from the form up — was not found: ${underFooterReport(reading)}`);
+    expect(formWindow.scrollHeight, `${where}, positive control A: the form holds more than its window ${formWindow.element} shows — ${underFooterReport(reading)}`).toBeGreaterThan(formWindow.clientHeight);
+    expect(probe.hit, `${where}, positive control B: the middle of the form's window above the footer hits a form descendant — ${underFooterReport(reading)}`).not.toBeNull();
+
+    // The offenders by element, in the order met (top row first): how often, and the first y.
+    const byElement = new Map<string, {count: number; firstY: number}>();
+    for (const {element, y} of offenders) {
+        const seen = byElement.get(element);
+        if (seen) seen.count += 1;
+        else byElement.set(element, {count: 1, firstY: y});
+    }
+    const lowest = offenders.reduce((max, offender) => Math.max(max, offender.y), -Infinity);
+    const first = [...byElement].slice(0, 5).map(([element, {count, firstY}]) => `${element} ×${count} from y ${px(firstY)}`);
+    const summary = offenders.length === 0 ? 'none' : `down to y ${px(lowest)}; first: ${first.join(', ')}`;
+    expect(offenders.length, `${where}: ${offenders.length}/${points} points of the footer band hit the form (${summary}) — ${underFooterReport(reading)}`).toBe(0);
+}
+
+function centreY(box: Edges): number {
+    return (box.top + box.bottom) / 2;
+}
+
+/** Each switch on the row of the label that names it, and the Benchmark switch flush with Save — soft, so one run reports all three. */
+function expectJustifiedSwitches(reading: SwitchesReading, where: string): void {
+    for (const row of [reading.active, reading.benchmark]) {
+        if (!row.toggle || !row.label) throw new Error(`${where}: ${row.testId} and the label its aria-labelledby names ("${row.labelledBy}") must both be laid out`);
+        const toggleY = centreY(row.toggle);
+        const labelY = centreY(row.label);
+        expect.soft(Math.abs(toggleY - labelY), `${where}: ${row.testId} sits on the row of its label #${row.labelledBy} — switch centre y ${px(toggleY)}, label centre y ${px(labelY)}`).toBeLessThanOrEqual(ROW_TOLERANCE_PX);
+    }
+    const {benchmark, save} = reading;
+    if (!benchmark.toggle || !save) throw new Error(`${where}: the Benchmark switch and Save must both be laid out`);
+    expect.soft(Math.abs(benchmark.toggle.right - save.right), `${where}: the Benchmark switch is flush with Save's right edge — switch right x ${px(benchmark.toggle.right)}, Save right x ${px(save.right)}`).toBeLessThanOrEqual(WIDTH_TOLERANCE_PX);
+}
+
+test.describe('Asset modal at phone width — the form never shows through the footer, and the switches are justified (K step 17, item 15)', () => {
+    // Every reading is attached to the report whatever the verdict: a green keeps its numbers too.
+    for (const viewport of UNDER_FOOTER_PHONES) {
+        test(`${viewport.width}×${viewport.height}: nothing of the form is drawn or hit under the footer`, async ({page, owned}, testInfo) => {
+            await page.setViewportSize(viewport);
+            await openAssetModal(page, owned, 'create');
+            await settleModal(page);
+            const reading = await readUnderFooter(page);
+            await testInfo.attach('under-footer.json', {body: JSON.stringify(reading, null, 1), contentType: 'application/json'});
+            expectNothingOfTheFormUnderTheFooter(reading, `${viewport.width}×${viewport.height}`);
+        });
+    }
+
+    for (const {lang, viewport, active} of SWITCH_CASES) {
+        const where = `${lang} at ${viewport.width}×${viewport.height}, Active ${active ? 'on' : 'off'}`;
+        test(`${where}: each switch on the row of its label, the Benchmark switch flush with Save`, async ({page, owned}, testInfo) => {
+            await page.setViewportSize(viewport);
+            await openAssetModal(page, owned, 'create', lang);
+            const activeToggle = page.getByTestId('asset-modal').getByTestId('asset-active-toggle');
+            await expect(activeToggle, 'precondition: a new asset opens active').toHaveAttribute('aria-checked', 'true');
+            if (!active) {
+                await activeToggle.click({timeout: 5_000});
+                await expect(activeToggle, 'Active is off: its label is the longest one').toHaveAttribute('aria-checked', 'false');
+            }
+            await settleModal(page);
+            const reading = await readSwitches(page);
+            await testInfo.attach('switches.json', {body: JSON.stringify(reading, null, 1), contentType: 'application/json'});
+            expectJustifiedSwitches(reading, where);
+        });
+    }
+
+    test(`${DESKTOP.width}×${DESKTOP.height} (control): the form's window is 70vh and scrolls, and nothing of the form is under the footer`, async ({page, owned}, testInfo) => {
+        await page.setViewportSize(DESKTOP);
+        await openAssetModal(page, owned, 'create');
+        await settleModal(page);
+        const reading = await readUnderFooter(page);
+        await testInfo.attach('under-footer.json', {body: JSON.stringify(reading, null, 1), contentType: 'application/json'});
+        const where = `${DESKTOP.width}×${DESKTOP.height}`;
+        const {formWindow} = reading;
+        if (!formWindow) throw new Error(`${where}: the form's window — the first scroll container from the form up — was not found: ${underFooterReport(reading)}`);
+        expect(Math.abs(formWindow.bottom - formWindow.top - FORM_WINDOW_VH * reading.innerHeight), `${where}: the form's window ${formWindow.element} is 70vh tall — ${underFooterReport(reading)}`).toBeLessThanOrEqual(FORM_WINDOW_TOLERANCE_PX);
+        expectNothingOfTheFormUnderTheFooter(reading, where);
     });
 });
