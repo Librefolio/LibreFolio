@@ -70,6 +70,12 @@
  * controllers' data-quality issues, L1°'s then L3°'s. Pinned by the final blocks; written red first,
  * against frames that still list a partial result and repeat its warning, and no `qualitySource`.
  *
+ * **The benchmark picker moves into L3°'s frame** (the developer's decision, 2026-10-06): the levels draw
+ * the picker the panel hands them (`benchmarkPicker`) in L3°'s frame, above L3°'s section, and take the
+ * picker's wait as a prop (`benchmarkPending`): while it lasts L1° asks and L3° asks nothing, then L3°
+ * asks once, with the benchmark. Pinned by the last block of this file; written red first, against
+ * levels that ignore both props.
+ *
  * Left elsewhere: the discard and re-ask rules themselves (`riskPanelController.test.ts`), the
  * tables' own cells (`AssetSetLossComparisonSection.test.ts`, `AssetSetRiskReturnSection.test.ts`,
  * `assetSetLevels.test.ts`), and the page end to end (`e2e/portfolio/risk-lab.spec.ts`).
@@ -110,6 +116,7 @@ vi.mock('$lib/stores/risk/riskPanelController.svelte', async (importOriginal) =>
     };
 });
 
+import {createRawSnippet, type Snippet} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {assertEffectsRun, recordReads} from '$test/runes.svelte';
 import type {schemas} from '$lib/api';
@@ -1309,5 +1316,172 @@ describe('AssetSetComparisonLevels — qualitySource(), what the lab panel reads
         } finally {
             reads.stop();
         }
+    });
+});
+
+/**
+ * ─── «Compared with» moves into L3°'s frame, and L3° waits for it ──────────────────────────────
+ *
+ * The developer's decision (2026-10-06): the lab's benchmark picker — `BenchmarkSelect`, «Compared
+ * with», today the last row of the selection card (`risk-asset-set-benchmark-row`) — moves into L3°'s
+ * frame, above L3°'s table, exactly as on the Dashboard, where `L3Benchmark` is the first child of L3's
+ * section body. L3° is the one level that compares against it.
+ *
+ * 🔴 **The guard moves with it.** The panel owns the choice and the picker's state, and today mounts
+ * these levels only once the picker has stopped saying `pending` — it confirms a stored benchmark
+ * against the asset list before it says `set` or `none`. The levels' controllers ask their base waves
+ * the moment they mount, and L3°'s question carries the benchmark (`assetSetBenchmarkId`): levels
+ * mounted during `pending` with a stored benchmark would ask L3° twice — without it, then with it — and
+ * show figures replaced a moment later. With the picker inside the levels, that gate would hide the very
+ * picker that ends the wait; so the levels take the wait as a prop and keep L3° out of it themselves:
+ *
+ *   - `benchmarkPending` (default `false`): while it holds, L1° asks at once — it never reads the
+ *     benchmark — and L3° asks nothing at all, because its controller does not exist yet. An empty
+ *     `asset_set` scope is no way out: it reaches the API and comes back 422, read as a failed load
+ *     (`AssetSetCorrelationSection.svelte`: «the boundary is the guard»). Meanwhile L3°'s section shows
+ *     its loading state, and nothing of a failure. When the wait ends, L3° asks exactly once, and that
+ *     one question already compares against the benchmark;
+ *   - `benchmarkPicker` (a snippet): drawn once, in L3°'s frame body before L3°'s section, never in L1°'s
+ *     frame — and drawn while the wait lasts, because the picker is what ends it. Kept when the wait
+ *     ends, too: a `BenchmarkSelect` says `pending` the moment it mounts, so a picker mounted again then
+ *     would start the wait over.
+ *
+ * The wait ends two ways below. With the benchmark already known while pending, so that the wait is the
+ * only thing that changes; and as the panel ends it — no benchmark while pending (`labBenchmarkId` hands
+ * one over only once the picker says `set`), then the confirmed one together with the end of the wait:
+ * the very case the guard exists for.
+ *
+ * Questions are told apart by the analytics they carry (`questionsOf`, `LEVEL_CODES`), the benchmark by
+ * the comparison's `comparison_asset_id` (`comparedWith`) — never by position, nor by the controller
+ * that sent them — and an absence is asserted only once L1°'s answer is in its cells. The picker is a
+ * probe snippet, not the product's `BenchmarkSelect`: the levels draw whatever they are handed, and the
+ * real row's place on the page is the E2E's (`risk-lab.spec.ts`).
+ *
+ * Written red first: today the levels ignore both props — L3° asks the moment it mounts, whatever
+ * `benchmarkPending` says, and no picker is drawn. The blocks above are untouched: `benchmarkPending`
+ * defaults to `false` and the picker is optional.
+ */
+
+/** The props this block hands the levels: the harness's, plus the two the change adds — declared here, so the file compiles on either side of their arrival. */
+type LevelsProps = typeof PROPS & {benchmarkPending?: boolean; benchmarkPicker?: Snippet};
+
+/** The probe picker's testid. No product component publishes it, so finding it means the levels drew what they were handed. */
+const PICKER = 'probe-benchmark-picker';
+
+/** A picker as the panel hands one over: a single element, its mounts counted. */
+function probePicker(): {snippet: Snippet; mounts: () => number} {
+    let mounts = 0;
+    const snippet: Snippet = createRawSnippet(() => ({
+        render: () => `<div data-testid="${PICKER}"></div>`,
+        setup: () => {
+            mounts += 1;
+        },
+    }));
+    return {snippet, mounts: () => mounts};
+}
+
+/** The benchmark the levels hold while the wait lasts — known already, or none, as the panel hands it over (see above). Either way the wait ends on `BENCHMARK`. */
+const WAITS = [{pendingBenchmarkId: BENCHMARK}, {pendingBenchmarkId: null}] as const;
+
+/** What the panel hands the levels once the picker stops saying `pending` with a benchmark confirmed. */
+const WAIT_ENDED: Partial<LevelsProps> = {benchmarkPending: false, benchmarkId: BENCHMARK};
+
+/**
+ * Mounted while the picker is pending, and past the barrier that gives any absence a meaning: L1° asked
+ * a question of its own, and its answer is in the cells — a mount that happened, and settled.
+ */
+async function mountWaiting(pendingBenchmarkId: number | null, picker?: Snippet) {
+    const props: LevelsProps = {...PROPS, benchmarkId: pendingBenchmarkId, benchmarkPending: true, benchmarkPicker: picker};
+    const {view} = mount(props);
+    await ownQuestion('l1');
+    await expectFigures();
+    return view;
+}
+
+/** L3°'s section waiting: its loading state, and nothing of a failed or a discarded wave. */
+function expectL3Waiting(why: string): void {
+    const loading = within(screen.getByTestId('risk-asset-set-l3')).queryByTestId('risk-asset-set-l3-loading');
+    expect(loading, `${why}: L3°'s section shows no loading state — it has asked nothing, so it has nothing else to show`).not.toBeNull();
+    expectNoLoadChromeIn('l3', 'risk-asset-set-paid', `${why}: waiting for the benchmark is neither a failed nor a discarded wave`);
+}
+
+/** The picker, found where it belongs: once on the page, in L3°'s frame body, before L3°'s section, and not in L1°'s frame. */
+function pickerInL3Frame(when: string): HTMLElement {
+    const drawn = screen.queryAllByTestId(PICKER);
+    expect(drawn.length, `${when}, the levels draw no picker: the benchmarkPicker they were handed is not on the page`).toBeGreaterThan(0);
+    expect(drawn, `${when}, the levels draw the picker they were handed more than once`).toHaveLength(1);
+    const picker = drawn[0];
+
+    expect(screen.getByTestId('risk-asset-set-paid').contains(picker), `${when}, the picker is not in L3°'s frame: L3° is the level that compares against the benchmark`).toBe(true);
+    expect(screen.getByTestId('risk-asset-set-paid-body').contains(picker), `${when}, the picker is in L3°'s frame but not in its body: it goes above L3°'s table, as on the Dashboard, not in the frame's header`).toBe(true);
+    expect(precedes(picker, screen.getByTestId('risk-asset-set-l3')), `${when}, the picker does not come before L3°'s section — it goes above L3°'s table — or it sits inside it`).toBe(true);
+    expect(screen.getByTestId('risk-asset-set-loss').contains(picker), `${when}, the picker is in L1°'s frame: L1° is measured without the benchmark`).toBe(false);
+    return picker;
+}
+
+describe("AssetSetComparisonLevels — the benchmark picker in L3°'s frame: while it is pending, L1° asks and L3° waits", () => {
+    it.each(WAITS)('while the benchmark is pending (benchmarkId $pendingBenchmarkId), L1° asks and L3° asks nothing: its section shows the loading state', async ({pendingBenchmarkId}) => {
+        await mountWaiting(pendingBenchmarkId);
+
+        expect(
+            questionsOf('l3').map((request) => codesOf(request)),
+            'L3° asked while the benchmark was pending: its question must wait for the picker, or a stored benchmark is asked twice — without it, then with it',
+        ).toEqual([]);
+        expectL3Waiting('while the benchmark is pending');
+    });
+
+    it.each(WAITS)('when the wait ends (benchmarkId $pendingBenchmarkId until then), L3° asks exactly once, with the benchmark, and L1° is not asked again', async ({pendingBenchmarkId}) => {
+        const view = await mountWaiting(pendingBenchmarkId);
+        const lossAsked = questionsOf('l1').length;
+        const paidWhileWaiting = questionsOf('l3').length;
+        const before = script.asked.length;
+
+        await view.rerender(WAIT_ENDED);
+        // The barrier: L3° asked once the wait was over — then every wave settled.
+        await waitFor(() =>
+            expect(
+                script.asked.slice(before).filter(({request}) => carries(request, 'l3')),
+                `the wait ended and L3° asked nothing — ${paidWhileWaiting} of its questions had been asked while the benchmark was pending`,
+            ).not.toHaveLength(0),
+        );
+        await quiet(created.controllers as RiskPanelController[]);
+
+        // Each entry: the benchmark one of L3°'s questions compared against, null for none.
+        const compared = questionsOf('l3').map((request) => comparedWith(request) ?? null);
+        expect(compared, 'L3° must ask exactly once over the whole mount: when the wait ends, never before it, never twice').toHaveLength(1);
+        expect(compared[0], "L3°'s one question does not compare against the benchmark the wait ended on").toBe(BENCHMARK);
+        expect(questionsOf('l1').length - lossAsked, 'the end of the wait asked L1° again: L1° never reads the benchmark, so it has nothing to wait for').toBe(0);
+        await expectL3Figures();
+    });
+
+    it("once the benchmark is settled: the picker is drawn once, in L3°'s frame body before L3°'s section, never in L1°'s frame", async () => {
+        const props: LevelsProps = {...PROPS, benchmarkId: BENCHMARK, benchmarkPicker: probePicker().snippet};
+        mount(props);
+        // The barrier: both levels drew their answers, so L3°'s table is on screen under the picker.
+        await expectFigures();
+        await expectL3Figures();
+
+        pickerInL3Frame('once the benchmark is settled');
+    });
+
+    it('while the benchmark is pending: the picker is drawn there too, because it is what ends the wait', async () => {
+        await mountWaiting(BENCHMARK, probePicker().snippet);
+
+        pickerInL3Frame('while the benchmark is pending');
+        expectL3Waiting('premise: the picker was looked for while L3° waits');
+    });
+
+    it('the end of the wait keeps the picker: the same element, mounted once — a picker mounted again would start a new wait', async () => {
+        const picker = probePicker();
+        const view = await mountWaiting(BENCHMARK, picker.snippet);
+        const waiting = pickerInL3Frame('while the benchmark is pending');
+        expect(picker.mounts(), 'premise: the picker was mounted more than once while the benchmark was pending').toBe(1);
+
+        await view.rerender(WAIT_ENDED);
+        // The barrier: the wait is over — L3° asked, and its answer is in its cells.
+        await expectL3Figures();
+
+        expect(pickerInL3Frame('once the wait has ended'), 'the end of the wait replaced the picker: a BenchmarkSelect says `pending` the moment it mounts, so a picker mounted again starts the wait over').toBe(waiting);
+        expect(picker.mounts(), 'the end of the wait mounted the picker again').toBe(1);
     });
 });

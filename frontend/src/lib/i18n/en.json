@@ -3127,7 +3127,7 @@
         },
         "l3": {
           "title": "What did each of these pay for its risk?",
-          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the table and in the chart; with a benchmark chosen at the top of the tab, also how much it moved along with it.",
+          "description": "For each selected asset, how much it swung and how much it returned on average per year, in the table and in the chart; with a benchmark chosen just above, also how much it moved along with it.",
           "expectedReturn": "Average annual return",
           "correlation": "Correlation",
           "columnHelp": {

@@ -50,7 +50,7 @@
     import {formatRatio} from './riskAnalysisHelpers';
     import {assetNameColumn, figureCell} from './assetSetTable';
     import {formatShare} from './levels/shareFormat';
-    import {HEADER_FONT, headerWidth, outsideParts, pointIdOf, referenceRowsFirst, riskReturnNotes, rowIdForPoint, rowIdOf, type RiskReturnCapabilities, type RiskReturnOutside, type RiskReturnRow} from './riskReturnLevel';
+    import {headerWidth, measureHeaderTitle, outsideParts, pointIdOf, referenceRowsFirst, riskReturnNotes, rowIdForPoint, rowIdOf, type RiskReturnCapabilities, type RiskReturnOutside, type RiskReturnRow} from './riskReturnLevel';
 
     interface Props {
         /** One per asset, in the order the page opens them in. */
@@ -113,19 +113,6 @@
     }
 
     const VALUE_CLASS = 'tabular-nums text-gray-600 dark:text-gray-300';
-
-    let titleMeasure: OffscreenCanvasRenderingContext2D | null | undefined;
-
-    /**
-     * A title's width in DataTable's header font, in the page's own typeface. Where there is no
-     * canvas (unit tests) a generous count of letters stands in.
-     */
-    function measureTitle(text: string): number {
-        if (titleMeasure === undefined) titleMeasure = typeof OffscreenCanvas === 'undefined' ? null : new OffscreenCanvas(1, 1).getContext('2d');
-        if (!titleMeasure) return text.length * 8.5;
-        titleMeasure.font = `${HEADER_FONT} ${getComputedStyle(document.body).fontFamily}`;
-        return titleMeasure.measureText(text).width;
-    }
 
     type ValueColumn = 'weight' | 'volatility' | 'expectedReturn' | 'sortino' | 'sharpe' | 'beta' | 'correlation';
 
@@ -204,7 +191,7 @@
      */
     function valueColumn(id: ValueColumn, figure: (row: T) => number | null | undefined, text: (value: number) => string): ColumnDef<T> {
         const fullTitleKey = FULL_TITLE_KEYS[id];
-        const width = headerWidth($t(TITLE_KEYS[id]), measureTitle);
+        const width = headerWidth($t(TITLE_KEYS[id]), measureHeaderTitle);
         return {
             id,
             header: () => $t(TITLE_KEYS[id]),
