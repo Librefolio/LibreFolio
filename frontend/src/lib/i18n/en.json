@@ -3603,7 +3603,8 @@
       }
     },
     "benchmark": {
-      "measuredHere": "This benchmark is also an asset measured here and cannot be its own yardstick: choose another one for the comparison."
+      "measuredHere": "This benchmark is also an asset measured here and cannot be its own yardstick: choose another one for the comparison.",
+      "blocked": "Not usable over this period"
     }
   },
   "updateCheck": {

@@ -80,11 +80,15 @@ export const riskBenchmark = {
     },
 };
 
-/** How far a picker got with the shared choice: `pending` is the picker's own word for "still checking". */
-export type RiskBenchmarkState = 'none' | 'pending' | 'set' | 'unknown';
+/**
+ * How far a picker got with the shared choice: `pending` is the picker's own word for "still checking", and
+ * `blocked` its word for a choice the engine says cannot be measured over the page's period (D378). Both are the
+ * picker's alone: the store resolves the stored id, never a page's period.
+ */
+export type RiskBenchmarkState = 'none' | 'pending' | 'set' | 'unknown' | 'blocked';
 
 export interface RiskBenchmarkResolution {
-    state: Exclude<RiskBenchmarkState, 'pending'>;
+    state: Exclude<RiskBenchmarkState, 'pending' | 'blocked'>;
     /** The confirmed benchmark, or null when there is none to use. */
     assetId: number | null;
 }
