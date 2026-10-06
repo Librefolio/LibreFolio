@@ -458,7 +458,7 @@ class _PlannerV2Normalizer:
         if not funding_values and not isinstance(self.request, RebalancerInvestAndSellRequest):
             self.issue("allocation.no_selected_funding", section_path("funding"))
 
-    def validate_funding_routes(self, cash_by_id: dict[str, object], contribution_by_id: dict[str, object]) -> None:
+    def validate_funding_routes(self, cash_by_id: dict[str, object], contribution_by_id: dict[str, object]) -> None:  # noqa: C901 — flat per-route field checks plus one source lookup per source kind
         self.duplicates(
             self.request.funding_routes,
             lambda item: item.funding_route_id,

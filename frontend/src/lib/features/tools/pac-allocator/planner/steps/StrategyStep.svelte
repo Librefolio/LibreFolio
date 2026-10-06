@@ -106,7 +106,9 @@
                             <div class="min-w-0">
                                 <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{$t('tools.pacAllocator.planner.strategy.tieBreakTitle', {default: 'Final tie-break'})}</p>
                                 <p class={HINT}>
-                                    {$t('tools.pacAllocator.planner.strategy.tieBreak', {default: 'If a tie is still left, a fixed order of Assets and Brokers decides: the same data always give the same plan.'})}
+                                    {$t('tools.pacAllocator.planner.strategy.tieBreak', {
+                                        default: 'If a tie is still left, a fixed order of Assets and Brokers decides. A search that ends by itself always gives the same plan for the same data; one stopped by a time or node limit may give a different plan.',
+                                    })}
                                 </p>
                             </div>
                         </div>

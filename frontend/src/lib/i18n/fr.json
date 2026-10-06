@@ -4566,7 +4566,7 @@
             "help": {
               "planAvailable": "Un plan qui respecte toutes les contraintes : les sections ci-dessous le détaillent.",
               "decimalVerified": "Le backend a revérifié le plan en arithmétique décimale exacte, indépendamment du solveur : chaque contrainte est respectée et les valeurs des objectifs sont exactes.",
-              "optimalProven": "Le solveur a prouvé qu’aucun meilleur plan n’existe, objectif par objectif, dans l’ordre choisi dans Stratégie.",
+              "optimalProven": "Le solveur a prouvé qu’aucun meilleur plan n’existe, objectif par objectif dans l’ordre choisi dans Stratégie, et la vérification exacte du plan concorde avec ses chiffres. La preuve vaut dans la petite marge de calcul du solveur, qui grandit avec les montants.",
               "completed": "Le solveur a terminé sa recherche de lui-même, sans atteindre de limite.",
               "timeLimit": "Le solveur a atteint sa limite de temps avant de terminer la recherche.",
               "nodeLimit": "Le solveur a atteint sa limite de nœuds, le nombre de tentatives qu’il peut faire, avant de terminer la recherche."
@@ -4783,7 +4783,7 @@
             "decimalVerified": "plan vérifié en Decimal exact par le backend",
             "dual": "Dual",
             "exactObjectives": "Valeurs exactes des objectifs (backend, Decimal)",
-            "floatingFinished": "Le solveur a clos chaque étape, mais son plan n’a pas passé la vérification en Decimal exact.",
+            "floatingFinished": "Le solveur a terminé sa recherche, mais ses propres chiffres ne concordent pas avec la vérification exacte de ce plan, donc la preuve ne tient pas. Le plan respecte toutes les contraintes : c’est le meilleur plan trouvé, mais il n’est pas prouvé que ce soit le meilleur.",
             "floatingUnfinished": "Le solveur s’est arrêté avant de clore chaque étape : c’est le meilleur plan trouvé, pas un plan prouvé.",
             "infeasible": "Infaisabilité prouvée",
             "notProven": "Non prouvé",
@@ -4805,8 +4805,8 @@
             "reportedFloating": "rapporté en virgule flottante",
             "scope": "Portée",
             "scopes": {
-              "global": "portée globale",
-              "incumbent_face": "face de l’incumbent"
+              "global": "tous les plans",
+              "incumbent_face": "seulement les plans aussi bons que celui trouvé"
             },
             "solverStages": "Étapes du solveur",
             "sources": {
@@ -4825,10 +4825,10 @@
             "solverInfeasibleWitness": "Le solveur a clos la première étape comme infaisable : aucun plan ne respecte toutes les contraintes strictes.",
             "exactValue": "Valeur exacte",
             "help": {
-              "status": "Indique si le solveur a clos cette étape : « terminée » signifie qu’il a prouvé la meilleure valeur.",
+              "status": "Indique si le solveur a clos cette étape. « Terminée » : il a prouvé la meilleure valeur. « Non terminée » : il s’est arrêté à une limite. Après une étape arrêtée, les suivantes n’ont cherché que parmi les plans aussi bons que celui déjà trouvé : là, même un écart de 0 ne prouve rien.",
               "primal": "La valeur du meilleur plan trouvé par le solveur pour cette étape.",
-              "dual": "La borne prouvée par le solveur : aucun plan ne peut faire mieux.",
-              "absoluteGap": "Écart entre les deux valeurs. 0 signifie que l’étape est close à l’optimum.",
+              "dual": "La borne prouvée par le solveur pour cette étape : aucun des plans qu’il a cherchés ne peut faire mieux. À partir de la deuxième étape, il n’a cherché que parmi les plans aussi bons que celui choisi aux étapes précédentes.",
+              "absoluteGap": "Écart entre les deux valeurs. Un écart de 0 ne prouve la meilleure valeur que si l’étape est terminée.",
               "relativeGap": "Le même écart, en fraction de la valeur."
             }
           },
@@ -5048,7 +5048,7 @@
           "l2Help": "Distance aux cibles : pour chaque actif, l’écart entre sa valeur après le plan et sa part cible de R, au carré, puis additionné sur tous les actifs. R est ce qui est déjà investi dans ces actifs plus les liquidités que vous pouvez utiliser. Le plan avec la somme la plus basse l’emporte ; le carré fait peser davantage les grands écarts. Valeurs au prix coté, sans frais ni marge.",
           "priorityHelp": "Vous choisissez les numéros à l’étape Routes, pour les actifs que plusieurs courtiers peuvent acheter, et à l’étape Courtiers, pour les sources de liquidités : le plus bas l’emporte. Tous à 0 = aucune préférence.",
           "tieBreakTitle": "Départage final",
-          "tieBreak": "S’il reste encore une égalité, un ordre fixe des actifs et des courtiers décide : les mêmes données donnent toujours le même plan.",
+          "tieBreak": "S’il reste encore une égalité, un ordre fixe des actifs et des courtiers décide. Une recherche qui se termine d’elle-même donne toujours le même plan avec les mêmes données ; une recherche arrêtée par une limite de temps ou de nœuds peut donner un autre plan.",
           "l2Formula": "Distance aux cibles :\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$ : valeur de l’actif après le plan\n• $p_i$ : sa cible\n• $R$ : déjà investi plus liquidités utilisables\nLe plan à la somme la plus basse l’emporte : le carré fait peser davantage les grands écarts. Au prix coté, sans frais ni marge."
         },
         "summary": {

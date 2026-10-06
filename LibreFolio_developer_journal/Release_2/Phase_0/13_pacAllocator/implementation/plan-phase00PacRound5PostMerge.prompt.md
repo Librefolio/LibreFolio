@@ -1,6 +1,7 @@
 # Piano D — Round 5 post-merge: UI PAC v2 nella build, poi review di dettaglio
 
 **Stato:** APPROVATO dal developer il 24/09/2026 (uscita dal plan mode in autopilot); in esecuzione. I gate umani (delta ASCII, test list, runbook, STOP) restano fermate esplicite anche in autopilot.
+**Chiusura (2026-10-05):** round chiuso e integrato in `dev_release2`. Codice `6f29ec1cf` e `0900f11fa`, journal `30d235b4d` e `946095d58`, merge `111b0bbd0`; compattazione del contratto `ac18ce097`, journal `9e4140376`, merge `68483ddda`; pagine utente `a568d6f45`, journal `7038c2224`; poi il CHANGELOG del coordinatore (`d9aad0ec9`). Le voci ⏳ rimaste sono chiuse con una nota datata; quelle ancora aperte (R3, R5, R7, R9, R10) hanno una destinazione nella chiusura della tabella dello STOP. Ordine approvato il 05/10: questa chiusura del journal → slice di robustezza del solver → rimozione finale del P1 → analisi del Rebalancer.
 **Baseline:** `f1047f766` (`dev_release2`), albero pulito, branch `e-alfy-allocatore-pac` — verificati il 23/09 e di nuovo il 24/09, prima del Passo 0.
 **Posizione:** `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md`
 (copia del piano di sessione approvato).
@@ -1230,7 +1231,13 @@ E2E Playwright: **dopo** l'approvazione umana, come da hard gate di Step 5 (Step
 >   pagina, e un resize desktop→mobile fotografa la transizione della sidebar. Non sono difetti; il
 >   flusso mobile ora parte già con il viewport mobile.
 
-### Passo F — SCIP unico motore in produzione (D-X1, X2, QX1-a, QX1-b) ⏳ in esecuzione
+### Passo F — SCIP unico motore in produzione (D-X1, X2, QX1-a, QX1-b) ~~⏳ in esecuzione~~ ✅ chiuso il 2026-10-05
+
+> **Chiusura (2026-10-05)**: F0–F6 ✅ fra il 25 e il 29/09; F7 riassegnato a K il 29/09. Commit:
+> `856c2193f` (F0, documenti), `f92e5560b` (X2, minimo della commissione), `6061affd7` (QX1-a,
+> tetto esatto della commissione), `b48b3cec9` (lo stato di SCIP è l'unica prova), merge
+> `d32f27c24` (J, A e K), `f6d7a955d` (QX1-b, arrotondamenti). Da allora SCIP è l'unico motore in
+> produzione; l'oracolo esaustivo resta solo nei test.
 
 > Stato al 24/09 sera: la decisione, i difetti e le prove sono registrati; **nessun file di codice
 > è stato toccato**. Il developer ha chiesto di fermarsi.
@@ -2260,7 +2267,56 @@ Ogni tema matematico si guarda **sulla schermata della UI che lo espone**, sui d
 | R9 | Toast di `ToolsHub` | Un `renderer_missing` atteso non merita un toast (`notify.svelte.ts:53-55`): correggerlo ora o metterlo in backlog. |
 | R10 | Stadi di tie-break e stop (latente, da prima di D-X1) | L'evidenza sul filo toglie gli stadi `tie:*` (`planner_report.py:814`), ma `build_stop_reason` li legge (`planner_report.py:910-913`). Se il budget finisce durante un tie-break, lo stop è `time_limit` mentre il filo non mostra alcuno stadio non terminato: `_validate_stop_evidence` (`schemas/pac_allocator.py:2125-2127`) alza un errore e il piano diventa un errore del tool, invece di un `not_proven` onesto. La finestra è stretta, ma con D-X1 ogni piano passa da SCIP. Opzioni: (a) un campo sul filo che dica che il tie-break è stato troncato; (b) contare lo stop solo sugli stadi pubblicati, ma allora `completed` non vorrebbe più dire «riproducibile»; (c) pubblicare anche gli stadi di tie-break, allargando `ObjectiveCode`. Da decidere; nessuna correzione nel commit 4. |
 
-### Iterazione UI col developer — passi 1 (Scenario) e 2 (Liquidità) ⏳ 2026-09-29, in attesa del suo feedback
+> **Chiusura (2026-10-05)**: la review di dettaglio si è fatta nei giri UI qui sotto (Round 2–14),
+> sulla 6161 coi dati del developer. Il suo via libera è nel Round 14, R14.5: «è tutto perfetto…
+> procedi con l'integrazione». Le voci della tabella vanno così:
+> - **R1, R2, R4, R6 e R8**: viste sulle schermate dei Round 2–14, coperte dal via libera del R14.5.
+>   - R1: la lettura prudente di Q-C0-2 è rimasta. I totali per coppia di valute li calcola il
+>     backend (R11.12). Il tetto predefinito `1000000000` non c'è più dal 30/09 (R8.5): il tetto
+>     è facoltativo (`NoOrderCap`), e vuoto vuol dire nessun limite oltre alle risorse. Della
+>     voce 13 resta quindi da rimisurare solo la riserva `_POST_ENGINE_RESERVE_MS`.
+>   - R6: `freshness` è uscita dal contratto con la compattazione (`ac18ce097`). `buffer = 0` e il
+>     deployment omesso non li ho ricontrollati uno per uno.
+>   - R8: vedi la chiusura del §4.
+> - **R3**: la review matematica di QX1-b chiesta da MathematicalCore §22 **non si è fatta** come
+>   review a sé: il developer ha visto gli arrotondamenti solo sulla schermata. Resta da spiegare
+>   anche l'osservazione su S17: U = −0,005 €, saldo finale −0,01 €, riga «Rounding» 0,005 €.
+>   Proposta al coordinatore: aggiungerla alla review matematica che apre la slice del solver. Ne
+>   allarga il perimetro, perché ledger e arrotondamenti stanno nell'evaluator, non nel solver.
+> - **R9** (il toast di `ToolsHub` per un `renderer_missing` atteso, oggi in
+>   `ToolsHub.svelte:88-101`) → analisi del Rebalancer.
+> - **R10** → slice di robustezza del solver, approvata il 05/10. Il difetto è dimostrato: se
+>   l'ultimo stadio di spareggio (`tie:*`) finisce il tempo (`solver.py:368-370`), il filtro di quegli
+>   stadi in `build_solver_evidence` (`planner_report.py:867`, `:890`) porta a un `ValidationError`.
+>   Ne esce un errore del tool, non un piano sbagliato; la correzione deve dare un `not_proven`.
+> - **R5**, il «ginocchio ≈ 18 asset» → domanda (b) dell'analisi del Rebalancer. Le misure del 05/10
+>   dicono che il numero di Asset da solo non decide: conta quanti Asset si possono comprare su più
+>   Broker con commissioni diverse.
+> - **R7**: rileggendo per questa chiusura, tre voci risultano **ancora aperte** sul codice di oggi.
+>   Nessun giro UI le ha corrette.
+>   - La voce del 29/09 sul testo della copia della distribuzione.
+>     `tools.pacAllocator.planner.distribution.source` («the values of the Allocation page», nel
+>     suggerimento a `DistributionDialog.svelte:204`) e `.differs` («the weights differ from the
+>     page», a `:66`) sono ancora in uso, in tutte e 4 le lingue. Quella pagina non esiste: è il
+>     pannello di allocazione della Dashboard (`AllocationPanel.svelte`).
+>   - «1 units»: `result/text.ts:21`, `:39`, `:48` e `:54` usano chiavi senza plurale
+>     (`result.text.buyUnits`, `.pricePer`, `.units`). Con una quantità di 1 scrivono ancora
+>     «buy 1 units».
+>   - La distanza L2 si scrive ancora nella locale del browser (`format.ts:206`, allora `:185`): il
+>     Round 14 ha cambiato le cifre decimali, non la locale.
+>
+>   Le altre voci dello smoke (titolo del contributo con etichetta vuota, testimone «9,018» contro
+>   «2212», cifre degli stage, numero di ordini in chiaro con privacy ON) riguardavano la vista dei
+>   risultati di prima del planner guidato, riscritta nei Round 2–14. Non le ho ricontrollate una per
+>   una. Proposta al coordinatore: portare le tre voci aperte, e il controllo delle altre,
+>   nell'analisi del Rebalancer, che riusa la stessa vista dei risultati; oppure correggere subito i
+>   testi con `dev.py i18n update` dentro la pulizia del P1 (punto 2).
+
+### Iterazione UI col developer — passi 1 (Scenario) e 2 (Liquidità) ~~⏳ 2026-09-29, in attesa del suo feedback~~ ✅ chiuso il 2026-10-05
+
+> **Chiusura (2026-10-05)**: il feedback è arrivato lo stesso giorno ed è il Round 2. I giri UI
+> sono continuati fino al Round 14 e sono stati consegnati nel commit `6f29ec1cf` (journal
+> `30d235b4d`, merge `111b0bbd0`).
 
 Il developer guarda la 6161 e scrive direttamente a D. Chiede di migliorare la UI dei passi 1 e 2, **senza test automatici**, e di fargliela vedere subito.
 
@@ -2334,7 +2390,11 @@ Il developer guarda la 6161 e scrive direttamente a D. Chiede di migliorare la U
   > - `OwnerBrokerPicker` ha ancora le righe vecchie;
   > - le chiavi legacy `tools.pacAllocator.*` fuori da `planner.` sembrano morte: verificarle con l'audit i18n.
 
-#### Round 2 — secondo feedback del developer ⏳ 2026-09-29, in attesa del suo feedback
+#### Round 2 — secondo feedback del developer ~~⏳ 2026-09-29, in attesa del suo feedback~~ ✅ chiuso il 2026-10-05
+
+> **Chiusura (2026-10-05)**: modifiche fatte il 29/09. La risposta del developer è la decisione
+> sulla data di riferimento (opzione 2, sotto), che apre il Round 3; sul resto, vedi «R3.6, esito»
+> nel Round 4. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
 
 **Cosa ha chiesto:**
 - Scenario: le spiegazioni non a schermo, ma in un `Tooltip` dietro un'icona «?»;
@@ -2448,7 +2508,10 @@ Il developer guarda la 6161 e scrive direttamente a D. Chiede di migliorare la U
   >
   > Qualunque cambio va al coordinatore, perché 05, 06 e la guida lo registrino.
 
-#### Round 3 — data automatica e rilettura prima di «Calcola» ⏳ 2026-09-29, in attesa del feedback del developer
+#### Round 3 — data automatica e rilettura prima di «Calcola» ~~⏳ 2026-09-29, in attesa del feedback del developer~~ ✅ chiuso il 2026-10-05
+
+> **Chiusura (2026-10-05)**: R3.1–R3.5 ✅ il 29/09; R3.6 chiuso con l'esito registrato nel Round 4.
+> Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
 
 Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, contratto `2.0.0` e client generato restano invariati.
 
@@ -2473,7 +2536,10 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
   - dopo la rilettura, una riga sopra il risultato dice quanti prezzi, cambi e saldi sono cambiati e quanti non sono stati trovati;
   - se la rilettura porta «Importo da usare» sopra il disponibile, il calcolo si ferma col problema locale che già esiste.
 - R3.5 ✅ 2026-09-29 — i18n, `front build --debug`, verifica sulla 6161. Nessun test automatico.
-- R3.6 ⏳ — feedback del developer su round 2 e round 3.
+- R3.6 ~~⏳~~ ✅ chiuso il 2026-10-05 — feedback del developer su round 2 e round 3.
+  > **Chiusura (2026-10-05)**: l'esito è registrato nel Round 4, alla voce «R3.6, esito». Il
+  > 30/09 il developer non ha commentato i passi 1–2 né le tre politiche del Round 3, che restano
+  > accettate; il suo feedback sui passi 3 e 4 apre il Round 4.
 
   > **Note implementazione** (2026-09-29):
   >
@@ -2530,7 +2596,7 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
   > - componenti: pannello d'errore (riprova, calcola senza rileggere, modifica), «Interrompi attesa» durante la rilettura, posizione della riga della rilettura;
   > - E2E: copia → «Calcola» con la lettura in più e gli stati `refreshing`/`refresh_failed`.
 
-#### Round 4 — feedback sui passi 3 (Broker) e 4 (Asset) ✅ 2026-09-30 (R4.1–R4.8); R4.9 ⏳ dopo i giri UI
+#### Round 4 — feedback sui passi 3 (Broker) e 4 (Asset) ✅ 2026-09-30 (R4.1–R4.8); ~~R4.9 ⏳ dopo i giri UI~~ R4.9 ✅ consegnato in R11.12 (chiuso il 2026-10-05)
 
 **Feedback del developer** (30/09), in sostanza:
 - **Broker, card**:
@@ -2579,7 +2645,7 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
 - R4.7b ✅ 2026-09-30 — rimesse nei cataloghi le 8 chiavi tolte nei round 1–3, contro la regola (a). Eseguito dopo il RESUME del venv condiviso: vedi il Fuori pista sotto.
   > **Note implementazione**: `/tmp/libreFolio_d_ui12/i18n_restore_r4.py`, 8 × `dev.py i18n add` con rc 0 e i testi di HEAD nelle 4 lingue (log `i18n_restore_r4.log`, 12:44; sha di prima in `i18n_before_r47b.sha`). Confronto con HEAD (`keydiff_r47b.log`): 4103 → 4157 chiavi per lingua, +54, **0 rimosse**, 0 differenze fuori dal planner. ICU di nuovo verde nelle 4 lingue (`icu_check_r47b.log`). Le 8 chiavi vanno nella lista di fine round.
 - R4.8 ✅ 2026-09-30 — feedback del developer sui passi 2–4, sulla 6161. Diventa l'ingresso del **Round 5** (sotto).
-- R4.9 ⏳ — **dopo questo giro UI**: riapertura della regola 10, cioè la modalità di conversione per Broker. Proposta approvata dal developer il 30/09:
+- R4.9 ~~⏳~~ ✅ chiuso il 2026-10-05 (nota in fondo al passo) — **dopo questo giro UI**: riapertura della regola 10, cioè la modalità di conversione per Broker. Proposta approvata dal developer il 30/09:
   - **Passo 3**: una scelta per Broker, «il Broker converte da solo quando compri» oppure «la fai tu prima di comprare». Il default è il comportamento di oggi, cioè la conversione manuale.
   - **Calcolo invariato**: stessi importi, stesso tasso, stesso spread; motore, oracolo e prova non si toccano.
   - **Lista finale**:
@@ -2591,6 +2657,11 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
     - test di schema e report tramite test-author.
   - **Limite dichiarato**: un ordine può essere pagato in parte con cassa nella valuta dell'asset e in parte convertendo. In modalità automatica si assume che il Broker lo sappia fare; se non lo fa, serve un cambio del calcolo, da portare alla review R1/R3.
   - Il coordinatore è stato avvisato il 30/09 (contratto, `api sync` in lista d'integrazione).
+  > **Chiusura (2026-10-05)**: R4.9 è stato consegnato come R11.12, nel Round 11 (contratto,
+  > UI e test; commit `6f29ec1cf`). Una differenza dal disegno qui sopra, decisa dal developer il
+  > 01/10: in modalità automatica la conversione non sta dentro la riga dell'ordine, perché il calcolo
+  > non assegna una conversione a un singolo ordine. C'è invece un riquadro col totale per coppia di
+  > valute nel gruppo «Ordini su {Broker}», più un badge sugli ordini in quella valuta.
 
   > **Note implementazione** (2026-09-30), R4.1–R4.7:
   >
@@ -3099,7 +3170,10 @@ Decisione del developer: opzione 2 (sopra). Solo frontend del planner: backend, 
   >   - PID 58751 (`dev.py server`), 58844 (uvicorn in ascolto).
   >   Verifiche: health 200 dopo ~4 s, `/api/v1/tools/catalog` senza auth 401, scheduler spento, la pagina serve `start.CbSeCkiu.js`/`app.-gH496nM.js` (il build di R9.9), 6151 libera. HEAD `f6d7a955d`, 72 percorsi, stage vuoto: nulla perso. Il server di F sulla 6164 non l'ho toccato. Poiché è staccato, al handoff va fermato in modo esplicito: `stop_bash srv6161r9`, poi `lsof`. Se resta in ascolto, SIGTERM a 58844, dopo aver verificato che il padre sia il mio `dev.py server`.
 
-#### Round 10 — Obiettivi bilanciabili, Strategia in due righe, L2 con formula, colonne dell'Allocazione, KPI e riquadro del calcolo, colonne ridimensionabili, «≈» delle percentuali, Composizione nel Rivedi, salto alla Prova, barra dei tempi ⏳ 2026-10-01
+#### Round 10 — Obiettivi bilanciabili, Strategia in due righe, L2 con formula, colonne dell'Allocazione, KPI e riquadro del calcolo, colonne ridimensionabili, «≈» delle percentuali, Composizione nel Rivedi, salto alla Prova, barra dei tempi ~~⏳ 2026-10-01~~ ✅ chiuso il 2026-10-05
+
+> **Chiusura (2026-10-05)**: R10.0–R10.11 ✅ il 01/10. La risposta del developer all'`ask_user` di
+> R10.11 apre il Round 11. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
 
 > Nota sugli ID: i finding `R1`…`R10` della tabella di `:2243-2252` non sono i passi di questo giro, che si chiamano `R10.x`.
 
@@ -3191,7 +3265,10 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
 - R10.11 ✅ 2026-10-01 — feedback (`ask_user`) con le spiegazioni.
   > **Note implementazione**: il developer ha risposto con 11 punti, che diventano il Round 11. Sul punto 1 conferma che vuole R4.9 adesso: «Broker: Manca ancora il modo di specificare come il broker gestisce le conversioni».
 
-#### Round 11 — R4.9 (conversione per Broker), titolo della Route, L2 con min ed elenco, Rivedi senza Composizione, badge nell'intestazione, ordine dei valori, marquee, esposizioni «ideale vs reale», colonne spostabili e nascondibili, barra dei tempi interattiva, Prova a card ⏳ 2026-10-01
+#### Round 11 — R4.9 (conversione per Broker), titolo della Route, L2 con min ed elenco, Rivedi senza Composizione, badge nell'intestazione, ordine dei valori, marquee, esposizioni «ideale vs reale», colonne spostabili e nascondibili, barra dei tempi interattiva, Prova a card ~~⏳ 2026-10-01~~ ✅ chiuso il 2026-10-05
+
+> **Chiusura (2026-10-05)**: R11.0–R11.11 e R11.13 ✅ il 01/10 (il developer ha risposto «ottimo»);
+> R11.12 chiuso con la nota in fondo al passo. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
 
 **Feedback del developer** (risposta all'`ask_user` del Round 10, 01/10), in sostanza:
 1. Broker: manca ancora il modo di dire come il Broker gestisce le conversioni. Il riepilogo dice solo «Conversione di valuta — Converti prima di comprare, al tasso del passo FX meno lo spread». È R4.9, e lo vuole adesso.
@@ -3257,7 +3334,7 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   > **⚠️ Fuori pista**: con l'infattibilità dimostrata il riquadro Prova mostra solo il badge, senza la riga `solverInfeasibleWitness`: è la spiegazione del badge stesso (R11.4) e l'avviso di stato sopra la dice per intero, quindi sarebbe stata la stessa frase due volte.
 - R11.11 ✅ 2026-10-01 — svelte-check.
   > **Note implementazione**: `svelte-kit sync`, poi `svelte-check --tsconfig ./tsconfig.json --output machine` in `frontend/` (log `/tmp/libreFolio_d_ui13/check_r11.log`): 5483 file, **3 errori e 41 avvisi, gli stessi della baseline** (`TransactionFormModal.test.ts` ×2, `ToolExecutionMetrics.svelte` ×1, tutti fuori dal planner). Nessun avviso nel planner: né sui gestori pointer/focus della barra dei tempi (R11.9) né sui riquadri e sulle card della Prova (R11.10).
-- R11.12 ⏳ — R4.9: contratto, UI, test, riavvio della 6161.
+- R11.12 ~~⏳~~ ✅ chiuso il 2026-10-05 (nota in fondo al passo) — R4.9: contratto, UI, test, riavvio della 6161.
   > **Analisi (2026-10-01), prima del codice: la conversione non appartiene a un ordine.**
   > - **Cosa decide il motore.** Una conversione è una decisione `fx_debit` per rotta d'acquisto × valuta di origine (`evaluator.py:1738-1821`). Il suo accredito però entra nella cassa del Broker nella valuta dell'Asset, la cella `(broker, valuta)` che tutti gli ordini di quel Broker in quella valuta usano insieme (`constraints.py:503-597`). Nessun vincolo lega la conversione all'acquisto della sua rotta: il catalogo dei vincoli (`models.py:53-87`) non ha una regola FX↔BUY, e `_validate_ready_solution` non controlla che `order_route_id` abbia una riga d'ordine.
   > - **Chi sceglie la rotta.** Nessun obiettivo distingue la rotta: lo spread dipende solo dalla coppia (`objectives.py:167-201`). Decide lo spareggio canonico, che minimizza i quanti in ordine (`objectives.py:224-231`), con la chiave `("", broker, origine, "fx", destinazione, route_id)` (`evaluator.py:3007-3077`). La conversione finisce quindi sull'ultima rotta in ordine di ID fra quelle dello stesso Broker e della stessa valuta, anche su un Asset che il piano non compra.
@@ -3301,6 +3378,15 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   > - `FxStep.svelte` non cambia: il suo testo non dipende dalla modalità.
   > - Nell'editor ho usato card radio (`fieldset`, `label` + `input type=radio`) e non i bottoni `aria-pressed` di `TOGGLE_CARD` (`ui.ts:62-64`) previsti nel disegno: la scelta è esclusiva fra due, e un gruppo radio lo comunica da solo a tastiera e screen reader.
   > - Restano: test e fixture (test-author, in corso) e `api pac-planner-tool` nella corsia 6151.
+  > **Chiusura (2026-10-05)**: R11.12 è completo.
+  > - Test backend con `conversion_mode` in `test_pac_planner_schemas.py`,
+  >   `test_pac_planner_normalize.py`, `test_pac_planner_evaluator.py`, `test_pac_planner_planner.py`
+  >   e `test_pac_planner_report.py`, già nel commit `6f29ec1cf`.
+  > - Il campo vive in `PlannerBrokerInput.conversion_mode` (`backend/app/schemas/pac_allocator.py:431`).
+  > - Il test frontend della richiesta, `planner/request.test.ts`, è entrato con la compattazione
+  >   (`ac18ce097`).
+  > - `api pac-planner-tool` verde: 6 su 6 nei gate R14.8 sulla revisione unita (05/10), 7 su 7
+  >   dopo la compattazione.
 - R11.13 ✅ 2026-10-01 — i18n, build, feedback (`ask_user`).
   > **Note implementazione (2026-10-01)**: il developer ha risposto all'`ask_user` del Round 11 con «ottimo». Subito dopo ha segnalato il blocco della Route su un Asset quotato in una valuta senza modalità d'ordine: è il Round 12.
   > **Note implementazione (2026-10-01)**: batch del giro `/tmp/libreFolio_d_ui13/i18n_round11.py` (R11.2, R11.4, R11.5, R11.7, R11.12), applicato con `dev.py i18n`.
@@ -3313,7 +3399,10 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
   >   - 5 aggiunte a mano, che lo script non vede perché stanno sotto famiglie dinamiche: `review.kind.exposures` (`${KEY}.kind.${kind}`, `ReviewStep.svelte:122`; R11.3) e `result.kpi.{funding,fundingReachable,shortfallParts,shortfallPartsNoRounding}` (helper `text()`, `KpiCards.svelte:45`; R10.6).
   > - Dei 5 aggiunti a mano nel Round 9, 4 restano senza uso: `problems.routeCapMissing` (non più in `request.ts`), `result.sections.assets` (non fra le sezioni di `ResultView.svelte:53`), `result.weights.{finalShort,targetShort}` (solo in `result/WeightBars.svelte`, che nessuno importa).
 
-#### Round 12 — Route: Asset quotato in una valuta in cui il Broker non ha una modalità d'ordine ⏳ 2026-10-01
+#### Round 12 — Route: Asset quotato in una valuta in cui il Broker non ha una modalità d'ordine ~~⏳ 2026-10-01~~ ✅ chiuso il 2026-10-05
+
+> **Chiusura (2026-10-05)**: R12.1–R12.2 ✅ il 01/10. Il developer ha risposto al Round 12 insieme
+> al feedback che apre il Round 13. Consegnato nel commit `6f29ec1cf` (journal `30d235b4d`).
 
 **Feedback del developer** (01/10, dopo l'«ottimo» sul Round 11): Broker directa con conversione manuale, poi un Asset «test» (ETF) aggiunto a mano e quotato in una valuta diversa da EUR. Al passo Route la card dell'Asset dice «Il Broker non ha alcuna modalità d'ordine nella valuta del prezzo di questo Asset», e il banner blocca Continua («1 problema da correggere prima di continuare: Route · test · directa · …»). Non capisce l'errore, «visto che semplicemente tra i passi da fare mi verrà detto di convertire».
 
@@ -3785,6 +3874,32 @@ La domanda «riuso dei margini = Piano operativo?» resta accettata (la risposta
 8. Residui P1 a fine round: `allocationSource.ts`, l'`allocation_source` P1 di `/portfolio/report`
    e le 680 chiavi `tools.pacAllocator.*` P1.
 9. Sankey/ribbon dei flussi e rifinitura mobile fine della serie D (rinviati da Q1).
+
+> **Chiusura (2026-10-05)**, dopo l'integrazione in `dev_release2` (`7038c2224`). Dove sono
+> finite le voci, con l'ordine deciso dal developer il 05/10: journal → robustezza del solver →
+> rimozione finale del P1 → analisi del Rebalancer.
+> - **1–3** (Rebalancer, una policy alla volta, margine e `g`) → analisi del Rebalancer, che parte
+>   in questo round. Riusa il più possibile del PAC: compilatore, verifier, report e UI.
+> - **4** (`limits/nodes` e gate di capacità) → voce 13 della slice di robustezza del solver, che
+>   rimisura la riserva `_POST_ENGINE_RESERVE_MS` e lascia `limits/nodes` non passato (serve una
+>   macchina di riferimento, rinviato). Il resto va alla domanda (b) sul numero di Asset
+>   nell'analisi del Rebalancer. Misure del 05/10 su questa
+>   macchina, limite di 30 s, caso realistico: quando 2 Broker offrono gli stessi Asset con
+>   commissioni diverse, la prova arriva fino a 12 Asset; con 3 Broker fino a 8.
+> - **5** e **6**: invariate (superata e rinviata).
+> - **7**: le pagine MkDocs del PAC sono fatte in S11 (`a568d6f45`), con la versione 1.0.0. Gli E2E
+>   del PAC si fanno dopo il Rebalancer, insieme ai suoi, sfruttando le parti comuni. Nella stessa
+>   analisi entra un E2E backend del motore: compone la richiesta del tool solo con gli altri
+>   endpoint (portafoglio, asset, prezzi, FX), a monte della UI, sul modello di
+>   `backend/test_scripts/test_e2e/test_search_to_prices.py`.
+> - **8**: le «680 chiavi» erano una stima. La scansione del 05/10 su `7038c2224` ne conta 285:
+>   261 senza uso, più 24 che restano senza uso quando si toglie anche il codice di copia v2 morto
+>   (estensione (b), approvata). Fra le 261 ci sono tutte le 28 `tools.portfolioRebalancer.*`. Le
+>   altre 104 chiavi del planner senza uso vanno nel backlog del coordinatore. La rimozione finale del
+>   P1 viene dopo la slice di robustezza del solver, nel piano
+>   `plan-phase00PacP1FinalRemoval.prompt.md` (da creare).
+> - **9**: invariata (rinviata da Q1).
+> - Il server MCP resta fuori round: «prematuro oltre ogni misura» (developer, 05/10).
 
 ---
 

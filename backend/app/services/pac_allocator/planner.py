@@ -16,6 +16,11 @@ SCIP is the only production search engine, and its own status is the proof
 found, or with none. The exhaustive oracle is a test instrument
 (``backend/test_scripts``); production cannot reach it.
 
+One check stands between SCIP and ``infeasibility_proven``: doing nothing is
+a plan too. If the exact replay accepts it, SCIP's verdict is contradicted,
+and ``SolverInfeasibilityContradictedError`` is raised instead
+(``_no_incumbent_result``).
+
 ``evaluate_exact_candidate`` is **always** on the path, and its verdict is
 authoritative. SCIP's incumbent is a floating proposal that has to survive
 exact arithmetic before a single number of it is published. The one deficit
@@ -79,7 +84,7 @@ from backend.app.schemas.pac_allocator import (
 )
 from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.evaluator import ExactEvaluatorError, build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -113,6 +118,18 @@ _PRIMARY_SOLUTION_ID = "solution:primary"
 _DEPLOYMENT = DeploymentUnavailable(kind="unavailable", reason_code="allocation.deployment_omitted")
 
 
+class SolverInfeasibilityContradictedError(ExactEvaluatorError):
+    """SCIP reported the scenario infeasible, but doing nothing passes the exact replay.
+
+    Doing nothing is itself a plan. If exact arithmetic accepts it, the
+    scenario has a plan, and SCIP's verdict is wrong: its float arithmetic
+    lost precision, as it can with amounts of around ten billion units of a
+    currency. Publishing ``infeasibility_proven`` would state something false,
+    so the error goes to the Tool, which reports ``execution_failed``, as it
+    does for ``ExactReplayRejectedError``. The message names no amounts.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class _Search:
     """What the search stage found, before any of it is trusted."""
@@ -131,9 +148,11 @@ def plan_pac_allocation(
 
     Never raises on a planning outcome: an infeasible scenario and an exhausted
     budget are *results*, each with its own ``result_state``. A genuine
-    contract violation propagates, and so does ``ExactReplayRejectedError``: a
-    SCIP plan the exact replay rejects for more than rounding is a defect, not
-    an outcome to answer with.
+    contract violation propagates, and so do two defects of the search, which
+    are not outcomes to answer with: ``ExactReplayRejectedError``, a SCIP plan
+    the exact replay rejects for more than rounding, and
+    ``SolverInfeasibilityContradictedError``, an infeasibility verdict on a
+    scenario where doing nothing is a valid plan.
 
     ``solver_time_budget_seconds`` is the engine window the caller has already
     claimed. It matters more than it looks: the lexicographic cascade is what
@@ -182,7 +201,8 @@ def _search(
 
     There is no other route and no size threshold: the exhaustive oracle is a
     test instrument that production cannot reach, and SCIP's cost grows with
-    the number of decisions, not with the size of the domain (see
+    the number of decisions, not with the size of the domain — and far faster
+    when several brokers sell the same asset (see
     ``planner_report.build_stop_reason``). SCIP's candidate stays a proposal
     until the Decimal replay accepts it, and its statuses become a proof only
     through ``proof.conclude_with_solver``.
@@ -242,15 +262,22 @@ def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, 
     because the search ended on that verdict, and ``build_stop_reason``
     already says so — an infeasible stage is not an unfinished one.
 
+    That verdict is checked before it is published. The do-nothing plan is
+    evaluated here anyway, for the scenario basis; if exact arithmetic finds
+    it valid and feasible, the scenario does have a plan, and
+    ``SolverInfeasibilityContradictedError`` is raised instead.
+
     Everything else is ``ready_no_incumbent`` with ``not_proven``: a limit that
     left no solution. A SCIP plan the Decimal replay rejects never lands here:
     it is published with its rounding top-ups, or ``plan_pac_allocation``
     raises ``ExactReplayRejectedError``.
     """
     evaluation = _zero_candidate_evaluation(scenario, view)
-    common = _common_ready_fields(scenario, view, search, evaluation, issues)
-
     conclusion = _conclude(view, search, published=None)
+    if isinstance(conclusion, InfeasibilityProvenConclusion) and evaluation.candidate_valid and evaluation.feasible:
+        raise SolverInfeasibilityContradictedError("the solver reported the scenario infeasible, but the do-nothing plan passes the exact replay")
+
+    common = _common_ready_fields(scenario, view, search, evaluation, issues)
     if isinstance(conclusion, InfeasibilityProvenConclusion):
         return PacPlannerReadyInfeasibleResult(result_state="ready_infeasible", outcome="infeasible_proven", proof=_wire_infeasibility(conclusion), **common)
 
