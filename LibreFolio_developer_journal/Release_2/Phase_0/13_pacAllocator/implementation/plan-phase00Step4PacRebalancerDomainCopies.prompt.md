@@ -390,6 +390,35 @@ della review umana in Step 5.
 > `D-main` registrerà il solo selector mancante
 > `services portfolio-allocation-source`; `api portfolio` resta il selector API.
 
+> **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
+> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti
+> aperti, senza spuntarli.
+> - **6. Test di permessi, dati mancanti, provenienza e assenza di scritture.** Ci sono:
+>   - `test_portfolio_allocation_source.py`, 48 test: permessi controllati prima di ogni
+>     lettura privata (`:446`, `:479`), asset mancante (`:666`), provenienza e quote
+>     (`:1011`, `:1147`);
+>   - in `test_portfolio_api.py` i test dell'endpoint `POST /portfolio/allocation-source`
+>     (`:1921`–`:2049`, `:2525`–`:2595`): risposta `no-store`, 401 senza login, nessun
+>     accesso implicito per l'admin, errori tipizzati;
+>   - `test_pac_planner_schemas.py` per la forma del contratto.
+>
+>   L'assenza di scritture è provata con una sessione finta che fallisce a ogni `add`,
+>   `delete`, `flush` o `commit` (`test_portfolio_allocation_source.py:60-92`, controlli a
+>   `:912`, `:1643`, `:1720`).
+> - **7. Client generato.** Si rigenera con `dev.py api sync` a ogni gate.
+> - **8. Client della copia.** `planner/source.ts:308` (`fetchPlannerSource`, unico client di
+>   `POST /portfolio/allocation-source`) e `planner/copies.ts`. Le risposte vecchie vengono
+>   scartate in `planner/sourceLoad.svelte.ts:29-50` (numero di sequenza più
+>   `AbortController`). Questa protezione non ha un test unitario suo.
+> - **9. Pulsanti di copia indipendenti.** Sono nei passi del planner, provati dal developer
+>   nei round 2–14 (via libera nel R14.5 del
+>   [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md)).
+> - **10. Review di permessi e privacy.** Coperta dai test sopra e dal controllo del
+>   coordinatore sul delta (nessun valore reale nuovo). Una review indipendente separata non
+>   è stata fatta.
+> - Il vecchio ramo `include_allocation_source` di `GET /portfolio/report` si toglie nella
+>   riga 13 del [README](README.md).
+
 ## 11. Stop conditions
 
 - serve modificare FIFO/WAC o schema DB;

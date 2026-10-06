@@ -356,6 +356,42 @@ services pac-planner-capacity
       > lista, non ricostruirla.
 - [ ] 14. Review matematica e resource lifecycle.
 
+> **Nota 2026-10-05 (chiusura del round 5).** Il PAC è integrato in `dev_release2`
+> (`7038c2224`). Le caselle restano come sono: questa nota dice dove sono finiti i punti,
+> senza spuntarli. Il lavoro fatto è registrato negli Stage 1–5 del §16 (tutti del 18/09) e
+> nel Passo F del [piano Round 5](plan-phase00PacRound5PostMerge.prompt.md).
+> - **1–5. Vincoli, compilatore, MIQP, cascata MIQCP e PAC `proportional`.** Fatti:
+>   `services/pac_allocator/{constraints,objectives,compiler,solver}.py`, Stage 2 e 3
+>   (§16.9, §16.12).
+> - **6. PAC `min_fragmentation`.** Rinviata dal developer il 21/09 (`TODO_FUTURI.md:651`).
+>   Il contratto accetta solo `proportional` (`schemas/pac_allocator.py:638`, `:2309`).
+> - **7–9 e 11. Rebalancer: `invest_only`, `invest_and_sell`, variante solo acquisti,
+>   verifica delle vendite.** Non fatti: vanno con l'analisi del Rebalancer (riga 14 del
+>   [README](README.md)). Il contratto ha già le due policy (`schemas/pac_allocator.py:647`,
+>   `:652`). `SellIrreducibilityCheck.closure_kind` cita ancora `"exhaustive_oracle"`
+>   (`:1406`), che dal 28/09 vive solo nei test: va rivisto lì.
+> - **10. Prova.** `proof.py`, Stage 4 (§16.13). Dal 28/09 (`b48b3cec9`) il servizio considera
+>   prova soltanto lo stato di SCIP.
+> - **12. Annullamento e pulizia.** Scadenze e annullamento li gestisce la piattaforma Tool. La
+>   riserva dopo il solver è `_POST_ENGINE_RESERVE_MS` (`tool_plugins/pac_allocator.py:79`).
+>   Cosa succede quando il tempo finisce a metà della cascata (A1, `solver.py:436`) lo
+>   sistema la slice di robustezza del solver (riga 12 del README).
+> - **13. Oracle e capacità.** Il confronto con l'oracle è in `test_pac_planner_oracle.py`. Il
+>   selector `services pac-planner-capacity` non esiste. Dei tre numeri elencati sopra:
+>   - `_POST_ENGINE_RESERVE_MS` si rimisura nella slice di robustezza. *Fatto il 2026-10-06*
+>     (S5 del [piano della slice](plan-phase00PacSolverRobustness.prompt.md)): il lavoro dopo
+>     il solver prende 6,4–12,9 ms, e i 2 000 ms restano;
+>   - `limits/nodes` resta non passato: serve una macchina di riferimento, ed è rinviato;
+>   - il tetto predefinito `1000000000` non c'è più dal 30/09 (R8.5 del piano Round 5): il
+>     tetto è facoltativo, e vuoto vuol dire nessun limite oltre alle risorse.
+>
+>   Le misure di capacità del 05/10 vanno alla domanda (b) dell'analisi del Rebalancer. Su
+>   scenari realistici, con 2 broker che vendono gli stessi asset il solver prova l'ottimo
+>   fino a 12 asset, con 3 broker fino a 8. Con la griglia grossolana dello scenario M
+>   diventa difficile già da 5 asset × 2 broker.
+> - **14. Review matematica e delle risorse.** Non fatta come review indipendente. La parte
+>   matematica va nella slice di robustezza; le risorse nella domanda (b).
+
 ## 14. Stop conditions
 
 - solver richiesto ma dependency/capacity gate non chiuso;
