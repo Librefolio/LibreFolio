@@ -54,10 +54,10 @@ Le RSI Stochastique est une **cascade à deux étages** : le premier étage (RSI
 
 ```mermaid
 flowchart LR
- C["💹 Close"] --> RSI["💪 RSI(N)"]
- RSI --> MINMAX["📐 Rolling min/max over N bars"]
- MINMAX --> K["🎯 %K"]
- K --> D["🔁 %D = SMA(d, %K)"]
+    C["💹 Close"] --> RSI["💪 RSI(N)"]
+    RSI --> MINMAX["📐 Rolling min/max over N bars"]
+    MINMAX --> K["🎯 %K"]
+    K --> D["🔁 %D = SMA(d, %K)"]
 ```
 
 !!! tip "Plus rapide mais plus bruyant"

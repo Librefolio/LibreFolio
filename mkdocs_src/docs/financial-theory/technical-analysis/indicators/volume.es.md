@@ -37,11 +37,11 @@ Un movimiento de precio con alto volumen refleja una amplia participación y es 
 
 ```mermaid
 flowchart LR
- C["💹 Close"] --> SGN["➕➖ Signo de ΔClose"]
- V["📦 Volume"] --> SGN
- SGN --> OBV["📊 OBV (acumulativo)"]
- HLCV["📈 High / Low / Close / Volume"] --> MF["💰 Flujo de Dinero"]
- MF --> MFI["💸 MFI (0–100)"]
+    C["💹 Close"] --> SGN["➕➖ Signo de ΔClose"]
+    V["📦 Volume"] --> SGN
+    SGN --> OBV["📊 OBV (acumulativo)"]
+    HLCV["📈 High / Low / Close / Volume"] --> MF["💰 Flujo de Dinero"]
+    MF --> MFI["💸 MFI (0–100)"]
 ```
 
 !!! info "OBV no tiene parámetro de período"

@@ -40,11 +40,11 @@ A diferencia de MACD (que resta dos salidas de *pase bajo* para aproximar una de
 
 ```mermaid
 flowchart LR
- C0["💹 C(t−N)"] --> DIFF["➖ C(t) − C(t−N)"]
- C1["💹 C(t)"] --> DIFF
- DIFF --> NORM["➗ ÷ C(t−N)"]
- NORM --> SCALE["✖️ ×100"]
- SCALE --> ROC["🚀 ROC(t)"]
+    C0["💹 C(t−N)"] --> DIFF["➖ C(t) − C(t−N)"]
+    C1["💹 C(t)"] --> DIFF
+    DIFF --> NORM["➗ ÷ C(t−N)"]
+    NORM --> SCALE["✖️ ×100"]
+    SCALE --> ROC["🚀 ROC(t)"]
 ```
 
 !!! warning "Amplificación de ruido"

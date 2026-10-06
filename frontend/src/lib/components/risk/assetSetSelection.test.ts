@@ -8,10 +8,11 @@
  * asked for and gave no way back. Every rule it now enforces is a decision
  * taken before a component renders — which assets are on the table, what a
  * mass action does to the ruled-out assets parked in the selection, which
- * benchmark the comparison levels measure against — so all of it is asserted
- * here rather than through a page. The "+" picker's own rules (the filter row,
- * its rows, its "select visible" switch) moved with the picker to
- * `ui/select/assetPicker.ts`, and their tests to `ui/select/AssetPickerPanel.test.ts`.
+ * benchmark the comparison levels measure against and when L3° waits for its
+ * verdict — so all of it is asserted here rather than through a page. The "+"
+ * picker's own rules (the filter row, its rows, its "select visible" switch)
+ * moved with the picker to `ui/select/assetPicker.ts`, and their tests to
+ * `ui/select/AssetPickerPanel.test.ts`.
  *
  * Two deliberate choices in the fixtures:
  *
@@ -41,7 +42,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
 import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
-import {FALLBACK_SELECTION_SIZE, MAX_SELECTED_ASSETS, applyBulkAction, labBenchmarkId, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectableAsset, type SelectionSource} from './assetSetSelection';
+import {FALLBACK_SELECTION_SIZE, MAX_SELECTED_ASSETS, applyBulkAction, labBenchmarkId, labL3Waits, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectableAsset, type SelectionSource} from './assetSetSelection';
 
 /** An asset carrying only the fields this module reads. */
 function asset(id: number, overrides: Partial<SelectableAsset> = {}): SelectableAsset {
@@ -708,12 +709,16 @@ describe('applyBulkAction', () => {
  *
  *  - **The state, pinned on its own.** Risk's shared picker, `BenchmarkSelect`,
  *    publishes `pending` while a stored choice is still being confirmed against
- *    the asset list, `unknown` for a stored id no asset matches and `none` when
- *    nothing is stored; only `set` is a confirmed choice. An unconfirmed or
- *    unknown id must never reach the request. No component test can pin this
- *    guard: with today's picker `value` stays null until `set`, so removing it
- *    there is an equivalent mutant. Here it is not — each of its rows carries an
- *    id the other guard lets through, and first proves it under `set`.
+ *    the asset list, `unknown` for a stored id no asset matches, `none` when
+ *    nothing is stored and — since D378 — `blocked` for a confirmed choice the
+ *    engine cannot measure over the page's period; only `set` is a choice to
+ *    measure against, and no other id may reach the request. For the first three
+ *    no component test can pin this guard: the picker's `value` stays null until
+ *    `set`, so removing it there is an equivalent mutant. Not for `blocked`: the
+ *    choice keeps its id, in the trigger and in `value`, so the state is all that
+ *    keeps it out of L3°'s request — which `risk-lab.spec.ts` also pins through
+ *    the page (benchmark picker (g)). Here every row carries an id the other
+ *    guard lets through, and first proves it under `set`.
  *  - **The value.** A confirmed state that comes with no id names no benchmark:
  *    the answer is `null` itself, the one value that starts nothing.
  *
@@ -743,6 +748,8 @@ describe('labBenchmarkId', () => {
         ['the stored choice is still pending confirmation', 'pending', 7],
         ['the stored id matches no asset', 'unknown', 7],
         ['nothing is stored', 'none', 7],
+        // D378: confirmed, and kept by the picker with its id, but not measurable over the page's period.
+        ['the engine rules the confirmed choice out over the period', 'blocked', 7],
     ])('measures against nothing while %s, however usable the id', (_label, state, value) => {
         // The control: confirmed, this very id would be measured against — the state alone refuses it.
         expect(labBenchmarkId('set', value), 'the same id, confirmed').toBe(value);
@@ -752,5 +759,75 @@ describe('labBenchmarkId', () => {
     it('measures against nothing when no id comes with the choice, even once confirmed', () => {
         // `null` itself: `undefined` is not the contract's "no comparison".
         expect(labBenchmarkId('set', null)).toBeNull();
+    });
+});
+
+/**
+ * labL3Waits — whether L3° holds its question back for the eligibility verdicts.
+ *
+ * D378, the developer's decision of 06/10/2026: a stored benchmark the engine
+ * cannot measure over the page's period is not tried — «Non lo prova». The lab
+ * hands its picker its own verdicts (`verdicts={eligibilityView}`), and the
+ * picker does not wait for them: with the map still empty it says `set`, and
+ * `blocked` once the verdict lands. An L3° that asked on `set` would therefore
+ * ask with the benchmark, then again without it: the benchmark tried, and the
+ * table drawn twice.
+ *
+ * So L3° waits whenever a benchmark is chosen and the verdict that decides it
+ * has not come:
+ *
+ *  - `pending` waits, as before D378: the choice itself is not confirmed yet,
+ *    whatever the verdicts say;
+ *  - a chosen benchmark, `set` or `blocked`, waits while the verdicts for the
+ *    current question are out, and asks once they have settled — answered, or
+ *    failed: a failed question blocks nothing, and an L3° waiting for it would
+ *    never ask. `blocked` with the verdicts out happens only on a re-ask — a
+ *    new period, a new list — when the old verdict no longer decides: asked
+ *    then, L3° would follow a stale verdict and ask again once the new one
+ *    lands, so it waits for one question with the new verdict, as `set` does;
+ *  - `none` and `unknown` never wait: nothing usable is chosen — nothing
+ *    stored, or an id no asset matches — so their question carries no
+ *    benchmark (`labBenchmarkId`), and a wait would only hold back figures no
+ *    verdict can change.
+ */
+describe('labL3Waits', () => {
+    /**
+     * Every state the picker publishes, kept complete by the compiler: a key
+     * missing here, or one the type lacks, fails to type-check, so a new state
+     * cannot reach the lab without its rows below.
+     */
+    const STATES: Record<RiskBenchmarkState, true> = {none: true, pending: true, set: true, unknown: true, blocked: true};
+
+    /** [why, state, the verdicts settled]: the pairs where L3° waits. */
+    const WAITS: ReadonlyArray<[string, RiskBenchmarkState, boolean]> = [
+        ['the stored choice is still being confirmed, the verdicts out', 'pending', false],
+        ['the stored choice is still being confirmed, though the verdicts are in', 'pending', true],
+        ['a confirmed benchmark has no verdict yet: asked now, it would be tried', 'set', false],
+        ['a benchmark blocked on an old verdict awaits the current question: the new verdict decides', 'blocked', false],
+    ];
+
+    /** [why, state, the verdicts settled]: the pairs where L3° asks at once. */
+    const ASKS: ReadonlyArray<[string, RiskBenchmarkState, boolean]> = [
+        ['a confirmed benchmark has its verdict and is still `set`: measurable, or the question failed, which blocks nothing', 'set', true],
+        ['the current verdict rules the benchmark out: the question carries none', 'blocked', true],
+        ['the stored id matches no asset, the verdicts in', 'unknown', true],
+        ['the stored id matches no asset, the verdicts out', 'unknown', false],
+        ['nothing is stored, the verdicts in', 'none', true],
+        ['nothing is stored, the verdicts out', 'none', false],
+    ];
+
+    it.each(WAITS)('L3° waits while %s', (_label, state, settled) => {
+        expect(labL3Waits(state, settled)).toBe(true);
+    });
+
+    it.each(ASKS)('L3° asks at once when %s', (_label, state, settled) => {
+        expect(labL3Waits(state, settled)).toBe(false);
+    });
+
+    it('the two tables hold every state the picker publishes, with the verdicts out and in, once each', () => {
+        // The tables' own premise: a pair left out of both would be a rule nobody pinned.
+        const held = [...WAITS, ...ASKS].map(([, state, settled]) => `${state}/${settled}`).sort();
+        const every = (Object.keys(STATES) as RiskBenchmarkState[]).flatMap((state) => [`${state}/false`, `${state}/true`]).sort();
+        expect(held).toEqual(every);
     });
 });

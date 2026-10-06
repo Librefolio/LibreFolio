@@ -33,12 +33,19 @@ import hashlib
 import io
 import json
 import re
+import threading
 import uuid
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - not POSIX: the in-process lock still serialises one server
+    fcntl = None  # type: ignore[assignment]
 
 import structlog
 from pydantic import ValidationError
@@ -605,12 +612,105 @@ class BRIMProvider(ABC):
 # FILE STORAGE
 # =============================================================================
 
-from backend.app.config import get_data_dir
+from backend.app.config import get_data_dir, get_version
 
 
 def get_broker_reports_dir() -> Path:
     """Get the broker reports directory based on current environment (prod/test)."""
     return get_data_dir() / "broker_reports"
+
+
+def detection_signature() -> str:
+    """The signature of the plugin catalogue a file's ``compatible_plugins`` were detected with.
+
+    It is the app version: a release (or a nightly commit) may change a plugin's ``can_parse``,
+    the base reader or the list of plugins, and the list detected at upload must then be detected
+    again. ``plugin_version`` cannot serve: its contract covers the parse output, not detection.
+    """
+    return get_version()
+
+
+# Metadata writes of one broker are serialised by a per-broker lock: in-process by a re-entrant
+# lock (callers run on worker threads), across processes by an advisory ``flock`` on
+# ``broker_reports/.locks/broker_<id>.lock`` (a test server may run several workers). Reads take no
+# lock: every write is an atomic rename, so a reader sees the old sidecar or the new one.
+_BROKER_LOCKS: Dict[str, threading.RLock] = {}
+_BROKER_LOCKS_GUARD = threading.Lock()
+_BROKER_LOCK_STATE = threading.local()
+
+
+def _broker_lock_key(broker_id: Optional[int]) -> str:
+    return f"broker_{broker_id}" if broker_id is not None else "broker_none"
+
+
+@contextmanager
+def _broker_metadata_lock(broker_id: Optional[int]) -> Iterator[None]:
+    """Hold the metadata lock of one broker; re-entrant within a thread, exclusive across processes.
+
+    The file lock is taken once, by the outermost block of the thread, and released when that block
+    ends — also on an exception.
+    """
+    key = _broker_lock_key(broker_id)
+    with _BROKER_LOCKS_GUARD:
+        thread_lock = _BROKER_LOCKS.setdefault(key, threading.RLock())
+    with thread_lock:
+        held: Dict[str, Tuple[int, Any]] = getattr(_BROKER_LOCK_STATE, "held", None) or {}
+        _BROKER_LOCK_STATE.held = held
+        depth, handle = held.get(key, (0, None))
+        if depth == 0:
+            handle = _acquire_file_lock(key)
+        held[key] = (depth + 1, handle)
+        try:
+            yield
+        finally:
+            depth, handle = held[key]
+            if depth == 1:
+                del held[key]
+                _release_file_lock(handle)
+            else:
+                held[key] = (depth - 1, handle)
+
+
+# The name other services use (report sets hold it from the reuse check to the save of a combined file).
+broker_metadata_lock = _broker_metadata_lock
+
+
+def _acquire_file_lock(key: str) -> Any:
+    if fcntl is None:  # pragma: no cover - not POSIX
+        return None
+    lock_dir = get_broker_reports_dir() / ".locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_dir / f"{key}.lock", "a+")  # noqa: SIM115 — held across the with-block, closed by _release_file_lock
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    except BaseException:
+        handle.close()
+        raise
+    return handle
+
+
+def _release_file_lock(handle: Any) -> None:
+    if handle is None:
+        return
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
+def _broker_id_of(meta_path: Path) -> Optional[int]:
+    """The broker a sidecar belongs to, from its folder (``<status>/broker_<id>/``; ``None`` at the root).
+
+    A file keeps its broker folder for its whole life (moves only change the status folder), so every
+    writer of one file derives the same lock key.
+    """
+    name = meta_path.parent.name
+    if name.startswith("broker_"):
+        try:
+            return int(name[len("broker_") :])
+        except ValueError:
+            return None
+    return None
 
 
 def _write_metadata_atomic(meta_path: Path, metadata: Dict[str, Any]) -> None:
@@ -708,6 +808,7 @@ def save_uploaded_file(
     file_path.write_bytes(content)
 
     # Detect compatible plugins
+    signature = detection_signature()
     compatible_plugins = BRIMProviderRegistry.get_compatible_plugins(file_path)
 
     # Create metadata
@@ -721,6 +822,7 @@ def save_uploaded_file(
         "uploaded_at": now.isoformat(),
         "processed_at": None,
         "compatible_plugins": compatible_plugins,
+        "plugins_signature": signature,
         "error_message": None,
         # Multi-user fields
         "uploaded_by_user_id": user_id,
@@ -731,7 +833,8 @@ def save_uploaded_file(
 
     # Write metadata JSON
     meta_path = uploaded_dir / f"{file_id}.json"
-    _write_metadata_atomic(meta_path, metadata)
+    with _broker_metadata_lock(_broker_id_of(meta_path)):
+        _write_metadata_atomic(meta_path, metadata)
 
     logger.info(
         "Saved uploaded file",
@@ -797,7 +900,7 @@ def _build_file_info_from_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
             status=status,
             uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
             processed_at=(datetime.fromisoformat(metadata["processed_at"]) if metadata.get("processed_at") else None),
-            compatible_plugins=metadata.get("compatible_plugins", []),
+            compatible_plugins=metadata.get("compatible_plugins", []) if kind == "combined" else _current_compatible_plugins(meta_path, metadata),
             error_message=metadata.get("error_message"),
             uploaded_by_user_id=metadata.get("uploaded_by_user_id"),
             target_broker_id=metadata.get("target_broker_id"),
@@ -814,6 +917,53 @@ def _build_file_info_from_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
     except Exception as e:
         logger.warning("Error reading file metadata", meta_path=str(meta_path), error=str(e))
         return None
+
+
+def _current_compatible_plugins(meta_path: Path, metadata: Dict[str, Any]) -> List[str]:
+    """An original's ``compatible_plugins`` for today's plugin catalogue (item 8).
+
+    The list is detected at upload and stored with the catalogue's signature. When the signature
+    is missing (a file uploaded before 1.2) or older than today's, the file is detected again: a
+    plugin added or changed since then — Danske Bank after 1.1.0, the stricter Generic CSV — is
+    then offered for it. The detection runs outside the lock (it reads the file); its result is
+    saved under the broker lock, once per version. If the data file is gone, the stored list stays.
+    """
+    stored = list(metadata.get("compatible_plugins", []))
+    signature = detection_signature()
+    if metadata.get("plugins_signature") == signature:
+        return stored
+    ext = Path(metadata.get("filename", "")).suffix.lower() or ".dat"
+    data_path = meta_path.with_name(f"{metadata['file_id']}{ext}")
+    if not data_path.exists():
+        return stored
+    try:
+        detected = BRIMProviderRegistry.get_compatible_plugins(data_path)
+    except Exception as e:  # never let a read fail on detection: the stored list still describes the file
+        logger.warning("Plugin re-detection failed", file_id=metadata.get("file_id"), error=str(e))
+        return stored
+    _save_detection(meta_path, detected, signature)
+    return detected
+
+
+def _save_detection(meta_path: Path, detected: List[str], signature: str) -> None:
+    """Store a re-detection, unless the sidecar moved or was detected again meanwhile.
+
+    Under the broker lock the sidecar is read again: a move or a deletion holds the same lock, so a
+    sidecar still at its path is the current one, and only the two detection fields change — a
+    field another writer set meanwhile is kept, and a stale copy is never written back.
+    """
+    with _broker_metadata_lock(_broker_id_of(meta_path)):
+        if not meta_path.exists():
+            return
+        try:
+            current = json.loads(meta_path.read_text())
+        except Exception:
+            return
+        if current.get("plugins_signature") == signature:
+            return
+        current["compatible_plugins"] = detected
+        current["plugins_signature"] = signature
+        _write_metadata_atomic(meta_path, current)
 
 
 def _find_metadata_path(file_id: str) -> Optional[Path]:
@@ -1043,6 +1193,14 @@ def delete_file(file_id: str) -> bool:
     Returns:
         True if deleted, False if not found
     """
+    meta_path = _find_metadata_path(file_id)
+    if meta_path is None:
+        return False
+    with _broker_metadata_lock(_broker_id_of(meta_path)):
+        return _delete_file_locked(file_id)
+
+
+def _delete_file_locked(file_id: str) -> bool:
     file_info = get_file_info(file_id)
     if not file_info:
         return False
@@ -1078,13 +1236,17 @@ def _members_key(member_ids: List[str]) -> str:
 
 
 def _update_metadata(file_id: str, mutate: Callable[[Dict[str, Any]], None]) -> bool:
-    """Load a sidecar, apply ``mutate(metadata)`` and write it back atomically."""
+    """Load a sidecar, apply ``mutate(metadata)`` and write it back atomically, under the broker lock."""
     meta_path = _find_metadata_path(file_id)
     if meta_path is None:
         return False
-    metadata = json.loads(meta_path.read_text())
-    mutate(metadata)
-    _write_metadata_atomic(meta_path, metadata)
+    with _broker_metadata_lock(_broker_id_of(meta_path)):
+        meta_path = _find_metadata_path(file_id)
+        if meta_path is None:
+            return False
+        metadata = json.loads(meta_path.read_text())
+        mutate(metadata)
+        _write_metadata_atomic(meta_path, metadata)
     return True
 
 
@@ -1113,8 +1275,30 @@ def save_combined_file(
     The combined file is an ordinary BRIM file (``kind = "combined"``) that only
     its plugin can parse. Its sidecar records the originals it was built from,
     the plugin code and version that built it and the combine summary; every
-    original gains the new file in ``combined_into``.
+    original gains the new file in ``combined_into``. The whole write holds the broker lock.
     """
+    with _broker_metadata_lock(broker_id):
+        return _save_combined_file_locked(
+            broker_id=broker_id,
+            plugin_code=plugin_code,
+            plugin_version=plugin_version,
+            members=members,
+            table=table,
+            filename=filename,
+            user_id=user_id,
+        )
+
+
+def _save_combined_file_locked(
+    *,
+    broker_id: int,
+    plugin_code: str,
+    plugin_version: str,
+    members: List[BRIMDerivedRef],
+    table: BRIMCombinedTable,
+    filename: str,
+    user_id: Optional[int],
+) -> BRIMFileInfo:
     _ensure_dirs(broker_id)
     if not filename.lower().endswith(".csv"):
         filename = f"{filename}.csv"
@@ -1311,17 +1495,23 @@ def save_parse_result(
         logger.warning("Metadata file not found for caching parse result", file_id=file_id)
         return False
 
-    # Load, update, and save metadata
-    metadata = json.loads(meta_path.read_text())
-    metadata["last_parse_result"] = parse_result
-    plugin_version: Optional[str] = None
-    if plugin_code is not None:
-        metadata["parsed_plugin_code"] = plugin_code
-        plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
-        if plugin is not None:
-            plugin_version = plugin.plugin_version
-            metadata["parsed_plugin_version"] = plugin_version
-    _write_metadata_atomic(meta_path, metadata)
+    with _broker_metadata_lock(_broker_id_of(meta_path)):
+        meta_path = _find_metadata_path(file_id)
+        if meta_path is None:
+            logger.warning("Metadata file not found for caching parse result", file_id=file_id)
+            return False
+
+        # Load, update, and save metadata
+        metadata = json.loads(meta_path.read_text())
+        metadata["last_parse_result"] = parse_result
+        plugin_version: Optional[str] = None
+        if plugin_code is not None:
+            metadata["parsed_plugin_code"] = plugin_code
+            plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+            if plugin is not None:
+                plugin_version = plugin.plugin_version
+                metadata["parsed_plugin_version"] = plugin_version
+        _write_metadata_atomic(meta_path, metadata)
 
     logger.info(
         "Saved parse result to metadata",
@@ -1346,6 +1536,16 @@ def _move_file(file_id: str, target_status: BRIMFileStatus, error_message: Optio
     """
     _ensure_dirs()
 
+    meta_path = _find_metadata_path(file_id)
+    if meta_path is None:
+        return False
+    # The whole move holds the broker lock: a writer that read the sidecar before the move then finds
+    # it gone, and never writes it back at the old address (which would make the file appear twice).
+    with _broker_metadata_lock(_broker_id_of(meta_path)):
+        return _move_file_locked(file_id, target_status, error_message)
+
+
+def _move_file_locked(file_id: str, target_status: BRIMFileStatus, error_message: Optional[str]) -> bool:
     # Get current file info
     file_info = get_file_info(file_id)
     if not file_info:
