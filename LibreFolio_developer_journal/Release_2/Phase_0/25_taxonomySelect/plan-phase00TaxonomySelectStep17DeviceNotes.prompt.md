@@ -218,12 +218,76 @@ Corsia 6155, un comando per volta, prima di toccare la voce 15.
 
 ### Voce 17 (checkpoint a sé)
 
-- [ ] **17.4 Domanda sulla regola di famiglia**, tramite il coordinator; la risposta del developer va scritta qui,
-  testuale.
-- [ ] **17.5 Rosso** (test-author): `ProviderComparisonModal.test.ts`, più l'helper e `providerLifecycle` se passa la
-  regola.
-- [ ] **17.6 Cura.**
-- [ ] **17.7 Verifica e handoff.**
+- [x] **17.4 Domanda sulla regola di famiglia**, tramite il coordinator; la risposta del developer va scritta qui,
+  testuale. ✅ 2026-10-06.
+  > **Decisione del developer** (06/10, 22:15, testuale): «farei che se il suggerimento è di un tipo padre, allora è
+  > considerato valido comunque».
+  > - Il coordinator: «Cioè la tua **a)**: se il provider propone la famiglia del sottotipo salvato, il confronto
+  >   considera i due valori d'accordo, quindi nessuna riga e il sottotipo resta. Gli altri casi restano come li hai
+  >   descritti (affinamento, sottotipi diversi, famiglie diverse: la riga c'è).»
+  > - Verificato in sola lettura:
+  >   - la differenza sul tipo la costruisce solo `AssetModal.compareStringField`;
+  >   - `autoFilledFields` viene scritto ma nessuno lo legge, quindi trattare il caso come valori uguali ha un solo
+  >     effetto visibile: la riga non c'è.
+  > - Il test dell'helper va in `utils/__tests__/assetTypeTables.test.ts`, dove stanno i contratti di
+  >   `assetTypeFamily`, e gira con `front-asset asset-unit`.
+  >
+  > **Rivalidazione della voce 15** sulla base nuova `7dd5e47e7` (commit `fd583456f` e `7dd5e47e7` sopra la punta di F
+  > `717e0e417`), corsia 6155:
+  > - `front build --debug` ok e `front check` 0/0;
+  > - vitest `AssetModal*` 66/66;
+  > - E2E `asset-mobile-layout` 21/21 e `asset-modal` 17/17.
+- [x] **17.5 Rosso** (test-author): `ProviderComparisonModal.test.ts`, più l'helper e `providerLifecycle` se passa la
+  regola. ✅ 2026-10-06.
+  > **Note implementazione**:
+  > - **10 test nuovi** in tre file: `assetTypeTables.test.ts` (1), `ProviderComparisonModal.test.ts` (5),
+  >   `AssetModal.providerLifecycle.test.ts` (4).
+  > - **Comando**: `node_modules/.bin/vitest run` sui tre file. Esito sulla baseline: 7 rossi e 101 verdi su 108; i 98
+  >   test esistenti sono verdi.
+  > - **I rossi, ciascuno per la ragione attesa:**
+  >   - l'helper `isFamilyOnlyProposal` non è esportato (1 test);
+  >   - nei due riquadri del tipo manca il badge (4 test, compresi il ripiego sul codice grezzo e il «—» per null);
+  >   - con ETF_STOCK salvato ed ETF proposto compare la riga `asset_type` (2 test: «nient'altro differisce» e «differisce
+  >     anche il nome»).
+  > - **Le 3 guardie verdi:**
+  >   - le altre righe di testo restano senza badge, anche se il valore è scritto come un tipo;
+  >   - un sottotipo fratello (ETF_STOCK → ETF_BOND) dà ancora una riga, e Applica la prende;
+  >   - un affinamento (ETF → ETF_STOCK) dà ancora una riga.
+  > - **Vincoli per la cura emersi dai test:**
+  >   - l'etichetta di ripiego si ottiene confrontando con la chiave, perché svelte-i18n restituisce la chiave quando il
+  >     messaggio manca;
+  >   - il riquadro null non ha nessun `<img>`;
+  >   - il badge dipende da `field === 'asset_type'`, non dal valore.
+  > - Prettier pulito; svelte-check 0/0.
+- [x] **17.6 Cura.** ✅ 2026-10-06.
+  > **Note implementazione**:
+  > - **`assetTypes.ts`**: `isFamilyOnlyProposal(current, proposed)`, subito dopo `assetTypeFamily`. Normalizza come
+  >   lei (trim e maiuscole), dà `false` con un lato vuoto o con valori uguali, altrimenti confronta
+  >   `assetTypeFamily(current)` con `proposed`.
+  > - **`AssetModal.compareStringField`**: il ramo dei valori uguali vale anche per `asset_type` quando la proposta
+  >   nomina solo la famiglia, con un commento che rimanda alla regola. Nessuna riga, il sottotipo resta.
+  > - **`ProviderComparisonModal`**: per `item.field === 'asset_type'`, nei due riquadri, lo snippet `typeBadge`.
+  >   - Mostra il badge delle card: `assetTypeBadgeClass`, l'icona `getAssetTypeIconUrl` e il nome da `typeLabel`.
+  >   - `typeLabel` ricade sul codice grezzo quando la chiave manca, confrontando con la chiave come fa `formatDistKey`.
+  >   - Il valore null mostra «—», senza `<img>`.
+  >   - Le altre righe di testo sono invariate.
+  > - **Nessuna chiave i18n nuova.** Il diff del prodotto è di 18 righe in `assetTypes.ts` più pochi ritocchi nei due
+  >   componenti; Prettier era già soddisfatto.
+- [x] **17.7 Verifica e handoff.** ✅ 2026-10-06.
+  > **Note implementazione** (corsia 6155, un comando per volta):
+  > - vitest sui tre file dei test e su `AssetModal.test.ts`: 4 file, 137/137.
+  > - `front check` 0/0.
+  > - `front-asset asset-unit`: 19 file, 531/531.
+  > - `front-utility component-unit`: exit 0, 108 file, 2730/2730, nessun errore non gestito.
+  > - `front build --debug`: ok.
+  > - E2E `asset-modal` 17/17 e `tx-import-asset-inspector` 5/5 (l'unico spec con `comparison-modal`).
+  > - **Due commit proposti**, con i messaggi in `/tmp/libreFolio_commits/` e il manifesto `k-17-17-manifest.txt`:
+  >   - `k-46-type-in-comparison` per il codice e i tre test;
+  >   - `k-47-journal-17-17` per il journal.
+  > - **CHANGELOG proposto** (🐛): «The provider comparison shows the asset type with its icon and name in your
+  >   language, and no longer offers to downgrade an ETF subtype (for example Equity ETF) to plain ETF when the provider
+  >   only knows the family, as Borsa Italiana does for every ETFplus instrument.»
+  > - Da verificare sul server: il developer, con l'ETC sull'oro (`IE00B579F325`) e Borsa Italiana.
 
 ## Definizione di fatto
 
