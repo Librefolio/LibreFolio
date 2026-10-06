@@ -76,6 +76,36 @@ Three consequences are published with the result.
 
 ---
 
+## 📈 The Risk/Return Line {: #the-risk-return-line }
+
+On the **Risk** tab of the Dashboard and of a broker's page, the level **Am I being paid for this risk?** draws a chart of risk against return — annualised volatility across, average annual return up. It shows one dot per holding, sized by its weight in the portfolio; one for the portfolio itself, as composed today and replayed over the window; one for the benchmark, drawn as a diamond; and a straight dashed line.
+
+The line starts on the vertical axis at the **risk-free rate the page uses** — the same rate as its Sharpe and Sortino figures, which today is 0 on the Dashboard and on a broker's page — and runs **through the benchmark**. In theory this is the Capital Market Line, which runs through the *market portfolio*; here the benchmark is what stands in for the market:
+
+$$R = R_f + \frac{R_b - R_f}{\sigma_b}\,\sigma$$
+
+where:
+
+- $\sigma$ is an annualised volatility, and $R$ the average annual return the line reaches at that volatility;
+- $R_f$ is the risk-free rate the page uses;
+- $R_b$ and $\sigma_b$ are the benchmark's average annual return — its mean return per period, scaled to a year — and its annualised volatility.
+
+**Reading it.** The slope, $(R_b - R_f)/\sigma_b$, is the benchmark's [Sharpe ratio](sharpe-ratio.md): its average return over the risk-free rate per unit of volatility. A dot above the line was better paid for its risk than the benchmark — more average return over the risk-free rate per unit of volatility, a higher Sharpe ratio. A dot below it was paid less. Like every relative figure on this page, that is a comparison with the reference, not a grade.
+
+**Choosing the benchmark for it.** Because the benchmark stands for "the market", a **broad global index** — a tracker of a world equity index, for example — is the most meaningful stand-in. A domestic index, a sector index or a bond fund still draws a line, but turns it into a comparison with that narrower reference: see [Why the Choice Is Already Half the Verdict](#why-the-choice-is-already-half-the-verdict).
+
+**With no benchmark chosen** — or one that could not be measured over the window — the line runs through **your own portfolio** instead. Above it then means better paid than the portfolio as a whole, and the slope is the portfolio's Sharpe ratio.
+
+**A benchmark you hold** is drawn once, not as two dots: it is your holding's own dot, at its weight, in the benchmark's style, and the line runs through it.
+
+**Where there is no line.** The [Correlation tab](../../../user/assets/correlation.md#what-did-each-pay) of the Assets page, which compares a selection of assets you put together, draws none — not even through its benchmark. A selection has no weights and so no whole of its own: the chart shows the trade-off and leaves the judgement to you.
+
+!!! warning "Prices only, for now"
+
+    The returns on this chart come from price series alone: coupons and dividends are not included yet. A holding that pays out a large share of its return as income therefore sits lower than its total return would place it — and when the benchmark does, the line tilts down with it.
+
+---
+
 ## ⚠️ Limitations {: #limitations }
 
 !!! warning "The benchmark is a choice, and the choice is not neutral"
@@ -102,3 +132,4 @@ Three consequences are published with the result.
 - 🔗 **[Correlation](correlation.md)** — whether the chosen reference is relevant at all
 - 📅 **[Observed Annualization](observed-annualization.md)** — why the factor is re-measured on the overlap
 - 🧪 **[Data Quality](data-quality.md)** — what the shared calendar drops, and how it is reported
+- 📐 **[Sharpe Ratio](sharpe-ratio.md)** — the slope of the risk/return line

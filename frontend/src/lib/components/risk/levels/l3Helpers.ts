@@ -35,6 +35,7 @@ import {finite, okOutput, record} from './levelHelpers';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {resultByCode} from '../riskAnalysisHelpers';
 import type {RiskReturnPoint} from '$lib/components/charts/scatterChartHelpers';
+import {formatShare} from './shareFormat';
 
 /** Which series the figures on screen were measured on. */
 export type KpiPerimeter = 'current_composition' | 'historical';
@@ -83,12 +84,24 @@ export interface RiskReturnInput {
     benchmarkName: string | null;
     /** Label for the portfolio's own dot, already translated. */
     portfolioLabel: string;
+    /** The tooltip's extra line per dot, already translated. Absent → no dot carries one. */
+    details?: RiskReturnDetails;
+}
+
+/** The sentences a dot's tooltip adds under its name; each share comes in already formatted. */
+export interface RiskReturnDetails {
+    /** A holding: what it weighs in the portfolio. */
+    weight: (share: string) => string;
+    /** The benchmark, when the reader does not hold it. */
+    benchmark: string;
+    /** The benchmark, when the reader holds it: one dot, with that holding's weight. */
+    heldBenchmark: (share: string) => string;
 }
 
 /**
  * Assemble the scatter's points: every holding, the portfolio, the benchmark.
  *
- * ⚠️ THE BUBBLE IS PROPORTIONAL TO WEIGHT ONLY FOR THE ASSETS, and the weights
+ * ⚠️ THE BUBBLE IS PROPORTIONAL TO WEIGHT ONLY FOR THE HOLDINGS, and the weights
  * are the real ones — share of net worth, exactly as the backend states them,
  * **not** renormalised to the invested part. So the asset bubbles do not add up
  * to the portfolio's: the missing area is the cash, and that is a fact about the
@@ -106,10 +119,21 @@ export interface RiskReturnInput {
  * the arithmetic expected one: paired with the volatility it makes the line's
  * slope identically the Sharpe ratio, which is what licenses reading "above the
  * line" as "better paid for the risk taken".
+ *
+ * ⚠️ A BENCHMARK THE READER HOLDS IS ONE DOT, NOT TWO. It is that holding's dot,
+ * re-roled: where the holding sits, as large as it weighs, drawn as the benchmark.
+ * Drawn from both sources, the same asset appeared twice a little apart — once grey
+ * and sized, once orange — and the reader saw two things where there is one
+ * (developer's review of 05/10/2026). The holding's coordinates win because they
+ * share the calendar of every other dot on the plot; the comparison's are kept for
+ * the benchmark the reader does not hold, which has no other place to come from.
  */
-export function buildRiskReturnPoints({riskReturnResult, comparisonResult, assetNames, benchmarkName, portfolioLabel}: RiskReturnInput): RiskReturnPoint[] {
+export function buildRiskReturnPoints({riskReturnResult, comparisonResult, assetNames, benchmarkName, portfolioLabel, details}: RiskReturnInput): RiskReturnPoint[] {
     const output = okOutput(riskReturnResult);
     if (!output) return [];
+
+    const comparison = okOutput(comparisonResult);
+    const benchmarkId = finite(comparison?.comparison_asset_id);
 
     const points: RiskReturnPoint[] = [];
     const portfolioVolatility = finite(output.portfolio_volatility);
@@ -125,6 +149,7 @@ export function buildRiskReturnPoints({riskReturnResult, comparisonResult, asset
         });
     }
 
+    let benchmarkHeld = false;
     const items = Array.isArray(output.items) ? output.items : [];
     for (const raw of items) {
         const item = record(raw);
@@ -133,13 +158,18 @@ export function buildRiskReturnPoints({riskReturnResult, comparisonResult, asset
         const annualReturn = finite(item.expected_annual_return);
         if (assetId === null || volatility === null || annualReturn === null) continue;
         const weight = finite(item.weight);
+        const share = weight === null ? null : formatShare(weight, 1);
+        const isBenchmark = benchmarkId !== null && assetId === benchmarkId;
+        if (isBenchmark) benchmarkHeld = true;
+        const detail = !details ? undefined : isBenchmark ? (share === null ? details.benchmark : details.heldBenchmark(share)) : share === null ? undefined : details.weight(share);
         points.push({
-            id: `asset-${assetId}`,
-            name: assetNames[assetId] ?? `#${assetId}`,
+            id: isBenchmark ? 'benchmark' : `asset-${assetId}`,
+            name: assetNames[assetId] ?? (isBenchmark ? benchmarkName : null) ?? `#${assetId}`,
             volatility,
             annualReturn,
             weight: weight === null ? undefined : weight,
-            role: 'asset',
+            role: isBenchmark ? 'benchmark' : 'asset',
+            ...(detail === undefined ? {} : {detail}),
         });
     }
 
@@ -163,17 +193,16 @@ export function buildRiskReturnPoints({riskReturnResult, comparisonResult, asset
     // born on the same dates. Measured on both seeded benchmarks; the figures, the
     // lane and the window are in the journal, under
     // `Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/`.
-    const comparison = okOutput(comparisonResult);
     const benchmarkVolatility = finite(comparison?.comparison_volatility);
     const benchmarkReturn = finite(comparison?.comparison_expected_annual_return);
-    const benchmarkId = finite(comparison?.comparison_asset_id);
-    if (benchmarkVolatility !== null && benchmarkReturn !== null) {
+    if (!benchmarkHeld && benchmarkVolatility !== null && benchmarkReturn !== null) {
         points.push({
             id: 'benchmark',
             name: benchmarkName ?? (benchmarkId === null ? '' : (assetNames[benchmarkId] ?? `#${benchmarkId}`)),
             volatility: benchmarkVolatility,
             annualReturn: benchmarkReturn,
             role: 'benchmark',
+            ...(details ? {detail: details.benchmark} : {}),
         });
     }
 

@@ -3,6 +3,8 @@
     import RiskCardGrid from '$lib/components/ui/display/RiskCardGrid.svelte';
     import RiskMetricCard from '$lib/components/ui/display/RiskMetricCard.svelte';
     import ScatterChart from '$lib/components/charts/ScatterChart.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import {capitalMarketLineAnchor} from '$lib/components/charts/scatterChartHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
@@ -63,6 +65,11 @@
             assetNames,
             benchmarkName,
             portfolioLabel: $t('risk.levels.l3.scatter.portfolio'),
+            details: {
+                weight: (share) => $t('risk.levels.l3.scatter.tooltip.weight', {values: {share}}),
+                benchmark: $t('risk.levels.l3.scatter.tooltip.benchmark'),
+                heldBenchmark: (share) => $t('risk.levels.l3.scatter.tooltip.heldBenchmark', {values: {share}}),
+            },
         }),
     );
     // What the scatter leaves out, named by what it is. `cash_weight` alone used to
@@ -73,11 +80,15 @@
     let uncovered = $derived(uncoveredWeight(riskReturnResult));
     let cashShare = $derived(uncovered?.cash ?? null);
     let unpricedShare = $derived(uncovered?.unpriced ?? null);
+    let hasCash = $derived(cashShare !== null && cashShare > 0);
+    let hasUnpriced = $derived(unpricedShare !== null && unpricedShare > 0);
 
     let hasAny = $derived(figures.sortino !== null || figures.sharpe !== null || figures.volatility !== null || figures.beta !== null);
     // Two dots are the least that can show a relationship; a lone one is a fact
     // without a comparison, and no chart says more than half a chart.
     let hasScatter = $derived(points.length >= 2);
+    // Which dot the line runs through, so the note names the line the chart draws.
+    let lineAnchor = $derived(capitalMarketLineAnchor(points));
 
     function ratio(value: number): string {
         return formatRatio(value);
@@ -99,39 +110,45 @@
         <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="risk-l3-empty">{$t('risk.states.unavailable')}</p>
     {:else}
         <RiskCardGrid testId="risk-l3-metrics">
+            <!-- Each card's title is the metric's own name, so the subtitle says what it
+                 measures and the ⓘ, on hover, what it is: repeating the name in both said
+                 nothing twice (developer's review of 05/10/2026). -->
             <!-- Sortino first, and first is the argument. -->
             <RiskMetricCard
                 label={$t('risk.levels.l3.sortino')}
-                technicalName="Sortino"
+                technicalName={$t('risk.levels.l3.measures.sortino')}
                 numericValue={figures.sortino ?? undefined}
                 formatValue={ratio}
                 value={formatRatio(figures.sortino)}
                 caption={perimeterLabel}
                 docsPath="financial-theory/technical-analysis/risk-metrics/sortino-ratio/"
+                docsHint={$t('risk.levels.l3.sortinoHelp')}
                 {loading}
                 testId="risk-l3-sortino"
             />
 
             <RiskMetricCard
                 label={$t('risk.levels.l3.sharpe')}
-                technicalName="Sharpe"
+                technicalName={$t('risk.levels.l3.measures.sharpe')}
                 numericValue={figures.sharpe ?? undefined}
                 formatValue={ratio}
                 value={formatRatio(figures.sharpe)}
                 caption={perimeterLabel}
                 docsPath="financial-theory/technical-analysis/risk-metrics/sharpe-ratio/"
+                docsHint={$t('risk.levels.l3.sharpeHelp')}
                 {loading}
                 testId="risk-l3-sharpe"
             />
 
             <RiskMetricCard
                 label={$t('risk.levels.l3.volatility')}
-                technicalName="σ ann."
+                technicalName={$t('risk.levels.l3.measures.volatility')}
                 numericValue={figures.volatility ?? undefined}
                 formatValue={percent}
                 value={formatPercent(figures.volatility, {scale: 100, signed: false, digits: 1})}
                 caption={perimeterLabel}
                 docsPath="financial-theory/technical-analysis/risk-metrics/volatility/"
+                docsHint={$t('risk.levels.l3.volatilityHelp')}
                 {loading}
                 testId="risk-l3-volatility"
             />
@@ -141,12 +158,14 @@
                  the perimeter when there is not. -->
             <RiskMetricCard
                 label={$t('risk.levels.l3.beta')}
-                technicalName="β"
+                technicalName={$t('risk.levels.l3.measures.beta')}
                 numericValue={figures.beta ?? undefined}
                 formatValue={ratio}
                 value={formatRatio(figures.beta)}
                 caption={figures.beta !== null && benchmarkName ? benchmarkName : perimeterLabel}
+                captionScroll={figures.beta !== null && !!benchmarkName}
                 docsPath="financial-theory/technical-analysis/risk-metrics/beta-active-return/"
+                docsHint={$t('risk.levels.l3.betaHelp')}
                 {loading}
                 testId="risk-l3-beta"
             />
@@ -173,19 +192,43 @@
                     testId="risk-l3-scatter"
                     emptyLabel={$t('risk.states.unavailable')}
                 />
-                <!-- The axis label alone cannot carry this. On a very volatile holding the
-                     expected return and the one actually lived through differ by tens of
-                     percentage points, and a reader seeing "-11%" beside a coin that
-                     halved will not guess that the word "expected" was the warning. -->
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l3-scatter-note">
-                    {$t('risk.levels.l3.scatter.note')}
-                    {#if cashShare !== null && cashShare > 0}
-                        <span data-testid="risk-l3-scatter-cash">{$t('risk.levels.l3.scatter.cash', {values: {share: formatShare(cashShare, 0)}})}</span>
+                <!-- One idea per line, one under the other (developer's review of 05/10/2026: the
+                     paragraph was right but read as a wall). The axis label alone cannot carry the
+                     return's line: on a very volatile holding the average return and the one actually
+                     lived through differ by tens of percentage points, and a reader seeing "-11%"
+                     beside a coin that halved will not guess that the word "average" was the
+                     warning — so the warning is the part in bold. The line under it says the return
+                     is price-only until the backend adds income (Risk, 05/10/2026). The two lines
+                     about the line are said only when one is drawn; the second names the dot it runs
+                     through, and its ⓘ opens the manual's section on why. -->
+                <ul class="mt-1 space-y-0.5 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l3-scatter-note">
+                    <!-- What the chart leaves out comes first, right under it, in the same plain text
+                         as the rest (developer's review of 05/10/2026), each part only when it is. -->
+                    {#if hasCash || hasUnpriced}
+                        <li data-testid="risk-l3-scatter-outside">
+                            {$t('risk.levels.l3.scatter.notes.outside')}
+                            {#if hasCash}
+                                <span data-testid="risk-l3-scatter-cash"><span aria-hidden="true">💰</span> {$t('risk.levels.l3.scatter.notes.outsideCash', {values: {share: formatShare(cashShare, 0)}})}</span>
+                            {/if}
+                            {#if hasCash && hasUnpriced}<span aria-hidden="true">·</span>{/if}
+                            {#if hasUnpriced}
+                                <span data-testid="risk-l3-scatter-unpriced"><span aria-hidden="true">🏷️</span> {$t('risk.levels.l3.scatter.notes.outsideUnpriced', {values: {share: formatShare(unpricedShare, 0)}})}</span>
+                            {/if}
+                        </li>
                     {/if}
-                    {#if unpricedShare !== null && unpricedShare > 0}
-                        <span data-testid="risk-l3-scatter-unpriced">{$t('risk.levels.l3.scatter.unpriced', {values: {share: formatShare(unpricedShare, 0)}})}</span>
+                    {#if lineAnchor !== null}
+                        <li>{$t('risk.levels.l3.scatter.notes.above')}</li>
                     {/if}
-                </p>
+                    <li>{$t('risk.levels.l3.scatter.notes.expected')} <strong class="font-semibold text-gray-700 dark:text-gray-200">{$t('risk.levels.l3.scatter.notes.expectedWarning')}</strong></li>
+                    <li data-testid="risk-l3-scatter-price-only">{$t('risk.levels.l3.scatter.notes.priceOnly')}</li>
+                    {#if lineAnchor !== null}
+                        <li class="flex items-start gap-1" data-testid="risk-l3-scatter-line" data-anchor={lineAnchor}>
+                            <span>{$t(lineAnchor === 'benchmark' ? 'risk.levels.l3.scatter.notes.lineBenchmark' : 'risk.levels.l3.scatter.notes.line')}</span>
+                            <DocsLink path="financial-theory/technical-analysis/risk-metrics/benchmark-selection/#the-risk-return-line" label={$t('risk.levels.l3.scatter.notes.lineDocs')} size={12} testId="risk-l3-scatter-line-docs" />
+                        </li>
+                    {/if}
+                    <li>{$t('risk.levels.l3.scatter.notes.size')}</li>
+                </ul>
             </div>
         {/if}
     {/if}
