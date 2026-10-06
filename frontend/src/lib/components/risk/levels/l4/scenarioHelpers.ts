@@ -1,7 +1,10 @@
 import type {z} from 'zod';
 
 import {schemas} from '$lib/api';
+import {riskMetadata, singleValue} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+
+import type {RiskResultWarning} from '../warningSentence';
 
 /**
  * Pure reading of the L4 payloads.
@@ -32,29 +35,16 @@ export interface TornadoRow {
     assetId?: number;
     /** Bucket id when the row is a configured bucket. */
     bucketId?: string;
-    /** Signed fraction: negative is a loss. */
+    /** Signed fraction: negative is a loss. What the bar draws: the contribution when the scope has weights, else the row's own return. */
     value: number;
+    /** The row's own return over the window: an asset's `shock_return`, a bucket's `shock` (D376). */
+    ownReturn: number | null;
+    /** What the row did to the whole, `contribution_return`; null on a scope without weights. */
+    contribution: number | null;
     /** Signed amount in the scope currency, when the payload carried one. */
     amount: number | null;
     /** How much of the scope this row speaks for, when known. */
     weight: number | null;
-}
-
-/**
- * The two things a failed replay lets the reader do next.
- *
- * `stress.py:458` refuses the whole replay as soon as one holding has no usable
- * history in the period, and says so by name: *"Asset N requires a manual proxy
- * or explicit exclusion"*. That is not a dead end, it is a **question** — and
- * the answer is a choice the reader has to make, because a proxy is an opinion
- * about what a missing asset would have done, not a measurement of it.
- */
-export interface ReplayBlocker {
-    assetId: number;
-    /** Why the series was unusable, verbatim from the server. */
-    reason: string;
-    /** True when the *proxy* is the thing without history, not the original. */
-    proxyAtFault: boolean;
 }
 
 function localized(value: unknown, language: string): string {
@@ -154,16 +144,18 @@ export function tornadoRows(output: unknown): TornadoRow[] {
             // first would make a 1%-weight bucket look as damaging as a 60% one.
             const value = toNumber(bucket.contribution_return);
             if (value === null) continue;
-            rows.push({key: `bucket:${bucketId}`, bucketId, value, amount: null, weight: toNumber(bucket.asset_exposure_total)});
+            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight: toNumber(bucket.asset_exposure_total)});
         }
     } else {
         for (const raw of Array.isArray(stress.impacts) ? stress.impacts : []) {
             const impact = raw as Record<string, unknown>;
             const assetId = toNumber(impact.asset_id);
             if (assetId === null) continue;
-            const value = toNumber(impact.contribution_return) ?? toNumber(impact.shock_return);
+            const ownReturn = toNumber(impact.shock_return);
+            const contribution = toNumber(impact.contribution_return);
+            const value = contribution ?? ownReturn;
             if (value === null) continue;
-            rows.push({key: `asset:${assetId}`, assetId, value, amount: toNumber(impact.impact_amount), weight: toNumber(impact.weight)});
+            rows.push({key: `asset:${assetId}`, assetId, value, ownReturn, contribution, amount: toNumber(impact.impact_amount), weight: toNumber(impact.weight)});
         }
     }
 
@@ -186,23 +178,185 @@ function firstError(error: RiskAnalyticResult['error']): RiskErrorShape | null {
 }
 
 /**
- * What a failed replay is asking for, when it is asking for something.
+ * The warnings the replay block shows itself, beside the number it qualifies (D372).
  *
- * Returns `null` for every other failure: a timeout, a busy worker or an
- * unprepared series are not questions the reader can answer, and offering a
- * "fix it" button for them would be a lie about who is in control.
- */ export function replayBlocker(result: RiskAnalyticResult | null | undefined): ReplayBlocker | null {
-    if (!result || (result.status !== 'unavailable' && result.status !== 'failed')) return null;
+ * The section around the block lists every analytic's warnings as its reasons. These two would
+ * then be read twice, and the first time far from the figure, so the mounts hand the section
+ * {@link replaySectionView} instead of the raw result.
+ */
+export const REPLAY_BLOCK_WARNING_CODES: readonly string[] = ['historical_replay_assets_excluded', 'historical_replay_mostly_excluded'];
+
+/**
+ * The order the block lists the reasons in: the order of `RiskHistoricalReplayExclusionReason`
+ * (`schemas/risk.py`), with the reader's own exclusion last. A reason this list does not know
+ * comes after the known ones, in the order it arrived.
+ */
+export const REPLAY_EXCLUSION_REASON_ORDER: readonly string[] = ['no_prices_in_window', 'starts_after_window_start', 'stale_at_window_start', 'stale_at_window_end', 'missing_fx', 'manual_exclusion'];
+
+/** One asset the replay left out, with its share of the value when the scope has weights. */
+export interface ReplayExcludedAsset {
+    assetId: number;
+    weight: number | null;
+}
+
+export interface ReplayExclusionGroup {
+    reason: string;
+    assets: ReplayExcludedAsset[];
+}
+
+/**
+ * What the replay left out, grouped by why.
+ *
+ * `treatment` is what the figures did with them: on a portfolio the excluded weight is carried as
+ * cash at zero return, on a selection without weights the assets are omitted. It is `null` when
+ * nothing was replayed at all, because then no figure treated them in any way.
+ */
+export interface ReplayExclusions {
+    groups: ReplayExclusionGroup[];
+    count: number;
+    weightTotal: number | null;
+    treatment: 'zero_return_residual' | 'omitted_from_replay' | null;
+}
+
+/** The part of the window that brings back the assets its edges excluded, as the backend verified it. */
+export interface ReplaySuggestion {
+    start: string;
+    end: string;
+    recovers: number[];
+}
+
+type ListedExclusion = ReplayExcludedAsset & {reason: string};
+
+function replayAudit(result: RiskAnalyticResult | null | undefined) {
+    return singleValue(riskMetadata(result)?.historical_replay_audit);
+}
+
+/**
+ * The details of a replay that had nothing left to run, or `null`.
+ *
+ * `stress.py::_historical` answers `insufficient_history` when every asset is excluded, and lists
+ * them in `details.excluded_asset_ids`. The same code without that list is another refusal (a
+ * window with no observations at all), and stays an error the section discloses.
+ */
+function nothingLeftDetails(result: RiskAnalyticResult | null | undefined): Record<string, unknown> | null {
+    if (!result || result.status !== 'unavailable') return null;
     const error = firstError(result.error);
-    if (!error) return null;
-    if (error.code !== 'insufficient_history' && error.code !== 'invalid_parameters') return null;
+    if (!error || error.code !== 'insufficient_history') return null;
     const details = (error.details ?? {}) as Record<string, unknown>;
-    const assetId = toNumber(details.asset_id);
+    return Array.isArray(details.excluded_asset_ids) && details.excluded_asset_ids.length > 0 ? details : null;
+}
+
+/** Whether the replay excluded every asset, so there was nothing left to replay. */
+export function replayNothingLeft(result: RiskAnalyticResult | null | undefined): boolean {
+    return nothingLeftDetails(result) !== null;
+}
+
+function reasonRank(reason: string): number {
+    const index = REPLAY_EXCLUSION_REASON_ORDER.indexOf(reason);
+    return index === -1 ? REPLAY_EXCLUSION_REASON_ORDER.length : index;
+}
+
+/** Heaviest first, unweighted last, then by id. */
+function byWeightThenId(left: ReplayExcludedAsset, right: ReplayExcludedAsset): number {
+    if (left.weight !== right.weight) {
+        if (left.weight === null) return 1;
+        if (right.weight === null) return -1;
+        return right.weight - left.weight;
+    }
+    return left.assetId - right.assetId;
+}
+
+function groupByReason(items: readonly ListedExclusion[]): ReplayExclusionGroup[] {
+    const groups = new Map<string, ReplayExcludedAsset[]>();
+    for (const {reason, assetId, weight} of items) {
+        const assets = groups.get(reason) ?? [];
+        assets.push({assetId, weight});
+        groups.set(reason, assets);
+    }
+    // A Map keeps arrival order and the sort is stable, so the unknown reasons keep theirs.
+    return [...groups.entries()].sort(([left], [right]) => reasonRank(left) - reasonRank(right)).map(([reason, assets]) => ({reason, assets: assets.sort(byWeightThenId)}));
+}
+
+function listedExclusion(raw: unknown): ListedExclusion | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const entry = raw as Record<string, unknown>;
+    const assetId = toNumber(entry.asset_id);
     if (assetId === null) return null;
-    const source = toNumber(details.return_source_asset_id);
-    return {
-        assetId,
-        reason: typeof details.reason === 'string' ? details.reason : 'insufficient_history',
-        proxyAtFault: source !== null && source !== assetId,
-    };
+    return {assetId, reason: typeof entry.reason === 'string' && entry.reason !== '' ? entry.reason : 'unknown', weight: toNumber(entry.weight)};
+}
+
+/**
+ * The assets the replay left out, by reason, or `null` when it left none out.
+ *
+ * Read from the audit when the replay ran. When nothing was left to run there is no audit, and
+ * the error's details carry the same list; an older answer with only the ids gives one group
+ * whose reason is unknown.
+ */
+export function replayExclusions(result: RiskAnalyticResult | null | undefined): ReplayExclusions | null {
+    const audit = replayAudit(result);
+    const audited = audit?.excluded_assets ?? [];
+    if (audited.length > 0) {
+        const items = audited.map((item) => ({assetId: item.asset_id, reason: item.reason ?? 'manual_exclusion', weight: toNumber(item.weight)}));
+        const treatment = audited.some((item) => item.treatment === 'omitted_from_replay') ? 'omitted_from_replay' : audited.some((item) => item.treatment === 'zero_return_residual') ? 'zero_return_residual' : null;
+        const weighted = items.some((item) => item.weight !== null);
+        return {groups: groupByReason(items), count: items.length, weightTotal: weighted ? toNumber(audit?.excluded_weight_total) : null, treatment};
+    }
+    const details = nothingLeftDetails(result);
+    if (!details) return null;
+    const listed = (Array.isArray(details.excluded_assets) ? details.excluded_assets : []).map(listedExclusion).filter((item): item is ListedExclusion => item !== null);
+    if (listed.length > 0) {
+        const weights = listed.flatMap((item) => (item.weight === null ? [] : [item.weight]));
+        return {groups: groupByReason(listed), count: listed.length, weightTotal: weights.length > 0 ? weights.reduce((sum, weight) => sum + weight, 0) : null, treatment: null};
+    }
+    const ids = (details.excluded_asset_ids as unknown[]).map(toNumber).filter((id): id is number => id !== null);
+    if (ids.length === 0) return null;
+    return {groups: groupByReason(ids.map((assetId) => ({assetId, reason: 'unknown', weight: null}))), count: ids.length, weightTotal: null, treatment: null};
+}
+
+function suggestionFrom(range: unknown, recovers: unknown): ReplaySuggestion | null {
+    if (!range || typeof range !== 'object') return null;
+    const {start, end} = range as {start?: unknown; end?: unknown};
+    if (typeof start !== 'string' || start === '') return null;
+    const ids = (Array.isArray(recovers) ? recovers : []).map(toNumber).filter((id): id is number => id !== null);
+    if (ids.length === 0) return null;
+    return {start, end: typeof end === 'string' && end !== '' ? end : start, recovers: ids};
+}
+
+/** The common period the backend proposes, from the audit or from a replay with nothing left; `null` without one. */
+export function replaySuggestion(result: RiskAnalyticResult | null | undefined): ReplaySuggestion | null {
+    const audit = replayAudit(result);
+    const audited = suggestionFrom(audit?.suggested_range, audit?.suggested_range_recovers);
+    if (audited) return audited;
+    const details = nothingLeftDetails(result);
+    return details ? suggestionFrom(details.suggested_range, details.suggested_range_recovers) : null;
+}
+
+/** The strong warning: the replay describes only part of the portfolio. */
+export function replayCoverageWarning(result: RiskAnalyticResult | null | undefined): RiskResultWarning | null {
+    return result?.warnings?.find((warning) => warning?.code === 'historical_replay_mostly_excluded') ?? null;
+}
+
+/**
+ * The replay result as its section should read it: without the warnings the block shows, and
+ * without the error of a replay that had nothing left, which the block explains itself.
+ *
+ * Status and metadata stay, so the section's status line still says the replay was partial or
+ * unavailable. A new object: the controller's result is never touched.
+ */
+export function replaySectionView(result: RiskAnalyticResult | null | undefined): RiskAnalyticResult | null {
+    if (!result) return null;
+    const view: RiskAnalyticResult = {...result};
+    if (result.warnings) view.warnings = result.warnings.filter((warning) => !REPLAY_BLOCK_WARNING_CODES.includes(warning?.code ?? ''));
+    if (replayNothingLeft(result)) view.error = null;
+    return view;
+}
+
+/** A replay date as the block writes it, e.g. «15 ott 2008». UTC, so the day never shifts. */
+export function formatReplayDate(iso: string, language: string): string {
+    return new Intl.DateTimeFormat(language, {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${iso}T00:00:00Z`));
+}
+
+/** A share of the value, with one decimal: «12,0%». */
+export function formatReplayShare(fraction: number, language: string): string {
+    return new Intl.NumberFormat(language, {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(fraction);
 }

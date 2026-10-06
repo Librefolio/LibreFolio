@@ -30,8 +30,9 @@ autorizzata da questi file.
 > ⚠️ **Aggiornamento del 2026-10-05 (`7038c2224`).** Il Round 5 è chiuso e integrato.
 > `dev_release2` è avanzato a `7038c2224`, poi il coordinatore ha aggiunto il CHANGELOG
 > (`d9aad0ec9`). Il contratto pubblicato è la versione 1.0.0 compattata (riga 11).
-> - Il P1 rimosso il 24/09 era il tool `analyze`. Resta la sorgente `include_allocation_source` di
->   `GET /portfolio/report`, con il suo client: la toglie la riga 13.
+> - Il P1 rimosso il 24/09 era il tool `analyze`. Resta la sorgente `allocation_source` di
+>   `POST /portfolio/report`, con il suo client: la toglie la riga 13. (Corretto il 06/10: questa nota
+>   diceva `include_allocation_source` di `GET /portfolio/report`.)
 > - Il lavoro seguente, approvato dal developer il 05/10, è nelle righe 12–14 della tabella «Piani
 >   successivi all'integrazione».
 > - Gli E2E del PAC si fanno dopo il Rebalancer, insieme ai suoi. Il server MCP resta fuori round.
@@ -75,8 +76,8 @@ al precedente in testa.
 | 9 | [Budget del solver](plan-phase00PacSolverBudget.prompt.md) | budget reale dell'engine propagato a SCIP | ✅ `a7cd01b07`, `3e513fea2` |
 | 10 | [Round 5 post-merge](plan-phase00PacRound5PostMerge.prompt.md) | documenti allineati, descrizione della card, UI PAC 2.0.0 nella build, STOP per la review di dettaglio | ✅ `4cd2cda56` … `946095d58`; integrato col fast-forward di `dev_release2` a `7038c2224` (chiuso il 2026-10-05) |
 | 11 | [Compattazione del contratto](plan-phase00PacContractCompaction.prompt.md) | wire compatto 1.0.0: freshness e data del prezzo tolte, default nello schema, commissioni facoltative; prima dell'integrazione | ✅ `ac18ce097`, `9e4140376`; merge `68483ddda`, gate finali verdi; pagine utente PAC allineate (S11) |
-| 12 | [Robustezza del solver](plan-phase00PacSolverRobustness.prompt.md) | A1, R10, P-a, P-c, P-d e voce 13, più R3 in sola lettura: prima la review matematica, poi i test rossi, poi il codice; nessun cambio di versione del contratto | ✅ consegnato il 2026-10-06, CHECKPOINT READY in tre commit (`chore(pac)` C901, `fix(pac)`, journal); contratto 1.0.0 e fingerprint invariati; SHA all'integrazione |
-| 13 | Rimozione finale del P1 — `plan-phase00PacP1FinalRemoval.prompt.md`, da creare | diversa dalla riga 8: toglie il ramo `include_allocation_source` di `GET /portfolio/report`, i suoi 7 schemi, `allocationSource.ts` e le chiavi i18n morte (le 28 `tools.portfolioRebalancer.*` comprese); il report passa da 13 a 12 sezioni | ⏳ approvato il 2026-10-05, dopo la riga 12 |
+| 12 | [Robustezza del solver](plan-phase00PacSolverRobustness.prompt.md) | A1, R10, P-a, P-c, P-d e voce 13, più R3 in sola lettura: prima la review matematica, poi i test rossi, poi il codice; nessun cambio di versione del contratto | ✅ `638961728` `chore(pac)` C901, `8fa96ac28` `fix(pac)`, `a8ad1a500` journal; merge `7ba60a62f` (albero `59873db3e`), validato verde il 2026-10-06 sulla 6151; contratto 1.0.0 e fingerprint invariati |
+| 13 | [Rimozione finale del P1](plan-phase00PacP1FinalRemoval.prompt.md) | diversa dalla riga 8: toglie il ramo `allocation_source` di `POST /portfolio/report`, i suoi 7 schemi, `allocationSource.ts` e le chiavi i18n morte (le 28 `tools.portfolioRebalancer.*` comprese); il report passa da 13 a 12 sezioni; poi R7 in un `fix(pac)` a sé | 🔄 S0–S8 ✅ il 2026-10-06: 285 chiavi tolte ×4 (da 4 508 a 4 223 per lingua), 18 gate verdi sulla 6151; CHECKPOINT READY, in attesa degli SHA; poi R7 |
 | 14 | Analisi del Rebalancer — piano da definire | massimo riuso del PAC (compilatore, verifier, report, UI); domanda (b) sul numero di Asset con le misure; un solo salto di versione del contratto; E2E backend del motore; squadra e rischi | ⏳ dopo la riga 13 |
 
 ## Ordine e parallelismo

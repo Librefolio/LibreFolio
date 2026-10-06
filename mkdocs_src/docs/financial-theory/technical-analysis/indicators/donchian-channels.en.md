@@ -36,7 +36,7 @@ This is the indicator behind the legendary "Turtle Trading" breakout system: buy
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 20 | Lookback window for the rolling max/min. |
+| Period ($N$) | `period` | 20 | Lookback window for the rolling max/min, in sessions. |
 
 ---
 

@@ -10,16 +10,18 @@
      * comparison between assets, never a judgement"*. A scatter states two
      * coordinates and lets the reader see the trade-off without ranking anyone.
      *
-     * 🔴 **AND THE JUDGEMENT IS NOT SUPPRESSED, IT IS IMPOSSIBLE.** On a
-     * risk/return plot the verdict is the Capital Market Line: above it means
-     * "paid well for the risk". `capitalMarketLine()` draws only when a point
-     * whose role is `portfolio` exists, and that point exists only when the
-     * payload carries both a portfolio volatility and a portfolio expected
-     * return. `RiskAssetSetReturnOutput` **has no field for either** — not
-     * `None`, absent — and the model is `extra="forbid"`, so a fabricated
-     * aggregate is not merely rejected, it is unexpressible. Nothing on this
-     * surface can turn the line back on, because there is no switch to turn: the
-     * defence lives in a shape, in a file that would have to be edited.
+     * 🔴 **A line only against the benchmark, never against the selection.** On a
+     * risk/return plot the Capital Market Line is a verdict: above it means "better
+     * paid for the risk" than whatever it runs through. Through a portfolio it would
+     * judge the selection as a whole, and a set of assets has no whole:
+     * `RiskAssetSetReturnOutput` **has no field for an aggregate** — not `None`,
+     * absent — and the model is `extra="forbid"`, so a fabricated portfolio dot is
+     * not merely rejected, it is unexpressible. Through the benchmark it compares each
+     * asset with a reference the reader chose (the developer's review, 06/10/2026: «non
+     * compare la retta tra 0 e benchmark»), so `capitalMarketLineAnchor()` anchors it
+     * there whenever a benchmark is placed, and the lab draws no line without one.
+     * The notes under the chart say which line it is (`lineBenchmark`), and only when
+     * it is drawn.
      *
      * **No money.** `assetSetLevels` has no currency parameter and returns no
      * amount; a set of assets has no weights and therefore no sum.
@@ -29,38 +31,81 @@
      * Detail read. `03` §3.1 says the benchmark must be identical across pages or
      * the pages stop being comparable, which is the property the whole redesign
      * builds; a second picker on this page would be a second way to disagree.
+     *
+     * **The table comes first, is the project's, and only the reader sorts it**
+     * (the developer's review, 30/09, as for L1°; the data first, then its chart). It
+     * opens in the order of the
+     * selection, and only a click on a column's title reorders it — never the system,
+     * and still no colour or arrow in a cell. Each title explains its figure in a
+     * tooltip, and the asset column is L1°'s (`assetSetTable`). The return is named
+     * for what it is, the period's average per year: "expected" read as a forecast,
+     * so the developer asked for the plain name and for its computation in the tooltip.
+     *
+     * **The table, the chart and their notes are `RiskReturnLevel`'s** since 06/10/2026,
+     * shared with the portfolio's L3 (the developer's review, 05/10: one component, so the
+     * two pages change together). What stays here is this payload's: the rows and the
+     * dots (`assetSetLevels`, D371), the description, the four states with their retry,
+     * and the period under the table. The lab declares what it measures — ratios always,
+     * beta and correlation only with a benchmark — and no weight, so no column, note or
+     * dot size speaks of one.
      */
     import {_ as t} from '$lib/i18n';
-    import ScatterChart from '$lib/components/charts/ScatterChart.svelte';
+    import type DataTable from '$lib/components/table/DataTable.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
-    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {currentLanguage} from '$lib/stores/app/language';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
-    import {formatRatio} from './riskAnalysisHelpers';
-    import {buildAssetSetBenchmarkPoint, buildAssetSetPaidRows, buildAssetSetScatterPoints} from './assetSetLevels';
+    import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
+    import {dayFormatter} from './eligibility';
+    import RiskReturnLevel from './RiskReturnLevel.svelte';
 
     interface Props {
         assetIds: number[];
         assetLabels: ReadonlyMap<number, string>;
+        /** Each asset's icon URL, by id, resolved by the panel as for L1°'s table. */
+        assetIcons: ReadonlyMap<number, string>;
         riskReturn: RiskAnalyticResult | null;
         kpi: RiskAnalyticResult | null;
         comparison: RiskAnalyticResult | null;
-        /** Set when a benchmark is chosen and it is not itself in the selection. */
+        /** Set when a benchmark is chosen and the comparison against it was measured. */
         benchmarkApplies: boolean;
         loading?: boolean;
+        /**
+         * The base wave failed (`controller.loadError`): the body says so and offers a retry.
+         * Without it the rows, which come from the selected ids, read as a table of dashes.
+         */
+        failed?: boolean;
+        /**
+         * The base answer arrived and was discarded on every attempt (`controller.loadDiscarded`).
+         * The frame says so (`answer_discarded` in its `errorCodes`); the body only offers
+         * the cure, a retry, when there is no figure to show.
+         */
+        discarded?: boolean;
+        /** Ask the base again, past the cache (`controller.loadBase(true)`). */
+        onretry?: () => void;
+        /**
+         * The table's instance, for the column toggle the levels draw beside the frame's
+         * manual icon. Set only while the table is on screen.
+         */
+        tableRef?: DataTable<AssetSetPaidRow>;
+        /**
+         * The toolbar's period, as ISO days. The note under the table states the window the
+         * figures were actually calculated on, and says when it falls short of this one.
+         */
+        dateStart: string;
+        dateEnd: string;
     }
 
-    let {assetIds, assetLabels, riskReturn, kpi, comparison, benchmarkApplies, loading = false}: Props = $props();
+    let {assetIds, assetLabels, assetIcons, riskReturn, kpi, comparison, benchmarkApplies, loading = false, failed = false, discarded = false, onretry, tableRef = $bindable(), dateStart, dateEnd}: Props = $props();
 
-    let rows = $derived(buildAssetSetPaidRows(assetIds, assetLabels, riskReturn, kpi, comparison));
-    let assetPoints = $derived(buildAssetSetScatterPoints(rows));
+    /** One row per selected asset: the dots, the load states and the counts read these. */
+    let assetRows = $derived(buildAssetSetPaidRows(assetIds, assetLabels, riskReturn, kpi, comparison));
     /**
-     * The reference's name comes from the asset store, as the portfolio L3 names its
-     * own benchmark (`RiskLevelsPanel`, `benchmarkName`). `assetLabels` is the
-     * selection's map, and the reference is never in the selection — the payload
-     * validator forbids it — so reading the name from there labelled the diamond
-     * `#id` on every chart. `$assetStoreVersion` is read so a name that arrives after
-     * the first render replaces the fallback.
+     * The reference's name comes from the selection when it is one of the selected
+     * assets (D371), and otherwise from the asset store, as the portfolio L3 names its
+     * own benchmark (`RiskLevelsPanel`, `benchmarkName`): read only from the selection's
+     * map, a benchmark outside it was labelled `#id` on every chart. `$assetStoreVersion`
+     * is read so a name that arrives after the first render replaces the fallback.
      */
     let benchmarkPoint = $derived.by(() => {
         void $assetStoreVersion;
@@ -68,113 +113,111 @@
     });
 
     /**
-     * The dots, with the benchmark last so it draws over the cloud.
-     *
-     * Its role is `benchmark`, never `portfolio`. That is not cosmetic: `role`
-     * is what `capitalMarketLine()` searches for, so labelling the reference as
-     * a portfolio would anchor a verdict line on an asset that is not the
-     * reader's holdings — a judgement drawn from a mislabelled dot.
+     * The dots, the benchmark among them (`buildAssetSetChartPoints`): a selected
+     * reference is its own row's dot, drawn as the benchmark; any other gets a dot of
+     * its own, last, so it draws over the cloud.
      */
-    let points = $derived(benchmarkPoint === null ? assetPoints : [...assetPoints, {id: 'benchmark', name: benchmarkPoint.name, volatility: benchmarkPoint.volatility, annualReturn: benchmarkPoint.expectedReturn, role: 'benchmark' as const}]);
+    let points = $derived(buildAssetSetChartPoints(assetRows, benchmarkPoint));
 
-    // Two dots are the least that can show a relationship; one is a fact without
-    // a comparison, and this level exists to compare.
-    let hasScatter = $derived(points.length >= 2);
-    let hasAnyFigure = $derived(rows.some((row) => row.volatility !== null || row.expectedReturn !== null));
+    /**
+     * The table's rows: the assets, and the benchmark's own row when one applies, which opens
+     * the table tinted like its dot (`withBenchmarkRow`; the developer's review, 06/10). A
+     * selected benchmark keeps its row; any other gets one added, `ref-<id>`, that a click
+     * on the benchmark's dot selects, and the other way round.
+     */
+    let rows = $derived(withBenchmarkRow(assetRows, benchmarkApplies ? benchmarkPoint : null));
 
-    function percent(value: number): string {
-        return formatPercent(value, {scale: 100, signed: false, digits: 1});
-    }
+    /**
+     * The lab charges every ratio against a zero risk-free rate (it has no control to set
+     * one: `appliedRiskFreePercent: 0` in its controllers, and the comparison's Sharpe is
+     * charged the same), so the line through the benchmark starts there too. Passed
+     * explicitly rather than left to the chart's default, so it stays right if the lab
+     * ever gains a rate.
+     */
+    const LAB_RISK_FREE_RATE = 0;
 
-    /** A return that may be a loss, so it carries its own sign. */
-    function signedPercent(value: number): string {
-        return `${value < 0 ? '\u2212' : '+'}${formatPercent(Math.abs(value), {scale: 100, signed: false, digits: 1})}`;
-    }
+    let hasAnyFigure = $derived(assetRows.some((row) => row.volatility !== null || row.expectedReturn !== null));
+
+    /**
+     * The period the figures were calculated on, recalled under the table because the toolbar
+     * that chose it is far away (the developer's review, round 4). Read from the answers' own
+     * metadata, never from the toolbar, so it always describes the figures on screen, and says
+     * so when an asset — or the benchmark — with a shorter history narrowed the window.
+     */
+    let calculationWindow = $derived(assetSetCalculationWindow([riskReturn, kpi, comparison], dateStart, dateEnd));
+    let formatDay = $derived(dayFormatter($currentLanguage));
+    /**
+     * The length in calendar years, months and days — «3 mesi e 1 giorno», «1 anno» — never
+     * as a count of days (the developer's review, round 4). Zero parts are left out, and the
+     * rest are joined the way the reader's language joins a list.
+     */
+    let periodLength = $derived.by(() => {
+        if (calculationWindow === null) return '';
+        const {years, months, days} = calendarLength(calculationWindow.start, calculationWindow.end);
+        const parts = [years > 0 ? $t('risk.assetSet.levels.l3.period.years', {values: {count: years}}) : null, months > 0 ? $t('risk.assetSet.levels.l3.period.months', {values: {count: months}}) : null, days > 0 ? $t('risk.assetSet.levels.l3.period.days', {values: {count: days}}) : null].filter(
+            (part): part is string => part !== null,
+        );
+        if (parts.length === 0) return $t('risk.assetSet.levels.l3.period.days', {values: {count: calculationWindow.days}});
+        return new Intl.ListFormat($currentLanguage, {style: 'long', type: 'conjunction'}).format(parts);
+    });
+    /** The first line: the window, and — only when it is shorter — the period that was asked for. */
+    let periodWindowText = $derived.by(() => {
+        if (calculationWindow === null) return '';
+        const sentences = [$t('risk.assetSet.levels.l3.period.window', {values: {start: formatDay(calculationWindow.start), end: formatDay(calculationWindow.end), length: periodLength}})];
+        if (calculationWindow.narrowed) sentences.push($t('risk.assetSet.levels.l3.period.narrowed', {values: {selectedStart: formatDay(dateStart), selectedEnd: formatDay(dateEnd)}}));
+        return sentences.join(' ');
+    });
 </script>
 
 <div class="space-y-4" data-testid="risk-asset-set-l3" data-benchmark={benchmarkApplies ? 'true' : 'false'}>
     <p class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.levels.l3.description')}</p>
 
-    {#if loading && !hasAnyFigure}
+    {#if failed}
+        <div class="py-4 text-center" data-testid="risk-asset-set-l3-error">
+            <p class="text-sm text-red-600 dark:text-red-400">{$t('risk.states.loadFailed')}</p>
+            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l3-retry">{$t('common.retry')}</button>
+        </div>
+    {:else if loading && !hasAnyFigure}
         <div class="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-asset-set-l3-loading"></div>
-    {:else if rows.length === 0}
+    {:else if discarded && !hasAnyFigure}
+        <!-- The frame carries the sentence (`answer_discarded`); the body carries the cure. -->
+        <div class="py-4 text-center" data-testid="risk-asset-set-l3-discarded">
+            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l3-retry">{$t('common.retry')}</button>
+        </div>
+    {:else if assetRows.length === 0}
         <p class="py-4 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l3-empty">{$t('risk.states.empty')}</p>
     {:else}
-        {#if hasScatter}
-            <div data-testid="risk-asset-set-l3-risk-return">
-                <!-- `riskFreeRate` is left at its default and anchors nothing here:
-                     with no portfolio point there is no line for it to anchor. The
-                     label is still supplied because the component asks for it; it
-                     names a line that this payload cannot produce. -->
-                <ScatterChart
-                    {points}
-                    labels={{
-                        volatility: $t('risk.levels.l3.scatter.axisVolatility'),
-                        return: $t('risk.levels.l3.scatter.axisReturn'),
-                        capitalMarketLine: $t('risk.levels.l3.scatter.line'),
-                    }}
-                    height="360px"
-                    testId="risk-asset-set-l3-scatter"
-                    emptyLabel={$t('risk.states.unavailable')}
-                />
-                <!-- The axis label alone cannot carry this. On a very volatile
-                     holding the expected return and the one actually lived through
-                     differ by tens of percentage points, and a reader seeing "−11%"
-                     beside a coin that halved will not guess that "expected" was the
-                     warning.
-
-                     A key of this page's own, and not the portfolio L3's note. That
-                     one opens with "above the line means better paid for the risk",
-                     which is true where the line is drawn — and was borrowed here,
-                     under a chart that by construction has no line, putting back in
-                     words the one verdict the payload's shape makes impossible.
-                     `assetSetI18n.test.ts` now fails if this note names a line. -->
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-asset-set-l3-scatter-note">{$t('risk.assetSet.levels.l3.scatterNote')}</p>
-            </div>
-        {/if}
-
-        <div class="w-full overflow-x-auto">
-            <table class="w-full text-sm" data-testid="risk-asset-set-l3-table" data-row-count={rows.length}>
-                <thead>
-                    <tr class="border-b border-gray-100 text-xs text-gray-500 dark:border-slate-700 dark:text-gray-400">
-                        <th class="py-2 pr-3 text-left font-medium">{$t('risk.assetSet.levels.asset')}</th>
-                        <th class="py-2 pl-3 text-right font-medium whitespace-nowrap">{$t('risk.levels.l3.volatility')}</th>
-                        <th class="py-2 pl-3 text-right font-medium whitespace-nowrap">{$t('risk.assetSet.levels.l3.expectedReturn')}</th>
-                        <th class="py-2 pl-3 text-right font-medium whitespace-nowrap">{$t('risk.levels.l3.sortino')}</th>
-                        <th class="py-2 pl-3 text-right font-medium whitespace-nowrap">{$t('risk.levels.l3.sharpe')}</th>
-                        {#if benchmarkApplies}
-                            <th class="py-2 pl-3 text-right font-medium whitespace-nowrap">{$t('risk.levels.l3.beta')}</th>
-                            <th class="py-2 pl-3 text-right font-medium whitespace-nowrap">{$t('risk.assetSet.levels.l3.correlation')}</th>
-                        {/if}
-                    </tr>
-                </thead>
-                <tbody>
-                    {#each rows as row (row.assetId)}
-                        <tr class="border-b border-gray-50 last:border-0 dark:border-slate-800" data-testid="risk-asset-set-l3-row" data-asset-id={row.assetId}>
-                            <td class="py-2 pr-3 text-gray-700 dark:text-gray-200" data-testid="risk-asset-set-l3-name">{row.name}</td>
-                            <td class="py-2 pl-3 text-right tabular-nums text-gray-600 dark:text-gray-300" data-testid="risk-asset-set-l3-volatility">{row.volatility === null ? '\u2014' : percent(row.volatility)}</td>
-                            <td class="py-2 pl-3 text-right tabular-nums text-gray-600 dark:text-gray-300" data-testid="risk-asset-set-l3-expectedReturn">{row.expectedReturn === null ? '\u2014' : signedPercent(row.expectedReturn)}</td>
-                            <!-- Ratios, printed plainly. No colour, no arrow, no
-                                 ordering by value: a grade is what this level may not
-                                 give, and a green cell is a grade. -->
-                            <td class="py-2 pl-3 text-right tabular-nums text-gray-600 dark:text-gray-300" data-testid="risk-asset-set-l3-sortino">{formatRatio(row.sortino)}</td>
-                            <td class="py-2 pl-3 text-right tabular-nums text-gray-600 dark:text-gray-300" data-testid="risk-asset-set-l3-sharpe">{formatRatio(row.sharpe)}</td>
-                            {#if benchmarkApplies}
-                                <td class="py-2 pl-3 text-right tabular-nums text-gray-600 dark:text-gray-300" data-testid="risk-asset-set-l3-beta">{formatRatio(row.beta)}</td>
-                                <td class="py-2 pl-3 text-right tabular-nums text-gray-600 dark:text-gray-300" data-testid="risk-asset-set-l3-correlation">{formatRatio(row.correlation)}</td>
-                            {/if}
-                        </tr>
-                    {/each}
-                </tbody>
-            </table>
-        </div>
-
-        {#if !benchmarkApplies}
-            <!-- Stated rather than left to be noticed. Two columns are missing and
-                 the reason is a choice the reader can make elsewhere; without this
-                 the absence reads as a limitation of the page. -->
-            <p class="text-[11px] text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l3-no-benchmark">{$t('risk.assetSet.levels.l3.noBenchmark')}</p>
-        {/if}
-        <p class="text-[11px] text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l3-blank-note">{$t('risk.assetSet.levels.blankNote')}</p>
+        <!-- The table, the chart and their notes are the shared level's (`RiskReturnLevel`):
+             the data first, then its chart (the developer's review, 30/09). The notes are the
+             shared ones, by capability; with no portfolio dot the line is drawn here only through
+             the benchmark, and only then do its notes appear (`riskReturnNotes`), and
+             `assetSetI18n.test.ts` checks that no note the lab renders names a line. -->
+        <RiskReturnLevel
+            {rows}
+            {points}
+            capabilities={{ratios: true, benchmark: benchmarkApplies}}
+            riskFreeRate={LAB_RISK_FREE_RATE}
+            {assetIcons}
+            testIdPrefix="risk-asset-set-l3"
+            storageKey="risk-asset-set-l3"
+            labels={{
+                volatility: $t('risk.levels.l3.scatter.axisVolatility'),
+                return: $t('risk.assetSet.levels.l3.axisReturn'),
+                capitalMarketLine: $t('risk.levels.l3.scatter.line'),
+            }}
+            height="360px"
+            bind:tableRef
+        >
+            {#snippet afterTable()}
+                {#if calculationWindow}
+                    <!-- Two lines (the developer's review, round 4): the window, then what is annualised.
+                         Only volatility and the average return are; Sharpe and Sortino derive from them,
+                         and beta and correlation have no unit of time — the line claims no more. -->
+                    <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-asset-set-l3-period" data-start={calculationWindow.start} data-end={calculationWindow.end} data-days={calculationWindow.days} data-narrowed={String(calculationWindow.narrowed)}>
+                        <span class="block" data-testid="risk-asset-set-l3-period-window">{periodWindowText}</span><span class="block" data-testid="risk-asset-set-l3-period-annualized">{$t('risk.assetSet.levels.l3.period.annualized')}</span>
+                    </p>
+                {/if}
+            {/snippet}
+        </RiskReturnLevel>
     {/if}
 </div>

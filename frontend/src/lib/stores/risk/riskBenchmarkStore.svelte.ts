@@ -20,6 +20,7 @@
 import {browser} from '$app/environment';
 
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
 
 const STORAGE_BASE_KEY = 'risk_benchmark_asset';
 
@@ -78,6 +79,40 @@ export const riskBenchmark = {
         }
     },
 };
+
+/**
+ * How far a picker got with the shared choice: `pending` is the picker's own word for "still checking", and
+ * `blocked` its word for a choice the engine says cannot be measured over the page's period (D378). Both are the
+ * picker's alone: the store resolves the stored id, never a page's period.
+ */
+export type RiskBenchmarkState = 'none' | 'pending' | 'set' | 'unknown' | 'blocked';
+
+export interface RiskBenchmarkResolution {
+    state: Exclude<RiskBenchmarkState, 'pending' | 'blocked'>;
+    /** The confirmed benchmark, or null when there is none to use. */
+    assetId: number | null;
+}
+
+/**
+ * The shared choice, confirmed against the asset list — a reading, never a correction.
+ *
+ * An id whose asset the list does not hold reads as `unknown` and is used by nobody, but
+ * it stays stored: `ensureAssetsLoaded()` resolves even when the request fails, so a
+ * deleted asset and a list that never arrived look the same from here, and clearing on
+ * that evidence would destroy a valid choice. Nor would clearing close the hole it aims
+ * at: `assets.id` has no AUTOINCREMENT, and SQLite may hand a deleted id to a new asset.
+ */
+export async function resolveRiskBenchmark(): Promise<RiskBenchmarkResolution> {
+    const stored = riskBenchmark.assetId;
+    // Nothing to confirm, so nothing to fetch.
+    if (stored === null) return {state: 'none', assetId: null};
+    try {
+        await ensureAssetsLoaded();
+    } catch {
+        return {state: 'unknown', assetId: null};
+    }
+    return getAssetInfo(stored) ? {state: 'set', assetId: stored} : {state: 'unknown', assetId: null};
+}
 
 registerClientSessionReset('riskBenchmarkStore', () => {
     hydratedKey = null;

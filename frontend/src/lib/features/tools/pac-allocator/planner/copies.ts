@@ -7,14 +7,10 @@
  * nothing prices an Asset (`/assets/prices/current` is never called).
  */
 import {canonicalInput, compareDecimal, decimalSign, fractionToPercent} from './decimal';
-import {EXPOSURE_DIMENSIONS, PlannerDraft, nowTimestamp, priceIsCopied, rateIsCopied, sameExposures, samePrice, type CopyKind, type CopyRecord, type CopyRef, type DraftAsset, type DraftBroker, type DraftCash, type DraftExposure, type DraftFx, type DraftPrice, type ExposureDimension} from './draft.svelte';
+import {EXPOSURE_DIMENSIONS, PlannerDraft, nowTimestamp, priceIsCopied, rateIsCopied, samePrice, type CopyKind, type CopyRecord, type CopyRef, type DraftAsset, type DraftBroker, type DraftCash, type DraftExposure, type DraftFx, type DraftPrice, type ExposureDimension} from './draft.svelte';
 import type {PlannerSource, SourceAsset, SourceBroker, SourceCurrentWeight, SourceIssue, SourceQuery, SourceSection} from './source';
 
-export type CopyConflict =
-    | {id: string; kind: 'cash'; cashKey: string; label: string; currency: string; previous: string; previousStamp: CopyRef | null; incoming: string; incomingStamp: CopyRef; ownershipShare: string; economicAmount: string; selected: string}
-    | {id: string; kind: 'price'; assetKey: string; label: string; previous: DraftPrice | null; previousStamp: CopyRef | null; current: DraftPrice | null; incoming: DraftPrice; incomingStamp: CopyRef; source: string | null}
-    | {id: string; kind: 'exposures'; assetKey: string; label: string; previousStamp: CopyRef | null; incoming: DraftExposure[]; incomingStamp: CopyRef}
-    | {id: string; kind: 'fx'; pair: string; label: string; previous: string | null; previousStamp: CopyRef | null; current: string; incoming: string; incomingStamp: CopyRef; source: string | null; referenceDate: string | null};
+export type CopyConflict = {id: string; kind: 'cash'; cashKey: string; label: string; currency: string; previous: string; previousStamp: CopyRef | null; incoming: string; incomingStamp: CopyRef; ownershipShare: string; economicAmount: string; selected: string};
 
 export interface CopyOutcome {
     kind: CopyKind;
@@ -303,60 +299,6 @@ function clonePrice(price: DraftPrice): DraftPrice {
     return {...price};
 }
 
-export function applyPriceCopy(draft: PlannerDraft, source: PlannerSource, copy: CopyRecord): CopyOutcome {
-    const result = outcome('prices', source, copy);
-    const keys = sourceAssetKeys(source);
-    for (const asset of draft.data.assets) {
-        if (asset.sourceAssetId === null) continue;
-        const sourceKey = keys.get(asset.sourceAssetId);
-        const row = sourceKey ? source.prices.find((item) => item.asset_id === sourceKey) : undefined;
-        if (!row || row.amount === null || row.currency === null || row.quote_base_quantity === null || row.reference_date === null) {
-            result.missing.push(asset.name);
-            continue;
-        }
-        const incoming: DraftPrice = {amount: row.amount, currency: row.currency, quoteBaseQuantity: row.quote_base_quantity, referenceDate: row.reference_date};
-        const incomingStamp = stampOf(draft, copy, row.provenance_id);
-        if (asset.priceManual) {
-            // The user's price stays; only the value «Auto» would restore moves.
-            asset.copiedPrice = clonePrice(incoming);
-            asset.priceStamp = incomingStamp;
-            asset.priceSource = row.source;
-            result.unchanged += 1;
-        } else if (asset.price === null) {
-            asset.price = clonePrice(incoming);
-            asset.copiedPrice = clonePrice(incoming);
-            asset.priceStamp = incomingStamp;
-            asset.priceSource = row.source;
-            result.applied += 1;
-        } else if (asset.copiedPrice && samePrice(asset.copiedPrice, incoming)) {
-            asset.priceStamp = incomingStamp;
-            asset.priceSource = row.source;
-            result.unchanged += 1;
-        } else if (asset.priceStamp && samePrice(asset.price, asset.copiedPrice)) {
-            asset.price = clonePrice(incoming);
-            asset.copiedPrice = clonePrice(incoming);
-            asset.priceStamp = incomingStamp;
-            asset.priceSource = row.source;
-            result.applied += 1;
-        } else {
-            result.conflicts.push({
-                id: `price|${asset.key}`,
-                kind: 'price',
-                assetKey: asset.key,
-                label: asset.name,
-                previous: asset.copiedPrice,
-                previousStamp: asset.priceStamp,
-                current: asset.price,
-                incoming,
-                incomingStamp,
-                source: row.source,
-            });
-        }
-    }
-    pruneCopies(draft);
-    return result;
-}
-
 /** A price never copied and never typed: the automatic read may fill it. A cleared copied price or a manual one is never read. */
 export function priceAwaitsRead(asset: DraftAsset): boolean {
     return asset.sourceAssetId !== null && !asset.priceManual && asset.price === null && asset.priceStamp === null;
@@ -488,46 +430,6 @@ export function lackingDimensions(source: PlannerSource, assetIds: readonly numb
     return lacking;
 }
 
-export function applyClassificationCopy(draft: PlannerDraft, source: PlannerSource, copy: CopyRecord): CopyOutcome {
-    const result = outcome('classifications', source, copy);
-    const keys = sourceAssetKeys(source);
-    for (const asset of draft.data.assets) {
-        if (asset.sourceAssetId === null) continue;
-        const sourceKey = keys.get(asset.sourceAssetId);
-        const rows = sourceKey ? source.classifications.filter((item) => item.asset_id === sourceKey) : [];
-        const complete = rows.filter((row) => row.category_id !== null && row.label !== null && row.weight !== null);
-        if (complete.length < rows.length || rows.length === 0) result.missing.push(asset.name);
-        if (complete.length === 0) continue;
-        const incoming: DraftExposure[] = complete.map((row) => ({
-            key: draft.nextId('exposure'),
-            dimension: row.dimension,
-            categoryId: row.category_id as string,
-            label: row.label as string,
-            weightPercent: fractionToPercent(row.weight as string) ?? '',
-            provenanceId: row.provenance_id,
-        }));
-        const incomingStamp = stampOf(draft, copy, complete[0].provenance_id);
-        if (asset.exposures.length === 0 && asset.exposureStamp === null) {
-            asset.exposures = incoming;
-            asset.copiedExposures = cloneExposures(draft, incoming);
-            asset.exposureStamp = incomingStamp;
-            result.applied += 1;
-        } else if (asset.copiedExposures && sameExposures(asset.copiedExposures, incoming)) {
-            asset.exposureStamp = incomingStamp;
-            result.unchanged += 1;
-        } else if (asset.exposureStamp && sameExposures(asset.exposures, asset.copiedExposures)) {
-            asset.exposures = incoming;
-            asset.copiedExposures = cloneExposures(draft, incoming);
-            asset.exposureStamp = incomingStamp;
-            result.applied += 1;
-        } else {
-            result.conflicts.push({id: `exposures|${asset.key}`, kind: 'exposures', assetKey: asset.key, label: asset.name, previousStamp: asset.exposureStamp, incoming, incomingStamp});
-        }
-    }
-    pruneCopies(draft);
-    return result;
-}
-
 // -- FX --------------------------------------------------------------------------
 
 /**
@@ -552,56 +454,6 @@ export function applyAwaitingFxRates(draft: PlannerDraft, source: PlannerSource,
         fx.source = row.source;
         fx.referenceDate = row.reference_date;
         result.applied += 1;
-    }
-    pruneCopies(draft);
-    return result;
-}
-
-export function applyFxCopy(draft: PlannerDraft, source: PlannerSource, copy: CopyRecord): CopyOutcome {
-    const result = outcome('fx', source, copy);
-    for (const row of source.fxQuotes) {
-        if (row.rate === null) {
-            result.missing.push(row.pair);
-            continue;
-        }
-        const incomingStamp = stampOf(draft, copy, row.provenance_id);
-        const fx = draft.ensureFx(row.pair);
-        const fresh = () => {
-            fx.rate = row.rate as string;
-            fx.copiedRate = row.rate;
-            fx.stamp = incomingStamp;
-            fx.source = row.source;
-            fx.referenceDate = row.reference_date;
-        };
-        if (fx.rate.trim() === '') {
-            fresh();
-            result.applied += 1;
-        } else if (fx.copiedRate !== null && compareDecimal(fx.copiedRate, row.rate) === 0) {
-            fx.stamp = incomingStamp;
-            fx.source = row.source;
-            fx.referenceDate = row.reference_date;
-            result.unchanged += 1;
-        } else if (fx.copiedRate !== null && fx.stamp && compareDecimal(canonicalInput(fx.rate) ?? fx.rate, fx.copiedRate) === 0) {
-            fresh();
-            result.applied += 1;
-        } else {
-            result.conflicts.push({
-                id: `fx|${row.pair}`,
-                kind: 'fx',
-                pair: row.pair,
-                label: row.pair,
-                previous: fx.copiedRate,
-                previousStamp: fx.stamp,
-                current: fx.rate,
-                incoming: row.rate,
-                incomingStamp,
-                source: row.source,
-                referenceDate: row.reference_date,
-            });
-        }
-    }
-    for (const pair of draft.fxPairs) {
-        if (!source.fxQuotes.some((row) => row.pair === pair) && !result.missing.includes(pair)) result.missing.push(pair);
     }
     pruneCopies(draft);
     return result;
@@ -788,42 +640,15 @@ export function resolveConflicts(draft: PlannerDraft, copy: CopyRecord, conflict
     if (choice === 'update' && conflicts.length > 0) {
         if (!draft.data.copies[copy.copyId]) draft.data.copies[copy.copyId] = copy;
         for (const conflict of conflicts) {
-            if (conflict.kind === 'cash') {
-                const cash = draft.cashRow(conflict.cashKey);
-                if (!cash) continue;
-                cash.available = conflict.incoming;
-                cash.stamp = conflict.incomingStamp;
-                cash.ownershipShare = conflict.ownershipShare;
-                cash.economicAmount = conflict.economicAmount;
-            } else if (conflict.kind === 'price') {
-                const asset = draft.asset(conflict.assetKey);
-                if (!asset) continue;
-                asset.copiedPrice = clonePrice(conflict.incoming);
-                asset.priceStamp = conflict.incomingStamp;
-                asset.priceSource = conflict.source;
-            } else if (conflict.kind === 'exposures') {
-                const asset = draft.asset(conflict.assetKey);
-                if (!asset) continue;
-                asset.copiedExposures = cloneExposures(draft, conflict.incoming);
-                asset.exposureStamp = conflict.incomingStamp;
-            } else {
-                const fx = draft.fx(conflict.pair);
-                if (!fx) continue;
-                fx.copiedRate = conflict.incoming;
-                fx.stamp = conflict.incomingStamp;
-                fx.source = conflict.source;
-                fx.referenceDate = conflict.referenceDate;
-            }
+            const cash = draft.cashRow(conflict.cashKey);
+            if (!cash) continue;
+            cash.available = conflict.incoming;
+            cash.stamp = conflict.incomingStamp;
+            cash.ownershipShare = conflict.ownershipShare;
+            cash.economicAmount = conflict.economicAmount;
         }
     }
     pruneCopies(draft);
-}
-
-// -- Restore ----------------------------------------------------------------------
-
-export function restoreCopiedRate(draft: PlannerDraft, pair: string): void {
-    const fx = draft.fx(pair);
-    if (fx?.copiedRate) fx.rate = fx.copiedRate;
 }
 
 // -- Current distribution (Q-C0-6) ---------------------------------------------

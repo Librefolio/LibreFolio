@@ -87,6 +87,7 @@
     let expanded = $state(new Set<string>());
     let containerRef = $state<HTMLDivElement | null>(null);
     let inputRef = $state<HTMLInputElement | null>(null);
+    let dropdownRef = $state<HTMLDivElement | null>(null);
     let dropdownStyle = $state('');
     let activeIndex = $state(-1);
     const instanceSuffix = Math.random().toString(36).slice(2, 9);
@@ -144,10 +145,36 @@
         return `${treeId}-item-${itemValue}`;
     }
 
+    /**
+     * Handles of the steps deferred to the next task, held until they run. A plain Set, not `$state`: the destroy
+     * teardown must see every handle, and a teardown reads `$state` as it was before its latest write. A step still
+     * pending when the picker is destroyed is cancelled, so it never runs against a DOM — or a test `document` — that
+     * is gone.
+     */
+    const pendingSteps = new Set<ReturnType<typeof setTimeout>>();
+
+    function defer(step: () => void) {
+        const handle = setTimeout(() => {
+            pendingSteps.delete(handle);
+            step();
+        }, 0);
+        pendingSteps.add(handle);
+    }
+
+    $effect(() => () => {
+        for (const handle of pendingSteps) clearTimeout(handle);
+        pendingSteps.clear();
+    });
+
+    /** A row of this picker, found inside its own dropdown rather than through the global `document`. */
+    function entryElement(id: string): HTMLElement | undefined {
+        return Array.from(dropdownRef?.querySelectorAll<HTMLElement>('[id]') ?? []).find((element) => element.id === id);
+    }
+
     function scrollActiveEntryIntoView() {
         const entry = navigationEntries[activeIndex];
         if (!entry) return;
-        setTimeout(() => document.getElementById(entry.id)?.scrollIntoView({block: 'nearest'}), 0);
+        defer(() => entryElement(entry.id)?.scrollIntoView({block: 'nearest'}));
     }
 
     function setActiveIndex(index: number) {
@@ -193,11 +220,11 @@
         query = '';
         const toExpand = groupToExpandOnOpen();
         if (toExpand !== null && !expanded.has(toExpand)) expanded = new Set([...expanded, toExpand]);
-        setTimeout(() => {
+        defer(() => {
             const selectedIndex = selectedEntry ? navigationEntries.findIndex((entry) => entry.kind === 'item' && entry.item.value === selectedEntry.value) : -1;
             setActiveIndex(fromEnd ? navigationEntries.length - 1 : selectedIndex >= 0 ? selectedIndex : 0);
             inputRef?.focus();
-        }, 0);
+        });
     }
 
     function close() {
@@ -316,7 +343,7 @@
             if (!isOpen && (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key.length === 1)) {
                 event.preventDefault();
                 open(event.key === 'ArrowUp');
-                if (event.key.length === 1) setTimeout(() => (query = event.key), 0);
+                if (event.key.length === 1) defer(() => (query = event.key));
             } else {
                 handleKeydown(event);
             }
@@ -335,7 +362,7 @@
                 class="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-gray-400"
                 placeholder={searchPlaceholder ?? $t('common.search')}
                 onclick={(event) => event.stopPropagation()}
-                oninput={() => setTimeout(() => setActiveIndex(0), 0)}
+                oninput={() => defer(() => setActiveIndex(0))}
                 onkeydown={(event) => {
                     event.stopPropagation();
                     handleKeydown(event);
@@ -349,7 +376,7 @@
                     onclick={(event) => {
                         event.stopPropagation();
                         query = '';
-                        setTimeout(() => setActiveIndex(0), 0);
+                        defer(() => setActiveIndex(0));
                         inputRef?.focus();
                     }}
                 >
@@ -368,7 +395,7 @@
     </div>
 
     {#if isOpen}
-        <div class="max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800" id={treeId} style={dropdownStyle} role={flat ? 'listbox' : 'tree'}>
+        <div bind:this={dropdownRef} class="max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800" id={treeId} style={dropdownStyle} role={flat ? 'listbox' : 'tree'}>
             {#if visibleGroups.length === 0}
                 <div class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                     {noMatchesText ?? $t('common.noData')}
