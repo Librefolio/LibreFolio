@@ -14,6 +14,9 @@ directory", timestamped to the millisecond of a neighbour's "Moved file" log lin
 calls it after resolving the path and before handing that path to ``parse``. The
 retry was fitted to ``parse`` alone, so the guard two lines above kept answering
 "this plugin cannot read your file" about files it reads fine.
+
+When the guard does refuse, it says why if the plugin can tell (workstream L,
+step G.5): see the last section of this file.
 """
 
 from pathlib import Path
@@ -184,3 +187,155 @@ def test_relocated_path_reports_none_when_the_file_never_moved(store):
     assert moved.parent.parent.name == BRIMFileStatus.PARSED.value
 
     assert brim_provider._relocated_path("does-not-exist", path) is None
+
+
+# =============================================================================
+# THE REFUSAL SAYS WHY (workstream L, step G.5)
+# =============================================================================
+#
+# The developer's decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)».
+# When the guard refuses a file, its message is ``Plugin '{code}' cannot parse file '{name}'``,
+# followed by ``: {reason}`` when the plugin says why: ``BRIMProvider.cannot_parse_reason``, an
+# optional method that the guard reads with ``getattr`` and asks only after ``can_parse`` answered
+# False, about the path it checked last (the relocated one when the file moved). ``None`` or an
+# empty sentence adds nothing, not even the colon. A duck-typed plugin without the method, or a
+# method that raises, leaves the plain message: always this ``ValueError``, never another exception.
+# ``{name}`` is the stored file's name, ``{file_id}{ext}``, which G.5 does not change.
+
+GENERIC_CSV_CODE = "broker_generic_csv"
+
+
+def _plain_refusal(stored: Path) -> str:
+    """The guard's message when the plugin has nothing to add, about the stored file ``stored``."""
+    return f"Plugin '{GENERIC_CSV_CODE}' cannot parse file '{stored.name}'"
+
+
+class _RefusingPlugin:
+    """A plugin that refuses every file, and answers ``cannot_parse_reason`` with ``reason``.
+
+    ``reason`` is a sentence or ``None``, a callable of the path, or an exception to raise. The
+    paths the guard checks and the paths it asks the reason about are recorded, so a test can tell
+    whether the guard asked, and where. ``mover`` as in ``_HonestPlugin``: the first check moves
+    that file uploaded → parsed, the way a neighbour's parse would.
+    """
+
+    plugin_version = "1.0.0"
+
+    def __init__(self, reason=None, mover: str | None = None):
+        self.reason = reason
+        self.mover = mover
+        self.checked: list[Path] = []
+        self.reasons_asked: list[Path] = []
+        self.paths_read: list[Path] = []
+
+    def can_parse(self, file_path: Path) -> bool:
+        self.checked.append(file_path)
+        if self.mover:
+            brim_provider.move_to_parsed(self.mover)
+            self.mover = None  # only the first caller wins the transition
+        return False
+
+    def cannot_parse_reason(self, file_path: Path):
+        self.reasons_asked.append(file_path)
+        if isinstance(self.reason, BaseException):
+            raise self.reason
+        return self.reason(file_path) if callable(self.reason) else self.reason
+
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+        self.paths_read.append(file_path)
+        return BRIMParseOutput(transactions=[], extracted_assets={})
+
+
+def _refusal(file_id: str, plugin, monkeypatch) -> ValueError:
+    """Parse ``file_id`` with ``plugin`` standing in for the generic CSV; the ``ValueError`` the guard must raise."""
+    monkeypatch.setattr(brim_provider.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
+    with pytest.raises(ValueError) as refusal:
+        brim_provider.parse_file(file_id, GENERIC_CSV_CODE, broker_id=1)
+    return refusal.value
+
+
+def test_the_refusal_says_why_when_the_plugin_knows(store, monkeypatch):
+    info = _upload()
+    stored = brim_provider.get_file_path(info.file_id)
+    plugin = _RefusingPlugin(reason="some reason")
+
+    refusal = _refusal(info.file_id, plugin, monkeypatch)
+
+    assert str(refusal) == f"{_plain_refusal(stored)}: some reason"
+    assert plugin.reasons_asked == [stored], "the reason is asked once, about the file the guard checked"
+    assert plugin.paths_read == []
+
+
+@pytest.mark.parametrize("reason", [None, ""], ids=["none", "empty-sentence"])
+def test_the_refusal_stays_plain_when_the_plugin_has_nothing_to_add(store, monkeypatch, reason):
+    """No colon, nothing appended, so a stray ``": "`` fails — and the guard did ask."""
+    info = _upload()
+    stored = brim_provider.get_file_path(info.file_id)
+    plugin = _RefusingPlugin(reason=reason)
+
+    refusal = _refusal(info.file_id, plugin, monkeypatch)
+
+    assert str(refusal) == _plain_refusal(stored)
+    assert plugin.reasons_asked == [stored], "the guard never asked the plugin why it refuses the file"
+
+
+def test_a_plugin_without_the_method_keeps_the_plain_refusal(store, monkeypatch):
+    """A guard, green before G.5 too: the method is read with ``getattr``, never an ``AttributeError``.
+
+    ``test_a_plugin_that_genuinely_cannot_read_the_format_still_fails`` matches a fragment of the
+    message; this pins all of it, so a stray suffix for a plugin without the method fails.
+    """
+    info = _upload()
+    stored = brim_provider.get_file_path(info.file_id)
+    plugin = _HonestPlugin()
+    plugin.can_parse = lambda file_path: False
+    assert not hasattr(plugin, "cannot_parse_reason"), "premise: this double predates G.5"
+
+    refusal = _refusal(info.file_id, plugin, monkeypatch)
+
+    assert str(refusal) == _plain_refusal(stored)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [RuntimeError("the reason itself failed"), ValueError("the reason itself failed")],
+    ids=["runtime-error", "value-error"],
+)
+def test_a_reason_that_raises_leaves_the_plain_refusal(store, monkeypatch, failure):
+    """The guard logs the failure and ignores it: the plain ``ValueError``, never the method's exception — not even its own ``ValueError``."""
+    info = _upload()
+    stored = brim_provider.get_file_path(info.file_id)
+    plugin = _RefusingPlugin(reason=failure)
+
+    refusal = _refusal(info.file_id, plugin, monkeypatch)
+
+    assert str(refusal) == _plain_refusal(stored)
+    assert plugin.reasons_asked == [stored], "the guard never asked the plugin why it refuses the file"
+
+
+def test_the_reason_is_asked_where_the_guard_looked_last(store, monkeypatch):
+    """The file moves uploaded → parsed under the check, and the plugin refuses it at both addresses: the reason comes from the relocated one."""
+    info = _upload()
+    stored = brim_provider.get_file_path(info.file_id)
+    plugin = _RefusingPlugin(reason=lambda file_path: f"refused in {file_path.parent.parent.name}", mover=info.file_id)
+
+    refusal = _refusal(info.file_id, plugin, monkeypatch)
+
+    assert len(plugin.checked) == 2, "premise: the guard checked the stale path, then the relocated one"
+    stale, relocated = plugin.checked
+    assert (stale.parent.parent.name, relocated.parent.parent.name) == (BRIMFileStatus.UPLOADED.value, BRIMFileStatus.PARSED.value), "premise: the file moved uploaded → parsed under the check"
+    assert str(refusal) == f"{_plain_refusal(stored)}: refused in {BRIMFileStatus.PARSED.value}"
+    assert plugin.reasons_asked == [relocated]
+
+
+def test_the_generic_csv_names_the_required_columns_a_file_misses(store):
+    """The real plugin through the guard: an uploaded CSV whose header is ``amount,description`` names neither ``date`` nor ``type``."""
+    info = _upload(b"amount,description\n10,first\n20,second\n")
+    assert GENERIC_CSV_CODE not in info.compatible_plugins, f"premise: the generic CSV does not offer itself for this file: {info.compatible_plugins}"
+
+    with pytest.raises(ValueError) as refusal:
+        brim_provider.parse_file(info.file_id, GENERIC_CSV_CODE, broker_id=1)
+
+    message = str(refusal.value)
+    assert message.startswith(f"Plugin '{GENERIC_CSV_CODE}' cannot parse file '"), message
+    assert message.endswith("': required columns 'date' and 'type' not found in the CSV header"), f"the refusal does not say which columns are missing: {message!r}"

@@ -609,3 +609,16 @@ export function formatTruncatedGhostLabel(ghostLabel: string): string {
     }
     return truncateName(ghostLabel);
 }
+
+/**
+ * Split a ghost label `"💱 Name (🇺🇸 USD)"` into its name and its currency parenthetical (the last
+ * one), with nothing cut: the tooltip lets the name shrink while the currency stays whole. A label
+ * without that shape is all name.
+ */
+export function splitGhostLabel(ghostLabel: string): {name: string; currency: string | null} {
+    const nameMatch = ghostLabel.match(/^💱\s*(.+?)\s*(\([^)]+\))$/);
+    if (nameMatch) {
+        return {name: `💱 ${nameMatch[1]}`, currency: nameMatch[2]};
+    }
+    return {name: ghostLabel, currency: null};
+}

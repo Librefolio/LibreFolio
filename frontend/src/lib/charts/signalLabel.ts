@@ -52,8 +52,13 @@ export interface SignalLabelInfo {
  * 2. Color dot `●` if `color` is set (always shown — additive with icon)
  * 3. Icon: `iconUrl` → `<img>` (custom) or `assetType` → PNG fallback
  * 4. Label text
+ *
+ * `options.inline` renders the label text as a plain inline box, so an enclosing box that
+ * ellipsizes decides where it ends. The default box caps itself at `calc(100% - 40px)`, which
+ * suits a table cell but clips a shrink-to-fit parent even when there is room (the tooltip row
+ * built by `buildFittedTooltipRow`).
  */
-export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): string {
+export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number, options?: {inline?: boolean}): string {
     const parts: string[] = [];
 
     // Crown prefix (fixed-width slot — matches dot slot width for table alignment)
@@ -77,7 +82,8 @@ export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): s
 
     // Label text — optionally truncated (tooltip uses truncateAt=15, tables rely on CSS overflow)
     const displayLabel = truncateAt && info.label.length > truncateAt ? info.label.slice(0, truncateAt) + '…' : info.label;
-    parts.push(`<span style="vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px);min-width:0;flex-shrink:1" title="${escapeHtml(info.label)}">${escapeHtml(displayLabel)}</span>`);
+    const labelStyle = options?.inline ? 'vertical-align:middle;white-space:nowrap' : 'vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px);min-width:0;flex-shrink:1';
+    parts.push(`<span style="${labelStyle}" title="${escapeHtml(info.label)}">${escapeHtml(displayLabel)}</span>`);
 
     // Non-truncatable suffix (e.g. currency badge) — always visible
     if (info.suffix) {

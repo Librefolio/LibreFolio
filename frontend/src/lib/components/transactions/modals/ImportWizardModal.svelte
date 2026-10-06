@@ -78,7 +78,7 @@
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeHistory as isBeforeHistoryPure, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
-    import {buildParseUnits, combinedFileForSet, groupBrokerFiles, setBlocksAnalysis, setPluginFor, setSelectionState, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import {buildParseUnits, combinedFileForSet, groupBrokerFiles, isReportSetPlugin, readAlonePlugins, rememberedChoices, setBlocksAnalysis, setPluginFor, setRequest, setSelectionState, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
     import {buildGapFixRequests, buildGapFixView, defaultGapFixSelection, gapFixHasSomethingToShow, gapFixSelectedCount, resolveTruthAssetId, selectedGapFixCreates, truthSourcesOf, type GapFixOutcome, type GapFixView, type TruthSource} from '$lib/utils/transactions/gapFixModel';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet, carryResolverChoices, type ResolverChoices} from '$lib/utils/transactions/importDuplicateResolver';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -282,16 +282,26 @@
 
     // Report sets (design §4.3): the plugin catalogue, the files grouped into sets, each set's
     // preview, and which cards are open. A set is selected, analysed and imported as a whole.
-    type SetPreviewEntry = SetPreviewState & {preview?: BrimSetPreview | null};
+    /** A set's preview, with the members it was asked for: another membership needs another preview. */
+    type SetPreviewEntry = SetPreviewState & {preview?: BrimSetPreview | null; members?: string};
     let importPlugins = $state<BrimPlugin[]>([]);
     let setPreviews = $state<Map<string, SetPreviewEntry>>(new Map());
     let expandedSets = $state<Set<string>>(new Set());
     let setUploadingRole = $state<Map<string, string>>(new Map());
     let setPreviewEpoch = 0;
     let setPluginInfos = $derived(importPlugins as unknown as SetPluginInfo[]);
+    /**
+     * How each file is read, as last analysed (phase G): files only uploaded have no memory, an
+     * analysed set remembers its members and plugin, a file analysed alone its plugin.
+     */
+    let rememberedByBroker = $derived(new Map([...brokerFilesMap].map(([brokerId, files]) => [brokerId, rememberedChoices(files, setPluginInfos)] as const)));
+    /** The choices in force: this session's (`filePluginOverrides`) over the memory of the last analysis. */
+    function choicesFor(brokerId: number): Map<string, string> {
+        return new Map([...(rememberedByBroker.get(brokerId) ?? new Map<string, string>()), ...filePluginOverrides]);
+    }
     let brokerSetGroups = $derived.by(() => {
         const groups = new Map<number, {sets: ReportSetGroup[]; singles: BrimFile[]}>();
-        for (const [brokerId, files] of brokerFilesMap) groups.set(brokerId, groupBrokerFiles(brokerId, files, setPluginInfos, filePluginOverrides));
+        for (const [brokerId, files] of brokerFilesMap) groups.set(brokerId, groupBrokerFiles(brokerId, files, setPluginInfos, choicesFor(brokerId)));
         return groups;
     });
     let allReportSets = $derived([...brokerSetGroups.values()].flatMap((group) => group.sets));
@@ -328,6 +338,8 @@
     interface ParsedSetInfo {
         key: string;
         batchId: string;
+        /** The originals of the upload left out of the set: the combine must leave them out too. */
+        excludeFileIds: string[];
         uploadedAt: string;
         memberIds: string[];
         memberNames: string[];
@@ -3347,6 +3359,13 @@ ${arrow}<span>${label}</span></span>`,
 
     // T6: Smart plugin auto-selection
     function pickBestPlugin(file: BrimFile, brokerId: number): string {
+        // A choice in force (this session's, or the last analysis'): its set, its plugin, or '' (none).
+        const choice = choicesFor(brokerId).get(file.file_id);
+        if (choice !== undefined) {
+            const chosenSet = setPluginFor(file, setPluginInfos, choice);
+            if (chosenSet) return chosenSet;
+            if (!isReportSetPlugin(setPluginInfos.find((plugin) => plugin.code === choice))) return choice;
+        }
         // A file a report-set plugin recognises is read through its set (A18).
         const setPlugin = setPluginFor(file, setPluginInfos);
         if (setPlugin) return setPlugin;
@@ -3386,7 +3405,7 @@ ${arrow}<span>${label}</span></span>`,
             if (!existing.has(id)) {
                 const bf = brokerFiles.find((f) => f.file_id === id);
                 if (bf) {
-                    const pluginCode = filePluginOverrides.get(id) ?? pickBestPlugin(bf, brokerId);
+                    const pluginCode = pickBestPlugin(bf, brokerId);
                     selectedFiles = [...selectedFiles, {fileId: id, fileName: bf.filename, brokerId, pluginCode}];
                 }
             }
@@ -3396,6 +3415,44 @@ ${arrow}<span>${label}</span></span>`,
     function updateFilePlugin(fileId: string, pluginCode: string) {
         filePluginOverrides = new Map(filePluginOverrides).set(fileId, pluginCode);
         selectedFiles = selectedFiles.map((f) => (f.fileId === fileId ? {...f, pluginCode} : f));
+        // Choosing a report-set plugin for a single file puts it back in its set.
+        void refreshChangedSetPreviews();
+    }
+
+    /**
+     * «Read as» on a set's card (phase G, A): another report-set plugin for every member, or each
+     * member alone with its best single-file plugin — a member no such plugin reads stays out, unselected.
+     */
+    function readSetAs(set: ReportSetGroup, code: string | null) {
+        const brokerDefault = brokers.find((b) => b.id === set.brokerId)?.default_import_plugin ?? null;
+        const next = new Map(filePluginOverrides);
+        const chosen = new Map<string, string>();
+        for (const file of set.files) {
+            const choice = code ?? readAlonePlugins(file, setPluginInfos, brokerDefault)[0]?.code ?? '';
+            next.set(file.file_id, choice);
+            chosen.set(file.file_id, choice);
+        }
+        filePluginOverrides = next;
+        selectedFiles = selectedFiles.flatMap((f) => {
+            const choice = chosen.get(f.fileId);
+            if (choice === undefined) return [f];
+            return choice === '' ? [] : [{...f, pluginCode: choice}];
+        });
+        void refreshChangedSetPreviews();
+    }
+
+    /** «Read alone with» a single-file plugin (phase G, B): the file leaves its set, and keeps its selection. */
+    function readFileAlone(fileId: string, code: string) {
+        filePluginOverrides = new Map(filePluginOverrides).set(fileId, code);
+        selectedFiles = selectedFiles.map((f) => (f.fileId === fileId ? {...f, pluginCode: code} : f));
+        void refreshChangedSetPreviews();
+    }
+
+    /** «Remove from the set» (phase G, B): the file leaves its set with no plugin, unselected. */
+    function removeFileFromSet(fileId: string) {
+        filePluginOverrides = new Map(filePluginOverrides).set(fileId, '');
+        selectedFiles = selectedFiles.filter((f) => f.fileId !== fileId);
+        void refreshChangedSetPreviews();
     }
 
     function getFileStatus(file: BrimFile): string {
@@ -3427,7 +3484,7 @@ ${arrow}<span>${label}</span></span>`,
                 (map.get(target.brokerId) ?? []).filter((f) => f.file_id !== target.fileId),
             );
             brokerFilesMap = map;
-            if (affectedSet) void previewSet(affectedSet);
+            if (affectedSet) void refreshChangedSetPreviews();
         } catch (e) {
             console.error('Delete report failed:', e);
             toasts.error($t('files.deleteFailed'));
@@ -3512,7 +3569,7 @@ ${arrow}<span>${label}</span></span>`,
             return;
         }
         selectedFiles = [...others, ...set.files.map((file) => ({fileId: file.file_id, fileName: file.filename, brokerId: set.brokerId, pluginCode: set.pluginCode}))];
-        if (!setPreviews.has(set.key)) void previewSet(set);
+        if (setPreviews.get(set.key)?.members !== memberSignature(set)) void previewSet(set);
     }
 
     /** "Exclude from the import": the incomplete set stops blocking, and the other files go on (design §4.1, rule 6). */
@@ -3521,15 +3578,25 @@ ${arrow}<span>${label}</span></span>`,
         selectedFiles = selectedFiles.filter((f) => !ids.has(f.fileId));
     }
 
+    /** The members a set preview is asked for: the cache key beside the set's own. */
+    function memberSignature(set: ReportSetGroup): string {
+        return set.files
+            .map((file) => file.file_id)
+            .sort()
+            .join(',');
+    }
+
     async function previewSet(set: ReportSetGroup): Promise<SetPreviewEntry> {
         const epoch = setPreviewEpoch;
-        setPreviews = new Map(setPreviews).set(set.key, {status: 'loading', preview: setPreviews.get(set.key)?.preview ?? null});
+        const members = memberSignature(set);
+        setPreviews = new Map(setPreviews).set(set.key, {status: 'loading', preview: setPreviews.get(set.key)?.preview ?? null, members});
         let entry: SetPreviewEntry;
         try {
-            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post({broker_id: set.brokerId, plugin_code: set.pluginCode, batch_id: set.batchId})) as BrimSetPreview;
-            entry = {status: 'ready', preview};
+            // The originals left out of the set (read alone, removed) are named, so the server reads the same set.
+            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post(setRequest(set, brokerFilesMap.get(set.brokerId) ?? []))) as BrimSetPreview;
+            entry = {status: 'ready', preview, members};
         } catch (e) {
-            entry = {status: 'error', preview: null, error: extractErrorMessage(e)};
+            entry = {status: 'error', preview: null, error: extractErrorMessage(e), members};
         }
         if (epoch === setPreviewEpoch) setPreviews = new Map(setPreviews).set(set.key, entry);
         return entry;
@@ -3539,6 +3606,11 @@ ${arrow}<span>${label}</span></span>`,
         await mapWithConcurrency(sets, async (set) => {
             await previewSet(set);
         });
+    }
+
+    /** After a choice changed a set (its plugin, or its members), read again the previews that no longer match. */
+    async function refreshChangedSetPreviews() {
+        await refreshSetPreviews(allReportSets.filter((set) => setPreviews.get(set.key)?.members !== memberSignature(set)));
     }
 
     /** Re-read one broker's files; the list also returns files with no broker, which are left out. */
@@ -3577,7 +3649,8 @@ ${arrow}<span>${label}</span></span>`,
             if (wasSelected && uploaded?.file_id && !selectedFileIdSet.has(uploaded.file_id) && setPluginFor(uploaded, setPluginInfos) === set.pluginCode) {
                 selectedFiles = [...selectedFiles, {fileId: uploaded.file_id, fileName: uploaded.filename, brokerId: set.brokerId, pluginCode: set.pluginCode}];
             }
-            await previewSet(set);
+            // The set as it is now, with its new file: the one before the upload would name that file as left out.
+            await previewSet(allReportSets.find((current) => current.key === set.key) ?? set);
             notify({name: 'tx.import.set.file_added', detail: {set: set.key, role: roleCode, fileId: uploaded?.file_id ?? null}});
         } finally {
             const next = new Map(setUploadingRole);
@@ -3780,6 +3853,7 @@ ${arrow}<span>${label}</span></span>`,
                 set: {
                     key: unit.set.key,
                     batchId: unit.set.batchId,
+                    excludeFileIds: setRequest(unit.set, brokerFilesMap.get(unit.set.brokerId) ?? []).exclude_file_ids,
                     uploadedAt: unit.set.uploadedAt,
                     memberIds: unit.members.map((member) => member.fileId),
                     memberNames: unit.members.map((member) => member.fileName),
@@ -3801,7 +3875,7 @@ ${arrow}<span>${label}</span></span>`,
     async function parseResultInPlace(result: ParsedFileResult) {
         try {
             if (result.set) {
-                const combined = (await zodiosApi.combine_report_set_api_v1_brokers_import_sets_combine_post({broker_id: result.brokerId, plugin_code: result.pluginUsed, batch_id: result.set.batchId})) as BrimSetCombineResponse;
+                const combined = (await zodiosApi.combine_report_set_api_v1_brokers_import_sets_combine_post({broker_id: result.brokerId, plugin_code: result.pluginUsed, batch_id: result.set.batchId, exclude_file_ids: result.set.excludeFileIds})) as BrimSetCombineResponse;
                 result.fileId = combined.combined.file_id;
                 result.set = {...result.set, combinedFileId: combined.combined.file_id, summary: (combined.summary ?? null) as Record<string, unknown> | null, reused: combined.reused ?? false};
             }
@@ -4398,6 +4472,11 @@ ${arrow}<span>${label}</span></span>`,
                                                 onExclude={() => excludeSet(set)}
                                                 onPreviewFile={(fileId) => openPreview(fileId)}
                                                 onDeleteFile={(file) => requestDeleteFile(file as BrimFile, broker.id)}
+                                                plugins={setPluginInfos}
+                                                brokerDefaultPlugin={broker.default_import_plugin ?? null}
+                                                onReadAs={(code) => readSetAs(set, code)}
+                                                onReadAlone={(fileId, code) => readFileAlone(fileId, code)}
+                                                onRemoveFromSet={(fileId) => removeFileFromSet(fileId)}
                                             />
                                         {/each}
                                     </div>
