@@ -3449,10 +3449,15 @@ ${arrow}<span>${label}</span></span>`,
         void refreshChangedSetPreviews();
     }
 
-    /** «Remove from the set» (phase G, B): the file leaves its set with no plugin, unselected. */
+    /**
+     * «Remove from the set» (phase G, B; R5): the file leaves its set with no plugin, waiting for a new
+     * choice, and keeps its tick — taking a file out of a set says «not with this plugin», not «not at
+     * all». Like «Read as» and «Read alone with», it changes how the file is read, never its tick;
+     * choosing the set's plugin again puts it back.
+     */
     function removeFileFromSet(fileId: string) {
         filePluginOverrides = new Map(filePluginOverrides).set(fileId, '');
-        selectedFiles = selectedFiles.filter((f) => f.fileId !== fileId);
+        selectedFiles = selectedFiles.map((f) => (f.fileId === fileId ? {...f, pluginCode: ''} : f));
         void refreshChangedSetPreviews();
     }
 
