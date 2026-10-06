@@ -24,6 +24,9 @@
  *   `holdLivePricePoll`). The only state it mutates is the selection, which
  *   lives in this browser context's `localStorage` and dies with it. There is
  *   nothing to clean up, and nothing here can disturb a neighbouring spec's rows.
+ *   Nor does the modal reach a provider by opening: the provider catalogue it
+ *   fetches then, which the backend builds by asking the providers over the
+ *   network, is answered with an empty list (see `answerFxProviderCatalog`).
  * - **No selector is positional.** Pair testids are keyed by asset-id pair,
  *   because the matrix reorders itself by similarity; chips, rows of the "+"
  *   and filter options are found by what they are, not by where they sit.
@@ -1179,6 +1182,65 @@ async function holdLivePricePoll(page: Page): Promise<void> {
 }
 
 /**
+ * The provider catalogue requests {@link answerFxProviderCatalog} answered, page by
+ * page: the guard's own record, so a test can prove it still catches the request it
+ * exists for.
+ */
+const fxProviderCatalogAnswers = new WeakMap<Page, string[]>();
+
+/**
+ * Answer the exchange-rate provider catalogue (`GET /fx/providers`) with an empty
+ * list, so it never reaches the backend, and record every request answered.
+ *
+ * `PageSyncModal` calls `getCurrencyGraph()` whenever it opens, unawaited, to cache
+ * provider icons; on a page that has not built the graph yet, that sends this
+ * request. The backend answers it by asking every installed provider for its
+ * currencies, and two of them look theirs up over the network: ECB on every call,
+ * SNB once per backend process (`_ensure_currency_map`). So every run of this file
+ * reached external servers as soon as a test opened the modal — what the sync
+ * stubs exist to prevent — and depended on what the network answered.
+ *
+ * Answered rather than held, unlike the live-price poll, because here an answer is
+ * inert. A GET on this path is no portfolio mutation (`isPortfolioAffectingMutation`
+ * names only POST and DELETE on `/routes`), so it passes `zodios-client`'s
+ * interceptor invalidating nothing. A held call is not inert: after axios's 30 s
+ * timeout it rejects, and since `getCurrencyGraph` has no catch and the modal does
+ * not await it, it would end as an unhandled rejection in the page, early enough to
+ * land inside the longer tests here. An empty list is valid for the response schema
+ * (`FXProviderInfo[]`, which the client validates) and is a graph with no provider:
+ * the modal reads it only for provider icons, and the only exchange-rate provider it
+ * draws here is the sync stubs' `E2E_MOCK`, which no catalogue has an icon for.
+ * Nothing a test here reads changes.
+ *
+ * Matched on the bare path, with or without a query, and never on anything longer:
+ * `/fx/providers/routes` is a read of the database that the page builds the modal's
+ * pairs from (`fxRoutesStore`), and must reach the backend. Any other method falls
+ * through. The graph is cached once built, so how many requests a test sends
+ * depends on how often its page loads, not on how often it opens the modal: the
+ * record is read as "at least one", never as a count. Nothing unroutes at teardown:
+ * see `holdLivePricePoll`.
+ *
+ * 🔴 This isolates the tests; it fixes nothing. Outside this file, opening the modal
+ * on a fresh page still sends the backend to every provider, and a catalogue call
+ * that fails, or outlasts axios's timeout, still ends as an unhandled rejection,
+ * since nothing catches it. All this does is keep these tests off the network.
+ */
+async function answerFxProviderCatalog(page: Page): Promise<void> {
+    const answered: string[] = [];
+    fxProviderCatalogAnswers.set(page, answered);
+    await page.route(/\/api\/v1\/fx\/providers(?:\?|$)/, async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        answered.push(route.request().url());
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify([])});
+    });
+}
+
+/** The provider catalogue requests {@link answerFxProviderCatalog} answered on this page, in order; none when it was never installed. */
+function fxProviderCatalogRequests(page: Page): readonly string[] {
+    return fxProviderCatalogAnswers.get(page) ?? [];
+}
+
+/**
  * The engine's thresholds, copied rather than chosen: `RISK_MIN_OBSERVATIONS` and
  * `STALE_PRICE_THRESHOLD_DAYS` (`data_quality_thresholds.py`), which
  * `RiskService.asset_eligibility` sends with every answer. The lab quotes them in
@@ -1446,12 +1508,14 @@ async function pressPeriodPreset(page: Page, key: string): Promise<DayRange> {
 
 /**
  * Stub the risk endpoints — the eligibility engine admitting everything — hold the
- * live-price poll, and hand back the analytics requests the page actually made.
+ * live-price poll, answer the provider catalogue with an empty list, and hand back
+ * the analytics requests the page actually made.
  */
 async function installRiskMocks(page: Page, options: RiskStubOptions = {}): Promise<RiskRequest[]> {
     const requests: RiskRequest[] = [];
 
     await holdLivePricePoll(page);
+    await answerFxProviderCatalog(page);
     await answerEligibility(page);
 
     await page.route('**/api/v1/risk/catalog', async (route) => {
@@ -6264,6 +6328,11 @@ test.describe('Asset Global risk laboratory', () => {
             `the price sync must be asked about ${expectation}`,
         ).toEqual(expectedAssets);
         expect(syncCalls.fxPairs.flat().sort(), `the rate sync must be asked about ${expectation}`).toEqual(expectedPairs);
+        // And the provider catalogue it fetched on opening met its stub, never the backend: the
+        // guard's own proof that it still catches the request it exists for.
+        await expect
+            .poll(() => fxProviderCatalogRequests(page).length, {message: 'the modal opened and no provider catalogue request met `answerFxProviderCatalog`: if its URL changed, the catalogue now reaches the backend, which asks every exchange-rate provider over the network'})
+            .toBeGreaterThan(0);
         for (const assetId of expectedAssets) {
             await expect(modal.locator(`[data-testid="sync-section"][data-section-id="assets"] [data-testid="sync-result-row"][data-row-id="${assetId}"]`)).toHaveAttribute('data-status', 'ok');
         }
