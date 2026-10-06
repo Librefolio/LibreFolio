@@ -26,19 +26,23 @@
      * **It discloses through the redesign's own frame, not its own.** A matrix
      * computed over a selection the server had to trim is still a matrix: it
      * renders, it looks whole, and nothing in its shape says an asset is
-     * missing. `RiskLevelSection` already carries that disclosure for the four
-     * levels, and `degradedResults`/`resultReasons` already compute it, so this
-     * section borrows all three rather than growing a fifth copy — and inherits
-     * every future repair to them for free.
+     * missing. `RiskLevelSection` already carries the disclosure of what did not
+     * come back at all, and `degradedResults` computes it, so this section
+     * borrows both rather than growing a copy. What is *partial*, and why, it
+     * hands to the lab's one notice above the sections through `qualitySource()`
+     * (the developer, 05/10): a trimmed selection reads the same under every
+     * section, and said once it is one problem, not four.
      */
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import {riskOutput} from '$lib/risk/riskTypes';
     import {currentLanguage} from '$lib/stores/app/language';
     import {ANSWER_DISCARDED_CODE, createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
+    import type {AssetSetQualitySource} from './assetSetLevels';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
     import {createMatrixMetadata} from './matrixMetadata.svelte';
-    import {degradedResults, levelMetadata, resultReasons} from './levels/levelHelpers';
+    import {degradedResults, levelMetadata, resultErrorCodes} from './levels/levelHelpers';
+    import {levelErrorHealth} from './levels/partialNotice';
     import RiskLevelSection from './levels/RiskLevelSection.svelte';
     import {resultByCode} from './riskAnalysisHelpers';
 
@@ -72,8 +76,7 @@
     let result = $derived(resultByCode(controller.historicalResults, 'correlation'));
     let output = $derived(riskOutput(result, schemas.RiskCorrelationOutput));
 
-    let health = $derived(degradedResults([result]));
-    let reasons = $derived(resultReasons([result], $t));
+    let health = $derived(levelErrorHealth(degradedResults([result])));
     /**
      * The window the figures were measured over — now rendered by the frame.
      *
@@ -90,8 +93,21 @@
      * one string forever, and a value that cannot vary is not provenance.
      */
     let metadata = $derived(levelMetadata([result]));
-    /** A base answer discarded twice running is said by the frame, as on L1°/L3°, the replay and the Dashboard's L4. */
-    let errorCodes = $derived(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : []);
+    /**
+     * Why the matrix did not come back, said by the frame as L1°/L3° and the replay say theirs:
+     * the result's own error code (an unavailable or failed correlation, `insufficient_history`
+     * for one), then a base answer discarded on every attempt, as on the Dashboard's L4.
+     */
+    let errorCodes = $derived([...resultErrorCodes([result]), ...(controller.loadDiscarded ? [ANSWER_DISCARDED_CODE] : [])]);
+
+    /**
+     * What the panel reads through `bind:this` for the lab's one notice: the correlation this
+     * frame renders (the controller's own object, `null` without one) and the controller's
+     * data-quality issues. A function, so a `$derived` in the panel tracks what it reads here.
+     */
+    export function qualitySource(): AssetSetQualitySource {
+        return {results: [result], labels: {}, issues: controller.dataQualityIssues};
+    }
 
     /**
      * Sector and country distributions of the selection, for the matrix's two
@@ -108,7 +124,7 @@
     const matrixMetadata = createMatrixMetadata(() => ({assetIds, language: $currentLanguage}));
 </script>
 
-<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" docsPath="financial-theory/technical-analysis/risk-metrics/correlation/" docsLabel={$t('risk.analytics.correlation.help')} {health} {reasons} {errorCodes} {metadata}>
+<RiskLevelSection title={$t('risk.analytics.correlation.name')} level={2} testId="risk-correlation-section" docsPath="financial-theory/technical-analysis/risk-metrics/correlation/" docsLabel={$t('risk.analytics.correlation.help')} {health} {errorCodes} {metadata}>
     <!-- `data-catalog` is published here because every section on this page is
          gated on the capability catalogue, so an absent section means
          "unsupported" *or* "not loaded yet" and a test cannot tell which. The

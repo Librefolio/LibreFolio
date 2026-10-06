@@ -10,12 +10,12 @@
  * The laboratory's historical replay (Asset Global, L4°) is the one on-demand analysis
  * of the page, and it runs beside the page's live price polling, which invalidates the
  * risk cache every 30 s: an answer in flight at that moment comes back from `queryRisk`
- * as `null` — *discarded*, not empty. The controller re-asks once, and when the second
- * answer is discarded too it records the fact (`discarded.replay`) for its host to say
+ * as `null` — *discarded*, not empty. The controller re-asks, three attempts in all, and when
+ * the third answer is discarded too it records the fact (`discarded.replay`) for its host to say
  * so, the way the Dashboard's L4 does through `discardedErrorCodes`. Three things this
  * section owes the reader are pinned here, all on the section itself:
  *
- *   1. **A discarded answer is disclosed.** Twice discarded, the replay leaves an empty
+ *   1. **A discarded answer is disclosed.** Three times discarded, the replay leaves an empty
  *      form behind: without the sentence the reader cannot tell "the data moved under
  *      the answer, run it again" from "nothing to show". The sentence is the level's own
  *      error line, `risk.errors.answer_discarded`, under `data-code`. The complement is
@@ -33,6 +33,15 @@
  *      leave those out, while its status line still says the replay is partial or
  *      unavailable. A refusal the block does not explain — a timeout — the section now
  *      discloses, where it used to disclose only a discarded answer.
+ *
+ * And one thing it owes the lab panel (decision B, the developer, 05/10/2026): **its
+ * data-quality issues.** The lab draws one data-quality banner above its one notice, over the
+ * issues of every section — the replay's included, since its controller holds answers no other
+ * section holds: its own runs. So the section publishes `qualitySource()`, as the correlation
+ * section and the levels do: no results and no labels — the replay keeps its own disclosure, as
+ * the Dashboard's L4 does, so the notice reads none of it — and its controller's
+ * `dataQualityIssues`. Pinned by the last block; written red first, against a section that
+ * exports nothing.
  *
  * **How a sentence is asserted without writing one down**: it is resolved from the
  * shipped catalogue through the same `$_` the component uses, with the same values
@@ -62,7 +71,8 @@
  * the helper's wording rules (`levels/levelHelpers.test.ts`), what `replaySectionView`
  * keeps and drops (`levels/l4/scenarioHelpers.test.ts`), the block itself
  * (`levels/l4/L4Replay.test.ts`), the source gate that every section passes a translator
- * (`warningTranslatorSites.test.ts`), and the page end to end
+ * (`warningTranslatorSites.test.ts`), how issues merge (`mergeQualityIssues`, in
+ * `riskPanelController.test.ts`), and the page end to end, the banner included
  * (`e2e/portfolio/risk-lab.spec.ts`).
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -102,16 +112,17 @@ vi.mock('$lib/stores/risk/riskPanelController.svelte', async (importOriginal) =>
 });
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
-import {assertEffectsRun} from '$test/runes.svelte';
+import {assertEffectsRun, recordReads} from '$test/runes.svelte';
 import {_, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import es from '$lib/i18n/es.json';
 import fr from '$lib/i18n/fr.json';
 import itCatalogue from '$lib/i18n/it.json';
 import type {RiskQueryRequest} from '$lib/risk/riskRequest';
-import type {RiskResultMetadata, RiskStressOutput} from '$lib/risk/riskTypes';
+import type {RiskDataQualityReport, RiskResultMetadata, RiskStressOutput} from '$lib/risk/riskTypes';
 import {ANSWER_DISCARDED_CODE, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+import type {AssetSetQualitySource} from './assetSetLevels';
 import AssetSetReplaySection from './AssetSetReplaySection.svelte';
 import {warningSentence} from './levels/warningSentence';
 
@@ -264,7 +275,12 @@ function at(catalogue: unknown, key: string): unknown {
  * the only way the reader reaches the Run button.
  */
 async function mountOpen(): Promise<RiskPanelController> {
-    render(AssetSetReplaySection, {props: {assetIds: [HOLDING_A, HOLDING_B, UNPRICED], assetLabels: LABELS, dateStart: DATE_START, dateEnd: DATE_END, targetCurrency: 'EUR'}});
+    return (await mountOpenKeepingInstance()).controller;
+}
+
+/** {@link mountOpen}, keeping the instance as well: `qualitySource()` is reached through it, as the panel reaches it through `bind:this`. */
+async function mountOpenKeepingInstance() {
+    const view = render(AssetSetReplaySection, {props: {assetIds: [HOLDING_A, HOLDING_B, UNPRICED], assetLabels: LABELS, dateStart: DATE_START, dateEnd: DATE_END, targetCurrency: 'EUR'}});
     expect(created.controllers, 'the section did not create a controller of its own').toHaveLength(1);
     const controller = created.controllers[0] as RiskPanelController;
     await waitFor(() => expect(controller.initialLoading, 'the base wave the mount fires never settled').toBe(false));
@@ -272,7 +288,7 @@ async function mountOpen(): Promise<RiskPanelController> {
     await fireEvent.click(screen.getByTestId(`${TEST_ID}-toggle`));
     expect(screen.getByTestId(TEST_ID), 'the drawer did not open').toHaveAttribute('data-open', 'true');
     expect(screen.getByTestId('risk-replay-run')).toBeEnabled();
-    return controller;
+    return {view, controller};
 }
 
 async function runReplay(): Promise<void> {
@@ -348,20 +364,20 @@ describe('AssetSetReplaySection — the harness itself', () => {
     });
 });
 
-describe('AssetSetReplaySection — a replay answer discarded twice running', () => {
+describe('AssetSetReplaySection — a replay answer discarded three times running', () => {
     beforeAll(async () => {
         await setupI18n('en');
     });
 
     it('is disclosed on the section, in the words of risk.errors.answer_discarded', async () => {
-        replay.answers = [null, null];
+        replay.answers = [null, null, null];
         const controller = await mountOpen();
         await runReplay();
 
-        // The premise, first: the question was asked, re-asked once, and the controller
+        // The premise, first: the question was asked three times in all, and the controller
         // recorded the discard. What follows is then about the section alone.
         await waitFor(() => expect(controller.discarded.replay, 'the controller never recorded the discard: the path under test did not run').toBe(true));
-        expect(replay.asked, 'the replay was not asked and then re-asked exactly once').toHaveLength(2);
+        expect(replay.asked, 'the replay was not asked three times in all — the first attempt and two re-asks').toHaveLength(3);
         expect(controller.replayLoading, 'the run is still in flight').toBe(false);
 
         expect(errorCodes(), 'the controller recorded a discarded replay answer and the section says nothing: an empty form reads as "nothing to show", not as "run it again"').toEqual([ANSWER_DISCARDED_CODE]);
@@ -488,5 +504,126 @@ describe('AssetSetReplaySection — what the block explains, the section does no
         expect(screen.getByTestId('risk-replay-nothing')).toBeInTheDocument();
         expectStatusLine('unavailable');
         expect(errorCodes(), 'the section calls the window that left everything out an insufficient history, beside the block that already says what happened').toEqual([]);
+    });
+});
+
+/**
+ * ─── `qualitySource()`: what the lab panel reads through `bind:this` (decision B) ──────────────
+ *
+ * The panel merges every section's `qualitySource().issues` — the correlation section's, the
+ * levels', then this one's — into the one data-quality banner it draws above its notice. This
+ * section's are its controller's `dataQualityIssues`: Risk's `mergeQualityIssues` over every
+ * result the controller holds, its base wave and its on-demand answers, so a replay run brings
+ * its own. The export hands them over as the controller holds them, with no results and no
+ * labels: the replay keeps its own disclosure, as the Dashboard's L4 does, and the notice must
+ * not read it. And it stays reactive: the panel calls it inside a `$derived`, so an effect
+ * reading it must re-run when a new answer brings other issues.
+ *
+ * The issues ride on the replay's own answer — the one this harness scripts — in the shapes
+ * `service.py::_asset_issue` gives an asset set's report (D373). Invented, like everything here.
+ */
+
+type QualityIssue = NonNullable<RiskDataQualityReport['issues']>[number];
+
+/** A holding whose prices went stale: the banner's row that offers the sync. */
+const STALE_ISSUE: QualityIssue = {
+    domain: 'asset',
+    code: 'STALE_PRICE',
+    severity: 'warning',
+    message_i18n_key: 'dataQuality.stalePrice',
+    message_params: {count: 1},
+    count: 1,
+    affected_asset_ids: [HOLDING_A],
+    affected_asset_names: ['Synthetic Holding A'],
+    cta_action: 'sync_asset_prices',
+    cta_target: String(HOLDING_A),
+    group_key: 'stale_price',
+};
+
+/** A holding with no price in the window: the banner's row that opens the asset. Another code, so a second answer is told from the first. */
+const MISSING_ISSUE: QualityIssue = {
+    domain: 'asset',
+    code: 'MISSING_PRICE',
+    severity: 'error',
+    message_i18n_key: 'risk.quality.missingPrice',
+    message_params: {count: 1},
+    count: 1,
+    affected_asset_ids: [UNPRICED],
+    affected_asset_names: ['Synthetic Holding C'],
+    cta_action: 'navigate_asset',
+    cta_target: String(UNPRICED),
+    group_key: 'missing_price',
+};
+
+/** A replay answer whose report carries these issues, as the backend attaches them to every result with a report. */
+function withIssues(answer: RiskAnalyticResult, issues: QualityIssue[]): RiskAnalyticResult {
+    return {...answer, data_quality: {issues, data_quality_status: issues.some((issue) => issue.severity === 'error') ? 'partial' : 'carried_forward'}};
+}
+
+/** The section's `qualitySource`, reached through the instance the harness mounted — as the panel reaches it, through `bind:this`. */
+function qualitySourceOf(view: {component: unknown}): () => AssetSetQualitySource {
+    const read = (view.component as {qualitySource?: unknown}).qualitySource;
+    expect(typeof read, "the replay section exports no qualitySource(): the lab panel has nothing to read the replay's data-quality issues through bind:this, and its banner never lists them").toBe('function');
+    return read as () => AssetSetQualitySource;
+}
+
+/** The latest value an effect read, or the error its read threw. */
+function lastRead<T>(values: ReadonlyArray<T | Error>): T {
+    const last = values.at(-1);
+    if (last === undefined) throw new Error('the effect never read qualitySource()');
+    if (last instanceof Error) throw last;
+    return last;
+}
+
+/** The codes of a list of issues, in order: what each case states as its premise. */
+function codesOf(issues: ReadonlyArray<{code: string}>): string[] {
+    return issues.map((issue) => issue.code);
+}
+
+describe('AssetSetReplaySection — qualitySource(), what the lab panel reads through bind:this', () => {
+    beforeAll(async () => {
+        await setupI18n('en');
+    });
+
+    it("returns no results and no labels — the replay keeps its own disclosure — and the controller's data-quality issues", async () => {
+        // A replay that left one holding out: partial, so a notice that read it would have something to say.
+        replay.answers = [{items: [withIssues(replayAnswer(), [STALE_ISSUE])]}];
+        const {view, controller} = await mountOpenKeepingInstance();
+        await runReplay();
+        await expectAnswerOnScreen();
+        await expectRunSettled(controller, 'partial');
+        // The premise: the controller holds the issue the replay's answer carried — so the list
+        // compared below is not empty, and an export that lost the replay's issues would show.
+        expect(codesOf(controller.dataQualityIssues), "premise: the controller does not hold the issue planted in the replay's answer").toEqual([STALE_ISSUE.code]);
+
+        const source = qualitySourceOf(view)();
+        expect(source.results, 'the replay keeps its own disclosure: the notice must read none of its results, partial as this one is').toEqual([]);
+        expect(source.labels, 'no result handed over, nothing to label').toEqual({});
+        expect(source.issues, "not the controller's data-quality issues: the lab's banner would miss the replay's").toEqual(controller.dataQualityIssues);
+    });
+
+    it('answered again with other issues, returns the new ones — to a plain call, and to an effect that reads it, as the panel does', async () => {
+        replay.answers = [{items: [withIssues(replayAnswer({excluded: false}), [STALE_ISSUE])]}, {items: [withIssues(replayAnswer({excluded: false}), [MISSING_ISSUE])]}];
+        const {view, controller} = await mountOpenKeepingInstance();
+        await runReplay();
+        await expectAnswerOnScreen();
+        await waitFor(() => expect(codesOf(controller.dataQualityIssues), "premise: the first answer's issue never reached the controller").toEqual([STALE_ISSUE.code]));
+
+        const source = qualitySourceOf(view);
+        const reads = recordReads(() => source());
+        try {
+            expect(lastRead(reads.values).issues, 'the first answer, read by an effect').toEqual(controller.dataQualityIssues);
+
+            // The reader runs the replay again, and this answer carries another issue.
+            await runReplay();
+            await waitFor(() => expect(codesOf(controller.dataQualityIssues), "premise: the second answer's issue never reached the controller").toEqual([MISSING_ISSUE.code]));
+            expect(controller.replayLoading, 'the second run is still in flight').toBe(false);
+            expect(replay.asked, 'the replay was not asked exactly twice').toHaveLength(2);
+
+            expect(source().issues, "a plain call after the second answer still returns the first answer's issues").toEqual(controller.dataQualityIssues);
+            await waitFor(() => expect(lastRead(reads.values).issues, "an effect reading qualitySource() after the second answer — it never re-ran, so the lab's banner would keep the first answer's issues").toEqual(controller.dataQualityIssues));
+        } finally {
+            reads.stop();
+        }
     });
 });

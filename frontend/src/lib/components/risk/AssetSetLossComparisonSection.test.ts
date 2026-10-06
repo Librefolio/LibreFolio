@@ -62,6 +62,23 @@
  * because their question is *which* key a column shows. A key missing from the catalogue would come
  * back as itself on both sides and agree with itself, so the catalogues are also read directly,
  * locale by locale — the move `assetSetI18n.test.ts` makes for ICU syntax.
+ *
+ * ── The dashes explain themselves (the developer, 2026-10-01) ────────────────────────────────────
+ *
+ *  - **the fixed note goes**: `risk-asset-set-l1-blank-note`, the sentence under the table about what
+ *    a dash means, is drawn in no state — nor its sentence under another testid;
+ *  - **the dash carries that sentence instead**: every unmeasured value cell (`data-measured="false"`,
+ *    the em dash) sits in the project's `Tooltip`, through DataTable's `HtmlCell.tooltip`, worded from
+ *    the same key, `risk.assetSet.levels.blankNote` — which therefore stays in every catalogue;
+ *  - **a figure carries none**: the wrapper is a property of the cell, not of the row, so a row with
+ *    a measured day and an unmeasured fall wraps the fall alone.
+ *
+ * The `Tooltip` is found by what it draws, not by a class: a trigger with `role="button"` and
+ * `tabindex="0"`, looked for between the figure and its own `td` — never beyond, where a role on the
+ * row could pass for it — and, once a click opens it, `[role="tooltip"][data-testid="tooltip-content"]`,
+ * portalled to `document.body`. Red first: the wrapper cases and the note's absence under the table
+ * fail on the section as it stands; its absence from the other states, and the catalogue case, pass on
+ * both.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import {get} from 'svelte/store';
@@ -496,10 +513,13 @@ interface MountProps {
     dailyVar?: RiskAnalyticResult | null;
     monthlyVar?: RiskAnalyticResult | null;
     drawdown?: RiskAnalyticResult | null;
+    loading?: boolean;
+    failed?: boolean;
+    discarded?: boolean;
 }
 
-function mountWith({assetIds, assetLabels, assetIcons, dailyVar = null, monthlyVar = null, drawdown = null}: MountProps): void {
-    render(AssetSetLossComparisonSection, {props: {assetIds, assetLabels, assetIcons, dailyVar, monthlyVar, drawdown, loading: false}});
+function mountWith({assetIds, assetLabels, assetIcons, dailyVar = null, monthlyVar = null, drawdown = null, loading = false, failed = false, discarded = false}: MountProps): void {
+    render(AssetSetLossComparisonSection, {props: {assetIds, assetLabels, assetIcons, dailyVar, monthlyVar, drawdown, loading, failed, discarded}});
 }
 
 function mountSortFixture(): void {
@@ -579,6 +599,21 @@ function expectSortedAsDrawn(column: ValueColumn, direction: 'asc' | 'desc'): vo
 async function press(column: string, expected: 'asc' | 'desc' | 'none'): Promise<void> {
     await fireEvent.click(screen.getByTestId(`dt-sort-${column}`));
     expect(screen.getByTestId(`dt-header-${column}`), `${column}: one more press must leave the header at ${expected}`).toHaveAttribute('data-sort', expected);
+}
+
+/** The fixed note under the table that said what a dash means (gone), and its key — now each dash's own explanation. */
+const BLANK_NOTE_TESTID = 'risk-asset-set-l1-blank-note';
+const BLANK_NOTE_KEY = 'risk.assetSet.levels.blankNote';
+
+/**
+ * The explanation wrapped around a value cell, or `null`: the trigger the project's `Tooltip` draws
+ * (`role="button"`), looked for between the figure and its own `td` and never beyond it, so that a
+ * role on the row could not pass for the cell's own.
+ */
+function explainerOf(cell: HTMLElement): HTMLElement | null {
+    const td = cell.closest('td');
+    const trigger = cell.closest<HTMLElement>('[role="button"]');
+    return td !== null && trigger !== null && trigger !== td && td.contains(trigger) ? trigger : null;
 }
 
 /**
@@ -848,5 +883,88 @@ describe('AssetSetLossComparisonSection — a column sorts by the figure it draw
 
         await press('name', 'none');
         expect(drawnOrder(), "the third press must give the rows back in the selection's order").toEqual(NAME_SELECTION);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// The dashes explain themselves (2026-10-01)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Each state with the element that proves its body is drawn, so "no note" is about a body that exists. */
+const NOTE_STATES: {state: string; props: MountProps; drawn: string}[] = [
+    {state: 'the table, an unmeasured asset in it', props: {assetIds: SORT_SELECTION, assetLabels: SORT_LABELS, assetIcons: SORT_ICONS, dailyVar: SORT_DAILY_VAR, monthlyVar: SORT_MONTHLY_VAR, drawdown: SORT_DRAWDOWN}, drawn: 'risk-asset-set-l1-table'},
+    {state: 'failed', props: {assetIds: SORT_SELECTION, assetLabels: SORT_LABELS, assetIcons: SORT_ICONS, failed: true}, drawn: 'risk-asset-set-l1-error'},
+    {state: 'loading with no figure', props: {assetIds: SORT_SELECTION, assetLabels: SORT_LABELS, assetIcons: SORT_ICONS, loading: true}, drawn: 'risk-asset-set-l1-loading'},
+    {state: 'discarded with no figure', props: {assetIds: SORT_SELECTION, assetLabels: SORT_LABELS, assetIcons: SORT_ICONS, discarded: true}, drawn: 'risk-asset-set-l1-discarded'},
+    {state: 'an empty selection', props: {assetIds: [], assetLabels: new Map(), assetIcons: new Map()}, drawn: 'risk-asset-set-l1-empty'},
+];
+
+describe('AssetSetLossComparisonSection — the fixed blank note is gone, in every state', () => {
+    dataTableHarness();
+
+    it.each(NOTE_STATES)('$state: no note, under its testid or any other', ({props, drawn}) => {
+        mountWith(props);
+
+        expect(screen.getByTestId(drawn), 'barrier: the state draws its own body').toBeInTheDocument();
+        expect(screen.queryByTestId(BLANK_NOTE_TESTID), 'the fixed note under the table is drawn: each dash explains itself now').toBeNull();
+        // Nor its sentence under another name. Compared with `$_()` of the key, so no language is read;
+        // a closed tooltip holds no text, so the dashes on the table do not print it either.
+        const sentence = normalize(get(_)(BLANK_NOTE_KEY));
+        expect(sentence, 'premise: the key resolves to something to look for').not.toBe('');
+        expect(normalize(screen.getByTestId('risk-asset-set-l1').textContent), "the note's sentence is still printed in the section, under another testid").not.toContain(sentence);
+    });
+});
+
+describe('AssetSetLossComparisonSection — a dash explains itself', () => {
+    dataTableHarness();
+
+    it.each(VALUE_COLUMNS)('%s: the dash of an unmeasured asset opens the explanation the note used to give', async (column) => {
+        mountSortFixture();
+        const cell = within(rowById(SORT_UNMEASURED)).getByTestId(`risk-asset-set-l1-${column}`);
+        expect(cell, 'premise: the asset is measured by no analytic').toHaveAttribute('data-measured', 'false');
+        expect(figureText(cell), 'premise: the cell draws the em dash').toBe('\u2014');
+
+        const trigger = explainerOf(cell);
+        expect(trigger, `${column}: the dash is bare — it must sit in the project's Tooltip, as HtmlCell.tooltip draws it`).not.toBeNull();
+        expect(trigger, 'the trigger is reachable from the keyboard').toHaveAttribute('tabindex', '0');
+        expect(screen.queryByRole('tooltip'), 'premise: nothing is open before the click').toBeNull();
+
+        // A click on the dash itself, where a pointer lands: it reaches the trigger around it.
+        await fireEvent.click(cell);
+        const help = await screen.findByRole('tooltip');
+        expect(help).toHaveAttribute('data-testid', 'tooltip-content');
+        const sentence = normalize(get(_)(BLANK_NOTE_KEY));
+        expect(sentence, `premise: ${BLANK_NOTE_KEY} resolves to a message, not to itself`).not.toBe(BLANK_NOTE_KEY);
+        expect(normalize(help.textContent), `${column}: the explanation is not the message of ${BLANK_NOTE_KEY}`).toBe(sentence);
+    });
+
+    /**
+     * Every cell of a mount, figure or dash: a figure is bare, a dash is wrapped. Two fixtures, because
+     * a wrapper decided per row would pass the first — whose blank row is blank throughout — and only
+     * the second, where every row mixes both, tells a row's rule from a cell's.
+     */
+    it.each([
+        {fixture: 'a blank row beside full ones', mount: mountSortFixture, assetIds: SORT_SELECTION, figures: 15, dashes: 5},
+        {fixture: 'tails measured, falls not', mount: () => mountWith({assetIds: SELECTION, assetLabels: LABELS, assetIcons: ICONS, dailyVar: DAILY_VAR, monthlyVar: MONTHLY_VAR}), assetIds: SELECTION, figures: 4, dashes: 6},
+    ])('$fixture: only the dashes are wrapped, cell by cell', ({mount: mountFixture, assetIds, figures, dashes}) => {
+        mountFixture();
+
+        const cells = assetIds.flatMap((assetId) => VALUE_COLUMNS.map((column) => ({assetId, column, cell: within(rowById(assetId)).getByTestId(`risk-asset-set-l1-${column}`)})));
+        const measured = cells.filter(({cell}) => cell.getAttribute('data-measured') === 'true');
+        const blank = cells.filter(({cell}) => cell.getAttribute('data-measured') === 'false');
+        // Presence first: both kinds are on screen, so neither half below is about an empty set.
+        expect({figures: measured.length, dashes: blank.length}, 'premise: the fixture draws its figures and its dashes').toEqual({figures, dashes});
+
+        for (const {assetId, column, cell} of measured) expect(explainerOf(cell), `asset ${assetId}: ${column} is a figure, and is wrapped like a dash`).toBeNull();
+        for (const {assetId, column, cell} of blank) expect(explainerOf(cell), `asset ${assetId}: ${column} is a dash with no explanation`).not.toBeNull();
+    });
+
+    it.each([...SUPPORTED_LOCALES])("%s.json keeps the blank note's message: it is the dash's explanation now", (locale) => {
+        const catalogue = CATALOGUES[locale];
+
+        // Barrier: the walk reaches the levels — the asset column's title lives beside the key.
+        expect(typeof at(catalogue, 'risk.assetSet.levels.asset'), `${locale}.json: the walk never reached risk.assetSet.levels`).toBe('string');
+        const message = at(catalogue, BLANK_NOTE_KEY);
+        expect(typeof message === 'string' && message.trim() !== '', `${locale}.json: ${BLANK_NOTE_KEY} is missing or empty — the note left the page, its message did not: every dash still says it`).toBe(true);
     });
 });

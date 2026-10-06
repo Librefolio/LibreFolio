@@ -602,6 +602,139 @@ describe('buildBaseAnalytics', () => {
             ['historical_var', 'historical'],
         ]);
     });
+
+    // ------------------------------------------------------------------
+    // The asset-set wave, split per level (the developer's decision, 2026-10-02).
+    //
+    // L1° — «How much did each of these hurt?» — is measured WITHOUT the benchmark; only L3° —
+    // «What did each of these pay for its risk?» — asks with it. The backend prepares one joint
+    // window per request, with the benchmark inside whenever the request asks for it, so a
+    // benchmark sharing L1°'s request decided L1°'s window: one with stale prices turned L1°
+    // «Partial» for a reason L1° never asks about. Hence two additive flags, one request each:
+    //   - `includeAssetSetLossLevels`: the per-asset VaR over a day and over a calendar month, then
+    //     the drawdown — never the comparison, whatever benchmark is set;
+    //   - `includeAssetSetPaidLevels`: the per-asset KPI and risk/return, then the comparison
+    //     against the benchmark when there is one.
+    // `includeAssetSetLevels` stays their union, byte for byte what it returns today.
+    //
+    // Written red first: today neither flag does anything, so every case that needs one to ask
+    // goes red on the analytics it misses. The pins of the union are green today and must stay so.
+    // ------------------------------------------------------------------
+    describe('the asset-set wave, split per level', () => {
+        /** The whole per-asset family is advertised, so every absence below is the flags' doing, never the catalogue's. */
+        const ASSET_SET_CODES = ['asset_set_kpi', 'asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_comparison'];
+        /** Invented, and unlike any other number an analytic carries — a horizon, a confidence, a rate. */
+        const BENCHMARK = 47;
+
+        /** Each analytic as the wire carries it: instance, code, parameters. */
+        function wire(analytics: ReturnType<typeof buildBaseAnalytics>): unknown[] {
+            return analytics.map((analytic) => [analytic.instance_id, analytic.analytic_code, analytic.parameters]);
+        }
+
+        // Written out, never derived from the constants that build them. The context charges a 2%
+        // risk-free rate, so the KPI carries 0.02.
+        const KPI = ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
+        const BAD_DAY = ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}];
+        const BAD_MONTH = ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}];
+        const DRAWDOWN = ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}];
+        const RISK_RETURN = ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}];
+        const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK}];
+
+        /** What the union returns today with a benchmark of 47, copied from a run before the split and kept literal: the pin. */
+        const UNION_TODAY = [
+            ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}],
+            ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
+            ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}],
+            ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}],
+            ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}],
+            ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: 47}],
+        ];
+
+        it.each<[string, number | null]>([
+            ['without a benchmark', null],
+            ['with a benchmark set', BENCHMARK],
+        ])('L1° alone, %s: the bad day, the bad month and the drawdown — never the comparison', (_when, benchmark) => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLossLevels: true, assetSetBenchmarkId: benchmark});
+            expect(wire(analytics), "L1°'s request is not the loss family alone — the VaR over a day and over a calendar month, then the drawdown, and nothing of the benchmark").toEqual([BAD_DAY, BAD_MONTH, DRAWDOWN]);
+        });
+
+        it('L3° alone, without a benchmark: the KPI and the risk/return, and no comparison', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetPaidLevels: true});
+            expect(wire(analytics), "L3°'s request without a benchmark is not the KPI and the risk/return alone").toEqual([KPI, RISK_RETURN]);
+        });
+
+        it('L3° alone, with a benchmark: the comparison against it closes the request', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            expect(wire(analytics), "L3°'s request does not end on the comparison against the benchmark, after its KPI and risk/return").toEqual([KPI, RISK_RETURN, COMPARISON]);
+        });
+
+        it.each<[string, number | null]>([
+            ['with a benchmark', BENCHMARK],
+            ['without a benchmark', null],
+        ])('the union, %s, is still what it is today — byte for byte', (_when, benchmark) => {
+            const today = benchmark === null ? UNION_TODAY.filter(([, code]) => code !== 'asset_set_comparison') : UNION_TODAY;
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLevels: true, assetSetBenchmarkId: benchmark});
+            expect(wire(analytics), 'the union moved: every caller of includeAssetSetLevels now sends a different request').toEqual(today);
+            expect(JSON.stringify(wire(analytics)), 'the union asks the same analytics in different bytes: a parameter changed its key order, or gained a key').toBe(JSON.stringify(today));
+        });
+
+        it.each<[string, number | null]>([
+            ['with a benchmark', BENCHMARK],
+            ['without a benchmark', null],
+        ])('both split flags, %s, ask exactly the union: the same analytics, in the same order, byte for byte', (_when, benchmark) => {
+            const context = {...ctx(ASSET_SET_CODES), assetSetBenchmarkId: benchmark};
+            const union = buildBaseAnalytics('historical', {...context, includeAssetSetLevels: true});
+            const split = buildBaseAnalytics('historical', {...context, includeAssetSetLossLevels: true, includeAssetSetPaidLevels: true});
+            expect(union.length, 'premise: the union asks the per-asset family').toBeGreaterThan(0);
+            expect(wire(split), 'L1° and L3° together ask something other than the union: splitting the request would change what is measured').toEqual(wire(union));
+            expect(JSON.stringify(split), 'L1° and L3° together ask the union in different bytes').toBe(JSON.stringify(union));
+        });
+
+        it('the union beside a split flag still asks each analytic once', () => {
+            const context = {...ctx(ASSET_SET_CODES), includeAssetSetLevels: true, assetSetBenchmarkId: BENCHMARK};
+            expect(wire(buildBaseAnalytics('historical', {...context, includeAssetSetLossLevels: true})), 'the union beside the loss flag asks an analytic twice, or drops one').toEqual(UNION_TODAY);
+            expect(wire(buildBaseAnalytics('historical', {...context, includeAssetSetPaidLevels: true})), 'the union beside the paid flag asks an analytic twice, or drops one').toEqual(UNION_TODAY);
+        });
+
+        it('the split flags still go through the catalogue: a code it withholds is never requested', () => {
+            // Only the VaR is advertised: no drawdown for L1°, whatever the flag asks.
+            expect(wire(buildBaseAnalytics('historical', {...ctx(['asset_set_var']), includeAssetSetLossLevels: true})), 'the loss flag requested a code the catalogue withholds, or dropped one it offers').toEqual([BAD_DAY, BAD_MONTH]);
+            // No comparison advertised: none for L3°, even with a benchmark set.
+            const paid = buildBaseAnalytics('historical', {...ctx(['asset_set_kpi', 'asset_set_risk_return']), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            expect(wire(paid), 'the paid flag requested a code the catalogue withholds, or dropped one it offers').toEqual([KPI, RISK_RETURN]);
+        });
+
+        it('the split flags ask the capability predicate about every code they add, in historical mode', () => {
+            const seen: Array<[string, string]> = [];
+            const analytics = buildBaseAnalytics('historical', {
+                appliedRiskFreePercent: 2,
+                hasCapability: (code, mode) => {
+                    seen.push([code, mode]);
+                    return false;
+                },
+                includeAssetSetLossLevels: true,
+                includeAssetSetPaidLevels: true,
+                assetSetBenchmarkId: BENCHMARK,
+            });
+            expect(analytics, 'a code the catalogue refused was requested anyway').toEqual([]);
+            // In any order: what matters is that none of them skips the predicate.
+            expect(seen.filter(([code]) => code.startsWith('asset_set_')).sort(), 'a code of the split skipped the capability predicate, or was asked about in the wrong mode').toEqual([
+                ['asset_set_comparison', 'historical'],
+                ['asset_set_drawdown', 'historical'],
+                ['asset_set_kpi', 'historical'],
+                ['asset_set_risk_return', 'historical'],
+                ['asset_set_var', 'historical'],
+                ['asset_set_var', 'historical'],
+            ]);
+        });
+
+        it('the split flags ask nothing in current_composition mode, like the union', () => {
+            // Advertised in every mode, so only the mode branch can keep the family out.
+            const context = {...ctx([...ASSET_SET_CODES, 'risk_contribution']), includeAssetSetLossLevels: true, includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK};
+            expect(buildBaseAnalytics('historical', context), 'premise: in historical mode the same context asks the whole per-asset family').toHaveLength(6);
+            expect(wire(buildBaseAnalytics('current_composition', context)), 'the per-asset family leaked into the current-composition wave').toEqual([['base-current_composition-risk_contribution', 'risk_contribution', {}]]);
+        });
+    });
 });
 
 describe('sync completion source contracts', () => {

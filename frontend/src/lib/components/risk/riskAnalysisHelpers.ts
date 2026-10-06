@@ -255,9 +255,18 @@ export interface BaseAnalyticsContext {
      */
     includeAssetSetLevels?: boolean;
     /**
-     * The shared L3 benchmark, when one is chosen and it is not itself in the
-     * selection. Drives `asset_set_comparison` inside the same request — see the
-     * note where it is added.
+     * Only L1°'s share of the per-asset wave: the two VaR horizons and the drawdown.
+     * Never the comparison, whatever the benchmark: the developer decided (02/10) that
+     * L1° is measured without it, because a benchmark prepared inside the request joins
+     * the joint window and would move L1°'s figures for an instrument L1° does not show.
+     */
+    includeAssetSetLossLevels?: boolean;
+    /** Only L3°'s share: the KPI, the risk/return pair and, with a benchmark, the comparison. */
+    includeAssetSetPaidLevels?: boolean;
+    /**
+     * The shared L3 benchmark, when one is chosen — possibly one of the selected assets
+     * (D371). Drives `asset_set_comparison` inside the same request — see the note where
+     * it is added.
      */
     assetSetBenchmarkId?: number | null;
 }
@@ -310,21 +319,28 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             add('historical_var', {confidence_level: 0.95, horizon_days: MONTHLY_VAR_HORIZON_DAYS}, MONTHLY_VAR_INSTANCE);
         }
         if (ctx.includeDrawdownSummary) add('drawdown_summary');
-        if (ctx.includeAssetSetLevels) {
+        // L1°'s share and L3°'s share of the per-asset wave. The union is the order the
+        // single request has always had — kpi, the two VaRs, drawdown, risk/return,
+        // comparison — so a caller asking for both still sends today's request byte for byte.
+        const lossLevels = ctx.includeAssetSetLevels === true || ctx.includeAssetSetLossLevels === true;
+        const paidLevels = ctx.includeAssetSetLevels === true || ctx.includeAssetSetPaidLevels === true;
+        if (lossLevels || paidLevels) {
             // The per-asset wave. Every code is `ASSET_SET`-only, so `add`'s
             // capability guard makes this block inert on every other scope.
             //
             // The risk-free rate is threaded into the KPI exactly as the singular
             // wave threads it: Sharpe and Sortino are charged against the reader's
             // setting, not against a constant this file chose.
-            add('asset_set_kpi', {risk_free_annual_rate: ctx.appliedRiskFreePercent / 100, target_annual_return: 0});
-            add('asset_set_var', {confidence_level: 0.95, horizon_days: 1}, ASSET_SET_DAILY_VAR_INSTANCE);
-            // The bad month is compounded by the backend over real overlapping
-            // windows, never scaled from the bad day — the same second observation
-            // the singular L1 pays for, for the same reason.
-            add('asset_set_var', {confidence_level: 0.95, horizon_days: MONTHLY_VAR_HORIZON_DAYS}, ASSET_SET_MONTHLY_VAR_INSTANCE);
-            add('asset_set_drawdown');
-            add('asset_set_risk_return');
+            if (paidLevels) add('asset_set_kpi', {risk_free_annual_rate: ctx.appliedRiskFreePercent / 100, target_annual_return: 0});
+            if (lossLevels) {
+                add('asset_set_var', {confidence_level: 0.95, horizon_days: 1}, ASSET_SET_DAILY_VAR_INSTANCE);
+                // The bad month is compounded by the backend over real overlapping
+                // windows, never scaled from the bad day — the same second observation
+                // the singular L1 pays for, for the same reason.
+                add('asset_set_var', {confidence_level: 0.95, horizon_days: MONTHLY_VAR_HORIZON_DAYS}, ASSET_SET_MONTHLY_VAR_INSTANCE);
+                add('asset_set_drawdown');
+            }
+            if (paidLevels) add('asset_set_risk_return');
             // 🔴 The benchmark rides in **this** request, not in one of its own.
             //
             // `RiskAssetSetComparisonOutput` publishes the reference's own
@@ -338,11 +354,14 @@ export function buildBaseAnalytics(mode: RiskMode, ctx: BaseAnalyticsContext): R
             // length for the singular case: "the dot would land in a place no
             // measurement puts it, on a chart that still looks right".
             //
-            // The reference may not also be one of the measured — the payload
-            // validator rejects that outright — so a benchmark that is itself in
-            // the selection is not requested at all, and the section says so
-            // rather than showing an error the reader cannot act on.
-            if (ctx.assetSetBenchmarkId != null) add('asset_set_comparison', {comparison_asset_id: ctx.assetSetBenchmarkId});
+            // The reference may also be one of the selected assets (D371): the engine
+            // keeps it in the selection, measures it like the others and leaves it out
+            // of the comparison's `items` — the payload validator still refuses a
+            // yardstick among the measured, and it never is one.
+            //
+            // L3°'s share only: L1°'s request never carries the benchmark, so it never
+            // joins L1°'s window.
+            if (paidLevels && ctx.assetSetBenchmarkId != null) add('asset_set_comparison', {comparison_asset_id: ctx.assetSetBenchmarkId});
         }
     } else {
         add('risk_contribution');

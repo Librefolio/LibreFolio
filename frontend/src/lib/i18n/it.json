@@ -3078,11 +3078,6 @@
         "invert": "Inverti",
         "mine": "I miei asset"
       },
-      "filters": {
-        "type": "Tipo",
-        "currency": "Valuta",
-        "clear": "Azzera i filtri"
-      },
       "band": {
         "high": "si muovono insieme",
         "moderate": "si muovono insieme in parte",
@@ -3132,7 +3127,7 @@
         },
         "l3": {
           "title": "Quanto ha pagato ciascuno per il suo rischio?",
-          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nel grafico e nella tabella; con un benchmark scelto nella Dashboard, anche quanto si è mosso insieme a lui.",
+          "description": "Per ogni asset selezionato, quanto ha oscillato e quanto ha reso in media all'anno, nella tabella e nel grafico; con un benchmark scelto in cima alla scheda, anche quanto si è mosso insieme a lui.",
           "expectedReturn": "Rendimento medio annuo",
           "correlation": "Correlazione",
           "scatterNote": "Ogni punto è un asset: l'asse orizzontale dice quanto ha oscillato, quello verticale quanto ha reso in media all'anno. Per un asset molto volatile la media è più alta di quanto ha reso davvero.",
@@ -3144,7 +3139,16 @@
             "beta": "Quanto si è mosso l'asset quando si muoveva il benchmark: 1 vuol dire come lui, 2 il doppio, 0 indipendentemente da lui.",
             "correlation": "Quanto l'asset e il benchmark si sono mossi insieme, da −1 (sempre opposti) a +1 (sempre insieme)."
           },
-          "axisReturn": "Rendimento medio annuo"
+          "axisReturn": "Rendimento medio annuo",
+          "period": {
+            "window": "Periodo: dal {start} al {end} ({length}).",
+            "narrowed": "Più corto del periodo scelto (dal {selectedStart} al {selectedEnd}).",
+            "annualized": "Volatilità e rendimento medio sono annualizzati; Sharpe e Sortino derivano da questi.",
+            "years": "{count, plural, one {# anno} other {# anni}}",
+            "months": "{count, plural, one {# mese} other {# mesi}}",
+            "days": "{count, plural, one {# giorno} other {# giorni}}"
+          },
+          "referenceItself": "Non applicabile: questo asset è il benchmark stesso, e non si confronta con sé stesso."
         }
       },
       "legend": {
@@ -3169,10 +3173,6 @@
         "noneHeld": "Lì non è posseduto nulla nell'ultimo giorno del periodo: la selezione non cambia."
       },
       "picker": {
-        "selectVisible": "Seleziona visibili",
-        "deselectVisible": "Deseleziona visibili",
-        "confirm": "Aggiungi {count}",
-        "allSelected": "Tutti gli asset sono già nella selezione.",
         "notAnalysable": "Non analizzabili nel periodo"
       },
       "selectedCountHint": "Il primo numero conta gli asset che il laboratorio sta analizzando adesso. Il secondo conta quanti ne potrebbe analizzare nel periodo scelto: tutti gli asset presenti in LibreFolio, non solo quelli che possiedi, purché abbiano abbastanza prezzi in quel periodo. Quelli che non li hanno li trovi comunque nel «+», in sola lettura, con il motivo.",
@@ -3182,6 +3182,9 @@
         "banner": "Con il periodo scelto, {count, plural, one {# asset scelto non ha prezzi} other {# asset scelti non hanno prezzi}} per una parte dell'intervallo.",
         "button": "Usa il periodo in cui tutti hanno prezzi (dal {start} al {end})",
         "hint": "Sposta il periodo in alto sull'intervallo in cui sono quotati tutti gli asset scelti che hanno prezzi. Tornano nell'analisi: {names}."
+      },
+      "benchmark": {
+        "help": "L'asset di riferimento, il «rischio di base»: beta dice, asset per asset, se ciascuno si è mosso più (sopra 1) o meno (sotto 1) di lui; la correlazione, quanto insieme."
       }
     },
     "metrics": {
@@ -4580,5 +4583,16 @@
       "dark": "Tema scuro",
       "light": "Tema chiaro"
     }
+  },
+  "assetPicker": {
+    "filters": {
+      "type": "Tipo",
+      "currency": "Valuta",
+      "clear": "Azzera i filtri"
+    },
+    "selectVisible": "Seleziona visibili",
+    "deselectVisible": "Deseleziona visibili",
+    "confirm": "Aggiungi {count}",
+    "allSelected": "Tutti gli asset sono già nella selezione."
   }
 }
