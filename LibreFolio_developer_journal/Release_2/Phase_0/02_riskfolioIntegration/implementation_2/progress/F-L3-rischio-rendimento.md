@@ -2903,3 +2903,66 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 > - **Dopo il commit**: l'ordine del coordinatore (il checkpoint 8 di A più la fusione del mio 13-A in A, poi i
 >   fast-forward); poi rimetto il 13-B dal parcheggio.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
+
+### 13-A committato, e il 13-B rimesso ✅ 2026-10-06, 15:5x
+
+> - Commit del developer: `14ec8438d`, `87e81e928`, `ef64d71e2`; `~3` = `001bebf12`, albero `ab8653079` (quello
+>   previsto dal coordinatore). `/tmp/libreFolio_f4/verify_l13a.sh`: **PASS**. Il coordinatore l'ha verificato, Risk
+>   l'ha controllato per conto suo.
+> - **Il 13-B rimesso**: lo spec di HEAD è esattamente quello del solo selettore (`746a0277…`), e gli altri tre file
+>   sono invariati da `001bebf12`. Le copie intere parcheggiate, ricopiate, ridanno esattamente HEAD più il 13-B: le 4
+>   impronte coincidono con quelle del parcheggio.
+> - Al coordinatore: il checkpoint 8 di A tocca `RiskReturnLevel.svelte` (e forse lo spec), quindi prima del suo
+>   fast-forward mi avvisa e io riparcheggio.
+
+### L13-B · il codice di L1° ✅ 2026-10-06, 16:0x
+
+> **Note implementazione**
+> - **`AssetSetLossComparisonSection.svelte`**:
+>   - via `tableLayout="auto"`: vale il `fixed` di difetto di `DataTable`, l'unico in cui una larghezza trascinata
+>     resta;
+>   - ogni colonna dei valori (le 5, `currentFall` compresa) ha `width` = `minWidth` = `titleWidth(id)`, cioè
+>     `headerWidth($t(titolo), measureHeaderTitle)`: la regola di A in `riskReturnLevel.ts`, riusata e non copiata;
+>   - le colonne sono `$derived`, così le larghezze seguono un cambio di lingua.
+> - **`assetSetTable.ts`**, per entrambe le tabelle: `assetNameColumn` perde `pinned: 'left'` e
+>   `assetNameCellHtml` perde `max-w-56`; i docblock spiegano perché. In `RiskReturnLevel` il `pinned: undefined` e il
+>   `max-width: none` di A diventano ridondanti ma innocui; li toglie A in un suo giro.
+> - **Prove** (fuori corsia):
+>   - vitest su L1°, L3°, i livelli, `riskReturnLevel` e `L3RiskAdjusted`: **277/277**, i 5 rossi di L1° verdi;
+>   - `front check` 0/0; prettier, che ha messo il `<DataTable>` di L1° su una riga.
+
+### L13-B · i cancelli ✅ 2026-10-06, 15:58-16:12 (`/tmp/libreFolio_f4/l13b_gates.sh`, corsia 6154, uno per volta)
+
+> | cancello | esito |
+> |---|---|
+> | `front build --debug` · `mkdocs build` (0 WARNING) | ✅ · ✅ |
+> | `front check` · `tsc -p tsconfig.e2e.json` · prettier | 0/0 · 2 (il pavimento) · pulito |
+> | lista vitest (con `riskReturnLevel.test.ts`) | 1489 |
+> | `core-unit` · `component-unit` · `risk-controller-unit` | 2972 · 2623 · 96 |
+> | `risk-levels-component` · `risk-levels-unit` (i selettori di A) | 155 · 366 |
+> | `front-portfolio risk-lab` | **41/41**: i due test di L1° coi rossi nuovi sono verdi, quello di L3° anche |
+> | `risk` (con l'E4 di A, le larghezze vere a 1024 px) · `risk-benchmark-shared` | 30 · 4 |
+> | `services risk-asset-set` · `check-orphans` | 51 · ok |
+> | `i18n audit` · `mkdocs check-links` | 3540 chiavi, 382 inutilizzate, nessuna mancante · 88/8/3 + D28 |
+> | righe di provider: `risk-lab` · `risk` · `bench` | 0 · 0 · 0 |
+>
+> - `git diff --check` pulito; `sw.js` invariato; 6154 libera alla fine.
+
+### Checkpoint 13-B · 2026-10-06, 16:1x (verso Risk)
+
+> - Base `ef64d71e2` (il 13-A), 7 percorsi modificati, tre gruppi in quest'ordine, perché L1° importa la funzione
+>   spostata:
+>   - **G1** lo spostamento di `measureHeaderTitle` nei due file di A (approvato da A);
+>   - **G2** L1°: il componente, `assetSetTable.ts`, i due test;
+>   - **G3** questo journal.
+> - **I miei blocchi in `RiskReturnLevel.svelte`** (per la simulazione del coordinatore contro il checkpoint 8 di A,
+>   che tocca il commento del trattino `undefined`): `:53` (l'import), `:117-129` vecchie (la copia locale tolta),
+>   `:207` vecchia, ora `:194` (la chiamata). In `riskReturnLevel.ts` solo l'aggiunta dopo `headerWidth` (`:111-123`).
+> - Nessuna chiave i18n toccata. CHANGELOG: niente da me.
+> - **Dopo il commit**: il checkpoint 8 di A fonde la punta del mio 13-B, quindi il mio fast-forward non chiede
+>   parcheggi.
+> - Restano per dopo, alla prossima fusione di A nel mio ramo:
+>   - l'adozione 1b nel laboratorio (la riga del benchmark in cima, D371 in cima, i test che si capovolgono);
+>   - `riskFreeRate={0}` esplicito;
+>   - la guida per la retta dal benchmark e il rombo.
+> - Stato dopo l'invio: **FROZEN** fino al commit.
