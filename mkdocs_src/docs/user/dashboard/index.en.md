@@ -14,7 +14,7 @@ The Dashboard interface is organized into four primary tabs, allowing you to swi
 
 1. **Overview** (default): Key metrics, cash balances, and visual charts of your portfolio.
 2. **[Positions & Analysis](positions.md)**: Open holdings, weights, and detailed tax lot (FIFO) analysis.
-3. **Risk**: The **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?** It always covers your whole portfolio: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so. See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
+3. **Risk**: The **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?** It always covers your whole portfolio: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so. **What if…?** opens on a selector: add the historical replay, the hypothetical shock or the simulation; the tools you leave open come back the next time, in this browser, and closing a tool with its **×** removes it together with its answer. See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
 4. **Transactions**: The operations in the selected date range and broker scope, as a paginated, read-only list — double-click a row to open its detail viewer. See [Transactions](../transactions/index.md) for the full guide.
 
 ---

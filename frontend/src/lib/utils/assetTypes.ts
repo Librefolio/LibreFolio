@@ -58,8 +58,9 @@ const PNG_MAP: Record<string, string> = {
  *
  * This is the **container** view — "which kind of instrument is it?" — and it is deliberately a
  * different relation from {@link primaryAssetType}, which is the **content** view: `ETF_STOCK`
- * belongs to the `ETF` family and contains `STOCK`. The select groups by family; allocation
- * charts aggregate by content. One map per question, never two maps of the same one.
+ * belongs to the `ETF` family and contains `STOCK`. The select and both allocation charts — the
+ * pie and, since I's D15, the history chart — group by family. One map per question, never two
+ * maps of the same one.
  */
 export const ASSET_TYPE_FAMILY: Readonly<Record<string, string>> = {
     ETF_STOCK: 'ETF',

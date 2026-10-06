@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel
@@ -26,6 +27,7 @@ from backend.app.schemas.risk import (
     RiskExcludedAsset,
     RiskFreeReference,
     RiskHistoricalReplayAudit,
+    RiskHistoricalReplayExclusionReason,
     RiskMode,
     RiskOutputKind,
     RiskReturnBasis,
@@ -35,6 +37,21 @@ from backend.app.schemas.risk import (
 )
 
 _ANALYTIC_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+class RiskSeriesInputs(StrEnum):
+    """The series an analytic reads, which decides what a scope asset without a series costs it.
+
+    On the portfolio TWRR, a PRIMARY reader reads that series alone, and a PRIMARY_AND_BENCHMARK
+    reader adds a benchmark prepared on the scope's joint calendar. The TWRR already values every
+    holding, so neither loses anything when a scope asset has no series of its own: the service
+    does not hand them the scope's exclusions. Any other basis replays the per-asset series, and
+    there every analytic reads the scope's assets.
+    """
+
+    PRIMARY = "primary"
+    PRIMARY_AND_BENCHMARK = "primary_and_benchmark"
+    SCOPE_ASSETS = "scope_assets"
 
 
 class RiskUnavailableError(ValueError):
@@ -60,6 +77,13 @@ class RiskHistoricalReplayContext:
     source_asset_ids: Mapping[int, int]
     excluded_asset_ids: tuple[int, ...]
     data_quality: DataQualityReport
+    # Assets the engine excluded because their quotes do not cover the replay window, with the
+    # reason. Disjoint from the manual `excluded_asset_ids`.
+    auto_excluded_assets: Mapping[int, RiskHistoricalReplayExclusionReason] = field(default_factory=dict)
+    # A part of the window, already verified, that brings back the assets its edges exclude, and
+    # those assets: a proposal for the user, never applied by the engine.
+    suggested_range: Optional[DateRangeModel] = None
+    suggested_range_recovers: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +123,12 @@ class RiskExecutionContext:
     prepared_data_quality: Optional[DataQualityReport] = None
     weights: Mapping[int, float] = field(default_factory=dict)
     asset_values: Mapping[int, Decimal] = field(default_factory=dict)
+    # In a weighted scope, the zero-return residual clamped at zero: 1 − Σ weights of the scope
+    # assets with a series, so the assets left without one weigh here as cash would (G6).
     cash_weight: float = 0.0
+    # Σ weights of the scope assets left without a series. Inside `cash_weight` while true cash is
+    # not negative; with negative true cash the two are not nested, and neither is adjusted.
+    excluded_weight: float = 0.0
     scope_value: Optional[Decimal] = None
     broker_ids: tuple[int, ...] = ()
     composition_as_of: Optional[date] = None
@@ -149,6 +178,7 @@ class RiskAnalytic(ABC):
     supported_modes: ClassVar[tuple[RiskMode, ...]]
     params_model: ClassVar[type[BaseModel]]
     min_observations: ClassVar[int]
+    series_inputs: ClassVar[RiskSeriesInputs] = RiskSeriesInputs.SCOPE_ASSETS
 
     @classmethod
     def validate_params(cls, params: Mapping[str, object] | BaseModel) -> BaseModel:
@@ -254,5 +284,6 @@ __all__ = [
     "RiskComputation",
     "RiskExecutionContext",
     "RiskHistoricalReplayContext",
+    "RiskSeriesInputs",
     "RiskUnavailableError",
 ]

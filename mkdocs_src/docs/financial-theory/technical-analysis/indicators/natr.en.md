@@ -26,7 +26,7 @@ Because $ATR_t$ is always non-negative, $NATR_t \ge 0$, with no theoretical uppe
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 14 | Smoothing window applied to the underlying True Range (same as ATR). |
+| Period ($N$) | `period` | 14 | Smoothing window applied to the underlying True Range (same as ATR), in sessions. |
 
 ---
 
