@@ -378,7 +378,9 @@ services pac-planner-capacity
 >   sistema la slice di robustezza del solver (riga 12 del README).
 > - **13. Oracle e capacità.** Il confronto con l'oracle è in `test_pac_planner_oracle.py`. Il
 >   selector `services pac-planner-capacity` non esiste. Dei tre numeri elencati sopra:
->   - `_POST_ENGINE_RESERVE_MS` si rimisura nella slice di robustezza;
+>   - `_POST_ENGINE_RESERVE_MS` si rimisura nella slice di robustezza. *Fatto il 2026-10-06*
+>     (S5 del [piano della slice](plan-phase00PacSolverRobustness.prompt.md)): il lavoro dopo
+>     il solver prende 6,4–12,9 ms, e i 2 000 ms restano;
 >   - `limits/nodes` resta non passato: serve una macchina di riferimento, ed è rinviato;
 >   - il tetto predefinito `1000000000` non c'è più dal 30/09 (R8.5 del piano Round 5): il
 >     tetto è facoltativo, e vuoto vuol dire nessun limite oltre alle risorse.
