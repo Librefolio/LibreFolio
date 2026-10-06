@@ -10,10 +10,12 @@
 node_modules/
 frontend/node_modules/
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
+# Python cache, anywhere in the tree: a pattern without "**/" matches only at
+# the context root, so a backend/**/__pycache__ left by a local server run
+# used to be copied into locally built images.
+**/__pycache__/
+**/*.pyc
+**/*.pyo
 .pytest_cache/
 htmlcov/
 .coverage
