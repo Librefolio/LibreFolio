@@ -11,6 +11,8 @@
     import type {RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
     import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
+    import AssetChip from '../../AssetChip.svelte';
+    import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {warningSentence} from '../warningSentence';
     import TornadoChart from './TornadoChart.svelte';
     import {formatReplayDate, formatReplayShare, replayCoverageWarning, replayExclusions, replayNothingLeft, replayOptions, replaySuggestion, tornadoRows, type ReplayExclusionGroup, type ReplayExclusions, type TornadoRow} from './scenarioHelpers';
@@ -35,6 +37,13 @@
      *
      * There is no manual exclusion and no stand-in here: the developer removed
      * the first and kept the second for later (`TODO_FUTURI.md`).
+     *
+     * **D376 (05/10/2026)**: the excluded assets come first, as badges, with the
+     * common-period button among them, and the engine no longer sends them as
+     * zero bars. The crisis menu offers «No preset»; the period has its quick
+     * ranges back, MAX excepted, and a quick range or a typed date drops the
+     * crisis. The menu and the date fields share one height, and Run has its own
+     * line.
      */
     interface Props {
         controller: RiskPanelController;
@@ -82,6 +91,8 @@
     let end = $derived(endOverride ?? dateEnd);
 
     let options = $derived(replayOptions(controller.scenarioCatalog, $currentLanguage));
+    /** The crisis menu, «No preset» first: choosing it drops the crisis and keeps the dates (D376). */
+    let presetOptions = $derived([{value: '', label: $t('risk.levels.l4.replayPresetNone')}, ...options.map((option) => ({value: option.value, label: option.label}))]);
     let result = $derived(controller.replayResult);
     let output = $derived(riskOutput(result, schemas.RiskStressOutput));
     let scopeKind = $derived(singleValue(riskMetadata(result)?.scope) ?? '');
@@ -104,6 +115,9 @@
     let askedCrisis = $state<{start: string; end: string} | null>(null);
     /** The proposal lies inside the crisis that was asked and is shorter than it: replaying it covers only part of the crisis. */
     let partOfCrisis = $derived(suggestion !== null && askedCrisis !== null && suggestion.start >= askedCrisis.start && suggestion.end <= askedCrisis.end && (suggestion.start > askedCrisis.start || suggestion.end < askedCrisis.end));
+
+    /** One height for the crisis menu and the period's date fields: the contract both boxes share (D376). */
+    const CONTROL_HEIGHT = 'h-8';
 
     /** Literal keys, one per reason, so the i18n audit finds them. */
     const REASON_KEYS: Record<string, string> = {
@@ -136,6 +150,8 @@
 
     function applyPreset(id: string): void {
         presetId = id;
+        // «No preset» keeps the dates: the period is the same question, only no longer named after a crisis.
+        if (id === '') return;
         const option = options.find((candidate) => candidate.value === id);
         if (option?.start) startOverride = option.start;
         if (option?.end) endOverride = option.end;
@@ -145,9 +161,22 @@
     }
 
     function changePeriod(nextStart: string, nextEnd: string): void {
+        // A quick range or a date typed by hand is no longer the crisis's period.
+        presetId = '';
         startOverride = nextStart;
         endOverride = nextEnd;
         controller.resetAnalysis('replay');
+    }
+
+    /**
+     * What a badge shows for an excluded asset: the asset cache when it knows the asset (icon,
+     * type, name), else the page's name, else the id. The cache is read, never loaded: the page
+     * that mounts the block owns loading it, and a test that mounts the block alone stays offline.
+     */
+    function chipAsset(assetId: number): {id: number; display_name: string; icon_url: string | null; asset_type: string | null} {
+        void $assetStoreVersion;
+        const info = getAssetInfo(assetId);
+        return {id: assetId, display_name: info?.display_name ?? assetNames[assetId] ?? `#${assetId}`, icon_url: info?.icon_url ?? null, asset_type: info?.asset_type ?? null};
     }
 
     /** One click: the proposed dates, and the replay over them. The proposal promises a result, so no second step. */
@@ -188,15 +217,21 @@
 </script>
 
 <div class="space-y-3" data-testid="risk-replay">
+    <!-- The two controls share one height (D376: «non mi piace che abbiano un altezza diversa
+         dal periodo»), and Run sits on its own line, at the end. -->
     <div class="flex flex-wrap items-end gap-2">
         <div class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
             <span>{$t('risk.stress.preset')}</span>
-            <SimpleSelect value={presetId} options={options.map((option) => ({value: option.value, label: option.label}))} compact dropdownPosition="auto" ariaLabel={$t('risk.stress.preset')} onchange={applyPreset} testId="risk-replay-preset" />
+            <SimpleSelect value={presetId} options={presetOptions} compact triggerClass={CONTROL_HEIGHT} dropdownPosition="auto" ariaLabel={$t('risk.stress.preset')} onchange={applyPreset} testId="risk-replay-preset" />
         </div>
         <div class="flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-replay-period">
             <span>{$t('risk.levels.l4.replayPeriod')}</span>
-            <DateRangePicker {start} {end} showPresets={false} showCustomWindow={false} compact onchange={changePeriod} />
+            <!-- The quick ranges are back beside the dates (D376, reversing F3), MAX excepted: its
+                 «all history» sentinel is resolved by the page's own date filter, not here. -->
+            <DateRangePicker {start} {end} excludePresets={['MAX']} showCustomWindow={false} compact fieldsClass={CONTROL_HEIGHT} onchange={changePeriod} />
         </div>
+    </div>
+    <div class="flex justify-end">
         <button type="button" class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-sm text-white hover:bg-primary-600 disabled:opacity-50" onclick={run} disabled={controller.replayLoading} data-testid="risk-replay-run">
             <Play size={14} />
             {$t('risk.actions.runReplay')}
@@ -207,6 +242,23 @@
         {#if coverage}
             <!-- Above the total: it changes what the total means. -->
             <p class="rounded-lg bg-amber-50 p-2 text-xs font-medium text-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="risk-replay-coverage">{warningSentence(coverage, $t)}</p>
+        {/if}
+        <!-- What was left out comes before the numbers it shapes (D376), with the period that
+             would bring it back. -->
+        {#if exclusions}
+            <div
+                class="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
+                data-testid="risk-replay-excluded"
+                data-count={exclusions.count}
+                data-treatment={exclusions.treatment ?? undefined}
+                data-weight-total={exclusions.weightTotal ?? undefined}
+            >
+                <p class="font-medium" data-testid="risk-replay-excluded-header">{excludedHeader(exclusions)}</p>
+                {@render excludedGroups(exclusions.groups)}
+                {@render suggestionButton()}
+            </div>
+        {:else}
+            {@render suggestionButton()}
         {/if}
         <!-- The sentence is withheld, not degraded, when the scope has no aggregate.
              `stress.py::_historical` sets `portfolio_return` on every weighted scope —
@@ -226,13 +278,6 @@
             </p>
         {/if}
         <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-replay-tornado" />
-        {#if exclusions}
-            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300" data-testid="risk-replay-excluded" data-count={exclusions.count} data-treatment={exclusions.treatment ?? undefined} data-weight-total={exclusions.weightTotal ?? undefined}>
-                <p class="font-medium" data-testid="risk-replay-excluded-header">{excludedHeader(exclusions)}</p>
-                {@render excludedGroups(exclusions.groups)}
-            </div>
-        {/if}
-        {@render suggestionButton()}
     {:else if nothingLeft}
         <div class="space-y-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="risk-replay-nothing">
             <p class="font-medium">{$t('risk.levels.l4.replayNothing')}</p>
@@ -245,13 +290,19 @@
 </div>
 
 {#snippet excludedGroups(groups: ReplayExclusionGroup[])}
-    <ul class="space-y-0.5">
+    <ul class="space-y-1.5">
         {#each groups as group (group.reason)}
-            <li data-testid="risk-replay-excluded-group" data-reason={group.reason}>
-                <span data-testid="risk-replay-excluded-reason">{reasonLabel(group.reason)}</span>:
-                {#each group.assets as asset, index (asset.assetId)}{index > 0 ? ', ' : ''}<span data-testid="risk-replay-excluded-asset" data-asset-id={asset.assetId} data-weight={asset.weight ?? undefined}
-                        >{name(asset.assetId)}{asset.weight === null ? '' : ` (${formatReplayShare(asset.weight, $currentLanguage)})`}</span
-                    >{/each}
+            <li class="space-y-1" data-testid="risk-replay-excluded-group" data-reason={group.reason}>
+                <span data-testid="risk-replay-excluded-reason">{reasonLabel(group.reason)}</span>
+                <div class="flex flex-wrap gap-1.5">
+                    {#each group.assets as asset (asset.assetId)}
+                        <AssetChip asset={chipAsset(asset.assetId)} variant="excluded" testId="risk-replay-excluded-asset" data-asset-id={asset.assetId} data-weight={asset.weight ?? undefined}>
+                            {#snippet trailing()}
+                                {#if asset.weight !== null}<span class="tabular-nums">{formatReplayShare(asset.weight, $currentLanguage)}</span>{/if}
+                            {/snippet}
+                        </AssetChip>
+                    {/each}
+                </div>
             </li>
         {/each}
     </ul>

@@ -10,7 +10,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 import pytest
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio import (
@@ -32,6 +32,7 @@ from backend.app.schemas.risk import (
     RiskDrawdownRecoveryStatus,
     RiskErrorCode,
     RiskExcludedAsset,
+    RiskFreeReference,
     RiskHistoricalReplayAudit,
     RiskHistoricalReplayExclusionReason,
     RiskHistoricalReplayExclusionTreatment,
@@ -61,10 +62,13 @@ from backend.app.services.risk.base import (
 from backend.app.services.risk.metrics import (
     annualized_expected_return,
     annualized_sharpe,
+    annualized_sortino,
     annualized_volatility,
+    beta,
     comparison_summary,
     current_buy_and_hold_returns,
     historical_var_cvar,
+    pearson_correlation,
     summarize_drawdown,
 )
 from backend.app.services.risk.quant.estimation import estimate_drift_uncertainty
@@ -510,7 +514,9 @@ def test_asset_risk_return_registers_canonical_capabilities():
     # invent weights — and the invented ones would be today's, which is this mode.
     assert AssetRiskReturnAnalytic.supported_modes == (RiskMode.CURRENT_COMPOSITION,)
     assert AssetRiskReturnAnalytic.min_observations == 20
-    assert AssetRiskReturnAnalytic.algorithm_version == "1.1.0"
+    # 1.2.0 (k6, 06/10/2026): every point also states its own Sharpe and Sortino, charged at the
+    # request's risk-free rate and target.
+    assert AssetRiskReturnAnalytic.algorithm_version == "1.2.0"
     assert AssetRiskReturnAnalytic.catalog_definition().name_i18n_key == "risk.analytics.assetRiskReturn.name"
 
 
@@ -630,6 +636,178 @@ def test_asset_risk_return_output_survives_the_discriminated_union_round_trip():
     assert restored.portfolio_expected_annual_return == pytest.approx(output.portfolio_expected_annual_return, rel=1e-12)
     assert restored.cash_weight == pytest.approx(output.cash_weight, rel=1e-12)
     assert [item.asset_id for item in restored.items] == [item.asset_id for item in output.items]
+
+
+# --------------------------------------------------------------------------- #
+# k6 — every risk/return point states its own Sharpe and Sortino (agreed with the Dashboard owner on
+# 06/10/2026).
+#
+# `AssetRiskReturnParams` takes the two rates of `HistoricalKpiParams` — `risk_free_annual_rate` and
+# `target_annual_return`, floats above -1, zero by default — and every item gains `sharpe` and
+# `sortino`, measured with `annualized_sharpe` / `annualized_sortino` on the very returns and the very
+# factor its `volatility` and `expected_annual_return` come from. So, with
+# `rf_p = expm1(log1p(rf) / f)`, every point obeys `sharpe * volatility == expected - f * rf_p`: the
+# intercept is `f * rf_p` (about ln(1 + rf)), not `rf`, and at rf = 0 the slope through the origin is
+# the Sharpe ratio. Sortino is charged the target, never the risk-free rate. An undefined ratio is
+# `None`, never 0, with one warning per condition naming the holdings, as `asset_set_kpi` does. The
+# computation declares the rate it charged. Without parameters the numbers are those of rf = 0 and a
+# zero target, and the portfolio-level fields do not move.
+#
+# Written red first: each case needs a parameter, a field or a declaration that k6 adds.
+# --------------------------------------------------------------------------- #
+
+RATIO_MIXED_ID = 1  # gains and losses: both ratios are defined
+RATIO_GAINER_ID = 2  # moves, but never loses: a Sharpe, and no downside to divide by
+RATIO_FLAT_ID = 3  # never moves: no volatility, no downside, neither ratio
+RATIO_RETURNS = {
+    RATIO_MIXED_ID: [round(0.004 * math.sin(index * 0.9) + 0.0006, 10) for index in range(24)],
+    RATIO_GAINER_ID: [round(0.002 + 0.0015 * math.cos(index * 0.7), 10) for index in range(24)],
+    RATIO_FLAT_ID: [0.0015] * 24,
+}
+RATIO_WEIGHTS = {RATIO_MIXED_ID: 0.4, RATIO_GAINER_ID: 0.3, RATIO_FLAT_ID: 0.2}
+# The parameters as a request sends them. Wherever the two rates differ, a Sortino charged the
+# risk-free rate instead of the target is a different number.
+RATIO_RATES = [
+    pytest.param({}, id="no-parameters"),
+    pytest.param({"risk_free_annual_rate": 0.03}, id="risk-free-3pct"),
+    pytest.param({"risk_free_annual_rate": 0.03, "target_annual_return": 0.05}, id="risk-free-3pct-target-5pct"),
+]
+
+
+def _ratio_context() -> RiskExecutionContext:
+    """Today's composition of the three holdings above; the primary is their buy-and-hold blend."""
+    context = make_context(RATIO_RETURNS, mode=RiskMode.CURRENT_COMPOSITION, scope_asset_ids=tuple(RATIO_RETURNS))
+    blend = current_buy_and_hold_returns(RATIO_RETURNS, RATIO_WEIGHTS, cash_weight=0.1)
+    return replace(context, weights=RATIO_WEIGHTS, cash_weight=0.1, primary_returns=tuple(blend))
+
+
+def _assert_ratio(actual: float | None, expected: float | None, label: str) -> None:
+    """A defined ratio to float precision; an undefined one as `None`, never as a number."""
+    if expected is None:
+        assert actual is None, f"{label}: {actual} published where the ratio is undefined"
+    else:
+        assert actual == pytest.approx(expected, rel=1e-12), label
+
+
+def _validation_schema(model, field: str) -> dict:
+    """What a parameter accepts — its type, default and bounds — without the hints a form reads."""
+    schema = model.model_json_schema()["properties"][field]
+    return {key: schema.get(key) for key in ("type", "default", "exclusiveMinimum", "minimum", "exclusiveMaximum", "maximum")}
+
+
+def test_asset_risk_return_params_take_the_two_rates_of_historical_kpi():
+    """The same two fields as `HistoricalKpiParams`: floats above -1, zero by default — and still nothing else."""
+    defaults = AssetRiskReturnParams()
+    assert (defaults.risk_free_annual_rate, defaults.target_annual_return) == (0.0, 0.0)
+    charged = AssetRiskReturnAnalytic.validate_params({"risk_free_annual_rate": 0.03, "target_annual_return": 0.05})
+    assert (charged.risk_free_annual_rate, charged.target_annual_return) == (0.03, 0.05)
+
+    for field in ("risk_free_annual_rate", "target_annual_return"):
+        assert _validation_schema(AssetRiskReturnParams, field) == _validation_schema(HistoricalKpiParams, field), field
+        assert getattr(AssetRiskReturnAnalytic.validate_params({field: -0.99}), field) == -0.99
+        with pytest.raises(ValidationError):
+            AssetRiskReturnAnalytic.validate_params({field: -1.0})
+    # Closed as before: a parameter it does not know is refused, never ignored.
+    with pytest.raises(ValidationError):
+        AssetRiskReturnAnalytic.validate_params({"risk_free_annual_rate": 0.03, "risk_free_rate": 0.03})
+
+
+@pytest.mark.parametrize("rates", RATIO_RATES)
+def test_asset_risk_return_gives_each_point_the_sharpe_and_sortino_of_its_own_coordinates(rates):
+    """Each ratio is measured on the returns and the factor its point is drawn from.
+
+    Two pins, one per half. The ratios are the metrics' own on the holding's prepared returns —
+    neither the primary's nor another holding's. And the Sharpe ties back to the point printed beside
+    it: the line from the intercept `f * rf_p` through (volatility, expected return) has it as its
+    slope, which holds only if all three were measured on one series with one factor.
+    """
+    risk_free = rates.get("risk_free_annual_rate", 0.0)
+    target = rates.get("target_annual_return", 0.0)
+    context = _ratio_context()
+    factor = context.annualization_factor
+    expected = {asset_id: (annualized_sharpe(returns, factor, annual_risk_free_rate=risk_free), annualized_sortino(returns, factor, annual_target_return=target)) for asset_id, returns in RATIO_RETURNS.items()}
+    # Premises, on the fixture alone: each ratio is defined somewhere and undefined somewhere, and a
+    # Sortino charged the risk-free rate instead of the target would be another number.
+    assert [sharpe is None for sharpe, _sortino in expected.values()] == [False, False, True]
+    assert [sortino is None for _sharpe, sortino in expected.values()] == [False, True, True]
+    if risk_free != target:
+        assert annualized_sortino(RATIO_RETURNS[RATIO_MIXED_ID], factor, annual_target_return=risk_free) != pytest.approx(expected[RATIO_MIXED_ID][1], rel=1e-6)
+
+    computation = AssetRiskReturnAnalytic().compute(AssetRiskReturnAnalytic.validate_params(rates), context)
+    items = computation.output.items
+
+    assert computation.annualization_factor == factor
+    assert [item.asset_id for item in items] == list(RATIO_RETURNS)
+    for item in items:
+        sharpe, sortino = expected[item.asset_id]
+        _assert_ratio(item.sharpe, sharpe, f"Sharpe of asset {item.asset_id}")
+        _assert_ratio(item.sortino, sortino, f"Sortino of asset {item.asset_id}")
+
+    period_rate = math.expm1(math.log1p(risk_free) / factor)
+    for item in items:
+        if item.sharpe is not None:
+            assert item.sharpe * item.volatility == pytest.approx(item.expected_annual_return - factor * period_rate, rel=1e-12, abs=1e-15), item.asset_id
+
+
+def test_asset_risk_return_reports_an_undefined_ratio_as_undefined_and_names_its_holdings():
+    """`None` is the absence of a ratio; a `0` would be a measurement nobody made.
+
+    As in `asset_set_kpi`: one warning per condition, naming every holding it applies to in the order
+    of the points. The flat holding has neither ratio; the one that never loses has a Sharpe but no
+    downside to divide by; the third keeps both and is named by neither warning.
+    """
+    computation = AssetRiskReturnAnalytic().compute(AssetRiskReturnAnalytic.validate_params({"risk_free_annual_rate": 0.03}), _ratio_context())
+    items = {item.asset_id: item for item in computation.output.items}
+
+    assert set(items) == set(RATIO_RETURNS)
+    assert (items[RATIO_FLAT_ID].sharpe, items[RATIO_FLAT_ID].sortino) == (None, None)
+    assert items[RATIO_GAINER_ID].sharpe is not None
+    assert items[RATIO_GAINER_ID].sortino is None
+    assert None not in (items[RATIO_MIXED_ID].sharpe, items[RATIO_MIXED_ID].sortino)
+    warnings = [(warning.code, warning.message_i18n_key, warning.details.get("asset_ids")) for warning in computation.warnings]
+    assert sorted(warnings) == [
+        ("sharpe_undefined", "risk.warnings.sharpe_undefined_assets", [RATIO_FLAT_ID]),
+        ("sortino_undefined", "risk.warnings.sortino_undefined_assets", [RATIO_GAINER_ID, RATIO_FLAT_ID]),
+    ]
+
+    # Nothing undefined, nothing said.
+    quiet = AssetRiskReturnAnalytic().compute(AssetRiskReturnAnalytic.validate_params({"risk_free_annual_rate": 0.03}), replace(_ratio_context(), scope_asset_ids=(RATIO_MIXED_ID,)))
+    assert [item.asset_id for item in quiet.output.items] == [RATIO_MIXED_ID]
+    assert list(quiet.warnings) == []
+
+
+def test_asset_risk_return_declares_the_risk_free_rate_it_charged():
+    """As `historical_kpi` does: the rate the ratios were charged, where it came from, in the target currency."""
+    context = replace(_ratio_context(), target_currency="CHF")
+
+    charged = AssetRiskReturnAnalytic().compute(AssetRiskReturnAnalytic.validate_params({"risk_free_annual_rate": 0.03, "target_annual_return": 0.05}), context)
+    implicit = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context)
+
+    assert charged.risk_free == RiskFreeReference(annual_rate=0.03, source="analytic_param", currency="CHF")
+    assert implicit.risk_free == RiskFreeReference(annual_rate=0.0, source="analytic_param", currency="CHF")
+
+
+def test_asset_risk_return_rates_move_the_two_ratios_and_nothing_else():
+    """Backward compatible by construction: without parameters nothing is charged, and a rate moves no coordinate.
+
+    The rates enter the two ratios only. The points stay where they were — weight, volatility,
+    expected return — and so does the portfolio's own pair, which gains no ratio of its own.
+    """
+    context = _ratio_context()
+    implicit = AssetRiskReturnAnalytic().compute(AssetRiskReturnParams(), context).output
+    explicit = AssetRiskReturnAnalytic().compute(AssetRiskReturnAnalytic.validate_params({"risk_free_annual_rate": 0.0, "target_annual_return": 0.0}), context).output
+    charged = AssetRiskReturnAnalytic().compute(AssetRiskReturnAnalytic.validate_params({"risk_free_annual_rate": 0.03, "target_annual_return": 0.05}), context).output
+
+    assert implicit.model_dump() == explicit.model_dump()
+    ratios = {"items": {"__all__": {"sharpe", "sortino"}}}
+    assert charged.model_dump(exclude=ratios) == implicit.model_dump(exclude=ratios)
+    # ...and the ratios did move, so the equality above is not between two copies.
+    mixed = [next(item for item in output.items if item.asset_id == RATIO_MIXED_ID) for output in (implicit, charged)]
+    assert mixed[1].sharpe != pytest.approx(mixed[0].sharpe, rel=1e-6)
+    assert mixed[1].sortino != pytest.approx(mixed[0].sortino, rel=1e-6)
+    # Two fields more on each point, none on the whole.
+    assert set(implicit.model_dump()) == {"kind", "portfolio_volatility", "portfolio_expected_annual_return", "cash_weight", "excluded_weight", "items"}
+    assert all(set(item) == {"asset_id", "weight", "volatility", "expected_annual_return", "sharpe", "sortino"} for item in implicit.model_dump()["items"])
 
 
 def test_comparison_measures_the_reference_on_the_common_days_it_reports():
@@ -781,6 +959,11 @@ def test_comparison_compounds_the_benchmark_moves_inside_each_primary_span():
     assert [point.comparison_drawdown for point in output.series] == pytest.approx(summary.comparison_drawdowns, rel=1e-12, abs=1e-15)
 
 
+# What k6 adds to the comparison payload (06/10/2026). Every other field is one comparison published before
+# k6, and the date-match pin below holds them to the bit; the three k6 fields have tests of their own.
+K6_COMPARISON_FIELDS = {"comparison_sharpe", "comparison_sortino", "items"}
+
+
 @pytest.mark.parametrize(
     ("scope_kind", "mode"),
     [
@@ -817,8 +1000,8 @@ def test_comparison_on_one_shared_calendar_is_the_date_match_to_the_byte(scope_k
             for day, primary_cumulative, comparison_cumulative, primary_drawdown, comparison_drawdown in zip(dates, summary.primary_cumulative, summary.comparison_cumulative, summary.primary_drawdowns, summary.comparison_drawdowns, strict=True)
         ],
     )
-    assert computation.output.model_dump() == expected.model_dump()
-    assert computation.output.model_dump_json() == expected.model_dump_json()  # the same payload, bit for bit
+    assert computation.output.model_dump(exclude=K6_COMPARISON_FIELDS) == expected.model_dump(exclude=K6_COMPARISON_FIELDS)
+    assert computation.output.model_dump_json(exclude=K6_COMPARISON_FIELDS) == expected.model_dump_json(exclude=K6_COMPARISON_FIELDS)  # the same payload, bit for bit
     assert (computation.n_observations, computation.calendar_days, computation.annualization_factor, computation.coverage) == (len(dates), calendar_days, factor, 1.0)
 
 
@@ -915,7 +1098,303 @@ def test_comparison_compounds_both_series_across_a_primary_date_the_benchmark_la
 
 
 def test_comparison_pairing_by_span_is_a_new_algorithm_version():
-    assert ComparisonAnalytic.algorithm_version == "1.1.0"
+    # 1.1.0 paired the two series by span. 1.2.0 (k6, 06/10/2026) adds the benchmark's own Sharpe and
+    # Sortino and, on a portfolio scope, one beta and correlation per holding.
+    assert ComparisonAnalytic.algorithm_version == "1.2.0"
+
+
+# --------------------------------------------------------------------------- #
+# k6 — the benchmark's own ratios, and one beta and correlation per holding (agreed with the Dashboard
+# owner on 06/10/2026).
+#
+# `ComparisonParams` takes the two rates of `HistoricalKpiParams` (zero by default, above -1) and stays
+# closed. `comparison_sharpe` / `comparison_sortino` are the benchmark's own ratios on exactly the paired
+# returns and the factor `comparison_volatility` / `comparison_expected_annual_return` are measured on,
+# so `comparison_sharpe * comparison_volatility == comparison_expected_annual_return - f * rf_p`;
+# undefined, each is `None` with a `sharpe_undefined` / `sortino_undefined` warning naming the
+# benchmark. On a portfolio scope `items` holds one `{asset_id, beta, correlation}` per held asset with
+# a prepared series — never the benchmark itself (D371) — in asset id order, each holding paired with
+# the benchmark as the primary is; on an asset scope it is empty. A flat holding has a measured beta of
+# zero and no correlation, named by the per-asset correlation warning; a flat benchmark leaves every
+# holding undefined, and only the two singular warnings speak for them.
+# --------------------------------------------------------------------------- #
+
+HOLDING_BENCHMARK_ID = 9
+HOLDING_OBSERVATIONS = 30
+HOLDING_RETURNS = {
+    1: [round(0.006 * math.sin(index * 0.8) + 0.0008, 10) for index in range(HOLDING_OBSERVATIONS)],
+    2: [round(0.004 * math.cos(index * 0.5) - 0.0002, 10) for index in range(HOLDING_OBSERVATIONS)],
+    3: [round(0.009 * math.sin(index * 0.3 + 0.5) + 0.0004, 10) for index in range(HOLDING_OBSERVATIONS)],
+}
+# Gains and losses, so its own Sharpe and Sortino are both defined.
+HOLDING_BENCHMARK = [round(0.005 * math.sin(index * 0.7 + 0.2) + 0.003 * math.cos(index * 1.3), 10) for index in range(HOLDING_OBSERVATIONS)]
+
+
+def holdings_context(
+    holdings: dict[int, list[float]] | None = None,
+    *,
+    benchmark: list[float] | None = None,
+    scope_asset_ids: tuple[int, ...] | None = None,
+    mode: RiskMode = RiskMode.CURRENT_COMPOSITION,
+) -> RiskExecutionContext:
+    """A portfolio of `holdings`, prepared on one joint calendar with the benchmark; the primary is their blend.
+
+    One calendar for every series, so every pairing — the primary's and each holding's — is the date
+    match, whatever the mode.
+    """
+    holdings = HOLDING_RETURNS if holdings is None else holdings
+    benchmark = HOLDING_BENCHMARK if benchmark is None else benchmark
+    scope = tuple(holdings) if scope_asset_ids is None else scope_asset_ids
+    context = make_context({**holdings, HOLDING_BENCHMARK_ID: benchmark}, mode=mode, scope_asset_ids=scope)
+    blend = current_buy_and_hold_returns(holdings, dict.fromkeys(holdings, 0.9 / len(holdings)), cash_weight=0.1)
+    return replace(context, primary_returns=tuple(blend))
+
+
+def compare_holdings(context: RiskExecutionContext, **rates: float):
+    """`comparison` against the holdings' benchmark, with the rates as a request sends them."""
+    return ComparisonAnalytic().compute(ComparisonAnalytic.validate_params({"comparison_asset_id": HOLDING_BENCHMARK_ID, **rates}), context)
+
+
+def test_comparison_params_take_the_two_rates_of_historical_kpi():
+    """Zero by default and above -1, as on the KPI; the benchmark is still required, and the model still closed."""
+    defaults = ComparisonParams(comparison_asset_id=2)
+    assert (defaults.risk_free_annual_rate, defaults.target_annual_return) == (0.0, 0.0)
+    charged = ComparisonAnalytic.validate_params({"comparison_asset_id": 2, "risk_free_annual_rate": 0.03, "target_annual_return": 0.05})
+    assert (charged.comparison_asset_id, charged.risk_free_annual_rate, charged.target_annual_return) == (2, 0.03, 0.05)
+
+    for field in ("risk_free_annual_rate", "target_annual_return"):
+        assert _validation_schema(ComparisonParams, field) == _validation_schema(HistoricalKpiParams, field), field
+        assert getattr(ComparisonAnalytic.validate_params({"comparison_asset_id": 2, field: -0.99}), field) == -0.99
+        with pytest.raises(ValidationError):
+            ComparisonAnalytic.validate_params({"comparison_asset_id": 2, field: -1.0})
+    with pytest.raises(ValidationError):
+        ComparisonAnalytic.validate_params({"risk_free_annual_rate": 0.03})
+    # An unknown parameter is still refused: the service turns this into `invalid_parameters`.
+    with pytest.raises(ValidationError):
+        ComparisonAnalytic.validate_params({"comparison_asset_id": 2, "risk_free_rate": 0.03})
+
+
+@pytest.mark.parametrize("rates", RATIO_RATES)
+def test_comparison_states_the_benchmark_own_sharpe_and_sortino_on_the_pairs_it_measured(rates):
+    """The benchmark's ratios come from the pairs its volatility and expected return come from.
+
+    On the span fixture the benchmark also moves at weekends, so a pair compounds several of its days:
+    its raw daily series gives other ratios, and a Sharpe measured there would leave the diamond off
+    the line through its own point.
+    """
+    risk_free = rates.get("risk_free_annual_rate", 0.0)
+    target = rates.get("target_annual_return", 0.0)
+    own = dict(zip(SPAN_EVERY_DAY[1:], SPAN_BENCHMARK_EVERY_DAY, strict=True))
+    pairs = [benchmark_move(own, start, end) for start, end in zip([SPAN_BASELINE, *SPAN_WEEKDAYS[:-1]], SPAN_WEEKDAYS, strict=True)]
+    factor = len(SPAN_WEEKDAYS) * 365 / (SPAN_END - SPAN_BASELINE).days
+    sharpe = annualized_sharpe(pairs, factor, annual_risk_free_rate=risk_free)
+    sortino = annualized_sortino(pairs, factor, annual_target_return=target)
+    # Premises: both defined on the pairs, and neither is what the unpaired series or a swapped rate gives.
+    assert sharpe is not None
+    assert sortino is not None
+    assert annualized_sharpe(SPAN_BENCHMARK_EVERY_DAY, factor, annual_risk_free_rate=risk_free) != pytest.approx(sharpe, rel=1e-6)
+    if risk_free != target:
+        assert annualized_sortino(pairs, factor, annual_target_return=risk_free) != pytest.approx(sortino, rel=1e-6)
+
+    computation = ComparisonAnalytic().compute(
+        ComparisonAnalytic.validate_params({"comparison_asset_id": COMPARISON_BENCHMARK_ID, **rates}),
+        span_context(SPAN_EVERY_DAY[1:], SPAN_BENCHMARK_EVERY_DAY),
+    )
+    output = computation.output
+
+    assert computation.annualization_factor == pytest.approx(factor, rel=1e-12)
+    assert output.comparison_sharpe == pytest.approx(sharpe, rel=1e-12)
+    assert output.comparison_sortino == pytest.approx(sortino, rel=1e-12)
+    # The diamond's own line: from the intercept f * rf_p through (volatility, expected return).
+    period_rate = math.expm1(math.log1p(risk_free) / computation.annualization_factor)
+    assert output.comparison_sharpe * output.comparison_volatility == pytest.approx(output.comparison_expected_annual_return - computation.annualization_factor * period_rate, rel=1e-12, abs=1e-15)
+
+
+def test_comparison_rates_move_the_benchmark_ratios_and_nothing_else():
+    """Without rates nothing is charged; with them only the benchmark's two ratios move — no beta, no item, no point."""
+    context = holdings_context()
+    implicit = compare_holdings(context).output
+    explicit = compare_holdings(context, risk_free_annual_rate=0.0, target_annual_return=0.0).output
+    charged = compare_holdings(context, risk_free_annual_rate=0.03, target_annual_return=0.05).output
+
+    assert implicit.model_dump() == explicit.model_dump()
+    ratios = {"comparison_sharpe", "comparison_sortino"}
+    assert charged.model_dump(exclude=ratios) == implicit.model_dump(exclude=ratios)
+    assert charged.comparison_sharpe != pytest.approx(implicit.comparison_sharpe, rel=1e-6)
+    assert charged.comparison_sortino != pytest.approx(implicit.comparison_sortino, rel=1e-6)
+
+
+def test_comparison_declares_the_risk_free_rate_it_charged():
+    """As `historical_kpi` and `asset_risk_return` do: the rate the benchmark's Sharpe was charged, where it came from, in the target currency."""
+    context = replace(holdings_context(), target_currency="CHF")
+
+    charged = compare_holdings(context, risk_free_annual_rate=0.03, target_annual_return=0.05)
+    implicit = compare_holdings(context)
+
+    assert charged.risk_free == RiskFreeReference(annual_rate=0.03, source="analytic_param", currency="CHF")
+    assert implicit.risk_free == RiskFreeReference(annual_rate=0.0, source="analytic_param", currency="CHF")
+
+
+def test_comparison_with_default_rates_keeps_every_field_it_published_before_k6():
+    """The pin, on the holdings fixture: whatever comparison published before k6 is still the date match, to the bit.
+
+    The scope holds three assets and the benchmark itself, so the per-holding work k6 adds runs on
+    this payload; none of it may move a field that was already there. Green before k6, and meant to
+    stay green after it.
+    """
+    context = holdings_context(scope_asset_ids=(3, 1, HOLDING_BENCHMARK_ID, 2))
+
+    computation = ComparisonAnalytic().compute(ComparisonParams(comparison_asset_id=HOLDING_BENCHMARK_ID), context)
+
+    dates = context.primary_return_dates
+    calendar_days = (dates[-1] - context.primary_baseline_date).days
+    factor = len(dates) * 365 / calendar_days
+    primary = list(context.primary_returns)
+    summary = comparison_summary(primary, HOLDING_BENCHMARK, factor)
+    expected = RiskComparisonOutput(
+        comparison_asset_id=HOLDING_BENCHMARK_ID,
+        active_return=summary.active_return,
+        tracking_error=summary.tracking_error,
+        information_ratio=summary.information_ratio,
+        correlation=summary.correlation,
+        beta=summary.beta,
+        observations=len(dates),
+        comparison_volatility=annualized_volatility(HOLDING_BENCHMARK, factor),
+        comparison_expected_annual_return=annualized_expected_return(HOLDING_BENCHMARK, factor),
+        series=[
+            RiskComparisonPoint(date=day, primary_cumulative_return=primary_cumulative, comparison_cumulative_return=comparison_cumulative, primary_drawdown=primary_drawdown, comparison_drawdown=comparison_drawdown)
+            for day, primary_cumulative, comparison_cumulative, primary_drawdown, comparison_drawdown in zip(dates, summary.primary_cumulative, summary.comparison_cumulative, summary.primary_drawdowns, summary.comparison_drawdowns, strict=True)
+        ],
+    )
+    assert computation.output.model_dump(exclude=K6_COMPARISON_FIELDS) == expected.model_dump(exclude=K6_COMPARISON_FIELDS)
+    assert computation.output.model_dump_json(exclude=K6_COMPARISON_FIELDS) == expected.model_dump_json(exclude=K6_COMPARISON_FIELDS)
+    assert (computation.method, computation.comparison_asset_id, computation.return_basis) == ("comparison_asset", HOLDING_BENCHMARK_ID, context.primary_return_basis)
+    assert (computation.n_observations, computation.calendar_days, computation.annualization_factor, computation.coverage) == (len(dates), calendar_days, factor, 1.0)
+    # Every figure is defined on this fixture, so nothing has a reason to warn.
+    assert list(computation.warnings) == []
+
+
+@pytest.mark.parametrize("mode", [pytest.param(RiskMode.CURRENT_COMPOSITION, id="current-composition"), pytest.param(RiskMode.HISTORICAL, id="historical")])
+def test_comparison_measures_every_holding_against_the_benchmark_in_asset_id_order(mode):
+    """One beta and one correlation per holding, each on its own returns paired with the benchmark's.
+
+    On one joint calendar every pairing is the date match, so each figure is the plain metric of the
+    two series. The holdings come in out of order, and their figures differ from each other and from
+    the portfolio's own: neither the scope's order nor a copied portfolio beta can pass.
+    """
+    context = holdings_context(scope_asset_ids=(3, 1, 2), mode=mode)
+    expected = {asset_id: (beta(returns, HOLDING_BENCHMARK), pearson_correlation(returns, HOLDING_BENCHMARK)) for asset_id, returns in HOLDING_RETURNS.items()}
+    portfolio_beta = beta(list(context.primary_returns), HOLDING_BENCHMARK)
+    assert len({round(value, 9) for value, _correlation in expected.values()} | {round(portfolio_beta, 9)}) == 4
+    assert len({round(correlation, 9) for _value, correlation in expected.values()}) == 3
+
+    output = compare_holdings(context).output
+
+    # The portfolio's own beta is what it was.
+    assert output.beta == pytest.approx(portfolio_beta, rel=1e-12)
+    assert [item.asset_id for item in output.items] == [1, 2, 3]
+    for item in output.items:
+        holding_beta, holding_correlation = expected[item.asset_id]
+        assert item.beta == pytest.approx(holding_beta, rel=1e-12), item.asset_id
+        assert item.correlation == pytest.approx(holding_correlation, rel=1e-12), item.asset_id
+
+
+def test_comparison_gives_no_item_to_the_benchmark_nor_to_an_asset_without_a_series_or_not_held():
+    """Only a held asset with a prepared series is measured, and never the yardstick itself (D371).
+
+    The benchmark is held: it gets no item — its beta on itself would be 1 by construction. Asset 4
+    is held, but nothing prepared a series for it: no item, and no cost to the others. Asset 3 has a
+    series, but is not held (another analytic's benchmark, prepared in the same request): no item.
+    """
+    context = holdings_context(scope_asset_ids=(2, HOLDING_BENCHMARK_ID, 4, 1))
+    prepared_ids = {series.returns.asset_id for series in context.prepared_series.series}
+    assert 4 not in prepared_ids
+    assert {3, HOLDING_BENCHMARK_ID} <= prepared_ids
+
+    output = compare_holdings(context).output
+
+    assert [item.asset_id for item in output.items] == [1, 2]
+    assert [item.beta for item in output.items] == pytest.approx([beta(HOLDING_RETURNS[asset_id], HOLDING_BENCHMARK) for asset_id in (1, 2)], rel=1e-12)
+
+
+def test_comparison_of_a_single_asset_has_no_holding_items():
+    """An asset scope is one series compared with the benchmark: its figures are the top-level ones, and `items` is empty."""
+    context = make_context({1: HOLDING_RETURNS[1], HOLDING_BENCHMARK_ID: HOLDING_BENCHMARK}, scope_kind=RiskScopeKind.ASSET, scope_asset_ids=(1,))
+
+    output = compare_holdings(context).output
+
+    # The asset itself is measured, as before.
+    assert output.beta == pytest.approx(beta(HOLDING_RETURNS[1], HOLDING_BENCHMARK), rel=1e-12)
+    assert output.items == []
+
+
+def test_a_flat_holding_has_a_zero_beta_and_no_correlation_and_is_named():
+    """No variance, no covariance: its beta is a measured zero, while correlation divides by that variance.
+
+    The warning is the per-asset one, naming the holding. The singular warnings stay with the
+    portfolio's own figures, which are defined here, and the benchmark's ratios are defined too.
+    """
+    holdings = {**HOLDING_RETURNS, 3: [0.0015] * HOLDING_OBSERVATIONS}
+
+    computation = compare_holdings(holdings_context(holdings))
+    output = computation.output
+
+    assert output.beta is not None
+    assert output.correlation is not None
+    items = {item.asset_id: item for item in output.items}
+    assert sorted(items) == [1, 2, 3]
+    assert items[3].correlation is None
+    assert items[3].beta is not None
+    assert items[3].beta == pytest.approx(0.0, abs=1e-12)
+    assert None not in (items[1].correlation, items[2].correlation)
+    assert [(warning.code, warning.message_i18n_key, warning.details.get("asset_ids")) for warning in computation.warnings] == [
+        ("comparison_correlation_undefined", "risk.warnings.comparison_correlation_undefined_assets", [3]),
+    ]
+
+
+def test_a_flat_benchmark_leaves_every_holding_undefined_and_lets_the_singular_warnings_speak():
+    """Against a series without variance nothing is defined, and saying so once per figure is enough.
+
+    The two singular warnings already say that beta and correlation are undefined because the
+    benchmark is flat; a per-asset warning listing every holding would say it again for each of them.
+    The benchmark's own ratios follow their own rule: undefined, and named.
+    """
+    computation = compare_holdings(holdings_context(benchmark=[0.002] * HOLDING_OBSERVATIONS))
+    output = computation.output
+
+    # The portfolio's own figures, as before k6.
+    assert (output.beta, output.correlation) == (None, None)
+    assert [item.asset_id for item in output.items] == [1, 2, 3]
+    assert all((item.beta, item.correlation) == (None, None) for item in output.items)
+    assert (output.comparison_sharpe, output.comparison_sortino) == (None, None)
+    warnings = {(warning.code, warning.message_i18n_key): warning for warning in computation.warnings}
+    assert len(warnings) == len(computation.warnings)
+    assert set(warnings) == {
+        ("comparison_beta_undefined", "risk.warnings.comparison_beta_undefined"),
+        ("comparison_correlation_undefined", "risk.warnings.comparison_correlation_undefined"),
+        ("sharpe_undefined", "risk.warnings.sharpe_undefined_assets"),
+        ("sortino_undefined", "risk.warnings.sortino_undefined_assets"),
+    }
+    for code in ("comparison_beta_undefined", "comparison_correlation_undefined"):
+        assert "asset_ids" not in warnings[(code, f"risk.warnings.{code}")].details, code
+    for code in ("sharpe_undefined", "sortino_undefined"):
+        assert warnings[(code, f"risk.warnings.{code}_assets")].details["asset_ids"] == [HOLDING_BENCHMARK_ID], code
+
+
+def test_comparison_names_the_benchmark_when_only_its_sortino_is_undefined():
+    """A benchmark that moves but never loses has a Sharpe, and no downside for a Sortino to divide by."""
+    gainer = [round(0.002 + 0.0015 * math.cos(index * 0.7), 10) for index in range(HOLDING_OBSERVATIONS)]
+    context = make_context({1: HOLDING_RETURNS[1], HOLDING_BENCHMARK_ID: gainer}, scope_kind=RiskScopeKind.ASSET, scope_asset_ids=(1,))
+
+    computation = compare_holdings(context)
+    output = computation.output
+
+    assert output.beta is not None
+    assert output.comparison_sharpe == pytest.approx(annualized_sharpe(gainer, computation.annualization_factor), rel=1e-12)
+    assert output.comparison_sortino is None
+    assert [(warning.code, warning.message_i18n_key, warning.details.get("asset_ids")) for warning in computation.warnings] == [
+        ("sortino_undefined", "risk.warnings.sortino_undefined_assets", [HOLDING_BENCHMARK_ID]),
+    ]
 
 
 def test_stress_projects_hypothetical_percentages_and_amounts():
@@ -1140,6 +1619,15 @@ def test_historical_replay_proxy_replaces_only_the_return_series():
 
 
 def test_historical_replay_exclusion_preserves_zero_return_residual_weight():
+    """Realigned to D376 (05/10/2026): the excluded asset leaves `impacts`, and nothing else moves.
+
+    It used to pin `impacts == [1, 2]`, asset 2 drawn as a row at zero return, zero contribution
+    and no money: the UI drew it as a +0.00% bar beside the assets that lived through the window,
+    though it had no data in it. A zero is not an abstention (D151). So `output.impacts` holds the
+    replayed assets alone, and the excluded one stays where it already was — the audit, with its
+    weight, reason and treatment; `computation.excluded_assets`; the warnings. Its weight is still
+    carried as cash at zero return: the figures are the ones this test pinned before.
+    """
     replay_range = DateRangeModel(
         start=date(2026, 1, 2),
         end=date(2026, 1, 21),
@@ -1158,13 +1646,24 @@ def test_historical_replay_exclusion_preserves_zero_return_residual_weight():
         ),
     )
 
+    # Unchanged: half of the scope gains 10%, the excluded quarter sits at zero beside the cash
+    # quarter, and the rest is not renormalized — 5%, ten euros of the two hundred.
     assert computation.output.portfolio_return == pytest.approx(0.05)
     assert computation.output.impact_amount == Decimal("10.000")
-    assert [impact.asset_id for impact in computation.output.impacts] == [1, 2]
-    assert computation.output.impacts[1].shock_return == 0
+    # Only the replayed asset has a row; the excluded one is not a bar at zero.
+    assert [impact.asset_id for impact in computation.output.impacts] == [1], "an excluded asset is still an impact row at zero return: impacts must carry the replayed assets only (D376)"
+    (replayed,) = computation.output.impacts
+    assert (replayed.weight, replayed.contribution_return) == (0.5, pytest.approx(0.05))
+    # The excluded asset is where it already was, with its weight, its reason and its treatment.
     audit = computation.historical_replay_audit
     assert audit.excluded_weight_total == pytest.approx(0.25)
-    assert audit.excluded_assets[0].treatment.value == "zero_return_residual"
+    assert [(item.asset_id, item.reason, item.weight, item.treatment) for item in audit.excluded_assets] == [
+        (2, RiskHistoricalReplayExclusionReason.MANUAL_EXCLUSION, 0.25, RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL),
+    ]
+    assert computation.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="manual_historical_replay_exclusion"),)
+    assert [(warning.message_i18n_key, warning.details["asset_ids"], warning.details["treatment"]) for warning in computation.warnings] == [
+        ("risk.warnings.historical_replay_excluded_manual", [2], "zero_return_residual"),
+    ]
 
 
 def test_historical_replay_auto_excludes_a_missing_original_instead_of_blocking():
@@ -1375,9 +1874,14 @@ def test_historical_replay_auto_exclusion_keeps_the_weight_as_zero_return_cash()
         (2, Reason.STARTS_AFTER_WINDOW_START, 0.25, Treatment.ZERO_RETURN_RESIDUAL),
     ]
     impacts = {impact.asset_id: impact for impact in automatic.output.impacts}
-    assert set(impacts) == {1, 2}
+    # D376 (05/10/2026): the excluded weight sits at zero beside the cash — the 5% above — but the
+    # asset is no row of its own: drawn at zero return it read as "lived through the window and did
+    # nothing", when it had no data in it at all (D151). The audit, the warning and the exclusions
+    # below are where it is named. It used to pin {1, 2} and a (0.0, 0.0) row for asset 2.
+    assert set(impacts) == {1}, "an automatically excluded asset is still an impact row at zero return (D376)"
     assert impacts[1].contribution_return == pytest.approx(0.05)
-    assert (impacts[2].shock_return, impacts[2].contribution_return) == (0.0, 0.0)
+    # The manual exclusion of the same asset leaves the same single row.
+    assert [impact.asset_id for impact in manual.output.impacts] == [1], "a manually excluded asset is still an impact row at zero return (D376)"
     (warning,) = automatic.warnings
     assert warning.code == "historical_replay_assets_excluded"
     assert warning.message_i18n_key == "risk.warnings.historical_replay_excluded_starts_late"
@@ -1389,6 +1893,35 @@ def test_historical_replay_auto_exclusion_keeps_the_weight_as_zero_return_cash()
     assert manual.historical_replay_audit.excluded_assets[0].reason == Reason.MANUAL_EXCLUSION
     assert [warning.message_i18n_key for warning in manual.warnings] == ["risk.warnings.historical_replay_excluded_manual"]
     assert manual.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="manual_historical_replay_exclusion"),)
+
+
+def test_historical_replay_keeps_a_replayed_asset_that_came_out_flat_and_no_row_for_the_excluded_one():
+    """D376 read with D151: who leaves `impacts` is decided by who was replayed, never by the value.
+
+    Asset 1 lived through the window and ended exactly where it started: 0% is its figure, and its
+    row stays. Asset 2 had no price in the window: it was never replayed, so it has no row, though
+    its weight still counts as cash at zero return. Dropping the zero rows instead would get both
+    of them wrong in one move — the flat asset gone, the excluded one gone for a reason that only
+    happened to coincide.
+    """
+    computation = replay(
+        replay_context(
+            {1: [0.0] * 20},
+            scope_kind=RiskScopeKind.PORTFOLIO,
+            scope_asset_ids=(1, 2),
+            weights={1: 0.5, 2: 0.25},
+            cash_weight=0.25,
+            auto={2: Reason.NO_PRICES_IN_WINDOW},
+        )
+    )
+
+    assert computation.output.portfolio_return == 0.0
+    assert [(impact.asset_id, impact.weight, impact.shock_return, impact.contribution_return) for impact in computation.output.impacts] == [(1, 0.5, 0.0, 0.0)], "the replayed asset that came out flat must keep its row, and the excluded one must have none (D376, D151)"
+    assert [(item.asset_id, item.reason, item.weight, item.treatment) for item in computation.historical_replay_audit.excluded_assets] == [
+        (2, Reason.NO_PRICES_IN_WINDOW, 0.25, Treatment.ZERO_RETURN_RESIDUAL),
+    ]
+    assert computation.historical_replay_audit.excluded_weight_total == pytest.approx(0.25)
+    assert computation.excluded_assets == (RiskExcludedAsset(asset_id=2, reason="historical_replay_no_prices_in_window"),)
 
 
 def test_historical_replay_auto_exclusion_omits_the_asset_from_an_asset_set():
@@ -1455,6 +1988,9 @@ def test_historical_replay_audits_manual_and_automatic_exclusions_with_one_warni
     assert RiskHistoricalReplayAudit.model_validate(audit.model_dump()) == audit
     # Only asset 1 moves: 0.3 × 10%, everything excluded sits at zero next to the cash.
     assert computation.output.portfolio_return == pytest.approx(0.03)
+    # …and only asset 1 is a row (D376): seven exclusions, one per reason the engine has, manual
+    # included, and not one of them drawn as a bar at zero.
+    assert [impact.asset_id for impact in computation.output.impacts] == [1], "an excluded asset is still an impact row at zero return (D376)"
 
     # Past half of the value excluded, the result first says it describes a minority of the
     # portfolio: 40% covered here, cash included, since cash is replayed at its zero return.

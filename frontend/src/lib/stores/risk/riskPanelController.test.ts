@@ -1224,7 +1224,8 @@ describe('riskPanelController', () => {
                     analytics: [
                         {instance_id: 'base-current_composition-risk_contribution', analytic_code: 'risk_contribution', parameters: {}},
                         {instance_id: 'base-current_composition-historical_kpi', analytic_code: 'historical_kpi', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
-                        {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {}},
+                        // k6 (06/10): the points' own Sharpe and Sortino are charged what the KPI beside them is.
+                        {instance_id: 'base-current_composition-asset_risk_return', analytic_code: 'asset_risk_return', parameters: {risk_free_annual_rate: 0.02, target_annual_return: 0}},
                     ],
                 },
                 false,
@@ -1275,7 +1276,8 @@ describe('riskPanelController', () => {
                         {instance_id: 'base-historical-asset_set_var-monthly', analytic_code: 'asset_set_var', parameters: {confidence_level: 0.95, horizon_days: 30}},
                         {instance_id: 'base-historical-asset_set_drawdown', analytic_code: 'asset_set_drawdown', parameters: {}},
                         {instance_id: 'base-historical-asset_set_risk_return', analytic_code: 'asset_set_risk_return', parameters: {}},
-                        {instance_id: 'base-historical-asset_set_comparison', analytic_code: 'asset_set_comparison', parameters: {comparison_asset_id: 47}},
+                        // k6 (06/10): the reference's own Sharpe and Sortino are charged the KPI's rate (0% here) and target.
+                        {instance_id: 'base-historical-asset_set_comparison', analytic_code: 'asset_set_comparison', parameters: {comparison_asset_id: 47, risk_free_annual_rate: 0, target_annual_return: 0}},
                     ],
                 },
                 false,
@@ -1300,7 +1302,7 @@ describe('riskPanelController', () => {
             expect(assetSetAnalyticsAsked(), "the paid option never reached L3°'s request").toEqual([
                 ['base-historical-asset_set_kpi', {risk_free_annual_rate: 0, target_annual_return: 0}],
                 ['base-historical-asset_set_risk_return', {}],
-                ['base-historical-asset_set_comparison', {comparison_asset_id: BENCHMARK}],
+                ['base-historical-asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0, target_annual_return: 0}],
             ]);
         });
 

@@ -34,6 +34,7 @@ from backend.app.schemas.risk import (
     RiskError,
     RiskErrorCode,
     RiskExcludedAsset,
+    RiskFreeReference,
     RiskKpiOutput,
     RiskMode,
     RiskOutputKind,
@@ -55,6 +56,7 @@ from backend.app.services.risk.base import (
     RiskExecutionContext,
     RiskUnavailableError,
 )
+from backend.app.services.risk.metrics import annualized_sharpe, annualized_sortino, beta, pearson_correlation
 from backend.app.services.risk.service import (
     RiskScopeAccessError,
     RiskScopeNotFoundError,
@@ -2136,8 +2138,9 @@ async def test_contribution_and_risk_return_name_the_excluded_weight_inside_cash
         assert result.output.excluded_weight <= result.output.cash_weight, instance_id
 
     # The versions that publish `excluded_weight`: a zero must be told apart from a server that predates the field.
+    # `asset_risk_return` is at 1.2.0 since k6 (06/10/2026), which adds each point's own Sharpe and Sortino.
     assert results["contribution"].metadata.algorithm_version == "1.2.0"
-    assert results["risk_return"].metadata.algorithm_version == "1.1.0"
+    assert results["risk_return"].metadata.algorithm_version == "1.2.0"
 
 
 # Captured on `ffe41c5ba`, before `excluded_weight` existed, from exactly the current-composition
@@ -2199,6 +2202,148 @@ async def test_publishing_the_excluded_weight_moves_no_other_number(monkeypatch)
     for instance_id in ("contribution", "risk_return"):
         assert as_cash[instance_id].status == RiskResultStatus.OK, (instance_id, warning_codes(as_cash[instance_id]))
         assert results[instance_id].output.model_dump(exclude={"excluded_weight"}) == as_cash[instance_id].output.model_dump(exclude={"excluded_weight"}), instance_id
+
+
+# ---------------------------------------------------------------------------
+# k6 through the service (agreed with the Dashboard owner on 06/10/2026). The arithmetic is pinned on
+# the plugins (`test_risk_analytics.py`); what only the request path adds is pinned here: the two
+# rates reach `asset_risk_return` from the request and come back in its metadata, a warning about
+# undefined ratios gets the names its sentence lists, and `comparison` measures each priced holding of
+# the composition held today — never the benchmark, never a holding left without a series.
+# ---------------------------------------------------------------------------
+
+
+class NamedRowsDb(EmptyRowsDb):
+    """`EmptyRowsDb`, except that the warning-name lookup finds the display names it is given."""
+
+    def __init__(self, names: dict[int, str]) -> None:
+        super().__init__()
+        self.names = names
+
+    async def execute(self, statement, *args, **kwargs):
+        if "display_name" not in str(statement):
+            return await super().execute(statement, *args, **kwargs)
+        self.statements.append(str(statement))
+        (requested,) = statement.compile().params.values()
+        return _Rows([(asset_id, self.names[asset_id]) for asset_id in requested if asset_id in self.names])
+
+
+# One holding that moves but never loses (a Sharpe, no Sortino), one that never moves (neither).
+RATIO_HOLDINGS = {
+    1: [round(0.002 + 0.0015 * math.cos(index * 0.7), 10) for index in range(OBSERVATIONS)],
+    2: [0.0015] * OBSERVATIONS,
+}
+
+
+@pytest.mark.asyncio
+async def test_risk_return_takes_the_rates_from_the_request_and_names_the_holdings_whose_ratios_are_undefined(monkeypatch):
+    db = NamedRowsDb({1: "Steady Gainer", 2: "Flat Note", BENCHMARK_ASSET_ID: "Benchmark"})
+    prepared = make_prepared_set({**RATIO_HOLDINGS, BENCHMARK_ASSET_ID: PRICED_RETURNS[BENCHMARK_ASSET_ID]})
+    analytic = {**RISK_RETURN, "parameters": {"risk_free_annual_rate": 0.03, "target_annual_return": 0.0}}
+
+    results = await query_unpriced_holding(monkeypatch, mode="current_composition", analytics=[analytic], report=priced_portfolio_report(), prepared=prepared, db=db)
+
+    result = results["risk_return"]
+    assert result.output is not None, result.error
+    assert result.metadata.params == {"risk_free_annual_rate": 0.03, "target_annual_return": 0.0}
+    assert result.metadata.risk_free == RiskFreeReference(annual_rate=0.03, source="analytic_param", currency="EUR")
+    items = {item.asset_id: item for item in result.output.items}
+    assert sorted(items) == [1, 2]
+    assert items[1].sharpe == pytest.approx(annualized_sharpe(RATIO_HOLDINGS[1], result.metadata.annualization_factor, annual_risk_free_rate=0.03), rel=1e-12)
+    assert (items[1].sortino, items[2].sharpe, items[2].sortino) == (None, None, None)
+    # The holdings each sentence lists, by name, in the order of the points.
+    named = {warning.code: warning for warning in result.warnings if warning.code in {"sharpe_undefined", "sortino_undefined"}}
+    assert named["sharpe_undefined"].message_i18n_key == "risk.warnings.sharpe_undefined_assets"
+    assert named["sharpe_undefined"].message_params == {"names": "Flat Note", "count": 1}
+    assert named["sortino_undefined"].message_i18n_key == "risk.warnings.sortino_undefined_assets"
+    assert named["sortino_undefined"].message_params == {"names": "Steady Gainer, Flat Note", "count": 2}
+
+
+@pytest.mark.asyncio
+async def test_comparison_measures_each_priced_holding_of_today_but_not_the_held_benchmark_nor_the_unpriced_one(monkeypatch):
+    """A portfolio worth 600: 300 and 100 priced, 100 nothing prices, 50 in the benchmark itself, 50 in cash.
+
+    In `current_composition` every holding sits on the request's joint calendar with the benchmark, so
+    each pairing is the date match and each figure the plain metric of the two series.
+    """
+    report = slice_report(holdings={1: "300", 2: "100", UNPRICED_ASSET_ID: "100", BENCHMARK_ASSET_ID: "50"}, cash="50", twrr=twrr_history(PORTFOLIO_TWRR_RETURNS))
+
+    results = await query_unpriced_holding(monkeypatch, mode="current_composition", analytics=[TWRR_READERS["comparison"], CONTRIBUTION], report=report)
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    # Presence barrier, in the same request: the benchmark is a priced holding of the scope, and the
+    # unpriced one was left out — so both absences below are the comparison's own doing.
+    contribution = results["contribution"]
+    assert contribution.output is not None, contribution.error
+    assert sorted(item.asset_id for item in contribution.output.items) == [1, 2, BENCHMARK_ASSET_ID]
+    assert exclusion_ids(comparison) == [UNPRICED_ASSET_ID]
+    assert comparison.metadata.comparison_asset_id == BENCHMARK_ASSET_ID
+    benchmark = PRICED_RETURNS[BENCHMARK_ASSET_ID]
+    assert [item.asset_id for item in comparison.output.items] == [1, 2]
+    for item in comparison.output.items:
+        assert item.beta == pytest.approx(beta(PRICED_RETURNS[item.asset_id], benchmark), rel=1e-12), item.asset_id
+        assert item.correlation == pytest.approx(pearson_correlation(PRICED_RETURNS[item.asset_id], benchmark), rel=1e-12), item.asset_id
+
+
+# An undefined ratio's warning degrades its result, as `historical_kpi`'s `sharpe_undefined` does: a figure
+# the reader expects is missing, so the result is `partial` (developer's decision of 06/10/2026). Every
+# case runs on a clean report with nothing excluded, so the warnings are the only thing that can make the
+# result partial; and each case isolates one warning, so a single warning that stopped degrading shows.
+FLAT_GAINING = [0.0015] * OBSERVATIONS  # no volatility and no downside: neither ratio
+FLAT_LOSING = [-0.0005] * OBSERVATIONS  # no volatility, but a downside: a Sortino and no Sharpe
+NEVER_LOSING = RATIO_HOLDINGS[1]  # moves, never loses: a Sharpe and no Sortino
+
+
+def holding_beside(second_holding: list[float]) -> PreparedAssetSeriesSet:
+    """Holding 1 (gains and losses, every ratio defined) beside `second_holding`, and the benchmark."""
+    return make_prepared_set({1: PRICED_RETURNS[1], 2: second_holding, BENCHMARK_ASSET_ID: PRICED_RETURNS[BENCHMARK_ASSET_ID]})
+
+
+@pytest.mark.parametrize(
+    ("second_holding", "undefined"),
+    [
+        pytest.param(PRICED_RETURNS[2], {}, id="every-ratio-defined"),
+        pytest.param(FLAT_GAINING, {"sharpe_undefined": [2], "sortino_undefined": [2]}, id="a-flat-holding"),
+        pytest.param(FLAT_LOSING, {"sharpe_undefined": [2]}, id="only-the-sharpe-undefined"),
+        pytest.param(NEVER_LOSING, {"sortino_undefined": [2]}, id="only-the-sortino-undefined"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_undefined_ratio_makes_the_risk_return_partial(monkeypatch, second_holding, undefined):
+    results = await query_unpriced_holding(monkeypatch, mode="current_composition", analytics=[RISK_RETURN], report=priced_portfolio_report(), prepared=holding_beside(second_holding))
+
+    result = results["risk_return"]
+    assert result.output is not None, result.error
+    # Nothing else can make it partial: no exclusion, a clean report, and no warning but the ratios'.
+    assert result.metadata.excluded_assets == []
+    assert result.data_quality.data_quality_status == DataQualityStatus.OK
+    assert sorted((warning.code, warning.details.get("asset_ids")) for warning in result.warnings) == sorted(undefined.items())
+    assert result.status == (RiskResultStatus.PARTIAL if undefined else RiskResultStatus.OK)
+    assert all(warning.degrades_result for warning in result.warnings)
+
+
+@pytest.mark.parametrize(
+    ("second_holding", "undefined_correlation"),
+    [
+        pytest.param(PRICED_RETURNS[2], [], id="every-holding-measured"),
+        pytest.param(FLAT_GAINING, [2], id="a-flat-holding"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_holding_without_a_correlation_makes_the_comparison_partial(monkeypatch, second_holding, undefined_correlation):
+    results = await query_unpriced_holding(monkeypatch, mode="current_composition", analytics=[TWRR_READERS["comparison"]], report=priced_portfolio_report(), prepared=holding_beside(second_holding))
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    assert comparison.metadata.excluded_assets == []
+    assert comparison.data_quality.data_quality_status == DataQualityStatus.OK
+    # The portfolio's own figures and the benchmark's ratios are defined: the per-holding warning is the only one.
+    assert None not in (comparison.output.beta, comparison.output.correlation, comparison.output.comparison_sharpe, comparison.output.comparison_sortino)
+    expected = [("comparison_correlation_undefined", "risk.warnings.comparison_correlation_undefined_assets", undefined_correlation)] if undefined_correlation else []
+    assert [(warning.code, warning.message_i18n_key, warning.details.get("asset_ids")) for warning in comparison.warnings] == expected
+    assert comparison.status == (RiskResultStatus.PARTIAL if undefined_correlation else RiskResultStatus.OK)
+    assert all(warning.degrades_result for warning in comparison.warnings)
 
 
 # `no_price_source`: an asset excluded for a missing price that has no provider assigned AND no price
@@ -2408,6 +2553,109 @@ async def test_the_comparison_keeps_the_benchmark_moves_between_two_observation_
     assert comparison.output.observations == comparison.metadata.n_observations == len(dates)
     assert comparison.metadata.coverage == pytest.approx(1.0)
     assert comparison.metadata.annualization_factor == pytest.approx(len(dates) * 365 / (dates[-1] - OBSERVATION_START).days)
+
+
+@pytest.mark.asyncio
+async def test_each_holding_meets_the_benchmark_on_the_joint_calendar_not_over_the_twrr_observation_spans(monkeypatch):
+    """The reading chosen for k6 (06/10/2026): a holding is paired with the benchmark on the joint calendar.
+
+    Holdings and benchmark were prepared together, so a holding pairs with the benchmark date for date,
+    and its beta and correlation are the plain metrics of the two prepared series. The portfolio's own
+    TWRR is read on observation days only, and its pairs compound the benchmark over those spans.
+    Reading the holdings over the same spans was the other candidate. On this fixture it gives other
+    numbers, which is the positive control that lets this pin tell the two readings apart.
+    """
+    held_holiday = date(2026, 1, 14)  # a Wednesday the held assets' exchange is closed
+    held_days = [day for day in WEEKDAYS if day != held_holiday]
+    prepared = with_quote_dates(
+        make_prepared_set({**HELD_RETURNS, BENCHMARK_ASSET_ID: BENCHMARK_RETURNS}, baseline=OBSERVATION_START),
+        {1: held_days, 2: held_days, BENCHMARK_ASSET_ID: EVERY_DAY},
+    )
+
+    context, results = await observe_the_portfolio_twrr(monkeypatch, holdings={1: "300", 2: "200"}, prepared=prepared, analytics=(SPY, TWRR_READERS["comparison"]))
+
+    # Premise: a historical TWRR, read on fewer days than the joint calendar the holdings sit on.
+    assert context.primary_return_basis == RiskReturnBasis.TWRR
+    assert list(prepared.joint_return_dates) == EVERY_DAY[1:]
+    assert list(context.primary_return_dates) == twrr_read_on(held_days)[0]
+    assert len(context.primary_return_dates) < len(prepared.joint_return_dates)
+
+    def over_twrr_spans(returns: list[float]) -> list[float]:
+        """`returns`, dated on the joint calendar, compounded over each span between two TWRR observation days."""
+        own = dict(zip(EVERY_DAY[1:], returns, strict=True))
+        starts = [context.primary_baseline_date, *context.primary_return_dates[:-1]]
+        return [math.prod(1 + value for day, value in own.items() if start < day <= end) - 1 for start, end in zip(starts, context.primary_return_dates, strict=True)]
+
+    expected: dict[int, tuple[float, float]] = {}
+    for asset_id, returns in HELD_RETURNS.items():
+        joint = (beta(returns, BENCHMARK_RETURNS), pearson_correlation(returns, BENCHMARK_RETURNS))
+        spanned = (beta(over_twrr_spans(returns), over_twrr_spans(BENCHMARK_RETURNS)), pearson_correlation(over_twrr_spans(returns), over_twrr_spans(BENCHMARK_RETURNS)))
+        # Positive control: the two readings are different numbers here, so the pin below can tell them apart.
+        assert spanned[0] != pytest.approx(joint[0], rel=1e-3), (asset_id, spanned, joint)
+        assert spanned[1] != pytest.approx(joint[1], rel=1e-3), (asset_id, spanned, joint)
+        expected[asset_id] = joint
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    assert [item.asset_id for item in comparison.output.items] == [1, 2]
+    for item in comparison.output.items:
+        assert item.beta == pytest.approx(expected[item.asset_id][0], rel=1e-12), item.asset_id
+        assert item.correlation == pytest.approx(expected[item.asset_id][1], rel=1e-12), item.asset_id
+
+
+@pytest.mark.asyncio
+async def test_the_benchmark_ratios_are_annualized_with_the_comparison_own_factor(monkeypatch):
+    """The benchmark's Sharpe and Sortino use the factor of the pairs they are measured on (K7, 06/10/2026).
+
+    The comparison annualizes over its own pairs, `len(pairs) * 365 / days since the first pair's span
+    start`, and its volatility and expected return already do. On the joint-calendar fixture above
+    that factor equals the context's — the TWRR's, which `require_annualization_factor` hands back — so
+    a ratio annualized with the request's factor would read the same there. Here the benchmark is
+    listed two days into the window: the TWRR still observes those two days (the held assets were
+    quoted on them, though the joint calendar starts after), the comparison cannot pair them, and the
+    two factors part. Only the comparison's own factor keeps the benchmark on its own line,
+    `sharpe * volatility == expected - f * rf_p`.
+    """
+    listing = date(2026, 1, 7)  # the benchmark's first close, so the joint calendar's baseline
+    offset = (listing - OBSERVATION_START).days
+    benchmark_days = [day for day in EVERY_DAY if day > listing]  # the joint calendar's return dates
+    held_holiday = date(2026, 1, 14)  # a Wednesday the held assets' exchange is closed
+    held_days = [day for day in WEEKDAYS if day != held_holiday]
+    prepared = with_quote_dates(
+        make_prepared_set({**{asset_id: returns[offset:] for asset_id, returns in HELD_RETURNS.items()}, BENCHMARK_ASSET_ID: BENCHMARK_RETURNS[offset:]}, baseline=listing),
+        {1: held_days, 2: held_days, BENCHMARK_ASSET_ID: benchmark_days},
+    )
+    rf, target = 0.03, 0.05
+    comparison_request = {**TWRR_READERS["comparison"], "parameters": {**TWRR_READERS["comparison"]["parameters"], "risk_free_annual_rate": rf, "target_annual_return": target}}
+
+    context, results = await observe_the_portfolio_twrr(monkeypatch, holdings={1: "300", 2: "200"}, prepared=prepared, analytics=(SPY, comparison_request))
+
+    comparison = results["comparison"]
+    assert comparison.output is not None, comparison.error
+    factor = comparison.metadata.annualization_factor
+    # The pairs, computed here: the TWRR dates the benchmark can answer, the first span opening at its
+    # listing and every later one at the previous TWRR date.
+    assert context.primary_return_basis == RiskReturnBasis.TWRR
+    assert [day for day in context.primary_return_dates if day <= listing] == [date(2026, 1, 6), listing]
+    paired_dates = [day for day in context.primary_return_dates if day > listing]
+    own = dict(zip(benchmark_days, BENCHMARK_RETURNS[offset:], strict=True))
+    starts = [listing, *paired_dates[:-1]]
+    benchmark_pairs = [math.prod(1 + value for day, value in own.items() if start < day <= end) - 1 for start, end in zip(starts, paired_dates, strict=True)]
+    assert comparison.output.observations == len(paired_dates)
+    assert factor == pytest.approx(len(paired_dates) * 365 / (paired_dates[-1] - listing).days, rel=1e-12)
+    # Positive control: here the comparison's factor is neither the context's, which the request's
+    # factor would be, nor the prepared calendar's.
+    assert factor != pytest.approx(context.annualization_factor, rel=1e-3)
+    assert factor != pytest.approx(prepared.annualization_factor, rel=1e-3)
+
+    output = comparison.output
+    period_rate = math.expm1(math.log1p(rf) / factor)
+    line = output.comparison_expected_annual_return - factor * period_rate
+    assert output.comparison_sharpe * output.comparison_volatility == pytest.approx(line, rel=1e-12, abs=1e-15)
+    # ...a line a Sharpe annualized with the context's factor would miss, so the identity can tell the two apart.
+    assert annualized_sharpe(benchmark_pairs, context.annualization_factor, annual_risk_free_rate=rf) * output.comparison_volatility != pytest.approx(line, rel=1e-6)
+    # The Sortino is measured on the same pairs with the same factor, and charged the target.
+    assert output.comparison_sortino == pytest.approx(annualized_sortino(benchmark_pairs, factor, annual_target_return=target), rel=1e-12)
 
 
 @pytest.mark.parametrize(

@@ -3564,7 +3564,8 @@
         "replayReasonOther": "Otro motivo",
         "replayNothing": "Nada que repetir: ningún activo tiene precios utilizables en este periodo.",
         "replaySuggested": "Repetir del {start} al {end}: {count, plural, one {vuelve # activo} other {vuelven # activos}}",
-        "replaySuggestedPartial": "Solo una parte de la crisis."
+        "replaySuggestedPartial": "Solo una parte de la crisis.",
+        "replayPresetNone": "Sin preajuste"
       },
       "backtestNotice": "Con un subconjunto activo, estas cifras se reconstruyen sobre la composición de hoy: dicen cómo *habría* ido, no cómo fue en realidad.",
       "notice": {

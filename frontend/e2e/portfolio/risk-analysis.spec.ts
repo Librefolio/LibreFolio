@@ -2203,13 +2203,17 @@ test.describe('Risk analysis functional integration', () => {
         // Asset Detail's risk tab has a replay of its own, with the same testids. Bound
         // to the panel's own window rather than frozen at mount: which window it holds
         // is read after the run below, against the question the replay puts on the wire.
-        // No quick presets, since the crisis menu is this block's preset, and the two
-        // single-date pickers it replaces are gone.
+        // Its quick ranges sit beside the dates, all but MAX: D376 (05/10/2026) brings them
+        // back at the developer's request, reversing F3's "no quick presets", and a replay
+        // cannot ask about all of history — MAX's min/max sentinels resolve to no period.
+        // YTD, drawn beside where MAX was, is the barrier that makes its absence a
+        // statement. The two single-date pickers the range picker replaces are gone.
         const l4Replay = level4.getByTestId('risk-replay');
         const replayPeriod = l4Replay.getByTestId('risk-replay-period');
         await expect(replayPeriod.getByTestId('date-range-input-start')).toBeVisible();
         await expect(replayPeriod.getByTestId('date-range-input-end')).toBeVisible();
-        await expect(replayPeriod.locator('[data-testid^="date-preset-"]')).toHaveCount(0);
+        for (const key of ['1w', '1m', '3m', '6m', '1y', '2y', 'ytd']) await expect(replayPeriod.getByTestId(`date-preset-${key}`), `the replay's period does not offer its ${key} quick range (D376)`).toBeVisible();
+        await expect(replayPeriod.getByTestId('date-preset-max'), 'the replay offers MAX, a period it cannot ask about (D376)').toHaveCount(0);
         await expect(l4Replay.getByTestId('risk-replay-start')).toHaveCount(0);
         await expect(l4Replay.getByTestId('risk-replay-end')).toHaveCount(0);
         await expect(panel.getByTestId('risk-simulation-horizon')).toHaveValue('365');

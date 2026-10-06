@@ -30,7 +30,7 @@ import {createSubscriber} from 'svelte/reactivity';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
 import type {SelectOption} from '$lib/components/ui/select/types';
 import CompactDurationBadge from './CompactDurationBadge.svelte';
-import DateRangePicker from './DateRangePicker.svelte';
+import DateRangePicker, {type QuickPreset} from './DateRangePicker.svelte';
 
 /** A date safely in the past, so no cell is disabled by the future guard. */
 const DEF_START = '2024-01-15';
@@ -830,5 +830,195 @@ describe('DateRangePicker — zoom-guard exemption (F17)', () => {
         expect(selectors).toContain('input:not(.zoom-guard-exempt)');
         expect(selectors).toContain('select:not(.zoom-guard-exempt)');
         expect(selectors).toContain('textarea:not(.zoom-guard-exempt)');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// k5a (D376): two additive props, for the historical replay's period.
+//
+// `fieldsClass` adds a class to the frame around the two date fields — L4Replay
+// gives it the declared height of the crisis menu beside it — and
+// `excludePresets` leaves quick ranges out of the row: the replay cannot ask
+// about "all of history", so it drops MAX, whose min/max sentinels it has no
+// way to resolve. Both are additive. Every existing caller passes neither and
+// must keep exactly the picker it renders today, so the default paths are
+// pinned: the frame token by token (`FRAME`, transcribed from the template at
+// the k5a baseline) in each state its classes depend on, and the row button by
+// button in each layout a caller mounts.
+//
+// As in the F17 block above, the class is the contract here, so it is read;
+// elements are still found by testid and by their place in the render. Date is
+// frozen (Date alone, the timers stay real) wherever two renders are compared,
+// so "today" is the same day for both.
+// ---------------------------------------------------------------------------
+
+/** The k5a contract, typed here so this file compiles before the props exist. */
+type K5aProps = {fieldsClass?: string; excludePresets?: readonly QuickPreset[]};
+
+/** Today's frame around the two fields, token by token, as the template composes it at the k5a baseline. */
+const FRAME = {
+    base: ['w-full', 'flex', 'items-center', 'gap-0', 'bg-white', 'dark:bg-slate-800', 'rounded-xl', 'border', 'border-gray-200', 'dark:border-slate-600', 'overflow-hidden', 'hover:border-libre-green/50', 'transition-colors'],
+    /** Every size but compact. */
+    shadow: ['shadow-sm'],
+    stacked: ['flex-col'],
+    /** While the calendar is open. */
+    open: ['ring-1', 'ring-libre-green', 'border-libre-green'],
+};
+
+/** The frame in each state its classes depend on: size, stacking, and whether the calendar is open. */
+const FRAME_STATES: {state: string; props: Record<string, unknown>; open: boolean; classes: string[]}[] = [
+    {state: 'regular', props: {}, open: false, classes: [...FRAME.base, ...FRAME.shadow]},
+    {state: 'compact', props: {compact: true}, open: false, classes: [...FRAME.base]},
+    {state: 'stacked', props: {stacked: true}, open: false, classes: [...FRAME.base, ...FRAME.stacked, ...FRAME.shadow]},
+    {state: 'calendar open', props: {}, open: true, classes: [...FRAME.base, ...FRAME.shadow, ...FRAME.open]},
+];
+
+/** Today's quick-range row, in drawing order: the centred row and the toolbar's alike, since jsdom measures no room for the "jolly" fill. */
+const QUICK_ROW = ['1w', '1m', '3m', '6m', '1y', '2y', 'ytd', 'max', 'custom'].map((key) => `date-preset-${key}`);
+
+/** The layouts the existing callers mount: centred (the default), the page toolbars', and the one without the custom window. */
+const QUICK_LAYOUTS: {layout: string; props: Record<string, unknown>; row: string[]}[] = [
+    {layout: 'centred, by default', props: {}, row: QUICK_ROW},
+    {layout: 'a page toolbar', props: {align: 'start', compact: true}, row: QUICK_ROW},
+    {layout: 'without the custom window', props: {showCustomWindow: false}, row: QUICK_ROW.filter((id) => id !== 'date-preset-custom')},
+];
+
+/** A day far from either midnight, for the cases that compare two renders. */
+const FROZEN_NOW = new Date(2024, 5, 14, 12);
+
+/** An element's classes as a sorted set: the order of tokens in `class` changes nothing on screen. */
+function classesOf(element: Element): string[] {
+    return [...element.classList].sort();
+}
+
+/** Every element's classes, in document order: a whole render as a list of class lists. */
+function classMap(root: Element): string[][] {
+    return [root, ...root.querySelectorAll('*')].map(classesOf);
+}
+
+/** Like `setup`, but scoped to its own container, so two renders can be compared within one case. */
+function mountPicker(overrides: Record<string, unknown> & K5aProps = {}) {
+    const onchange = vi.fn();
+    const {container, unmount} = render(DateRangePicker, {props: {start: DEF_START, end: DEF_END, onchange, ...overrides}});
+    const view = within(container);
+    return {onchange, container, unmount, view, startInput: view.getByTestId('date-range-input-start'), endInput: view.getByTestId('date-range-input-end'), root: view.getByTestId('date-range-picker-root')};
+}
+
+/** The frame around the two date fields: their nearest common ancestor. */
+function fieldsFrame(startInput: HTMLElement, endInput: HTMLElement): HTMLElement {
+    for (let node = startInput.parentElement; node; node = node.parentElement) if (node.contains(endInput)) return node;
+    throw new Error('the two date fields share no frame');
+}
+
+/** Mount in one state: the frame, the whole render's classes, and where the frame sits in them. */
+async function frameInState(props: Record<string, unknown> & K5aProps, open: boolean) {
+    const picker = mountPicker(props);
+    if (open) {
+        await fireEvent.focus(picker.startInput);
+        expect(picker.root, 'the calendar did not open: the state under test was never reached').toHaveAttribute('data-open', 'true');
+    }
+    const frame = fieldsFrame(picker.startInput, picker.endInput);
+    return {...picker, frame, classes: classMap(picker.container), frameIndex: [picker.container, ...picker.container.querySelectorAll('*')].indexOf(frame)};
+}
+
+/** The quick-range buttons on the row, in drawing order. */
+function quickRow(container: HTMLElement): string[] {
+    return [...container.querySelectorAll('[data-testid^="date-preset-"]')].map((node) => node.getAttribute('data-testid') ?? '');
+}
+
+/** Mount, click each quick range on the row once — the custom window aside, which opens an editor — and note what each published, and how the row groups them. */
+async function quickRanges(props: Record<string, unknown> & K5aProps) {
+    const {onchange, container, unmount, view} = mountPicker(props);
+    const row = quickRow(container);
+    // The row's groups, in drawing order: the buttons that share a parent. The toolbar draws its
+    // groups as lines, so a button that changes group changes line.
+    const parents = [...new Set(row.map((testId) => view.getByTestId(testId).parentElement))];
+    const groups = parents.map((parent) => row.filter((testId) => view.getByTestId(testId).parentElement === parent));
+    const published: Record<string, unknown[][]> = {};
+    for (const testId of row.filter((id) => id !== 'date-preset-custom')) {
+        onchange.mockClear();
+        await fireEvent.click(view.getByTestId(testId));
+        published[testId] = onchange.mock.calls.map((call) => [...call]);
+    }
+    unmount();
+    return {row, groups, published};
+}
+
+describe('DateRangePicker — the caller’s class for the fields’ frame (k5a)', () => {
+    it.each(FRAME_STATES)('frames the fields exactly as today without it: $state', async ({props, open, classes}) => {
+        const {frame, root} = await frameInState(props, open);
+
+        expect(classesOf(frame), 'the frame every existing caller renders has changed').toEqual([...classes].sort());
+        // The frame is still the box right inside the trigger wrapper, as today.
+        expect(frame.parentElement?.classList.contains('drp-trigger'), 'the frame moved').toBe(true);
+        expect(root.contains(frame)).toBe(true);
+    });
+
+    it.each(FRAME_STATES)('appends fieldsClass to the frame, and to nothing else: $state', async ({props, open, classes}) => {
+        vi.setSystemTime(FROZEN_NOW);
+        try {
+            const today = await frameInState(props, open);
+            const baseline = today.classes;
+            today.unmount();
+
+            const {frame, classes: rendered, frameIndex} = await frameInState({...props, fieldsClass: 'h-7'}, open);
+
+            expect(classesOf(frame), 'fieldsClass did not reach the frame, or replaced classes it should have joined').toEqual([...classes, 'h-7'].sort());
+            // Nowhere else: the same render, element by element, with the one token on the frame.
+            expect(rendered, 'the render does not have the same elements with the class as without it').toHaveLength(baseline.length);
+            const changed = rendered.flatMap((tokens, index) => (tokens.join(' ') === baseline[index].join(' ') ? [] : [index]));
+            expect(changed, 'fieldsClass changed an element other than the frame').toEqual([frameIndex]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+describe('DateRangePicker — quick ranges a caller leaves out (k5a)', () => {
+    it.each(QUICK_LAYOUTS)('draws every quick range it draws today when none is left out: $layout', ({props, row}) => {
+        const {container} = mountPicker(props);
+
+        expect(quickRow(container), 'the quick ranges every existing caller draws have changed').toEqual(row);
+    });
+
+    it.each(QUICK_LAYOUTS)('leaves MAX out when asked, and every other range publishes the window it publishes today: $layout', async ({props, row}) => {
+        vi.setSystemTime(FROZEN_NOW);
+        try {
+            const today = await quickRanges(props);
+            // The premise: today the row is whole, and MAX publishes the sentinels the replay cannot resolve.
+            expect(today.row).toEqual(row);
+            expect(today.published['date-preset-max']).toEqual([['min', 'max']]);
+
+            const excludePresets: readonly QuickPreset[] = ['MAX'];
+            const withoutMax = await quickRanges({...props, excludePresets});
+
+            expect(withoutMax.row, 'MAX is still drawn, or another range went with it').toEqual(row.filter((id) => id !== 'date-preset-max'));
+            expect(withoutMax.groups, 'a range that stayed changed group').toEqual(today.groups.map((group) => group.filter((id) => id !== 'date-preset-max')).filter((group) => group.length > 0));
+            const others = Object.fromEntries(Object.entries(today.published).filter(([id]) => id !== 'date-preset-max'));
+            expect(withoutMax.published, 'a range that stayed publishes another window than it does today').toEqual(others);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('leaves out every range it is given, from the leading group and the trailing one alike, and moves none of the others', async () => {
+        // 1W leads the row and MAX trails it: the two are drawn by different parts of the
+        // template, so a list that reaches only one of them fails here. YTD stays, beside where
+        // MAX was: leaving a range out must not pull another into the group before it — in the
+        // toolbar a group is a line.
+        vi.setSystemTime(FROZEN_NOW);
+        try {
+            const today = await quickRanges({});
+            const excludePresets: readonly QuickPreset[] = ['1W', 'MAX'];
+            const gone = new Set(['date-preset-1w', 'date-preset-max']);
+
+            const trimmed = await quickRanges({excludePresets});
+
+            expect(trimmed.row, 'the row does not leave out exactly the ranges it was given').toEqual(QUICK_ROW.filter((id) => !gone.has(id)));
+            expect(trimmed.groups, 'a range that stayed changed group').toEqual(today.groups.map((group) => group.filter((id) => !gone.has(id))).filter((group) => group.length > 0));
+            expect(trimmed.published, 'a range that stayed publishes another window than it does today').toEqual(Object.fromEntries(Object.entries(today.published).filter(([id]) => !gone.has(id))));
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

@@ -12,31 +12,52 @@
 /**
  * L4Replay — component test (Vitest + jsdom).
  *
- * The replay block after F3 (developer's decision D372, 02/10/2026). Since 24/09
- * the engine leaves out, on its own, every holding whose quotes do not cover the
- * window, so the block has no question left to put to the reader: the "leave it
- * out and run again" blocker, its chips and the one-line audit are retired. What
- * the block says instead is read off the answer:
+ * The replay block after F3 (developer's decision D372, 02/10/2026), redrawn by
+ * D376 (05/10/2026, checkpoint k5a). Since 24/09 the engine leaves out, on its
+ * own, every holding whose quotes do not cover the window, so the block has no
+ * question left to put to the reader: the "leave it out and run again" blocker,
+ * its chips and the one-line audit are retired. What the block says instead is
+ * read off the answer:
  *
- *   1. **The period** is one `DateRangePicker`, without its quick presets — the
- *      crisis menu is this block's preset, and it opens where there is room. Run
- *      asks over exactly the window the picker shows, with nothing excluded by
- *      hand and no stand-in (proxies stay out of L4). Changing the dates or the
- *      crisis drops the answer on screen, as before.
- *   2. **What was left out, and why**: grouped by reason in the block's order,
- *      each asset named, with its share of the value when the scope has weights.
- *      The header names the treatment the payload carries — carried as cash at
- *      zero return on a weighted scope, omitted from the replay on a selection —
- *      and keeps the three-arm discipline the audit sentence had: all residual,
- *      all omitted, one of each.
- *   3. **The strong warning** — the replay describes only part of the
- *      portfolio — stands above the total it qualifies, in the warning's own
- *      words. That the section around the block stops repeating it is the
- *      mounts' half (`AssetSetReplaySection.test.ts`, `risk-analysis.spec.ts`).
- *   4. **Nothing left**: a sentence and the same groups, never a figure.
- *   5. **The common period** the backend verified is one button, and one click
+ *   1. **The period** is one `DateRangePicker`, with its quick ranges beside the
+ *      dates (D376 brings them back: it reverses F3's "no quick presets", at the
+ *      developer's request), and the crisis menu beside it, which opens where
+ *      there is room. The menu and the period are one height, and Run sits on a
+ *      line of its own below them, at its end (D376). Run asks over exactly the
+ *      window the picker shows, with nothing excluded by hand and no stand-in
+ *      (proxies stay out of L4). Changing the dates or the crisis drops the
+ *      answer on screen, as before.
+ *   2. **The crisis can be cleared** (D376): the menu offers «No preset», which
+ *      clears the crisis and keeps its dates; and a period that is no longer the
+ *      crisis's own — a quick range, a date typed by hand — clears it as well.
+ *   3. **What was left out, and why**: one box at the top as soon as an asset is
+ *      out — under the strong warning, above the total and the bars, with the
+ *      common period in it (D376) — grouped by reason in the block's order. Each
+ *      asset is an excluded `AssetChip`: its icon and its name from the session's
+ *      asset cache, the page's names as the fallback, and on a weighted scope its
+ *      share of the value after the name. The header names the treatment the
+ *      payload carries — carried as cash at zero return on a weighted scope,
+ *      omitted from the replay on a selection — and keeps the three-arm
+ *      discipline the audit sentence had: all residual, all omitted, one of each.
+ *   4. **The strong warning** — the replay describes only part of the
+ *      portfolio — stands above everything else, the total it qualifies
+ *      included, in the warning's own words. That the section around the block
+ *      stops repeating it is the mounts' half (`AssetSetReplaySection.test.ts`,
+ *      `risk-analysis.spec.ts`).
+ *   5. **The bars** are the assets replayed, each one, at whatever it did — a
+ *      holding that came out flat keeps its bar at zero. An asset left out has
+ *      no bar: since D376 the backend sends none, and it is named in the box.
+ *   6. **Nothing left**: a sentence and the same groups, never a figure.
+ *   7. **The common period** the backend verified is one button, and one click
  *      sets the dates *and* asks the question, once. Beside it, a note when that
  *      period is only part of the crisis the reader chose.
+ *
+ * **The one place this file reads classes: layout.** jsdom has no layout engine,
+ * so "one height" and "at the end of its line" cannot be measured here; they can
+ * only be read in the utilities that write them. The elements are still found by
+ * testid and by their place in the tree, never by class, and the two helpers that
+ * read classes (`declaredHeight`, `heldAtTheEnd`) say exactly which utilities
+ * count. What the eye sees is the human gate's to judge.
  *
  * **How a sentence is asserted without pinning one.** The UI ships in
  * EN/IT/FR/ES, so every expected sentence is resolved *from the shipped
@@ -61,9 +82,11 @@
  * left — are pinned by `scenarioHelpers.test.ts`, and restating them here would
  * make two copies of one rule that drift apart.
  *
- * Left elsewhere: the backend's treatment, weights and proposal
- * (`test_risk_analytics.py`), the section reading `replaySectionView`
- * (`AssetSetReplaySection.test.ts`), and the replay end to end
+ * Left elsewhere: the backend's treatment, weights and proposal, and since D376
+ * the replayed-only `impacts` (`test_risk_analytics.py`), the section reading
+ * `replaySectionView` (`AssetSetReplaySection.test.ts`), what an excluded chip
+ * looks like (`AssetChip.test.ts`), what each quick range means
+ * (`DateRangePicker.test.ts`), and the replay end to end
  * (`portfolio/risk-analysis.spec.ts`, `portfolio/risk-lab.spec.ts`).
  *
  * ⚠️ Every figure, name and date below is invented; the shapes are the backend's
@@ -95,6 +118,16 @@ vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
     };
 });
 
+// The excluded assets are drawn from the session's asset cache (D376): the real cache, seeded
+// per test through `mergeAssets` and emptied after each one. Only its two loaders are stubbed,
+// so a block that asks the cache to load never reaches the network — nor wipes the seed with
+// whatever a listener on jsdom's default origin would answer.
+vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('$lib/stores/reference/assetStore')>()),
+    ensureAssetsLoaded: vi.fn(async () => undefined),
+    refreshAllAssets: vi.fn(async () => undefined),
+}));
+
 import type {z} from 'zod';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {assertEffectsRun, effectRoot} from '$test/runes.svelte';
@@ -107,8 +140,11 @@ import itCatalogue from '$lib/i18n/it.json';
 import type {RiskQueryRequest} from '$lib/risk/riskRequest';
 import type {RiskResultMetadata, RiskStressOutput} from '$lib/risk/riskTypes';
 import {currentLanguage} from '$lib/stores/app/language';
+import {mergeAssets, resetAssetStore, type AssetInfo} from '$lib/stores/reference/assetStore';
 import {createRiskPanelController, type RiskControllerInputs, type RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+import {addMonths, todayIso} from '$lib/utils/dateOnly';
 import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
 import {warningSentence, type RiskResultWarning} from '../warningSentence';
 import L4Replay from './L4Replay.svelte';
@@ -208,6 +244,27 @@ const NEW_KEYS = [...Object.values(KEYS), ...Object.values(REASON_KEYS), REASON_
 const RETIRED_KEYS = ['replayNeedsChoice', 'replayProxyUnusable', 'replayExcludeAndRetry', 'replayExcluded', 'replayAudit', 'replayAuditOmitted'].map((name) => `${L4}.${name}`);
 /** Their handles. None may come back in any state the block can be in. */
 const RETIRED_TEST_IDS = ['risk-replay-blocker', 'risk-replay-exclude', 'risk-replay-exclusions', 'risk-replay-exclusion', 'risk-replay-audit'];
+
+/**
+ * The crisis menu's own entry that clears it (D376). The product adds the key; until it does,
+ * svelte-i18n echoes the id back on both sides, so the behaviour below finds the entry by the key
+ * itself — and the harness case is what says the sentence is missing from the catalogues.
+ */
+const NO_PRESET_KEY = `${L4}.replayPresetNone`;
+
+/** The quick ranges the picker always draws when they are on: the six core spans back from today. */
+const QUICK_RANGES = ['date-preset-1w', 'date-preset-1m', 'date-preset-3m', 'date-preset-6m', 'date-preset-1y', 'date-preset-2y'];
+
+/**
+ * The clock the quick-range case runs on: a local noon, far from either midnight, so "today"
+ * cannot change between the picker computing a range and this test reading it. Date only — the
+ * timers stay real, because `waitFor` and the controller run on them.
+ */
+const FROZEN_NOW = new Date(2026, 9, 6, 12, 0, 0);
+const FROZEN_TODAY = '2026-10-06';
+
+/** Height utilities that leave a box to its content instead of fixing it. */
+const CONTENT_HEIGHTS = new Set(['h-auto', 'h-fit', 'h-min', 'h-max']);
 
 const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
 
@@ -585,6 +642,123 @@ async function runAnsweringWith(proposal: ReplayWindow): Promise<ReplaySuggestio
     return suggestionOf(answers[0]);
 }
 
+/** Press Run with the next answer scripted as a clean replay over whatever window is asked, and end on its bars. */
+async function runOverWindowOnScreen(): Promise<void> {
+    replay.answer = (window) => replayed('portfolio', audit([]), {range: window});
+    await fireEvent.click(screen.getByTestId('risk-replay-run'));
+    await waitFor(() => expectBars(DEFAULT_BARS, 'the replay answer never reached the screen'));
+}
+
+/** The entries the crisis menu lists, in its order, each with whether it is the one chosen. Opens the menu and leaves it closed. */
+async function presetEntries(): Promise<{label: string; chosen: boolean}[]> {
+    const trigger = screen.getByTestId('risk-replay-preset-button');
+    await fireEvent.click(trigger);
+    const menu = screen.getByTestId('risk-replay-preset-dropdown');
+    const entries = within(menu)
+        .queryAllByRole('option')
+        .map((option) => ({label: normalize(option.textContent), chosen: option.getAttribute('aria-selected') === 'true'}));
+    await fireEvent.click(trigger);
+    return entries;
+}
+
+/**
+ * What the crisis menu holds as chosen, read the way a listbox states it — the entry marked
+ * `aria-selected` — or `null` when none is. Two chosen entries are a defect of their own.
+ */
+async function chosenPreset(): Promise<string | null> {
+    const chosen = (await presetEntries()).filter((entry) => entry.chosen).map((entry) => entry.label);
+    if (chosen.length > 1) throw new Error(`the crisis menu marks ${chosen.length} entries as chosen: ${JSON.stringify(chosen)}`);
+    return chosen[0] ?? null;
+}
+
+/** Choose «No preset» from the crisis menu, found by its catalogue sentence (or the echoed key, while the catalogue lacks it). */
+async function chooseNoPreset(): Promise<void> {
+    await fireEvent.click(screen.getByTestId('risk-replay-preset-button'));
+    const menu = screen.getByTestId('risk-replay-preset-dropdown');
+    const options = within(menu).queryAllByRole('option');
+    const entry = options.find((option) => normalize(option.textContent) === t(NO_PRESET_KEY));
+    if (!entry) throw new Error(`the crisis menu offers no «No preset» entry worded by ${NO_PRESET_KEY} (D376); it lists ${JSON.stringify(options.map((option) => normalize(option.textContent)))}`);
+    await fireEvent.click(entry);
+}
+
+/** One of the picker's quick ranges, inside the replay's period. */
+function quickRange(testId: string): HTMLElement {
+    const period = screen.getByTestId('risk-replay-period');
+    const button = within(period).queryByTestId(testId);
+    if (!button) throw new Error(`the period shows no ${testId} quick range: D376 brings the picker's quick ranges back beside the dates`);
+    return button;
+}
+
+/** The box that frames the two date fields: their nearest common ancestor. */
+function dateFieldsBox(): HTMLElement {
+    const {start, end} = periodInputs();
+    for (let node = start.parentElement; node; node = node.parentElement) if (node.contains(end)) return node;
+    throw new Error('the two date fields share no box');
+}
+
+/** The nearest element holding both. */
+function commonAncestor(first: Element, second: Element): Element {
+    for (let node = first.parentElement; node; node = node.parentElement) if (node.contains(second)) return node;
+    throw new Error('the two elements share no ancestor');
+}
+
+/**
+ * The height a box is explicitly given, as the utility that writes it, or `null` when the box is
+ * left to its content — its padding, line height and font. `h-full` hands the question to the
+ * parent, so it is followed up the tree. Only the unprefixed utilities count: the claim is about
+ * the box at every width, not at one breakpoint.
+ */
+function declaredHeight(box: Element): string | null {
+    for (let node: Element | null = box; node; node = node.parentElement) {
+        const heights = [...node.classList].filter((token) => token.startsWith('h-'));
+        const fixed = heights.find((token) => token !== 'h-full' && !CONTENT_HEIGHTS.has(token));
+        if (fixed) return fixed;
+        if (!heights.includes('h-full')) return null;
+    }
+    return null;
+}
+
+/**
+ * Whether `line` holds `child` at its end, read off the utilities that write it. A flex row does
+ * it with `justify-end`, or the child with an automatic start margin (`ml-auto`, `ms-auto`); a flex
+ * column with `items-end`, or the child with `self-end` or the same margin; a grid with
+ * `justify-items-end`, or the child with `justify-self-end`. Nothing else counts: `text-right` moves
+ * inline content only, and Run is a flex box.
+ */
+function heldAtTheEnd(child: Element, line: Element): boolean {
+    const own = new Set(line.classList);
+    const its = new Set(child.classList);
+    const pushesItself = its.has('ml-auto') || its.has('ms-auto');
+    if (own.has('flex') || own.has('inline-flex')) {
+        if (own.has('flex-col')) return own.has('items-end') || its.has('self-end') || pushesItself;
+        return own.has('justify-end') || pushesItself;
+    }
+    if (own.has('grid') || own.has('inline-grid')) return own.has('justify-items-end') || its.has('justify-self-end');
+    return false;
+}
+
+/** The testids of some elements, in the order a reader meets them. */
+function inDocumentOrder(...nodes: Element[]): string[] {
+    return [...nodes].sort((left, right) => (left === right ? 0 : left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)).map((node) => node.getAttribute('data-testid') ?? node.tagName);
+}
+
+/** Put assets in the session's asset cache, as the app's loaders would. Emptied after each test. */
+function seedAssets(assets: readonly AssetInfo[]): void {
+    mergeAssets(assets);
+}
+
+/** The chip of one excluded asset, wherever the block lists it. */
+function chipOf(root: HTMLElement, assetId: number): HTMLElement {
+    const chip = root.querySelector<HTMLElement>(`[data-testid="risk-replay-excluded-asset"][data-asset-id="${assetId}"]`);
+    if (!chip) throw new Error(`asset ${assetId} was left out of the replay and the block does not list it`);
+    return chip;
+}
+
+/** The element of a chip that holds the name and nothing else, or `null` when the name shares its element with something. */
+function nameHolder(chip: Element, name: string): Element | null {
+    return [...chip.querySelectorAll('*')].find((node) => normalize(node.textContent) === name) ?? null;
+}
+
 type AstNode = Record<string, unknown> & {type: string};
 
 function isAstNode(value: unknown): value is AstNode {
@@ -639,6 +813,9 @@ beforeEach(() => {
 
 afterEach(() => {
     while (stops.length > 0) stops.pop()?.();
+    resetAssetStore();
+    // Restores the clock `vi.setSystemTime` froze, even when the case that froze it failed half-way.
+    vi.useRealTimers();
 });
 
 describe('L4Replay — the harness itself', () => {
@@ -674,22 +851,37 @@ describe('L4Replay — the harness itself', () => {
         const leftovers = SUPPORTED_LOCALES.flatMap((code) => RETIRED_KEYS.filter((key) => at(CATALOGUES[code], key) !== undefined).map((key) => `${code}: ${key}`));
         expect(leftovers, 'sentences of the retired exclude-and-retry flow are still in the catalogues').toEqual([]);
     });
+
+    it('has the sentence of the «No preset» entry in every catalogue (D376)', () => {
+        // The behaviour below finds the entry by `$_` of its key, which would also find a menu
+        // printing the bare key: this is the case that says the sentence itself is missing.
+        const missing = SUPPORTED_LOCALES.filter((code) => {
+            const sentence = at(CATALOGUES[code], NO_PRESET_KEY);
+            return typeof sentence !== 'string' || sentence.trim() === '';
+        });
+        expect(missing, `${NO_PRESET_KEY} is missing from these catalogues: the crisis menu would offer its key as the entry`).toEqual([]);
+        expect(t(NO_PRESET_KEY), `${NO_PRESET_KEY} does not resolve: the catalogue is not loaded`).not.toBe(NO_PRESET_KEY);
+        // An entry worded like a crisis could not be told from one.
+        expect(t(NO_PRESET_KEY)).not.toBe(CRISIS.label);
+    });
 });
 
 describe('L4Replay — the period', () => {
-    it('is one range picker holding the panel’s window, without quick presets, under its own label', async () => {
+    it('is one range picker holding the panel’s window, its quick ranges beside the dates, under its own label', async () => {
         mount('portfolio');
 
         const period = screen.getByTestId('risk-replay-period');
-        // Barrier: the picker itself, inside the period, so the absences below are about it.
+        // Barrier: the picker itself, inside the period, so what follows is about it.
         expect(within(period).getByTestId('date-range-picker-root')).toBeInTheDocument();
         expect(await pickerWindow(), 'the picker does not hold the panel’s window').toEqual(WINDOW);
+        // D376 (05/10/2026) reverses F3's "no quick presets", at the developer's request: the
+        // shortcuts are back beside the dates, and the crisis menu stays the block's own preset.
         expect(
             within(period)
                 .queryAllByTestId(/^date-preset-/)
                 .map((node) => node.getAttribute('data-testid')),
-            'the picker shows its own quick presets: a second preset row beside the crisis menu, answering another question (how far back from today)',
-        ).toEqual([]);
+            'the period shows none of the picker’s quick ranges: D376 brings them back beside the dates',
+        ).toEqual(expect.arrayContaining(QUICK_RANGES));
         expect(period, `the period is not labelled by ${KEYS.period}`).toHaveTextContent(t(KEYS.period));
         // The two single-date pickers it replaces are gone from the whole block.
         expect(
@@ -697,6 +889,18 @@ describe('L4Replay — the period', () => {
             'the single-date pickers the range picker replaces are still mounted',
         ).toEqual([]);
         expectRetiredControlsGone();
+    });
+
+    it('offers no MAX («All») among its quick ranges, while YTD, drawn in the same group, is there', () => {
+        mount('portfolio');
+
+        const period = screen.getByTestId('risk-replay-period');
+        // The positive control: YTD trails the six core spans in the group MAX belongs to, so that
+        // group is drawn here, and the absence below is a statement rather than a gap in the render.
+        expect(within(period).queryAllByTestId('date-preset-ytd'), 'the period draws no YTD: the group MAX belongs to is not on screen, so its absence would prove nothing').toHaveLength(1);
+        // MAX asks for all of history through the picker’s «min»/«max» sentinels, which the page’s
+        // own date filter resolves: the replay has no period to resolve them to (D376).
+        expect(within(period).queryAllByTestId('date-preset-max'), 'the period offers MAX («All»), whose «all history» sentinels the replay cannot turn into a period (D376)').toHaveLength(0);
     });
 
     it('drops the answer on screen when its dates change, and the next run asks over the new window', async () => {
@@ -739,6 +943,130 @@ describe('L4Replay — the crisis menu', () => {
         const menus = componentsNamed(L4_REPLAY_SOURCE, 'SimpleSelect').filter((node) => constantAttribute(node, 'testId') === 'risk-replay-preset');
         expect(menus, 'L4Replay.svelte holds no SimpleSelect with testId="risk-replay-preset": this check would be reading nothing').toHaveLength(1);
         expect(constantAttribute(menus[0], 'dropdownPosition'), 'the crisis menu does not open where there is room').toBe('auto');
+    });
+
+    // D376 (05/10/2026): the crisis can be taken back. The menu says so with an entry of its own,
+    // «No preset», and a period that is no longer the crisis's own clears the crisis as well:
+    // the question on screen would otherwise wear the name of a crisis it no longer asks about.
+
+    it('offers «No preset», which clears the crisis and keeps its dates', async () => {
+        const controller = mount('portfolio');
+        await controller.loadScenarioCatalog();
+        await choosePreset(CRISIS.label);
+        // The premise: the crisis is the choice, and its dates are the period.
+        expect(await chosenPreset(), 'the crisis was chosen and the menu does not hold it').toBe(CRISIS.label);
+        expect(await pickerWindow()).toEqual({start: CRISIS.start, end: CRISIS.end});
+
+        await chooseNoPreset();
+
+        expect(await chosenPreset(), 'after «No preset» the menu still holds the crisis').toBe(t(NO_PRESET_KEY));
+        expect(await pickerWindow(), '«No preset» moved the dates: it clears the crisis and leaves the period as it is').toEqual({start: CRISIS.start, end: CRISIS.end});
+        expect(replay.asked, 'clearing the crisis asked a question by itself').toHaveLength(0);
+        await runOverWindowOnScreen();
+        expect(replay.asked.map(replayParameters), 'Run did not ask over the period «No preset» kept').toEqual([expectedParameters({start: CRISIS.start, end: CRISIS.end})]);
+    });
+
+    it('keeps the answer on screen when «No preset» clears the crisis: the period, and so the question, is the same', async () => {
+        const controller = mount('portfolio');
+        await controller.loadScenarioCatalog();
+        await choosePreset(CRISIS.label);
+        await runOverWindowOnScreen();
+        // The premise: the answer to the crisis is on screen, its total and its bars.
+        expect(replay.asked.map(replayParameters), 'the run did not ask over the crisis').toEqual([expectedParameters({start: CRISIS.start, end: CRISIS.end})]);
+        expect(screen.queryAllByTestId('risk-replay-total'), 'the answer to the crisis states no total').toHaveLength(1);
+        const answer = controller.replayResult;
+        // Watched from here on, so the crisis chosen above is not counted.
+        const resetAnalysis = vi.spyOn(controller, 'resetAnalysis');
+
+        await chooseNoPreset();
+
+        // Barrier: the menu holds «No preset», so the form did change under the answer.
+        expect(await chosenPreset(), 'after «No preset» the menu still holds the crisis').toBe(t(NO_PRESET_KEY));
+        expect(await pickerWindow(), '«No preset» moved the dates').toEqual({start: CRISIS.start, end: CRISIS.end});
+        expectBars(DEFAULT_BARS, '«No preset» took the answer’s bars off screen, though the period it answers did not move');
+        expect(screen.queryAllByTestId('risk-replay-total'), '«No preset» took the answer’s total off screen, though the period it answers did not move').toHaveLength(1);
+        expect(controller.replayResult, '«No preset» dropped or replaced the answer').toBe(answer);
+        expect(resetAnalysis, '«No preset» reset the replay: the same period is the same question (D376)').not.toHaveBeenCalled();
+        expect(replay.asked, '«No preset» asked a question by itself').toHaveLength(1);
+
+        // The positive control, on the same observation: a quick range does move the period, and
+        // the answer goes. So the green above is the answer staying, not a reset nobody could see.
+        await fireEvent.click(quickRange('date-preset-1y'));
+
+        await waitFor(() => expect(controller.replayResult, 'a quick range moved the period and the answer stayed').toBeNull());
+        expect(resetAnalysis, 'a quick range moved the period and the replay was not reset').toHaveBeenCalledWith('replay');
+        expect(barKeys()).toEqual([]);
+        expect(screen.queryAllByTestId('risk-replay-total')).toHaveLength(0);
+    });
+
+    it('is cleared by a quick range, which brings its own dates', async () => {
+        vi.setSystemTime(FROZEN_NOW);
+        expect(todayIso(), 'the clock did not freeze: "today" could move under the quick range').toBe(FROZEN_TODAY);
+        const controller = mount('portfolio');
+        await controller.loadScenarioCatalog();
+        await choosePreset(CRISIS.label);
+        expect(await chosenPreset(), 'the crisis was chosen and the menu does not hold it').toBe(CRISIS.label);
+
+        await fireEvent.click(quickRange('date-preset-1y'));
+
+        // A year back to today, as the picker defines its 1Y (`DateRangePicker.test.ts` owns that).
+        const lastYear: ReplayWindow = {start: addMonths(FROZEN_TODAY, -12), end: FROZEN_TODAY};
+        expect(await pickerWindow(), 'the quick range did not reach the picker').toEqual(lastYear);
+        expect(await chosenPreset(), 'a quick range left the crisis chosen, though the period is no longer the crisis').toBe(t(NO_PRESET_KEY));
+        await runOverWindowOnScreen();
+        expect(replay.asked.map(replayParameters), 'Run did not ask over the quick range the picker shows').toEqual([expectedParameters(lastYear)]);
+    });
+
+    it('is cleared by a date typed by hand, even inside the crisis', async () => {
+        const edited: ReplayWindow = {start: '2020-02-24', end: CRISIS.end};
+        const controller = mount('portfolio');
+        await controller.loadScenarioCatalog();
+        await choosePreset(CRISIS.label);
+        expect(await chosenPreset(), 'the crisis was chosen and the menu does not hold it').toBe(CRISIS.label);
+
+        await typeStart(edited.start);
+
+        expect(await pickerWindow(), 'the date typed by hand did not reach the picker').toEqual(edited);
+        expect(await chosenPreset(), 'a date typed by hand left the crisis chosen, though the period is no longer the crisis').toBe(t(NO_PRESET_KEY));
+        await runOverWindowOnScreen();
+        expect(replay.asked.map(replayParameters), 'Run did not ask over the window the reader edited').toEqual([expectedParameters(edited)]);
+    });
+});
+
+describe('L4Replay — the form’s layout (D376)', () => {
+    // jsdom lays nothing out: both cases read the utilities that write the layout, and find
+    // every element by testid and by its place in the tree (see the header).
+
+    it('draws the crisis menu and the period at one declared height', () => {
+        mount('portfolio');
+
+        // The two boxes a reader sees side by side: the menu's trigger, and the frame around the
+        // two date fields — not the period's label, nor the quick ranges above the fields.
+        const menu = screen.getByTestId('risk-replay-preset-button');
+        const fields = dateFieldsBox();
+        expect(within(screen.getByTestId('risk-replay-period')).getByTestId('date-range-picker-root').contains(fields), 'the date fields found are not the period’s').toBe(true);
+        const crisisMenu = declaredHeight(menu);
+        expect({crisisMenu, period: declaredHeight(fields)}, 'the crisis menu and the period are not drawn at one declared height: each box leaves its height to its own padding and font, and the two come out different (D376)').toEqual({crisisMenu: expect.stringMatching(/^h-/), period: crisisMenu});
+    });
+
+    it('puts Run on a line of its own, below the controls, held at its end', () => {
+        mount('portfolio');
+
+        const run = screen.getByTestId('risk-replay-run');
+        const preset = screen.getByTestId('risk-replay-preset');
+        const period = screen.getByTestId('risk-replay-period');
+        // The controls' line: the nearest element holding both the crisis menu and the period.
+        const controls = commonAncestor(preset, period);
+        const line = run.parentElement;
+        if (!line) throw new Error('Run is not mounted inside the block');
+
+        expect(controls.contains(run), 'Run still shares the line of the crisis menu and the period (D376: a line of its own)').toBe(false);
+        expect(
+            [preset, period].filter((control) => line.contains(control)).map((control) => control.getAttribute('data-testid')),
+            'Run’s container also holds a control of the form: it is not a line of its own',
+        ).toEqual([]);
+        expect(Boolean(controls.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING), 'Run’s line comes before the controls instead of below them').toBe(true);
+        expect(heldAtTheEnd(run, line), `Run’s line does not hold it at its end (line: "${line.className}"; Run: "${run.className}")`).toBe(true);
     });
 });
 
@@ -899,6 +1227,168 @@ describe('L4Replay — what the replay left out', () => {
     });
 });
 
+describe('L4Replay — the box of what was left out, at the top (D376)', () => {
+    // D376 (05/10/2026): as soon as one asset is out, the box that says who and why comes first —
+    // only the strong warning stands above it — and the common period that brings assets back is
+    // offered inside it, beside the assets it brings back.
+
+    it('stands under the strong warning and above the total and the bars, with the common period in it', () => {
+        const excluded = [residual(12, 'starts_after_window_start', 0.375), residual(13, 'no_prices_in_window', 0.25)];
+        const result = replayed('portfolio', audit(excluded, {suggested_range: {start: SUGGESTED.start, end: SUGGESTED.end}, suggested_range_recovers: [12]}), {warnings: [coverageWarning(0.625), ...exclusionWarnings(excluded)]});
+        mount('portfolio', result);
+        const exclusions = exclusionsOf(result);
+
+        // Barriers: every part is on screen and whole, so their order is a statement about each.
+        expectBars(DEFAULT_BARS);
+        const block = screen.getByTestId('risk-replay-excluded');
+        expectHeader('residual', exclusions);
+        expect(groupsOnScreen(block)).toEqual(groupsExpected(exclusions));
+        expectSuggestionButton(suggestionOf(result));
+
+        expect(inDocumentOrder(screen.getByTestId('risk-replay-tornado'), screen.getByTestId('risk-replay-total'), block, screen.getByTestId('risk-replay-coverage')), 'the box of what was left out is not at the top: D376 puts it under the strong warning and above the figures').toEqual([
+            'risk-replay-coverage',
+            'risk-replay-excluded',
+            'risk-replay-total',
+            'risk-replay-tornado',
+        ]);
+        expect(block.contains(screen.getByTestId('risk-replay-suggested')), 'the common period is not offered inside the box that names the assets it brings back').toBe(true);
+    });
+
+    it('stands above the bars on a selection, which has no total', () => {
+        const result = replayed('asset_set', audit([omitted(13, 'starts_after_window_start'), omitted(12, 'no_prices_in_window')], {suggested_range: {start: SUGGESTED.start, end: SUGGESTED.end}, suggested_range_recovers: [13]}));
+        mount('asset_set', result);
+        const exclusions = exclusionsOf(result);
+
+        expectBars(DEFAULT_BARS);
+        const block = screen.getByTestId('risk-replay-excluded');
+        expectHeader('omitted', exclusions);
+        expectSuggestionButton(suggestionOf(result));
+
+        expect(inDocumentOrder(screen.getByTestId('risk-replay-tornado'), block), 'the box of what was left out is not above the bars (D376)').toEqual(['risk-replay-excluded', 'risk-replay-tornado']);
+        expect(block.contains(screen.getByTestId('risk-replay-suggested')), 'the common period is not offered inside the box that names the assets it brings back').toBe(true);
+    });
+});
+
+describe('L4Replay — the assets left out, as badges (D376)', () => {
+    // Each asset left out is the shared `AssetChip` (F's, mounted here and never restyled) in its
+    // `excluded` variant, which it publishes as `data-variant`. Its icon and name come from the
+    // session's asset cache, the page's names being the fallback; a weight goes after the name,
+    // in the chip's trailing slot. The handles every other test reads stay as they were.
+
+    /** What the session's asset cache knows: two of the holdings below, invented like the rest. */
+    const CACHED_ICON = '/synthetic-icons/holding-d.svg';
+    const CACHED_NAME = 'Synthetic Holding E, as the asset cache names it';
+    const CACHE: AssetInfo[] = [
+        {id: 12, display_name: ASSET_NAMES[12], currency: 'EUR', asset_type: 'ETF', icon_url: CACHED_ICON, active: true},
+        {id: 13, display_name: CACHED_NAME, currency: 'EUR', asset_type: 'STOCK', icon_url: null, active: true},
+    ];
+
+    it('draws each one as an excluded chip: the cache’s icon and name, the page’s name as the fallback, the share after the name', () => {
+        seedAssets(CACHE);
+        const result = replayed('portfolio', audit([residual(12, 'no_prices_in_window', 0.25), residual(13, 'starts_after_window_start', 0.125), residual(15, 'stale_at_window_end', 0.0625), residual(UNNAMED, 'no_prices_in_window', 0.03125)]));
+        mount('portfolio', result);
+        const exclusions = exclusionsOf(result);
+
+        expectBars(DEFAULT_BARS);
+        const block = screen.getByTestId('risk-replay-excluded');
+        // Unchanged handles: the groups by reason, each asset under its id.
+        expect(groupsOnScreen(block)).toEqual(groupsExpected(exclusions));
+        const listed = exclusions.groups.flatMap((group) => group.assets);
+        expect(
+            listed.map((asset) => chipOf(block, asset.assetId).getAttribute('data-variant')),
+            'an asset left out is not drawn as the excluded AssetChip',
+        ).toEqual(listed.map(() => 'excluded'));
+
+        const expected: Record<number, {name: string; icon: string | null}> = {
+            // The cache's own icon.
+            12: {name: ASSET_NAMES[12], icon: CACHED_ICON},
+            // No icon of its own, so its type's; and the cache's name, over the page's.
+            13: {name: CACHED_NAME, icon: getAssetTypeIconUrl('STOCK')},
+            // Unknown to the cache: the page's name, and whatever icon the chip falls back to.
+            15: {name: ASSET_NAMES[15], icon: null},
+            // Unknown to both: the id.
+            [UNNAMED]: {name: `#${UNNAMED}`, icon: null},
+        };
+        for (const asset of listed) {
+            const chip = chipOf(block, asset.assetId);
+            const {name, icon} = expected[asset.assetId];
+            expect(chip).toHaveAttribute('data-weight', String(asset.weight));
+            const images = chip.querySelectorAll('img');
+            expect(images, `asset ${asset.assetId} is drawn without its icon`).toHaveLength(1);
+            if (icon !== null) expect(images[0].getAttribute('src'), `asset ${asset.assetId} does not take its icon from the session’s asset cache`).toBe(icon);
+            expect(nameHolder(chip, name), `asset ${asset.assetId} is not named ${JSON.stringify(name)} by an element of its own inside the chip`).not.toBeNull();
+            const text = normalize(chip.textContent);
+            expect(text.indexOf(formatReplayShare(asset.weight ?? Number.NaN, lang())), `asset ${asset.assetId}’s share is not written after its name, inside the chip`).toBeGreaterThan(text.indexOf(name));
+        }
+    });
+
+    it('draws them as the same chips on a selection, with no share at all', () => {
+        const result = replayed('asset_set', audit([omitted(13, 'starts_after_window_start'), omitted(UNNAMED, 'no_prices_in_window')]));
+        mount('asset_set', result);
+        const exclusions = exclusionsOf(result);
+
+        expectBars(DEFAULT_BARS);
+        const block = screen.getByTestId('risk-replay-excluded');
+        const listed = exclusions.groups.flatMap((group) => group.assets);
+        expect(
+            listed.map((asset) => chipOf(block, asset.assetId).getAttribute('data-variant')),
+            'an asset left out of a selection is not drawn as the excluded AssetChip',
+        ).toEqual(listed.map(() => 'excluded'));
+        for (const asset of listed) expect(chipOf(block, asset.assetId).querySelectorAll('img'), `asset ${asset.assetId} is drawn without its icon`).toHaveLength(1);
+        // Named, with no weight published and no share printed: the rules every exclusion case reads.
+        expectItems(block, exclusions);
+    });
+
+    it('draws the assets of a replay with nothing left as the same chips', () => {
+        const result = nothingLeft({
+            excluded_asset_ids: [12, 13],
+            excluded_assets: [
+                {asset_id: 12, reason: 'starts_after_window_start', weight: 0.5},
+                {asset_id: 13, reason: 'no_prices_in_window', weight: 0.25},
+            ],
+        });
+        mount('portfolio', result);
+        const exclusions = exclusionsOf(result);
+
+        // Barrier: the refusal was read as "nothing left".
+        const root = screen.getByTestId('risk-replay-nothing');
+        const listed = exclusions.groups.flatMap((group) => group.assets);
+        expect(
+            listed.map((asset) => chipOf(root, asset.assetId).getAttribute('data-variant')),
+            'an asset of a replay with nothing left is not drawn as the excluded AssetChip',
+        ).toEqual(listed.map(() => 'excluded'));
+        for (const asset of listed) expect(chipOf(root, asset.assetId).querySelectorAll('img'), `asset ${asset.assetId} is drawn without its icon`).toHaveLength(1);
+        expectItems(root, exclusions);
+    });
+});
+
+describe('L4Replay — the bars', () => {
+    it('draws every asset replayed, one that came out flat included, and none for an asset left out (D376 with D151)', () => {
+        // Since D376 the backend sends the replayed assets alone. Holding C lived through the
+        // window and ended where it started: 0% is its figure, not an abstention, so its bar
+        // stays. The bars follow who was replayed, never the value.
+        mount(
+            'portfolio',
+            replayed('portfolio', audit([residual(12, 'no_prices_in_window', 0.125)]), {
+                impacts: [
+                    [9, 0.05],
+                    [11, 0],
+                    [7, -0.2],
+                ],
+            }),
+        );
+
+        expectBars(['asset:7', 'asset:11', 'asset:9'], 'a replayed asset that came out flat lost its bar, or the bars stopped sorting by signed damage');
+        // The asset left out is named in the box, and only there.
+        expect(
+            within(screen.getByTestId('risk-replay-excluded'))
+                .getAllByTestId('risk-replay-excluded-asset')
+                .map((item) => item.getAttribute('data-asset-id')),
+        ).toEqual(['12']);
+        expect(barKeys(), 'an asset left out of the replay is drawn as a bar').not.toContain('asset:12');
+    });
+});
+
 describe('L4Replay — nothing left to replay', () => {
     it('says so, lists who and why with their shares, offers the common period, and draws no figure', () => {
         const result = nothingLeft({
@@ -1018,10 +1508,11 @@ describe('L4Replay — the note beside the common period', () => {
     });
 
     it('is not there once the chosen crisis was edited by hand, even inside its dates', async () => {
-        // The crisis stays chosen in the menu, but the question is no longer the crisis:
-        // the note speaks of the period that was asked, not of the preset still shown.
-        // Edited inside the crisis, and the proposal lies inside the crisis and is shorter
-        // than it — so "is a crisis chosen" and "was the crisis asked" give opposite answers.
+        // The question is no longer the crisis: the note speaks of the period that was asked.
+        // Edited inside the crisis, and the proposal lies inside the crisis and is shorter than
+        // it — so "the dates fall within the crisis" and "the crisis was asked" give opposite
+        // answers. (Since D376 the edit also clears the menu, which "the crisis menu" pins; the
+        // note must hold either way, so this case does not lean on it.)
         const edited: ReplayWindow = {start: '2020-02-24', end: CRISIS.end};
         const controller = mount('asset_set');
         await controller.loadScenarioCatalog();
