@@ -3468,14 +3468,37 @@
           "title": "Riesgo frente a rentabilidad, activo por activo",
           "portfolio": "Cartera",
           "axisVolatility": "Volatilidad anualizada",
-          "axisReturn": "Rentabilidad anualizada esperada",
+          "axisReturn": "Rentabilidad media anual",
           "line": "Recta riesgo-rentabilidad",
           "note": "Por encima de la recta significa mejor pagado por el riesgo asumido. Los puntos muestran la rentabilidad esperada en media-varianza, la magnitud en la que la pendiente de la recta es el ratio de Sharpe: en un activo muy volátil la rentabilidad realmente vivida es menor, porque la volatilidad erosiona la capitalización.",
-          "cash": "La liquidez ({share} del patrimonio) no es un punto: en el modelo rinde exactamente cero, y dibujarla la convertiría en una medición.",
-          "unpriced": "Las posiciones sin serie de precios ({share} del patrimonio) tampoco son puntos: no se han podido medir, y el modelo las mantiene con una rentabilidad exactamente cero."
+          "notes": {
+            "above": "Por encima de la recta: mejor pagado por el riesgo asumido.",
+            "line": "La recta parte del tipo sin riesgo y, sin índice de referencia, pasa por la cartera: su pendiente es el ratio de Sharpe de la cartera.",
+            "expected": "Los puntos usan la rentabilidad media anual:",
+            "size": "El tamaño de un punto es su peso en la cartera: los puntos grandes son los que más mueven el resultado.",
+            "outside": "No representado:",
+            "outsideCash": "liquidez {share}",
+            "outsideUnpriced": "posiciones sin precios {share}",
+            "expectedWarning": "en un activo muy volátil, la realmente vivida es más baja.",
+            "lineBenchmark": "La recta parte del tipo sin riesgo y pasa por el índice de referencia: su pendiente es el ratio de Sharpe del índice.",
+            "priceOnly": "La rentabilidad viene solo de los precios: los cupones y los dividendos aún no están incluidos.",
+            "lineDocs": "De dónde sale la recta, y qué índice de referencia elegir"
+          },
+          "tooltip": {
+            "weight": "Peso en la cartera: {share}",
+            "benchmark": "Índice de referencia",
+            "heldBenchmark": "Índice de referencia · en cartera, peso {share}"
+          }
         },
         "rows": {
           "kpi": "Sortino, Sharpe y volatilidad"
+        },
+        "volatilityHelp": "Cuánto oscila el rendimiento en un año, al alza y a la baja: mide la amplitud de los movimientos, no su dirección.",
+        "measures": {
+          "sortino": "rendimiento por riesgo a la baja",
+          "sharpe": "rendimiento por volatilidad total",
+          "volatility": "σ anualizada",
+          "beta": "sensibilidad al índice de referencia"
         }
       },
       "l4": {

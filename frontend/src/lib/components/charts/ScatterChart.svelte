@@ -140,12 +140,15 @@
                 tooltip: {
                     position: tooltipPositionAboveFinger,
                     confine: true,
-                    formatter: (params: {data?: {name?: string; value?: [number, number]}}) => {
+                    formatter: (params: {data?: {name?: string; value?: [number, number]; detail?: string}}) => {
                         const item = params.data;
                         if (!item?.value) return '';
                         const [volatility, annualReturn] = item.value;
                         const nameHtml = escapeHtml(String(item.name ?? ''));
-                        return [`<div style="font-weight:600">${nameHtml}</div>`, `<div style="margin-top:4px">${labels.volatility}: ${axisPercent(volatility)}</div>`, `<div>${labels.return}: ${formatPercent(annualReturn, {scale: 100, digits: 1})}</div>`].join('');
+                        // The caller's line — what the dot weighs, or that it is the benchmark —
+                        // sits under the name, because it says what the dot is before where.
+                        const detailHtml = item.detail ? `<div>${escapeHtml(item.detail)}</div>` : '';
+                        return [`<div style="font-weight:600">${nameHtml}</div>`, detailHtml, `<div style="margin-top:4px">${labels.volatility}: ${axisPercent(volatility)}</div>`, `<div>${labels.return}: ${formatPercent(annualReturn, {scale: 100, digits: 1})}</div>`].join('');
                     },
                 },
             },

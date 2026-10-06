@@ -1385,3 +1385,369 @@ commit del checkpoint 1.
 >   developer portavano le cifre che la UI gli mostrava. Da ora una citazione dalla UI sui dati veri passa dalla stessa
 >   regola delle mie note.
 > - Riscrivere la storia per `2b9362618` è una decisione del developer, via coordinator.
+
+### Checkpoint 5 committato · ✅ 05/10
+
+- **16:55 — Risk ha verificato il checkpoint 5**: blob 11/11; i18n +3 chiavi per lingua; lo spec aggiunge soltanto.
+  Previsione di fusione pulita con la punta Risk=F `8cb564ace` e con `dev_release2`: si sovrappongono solo i 4
+  cataloghi, con JSON valido. I miei due file vitest sull'albero congelato: 31 passed. `RiskMetricCard` lo usano ancora
+  solo L1–L3.
+- **Lo scatter è mio** (Risk corregge il messaggio delle 16:25): `charts/ScatterChart.svelte` e `scatterChartHelpers.ts`
+  sono miei secondo la tabella del 29/09, condivisi con il lab, **senza concessione**. Vale per la retta, il tooltip del
+  punto, il punto doppio, V6 e `SYMBOL_BY_ROLE`. Condizioni:
+  - prima le proposte al developer;
+  - fra i cancelli, `scatterChartHelpers.test.ts` (di F) ed E2E `risk-lab`;
+  - avvisare F prima di cominciare.
+- **Il buco del ritorno a capo**: accettato per il checkpoint 5, perché il diario lo dichiara. **Nel prossimo checkpoint**
+  va fissato, e la prova è che il mutante `line-clamp-2 → truncate` muoia. **Scelta di A**: in T5, lo stile calcolato della
+  didascalia. L'altra strada (una finestra stretta) non stringe la casella, perché a finestra stretta le schede si
+  impilano e si allargano.
+- **~17:00 — il developer approva il disegno delle 6 proposte** («Approvo tutto, così»):
+  1. **card L3**:
+     - il sottotitolo dice cosa misura: Sortino «rendimento per rischio al ribasso», Sharpe «rendimento per volatilità
+       totale», Beta «quanto segue il benchmark»; la volatilità resta «σ annualizzata»;
+     - il tooltip dell'icona del manuale è una frase su cos'è la metrica; il clic apre ancora il manuale;
+  2. **la nota sotto lo scatter** diventa un elenco corto, una riga per idea:
+     - sopra la retta;
+     - la retta parte dal tasso senza rischio e passa per il portafoglio, e la sua pendenza è lo Sharpe;
+     - rendimento atteso e rendimento vissuto;
+     - fuori dal grafico: liquidità · senza prezzi, a rendimento zero per ipotesi (solo le parti presenti);
+  3. **il tooltip del punto** dice il peso, e la legenda dice che la grandezza del punto è il peso;
+  4. **il benchmark posseduto** è un solo punto: quello dell'asset, grande quanto il peso, con lo stile del benchmark
+     (arancione, a rombo). Il tooltip dice «Benchmark · in portafoglio, peso …». Se non lo possiedi, resta il rombo da
+     solo, perché finalmente si applica `SYMBOL_BY_ROLE`;
+  5. **V6**: meno spazio vuoto a sinistra dello scatter, con la correzione del grafico di crescita (`cda9408d4`);
+  6. **la riga di stato di L4** dice «Replay storico: Parziale» invece di «Stress test: Parziale».
+
+  Nel lab cambiano solo il rombo del benchmark e il margine, perché lì il benchmark non è mai uno degli asset scelti.
+- **~17:35 — privacy** (sopra): Risk ha scansionato il checkpoint ricongelato, pulito; il coordinator l'ha ricontrollato.
+- **Committato** dal developer e verificato dal coordinator: `01bc97106` su `1629a27c5`, albero `b5b2fc3db`, 11 file,
+  blob e messaggio uguali al registro, albero di lavoro pulito (verificato anche da me).
+- **Per il prossimo giro (Risk, solo un commento)**: il commento di `RiskLevelsPanel.svelte:173` dice «An on-demand
+  answer discarded twice running». Va corretto in «discarded on every attempt», perché con il suo k3 (D374) il limite è
+  `RISK_DISCARD_ATTEMPTS = 3`.
+
+### Passo 13 — il ritorno a capo della didascalia, fissato · ✅ 05/10
+
+> **Note implementazione**:
+> - **test-author**: in T5 (`risk-analysis.spec.ts:2972`) un **controllo 4** legge in una sola `evaluate` lo stile calcolato
+>   della didascalia: `white-space` diverso da `nowrap` (`:3038`) e `-webkit-line-clamp` uguale a `2` (`:3039`). Il JSDoc
+>   dice perché: con le frasi di oggi la didascalia dello stub sta su una riga, quindi i controlli 1–2 sulla casella
+>   reggono anche con la didascalia tenuta su una riga. I controlli 1–3 e le barriere non cambiano.
+> - **Valori misurati da test-author** in un Chromium headless, con le regole esatte di Tailwind 4.1.18, senza server né
+>   corsia: con `line-clamp-2` → `normal` e `2`; con `truncate` → `nowrap` e `none`; senza la classe → `normal` e `none`.
+>   `display` **non** si asserisce: per la didascalia limitata Chromium riporta `flow-root`, non `-webkit-box`.
+> - **Verde sul codice di oggi** (6153, carico 15): 1 passed.
+> - **Mutanti** (ripristino verificato per sha256, poi `git diff` vuoto sul componente):
+>   - **A**, `line-clamp-2` → `truncate`: **ucciso**, rosso a `:3038` («held on one line», `Expected: not "nowrap"`);
+>   - **B**, `line-clamp-2` tolto: **ucciso**, rosso a `:3039` («no two-line clamp», `Received: "none"`).
+> - **Resta scoperto, dichiarato**: un `display` diverso che spegnesse il limite lasciando la classe passerebbe, finché la
+>   frase sta su una riga.
+
+### Passo 14 — le 6 proposte: decisioni, poi il codice da mostrare · 🔶 05/10
+
+> **Decisioni del developer (05/10)**:
+> - **V3** («Sì, a capo come la didascalia (chiude V3)»): su tutte le card L1–L3 anche il titolo e il sottotitolo vanno a
+>   capo, al massimo due righe, senza il tooltip nativo.
+> - **Lista dei test T6–T17 approvata**:
+>   - T6–T9: card di L3 e V3;
+>   - T10: la nota a elenco;
+>   - T11–T15: peso nel tooltip, benchmark posseduto, rombo, V6;
+>   - T16–T17: le etichette dello stato di L4.
+>
+>   La sua risposta, testuale: «i test mi vanno bene, ma io non li ho testati, devi ancora fare lo sviluppo o stavi già
+>   passando al test autor? ricorda che prima di avviarlo serve il mio via libera visivo!».
+> - **Ordine, quindi**:
+>   1. il codice;
+>   2. lui lo vede;
+>   3. con il suo via libera visivo parte test-author, come il 30/09;
+>   4. i rossi si provano contro il codice di prima.
+> - **Dove vederlo**: «Sui miei dati veri (copia dello snapshot, 6163)». La copia è privata (`700`), il server ascolta
+>   solo su 127.0.0.1, e si cancella alla fine.
+>
+> **Accordi presi prima del codice (05/10)**:
+> - **F**: lo scatter va bene per il lab, perché i suoi punti non portano mai `weight` né `detail`; il lab prende il rombo
+>   a misura fissa e il margine. Posso aggiungere test ai suoi due file dei grafici, lasciando come sono le asserzioni
+>   della selezione (`f6f11cb9c`). **Concessione su `assetSetI18n.test.ts:194-233`** (il commento che cita la nota
+>   vecchia e il controllo positivo): il controllo passa a `risk.levels.l3.scatter.notes.line`, meglio se su tutte e 4
+>   le lingue con `LINE_WORDS[locale]`, e `risk.levels.l3.scatter.note` esce dai cataloghi **nello stesso cambiamento**.
+>   Lo faccio insieme ai test, dopo il via libera visivo, così nel frattempo non si accende nessun rosso.
+> - **Risk e coordinator**: concessione su `_frontend_portfolio.py`, solo `L3RiskAdjusted.test.ts` nella lista e in
+>   `tests=` di `risk-levels-component`, più una frase nella `desc`. Le chiavi morte `l3.scatter.cash` e
+>   `l3.scatter.unpriced` si possono togliere: nessun altro le legge.
+> - **Coordinator, per la copia**: lo snapshot che c'è, di cui prima si ricontrolla l'impronta. Cartella con `mkdir -m 700`
+>   e `umask 077` **prima** di copiare: niente file leggibili da altri, neanche per un minuto. Server solo su
+>   `127.0.0.1:6163`, log dentro la copia, cancellazione con la prova di `lsof +D` e `ls`, nessuna cifra nel journal.
+>   Dopo la review, al prossimo checkpoint, si fonde k3 di Risk (`bb8d68ad2`).
+
+> **Note implementazione (codice, prima della review visiva)**:
+> - `RiskMetricCard`: nuova prop `docsHint` (il testo dell'ⓘ; senza, il titolo, quindi L1 e L2 non cambiano). Titolo e
+>   sottotitolo passano da `truncate` + `title` a `line-clamp-2` senza `title` (V3).
+> - `L3RiskAdjusted`:
+>   - sottotitoli `risk.levels.l3.measures.*`;
+>   - ⓘ con `sortinoHelp`/`sharpeHelp`/`betaHelp`, che esistevano e nessuno usava, più `volatilityHelp` nuova;
+>   - la nota è un elenco `<ul>` con lo stesso `risk-l3-scatter-note`: sopra la retta, la retta, atteso e vissuto, la
+>     grandezza = il peso, e la riga «fuori dal grafico» (`risk-l3-scatter-outside`) solo con liquidità o posizioni
+>     senza prezzo, con le parti `risk-l3-scatter-cash`/`-unpriced` di prima.
+> - `l3Helpers.buildRiskReturnPoints`: i dettagli del tooltip, composti dal chiamante; il benchmark posseduto diventa
+>   il punto della sua posizione (id `benchmark`, ruolo `benchmark`, peso e coordinate della posizione); quello non
+>   posseduto resta il punto del `comparison`.
+> - `scatterChartHelpers`: `detail` portato fino al dato; `SYMBOL_BY_ROLE` applicato; un rombo pesato ha l'area di un
+>   cerchio dello stesso peso (×√(π/2)), quello senza peso la misura fissa di prima. V6: `grid.left: '3%'` e il nome
+>   dell'asse y allineato a sinistra. `ScatterChart`: la riga `detail`, con escape, sotto il nome.
+> - `RiskLevelsPanel`: lo stato di L4 è etichettato per passo, nell'ordine dei blocchi, con chiavi `l4-<passo>`.
+>   `replayView` porta il gettone `replaySectionView` di Risk, invariato. Corretto il commento di `:173` (k3).
+> - i18n: 15 chiavi nuove × 4 lingue con `dev.py i18n add`; tolte `l3.scatter.cash` e `.unpriced`. Parità delle chiavi
+>   ok, diff dei cataloghi +84 −8.
+> - **Verdi**:
+>   - `front check` → 0/0;
+>   - vitest sui file toccati (scatter, ScatterChart, l3Helpers, RiskMetricCard, L2, i18n e sezione rischio/rendimento
+>     del lab) → 7 file · 170 test.
+
+### Review visiva 1 sui dati veri (6163) · 05/10
+
+> **Copia**: lo snapshot del coordinator, impronta ricontrollata prima (uguale alla sua); `umask 077` e `mkdir -m 700`
+> prima di copiare: 0 voci leggibili da altri. Server `--host 127.0.0.1 --port 6163`, log `600` dentro la copia;
+> ascolta solo su 127.0.0.1. Build dal mio albero di lavoro.
+
+> **Risposte del developer (05/10)**, testuali tranne le cifre e i nomi dei suoi dati (`[…]`):
+> - Card: «ok per le 4 card anche se forzerei il render per farle venire sempre in riga, 2x2 o in colonna, non come ora 3
+>   e poi 1 (alla larghezza di prova che ho usato.» · «lo spazio mi pare troppo, se spostassimo il ? e mettessimo il
+>   numero hero al suo posto ? renderemmo le card più basse.» · «i tooltip che hai messo nei vari ? sono perfetti».
+> - Nota: «le label sotto lo scatter ora vanno bene ma lasciale solo una sotto l'altra, senza bullet point.» · la riga
+>   sul rendimento atteso «la metterei alla 2° riga e la parte dell'asset molto volatile in grassetto» · l'ultima riga
+>   «la metterei come badge appena sotto il grafico […] magari con le emoji per liquidità e per l'asset, per dare
+>   colore.» · «Aggiungerei un punto che spiega la larghezza di un punto a cosa serve.»
+> - Tasso senza rischio: oggi la retta parte da zero («nessun investimento»); propone un parametro modificabile vicino al
+>   benchmark, con il suggerimento dei titoli di Stato a breve di un paese sicuro (BTP, BCE, Treasury USA).
+> - Retta: «è corretto che la retta passi per il portafoglio? non dovrebbe passare per il benchmark se è presente? […] il
+>   portafoglio come fallback se il benchmark non è selezionato direi». Il rombo: «carina l'idea».
+> - Periodo: «Non manca poi il selettore sul periodo temporale o quello è lavoro di F?».
+> - Replay: il preset scelto non si può più cancellare; nel periodo servirebbero anche i badge dei range; ci sono ancora
+>   gli asset fuori dal periodo storico (`[uscita del replay sui suoi dati, omessa]`); gli esclusi come badge con le icone
+>   dei loro asset, non come testo.
+
+> **Smistamento e decisione** (sua scelta: «Fai 1–7 e rimostrami; il tasso nel giro dopo (consigliato)»):
+> 1. le griglie delle card L1–L3 hanno righe sempre piene: il numero di colonne divide il numero di card (4: 4, 2 o 1;
+>    3: 3 o 1);
+> 2. card più basse: il numero grande in alto a destra al posto del «?», e il «?» accanto al titolo (tutte le card L1–L3);
+> 3. nota: una riga sotto l'altra, senza pallini; la riga sull'atteso diventa la seconda, con la parte sull'asset molto
+>    volatile in grassetto;
+> 4. «Non sono punti…» diventa un badge subito sotto il grafico, con un'emoji per la liquidità e una per le posizioni
+>    senza prezzo;
+> 5. la riga sulla grandezza dice anche a cosa serve;
+> 6. **la retta passa per il benchmark quando c'è**, il portafoglio è il ripiego, e la frase lo dice. In teoria la retta
+>    del mercato passa per il portafoglio di mercato, di cui il benchmark fa le veci. Nel lab non cambia: senza
+>    portafoglio la retta non c'è;
+> 7. il periodo esiste già: è il selettore in cima alla Dashboard, che il rischio usa (`dateRangeCtl`), e così sulla
+>    pagina di un broker.
+>
+> **Tasso senza rischio**: oggi è fisso a 0 sulla Dashboard (`RiskLevelsPanel.svelte:71`); il vecchio pannello aveva il
+> campo. Diventa un passo a sé nel giro dopo: è un calcolo che cambia Sharpe e Sortino, e va salvato e condiviso con le
+> pagine dei broker, come il benchmark. **A Risk**: i quattro punti del replay.
+
+> **Note implementazione (punti 1–7 della review 1)**:
+> - `RiskCardGrid`: righe sempre piene. Una volta a schermo misura quante colonne ci stanno e le abbassa al numero più
+>   grande che divide le card; prima della misura, o senza larghezza (scheda nascosta, jsdom), resta l'auto-fit.
+>   `ResizeObserver` (protetto, perché jsdom non lo ha) più `MutationObserver` sui figli, perché una card può comparire
+>   o sparire. Pubblica `data-columns`.
+> - `RiskMetricCard`: il numero in alto a destra, il «?» accanto al titolo; la riga va a capo solo se numero e titolo
+>   non ci stanno affiancati (titolo almeno `9rem`). Restano l'invisibilità del valore durante il caricamento e la sua
+>   identità.
+> - `capitalMarketLineAnchor` (nuova, in `scatterChartHelpers`): il benchmark quando c'è, altrimenti il portafoglio.
+>   Senza portafoglio la retta non c'è, quindi il lab resta senza. La riga della nota dice per quale punto passa
+>   (`risk-l3-scatter-line`, `data-anchor`).
+> - Nota: righe senza pallini; la seconda è sull'atteso, con l'avvertimento in `<strong>`; «fuori dal grafico» come
+>   badge sotto il grafico (rifatto subito dopo, vedi review 2).
+> - Verdi: `front check` 0/0; vitest sui file toccati → 7 · 170.
+
+### Review visiva 2 sui dati veri (6163) · 05/10
+
+> **Server ricostruito** sulla stessa copia (log `600` dentro la copia, solo 127.0.0.1).
+>
+> **Risposte del developer (05/10)**, testuali tranne le cifre e i nomi dei suoi dati (`[…]`):
+> - «sotto lo scatter non metterei la frase "Non sono punti" e non la metterei in un badge, scriverei come testo normale
+>   "Non Graficato: [liquidità] [asset] ....»
+> - sulla frase della retta: «capisco cosa intendi con "che fa le veci del mercato" ma non va detto qui, va spiegato nella
+>   pagina di manuale e sempre lì va detto che è bene cercare di prendere un indice globale apposta, qui salterei e
+>   andrei direttamente alla pendenza.»
+> - rendimento: un asset a cedola `[…]` risulta sotto lo zero perché conta solo il prezzo; «è corretto guardare solo il
+>   prezzo di mercato o bisognerebbe anche tenere conto delle rendite nel periodo?» — poi: «forse lo yoc che già
+>   calcoliamo potrebbe aiutare? […] se non ci sono transazioni registrate prendiamoci il prezzo per ora».
+> - card: «molto meglio, mi piacciono molto di più, nel beta magari non manderei a capo il nome dell'asset ma lo farei
+>   scorrere.»
+> - lab e tabella: «le label che sono applicabili scrivile anche là, e fallo a livello di componente […] non di wrapper
+>   se possibile, e sì fai la stessa cosa anche con la tabella, rendi il tutto un componente così che nel tempo se
+>   aggiorniamo uno aggiorniamo entrambi. […] nella tabella […] metti la paginazione se ci sono più di 5 righe, come
+>   facciamo di solito in tutte le altre tabelle. Sul come farlo mettetevi d'accordo tra di voi, la richiesta è chiara».
+> - «Lato L4 mi sono perso, chi lo sta facendo, risk come agente?» Risposta: il blocco del replay è di Risk (k5, D376);
+>   la riga di stato di L4 è mia, ed è in questo giro.
+
+> **Verificato in sola lettura (05/10)**:
+> - il rendimento per asset dell'analisi rischio viene **solo dai prezzi**: `get_prices_bulk`, poi i rendimenti semplici
+>   dei prezzi convertiti (`series_preparation.py:229`); cedole e dividendi incassati non entrano. È del backend, quindi
+>   va a Risk come proposta, con l'idea del developer (le rendite registrate, come lo YoC, e il prezzo come ripiego);
+> - il lab usa lo stesso `ScatterChart`, e la sua tabella (`78b9ba04f`) è nel mio ramo: non manca una fusione, la
+>   Dashboard non l'ha mai avuta.
+
+> **Chiusura della review 2**: server fermato, 6163 libera; **copia cancellata** con i log che conteneva (`lsof +D` vuoto
+> prima, poi `ls` → «No such file or directory»). Lo snapshot del coordinator resta. Per la prossima prova visiva, una
+> copia nuova con la stessa procedura.
+
+> **Note implementazione (punti della review 2, prima della pausa)**:
+> - «Non graficato:» (`notes.outside` aggiornata) è una riga di testo normale, la prima sotto il grafico: niente badge,
+>   le parti con 💰 e 🏷️ e i testid di prima.
+> - `notes.lineBenchmark`: va dritta alla pendenza; il perché finisce nel manuale (sotto, da fare).
+> - Beta: `RiskMetricCard` ha una nuova prop `captionScroll`. Con il benchmark la didascalia resta su una riga e scorre
+>   (`scrollOnOverflow`, `overflowScrollTextClass`, come i nomi degli asset nelle tabelle).
+> - Verdi: `front check` 0/0; vitest su card, L2, `l3Helpers`, scatter e `ScatterChart` → 5 · 87.
+
+> **Risposte dopo la review 2 (05/10)**:
+> - **Risk**: il rendimento totale è suo (backend, `series_preparation.py`). Cambia la base del rendimento, quindi
+>   prima porterà una proposta al developer, con queste opzioni:
+>   - le rendite per unità, prese dalle transazioni registrate e solo mentre l'asset è posseduto;
+>   - lo YoC come rendita annua;
+>   - più avanti, i prezzi rettificati dei provider.
+>
+>   Il prezzo resta il ripiego, e ogni risultato dichiara la sua base per asset. Viene dopo i suoi k4 e k5. **Fino ad
+>   allora**: le mie note che parlano del rendimento devono dire che le rendite non sono ancora incluse. Il componente
+>   condiviso gli va bene: la divisione fra me e F è nostra, e lui verifica. Le colonne per posizione sulla Dashboard
+>   arriveranno con un'opzione del suo controller, quando il developer le vorrà: gli porto il contratto.
+> - **F**: proposta inviata, risposta attesa.
+
+### Pausa · 05/10 18:45 — il developer stacca
+
+> **Coordinator**: fermarsi e salvare. La review sui suoi dati si rifà al suo rientro.
+> - **Stato**: HEAD `01bc97106` (checkpoint 5); 13 file sporchi, tutti miei o nelle concessioni: lo spec, `ScatterChart`,
+>   `scatterChartHelpers`, `L3RiskAdjusted`, `RiskLevelsPanel`, `l3Helpers`, `RiskCardGrid`, `RiskMetricCard`, i 4
+>   cataloghi e questo piano. Nessun commit.
+> - **Copia dei dati veri**: cancellata a fine review 2 e ricontrollata ora (`lsof +D` e `ls` → «No such file or
+>   directory»). Porte 6153 e 6163 libere, nessun comando in corso.
+> - **Fatto, da mostrare** (non ancora visto dal developer):
+>   - review 1: punti 1–7, cioè righe piene, card più basse e retta per il benchmark;
+>   - review 2: «Non graficato» come testo, frase della retta più corta, beta che scorre;
+>   - prima ancora: V3, i sottotitoli e le ⓘ di L3, il rombo e la sua area, `detail` nel tooltip, V6 e le etichette di
+>     L4;
+>   - il commento di Risk a `:173`.
+> - **Manca, in ordine**:
+>   1. **il componente condiviso con F** (`RiskReturnLevel`): tabella prima, poi scatter, note per capacità,
+>      paginazione oltre 5 righe, `testIdPrefix`. Da allineare il nome del rendimento («rendimento medio annuo» del
+>      lab). Le note sul rendimento dicono che le rendite non sono ancora incluse (Risk);
+>   2. **il manuale**: una sezione sulla retta, con il benchmark che fa le veci del mercato, la scelta di un indice
+>      globale e il ripiego sul portafoglio. Proposta: la pagina dello Sharpe, con un «?» accanto al titolo dello
+>      scatter. Prima va chiesto a Risk di chi è la pagina;
+>   3. **la review visiva da rifare** al rientro, con una copia nuova dello snapshot. La procedura v2 è salvata in
+>      `files/libreFolio_a_prodcopy_review.sh` nella cartella di sessione: impronta, `umask 077`, `mkdir -m 700`;
+>   4. **con il via libera visivo**, test-author scrive T6–T17 più i test del componente condiviso, e i rossi si provano
+>      contro il codice di prima. Concessioni già date:
+>      - `_frontend_portfolio.py`, per `L3RiskAdjusted.test.ts`, o per il file del componente condiviso: va riconfermato;
+>      - di F, `assetSetI18n.test.ts:194-233`, con `risk.levels.l3.scatter.note` tolta nello stesso cambiamento;
+>   5. **il checkpoint**, con la fusione di k3 di Risk (`bb8d68ad2`);
+>   6. **il giro dopo**: il tasso senza rischio modificabile, con l'analisi a Risk prima, perché lo store condiviso è suo.
+
+### Ripresa · 06/10 09:25
+
+> **Coordinator**: riprendere dal codice del giro; quando è pronto, review del developer sulla copia dei suoi dati con la
+> stessa procedura, **avvisandolo prima di creare la copia**. Carico alto della macchina (~26, servizi di sistema).
+> **Verificato**: HEAD `01bc97106`, 13 file sporchi, nessuna modifica dopo le 18:43 del 05/10, stage vuoto, 6153 e 6163
+> libere, impronta dello snapshot uguale a quella del coordinator.
+
+> **Durante la pausa (05/10 ~18:45)**:
+> - **F** ha risposto alla proposta del componente condiviso:
+>   - in linea di principio sì, e sì a «rendimento medio annuo» su tutte e due le pagine;
+>   - la risposta completa arriva dopo che ha controllato quattro fatti: quando compaiono Beta e Correlazione; quante
+>     righe usano i test di L3, rispetto alla paginazione a 5; se DataTable sa saltare alla pagina della riga di un
+>     punto; quali guardie leggono il sorgente della sua sezione;
+>   - **finché non siamo d'accordo non tocco i suoi file di L3**: `AssetSetRiskReturnSection.svelte` e il suo test,
+>     `AssetSetComparisonLevels.*`, `assetSetTable.ts`, `assetSetLevels.ts`, `assetSetI18n.test.ts` fuori da `:194-233`,
+>     `risk-lab.spec.ts`, `correlation.en.md`;
+>   - il suo ultimo giro, `174c467df`, tocca solo il suo journal (verificato in sola lettura).
+> - **A F, in coda per la sua sessione**: la retta passa per il benchmark quando c'è (`capitalMarketLineAnchor`), e nel
+>   lab non cambia niente. La sua guida, `correlation.en.md:113`, sulle pagine di portafoglio con benchmark diventa
+>   inesatta; il file è suo.
+
+### Passo 15 — l'ordine verso il componente condiviso, e i tre punti piccoli · 🔶 06/10
+
+> **Accordi (06/10)**:
+> - **F**: d'accordo su tutto. Io scrivo `RiskReturnLevel.svelte` con i suoi helper e i suoi test, e **nello stesso
+>   cambiamento** trasformo la sua `AssetSetRiskReturnSection` nel suo involucro, con la sua concessione.
+>   - **Passo 1, solo spostamento, senza paginazione**:
+>     - i `Props` della sua sezione restano uguali, e `AssetSetComparisonLevels` lega `tableRef`;
+>     - restano uguali tutti i testid `risk-asset-set-l3*`, `data-row-count` e `data-benchmark`;
+>     - i suoi test passano senza modifiche: `AssetSetRiskReturnSection.test.ts`,
+>       `AssetSetComparisonLevels.test.ts`, `assetSetLevels.test.ts` ed E2E `risk-lab`;
+>     - l'unica guardia sul sorgente è `assetSetI18n.test.ts:208-212`, dentro il blocco concesso;
+>     - le chiavi che escono da `risk.assetSet` perdono il controllo ICU e di parità di quel file, quindi lo
+>       riprendono i miei test.
+>   - **Nel suo involucro restano**: righe e punti (D371), la descrizione, i quattro stati con il loro riprova e il
+>     blocco del periodo.
+>   - **Le colonne si accendono con capacità esplicite**, mai «se qualche riga ha un valore»: Beta e Correlazione
+>     dipendono da `benchmarkApplies`, e nella riga di riferimento D371 mostrano un trattino con il tooltip
+>     `referenceItself`.
+>   - Nessun importo. F rivede il diff dei suoi file prima del mio checkpoint.
+>   - **La paginazione è il passo 2, da pianificare insieme**:
+>     - nelle sue fixture ci sono 6 e 12 righe;
+>     - circa dieci asserzioni E2E contano le celle contro `selected.length`;
+>     - `DataTable.navigateToRowId()` cambia pagina ma scorre anche fino alla riga, quindi serve un percorso «solo
+>       pagina», e `table/` è condiviso.
+> - **Base**: la sua punta `174c467df` **non è nel mio ramo**. Dalla base comune `2e2d21e76` cambiano la sua sezione
+>   (+91 righe), `assetSetLevels.ts` (+167), `AssetSetComparisonLevels.svelte`, `assetSetTable.ts` e i 4 cataloghi;
+>   porta anche k3 di Risk. Inoltre le mie 13 modifiche non committate, cataloghi compresi, impediscono la fusione.
+>   F non tocca più i suoi file di L3 fino al mio passo 1, e il suo giro 11 tocca solo il runner e il suo journal.
+> - **Coordinator**, ordine confermato:
+>   1. **checkpoint 6** con il codice del giro, verde, senza T6–T17 (il developer vuole i test solo dopo il suo via
+>      libera visivo);
+>   2. **nello stesso script**, `merge --no-ff` della punta di F di quel momento, che porta k3, simulato prima;
+>   3. validazione della revisione combinata con i miei cancelli più E2E `risk-lab`;
+>   4. il passo 1;
+>   5. la review sui suoi dati, avvisandolo prima della copia;
+>   6. test-author, poi il checkpoint 7.
+>
+>   La paginazione aspetta un'analisi a parte di `DataTable` e la sua concessione.
+> - **Risk, concessione sul manuale**: una sola sezione nuova, «The Risk/Return Line» (`#the-risk-return-line`), in
+>   `benchmark-selection.en.md`. La pagina è sua e solo in inglese. Formulazione richiesta: la retta parte dal tasso
+>   senza rischio che la pagina usa, oggi 0 su Dashboard e broker, e la frase si aggiorna nel giro del tasso
+>   modificabile. Ammessa una riga in «Related».
+
+> **Note implementazione (i tre punti piccoli)**:
+> - **Nome del rendimento**: «Rendimento medio annuo» come il lab, sull'asse (`scatter.axisReturn`) e nella nota
+>   (`notes.expected`). Valori allineati alle chiavi di F nelle 4 lingue.
+> - **Rendite** (Risk): una riga nuova `notes.priceOnly` («Il rendimento viene dai soli prezzi: cedole e dividendi non
+>   sono ancora inclusi»), `risk-l3-scatter-price-only`, sotto quella sul rendimento. **Da aggiornare** quando arriva il
+>   rendimento totale di Risk.
+> - **Manuale**: la riga della retta ha una ⓘ (`risk-l3-scatter-line-docs`, testo `notes.lineDocs`) verso
+>   `benchmark-selection/#the-risk-return-line`. La sezione la scrive docs-writer.
+> - **Verdi** (06/10):
+>   - `front check` → 0/0;
+>   - vitest sui file toccati → 7 · 170;
+>   - `risk-levels-unit` → 10 · 329; `risk-levels-component` → 5 · 126;
+>   - `core-unit` → 107 · 2896; `component-unit` → 100 · 2381;
+>   - `check-orphans` → OK;
+>   - E2E `risk` sul codice di ieri sera → 24 passed, con carico 15–21.
+> - **Manuale (docs-writer)**: in `benchmark-selection.en.md` una sezione nuova, «📈 The Risk/Return Line»
+>   (`#the-risk-return-line`), fra «The Shared Window» e «Limitations», più una riga in «Related» verso lo Sharpe, +31
+>   righe e nessuna tolta. Dice:
+>   - la retta parte dal tasso senza rischio che la pagina usa, oggi 0 su Dashboard e broker (formulazione di Risk);
+>   - passa per il benchmark, che fa le veci del mercato, e c'è la formula;
+>   - la pendenza è lo Sharpe del benchmark;
+>   - conviene un indice globale ampio;
+>   - senza benchmark il ripiego è il portafoglio;
+>   - il benchmark posseduto è un punto solo;
+>   - nella scheda Correlazione la retta non c'è;
+>   - un avviso «Prices only, for now».
+>
+>   Le scelte di docs-writer, verificate sul codice: «Correlation tab of the Assets page» e non «Asset Global», che non è
+>   in nessun testo dell'interfaccia; «the same rate as its Sharpe and Sortino figures»; il ripiego anche per un
+>   benchmark che non si è potuto misurare (`okOutput`). `mkdocs build` (strict) → 0 avvisi. `check-links` → l'unico
+>   rotto resta `#rolling-return`, ereditato; la nuova ancora risolve dal `DocsLink` di `L3RiskAdjusted`.
+>   ⚠️ **Da aggiornare**: la frase sul tasso nel giro del tasso modificabile, e l'avviso sui prezzi quando arriva il
+>   rendimento totale di Risk.
+> - **i18n audit** → 3536 chiavi, complete; nessuna chiave di `risk.levels.l3` fra le inutilizzate.
+> - **E2E** (06/10, 07:43–07:47 UTC, carico 16–30): `front-portfolio risk` → **24 passed**; `risk-lab` → **31 passed**.
+>   - **Provider**: nel log del backend, 7394 eventi nella finestra e **0 chiamate nel run di `risk`**.
+>   - Nel run di `risk-lab` c'è **una** chiamata vera, `fx_providers.snb` «SNB dimensions loaded»: un GET all'API SNB
+>     (`snb.py:21`) dallo spec di F, che non trattiene il catalogo FX. Non viene dal mio cambiamento. Segnalato a F, con
+>     `holdFxProviderCatalog` come modello.
+> - **Previsione di fusione con la punta di F `174c467df`** (base comune `2e2d21e76`): dei file che toccano entrambi i
+>   lati restano solo i 4 cataloghi. Simulati con `git merge-file`: **0 conflitti**, JSON valido, parità, 3544 chiavi,
+>   cioè l'unione dei due lati meno le chiavi tolte.

@@ -2956,12 +2956,18 @@ test.describe('Risk analysis functional integration', () => {
      * uncovered card is alone in an `auto-fit` grid and spans the whole level, some 900 px
      * here, where no caption is cut and the first two checks below would pass on width
      * alone. With them it is a third of the row — some 300 px here, near the grid's 17rem
-     * floor — where today's caption, one fixed sentence (54 characters in English, more in
-     * the other three catalogues) on one clipped line, overflows its box: the red this test
-     * has before the code lands is the first check's.
+     * floor — where the old caption, one fixed sentence (54 characters in English, more in
+     * the other three catalogues) on one clipped line, overflowed its box: the red this
+     * test had before the code landed was the first check's.
+     *
+     * With today's sentences the stub's caption fits that card on one line, so the first two
+     * checks hold even for a caption forced back onto one clipped line, or wrapped with no
+     * bound: there is no overflow for the first to find, and no third line for the second.
+     * The fourth check reads the caption's computed style, which declares the wrap and the
+     * two-line bound whatever the sentence's length.
      *
      * Nothing reads the sentence, which is translated. What is read is the caption's box,
-     * and one attribute.
+     * its computed style, and one attribute.
      */
     test('L2 wraps the uncovered caption within its card instead of cutting it, and drops the native tooltip', async ({page}) => {
         await installRiskMocks(page, {excludedWeight: 0.004, concentration: true});
@@ -3018,6 +3024,19 @@ test.describe('Risk analysis functional integration', () => {
         // 3. No native tooltip. The whole sentence is on the card, so a `title` would only repeat
         //    it in the browser's own box. Red: the caption still carries one.
         await expect(caption, 'the uncovered caption still carries a native title').not.toHaveAttribute('title');
+
+        // 4. Declared to wrap, and to stop at two lines. Today's sentence fits this card on one
+        //    line, so checks 1 and 2 also pass for a caption held on one clipped line, or wrapped
+        //    with no bound; the computed style says both whatever the sentence's length. Read
+        //    once, not polled: the class is static, and the width barrier above already needed
+        //    the stylesheet that carries it. Red on `white-space`: the caption is held on one
+        //    line, the way `truncate` holds it. Red on the clamp: nothing stops it at two lines.
+        const captionStyle = await caption.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {whiteSpace: style.whiteSpace, lineClamp: style.getPropertyValue('-webkit-line-clamp') || style.webkitLineClamp};
+        });
+        expect(captionStyle.whiteSpace, 'the uncovered caption is held on one line: its style does not let it wrap').not.toBe('nowrap');
+        expect(captionStyle.lineClamp, 'the uncovered caption has no two-line clamp: a longer sentence would run past two lines').toBe('2');
     });
 
     /**
