@@ -2392,6 +2392,47 @@ async function waitForLossTable(page: Page): Promise<void> {
 }
 
 /**
+ * L1°'s names as the reader meets them, as two lists of offenders — both empty when every name
+ * scrolls with its figures and may use its column's whole width (the developer's review 4 of
+ * 06/10/2026, «non li volevo fissi»):
+ *
+ *  - `pinned`: the assets whose name cell is drawn `position: sticky`, which is what DataTable's
+ *    `pinned: 'left'` is in a browser — the cell staying put while the row scrolls under it;
+ *  - `capped`: the assets whose name carries a computed `max-width` other than `none`, with the
+ *    value it carries — the 14rem an `auto` table needed so that its longest name would not set the
+ *    column's width, and which a `fixed` table, sized by the reader, does not.
+ *
+ * Read on the body cells only. The header row is sticky to the top on purpose (DataTable's
+ * `stickyHeader`), so a title cell's `position` says nothing about pinning: whether the asset title
+ * is pinned is the component test's, which reads the inline `left` DataTable writes on a pinned cell.
+ *
+ * It fails closed: an asset with no name cell of its own, in its own row, is listed in both.
+ * One read, not a retry: a caller polls it.
+ */
+async function lossNameOffenders(page: Page, assetIds: readonly number[]): Promise<{pinned: string[]; capped: string[]}> {
+    return lossTable(page).evaluate(
+        (root, ids) => {
+            const pinned: string[] = [];
+            const capped: string[] = [];
+            for (const id of ids) {
+                const names = root.querySelectorAll<HTMLElement>(`tbody tr[data-row-id="${id}"] [data-testid="risk-asset-set-l1-name"][data-asset-id="${id}"]`);
+                const cell = names.length === 1 ? names[0].closest('td') : null;
+                if (cell === null) {
+                    pinned.push(`asset ${id}: no name cell of its own`);
+                    capped.push(`asset ${id}: no name cell of its own`);
+                    continue;
+                }
+                if (getComputedStyle(cell).position === 'sticky') pinned.push(`asset ${id}`);
+                const maxWidth = getComputedStyle(names[0]).maxWidth;
+                if (maxWidth !== 'none') capped.push(`asset ${id}: max-width ${maxWidth}`);
+            }
+            return {pinned, capped};
+        },
+        [...assetIds],
+    );
+}
+
+/**
  * ─── L3° — "what did each of these pay for its risk?" ──────────────────────
  *
  * Since the developer's review of 30/09 L3°'s table is the project's DataTable, as L1°'s is, and
@@ -2443,6 +2484,71 @@ async function paidHeaderIds(page: Page): Promise<string[]> {
 async function waitForPaidTable(page: Page): Promise<void> {
     await expect(paidTable(page)).toBeVisible({timeout: 20_000});
     await expect(page.getByTestId('risk-asset-set-l3-loading')).toHaveCount(0);
+}
+
+/**
+ * ─── Both level tables: the reader sizes the columns (the developer's reviews of 06/10/2026) ───
+ *
+ * One rule for L1° and L3° since review 4, «stessi errori in risk lab»: the table is laid out
+ * `fixed` — DataTable's default, and the only layout in which a dragged width holds: under `auto` a
+ * table wider than its box keeps every column at its minimum, and a drag moved nothing — and every
+ * figure column opens exactly as wide as its own title in the reader's language, and no narrower
+ * (`headerWidth`). The reads below serve both levels' cases, so one piece of code holds the two
+ * tables to one rule.
+ */
+
+/**
+ * The figure columns of a level table whose title does not fit inside its `th`, by id; empty when
+ * every title fits. A title fits when it lies inside the cell's padding as drawn, and when it would
+ * fit at the column's own width too — the inline `width` DataTable writes on the cell, the width it
+ * is drawn at when the table has no room to spare.
+ *
+ * It fails closed: a column whose title cell is missing, or whose cell carries no inline width to
+ * hold the title against, is listed. Without that guard the own width is `NaN`, every comparison
+ * with it is false, and such a cell would pass for one its title fits.
+ *
+ * One read, not a retry: a caller polls it.
+ */
+async function titlesSpillingOut(table: Locator, columns: readonly string[]): Promise<string[]> {
+    return table.evaluate(
+        (root, ids) =>
+            ids.filter((column) => {
+                const cell = root.querySelector<HTMLElement>(`thead th[data-testid="dt-header-${column}"]`);
+                const title = cell?.querySelector<HTMLElement>(`[data-testid="dt-sort-${column}"]`);
+                if (!cell || !title) return true;
+                const style = getComputedStyle(cell);
+                const box = cell.getBoundingClientRect();
+                const drawn = title.getBoundingClientRect();
+                const inside = drawn.left >= box.left + parseFloat(style.paddingLeft) - 0.5 && drawn.right <= box.right - parseFloat(style.paddingRight) + 0.5;
+                const own = parseFloat(cell.style.width) - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+                if (!Number.isFinite(own)) return true;
+                return !inside || Math.max(title.scrollWidth, drawn.width) > own + 0.5;
+            }),
+        [...columns],
+    );
+}
+
+/**
+ * The point on a column's right edge where DataTable draws its resize handle — the last 6 px of the
+ * title cell — and whether the pointer there meets that handle, found by what it is to the pointer,
+ * `col-resize`, not by a class. The cell is scrolled into view first: the point is read off the
+ * screen. One read, not a retry.
+ */
+async function columnEdge(header: Locator): Promise<{x: number; y: number; handle: boolean}> {
+    await header.scrollIntoViewIfNeeded();
+    return header.evaluate((cell) => {
+        const box = cell.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.right - 3, box.top + box.height / 2);
+        return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
+    });
+}
+
+/** Press at `from`, drag `by` px to the right in small steps, as a hand does, and let go. */
+async function dragRight(page: Page, from: {x: number; y: number}, by: number): Promise<void> {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + by, from.y, {steps: 8});
+    await page.mouse.up();
 }
 
 /**
@@ -4822,6 +4928,16 @@ test.describe('Asset Global risk laboratory', () => {
      * The tooltip's words are not read: they are translated, and the component test
      * already proves each title shows its own key's message. What only a browser can
      * prove is that resting the pointer on the title opens it.
+     *
+     * And the reader sizes the columns — L3°'s rule, brought here by the developer's review 4
+     * of 06/10/2026, «stessi errori in risk lab»: the table is laid out `fixed`, the only layout
+     * in which a dragged width holds — under `auto` a table wider than its box kept every column
+     * at its minimum, and a drag moved nothing — and every figure column opens exactly as wide as
+     * its own title in the reader's language, and no narrower (`headerWidth`), which is what the
+     * `auto` layout was there for: DataTable draws its titles upper-case on one line, and a fixed
+     * width sized for Italian once let a French title spill out of its column. The reads are
+     * L3°'s own ({@link titlesSpillingOut}, {@link columnEdge}), so the two levels answer to one
+     * piece of code.
      */
     test("L1°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
         await installRiskMocks(page);
@@ -4837,6 +4953,22 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(lossTable(page).locator('thead a'), "a link in L1°'s header row: the documentation belongs to the frame's manual icon").toHaveCount(0);
         await expect(lossTable(page).locator('[data-testid^="dt-header-tooltip-"]'), 'an ⓘ beside a title: the help is the title itself').toHaveCount(0);
         await expect(page.locator('[data-testid^="risk-asset-set-l1-docs-"]')).toHaveCount(0);
+        // Laid out `fixed` since review 4, as L3° is: under `auto` a drag wrote a width the column ignored. What `auto`
+        // gave still holds, because each figure column opens as wide as its own title in the reader's language
+        // (`headerWidth`): every title fits inside its th, as drawn, and at the column's own width — the one it is
+        // drawn at when the table has no room to spare.
+        await expect(lossTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L1°'s table is not laid out fixed: a dragged width would not hold").toHaveCSS('table-layout', 'fixed');
+        await expect.poll(() => titlesSpillingOut(lossTable(page), L1_CELLS), {message: 'a title spills out of its th: its column opened narrower than its title'}).toEqual([]);
+        // And the reader sizes the columns: a drag on a figure column's edge changes its width, the edge found as on L3°.
+        const badDay = lossTable(page).getByTestId('dt-header-badDay');
+        const badDayWidth = () => badDay.evaluate((cell) => cell.getBoundingClientRect().width);
+        const widthBefore = await badDayWidth();
+        const edge = await columnEdge(badDay);
+        expect(edge.handle, 'no resize handle under the right edge of the bad-day title').toBe(true);
+        await dragRight(page, edge, 60);
+        await expect.poll(badDayWidth, {message: "a drag on the bad-day column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
+        // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
+        await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // The help itself, where the pointer rests. The Tooltip opens after its own hover
         // delay, which the retrying assertion absorbs: nothing here waits on a clock.
@@ -4943,6 +5075,13 @@ test.describe('Asset Global risk laboratory', () => {
      * name sits in the span the marquee attaches to — found by the marquee's own selector,
      * a hook rather than a style — and does not wrap: a long name scrolls instead of
      * pushing its row onto two lines, which is the point of the pattern.
+     *
+     * And the name scrolls with its figures (the developer's review 4 of 06/10/2026, «non li
+     * volevo fissi»): no name cell is pinned on the left, and no name is capped under its
+     * column — the 14rem cap was there for the `auto` layout, so that the longest name would
+     * not set the column's width; in a `fixed` table the reader sets it, and a name may use
+     * all of it. Both are read for every asset in one pass ({@link lossNameOffenders}),
+     * behind the barriers of the loop, so a red names every offender of both faults at once.
      */
     test('L1° names each asset with its type icon and a name that stays on one line', async ({page}) => {
         await installRiskMocks(page);
@@ -4966,6 +5105,8 @@ test.describe('Asset Global risk laboratory', () => {
             await expect(name, `asset ${assetId}: the name is empty`).not.toHaveText(/^\s*$/);
             await expect(name, `asset ${assetId}: the name wraps instead of scrolling`).toHaveCSS('white-space', 'nowrap');
         }
+
+        await expect.poll(() => lossNameOffenders(page, selected), {message: "L1°'s names must scroll with their figures and use their column's whole width: none pinned on the left, none capped"}).toEqual({pinned: [], capped: []});
     });
 
     /**
@@ -5064,7 +5205,8 @@ test.describe('Asset Global risk laboratory', () => {
      * And the titles fit: the table is laid out `fixed`, so a width the reader drags holds, and every
      * figure column opens exactly as wide as its own title in the reader's language, and no narrower
      * (`headerWidth`). DataTable draws its titles upper-case on one line, and a fixed layout sized
-     * for Italian let a French title spill out of its column on L1°.
+     * for Italian let a French title spill out of its column on L1°. The reads ({@link titlesSpillingOut},
+     * {@link columnEdge}) are shared with L1°'s case, held to the same rule since review 4.
      */
     test("L3°'s value columns carry their help as a tooltip on the title, and its header row carries no link", async ({page}) => {
         await installRiskMocks(page);
@@ -5085,43 +5227,15 @@ test.describe('Asset Global risk laboratory', () => {
         // column opens as wide as its own title in the reader's language (`headerWidth`): every title fits inside its th,
         // as drawn, and at the column's own width — the one it is drawn at when the table has no room to spare.
         await expect(paidTable(page).locator('table', {has: page.getByTestId('dt-header-name')}), "L3°'s table is not laid out fixed: a dragged width would not hold").toHaveCSS('table-layout', 'fixed');
-        await expect
-            .poll(
-                () =>
-                    paidTable(page).evaluate(
-                        (root, columns) =>
-                            columns.filter((column) => {
-                                const cell = root.querySelector<HTMLElement>(`thead th[data-testid="dt-header-${column}"]`);
-                                const title = cell?.querySelector<HTMLElement>(`[data-testid="dt-sort-${column}"]`);
-                                if (!cell || !title) return true;
-                                const style = getComputedStyle(cell);
-                                const box = cell.getBoundingClientRect();
-                                const drawn = title.getBoundingClientRect();
-                                const inside = drawn.left >= box.left + parseFloat(style.paddingLeft) - 0.5 && drawn.right <= box.right - parseFloat(style.paddingRight) + 0.5;
-                                const own = parseFloat(cell.style.width) - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-                                return !inside || Math.max(title.scrollWidth, drawn.width) > own + 0.5;
-                            }),
-                        [...L3_CELLS],
-                    ),
-                {message: 'a title spills out of its th: its column opened narrower than its title'},
-            )
-            .toEqual([]);
+        await expect.poll(() => titlesSpillingOut(paidTable(page), L3_CELLS), {message: 'a title spills out of its th: its column opened narrower than its title'}).toEqual([]);
         // And the reader sizes the columns: a drag on a figure column's edge changes its width. The edge is DataTable's
         // resize handle, the last 6 px of the title cell, found by what it is to the pointer — `col-resize` — not by a class.
         const volatility = paidTable(page).getByTestId('dt-header-volatility');
         const volatilityWidth = () => volatility.evaluate((cell) => cell.getBoundingClientRect().width);
         const widthBefore = await volatilityWidth();
-        await volatility.scrollIntoViewIfNeeded();
-        const edge = await volatility.evaluate((cell) => {
-            const box = cell.getBoundingClientRect();
-            const hit = document.elementFromPoint(box.right - 3, box.top + box.height / 2);
-            return {x: box.right - 3, y: box.top + box.height / 2, handle: hit !== null && hit !== cell && cell.contains(hit) && getComputedStyle(hit).cursor === 'col-resize'};
-        });
+        const edge = await columnEdge(volatility);
         expect(edge.handle, 'no resize handle under the right edge of the volatility title').toBe(true);
-        await page.mouse.move(edge.x, edge.y);
-        await page.mouse.down();
-        await page.mouse.move(edge.x + 60, edge.y, {steps: 8});
-        await page.mouse.up();
+        await dragRight(page, edge, 60);
         await expect.poll(volatilityWidth, {message: "a drag on the volatility column's edge did not change its width"}).toBeGreaterThan(widthBefore + 30);
         // The pointer rested on the edge it dragged, beside no title: no help is open before the one below is read.
         await expect(page.getByTestId('tooltip-content')).toHaveCount(0);

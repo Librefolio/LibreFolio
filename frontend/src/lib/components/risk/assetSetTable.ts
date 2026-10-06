@@ -36,27 +36,28 @@ export interface AssetSetTableRow {
  * The cell's HTML: `{prefix}-name` carries the asset id, `{prefix}-icon` appears only
  * when there is an icon URL.
  *
- * The content is capped (`max-w-56`) because an `auto` table widens a column to its
- * longest unbreakable content: without the cap the longest name would set the column's
- * width instead of scrolling inside it.
+ * No cap on the content: both tables that use it are laid out `fixed` (the developer's
+ * review, 06/10), so the column is as wide as the reader made it and a name may use all of
+ * it, scrolling inside it when it is longer. (An `auto` table needed `max-w-56`, or the
+ * longest name set the column's width.)
  */
 export function assetNameCellHtml(testIdPrefix: string, row: AssetSetTableRow, iconUrl: string | undefined): string {
     const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="h-5 w-5 shrink-0 object-contain" data-testid="${testIdPrefix}-icon" />` : '';
-    return `<div class="flex min-w-0 max-w-56 items-center gap-2" data-testid="${testIdPrefix}-name" data-asset-id="${row.assetId}">${iconHtml}<span class="min-w-0 flex-1 text-gray-700 dark:text-gray-200 ${overflowScrollTextClass}">${escapeHtml(row.name)}</span></div>`;
+    return `<div class="flex min-w-0 items-center gap-2" data-testid="${testIdPrefix}-name" data-asset-id="${row.assetId}">${iconHtml}<span class="min-w-0 flex-1 text-gray-700 dark:text-gray-200 ${overflowScrollTextClass}">${escapeHtml(row.name)}</span></div>`;
 }
 
 const compareNames = nameComparator();
 
 /**
- * The asset column, pinned on the left. `icons` is read at render time, so a map the
- * caller replaces reaches the cells without rebuilding the column.
+ * The asset column. Not pinned (the developer's review, 06/10: «non li volevo fissi»): the
+ * names scroll with their figures. `icons` is read at render time, so a map the caller
+ * replaces reaches the cells without rebuilding the column.
  */
 export function assetNameColumn<T extends AssetSetTableRow>(header: () => string, icons: () => ReadonlyMap<number, string>, testIdPrefix: string): ColumnDef<T> {
     return {
         id: 'name',
         header,
         type: 'text',
-        pinned: 'left',
         width: 220,
         minWidth: 140,
         filterable: false,
