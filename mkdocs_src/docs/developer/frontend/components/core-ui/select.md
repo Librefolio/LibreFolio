@@ -232,7 +232,9 @@ A specialized `SearchSelect` for currency selection.
 - Searchable by code, name, symbol (€, $, £), ISO-2 country codes and localized country names
 - Optional shortcuts at the top of the list — *All currencies* (`includeAll`), *Back to default*
   (`defaultCurrency`), *Original value* (`originalCurrency`) — and `configuredOnly`, which keeps only
-  the currencies reachable through a configured FX route
+  the currencies at either end of a configured FX pair (`fxRoutesStore.getConfiguredCurrencySet()`),
+  plus `value` and `defaultCurrency`; the currency a chain route passes through is left out, since
+  syncing a chain stores only the composed rate of its own pair
 
 **Used in**: currency fields across the app — FX pair creation (base/quote), broker form, asset
 modal, dashboard and asset detail target currency, settings.
