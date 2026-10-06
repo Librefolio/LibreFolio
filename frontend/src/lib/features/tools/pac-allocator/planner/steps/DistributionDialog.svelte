@@ -63,7 +63,7 @@
     function weightHelp(): string {
         const parts = [
             $t('tools.pacAllocator.planner.distribution.denominator', {default: 'Denominator: the Assets of the scenario; cash does not enter.'}),
-            $t('tools.pacAllocator.planner.distribution.differs', {default: 'If the scenario does not include all your Assets, the weights differ from the page.'}),
+            $t('tools.pacAllocator.planner.distribution.differs', {default: 'On the Dashboard, an Asset’s weight is measured against the whole portfolio, cash included, so it can differ from the weight here.'}),
         ];
         if (proposal?.quantumPercent) {
             parts.push($t('tools.pacAllocator.planner.distribution.quantum', {default: 'Weights to {quantum} points; the exact sum comes from the backend.', values: {quantum: formatPlannerPercentUnits(proposal.quantumPercent)}}));
@@ -201,7 +201,7 @@
                 <div>
                     <p class={LABEL_ROW}>
                         {$t('tools.pacAllocator.planner.distribution.brokers', {default: 'Brokers (OWNER only)'})}
-                        <HelpTip label={$t('tools.pacAllocator.planner.distribution.brokers', {default: 'Brokers (OWNER only)'})} help={$t('tools.pacAllocator.planner.distribution.source', {default: 'Source: portfolio engine (the values of the Allocation page).'})} />
+                        <HelpTip label={$t('tools.pacAllocator.planner.distribution.brokers', {default: 'Brokers (OWNER only)'})} help={$t('tools.pacAllocator.planner.distribution.source', {default: 'Source: the portfolio engine, the same calculation the Dashboard uses.'})} />
                     </p>
                     <OwnerBrokerPicker {scope} bind:selected testid="{testid}-scope" disabled={load.status === 'loading'} onchange={() => void read()} />
                 </div>
