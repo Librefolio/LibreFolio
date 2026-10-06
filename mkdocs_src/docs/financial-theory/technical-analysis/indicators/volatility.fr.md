@@ -42,11 +42,11 @@ Aucun de ces indicateurs ne vous dit si le prix va monter ou descendre. Ils vous
 
 ```mermaid
 flowchart LR
- C["💹 Clôture"] --> BB["📏 Bandes de Bollinger (enveloppe σ)"]
- HLC["📈 Plus haut / Plus bas / Clôture"] --> TR["🌡️ Plage réelle"]
- TR --> ATR["🌡️ ATR"]
- ATR -->|"÷ clôture × 100"| NATR["📐 NATR"]
- HL["📊 Plus haut / Plus bas"] --> DON["↔️ Canaux de Donchian"]
+    C["💹 Clôture"] --> BB["📏 Bandes de Bollinger (enveloppe σ)"]
+    HLC["📈 Plus haut / Plus bas / Clôture"] --> TR["🌡️ Plage réelle"]
+    TR --> ATR["🌡️ ATR"]
+    ATR -->|"÷ clôture × 100"| NATR["📐 NATR"]
+    HL["📊 Plus haut / Plus bas"] --> DON["↔️ Canaux de Donchian"]
 ```
 
 !!! note "Volatilité absolue vs relative"

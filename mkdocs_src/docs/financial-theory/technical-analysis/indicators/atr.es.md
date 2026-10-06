@@ -40,11 +40,11 @@ Tomar $\max(\cdot)$ de tres candidatos de diferencia absoluta es una forma de **
 
 ```mermaid
 flowchart LR
- H["📈 Máximo"] --> TR["🌡️ Rango Verdadero = max(H−L, |H−C_prev|, |L−C_prev|)"]
- L["📉 Mínimo"] --> TR
- Cp["💹 Cierre Anterior"] --> TR
- TR --> SMMA["🔁 SMMA(N)"]
- SMMA --> ATR["🌡️ ATR(t)"]
+    H["📈 Máximo"] --> TR["🌡️ Rango Verdadero = max(H−L, |H−C_prev|, |L−C_prev|)"]
+    L["📉 Mínimo"] --> TR
+    Cp["💹 Cierre Anterior"] --> TR
+    TR --> SMMA["🔁 SMMA(N)"]
+    SMMA --> ATR["🌡️ ATR(t)"]
 ```
 
 !!! tip "El ATR no tiene límite superior"

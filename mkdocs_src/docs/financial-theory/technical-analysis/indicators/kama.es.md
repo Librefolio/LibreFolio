@@ -56,12 +56,12 @@ KAMA es la misma **recurrencia IIR de primer orden** que la EMA, pero con una ga
 
 ```mermaid
 flowchart LR
- C["💹 Precio de cierre"] --> ER["📐 Ratio de Eficiencia (ventana N)"]
- ER --> SC["⚙️ Constante de suavizado adaptativa SC"]
- C --> REC["🔁 KAMA(t) = KAMA(t-1) + SC·(C(t) − KAMA(t-1))"]
- SC --> REC
- REC --> OUT["🛣️ KAMA(t)"]
- OUT -.->|"retroalimentación"| REC
+    C["💹 Precio de cierre"] --> ER["📐 Ratio de Eficiencia (ventana N)"]
+    ER --> SC["⚙️ Constante de suavizado adaptativa SC"]
+    C --> REC["🔁 KAMA(t) = KAMA(t-1) + SC·(C(t) − KAMA(t-1))"]
+    SC --> REC
+    REC --> OUT["🛣️ KAMA(t)"]
+    OUT -.->|"retroalimentación"| REC
 ```
 
 !!! tip "Polo en tendencia vs. lateral"

@@ -46,12 +46,12 @@ L'OBV est un **intégrateur** en temps discret (un accumulateur, l'équivalent n
 
 ```mermaid
 flowchart LR
- C["💹 Prix de clôture"] --> SGN["➕➖0️⃣ signe(ΔClôture)"]
- V["📦 Volume"] --> MUL["✖️ volume signé"]
- SGN --> MUL
- MUL --> ACC["🔁 Somme cumulée (intégrateur)"]
- ACC --> OBV["📊 OBV(t)"]
- ACC -.->|"rétroaction"| ACC
+    C["💹 Prix de clôture"] --> SGN["➕➖0️⃣ signe(ΔClôture)"]
+    V["📦 Volume"] --> MUL["✖️ volume signé"]
+    SGN --> MUL
+    MUL --> ACC["🔁 Somme cumulée (intégrateur)"]
+    ACC --> OBV["📊 OBV(t)"]
+    ACC -.->|"rétroaction"| ACC
 ```
 
 :material-link: [Volume en équilibre sur Wikipédia](https://en.wikipedia.org/wiki/On-balance_volume){ target="_blank" }

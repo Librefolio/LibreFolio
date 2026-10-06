@@ -48,15 +48,15 @@ L'uscita passa-banda del MACD (vedi [MACD](macd.md)) ha un'ampiezza che scala co
 
 ```mermaid
 flowchart LR
- C["💹 Chiusura"] --> EF["📉 EMA veloce"]
- C --> ES["📉 EMA lenta"]
- EF --> DIFF["➖ EMA veloce − EMA lenta"]
- ES --> DIFF
- DIFF --> AGC["🎚️ ÷ EMA lenta ×100 (AGC)"]
- AGC --> PPO["📐 Linea PPO"]
- PPO --> SIG["🔁 EMA(signalPeriod)"]
- PPO --> HIST["📊 Istogramma = PPO − Segnale"]
- SIG --> HIST
+    C["💹 Chiusura"] --> EF["📉 EMA veloce"]
+    C --> ES["📉 EMA lenta"]
+    EF --> DIFF["➖ EMA veloce − EMA lenta"]
+    ES --> DIFF
+    DIFF --> AGC["🎚️ ÷ EMA lenta ×100 (AGC)"]
+    AGC --> PPO["📐 Linea PPO"]
+    PPO --> SIG["🔁 EMA(signalPeriod)"]
+    PPO --> HIST["📊 Istogramma = PPO − Segnale"]
+    SIG --> HIST
 ```
 
 !!! info "Stessi incroci, scala diversa"
