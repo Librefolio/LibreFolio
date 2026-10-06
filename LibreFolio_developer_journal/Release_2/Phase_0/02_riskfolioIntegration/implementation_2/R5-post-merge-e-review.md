@@ -3234,12 +3234,118 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `2a4364724`. Nessuna voce di CHANGELOG da sola: l'utente vede i numeri con l'interfaccia di A, e la voce va con il
 > suo giro. **Stato: FROZEN**, consegnato al coordinator.
 
-### Checkpoint 5b, dopo k6: la tabella e il selettore degli strumenti (D376) · ⏳
+### Checkpoint 5b: la tabella e il selettore degli strumenti (D376, D377) · ✅ 06/10/2026 (FROZEN)
 
-> - La tabella prende il posto di `TornadoChart` ma ne tiene le props, così `L4Shock` di A non cambia, e tiene i testid
->   che leggono i test di F. Usa `DataTable` così com'è, con `enableColumnResize`: il file è riservato al cambio di F.
-> - In `L4WhatIf`, il selettore degli strumenti ricorda nel browser l'ultimo insieme aperto. Alla prima visita sono
->   aperti tutti e tre, come oggi.
+> **Le due domande al developer** (06/10, dopo il crash dell'app delle 14:18, che aveva perso la prima) → D377:
+> - alla prima visita, quando il browser non ricorda ancora niente: «Nessuno: solo il selettore». Il piano scritto
+>   qui diceva «tutti e tre, come oggi»: era una mia scelta per non toccare gli E2E di A, e non era stata chiesta;
+> - la × di uno strumento: «Si cancella», con la sua risposta; chiudere tutta la sezione L4 invece tiene le risposte,
+>   come oggi.
+>
+> **Il selettore** (`L4WhatIf.svelte`, mio):
+> - gli strumenti stanno sempre nell'ordine osservato → ipotizzato → modellato;
+> - sopra i riquadri c'è un pulsante «aggiungi» per ogni strumento chiuso; quando non ce n'è nessuno aperto, una riga
+>   spiega la scelta. Ogni riquadro aperto ha la sua ×;
+> - l'insieme aperto si ricorda per utente in questo browser (`getUserStorage`), con una chiave sola per la Dashboard
+>   e per il dettaglio broker;
+> - alla ×, `controller.resetAnalysis` sull'analisi dello strumento. Per questo `L4WhatIf` riceve il controller, e
+>   `RiskLevelsPanel` (di A) glielo deve passare: una riga, da concedere;
+> - con un solo strumento (il laboratorio di F) non ci sono né selettore né ×, e il riquadro si vede subito, come oggi;
+> - la sezione L4 smonta gli strumenti quando si chiude, quindi l'insieme aperto si rilegge dalla memoria quando si
+>   riapre.
+>
+> **La tabella** (`TornadoChart.svelte`, mio): prende il posto delle barre, con le stesse props, così `L4Shock` di A non
+> cambia, e con lo stesso nome di file, per non toccare il suo import.
+> - Monta `DataTable` così com'è (il file è riservato al cambio di F), senza selezione, azioni, filtri né paginazione,
+>   con le colonne ridimensionabili.
+> - Colonne: asset (icona e nome, che scorre se non ci sta), peso, rendimento dell'asset nel periodo, contributo,
+>   impatto in valuta, e la barra. Una colonna senza dati in nessuna riga non si mostra: nel laboratorio restano asset,
+>   rendimento e barra.
+> - La barra resta quella di oggi: una scala comune e la linea dello zero.
+> - `tornadoRows` aggiunge a ogni riga il rendimento proprio (`shock_return`, o lo `shock` del bucket) e il contributo.
+> - I testid restano: `{testId}` sul contenitore, `{testId}-row` con `data-row-key` sulla cella del nome,
+>   `{testId}-bar` con `data-sign`, `{testId}-value`. `DataTable` non mette attributi sulle righe, quindi stanno nelle
+>   celle, che sono due componenti nuovi miei.
+>
+> **Chi altro tocca**:
+> - A: la riga in `RiskLevelsPanel`; in `risk-analysis.spec.ts`, `openLevel4` che aggiunge i tre strumenti dal
+>   selettore, più un E2E del selettore (prima visita vuota, ricordo dopo il ricaricamento, la × che toglie la
+>   risposta). Due concessioni da chiedere;
+> - il coordinator: due file di test nuovi (`L4WhatIf.test.ts`, `l4/TornadoChart.test.ts`) da registrare in
+>   `risk-levels-component`, la stessa riga della richiesta di A per `L3RiskAdjusted.test.ts`: serve un solo scrittore;
+> - F: niente da cambiare, perché il laboratorio monta solo il replay e i testid restano. La sua pagina
+>   `correlation.en.md` dice «barre»: una frase da concedere quando arriva la doc.
+>
+> **Passi**: concessioni → rossi (test-author) → codice → cancelli e mutanti → doc → checkpoint.
+>
+> **Fatto il 06/10** (pomeriggio):
+> - **Concessioni**:
+>   - A: `RiskLevelsPanel.svelte:360` e lo spec, con le sue condizioni: prima visita in un contesto nuovo, solo
+>     testid, attese con ripetizione, tutto lo spec anche con `--workers 4`, e la patch dei suoi due file da fargli
+>     rivedere;
+>   - F: tre righe di `correlation.en.md` (139, 141, 143), con la forma dettata da lui per la 139;
+>   - il coordinator: la frase su `user/dashboard/index.en.md:17`, senza stamp (debito di traduzione per la fine del
+>     giro), e la riga di `risk-levels-component` nel runner, di cui ora sono l'unico scrittore.
+> - **Il fast-forward a `001bebf12`** (la punta di A, con k6 e il checkpoint 7 di A): fatto dal developer alle 14:51,
+>   con i due file del diario tenuti.
+> - **I rossi** (test-author): 38 su 147, nei tre file `scenarioHelpers.test.ts`, `TornadoChart.test.ts` (nuovo) e
+>   `L4WhatIf.test.ts` (nuovo); i due file di F e `L4Replay.test.ts` restano verdi. test-author ha anche provato i suoi
+>   test contro 26 versioni sbagliate, costruite fuori dal repository.
+> - **Il codice**: le bozze preparate in sessione, con una correzione dai test: ogni riga di un asset ha esattamente
+>   un'immagine, quella del tipo quando l'asset non ne ha una sua. Al primo giro 147/147, `svelte-check` 0/0, nove
+>   chiavi i18n nuove (3549 in tutto, nessuna mancante).
+> - **L'E2E** (test-author, nello spec di A): il vecchio `openLevel4` diventa `openLevel4Drawer`; il nuovo aggiunge
+>   gli strumenti ancora chiusi, ma solo dopo averne visto il pulsante o il riquadro. Il test del selettore copre la
+>   prima visita in un contesto nuovo, il ricordo dopo il ricaricamento e la × che toglie anche la riga di stato.
+>   Tutto lo spec dà 31/31, e 31/31 anche con `--workers 4`. I due punti che aprono L4 senza l'helper restano verdi
+>   senza modifiche.
+> - **La doc** (docs-writer):
+>   - la mia pagina di teoria: le barre diventano la tabella, con che cosa disegna la barra;
+>   - le tre righe di F, che lui ha verificato sul diff esportato;
+>   - la frase sulla Dashboard.
+>
+> **L'ordine della famiglia** (coordinator, 15:4x): k5b si committa per primo. L'ORDER di A fonde poi le punte pronte
+> (F 13-A, e k5b se è pronto) e F e io facciamo il fast-forward senza lavoro in corso. La sua prima idea era il
+> fast-forward con k5b in corso: sarebbe stato rifiutato, perché 6 miei percorsi sono in corso anche da A
+> (`RiskLevelsPanel`) e da F (i18n ×4, `correlation.en.md`). La fusione simulata dà 0 conflitti su tutti e 6.
+>
+> **Mutanti**: 23 sul prodotto vero, con il ripristino verificato dallo sha256. 22 muoiono al primo giro; R1 (il
+> pannello che non passa il controller) muore solo nell'E2E del selettore, perché dopo la × la riga di stato nomina
+> ancora il replay. Sopravvive W9: il suggerimento «nessuno strumento» resta anche con uno strumento aperto. Lo fissava
+> solo l'E2E di A; test-author aggiunge una prova unit con il controllo positivo, ed è **23/23** (vitest 148/148).
+>
+> **A ha approvato** la patch dei suoi due file (diff esportato in `/tmp/libreFolio_Risk_for_A/`). I blob di partenza
+> sono i suoi committati; `git apply --check` passa sul suo lavoro in corso, che contiene k6 nella L3.
+>
+> **⚠️ Fuori pista**:
+> - Il crash dell'app delle 14:18 ha interrotto la domanda al developer sulla prima visita; l'ho rifatta. La sua
+>   risposta, «nessuno», contraddice la riga del piano, che avevo scritto senza chiedergliela.
+> - Nella prima bozza della tabella un asset senza icona mostrava l'iniziale; i test di test-author vogliono sempre
+>   un'immagine. Ho preso quella del tipo, come `ContributionTable`, che vale anche per gli asset sconosciuti. Nella
+>   correzione avevo tolto per sbaglio l'`onerror` che nasconde un'icona rotta; l'ho rimesso, con `visibility` per
+>   non spostare il nome.
+> - Il docs-writer ha visto `L4WhatIf.svelte` cambiare tre volte fra le 15:37 e le 15:40 e ha sospettato una modifica
+>   di qualcun altro. Erano i miei mutanti, ognuno ripristinato e verificato; la frase della Dashboard è controllata
+>   sulla versione finale.
+> - Con il fast-forward mi sono arrivati anche il lavoro sulla L3 di A e la riga del runner con le sue registrazioni;
+>   su quella riga ora scrivo solo io.
+>
+> **Verifica** (corsia 6152, un comando alla volta, con un carico fra 30 e 106 per le altre corsie):
+> - `front build --debug` passa, con svelte-check 0/0 (chiesto dal coordinator, perché la L3 di A ora è sotto di me);
+> - `risk-levels-component` 202 (8 file, con i due nuovi e la L3 di A), `risk-levels-unit` 371,
+>   `risk-controller-unit` 96, `risk-unit` 20, `risk-frame-component` 13, `core-unit` 2972, `component-unit` 2611;
+> - `front check` 0/0; orfani a posto (303 file frontend raggiungibili); audit i18n 3549 chiavi, 0 incomplete;
+> - `mkdocs build` strict senza avvisi; `check-links` dà solo il rosso ereditato D28;
+> - E2E `risk` 31 (con test-author anche 31 con `--workers 4`), `risk-lab` 41, `risk-benchmark-shared` 4,
+>   `risk-asset-detail` 2; alla fine la 6152 è libera.
+>
+> Nessun percorso backend, né in k5b né nel fast-forward: niente cancelli backend.
+>
+> **Il debito di traduzione**: `user/dashboard/index.{it,fr,es}.md` non hanno la frase su «What if…?»; restano per la
+> traduzione di fine giro, come ha deciso il coordinator.
+>
+> **Il checkpoint**: 18 percorsi in 4 commit (selettore e tabella, lo spec di A, doc, diario), in `ORDER-risk-k5b.sh`
+> su HEAD `001bebf12`. **Stato: FROZEN**, consegnato al coordinator.
 >
 > **In coda**:
 > - la fase 2: contratto concordato con F il 06/10. `BenchmarkSelect` monta `AssetPickerPanel` in modalità single,
