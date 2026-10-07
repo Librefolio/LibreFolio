@@ -334,3 +334,176 @@ describe('RiskLevelSection — the actions slot: a click on an action is not a c
         expect(onfirstopen, 'a click on the action asked for the data again').toHaveBeenCalledTimes(1);
     });
 });
+
+// ─── The banner around what the level could not give ────────────────────────────────────────
+/*
+ * The developer's review of D378 (06/10/2026): «migliorerei con un banner il warning», on every
+ * page that draws a level («ovunque»). What a level could not give is said by up to three blocks —
+ * `-health` (the measurements that did not come back whole), `-errors` (the ones that never ran,
+ * by code) and `-reasons` (why, in the caller's sentences) — which stood as loose amber lines: a
+ * footnote, not the reason the level below is empty. They now sit in one banner, `{testId}-alert`,
+ * its icon beside them and never inside one. Four things are pinned:
+ *
+ *   - **One banner, around whatever there is.** Each block alone, and all three together, sit
+ *     inside exactly one banner; together they keep the frame's order — health, errors, reasons —
+ *     since a measurement that never ran explains the gap, and a warning only qualifies a number.
+ *   - **No problem, no banner.** A level with nothing to disclose draws none. The same mount then
+ *     draws one as soon as there is something to say, and drops it with the last thing: so the
+ *     absence is the frame's choice, not a frame that never draws a banner.
+ *   - **It opens the body.** Inside `{testId}-body`, before the level's own content.
+ *   - **The icon is the banner's.** No block carries it, so an error's line is its sentence and
+ *     nothing else.
+ *
+ * Read by testid, attribute and document order; no class, since how the banner looks is a
+ * browser's to measure. The error's sentence is resolved from the shipped catalogue through the
+ * same `$_` (`resolve`), and a reason is the caller's own words, which the frame shows as they are.
+ * The harness cases prove that the sentence compared is a real one, and that the probe content
+ * renders where the frame puts its children.
+ */
+
+/** The banner's testid. */
+const ALERT = `${TEST_ID}-alert`;
+/**
+ * A code with a sentence of its own. `translateErrorCode` words a code through
+ * `risk.errors.<code>`, and only a code missing from the catalogue falls back to
+ * `risk.errors.unknown`.
+ */
+const ERROR_CODE = 'insufficient_history';
+const ERROR_KEY = `risk.errors.${ERROR_CODE}`;
+const FALLBACK_ERROR_KEY = 'risk.errors.unknown';
+/** A reason as a caller words it: a finished sentence, shown as it is. */
+const REASON_SENTENCE = 'Synthetic reason sentence';
+/** The probe content's testid: the level's own children, which the banner must come before. */
+const CONTENT = 'probe-content';
+
+/** The banner's three blocks, in the order the frame draws them. */
+const BLOCKS = ['health', 'errors', 'reasons'] as const;
+type Block = (typeof BLOCKS)[number];
+
+/** What draws each block: one entry of its own kind, and nothing else. */
+const DISCLOSURES: Record<Block, Partial<FrameProps>> = {
+    health: {health: [{instanceId: 'synthetic-var', code: CODE, status: 'failed'}]},
+    errors: {errorCodes: [ERROR_CODE]},
+    reasons: {reasons: [{key: 'synthetic:reason', message: REASON_SENTENCE, occurrences: 2}]},
+};
+
+/** The props that draw every block in `blocks`. */
+function disclosing(blocks: readonly Block[]): Partial<FrameProps> {
+    return Object.assign({}, ...blocks.map((block) => DISCLOSURES[block]));
+}
+
+/** The level's own content as a caller passes it: a raw snippet, with a testid of its own. */
+function probeContent(): Snippet {
+    return createRawSnippet(() => ({render: () => `<p data-testid="${CONTENT}">probe content</p>`}));
+}
+
+/** The banner, which must be drawn exactly once. */
+function theAlert(): HTMLElement {
+    const drawn = screen.queryAllByTestId(ALERT);
+    expect(drawn, 'the level does not draw exactly one banner — none: the blocks stand loose again; two: a banner per block').toHaveLength(1);
+    return drawn[0];
+}
+
+/** One of the banner's blocks, which must be drawn exactly once. */
+function theBlock(block: Block): HTMLElement {
+    const drawn = screen.queryAllByTestId(`${TEST_ID}-${block}`);
+    expect(drawn, `the ${block} block is not drawn exactly once`).toHaveLength(1);
+    return drawn[0];
+}
+
+describe('RiskLevelSection — the banner: the harness itself', () => {
+    it("resolves the error's sentence, and that sentence is not the fallback a code missing from the catalogue prints", () => {
+        expect(typeof at(en, ERROR_KEY), `${ERROR_KEY} is missing from en.json`).toBe('string');
+        expect(resolve(ERROR_KEY), `${ERROR_KEY} does not resolve: the catalogue is not loaded`).not.toBe(ERROR_KEY);
+        // Were the two one sentence, an error line worded by the fallback would pass for the code's own.
+        expect(resolve(ERROR_KEY), `${ERROR_KEY} reads like ${FALLBACK_ERROR_KEY}: a code the frame failed to word could not be told from one it worded`).not.toBe(resolve(FALLBACK_ERROR_KEY));
+    });
+
+    it('the probe content renders where the frame puts its children: in the body', () => {
+        mountFrame({children: probeContent()});
+        const content = screen.queryAllByTestId(CONTENT);
+        expect(content, 'the probe content, passed as children, is not drawn exactly once').toHaveLength(1);
+        expect(screen.getByTestId(`${TEST_ID}-body`).contains(content[0]), 'the probe content is not in the body').toBe(true);
+    });
+});
+
+describe('RiskLevelSection — the banner around what the level could not give', () => {
+    const ALONE_AND_TOGETHER: Array<{label: string; blocks: readonly Block[]}> = [
+        {label: 'the health line alone', blocks: ['health']},
+        {label: 'the errors alone', blocks: ['errors']},
+        {label: 'the reasons alone', blocks: ['reasons']},
+        {label: 'all three blocks', blocks: BLOCKS},
+    ];
+
+    for (const {label, blocks} of ALONE_AND_TOGETHER) {
+        it(`holds ${label} in exactly one banner`, () => {
+            mountFrame(disclosing(blocks));
+            const alert = theAlert();
+            for (const block of BLOCKS) {
+                if (blocks.includes(block)) {
+                    expect(alert.contains(theBlock(block)), `the ${block} block is outside the banner`).toBe(true);
+                } else {
+                    expect(screen.queryByTestId(`${TEST_ID}-${block}`), `the ${block} block is drawn with nothing to say`).toBeNull();
+                }
+            }
+        });
+    }
+
+    it('keeps the three blocks in the order the frame gives them: health, errors, reasons', () => {
+        mountFrame(disclosing(BLOCKS));
+        const alert = theAlert();
+        const [health, errors, reasons] = BLOCKS.map((block) => theBlock(block));
+        for (const block of [health, errors, reasons]) expect(alert.contains(block), `${block.getAttribute('data-testid')} is outside the banner`).toBe(true);
+        expect(precedes(health, errors), 'the errors come before the health line').toBe(true);
+        expect(precedes(errors, reasons), 'the reasons come before the errors').toBe(true);
+    });
+
+    it('draws no banner for a level with nothing to disclose — one as soon as there is something, and none again after the last', async () => {
+        const props: FrameProps = {title: 'Synthetic level title', lead: 'Synthetic lead sentence', level: 2, testId: TEST_ID, children: probeContent(), health: [], errorCodes: [], reasons: []};
+        const {rerender} = render(RiskLevelSection, {props});
+        // Barrier: the body is drawn, with the level's own content in it — the frame is open and has rendered.
+        expect(screen.getByTestId(`${TEST_ID}-body`).contains(screen.getByTestId(CONTENT)), "premise: the level's content is drawn in its body").toBe(true);
+        expect(screen.queryAllByTestId(ALERT), 'a level with nothing to disclose draws a banner').toHaveLength(0);
+
+        // The control: given something to say, the same mount draws the banner — so the absence above
+        // is the frame's choice, not a frame that never draws one.
+        await rerender(disclosing(['health']));
+        expect(theAlert().contains(theBlock('health')), 'the health line is outside the banner').toBe(true);
+
+        // …and the banner goes with the last thing it had to say, the level's content staying.
+        await rerender({health: []});
+        expect(screen.getByTestId(`${TEST_ID}-body`).contains(screen.getByTestId(CONTENT)), "the level's content left with the banner").toBe(true);
+        expect(screen.queryAllByTestId(ALERT), 'the banner outlived the last thing it disclosed').toHaveLength(0);
+    });
+
+    it("opens the body: inside it, and before the level's own content", () => {
+        mountFrame({...disclosing(BLOCKS), children: probeContent()});
+        const alert = theAlert();
+        const body = screen.getByTestId(`${TEST_ID}-body`);
+        const content = screen.getByTestId(CONTENT);
+        expect(body.contains(alert), 'the banner is outside the body').toBe(true);
+        expect(alert.contains(content), "the level's content is inside the banner").toBe(false);
+        expect(precedes(alert, content), "the banner does not come before the level's content").toBe(true);
+    });
+
+    it("keeps its icon outside the three blocks: an error's line is its sentence, and nothing else", () => {
+        mountFrame(disclosing(BLOCKS));
+        const alert = theAlert();
+        const icon = alert.firstElementChild;
+        expect(icon?.tagName.toLowerCase(), 'the banner does not open with its icon').toBe('svg');
+        for (const block of BLOCKS) {
+            const element = theBlock(block);
+            expect(element.contains(icon), `the icon is inside the ${block} block`).toBe(false);
+            expect(element.querySelector('svg'), `the ${block} block draws an icon of its own`).toBeNull();
+        }
+
+        const errors = screen.getAllByTestId(`${TEST_ID}-error`);
+        expect(errors, 'premise: one error line per code given').toHaveLength(1);
+        expect(errors[0], 'premise: the error line carries its code').toHaveAttribute('data-code', ERROR_CODE);
+        expect(normalize(errors[0].textContent), `the error line is not exactly the sentence of ${ERROR_KEY}`).toBe(resolve(ERROR_KEY));
+        // The two siblings, which the banner leaves as they were: a reason is the caller's sentence, the
+        // health line the measurement's name and state.
+        expect(normalize(screen.getByTestId(`${TEST_ID}-reason`).textContent), 'the reason line is not exactly its sentence').toBe(REASON_SENTENCE);
+        expect(normalize(theBlock('health').textContent), 'the health line is not exactly its entry').toBe(`${resolve(NAME_KEY)}: ${resolve(FAILED_KEY)}`);
+    });
+});
