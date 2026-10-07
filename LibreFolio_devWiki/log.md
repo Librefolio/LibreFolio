@@ -2187,3 +2187,10 @@ out of the walk, backend codes in any spelling or starting with a digit, and mul
 proved dead, and it was removed with the batch.
 Updated: [[problems/i18n-audit-false-dead-and-false-used]].
 Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-07] file | A slow language switch tore the whole app down
+Triage of the auth 3a coverage red: both layouts unmounted the app on every svelte-i18n `isLoading`, so a
+Welcome language preview whose catalogue took more than 200 ms was rebuilt back to the persisted language.
+Fixed with a first-dictionary latch; regression E2E 3c and a layout unit case.
+Filed: [[problems/i18n-loading-gate-remounts-app]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.

@@ -846,6 +846,50 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - Correzione proposta, in attesa dell'autorizzazione: i layout mostrano il segnaposto solo fino al
   >   primo dizionario pronto, poi l'app resta montata; `data-i18n-ready` continua a segnalare il caricamento.
   >   Il test-author scrive un E2E di regressione, rosso prima del fix.
+  >
+  > Decisione del developer (16:29): «Approva tutte e tre le correzioni», cioè segnaposto solo per il
+  > primo dizionario, commento corretto ed E2E rosso prima; 3a non si tocca → S17.
+- **S17** ✅ 2026-10-07 — Correzione: un cambio lingua non rimonta più l'app. Base `1cad0d628`, sopra il
+  checkpoint di sicurezza (`95293ab51` · `1cad0d628`, verificato con i blob). Checkpoint a parte.
+  > **Note implementazione**:
+  > - **test-author**, rosso prima del fix:
+  >   - nuovo E2E `3c: a Welcome language whose catalogue arrives late survives the load…` in
+  >     `auth.spec.ts` (+107), con 3a intatto. Il chunk italiano viene trovato per contenuto nel build,
+  >     leggendo il marcatore da `it.json`. La route lo trattiene finché `data-i18n-ready="false"` non è
+  >     a schermo: niente orologio.
+  >   - Barriera verde: chunk trattenuto e `ready=false` osservato.
+  >   - Contratto rosso: form diverso (soft) e `lang` `en` invece di `it`, 10 letture
+  >     (`/tmp/libreFolio_o_remount_e2e_red2.log`).
+  >   - Caso unitario in `layout.gate.test.ts` (+31/−1, il mock di `i18nLoading` diventa writable): rosso,
+  >     1 su 409 (`/tmp/libreFolio_o_remount_unit_red.log`).
+  > - **fix**:
+  >   - `routes/+layout.svelte` e `(app)/+layout.svelte`: `let i18nBooted = false; $: if (!$i18nLoading)
+  >     i18nBooted = true;`, e `{#if $i18nLoading}` → `{#if !i18nBooted}`;
+  >   - corretto il commento su `data-i18n-ready`;
+  >   - nessun export nuovo da `$lib/i18n`, quindi il mock del gate non va toccato.
+  > - **gate**, uno per volta sulla 6160 (il rebuild del frontend l'ha fatto l'avvio del backend: build
+  >   delle 16:56, dopo le modifiche, con `i18nBooted` nei nodi 0 e 2):
+  >
+  > | Comando | Esito | Log |
+  > |---|---|---|
+  > | `test … front-utility auth "catalogue arrives late"` | 3c passato | `/tmp/libreFolio_o_remount_green1.log` |
+  > | `test … front-utility onboarding-component-unit` | 14 file, 409 passati | `/tmp/libreFolio_o_remount_onb.log` |
+  > | `test … front-utility auth` | 25 passati (3a, 3b, 3c compresi) | `/tmp/libreFolio_o_remount_auth_all.log` |
+  > | `test … front-utility settings` | 45 passati (Preferenze e About, cioè anche la diagnostica plugin col login) | `/tmp/libreFolio_o_remount_settings.log` |
+  > | `test … front-utility component-unit` | 109 file, 2829 passati | `/tmp/libreFolio_o_remount_comp.log` |
+  > | `front check` | 0 errori, 0 avvisi | `/tmp/libreFolio_o_remount_front_check.log` |
+  > | Prettier `--check` sui 4 file frontend | pulito | — |
+  > | `git diff --check`; `lsof` 6160 e 6170 | pulito; porte libere | — |
+  >
+  > - **wiki**: nuova pagina `problems/i18n-loading-gate-remounts-app.md`, una riga in `index.md`, una
+  >   voce in `log.md`; `check_source_paths.py`: 0 percorsi mancanti nella pagina.
+  >
+  > **⚠️ Fuori pista**:
+  > - la sonda di triage era sbagliata due volte: corpi riscritti di chunk serviti in gzip davano una
+  >   pagina bianca, e una Promise restituita da un helper `async` veniva adottata, bloccando il test;
+  >   la lezione è nella pagina wiki;
+  > - `initI18n()` nello script di `(app)/+layout.svelte` resta: ora gira solo quando il gruppo
+  >   `(app)` si crea davvero, e legge la lingua salvata. Non l'ho toccato, è fuori dall'approvazione.
 
 ## 12. Definition of done
 
