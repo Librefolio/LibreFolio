@@ -4,6 +4,17 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-10-07] update | CI/CD Release Pipeline
+Realigned the concept page with the real release.yml after R12 (workstream M): no screenshot cache,
+no `force_gallery`, no test stage; the gallery is now a release gate (soft on dev) with failure
+evidence kept; Docker tags follow the user guide (latest = light, X.Y.Z full, X.Y.Z-light, no v,
+no latest-light) with per-variant push guards; the light image is pushed before the full one so the
+update prompt's image gate (plain X.Y.Z) fires only once `latest` moved; cache keys carry the runner
+image ahead of the ubuntu-latest → 26.04 move; dashboard gallery fixture + its Vitest guard.
+Updated: [[concepts/ci-release-pipeline]].
+Graph not updated: graphify-out/graph.json and .graphify_python are absent in this worktree (ignored
+artifacts); queued for the next graphify --update on the main checkout.
+
 ## [2026-09-10] file | SQLite savepoint without an outer write transaction commits on release
 Recorded the deferred-BEGIN trap found by the asset deletion commit-failure
 regression and the no-op-write fix that restores real outer rollback semantics.
