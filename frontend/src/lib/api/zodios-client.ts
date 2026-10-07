@@ -120,7 +120,7 @@ axiosInstance.interceptors.request.use(
  */
 axiosInstance.interceptors.response.use(
     (response) => {
-        notifyPortfolioMutation(response.config.method, response.config.url);
+        notifyPortfolioMutation(response.config.method, response.config.url, response.data);
         return response;
     },
     (error: AxiosError) => {

@@ -10,7 +10,7 @@ The Store Client System is divided into **5 Macro-Categories**, each with its ow
 
 1. **[App & UI State](app-state.md)**: Manages global UX elements (Authentication, Settings, Theme, Navigation, Toasts).
 2. **[Reference State](reference-state.md)**: Stores dictionaries and basic CRUD entities (Brokers, Assets, Currencies) synced with the backend.
-3. **[Domain & Feature State](domain-state.md)**: Heavy computational and business logic stores (Portfolio calculation, FX graph routing, Transaction ledger).
+3. **[Domain & Feature State](domain-state.md)**: Heavy computational and business logic stores (Portfolio report cache, FX graph routing, Transaction ledger).
 4. **[Registries & Caches](registries.md)**: Dynamic stores that spawn sub-stores per entity (Asset Prices, FX Rates, Image Previews).
 5. **[Core Infrastructure](core-infrastructure.md)**: Base classes and utility wrappers (`EntityStore`, `EditBuffer`, `TimeSeriesStore`) used to build the other stores.
 
@@ -43,7 +43,6 @@ graph LR
 
     S_Core -.->|extends| S_Ref
     S_Ref -->|provides entities| S_Dom
-    S_Reg -->|provides realtime rates| S_Dom
 
     S_App ===>|drives UX| UI_Nav
     S_App ===>|configured by| UI_Set
@@ -54,8 +53,10 @@ graph LR
     S_Dom --->|powers| UI_FX
     
     S_Ref --->|populates dropdowns| UI_Trans
-    S_Reg --->|live tickers| UI_Dash
+    S_Reg --->|rate series| UI_FX
 ```
+
+The portfolio figures are not computed from live prices in the browser: the backend computes the portfolio report, and the Domain State keeps it as a session cache that refreshes in background — see [Domain & Feature State](domain-state.md).
 
 ### 🔄 Reactivity Paradigm
 

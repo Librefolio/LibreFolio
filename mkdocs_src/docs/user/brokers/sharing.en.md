@@ -73,7 +73,7 @@ The sum of all share percentages for a broker **must not exceed 100%**, but it c
 
 !!! note "Portfolio Aggregation"
 
-    The share percentage is **already applied** to your portfolio aggregation: the Dashboard and portfolio-level statistics scale every amount of a shared broker by your ownership share. An Owner with 50% sees half of that broker's value, income, and P&L counted in their totals. Viewers and Editors, whose share is always 0% by rule, see the broker's **full** amounts instead — the share only scales what you *own*.
+    The share percentage is **already applied** to your portfolio aggregation: the Dashboard counts only the brokers you **own** with a share above 0%, and scales every amount from them by your ownership share. An Owner with 50% sees half of that broker's value, income, and P&L counted in their totals. Brokers where you are a Viewer or an Editor — whose share is always 0% by rule — are not counted on the Dashboard, and neither are those you own with a 0% share. You see them on their own broker page, where Viewers and Editors get the broker's **full** amounts — the share only scales what you *own*.
 
 ---
 

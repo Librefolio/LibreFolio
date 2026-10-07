@@ -327,9 +327,10 @@ per-lot accumulators, an audit trail, and asset-level orphans.
 `(broker, date, economic_type, native_currency, target_currency)` and allocates it to eligible lots:
 
 - **Eligibility = D-1**: a lot is eligible if it has open **LONG** quantity as of `date - 1`
-  (`_eligible_income_quantity(...)`), **scoped to the paying broker** (including quantity that left that
+  (`eligible_income_quantity(...)`), **scoped to the paying broker** (including quantity that left that
   broker as `IN_TRANSIT`). A BUY made on the income date is therefore not eligible; a lot already closed by
-  end of `date - 1` is not either.
+  end of `date - 1` is not either. It is the shared D-1 eligibility seam: transaction-ledger Yield on Cost
+  (`backend/app/services/yield_on_cost.py`) counts eligible quantity with the same public function.
 - weight `w_i = EligibleQty_i / Σ EligibleQty_j`, distributed with a running remainder so the pool total is
   conserved exactly;
 - **no eligible lot** → the whole pool becomes `asset_orphan_income`, with an `ASSET_INCOME_NO_ELIGIBLE_LOTS`
