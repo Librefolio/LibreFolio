@@ -717,6 +717,9 @@
     }
 
     function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+        // F2: a portfolio export without the owned scope would be widened by the backend to every
+        // broker the user can see. The trigger is disabled until then; this guards the call itself.
+        if (!canAsk) return Promise.reject(new Error('Owned brokers are not loaded'));
         return prepareAiExport({
             context: {
                 domain: 'portfolio',
@@ -946,7 +949,7 @@
                 compatibility={aiExportCompatibility}
                 memoryKey="portfolio"
                 defaultSelectionId="portfolio.pac_planning"
-                disabled={aiExportCatalogLoading || aiExportCatalogFailed}
+                disabled={aiExportCatalogLoading || aiExportCatalogFailed || !canAsk}
                 labels={aiExportLabels}
                 showLabel={showActionLabels}
                 onprepare={handleAiExport}
