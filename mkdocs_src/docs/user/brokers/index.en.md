@@ -35,8 +35,7 @@ Once you select a broker from the list, the interface is split into five tabs:
 
 1. **Overview**: Display of net worth, return metrics, growth history, and allocation charts scoped exclusively to this broker account (see **[Dashboard Overview](../dashboard/index.md)**).
 2. **Positions**: List of open positions, asset weights, and performance metrics within this broker, with access to the inline FIFO Lots Analysis panel (see **[Dashboard Positions](../dashboard/positions.md)**).
-3. **Risk**: The same risk analysis as the Dashboard's **Risk** tab, limited to this broker's holdings (see **[Dashboard](../dashboard/index.md)**).
-    <!-- TODO(anchor): #risk-tab, after N -->
+3. **Risk**: The same risk analysis as the Dashboard's **Risk** tab, limited to this broker's holdings (see **[Dashboard Risk Tab](../dashboard/index.md#risk-tab)**).
 4. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Broker Transactions](import.md)**).
 5. **Info**: Broker metadata, cash overdraft/shorting configurations, and inline sharing controls (see **[Configuration & Info](info.md)**).
 
