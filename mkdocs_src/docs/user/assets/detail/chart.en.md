@@ -2,7 +2,7 @@
 
 The chart is the centerpiece of the asset detail page. It can show the asset's price history or a backend-computed Rolling Return over that history.
 
-_Last updated: 2026-10-02_
+_Last updated: 2026-10-07_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Price Chart" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -20,6 +20,11 @@ Use the two buttons above the chart to choose its primary series:
 Opening or reloading an asset starts in **Prices** mode. LibreFolio remembers the Rolling Return window, but it does not persist the selected primary mode.
 
 ### 🗓️ Rolling Return Window {: #rolling-return }
+
+<!-- [Screenshot Placeholder: assets/detail-chart-rolling-return — the chart in Rolling Return mode with the 1Y window selected and one comparison asset] -->
+
+In **Rolling Return** mode a **Window** control appears next to the two mode buttons. The **?** at
+its end opens this section of the manual in a new tab.
 
 The four presets are exact calendar-day aliases:
 
