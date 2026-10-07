@@ -6538,13 +6538,117 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(counter).toHaveAttribute('data-selected', String(kept.length));
     });
 
-    test('broker preset: a report discarded by a portfolio mutation in flight is asked for once more, and that answer is the one applied', async ({page}) => {
+    // ── The broker preset under the page cache (decisions E1 and E2, 06/10) ──────
+    //
+    // `portfolioStore` is stale-while-revalidate. E1: a portfolio mutation *marks*
+    // every cached report stale and keeps it; a report whose request was in flight
+    // when a mark landed is answered and stored all the same, still stale, and only
+    // a session change discards one. E2: a sync is a mutation only when its answer
+    // says it wrote, so the `points_changed: 0` of `installSyncMocks` marks nothing.
+    // Inside a case, then, the preset meets a `null` only when its request fails.
+    // The three cases below make their mutations and their failures with the
+    // helpers here, which are theirs alone.
+
+    /**
+     * Answer both sync endpoints as writes, and record what was asked: the bodies of
+     * `installSyncMocks`, through the same schemas, with one point changed per item —
+     * what makes a run a portfolio mutation (E2). Registered after it, so it answers
+     * first (Playwright runs the most recently registered matching handler first);
+     * the shared stub stays underneath, so nothing this one lets through reaches the
+     * backend.
+     *
+     * The rates' `total_points_changed` is set on purpose: the schema defaults it to
+     * 0, and `fxSyncWrote` reads the total before the pairs, so changed pairs under a
+     * parsed total of 0 would still mark nothing.
+     */
+    async function answerSyncsAsWrites(page: Page): Promise<SyncCalls> {
+        const calls: SyncCalls = {assets: [], fxPairs: []};
+
+        await page.route(/\/api\/v1\/assets\/prices\/sync(?:\?|$)/, async (route) => {
+            if (route.request().method() !== 'POST') return route.fallback();
+            const items = (route.request().postDataJSON() ?? []) as Array<{asset_id: number; date_range?: {start: string; end: string}}>;
+            calls.assets.push(items.map((item) => item.asset_id));
+            const body = schemas.FABulkRefreshResponse.parse({
+                results: items.map((item) => ({asset_id: item.asset_id, status: 'ok', provider_used: 'E2E_MOCK', points_fetched: 1, points_changed: 1})),
+                success_count: items.length,
+                date_range: items[0]?.date_range ?? null,
+                total_points_changed: items.length,
+            });
+            await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
+        });
+
+        await page.route(/\/api\/v1\/fx\/currencies\/sync(?:\?|$)/, async (route) => {
+            if (route.request().method() !== 'POST') return route.fallback();
+            const sent = (route.request().postDataJSON() ?? {}) as {pairs?: string[]; start?: string; end?: string};
+            const pairs = sent.pairs ?? [];
+            calls.fxPairs.push([...pairs]);
+            const body = schemas.FXSyncBulkResponse.parse({
+                results: pairs.map((pair) => ({pair, status: 'ok', provider_used: 'E2E_MOCK', points_fetched: 1, points_changed: 1})),
+                success_count: pairs.length,
+                date_range: {start: sent.start ?? '', end: sent.end ?? ''},
+                total_points_changed: pairs.length,
+            });
+            await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
+        });
+
+        return calls;
+    }
+
+    /**
+     * Run the page sync to completion through {@link answerSyncsAsWrites}, and prove it
+     * answered at least one item as written. `runSyncToCompletion` ends once every
+     * answer has passed the client's interceptor, so the mark the next step depends on
+     * has then landed; a run the stub never wrote for would otherwise surface steps
+     * later, as a preset served from the cache.
+     */
+    async function runWritingSync(page: Page, writes: SyncCalls): Promise<void> {
+        const written = () => writes.assets.flat().length + writes.fxPairs.flat().length;
+        const before = written();
+        await runSyncToCompletion(page);
+        expect(written(), 'premise: the run must be answered as a write by the stub, or nothing marked the cached report stale (E2)').toBeGreaterThan(before);
+    }
+
+    /**
+     * Fail the lab's `/portfolio/report` requests about exactly `brokerId` with a 500 —
+     * the first `times`, every one by default — and record each one failed.
+     *
+     * `fetchReport` resolves `null` when its request fails: the one `null` left to
+     * produce, now that a mark discards nothing (E1). Registered after `gateReports`,
+     * so it decides first; whatever it does not fail falls back to the gate, which
+     * holds it as before — the opening seed among them. Matched on `broker_ids` as
+     * `forBroker` matches, and only what the lab sends (`sentByLab`): the Dashboard
+     * `login` lands on asks about the brokers the user owns, and one of its requests,
+     * failed here, would be counted as the preset's. Quiet (`routeQuietly`): a callback
+     * that throws leaves its request unanswered, and the case fails on the barrier
+     * behind it.
+     */
+    async function failBrokerReports(page: Page, brokerId: number, times = Number.POSITIVE_INFINITY): Promise<ReportBody[]> {
+        const failed: ReportBody[] = [];
+        await routeQuietly(page, '**/api/v1/portfolio/report', async (route) => {
+            const request = route.request();
+            const sent = (request.postDataJSON() ?? {}) as ReportBody;
+            const aboutBroker = request.method() === 'POST' && sentByLab(request) && sameMembers((sent.broker_ids ?? []).map(String), [String(brokerId)]);
+            if (!aboutBroker || failed.length >= times) return route.fallback();
+            failed.push(sent);
+            await route.fulfill({status: 500, contentType: 'application/json', body: JSON.stringify({detail: 'E2E: the report failed on purpose'})});
+        });
+        return failed;
+    }
+
+    /**
+     * E1 on the preset: a mark is not a discard. A writing sync (E2) marks the answer
+     * the preset read stale, so its next run asks again; a second one lands while that
+     * request is held, and the answer is applied all the same, after that one request.
+     * Until E1 the mark threw the answer away and the preset asked a third time.
+     */
+    test('broker preset: a portfolio mutation in flight no longer discards the report — its answer is applied, after one request', async ({page}) => {
         // Two presets and two sync runs, each a barrier on a published state; the
         // budget pays for the work, never for a wait on the clock.
         test.setTimeout(60_000);
         await installRiskMocks(page);
         const eligibility = await answerEligibility(page);
         await installSyncMocks(page);
+        const writes = await answerSyncsAsWrites(page);
         const reports = await gateReports(page);
         const broker = await brokerWithHoldings(page);
 
@@ -6552,83 +6656,138 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForRiskCatalog(page);
         const catalogue = await assetCatalogue(page);
         const priced = (assetId: number) => catalogue.get(assetId)?.priced === true;
-        // The mutation below is a sync run, and a run needs an item to answer about.
+        // The mutations below are sync runs, and a run needs an item to answer about.
         await ensureSelectedWhere(page, priced, 'asset a provider prices');
 
         const counter = selectionCounter(page);
+        const loading = page.getByTestId('risk-broker-filter-loading');
         const onPage = pageCatalogue(eligibility);
         const forBroker = () => reports.filter((report) => sameMembers((report.brokerIds ?? []).map(String), [String(broker.brokerId)]));
 
-        // ── The control: nothing moves the cache, so the preset asks once ────────
+        // ── The control: nothing marks the cache, so the preset asks once ────────
         await chooseBrokerPreset(page, `risk-broker-option-${broker.brokerId}`);
         await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'the preset must ask for the report'}).toBe(1);
+        await expect(loading, 'the preset must be waiting on the answer the test holds').toBeVisible();
         const undisturbed = presetIdsOf(await forBroker()[0].release(), onPage);
         expect(undisturbed.length, 'the broker held something when probed, so the report the page read must list it too').toBeGreaterThan(0);
-        await expect(counter).toHaveAttribute('data-selected', String(undisturbed.length), {timeout: 15_000});
-        // Applied, therefore never re-asked: the re-ask replaces the apply, it cannot follow it.
-        expect(forBroker(), 'an answer nothing discarded is applied as it is, after one request').toHaveLength(1);
+        await expect(loading, 'the answer must end the preset').toHaveCount(0, {timeout: 15_000});
+        await expect(counter).toHaveAttribute('data-selected', String(undisturbed.length));
+        await expect.poll(async () => scopeKey(await chipIds(page)), {timeout: 15_000, message: 'the selection must be exactly the holdings of the answer'}).toBe(scopeKey(undisturbed));
+        expect(forBroker(), 'an answer nothing marked is applied as it is, after one request').toHaveLength(1);
 
-        // A sync to empty the report cache. The preset is a command, so running it
-        // again needs no way back to a null state first — but the answer it read is
-        // cached now, and a cached answer puts nothing in flight to discard: the next
-        // run must reach the wire.
+        // ── E2: a sync that wrote marks the cached answer stale ─────────────────
+        // The answer the preset read is cached now, and fresh: run again, the preset
+        // would be served from the cache and put nothing on the wire. A writing sync
+        // marks it stale, so the next run must ask. Before that, the selection is
+        // moved off the broker's holdings — an asset it does not hold beside them —
+        // or "the second answer was applied" and "nothing happened" would leave the
+        // same chips.
         await ensureSelectedWhere(page, priced, 'asset a provider prices');
-        await runSyncToCompletion(page);
+        await ensureSelectedWhere(page, (assetId) => !undisturbed.includes(assetId), `asset broker ${broker.brokerId} does not hold`);
+        const beforeSecondRun = await chipIds(page);
+        await runWritingSync(page, writes);
 
         // ── The race, made deterministic ────────────────────────────────────
         await chooseBrokerPreset(page, `risk-broker-option-${broker.brokerId}`);
-        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'with the cache emptied, the preset must ask again'}).toBe(2);
-        // The request is out, so the page has read the cache generation; its answer
-        // is held. Now the mutation, run to its published end…
-        await runSyncToCompletion(page);
-        // …and only then the answer, which therefore lands after the invalidation.
-        // This is ordering by causality: the answer does not exist until released.
-        await forBroker()[1].release();
-        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'a discarded answer must be asked for once more'}).toBe(3);
-        const expected = presetIdsOf(await forBroker()[2].release(), onPage);
+        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'a stale answer is asked for again: the preset must reach the wire'}).toBe(2);
+        // The request is out and its answer held. Now a second mutation, run to its
+        // published end: its mark lands while the request is in flight…
+        await runWritingSync(page, writes);
+        await expect(loading, 'the preset must still be waiting on the answer the test holds').toBeVisible();
+        // …and only then the answer, which therefore lands after the mark. This is
+        // ordering by causality: the answer does not exist until released.
+        const expected = presetIdsOf(await forBroker()[1].release(), onPage);
+        expect(expected.length, 'the broker held something when probed, so the report the page read must list it too').toBeGreaterThan(0);
+        expect(scopeKey(beforeSecondRun), 'premise: the selection the preset replaces must differ from its answer, or applied and ignored look alike').not.toBe(scopeKey(expected));
 
-        await expect(counter).toHaveAttribute('data-selected', String(expected.length), {timeout: 15_000});
-        await expect.poll(async () => scopeKey(await chipIds(page)), {timeout: 15_000, message: 'the selection must be exactly the holdings of the answer that was applied'}).toBe(scopeKey(expected));
-        await expect(page.getByTestId('risk-broker-filter-loading')).toHaveCount(0);
-        await expect(page.getByTestId('risk-broker-filter-error'), 'one discard is recovered, not reported').toHaveCount(0);
-        expect(forBroker(), 'one discard costs one re-ask, and the applied answer ends the preset').toHaveLength(3);
+        // The preset now decides on that answer: it applies it and ends — the
+        // spinner goes — or, were a mark still a discard, it asks for it again: a
+        // third request, which the gate holds like the others. Wait for whichever
+        // comes first, then read which one it was.
+        await expect.poll(async () => forBroker().length > 2 || (await loading.count()) === 0, {timeout: 15_000, message: 'the released answer must end the preset, or be asked for again'}).toBe(true);
+        expect(forBroker(), 'E1: a mark is not a discard — the answer whose request was in flight is applied, never asked for again').toHaveLength(2);
+        await expect(counter).toHaveAttribute('data-selected', String(expected.length));
+        await expect.poll(async () => scopeKey(await chipIds(page)), {timeout: 15_000, message: 'the selection must be exactly the holdings of the answer that was in flight'}).toBe(scopeKey(expected));
+        await expect(page.getByTestId('risk-broker-filter-error'), 'an answer that came back is applied, not reported').toHaveCount(0);
+        // The final count, read with the applied state on screen: nothing follows the apply.
+        expect(forBroker(), 'two runs of the preset, two requests: the mark cost no re-ask').toHaveLength(2);
     });
 
-    test('broker preset: when the re-asked report is discarded too, the control reports the failure and the selection stays as it was', async ({page}) => {
+    /**
+     * A failed report is asked for once more, and the answer to the re-ask is the one
+     * applied: the recovery the preset owes a transient failure — since E1 the only
+     * `null` it can meet here. The first request about the broker fails; the re-ask
+     * gets through to the gate.
+     */
+    test('broker preset: one failed report is asked for once more, and that answer is applied', async ({page}) => {
         test.setTimeout(60_000);
         await installRiskMocks(page);
-        await installSyncMocks(page);
+        const eligibility = await answerEligibility(page);
         const reports = await gateReports(page);
         const broker = await brokerWithHoldings(page);
+        const failed = await failBrokerReports(page, broker.brokerId, 1);
 
         await openAssetGlobalRiskReleasingSeed(page, reports);
         await waitForRiskCatalog(page);
-        const catalogue = await assetCatalogue(page);
-        await ensureSelectedWhere(page, (assetId) => catalogue.get(assetId)?.priced === true, 'asset a provider prices');
+
+        const counter = selectionCounter(page);
+        const loading = page.getByTestId('risk-broker-filter-loading');
+        const onPage = pageCatalogue(eligibility);
+        const forBroker = () => reports.filter((report) => sameMembers((report.brokerIds ?? []).map(String), [String(broker.brokerId)]));
+
+        // Started from an empty selection, so the holdings the preset loads cannot
+        // coincide with what was on screen: applied and ignored must look different.
+        await page.getByTestId('risk-bulk-none').click();
+        await expect(counter).toHaveAttribute('data-selected', '0');
+        await expect(page.getByTestId('risk-asset-set-empty')).toBeVisible();
+
+        await chooseBrokerPreset(page, `risk-broker-option-${broker.brokerId}`);
+        // The first request fails at once; the re-ask passes the stub, and the gate holds it.
+        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'a failed report must be asked for once more'}).toBe(1);
+        expect(failed, 'premise: the first request about that broker is the one the stub failed').toHaveLength(1);
+        await expect(loading, 'the preset must be waiting on the re-asked answer the test holds').toBeVisible();
+        const expected = presetIdsOf(await forBroker()[0].release(), onPage);
+        expect(expected.length, 'the broker held something when probed, so the report the page read must list it too').toBeGreaterThan(0);
+
+        await expect(loading, 'the answer to the re-ask must end the preset').toHaveCount(0, {timeout: 15_000});
+        await expect(counter).toHaveAttribute('data-selected', String(expected.length));
+        await expect.poll(async () => scopeKey(await chipIds(page)), {timeout: 15_000, message: 'the selection must be exactly the holdings of the re-asked answer'}).toBe(scopeKey(expected));
+        await expect(page.getByTestId('risk-broker-filter-error'), 'one failure is recovered, not reported').toHaveCount(0);
+        // Read with the applied state on screen: two requests in all, the failed one and its re-ask.
+        expect(failed, 'only the first request failed').toHaveLength(1);
+        expect(forBroker(), 'one failure costs one re-ask, and the applied answer ends the preset').toHaveLength(1);
+    });
+
+    /**
+     * Two failed reports: the re-ask fails too, the control says so, and the selection
+     * stays exactly as it was. Made with failures, not with mutations in flight: since
+     * E1 a mark discards nothing, so it can no longer produce the `null`s this needs.
+     */
+    test('broker preset: when the report fails twice, the control reports the failure and the selection stays as it was', async ({page}) => {
+        test.setTimeout(60_000);
+        await installRiskMocks(page);
+        const reports = await gateReports(page);
+        const broker = await brokerWithHoldings(page);
+        const failed = await failBrokerReports(page, broker.brokerId);
+
+        await openAssetGlobalRiskReleasingSeed(page, reports);
+        await waitForRiskCatalog(page);
 
         // Recorded before the preset: the failure must leave exactly this behind.
         const counter = selectionCounter(page);
         const before = await chipIds(page);
         await expect(counter).toHaveAttribute('data-selected', String(before.length));
-        const forBroker = () => reports.filter((report) => sameMembers((report.brokerIds ?? []).map(String), [String(broker.brokerId)]));
 
         await chooseBrokerPreset(page, `risk-broker-option-${broker.brokerId}`);
-        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'the preset must ask for the report'}).toBe(1);
-        // First discard: the mutation completes while the first answer is held.
-        await runSyncToCompletion(page);
-        await forBroker()[0].release();
-        await expect.poll(() => forBroker().length, {timeout: 15_000, message: 'the first discard must be asked for once more'}).toBe(2);
-        // Second discard: the re-ask is out and held, and a second mutation lands first.
-        await runSyncToCompletion(page);
-        await forBroker()[1].release();
-
-        await expect(page.getByTestId('risk-broker-filter-error'), 'two discarded answers must end in a visible failure, not in a silent empty selection').toBeVisible({timeout: 15_000});
+        await expect.poll(() => failed.length, {timeout: 15_000, message: 'the preset must ask about that broker, and the stub must fail it'}).toBeGreaterThan(0);
+        await expect(page.getByTestId('risk-broker-filter-error'), 'two failed reports must end in a visible failure, not in a silent empty selection').toBeVisible({timeout: 15_000});
         await expect(page.getByTestId('risk-broker-filter-loading')).toHaveCount(0);
+        await expect(page.getByTestId('risk-broker-filter-empty'), 'a failure is not "nothing held"').toHaveCount(0);
         expect(scopeKey(await chipIds(page)), 'a failed preset must leave the selection exactly as it found it').toBe(scopeKey(before));
         await expect(counter).toHaveAttribute('data-selected', String(before.length));
         // Read after the failure is on screen, and the failure is the end of the
         // path: `heldAssetIds` gives up after the second null, without asking again.
-        expect(forBroker(), 'the second discard is the last word: no third report request').toHaveLength(2);
+        expect(failed, 'one re-ask, and the second failure is the last word: no third report request').toHaveLength(2);
     });
 
     test("the toolbar's sync targets the selection's priced assets and every configured pair that converts them into the target currency", async ({page}) => {
