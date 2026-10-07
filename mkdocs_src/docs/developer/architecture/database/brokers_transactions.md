@@ -30,7 +30,7 @@ erDiagram
         int id PK
         int broker_id FK
         int user_id FK
-        enum role "owner | editor | viewer"
+        enum role "OWNER | EDITOR | VIEWER"
     }
 
     TRANSACTION {
@@ -39,7 +39,7 @@ erDiagram
         int asset_id FK "Nullable"
         int related_transaction_id FK "Nullable, DEFERRED"
         int asset_event_id FK "Nullable, RESTRICT"
-        enum type "BUY, SELL, TRANSFER..."
+        string type "VARCHAR(32), TransactionType value"
         date date
         decimal quantity "signed"
         decimal amount "signed"
@@ -81,11 +81,11 @@ RBAC model — per-broker, per-user role grants.
 
 | Role | Can view | Can edit | Can manage access |
 |------|----------|----------|-------------------|
-| `viewer` | ✅ | ❌ | ❌ |
-| `editor` | ✅ | ✅ | ❌ |
-| `owner` | ✅ | ✅ | ✅ |
+| `VIEWER` | ✅ | ❌ | ❌ |
+| `EDITOR` | ✅ | ✅ | ❌ |
+| `OWNER` | ✅ | ✅ | ✅ |
 
-The first user to create a broker is automatically `owner`. Owners can grant `editor`/`viewer` to other users, enabling shared household portfolios.
+The first user to create a broker is automatically `OWNER`. Owners can grant `EDITOR`/`VIEWER` to other users, enabling shared household portfolios.
 
 ### 💰 `transactions`
 
@@ -95,7 +95,7 @@ The single source of truth for all financial operations. Each transaction belong
 |--------|-------------|
 | `broker_id` | FK to broker — required |
 | `asset_id` | FK to asset — nullable for cash-only ops (DEPOSIT, WITHDRAWAL) |
-| `type` | Enum: BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, TRANSFER, CASH_TRANSFER, FX_CONVERSION, ADJUSTMENT, OTHER |
+| `type` | `TransactionType` value: BUY, SELL, DIVIDEND, INTEREST, DEPOSIT, WITHDRAWAL, FEE, TAX, ADJUSTMENT, TRANSFER, FX_CONVERSION, CASH_TRANSFER. A plain `VARCHAR(32)` with no `CHECK` constraint; databases created before 22/09/2026 still declare `VARCHAR(14)`, which SQLite does not enforce — see [Migrations](index.md#enum-column-length) |
 | `date` | Settlement date |
 | `quantity` | Signed asset delta (+in, −out). Default 0, NOT NULL |
 | `amount` | Signed cash delta (+in, −out). Default 0, NOT NULL |

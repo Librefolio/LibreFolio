@@ -115,11 +115,42 @@ pattern is used across `schemas/signals.py`, `schemas/ai_export_runtime.py`, `sc
 
 ---
 
+## 🗜️ Response Compression
+
+`backend/app/main.py` installs Starlette's `GZipMiddleware` on the whole application
+(`minimum_size=1024`, `compresslevel=6`), so it covers API JSON as well as the SvelteKit
+bundle and the documentation served by the same process.
+
+- A response is compressed only when the request's `Accept-Encoding` header contains `gzip`.
+  Browsers send it and decompress transparently, so frontend code never handles compressed
+  bytes.
+- A compressed response carries `Content-Encoding: gzip`. Its `Content-Length` is the
+  compressed size; a streamed response drops the header.
+- `Vary: Accept-Encoding` is added to every response eligible for compression — 1 KiB or
+  more, or streamed — whether or not the client asked for gzip, so a cache keeps the two
+  variants apart.
+- Left untouched: bodies under 1 KiB sent in one piece, responses that already declare a
+  `Content-Encoding`, `206 Partial Content` range replies, Server-Sent Events
+  (`text/event-stream`, such as `GET /assets/provider/search/stream`), AVIF, GIF, JPEG, PNG,
+  and WebP images, WOFF and WOFF2 fonts, audio, video, and gzip or zip archives. SVG is text
+  and is compressed.
+- A body chunk of 128 KiB or more is compressed in a worker thread, off the event loop.
+
+`curl` sends no `Accept-Encoding` by default and therefore receives the uncompressed body.
+With `--compressed` it asks for gzip and decompresses transparently:
+
+```bash
+# Print the response headers of the compressed variant (Content-Encoding, Vary)
+curl -s --compressed -D - -o /dev/null http://localhost:6040/api/v1/openapi.json
+```
+
+---
+
 ## 📡 Notable Endpoints
 
 ### `POST /api/v1/assets/prices/current` — Bulk Current Price
 
-Returns the **live current price** for a list of asset IDs. The response is designed for the `LiveTicker` frontend component.
+Returns the **live current price** for a list of asset IDs. The response is designed for the frontend's live-price polling.
 
 **Request body**: `List[int]` — asset IDs.
 
@@ -145,5 +176,5 @@ Returns the **live current price** for a list of asset IDs. The response is desi
 1. Ask the assigned provider's `get_current_value()` (live quote from JustETF WebSocket, Yahoo Finance `ticker.info`, etc.)
 2. **Fallback**: if the provider fails or has no live feed, return the latest close price from the database.
 
-This endpoint is used by the `LiveTicker` component in the Dashboard and Asset Detail pages, and by the Asset List page for inline live prices in cards.
+This endpoint is used by the Assets list (inline live prices on cards and table rows) and by the asset detail page (price summary and chart head) — see [Live Prices](../frontend/components/features/live-ticker.md#polling).
 

@@ -39,9 +39,9 @@ Asset charts can run **22 indicator plugins**, grouped by the market property th
 | ⚡ **Momentum** (6) | [RSI](../../../financial-theory/technical-analysis/indicators/rsi.md) · [MACD](../../../financial-theory/technical-analysis/indicators/macd.md) · [ROC](../../../financial-theory/technical-analysis/indicators/roc.md) · [Stochastic RSI](../../../financial-theory/technical-analysis/indicators/stochastic-rsi.md) · [PPO](../../../financial-theory/technical-analysis/indicators/ppo.md) · [CCI](../../../financial-theory/technical-analysis/indicators/cci.md) |
 | 🌊 **Volatility** (4) | [Bollinger Bands](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md) · [ATR](../../../financial-theory/technical-analysis/indicators/atr.md) · [NATR](../../../financial-theory/technical-analysis/indicators/natr.md) · [Donchian Channels](../../../financial-theory/technical-analysis/indicators/donchian-channels.md) |
 | 📊 **Volume** (2) | [OBV](../../../financial-theory/technical-analysis/indicators/obv.md) · [MFI](../../../financial-theory/technical-analysis/indicators/mfi.md) |
-| ⚠️ **Risk** (5) | Underwater Drawdown · Rolling Return · Rolling Volatility · Rolling Sharpe Ratio · Rolling Beta |
+| ⚠️ **Risk** (5) | [Underwater Drawdown](../../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md) · [Rolling Return](../../../financial-theory/fundamentals/returns.md#rolling-return) · [Rolling Volatility](../../../financial-theory/technical-analysis/risk-metrics/volatility.md) · [Rolling Sharpe Ratio](../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md) · [Rolling Beta](../../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md) |
 
-For the risk family's concepts, see the [Risk Metrics](../../../financial-theory/technical-analysis/risk-metrics/index.md) theory pages ([Max Drawdown](../../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md), [Volatility](../../../financial-theory/technical-analysis/risk-metrics/volatility.md), [Sharpe Ratio](../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)).
+The 📖 guide button on a risk signal's card opens the same page as its link above: the underwater drawdown's opens [Current Drawdown](../../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md), the rolling return's opens [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md#rolling-return), and the other three open the page of the metric they roll. All the risk metrics are described in [Risk Metrics](../../../financial-theory/technical-analysis/risk-metrics/index.md). The **Window** of the four rolling signals counts return observations of the asset's prepared series — days with a quote of the asset's own, joined for Rolling Beta by those of the comparison asset — not calendar days.
 
 !!! info "Not every indicator can run on every asset"
 
@@ -112,6 +112,8 @@ After loading, a colored icon reports how the computation went — hover it for 
 ## 🧩 Incomplete Data: Partial Segments
 
 Indicators that tolerate gaps (ADX, Aroon, ATR, NATR, CCI, Donchian, MFI, OBV) do not fail on a patchy price history: the backend selects the most recent **complete contiguous segment**, computes the indicator there, and reports the result as *partial* — the tooltip tells you which segment was used and how many points were excluded. All other indicators require gap-free input and explain why they cannot run instead of drawing a misleading line.
+
+The windows of the technical indicators count **sessions** — the days on which the asset was actually quoted — as their standard definitions do: an SMA 200 spans 200 sessions, not 200 calendar days. A weekend or a market holiday is therefore not a gap. Inside the segment it is simply skipped, and the tooltip's count of excluded points never includes it: the points it counts are those left outside the segment.
 
 ---
 

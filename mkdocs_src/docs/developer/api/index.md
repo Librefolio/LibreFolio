@@ -13,7 +13,7 @@ When the LibreFolio server is running, you can access the auto-generated interac
 request/response schemas, and even execute requests directly from your browser.
 
 - 🚀 [**Swagger UI**](http://localhost:6040/api/v1/docs){:target="_blank"} : Best for exploring and testing endpoints.
-- 💻 [**ReDoc**](http://localhost:6040/api/v1/redocs){:target="_blank"}: Best for reading the documentation in a structured format.
+- 💻 [**ReDoc**](http://localhost:6040/api/v1/redoc){:target="_blank"}: Best for reading the documentation in a structured format.
 
 ## 🔀 Dynamic Route Generation
 
@@ -33,8 +33,9 @@ The API is structured into routers, each handling a specific domain (all mounted
 - `/portfolio`: Portfolio analysis and metrics.
 - `/fx`: Foreign exchange operations — includes `/fx/providers` and `/fx/currencies`.
 - `/signals`: Domain-agnostic signal preview (`POST /signals/preview`).
-- `/risk`: Risk analysis (beta) — analytics catalog, queries, scenario catalog.
+- `/risk`: Risk analysis — analytics catalog, queries, scenario catalog, and per-asset eligibility for a period (`POST /risk/eligibility`). The Asset Detail risk view and the *What if…?* simulation still carry a beta notice.
 - `/ai-export`: Versioned AI Export datasets and analyses.
+- `/tools`: Atomic Tool calculations — catalog, batch compute (`POST /tools/compute`), and per-process diagnostics; see [Tool plugins](../architecture/patterns/tool_plugins.md).
 - `/utilities`: Reference data (ISO currencies, etc.).
 
 ## 📋 Pydantic Schemas

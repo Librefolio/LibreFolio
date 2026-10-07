@@ -66,7 +66,7 @@ The scheduler runs two types of background synchronization jobs defined in `back
 
 ### ⏱️ 1. Current Price Refresh
 
-* **Purpose:** Keeps the current prices of all active portfolio assets up-to-date. This updates the local pricing cache, feeding the frontend `LiveTicker` component.
+* **Purpose:** Keeps the current prices of all active portfolio assets up-to-date. This updates the local pricing cache, feeding the frontend's [live prices](../frontend/components/features/live-ticker.md#polling) on the Assets list and the asset detail page.
 * **Frequency:** Defined by `scheduler_current_price_frequency_minutes` (default: every 10 minutes).
 * **Execution:** Calls `bulk_refresh_prices()` on all assets linked to active portfolios.
 
@@ -104,6 +104,6 @@ Scheduler options are fully integrated into LibreFolio's database-backed Global 
 
 ## 🔗 Related
 
-* 📡 **[LiveTicker Component Overview](../frontend/components/features/live-ticker.md)** — Frontend polling component
+* 📡 **[Live Prices](../frontend/components/features/live-ticker.md)** — How the Assets list and the asset detail page poll current prices
 * 💰 **[Asset Architecture](assets/architecture.md)** — Pricing provider pipelines and sync steps
 * ⚙️ **[Settings System](../architecture/settings.md)** — Dynamic global configuration variables
