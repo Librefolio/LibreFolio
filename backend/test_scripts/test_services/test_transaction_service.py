@@ -1525,42 +1525,6 @@ class TestBalanceQueryMethods:
 
         assert holdings.get(test_asset.id) == Decimal("70")
 
-    @pytest.mark.asyncio
-    async def test_get_cost_basis(self, session, test_broker, test_asset):
-        """TX-U-122: get_cost_basis returns sum of BUY amounts."""
-        service = TransactionService(session)
-
-        items = [
-            TXCreateItem(
-                broker_id=test_broker.id,
-                type=TransactionType.DEPOSIT,
-                date=date.today(),
-                cash=Currency(code="EUR", amount=Decimal("10000")),
-            ),
-            TXCreateItem(
-                broker_id=test_broker.id,
-                asset_id=test_asset.id,
-                type=TransactionType.BUY,
-                date=date.today(),
-                quantity=Decimal("10"),
-                cash=Currency(code="EUR", amount=Decimal("-500")),  # Negative = spent
-            ),
-            TXCreateItem(
-                broker_id=test_broker.id,
-                asset_id=test_asset.id,
-                type=TransactionType.BUY,
-                date=date.today(),
-                quantity=Decimal("20"),
-                cash=Currency(code="EUR", amount=Decimal("-1200")),
-            ),
-        ]
-        await create_bulk(service, items)
-
-        cost_basis = await service.get_cost_basis(test_broker.id, test_asset.id)
-
-        # Should be absolute value of sum: |-500| + |-1200| = 1700
-        assert cost_basis == Decimal("1700")
-
 
 # ============================================================================
 # 3.X ASSET EVENT LINK (Phase 7 Part 1)

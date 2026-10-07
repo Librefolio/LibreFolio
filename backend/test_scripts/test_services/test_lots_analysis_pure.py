@@ -27,13 +27,22 @@ import pytest
 import backend.app.services.lots_analysis_service as module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import LotAnalysisType
+from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType
 from backend.app.services.fifo_lot_engine import (
     FifoEngineResult,
     FifoEvent,
     FifoLot,
     FragmentInterval,
     LotClosure,
+)
+from backend.app.services.financial_math.average_cost import (
+    AverageCost,
+    CostMovement,
+    CostMovementKind,
+    CostPosition,
+    _ConversionRequest,
+    _fold_average_costs,
+    _ResolvedConversion,
 )
 from backend.app.services.lots_analysis_service import (
     LotsAnalysisService,
@@ -42,7 +51,6 @@ from backend.app.services.lots_analysis_service import (
     _PerformanceSourceContext,
     _PriceHistoryLookup,
 )
-from backend.app.utils.financial.wac_utils import WACInputTX
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -340,34 +348,32 @@ class TestCollectFxNeeds:
         kwargs.update(overrides)
         _svc()._collect_fx_needs(**kwargs)
 
-    def test_wac_skips_a_non_buy_without_a_cost_basis_override(self):
-        """A SELL needs no acquisition FX: the WAC pool only prices what came in."""
-        resolver = _resolver("EUR")
-        self._call(
-            resolver,
-            analyses=[LotAnalysisType.BROKER_WAC_HISTORY],
-            transactions=[_tx(1, tx_type=TransactionType.SELL, quantity=D("10"), currency="USD")],
-        )
-        assert resolver._needs == []
+    def test_wac_analyses_ask_the_lots_resolver_for_no_rate(self):
+        """The WAC lines convert through financial_math.average_cost, each acquisition at its own date.
 
-    def test_wac_requests_the_cost_basis_currency_of_an_adjustment(self):
-        """A manual ADJUSTMENT-in prices the pool from cost_basis_currency, not tx.currency."""
+        A BUY paid in USD and an ADJUSTMENT-in costed in USD both need a USD rate for the WAC
+        lines; neither reaches this resolver, so it loads no rate the WAC lines never read. (Which
+        currency an ADJUSTMENT-in is costed in is pinned by test_average_cost.py, U13/U16.)
+        """
         resolver = _resolver("EUR")
         self._call(
             resolver,
-            analyses=[LotAnalysisType.CUMULATIVE_WAC_HISTORY],
+            analyses=[LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY],
             transactions=[
+                _tx(1, tx_type=TransactionType.BUY, quantity=D("10"), amount=D("-100"), currency="USD"),
                 _tx(
-                    1,
+                    2,
                     tx_type=TransactionType.ADJUSTMENT,
                     quantity=D("10"),
+                    amount=D("0"),
                     currency="GBP",
                     cost_basis_override=D("5"),
                     cost_basis_currency="USD",
-                )
+                ),
+                _tx(3, tx_type=TransactionType.SELL, quantity=D("-5"), amount=D("60"), currency="USD"),
             ],
         )
-        assert resolver._needs == [("USD", date(2024, 1, 10))]
+        assert resolver._needs == []
 
     def test_lot_summary_skips_the_reference_price_when_none_can_be_resolved(self):
         """The lot carries a reference price but the asset has no quotes at all."""
@@ -565,88 +571,92 @@ class TestAdjustmentCashFlowCost:
 
 
 # --------------------------------------------------------------------------- #
-# _build_wac_row
+# Average-cost lines -> WAC history points
 # --------------------------------------------------------------------------- #
+#
+# The WAC lines are financial_math.average_cost lines: one per broker and one for every broker
+# together (keyed module._ALL_BROKERS), built by _compute_average_cost_lines with a single
+# compute_average_costs call. Here the lines come from the same pure fold, _fold_average_costs,
+# with the conversions it would have received already resolved -- which keeps this unit PURE.
 
 
-class TestBuildWacRow:
-    def _row(self, tx, *, split_linked=False, rates=None):
-        return _svc()._build_wac_row(
-            tx=tx,
-            split_linked=split_linked,
-            asset_currency="EUR",
-            target_currency="EUR",
-            fx_resolver=_resolver("EUR", rates),
-        )
-
-    def test_a_buy_with_no_amount_has_a_zero_unit_cost(self):
-        """A free share grant: quantity arrives, no money leaves. WAC must not divide by nothing."""
-        row = self._row(_tx(1, tx_type=TransactionType.BUY, quantity=D("10"), amount=D("0")))
-        assert row.unit_cost_converted == D("0")
-
-    def test_a_buy_divides_the_converted_total_by_the_quantity(self):
-        row = self._row(
-            _tx(1, tx_type=TransactionType.BUY, quantity=D("10"), amount=D("-1000"), currency="USD"),
-            rates={("USD", date(2024, 1, 10)): D("0.5")},
-        )
-        assert row.unit_cost_converted == D("50.0")
-
-    def test_a_buy_keeps_the_native_unit_cost_when_no_rate_is_available(self):
-        row = self._row(_tx(1, tx_type=TransactionType.BUY, quantity=D("10"), amount=D("-1000"), currency="USD"))
-        assert row.unit_cost_converted == D("100")
-
-    def test_a_split_linked_row_is_repriced_in_the_asset_currency(self):
-        """A split leg carries no money of its own; it inherits the asset's currency."""
-        row = self._row(_tx(1, currency="USD"), split_linked=True)
-        assert (row.is_split_linked, row.original_currency, row.unit_cost_converted) == (True, "EUR", None)
-
-    def test_an_adjustment_uses_the_cost_basis_override_as_the_unit_cost(self):
-        row = self._row(_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("10"), amount=D("0"), cost_basis_override=D("4"), cost_basis_currency="EUR"))
-        assert row.unit_cost_converted == D("4")
-
-    def test_a_sell_carries_no_unit_cost(self):
-        row = self._row(_tx(1, tx_type=TransactionType.SELL, quantity=D("-10"), amount=D("500")))
-        assert row.unit_cost_converted is None
+def _acquired(day: date, quantity: str, paid: str, currency: str = "EUR") -> CostMovement:
+    return CostMovement(movement_id=None, transaction_type="BUY", date=day, kind=CostMovementKind.ACQUISITION, quantity=D(quantity), cost_amount=D(paid), cost_currency=currency)
 
 
-# --------------------------------------------------------------------------- #
-# _compute_wac_series
-# --------------------------------------------------------------------------- #
+def _sold(day: date, quantity: str) -> CostMovement:
+    return CostMovement(movement_id=None, transaction_type="SELL", date=day, kind=CostMovementKind.REDUCTION, quantity=D(quantity))
 
 
-class TestComputeWacSeries:
-    def _wac_tx(self, day: date, qty: Decimal, unit_cost: Decimal | None) -> WACInputTX:
-        return WACInputTX(
-            tx_id=1,
-            type="BUY",
-            date=day,
-            quantity=qty,
-            unit_cost_converted=unit_cost,
-            original_currency="EUR",
-            cost_basis_mode=None,
-            is_split_linked=False,
-        )
+def _line(key, *movements: CostMovement, resolved: dict | None = None) -> AverageCost:
+    """The EUR line of an EUR asset folded from ``movements`` (in this order), as the lots page builds it.
 
-    def test_a_broker_with_no_transactions_produces_no_series(self):
+    ``resolved`` answers the conversion requests; a request it lacks is a missing conversion, as
+    a convert_bulk without that rate would report it -- never a zero.
+    """
+    position = CostPosition(key=key, asset_currency="EUR", movements=movements)
+    return _fold_average_costs([position], report_currency="EUR", asset_leg=False, resolved=resolved or {})[key]
+
+
+class TestAverageCostPoints:
+    """``_average_cost_points``: (date, WAC, pool quantity) for each history date, read off one line."""
+
+    def test_a_line_without_movements_has_no_point(self):
         """A broker in scope that never traded this asset must not emit flat-zero points."""
-        assert _svc()._compute_wac_series([], _days(date(2024, 1, 1), 3), "EUR") == []
+        assert LotsAnalysisService._average_cost_points(_line(1), _days(date(2024, 1, 1), 3)) == []
 
-    def test_dates_before_the_first_transaction_are_skipped(self):
+    def test_dates_before_the_first_movement_have_no_point(self):
         """The pool does not exist yet, so there is no average cost to report."""
-        series = _svc()._compute_wac_series(
-            [self._wac_tx(date(2024, 1, 3), D("10"), D("5"))],
-            _days(date(2024, 1, 1), 4),
-            "EUR",
-        )
-        assert [point[0] for point in series] == [date(2024, 1, 3), date(2024, 1, 4)]
+        line = _line(1, _acquired(date(2024, 1, 3), "10", "50"))
 
-    def test_the_pool_grows_as_transactions_are_absorbed(self):
-        series = _svc()._compute_wac_series(
-            [self._wac_tx(date(2024, 1, 1), D("10"), D("5")), self._wac_tx(date(2024, 1, 3), D("10"), D("15"))],
-            _days(date(2024, 1, 1), 3),
-            "EUR",
+        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 4))
+
+        assert points == [(date(2024, 1, 3), D("5"), D("10")), (date(2024, 1, 4), D("5"), D("10"))]
+
+    def test_each_point_is_the_pool_after_the_last_movement_on_or_before_its_date(self):
+        """10 for 50, then on one day 10 for 150 and a sale of 5 (purchase first): 5 → 10 per unit, 10 → 15 units."""
+        line = _line(1, _acquired(date(2024, 1, 1), "10", "50"), _sold(date(2024, 1, 3), "-5"), _acquired(date(2024, 1, 3), "10", "150"))
+
+        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 4))
+
+        assert points == [
+            (date(2024, 1, 1), D("5"), D("10")),
+            (date(2024, 1, 2), D("5"), D("10")),
+            (date(2024, 1, 3), D("10"), D("15")),
+            (date(2024, 1, 4), D("10"), D("15")),
+        ]
+
+    def test_an_acquisition_counts_at_its_cost_in_the_report_currency(self):
+        """10 for 110 EUR, then 10 paid 100 USD that the FX service turned into 90 EUR on that day: 200 EUR for 20."""
+        paid_in_usd = _acquired(date(2024, 1, 2), "10", "100", "USD")
+        resolved = {_ConversionRequest("USD", "EUR", date(2024, 1, 2), D("100")): _ResolvedConversion(amount=D("90"), rate_date=date(2024, 1, 2))}
+        line = _line(1, _acquired(date(2024, 1, 1), "10", "110"), paid_in_usd, resolved=resolved)
+
+        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 2))
+
+        assert points == [(date(2024, 1, 1), D("11"), D("10")), (date(2024, 1, 2), D("10"), D("20"))]
+
+    def test_a_day_whose_pool_lacks_part_of_its_cost_has_no_point_until_the_pool_empties(self):
+        """No rate for the MGA purchase: from it until the pool empties the line draws nothing, not a wrong average."""
+        line = _line(
+            1,
+            _acquired(date(2024, 1, 1), "10", "100"),
+            _acquired(date(2024, 1, 3), "10", "5000", "MGA"),  # nothing resolves it: a missing conversion
+            _sold(date(2024, 1, 5), "-20"),
+            _acquired(date(2024, 1, 7), "4", "60"),
         )
-        assert [point[2] for point in series] == [D("10"), D("10"), D("20")]
+        assert line.has_missing_report_fx, "precondition: the fold reports the MGA purchase as unconverted"
+
+        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 8))
+
+        assert points == [
+            (date(2024, 1, 1), D("10"), D("10")),
+            (date(2024, 1, 2), D("10"), D("10")),
+            (date(2024, 1, 5), D("0"), D("0")),
+            (date(2024, 1, 6), D("0"), D("0")),
+            (date(2024, 1, 7), D("15"), D("4")),
+            (date(2024, 1, 8), D("15"), D("4")),
+        ]
 
 
 # --------------------------------------------------------------------------- #
@@ -1275,29 +1285,53 @@ class TestSmallBuilders:
 
 
 class TestWacHistoryBuilders:
-    """A broker that holds none of this asset must produce no WAC series at all."""
+    """Broker and cumulative WAC histories: one series per line, nothing for a broker without one."""
 
-    def test_a_broker_with_no_wac_rows_is_skipped(self):
-        """Broker 2 is in the analysis scope but never traded this asset."""
-        points = _svc()._build_broker_wac_history([1, 2], {1: []}, _days(date(2024, 1, 10), 2), "EUR")
-        assert points == []
+    def test_a_broker_in_scope_without_a_line_is_skipped(self):
+        """Broker 2 is in the analysis scope but never traded this asset: it has no line, so no series at all."""
+        lines = {1: _line(1, _acquired(date(2024, 1, 10), "10", "50"))}
 
-    def test_a_broker_with_wac_rows_produces_one_point_per_day(self):
-        row = WACInputTX(
-            tx_id=1,
-            type="BUY",
-            date=date(2024, 1, 10),
-            quantity=D("10"),
-            unit_cost_converted=D("5"),
-            original_currency="EUR",
-            cost_basis_mode=None,
-            is_split_linked=False,
-        )
-        points = _svc()._build_broker_wac_history([1], {1: [row]}, _days(date(2024, 1, 10), 2), "EUR")
-        assert [point.broker_id for point in points] == [1, 1]
+        points = _svc()._build_broker_wac_history([1, 2], lines, _days(date(2024, 1, 10), 2))
 
-    def test_an_asset_with_no_transactions_has_no_cumulative_wac(self):
-        assert _svc()._build_cumulative_wac_history({}, _days(date(2024, 1, 10), 2), "EUR") == []
+        assert points == [
+            BrokerWACHistoryPoint(date=date(2024, 1, 10), broker_id=1, wac=D("5"), pool_qty=D("10")),
+            BrokerWACHistoryPoint(date=date(2024, 1, 11), broker_id=1, wac=D("5"), pool_qty=D("10")),
+        ]
+
+    def test_each_broker_gets_its_own_line_in_scope_order(self):
+        """Broker 2 listed first, its line starting a day later; the all-brokers line is not a broker's."""
+        lines = {
+            1: _line(1, _acquired(date(2024, 1, 10), "10", "50")),
+            2: _line(2, _acquired(date(2024, 1, 11), "5", "100")),
+            module._ALL_BROKERS: _line(module._ALL_BROKERS, _acquired(date(2024, 1, 10), "10", "50"), _acquired(date(2024, 1, 11), "5", "100")),
+        }
+
+        points = _svc()._build_broker_wac_history([2, 1], lines, _days(date(2024, 1, 10), 2))
+
+        assert [(point.broker_id, point.date, point.wac, point.pool_qty) for point in points] == [
+            (2, date(2024, 1, 11), D("20"), D("5")),
+            (1, date(2024, 1, 10), D("5"), D("10")),
+            (1, date(2024, 1, 11), D("5"), D("10")),
+        ]
+
+    def test_the_cumulative_history_is_the_all_brokers_line(self):
+        """10 for 50 at one broker, 5 for 100 at another: together 15 for 150, 10 per unit."""
+        lines = {
+            1: _line(1, _acquired(date(2024, 1, 10), "10", "50")),
+            2: _line(2, _acquired(date(2024, 1, 11), "5", "100")),
+            module._ALL_BROKERS: _line(module._ALL_BROKERS, _acquired(date(2024, 1, 10), "10", "50"), _acquired(date(2024, 1, 11), "5", "100")),
+        }
+
+        points = _svc()._build_cumulative_wac_history(lines, _days(date(2024, 1, 10), 2))
+
+        assert points == [
+            CumulativeWACHistoryPoint(date=date(2024, 1, 10), wac=D("5"), pool_qty=D("10")),
+            CumulativeWACHistoryPoint(date=date(2024, 1, 11), wac=D("10"), pool_qty=D("15")),
+        ]
+
+    def test_an_asset_without_an_all_brokers_line_has_no_cumulative_history(self):
+        assert _svc()._build_cumulative_wac_history({}, _days(date(2024, 1, 10), 2)) == []
+        assert _svc()._build_cumulative_wac_history({1: _line(1, _acquired(date(2024, 1, 10), "10", "50"))}, _days(date(2024, 1, 10), 2)) == []
 
 
 class TestEmptyResponse:

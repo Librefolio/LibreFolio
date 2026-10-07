@@ -24,8 +24,8 @@ $$
 
 | Component | Definition |
 |-----------|-----------|
-| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period |
-| Realized | Sum of (sell proceeds − cost basis) for SELLs in period |
+| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period — for assets priced in another currency, including the exchange-rate effect on their historical cost |
+| Realized | Sum of (sell proceeds − historical cost of the units sold) for SELLs in period; proceeds are converted at the sale date |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
 | Other | Residual that closes the identity |
@@ -35,6 +35,64 @@ The residual is computed as:
 $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
+
+Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. What Other still holds is what the four components cannot see, for example the value of assets travelling between two brokers on a boundary day, or a sale left out of Realized because its proceeds could not be converted or its position's cost is incomplete.
+
+---
+
+## 💱 Unrealized Change by Currency {: #unrealized-change-by-currency }
+
+$\Delta\mathrm{UGL}$ is split by the currency $A$ the assets are priced in. For the positions in currency $A$ on day $t$, let
+
+| Symbol | Meaning |
+|--------|---------|
+| $\mathrm{MV}_A(t)$ | Their market value in $C^*$, at the day's price and rate |
+| $\mathrm{Cost}^{A}_A(t)$ | Their historical cost in $A$ |
+| $\mathrm{Cost}^{*}_A(t)$ | Their historical cost in $C^*$ |
+| $r_A(t) = \mathrm{fx}(A, C^*, t)$ | The day's exchange rate |
+
+Each acquisition's cost in $A$ comes from its cost in $C^*$ at the acquisition date, $c^{A} = c^{*} \cdot \mathrm{fx}(C^*, A, d)$ (or the amount paid, when paid in $A$). The unrealized gain/loss then splits exactly into an **asset effect** and an **exchange-rate effect**:
+
+$$
+E^{\text{asset}}_A(t) = \mathrm{MV}_A(t) - \mathrm{Cost}^{A}_A(t)\, r_A(t)
+$$
+
+$$
+E^{\text{fx}}_A(t) = \mathrm{Cost}^{A}_A(t)\, r_A(t) - \mathrm{Cost}^{*}_A(t)
+$$
+
+$$
+E^{\text{asset}}_A(t) + E^{\text{fx}}_A(t) = \mathrm{MV}_A(t) - \mathrm{Cost}^{*}_A(t) = \mathrm{UGL}_A(t)
+$$
+
+For a mark quoted in $A$, $\mathrm{MV}_A(t) = \frac{q}{qbq} \cdot \mathrm{mark}_A(t) \cdot r_A(t)$, so the asset effect is the assets' own change in their currency, translated at the day's rate: $E^{\text{asset}}_A(t) = \bigl(\frac{q}{qbq} \cdot \mathrm{mark}_A(t) - \mathrm{Cost}^{A}_A(t)\bigr)\, r_A(t)$. The exchange-rate effect is zero on the day of each purchase. For $A = C^*$, $r = 1$ and $\mathrm{Cost}^{A} = \mathrm{Cost}^{*}$: the exchange-rate effect vanishes, and assets already in the report currency have an asset effect only.
+
+A position in a currency $A \neq C^*$ that cannot be split on day $t$ — no market value, no rate $r_A(t)$, or a cost incomplete in either currency — adds its whole $\mathrm{MV} - \mathrm{Cost}^{*}$ (with $\mathrm{MV} = 0$ when it has no market value) to an **unsplit** part $E^{\text{unsplit}}_A(t)$ instead. Positions in $C^*$ always count in the asset effect.
+
+The period rows are the changes between the period's two boundary states — the last state on or before $t_0$ (zero if there is none) and the state at $t_1$ —, the same two states as $\Delta\mathrm{UGL}$:
+
+$$
+\Delta E^{k}_A = E^{k}_A(t_1) - E^{k}_A(t_0), \qquad k \in \{\text{asset}, \text{fx}, \text{unsplit}\}
+$$
+
+$$
+\sum_{A}\ \sum_{k} \Delta E^{k}_A = \Delta\mathrm{UGL} \quad \text{exactly}
+$$
+
+??? example "Example: a US ETF on a euro dashboard"
+
+    10 units bought for €400 when they were worth 500 USD, so $\mathrm{Cost}^{*} = 400$ EUR and $\mathrm{Cost}^{A} = 500$ USD.
+
+    | Day | Value in USD | $r_{USD}$ | MV in EUR | $E^{\text{asset}}$ | $E^{\text{fx}}$ | $\mathrm{UGL}$ |
+    |-----|-------|-----------|---------------|--------------------|-----------------|----------------|
+    | $t_0$ | 520 USD | 0.78 | 405.60 | $(520-500) \times 0.78 = 15.60$ | $500 \times 0.78 - 400 = -10.00$ | 5.60 |
+    | $t_1$ | 550 USD | 0.75 | 412.50 | $(550-500) \times 0.75 = 37.50$ | $500 \times 0.75 - 400 = -25.00$ | 12.50 |
+
+    $$
+    \Delta E^{\text{asset}} = +21.90, \qquad \Delta E^{\text{fx}} = -15.00, \qquad \Delta\mathrm{UGL} = +6.90 \text{ EUR}
+    $$
+
+    The ETF gained in dollars (+€21.90), the dollar lost ground against the euro (−€15.00): together, the +€6.90 of the period's unrealized change.
 
 ---
 
@@ -73,6 +131,7 @@ $$
 ## 🔗 Related
 
 - 💼 [NAV](nav.md) — endpoint of every PnL formula
+- 📖 [Book Value](book-value.md) — historical cost basis behind the unrealized gain/loss
 - 💸 [Deposited Capital](deposited-capital.md) — inception-to-date Total PnL
 - ⚙️ [Portfolio Engine](index.md) — full mathematical model
 - 📈 [Performance Metrics Overview](../index.md) — all performance metrics at a glance
