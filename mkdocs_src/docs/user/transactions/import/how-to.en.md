@@ -81,11 +81,17 @@ The step is **optional**: reports uploaded in earlier sessions are already store
 
 ### ⚙️ Step 2: Select Files & Parser
 
-This step lists the reports stored for each broker, grouped in collapsible per-broker panels, so you can pick exactly which ones to parse — including files uploaded in an earlier session (the files you just uploaded are pre-selected). Reports can be previewed or deleted from this step. Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. If you upload a generic spreadsheet, use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields. When a bank splits one account across several exports, such as [Danske Bank](danske-bank.md), the files you upload together form a **report set**: it appears as a single card, ticked as a whole, instead of one row per file.
+This step lists the reports stored for each broker, grouped in collapsible per-broker panels, so you can pick exactly which ones to parse — including files uploaded in an earlier session (the files you just uploaded are pre-selected). After an upload, only the panels of the brokers that received the new files start open; if you skipped the upload, every broker with stored reports starts open. When a broker's table lists more than five files, it shows them five per page — pick a larger page size if you prefer. Reports can be previewed or deleted from this step.
+
+Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. For a CSV you built yourself, the **[Generic CSV](generic-csv.md)** parser recognises the columns (date, type, quantity, asset, amount…) from their header names, so there is nothing to map by hand. When a bank splits one account across several exports, such as [Danske Bank](danske-bank.md), the files you upload together form a **report set**: it appears as a single card, ticked as a whole, instead of one row per file.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Parser Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+You choose how a set is read on its card. **Read as**, in the card's header, lists the plugin that recognised the set, marked *(detected)*, any other report-set plugin able to read every file of the set, and **Read the files one by one**. Each file's **⋮** menu offers **Read alone with ‹plugin›**, when another plugin can read that file on its own, and **Remove from the set**. None of these commands ticks or unticks a file: they change only *how* the files are read. A set ticked only in part — its checkbox shows a dash — keeps **Parse** disabled until you tick the whole set or untick it. The Danske Bank page explains each case in [How the set is read](danske-bank.md#how-the-set-is-read).
+
+<!-- [Screenshot Placeholder: brokers/import-report-set-read-as — a report set's card in Select Files with the Read as menu open, and a file's ⋮ menu offering Read alone with… and Remove from the set] -->
 
 ### 🧠 Step 3: Analysis & Parsing
 
@@ -160,8 +166,9 @@ At the end of parsing, the table displays a summary of the processing for each f
     </div>
 
     **When you will see it.** When your report contains lines the plugin recorded but could not
-    read completely: a trade whose instrument or quantity the file simply does not carry, or a
-    fee or tax it could not attach to any security. Reports that parse cleanly skip this step.
+    read completely: a trade whose instrument or quantity the file simply does not carry, a
+    fee or tax it could not attach to any security, or one amount that bundles a trade with its
+    charges. Reports that parse cleanly skip this step.
 
     This step exists only if the broker's plugin **flags rows for review** — a plugin that
     never emits these flags will never open it. The plugins that currently do:
@@ -169,6 +176,7 @@ At the end of parsing, the table displays a summary of the processing for each f
     | Plugin | Flags it can raise |
     |--------|--------------------|
     | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> [Crédit Agricole](credit_agricole.md) | Bundled trade+fees lines (offered for **splitting**), cash rows that could not be linked to an instrument, duplicate-relevant blockers |
+    | <img src="https://danskebank.fi/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> [Danske Bank](danske-bank.md) | Every purchase and sale, because its amount includes the commission (offered for **splitting**; for a security priced in euro, the likely commission is suggested) |
 
 
     As more plugins learn to flag rows, they will be listed here.
@@ -185,9 +193,9 @@ At the end of parsing, the table displays a summary of the processing for each f
       and quantity. Only the types that make sense for that row are offered; a fee or tax has no
       quantity field and may legitimately have **no instrument at all** ("broker charge").
     - **Split it** — when one line bundles a trade together with its fees or taxes.
-    - **Keep it as read** — you agree with what the plugin did. The row greys out and stays in
+    - **Keep as recorded** — you agree with what the plugin did. The row greys out and stays in
       the list, so you can always see, and revise, what you decided.
-    - **Reset** a single row, or every row in a group, and start again.
+    - **Restore** a single row, or every row in a group with **Restore all (N)**, and start again.
 
     A **show-me-the-source** button highlights every original line behind a warning in the file
     preview, so you can check the statement itself before deciding.
@@ -195,7 +203,9 @@ At the end of parsing, the table displays a summary of the processing for each f
     !!! danger "Blocking rows"
 
         Rows marked in **red** are blocking: the import cannot be saved until you settle them.
-        Amber rows are advisory — you may leave them exactly as they are.
+        Amber rows are advisory: **Keep as recorded** leaves them exactly as they are. Either
+        way, **Continue** waits until every row has an answer — **Keep the remaining N rows as
+        read** answers all the open ones in one click.
 
 ??? note "🧹 Duplicates — appears when the same movement is in two of the files you are importing together"
 
@@ -268,6 +278,8 @@ what it is in your library. One search field covers everything, in two sections:
 
 Auto-matched candidates are pinned at the top of the search field with a confidence badge
 (**Exact** / **High** / **Medium** / **Low**), so the most likely match is usually one click away.
+When exactly one asset in your library matches, the wizard selects it for you; when several
+could match, the choice stays yours.
 
 If neither section has what you need, the **Create «…»** button at the bottom of the list is
 always visible and already carries whatever you typed — you never have to go looking for it.
@@ -341,9 +353,18 @@ Click **Import N transactions** to hand the selected rows to the **bulk editor**
 nothing is written to the ledger yet. Give them one last look — or keep editing — and then
 **Save All** to commit them to your portfolio.
 
+Before the hand-over, **Import N transactions** may run one final duplicate check. New or changed
+duplicates between your files take you back to the **Duplicates** step, as described above. If the
+check only changes which rows are selected, the wizard never imports a smaller — or empty — batch
+behind your back: it stays on the review and warns you, *The final duplicate check changed the
+selection. Review it before importing.* Look at the selection, then click **Import N transactions**
+again.
+
 With a **report set**, **Import N transactions** may first stop on **Align with the bank**, which
 compares what LibreFolio will hold with what the bank states and proposes the corrections that
 close the difference — see [Danske Bank](danske-bank.md#first-import-align-with-the-bank).
+
+<!-- [Screenshot Placeholder: brokers/import-wizard-gapfix-step — the Align with the bank step: one card per point (starting point, after the gap, end-of-period check) above the table of proposed corrections tagged gap_fix] -->
 
 ---
 

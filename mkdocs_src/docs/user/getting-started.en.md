@@ -45,13 +45,23 @@ dashboard.
 
 On this page you can:
 
-- 🌍 **Confirm your language and base currency** — pre-filled from your administrator's
-  instance-wide defaults.
+- 🌍 **Confirm your language and currency** — the **Language** and **Default Currency** fields are
+  pre-filled from your administrator's instance-wide defaults, which every new account starts
+  from.
 - 🖼️ **Add a profile picture if you want** — your initials remain in place when you do not
   choose one.
 - ✅ Select **Continue** to save the visible choices, or **Skip setup permanently** to keep the
   existing settings and move on.
 - 🚪 Use the dedicated **Log out** action in the page header whenever you need to leave safely.
+
+<!-- [Screenshot Placeholder: onboarding/welcome-setup — the Welcome page with the Language and Default Currency fields pre-filled, the optional profile picture, and the Continue and Skip setup permanently actions] -->
+
+!!! note "Already using LibreFolio?"
+
+    Accounts that existed before LibreFolio 1.2.0 are not sent through onboarding: their Welcome
+    setup counts as **Completed**, and the tour and every guide as **Skipped**. You can still
+    replay any of them from
+    **[Settings → Preferences → Onboarding and guides](settings/preferences.md#onboarding-and-guides)**.
 
 An onboarding refresh or bootstrap failure can fall back to the Dashboard with an inline
 **Retry** banner only when LibreFolio already has a cached terminal Welcome state
@@ -70,6 +80,8 @@ The core tour is deliberately short and stays focused on navigation:
 
 It points out the main destinations without opening forms or creating data.
 
+<!-- [Screenshot Placeholder: onboarding/core-tour-step — a step of the Core tour pointing at a destination in the sidebar, with its message panel] -->
+
 ### 🧭 Contextual guides
 
 Short guides then appear where their controls are real and useful:
@@ -84,6 +96,8 @@ Short guides then appear where their controls are real and useful:
 These guides observe the interface; they never synthesize a click, upload, edit, or save. An
 informational area pulses, while a real action is marked with a translucent cursor. Clicking
 that real action performs the normal app action and advances the guide.
+
+<!-- [Screenshot Placeholder: onboarding/contextual-guide — a contextual guide on the FX page highlighting a real control, with its message panel] -->
 
 The message panel becomes translucent after **3 seconds** so the underlying interface is easier
 to see, then returns to full strength when you hover it or move focus inside it. When LibreFolio
@@ -163,5 +177,5 @@ Now that your portfolio is populated, you can:
 
 - 🤝 **[Share your broker](brokers/sharing.md)** — Give access to family members or advisors.
 - 💱 **[Set up FX rates](fx/index.md)** — Configure currency conversion for multi-currency portfolios.
-- ⚙️ **[Customize settings](../admin/settings.md)** — Adjust language, theme, and system preferences.
+- ⚙️ **[Customize your preferences](settings/preferences.md)** — Adjust your language, default currency, and theme. Administrators also manage the system-wide **[Global Settings](../admin/settings.md)**.
 - 🧭 **[Replay the welcome setup or guided tours](settings/preferences.md#onboarding-and-guides)** — Revisit the welcome screen, quick tour, or import guide any time from Settings → Preferences.

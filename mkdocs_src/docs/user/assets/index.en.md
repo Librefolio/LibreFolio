@@ -12,8 +12,8 @@ Assets are the core of LibreFolio. They represent any financial instrument you o
 An asset in LibreFolio is a financial instrument with:
 
 - **Identity**: name, ISIN, ticker, or other identifiers
-- **Category**: stock, ETF, bond, crypto, commodity, etc.
-- **Currency**: the currency the asset is denominated in
+- **Type**: stock, ETF, bond, crypto, commodity, etc.
+- **Currency**: the currency used to store the asset's prices — normally the one it is quoted in
 - **Provider**: an optional pricing provider that automatically fetches current prices and history
 - **Classification**: sector and geographic distribution (pie charts + world map)
 - **Transactions**: buy, sell, dividend, interest operations linked to a portfolio
@@ -23,9 +23,9 @@ An asset in LibreFolio is a financial instrument with:
 Navigate to **Assets** in the sidebar to see all your assets. The list page provides:
 
 - 🔀 **Grid / Table Layouts**: Choose between a card-based visual grid or a dense, sortable data table. Your layout preference is automatically persisted in your browser's `localStorage` and will be loaded in future sessions.
-- 🔎 **Smart Search**: Filter assets in real-time by entering a name, ISIN, ticker, or broker name.
-- 🏷️ **Type Filters**: Filter the list to display only specific classes (e.g. ETFs, Stocks, Bonds, Crypto).
-- 🗃️ **Archived Assets**: Toggle between active holdings and archived assets to keep your list clean.
+- 🔎 **Search**: Filter the list in real time by asset name.
+- 🏷️ **Type & Currency Filters**: Show only some asset types (e.g. ETFs, Stocks, Bonds, Crypto) or only some currencies.
+- 🗃️ **Active / Inactive**: The list starts with active assets only. Switch on **Inactive** to see deactivated (archived) assets as well, or switch off **Active** to see only those.
 - ⏱️ **Time Delta Selector**: Change the timeframe used to calculate price changes (e.g., `1W`, `1M`, `3M`, `6M`, `1Y`, `2Y`, `3Y`, `5Y`).
 - 📉 **Absolute / Percentage Delta**: In grid view, the toolbar's **Abs / %** control applies to
   every asset card. The % button on an individual card changes only that card; using the toolbar
@@ -38,6 +38,26 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 - 🖱️ **Context Menu**: Right-click any row in the data table layout for quick actions (**Sync**, **Refresh**, **Merge**, **Delete**). Sync is disabled for assets without a pricing provider and for archived assets; Merge folds a duplicate asset into another one — transactions, prices, and events converge on the target and the source asset is deleted.
 
 Click on any asset card to navigate to its **[detail page](detail/index.md)**. There, the **‹ ›** arrows in the header step through the assets in the order this list shows them — search, filters and sort included.
+
+### 🗂️ Your Assets, Other Users' Assets, Watched
+
+In both layouts the list is split into up to three panels, each with its own count. A panel with
+nothing in it is not shown.
+
+| Panel | What it holds |
+|---|---|
+| **Your assets** | Assets held now in a broker you own |
+| **Other users' assets** | Assets held now only by other users — in brokers you do not own |
+| **Watched** | Assets held by no one now — never bought or already sold, kept on the radar |
+
+What decides the panel is the position **today**, not the past: having once traded an asset does
+not keep it among *Your assets*. When you sell your whole position, the asset moves to
+*Other users' assets* if someone else still holds it, and to *Watched* otherwise. Brokers shared
+with you as **Editor** or **Viewer** count as other users' brokers, and a position closed down to a
+negligible leftover counts as not held.
+
+In table view each panel is a table of its own: column widths, order and visibility stay aligned
+across the three, while each table has its own pages.
 
 ### 🗑️ Deleting an Asset
 
@@ -65,7 +85,7 @@ The heart of asset analysis — interactive chart, technical signals, measures, 
 
 ### 🔌 [Providers](providers/index.md)
 
-Automatic price fetching from Yahoo Finance, justETF, CSS Scraper, or the Scheduled Investment engine.
+Automatic price fetching from Yahoo Finance, justETF, Borsa Italiana, CSS Scraper, or the Scheduled Investment engine.
 
 ---
 
