@@ -3,6 +3,13 @@
  *
  * Query keys sort object keys and canonicalize unordered scope identifiers, so
  * semantically equivalent requests share one cache entry.
+ *
+ * Two ways to let go of an answer (page cache, phase 1):
+ * - `markRiskStale()` — a portfolio mutation, «Aggiorna»: query and eligibility answers are marked
+ *   stale and kept, so a panel shows them while it asks again; the catalogs describe the engine,
+ *   not the portfolio, and are left alone (E6). Nothing in flight is discarded.
+ * - `invalidateRisk()` — a session change, or a host that wants everything asked again: forget
+ *   everything, catalogs included, and discard every answer still in flight.
  */
 
 import {zodiosApi} from '$lib/api';
@@ -20,18 +27,32 @@ export type {RiskMode, RiskQueryRequest, RiskQueryResponse, RiskScope, RiskScope
 
 type CacheKey = string;
 
+/** An answer, and the mark its question was asked under: asked before the last `markRiskStale()` = stale. */
+interface Marked<T> {
+    value: T;
+    seq: number;
+}
+
+interface MarkedFlight<T> {
+    promise: Promise<T | null>;
+    seq: number;
+}
+
 let catalogCache = $state<RiskCatalogResponse | null>(null);
 let scenarioCatalogCache = $state<RiskScenarioCatalogResponse | null>(null);
-let queryCache = $state(new Map<CacheKey, RiskQueryResponse>());
+let queryCache = $state(new Map<CacheKey, Marked<RiskQueryResponse>>());
 let queryErrorCache = $state(new Map<CacheKey, unknown>());
 
 let catalogInflight: Promise<RiskCatalogResponse | null> | null = null;
 let scenarioCatalogInflight: Promise<RiskScenarioCatalogResponse | null> | null = null;
-const queryInflight = new Map<CacheKey, Promise<RiskQueryResponse | null>>();
+const queryInflight = new Map<CacheKey, MarkedFlight<RiskQueryResponse>>();
 // Not reactive: nothing renders the cache, the callers await its answers.
-let eligibilityCache = new Map<CacheKey, EligibilityVerdicts>();
-const eligibilityInflight = new Map<CacheKey, Promise<EligibilityVerdicts | null>>();
+let eligibilityCache = new Map<CacheKey, Marked<EligibilityVerdicts>>();
+const eligibilityInflight = new Map<CacheKey, MarkedFlight<EligibilityVerdicts>>();
+/** Bumped by `invalidateRisk()` only: an answer asked before it is discarded. */
 let cacheGeneration = 0;
+/** Bumped by `markRiskStale()`: answers asked before it are stale, and kept. */
+let markSeq = 0;
 
 export type RiskQueryCacheStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -40,6 +61,8 @@ export interface RiskQueryCacheSnapshot {
     status: RiskQueryCacheStatus;
     response: RiskQueryResponse | null;
     error: unknown | null;
+    /** The cached response was asked before the last `markRiskStale()`: show it, and ask again. */
+    stale: boolean;
 }
 
 export function makeRiskRequestKey(request: RiskQueryRequest): CacheKey {
@@ -65,20 +88,22 @@ function releaseWhenSettled(promise: Promise<unknown>, release: () => void): voi
  * How many times in all a risk question is asked while its answer keeps being discarded: the
  * first request plus two re-asks (D374, «come il catalogo»). One constant for the two catalog
  * fetches below and for the controller's base wave and on-demand runs, so the bound cannot
- * drift apart between them. Three, not two: on Asset Global a slow request can cross more than
- * one 30 s live-price poll, and each poll moves the cache generation.
+ * drift apart between them. Three, not two: on Asset Global a slow request used to cross more
+ * than one 30 s live-price poll, each moving the cache generation. Since the page cache a poll
+ * only marks the answers stale; the generation moves with a session change or `invalidateRisk()`.
  */
 export const RISK_DISCARD_ATTEMPTS = 3;
 
 export function getRiskQuerySnapshot(request: RiskQueryRequest): RiskQueryCacheSnapshot {
     const key = makeRiskRequestKey(request);
-    const response = queryCache.get(key) ?? null;
+    const entry = queryCache.get(key);
+    const response = entry?.value ?? null;
     const error = queryErrorCache.get(key) ?? null;
     let status: RiskQueryCacheStatus = 'idle';
     if (queryInflight.has(key)) status = 'loading';
     else if (queryErrorCache.has(key)) status = 'error';
     else if (response) status = 'success';
-    return {key, status, response, error};
+    return {key, status, response, error, stale: entry !== undefined && entry.seq < markSeq};
 }
 
 export async function fetchRiskCatalog(force = false): Promise<RiskCatalogResponse | null> {
@@ -87,12 +112,12 @@ export async function fetchRiskCatalog(force = false): Promise<RiskCatalogRespon
 
     const promise = (async () => {
         // A response is discarded when the session or the cache generation moved while
-        // it was in flight — and on an asset page that happens for a mundane reason:
-        // opening the page persists today's price, which notifies the portfolio
-        // mutation listeners, which invalidate risk. A discard is not a failure: it
-        // means the answer describes a world that no longer exists, so the right
-        // reaction is to ask again rather than hand the caller a null it can only
-        // report as an error. Bounded, so a generation that keeps moving cannot spin.
+        // it was in flight: a session change, or a host's `invalidateRisk()`. A portfolio
+        // mutation no longer does — the catalog describes the engine, not the portfolio
+        // (E6). A discard is not a failure: it means the answer describes a world that no
+        // longer exists, so the right reaction is to ask again rather than hand the caller
+        // a null it can only report as an error. Bounded, so a generation that keeps
+        // moving cannot spin.
         for (let attempt = 0; attempt < RISK_DISCARD_ATTEMPTS; attempt += 1) {
             const requestSessionGeneration = getClientSessionGeneration();
             const requestCacheGeneration = cacheGeneration;
@@ -137,17 +162,29 @@ export async function fetchRiskScenarioCatalog(force = false): Promise<RiskScena
     return promise;
 }
 
+/**
+ * Ask a bulk risk question, or answer it from the cache.
+ *
+ * A fresh answer is served as it is. A stale one (`markRiskStale`) is asked again, once however
+ * many callers, and the promise resolves the fresh answer; `getRiskQuerySnapshot` still hands the
+ * stale one to whoever shows it meanwhile. A mark never discards a request in flight: its answer
+ * is cached, still stale. Resolves `null` only when the session or `invalidateRisk()` discarded it.
+ *
+ * A failure rejects. It is remembered (and thrown again without asking) only when there is no
+ * answer to fall back on: a failed refresh leaves the stale answer cached, and the next question
+ * asks again.
+ */
 export async function queryRisk(request: RiskQueryRequest, force = false): Promise<RiskQueryResponse | null> {
     const canonicalRequest = canonicalizeRiskRequest(request);
     const key = makeRiskRequestKey(canonicalRequest);
+    const cached = queryCache.get(key);
     if (!force) {
-        const cached = queryCache.get(key);
-        if (cached) return cached;
-        if (queryErrorCache.has(key)) throw queryErrorCache.get(key);
+        if (cached && cached.seq >= markSeq) return cached.value;
+        if (!cached && queryErrorCache.has(key)) throw queryErrorCache.get(key);
     }
 
     const existing = queryInflight.get(key);
-    if (existing) return existing;
+    if (existing && existing.seq >= markSeq) return existing.promise;
 
     if (force && queryErrorCache.has(key)) {
         queryErrorCache = new Map(queryErrorCache);
@@ -156,26 +193,30 @@ export async function queryRisk(request: RiskQueryRequest, force = false): Promi
 
     const requestSessionGeneration = getClientSessionGeneration();
     const requestCacheGeneration = cacheGeneration;
+    const requestSeq = markSeq;
+    const discarded = () => !isClientSessionCurrent(requestSessionGeneration) || requestCacheGeneration !== cacheGeneration;
     const promise = (async () => {
         try {
             const response = await zodiosApi.query_risk_api_v1_risk_query_post(canonicalRequest);
-            if (!isClientSessionCurrent(requestSessionGeneration) || requestCacheGeneration !== cacheGeneration) return null;
-            queryCache = new Map(queryCache).set(key, response);
+            if (discarded()) return null;
+            const stored = queryCache.get(key);
+            if (!stored || stored.seq <= requestSeq) queryCache = new Map(queryCache).set(key, {value: response, seq: requestSeq});
             if (queryErrorCache.has(key)) {
                 queryErrorCache = new Map(queryErrorCache);
                 queryErrorCache.delete(key);
             }
             return response;
         } catch (error) {
-            if (!isClientSessionCurrent(requestSessionGeneration) || requestCacheGeneration !== cacheGeneration) return null;
-            queryErrorCache = new Map(queryErrorCache).set(key, error);
+            if (discarded()) return null;
+            if (!queryCache.has(key)) queryErrorCache = new Map(queryErrorCache).set(key, error);
             throw error;
         }
     })();
 
-    queryInflight.set(key, promise);
+    const flight = {promise, seq: requestSeq};
+    queryInflight.set(key, flight);
     releaseWhenSettled(promise, () => {
-        if (queryInflight.get(key) === promise) queryInflight.delete(key);
+        if (queryInflight.get(key) === flight) queryInflight.delete(key);
     });
     return promise;
 }
@@ -185,41 +226,45 @@ export async function queryRisk(request: RiskQueryRequest, force = false): Promi
  *
  * The same question is asked once per session: the key is the user, the period, the currency and the ids
  * sorted, so two pickers — or one remounted when its section reopens — share the answer and its request.
- * It is cleared with the rest of the cache by `invalidateRisk` (a session change, a portfolio mutation, a
- * sync): verdicts follow the prices, and a sync is how prices change. The engine takes at most 500 ids a
- * request, so the question is split and the answers merged, as the lab does.
+ * A portfolio mutation or a sync marks the verdicts stale (`markRiskStale`): they follow the prices, and
+ * a sync is how prices change, so the same question then asks again — and its answer is awaited. A
+ * session change forgets them (`invalidateRisk`). The engine takes at most 500 ids a request, so the
+ * question is split and the answers merged, as the lab does.
  *
- * Resolves `null` when the session or the cache moved on while it was asked, like `queryRisk`; a failure
- * rejects and is not kept, so the next question asks again.
+ * Resolves `null` when the session or `invalidateRisk()` moved on while it was asked, like `queryRisk`
+ * (a mark does not discard it); a failure rejects and is not kept, so the next question asks again.
  */
 export function queryEligibility(assetIds: readonly number[], period: {start: string; end: string}, currency: string): Promise<EligibilityVerdicts | null> {
     const ids = [...new Set(assetIds)].sort((left, right) => left - right);
     if (ids.length === 0) return Promise.resolve(EMPTY_VERDICTS);
     const key = `${getClientSessionUserId() ?? 'anonymous'}|${period.start}|${period.end}|${currency}|${ids.join(',')}`;
     const cached = eligibilityCache.get(key);
-    if (cached) return Promise.resolve(cached);
+    if (cached && cached.seq >= markSeq) return Promise.resolve(cached.value);
     const existing = eligibilityInflight.get(key);
-    if (existing) return existing;
+    if (existing && existing.seq >= markSeq) return existing.promise;
 
     const requestSessionGeneration = getClientSessionGeneration();
     const requestCacheGeneration = cacheGeneration;
-    const stale = () => !isClientSessionCurrent(requestSessionGeneration) || requestCacheGeneration !== cacheGeneration;
+    const requestSeq = markSeq;
+    const discarded = () => !isClientSessionCurrent(requestSessionGeneration) || requestCacheGeneration !== cacheGeneration;
     const promise = (async () => {
         try {
             const answers = await Promise.all(eligibilityBatches(ids).map((batch) => zodiosApi.asset_eligibility_api_v1_risk_eligibility_post({asset_ids: batch, date_range: {start: period.start, end: period.end || null}, target_currency: currency})));
-            if (stale()) return null;
+            if (discarded()) return null;
             const verdicts = mergeEligibilityAnswers(answers);
-            eligibilityCache.set(key, verdicts);
+            const stored = eligibilityCache.get(key);
+            if (!stored || stored.seq <= requestSeq) eligibilityCache.set(key, {value: verdicts, seq: requestSeq});
             return verdicts;
         } catch (error) {
-            if (stale()) return null;
+            if (discarded()) return null;
             throw error;
         }
     })();
 
-    eligibilityInflight.set(key, promise);
+    const flight = {promise, seq: requestSeq};
+    eligibilityInflight.set(key, flight);
     releaseWhenSettled(promise, () => {
-        if (eligibilityInflight.get(key) === promise) eligibilityInflight.delete(key);
+        if (eligibilityInflight.get(key) === flight) eligibilityInflight.delete(key);
     });
     return promise;
 }
@@ -233,6 +278,18 @@ export function hasRiskCapability(catalog: RiskCatalogResponse | null | undefine
     return Boolean(definition?.supported_scopes.includes(scope) && definition.supported_modes.includes(mode));
 }
 
+/**
+ * Mark every query and eligibility answer stale, and keep it (page cache, phase 1): the next question
+ * asks again, `getRiskQuerySnapshot` still hands the old answer to the panel that shows it, and an
+ * answer in flight still lands. The catalogs are not touched (E6). A remembered failure is dropped,
+ * so the next question asks again instead of throwing it.
+ */
+export function markRiskStale(): void {
+    markSeq += 1;
+    if (queryErrorCache.size > 0) queryErrorCache = new Map();
+}
+
+/** Forget everything, catalogs included, and discard every answer still in flight: a session change. */
 export function invalidateRisk(): void {
     cacheGeneration += 1;
     catalogCache = null;
@@ -247,4 +304,4 @@ export function invalidateRisk(): void {
 }
 
 registerClientSessionReset('riskStore', invalidateRisk);
-registerPortfolioMutationListener('riskStore', invalidateRisk);
+registerPortfolioMutationListener('riskStore', markRiskStale);

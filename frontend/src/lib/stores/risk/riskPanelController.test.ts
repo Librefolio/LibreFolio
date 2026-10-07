@@ -17,6 +17,11 @@ const fetchRiskCatalog = vi.hoisted(() => vi.fn());
 const fetchRiskScenarioCatalog = vi.hoisted(() => vi.fn());
 const queryRisk = vi.hoisted(() => vi.fn());
 const invalidateRisk = vi.hoisted(() => vi.fn());
+/** Page cache, phase 1: what the store already holds for a request, and the mark a sync leaves.
+ *  `beforeEach` answers "nothing cached" for every request, so every case written before the page
+ *  cache sees the store it was written against. */
+const getRiskQuerySnapshot = vi.hoisted(() => vi.fn());
+const markRiskStale = vi.hoisted(() => vi.fn());
 /** Read at call time by the `hasRiskCapability` stub; `beforeEach` puts it back. `only`, when a
  *  test sets it, narrows "everything" to what one catalogue offers. */
 const capability = vi.hoisted(() => ({supported: true, only: null as ((code: string, scopeKind: string, mode: string) => boolean) | null}));
@@ -29,6 +34,8 @@ vi.mock('$lib/stores/risk/riskStore.svelte', async (importOriginal) => {
         fetchRiskScenarioCatalog,
         queryRisk,
         invalidateRisk,
+        getRiskQuerySnapshot,
+        markRiskStale,
         // Every analytic is available: capability gating is the panel's business,
         // not the controller's, and stubbing it here keeps the subject singular.
         // The one test about an unsupported analytic flips it for itself, and the
@@ -82,6 +89,11 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
         resolve = r;
     });
     return {promise, resolve};
+}
+
+/** The store's snapshot of a request it holds no answer for: what every case sees unless it says otherwise. */
+function nothingCached(request: RiskQueryRequest) {
+    return {key: `uncached|${request.mode}`, status: 'idle', response: null, error: null, stale: false};
 }
 
 function mountController(initial: RiskControllerInputs = defaultInputs(), options: RiskControllerOptions = {}) {
@@ -334,6 +346,8 @@ describe('riskPanelController', () => {
         fetchRiskScenarioCatalog.mockReset().mockResolvedValue({items: []});
         queryRisk.mockReset().mockResolvedValue({items: []});
         invalidateRisk.mockReset();
+        getRiskQuerySnapshot.mockReset().mockImplementation(nothingCached);
+        markRiskStale.mockReset();
         capability.supported = true;
         capability.only = null;
     });
@@ -690,9 +704,197 @@ describe('riskPanelController', () => {
 
         await controller.handleSynced();
 
-        expect(invalidateRisk).toHaveBeenCalledTimes(1);
+        // Contract changed with the page cache (phase 1, D): a sync marks the risk answers stale instead of resetting the store.
+        expect(markRiskStale).toHaveBeenCalledTimes(1);
+        expect(invalidateRisk).not.toHaveBeenCalled();
         expect(controller.simulationResult).toBeNull();
         stop();
+    });
+
+    // ------------------------------------------------------------------
+    // Page cache, phase 1 (R2 / N, decision E1 of 06/10): show the old answer,
+    // refresh in background. When the store still holds a stale answer for the
+    // base wave (`getRiskQuerySnapshot(...).stale`), the panel shows it at once —
+    // no skeleton, no count from zero (`hydratedFromCache` tells the tweened
+    // figures to start from their value) — and swaps in the fresh answer when the
+    // refresh lands. A sync marks the risk answers stale (`markRiskStale`) instead
+    // of resetting the store, so the catalogs survive and the figures stay up.
+    // ------------------------------------------------------------------
+    describe('stale-while-revalidate on the base wave (page cache, phase 1)', () => {
+        const CACHED = {
+            historical: {items: [{analytic_code: 'historical_kpi', marker: 'cached'}]},
+            current_composition: {items: [{analytic_code: 'risk_contribution', marker: 'cached'}]},
+        };
+        const FRESH = {
+            historical: {items: [{analytic_code: 'historical_kpi', marker: 'fresh'}]},
+            current_composition: {items: [{analytic_code: 'risk_contribution', marker: 'fresh'}]},
+        };
+
+        /** Read by name: the getter is what this phase adds, so the type check does not depend on it landing first. */
+        function hydratedFromCache(controller: RiskPanelController): unknown {
+            return (controller as unknown as {hydratedFromCache?: boolean}).hydratedFromCache;
+        }
+
+        /** The base wave held in flight, one answer per mode, settled by the case. */
+        function holdBaseWave() {
+            const answers = {historical: deferred<OnDemandAnswer>(), current_composition: deferred<OnDemandAnswer>()};
+            queryRisk.mockImplementation((request: RiskQueryRequest) => (onDemandAnalysisOf(request) === null ? answers[request.mode].promise : Promise.reject(new Error('an on-demand question reached a base-wave case'))));
+            onTestFinished(() => {
+                answers.historical.resolve({items: []});
+                answers.current_composition.resolve({items: []});
+            });
+            return answers;
+        }
+
+        it('exposes hydratedFromCache, false while nothing was served from the cache', async () => {
+            const {controller, stop} = mountController();
+            onTestFinished(stop);
+
+            expect(hydratedFromCache(controller), 'the controller exposes no hydratedFromCache: the panel cannot tell its figures to start from their value instead of counting up from zero').toBe(false);
+            await vi.waitFor(() => expect(controller.initialLoading).toBe(false));
+            expect(hydratedFromCache(controller), 'nothing was cached, yet the controller says it hydrated from the cache').toBe(false);
+        });
+
+        it('shows a stale cached base wave at once, while its refresh is in flight, then the fresh answer', async () => {
+            getRiskQuerySnapshot.mockImplementation((request: RiskQueryRequest) => ({key: `cached|${request.mode}`, status: 'success', response: CACHED[request.mode], error: null, stale: true}));
+            const refresh = holdBaseWave();
+
+            const {controller, stop} = mountController();
+            onTestFinished(stop);
+
+            await vi.waitFor(() => expect(controller.historicalResults, 'the stale cached answer is not on screen while its refresh is in flight: the panel shows a skeleton instead').toEqual(CACHED.historical.items));
+            expect(controller.currentResults, 'only half of the cached wave was shown').toEqual(CACHED.current_composition.items);
+            expect(controller.initialLoading, 'a panel with figures to show still reports its first load').toBe(false);
+            expect(controller.refreshing, 'the refresh in background is not reported').toBe(true);
+            expect(hydratedFromCache(controller), 'the figures came from the cache and the controller does not say so').toBe(true);
+            expect(queryRisk, 'the stale answer was shown and never asked again').toHaveBeenCalled();
+
+            refresh.historical.resolve(FRESH.historical);
+            refresh.current_composition.resolve(FRESH.current_composition);
+            await vi.waitFor(() => expect(controller.refreshing).toBe(false));
+            expect(controller.historicalResults, 'the fresh answer did not replace the cached one').toEqual(FRESH.historical.items);
+            expect(controller.currentResults).toEqual(FRESH.current_composition.items);
+        });
+
+        it('marks the risk answers stale on a sync, instead of resetting the store, and keeps the figures up while it reloads', async () => {
+            const {controller, stop} = mountController();
+            onTestFinished(stop);
+            answerBaseWave(CACHED.historical.items, CACHED.current_composition.items);
+            await controller.loadBase(false);
+            expect(controller.historicalResults, 'precondition: the base wave is on screen').toEqual(CACHED.historical.items);
+            const callsBeforeSync = queryRisk.mock.calls.length;
+
+            const reload = holdBaseWave();
+            const synced = controller.handleSynced();
+
+            await vi.waitFor(() => expect(markRiskStale, 'a sync does not mark the risk answers stale').toHaveBeenCalledTimes(1));
+            expect(invalidateRisk, 'a sync still resets the whole risk store, catalogs and figures included').not.toHaveBeenCalled();
+            await vi.waitFor(() => expect(queryRisk.mock.calls.length, 'the sync did not reload the base wave').toBeGreaterThan(callsBeforeSync));
+            expect(controller.historicalResults, 'the base results were emptied while the reload is in flight').toEqual(CACHED.historical.items);
+            expect(controller.currentResults).toEqual(CACHED.current_composition.items);
+
+            reload.historical.resolve(FRESH.historical);
+            reload.current_composition.resolve(FRESH.current_composition);
+            await synced;
+            expect(controller.historicalResults).toEqual(FRESH.historical.items);
+            expect(controller.currentResults).toEqual(FRESH.current_composition.items);
+        });
+
+        // A refresh that fails (Risk family review of phase 1). The figures on screen stay, and the
+        // host is told through `onrefreshfailed` (its toast), only when they answer the very question
+        // whose refresh failed. Figures of another question — the period or the currency before the
+        // change — must not stand under the new inputs as if they answered them: that failure is
+        // reported as a failure, through `loadError`, as it was before the page cache.
+        const QUESTION_A = {
+            historical: [{analytic_code: 'historical_kpi', marker: 'question A'}],
+            current_composition: [{analytic_code: 'risk_contribution', marker: 'question A'}],
+        };
+        const QUESTION_B = {
+            historical: [{analytic_code: 'historical_kpi', marker: 'question B'}],
+            current_composition: [{analytic_code: 'risk_contribution', marker: 'question B'}],
+        };
+
+        /** Every base question fails: held until the case calls `fail()`. Marked handled at once, so a
+         *  case that ends before asking leaves no unhandled rejection behind. */
+        function failBaseWave() {
+            let reject!: (error: Error) => void;
+            const failing = new Promise<never>((_resolve, settle) => {
+                reject = settle;
+            });
+            failing.catch(() => undefined);
+            queryRisk.mockImplementation((request: RiskQueryRequest) => (onDemandAnalysisOf(request) === null ? failing : Promise.reject(new Error('an on-demand question reached a base-wave case'))));
+            onTestFinished(() => reject(new Error('released at the end of the case')));
+            return {fail: () => reject(new Error('synthetic: risk engine unreachable'))};
+        }
+
+        function silenceConsoleError(): void {
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+            onTestFinished(() => consoleError.mockRestore());
+        }
+
+        it('reports a failure, and leaves onrefreshfailed alone, when the figures on screen answer another question than the refresh that failed', async () => {
+            silenceConsoleError();
+            const onrefreshfailed = vi.fn();
+            const {controller, inputs, stop} = mountController(defaultInputs(), {onrefreshfailed});
+            onTestFinished(stop);
+            answerBaseWave(QUESTION_A.historical, QUESTION_A.current_composition);
+            await controller.loadBase(false);
+            expect(controller.historicalResults, 'precondition: question A is on screen').toEqual(QUESTION_A.historical);
+            const askedBefore = queryRisk.mock.calls.length;
+
+            // Question B: the period moves, so the signature moves and B is asked while A stays up.
+            const waveB = failBaseWave();
+            inputs.dateStart = '2025-02-01';
+            flushSync();
+            await vi.waitFor(() => expect(queryRisk.mock.calls.length, 'precondition: moving the period did not ask question B').toBeGreaterThan(askedBefore));
+            const askedStarts = queryRisk.mock.calls.slice(askedBefore).map(([request]) => (request as RiskQueryRequest).date_range.start);
+            expect(askedStarts, 'precondition: what was asked after the move is not question B').toEqual(askedStarts.map(() => '2025-02-01'));
+            expect(controller.refreshing, 'precondition: question B is asked as a refresh, over the figures of A').toBe(true);
+            expect(controller.historicalResults, 'precondition: question A stays on screen while B is in flight').toEqual(QUESTION_A.historical);
+
+            waveB.fail();
+            await vi.waitFor(() => expect(controller.refreshing).toBe(false));
+
+            expect(onrefreshfailed, 'the figures of question A were kept under question B as if they answered it: only a failed refresh of the very question on screen may keep its figures').not.toHaveBeenCalled();
+            expect(controller.loadError, 'question B failed with only the figures of question A on screen, and the failure was not reported').toBe(true);
+        });
+
+        it('keeps the figures and calls onrefreshfailed once when the refresh of the question on screen fails: figures loaded by a previous load', async () => {
+            silenceConsoleError();
+            const onrefreshfailed = vi.fn();
+            const {controller, stop} = mountController(defaultInputs(), {onrefreshfailed});
+            onTestFinished(stop);
+            answerBaseWave(QUESTION_B.historical, QUESTION_B.current_composition);
+            await controller.loadBase(false);
+            expect(controller.historicalResults, 'precondition: question B is on screen').toEqual(QUESTION_B.historical);
+
+            queryRisk.mockImplementation(() => Promise.reject(new Error('synthetic: risk engine unreachable')));
+            await controller.loadBase(true);
+
+            expect(onrefreshfailed, 'a failed refresh of the question on screen did not reach the host').toHaveBeenCalledTimes(1);
+            expect(controller.loadError, 'a failed refresh of the question on screen replaced its figures with an error').toBe(false);
+            expect(controller.historicalResults, 'the figures of the question on screen were dropped by its failed refresh').toEqual(QUESTION_B.historical);
+            expect(controller.currentResults).toEqual(QUESTION_B.current_composition);
+        });
+
+        it('keeps the figures and calls onrefreshfailed once when the refresh of the question on screen fails: figures hydrated from the cache', async () => {
+            silenceConsoleError();
+            getRiskQuerySnapshot.mockImplementation((request: RiskQueryRequest) => ({key: `cached|${request.mode}`, status: 'success', response: {items: QUESTION_B[request.mode]}, error: null, stale: true}));
+            const refresh = failBaseWave();
+            const onrefreshfailed = vi.fn();
+            const {controller, stop} = mountController(defaultInputs(), {onrefreshfailed});
+            onTestFinished(stop);
+            await vi.waitFor(() => expect(controller.historicalResults, 'precondition: question B is on screen, from the cache').toEqual(QUESTION_B.historical));
+            expect(hydratedFromCache(controller), 'precondition: the figures came from the cache').toBe(true);
+
+            refresh.fail();
+            await vi.waitFor(() => expect(controller.refreshing).toBe(false));
+
+            expect(onrefreshfailed, 'a failed refresh of the question on screen did not reach the host').toHaveBeenCalledTimes(1);
+            expect(controller.loadError, 'a failed refresh of the question on screen replaced its figures with an error').toBe(false);
+            expect(controller.historicalResults, 'the cached figures of the question on screen were dropped by its failed refresh').toEqual(QUESTION_B.historical);
+            expect(controller.currentResults).toEqual(QUESTION_B.current_composition);
+        });
     });
 
     it('asks for the scenario catalog once, however often it is requested', async () => {
