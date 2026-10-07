@@ -239,7 +239,7 @@ LibreFolio supports importing statement files from the following brokers:
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" style="color: var(--md-accent-fg-color);"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m1.8 18H14v-2h1.8v2m0-3H14v-2h1.8v2m0-3H14V9.8h1.8v4.2M13 9V3.5L18.5 9H13M6 20V4h5v7h7v9H6z"/></svg>
             <span class="card-title" style="margin: 0;">Generic CSV</span>
         </div>
-        <span class="card-desc">Our fallback parser with manual column mapping.</span>
+        <span class="card-desc">Our fallback parser: it recognises your columns from their header names.</span>
     </a>
     <a href="../../../community/contribute/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
       <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -285,7 +285,11 @@ LibreFolio supports importing statement files from the following brokers:
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://cointracking.info/favicon.ico" width="16" height="16" style=""><span>CO</span></span> **CoinTracking** | 🧪 Beta | CSV | ✅ | ❌ | ✅ | ✅ | Crypto exchange — built from sample exports |
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.google.com/s2/favicons?domain=delta.app&amp;sz=64" width="16" height="16" style=""><span>DE</span></span> **Delta** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Crypto exchange — built from sample exports |
     | <span class="broker-icon-fallback"><img onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" src="https://www.investimental.ro/wp-content/themes/investimental/img/favicon/favicon.ico" width="16" height="16" style=""><span>IN</span></span> **Investimental** | 🧪 Beta | CSV | ✅ | ❌ | ❌ | ✅ | Built from sample exports |
-    | <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="color: var(--md-accent-fg-color); vertical-align: middle; margin-right: 4px;"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m1.8 18H14v-2h1.8v2m0-3H14v-2h1.8v2m0-3H14V9.8h1.8v4.2M13 9V3.5L18.5 9H13M6 20V4h5v7h7v9H6z"/></svg> **Generic CSV** | ✅ Stable | CSV | ✅ | ✅ | ✅ | ✅ | Manual column mapper fallback |
+    | <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" style="color: var(--md-accent-fg-color); vertical-align: middle; margin-right: 4px;"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m1.8 18H14v-2h1.8v2m0-3H14v-2h1.8v2m0-3H14V9.8h1.8v4.2M13 9V3.5L18.5 9H13M6 20V4h5v7h7v9H6z"/></svg> **Generic CSV** | ✅ Stable | CSV | ✅ | ✅ | ✅ | ✅ | Fallback for your own CSV: columns recognised from their header names |
+
+!!! tip "Accented characters, the euro sign and semicolons"
+
+    Every CSV importer reads files saved as **UTF-8**, **Windows-1252** or **Latin-1** — the encodings many banks write, and Excel uses when you re-save a CSV on Windows. Accented characters and the euro sign (`€`) are read correctly, and a semicolon-separated export is not split on commas. Still, import your files as downloaded whenever you can: some broker pages, such as [Danske Bank](danske-bank.md), ask for exactly that. The technical details are in the [BRIM Plugin Guide](../../../developer/architecture/patterns/brim_plugin_guide.md).
 
 ---
 

@@ -19,6 +19,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/transactions/duplicateRecheckPayload.test.ts",
            "src/lib/utils/transactions/bulkDisplay.test.ts",
            "src/lib/utils/transactions/importReportSets.test.ts",
+           "src/lib/utils/transactions/importPairs.test.ts",
            "src/lib/utils/transactions/gapFixModel.test.ts",
            "src/lib/components/transactions/import/GapFixStep.test.ts",
            "src/lib/components/transactions/import/ReportSetCard.test.ts",
@@ -380,6 +381,18 @@ def front_tx_import_report_set(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-import-report-set.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_import_degiro(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Import Wizard DEGIRO E2E tests (Account Statement in English; currency conversions as linked pairs in review and editor)."""
+    print_section("Frontend TX Import DEGIRO Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-degiro.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_report_set_guide(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the import guide's gap-fix step on desktop and mobile (report sets C3, R9; a disposable account per test)."""
     print_section("Frontend TX Import Report Set Guide Tests")
@@ -589,6 +602,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Import Report Set Guide Tests",
         desc="Report sets (C3, R9) on desktop and mobile: the import guide's step on the gap-fix (import.gapFix, between review and bulk) anchored on the step's Continue, with a disposable account whose earlier import-guide steps are completed over the API",
         tests="transactions/tx-import-report-set-guide.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-import-degiro",
+        front_tx_import_degiro,
+        name="TX Import DEGIRO Tests",
+        desc="DEGIRO Account Statement in English: currency conversions as one row per linked pair in review (From/To, implied rate, one tick for both legs), handed to the editor as pairs that validate",
+        tests="transactions/tx-import-degiro.spec.ts",
     )
     add_test(
         cat,

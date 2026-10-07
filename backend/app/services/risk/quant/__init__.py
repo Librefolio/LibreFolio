@@ -15,6 +15,7 @@ from backend.app.services.risk.quant.estimation import (
 )
 from backend.app.services.risk.quant.models import (
     MAX_HISTORY_OBSERVATIONS,
+    MAX_SIMULATION_ASSETS,
     MAX_SOBOL_DIMENSION,
     SimulationEngineRequest,
     SimulationEngineResult,
@@ -30,6 +31,7 @@ from backend.app.services.risk.quant.resampling import (
 __all__ = [
     "MAX_HISTORY_CELLS",
     "MAX_HISTORY_OBSERVATIONS",
+    "MAX_SIMULATION_ASSETS",
     "MAX_SOBOL_DIMENSION",
     "GbmParameterEstimates",
     "SimulationEngineRequest",

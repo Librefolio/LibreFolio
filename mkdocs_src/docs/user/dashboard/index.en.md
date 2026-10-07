@@ -14,7 +14,7 @@ The Dashboard interface is organized into four primary tabs, allowing you to swi
 
 1. **Overview** (default): Key metrics, cash balances, and visual charts of your portfolio.
 2. **[Positions & Analysis](positions.md)**: Open holdings, weights, and detailed tax lot (FIFO) analysis.
-3. **Risk**: The **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?** It always covers your whole portfolio: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so. **What if…?** opens on a selector: add the historical replay, the hypothetical shock or the simulation; the tools you leave open come back the next time, in this browser, and closing a tool with its **×** removes it together with its answer. See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
+3. **[Risk](#risk-tab)**: The **Portfolio risk** panel, which answers four questions about your portfolio's risk.
 4. **Transactions**: The operations in the selected date range and broker scope, as a paginated, read-only list — double-click a row to open its detail viewer. See [Transactions](../transactions/index.md) for the full guide.
 
 ---
@@ -38,12 +38,24 @@ When you apply a broker filter, the cash balances automatically update to reflec
 
 ---
 
+## 🛡️ Risk Tab {: #risk-tab }
+
+The Risk tab holds the **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?**
+
+It always covers your whole portfolio, meaning every broker you own with a share above 0%: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so.
+
+**What if…?** opens on a selector: add the historical replay, the hypothetical shock or the simulation; the tools you leave open come back the next time, in this browser, and closing a tool with its **×** removes it together with its answer.
+
+See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
+
+---
+
 ## 🎛️ Date Range, Filters & AI Export
 
 At the top right of the dashboard, you have several controls to customize your view:
 
 - **Time range** — presets from 1 week to All-Time (MAX), or a custom range via the date picker.
-- **Broker filter** — filter all metrics to one or more specific brokers.
+- **Broker filter** — filters the metrics to one or more specific brokers; the Risk tab always covers every broker you own, and a subtitle says so when a filter is on.
 - **Target currency** — converts all assets and cash balances dynamically into a single selected currency for aggregate viewing. The list offers your default currency and the currencies of your configured FX pairs — both ends of each pair. A currency that a [chain route](../fx/add-pair.md) only passes through is not offered: syncing a chain stores only the rate of its own pair, so LibreFolio has no rates to convert into that currency. To make a currency available, give it a pair of its own: pick **Create forex…** at the bottom of the list, or tick **Also create intermediate pairs** when you add a pair through a chain route.
 - **AI Export** (:material-brain:) — opens a clipboard export. Choose **Data
   Snapshot** for factual data only, or an **analysis task** that automatically
@@ -61,7 +73,7 @@ The time range, the broker filter and the target currency stay as you set them f
 
 !!! note "Sharing affects these numbers"
 
-    The dashboard counts only the brokers you **own** with a share above 0%, and every amount from them is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals. Brokers where you are an **Editor** or a **Viewer** — who always carry a 0% share by rule — are left out, like those you own with a 0% share: they are missing from the totals, from the broker filter, from the Positions tab (Performance view and lots panel included) and from the Transactions tab. You see them on their own broker page, where Editors and Viewers get the broker's **full** amounts. The **Risk** tab is the exception: it analyses every broker you can access, Editor and Viewer ones included. See [Broker Sharing](../brokers/sharing.md) for details.
+    The dashboard counts only the brokers you **own** with a share above 0%, and every amount from them is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals. Brokers where you are an **Editor** or a **Viewer** — who always carry a 0% share by rule — are left out, like those you own with a 0% share: they are missing from the totals, from the broker filter, from the Positions tab (Performance view and lots panel included), from the Risk tab and from the Transactions tab. You see them on their own broker page, where Editors and Viewers get the broker's **full** amounts. See [Broker Sharing](../brokers/sharing.md) for details.
 
 ---
 
@@ -74,7 +86,7 @@ Come back to the Dashboard — from the sidebar, or with the **←** back button
 
 The **Refresh** button recalculates everything, even when nothing changed: the figures, the Performance view, the lots panel and the Risk tab. What you see stays on screen meanwhile.
 
-If a recalculation fails, the figures already on screen stay and a message tells you so. The Risk tab is the exception: it shows *Risk data could not be loaded.* in place of its levels.
+If a recalculation fails, the figures already on screen stay and a message tells you so. On the Risk tab, this holds only for figures of the period and currency you are viewing: if you switch to a period or a currency the tab has no figures for yet and the calculation fails, it shows *Risk data could not be loaded.* in place of its levels, rather than the figures of your previous choice.
 
 ---
 

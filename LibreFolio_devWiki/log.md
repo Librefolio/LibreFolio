@@ -4,6 +4,17 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-10-07] update | CI/CD Release Pipeline
+Realigned the concept page with the real release.yml after R12 (workstream M): no screenshot cache,
+no `force_gallery`, no test stage; the gallery is now a release gate (soft on dev) with failure
+evidence kept; Docker tags follow the user guide (latest = light, X.Y.Z full, X.Y.Z-light, no v,
+no latest-light) with per-variant push guards; the light image is pushed before the full one so the
+update prompt's image gate (plain X.Y.Z) fires only once `latest` moved; cache keys carry the runner
+image ahead of the ubuntu-latest → 26.04 move; dashboard gallery fixture + its Vitest guard.
+Updated: [[concepts/ci-release-pipeline]].
+Graph not updated: graphify-out/graph.json and .graphify_python are absent in this worktree (ignored
+artifacts); queued for the next graphify --update on the main checkout.
+
 ## [2026-09-10] file | SQLite savepoint without an outer write transaction commits on release
 Recorded the deferred-BEGIN trap found by the asset deletion commit-failure
 regression and the no-op-write fix that restores real outer rollback semantics.
@@ -2166,6 +2177,16 @@ fixes are filed with their gates; the catalogue went from 4 356 to 4 186 keys pe
 Filed: [[problems/i18n-audit-false-dead-and-false-used]], [[problems/svelte-i18n-formatter-cache-ignores-locale]].
 Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
 worktree.
+
+## [2026-10-07] update | Workstream O — the i18n audit, second pass on the release tip
+On `d07412899` (dashboard and risk work merged) the audit still read 78 live keys as «not verified» and let a
+component nobody imported prove five keys. Five rules closed that: one import hop for narrow families, reachability
+from the SvelteKit entries (keys only unreferenced sources keep alive are listed under 📦), generated API clients
+out of the walk, backend codes in any spelling or starting with a digit, and multi-slot template shapes. Result:
+0 dead and 3 not verified, all live; a fourth (`onboarding.settings.groups.contextual`) only a per-key check
+proved dead, and it was removed with the batch.
+Updated: [[problems/i18n-audit-false-dead-and-false-used]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
 
 ## [2026-10-07] file | Workstream P — one average-cost function in a financial_math layer (decision)
 Release 2 workstream P answered issue #32 without a patch. The developer chose one generic average-cost function,

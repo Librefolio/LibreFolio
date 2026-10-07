@@ -10,7 +10,11 @@ The detail page is organized into two tabs: **Overview** (all the features below
 
 !!! info "Beta"
 
-    The **Risk & Scenarios** tab belongs to the Risk Analysis subsystem, which is currently in **beta**. It is not covered by this documentation yet — the sections below describe the Overview tab.
+    Risk Analysis has left beta on the Dashboard and on broker pages — where only the simulation
+    step still carries a beta notice — and in the [Correlation tab](../correlation.md) of the Assets
+    page. The **Risk & Scenarios** tab of this page is the exception: its risk view has not been
+    rebuilt yet, so it still opens with the notice *Risk Analysis is in beta.* It is not covered by
+    this documentation yet — the sections below describe the Overview tab.
 
 ---
 
@@ -18,7 +22,10 @@ The detail page is organized into two tabs: **Overview** (all the features below
 
 ### 📈 [Interactive Chart](chart.md)
 
-The main view — a full ECharts-powered chart with zoom, pan, date range filtering, and currency conversion. Event markers (dividends, splits, interest) are overlaid directly on the price line.
+The main view — a full ECharts-powered chart with zoom, pan, date range filtering, and currency conversion, in two modes:
+
+- **Prices** shows the price history, with event markers (dividends, splits, interest) overlaid directly on the price line.
+- **[Rolling Return](chart.md#rolling-return)** shows the price-only return over a window you choose — 1W, 1M, 3M, 1Y or a custom length.
 
 ### 📊 [Signals](signals.md)
 

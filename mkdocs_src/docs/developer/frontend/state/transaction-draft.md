@@ -52,15 +52,7 @@ interface DraftFields {
     description: string;
     asset_event_id: number | null;
     cost_basis_override: { code: string; amount: string; } | null;
-    cost_basis_mode: 'auto' | 'manual' | null;
-}
-
-interface PartnerDisplay {
-    partnerId?: number;
-    partnerBrokerId?: number;
-    partnerCash?: { code: string; amount: string; } | null;
-    partnerDate?: string;
-    partnerPayload?: TxFields | null;
+    cost_basis_mode: 'auto' | 'manual' | null; // UI-only; null = not applicable to this type/side
 }
 
 type PendingOp = (
@@ -68,13 +60,19 @@ type PendingOp = (
     | { op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean; } // Existing DB row
 ) & {
     tempId: string;
+    createdSeq: number; // Keeps new rows of the same day in the order they were added
     fields: DraftFields;
-    pairedWith?: string; // Links main leg tempId with partner leg tempId
+    pairedWith?: string; // Set on the hidden partner op: the tempId of its visible row
     link_uuid?: string | null; // Shared pairing UUID for transfers & conversions
-    inaccessible?: boolean; // Read-only marker for rows on inaccessible accounts
-    _wacCache?: WacResultEntry | null; // Transient WAC results returned by validate
-} & PartnerDisplay;
+    inaccessible?: boolean; // Read-only marker for a partner on an inaccessible broker
+    promoteFromType?: TransactionTypeCode | null; // Pre-promote type sent to the backend by a mixed promote
+    _wacCache?: WacResultEntry | null; // Transient WAC result returned by validate
+    wacCurrencyHint?: string | null; // WAC target currency; null = backend decides
+    todos?: ImportTodo[]; // Import field todos (see below)
+};
 ```
+
+A linked pair is two ops: the visible row and a hidden partner whose `pairedWith` points to it.
 
 ---
 
@@ -99,12 +97,22 @@ Row status is calculated dynamically at runtime. It is never stored as an editab
 
 The tagged union structure of `PendingOp` simplifies complex composite operations in Svelte:
 
-* **Split**: Breaks a composite pair (like `TRANSFER` or `FX_CONVERSION`) into two independent transactions.
-  - Sets `markedDelete: true` on the original composite transaction.
-  - Appends two new `create` operations mapped to the appropriate independent types (e.g., `WITHDRAWAL` and `DEPOSIT`) via the `SPLIT_TYPE_MAP`.
-* **Promote**: Merges two independent transactions (e.g., a `WITHDRAWAL` and a `DEPOSIT`) into a linked pair.
-  - Converts both into edit operations.
-  - Generates a new `link_uuid` and assigns it to both operations, transforming them into a composite type.
+* **Split** (`handleSplitRow`) breaks a linked pair (`TRANSFER`, `CASH_TRANSFER`, `FX_CONVERSION`)
+  into two independent rows; nothing is deleted.
+  - A **saved** pair is queued in `pendingSplits` as `{id_a, id_b}`; the backend splits it at
+    commit. Meanwhile the partner op loses `pairedWith` and becomes a visible row next to its
+    former main row.
+  - A **new** pair is split locally: both ops lose their link and take the standalone types of
+    `SPLIT_TYPE_MAP` (the client mirror of the backend's split rules, e.g. `WITHDRAWAL` and
+    `DEPOSIT` for `FX_CONVERSION`).
+* **Promote** (`executePromote`) links two independent rows (e.g. a `WITHDRAWAL` and a `DEPOSIT`)
+  into a pair of the matching type; both ops take the target type and collapse into one paired
+  row, the receiving op becoming the hidden partner (`collapseIntoPaired`).
+  - Two **saved** rows are queued in `pendingPromotes` (`{id_a, id_b}`) for the backend.
+  - Two **new** rows simply share a fresh `link_uuid`.
+  - A **mixed** pair (one saved, one new) is queued as `{id_a, link_uuid_b}`, and the new row keeps
+    its pre-promote type in `promoteFromType`, because the backend derives the target from the
+    two source types.
 
 ---
 
@@ -123,11 +131,11 @@ sequenceDiagram
     %% Phase 1: Local & Staging Validation
     Note over User, FormModal: Phase 1: Editing & Local Validation
     User->>FormModal: Edit transaction fields
-    FormModal->>FormModal: Run local sanity checks (e.g., Qty > 0)
-    FormModal->>BulkModal: Return DraftFields on Save
+    FormModal->>FormModal: Local checks (required fields, exact quantity, sign rules)
+    FormModal->>BulkModal: Push the row on Apply (onPushDraft)
 
     %% Phase 2: Server-Side Validation
-    Note over BulkModal, Backend: Phase 2: Server-Side Validation (Debounced)
+    Note over BulkModal, Backend: Phase 2: Server-Side Validation
     BulkModal->>Backend: POST /transactions/validate (Staged Ops)
     Backend->>Backend: Run Access Checks & Balance Walk
     Backend-->>BulkModal: Return Validation Issues & WAC Previews
@@ -135,27 +143,43 @@ sequenceDiagram
 
     %% Phase 3: Commit Batch
     Note over User, Backend: Phase 3: Atomic Batch Commit
-    User->>BulkModal: Click Commit Changes
-    BulkModal->>Backend: POST /transactions/commit (Creates, Updates, Deletes)
+    User->>BulkModal: Click Save All
+    BulkModal->>Backend: POST /transactions/commit (creates, updates, deletes, splits, promotes)
     Backend->>Backend: Access Check & execute_batch() inside DB Transaction
     Backend-->>BulkModal: Return Commit Result (Success)
-    BulkModal->>BulkModal: Clear staging ops array
-    BulkModal->>User: Refresh txStore & reload Portfolio View
+    BulkModal->>BulkModal: onCommitted(response), then close
+    BulkModal->>User: Host page reloads its data
 ```
 
 ### 1. Local Sanity Checks
-Before sending data to the server, basic local rules are checked (e.g., quantity must be positive, type must be selected).
+Before a row reaches the workspace, the single-row form checks what it can know locally: the
+fields its type requires, the exact quantity and the sign rules (see
+[Client-Side Validation](../components/features/transaction-form.md#client-side-validation)).
 
 ### 2. Server-Side Validation (`/transactions/validate`)
 LibreFolio defers all deep ledger validation (such as checking if a sale results in a negative cash or asset balance) to the backend.
-* **Auto-Validation**: If the number of staged operations $N \le 50$, the frontend debounces (1s) and automatically checks the staging state with the server.
-* **Manual Validation**: Above 50 rows, the auto-validation is disabled to conserve performance, requiring the user to click the manual `⚡ Validate now` button.
+
+* **Auto-validation**: while the workspace holds at most 50 operations (`AUTO_VALIDATE_THRESHOLD`,
+  hidden partners included) and at least one row is ready for validation, every edit schedules a
+  run, debounced by `createValidateScheduler` (500 ms by default); an idle run also fires after
+  60 s without changes.
+* **Manual validation**: above that threshold the automatic runs stop, and once more than 50 rows
+  are visible the toolbar says so (*Auto-validate is OFF … press ⚡️ Validate now before commit*).
+  The **⚡ Validate now** button works at any size.
+* **Import hand-over**: the rows handed over by the Import Wizard (`onImportBatch`) are validated
+  once right away, whatever their number (`scheduler.trigger('manual')`), so even a large import
+  shows its issues without a click. Later edits follow the two rules above.
 
 ### 3. Batch Commit (`/transactions/commit`)
-On commit, the frontend resolves `PendingOp[]` into three clean payloads (creates, updates, and deletes) via `buildBatchPayload()`. These are sent as a single atomic batch transaction:
-* **Creates**: Array of brand-new transaction data.
+On **Save All**, `resolveOps()` turns `PendingOp[]` into create, update and delete operations, and `buildBatchPayload()` assembles them, together with the queued splits and promotes, into a single atomic batch:
+
+* **Creates**: Array of brand-new transaction data (a pair contributes both legs).
 * **Updates**: Key-value diffs containing only modified fields vs the original `txStore` data.
 * **Deletes**: List of transaction IDs marked for deletion.
+* **Splits** / **Promotes**: the pairs queued in `pendingSplits` and `pendingPromotes`.
+
+Empty lists are left out of the payload. When the server refuses the batch (`committed: false`),
+the workspace stays open with the issues; on success it calls `onCommitted` and closes.
 
 ---
 
@@ -171,7 +195,7 @@ export type WorkspaceIntent =
   | { action: 'import'; }                      // Mount BRIM wizard to parse files
   | { action: 'edit'; txIds: number[]; }       // Edit specific existing rows
   | { action: 'delete'; txIds: number[]; }     // Pre-mark specific rows for deletion
-  | { action: 'clone'; txIds: number[]; };     // Copy existing rows with today's date
+  | { action: 'clone'; txIds: number[]; };     // Copy existing rows, keeping their dates
 ```
 
 Upon receiving the intent, `TransactionBulkModal` resolves the actual row data directly from `txStore` (the Single Source of Truth) using the provided transaction IDs. This ensures the modal always operates on the most up-to-date ledger state.
@@ -182,21 +206,52 @@ Upon receiving the intent, `TransactionBulkModal` resolves the actual row data d
 
 When running a file import (`action: 'import'`), LibreFolio's backend BRIM parser plugins might accept a transaction but leave some fields incomplete if they cannot be computed automatically (e.g. cost basis on complex corporate mergers). These are returned to the frontend as a list of `field_todos` (`BRIMFieldTodo` schema).
 
-On the frontend, these are loaded into the bulk modal grid as an array of `ImportTodo` objects linked to the staging row:
+On the frontend, these are loaded into the bulk modal grid as an array of `ImportTodo` objects
+(`lib/utils/transactions/txPayloadHelpers.ts`) linked to the staging row:
 
 ```typescript
 export interface ImportTodo {
     field: string;                  // The field requiring manual input (e.g. 'cost_basis_override')
-    severity: 'blocker' | 'warning'; // blocker = prevents saving; warning = informational
+    severity: 'blocker' | 'warning'; // blocker = prevents saving; warning = to verify before saving
     reasonCode: string;             // Machine-readable code (e.g., 'stock_merger')
     message: string;                // Human-readable fallback message
+    evidence?: BrimEvidence[];      // Source-data tables backing the todo (raw rows + plugin comment)
+    context?: Record<string, unknown>; // Numbers behind the todo
 }
 ```
 
 ### Validation & Resolution Lifecycle:
-1. **Highlighting:** Rows containing active `ImportTodo` items are marked in the grid with specific visual warnings.
-2. **Blocker Prevention:** If any row has a todo with `severity: 'blocker'`, the **Commit Changes** button is disabled, and the user is shown the specific reason in a tooltip.
-3. **Resolution:** The user edits the row inline or opens the single transaction form. Once the missing field is filled, the `ImportTodo` is resolved, and the row is cleared for saving.
+1. **Highlighting:** A row with a blocker todo gets the `row-todo-blocker` row class. Above the
+   grid, two folded banners list the open todos: the blockers in red (each with its evidence
+   tables) and the warnings (*auto-derived fields to verify*). Each entry shows the row number and
+   the todo's message.
+2. **Going to the row:** clicking an entry calls `jumpToTodoRow()`, which pages the grid to that
+   row and highlights it through `DataTable.navigateToRowId()` — the same mechanism as a
+   validation issue. The highlight clears on the next row click or key press in the table. A todo
+   of a hidden partner leads to its visible row (`pairedWith`); a row filtered out of the table
+   gives a warning toast instead (*The affected rows are hidden by the table filters.*).
+3. **Blocker Prevention:** If any row has a todo with `severity: 'blocker'`, the **Save All** button
+   is disabled and its tooltip reads *Complete all required fields before saving*.
+4. **Warnings gate:** with warning todos left, **Save All** first opens *Verify auto-derived
+   fields?*, listing them, with **Save anyway** and **Review**.
+5. **Resolution:** the user opens the row in the nested `TransactionFormModal` (double-click or the
+   row action) and applies it. Applying re-checks the row's todos with `remainingTodos()`
+   (`lib/utils/transactions/bulkTodos.ts`): a todo is resolved when its field now holds a value.
+   A missing cost basis has a second answer: Auto (WAC) mode, where the backend computes the cost.
+   Applying the form with **Auto** selected clears the "enter the cost" todo
+   (`cost_basis_override`) even when Auto was already the mode, because `remainingTodos()` looks
+   only at the row's resulting `cost_basis_mode`. Once its last blocker is resolved, the row no
+   longer holds **Save All** back.
+
+### 🧹 Selection on the Transactions page {: #transactions-selection }
+
+The Transactions page (`routes/(app)/transactions/+page.svelte`) empties its selection — the
+table's checkboxes and the toolbar's `selectedRows` — with `clearSelection()` after every operation
+that ran: any save from the bulk workspace (add, edit, clone, delete, import) through
+`handleBulkCommitted`, and a successful link (promote) or unlink (split) of a pair. The rows the
+selection pointed at may have changed or disappeared. Cancelling — closing the workspace without
+saving, or dismissing a confirmation — keeps the selection. The **Refresh** button also clears it,
+together with the filters.
 
 ---
 

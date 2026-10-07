@@ -12,8 +12,8 @@
  *   - This ensures brokers with icons exist for realistic screenshots
  */
 import {expect, type Locator, type Page, test} from './fixtures/playwright';
-import {login, logout, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
-import {waitForSettled} from './fixtures/app-events';
+import {login, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
+import {waitForParseVerdict, waitForSettled} from './fixtures/app-events';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage, navigateToAssetByName} from './assets/assets-helpers';
@@ -175,6 +175,8 @@ test.describe('Gallery Screenshots', () => {
     // Each gallery test is independent (logs in fresh, navigates, screenshots).
     // Run in parallel across workers for faster generation.
     test.describe.configure({mode: 'parallel'});
+    // A hung action must fail in seconds, naming the real step, not at the test timeout; explicit per-call timeouts keep their value.
+    test.use({actionTimeout: 20_000});
 
     test.describe('Auth Pages', () => {
         test('login page - all languages and themes', async ({page}, testInfo) => {
@@ -237,11 +239,12 @@ test.describe('Gallery Screenshots', () => {
         test('update available modal (mocked release) - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
-            // Deterministic mock: seed the 24h-throttled update-check cache with a fake
+            // Deterministic mock: seed the 1h-throttled update-check cache with a fake
             // newer release BEFORE the app boots. The admin layout probe
             // (checkForNewerRelease) then reads the fresh cache instead of fetching GitHub,
             // and prompts. addInitScript re-runs on every full page load, so each reload
-            // re-seeds a fresh cache and the modal reappears.
+            // re-seeds a fresh cache and the modal reappears. The shape is the one
+            // updateCheck.ts writes today (tag + probeStatus), which readCache() accepts.
             await page.addInitScript(() => {
                 localStorage.setItem(
                     'librefolio-update-check',
@@ -249,18 +252,30 @@ test.describe('Gallery Screenshots', () => {
                         checkedAt: Date.now(),
                         latest: {
                             version: '99.9.0',
+                            tag: 'v99.9.0',
                             url: 'https://github.com/Librefolio/LibreFolio/releases/tag/v99.9.0',
                             name: 'v99.9.0',
                         },
+                        probeStatus: 'success',
                     }),
                 );
             });
-            // The prompt is now double-gated: GitHub release (mocked via the seeded cache
-            // above) AND the GHCR image manifest. Intercept the manifest HEAD too, or the
-            // 404 for the fake 99.9.0 tag silences the prompt (the gate working as designed).
-            await page.route('**/ghcr.io/v2/**/manifests/**', (route) => route.fulfill({status: 200}));
+            // The prompt is double-gated: the GitHub release (mocked via the seeded cache
+            // above) AND the container image of its tag. The image gate is the same-origin
+            // backend GET /api/v1/system/container-image-status?tag=99.9.0 (updateCheck.ts
+            // probeImageWithApi), which answers `pending` for the fake tag and silences the
+            // prompt — the gate working as designed. Answer `published` instead
+            // (ContainerImageStatusResponse: `reason` is set only when status is `error`).
+            let imageStatusHits = 0;
+            await page.route('**/api/v1/system/container-image-status**', (route) => {
+                imageStatusHits += 1;
+                return route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({status: 'published', reason: null})});
+            });
 
             await login(page, TEST_ADMIN);
+            // The login load runs the probe once too: let it reach the gate first, so each reload
+            // below is measured against a counter that nothing else is still moving.
+            await expect.poll(() => imageStatusHits, {message: 'the admin update probe never asked the (mocked) container-image-status gate after login', timeout: 20_000}).toBeGreaterThan(0);
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
@@ -273,9 +288,15 @@ test.describe('Gallery Screenshots', () => {
                         },
                         [lang, theme] as [string, string],
                     );
-                    // Full reload → layout auth check → cached probe → prompt (once per load)
+                    // Full reload → layout auth check → cached probe → image gate → prompt (once per load)
+                    const imageStatusHitsBefore = imageStatusHits;
                     await page.reload();
-                    await page.waitForSelector('html[data-i18n-ready="true"]', {timeout: 15_000});
+                    // The attribute, not visibility: with the update modal open the body is scroll-locked
+                    // (position: fixed), <html> lays out with no height, and Playwright calls it hidden.
+                    await expect(page.locator('html')).toHaveAttribute('data-i18n-ready', 'true', {timeout: 15_000});
+                    // Two halves, so a red names the one that failed: the probe reached the image gate
+                    // (the seeded release was accepted as newer), then the prompt was shown.
+                    await expect.poll(() => imageStatusHits, {message: 'the admin update probe never asked the (mocked) container-image-status gate', timeout: 20_000}).toBeGreaterThan(imageStatusHitsBefore);
                     const modal = page.getByTestId('update-available-modal');
                     await expect(modal).toBeVisible({timeout: 20_000});
                     await expect(page.locator('html')).toHaveAttribute('lang', lang);
@@ -354,42 +375,98 @@ test.describe('Gallery Screenshots', () => {
      * against the current report schema (zodios rejects the whole response and the
      * dashboard renders zeroed KPIs), do NOT patch or delete blocks to make it pass —
      * the snapshot must be RE-CAPTURED from a real backend by the user (see the comment
-     * in the docs/testing guides). A loud failure beats a silently wrong screenshot.
+     * in the docs/testing guides). A loud failure beats a silently wrong screenshot;
+     * src/lib/api/dashboardReportFixture.test.ts says it in seconds.
+     *
+     * One snapshot answers EVERY POST /api/v1/portfolio/report the dashboard makes (main
+     * report, positions contribution, P&L candles): it carries all of those sections, so no
+     * answer is merged with live data. Matched by URL only — the snapshot was captured with
+     * other broker ids than the gallery DB's, so a request body is never a reason to fall
+     * through to the backend. `adjust` edits the date-shifted copy, never the file.
      */
+    async function setupDashboardMockReport(page: Page, adjust?: (report: {summary: {data_quality: Record<string, unknown>}}) => void): Promise<void> {
+        const report = shiftDatesToToday(JSON.parse(fs.readFileSync(path.join(__dirname, 'dashboard-report.json'), 'utf8')));
+        adjust?.(report);
+        const body = JSON.stringify(report);
+        await page.route('**/api/v1/portfolio/report', (route) => route.fulfill({status: 200, contentType: 'application/json', body}));
+    }
 
-    async function setupDashboardMockReport(page: Page) {
-        const mockDataPath = path.join(__dirname, 'dashboard-report.json');
-        if (fs.existsSync(mockDataPath)) {
-            try {
-                const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
-                const adjustedMockData = shiftDatesToToday(rawMockData);
-                // NOTE: no sanitizing — if the snapshot no longer validates, the shots
-                // must fail loudly until the fixture is re-captured from a real backend.
-                await page.route('**/api/v1/portfolio/report', async (route) => {
-                    const postData = route.request().postDataJSON?.() as {include_positions_contribution?: boolean} | undefined;
-                    if (postData?.include_positions_contribution) {
-                        const liveResponse = await route.fetch();
-                        const liveData = await liveResponse.json();
-                        await route.fulfill({
-                            status: liveResponse.status(),
-                            contentType: 'application/json',
-                            body: JSON.stringify({
-                                ...adjustedMockData,
-                                positions_contribution: liveData.positions_contribution ?? null,
-                            }),
-                        });
-                        return;
-                    }
-                    await route.fulfill({
-                        status: 200,
-                        contentType: 'application/json',
-                        body: JSON.stringify(adjustedMockData),
-                    });
-                });
-            } catch (err) {
-                console.error('Failed to setup mock portfolio report:', err);
-            }
+    /**
+     * The 1-year range, strictly: the dashboard shots' form of selectOneYearDateRange(), which
+     * the asset and broker shots keep as it is — it looks once and, on a preset bar not painted
+     * yet, clicks nothing. The range persists in the session. When the click changed it, the
+     * page is reloaded, so every chart draws once on the new range instead of being redrawn,
+     * by the report the click asked for, while a shot is taken.
+     */
+    async function selectOneYearPreset(page: Page): Promise<void> {
+        const oneYear = page.getByTestId('date-preset-1y');
+        await expect(oneYear).toBeVisible({timeout: 10_000});
+        if ((await oneYear.getAttribute('data-active')) === 'true') return;
+        await oneYear.click();
+        await expect(oneYear).toHaveAttribute('data-active', 'true');
+        await page.reload();
+        await expect(page.getByTestId('date-preset-1y')).toHaveAttribute('data-active', 'true', {timeout: 15_000});
+    }
+
+    /**
+     * The served snapshot reached the page — asserted before every dashboard shot. From 09-11 the
+     * mocked report failed Zod, the dashboard drew nothing, and these shots stayed green. Settled
+     * alone proves nothing (a rejected report settles too); the % toggle does: GrowthChart enables
+     * it only when the history carries performance data. Overview tab only — it holds the chart.
+     */
+    async function expectDashboardReportLoaded(page: Page): Promise<void> {
+        await waitForSettled(page.getByTestId('dashboard-page'), 20_000);
+        await expect(page.getByTestId('growth-chart')).toBeVisible();
+        await expect(page.getByTestId('growth-toggle-pct'), 'no performance history on the dashboard — was the served dashboard-report.json rejected by Zod?').toBeEnabled({timeout: 10_000});
+        await expect(page.getByTestId('kpi-period-pnl').getByTestId('kpi-value')).toBeVisible();
+        await expect(page.getByTestId('kpi-net-worth').getByTestId('kpi-value')).toBeVisible();
+    }
+
+    /**
+     * Switch the growth chart to `mode` and return once it has drawn it. The chart counts its
+     * finished render passes in data-chart-renders (attachChartReady): read before the click and
+     * awaited after, so the shot follows a pass of the new mode, not a guessed animation length.
+     * The mode must really change — a click on the active one draws nothing.
+     */
+    async function switchGrowthMode(page: Page, mode: 'eur' | 'pct'): Promise<void> {
+        const growthChart = page.getByTestId('growth-chart');
+        const toggle = growthChart.getByTestId(`growth-toggle-${mode}`);
+        const drawing = growthChart.locator('[data-chart-renders]');
+        const renders = async () => Number((await drawing.getAttribute('data-chart-renders', {timeout: 2_000}).catch(() => null)) ?? '0');
+        await expect(toggle).toBeEnabled();
+        await expect(toggle, `the growth chart is already in ${mode}: no render pass would follow the click`).not.toHaveAttribute('aria-pressed', 'true');
+        const before = await renders();
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(renders, {message: `the growth chart never redrew in ${mode}`, timeout: 10_000}).toBeGreaterThan(before);
+    }
+
+    /**
+     * Show one allocation tab in one view and return once its chart has drawn. Both buttons are
+     * toggles whose end state (aria-pressed) is asserted. Now: the pie or the map is mounted for
+     * the tab, so the first pass its container reports (data-chart-ready) is the data pass.
+     * History: that chart stays mounted but draws only while visible, so turning the view on
+     * causes a pass — its data-chart-renders count is read before the clicks and awaited after.
+     */
+    async function showAllocation(page: Page, tab: 'type' | 'sector' | 'geo', view: 'now' | 'history'): Promise<void> {
+        const panel = page.getByTestId('allocation-panel');
+        const tabButton = panel.getByTestId(`allocation-tab-${tab}`);
+        const viewButton = panel.getByTestId(`allocation-view-${view}`);
+        const historyChart = panel.getByTestId('allocation-history-chart');
+        const historyRenders = async () => Number((await historyChart.getAttribute('data-chart-renders', {timeout: 2_000}).catch(() => null)) ?? '0');
+        const historyTurnsOn = view === 'history' && (await viewButton.getAttribute('aria-pressed')) !== 'true';
+        const historyRendersBefore = await historyRenders();
+        await tabButton.click();
+        await expect(tabButton).toHaveAttribute('aria-pressed', 'true');
+        await viewButton.click();
+        await expect(viewButton).toHaveAttribute('aria-pressed', 'true');
+        if (view === 'now') {
+            await expect(panel.locator('[data-chart-ready]:not([data-testid="allocation-history-chart"])')).toHaveAttribute('data-chart-ready', 'true', {timeout: 10_000});
+            return;
         }
+        await expect(historyChart).toBeVisible({timeout: 10_000});
+        if (historyTurnsOn) await expect.poll(historyRenders, {message: `the allocation history never drew ${tab}`, timeout: 10_000}).toBeGreaterThan(historyRendersBefore);
+        await expect(historyChart).toHaveAttribute('data-chart-ready', 'true');
     }
 
     async function selectMaxDateRange(page: Page) {
@@ -530,48 +607,30 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectOneYearDateRange(page);
-                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
                 await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
 
-                // Top-of-dashboard screenshot (scroll=0): KPI cards with real portfolio
-                // data — previously only captured empty (dashboard-empty-state test uses
-                // TEST_EMPTY). Wait for the KPI row to swap out of its loading skeleton,
-                // then give the svelte/motion `tweened()` counters (900ms JS-driven
-                // count-up, NOT a CSS animation — freezeAnimations() can't freeze it)
-                // time to settle so numbers aren't captured mid-animation.
-                const kpiRow = page.getByTestId('kpi-row');
-                if (await kpiRow.isVisible({timeout: 5_000}).catch(() => false)) {
-                    await expect(kpiRow.getByTestId('kpi-value').first()).toBeVisible({timeout: 10_000});
-                    await page.waitForTimeout(1_000);
-                }
+                // Top-of-dashboard screenshot (scroll=0): KPI cards with the snapshot's figures.
+                // The svelte/motion `tweened()` count-up (TweenedValue, 900 ms, JS-driven — not a
+                // CSS animation, so freezeAnimations() cannot stop it) publishes no settled state,
+                // so this wait stays until the component exposes one.
+                await page.waitForTimeout(1_000);
                 await page.evaluate(() => window.scrollTo(0, 0));
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'kpi-top');
 
                 // Scroll to the growth chart so it is visible and positioned nicely
-                const growthChart = page.getByTestId('growth-chart');
-                if (await growthChart.isVisible({timeout: 5000}).catch(() => false)) {
-                    await growthChart.scrollIntoViewIfNeeded();
-                    await page.waitForTimeout(500); // Give e-charts time to redraw/stabilize
-                }
+                await page.getByTestId('growth-chart').scrollIntoViewIfNeeded();
 
-                // Select Abs explicitly: the growth chart remembers its last mode per user,
-                // and this loop clicks % in every iteration, so from the second iteration
-                // on 'main' would otherwise be captured in % mode.
-                const eurToggle = page.getByTestId('growth-toggle-eur');
-                if (await eurToggle.isVisible({timeout: 2000}).catch(() => false)) {
-                    await eurToggle.click();
-                    await expect(eurToggle).toHaveAttribute('aria-pressed', 'true');
-                    await page.waitForTimeout(500); // Give e-charts time to redraw
-                }
+                // Abs for 'main', % for 'main-pct', each shot right after a render pass of its own
+                // mode. The chart remembers its last mode per user and this loop leaves it in %, so
+                // Abs is normally a switch; when it is already Abs (first combo), go through % first,
+                // or there would be no fresh pass to wait for.
+                if ((await page.getByTestId('growth-toggle-eur').getAttribute('aria-pressed')) === 'true') await switchGrowthMode(page, 'pct');
+                await switchGrowthMode(page, 'eur');
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'main');
 
-                // Toggle and screenshot percentage mode
-                const pctToggle = page.getByTestId('growth-toggle-pct');
-                if (await pctToggle.isVisible({timeout: 2000}).catch(() => false)) {
-                    await pctToggle.click();
-                    await page.waitForTimeout(500); // Give e-charts time to redraw
-                }
+                await switchGrowthMode(page, 'pct');
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'main-pct');
             });
         });
@@ -591,18 +650,19 @@ test.describe('Gallery Screenshots', () => {
                     // Navigate fresh to dashboard for each combo (ensures clean state)
                     await page.goto('/dashboard');
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
-                    await selectOneYearDateRange(page);
-                    await page.waitForLoadState('networkidle', {timeout: 20_000});
+                    await selectOneYearPreset(page);
                     await freezeAnimations(page);
+                    // The dashboard behind the drawer is part of the shot
+                    await expectDashboardReportLoaded(page);
 
                     // Set language and theme while menu is closed
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
-                    await page.waitForTimeout(100);
 
-                    // Open the menu for screenshot
+                    // Open the menu for the shot. The drawer is open once its contents are wholly
+                    // on screen (transitions are frozen, so it does not slide).
                     await menuToggle.click();
-                    await page.waitForTimeout(400); // Let menu animation complete
+                    await expect(page.getByTestId('logout-button')).toBeInViewport({ratio: 1});
 
                     await screenshot(page, 'mobile', lang, theme, 'dashboard', 'menu-open');
                     // No need to close - we navigate away next iteration
@@ -617,58 +677,27 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectOneYearDateRange(page);
-                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
                 await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
 
                 // Scroll to the allocation panel
                 const allocPanel = page.getByTestId('allocation-panel');
-                if (await allocPanel.isVisible({timeout: 5_000}).catch(() => false)) {
-                    await allocPanel.scrollIntoViewIfNeeded();
-                    await page.waitForTimeout(400);
+                await expect(allocPanel).toBeVisible();
+                await allocPanel.scrollIntoViewIfNeeded();
+
+                // Now then History for each dimension — the same six shots, in the same order.
+                // Tab and view persist per user, so every step states both and waits for its chart.
+                for (const [tab, shot] of [
+                    ['type', 'allocation-type'],
+                    ['sector', 'allocation-sector'],
+                    ['geo', 'allocation-geo'],
+                ] as const) {
+                    await showAllocation(page, tab, 'now');
+                    await screenshot(page, viewport, lang, theme, 'dashboard', `${shot}-now`);
+                    await showAllocation(page, tab, 'history');
+                    await screenshot(page, viewport, lang, theme, 'dashboard', `${shot}-history`);
                 }
-
-                const viewNowBtn = page.getByTestId('allocation-view-now');
-                const viewHistBtn = page.getByTestId('allocation-view-history');
-                const tabTypeBtn = page.getByTestId('allocation-tab-type');
-                const tabSectorBtn = page.getByTestId('allocation-tab-sector');
-                const tabGeoBtn = page.getByTestId('allocation-tab-geo');
-
-                // 1. TYPE + NOW
-                await tabTypeBtn.click();
-                await viewNowBtn.click();
-                await page.waitForTimeout(500); // Wait for ECharts animation
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-type-now');
-
-                // 2. TYPE + HISTORY
-                await viewHistBtn.click();
-                await page.waitForLoadState('networkidle', {timeout: 10_000});
-                await page.waitForTimeout(500);
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-type-history');
-
-                // 3. SECTOR + NOW
-                await tabSectorBtn.click();
-                await viewNowBtn.click();
-                await page.waitForTimeout(500);
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-sector-now');
-
-                // 4. SECTOR + HISTORY
-                await viewHistBtn.click();
-                await page.waitForLoadState('networkidle', {timeout: 10_000});
-                await page.waitForTimeout(500);
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-sector-history');
-
-                // 5. GEO + NOW
-                await tabGeoBtn.click();
-                await viewNowBtn.click();
-                await page.waitForTimeout(500);
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-geo-now');
-
-                // 6. GEO + HISTORY
-                await viewHistBtn.click();
-                await page.waitForLoadState('networkidle', {timeout: 10_000});
-                await page.waitForTimeout(500);
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-geo-history');
 
                 // Scroll back to top so next iteration starts clean
                 await page.evaluate(() => window.scrollTo(0, 0));
@@ -682,12 +711,15 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectOneYearDateRange(page);
-                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
                 await freezeAnimations(page);
+                // Asserted on the overview, which holds the chart and the KPIs, before leaving it
+                await expectDashboardReportLoaded(page);
 
                 await page.getByTestId('dashboard-tab-posizioni').click();
                 await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
+                // Each variant is shot once setPositionsView() has its content root on screen: the
+                // holdings table or treemap, the contribution table or the performance chart.
                 await screenshotPositionsVariants(page, viewport, lang, theme, 'dashboard');
             });
         });
@@ -777,13 +809,18 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectOneYearDateRange(page);
-                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
                 await freezeAnimations(page);
+                // Asserted on the overview, which holds the chart and the KPIs, before leaving it
+                await expectDashboardReportLoaded(page);
 
                 await page.getByTestId('dashboard-tab-transazioni').click();
-                await expect(page.getByTestId('dashboard-transactions-tab')).toBeVisible({timeout: 5_000});
-                await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+                const transactionsTab = page.getByTestId('dashboard-transactions-tab');
+                await expect(transactionsTab).toBeVisible({timeout: 5_000});
+                // This tab lists the gallery DB's own transactions (live, not the snapshot)
+                await expect(transactionsTab.getByTestId('tx-table').locator('tbody tr[data-row-id]'), 'TEST_ADMIN has no transaction in the last year — check populate_mock_data.py').not.toHaveCount(0, {timeout: 15_000});
+                // Linked-pair partners and event tooltips load after the rows and publish no state
+                // of their own (the tab's txLoading is not exposed), so this wait stays for now.
                 await page.waitForTimeout(500);
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'transactions-tab');
             });
@@ -791,19 +828,29 @@ test.describe('Gallery Screenshots', () => {
 
         test('dashboard empty state - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
-            // Logout TEST_ADMIN (from beforeEach) and switch to empty user.
-            // On mobile the logout button is inside the collapsed sidebar — open the menu first.
-            const isMobile = testInfo.project.name === 'mobile';
-            if (isMobile) {
-                await openMobileMenu(page);
-                await page.waitForTimeout(300);
-            }
-            await logout(page);
+            // Switch from TEST_ADMIN (beforeEach) to the empty user without the UI logout: on
+            // mobile its button sits in the off-canvas drawer, and openMobileMenu() opens it only
+            // when the burger is already visible — right after login() it often is not yet.
+            // page.request shares this context's cookie jar, so the server logout plus the cookie
+            // purge leave no session behind; login() then starts from a full page load, where the
+            // in-memory auth store re-asks /auth/me and keeps nothing of the admin.
+            const logoutResponse = await page.request.post('/api/v1/auth/logout');
+            expect(logoutResponse.ok()).toBeTruthy();
+            await page.context().clearCookies();
+            expect((await page.request.get('/api/v1/auth/me')).status(), 'a session survived the logout').toBe(401);
             await login(page, TEST_EMPTY);
+            const meResponse = await page.request.get('/api/v1/auth/me');
+            expect(meResponse.ok()).toBeTruthy();
+            expect(((await meResponse.json()) as {user?: {username?: string}}).user?.username, 'the dashboard below must be the empty user').toBe(TEST_EMPTY.username);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
+                // Prove the empty dashboard is the one on screen. The empty user owns no broker,
+                // so the page asks for no report and settles with no history — and with no history
+                // GrowthChart disables its % toggle, which the admin's populated dashboard does not.
+                await waitForSettled(page.getByTestId('dashboard-page'));
+                await expect(page.getByTestId('growth-toggle-pct')).toBeDisabled({timeout: 5_000});
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'empty-state');
             });
@@ -813,15 +860,13 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             // The populated DB produces no data-quality issues deterministically, so inject
-            // two synthetic ones into the mocked portfolio report (same route the other
-            // dashboard shots mock). One warning with CTA + one info row.
-            const mockDataPath = path.join(__dirname, 'dashboard-report.json');
-            const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
-            const adjustedMockData = shiftDatesToToday(rawMockData);
-            adjustedMockData.summary = {
-                ...adjustedMockData.summary,
-                data_quality: {
-                    data_quality_status: 'partial',
+            // two synthetic ones into the served snapshot (same helper as the other dashboard
+            // shots): one warning with CTA + one info row. Only `issues` is written —
+            // data_quality_status stays the snapshot's own: the backend derives it from the
+            // other fields (a computed field it rejects as input), never from the issues.
+            await setupDashboardMockReport(page, (report) => {
+                report.summary.data_quality = {
+                    ...report.summary.data_quality,
                     issues: [
                         {
                             domain: 'portfolio',
@@ -849,36 +894,23 @@ test.describe('Gallery Screenshots', () => {
                             group_key: 'missing_fx_market',
                         },
                     ],
-                },
-            };
-            await page.route('**/api/v1/portfolio/report', async (route) => {
-                const postData = route.request().postDataJSON?.() as {include_positions_contribution?: boolean} | undefined;
-                if (postData?.include_positions_contribution) {
-                    const liveResponse = await route.fetch();
-                    const liveData = await liveResponse.json();
-                    await route.fulfill({
-                        status: liveResponse.status(),
-                        contentType: 'application/json',
-                        body: JSON.stringify({
-                            ...adjustedMockData,
-                            positions_contribution: liveData.positions_contribution ?? null,
-                        }),
-                    });
-                    return;
-                }
-                await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(adjustedMockData)});
+                };
             });
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
 
+                // Collapsed on every load. A toggle: open it only when closed, then assert the end
+                // state and the two injected issues the shot is for.
                 const bannerToggle = page.getByTestId('data-quality-toggle');
                 await expect(bannerToggle).toBeVisible({timeout: 10_000});
-                // Collapsed by default — expand to show the issue chips + CTAs
-                await bannerToggle.click();
-                await page.waitForTimeout(300);
+                if ((await bannerToggle.getAttribute('aria-expanded')) !== 'true') await bannerToggle.click();
+                await expect(bannerToggle).toHaveAttribute('aria-expanded', 'true');
+                await expect(page.getByTestId('data-quality-issue-STALE_PRICE')).toBeVisible();
+                await expect(page.getByTestId('data-quality-issue-MISSING_FX_MARKET')).toBeVisible();
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'data-quality-banner');
             });
@@ -2246,6 +2278,17 @@ test.describe('Gallery Screenshots', () => {
                 }
                 uploadedFileIds.clear();
             };
+            // Parse opens only when every ticked file has a plugin and no report set is ticked in
+            // part or left incomplete. When it stays shut, say which of those gates held it.
+            const expectParseEnabled = async () => {
+                try {
+                    await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 10_000});
+                } catch (error) {
+                    const setBlocks = page.getByTestId('import-wizard-set-blocks');
+                    const why = (await setBlocks.count()) > 0 ? `a report set blocks the analysis (data-reason="${await setBlocks.getAttribute('data-reason')}")` : 'no report set blocks it, so a ticked file has no plugin or nothing is ticked';
+                    throw new Error(`import-wizard-parse stayed disabled: ${why}.\n${(error as Error).message}`);
+                }
+            };
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
@@ -2260,27 +2303,24 @@ test.describe('Gallery Screenshots', () => {
                         await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
                         const step1 = page.getByTestId('import-wizard-step1');
                         await step1.waitFor({state: 'visible', timeout: 5_000});
-                        const dropzoneMore = page.getByTestId('import-wizard-upload-more');
-                        if (await dropzoneMore.isVisible({timeout: 1_000}).catch(() => false)) {
-                            await dropzoneMore.click();
-                        }
-                        await step1.locator('[data-testid="file-input"]').setInputFiles([TITOLI_CSV, CONTO_CSV]);
+                        // A fresh wizard opens with its drop zone expanded (dropZoneExpanded starts true and
+                        // resetState() restores it), so there is no "upload more" to click: the input is there.
+                        const fileInput = step1.getByTestId('file-input');
+                        await expect(fileInput).toBeAttached({timeout: 5_000});
+                        await fileInput.setInputFiles([TITOLI_CSV, CONTO_CSV]);
                         // Both pending rows rendered
                         await expect(step1.locator('tbody tr[data-row-id]')).toHaveCount(2, {timeout: 5_000});
 
                         // Assign the global broker (both files to the same broker — duplicates
-                        // arbitration is per-broker). Prefer Interactive Brokers (has an icon in
-                        // the populated DB); fall back to the first editable broker.
+                        // arbitration is per-broker): Interactive Brokers, which has an icon and is
+                        // seeded for TEST_ADMIN by populate_mock_data.py — required, not a preference.
                         await page.getByTestId('import-wizard-step1-broker-select').locator('[role="combobox"]').click();
                         const listbox = page.locator('[role="listbox"]').first();
                         await expect(listbox).toBeVisible({timeout: 5_000});
                         await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 8_000});
                         const ibOption = listbox.locator('[data-testid^="search-select-option-"]').filter({hasText: 'Interactive Brokers'}).first();
-                        if (await ibOption.isVisible({timeout: 1_000}).catch(() => false)) {
-                            await ibOption.click();
-                        } else {
-                            await listbox.locator('[data-testid^="search-select-option-"]').first().click();
-                        }
+                        await expect(ibOption, 'Interactive Brokers must be offered to TEST_ADMIN — check populate_mock_data.py').toBeVisible({timeout: 5_000});
+                        await ibOption.click();
 
                         // Upload on Next — uploaded files arrive pre-selected in step 2 (T7)
                         await expect(page.getByTestId('import-wizard-next')).toBeEnabled({timeout: 5_000});
@@ -2288,29 +2328,55 @@ test.describe('Gallery Screenshots', () => {
                         const step2 = page.getByTestId('import-wizard-step2');
                         await step2.waitFor({state: 'visible', timeout: 10_000});
                         await expect(step2).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+                        // Both uploads are known by id: the cleanup deletes by these, and step 3 is checked against them.
+                        await expect.poll(() => uploadedFileIds.size, {message: 'both demo uploads must be recorded by id', timeout: 5_000}).toBe(2);
 
                         // ── Step 2 → 3: parse both files (plugin auto-picked: broker_credit_agricole) ──
-                        const parseBtn = page.getByTestId('import-wizard-parse');
-                        await expect(parseBtn).toBeEnabled({timeout: 10_000});
-                        await parseBtn.click();
-                        await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
-                        await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 60_000});
+                        // The demo files are two single files (only report-set plugins group files into
+                        // sets), so no set should hold Parse — but if one ever does, the failure says so.
+                        await expectParseEnabled();
+                        await page.getByTestId('import-wizard-parse').click();
+                        const step3 = page.getByTestId('import-wizard-step3');
+                        await step3.waitFor({state: 'visible', timeout: 15_000});
+                        await waitForParseVerdict(page, 60_000);
+                        await expect(step3, 'both demo files must parse: the later steps are built from the two of them').toHaveAttribute('data-parse-state', 'ok');
+                        // The analysis lists exactly what step 2 ticked: this combo's two uploads, nothing else.
+                        await expect(step3.locator('tbody tr[data-row-id]')).toHaveCount(uploadedFileIds.size);
+                        for (const id of uploadedFileIds) await expect(step3.locator(`tbody tr[data-row-id="${id}"]`)).toHaveCount(1);
+
+                        // ── Step 3 → assets: Continue either opens the parse-notices modal (the parse
+                        // raised some) or moves straight on. Wait for whichever of the two the click
+                        // produced, then act on that one — no guess at how long the modal takes.
                         await page.getByTestId('import-wizard-continue').click();
-                        // Parse-warnings overlay intercepts the step3 → next transition
+                        const assetsStep = page.getByTestId('import-wizard-step-assets');
                         const warningConfirm = page.getByTestId('import-wizard-warning-confirm');
-                        if (await warningConfirm.isVisible({timeout: 3_000}).catch(() => false)) {
+                        await expect(warningConfirm.or(assetsStep).first()).toBeVisible({timeout: 15_000});
+                        if (await warningConfirm.isVisible()) {
                             await warningConfirm.click();
-                            await page.waitForTimeout(300);
+                            await expect(warningConfirm).toBeHidden({timeout: 5_000});
                         }
 
                         // ── Assets step: proposed (AMUNDI name-suffix) + confirmed (BTP) groups ──
-                        const assetsStep = page.getByTestId('import-wizard-step-assets');
                         await expect(assetsStep).toBeVisible({timeout: 15_000});
                         await expect(assetsStep.getByTestId('asset-group-step')).toBeVisible({timeout: 10_000});
+                        // The shot exists to show an open proposal: insist on one before taking it.
+                        const proposedGroups = assetsStep.locator('[data-testid^="asset-group-grp-"][data-state="proposed"]');
+                        await expect(proposedGroups.first()).toBeVisible({timeout: 10_000});
                         await freezeAnimations(page);
                         await page.waitForTimeout(300);
                         await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-assets-step');
-                        await page.getByTestId('import-wizard-assets-continue').click();
+                        // Continue stays disabled while any proposal is open, so settle them first.
+                        // AssetGroupStep offers "confirm all" only from two open proposals up; a lone one
+                        // is settled by its own button. The cards render together, so the count is final.
+                        if ((await proposedGroups.count()) >= 2) {
+                            await assetsStep.getByTestId('asset-group-confirm-all').click();
+                        } else {
+                            await proposedGroups.getByTestId(/^asset-group-confirm-grp-/).click();
+                        }
+                        await expect(proposedGroups).toHaveCount(0, {timeout: 5_000});
+                        const assetsContinue = page.getByTestId('import-wizard-assets-continue');
+                        await expect(assetsContinue).toBeEnabled({timeout: 30_000});
+                        await assetsContinue.click();
 
                         // ── Fix step: bundled-amount warning + unresolved-asset blocker ──
                         const fixStep = page.getByTestId('import-wizard-step-fix');
@@ -2328,17 +2394,15 @@ test.describe('Gallery Screenshots', () => {
                         const dupStep = page.getByTestId('import-wizard-step-duplicates');
                         await expect(dupStep).toBeVisible({timeout: 20_000});
                         await expect(dupStep.getByTestId('import-wizard-duplicate-resolver')).toBeVisible({timeout: 10_000});
-                        // Probable-tier groups start expanded; expand the resolver when all tiers are 'sure'
-                        const resolverToggle = dupStep.getByTestId('import-wizard-duplicate-resolver-toggle');
-                        if (
-                            !(await dupStep
-                                .getByTestId('import-wizard-file-priority')
-                                .isVisible({timeout: 500})
-                                .catch(() => false))
-                        ) {
-                            await resolverToggle.click();
-                            await expect(dupStep.getByTestId('import-wizard-file-priority')).toBeVisible({timeout: 3_000});
-                        }
+                        // Every duplicate re-check rebuilds the resolver's layout: read it only once the
+                        // wizard says no re-check or candidate refresh is running.
+                        await expect(page.getByTestId('import-wizard-content')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+                        // The resolver opens by itself when a group is partial (probable tier) and stays
+                        // folded when every overlap is total. A toggle: read its settled state, click only
+                        // when folded, then assert the end state.
+                        const filePriority = dupStep.getByTestId('import-wizard-file-priority');
+                        if (!(await filePriority.isVisible())) await dupStep.getByTestId('import-wizard-duplicate-resolver-toggle').click();
+                        await expect(filePriority).toBeVisible({timeout: 3_000});
                         // Open the first tier panel so its groups are listed in the shot
                         const tierToggle = dupStep.locator('[data-testid^="import-wizard-resolver-tier-toggle-"]').first();
                         await expect(tierToggle).toBeVisible({timeout: 5_000});
@@ -2363,17 +2427,11 @@ test.describe('Gallery Screenshots', () => {
                         await page.getByTestId('import-wizard-compare-close').click();
                         await expect(compareModal).not.toBeVisible({timeout: 3_000});
                     } finally {
-                        // Close the wizard (confirming the discard) and remove this combo's uploads
-                        await page.keyboard.press('Escape');
-                        await page.waitForTimeout(300);
-                        const confirmDiscard = page.getByTestId('confirm-modal-confirm');
-                        if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
-                            await confirmDiscard.click();
-                            await page.waitForTimeout(200);
-                        }
-                        await page.keyboard.press('Escape');
-                        await page.waitForTimeout(200);
-                        await cleanupUploadedFiles();
+                        // A page that died (test timeout) cannot be cleaned, and touching it would replace
+                        // the real error with "Target page… closed". Nothing here may throw either, for
+                        // the same reason: the wizard needs no closing, since the next combo starts from
+                        // a full navigation — only this combo's uploads must go.
+                        if (!page.isClosed()) await cleanupUploadedFiles();
                     }
                 }
             }
@@ -3338,6 +3396,10 @@ test.describe('Gallery Screenshots', () => {
             const dates: string[] = [];
             for (let i = days - 1; i >= 0; i--) dates.push(fmt(new Date(today.getTime() - i * dayMs)));
             const midDate = dates[Math.floor(dates.length / 2)];
+            // What the price-query route saw and answered, one entry per request: the asset ids
+            // ("+events" where include_events was asked) and how many events the mock returned.
+            // Read back only by the diagnostics below, when the event marker cannot be shown.
+            const priceQueries: Array<{assets: string[]; eventsReturned: number}> = [];
             await page.route('**/api/v1/assets/prices/query', async (route) => {
                 // The assets LIST also bulk-queries prices (per-card sparklines) before we
                 // reach the detail page — answer every requested item, not just Apple's.
@@ -3359,24 +3421,89 @@ test.describe('Gallery Screenshots', () => {
                         signals: [],
                     };
                 });
+                priceQueries.push({assets: postData.map((item) => `${item?.asset_id ?? '?'}${item?.include_events ? '+events' : ''}`), eventsReturned: items.reduce((total, item) => total + item.events.length, 0)});
                 await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({items})});
             });
 
+            // The dividend sits ~120 days back, outside the 3-month session default, so the range
+            // must really be «All». Strict local form of selectMaxDateRange() (still used by the FIFO
+            // shots): that one looks once, and on a preset bar not painted yet it clicks nothing,
+            // silently. Here the button is waited for, clicked only when not already active (the
+            // range persists in the session), and its active state asserted.
+            const selectMaxPreset = async () => {
+                const maxPreset = page.getByTestId('date-preset-max');
+                await expect(maxPreset).toBeVisible({timeout: 10_000});
+                if ((await maxPreset.getAttribute('data-active')) !== 'true') await maxPreset.click();
+                await expect(maxPreset).toHaveAttribute('data-active', 'true', {timeout: 5_000});
+            };
+
+            // What the price chart behind `canvas` draws, read through the `__lfChart` handle
+            // PriceChartFull exposes for E2E tooling — and, with `showTip`, the first event marker's
+            // tooltip driven directly instead of hovered. It reports instead of returning silently.
+            type LfChart = {getOption: () => {series?: Array<{name?: unknown; data?: unknown}>; dataZoom?: Array<{start?: unknown; end?: unknown}>}; dispatchAction: (action: {type: string; seriesIndex: number; dataIndex: number}) => void};
+            type ChartReading = {chartFound: boolean; series: string[]; eventPoints: number; firstEvent: string | null; zoom: string | null; tipDispatched: boolean};
+            const inspectEventChart = (canvas: Locator, showTip = false): Promise<ChartReading> =>
+                canvas.evaluate((el, dispatch): ChartReading => {
+                    let node: Element | null = el;
+                    let chart: LfChart | null = null;
+                    while (node && !chart) {
+                        chart = (node as unknown as {__lfChart?: LfChart}).__lfChart ?? null;
+                        node = node.parentElement;
+                    }
+                    if (!chart) return {chartFound: false, series: [], eventPoints: 0, firstEvent: null, zoom: null, tipDispatched: false};
+                    const option = chart.getOption();
+                    const series = (option.series ?? []).map((s) => ({name: String(s?.name ?? ''), data: Array.isArray(s?.data) ? (s.data as unknown[]) : []}));
+                    const eventSeries = series.filter((s) => s.name.startsWith('Events: '));
+                    const tipIndex = series.findIndex((s) => s.name.startsWith('Events: ') && s.data.length > 0);
+                    if (dispatch && tipIndex >= 0) chart.dispatchAction({type: 'showTip', seriesIndex: tipIndex, dataIndex: 0});
+                    const first = (tipIndex >= 0 ? series[tipIndex].data[0] : undefined) as {value?: unknown[]; marker?: {value?: unknown}; bucketValue?: unknown} | undefined;
+                    const zoom = option.dataZoom?.[0];
+                    return {
+                        chartFound: true,
+                        series: series.map((s) => `${s.name} [${s.data.length}]`),
+                        eventPoints: eventSeries.reduce((total, s) => total + s.data.length, 0),
+                        firstEvent: first ? `${String(first.value?.[0])} value=${String(first.marker?.value)} bucketValue=${String(first.bucketValue)}` : null,
+                        zoom: zoom ? `${String(zoom.start)}–${String(zoom.end)}%` : null,
+                        tipDispatched: dispatch && tipIndex >= 0,
+                    };
+                }, showTip);
+
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    const comboQueries = priceQueries.length; // this combo's slice of the route log starts here
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
-                    await selectMaxDateRange(page);
-                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
-                    await page.waitForSelector('canvas', {timeout: 8_000});
+                    await selectMaxPreset();
+                    await waitForSettled(page.getByTestId('asset-detail-page'));
 
                     const chartCard = page.getByTestId('asset-detail-chart');
+                    const canvas = chartCard.locator('canvas').first();
+                    await expect(canvas).toBeVisible({timeout: 8_000});
+                    // A red here must say why: what the chart draws, which preset is active, and
+                    // what the price-query route was asked and answered during this combo.
+                    const diagnose = async (what: string): Promise<string> => {
+                        const chart = await inspectEventChart(canvas).catch((error: unknown) => `unreadable: ${(error as Error).message}`);
+                        const activePresets = await page.locator('[data-testid^="date-preset-"][data-active="true"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+                        const comboLog = priceQueries.slice(comboQueries);
+                        // Events answered for this page's asset but absent from the chart point at the page, not at the mock.
+                        const assetId = /\/assets\/(\d+)/.exec(page.url())?.[1];
+                        const answered = comboLog.filter((query) => query.assets.includes(`${assetId}+events`)).reduce((total, query) => total + query.eventsReturned, 0);
+                        const hint = answered > 0 && typeof chart !== 'string' && chart.eventPoints === 0 ? `  hint: the route answered ${answered} event(s) for asset ${assetId}, yet the chart draws none — the page dropped or filtered them` : '';
+                        return [`detail-events ${lang}/${theme}: ${what}.`, `  page: ${page.url()}`, `  chart: ${JSON.stringify(chart)}`, `  active preset: ${activePresets.join(', ') || 'none'}`, `  price queries this combo: ${JSON.stringify(comboLog)}`, hint].filter(Boolean).join('\n');
+                    };
+                    // data-busy covers the price fetch, not the events-only request a price-cache hit
+                    // still sends, so wait for the marker itself: an "Events: …" series with a point.
+                    try {
+                        await expect.poll(async () => (await inspectEventChart(canvas).catch(() => null))?.eventPoints ?? 0, {timeout: 15_000}).toBeGreaterThan(0);
+                    } catch {
+                        throw new Error(await diagnose('the chart drew no event marker within 15 s'));
+                    }
+
                     await chartCard.evaluate((el) => el.scrollIntoView({block: 'center'}));
                     await page.waitForTimeout(500);
-                    const canvas = chartCard.locator('canvas').first();
                     const box = await canvas.boundingBox();
                     if (!box) throw new Error('detail-events: chart canvas has no bounding box');
 
@@ -3394,25 +3521,16 @@ test.describe('Gallery Screenshots', () => {
                         if (await tooltip.isVisible().catch(() => false)) break;
                     }
                     if (!(await tooltip.isVisible().catch(() => false))) {
-                        // Deterministic fallback: drive the component's ECharts instance
-                        // (exposed on the container as __lfChart) and showTip the first point
-                        // of the "Events: …" scatter series (the mocked dividend).
-                        await canvas.evaluate((el) => {
-                            let node: HTMLElement | null = el as unknown as HTMLElement;
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            let chart: any = null;
-                            while (node && !chart) {
-                                chart = (node as any).__lfChart ?? null;
-                                node = node.parentElement;
-                            }
-                            if (!chart) return;
-                            const series = (chart.getOption().series as any[]) ?? [];
-                            const idx = series.findIndex((s) => String(s?.name ?? '').startsWith('Events: '));
-                            if (idx < 0) return;
-                            chart.dispatchAction({type: 'showTip', seriesIndex: idx, dataIndex: 0});
-                        });
+                        // Deterministic fallback: showTip the first point of the "Events: …" scatter
+                        // series (the mocked dividend) — and fail loudly when there is none to drive.
+                        const reading = await inspectEventChart(canvas, true).catch(() => null);
+                        if (!reading?.tipDispatched) throw new Error(await diagnose('the hover sweep missed and the showTip fallback found no event point to drive'));
                     }
-                    await expect(tooltip).toBeVisible({timeout: 2_000});
+                    try {
+                        await expect(tooltip).toBeVisible({timeout: 2_000});
+                    } catch (error) {
+                        throw new Error(`${await diagnose('no 💰 tooltip after the hover sweep and the showTip fallback')}\n${(error as Error).message}`);
+                    }
                     await freezeAnimations(page);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-events');
                     // Move away to dismiss the tooltip for the next iteration

@@ -55,10 +55,29 @@ The rules below close those holes; each one only ever *adds* evidence:
 - **A suffix on a key is a key** (R6): ``${definition.displayNameKey}Full``.
 - **Nested templates are templates**: ``…${$t(`risk.valueStatus.${s}`)}…`` is
   parsed with its own backticks, not by pairing them blindly.
+
+A third round on the release tip left 78 live keys "not verified" and one dead
+component still proving five keys. Its rules, again only ever adding evidence or
+removing a false witness:
+
+- **One import hop** (R8): a narrow family also reads the words of the modules its
+  file imports directly (``correlationHelpers.ts`` names the bands the heatmap
+  renders). Two hops, an unimported neighbour or a wide family read nothing.
+- **Unreferenced sources** (R9): a file no SvelteKit entry reaches renders nothing.
+  ``unreferenced_sources`` lists them and ``collect_from_source(…, skip=…)`` can
+  leave them out, so the audit can show which keys only they keep alive.
+- **Generated clients are no sources** (R10): ``generated.ts`` exists only after
+  ``api sync``, so a verdict that depended on it would change on a fresh clone.
+- **Codes in other spellings** (R11): ``"3m"`` is a code, and ``IN_TRANSIT``
+  witnesses ``in_transit``.
+- **Several runtime segments** (R12): ``ns.params.${code}.${kind}.${field}`` keeps
+  its shape, and a key is used when every slot is a word of the building file,
+  of its direct imports or of the producer.
 """
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
@@ -109,7 +128,8 @@ _PARAM_LIST = re.compile(r"\(([^()]*)\)\s*(?::\s*[^=;{}()]+?)?\s*(?:=>|\{)")
 
 # R4: identifier-shaped literals of any case, Title Case phrases, and f-strings whose
 # literal head is a key prefix.
-_IDENT_LITERAL = re.compile(r"""['"]([A-Za-z][A-Za-z0-9_]*)['"]""")
+# R11: a code may begin with a digit (`"3m"`), but it holds a letter: a number is no code.
+_IDENT_LITERAL = re.compile(r"""['"]((?=[0-9_]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9_]*)['"]""")
 _TITLE_PHRASE = re.compile(r"""['"]([A-Z][A-Za-z0-9]*(?: [A-Z][A-Za-z0-9]*)+)['"]""")
 _BACKEND_FSTRING = re.compile(r"""(?<![A-Za-z0-9_])[rR]?[fF][rR]?(['"])([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*\.)\{""")
 
@@ -126,6 +146,20 @@ _INDEXED_MAP = re.compile(r"([A-Za-z_$][\w$]*)\s*\[[^\]]*\]")
 
 # R6: a whole key expression followed by a literal suffix.
 _SUFFIX_TEMPLATE = re.compile(r"^\$\{[^}]*\}([A-Za-z0-9_]+)$")
+
+# R8, R9: every import form that names a module (static, type-only, re-export,
+# dynamic, side effect), and how a specifier without an extension finds its file.
+_IMPORT_SPEC = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"\n]+)\1""")
+_SOURCE_SUFFIXES = (".ts", ".js", ".svelte", ".svelte.ts", ".svelte.js")
+_INDEX_FILES = ("index.ts", "index.js")
+
+# R9: the files SvelteKit loads by itself. Routes live under `routes/` (a layout
+# reset such as `+page@.svelte` included); hooks and the service worker at the root.
+_ROUTE_ENTRY = re.compile(r"^\+(?:(?:page|layout)(?:@[^.]*)?(?:\.server)?\.(?:svelte|ts|js)|error\.svelte|server\.(?:ts|js))$")
+_ROOT_ENTRY = re.compile(r"^(?:hooks(?:\.(?:server|client))?|service-worker)\.(?:ts|js)$")
+
+# R10: what `api sync` and the tool-contract generator write.
+_GENERATED_NAME = re.compile(r"^generated(?:-[\w-]+)?\.(?:ts|js)$|\.generated\.(?:ts|js)$")
 
 
 def _resolvable_names(content: str) -> dict[str, list[str]]:
@@ -166,20 +200,65 @@ class Usage:
     suffixes: set[str] = field(default_factory=set)
     """Literal suffixes appended to a whole key expression, e.g. ``Full`` (R6)."""
 
+    shapes: dict[tuple[str, frozenset[str]], re.Pattern[str]] = field(default_factory=dict)
+    """``(pattern, slot witnesses) -> compiled pattern`` for a template with several
+    runtime segments, or one before a literal tail; the witnesses are the words of the
+    building file and of its direct imports (R12)."""
+
 
 def is_test_source(path: Path) -> bool:
     """True for a test, a spec, or anything under ``__tests__`` / ``__mocks__`` (R1)."""
     return path.name.endswith(_TEST_SUFFIXES) or any(part in _TEST_DIRS for part in path.parts)
 
 
+def is_generated_source(path: Path) -> bool:
+    """True for a generated client: ``generated.ts``, ``generated-tools.ts``, ``*.generated.ts`` (R10).
+
+    Not written by hand and absent until ``api sync`` runs, so it must not decide a verdict.
+    """
+    return bool(_GENERATED_NAME.search(path.name))
+
+
 def iter_source_files(src_dir: Path) -> Iterator[Path]:
-    """Every product source under ``src_dir``: no dependencies, no build output, no tests."""
+    """Every product source under ``src_dir``: no dependencies, no build output, no tests,
+    no generated client."""
     for pattern in _SOURCE_GLOBS:
         for path in sorted(src_dir.rglob(pattern)):
             relative = path.relative_to(src_dir)
-            if any(part in _SKIPPED_DIRS for part in relative.parts) or is_test_source(relative):
+            if any(part in _SKIPPED_DIRS for part in relative.parts) or is_test_source(relative) or is_generated_source(relative):
                 continue
             yield path
+
+
+def resolve_import(spec: str, importer: Path, src_dir: Path) -> Path | None:
+    """The source file an import specifier names, or ``None`` (R8, R9).
+
+    Relative and ``$lib`` specifiers only: a package or another alias names no product
+    source. An omitted ``.ts``, ``.js``, ``.svelte``, ``.svelte.ts`` or ``/index.ts``
+    is found as the bundler finds it, and ``'./draft.svelte'`` names the runes module
+    ``draft.svelte.ts``. A directory without an index is no module.
+    """
+    spec = spec.split("?", 1)[0]
+    if spec == "$lib" or spec.startswith("$lib/"):
+        base = src_dir / "lib" / spec.removeprefix("$lib").lstrip("/")
+    elif spec.startswith(("./", "../")):
+        base = importer.parent / spec
+    else:
+        return None
+    base = Path(os.path.normpath(base))
+    candidates = [base] if base.suffix in (".svelte", ".ts", ".js") else []
+    candidates += [base.with_name(base.name + suffix) for suffix in _SOURCE_SUFFIXES]
+    candidates += [base / index for index in _INDEX_FILES]
+    return next((candidate for candidate in candidates if candidate.is_file()), None)
+
+
+def _is_entry(relative: Path) -> bool:
+    """A file SvelteKit loads by itself: a route file, a hook or the service worker (R9)."""
+    if relative.parts[0] == "routes":
+        return bool(_ROUTE_ENTRY.match(relative.name))
+    if len(relative.parts) == 1:
+        return bool(_ROOT_ENTRY.match(relative.name))
+    return relative.parts[0] == "service-worker" and relative.name in _INDEX_FILES
 
 
 def _parameter_literal_type(text: str, name: str) -> list[str] | None:
@@ -363,8 +442,12 @@ class _FileContext:
 
     def __init__(self, content: str) -> None:
         self.content = content
+        # The product sources this file imports directly (R8), linked by `_read_sources`.
+        self.imports: list[_FileContext] = []
+        self.import_paths: set[Path] = set()
         self._words: set[str] | None = None
         self._narrow: set[str] | None = None
+        self._slot_words: frozenset[str] | None = None
 
     def words(self) -> set[str]:
         if self._words is None:
@@ -372,13 +455,22 @@ class _FileContext:
         return self._words
 
     def narrow_rests(self) -> set[str]:
-        """Words, plus ``head.word`` for every key-template head (``help.${key}``)."""
+        """Words, plus ``head.word`` for every key-template head (``help.${key}``), plus the
+        words of every module the file imports directly: one hop, never two (R8)."""
         if self._narrow is None:
             heads = {body.split("${", 1)[0] for _, body in _iter_key_templates(self.content)}
             heads = {h for h in heads if h.endswith(".")}
             words = self.words()
             self._narrow = words | {h + w for h in heads for w in words if "." not in w}
+            for imported in self.imports:
+                self._narrow |= imported.words()
         return self._narrow
+
+    def slot_words(self) -> frozenset[str]:
+        """The words that can fill one runtime segment of a shape: no dot (R12)."""
+        if self._slot_words is None:
+            self._slot_words = frozenset(w for w in self.narrow_rests() if "." not in w)
+        return self._slot_words
 
     def property_values(self, prop: str) -> set[str]:
         return set(re.findall(rf"(?<![\w$]){re.escape(prop)}\s*:\s*['\"]([^'\"]+)['\"]", self.content))
@@ -473,6 +565,25 @@ def _record_candidates(
             usage.unverified_prefixes.setdefault(cand.rstrip("."), origin)
 
 
+def _record_shape(usage: Usage, template: str, consts: dict[str, list[str]], text: str, ctx: _FileContext | None) -> None:
+    """``ns.params.${code}.${kind}.${field}``: each runtime segment becomes a slot of one
+    segment, and a resolved one keeps its values (R12). Without a dotted literal head
+    (``${a}.${b}``) there is no shape: any two quoted words would make a key."""
+    if ctx is None or "." not in template.split("${", 1)[0]:
+        return
+    pattern: list[str] = []
+    for i, part in enumerate(_INTERP.split(template)):
+        if i % 2 == 0:
+            pattern.append(re.escape(part))
+            continue
+        name = part.strip()
+        values = consts.get(name) or (_union_members(text, name.split(".")[0]) if name else None)
+        pattern.append("(?:" + "|".join(map(re.escape, values)) + ")" if values else "([^.]+)")
+    shape = ("".join(pattern), ctx.slot_words())
+    if shape not in usage.shapes:
+        usage.shapes[shape] = re.compile(shape[0])
+
+
 def _record_template(
     usage: Usage, template: str, consts: dict[str, list[str]], text: str, origin: str, ctx: _FileContext | None = None
 ) -> None:
@@ -490,6 +601,7 @@ def _record_template(
     if not candidates:
         if head and "." in head:
             usage.unverified_prefixes.setdefault(head, origin)
+            _record_shape(usage, template, consts, text, ctx)
         return
 
     if fully_resolved:
@@ -498,6 +610,8 @@ def _record_template(
         return
 
     _record_candidates(usage, candidates, trailing_only, _INTERP.findall(template)[-1], origin, ctx)
+    if not trailing_only:
+        _record_shape(usage, template, consts, text, ctx)
 
     # The bare root the old truncation would have produced is now superseded by
     # the expansion above — but only when the expansion produced something usable.
@@ -505,18 +619,62 @@ def _record_template(
         usage.suppressed_roots.add(head)
 
 
-def collect_from_source(src_dir: Path) -> Usage:
-    """Scan the frontend's product sources (never its tests) for key evidence."""
-    usage = Usage()
+def _read_sources(src_dir: Path, skip: frozenset[Path] = frozenset()) -> dict[Path, _FileContext]:
+    """Every product source not in ``skip``, read once, linked to the sources it imports.
 
+    A skipped file is not read at all, so it is no witness one import away either (R8, R9).
+    """
+    contexts: dict[Path, _FileContext] = {}
     for path in iter_source_files(src_dir):
+        if path in skip:
+            continue
         try:
-            content = path.read_text(encoding="utf-8")
+            contexts[path] = _FileContext(path.read_text(encoding="utf-8"))
         except OSError:
             continue
+    # Resolution yields normalised paths; the walk yields them as `src_dir` spells them.
+    walked = {Path(os.path.normpath(path)): path for path in contexts}
+    resolved: dict[tuple[str, Path], Path | None] = {}
+    for path, ctx in contexts.items():
+        for m in _IMPORT_SPEC.finditer(ctx.content):
+            spec = (m.group(2), path.parent)
+            if spec not in resolved:
+                target = resolve_import(m.group(2), path, src_dir)
+                resolved[spec] = walked.get(target) if target is not None else None
+            target = resolved[spec]
+            if target is not None and target != path and target not in ctx.import_paths:
+                ctx.imports.append(contexts[target])
+                ctx.import_paths.add(target)
+    return contexts
 
+
+def unreferenced_sources(src_dir: Path) -> set[Path]:
+    """Product sources no SvelteKit entry reaches through any chain of imports (R9).
+
+    The entries are the route files, the hooks and the service worker. A declaration
+    file is never reported; a test is no source, so it reaches nothing. The paths are
+    the walk's own, ready to be handed back to ``collect_from_source`` as ``skip``.
+    """
+    contexts = _read_sources(src_dir)
+    reached = {path for path in contexts if _is_entry(path.relative_to(src_dir))}
+    frontier = list(reached)
+    while frontier:
+        for target in contexts[frontier.pop()].import_paths - reached:
+            reached.add(target)
+            frontier.append(target)
+    return {path for path in contexts if path not in reached and not path.name.endswith(".d.ts")}
+
+
+def collect_from_source(src_dir: Path, skip: frozenset[Path] = frozenset()) -> Usage:
+    """Scan the frontend's product sources (never its tests) for key evidence.
+
+    ``skip`` leaves files out entirely, e.g. the ``unreferenced_sources`` (R9).
+    """
+    usage = Usage()
+
+    for path, ctx in _read_sources(src_dir, skip).items():
+        content = ctx.content
         consts = _resolvable_names(content)
-        ctx = _FileContext(content)
 
         # Literals inside a translation call, including every branch of a
         # ternary — `$t(cond ? 'a.b' : 'a.c')` must yield both, not neither.
@@ -563,8 +721,9 @@ def harvest_vocabulary(backend_dir: Path) -> set[str]:
     ``risk.warnings.${code}``. Absence here is the only evidence that can tell a
     dead dynamic key from one merely awaiting its trigger — and it is deliberately
     permissive: a vocabulary can only ever prove presence. Any case counts
-    (``flat_series``, ``deeperTechnical``, ``FETCH_ERROR``), and a Title Case name
-    counts without its spaces (``"Health Care"`` → ``HealthCare``) (R4).
+    (``flat_series``, ``deeperTechnical``, ``FETCH_ERROR``), a code may begin with a
+    digit (``"3m"``, R11), and a Title Case name counts without its spaces
+    (``"Health Care"`` → ``HealthCare``) (R4).
     """
     vocab: set[str] = set()
     for _path, text in _python_sources(backend_dir):
@@ -608,6 +767,12 @@ def _is_narrow(family: str) -> bool:
     return family.count(".") >= 2 or not family.endswith(".")
 
 
+def _is_vocabulary(word: str, vocabulary: set[str]) -> bool:
+    """A runtime segment the producer emits, in the spelling of the key or in another:
+    ``in_transit`` for ``IN_TRANSIT``, ``fetchError`` for ``fetch_error`` (R4, R11)."""
+    return any(spelling in vocabulary for spelling in (word, _camel_to_snake(word), word.upper(), word.lower()))
+
+
 def _family_verdict(key: str, usage: Usage) -> str | None:
     """Verdict from a resolved dynamic family, or ``None`` when none applies.
 
@@ -628,9 +793,22 @@ def _family_verdict(key: str, usage: Usage) -> str | None:
             matched = matched or _is_narrow(family)
             continue
         matched = True
-        if rest in usage.vocabulary or _camel_to_snake(rest) in usage.vocabulary:
+        if _is_vocabulary(rest, usage.vocabulary):
             return USED
     return UNVERIFIED if matched else None
+
+
+def _shape_verdict(key: str, usage: Usage) -> bool:
+    """True when ``key`` has the shape of a template and every slot is named (R12).
+
+    The witnesses are read at classification time: the audit sets the producer's
+    vocabulary after the sources are collected.
+    """
+    for (_source, words), pattern in usage.shapes.items():
+        m = pattern.fullmatch(key)
+        if m and m.groups() and all(slot in words or _is_vocabulary(slot, usage.vocabulary) for slot in m.groups()):
+            return True
+    return False
 
 
 def classify(key: str, usage: Usage, legacy_prefixes: set[str] | None = None) -> str:
@@ -647,6 +825,9 @@ def classify(key: str, usage: Usage, legacy_prefixes: set[str] | None = None) ->
     for suffix in usage.suffixes:
         if key.endswith(suffix) and key[: -len(suffix)] in usage.exact:
             return USED
+
+    if _shape_verdict(key, usage):
+        return USED
 
     verdict = _family_verdict(key, usage)
     if verdict == USED:

@@ -367,9 +367,11 @@ bigger `N`.
 !!! warning "A running test server poisons the whole backend run"
 
     `--fresh-run` starts with `db create`, which **unlinks the database first** and only then calls
-    `db:upgrade` — and `db:upgrade` refuses to migrate while something holds port 6041. The result is
+    `db:upgrade` — and `db:upgrade` refuses to migrate while something holds the lane's test port
+    (`TEST_PORT`, 6041 by default). The result is
     not one clear error but roughly a dozen unrelated-looking reds downstream, all caused by a
-    database that no longer exists. Check `lsof -ti:6041` is empty before a backend run.
+    database that no longer exists. Check `lsof -ti:6041` (or your lane's port) is empty before a
+    backend run.
 
 ### On failure
 
@@ -727,18 +729,18 @@ sequenceDiagram
 
 | File | Purpose |
 |------|---------|
-| [`__init__.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/__init__.py) | Package entry point. Exports the CLI dispatchers and registers system-wide path overrides. |
-| [`_cli.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_cli.py) | Defines the argparse command hierarchy (e.g., `./dev.py test [category] [action]`), listings (`--list`), and executes the matched callback. |
-| [`_registry.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_registry.py) | Imports and invokes the registry population hook for all modules to assemble `TEST_REGISTRY`. |
-| [`_suites.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_suites.py) | Contains logic to run entire groups of tests (`all`, `all-backend`, `all-frontend`) and clean up coverage folders. |
-| [`_coverage.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_coverage.py) | Implements database merging, report generation (`htmlcov-backend/`, `htmlcov-backend-e2e/`, `htmlcov/`), the JS/Svelte pipeline (`frontend/coverage-js/`), and HTML viewer serving. |
-| [`_inventory.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_inventory.py) | Derives the test units from the registry without executing them, classifies each one by isolation class, and answers the reachability questions used by `check-orphans`. |
-| [`_scheduler.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_scheduler.py) | Turns inventory plus `--workers N` into an execution plan, balancing groups longest-processing-time first from persisted per-unit durations. |
-| [`_executor.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_executor.py) | Runs the plan's groups as concurrent processes, hands each worker its exclusive resource lot, and combines the per-worker coverage databases afterwards. |
-| [`_consolidate.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_consolidate.py) | Groups a frontend category's units into one Playwright and one vitest invocation, then reads the JSON reporters back into a per-spec verdict. |
-| [`_common.py`](file:///Users/ea_enel/Documents/00_My/LibreFolio/scripts/test_runner/_common.py) | Shared testing helpers: spawning backend servers, waiting for ports, checking database states, and executing test subprocess commands. |
-| `_backend_*.py` | Specific modules for launching pytest categories on the backend. |
-| `_frontend_*.py` | Specific modules for running Playwright E2E testing files on the frontend SPA. |
+| `scripts/test_runner/__init__.py` | Package entry point. Exports the CLI dispatchers and registers system-wide path overrides. |
+| `scripts/test_runner/_cli.py` | Defines the argparse command hierarchy (e.g., `./dev.py test [category] [action]`), listings (`--list`), and executes the matched callback. |
+| `scripts/test_runner/_registry.py` | Imports and invokes the registry population hook for all modules to assemble `TEST_REGISTRY`. |
+| `scripts/test_runner/_suites.py` | Contains logic to run entire groups of tests (`all`, `all-backend`, `all-frontend`) and clean up coverage folders. |
+| `scripts/test_runner/_coverage.py` | Implements database merging, report generation (`htmlcov-backend/`, `htmlcov-backend-e2e/`, `htmlcov/`), the JS/Svelte pipeline (`frontend/coverage-js/`), and HTML viewer serving. |
+| `scripts/test_runner/_inventory.py` | Derives the test units from the registry without executing them, classifies each one by isolation class, and answers the reachability questions used by `check-orphans`. |
+| `scripts/test_runner/_scheduler.py` | Turns inventory plus `--workers N` into an execution plan, balancing groups longest-processing-time first from persisted per-unit durations. |
+| `scripts/test_runner/_executor.py` | Runs the plan's groups as concurrent processes, hands each worker its exclusive resource lot, and combines the per-worker coverage databases afterwards. |
+| `scripts/test_runner/_consolidate.py` | Groups a frontend category's units into one Playwright and one vitest invocation, then reads the JSON reporters back into a per-spec verdict. |
+| `scripts/test_runner/_common.py` | Shared testing helpers: spawning backend servers, waiting for ports, checking database states, and executing test subprocess commands. |
+| `scripts/test_runner/_backend_*.py` | Specific modules for launching pytest categories on the backend. |
+| `scripts/test_runner/_frontend_*.py` | Specific modules for running Playwright E2E testing files on the frontend SPA. |
 
 ---
 

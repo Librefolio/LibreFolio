@@ -718,7 +718,7 @@
         if (assetIncome != null && assetIncome !== 0) {
             html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.assetIncome', 'Income')), signedColorField(assetIncome, formatSignedMoneyField, themeDark));
         }
-        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.tooltip.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
+        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
         html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalReturn', 'Total return')), signedColorField(lotDto?.total_return, formatSignedPercentField, themeDark));
         const allocatedFees = parseUnknownNumber(lotDto?.allocated_fees);
         const allocatedTaxes = parseUnknownNumber(lotDto?.allocated_taxes);

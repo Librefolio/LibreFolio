@@ -42,6 +42,10 @@ With $k = 2$, if returns were normally distributed the price would stay inside t
 | Period ($N$) | `period` | 20 | SMA window for expected value, in sessions. |
 | Multiplier ($k$) | `multiplier` | 2 | Number of standard deviations. |
 
+!!! note "Drawn across closed days"
+
+    The bands have a value on sessions only, while the chart's date axis runs through every calendar day. Over a weekend or a holiday, the shaded band is drawn in a straight line from the last session before to the first one after, as the middle band is, so it does not break: the bridged stretch only shapes the fill and carries no value of its own.
+
 ---
 
 ## 🎛️ Signal Processing Equivalent — Adaptive Confidence Interval Tracker
