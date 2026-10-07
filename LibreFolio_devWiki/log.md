@@ -2157,3 +2157,12 @@ covers only the regional indicators: Apple flags on Apple devices, the self-host
 every other character on its usual font. The page records the new solution, why the old "not globally" rule fell,
 and how to verify it without Windows.
 Filed: [[problems/flag-emoji-windows]] (updated); [[domains/layout-settings]] (its known-problems line aligned).
+
+## [2026-10-07] file | Workstream O — the i18n audit, and the svelte-i18n formatter cache
+The Release 2 i18n audit found the usage audit wrong in both directions (118 live keys reported dead, the whole
+`risk.*` namespace absolved by a single-literal parameter type, tests counted as evidence) and a svelte-i18n
+4.0.1 cache keyed on message text only, which leaks plural rules across locales after an in-place switch. Both
+fixes are filed with their gates; the catalogue went from 4 356 to 4 186 keys per language.
+Filed: [[problems/i18n-audit-false-dead-and-false-used]], [[problems/svelte-i18n-formatter-cache-ignores-locale]].
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
+worktree.
