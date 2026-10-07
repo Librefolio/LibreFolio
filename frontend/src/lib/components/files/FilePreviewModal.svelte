@@ -674,13 +674,13 @@
 
                 {#if previewType === 'image'}
                     <div class="preview-toggle">
-                        <button type="button" onclick={zoomOut} aria-label={$t('uploads.previewZoomOut')}>
+                        <button type="button" onclick={zoomOut} aria-label={$t('uploads.zoomOut')}>
                             <Minus size={16} />
                         </button>
                         <button type="button" onclick={resetZoom} aria-label={$t('common.reset')}>
                             <RotateCcw size={16} />
                         </button>
-                        <button type="button" onclick={zoomIn} aria-label={$t('uploads.previewZoomIn')} data-testid="file-preview-zoom-in">
+                        <button type="button" onclick={zoomIn} aria-label={$t('uploads.zoomIn')} data-testid="file-preview-zoom-in">
                             <Plus size={16} />
                         </button>
                     </div>
