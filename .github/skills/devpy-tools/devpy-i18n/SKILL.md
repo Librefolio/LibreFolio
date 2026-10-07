@@ -34,8 +34,8 @@ description: "Use this skill when the user needs to manage frontend translations
 - Location: `frontend/src/lib/i18n/{en,it,fr,es}.json`
 - Library: svelte-i18n
 - Languages: EN (primary), IT, FR, ES
-- ~4 190 keys per language after the Release 2 audit (2026-10: 4 356 → 165 dead keys removed,
-  C1-C4 condensed). Read the live number from `./dev.py i18n audit`, never from here.
+- ~4 150 keys per language after the Release 2 audit (2026-10: 4 356 → 4 152; 192 dead keys removed,
+  five condensations C1-C5). Read the live number from `./dev.py i18n audit`, never from here.
 
 ## Locale File Format — canonical form is `indent=2`
 
@@ -128,6 +128,8 @@ What counts as evidence:
 
 - **Product sources only.** `*.test.ts`, `*.spec.ts`, `__tests__/` and `__mocks__/` prove nothing: a key
   only a test names is dead to every user (774 strings and 19 prefixes came only from tests before).
+  Generated API clients (`lib/api/generated.ts`, `generated-tools.ts`, `*.generated.ts`) prove nothing
+  either: they exist only after `api sync`, so a verdict resting on them would flip on a fresh clone.
 - **Any whole-key literal**, quoted or in a backtick without interpolation, whoever receives it:
   `translateOr($_, 'k', …)`, `label('k', …)`, `translate('k')`, `tr('k', …)`, `afterCopyKey: 'k'`,
   ternaries across lines, arrays, and **backend** literals (dictionaries such as
@@ -136,16 +138,30 @@ What counts as evidence:
   conditionals, typed unions and single-literal parameter types (`prefix: 'errors'`) are expanded;
   camelCase continuations (`historyDays${day}`) and `'ns.cat.' + code` concatenations are families.
 - **Family members**: the producer's vocabulary (any identifier case, Title Case names without spaces —
-  `"Health Care"` → `HealthCare` — and dotted codes); the `titleKey:` values or map values the
-  interpolation itself names; and, for narrow families only (two dots or a camelCase continuation),
-  any word the **building file** quotes (`text('compute.title')` over `` `${KEY}.${key}` ``).
+  `"Health Care"` → `HealthCare` — dotted codes, codes beginning with a digit such as `"3m"`, matched in
+  any case: `IN_TRANSIT` proves `in_transit`); the `titleKey:` values or map values the interpolation
+  itself names; and, for narrow families only (two dots or a camelCase continuation), any word the
+  **building file** quotes (`text('compute.title')` over `` `${KEY}.${key}` ``) **or a module it imports
+  directly** (the bands of `correlationHelpers.ts` for the heatmap). One hop only: a word two imports
+  away, or in a neighbour nobody imports, proves nothing, and a wide family (`ns.${x}`) reads no import.
+- **Shapes**: a template with several runtime segments, or one before a literal tail
+  (`` `assets.providerParams.${code}.${kind}.${field.key}` ``, `` `assets.panels.${panel.id}Hint` ``),
+  keeps its shape. A key with exactly that shape is used when every slot is a word of the building file,
+  of its direct imports or of the producer; a typed-union slot takes only its members. One slot named
+  nowhere leaves the key not verified, and a template without a dotted literal head has no shape.
 - **Backend f-string families** (`f"aiExport.additionalData.reason.{reason}"`) and suffixes
   (`` `${displayNameKey}Full` ``).
 - A backend family whose namespace exists but holds no key is listed under 👻 (today:
   `tools.allocation.constraints.` ← `pac_allocator/evaluator.py:968`, a field nobody reads).
+- A key that only **unreferenced sources** keep alive is listed under 📦, with the verdict it would get
+  without them. A source is unreferenced when no SvelteKit entry (route files, hooks, service worker)
+  reaches it through static or dynamic imports. Informational: decide whether the source is dead, then
+  remove it with its keys (`AgeLabel.svelte` and its five `planner.age.*` keys went this way). Today
+  `onboardingTourSurfaces.svelte.ts` and `stores/core/EditBuffer.ts` are unreferenced but read no key.
 
 Known limit: the backend vocabulary is shared by every family, so a common word ("assets") can still
-make a dead key look used under a family (`…planner.result.sections.assets` was removed by hand).
+make a dead key look used under a family (`…planner.result.sections.assets` was removed by hand). And
+a member two imports away stays not verified (`chartSettings.params.amplitude`, `histogramScale`).
 
 If you introduce a NEW backend-driven key mechanism, make sure the key is a literal somewhere, or a
 dotted f-string head: then the audit sees it with no tool change.
@@ -193,7 +209,6 @@ Consolidate under `common.*` only when **meaning, context AND value match in all
   `signals.<plugin>.{name,output}`, often identical ("EMA"/"EMA"): metadata emitted by the backend, keep.
 
 **Discovered during 2026-07 cleanup campaign (do NOT re-consolidate):**
-- `dashboard.holdings` vs `dashboard.positions` — "Holdings" and "Positions" are distinct portfolio concepts, not interchangeable despite similar translations.
 - `transactions.promote.fieldTags` vs `transactions.fields.tags` / `transactions.form.tags` — promote-merge UI field label vs generic field/form label; `transactions.fields.*` is dynamic-prefix protected anyway.
 - `transactions.linkTooltip.generic` vs `transactions.types.CASH_TRANSFER` — generic tooltip copy vs the actual transaction-type label (dynamic-prefix protected).
 - `assets.confirm.confirmChange` vs `assets.confirm.identifierChanged` — generic confirm-change prompt vs a specific "identifier changed" warning; same FR text today but distinct triggers.
@@ -214,9 +229,14 @@ Consolidate under `common.*` only when **meaning, context AND value match in all
 - `uploads.previewZoomIn` / `.previewZoomOut` → `uploads.zoomIn` / `.zoomOut` (file preview and image cropper);
 - `uploads.size` → `uploads.fileSize` (asset picker, file table, file edit modal);
 - `assetDetail.editorTip{Desktop,Mobile}` and `fxDetail.editorTip{Desktop,Mobile}` → `dataEditor.editorTip{Desktop,Mobile}`
-  (the same data-editor tip on the asset and FX pages).
+  (the same data-editor tip on the asset and FX pages);
+- `brokers.lots.modal.{currentValue,fifoPnl,openQuantity,openReturn,originalQuantity,totalPnl}` and
+  `brokers.lots.tooltip.totalPnl` → `brokers.lots.{…}` (one lot field, one label, in the custody modal,
+  the lots table and the chart tooltips).
 
 Of the 112 groups identical in all four languages, the rest were kept on purpose: backend signal-plugin
 metadata (`signals.<plugin>.{name,output}`, «Overbought»/«Oversold»/«Neutral» per plugin), the PAC
 planner's per-module namespaces, generic words in different roles («Period», «Type», «Status», «Price»),
-and every group touching an area under active work at the time (`risk.*`, `dashboard.*`, `brokers.lots.*`).
+and the `risk.*` and `dashboard.*` groups, kept separate while those areas were under active work.
+(`dashboard.holdings` vs `dashboard.positions` no longer applies: `dashboard.holdings` had no reader
+and was removed.)
