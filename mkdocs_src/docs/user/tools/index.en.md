@@ -28,11 +28,15 @@ the calculation engine behind it does.
 
 Open **Tools** from the sidebar to see the catalogue as a grid of cards. For a ready tool, the **entire card** is clickable, not just its title or an icon; an arrow indicator marks it as open-able. A tool whose interface is missing has neither, and states its situation on the card instead.
 
+<!-- [Screenshot Placeholder: tools/hub — the Tools catalogue with the PAC allocator card, its Backend/API · UI version pair, and the Documentation and Reload actions] -->
+
 Both the catalogue and an open tool show:
 
 - a **Documentation** action linking to that tool's page, with a label that appears next to the icon on wider screens and collapses to an icon-only control on narrow screens;
-- a **Refresh** action that reloads the catalogue (from the hub) or the current tool's interface (from an open tool), with the same responsive icon-only behavior; refreshing an open tool always asks for confirmation because it replaces the interface and discards its current draft;
-- a single **Version** label showing the tool's compatibility pair — there is no separate build or implementation number shown alongside it.
+- a **Reload** action that reloads the catalogue (from the hub) or the current tool's interface (from an open tool), with the same responsive icon-only behavior; reloading an open tool first asks for confirmation (**Reload tool?**), because it replaces the interface and discards its current draft;
+- the tool's compatibility pair, `Backend/API <contract_version> · UI <ui.version>`, with no separate build or implementation number shown alongside it.
+
+When some catalogue entries or interfaces are unavailable, the hub says how many and points to **Settings → About → Plugin diagnostics**.
 
 ## 🧭 Availability and compatibility
 
@@ -51,9 +55,11 @@ A usable Tool needs both a compatible backend operation and its matching **tool-
 
 The frontend owns each tool's form and result presentation. The backend owns the calculation and validates its inputs and outputs. A catalogue entry does not download arbitrary interface code or create a generic form automatically.
 
-Every Tool card and opened Tool header shows the compatibility pair as
-`Backend/API <contract_version> · UI <ui.version>`. The implementation version is intentionally
-kept out of these everyday labels; find it only under **Settings → About → Plugin diagnostics**.
+Only the Tool cards of the catalogue and the header of an open tool show the compatibility pair
+`Backend/API <contract_version> · UI <ui.version>`. **Settings → About → Plugin diagnostics** shows
+each tool with its code and `Version: <contract_version>` only. The implementation version is
+intentionally kept out of the interface: it travels only in the catalogue and diagnostics data
+returned by the API.
 
 ## 📦 Prepare the inputs first
 
@@ -113,6 +119,13 @@ The capacity limits apply to **one API process**, not to the whole installation.
 If the queue is full, allow the current work to finish before trying again. Repeatedly submitting the same inputs does not bypass admission limits or make the work share an execution.
 
 ## 🔎 Read-only diagnostics
+
+In the app, you find these diagnostics under **Settings → About → Plugin diagnostics**: below the
+plugin registries, the **Tools** panel lists the catalogue, and its **Tool diagnostics** collapsible
+loads the snapshot described here (see [About](../settings/about.md)). The panel shows part of it:
+the scope and process identifier, the execution pool, each loaded tool with its code and contract
+version, the discovery failures, and the effective platform limits. Implementation versions and
+schemas are not displayed.
 
 The diagnostics contract is available to **every authenticated user with an active account**. It is not restricted to administrators. Catalogue access and computation use the same active-account authentication boundary.
 
