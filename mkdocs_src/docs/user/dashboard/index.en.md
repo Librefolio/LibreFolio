@@ -53,13 +53,28 @@ At the top right of the dashboard, you have several controls to customize your v
   AI service. See [Portfolio AI Export](../ai-export/portfolio.md) or the
   [AI Export overview](../ai-export/index.md).
 
+The time range, the broker filter and the target currency stay as you set them for the rest of your session in this browser tab — a page reload keeps them too — and reset when you log out. The time range is shared with the other pages that have one (the Assets and FX pages, their detail pages, and each broker's page), so a change made there shows up here as well. Next to **AI Export**, the **Refresh** button (:material-refresh:) recalculates everything on demand: see [Coming back and refreshing](#coming-back-and-refreshing).
+
 !!! tip "Scope matters"
 
     When you filter to a single broker, cash transfers *to other brokers* become external flows for that scope. This affects [Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) and [P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) calculations.
 
 !!! note "Sharing affects these numbers"
 
-    The dashboard aggregates only the brokers **you have access to**, and every amount from a broker you co-own is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals (a 0% share is valid and contributes nothing). Editors and Viewers — who always carry a 0% share by rule — see the broker's **full** amounts instead. See [Broker Sharing](../brokers/sharing.md) for details.
+    The dashboard counts only the brokers you **own** with a share above 0%, and every amount from them is **scaled by your ownership share**: an Owner with a 50% share sees half of that broker's value, income, and P&L counted in the totals. Brokers where you are an **Editor** or a **Viewer** — who always carry a 0% share by rule — are left out, like those you own with a 0% share: they are missing from the totals, from the broker filter, from the Positions tab (Performance view and lots panel included) and from the Transactions tab. You see them on their own broker page, where Editors and Viewers get the broker's **full** amounts. The **Risk** tab is the exception: it analyses every broker you can access, Editor and Viewer ones included. See [Broker Sharing](../brokers/sharing.md) for details.
+
+---
+
+## 🔄 Coming back and refreshing {: #coming-back-and-refreshing }
+
+Come back to the Dashboard — from the sidebar, or with the **←** back button of an asset page — and it shows at once what it showed when you left: the KPI cards, the charts, the Positions tab with its Performance view and [FIFO Lots Analysis](positions.md#fifo-lots-analysis) panel, and the Risk tab. There are no loading placeholders, and the KPI figures appear at their value instead of counting up from zero. If you changed the time range on another page in the meantime, the Dashboard opens on that range instead.
+
+- **If nothing changed in the meantime**, that is all: LibreFolio recalculates nothing.
+- **If something changed** — for example a transaction; prices, rates or events entered by hand or brought in by a sync; an asset edited or merged; a change to one of your brokers or to your access to it; or the live price that an asset page checks while it is open — the old figures stay on screen while LibreFolio recalculates in the background, then the numbers move to the new values. A price or rate sync that brought nothing new is not a change.
+
+The **Refresh** button recalculates everything, even when nothing changed: the figures, the Performance view, the lots panel and the Risk tab. What you see stays on screen meanwhile.
+
+If a recalculation fails, the figures already on screen stay and a message tells you so. The Risk tab is the exception: it shows *Risk data could not be loaded.* in place of its levels.
 
 ---
 
