@@ -106,7 +106,8 @@
                     Promise.all(['/dashboard', '/fx', '/assets', '/brokers', '/transactions', '/settings', '/files', '/tools'].map((r) => preloadCode(r).catch(() => {}))).catch(() => {});
 
                     // F14: admins only — probe GitHub for a newer stable release
-                    // (throttled to once/24h, silent on offline installs).
+                    // (throttled to once an hour, CHECK_INTERVAL_MS in updateCheck.ts;
+                    // silent on offline installs).
                     if (get(auth).user?.is_superuser) {
                         void (async () => {
                             try {
