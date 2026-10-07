@@ -3413,7 +3413,11 @@
       "execution_timeout": "The calculation took too long and was stopped.",
       "optimization_infeasible": "No allocation satisfies the requested constraints.",
       "unknown": "This measurement did not return a result.",
-      "answer_discarded": "The answer was set aside because the data changed while it was arriving. Run the analysis again."
+      "answer_discarded": "The answer was set aside because the data changed while it was arriving. Run the analysis again.",
+      "resource_limit_paths_or_horizon": "This simulation is too large to run. Use fewer simulation paths or a shorter horizon.",
+      "resource_limit_horizon_or_sampling": "This quasi-Monte Carlo simulation is too large to run. Shorten the horizon or choose Monte Carlo sampling.",
+      "resource_limit_period": "This simulation is too large to run: the period holds too much history. Choose a shorter period.",
+      "resource_limit_positions": "A simulation can include at most 100 holdings, and this portfolio has more. Simulate a broker with fewer holdings instead."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",
