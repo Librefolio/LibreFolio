@@ -1550,7 +1550,7 @@
                 </button>
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {pageLayoutMode === 'oneColumn' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
+                💡 {pageLayoutMode === 'oneColumn' ? $t('dataEditor.editorTipMobile') : $t('dataEditor.editorTipDesktop')}
             </p>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection
