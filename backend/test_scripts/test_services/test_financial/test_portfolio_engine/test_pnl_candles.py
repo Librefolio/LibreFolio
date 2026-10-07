@@ -71,6 +71,7 @@ from backend.app.services.portfolio_engine import (
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 
 # =============================================================================
 # HELPERS — mirror the established conventions in this test directory
@@ -177,6 +178,15 @@ def _builder(**overrides) -> DailyStateBuilder:
             defaults["quote_base_map"],
             defaults.get("split_linked_tx_ids"),
             ohlc_by_date,
+        )
+    if "average_costs" not in defaults:
+        defaults["average_costs"] = engine_average_costs(
+            defaults["classified_txs"],
+            asset_currencies=defaults["asset_currencies"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
+            split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
         )
     return DailyStateBuilder(**defaults)
 
