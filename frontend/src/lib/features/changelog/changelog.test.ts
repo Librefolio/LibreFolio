@@ -232,19 +232,44 @@ describe('splitSections (round-3 F12)', () => {
 });
 
 describe('the bundled changelog (F12)', () => {
-    it('parses the repo CHANGELOG.md with one canonical undated Unreleased chapter', () => {
+    it('parses the repo CHANGELOG.md: newest chapter first, every release dated', () => {
         // The modal renders this list: an unparsable shipped file means an empty
         // modal in production, which is exactly the failure this test exists to
         // catch before release.
         expect(changelogChapters.length).toBeGreaterThan(0);
 
-        const unreleased = changelogChapters.filter((c) => c.version === 'Unreleased');
-        expect(unreleased).toHaveLength(1);
-        expect(unreleased[0].date).toBe('');
+        // The top chapter takes either shape: Keep-a-Changelog's undated
+        // `## [Unreleased]`, or — while a release is being prepared — that
+        // release's own `## [x.y.z] - date` chapter with an indicative date. So an
+        // Unreleased chapter is optional, but there is at most one, it comes
+        // first and it carries no date.
+        const isUnreleased = (version: string) => version.toLowerCase() === 'unreleased';
+        const unreleased = changelogChapters.filter((c) => isUnreleased(c.version));
+        expect(unreleased.length, 'more than one Unreleased chapter').toBeLessThanOrEqual(1);
+        for (const chapter of unreleased) {
+            expect(changelogChapters.indexOf(chapter), 'Unreleased is not the first chapter').toBe(0);
+            expect(chapter.date, 'Unreleased carries a date').toBe('');
+        }
 
-        const released = changelogChapters.filter((c) => c.version !== 'Unreleased');
-        expect(released.length).toBeGreaterThan(0);
-        expect(released.every((c) => c.version.length > 0 && c.date.length > 0)).toBe(true);
+        // Every other chapter is a release: a plain X.Y.Z version (SemVer's
+        // version core, so no leading zeros) and a YYYY-MM-DD date...
+        const releases = changelogChapters.filter((c) => !isUnreleased(c.version));
+        expect(releases.length, 'no release chapter').toBeGreaterThan(0);
+        for (const {version, date} of releases) {
+            expect(version, 'release version is not X.Y.Z').toMatch(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+            expect(date, `release ${version} has no YYYY-MM-DD date`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        }
+
+        // ...listed newest first, strictly, so a mistyped or misplaced chapter
+        // breaks the order. Compared numerically part by part: 1.10.0 > 1.9.0.
+        const compareSemver = (a: string, b: string) => {
+            const [x, y] = [a, b].map((v) => v.split('.').map(Number));
+            return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+        };
+        for (let i = 1; i < releases.length; i++) {
+            const [above, below] = [releases[i - 1].version, releases[i].version];
+            expect(compareSemver(above, below), `${above} is listed above ${below} but is not newer`).toBeGreaterThan(0);
+        }
     });
 
     it('points the remote link at the repository CHANGELOG.md', () => {
