@@ -1059,7 +1059,7 @@ class TestGenericCSVSaysWhyItRefuses:
         assert callable(getattr(BRIMProvider, "cannot_parse_reason", None)), "BRIMProvider has no cannot_parse_reason method"
         assert "cannot_parse_reason" not in BRIMProvider.__abstractmethods__
 
-    @pytest.mark.parametrize("code", ["broker_degiro", "broker_danske_bank"])
+    @pytest.mark.parametrize("code", ["broker_trading212", "broker_danske_bank"])
     def test_a_plugin_that_does_not_override_it_has_nothing_to_add(self, code: str, tmp_path: Path):
         """The base default, ``None``, about a file the plugin refuses: the guard of ``parse_file`` keeps its plain message."""
         plugin = BRIMProviderRegistry.get_provider_instance(code)
