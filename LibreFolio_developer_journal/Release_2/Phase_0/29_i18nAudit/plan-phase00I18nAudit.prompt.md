@@ -761,6 +761,91 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   il gate dei testi delle guide) e `onboarding-component-unit`.
   > - Non sono girati gli E2E: C5 cambia solo chiavi con valori identici nelle 4 lingue, e la resa
   >   non cambia.
+- **S15** ✅ 2026-10-07 — Lotto a parte, non i18n: `GET /api/v1/system/plugin-diagnostics` richiede il
+  login. Trovato da Q, verificato dal coordinatore. Decisione del developer: «Sì, correggilo con O nella
+  1.2». Base `1e2b08804`.
+  > **Note implementazione** (verifica prima del codice):
+  > - `system.py:192-202`: `get_plugin_diagnostics()` non ha `Depends(get_current_user)`, che invece c'è
+  >   su `container-image-status` (`:205-211`). Restituisce il testo delle eccezioni d'import dei plugin,
+  >   quindi può esporre percorsi interni. C'è dalla 1.1.0 (`81853ae81`).
+  > - L'unico chiamante è `AboutTab.svelte:133`, nelle impostazioni, da utente loggato, con
+  >   `.catch(() => [])`; anche l'E2E `settings.spec.ts:556` è loggato.
+  > - `developer/architecture/security.md:84-95` già non elenca l'endpoint fra i pubblici: è il codice a
+  >   non rispettare la doc, che non va toccata.
+  > - `get_current_user` legge il cookie da `Request`, quindi l'OpenAPI non cambia.
+  > - Niente frontend né i18n; il CHANGELOG lo scrive il coordinatore.
+  >
+  > **Esecuzione** (✅ 2026-10-07):
+  > - **test-author**: classe `TestPluginDiagnosticsRequiresSession` in `test_system_api.py` (+140/−1),
+  >   HTTP vero sul backend della corsia:
+  >   - senza cookie → 401 «Not authenticated»;
+  >   - cookie falso (`SESSION_COOKIE_NAME`) → 401 «Session expired or invalid»;
+  >   - utente proprio loggato → 200, `PluginDiagnosticsResponse` valida, chiavi esatte
+  >     `system`/`filename`/`error`, senza vincoli di lunghezza;
+  >   - barriera strutturale: `get_current_user` fra le dipendenze della route, con il controllo positivo
+  >     su `container-image-status`.
+  >
+  >   Prima del fix: 3 rossi (200 invece di 401, due volte; nessuna dipendenza), 25 verdi compresa la
+  >   barriera del login (`/tmp/libreFolio_o_sec_red.log`).
+  > - **fix**: `_current_user: Annotated[User, Depends(get_current_user)]` su `get_plugin_diagnostics`,
+  >   più una riga di docstring.
+  > - **gate**:
+  >   - `test … api system`: 28 passati, ripetuto sull'albero finale (`/tmp/libreFolio_o_sec_green2.log`);
+  >   - `lint` verde; black pulito su entrambi i file, prima e dopo; `diff --check` pulito;
+  >   - porte 6160 e 6170 libere;
+  >   - OpenAPI: cambia solo `description`, cioè la docstring; `operationId`, parametri e risposte sono
+  >     identici, quindi il client è compatibile (`/tmp/libreFolio_o_sec_openapi.log`).
+  >
+  > **⚠️ Fuori pista** (segnalati, non corretti):
+  > - l'azione singola `api system` non popola il DB della corsia, quindi il primo account registrato è
+  >   diventato l'admin d'avvio ed è rimasto nel DB di `/tmp/librefolio-r2-o`;
+  > - `_TestingServerManager.ensure_started()`, documentato in `backend-testing.instructions.md:109`,
+  >   nella skill `testing-backend` e in `knowledge_base/06_testing_backend.md:138`, non esiste: c'è
+  >   `start_server()`;
+  > - la descrizione di `api system` nel runner («parse_pipfile, deps») è vecchia;
+  > - il runner ha creato `frontend/build/`, che è ignorato.
+- **S16** ⏳ 2026-10-07 — Triage del rosso di coverage `auth.spec.ts:312` («3a: completing welcome…»),
+  chiesto dal coordinatore dopo il fix di sicurezza.
+  > **Prove**:
+  > - run completa 13:05-15:58 su `d07412899`, 2 worker, carico 30-50: a `:338` per 3 s
+  >   `<html lang="en" data-i18n-ready="true">` ×10 (`/tmp/libreFolio_triage_20261007/logs/front-utility__e2e-desktop.log:198-226`).
+  > - Ipotesi della skill `test-triage`, nell'ordine:
+  >   - forma: no, non c'è niente di posizionale e `it` non c'è da nessuna parte (la POST porta `en`);
+  >   - orologio: no, l'attesa è sullo stato giusto e lo stato finale è `en`, quindi alzare il timeout non
+  >     servirebbe;
+  >   - stato condiviso: no, l'utente è usa e getta;
+  >   - cascata: no, è l'unico rosso di `auth`.
+  >
+  > **Meccanismo**:
+  > 1. svelte-i18n 4.0.1, con un loader in coda, rende vero `isLoading` dopo `loadingDelay` = 200 ms e
+  >    cambia `locale` solo a caricamento finito (`runtime.js:319-338`);
+  > 2. `routes/+layout.svelte:43-48`, e allo stesso modo `(app)/+layout.svelte`, smontano l'intera app
+  >    finché `$i18nLoading` è vero;
+  > 3. al rimontaggio `(app)/+layout.svelte:45` (`initI18n()`) e `:61` (`currentLanguage.init()`)
+  >    rileggono `localStorage['librefolio-locale']`, che l'anteprima del Welcome
+  >    (`welcome/+page.svelte:104-110`, solo `locale.set`) non scrive mai, quindi la lingua torna `en`;
+  > 4. la pagina Welcome si rimonta e riidrata la bozza da `$userSettings` (`:55-75`), cioè `en`, e il
+  >    completamento invia `en`.
+  >
+  > Il commento di `+layout.svelte:32-35` («`locale` flips the moment the user picks») è falso con
+  > svelte-i18n 4.
+  >
+  > **Riproduzione**, in corsia 6160, con uno spec temporaneo non tracciato e poi tolto (copia in
+  > `/tmp/libreFolio_o_triage_probe.spec.ts`):
+  > - con il chunk italiano instradato, a 0 ms e a 1500 ms, la traccia è `en/true > en/false > it/false >
+  >   en/true`; il form del Welcome è un nodo nuovo, `lang` è `en`, la POST porta `language: en`
+  >   (`/tmp/libreFolio_o_triage_run3.log`);
+  > - controllo: il vero 3a senza route passa in 3,0 s (`/tmp/libreFolio_o_triage_3a.log`);
+  > - il chunk italiano pesa 254 KB nel build di debug.
+  >
+  > **Verdetto: difetto.** Il test è giusto.
+  > - Impatto per l'utente: su un'istanza remota, chi sceglie la lingua nel Welcome vede l'app sparire e
+  >   tornare in inglese, e la scelta si perde.
+  > - Ogni cambio di lingua successivo che superi i 200 ms (header, Preferenze) rimonta l'app e perde lo
+  >   stato della pagina, anche se la lingua resta, perché `currentLanguage.set` la salva prima.
+  > - Correzione proposta, in attesa dell'autorizzazione: i layout mostrano il segnaposto solo fino al
+  >   primo dizionario pronto, poi l'app resta montata; `data-i18n-ready` continua a segnalare il caricamento.
+  >   Il test-author scrive un E2E di regressione, rosso prima del fix.
 
 ## 12. Definition of done
 
