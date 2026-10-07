@@ -176,17 +176,19 @@
      * the risk cache itself, so dropping the cache alone would leave every section
      * on its pre-sync answer.
      *
-     * The cache is already gone by the time this runs: the sync requests are
-     * portfolio mutations (`isPortfolioAffectingMutation`), and `riskStore`
-     * registers `invalidateRisk` as their listener. The explicit call mirrors the
-     * controller's own `handleSynced`, so this refresh does not depend on how those
-     * URLs happen to be classified.
+     * By the time this runs, a sync that wrote has already marked the risk answers
+     * stale: the sync requests are portfolio mutations (`isPortfolioAffectingMutation`)
+     * when their answer says they wrote, and `riskStore` registers `markRiskStale` as
+     * their listener; one that wrote nothing has marked nothing. The explicit hard reset
+     * (`invalidateRisk`) makes every section ask again either way, so this refresh does
+     * not depend on how those URLs, or their answers, happen to be classified.
      *
      * 🔴 **The page refreshes first, the sections after.** The page's `onsynced`
      * re-reads its price series, which reassigns its `assets` list several times.
      * Its live-price poll used to re-run on every one of those reassignments — each
-     * run a write (`POST /assets/prices/current`) and so a portfolio mutation that
-     * drops every risk answer in flight — until it was keyed on the set of ids
+     * run a write (`POST /assets/prices/current`) and so a portfolio mutation, which
+     * then dropped every risk answer in flight (since the page cache it only marks them
+     * stale) — until it was keyed on the set of ids
      * (`liveAssetIdsKey` in `assets/+page.svelte`). The order outlived the reason it
      * was introduced for, and is kept on purpose: it costs nothing, and it keeps the
      * sections clear of whatever that refresh sets off if the poll ever regresses,
@@ -493,14 +495,13 @@
     async function heldAssetIds(brokerId: number | null, generation: number): Promise<number[] | null | undefined> {
         const brokerIds = brokerId === null ? undefined : [brokerId];
         // `fetchReport` answers with a report or with `null`, and `null` covers two
-        // different facts: a *discard* (the client session or the report cache moved
-        // while the request was in flight) and a *failure* (it turns every error into
-        // `null` — nothing is ever thrown at this caller). On this page the cache moves
-        // on its own: the live-price poll writes today's prices
-        // (`POST /assets/prices/current`), that is a portfolio mutation, and
-        // `portfolioStore`'s mutation listener drops every report in flight. Read as
+        // different facts: a *failure* (it turns every error into `null` — nothing is ever
+        // thrown at this caller) and a *discard* (a session change, or a hard reset of the
+        // report cache, while the request was in flight). A portfolio mutation — on this
+        // page the live-price poll, which writes today's prices — only marks the reports
+        // stale since the page cache: the answer in flight is still returned. Read as
         // "no holdings", a null used to wipe the selection in silence. It is asked once
-        // more — the right answer to a transient failure too — and a second null is
+        // more — the right answer to a transient failure — and a second null is
         // reported as a failure.
         // Only the holdings are read, so the report is asked without its daily history and
         // allocation history: those two series are what made "All mine" wait, and nothing here
