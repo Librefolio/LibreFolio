@@ -7,13 +7,19 @@ Covers:
 - get_backend_deps: backend dependency list
 - get_frontend_deps: frontend dependency list from package.json
 - GET /api/v1/system/info: system info endpoint
+- GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
 """
 
+from uuid import uuid4
+
+import httpx
 import pytest
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 import backend.app.api.v1.system as system_module
+from backend.app.api.v1.auth import SESSION_COOKIE_NAME, get_current_user
 from backend.app.api.v1.system import (
     BACKEND_NAME_MAP,
     FRONTEND_NAME_MAP,
@@ -24,7 +30,10 @@ from backend.app.api.v1.system import (
     get_system_info,
     parse_pipfile,
 )
-from backend.app.config import TEST_LANE_HEADER
+from backend.app.config import TEST_LANE_HEADER, get_settings
+from backend.app.schemas.system import PluginDiagnosticsResponse
+from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_utils import unique_id
 
 
 class _FakePath:
@@ -219,3 +228,133 @@ class TestGetSystemInfoEndpoint:
         assert result.deployment_mode in ("local", "docker")
         assert len(result.backend_dependencies) > 0
         assert len(result.frontend_dependencies) > 0
+
+
+# ============================================================================
+# GET /api/v1/system/plugin-diagnostics — real HTTP on the lane's shared backend
+# ============================================================================
+#
+# The diagnostics carry the text of plugin import exceptions, which can name
+# internal paths. The route is not among the public endpoints listed in
+# mkdocs_src/docs/developer/architecture/security.md, so it belongs behind the
+# session gate, like its sibling container-image-status. Only FastAPI resolves
+# that dependency: these tests talk HTTP instead of calling the handler.
+
+settings = get_settings()
+API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
+PLUGIN_DIAGNOSTICS_URL = f"{API_BASE}/system/plugin-diagnostics"
+TIMEOUT = 30
+PASSWORD = "PluginDiagPass123!"
+#: The ``system`` label get_plugin_diagnostics gives each registry it reads.
+PLUGIN_SYSTEMS = {"asset", "fx", "brim", "signals"}
+
+
+@pytest.fixture(scope="module")
+def test_server():
+    """Attach to the runner-owned backend, or start its in-process test server."""
+    with _TestingServerManager() as server_manager:
+        if not server_manager.start_server():
+            pytest.fail("Failed to start test server")
+        yield server_manager
+
+
+async def _login_own_regular_user(client: httpx.AsyncClient) -> None:
+    """Register an account of this test's own and put its session on ``client``.
+
+    The first account of an empty database becomes admin (``auth.register``);
+    registering again then yields the ordinary user the Settings → About tab is
+    served to. That bootstrap admin, if created, cannot delete itself as sole
+    admin; a populated lane never takes the branch.
+    """
+
+    async def register() -> tuple[str, bool]:
+        username = f"{unique_id('plugdiag')}_{uuid4().hex[:8]}"
+        response = await client.post(
+            f"{API_BASE}/auth/register",
+            json={"username": username, "email": f"{username}@example.com", "password": PASSWORD},
+            timeout=TIMEOUT,
+        )
+        assert response.status_code == 201, response.text
+        return username, response.json()["user"]["is_superuser"]
+
+    username, is_admin = await register()
+    if is_admin:
+        username, is_admin = await register()
+    assert is_admin is False
+
+    login = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": PASSWORD}, timeout=TIMEOUT)
+    assert login.status_code == 200, login.text
+    token = login.cookies.get(SESSION_COOKIE_NAME)
+    assert token, f"login set no {SESSION_COOKIE_NAME!r} cookie"
+    client.cookies.set(SESSION_COOKIE_NAME, token)
+    # Post-condition: the gate accepts this client as that user. Without it, today's
+    # open route would answer 200 even to a client whose session never worked.
+    me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+    assert me.status_code == 200 and me.json()["user"]["username"] == username, me.text
+
+
+def _route_dependency_calls(path: str) -> set:
+    """Every callable FastAPI resolves before the handler of GET ``path`` on the system router."""
+    route = next((r for r in system_module.router.routes if isinstance(r, APIRoute) and r.path == path and "GET" in r.methods), None)
+    assert route is not None, f"GET {path} is not declared on the system router"
+    calls, pending = set(), list(route.dependant.dependencies)
+    while pending:
+        dependant = pending.pop()
+        calls.add(dependant.call)
+        pending.extend(dependant.dependencies)
+    return calls
+
+
+class TestPluginDiagnosticsRequiresSession:
+    """No valid session, no diagnostics; a logged-in user still gets the same list."""
+
+    @staticmethod
+    def assert_rejected_by_session_gate(response: httpx.Response, detail: str):
+        assert response.status_code == 401, f"plugin-diagnostics answered without a valid session: expected 401, got {response.status_code}: {response.text}"
+        # The gate's own error and nothing of the payload: no list, no filename/error fields.
+        assert response.json() == {"detail": detail}
+
+    def test_route_depends_on_get_current_user(self):
+        """Structural barrier: FastAPI resolves get_current_user before the handler runs."""
+        # Control first: the walk finds the gate where it is already declared, so a
+        # red on the second assertion is about plugin-diagnostics, not about the walk.
+        assert get_current_user in _route_dependency_calls("/system/container-image-status")
+        assert get_current_user in _route_dependency_calls("/system/plugin-diagnostics"), "GET /system/plugin-diagnostics resolves no get_current_user: it answers without a session"
+
+    @pytest.mark.asyncio
+    async def test_request_without_session_cookie_is_rejected(self, test_server):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(PLUGIN_DIAGNOSTICS_URL, timeout=TIMEOUT)
+
+        self.assert_rejected_by_session_gate(response, "Not authenticated")
+
+    @pytest.mark.asyncio
+    async def test_invalid_session_cookie_is_rejected(self, test_server):
+        async with httpx.AsyncClient() as client:
+            client.cookies.set(SESSION_COOKIE_NAME, f"forged-{uuid4().hex}")
+            response = await client.get(PLUGIN_DIAGNOSTICS_URL, timeout=TIMEOUT)
+
+        # This detail proves the cookie reached the token check: under a wrong
+        # cookie name the gate would answer "Not authenticated" instead.
+        self.assert_rejected_by_session_gate(response, "Session expired or invalid")
+
+    @pytest.mark.asyncio
+    async def test_logged_in_user_gets_the_failure_list(self, test_server):
+        async with httpx.AsyncClient() as client:
+            await _login_own_regular_user(client)
+            try:
+                response = await client.get(PLUGIN_DIAGNOSTICS_URL, timeout=TIMEOUT)
+            finally:
+                # The account is this test's only write; a regular user may delete itself.
+                deleted = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
+
+        assert response.status_code == 200, f"a logged-in user must still get the diagnostics: {response.status_code} {response.text}"
+        body = response.json()
+        # Shape unchanged by the gate. The lane may legitimately have discovery
+        # failures, so neither emptiness nor a length is asserted.
+        assert isinstance(body, list), body
+        PluginDiagnosticsResponse.model_validate(body)
+        for failure in body:
+            assert set(failure) == {"system", "filename", "error"}, failure
+            assert failure["system"] in PLUGIN_SYSTEMS, failure
+        assert deleted.status_code == 200, f"could not delete this test's own account: {deleted.status_code} {deleted.text}"
