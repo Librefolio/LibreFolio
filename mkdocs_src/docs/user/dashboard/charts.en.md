@@ -33,6 +33,8 @@ If you left the chart on **%** but there is no rate-of-return data to draw, the 
 
     The setting belongs to this browser, not to your account: switching to another account in the same browser keeps the amounts hidden.
 
+<!-- [Screenshot Placeholder: dashboard/privacy-masked — the Dashboard with Hide amounts on: the eye button in the header and every amount, including the Growth chart's axis and tooltip values, shown as •••] -->
+
 ### ABS mode — absolute values
 
 The chart uses a **stacked area + overlay lines** design:
@@ -108,6 +110,8 @@ A single line of your Total P&L, drawn **green while it is above zero and red wh
 
 A **dashed grey horizontal line** marks the P&L you had already accumulated on the first day visible in the view. The gap between the curve and that line is what you gained (or lost) *since the left edge*, while the scale itself stays anchored to the since-inception figure.
 
+<!-- [Screenshot Placeholder: dashboard/growth-pnl-line — the Growth chart in P&L mode, Line submode: the Total P&L line, green above zero and red below, with the dashed grey reference line] -->
+
 When the effective broker scope contains **two or more brokers**, one dashed coloured line per broker is added, each named after its broker in the legend below the chart. On every single day, those broker lines **add up exactly to the total** — they are the additive contributions that compose the total, computed inside the one combined scope.
 
 !!! warning "Broker lines are contributions, not standalone performance"
@@ -123,6 +127,8 @@ Hovering shows the Total P&L for that date, plus one signed row per broker when 
 #### Candles — the swing inside the period {: #pnl-candles }
 
 Instead of one point per period, each period becomes a **candle** whose open, high, low, and close are all expressed in P&L, not in price. The **close is exactly the same Total P&L** the Line submode draws for that date — the two submodes never tell different stories about where you ended up.
+
+<!-- [Screenshot Placeholder: dashboard/growth-pnl-candles — the Growth chart in P&L mode, Candles submode: synthetic P&L candles, the candle-width buttons (1D to 1Y) in the top-right corner of the plot, and the Synthetic caption under it] -->
 
 The high and the low are a different matter, and this is the one thing to understand before reading them:
 
@@ -159,6 +165,8 @@ Each period gets up to three columns, side by side:
 | Income and costs | **Dividend** · **Interest** above zero, **Fees & taxes** below it | Money the portfolio paid you, and what the activity cost you. It is a single stack that splits by sign, so fees and taxes hang below the axis. |
 | Deposits | **Deposit** | Fresh external money you put in. Only deposits are drawn — withdrawals are not. |
 | Purchases | **Purchase Cost**, in two zones: **New capital** at the bottom, **Reinvested** on top | What you spent on buys in that period, split by where the money came from |
+
+<!-- [Screenshot Placeholder: dashboard/growth-pnl-income — the Growth chart in P&L mode, Income submode at 1M: monthly groups of bars for dividends and interest (fees and taxes below zero), deposits, and purchase cost split into new capital and reinvested] -->
 
 The purchase column is the interesting one: it separates buying with **capital you deposited** from buying with **returns you had already earned** and put back to work. When you buy, the returns already held as cash at that broker count as spent first; whatever the purchase needs beyond them is new capital. Each zone wears the colour its money has in the **Abs** view: new capital the blue of the **Purchase Cost** area, reinvested money the green of the **Returns** area. Only purchases of an asset count — sales are never drawn as bars.
 
@@ -237,16 +245,28 @@ The allocation panel shows how your portfolio is distributed at the current poin
 
 | Dimension | What it shows |
 |-----------|--------------|
-| **Type** | ETF, Stock, Bond, Crypto, Real Estate, Liquidity (cash) |
+| **Type** | What each holding is — its [asset type](../../financial-theory/instruments/asset-types/index.md), such as Stock, ETF, Bond, Fund, or Crypto — plus **Liquidity** for your cash. Subtypes count with their [family](../../financial-theory/instruments/asset-types/index.md#families-and-subtypes): an **Equity ETF** with your other ETFs, **Real estate crowdfunding** with **Crowdfund**. |
 | **Sector** | Industry sector: 💻 Technology, 🏦 Financials, 💊 Health Care, etc. |
-| **Geography** | Country or region of each asset's primary listing |
+| **Geography** | Where your assets are invested, country by country, according to each asset's geographic distribution |
 
 ### Now vs. History tabs
 
-- **Now** — Donut chart of current allocation at `date_to`. Hover any slice to see the exact percentage and absolute value.
+- **Now** — The allocation on the last day of the selected range: a donut chart for **Type** and **Sector**, a world map for **Geography**. Hover any slice or country to see the exact percentage and absolute value. By **Type**, the donut can have two rings — see [Two rings by type](#allocation-type-rings) below.
 - **History** — 100% stacked area chart showing how allocation shifted over time. Useful for visualizing portfolio rebalancing across months or years. With the **Type** dimension, each asset family is a single area: all your ETFs together — generic ETFs plus every ETF subtype, such as **Equity ETF** or **Bond ETF** — and **Real estate crowdfunding** together with generic crowdfunding. Hovering a date shows each family's total with its subtypes listed under it, the generic one labelled as in the donut, for example *Generic ETF*.
 
 LibreFolio remembers whether you left the panel on **Now** or **History**, and which dimension you were viewing (Type, Sector, or Geography) — in this browser, separately for each user. The Dashboard and a broker's detail page share that memory. If you left it on **History**, it opens on History and loads its data straight away, just as if you had clicked it.
+
+### 🍩 Two rings by type {: #allocation-type-rings }
+
+As soon as you hold at least one asset with a subtype — an **Equity ETF**, say, or **Real estate crowdfunding** — the **Now** donut of the **Type** dimension draws two rings, so that you can see each subtype inside its family:
+
+- The **inner ring** has one slice per family, with the family's icon where the slice is wide enough. All your ETFs make up one slice — generic **ETF** plus every ETF subtype — and so do **Crowdfund** and **Real estate crowdfunding**; every other type is a family of its own, and so is **Liquidity**, your cash. The ETF and crowdfunding families are the same ones the asset [Type menu](../assets/create-edit.md#choosing-the-asset-type) groups together.
+- The **outer ring**, thinner and set slightly apart, splits each family that holds a subtype into its members, each captioned with its name and share where there is room. The generic member is captioned *Generic ETF* or *Generic Crowdfund*, so that it does not read as the whole family. A family with no subtype is not split: the outer ring stays empty next to it.
+- Each member wears a **shade of its family's colour**: the generic member the family's own colour, each subtype a lighter or darker variant. When a family holds three subtypes or more, the shades spread both lighter and darker, every other one more muted, so that the members stay distinct.
+
+Hovering a slice shows its share and amount; on the outer ring, a last line starting with **↳** adds the share of the whole family. The legend lists families only: clicking one hides its inner slice and all its outer slices together, so the two rings still add up.
+
+If you hold no subtype at all, the donut keeps a single ring, with one slice per type.
 
 ### Cash as Liquidity
 

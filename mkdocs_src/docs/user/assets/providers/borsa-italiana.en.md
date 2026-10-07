@@ -24,14 +24,28 @@ Assets traded on Borsa Italiana include Italian stocks (MTA/MIL segment), ETFs (
     This mapping is applied when provider metadata is inferred; it does not retroactively
     migrate sector values already stored for existing assets.
 
+### 💶 ETFs and ETCs: Currency and Type
+
+**Currency.** A listed instrument takes the currency of Borsa Italiana's own price feed — the
+currency its prices are quoted in. For ETFs and ETCs on ETFplus that is **EUR**, even when the
+instrument's page shows a different denomination currency for the fund (for example USD). This
+holds whether you find the instrument with Smart Search or add it from its page address. A price
+feed reply that carries no currency counts as EUR; if the feed cannot be reached, the asset's
+currency is left as it is rather than guessed, so check it before saving.
+
+**Type.** Borsa Italiana reports ETFs, ETCs and ETNs alike with the generic type **ETF**. If you
+know what the fund holds, refine the type — for example to **Equity ETF** or **Commodity ETF**: a
+later [comparison with the provider's data](../create-edit.md#provider-data-comparison) keeps your
+choice instead of offering to turn it back into plain **ETF**.
+
 ---
 
 ## ⚙️ Configuration
 
-No API key or registration is required — the provider scrapes public data from the Borsa Italiana website. Configuration is available per-asset in the **Provider Config** panel on the asset detail page.
+No API key or registration is required — the provider scrapes public data from the Borsa Italiana website. Configuration is per asset, in the **Provider Assignment** section of the asset form.
 
-1. Navigate to the asset you want to track.
-2. Open the **⚙️ Provider Config** panel.
+1. Open the asset's detail page and click **Edit** (✏️) — or start a new asset with **Add Asset**.
+2. Expand **Provider Assignment**.
 3. Select **Borsa Italiana** from the provider list.
 4. Enter the **ISIN** for listed instruments. For funds, use Smart Search so LibreFolio can capture the Borsa internal fund code automatically.
 5. Save — LibreFolio will fetch the first historical series on the next sync.
@@ -48,7 +62,7 @@ No API key or registration is required — the provider scrapes public data from
 
 ### 🎛️ Provider Parameters
 
-These parameters are set for you when you add the asset through **Smart Search**. To view or change them by hand, open the asset and expand the **⚙️ Provider Config** panel — useful when an instrument's market page does not resolve, or for an asset saved before these parameters existed.
+These parameters are set for you when you add the asset through **Smart Search**. To view or change them by hand, open the asset with **Edit** (✏️) and expand **Provider Assignment** — useful when an instrument's market page does not resolve, or for an asset saved before these parameters existed.
 
 | Field | Key | How to set it |
 |-------|-----|---------------|
@@ -71,7 +85,7 @@ These parameters are set for you when you add the asset through **Smart Search**
 
 !!! example "Setting up a EuroTLX bond by hand"
 
-    A US Treasury bond listed on EuroTLX (e.g. ISIN `US912810TU25`) does not resolve from the bare ISIN URL. On borsaitaliana.it its page URL ends in `…/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html`, so its MIC is `ETLX`. In **⚙️ Provider Config** set **Market MIC** to `ETLX` and **Platform** to `TLX`: the instrument page link, current price, and history then work normally. History for FX-denominated bonds may be reported in the foreign currency (e.g. USD).
+    A US Treasury bond listed on EuroTLX (e.g. ISIN `US912810TU25`) does not resolve from the bare ISIN URL. On borsaitaliana.it its page URL ends in `…/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html`, so its MIC is `ETLX`. In **Provider Assignment** set **Market MIC** to `ETLX` and **Platform** to `TLX`: the instrument page link, current price, and history then work normally. History for FX-denominated bonds may be reported in the foreign currency (e.g. USD).
 
 ---
 

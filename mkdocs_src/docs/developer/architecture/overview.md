@@ -30,6 +30,8 @@ graph TD
         B_Plugins[BRIM Plugins]
         A_Plugins[Asset Plugins]
         F_Plugins[FX Plugins]
+        R_Plugins[Risk Analytics]
+        T_Plugins[Tool Plugins]
     end
 
     Frontend -- HTTP API Calls --> Backend
@@ -56,7 +58,7 @@ graph TD
 
 3. 🗄️ **Database (SQLite)**: A single-file database that stores all user data, including transactions, assets, user settings, and cached data.
 
-4. 🔌 **Provider Plugins**: A system of pluggable modules that abstract the interaction with external data sources. This makes it easy to add support for new brokers, pricing APIs, or FX rate providers without modifying the core application logic.
+4. 🔌 **Provider Plugins**: A system of pluggable modules that abstract the interaction with external data sources. This makes it easy to add support for new brokers, pricing APIs, or FX rate providers without modifying the core application logic. The same registry mechanism also discovers plugins that call no external service: the [risk analytics](../backend/risk/architecture.md) and the [Tools](patterns/tool_plugins.md).
 
 ## 🔑 Key Subsystems
 
@@ -71,6 +73,9 @@ For detailed architectural documentation of specific subsystems, see:
     - 🔎 See also: **[Asset Search & Link-Finder](../backend/assets/search_link_finder.md)** for the three-layer interactive search (on-site → `ddgs` web link-finder → `resolve_url`); best-effort, last-resort, and **never** used on automated price fetches.
 - 💱 **[FX Architecture](../backend/fx/architecture.md)**: Foreign Exchange system.
     - 🔀 See also: **[FX Configuration & Routing](../backend/fx/configuration.md)** for multi-provider setup.
+- 📉 **[Risk Engine](../backend/risk/architecture.md)**: Bulk risk analytics over a portfolio, a broker, an asset or a selection of assets — plugin catalogue, eligibility verdicts, and simulation and optimization in spawned worker pools.
+- 🧰 **[Tool Plugins](patterns/tool_plugins.md)**: Atomic, typed calculations behind a versioned catalogue (first tool: the PAC allocator), each computed in a spawned process the executor owns.
+- 🧭 **[Onboarding Guides](../frontend/onboarding.md)**: Welcome setup, intro tour and contextual guides, with versioned per-user progress kept by the backend.
 - 📁 **File Upload System**: Static file uploads with image preview cache (50MB, TTL 1h), avatar seeding, and BRIM file management. See `backend/app/services/static_uploads.py`.
 
 ## 🔄 Request Flow Example: Displaying Portfolio

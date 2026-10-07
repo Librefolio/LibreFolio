@@ -31,12 +31,16 @@ All transactions, reports, and import data are tied to a broker. You need at lea
 
 ## 🗂️ Broker Detail Layout
 
-Once you select a broker from the list, the interface is split into four primary tabs:
+Once you select a broker from the list, the interface is split into five tabs:
 
 1. **Overview**: Display of net worth, return metrics, growth history, and allocation charts scoped exclusively to this broker account (see **[Dashboard Overview](../dashboard/index.md)**).
 2. **Positions**: List of open positions, asset weights, and performance metrics within this broker, with access to the inline FIFO Lots Analysis panel (see **[Dashboard Positions](../dashboard/positions.md)**).
-3. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Broker Transactions](import.md)**).
-4. **Info**: Broker metadata, cash overdraft/shorting configurations, AI Export, and inline sharing controls (see **[Configuration & Info](info.md)** and **[Broker AI Export](../ai-export/broker.md)**).
+3. **Risk**: The same risk analysis as the Dashboard's **Risk** tab, limited to this broker's holdings (see **[Dashboard](../dashboard/index.md)**).
+    <!-- TODO(anchor): #risk-tab, after N -->
+4. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Broker Transactions](import.md)**).
+5. **Info**: Broker metadata, cash overdraft/shorting configurations, and inline sharing controls (see **[Configuration & Info](info.md)**).
+
+**AI Export** is not a tab: it sits in the page toolbar, next to **Refresh**, and works from any tab (see **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
 
@@ -46,8 +50,10 @@ The **Overview** tab acts as a local dashboard for the selected broker. It conta
 
 - **Local KPI Cards**: Net Worth, Period P&L, and Returns specific to this broker. (See **[Dashboard KPI Cards](../dashboard/kpi-cards.md)** for calculation details).
 - **Cash Balances Panel**: Liquid cash held in this broker account, broken down by currency.
-- **Growth Chart**: Historical growth of this account value (see **[Portfolio Growth Chart](../dashboard/charts.md#portfolio-growth-chart)**).
+- **Growth Chart**: Historical growth of this account value, with the same **Abs** / **%** / **P&L** views as the Dashboard — P&L included, with its **Line**, **Candles**, and **Income** views (see **[Portfolio Growth Chart](../dashboard/charts.md#portfolio-growth-chart)** and **[P&L mode](../dashboard/charts.md#pnl-mode)**). The view you pick is remembered and shared with the Dashboard.
 - **Allocation Panel**: Portfolio composition (by Type, Sector, and Geography) for holdings held at this specific broker (see **[Allocation Panel](../dashboard/charts.md#allocation-panel)**).
+
+When you come back to a broker page you have already opened — for example with the back button of an asset page — LibreFolio does not recalculate what it has already worked out: as soon as the broker's details have loaded, the Overview shows the figures it had for that time range and currency. If something in your portfolio changed in the meantime, those figures stay on screen while LibreFolio recalculates them in the background (see **[Coming back and refreshing](../dashboard/index.md#coming-back-and-refreshing)** for what counts as a change). To recalculate on demand, use **Refresh** in the page toolbar: it reloads the Overview, the **Risk** tab, the FIFO Lots Analysis panel and, if you have already opened it, the transaction list.
 
 ---
 
