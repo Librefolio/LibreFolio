@@ -2448,6 +2448,91 @@ class TestDamagedWorkbookPreview:
 
 
 # ============================================================================
+# CATEGORY 16: DEGIRO CURRENCY CONVERSIONS GO THROUGH THE BATCH AS LINKED PAIRS (workstream L, issue #35)
+# ============================================================================
+#
+# The rewritten DEGIRO plugin is the first BRIM plugin that emits pairs: each currency conversion of an Account
+# Statement becomes two FX_CONVERSION rows with one ``link_uuid``, one description and one set of tags (plan
+# 31_brimDegiro §1.4, §2.5). The import editor hands what the wizard gives it to POST /transactions/validate, then
+# /commit, and the batch wants exactly two creates per ``link_uuid``, of one type, with the same description and tags
+# (``linkUuidPairCount``, ``pairTypeMismatch``, ``pairDescriptionMismatch``, ``pairTagsMismatch``). The test uploads
+# the synthetic English sample, parses it with DEGIRO, submits the two conversions and the rows that need no asset
+# (the deposit, the three interest credits, the connection fee) as parsed, and reads the saved legs back, each one
+# pointing at the other. Red until the rewrite: today's plugin does not recognise the English header. What the plugin
+# reads, row by row, is in test_external/test_brim_degiro.py. The test deletes the file and the broker it created.
+
+DEGIRO_CODE = "broker_degiro"
+DEGIRO_ACCOUNT_SAMPLE = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "degiro-account-en.csv"
+# The rows of the English sample without an asset, as (type, currency, amount): the editor can save them as parsed.
+DEGIRO_CASH_ROWS = [("DEPOSIT", "EUR", Decimal("2500.00")), ("FEE", "EUR", Decimal("-2.50")), ("INTEREST", "CZK", Decimal("3.47")), ("INTEREST", "EUR", Decimal("0.75")), ("INTEREST", "EUR", Decimal("3.00"))]
+DEGIRO_PAIR_CODES = {"linkUuidPairCount", "pairTypeMismatch", "pairDescriptionMismatch", "pairTagsMismatch"}
+
+
+def _degiro_selection(transactions: list) -> Tuple[list, list]:
+    """What the editor submits of a DEGIRO parse here: every FX_CONVERSION leg, and the DEPOSIT, INTEREST and FEE rows without an asset."""
+    conversions = [tx for tx in transactions if tx["type"] == "FX_CONVERSION"]
+    cash_rows = [tx for tx in transactions if tx["type"] in ("DEPOSIT", "INTEREST", "FEE") and tx.get("asset_id") is None]
+    return conversions, cash_rows
+
+
+def _pairs_by_link(conversions: list) -> Dict[str, List[int]]:
+    """The positions of the legs in ``conversions``, by ``link_uuid``."""
+    pairs: Dict[str, List[int]] = {}
+    for index, tx in enumerate(conversions):
+        pairs.setdefault(tx["link_uuid"], []).append(index)
+    return pairs
+
+
+class TestDegiroConversionsThroughTheBatch:
+    """L — the conversions of a DEGIRO statement validate and commit as linked pairs, submitted as the import editor submits them."""
+
+    @pytest.mark.asyncio
+    async def test_the_conversions_of_the_english_sample_commit_as_linked_pairs(self, test_server):
+        """RS-DG01: ``degiro-account-en.csv`` uploaded and parsed with DEGIRO; its 2 conversions (4 legs) and its 5 rows without an asset go to
+        /validate with no issue — no ``linkUuidPairCount``, ``pairDescriptionMismatch``, ``pairTagsMismatch`` — then to /commit; read back, each leg's
+        ``related_transaction_id`` is the other leg of its conversion."""
+        print_section("RS-DG01: DEGIRO conversions through validate and commit")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                upload = await _upload_csv(client, broker_id, DEGIRO_ACCOUNT_SAMPLE.read_bytes(), DEGIRO_ACCOUNT_SAMPLE.name)
+                assert upload.status_code == 200, upload.text
+                file_ids.append(upload.json()["file_id"])
+                assert DEGIRO_CODE in upload.json()["compatible_plugins"], f"the test backend's DEGIRO plugin does not recognise {DEGIRO_ACCOUNT_SAMPLE.name}: compatible {upload.json()['compatible_plugins']} (DEGIRO rewrite, issue #35)"
+
+                parsed = await client.post(f"{API_BASE}/brokers/import/files/{file_ids[0]}/parse", json={"plugin_code": DEGIRO_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
+                assert parsed.status_code == 200, parsed.text
+                conversions, cash_rows = _degiro_selection(parsed.json()["transactions"])
+                pairs = _pairs_by_link(conversions)
+                assert sorted(len(indexes) for indexes in pairs.values()) == [2, 2], f"presence barrier: two conversions of two legs each, by link_uuid: {[(tx['cash'], tx['link_uuid']) for tx in conversions]}"
+                assert sorted((tx["type"], tx["cash"]["code"], Decimal(tx["cash"]["amount"])) for tx in cash_rows) == DEGIRO_CASH_ROWS
+                creates = [*conversions, *cash_rows]
+
+                validated = await client.post(f"{API_BASE}/transactions/validate", json={"creates": creates}, timeout=TIMEOUT)
+                assert validated.status_code == 200, validated.text
+                issues = validated.json()["issues"]
+                assert [issue for issue in issues if issue.get("code") in DEGIRO_PAIR_CODES] == [], f"the batch refuses the DEGIRO pairs: {issues}"
+                assert issues == [], f"the DEGIRO rows do not validate: {issues}"
+
+                committed = await client.post(f"{API_BASE}/transactions/commit", json={"creates": creates}, timeout=TIMEOUT)
+                assert committed.status_code == 200, committed.text
+                assert committed.json()["committed"] is True, committed.text
+                saved_ids = {result["index"]: result["ids"][0] for result in committed.json()["results"]}
+                expected_links = {saved_ids[a]: saved_ids[b] for first, second in pairs.values() for a, b in ((first, second), (second, first))}
+                saved = await client.get(f"{API_BASE}/transactions", params={"ids": list(expected_links)}, timeout=TIMEOUT)
+                assert saved.status_code == 200, saved.text
+
+                assert {item["id"]: item["related_transaction_id"] for item in saved.json()} == expected_links, "each saved leg points at the other leg of its conversion"
+                assert {item["type"] for item in saved.json()} == {"FX_CONVERSION"}
+                print_success("✓ the DEGIRO conversions validate and commit as reciprocally linked pairs")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+
+# ============================================================================
 # Note: E2E tests are in test_e2e/test_brim_e2e.py
 # ============================================================================
 

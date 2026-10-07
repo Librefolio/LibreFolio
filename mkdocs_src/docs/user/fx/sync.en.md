@@ -6,7 +6,7 @@ Once a currency pair is configured with a data provider, LibreFolio can **automa
 
 ## 🔄 Sync All
 
-From the FX list page, use the **Sync All** button to synchronize all configured pairs at once:
+From the FX list page, use the **Sync All** button to synchronize all configured pairs at once — every pair with a data provider, since a pair whose only provider is MANUAL has nothing to download. It downloads the period selected on the page, or the whole history when the period is set to **All**:
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Sync Progress" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -17,6 +17,10 @@ The sync modal shows:
 - 📊 **Progress** for each pair being synced
 - ✅ **Status** indicators (success, error, skipped)
 - 🆕 **New data points** count for each pair
+
+!!! tip "Pairs added before LibreFolio 1.2.0"
+
+    A new pair with a data provider downloads its whole rate history as soon as you add it, whichever page you add it from: the FX page, the Dashboard, an asset page, or the FX step of the PAC allocator. Pairs added with an earlier version downloaded only the period of the page they were added from, so the oldest part of their history may be missing. To fill it in, open the FX page, set the period to **All**, and click **Sync All** once.
 
 ---
 

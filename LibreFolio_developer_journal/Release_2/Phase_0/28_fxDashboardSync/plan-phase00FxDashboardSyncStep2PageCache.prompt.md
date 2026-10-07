@@ -802,6 +802,107 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
    > - `front-broker detail` **33/33 a 4 worker** (61 s, carico 19);
    > - porta 6159 libera.
 
+10. ✅ (07/10) **Lotto 2**: tab Rischio solo sui broker posseduti, le due righe di `RiskLevelsPanel`, i commenti
+    superati. Via del developer alle 13:10 («avviamoli adesso, sfruttiamo il tempo della coverage»); base
+    `d07412899` (fast-forward delle 13:25).
+
+    > **Decisione del developer** (07/10, testuale): «Solo i broker posseduti, come il resto della Dashboard».
+    >
+    > **Design confermato dal coordinator**:
+    > - scope = tutti i broker posseduti, `{kind: 'portfolio', broker_ids: ownedBrokerIds}`, indipendente dal
+    >   filtro: il sottotitolo `risk.dashboardFullPortfolio` resta vero;
+    > - L1 (`scopeValue`, dal `summary` non filtrato) ora coincide con lo scope;
+    > - il pannello si monta solo con `canAsk`, quindi un caricamento a freddo su `?tab=rischio` non manda
+    >   richieste senza `broker_ids`;
+    > - chi non possiede broker vede il vuoto con `common.noData`, nessuna chiave nuova.
+    >
+    > **Concessioni**:
+    > - `dashboard/+page.svelte` (prop, montaggio, getter del contesto);
+    > - `RiskLevelsPanel.svelte` (`setTweenHydration`, `onrefreshfailed`);
+    > - `brokers/[id]/+page.svelte` (getter e commento);
+    > - commenti di `AssetSetRiskPanel.svelte` (`:180`, `:188`, `:494-503`);
+    > - `risk-analysis.spec.ts` (condizioni della Dashboard);
+    > - `risk-lab.spec.ts` (commenti);
+    > - un caso nuovo in `dashboard-cache.spec.ts`;
+    > - doc EN: `user/dashboard/index`, `user/brokers/sharing`, il paragrafo Rischio di `domain-state.md`.
+    >
+    > Il CHANGELOG lo scrive il coordinator con le mie frasi.
+    >
+    > **Ordine**: il test-author scrive le specifiche senza lanciarle. Io lancio i rossi con la produzione invariata,
+    > poi applico `/tmp/libreFolio_n_batch2_prod.py`, poi i verdi a 1 e a 4 worker. Il docs-writer lavora in
+    > parallelo, fuori dalla corsia.
+    >
+    > **Doc (docs-writer, ✅)**:
+    > - `user/dashboard/index.en.md`:
+    >   - bullet Rischio: «every broker you own»;
+    >   - nota Sharing senza eccezione;
+    >   - «Coming back»: la sfumatura sul cambio di periodo o valuta;
+    >   - bullet del filtro broker.
+    > - `user/brokers/sharing.en.md`: tolta l'eccezione.
+    > - `domain-state.md`: paragrafo Rischio; nel bullet Lotti `brokersReady` diventa `canAsk`. Quest'ultimo
+    >   era falso dal lotto 1 ed è una parola sola, fuori dal paragrafo Rischio: lo dichiaro.
+    > - Build strict pulito (`/tmp/libreFolio_n_b2_mkdocs_build2.log`); `check-links` invariato.
+    >
+    > **Rosso 1** (`dashboard-cache`, caso nuovo, produzione invariata): fallisce a `:532`. Ci sono 2 domande di
+    > rischio `{"kind":"portfolio"}` senza `broker_ids` al caricamento a freddo; posseduti `[1, 5]`
+    > (`/tmp/libreFolio_n_b2_red_dashcache.log`, carico 27).
+    >
+    > **Specifiche (test-author, senza lanciarle)**:
+    > - `risk-analysis.spec.ts`:
+    >   - la Dashboard si riconosce dall'insieme dei broker posseduti (`portfolioOver`, mai su un insieme vuoto),
+    >     letto due volte, prima del caricamento e a pagina ferma: un vicino parallelo
+    >     (`dashboard-broker-filter-label`) crea e cancella un broker di TEST_USER;
+    >   - premessa: l'insieme posseduto non è `[brokerId]`;
+    >   - aggiunto un controllo della base-wave in `openWithStoredBenchmark`, accettato e dichiarato;
+    >   - corretto il commento sul live price (`:1135-1154`).
+    > - `dashboard-cache.spec.ts`: caso nuovo (`:507-565`), con tre letture dell'insieme posseduto.
+    > - `risk-lab.spec.ts`: solo commenti. Il test-author ha corretto anche due falsi vecchi in `holdLivePricePoll`:
+    >   il trigger è l'insieme degli id, e `runGuarded` era già stato corretto il 25/09 in `b02f49727`.
+    >
+    > **Rosso 2** (`front-portfolio risk`, produzione invariata, carico 38): 9 falliti, 29 verdi, ed esattamente
+    > i previsti:
+    > - `:2814` → `:2839`;
+    > - `:2920` → `:2970`;
+    > - `:3701` → `:3720`;
+    > - i 5 D378 → `:3808` («asked: {"kind":"portfolio"}»);
+    > - `:4360` → `:4394`.
+    >
+    > Log: `/tmp/libreFolio_n_b2_red_risk.log`.
+    >
+    > **Produzione applicata** (`/tmp/libreFolio_n_batch2_prod.py`, poi Prettier):
+    > - Dashboard: `{#if canAsk}`, `scope` sui posseduti, vuoto `common.noData` (`dashboard-risk-no-owned`),
+    >   getter `summary !== null`;
+    > - dettaglio broker: getter `portfolioSummary !== null`;
+    > - `RiskLevelsPanel`: 2 import, `onrefreshfailed`, `setTweenHydration`;
+    > - `AssetSetRiskPanel`: i 3 commenti.
+    >
+    > **Cancelli** (corsia 6159, un comando per volta, carico 13–59 per la coverage nella 6150):
+    >
+    > | Cancello | Esito |
+    > |---|---|
+    > | `front check` | 0 errori, 0 avvisi (rifatto dopo la cura) |
+    > | unità risk · risk-controller · store · risk-levels-component · component | 40 · 102 · 52 · 247 · 2829 |
+    > | `dashboard-cache` | 6/6 a 1 worker (anche dopo la cura) · 6/6 a 4 |
+    > | `risk` | 38/38 a 1 · a 4 prima 37/38, poi **38/38** dopo la cura |
+    > | `risk-lab` | 44/44 a 1 · 44/44 a 4 |
+    > | `dashboard` · broker `detail` · `banners` | 26 · 33 · 18 |
+    > | `mkdocs build` strict | 0 avvisi (anche con `#risk-tab`) |
+    > | `check-links` | solo il rotto già alla base (`#rolling-return`) |
+    >
+    > Log: `/tmp/libreFolio_n_b2_*.log`, `/tmp/libreFolio_n_b2r_*.log`. Porta 6159 libera.
+    >
+    > **⚠️ Fuori pista: un difetto trovato dal test a 4 worker.** `risk-analysis.spec.ts:3849` (D378 «blocked»)
+    > falliva a `:1316`: `dashboard-risk-tab` era nascosta. Triage (`test-triage`), verdetto **defect**: al
+    > caricamento a freddo, finché i broker posseduti non arrivano, `{#if canAsk}` non rendeva niente, e la tab
+    > restava **vuota** anche per l'utente. Sotto carico 40 sono serviti più di 8 s.
+    > - Cura nel prodotto (§6 della skill): un ramo `{:else}` con lo spinner della tab Transazioni
+    >   (`dashboard-risk-loading`), senza testo né chiave i18n.
+    > - Rifatti: il test da solo 1/1, `risk` a 4 worker 38/38, `dashboard-cache` 6/6.
+    >
+    > **Ancora per Q**: `user/dashboard/index.en.md#risk-tab`, nuova sezione `## 🛡️ Risk Tab {: #risk-tab }`
+    > (`:41`). Ci sono la spiegazione della voce 3, che ora rimanda alla sezione. È un titolo in più: debito di
+    > traduzione IT/FR/ES.
+
 **Definition of done:**
 
 - **Ritorno senza trigger** (es. Dashboard → Transazioni → Dashboard): **0** `/portfolio/report`, **0**
