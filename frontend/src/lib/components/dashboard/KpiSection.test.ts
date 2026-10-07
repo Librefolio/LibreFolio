@@ -30,7 +30,11 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {render, screen, setupI18n, waitFor} from '$test/component';
+import {render, screen, setupI18n, waitFor, within} from '$test/component';
+// Namespace import on purpose: the hydration context (page cache, phase 1) is read by name below, so
+// the F5 and V2 cases keep running while `TweenedValue.svelte` does not export it yet.
+import * as Tweened from '$lib/components/ui/TweenedValue.svelte';
+import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import KpiSection from './KpiSection.svelte';
 
 const EUR = (amount: string) => ({code: 'EUR', amount});
@@ -236,5 +240,60 @@ describe('KpiSection — daily change percentage (V2)', () => {
             expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+16.36%');
             expect(pct).toBeNull();
         });
+    });
+});
+
+/**
+ * Page cache, phase 1 (R2 / N, decision E1 of 06/10): a figure already known does not count up from 0.
+ *
+ * `TweenedValue` starts every value from `tweened(0)`, so returning to the Dashboard with the report
+ * in cache still shows each KPI counting from zero for ~1 s — on screen it looks like a recompute.
+ * The page that hydrates from the cache says so through a Svelte context, `TWEEN_HYDRATION_CONTEXT`
+ * (set by `setTweenHydration(isHydrated)`, both exported by `TweenedValue.svelte`'s module script):
+ * while `isHydrated()` is true, a tweened value appears at its final value on the first frame, and a
+ * later change still tweens from the old value to the new one. Without the context nothing changes:
+ * the first load counts from zero, as today.
+ *
+ * The subject is Card 1's hero (`kpi-period-pnl` → `kpi-value`), formatted by the same formatter the
+ * card uses, so the comparison carries no translated text and no locale assumption.
+ */
+describe('KpiSection — hydration from the cache (page cache, phase 1)', () => {
+    const hydration = Tweened as unknown as {TWEEN_HYDRATION_CONTEXT?: unknown; setTweenHydration?: (isHydrated: () => boolean) => void};
+    const hero = () => within(screen.getByTestId('kpi-period-pnl')).getByTestId('kpi-value');
+    /** Card 1's hero exactly as KpiSection formats it. */
+    const heroText = (amount: number) => formatCurrencyAmountPlain(amount, 'EUR', {showSign: true});
+    const props = (periodPnl = '500') => ({summary: {...summary(), period_pnl: EUR(periodPnl)}, history: [], loading: false, displayCurrency: 'EUR'});
+
+    function hydratedContext(): Map<unknown, () => boolean> {
+        expect(hydration.TWEEN_HYDRATION_CONTEXT, 'TweenedValue.svelte exports no TWEEN_HYDRATION_CONTEXT: a page hydrated from the cache cannot tell its figures to start from their value').toBeDefined();
+        return new Map([[hydration.TWEEN_HYDRATION_CONTEXT, () => true]]);
+    }
+
+    it('exports the context key and its setter from TweenedValue’s module script', () => {
+        expect(hydration.TWEEN_HYDRATION_CONTEXT, 'TweenedValue.svelte exports no TWEEN_HYDRATION_CONTEXT').toBeDefined();
+        expect(typeof hydration.setTweenHydration, 'TweenedValue.svelte exports no setTweenHydration(isHydrated)').toBe('function');
+    });
+
+    it('without the context, counts up: the first frame is the formatted zero, then the final value (the first load, unchanged)', async () => {
+        render(KpiSection, props());
+
+        // Read synchronously after render: before any animation frame.
+        expect(hero().textContent?.trim()).toBe(heroText(0));
+        await waitFor(() => expect(hero().textContent?.trim()).toBe(heroText(500)), {timeout: 3000});
+    });
+
+    it('with the context, shows the final value on the first frame, before any animation frame', () => {
+        render(KpiSection, {props: props(), context: hydratedContext()});
+
+        expect(hero().textContent?.trim(), 'a figure served from the cache still counts up from zero').toBe(heroText(500));
+    });
+
+    it('with the context, still moves to a new value when the summary changes', async () => {
+        const {rerender} = render(KpiSection, {props: props('500'), context: hydratedContext()});
+        expect(hero().textContent?.trim(), 'precondition: the cached figure is on screen at once').toBe(heroText(500));
+
+        await rerender(props('800'));
+
+        await waitFor(() => expect(hero().textContent?.trim(), 'the refreshed figure never replaced the cached one').toBe(heroText(800)), {timeout: 3000});
     });
 });

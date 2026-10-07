@@ -33,6 +33,9 @@
     import {
         fetchReport,
         invalidate,
+        peekReport,
+        portfolioError,
+        type PortfolioReport,
         type AllocationHistoryDimensions,
         type PortfolioHistoryPoint,
         type PortfolioSummary,
@@ -60,6 +63,9 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -279,27 +285,49 @@
         }
     }
 
+    /** Bumped by «Aggiorna»: the risk levels and the lots panel ask again too (E4). */
+    let refreshVersion = 0;
+    // Figures already known when a card mounts appear at their value instead of counting up from 0;
+    // the Risk tab is left out until its panel says so itself.
+    setTweenHydration(() => portfolioSummary !== null && activeTab !== 'rischio');
+
+    /**
+     * Page cache (E1): the overview of the scope on screen comes from the cache at once — stale or
+     * not — and only a stale or missing one is asked again; a refresh that fails keeps it, with a toast.
+     */
     async function loadOverview(force = false) {
+        const options = {includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
+        const cached = peekReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, true, true, options);
+        if (cached) applyOverview(cached.report);
+        if (cached && !cached.stale && !force) {
+            reportLoading = false;
+            return;
+        }
         reportLoading = true;
         try {
-            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, {includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true});
-            portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
-            portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
-            // Eager per plan §4.1's sparse-payload caller policy ("Dashboard/Broker overview true").
-            incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
-            costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
-            depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
-            acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
-            allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
-            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-            // Scope, currency or date range may have changed, so any previously fetched
-            // candle series is stale. Nulling it lets GrowthChart ask again on its next
-            // candles activation instead of rendering the old window's OHLC.
-            pnlCandles = null;
-            resolveMaxStartFromHistory();
+            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, options);
+            if (report || !cached) applyOverview(report);
+            else toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
         } finally {
             reportLoading = false;
         }
+    }
+
+    function applyOverview(report: PortfolioReport | null) {
+        portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
+        portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        // Eager per plan §4.1's sparse-payload caller policy ("Dashboard/Broker overview true").
+        incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
+        costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
+        depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
+        acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
+        allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
+        positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+        // Scope, currency or date range may have changed, so any previously fetched
+        // candle series is stale. Nulling it lets GrowthChart ask again on its next
+        // candles activation instead of rendering the old window's OHLC.
+        pnlCandles = null;
+        resolveMaxStartFromHistory();
     }
 
     /**
@@ -394,7 +422,8 @@
     }
 
     async function handleRefresh() {
-        invalidate();
+        requestPortfolioRefresh();
+        refreshVersion += 1;
         await Promise.all([loadBroker(), loadOverview(true)]);
         if (txLoaded) await loadTransactions(true);
     }
@@ -640,7 +669,7 @@
                     onAnalyze={openAssetPanel}
                     analyzedAssetId={activeAssetId}
                 />
-                <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+                <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} {refreshVersion} />
             </div>
         {:else if activeTab === 'rischio'}
             <div data-testid="broker-risk-tab">
@@ -657,6 +686,7 @@
                     scopeValue={portfolioSummary ? parseFloat(portfolioSummary.net_worth.amount) : null}
                     title={$_('risk.brokerTitle')}
                     internalSubset={true}
+                    {refreshVersion}
                     onsynced={async () => {
                         invalidate();
                         await Promise.all([loadBroker(), loadOverview(true)]);
