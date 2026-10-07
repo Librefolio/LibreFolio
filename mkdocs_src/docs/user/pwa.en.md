@@ -9,7 +9,7 @@ LibreFolio can be installed as a **Progressive Web App (PWA)** on your device. T
 | Feature | Description |
 |---------|-------------|
 | **Full-screen mode** | No address bar or browser UI clutter |
-| **Home screen icon** | Launch LibreFolio like a native app |
+| **Home screen icon** | Launch LibreFolio like a native app. The icons are fully opaque, so neither the iPhone home-screen icon nor the Android splash screen shows black corners, and Android gets dedicated maskable icons (192 × 192 and 512 × 512) that it can crop to your launcher's icon shape |
 | **No gestures interference** | Swipe-back and double-tap zoom disabled |
 | **Persistent session** | Stays logged in between launches |
 

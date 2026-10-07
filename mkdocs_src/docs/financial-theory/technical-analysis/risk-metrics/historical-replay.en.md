@@ -89,8 +89,11 @@ On those three tabs, the replay says what it left out before the figures it repo
 
 - a warning **above everything else** when more than half of the portfolio's value is left out, stating the share the result still covers: past that point the total speaks for a minority of the portfolio, with the rest held flat beside it;
 - as soon as one holding is left out, a box **above the total, where there is one, and the table** lists the holdings left out, **grouped by reason**, each as a badge with its icon and its name — on a portfolio with its share of the value too, under a line stating how much of the value counts as cash at zero return. The [common period](#the-common-period), when there is one, is offered in the same box;
-- the table lists only the holdings that were **replayed**, each with its weight, its own return, its contribution to the total and the amount gained or lost — on a selection of assets, its return alone — and its bar, which shows its contribution on a portfolio and its own return on a selection: a holding left out has [no return of its own](#what-takes-its-place), so it gets no row, not a row at zero;
+- the table lists only the holdings that were **replayed**, worst first — a click on a column title sorts by that column — each in one row: its **Weight**; its **Return**, its own over the period; its **Contribution**, the weight times that return, so that the contributions add up to the total; its **Impact**, the amount gained or lost; and its **Effect**, a bar in a column you can widen by dragging the edge of its title. The bar shows the contribution on a portfolio and the return on a selection. It grows from a zero line in the middle of the column — losses to the left in red, gains to the right in green — on one scale shared by every row, the largest magnitude reaching the edge. A holding left out has [no return of its own](#what-takes-its-place), so it gets no row, not a row at zero;
+- a column with nothing to show is left out, not filled with dashes: a selection of assets has no weights, no contributions and no money, so its table shows just the **Return** and the **Effect**;
 - when every holding is left out, no figure: the result says there is **nothing to replay**, and lists the reasons.
+
+<!-- [Screenshot Placeholder: risk/lab-replay — a replay that left assets out: the box of assets left out, as badges grouped by reason, with the common-period button, above the table of the assets replayed with its Return and Effect columns] -->
 
 ### 📆 The Common Period {: #the-common-period }
 

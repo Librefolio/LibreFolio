@@ -220,6 +220,17 @@ files; when the broker has at least one set, that table is headed **Other files 
 this session are selected and open; older sets stay listed, unselected. Every set's preview runs in
 the background.
 
+**Which panels open, and the paging of the file tables.** `loadBrokerFiles()`, run when the wizard
+enters `select`, decides which broker panels start expanded (`expandedBrokers`): after an upload in
+this session, only the brokers that received one of the uploaded files; when the user went on
+without uploading anything, every broker that has stored files. The other panels stay collapsed
+behind their header (`import-wizard-broker-toggle-<brokerId>`, `toggleBrokerExpand`), which still
+shows how many sets and files they hold. Each broker's table of single files pages at five rows
+(`defaultPageSize={5}`, page sizes 5 / 10 / 25 / 50 / 100 / All); its pager appears only when the
+broker has more than five single files (`enablePagination` and `alwaysShowPagination` are both
+`singles.length > 5`), and the page size the user picks is remembered per broker through the
+table's `storageKey` (`import-wizard-files-<brokerId>`).
+
 - A set is selected or deselected **as a whole** (`toggleSetSelection`, which, when it selects a set
   whose preview was asked for other members, previews it again), and its members take the set's
   plugin (`pickBestPlugin` returns the choice in force first, then asks `setPluginFor`). Which
@@ -815,8 +826,12 @@ state to the guide and renders anchors for it to point at:
   is open and no guide step is active; only its **Save All** button
   (`use:guideAnchor={'import.bulk.save-all'}`) is highlighted. `OnboardingOverlayHost` swaps the
   coachmark's **Next** button for **Finish guide** only on this step (and on the tour's last
-  step); pressing it calls `onboardingGuide.finish()`. In automatic pending mode, that is the
-  *only* guide path that POSTs `/api/v1/settings/onboarding/import_guide/complete`. In replay
+  step); pressing it calls `onboardingGuide.finish()`. In automatic pending mode, `finish()`
+  completes that step on the server: `import_guide` is step-managed, so every `import.*` step is
+  recorded on its own through `completeStep` — here
+  `POST /api/v1/settings/onboarding/import_guide/steps/import.bulk/complete`; the earlier steps are
+  completed the same way when the user activates the control their coachmark points at
+  (`handleTargetActivate` in `OnboardingOverlayHost.svelte`). In replay
   mode, the same button only removes `import.bulk` from the stored replay (deleting the key once
   no step remains) and never calls the endpoint. The guide never calls `Save All` itself —
   finishing the guide and saving the batch are two independent user actions.

@@ -18,6 +18,37 @@ see `.github/agents/test-author.agent.md` rule 12 and the frontend-testing rules
 
 After the transform the script verifies its invariants and exits 1 on violation:
 net worth equals the target and per-holding value ≈ price × quantity.
+
+Capturing a fresh snapshot (the developer does it, from a recent build whose report
+schema matches the code; never invent or patch fields):
+
+1. Log in on that build, then in the browser console (DevTools) run, with your own
+   broker ids, the last year ending today, and EUR:
+
+       const lfPayload = {include_summary:true, include_history:true, include_allocation_history:true,
+         include_breakdown:true, include_positions_contribution:true, include_broker_pnl_history:true,
+         include_pnl_candles:true, include_income_history:true, include_cost_history:true,
+         include_deposit_history:true, include_acquisition_funding:true, broker_ids:[2,1],
+         date_range:{start:'2025-10-07', end:'2026-10-07'}, target_currency:'EUR'};
+       const lfRes = await fetch('/api/v1/portfolio/report', {method:'POST', credentials:'include',
+         headers:{'Content-Type':'application/json'}, body: JSON.stringify(lfPayload)});
+       window.lfReport = await lfRes.json();
+
+   then, as a SEPARATE console command (Chrome does not define `copy()` inside a block
+   that uses `await`: "ReferenceError: copy is not defined"):
+
+       copy(JSON.stringify(window.lfReport))
+
+   Alternatively copy the response of that POST from the Network panel (Response tab).
+   One snapshot with every section on, so the gallery serves it to every report request
+   (main view, positions tab, P&L candles) and the shots stay coherent. Use at least two
+   brokers: the per-broker P&L overlay needs them.
+2. Paste the clipboard into a file OUTSIDE the repository (e.g. /tmp/…_raw.json).
+3. Normalize that file with this script (`--dry-run` first), check that every money
+   field moved by the same factor, validate it against the generated Zod
+   `PortfolioReportResponse`, and only then copy it to `frontend/e2e/dashboard-report.json`.
+   Delete the raw file afterwards. The Vitest guard `src/lib/api/dashboardReportFixture.test.ts`
+   fails in seconds if the fixture stops matching the schema.
 """
 
 import argparse
@@ -30,8 +61,10 @@ from pathlib import Path
 TARGET_NET_WORTH = Decimal("50000")
 
 # Field names whose plain-string numbers are money → scale them.
+# `gross_gains` / `gross_losses` / `period_unrealized_delta` are plain-number money in
+# `positions_contribution` (captured since the single all-sections snapshot).
 SCALE_NAME_RE = re.compile(
-    r"(?:^|_)(value|price|amount|cost|cash|nav|income|fee|fees|tax|taxes|deposit|deposited|" r"withdrawn|withdrawal|pnl|capital|book|baseline|flow|flows|result|contribution|invested|" r"gain_loss|gain|loss|wac)(?:$|_)",
+    r"(?:^|_)(value|price|amount|cost|cash|nav|income|fee|fees|tax|taxes|deposit|deposited|" r"withdrawn|withdrawal|pnl|capital|book|baseline|flow|flows|result|contribution|invested|" r"gain_loss|gain|gains|loss|losses|wac)(?:$|_)" r"|^period_unrealized_delta$",
     re.IGNORECASE,
 )
 

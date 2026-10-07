@@ -785,9 +785,8 @@
 
     // Figures already known when a card mounts — served from the cache on a return, or kept from an
     // earlier load on a tab switch — appear at their value instead of counting up from 0. The Risk
-    // tab is left out until its panel says so itself (its cards come from the risk cache, not from
-    // this report).
-    setTweenHydration(() => summary !== null && activeTab !== 'rischio');
+    // panel sets its own context for its cards, which come from the risk cache, not from this report.
+    setTweenHydration(() => summary !== null);
     hydrateFromCache();
 
     onMount(() => {
@@ -1027,25 +1026,37 @@
         </div>
     {:else if activeTab === 'rischio'}
         <div data-testid="dashboard-risk-tab">
-            <!-- The risk scope is the *whole* portfolio even when a broker filter
-                 is on, which is what the subtitle announces. `summary` follows the
-                 filter, so its net worth belongs to a different question: passing
-                 it would print one broker's money beside every broker's risk. -->
-            <RiskLevelsPanel
-                scope={{kind: 'portfolio'}}
-                dateStart={dateRangeCtl.start}
-                dateEnd={dateRangeCtl.end}
-                targetCurrency={appliedCurrency}
-                assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
-                scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
-                title={$_('risk.dashboardTitle')}
-                subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
-                {refreshVersion}
-                onsynced={async () => {
-                    invalidate();
-                    await loadAll(true);
-                }}
-            />
+            <!-- The risk scope is the *whole* portfolio — every broker the user owns (F2,
+                 as the rest of the Dashboard) — even when a broker filter is on, which is
+                 what the subtitle announces. Never without `broker_ids`: the backend would
+                 widen it to every broker the user can see, editor and viewer ones included,
+                 so the panel mounts only once the owned brokers are known. `summary` follows
+                 the filter, so its net worth belongs to a different question: passing it
+                 would print one broker's money beside every broker's risk. -->
+            {#if canAsk}
+                <RiskLevelsPanel
+                    scope={{kind: 'portfolio', broker_ids: ownedBrokerIds}}
+                    dateStart={dateRangeCtl.start}
+                    dateEnd={dateRangeCtl.end}
+                    targetCurrency={appliedCurrency}
+                    assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                    scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
+                    title={$_('risk.dashboardTitle')}
+                    subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
+                    {refreshVersion}
+                    onsynced={async () => {
+                        invalidate();
+                        await loadAll(true);
+                    }}
+                />
+            {:else if brokersReady}
+                <p class="py-12 text-center text-sm italic text-gray-400 dark:text-gray-500" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
+            {:else}
+                <!-- Owned brokers still loading (cold load): say so instead of an empty tab. -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center" data-testid="dashboard-risk-loading">
+                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                </div>
+            {/if}
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">
