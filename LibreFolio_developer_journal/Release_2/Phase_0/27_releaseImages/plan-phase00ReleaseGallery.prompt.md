@@ -279,3 +279,47 @@
 > - `:3325` event popover stays red until the product fix (reported).
 > - The data-quality shot keeps the 3M preset (as before R12), cosmetic.
 > - The positions tables resolve brokers by id from the gallery DB, so the snapshot's broker names show only in tooltips. That is fine for privacy.
+
+## Batch 2 (after commit `742e381ec`, train 9)
+
+### 11. ✅ Prerelease tag guard — 2026-10-07
+> **Note implementazione**: developer: «sì al suffisso rc per le pre release, però non succede che faccio una pre release e poi promuovo, al più ne creo un'altra da 0 su un tag nuovo».
+> - New first step of the job, «Prerelease tag must be vX.Y.Z-rc.N». It runs only for a release marked as prerelease and reads the tag through `env`. It fails with an `::error` annotation unless `[[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]`.
+> - The promotion event is not handled: the stable release is always published on a new `vX.Y.Z` tag.
+> - Simulation (bash, 14 tags): `v1.2.0-rc.1`, `1.2.0-rc.12` and `v10.20.30-rc.0` pass. Plain, `beta`, bare `rc`, `rc.1.2`, upper-case `V`, leading space, a quote injection, `$(id)`, the empty tag and both embedded-newline forms fail.
+> - `utils release-image-contract` is still 87/87. Contract pins: test-author. `release-pipeline.md`: docs-writer.
+> **⚠️ Fuori pista**: the first draft matched with `grep -Eq`, which matches line by line, so `v1.2.0-rc.1\nv9` passed. Replaced with bash's whole-string `[[ =~ ]]`. Evidence: `release-pipeline/runs/prerelease_guard_sim.txt`.
+> **Gates**: `utils release-image-contract` **115/115** (+28 in `TestPrereleaseTagGuard`). They pin:
+> - the `if:`, which is true only for prereleases;
+> - the tag passed through `env`;
+> - the step comes first;
+> - the 14 tag verdicts, run in bash;
+> - a plain-tag prerelease fails at this guard before any other step;
+> - 7 negative controls: removed, every-release `if`, dropped `if`, any suffix, `grep` restored, tag interpolated into the script, moved after checkout.
+>
+> ruff and black clean. `release-pipeline.md` (docs-writer): new subsection «Prereleases and Publishing» with the guard, why the rc suffix matters, why there is no promotion, and «How to publish»; the diagram check; the §3 row and the `latest` bullet. `mkdocs build` strict: 0 warnings. `check-links`: 89 valid plus the pre-existing `#rolling-return`. `git diff --check` clean.
+> **⚠️ Fuori pista**:
+> - `Archive Generated Screenshots` (`!cancelled()`) still runs after the guard fails, and uploads nothing (`if-no-files-found: ignore`).
+> - Open question for the coordinator: a release tagged `-rc.N` but **not** marked as a prerelease passes the guard and would deploy the docs with a `:latest` line in its notes. A symmetric check would close it (stable ⇒ `^v?X.Y.Z$`).
+
+### 12. ✅ Symmetric release tag check — 2026-10-07
+> **Note implementazione**: developer: «Sì, controllo simmetrico». The first step, renamed «Release tag must match the release kind», now runs for every release (`if: github.event_name == 'release'`) and reads `TAG_NAME` and `PRERELEASE` through `env`.
+> - Prerelease: the tag must be `vX.Y.Z-rc.N`, otherwise `::error title=Prerelease tag`.
+> - Stable: the tag must be a plain `vX.Y.Z`, otherwise `::error title=Release tag`.
+> - This closes the case of an `-rc.N` tag published as stable, which would deploy the docs and announce `:latest` while `latest` and the update prompt ignore it.
+> - Bash simulation, 28 cases (14 per branch, including an injection attempt, `$(id)`, embedded newlines and the empty tag): all as expected, each failure with its own title. Evidence: `release-pipeline/runs/release_tag_guard_sim.txt`.
+> - Contract tests (test-author, including the developer's 2 negatives) and `release-pipeline.md` (docs-writer) are in progress.
+>
+> **Coordinator constraints, inventory order approved:**
+> - group 2 (P&L and privacy) waits for I: the developer decided gold for the dividend and a label on every X-axis bucket for Candles and Income;
+> - `detail-chart-rolling-return` waits for I's fix (train 9);
+> - sequence: train 9 (Q + I) → commit of batch 2 → merge of `dev_release2` into M → replace Q's placeholders.
+> **Gates** (lane 6158, load 50):
+> - `utils release-image-contract` **133/133** (was 115). test-author added:
+>   - 28 bash verdicts, with titles;
+>   - the run «stable release on `v1.2.0-rc.1`», which fails first at the guard;
+>   - the developer's 2 negatives, `stable-branch-dropped` and `stable-regex-loosened`, plus `prerelease-in-script` and `stable-error-titled-as-prerelease`;
+>   - `if-every-release` → `if-prerelease-only`.
+> - Ruff and black: clean.
+> - `release-pipeline.md` (docs-writer): «🔖 Release Tags and Publishing» (anchor `#prereleases` kept) with a two-branch table, the refreshed YAML, both «why» bullets, «How to publish», the diagram box «Tag matches its kind? (rc / plain)», the gate and contract sentences, and the closed gap.
+> - `mkdocs build` strict: 0 warnings. `check-links`: 89 valid plus the pre-existing `#rolling-return`. `git diff --check`: clean.
