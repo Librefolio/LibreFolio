@@ -310,7 +310,7 @@ Tests for utility modules and helper functions:
         "release-image-contract",
         utils_release_image_contract,
         name="Release Image Contract",
-        desc="release.yml rebuilds the frontend (production) and the docs between the gallery and both image builds, the nightly report reads every soft-gated step; the Dockerfile takes frontend/build only through the guarded frontend stage",
+        desc="release.yml rebuilds the frontend (production) and the docs between the gallery and both image builds, the nightly report reads every soft-gated step, the gallery fails a release (soft on dev only), cache keys carry the runner image, tags follow the user guide (latest = light, X.Y.Z full, X.Y.Z-light, no v; a variant without tags is not pushed) and the release notes say so; the Dockerfile takes frontend/build only through the guarded frontend stage",
         # Reads .github/workflows/release.yml and Dockerfile, mutates copies in
         # memory: no DB, no server, no network, no writes.
         isolation="pure",
