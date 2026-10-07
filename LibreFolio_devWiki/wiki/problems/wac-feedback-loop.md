@@ -4,10 +4,11 @@ category: Problem
 status: resolved
 date_encountered: 2026-05-28
 date_resolved: 2026-05-28
+updated: 2026-10-07
 severity: critical
 tags: [frontend, wac, reactivity, infinite-loop, svelte5, bulkModal]
 related_features: [F-097, F-048]
-related_decisions: [decisions/wac-inline-validate-commit]
+related_decisions: [decisions/wac-inline-validate-commit, decisions/financial-math-single-average-cost]
 related_problems: [problems/svelte5-effect-read-write-loop]
 ---
 
@@ -42,7 +43,16 @@ Added explicit `cost_basis_mode: 'auto' | 'manual'` field to `WACPendingTXItem`:
 2. **Frontend**: Sends `cost_basis_mode` in payload instead of writing result to `cost_basis_override` pre-commit
 3. **Fingerprint**: No longer includes the computed WAC value — only user-editable fields trigger recalc
 
+> **Historical note (2026-10-07).** Item 1 no longer describes the code. When workstream P analysed it, no production
+> caller passed `cost_basis_mode` (or `is_pending`) to the math engine, so the `add_at_wac` branch was unreachable; it
+> was deleted on 2026-10-07 together with `backend/app/utils/financial/wac_utils.py`, when the WAC moved to the single
+> average-cost function — see [[decisions/financial-math-single-average-cost]]. An auto-mode receiver's cost basis is
+> computed post-flush by the WAC facade instead — previewed by `/validate`, written by `/commit`
+> ([[decisions/wac-inline-validate-commit]]). Items 2 and 3 were not touched by that change.
+
 ### Why `add_at_wac` is correct
+
+*(Kept as history: the branch described here was unreachable and is deleted — see the note above.)*
 
 For a TRANSFER_IN with `cost_basis_mode: 'auto'`:
 ```
@@ -68,7 +78,11 @@ The position grows but the average cost doesn't change. This is the correct PMC 
 | Role | Path |
 |------|------|
 | Backend WAC pending schema | `backend/app/schemas/transactions.py` |
-| Backend math engine | `backend/app/utils/financial_utils.py` |
+| Backend average-cost math (since 2026-10-07; replaces the math engine that held `add_at_wac`) | `backend/app/services/financial_math/average_cost.py` |
 | Backend WAC iterative | `backend/app/services/transaction_service.py` |
 | Frontend BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | E2E WAC tests | `frontend/e2e/transactions/tx-wac-bulk.spec.ts` |
+
+> Until 2026-10-07 the math-engine row cited `backend/app/utils/financial_utils.py`, where `add_at_wac` was written.
+> Phase 09 M1 moved that module to `backend/app/utils/financial/wac_utils.py`, which workstream P deleted on
+> 2026-10-07.

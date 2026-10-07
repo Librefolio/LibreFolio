@@ -71,6 +71,7 @@ For detailed architectural documentation of specific subsystems, see:
     - 🔎 See also: **[Asset Search & Link-Finder](../backend/assets/search_link_finder.md)** for the three-layer interactive search (on-site → `ddgs` web link-finder → `resolve_url`); best-effort, last-resort, and **never** used on automated price fetches.
 - 💱 **[FX Architecture](../backend/fx/architecture.md)**: Foreign Exchange system.
     - 🔀 See also: **[FX Configuration & Routing](../backend/fx/configuration.md)** for multi-provider setup.
+- 🧮 **[Financial Math Layer](../backend/transactions/wac.md#financial-math-layer)**: `backend/app/services/financial_math/`, the home of financial calculations — each takes the plain data of its problem and calls the services it needs, such as the FX service. Its first module is the single average-cost implementation.
 - 📁 **File Upload System**: Static file uploads with image preview cache (50MB, TTL 1h), avatar seeding, and BRIM file management. See `backend/app/services/static_uploads.py`.
 
 ## 🔄 Request Flow Example: Displaying Portfolio

@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
+    AssetEvent,
+    AssetEventType,
     Broker,
     BrokerUserAccess,
     PriceHistory,
@@ -48,6 +50,8 @@ from backend.app.schemas.brokers import (
     BRUpdateResult,
 )
 from backend.app.schemas.common import Currency
+from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.transaction_service import (
     BalanceValidationError,
     TransactionService,
@@ -396,6 +400,13 @@ class BrokerService:
         # one query per holding (was the dominant N+1 cost of this endpoint).
         held_asset_ids = [asset_id for asset_id, quantity in holdings_dict.items() if quantity != Decimal("0")]
         latest_prices = await self._get_latest_prices_batch(held_asset_ids)
+        # Average cost of each holding, in its asset currency (see _holding_average_costs)
+        average_costs = await self._holding_average_costs(broker_id, held_asset_ids)
+        missing_pairs: dict[str, set] = {}
+        for average_cost in average_costs.values():
+            for missing in average_cost.missing:
+                if missing.leg == "report":
+                    missing_pairs.setdefault(missing.pair, set()).update(missing.dates)
 
         for asset_id, quantity in holdings_dict.items():
             if quantity == Decimal("0"):
@@ -406,13 +417,19 @@ class BrokerService:
             if not asset:
                 continue
 
-            # Get cost basis
-            total_cost_amount = await self.tx_service.get_cost_basis(broker_id, asset_id)
-            average_cost = total_cost_amount / quantity if quantity != Decimal("0") else Decimal("0")
-            # SafeDecimal in BRAssetHolding guarantees fixed-point JSON
-            # serialization — no scientific notation reaches the frontend.
-            if average_cost == 0:
-                average_cost = Decimal("0")
+            # Historical cost of the quantity held, in the asset currency: None when part of
+            # it is unknown (an unconvertible purchase or a transfer without cost basis).
+            position_cost = average_costs.get(asset_id)
+            total_cost_amount: Decimal | None = Decimal("0")
+            if position_cost is not None and position_cost.steps:
+                total_cost_amount = position_cost.steps[-1].cost_report_for(quantity) if position_cost.report_complete else None
+            average_cost: Decimal | None = None
+            if total_cost_amount is not None:
+                average_cost = total_cost_amount / quantity
+                # SafeDecimal in BRAssetHolding guarantees fixed-point JSON
+                # serialization — no scientific notation reaches the frontend.
+                if average_cost == 0:
+                    average_cost = Decimal("0")
 
             # Get current price (from the batch lookup above)
             current_price = latest_prices.get(asset_id)
@@ -428,18 +445,19 @@ class BrokerService:
                 )
                 current_value = Currency(code=asset.currency, amount=current_value_amount)
 
-                unrealized_pnl_amount = current_value_amount - total_cost_amount
-                unrealized_pnl = Currency(code=asset.currency, amount=unrealized_pnl_amount)
+                if total_cost_amount is not None:
+                    unrealized_pnl_amount = current_value_amount - total_cost_amount
+                    unrealized_pnl = Currency(code=asset.currency, amount=unrealized_pnl_amount)
 
-                if total_cost_amount != Decimal("0"):
-                    unrealized_pnl_percent = ((unrealized_pnl_amount / total_cost_amount) * 100).quantize(Decimal("0.01"))
+                    if total_cost_amount != Decimal("0"):
+                        unrealized_pnl_percent = ((unrealized_pnl_amount / total_cost_amount) * 100).quantize(Decimal("0.01"))
 
             holdings.append(
                 BRAssetHolding(
                     asset_id=asset_id,
                     asset_name=asset.display_name,
                     quantity=quantity,
-                    total_cost=Currency(code=asset.currency, amount=total_cost_amount),
+                    total_cost=Currency(code=asset.currency, amount=total_cost_amount) if total_cost_amount is not None else None,
                     average_cost_per_unit=average_cost,
                     current_price=current_price,
                     current_value=current_value,
@@ -492,9 +510,41 @@ class BrokerService:
             updated_at=broker.updated_at,
             cash_balances=cash_balances,
             holdings=holdings,
+            missing_fx_pairs=[WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(missing_pairs.items())],
             user_role=user_role_value,
             user_share_percentage=user_share_value,
         )
+
+    async def _holding_average_costs(self, broker_id: int, asset_ids: List[int]) -> dict[int, AverageCost]:
+        """Average cost of each held asset at this broker, in the asset's own currency.
+
+        One financial_math.average_cost call per asset currency; a purchase paid in another
+        currency is converted at its date, and a missing rate is reported, never counted as zero.
+        """
+        if not asset_ids:
+            return {}
+        assets = (await self.session.execute(select(Asset).where(Asset.id.in_(asset_ids)))).scalars().all()
+        currency_by_asset = {asset.id: asset.currency for asset in assets if asset.currency}
+        rows = (await self.session.execute(select(Transaction).where(Transaction.broker_id == broker_id, Transaction.asset_id.in_(list(currency_by_asset)), Transaction.quantity.is_not(None), Transaction.quantity != 0).order_by(Transaction.date, Transaction.id))).scalars().all()
+        split_candidate_ids = [row.id for row in rows if row.asset_event_id is not None]
+        split_linked_ids: set[int] = set()
+        if split_candidate_ids:
+            split_linked_ids = set((await self.session.execute(select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_candidate_ids)).where(AssetEvent.type == AssetEventType.SPLIT))).scalars().all())
+
+        movements_by_asset: dict[int, list] = {}
+        for row in rows:
+            movement = cost_movement_from_transaction(row, asset_currency=currency_by_asset[row.asset_id], split_linked=row.id in split_linked_ids)
+            if movement is not None:
+                movements_by_asset.setdefault(row.asset_id, []).append(movement)
+
+        positions_by_currency: dict[str, list[CostPosition]] = {}
+        for asset_id, movements in movements_by_asset.items():
+            currency = currency_by_asset[asset_id]
+            positions_by_currency.setdefault(currency, []).append(CostPosition(key=asset_id, asset_currency=currency, movements=tuple(movements)))
+        average_costs: dict[int, AverageCost] = {}
+        for currency, positions in positions_by_currency.items():
+            average_costs.update(await compute_average_costs(self.session, positions, report_currency=currency, asset_leg=False))
+        return average_costs
 
     async def _get_latest_prices_batch(self, asset_ids: List[int]) -> dict:
         """Batch lookup of the latest price per asset — a single query for N

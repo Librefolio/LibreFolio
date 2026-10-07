@@ -40,6 +40,7 @@ from backend.app.schemas.portfolio import (
     ReferencePriceSource,
     TargetOperationAllocationSchema,
 )
+from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.fifo_lot_engine import (
     EconomicAllocationGroup,
     EconomicEvent,
@@ -53,12 +54,13 @@ from backend.app.services.fifo_lot_engine import (
     ReferencePriceResolution,
     run_fifo_lot_engine,
 )
+from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.fx import convert_bulk
+from backend.app.services.portfolio_engine import DerivedViewsBuilder, load_configured_fx_pair_sets
 from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series, cumulative_to_annualized
 from backend.app.utils.financial.valuation_utils import compute_holding_value, normalize_quote_base_quantity
-from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
@@ -160,6 +162,10 @@ class _FxRateResolver:
         if rate is None:
             return None
         return amount * rate
+
+
+# Key of the average-cost line that pools every broker in scope (the cumulative WAC line).
+_ALL_BROKERS = "__all__"
 
 
 class LotsAnalysisService:
@@ -398,13 +404,15 @@ class LotsAnalysisService:
             value = converted if converted is not None else mark.unit_price
             market_prices[current_date] = value
             estimated_market_prices[current_date] = (value, mark.estimated)
-        wac_context = self._build_wac_context(
-            transactions=transactions,
-            split_ratios_by_tx_id=split_ratios_by_tx_id,
-            asset_currency=asset.currency,
-            target_currency=target_currency,
-            fx_resolver=fx_resolver,
-        )
+        average_cost_lines: dict[int | str, AverageCost] = {}
+        if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
+            average_cost_lines = await self._compute_average_cost_lines(
+                transactions=transactions,
+                split_ratios_by_tx_id=split_ratios_by_tx_id,
+                asset_currency=asset.currency,
+                target_currency=target_currency,
+            )
+            await self._report_average_cost_gaps(data_quality, average_cost_lines, target_currency, asset)
 
         lots = None
         if LotAnalysisType.LOT_SUMMARY in normalized_analyses:
@@ -505,7 +513,7 @@ class LotsAnalysisService:
         broker_wac_history = None
         if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses:
             broker_wac_history = self._trim_dates(
-                self._build_broker_wac_history(scope_broker_ids, wac_context, history_dates, target_currency),
+                self._build_broker_wac_history(scope_broker_ids, average_cost_lines, history_dates),
                 display_from,
                 actual_to,
             )
@@ -513,7 +521,7 @@ class LotsAnalysisService:
         cumulative_wac_history = None
         if LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
             cumulative_wac_history = self._trim_dates(
-                self._build_cumulative_wac_history(wac_context, history_dates, target_currency),
+                self._build_cumulative_wac_history(average_cost_lines, history_dates),
                 display_from,
                 actual_to,
             )
@@ -548,7 +556,8 @@ class LotsAnalysisService:
             asset_id=asset_id,
             target_currency=target_currency,
             quote_base_quantity=quote_base_quantity,
-            calculation_status=engine_result.analysis_status,
+            # A gap in the average-cost lines (a missing rate or cost basis) is isolable: DEGRADED.
+            calculation_status=("DEGRADED" if engine_result.analysis_status == "COMPLETE" and any(line.has_missing_report_fx or line.unknown_cost_movement_ids for line in average_cost_lines.values()) else engine_result.analysis_status),
             calculation_metadata=LotsAnalysisMetadata(
                 broker_ids=scope_broker_ids,
                 selected_lot_ids=selected_ids if selected_lot_ids is not None else None,
@@ -726,15 +735,6 @@ class LotsAnalysisService:
         asset_currency: str,
     ) -> None:
         tx_by_id = {tx.id: tx for tx in transactions if tx.id is not None}
-        if LotAnalysisType.BROKER_WAC_HISTORY in analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in analyses:
-            for tx in transactions:
-                if tx.id in split_ratios_by_tx_id or tx.quantity <= 0:
-                    continue
-                if str(getattr(tx.type, "value", tx.type)) == "BUY":
-                    fx_resolver.need(tx.currency, tx.date)
-                elif tx.cost_basis_override is not None:
-                    fx_resolver.need(tx.cost_basis_currency, tx.date)
-
         if LotAnalysisType.LOT_SUMMARY in analyses or LotAnalysisType.RETURN_HISTORY in analyses:
             for lot_id in selected_ids:
                 lot = lots_by_id[lot_id]
@@ -822,95 +822,95 @@ class LotsAnalysisService:
             if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":
                 fx_resolver.need(lot.currency or asset_currency, closure.close_date)
 
-    def _build_wac_context(
+    async def _compute_average_cost_lines(
         self,
         *,
         transactions: Sequence[Transaction],
         split_ratios_by_tx_id: dict[int, Decimal],
         asset_currency: str,
         target_currency: str,
-        fx_resolver: _FxRateResolver,
-    ) -> dict[int | str, list[WACInputTX]]:
-        broker_rows: dict[int, list[WACInputTX]] = defaultdict(list)
-        all_rows: list[WACInputTX] = []
-        for tx in transactions:
-            row = self._build_wac_row(
-                tx=tx,
-                split_linked=tx.id in split_ratios_by_tx_id,
-                asset_currency=asset_currency,
-                target_currency=target_currency,
-                fx_resolver=fx_resolver,
-            )
-            broker_rows[tx.broker_id].append(row)
-            all_rows.append(row)
-        out: dict[int | str, list[WACInputTX]] = {broker_id: sorted(rows, key=lambda row: (row.date, row.tx_id or 0)) for broker_id, rows in broker_rows.items()}
-        out["__all__"] = sorted(all_rows, key=lambda row: (row.date, row.tx_id or 0))
-        return out
+    ) -> dict[int | str, AverageCost]:
+        """Average cost per broker and for all the brokers together, in target currency.
 
-    def _build_wac_row(
-        self,
-        *,
-        tx: Transaction,
-        split_linked: bool,
-        asset_currency: str,
-        target_currency: str,
-        fx_resolver: _FxRateResolver,
-    ) -> WACInputTX:
-        tx_type = str(getattr(tx.type, "value", tx.type))
-        unit_cost: Decimal | None = None
-        original_currency = tx.currency or asset_currency
-        if split_linked:
-            original_currency = asset_currency
-        elif tx.quantity > 0:
-            if tx_type == "BUY":
-                original_currency = tx.currency or asset_currency
-                if tx.amount:
-                    total_cost = abs(tx.amount)
-                    converted_total = fx_resolver.convert(total_cost, original_currency, tx.date)
-                    unit_cost = (converted_total / tx.quantity) if converted_total is not None else (total_cost / tx.quantity)
-                else:
-                    unit_cost = Decimal("0")
-            elif tx.cost_basis_override is not None:
-                original_currency = tx.cost_basis_currency or asset_currency
-                total_cost = tx.quantity * tx.cost_basis_override
-                converted_total = fx_resolver.convert(total_cost, original_currency, tx.date)
-                unit_cost = (converted_total / tx.quantity) if converted_total is not None else tx.cost_basis_override
-        return WACInputTX(
-            tx_id=tx.id,
-            type=tx_type,
-            date=tx.date,
-            quantity=tx.quantity,
-            unit_cost_converted=unit_cost,
-            original_currency=original_currency,
-            cost_basis_mode=None,
-            is_split_linked=split_linked,
+        One financial_math.average_cost call: each acquisition converted at its own date,
+        missing conversions reported instead of falling back to the unconverted cost.
+        ``transactions`` arrive ordered by (date, id), the replay order of the pools.
+        """
+        movements_by_broker: dict[int, list] = defaultdict(list)
+        all_movements: list = []
+        for tx in transactions:
+            movement = cost_movement_from_transaction(tx, asset_currency=asset_currency, split_linked=tx.id in split_ratios_by_tx_id)
+            if movement is None:
+                continue
+            movements_by_broker[tx.broker_id].append(movement)
+            all_movements.append(movement)
+        positions = [CostPosition(key=broker_id, asset_currency=asset_currency, movements=tuple(movements)) for broker_id, movements in movements_by_broker.items()]
+        positions.append(CostPosition(key=_ALL_BROKERS, asset_currency=asset_currency, movements=tuple(all_movements)))
+        return await compute_average_costs(self.db, positions, report_currency=target_currency, asset_leg=False)
+
+    async def _report_average_cost_gaps(self, data_quality: DataQualityReport, lines: dict[int | str, AverageCost], target_currency: str, asset: Asset) -> None:
+        """Put what the average-cost lines could not compute in the data quality, as the portfolio banner does.
+
+        Conversions that could not be made become ``missing_fx_pairs`` (pair and dates) and their FX
+        issues; an acquisition without a known cost becomes a ``MISSING_COST_BASIS`` issue.
+        """
+        dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
+        for line in lines.values():
+            for missing in line.missing:
+                if missing.leg == "report":
+                    dates_by_pair[missing.pair].update(missing.dates)
+        unknown_cost = any(line.unknown_cost_movement_ids for line in lines.values())
+        if not dates_by_pair and not unknown_cost:
+            return
+        missing_pairs = [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
+        configured_pairs, real_provider_pairs = await load_configured_fx_pair_sets(self.db) if missing_pairs else (set(), set())
+        gap_report = DerivedViewsBuilder([], target_currency).build_data_quality_report(
+            missing_fx_pairs_dto=missing_pairs or None,
+            missing_cost_basis_assets=[(asset.id, asset.display_name)] if unknown_cost else None,
+            configured_fx_pairs=configured_pairs,
+            real_provider_fx_pairs=real_provider_pairs,
         )
+        data_quality.issues.extend(gap_report.issues)
+        data_quality.missing_fx_pairs.extend(missing_pairs)
 
     def _build_broker_wac_history(
         self,
         broker_ids: Sequence[int],
-        wac_context: dict[int | str, list[WACInputTX]],
+        lines: dict[int | str, AverageCost],
         history_dates: Sequence[date_type],
-        target_currency: str,
     ) -> list[BrokerWACHistoryPoint]:
         points: list[BrokerWACHistoryPoint] = []
         for broker_id in broker_ids:
-            txs = wac_context.get(broker_id, [])
-            if not txs:
+            line = lines.get(broker_id)
+            if line is None:
                 continue
-            points.extend(BrokerWACHistoryPoint(date=point_date, broker_id=broker_id, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._compute_wac_series(txs, history_dates, target_currency))
+            points.extend(BrokerWACHistoryPoint(date=point_date, broker_id=broker_id, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._average_cost_points(line, history_dates))
         return points
 
     def _build_cumulative_wac_history(
         self,
-        wac_context: dict[int | str, list[WACInputTX]],
+        lines: dict[int | str, AverageCost],
         history_dates: Sequence[date_type],
-        target_currency: str,
     ) -> list[CumulativeWACHistoryPoint]:
-        txs = wac_context.get("__all__", [])
-        if not txs:
+        line = lines.get(_ALL_BROKERS)
+        if line is None:
             return []
-        return [CumulativeWACHistoryPoint(date=point_date, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._compute_wac_series(txs, history_dates, target_currency)]
+        return [CumulativeWACHistoryPoint(date=point_date, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._average_cost_points(line, history_dates)]
+
+    @staticmethod
+    def _average_cost_points(line: AverageCost, history_dates: Sequence[date_type]) -> list[tuple[date_type, Decimal, Decimal]]:
+        """(date, WAC, pool quantity) for each history date from the first movement on.
+
+        A date on which the pool lacks part of its cost (a missing conversion) has no point:
+        the gap is reported in the data quality instead of drawing a wrong average.
+        """
+        points: list[tuple[date_type, Decimal, Decimal]] = []
+        for current_date in history_dates:
+            state = line.state_at(current_date)
+            if state is None or not state.report_complete:
+                continue
+            points.append((current_date, state.unit_cost_report, state.quantity))
+        return points
 
     def _build_performance_history(  # noqa: C901 — cash-flow collection loops with sequential guard filters
         self,
@@ -1014,29 +1014,6 @@ class LotsAnalysisService:
             )
             for current_date in history_dates
         ]
-
-    def _compute_wac_series(
-        self,
-        txs: Sequence[WACInputTX],
-        history_dates: Sequence[date_type],
-        target_currency: str,
-    ) -> list[tuple[date_type, Decimal, Decimal]]:
-        if not txs:
-            return []
-        txs_sorted = sorted(txs, key=lambda row: (row.date, row.tx_id or 0))
-        first_date = txs_sorted[0].date
-        prefix: list[WACInputTX] = []
-        cursor = 0
-        points: list[tuple[date_type, Decimal, Decimal]] = []
-        for current_date in history_dates:
-            if current_date < first_date:
-                continue
-            while cursor < len(txs_sorted) and txs_sorted[cursor].date <= current_date:
-                prefix.append(txs_sorted[cursor])
-                cursor += 1
-            calc = compute_wac_from_txlist(prefix, target_currency)
-            points.append((current_date, calc.wac_amount, calc.pool_qty))
-        return points
 
     def _build_income_economic_events(
         self,

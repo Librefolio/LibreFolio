@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import timedelta
@@ -37,6 +38,15 @@ from backend.app.schemas.portfolio import (
     IssueSeverity,
 )
 from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.financial_math.average_cost import (
+    AverageCost,
+    CostEffect,
+    CostMovement,
+    CostPosition,
+    CostStep,
+    compute_average_costs,
+    cost_movement_from_transaction,
+)
 from backend.app.services.fx import convert_bulk
 from backend.app.services.price_resolver import AssetPriceSeries, build_asset_price_series
 from backend.app.services.settings_service import get_effective_base_currency
@@ -451,10 +461,52 @@ class DailyPositionState:
     valuation_stale: bool
     missing_fx_pair: str | None
     market_value: Decimal | None  # in target_currency
-    wac: Decimal  # in asset_currency
-    wac_currency: str
-    cost_basis: Decimal  # in target_currency (wac * qty * fx)
-    unrealized_pnl: Decimal | None  # market_value - cost_basis (None if MV missing)
+    wac: Decimal | None  # per unit, in target_currency: historical average cost; None when the cost is incomplete
+    wac_currency: str  # target_currency
+    cost_basis: Decimal  # in target_currency: historical cost of the open quantity (known part)
+    unrealized_pnl: Decimal | None  # market_value - cost_basis (None if MV missing or cost incomplete)
+    asset_currency: str | None = None
+    wac_asset: Decimal | None = None  # per unit, in asset_currency; None when unknown
+    cost_complete: bool = True  # False: a rate or a cost basis is missing for part of the open quantity
+
+
+@dataclass(frozen=True, slots=True)
+class UnrealizedSplit:
+    """One asset currency's part of a day's unrealized gain or loss, split by cause.
+
+    For the positions in assets priced in currency A, reported in currency T, with r(t) the
+    rate A→T of the day, C_A and C_T their historical cost in A and in T:
+
+    * ``asset`` = MV − C_A × r(t): what the assets did in their own currency, at today's rate;
+    * ``fx`` = C_A × r(t) − C_T: what the exchange rate did to their cost;
+    * ``unsplit`` = MV − C_T of the positions that cannot be split that day (no market value,
+      no rate, or a cost incomplete in either currency).
+
+    The three add up to the positions' MV − C_T exactly; for A = T, ``fx`` is always zero.
+    """
+
+    asset: Decimal = Decimal("0")
+    fx: Decimal = Decimal("0")
+    unsplit: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True, slots=True)
+class RealizedSale:
+    """A SELL replayed by the engine, with its proceeds and the historical cost it took from the pool.
+
+    Amounts are in the target currency and scaled by the owner's share of the broker.
+    ``proceeds`` is None when they could not be converted (the pair is in the result's
+    ``missing_fx``); ``cost_complete`` is False when the pool already lacked part of its cost.
+    """
+
+    transaction_id: int | None
+    asset_id: int
+    broker_id: int
+    date: date_type
+    quantity: Decimal
+    proceeds: Decimal | None
+    cost: Decimal
+    cost_complete: bool
 
 
 @dataclass
@@ -554,6 +606,9 @@ class DailyPortfolioState:
     # compute_acquisition_funding=True AND at least one BUY happened this day (a
     # genuine "no acquisition today" gap, never a zero-valued contribution).
     acquisition_funding: AcquisitionFundingContribution | None = None
+    # Unrealized gain/loss of the held positions (market_value - open_cost_basis) by asset
+    # currency, split into asset and exchange-rate effect (see UnrealizedSplit).
+    unrealized_by_currency: dict[str, UnrealizedSplit] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -566,9 +621,11 @@ class DailyStateBuilder:
 
     Pure function — no I/O, no DB, no async. All data is pre-loaded.
 
-    WAC is computed inline during the daily loop (no external wac_series needed).
-    Each position's (asset_id, broker_id) WAC pool is maintained in its native
-    asset_currency, then converted to target_currency at evaluation time.
+    The cost of every position comes from ``average_costs`` (financial_math.average_cost,
+    computed by the engine before the replay): each (asset_id, broker_id) pool is the
+    historical cost in target_currency, every acquisition converted at its own date. The
+    builder replays each position's cost steps in the order of its transactions and never
+    converts a cost itself.
     """
 
     def __init__(
@@ -583,6 +640,7 @@ class DailyStateBuilder:
         asset_classifications: dict[int, dict | None],
         asset_types: dict[int, str],
         asset_currencies: dict[int, str],
+        average_costs: Mapping[tuple[int, int], AverageCost],
         target_currency: str,
         date_from: date_type,
         date_to: date_type,
@@ -602,14 +660,19 @@ class DailyStateBuilder:
         self.asset_classifications = asset_classifications
         self.asset_types = asset_types
         self.asset_currencies = asset_currencies
+        # Average cost of every position, keyed (asset_id, broker_id): see build_cost_positions().
+        self.average_costs = average_costs
         self.target_currency = target_currency
         self.date_from = date_from
         self.date_to = date_to
         # Transaction ids for ADJUSTMENT rows linked to an AssetEvent of type SPLIT.
-        # These bypass the normal add/reduce WAC pool math (see _apply_wac_pool_update):
-        # a split redistributes existing cost over a new quantity, it never adds or
-        # removes economic cost. Populated by PortfolioCalculationEngine.run().
+        # A split redistributes existing cost over a new quantity: it never adds or
+        # removes economic cost, nor capital. Populated by PortfolioCalculationEngine.calculate().
         self.split_linked_tx_ids: set[int] = split_linked_tx_ids or set()
+        # Replay state: next cost step of each position, and the conversions movements
+        # needed but could not get (pair "FROM/TO" -> dates). Reset by build().
+        self._cost_cursor: dict[tuple[int, int], int] = {}
+        self._missing_fx: dict[str, set[date_type]] = defaultdict(set)
         # frame_start: first day to emit DailyPortfolioState. Before this = pre-frame (accounting only).
         # None → same as date_from (no pre-frame, full evaluation from start).
         self.frame_start = frame_start if frame_start is not None else date_from
@@ -643,11 +706,19 @@ class DailyStateBuilder:
         """Build daily states for [frame_start, date_to] + position snapshots + period accumulators.
 
         Architecture (pre-frame / frame split):
-        - Pre-frame [date_from, frame_start): update accumulators only (cash, qty, WAC, pools).
+        - Pre-frame [date_from, frame_start): update accumulators only (cash, qty, cost pools, K/R/W).
           No market evaluation, no FX lookups for prices, no state emission.
         - Frame [frame_start, date_to]: full daily evaluation + DailyPortfolioState emission.
         """
         zero = Decimal("0")
+
+        # Replay state. Conversions the cost computation could not make are movement failures too.
+        self._cost_cursor = {}
+        self._missing_fx = defaultdict(set)
+        for average_cost in self.average_costs.values():
+            for missing in average_cost.missing:
+                self._missing_fx[missing.pair].update(missing.dates)
+        realized_sales: list[RealizedSale] = []
 
         # ── 1. Cash ledger: sum amount deltas per day ──
         cash_deltas: dict[date_type, Decimal] = defaultdict(lambda: zero)
@@ -655,13 +726,13 @@ class DailyStateBuilder:
         for ctxn in self.classified_txs:
             tx = ctxn.tx
             if tx.amount and tx.amount != 0 and tx.currency:
-                converted = self._convert(tx.amount, tx.currency, tx.date)
+                converted = self._convert_movement(tx.amount, tx.currency, tx.date)
                 if converted is not None:
                     delta = converted * ctxn.share
                     cash_deltas[tx.date] += delta
                     cash_deltas_by_broker[(tx.date, tx.broker_id)] += delta
 
-        # ── 2. Position transactions by date (for inline WAC computation) ──
+        # ── 2. Position transactions by date (replayed against their average-cost steps) ──
         position_txs_by_date: dict[date_type, list[ClassifiedTransaction]] = defaultdict(list)
         for ctxn in self.classified_txs:
             tx = ctxn.tx
@@ -677,7 +748,7 @@ class DailyStateBuilder:
         ecf_by_date: dict[date_type, Decimal] = defaultdict(lambda: zero)
         ecf_by_date_by_broker: dict[tuple[date_type, int], Decimal] = defaultdict(lambda: zero)
         for dt, bid, amount, ccy in self.external_cash_flows:
-            converted = self._convert(amount, ccy, dt)
+            converted = self._convert_movement(amount, ccy, dt)
             if converted is not None:
                 ecf_by_date[dt] += converted
                 ecf_by_date_by_broker[(dt, bid)] += converted
@@ -693,8 +764,8 @@ class DailyStateBuilder:
         cumulative_cash_by_broker: dict[int, Decimal] = defaultdict(lambda: zero)
         cumulative_ecf_by_broker: dict[int, Decimal] = defaultdict(lambda: zero)
         cumulative_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
-        wac_pool_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
-        wac_pool_cost: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
+        # Pool of every position after its last replayed movement (historical cost in target_currency)
+        cost_pool: dict[tuple[int, int], CostStep] = {}
         # 3-pool: per-broker K and R, global W
         K: dict[int, Decimal] = defaultdict(lambda: zero)  # capital pool per broker
         R: dict[int, Decimal] = defaultdict(lambda: zero)  # returns pool per broker
@@ -714,7 +785,7 @@ class DailyStateBuilder:
         all_broker_ids: set[int] = {ctxn.tx.broker_id for ctxn in self.classified_txs}
 
         # ── 5. PRE-FRAME: [date_from, frame_start) — accounting only ──
-        # Process all transaction days before frame_start: update cash, qty, WAC, ECF.
+        # Process all transaction days before frame_start: update cash, qty, cost pools, ECF.
         # No market evaluation, no DailyPortfolioState emission.
         preframe_tx_dates = sorted(d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys())) if d < self.frame_start)
         for day in preframe_tx_dates:
@@ -729,7 +800,7 @@ class DailyStateBuilder:
                 bid = tx.broker_id
                 if tx.amount is None or tx.amount == 0 or tx.currency is None:
                     continue
-                amt = self._convert(abs(tx.amount), tx.currency, tx.date)
+                amt = self._convert_movement(abs(tx.amount), tx.currency, tx.date)
                 if amt is None:
                     continue
                 amt = amt * ctxn.share
@@ -776,7 +847,7 @@ class DailyStateBuilder:
                         # Arrival leg (positive amount = inflow)
                         # Approximate: add to K (can't track exact split without buffering)
                         K[bid] += amt
-            # Update WAC pools for position txs
+            # Replay the position txs against their average-cost steps
             day_pos_txs = position_txs_by_date.get(day)
             if day_pos_txs:
                 additions = [c for c in day_pos_txs if c.tx.quantity and c.tx.quantity > 0]
@@ -785,50 +856,25 @@ class DailyStateBuilder:
                     tx = ctxn.tx
                     key = (tx.asset_id, tx.broker_id)
                     tx_qty = tx.quantity * ctxn.share
+                    cumulative_qty[key] += tx_qty
+                    previous = cost_pool.get(key)
+                    step = self._next_cost_step(key, tx, tx_qty)
+                    if step is None:
+                        continue
+                    cost_pool[key] = step
                     if tx.id in self.split_linked_tx_ids:
-                        self._apply_split_rescale(key, tx_qty, wac_pool_qty, wac_pool_cost, zero)
-                        cumulative_qty[key] += tx_qty
                         continue
                     if tx.quantity > 0:
-                        unit_cost_asset_ccy = self._buy_unit_cost(tx)
-                        if unit_cost_asset_ccy is not None:
-                            old_qty = wac_pool_qty[key]
-                            old_cost = wac_pool_cost[key]
-                            new_qty = old_qty + tx_qty
-                            if new_qty > zero:
-                                wac_pool_cost[key] = old_cost + unit_cost_asset_ccy * tx_qty
-                                wac_pool_qty[key] = new_qty
-                            else:
-                                wac_pool_qty[key] = zero
-                                wac_pool_cost[key] = zero
-                        else:
-                            old_qty = wac_pool_qty[key]
-                            new_qty = old_qty + tx_qty
-                            if old_qty > zero:
-                                current_wac = wac_pool_cost[key] / old_qty
-                                wac_pool_cost[key] += current_wac * tx_qty
-                            wac_pool_qty[key] = max(new_qty, zero)
-                        if self._is_capital_adjustment(tx) and unit_cost_asset_ccy is not None:
-                            contributed = self._capital_flow_for_adjustment_in(tx, tx_qty, unit_cost_asset_ccy)
-                            if contributed is not None:
-                                cumulative_ecf += contributed
-                                cumulative_ecf_by_broker[tx.broker_id] += contributed
+                        if step.effect == CostEffect.ADD and self._is_capital_adjustment(tx):
+                            cumulative_ecf += step.cost_report_change
+                            cumulative_ecf_by_broker[tx.broker_id] += step.cost_report_change
                     else:
-                        old_qty = wac_pool_qty[key]
-                        old_cost = wac_pool_cost[key]
-                        if old_qty > zero:
-                            current_wac = old_cost / old_qty
-                            wac_pool_qty[key] = max(old_qty + tx_qty, zero)
-                            wac_pool_cost[key] = wac_pool_qty[key] * current_wac
-                        else:
-                            wac_pool_qty[key] = zero
-                            wac_pool_cost[key] = zero
+                        removed = -step.cost_report_change
                         if self._is_capital_adjustment(tx):
-                            removed_target = self._convert(old_cost - wac_pool_cost[key], self.asset_currencies.get(tx.asset_id, self.target_currency), tx.date)
-                            if removed_target is not None:
-                                cumulative_ecf -= removed_target
-                                cumulative_ecf_by_broker[tx.broker_id] -= removed_target
-                    cumulative_qty[key] += tx_qty
+                            cumulative_ecf -= removed
+                            cumulative_ecf_by_broker[tx.broker_id] -= removed
+                        if tx.type == TransactionType.SELL:
+                            realized_sales.append(self._realized_sale(ctxn, tx_qty, removed, previous))
 
         # ── 6. FRAME: [frame_start, date_to] — full daily evaluation ──
         # Build dirty_days for frame range only
@@ -902,6 +948,7 @@ class DailyStateBuilder:
                         broker_contributions=dict(prev.broker_contributions),
                         pnl_candle=prev.pnl_candle,
                         acquisition_funding=None,
+                        unrealized_by_currency=dict(prev.unrealized_by_currency),
                     )
                 )
                 current += timedelta(days=1)
@@ -917,12 +964,11 @@ class DailyStateBuilder:
             day_acq_from_k = zero
             day_acq_from_r = zero
 
-            # 4b. Unified per-transaction loop: WAC + 3-pool + period accumulators
+            # 4b. Unified per-transaction loop: cost pool + 3-pool + period accumulators
             # Single pass: for each tx, in additions-first order:
-            #   1. Read current WAC (before mutation)
-            #   2. Update WAC pool (BUY adds, SELL reduces)
-            #   3. Update 3-pool (K, R) using the captured WAC
-            #   4. Update period accumulators (realized, income, fees)
+            #   1. Replay the position's next average-cost step (BUY adds, SELL removes cost)
+            #   2. Update 3-pool (K, R) with the historical cost a reduction gave up
+            #   3. Update period accumulators (realized, income, fees)
             ecf_today = ecf_by_date.get(current, zero)
             cumulative_ecf += ecf_today
             for bid in all_broker_ids:
@@ -943,72 +989,36 @@ class DailyStateBuilder:
                 # ── Convert amount to target currency ──
                 amount_target: Decimal | None = None
                 if tx.amount and tx.amount != 0 and tx.currency:
-                    amount_target = self._convert(abs(tx.amount), tx.currency, tx.date)
+                    amount_target = self._convert_movement(abs(tx.amount), tx.currency, tx.date)
                     if amount_target is not None:
                         amount_target = amount_target * ctxn.share
 
-                # ── Position tx: WAC pool update ──
+                # ── Position tx: replay its average-cost step ──
                 if tx.quantity and tx.quantity != 0 and tx.asset_id and key:
+                    cumulative_qty[key] += tx_qty
+                    previous = cost_pool.get(key)
+                    step = self._next_cost_step(key, tx, tx_qty)
+                    if step is not None:
+                        cost_pool[key] = step
                     if tx.id in self.split_linked_tx_ids:
-                        self._apply_split_rescale(key, tx_qty, wac_pool_qty, wac_pool_cost, zero)
-                        cumulative_qty[key] += tx_qty
                         continue  # split never touches cash/K/R/realized accounting
                     if tx.quantity > 0:
-                        # Acquisition: update WAC pool
-                        unit_cost_asset_ccy = self._buy_unit_cost(tx)
-                        if unit_cost_asset_ccy is not None:
-                            old_qty = wac_pool_qty[key]
-                            old_cost = wac_pool_cost[key]
-                            new_qty = old_qty + tx_qty
-                            if new_qty > zero:
-                                wac_pool_cost[key] = old_cost + unit_cost_asset_ccy * tx_qty
-                                wac_pool_qty[key] = new_qty
-                            else:
-                                wac_pool_qty[key] = zero
-                                wac_pool_cost[key] = zero
-                        else:
-                            old_qty = wac_pool_qty[key]
-                            new_qty = old_qty + tx_qty
-                            if old_qty > zero:
-                                cur_wac = wac_pool_cost[key] / old_qty
-                                wac_pool_cost[key] += cur_wac * tx_qty
-                            wac_pool_qty[key] = max(new_qty, zero)
-                        cumulative_qty[key] += tx_qty
                         # In-kind ADJUSTMENT-in (priced, no cash): capital contribution.
-                        # Add the injected WAC cost to the capital baseline so total P&L
-                        # excludes it (opening equity, not profit). See _is_capital_adjustment.
-                        if self._is_capital_adjustment(tx) and unit_cost_asset_ccy is not None:
-                            contributed = self._capital_flow_for_adjustment_in(tx, tx_qty, unit_cost_asset_ccy)
-                            if contributed is not None:
-                                cumulative_ecf += contributed
-                                cumulative_ecf_by_broker[bid] += contributed
+                        # Add the cost it brings into the pool to the capital baseline so total
+                        # P&L excludes it (opening equity, not profit). See _is_capital_adjustment.
+                        if step is not None and step.effect == CostEffect.ADD and self._is_capital_adjustment(tx):
+                            cumulative_ecf += step.cost_report_change
+                            cumulative_ecf_by_broker[bid] += step.cost_report_change
                     else:
-                        # Reduction: READ WAC before reducing, then reduce
-                        old_qty = wac_pool_qty[key]
-                        sell_qty_abs = abs(tx_qty)
-                        if old_qty > zero:
-                            cur_wac = wac_pool_cost[key] / old_qty
-                            # Cost basis in target currency (captured before reduction)
-                            cb_local = cur_wac * sell_qty_abs
-                            wac_ccy = self.asset_currencies.get(tx.asset_id, self.target_currency)
-                            if wac_ccy == self.target_currency:
-                                sell_cb_target = cb_local
-                            else:
-                                rate = self.fx_rate_map.get((wac_ccy, self.target_currency, current))
-                                sell_cb_target = cb_local * rate if rate else cb_local
-                            # Now reduce pool
-                            wac_pool_qty[key] = max(old_qty + tx_qty, zero)
-                            wac_pool_cost[key] = wac_pool_qty[key] * cur_wac
-                        else:
-                            sell_cb_target = zero
-                            wac_pool_qty[key] = zero
-                            wac_pool_cost[key] = zero
-                        cumulative_qty[key] += tx_qty
+                        # Reduction: the historical cost the pool gave up, in target currency
+                        sell_cb_target = -step.cost_report_change if step is not None else zero
+                        if tx.type == TransactionType.SELL:
+                            realized_sales.append(self._realized_sale(ctxn, tx_qty, sell_cb_target, previous))
 
                         # In-kind ADJUSTMENT-out (no cash proceeds): capital distribution.
-                        # Remove the WAC cost from the capital baseline (mirror of the
-                        # in-kind contribution on ADJUSTMENT-in) so total P&L keeps
-                        # tracking unrealized instead of dumping the book into "Other".
+                        # Remove the cost from the capital baseline (mirror of the in-kind
+                        # contribution on ADJUSTMENT-in) so total P&L keeps tracking
+                        # unrealized instead of dumping the book into "Other".
                         if self._is_capital_adjustment(tx):
                             cumulative_ecf -= sell_cb_target
                             cumulative_ecf_by_broker[bid] -= sell_cb_target
@@ -1109,6 +1119,9 @@ class DailyStateBuilder:
             candle_high_sum = zero
             candle_low_sum = zero
             candle_close_sum = zero
+            # Open cost basis: historical cost of the held quantity, already in target currency
+            open_cost_basis = zero
+            unrealized_parts: dict[str, list[Decimal]] = {}
 
             for (asset_id, position_broker_id), qty in cumulative_qty.items():
                 if qty <= 0:
@@ -1132,6 +1145,10 @@ class DailyStateBuilder:
                     missing_fx.add(valuation.missing_fx_pair)
                 if valuation.source == ValuationSource.LAST_TRADE_PRICE:
                     implied.add(asset_id)
+                position_cost = cost_pool.get((asset_id, position_broker_id))
+                position_cost_report = position_cost.cost_report_for(qty) if position_cost is not None else zero
+                open_cost_basis += position_cost_report
+                self._add_unrealized_part(unrealized_parts, asset_id, qty, valuation.market_value, position_cost_report, position_cost, current)
 
             # 4d. In-transit values. `it_by_broker` is attributed to each interval's
             # departure-broker (cash+asset market value only — additive NAV
@@ -1139,9 +1156,6 @@ class DailyStateBuilder:
             # with the departure broker for the whole transit window.
             it_by_broker: dict[int, Decimal] = defaultdict(lambda: zero)
             it_cash, it_asset_mv, it_asset_cb = self._compute_in_transit(current, missing_fx, it_by_broker)
-
-            # 4e. Open cost basis from inline WAC pool
-            open_cost_basis = self._compute_open_cost_basis_inline(cumulative_qty, wac_pool_qty, wac_pool_cost, current, missing_fx)
 
             # 4f. Compose
             broker_nav = market_value + cumulative_cash
@@ -1225,7 +1239,7 @@ class DailyStateBuilder:
                 for (aid, bid), qty in cumulative_qty.items():
                     if qty <= 0:
                         continue
-                    ps = self._build_position_state(aid, bid, qty, current, wac_pool_qty, wac_pool_cost)
+                    ps = self._build_position_state(aid, bid, qty, current, cost_pool)
                     position_states_start.append(ps)
                 is_first_frame_day = False
 
@@ -1265,6 +1279,7 @@ class DailyStateBuilder:
                     broker_contributions=broker_contributions,
                     pnl_candle=pnl_candle,
                     acquisition_funding=acquisition_funding,
+                    unrealized_by_currency={currency: UnrealizedSplit(asset=part[0], fx=part[1], unsplit=part[2]) for currency, part in unrealized_parts.items()},
                 )
             )
             current += timedelta(days=1)
@@ -1273,7 +1288,7 @@ class DailyStateBuilder:
         for (aid, bid), qty in cumulative_qty.items():
             if qty <= 0:
                 continue
-            ps = self._build_position_state(aid, bid, qty, self.date_to, wac_pool_qty, wac_pool_cost)
+            ps = self._build_position_state(aid, bid, qty, self.date_to, cost_pool)
             position_states_end.append(ps)
 
         return PortfolioCalculationResult(
@@ -1289,8 +1304,8 @@ class DailyStateBuilder:
                 cumulative_cash=cumulative_cash,
                 cumulative_ecf=cumulative_ecf,
                 cumulative_qty=dict(cumulative_qty),
-                wac_pool_qty=dict(wac_pool_qty),
-                wac_pool_cost=dict(wac_pool_cost),
+                wac_pool_qty={key: step.quantity for key, step in cost_pool.items()},
+                wac_pool_cost={key: step.cost_report for key, step in cost_pool.items()},
                 capital_pool=dict(K),
                 returns_pool=dict(R),
                 withdrawn_pool=W,
@@ -1301,6 +1316,9 @@ class DailyStateBuilder:
             target_currency=self.target_currency,
             date_from=self.date_from,
             date_to=self.date_to,
+            average_costs=dict(self.average_costs),
+            realized_sales=realized_sales,
+            missing_fx={pair: set(dates) for pair, dates in self._missing_fx.items()},
         )
 
     # ── Helper methods ──
@@ -1311,26 +1329,25 @@ class DailyStateBuilder:
         broker_id: int,
         qty: Decimal,
         dt: date_type,
-        wac_pool_qty: dict[tuple[int, int], Decimal],
-        wac_pool_cost: dict[tuple[int, int], Decimal],
+        cost_pool: dict[tuple[int, int], CostStep],
     ) -> DailyPositionState:
         """Build a DailyPositionState for one position at a given date."""
         zero = Decimal("0")
-        key = (asset_id, broker_id)
-        pool_q = wac_pool_qty.get(key, zero)
-        wac_val = (wac_pool_cost.get(key, zero) / pool_q) if pool_q > 0 else zero
-        wac_ccy = self.asset_currencies.get(asset_id, self.target_currency)
-
-        # Cost basis in target currency
-        ocb_local = wac_val * qty
-        if wac_ccy == self.target_currency:
-            cost_basis = ocb_local
+        asset_currency = self.asset_currencies.get(asset_id, self.target_currency)
+        position_cost = cost_pool.get((asset_id, broker_id))
+        if position_cost is None:
+            cost_basis = zero
+            cost_complete = True
+            wac_val: Decimal | None = zero
+            wac_asset: Decimal | None = zero
         else:
-            rate = self.fx_rate_map.get((wac_ccy, self.target_currency, dt))
-            cost_basis = ocb_local * rate if rate else ocb_local
+            cost_basis = position_cost.cost_report_for(qty)
+            cost_complete = position_cost.report_complete
+            wac_val = position_cost.unit_cost_report if cost_complete else None
+            wac_asset = position_cost.unit_cost_asset if position_cost.asset_complete else None
 
         valuation = self._market_value_for(asset_id, qty, dt)
-        unrealized = (valuation.market_value - cost_basis) if valuation.market_value is not None else None
+        unrealized = (valuation.market_value - cost_basis) if valuation.market_value is not None and cost_complete else None
 
         return DailyPositionState(
             date=dt,
@@ -1348,10 +1365,81 @@ class DailyStateBuilder:
             missing_fx_pair=valuation.missing_fx_pair,
             market_value=valuation.market_value,
             wac=wac_val,
-            wac_currency=wac_ccy,
+            wac_currency=self.target_currency,
             cost_basis=cost_basis,
             unrealized_pnl=unrealized,
+            asset_currency=asset_currency,
+            wac_asset=wac_asset,
+            cost_complete=cost_complete,
         )
+
+    def _next_cost_step(self, key: tuple[int, int], tx: Transaction, tx_qty: Decimal) -> CostStep | None:
+        """The average-cost step of ``tx``: the next one of its position, in replay order.
+
+        build_cost_positions() feeds compute_average_costs the same transactions, in the same
+        order, that the replay visits; a mismatch is a bug, never data, so it raises.
+        """
+        if tx_qty == 0:
+            return None  # an owner's 0% share moves nothing
+        average_cost = self.average_costs.get(key)
+        index = self._cost_cursor.get(key, 0)
+        if average_cost is None or index >= len(average_cost.steps):
+            raise RuntimeError(f"no average-cost step for transaction {tx.id} of position {key}")
+        step = average_cost.steps[index]
+        if step.movement.movement_id != tx.id or step.movement.date != tx.date:
+            raise RuntimeError(f"average-cost steps out of replay order at transaction {tx.id} of position {key}")
+        self._cost_cursor[key] = index + 1
+        return step
+
+    def _realized_sale(self, ctxn: ClassifiedTransaction, tx_qty: Decimal, cost: Decimal, previous: CostStep | None) -> RealizedSale:
+        """A SELL with its proceeds converted at its date and the historical cost it took from the pool."""
+        tx = ctxn.tx
+        proceeds: Decimal | None = Decimal("0")
+        if tx.amount:
+            converted = self._convert_movement(abs(tx.amount), tx.currency or self.target_currency, tx.date)
+            proceeds = converted * ctxn.share if converted is not None else None
+        return RealizedSale(
+            transaction_id=tx.id,
+            asset_id=tx.asset_id,
+            broker_id=tx.broker_id,
+            date=tx.date,
+            quantity=abs(tx_qty),
+            proceeds=proceeds,
+            cost=cost,
+            cost_complete=previous.report_complete if previous is not None else True,
+        )
+
+    def _add_unrealized_part(
+        self,
+        parts: dict[str, list[Decimal]],
+        asset_id: int,
+        qty: Decimal,
+        market_value: Decimal | None,
+        cost_report: Decimal,
+        position_cost: CostStep | None,
+        day: date_type,
+    ) -> None:
+        """Add one position's MV − C_T to its asset currency's [asset, fx, unsplit] parts (see UnrealizedSplit)."""
+        zero = Decimal("0")
+        asset_currency = self.asset_currencies.get(asset_id, self.target_currency)
+        part = parts.setdefault(asset_currency, [zero, zero, zero])
+        value = market_value if market_value is not None else zero
+        if asset_currency == self.target_currency:
+            part[0] += value - cost_report
+            return
+        rate = self.fx_rate_map.get((asset_currency, self.target_currency, day))
+        if position_cost is None:
+            cost_asset: Decimal | None = zero
+            complete = True
+        else:
+            cost_asset = position_cost.cost_asset_for(qty)
+            complete = position_cost.report_complete and position_cost.asset_complete
+        if market_value is None or rate is None or cost_asset is None or not complete:
+            part[2] += value - cost_report
+            return
+        cost_at_today_rate = cost_asset * rate
+        part[0] += market_value - cost_at_today_rate
+        part[1] += cost_at_today_rate - cost_report
 
     def _convert(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
         """Convert amount from from_ccy to target_currency using pre-loaded FX map."""
@@ -1361,6 +1449,13 @@ class DailyStateBuilder:
         if rate is None:
             return None
         return amount * rate
+
+    def _convert_movement(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
+        """Convert a movement's amount at its own date; a missing rate is recorded with that date."""
+        converted = self._convert(amount, from_ccy, dt)
+        if converted is None:
+            self._missing_fx[f"{from_ccy}/{self.target_currency}"].add(dt)
+        return converted
 
     def _market_value_for(
         self,
@@ -1507,11 +1602,11 @@ class DailyStateBuilder:
                     if qty > 0:
                         has_authoritative_cost = interval.cost_basis_amount is not None and interval.cost_basis_currency is not None
                         if has_authoritative_cost:
-                            authoritative_cost_value = self._convert(interval.cost_basis_amount * qty, interval.cost_basis_currency, dt)
+                            # Historical cost: converted at the arrival date, as the destination
+                            # pool books it, not re-converted every day of the transit.
+                            authoritative_cost_value = self._convert_movement(interval.cost_basis_amount * qty, interval.cost_basis_currency, interval.arrival_leg.date)
                             if authoritative_cost_value is not None:
                                 it_asset_cb += authoritative_cost_value * interval.share
-                            else:
-                                missing_fx.add(f"{interval.cost_basis_currency}/{self.target_currency}")
 
                         valuation = self._market_value_for(interval.asset_id, qty, dt)
                         if valuation.market_value is not None:
@@ -1529,41 +1624,6 @@ class DailyStateBuilder:
 
         return it_cash, it_asset_mv, it_asset_cb
 
-    def _compute_open_cost_basis_inline(
-        self,
-        cumulative_qty: dict[tuple[int, int], Decimal],
-        wac_pool_qty: dict[tuple[int, int], Decimal],
-        wac_pool_cost: dict[tuple[int, int], Decimal],
-        dt: date_type,
-        missing_fx: set[str],
-    ) -> Decimal:
-        """Compute open cost basis from inline WAC pool.
-
-        For each position with qty > 0: cost_basis = wac * qty, converted to target_currency.
-        WAC is in asset_currency; conversion uses daily FX rate.
-        """
-        total = Decimal("0")
-        for (asset_id, broker_id), qty in cumulative_qty.items():
-            if qty <= 0:
-                continue
-            key = (asset_id, broker_id)
-            pool_q = wac_pool_qty.get(key, Decimal("0"))
-            pool_c = wac_pool_cost.get(key, Decimal("0"))
-            if pool_q <= 0:
-                continue
-            wac_val = pool_c / pool_q
-            wac_ccy = self.asset_currencies.get(asset_id, self.target_currency)
-            ocb_in_wac_ccy = wac_val * qty
-            if wac_ccy == self.target_currency:
-                total += ocb_in_wac_ccy
-            else:
-                rate = self.fx_rate_map.get((wac_ccy, self.target_currency, dt))
-                if rate is not None:
-                    total += ocb_in_wac_ccy * rate
-                else:
-                    missing_fx.add(f"{wac_ccy}/{self.target_currency}")
-        return total
-
     def _is_capital_adjustment(self, tx: Transaction) -> bool:
         """True when a transaction is a priced in-kind ADJUSTMENT (a capital event).
 
@@ -1579,95 +1639,6 @@ class DailyStateBuilder:
         over a new quantity, it neither adds nor removes economic capital.
         """
         return tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity is not None and tx.quantity != 0 and (tx.id is None or tx.id not in self.split_linked_tx_ids)
-
-    def _capital_flow_for_adjustment_in(self, tx: Transaction, tx_qty: Decimal, unit_cost_asset_ccy: Decimal) -> Decimal | None:
-        """Target-currency capital contributed by a priced in-kind ADJUSTMENT-in (qty>0).
-
-        Equals the WAC cost injected into the pool (per-unit cost in the asset
-        currency × share-adjusted quantity), converted to the target currency at the
-        transaction date. Returns None if the FX rate is unavailable.
-        """
-        asset_ccy = self.asset_currencies.get(tx.asset_id, self.target_currency)
-        return self._convert(unit_cost_asset_ccy * tx_qty, asset_ccy, tx.date)
-
-    def _buy_unit_cost(self, tx: Transaction) -> Decimal | None:
-        """Compute unit cost for a BUY/acquisition transaction in the asset's native currency.
-
-        Returns unit_cost in asset_currency, or None if cost cannot be determined.
-        Handles FX conversion from tx.currency to asset_currency via fx_rate_map.
-        """
-        asset_id = tx.asset_id
-        if asset_id is None:
-            return None
-
-        qty = abs(tx.quantity) if tx.quantity else Decimal("0")
-        if qty == 0:
-            return None
-
-        asset_ccy = self.asset_currencies.get(asset_id, self.target_currency)
-
-        # For BUY: cost = |amount| in tx.currency
-        # For TRANSFER-in: cost = cost_basis_override in cost_basis_currency
-        if tx.type == TransactionType.BUY:
-            if tx.amount is None or tx.amount == 0:
-                return Decimal("0")
-            total_cost = abs(tx.amount)
-            cost_ccy = tx.currency or asset_ccy
-        elif tx.cost_basis_override is not None:
-            # TRANSFER with cost_basis_override
-            total_cost = tx.cost_basis_override * qty
-            cost_ccy = tx.cost_basis_currency or asset_ccy
-        else:
-            # No cost info (e.g., TRANSFER without CBO) → None (add at current WAC)
-            return None
-
-        # Convert total_cost from cost_ccy to asset_ccy
-        if cost_ccy == asset_ccy:
-            return total_cost / qty
-
-        # Need FX: cost_ccy → asset_ccy
-        # Strategy: use fx(cost_ccy → target) / fx(asset_ccy → target) if asset_ccy != target
-        #           or fx(cost_ccy → target) directly if asset_ccy == target
-        if asset_ccy == self.target_currency:
-            rate = self.fx_rate_map.get((cost_ccy, self.target_currency, tx.date))
-            if rate is not None:
-                return (total_cost * rate) / qty
-        else:
-            rate_cost_to_target = self.fx_rate_map.get((cost_ccy, self.target_currency, tx.date))
-            rate_asset_to_target = self.fx_rate_map.get((asset_ccy, self.target_currency, tx.date))
-            if rate_cost_to_target is not None and rate_asset_to_target is not None and rate_asset_to_target != 0:
-                cross_rate = rate_cost_to_target / rate_asset_to_target
-                return (total_cost * cross_rate) / qty
-
-        # Cannot convert — return None (will be treated as add-at-current-WAC)
-        return None
-
-    @staticmethod
-    def _apply_split_rescale(
-        key: tuple[int, int],
-        tx_qty: Decimal,
-        wac_pool_qty: dict[tuple[int, int], Decimal],
-        wac_pool_cost: dict[tuple[int, int], Decimal],
-        zero: Decimal,
-    ) -> None:
-        """Apply a SPLIT-linked quantity change to the WAC pool by rescaling, not add/reduce.
-
-        A split (forward or reverse) never adds or removes economic cost — it only
-        redistributes the existing total cost over a different unit count. Unlike a
-        BUY (cost added) or SELL (cost removed proportionally at current WAC), the
-        pool's total cost is left UNCHANGED here; only quantity moves. This preserves
-        the cost invariant q*wac = const from plan v2 §8.2 for both forward
-        (tx_qty > 0) and reverse (tx_qty < 0) splits alike — e.g. 15@100 -> +15 ->
-        30@50 (cost 1500 both sides), or 30@50 -> -15 -> 15@100 (cost 1500 both sides).
-        Mutates wac_pool_qty/wac_pool_cost in place.
-        """
-        new_qty = wac_pool_qty[key] + tx_qty
-        if new_qty > zero:
-            wac_pool_qty[key] = new_qty
-            # wac_pool_cost[key] intentionally untouched: total cost is split-invariant.
-        else:
-            wac_pool_qty[key] = zero
-            wac_pool_cost[key] = zero
 
     def _distribute_allocation(
         self,
@@ -1727,8 +1698,8 @@ class EngineEndState:
     cumulative_cash: Decimal
     cumulative_ecf: Decimal
     cumulative_qty: dict[tuple[int, int], Decimal]
-    wac_pool_qty: dict[tuple[int, int], Decimal]
-    wac_pool_cost: dict[tuple[int, int], Decimal]
+    wac_pool_qty: dict[tuple[int, int], Decimal]  # average-cost pool quantity
+    wac_pool_cost: dict[tuple[int, int], Decimal]  # average-cost pool cost, historical, in target currency
     capital_pool: dict[int, Decimal]  # K per broker
     returns_pool: dict[int, Decimal]  # R per broker
     withdrawn_pool: Decimal  # W global
@@ -1759,6 +1730,42 @@ class PortfolioCalculationResult:
     target_currency: str = "EUR"
     date_from: date_type = field(default_factory=date_type.today)
     date_to: date_type = field(default_factory=date_type.today)
+    # Average cost of every (asset_id, broker_id) position replayed (financial_math.average_cost)
+    average_costs: dict[tuple[int, int], AverageCost] = field(default_factory=dict)
+    # SELLs replayed, in replay order, with proceeds and historical cost in target_currency
+    realized_sales: list[RealizedSale] = field(default_factory=list)
+    # Conversions a movement (cost, cash, external flow, in-transit cost) needed and could not
+    # get: pair "FROM/TO" -> dates. Valuation failures are per day in DailyPortfolioState.missing_fx_pairs.
+    missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
+
+
+def build_cost_positions(
+    classified_txs: list[ClassifiedTransaction],
+    asset_currencies: Mapping[int, str],
+    target_currency: str,
+    split_linked_tx_ids: set[int],
+    date_to: date_type | None = None,
+) -> list[CostPosition]:
+    """The average-cost positions of the replay: one per (asset_id, broker_id).
+
+    Movements are the classified transactions that move quantity, scaled by the owner's
+    share, in the order DailyStateBuilder replays them (classification order, which is
+    date then id); transactions after ``date_to`` are left out.
+    """
+    movements: dict[tuple[int, int], list[CostMovement]] = defaultdict(list)
+    for ctxn in classified_txs:
+        tx = ctxn.tx
+        if tx.asset_id is None or (date_to is not None and tx.date > date_to):
+            continue
+        movement = cost_movement_from_transaction(
+            tx,
+            asset_currency=asset_currencies.get(tx.asset_id, target_currency),
+            split_linked=tx.id in split_linked_tx_ids,
+            share=ctxn.share,
+        )
+        if movement is not None:
+            movements[(tx.asset_id, tx.broker_id)].append(movement)
+    return [CostPosition(key=key, asset_currency=asset_currencies.get(key[0], target_currency), movements=tuple(items)) for key, items in movements.items()]
 
 
 # =============================================================================
@@ -1963,6 +1970,7 @@ class DerivedViewsBuilder:
         stale_prices_dto: list | None = None,
         missing_fx_pairs_dto: list | None = None,
         transaction_implied_assets_dto: list | None = None,
+        missing_cost_basis_assets: list[tuple[int, str]] | None = None,
         classifier_warnings: list[str] | None = None,
         mwrr_available: bool = True,
         configured_fx_pairs: set[str] | None = None,
@@ -1975,6 +1983,9 @@ class DerivedViewsBuilder:
         missing_price_assets_dto / stale_prices_dto / missing_fx_pairs_dto are
         pre-built DTO lists (caller constructs them with full asset/broker info).
         transaction_implied_assets_dto: assets valued at cost (no market price but WAC present).
+        missing_cost_basis_assets: (asset_id, name) of the assets with an acquisition whose cost
+        is not known (a TRANSFER or ADJUSTMENT adding quantity without cost_basis_override): it
+        counts at zero cost, so their purchase cost and P&L are incomplete.
         If None, the report still populates date-level fields.
 
         period_from / period_to bound the window the caller is actually showing.
@@ -2055,6 +2066,24 @@ class DerivedViewsBuilder:
                     cta_action="sync_asset_prices",
                     cta_target=str(stale_prices_dto[0].asset_id),
                     group_key="stale_price",
+                )
+            )
+
+        # MISSING_COST_BASIS — warning: an acquisition without a known cost counts at zero
+        if missing_cost_basis_assets:
+            issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.MISSING_COST_BASIS,
+                    severity=IssueSeverity.WARNING,
+                    message_i18n_key="dataQuality.missingCostBasis",
+                    message_params={"count": len(missing_cost_basis_assets)},
+                    count=len(missing_cost_basis_assets),
+                    affected_asset_ids=[asset_id for asset_id, _ in missing_cost_basis_assets],
+                    affected_asset_names=[name for _, name in missing_cost_basis_assets],
+                    cta_action="navigate_asset",
+                    cta_target=str(missing_cost_basis_assets[0][0]),
+                    group_key="missing_cost_basis",
                 )
             )
 
@@ -2266,6 +2295,23 @@ async def compute_portfolio_fx_cache_identity(
     return hashlib.sha256(serialized.encode()).hexdigest()
 
 
+async def load_configured_fx_pair_sets(db) -> tuple[set[str], set[str]]:
+    """Slugs ("AAA-BBB", alphabetical) of the configured FX pairs, and of those served by a real provider.
+
+    A pair whose route only goes through the MANUAL sentinel is configured but has no provider
+    to sync from; build_data_quality_report uses both sets to pick each missing pair's issue.
+    """
+    routes = (await db.execute(select(FxConversionRoute))).scalars().all()
+    configured_pairs: set[str] = set()
+    real_provider_pairs: set[str] = set()
+    for route in routes:
+        slug = _normalize_fx_pair_slug(f"{route.base}/{route.quote}")
+        configured_pairs.add(slug)
+        if any(str(step.get("provider", "")).strip().upper() != "MANUAL" for step in route.parsed_steps):
+            real_provider_pairs.add(slug)
+    return configured_pairs, real_provider_pairs
+
+
 class PortfolioCalculationEngine:
     """Async orchestrator that loads data from DB and runs the calculation pipeline.
 
@@ -2291,8 +2337,9 @@ class PortfolioCalculationEngine:
     ) -> PortfolioCalculationResult:
         """Run the full portfolio calculation pipeline.
 
-        WAC is computed inline during the daily state build — no separate
-        compute_wac_iterative calls needed (eliminates N×M DB round-trips).
+        The cost of every position comes from one compute_average_costs call for the whole
+        scope (financial_math.average_cost) — historical cost in the target currency, each
+        acquisition converted at its own date — that the daily replay then follows.
 
         ``include_candles`` (G1b, default False) additionally resolves each held asset's
         daily OHLC and composes the synthetic total-P&L candle (plan §4.3) — kept opt-in
@@ -2348,7 +2395,7 @@ class PortfolioCalculationEngine:
             )
 
         # ── 3b. Load ADJUSTMENT rows linked to unique SPLIT AssetEvents ──
-        # These bypass the normal BUY/SELL WAC pool math in DailyStateBuilder: a split
+        # A split rescales the average-cost pool instead of adding or reducing it: it
         # redistributes existing cost over a new quantity, it never adds/removes cost.
         split_event_tx_ids = {tx.id for tx in all_txs if tx.id is not None and tx.asset_event_id is not None}
         split_linked_tx_ids: set[int] = set()
@@ -2463,7 +2510,7 @@ class PortfolioCalculationEngine:
             for a in assets_list:
                 quote_base_map[a.id] = a.quote_base_quantity
 
-        # ── 8. Build asset_currencies map (replaces N×M WAC pre-load) ──
+        # ── 8. Build asset_currencies map ──
         asset_currencies: dict[int, str] = {}
         for a in assets_list:
             asset_currencies[a.id] = a.currency or target_currency
@@ -2491,6 +2538,14 @@ class PortfolioCalculationEngine:
             target_currency,
             actual_from,
             actual_to,
+        )
+
+        # ── 10a. Average cost of every position: historical cost in target currency (and in the
+        # asset currency, for the unrealized split), each acquisition converted at its own date ──
+        average_costs = await compute_average_costs(
+            self.db,
+            build_cost_positions(classification.classified, asset_currencies, target_currency, split_linked_tx_ids, date_to=actual_to),
+            report_currency=target_currency,
         )
 
         # ── 10b. Unified price-resolver series per held asset — the single valuation brain ──
@@ -2528,6 +2583,7 @@ class PortfolioCalculationEngine:
             asset_classifications=asset_classifications,
             asset_types=asset_types,
             asset_currencies=asset_currencies,
+            average_costs=average_costs,
             target_currency=target_currency,
             date_from=actual_from,
             date_to=actual_to,
@@ -2587,8 +2643,10 @@ class PortfolioCalculationEngine:
         - Transaction amounts → target_currency (all tx dates)
         - External cash flows → target_currency
         - Price currencies → target_currency (every day in range)
-        - Asset currencies (for inline WAC + resolver marks) → target_currency (every day in range + BUY dates)
-        - In-transit currencies → target_currency
+        - Asset currencies (resolver marks, unrealized split) → target_currency (every day in range)
+        - In-transit cash → target_currency (every day of the transit); in-transit cost → at arrival
+
+        Cost conversions are not here: compute_average_costs makes its own, at each movement's date.
         """
         # Collect all (from_ccy, date) pairs needed
         fx_needs: set[tuple[str, date_type]] = set()
@@ -2611,7 +2669,7 @@ class PortfolioCalculationEngine:
                 if ccy != target_currency:
                     price_currencies.add(ccy)
 
-        # From asset currencies (for inline WAC cost_basis evaluation daily + resolver marks)
+        # From asset currencies (resolver marks + unrealized split, every day in range)
         asset_ccys_non_target: set[str] = set()
         for ccy in asset_currencies.values():
             if ccy != target_currency:
@@ -2626,16 +2684,7 @@ class PortfolioCalculationEngine:
                     fx_needs.add((ccy, current))
                 current += timedelta(days=1)
 
-        # For inline WAC: also need asset currency rates at BUY dates (pre-frame)
-        # so that cross-rate fx(tx_ccy → asset_ccy) can be computed
-        for ctxn in classified_txs:
-            tx = ctxn.tx
-            if tx.quantity and tx.quantity > 0 and tx.asset_id:
-                asset_ccy = asset_currencies.get(tx.asset_id, target_currency)
-                if asset_ccy != target_currency:
-                    fx_needs.add((asset_ccy, tx.date))
-
-        # From in-transit intervals
+        # From in-transit intervals: cash every day of the transit, cost at the arrival date
         for interval in in_transit_intervals:
             dep = interval.departure_leg
             if interval.tx_type == "cash" and dep.currency and dep.currency != target_currency:
@@ -2644,10 +2693,7 @@ class PortfolioCalculationEngine:
                     fx_needs.add((dep.currency, current))
                     current += timedelta(days=1)
             if interval.cost_basis_currency and interval.cost_basis_currency != target_currency:
-                current = interval.start_date
-                while current <= interval.end_date:
-                    fx_needs.add((interval.cost_basis_currency, current))
-                    current += timedelta(days=1)
+                fx_needs.add((interval.cost_basis_currency, interval.arrival_leg.date))
 
         if not fx_needs:
             return {}

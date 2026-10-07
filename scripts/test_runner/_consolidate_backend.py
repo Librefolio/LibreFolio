@@ -111,7 +111,9 @@ def _junit_results(report: Path, known: list) -> dict:
     except (OSError, ET.ParseError):
         return {}
 
-    # Units can be directories, which own every module underneath them.
+    # Units can be directories, which own every module underneath them — across a "/" only, so
+    # test_financial/ does not own test_financial_math/ — and the deepest owner wins over its
+    # parents. Without the boundary the verdict depended on the (sorted) order of the units.
     dirs = [k for k in known if k.endswith("/")]
     outcome: dict = {}
     for case in root.iter("testcase"):
@@ -127,8 +129,8 @@ def _junit_results(report: Path, known: list) -> dict:
                 break
             walk = walk[:-1]
         if module is None:
-            dotted = "/".join(parts)
-            module = next((d for d in dirs if dotted.startswith(d.rstrip("/"))), None)
+            dotted = "/".join(parts) + "/"
+            module = max((d for d in dirs if dotted.startswith(d)), key=len, default=None)
         if module is None:
             continue
         # error/failure children mark a red; skipped is not one.

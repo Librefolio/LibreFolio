@@ -6,7 +6,7 @@
 
     `FifoLotEngine` answers **lot-level lifecycle** questions: FIFO matching, realized P&L per lot, custody fragments, transfer transit, split-adjusted quantities, and lot history for charts/modals.
 
-    `portfolio_service.compute_wac_iterative()` plus `utils/financial/wac_utils.py` answer **position-level cost basis** questions: one running WAC per `(broker, asset)` scope, suitable for transaction validation and broker summaries.
+    `portfolio_service.compute_wac_iterative()` plus `services/financial_math/average_cost.py` answer **position-level cost basis** questions: one running WAC per `(broker, asset)` scope, suitable for transaction validation and broker summaries.
 
 ---
 
