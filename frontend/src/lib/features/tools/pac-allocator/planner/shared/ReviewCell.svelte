@@ -17,7 +17,7 @@
     import {CircleAlert, CircleCheck, PiggyBank} from 'lucide-svelte';
     import {locale, t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain} from '../format';
+    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
     import {STEP_FALLBACKS, stepKey} from '../labels';
     import {factOriginState} from '../review';
     import {ICON_BUBBLE} from '../ui';
@@ -89,7 +89,7 @@
         {:else if value.kind === 'price'}
             {$t(`${KEY}.price`, {
                 default: '{price} / {units} {count, plural, one {unit} other {units}}',
-                values: {price: formatPlannerPricePlain(value.amount, value.currency), units: formatPlannerPlainDecimal(value.units), count: Number(value.units) || 0},
+                values: {price: formatPlannerPricePlain(value.amount, value.currency), units: formatPlannerPlainDecimal(value.units), count: plannerPlainDecimalCount(value.units)},
             })}
         {:else if value.kind === 'rate'}
             {formatPlannerFxRate(value.rate)}
