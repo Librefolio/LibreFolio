@@ -2166,3 +2166,13 @@ fixes are filed with their gates; the catalogue went from 4 356 to 4 186 keys pe
 Filed: [[problems/i18n-audit-false-dead-and-false-used]], [[problems/svelte-i18n-formatter-cache-ignores-locale]].
 Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
 worktree.
+
+## [2026-10-07] update | Workstream O — the i18n audit, second pass on the release tip
+On `d07412899` (dashboard and risk work merged) the audit still read 78 live keys as «not verified» and let a
+component nobody imported prove five keys. Five rules closed that: one import hop for narrow families, reachability
+from the SvelteKit entries (keys only unreferenced sources keep alive are listed under 📦), generated API clients
+out of the walk, backend codes in any spelling or starting with a digit, and multi-slot template shapes. Result:
+0 dead and 3 not verified, all live; a fourth (`onboarding.settings.groups.contextual`) only a per-key check
+proved dead, and it was removed with the batch.
+Updated: [[problems/i18n-audit-false-dead-and-false-used]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.

@@ -190,8 +190,13 @@ def _plugin_discovery_failures(system: str, registry) -> list[PluginDiscoveryFai
 
 
 @router.get("/plugin-diagnostics", response_model=PluginDiagnosticsResponse)
-def get_plugin_diagnostics() -> PluginDiagnosticsResponse:
-    """Return plugin discovery import failures for all plugin registries."""
+def get_plugin_diagnostics(
+    _current_user: Annotated[User, Depends(get_current_user)],
+) -> PluginDiagnosticsResponse:
+    """Return plugin discovery import failures for all plugin registries.
+
+    Requires a session: the failures carry exception text that can name internal paths.
+    """
     return PluginDiagnosticsResponse(
         [
             *_plugin_discovery_failures("asset", AssetProviderRegistry),
