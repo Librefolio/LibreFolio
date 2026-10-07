@@ -16,7 +16,7 @@
     import {draftAssetFromInfo, domainAssetKey, setPriceManual} from '../copies';
     import {compareDecimal} from '../decimal';
     import {EXPOSURE_DIMENSIONS, type DraftAsset, type DraftExposure, type ExposureDimension, type PlannerDraft, type RemovalImpact} from '../draft.svelte';
-    import {formatPlannerDate, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain} from '../format';
+    import {formatPlannerDate, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
     import {DIMENSION_FALLBACKS} from '../labels';
     import {BADGE, BUTTON_DANGER, BUTTON_LINK, BUTTON_SECONDARY, HINT, INPUT, NOTICE} from '../ui';
     import AutoManualToggle from '../shared/AutoManualToggle.svelte';
@@ -122,7 +122,7 @@
     }
 
     function unitsText(price: NonNullable<DraftAsset['price']>): string {
-        return $t(`${KEY}.perUnits`, {default: '/ {units} {count, plural, one {unit} other {units}}', values: {units: formatPlannerPlainDecimal(price.quoteBaseQuantity), count: Number(price.quoteBaseQuantity)}});
+        return $t(`${KEY}.perUnits`, {default: '/ {units} {count, plural, one {unit} other {units}}', values: {units: formatPlannerPlainDecimal(price.quoteBaseQuantity), count: plannerPlainDecimalCount(price.quoteBaseQuantity)}});
     }
 
     /** Manual starts from the price on screen; without one, in the currency LibreFolio prices the Asset in. */
@@ -244,7 +244,7 @@
                                     <span class="tabular-nums text-gray-900 dark:text-gray-100">
                                         {$t(`${KEY}.priceLine`, {
                                             default: '{price} / {units} {count, plural, one {unit} other {units}}',
-                                            values: {price: formatPlannerPricePlain(asset.price.amount, asset.price.currency), units: formatPlannerPlainDecimal(asset.price.quoteBaseQuantity), count: Number(asset.price.quoteBaseQuantity)},
+                                            values: {price: formatPlannerPricePlain(asset.price.amount, asset.price.currency), units: formatPlannerPlainDecimal(asset.price.quoteBaseQuantity), count: plannerPlainDecimalCount(asset.price.quoteBaseQuantity)},
                                         })}
                                     </span>
                                     {#if asset.priceStamp}
