@@ -5,6 +5,7 @@ import {expectChartCanvas} from '../fixtures/charts';
 import {t as catalogueText} from '../fixtures/i18n-data';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage} from '../assets/assets-helpers';
+import {schemas} from '../../src/lib/api/generated';
 
 type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'; broker_ids?: number[] | null};
 
@@ -184,6 +185,54 @@ interface RiskMockOptions {
      * payload of every other test.
      */
     holdingRelatives?: boolean;
+    /**
+     * The verdicts of the stub's eligibility engine, `POST /risk/eligibility`, by asset id (D378).
+     *
+     * Since D378 the L3 picker asks the engine itself, with the page's period and currency, which
+     * benchmarks can be measured there: one it rules out is listed apart, read-only, and a stored
+     * choice it rules out is `blocked` and never measured. Left to the lane, the question reached the
+     * real engine, whose verdicts follow the seed's prices and today's date: on 06/10/2026 it ruled
+     * out the benchmark `openWithUnheldBenchmark` stores (`too_few_quotes`), and four tests waited for
+     * that benchmark's row behind a comparison the page rightly never asked.
+     *
+     * So `installRiskMocks` answers every eligibility question, and by default it admits every asset
+     * asked about, with no reasons: what the Dashboard's picker had before D378, when it never asked
+     * and everything was selectable. Every test that names no verdict is unmoved by D378. An id listed
+     * here gets its own verdict instead. The map is read when each question arrives, so a test may rule
+     * an asset out between two questions — before moving the period, say — and leave the answer
+     * already given as it was.
+     *
+     * The answer passes the generated `RiskEligibilityResponse` schema before it leaves, as
+     * `risk-lab.spec.ts`'s `answerEligibility` does. The client validates every response, so a stub
+     * drifted from the contract would otherwise reach the picker as `failed` — which locks nothing, and
+     * every test on the default would stay green over it. Parsed in the stub, the drift throws in the
+     * route handler instead: Playwright takes the throw as an unhandled error of the running test,
+     * which fails at once with the schema's `ZodError` as its first error, pointing at the stub's parse.
+     */
+    eligibilityVerdicts?: Record<number, {level: 'eligible' | 'warning' | 'ineligible'; reasons: ReadonlyArray<'no_price_history' | 'no_prices' | 'too_few_quotes' | 'missing_fx' | 'starts_late' | 'stale_at_end'>}>;
+    /**
+     * Answers every eligibility question with a 500, the way an engine that failed does. D378's fourth
+     * decision: a failed question locks nothing, so the picker reads `failed`, its choice `set`, and
+     * the comparison is asked. Opt-in.
+     */
+    eligibilityFails?: boolean;
+    /**
+     * Holds every eligibility answer until this settles, so a test can read the picker while its
+     * question is at the engine (`pending`); questions asked after it settles are answered at once.
+     * Release it in `finally`: an answer still held when the page closes is dropped, never sent.
+     */
+    eligibilityGate?: Promise<unknown>;
+    /**
+     * Where each eligibility question is kept, as the page asked it — ids deduplicated, in the order
+     * asked — and when it was asked and answered.
+     *
+     * `askedAt` and `answeredAt` are read on the clock of the risk queries: the length of the log
+     * `installRiskMocks` returns, when the question arrived and when its answer left (`null` while it
+     * is held). A risk query at index `i` of that log therefore left after the answer exactly when
+     * `i >= answeredAt` — one ordering for both endpoints, so "the comparison waited for the verdict"
+     * is read off the log and never inferred from two timelines.
+     */
+    eligibilityCalls?: Array<{assetIds: number[]; dateRange: {start: string; end: string | null}; targetCurrency: string; askedAt: number; answeredAt: number | null}>;
 }
 
 /**
@@ -1084,14 +1133,15 @@ function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOp
  * the shared test database — measured on the test lane on 05/10/2026: one full run
  * of this file made real provider calls (eight live quotes, JustETF's live feeds,
  * two scraped pages) and wrote today's prices twice. And `zodios-client`'s
- * response interceptor calls `notifyPortfolioMutation`, which drops the report
- * and risk caches and discards every answer still in flight: a background actor
- * these tests do not control, racing the very requests they measure.
+ * response interceptor calls `notifyPortfolioMutation`, which marks every cached
+ * report and risk answer stale. Since the page cache (decision E1) a mark discards
+ * nothing in flight, but each answer it marks is asked again on its next read:
+ * refreshes these tests do not control, racing the very requests they measure.
  *
  * Held, never answered, because nothing else is inert: a stubbed answer, even an
- * empty one, still passes through that interceptor and still invalidates. An
- * unanswered call does nothing at all. Each poller awaits it and, after axios's
- * 30 s timeout, catches the error — silently on Asset Detail, with one
+ * empty one, still passes through that interceptor and still marks the caches
+ * stale. An unanswered call does nothing at all. Each poller awaits it and, after
+ * axios's 30 s timeout, catches the error — silently on Asset Detail, with one
  * non-critical warning on `/assets` — and none of them feeds `data-busy`, so the
  * `data-busy="false"` that `goToAssetsPage` waits for still arrives. The handler
  * calls no route method, so nothing can throw when the context closes.
@@ -1100,8 +1150,8 @@ function withInjectedStatus(result: Record<string, unknown>, options: RiskMockOp
  * and Broker Detail never poll, so for the tests that stay there it is inert.
  *
  * ⚠️ This isolates the tests; it repairs nothing. Outside this file the poll still
- * reaches the providers, writes on every visit and invalidates whatever is in
- * flight. All this does is stop these tests from depending on a race nobody
+ * reaches the providers, writes on every visit and marks every cached answer
+ * stale. All this does is stop these tests from depending on a race nobody
  * controls: a test that turns green only behind it was losing a race the product
  * still runs.
  */
@@ -1188,6 +1238,42 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
                 items: request.analytics.map((analytic) => withInjectedWarnings(withInjectedError(withInjectedStatus(resultFor(request, analytic, options), options), options), options)),
             }),
         });
+    });
+
+    // The picker's own question since D378 (`eligibilityVerdicts` says why it is answered here). Every
+    // asked id gets a verdict, deduplicated and in request order, as the engine answers, and the answer
+    // passes the generated schema before it leaves.
+    type EligibilityVerdict = NonNullable<RiskMockOptions['eligibilityVerdicts']>[number];
+    const admitted: EligibilityVerdict = {level: 'eligible', reasons: []};
+    await page.route('**/api/v1/risk/eligibility', async (route) => {
+        const sent = (route.request().postDataJSON() ?? {}) as {asset_ids?: number[]; date_range?: {start?: string; end?: string | null}; target_currency?: string};
+        const assetIds = [...new Set(sent.asset_ids ?? [])];
+        const start = sent.date_range?.start ?? '';
+        const end = sent.date_range?.end ?? null;
+        const call = {assetIds, dateRange: {start, end}, targetCurrency: sent.target_currency ?? '', askedAt: requests.length, answeredAt: null as number | null};
+        options.eligibilityCalls?.push(call);
+        if (options.eligibilityGate) await options.eligibilityGate;
+
+        const body = options.eligibilityFails
+            ? {detail: 'E2E eligibility failure'}
+            : schemas.RiskEligibilityResponse.parse({
+                  items: assetIds.map((assetId) => {
+                      const verdict = options.eligibilityVerdicts?.[assetId] ?? admitted;
+                      // Never quoted, or not once in the period: no first or last quote to report either.
+                      const quoted = !verdict.reasons.some((reason) => reason === 'no_prices' || reason === 'no_price_history');
+                      // Too few quotes is fewer than the engine needs; every other verdict has plenty.
+                      const quotes = !quoted ? 0 : verdict.reasons.includes('too_few_quotes') ? 3 : 60;
+                      return {asset_id: assetId, level: verdict.level, reasons: [...verdict.reasons], first_quote: quoted ? start : null, last_quote: quoted ? (end ?? start) : null, quotes_in_period: quotes};
+                  }),
+                  // The engine's thresholds, `RISK_MIN_OBSERVATIONS` and `STALE_PRICE_THRESHOLD_DAYS`, as
+                  // `risk-lab.spec.ts` copies them: the picker quotes them in its sentences, nothing reads them here.
+                  min_quotes: 20,
+                  stale_days: 7,
+              });
+        // Stamped as the answer leaves, with nothing awaited in between: no risk query can land between the two.
+        call.answeredAt = requests.length;
+        // A held answer released after the page closed has nowhere to go: dropped, never thrown at the next test.
+        await route.fulfill({status: options.eligibilityFails ? 500 : 200, contentType: 'application/json', body: JSON.stringify(body)}).catch(() => undefined);
     });
 
     return requests;
@@ -1415,14 +1501,62 @@ async function clearRiskBenchmark(page: Page): Promise<void> {
         .catch(() => undefined);
 }
 
-/** Every `comparison_asset_id` put on the wire by portfolio requests for one broker scope. */
-function comparisonAssetIds(requests: RiskRequest[], brokerIds: number[]): number[] {
-    const wanted = brokerIds.join(',');
+/**
+ * The broker sets one page's portfolio requests may be asked over: a single one for a
+ * page whose scope is fixed (Broker Detail's `[[brokerId]]`), every reading of the owned
+ * set for the Dashboard's (`ownedBrokerIds`).
+ */
+type BrokerSets = readonly (readonly number[])[];
+
+/**
+ * A portfolio request over exactly one of `brokerSets`, each compared as a set: both
+ * sides sorted, so the order either lists them in is not the question. Never over an
+ * empty set: no page asks one, and to the backend a missing or empty `broker_ids` is
+ * "every broker the user can access" — the question the Dashboard no longer asks (R2/N)
+ * — so an owned set read empty cannot let it pass for the Dashboard's.
+ */
+function portfolioOver(request: RiskRequest, brokerSets: BrokerSets): boolean {
+    if (request.scope.kind !== 'portfolio') return false;
+    const sorted = (ids: readonly number[]) => [...ids].sort((left, right) => left - right).join(',');
+    const asked = sorted(request.scope.broker_ids ?? []);
+    return brokerSets.some((ids) => ids.length > 0 && sorted(ids) === asked);
+}
+
+/** Every `comparison_asset_id` put on the wire by portfolio requests over one of `brokerSets` (`portfolioOver`). */
+function comparisonAssetIds(requests: RiskRequest[], brokerSets: BrokerSets): number[] {
     return requests
-        .filter((request) => request.scope.kind === 'portfolio' && (request.scope.broker_ids ?? []).join(',') === wanted)
+        .filter((request) => portfolioOver(request, brokerSets))
         .flatMap((request) => request.analytics)
         .filter((analytic) => analytic.analytic_code === 'comparison')
         .map((analytic) => Number(analytic.parameters?.comparison_asset_id));
+}
+
+/**
+ * The brokers this user owns, ascending: OWNER, with a share unset or above zero, as
+ * `getOwnedBrokers()` keeps them. Since R2/N the Dashboard asks its risk over every one of
+ * them, whatever its broker filter — the scope that tells its requests apart from Broker
+ * Detail's — and `heldBenchmarkCandidate` walks them.
+ *
+ * Read from the backend through `page.request`, which no route of `installRiskMocks`
+ * intercepts, and never hard-coded. The Dashboard's tests read it twice, just before the
+ * page loads and once it has settled, and accept a request over either reading
+ * (`portfolioOver`): a neighbour may create or delete a broker of this user while the page
+ * reads its own (`dashboard-broker-filter-label.spec.ts`, in this category, creates one),
+ * and that moves only which of the two the page saw.
+ */
+async function ownedBrokerIds(page: Page): Promise<number[]> {
+    const response = await page.request.get('/api/v1/brokers');
+    expect(response.ok(), 'the brokers this user can see must be listable').toBe(true);
+    const brokers = ((await response.json()) as {items?: Array<{id: number; user_role?: string | null; user_share_percentage?: string | number | null}>}).items ?? [];
+    return brokers
+        .filter((broker) => broker.user_role === 'OWNER' && (broker.user_share_percentage == null || parseFloat(String(broker.user_share_percentage)) > 0))
+        .map((broker) => broker.id)
+        .sort((left, right) => left - right);
+}
+
+/** Owned-set readings as a message names them: `[3, 4]`, or `[3, 4] or [3, 4, 9]` when a neighbour moved the set in between. */
+function readingsText(brokerSets: BrokerSets): string {
+    return brokerSets.map((ids) => `[${ids.join(', ')}]`).join(' or ');
 }
 
 /**
@@ -1522,23 +1656,20 @@ interface HeldBenchmark {
  * non-empty name: the tests read the trigger by that name.
  */
 async function heldBenchmarkCandidate(page: Page): Promise<HeldBenchmark> {
-    const brokersResponse = await page.request.get('/api/v1/brokers');
-    expect(brokersResponse.ok(), 'the brokers this user can see must be listable').toBe(true);
-    const brokers = ((await brokersResponse.json()) as {items?: Array<{id: number; user_role?: string | null; user_share_percentage?: string | number | null}>}).items ?? [];
-    const owned = brokers.filter((broker) => broker.user_role === 'OWNER' && (broker.user_share_percentage == null || parseFloat(String(broker.user_share_percentage)) > 0)).sort((left, right) => left.id - right.id);
+    const owned = await ownedBrokerIds(page);
 
     const names = await assetDisplayNames(page);
     const refused: number[] = [];
-    for (const broker of owned) {
-        const held = await brokerHoldings(page, broker.id);
+    for (const brokerId of owned) {
+        const held = await brokerHoldings(page, brokerId);
         if (held === null) {
-            refused.push(broker.id);
+            refused.push(brokerId);
             continue;
         }
         const assetId = held.find((id) => (names.get(id) ?? '') !== '');
-        if (assetId !== undefined) return {brokerId: broker.id, assetId, displayName: names.get(assetId) ?? ''};
+        if (assetId !== undefined) return {brokerId, assetId, displayName: names.get(assetId) ?? ''};
     }
-    throw new Error(`No broker this user owns holds an asset the picker can name (owned: ${owned.map((broker) => broker.id).join(', ') || 'none'}; report refused: ${refused.join(', ') || 'none'}). Check populate_mock_data.py.`);
+    throw new Error(`No broker this user owns holds an asset the picker can name (owned: ${owned.join(', ') || 'none'}; report refused: ${refused.join(', ') || 'none'}). Check populate_mock_data.py.`);
 }
 
 /**
@@ -2684,7 +2815,12 @@ test.describe('Risk analysis functional integration', () => {
         const requests = await installRiskMocks(page);
 
         try {
+            // The Dashboard's scope, every broker the user owns (R2/N): read before the page
+            // loads and once it has settled (`ownedBrokerIds`). It is what tells its requests
+            // apart from Broker Detail's.
+            const owned = [await ownedBrokerIds(page)];
             const dashboard = await openDashboardRisk(page);
+            owned.push(await ownedBrokerIds(page));
             const dashboardBenchmark = dashboard.getByTestId('risk-l3-benchmark');
 
             // The precondition, checked rather than assumed: without it, a page
@@ -2700,7 +2836,7 @@ test.describe('Risk analysis functional integration', () => {
             // exactly this id. Asserted here because this is where the pick
             // happens; the receiving page is asked the same question at the
             // bottom, where it is a harder one.
-            await expect.poll(() => comparisonAssetIds(requests, []), {timeout: 15_000}).toContain(benchmarkId);
+            await expect.poll(() => comparisonAssetIds(requests, owned), {timeout: 15_000}).toContain(benchmarkId);
 
             // `openFirstBrokerRisk` navigates with `page.goto`, so this is a full
             // document load: the module that holds the choice is torn down and
@@ -2710,6 +2846,14 @@ test.describe('Risk analysis functional integration', () => {
             // the assertion is worth making here and not after a client-side
             // route change.
             const {brokerId, panel} = await openFirstBrokerRisk(page);
+            // Premise: the two pages are told apart by their scopes alone, so they must
+            // differ. Were the owned set exactly this broker, every sample below would
+            // credit Broker Detail with the Dashboard's comparisons.
+            if (owned.some((ids) => ids.length === 1 && ids[0] === brokerId)) {
+                throw new Error(
+                    `${TEST_USER.username} owns only broker ${brokerId} (owned: ${readingsText(owned)}), the one Broker Detail opened: the Dashboard's risk scope and Broker Detail's are the same set, and this test cannot tell their requests apart. Check populate_mock_data.py (the seed gives this user two owned brokers).`,
+                );
+            }
             const brokerBenchmark = panel.getByTestId('risk-l3-benchmark');
             await expect(brokerBenchmark).toBeVisible({timeout: 10_000});
             await expect(brokerBenchmark).toHaveAttribute('data-benchmark-id', String(benchmarkId), {timeout: 10_000});
@@ -2736,7 +2880,7 @@ test.describe('Risk analysis functional integration', () => {
             // arrives through a `goto` that wipes the module cache too. It cannot
             // degrade to green over a scope that sent nothing, which is the failure
             // this exists to catch.
-            const askedBeforeReload = comparisonAssetIds(requests, [brokerId]).length;
+            const askedBeforeReload = comparisonAssetIds(requests, [[brokerId]]).length;
 
             // The cold load, and it is a *document* load of Broker Detail itself:
             // a fresh module cache by construction, so the panel is mounted by the
@@ -2756,7 +2900,7 @@ test.describe('Risk analysis functional integration', () => {
             // Nothing was clicked after the reload. If the persisted choice is
             // worth persisting, that alone has to reach the backend as this
             // scope's comparison, carrying this id.
-            await expect.poll(() => comparisonAssetIds(requests, [brokerId]).slice(askedBeforeReload), {timeout: 15_000}).toContain(benchmarkId);
+            await expect.poll(() => comparisonAssetIds(requests, [[brokerId]]).slice(askedBeforeReload), {timeout: 15_000}).toContain(benchmarkId);
         } finally {
             await clearRiskBenchmark(page);
         }
@@ -2775,16 +2919,21 @@ test.describe('Risk analysis functional integration', () => {
      */
     test('a benchmark in force is re-measured when the period moves', async ({page}) => {
         const requests = await installRiskMocks(page);
-        /** Portfolio-wide requests — the Dashboard's scope — that carry a comparison. */
-        const dashboardComparisons = () => requests.filter((request) => request.scope.kind === 'portfolio' && (request.scope.broker_ids ?? []).length === 0 && request.analytics.some((analytic) => analytic.analytic_code === 'comparison'));
+        // The Dashboard's scope, every broker the user owns (R2/N): read here, before the page loads, and
+        // again once it has settled (`ownedBrokerIds`).
+        const owned = [await ownedBrokerIds(page)];
+        /** The Dashboard's requests — over every broker the user owns — that carry a comparison. */
+        const dashboardComparisons = () => requests.filter((request) => portfolioOver(request, owned) && request.analytics.some((analytic) => analytic.analytic_code === 'comparison'));
 
         try {
             // The Dashboard rather than Broker Detail, though both mount a period
-            // control: its scope is `{kind: 'portfolio'}` with no broker ids, so
-            // `comparisonAssetIds(requests, [])` names it exactly without the test
-            // first having to resolve which broker it landed on, and one levels
-            // panel is mounted on the page, so every locator below is unambiguous.
+            // control: its scope is every broker the user owns, read around the
+            // load, so `comparisonAssetIds(requests, owned)` names it exactly
+            // without the test first having to resolve which broker it landed on,
+            // and one levels panel is mounted on the page, so every locator below
+            // is unambiguous.
             const dashboard = await openDashboardRisk(page);
+            owned.push(await ownedBrokerIds(page));
 
             // The precondition, checked rather than assumed: a page that arrived
             // already carrying a benchmark would make the rest of this true before
@@ -2816,7 +2965,7 @@ test.describe('Risk analysis functional integration', () => {
             // before its reload: choosing a benchmark legitimately sends its own
             // comparison, so "one was sent at some point" is already green before
             // the period has moved at all. Only the delta is about the change.
-            const askedBeforePeriodChange = comparisonAssetIds(requests, []).length;
+            const askedBeforePeriodChange = comparisonAssetIds(requests, owned).length;
             const windowBefore = dashboardComparisons()[0]?.date_range.start;
             expect(windowBefore).toBeTruthy();
 
@@ -2835,7 +2984,7 @@ test.describe('Risk analysis functional integration', () => {
             // The claim. Nothing was re-chosen and nothing was clicked in the
             // panel: a standing benchmark has to re-ask itself, because the answer
             // it had was discarded along with the question that produced it.
-            await expect.poll(() => comparisonAssetIds(requests, []).slice(askedBeforePeriodChange), {timeout: 20_000}).toContain(benchmarkId);
+            await expect.poll(() => comparisonAssetIds(requests, owned).slice(askedBeforePeriodChange), {timeout: 20_000}).toContain(benchmarkId);
 
             // …and it has to ask the *new* question. A re-ask that replayed the
             // old window would put the same id back on the wire and satisfy the
@@ -3286,6 +3435,11 @@ test.describe('Risk analysis functional integration', () => {
         /**
          * Opens L3 with a benchmark nobody holds already in force, and hands it back once every row is drawn,
          * with the requests the page put on the wire. `options` go to the stub (`installRiskMocks`).
+         *
+         * In force because the stub's eligibility engine admits it: since D378 the picker asks the engine
+         * about the page's period before L3 measures anything, and `installRiskMocks` admits every asset
+         * unless a test names a verdict (`eligibilityVerdicts`). The lane's own engine ruled this benchmark
+         * out on 06/10/2026 (`too_few_quotes`), which left it `blocked` — no comparison, no row.
          */
         async function openWithUnheldBenchmark(page: Page, options: RiskMockOptions = {}): Promise<{panel: Locator; benchmarkId: number; requests: RiskRequest[]}> {
             const benchmarkId = await unheldBenchmarkId(page);
@@ -3546,7 +3700,11 @@ test.describe('Risk analysis functional integration', () => {
          */
         test('the comparison is asked at the rates the page applies: its risk-free rate and a zero target, beside the benchmark', async ({page}) => {
             try {
+                // The Dashboard's scope, every broker the user owns (R2/N): read before the page loads and once
+                // it has settled (`ownedBrokerIds`).
+                const owned = [await ownedBrokerIds(page)];
                 const {benchmarkId, requests} = await openWithUnheldBenchmark(page);
+                owned.push(await ownedBrokerIds(page));
 
                 // The page's applied rate, as it puts it on the wire: the current composition's KPI, the wave
                 // the comparison is asked in.
@@ -3558,11 +3716,323 @@ test.describe('Risk analysis functional integration', () => {
 
                 // The claim. Barrier first: the benchmark's row is drawn (`openWithUnheldBenchmark`), so its
                 // comparison was asked and recorded.
-                const comparisons = requests.filter((request) => request.scope.kind === 'portfolio' && (request.scope.broker_ids ?? []).length === 0).flatMap((request) => request.analytics.filter((analytic) => analytic.analytic_code === 'comparison'));
-                expect(comparisons.length, "barrier: the Dashboard's comparison is in the capture").toBeGreaterThan(0);
+                const comparisons = requests.filter((request) => portfolioOver(request, owned)).flatMap((request) => request.analytics.filter((analytic) => analytic.analytic_code === 'comparison'));
+                expect(comparisons.length, `barrier: the Dashboard's comparison is in the capture, asked over every broker the user owns (${readingsText(owned)})`).toBeGreaterThan(0);
                 for (const comparison of comparisons) {
                     expect(comparison.parameters, 'the comparison is not asked at the rates the page applies, beside its benchmark').toEqual({comparison_asset_id: benchmarkId, risk_free_annual_rate: appliedRate, target_annual_return: 0});
                 }
+            } finally {
+                await clearRiskBenchmark(page);
+            }
+        });
+    });
+
+    /**
+     * D378 on the Dashboard's L3 (the developer's decisions of 06/10/2026): the benchmark picker asks the
+     * engine which benchmarks can be measured over the page's period, in the page's currency
+     * (`POST /risk/eligibility`), and L3 measures only a benchmark the engine admits.
+     *
+     *  1. One picker on every page: a benchmark the engine rules out for the period is listed apart,
+     *     read-only, with the engine's reasons.
+     *  2. A stored choice the engine rules out is `blocked` — «Non lo prova: la riga del benchmark sparisce,
+     *     e il motivo lo dice solo il selettore». It stays the choice: in the trigger, and in the read-only
+     *     section, marked current.
+     *  3. With a period, a stored choice is `pending` until its verdict for the page's period and currency
+     *     is in, and again after the period moves: no page asks a comparison it would then have to drop.
+     *  4. A failed question locks nothing: the choice is `set`, and measured.
+     *
+     * The verdicts are this block's, through the stub's engine (`installRiskMocks`), never the lane's. Every
+     * question is kept with when it was asked and answered, on the clock of the risk queries' log
+     * (`eligibilityCalls`), so "measured only after the verdict" is one ordering read off one log. The
+     * decision is read off the picker's root (`-control`: `data-benchmark-state`, `data-eligibility`,
+     * `data-benchmark-id`) and off L3's wrapper; a reason off `data-reasons`, never off its sentence.
+     *
+     * The benchmark is one nobody holds in the stub (`unheldBenchmarkId`), stored before the page loads and
+     * taken out in `finally`: measured, it is a row of its own, `ref-<id>`, so "its row" is a fact about this
+     * benchmark alone. Every absence of a comparison is read after the barriers that make it one — the
+     * question at the engine or its verdict in, the base wave landed, L3's table drawn from it — never after
+     * a sleep.
+     */
+    test.describe("D378: the Dashboard's L3 measures its benchmark only once the engine admits it for the period", () => {
+        type EligibilityCall = NonNullable<RiskMockOptions['eligibilityCalls']>[number];
+        type EligibilityVerdict = NonNullable<RiskMockOptions['eligibilityVerdicts']>[number];
+
+        /** Ruled out for the period: fewer quotes in it than the engine needs — the lane's own verdict of 06/10/2026. */
+        const TOO_FEW_QUOTES: EligibilityVerdict = {level: 'ineligible', reasons: ['too_few_quotes']};
+
+        /** The picker's root, which publishes the decision. */
+        function pickerRoot(panel: Locator): Locator {
+            return panel.getByTestId('risk-l3-benchmark-select-control');
+        }
+
+        /** The benchmark's own row in L3's table: added, `ref-<id>`, since nobody holds it. */
+        function benchmarkRow(panel: Locator, assetId: number): Locator {
+            return l3Table(panel).locator(`tbody tr[data-row-id="ref-${assetId}"]`);
+        }
+
+        /** The Dashboard's comparisons against `assetId` — asked over one of the `owned` readings, every broker the user owns — each with its index in the log: the clock the questions are stamped on. */
+        function comparisonsAgainst(requests: readonly RiskRequest[], owned: BrokerSets, assetId: number): Array<{at: number; request: RiskRequest}> {
+            return requests.flatMap((request, at) => (portfolioOver(request, owned) && request.analytics.some((analytic) => analytic.analytic_code === 'comparison' && Number(analytic.parameters?.comparison_asset_id) === assetId) ? [{at, request}] : []));
+        }
+
+        /** The questions about `assetId` that were answered, in the order they were asked. */
+        function answeredAbout(calls: readonly EligibilityCall[], assetId: number): EligibilityCall[] {
+            return calls.filter((call) => call.answeredAt !== null && call.assetIds.includes(assetId));
+        }
+
+        /** The answered questions about `assetId` over a window other than the one starting on `firstStart`, among those asked after the first `askedBefore`. */
+        function newWindowVerdicts(calls: readonly EligibilityCall[], askedBefore: number, assetId: number, firstStart: string): EligibilityCall[] {
+            return answeredAbout(calls.slice(askedBefore), assetId).filter((call) => call.dateRange.start !== firstStart);
+        }
+
+        /**
+         * Stores `benchmarkId` before the page loads and opens the Dashboard's Risk tab over the stub's
+         * `options`. Ends on the base wave landed, and claims nothing about the benchmark: what it became is
+         * each test's question.
+         *
+         * Hands back `owned`, the scope the Dashboard asks its risk over (`ownedBrokerIds`, read before the
+         * page loads and once it has settled), checked on the base wave itself: every absence of a comparison
+         * below is read through that scope, and one that matched no request at all would make each of them
+         * true for nothing.
+         */
+        async function openWithStoredBenchmark(page: Page, benchmarkId: number, options: RiskMockOptions): Promise<{panel: Locator; requests: RiskRequest[]; owned: number[][]}> {
+            const requests = await installRiskMocks(page, options);
+            await seedRiskBenchmark(page, benchmarkId);
+            const owned = [await ownedBrokerIds(page)];
+            const panel = await openDashboardRisk(page);
+            owned.push(await ownedBrokerIds(page));
+            const asked = [...new Set(requests.map((request) => JSON.stringify(request.scope)))].join(' ');
+            expect(
+                requests.some((request) => portfolioOver(request, owned)),
+                `premise: the Dashboard's base wave is asked over every broker the user owns (${readingsText(owned)}); asked: ${asked}`,
+            ).toBe(true);
+            return {panel, requests, owned};
+        }
+
+        /**
+         * The presence every absence of a comparison is read against: the base wave has landed, and L3 drew its
+         * table from it — the portfolio's row and the stub's two holdings. A comparison the page meant to ask on
+         * the way is in the log by then.
+         */
+        async function expectBaseTable(panel: Locator): Promise<void> {
+            await expect(panel).toHaveAttribute('data-busy', 'false');
+            await expect(l3PortfolioRow(panel)).toBeVisible({timeout: 10_000});
+            for (const assetId of STUB_HOLDINGS) await expect(l3Table(panel).locator(`tbody tr[data-row-id="${assetId}"]`)).toBeVisible();
+        }
+
+        /**
+         * The reader's situation before the period moves: the stored benchmark measured over the first window,
+         * its row drawn. Hands back that window's start, read off the comparison that drew the row, beside what
+         * `openWithStoredBenchmark` hands back. Claims nothing about eligibility, so the code before D378 gets
+         * this far too, and its red is a D378 one.
+         */
+        async function measuredOverFirstWindow(page: Page, benchmarkId: number, options: RiskMockOptions): Promise<{panel: Locator; requests: RiskRequest[]; owned: number[][]; firstStart: string}> {
+            const {panel, requests, owned} = await openWithStoredBenchmark(page, benchmarkId, options);
+            await expect(benchmarkRow(panel, benchmarkId), 'premise: the stored benchmark is measured over the first window, its row drawn').toBeVisible({timeout: 15_000});
+            const first = comparisonsAgainst(requests, owned, benchmarkId);
+            expect(first.length, 'premise: the row was drawn from a comparison against the stored benchmark').toBeGreaterThan(0);
+            return {panel, requests, owned, firstStart: first[first.length - 1].request.date_range.start};
+        }
+
+        /**
+         * Moves the Dashboard's period from the 3-month default to one year, through the preset a reader clicks,
+         * `data-active` read on both sides so a click that moved nothing fails here — the pattern of «a benchmark
+         * in force is re-measured when the period moves».
+         */
+        async function moveToOneYear(page: Page): Promise<void> {
+            const oneYear = page.getByTestId('date-preset-1y');
+            await expect(oneYear).toHaveAttribute('data-active', 'false');
+            await oneYear.click();
+            await expect(oneYear).toHaveAttribute('data-active', 'true');
+        }
+
+        test('a stored benchmark the engine rules out is blocked: no comparison, no row, and only the picker says why', async ({page}) => {
+            const benchmarkId = await unheldBenchmarkId(page);
+            const name = (await assetDisplayNames(page)).get(benchmarkId) ?? '';
+            expect(name, 'premise: the stored benchmark has a name its trigger can be read by').not.toBe('');
+            const calls: EligibilityCall[] = [];
+            try {
+                const {panel, requests, owned} = await openWithStoredBenchmark(page, benchmarkId, {eligibilityVerdicts: {[benchmarkId]: TOO_FEW_QUOTES}, eligibilityCalls: calls});
+                const root = pickerRoot(panel);
+
+                // The decision. `ready` first: `blocked` is a verdict, and read before one it would be about a question still in flight.
+                await expect(root, "D378: the picker never had the engine's verdict on the page's period").toHaveAttribute('data-eligibility', 'ready', {timeout: 10_000});
+                await expect(root, 'D378: a stored benchmark the engine rules out for the period is not blocked').toHaveAttribute('data-benchmark-state', 'blocked');
+                await expect(root, 'D378: the blocked benchmark is no longer the choice').toHaveAttribute('data-benchmark-id', String(benchmarkId));
+                await expect(panel.getByTestId('risk-l3-benchmark'), "L3's wrapper does not republish the picker's decision").toHaveAttribute('data-benchmark-state', 'blocked');
+                expect(answeredAbout(calls, benchmarkId), 'premise: the engine was asked about the stored benchmark, and answered').not.toEqual([]);
+
+                // Not tried. Barriers: the verdict above, and the base wave landed with L3's table drawn from it.
+                await expectBaseTable(panel);
+                expect(comparisonsAgainst(requests, owned, benchmarkId), 'D378: a comparison was asked against a benchmark the engine rules out').toEqual([]);
+                await expect(benchmarkRow(panel, benchmarkId), "D378: the blocked benchmark's row is drawn").toHaveCount(0);
+
+                // Kept as the choice: in the trigger, by its name — data, not a translation…
+                const picker = panel.getByTestId('risk-l3-benchmark-select');
+                await expect(picker.getByTestId('risk-l3-benchmark-select-trigger'), 'D378: the trigger dropped the blocked choice').toContainText(name);
+                // …and in the section apart: read-only, marked current, the engine's reason as its code.
+                await openBenchmarkPicker(panel);
+                const section = picker.getByTestId('risk-l3-benchmark-select-blocked');
+                await expect(section, 'D378: the picker lists nothing apart').toBeVisible();
+                await expect(section).toHaveAttribute('role', 'group');
+                const option = section.getByTestId(`search-select-option-${benchmarkId}`);
+                await expect(option, 'D378: the blocked benchmark is not in the section apart').toBeVisible();
+                await expect(option, 'the blocked benchmark can be chosen').toBeDisabled();
+                await expect(option).toHaveAttribute('aria-disabled', 'true');
+                await expect(option).toHaveAttribute('data-level', 'ineligible');
+                await expect(option, "the section does not carry the engine's reason").toHaveAttribute('data-reasons', /(?:^|\s)too_few_quotes(?:\s|$)/);
+                await expect(option, 'the blocked benchmark is not marked as the current choice').toHaveAttribute('aria-selected', 'true');
+
+                // Still never tried, for as long as the picker was read.
+                expect(comparisonsAgainst(requests, owned, benchmarkId), 'D378: a comparison was asked against a benchmark the engine rules out').toEqual([]);
+            } finally {
+                await clearRiskBenchmark(page);
+            }
+        });
+
+        test('a stored benchmark is pending while its verdict is held, then measured exactly once, after the verdict admits it', async ({page}) => {
+            const benchmarkId = await unheldBenchmarkId(page);
+            const calls: EligibilityCall[] = [];
+            let release: () => void = () => undefined;
+            const verdictHeld = new Promise<void>((resolve) => {
+                release = () => resolve();
+            });
+            try {
+                const {panel, requests, owned} = await openWithStoredBenchmark(page, benchmarkId, {eligibilityGate: verdictHeld, eligibilityCalls: calls});
+                const root = pickerRoot(panel);
+
+                // Asked, and held: the question about the stored benchmark is at the engine, unanswered.
+                await expect(root, 'D378: with a period, the picker is not waiting on the engine').toHaveAttribute('data-eligibility', 'pending', {timeout: 10_000});
+                await expect.poll(() => calls.some((call) => call.assetIds.includes(benchmarkId)), {timeout: 10_000, message: 'D378: the picker never asked the engine about the stored benchmark'}).toBe(true);
+                expect(answeredAbout(calls, benchmarkId), 'premise: the question is still held').toEqual([]);
+
+                // Pending on its verdict, not on the asset list: the list has confirmed the choice, whose id is in force.
+                await expect(root, 'premise: the asset list confirmed the stored choice').toHaveAttribute('data-benchmark-id', String(benchmarkId));
+                await expect(root, 'D378: a stored choice whose verdict is not in is not pending').toHaveAttribute('data-benchmark-state', 'pending');
+                await expect(panel.getByTestId('risk-l3-benchmark'), "L3's wrapper does not republish the picker's decision").toHaveAttribute('data-benchmark-state', 'pending');
+
+                // Nothing measured meanwhile. Barriers: the question at the engine, and the base wave landed with
+                // L3's table drawn from it — a comparison asked on the confirmed choice would be in the log.
+                await expectBaseTable(panel);
+                expect(comparisonsAgainst(requests, owned, benchmarkId), 'D378: a comparison left while the verdict on its benchmark was held').toEqual([]);
+                await expect(benchmarkRow(panel, benchmarkId), "the benchmark's row is drawn before its verdict").toHaveCount(0);
+
+                // The verdict admits it: `set`, then measured — once, and after the answer left.
+                release();
+                await expect(root, 'D378: the choice the verdict admits did not become set').toHaveAttribute('data-benchmark-state', 'set', {timeout: 10_000});
+                await expect(root).toHaveAttribute('data-eligibility', 'ready');
+                await expect(benchmarkRow(panel, benchmarkId), "the admitted benchmark's row was not drawn").toBeVisible({timeout: 15_000});
+                const [verdict] = answeredAbout(calls, benchmarkId);
+                const comparisons = comparisonsAgainst(requests, owned, benchmarkId);
+                expect(
+                    comparisons.map(({at}) => at),
+                    'D378: the admitted benchmark was not measured exactly once',
+                ).toHaveLength(1);
+                expect(comparisons[0].at >= (verdict?.answeredAt ?? Number.POSITIVE_INFINITY), `D378: the comparison left before the verdict (log index ${comparisons[0].at}, verdict answered at ${verdict?.answeredAt})`).toBe(true);
+            } finally {
+                release();
+                await clearRiskBenchmark(page);
+            }
+        });
+
+        test('a move of the period asks the engine again, and re-measures the benchmark over the new window only after its verdict', async ({page}) => {
+            const benchmarkId = await unheldBenchmarkId(page);
+            const calls: EligibilityCall[] = [];
+            try {
+                const {panel, requests, owned, firstStart} = await measuredOverFirstWindow(page, benchmarkId, {eligibilityCalls: calls});
+                const askedBefore = calls.length;
+                const loggedBefore = requests.length;
+
+                await moveToOneYear(page);
+
+                // A new question, about the new window, answered.
+                await expect.poll(() => newWindowVerdicts(calls, askedBefore, benchmarkId, firstStart).length, {timeout: 10_000, message: 'D378: the period moved and the picker did not ask the engine about the new window'}).toBeGreaterThan(0);
+                const [verdict] = newWindowVerdicts(calls, askedBefore, benchmarkId, firstStart);
+
+                // Re-measured over the new window — and only once that verdict had left.
+                const remeasured = () => comparisonsAgainst(requests, owned, benchmarkId).filter(({at}) => at >= loggedBefore);
+                await expect.poll(() => remeasured().length, {timeout: 15_000, message: 'the benchmark was not re-measured after the period moved'}).toBeGreaterThan(0);
+                for (const {at, request} of remeasured()) {
+                    expect(at >= (verdict.answeredAt ?? Number.POSITIVE_INFINITY), `D378: a comparison left before the verdict on the new window (log index ${at}, verdict answered at ${verdict.answeredAt})`).toBe(true);
+                    expect(request.date_range.start, 'the comparison was not asked over the new window').toBe(verdict.dateRange.start);
+                }
+
+                // The reader's half: the row is back, over a choice still in force.
+                await expect(benchmarkRow(panel, benchmarkId), "the benchmark's row did not come back over the new window").toBeVisible({timeout: 15_000});
+                await expect(pickerRoot(panel)).toHaveAttribute('data-benchmark-state', 'set');
+            } finally {
+                await clearRiskBenchmark(page);
+            }
+        });
+
+        test('a move of the period to a window the engine rules the benchmark out of blocks it: its row goes, and nothing is measured over that window', async ({page}) => {
+            const benchmarkId = await unheldBenchmarkId(page);
+            const calls: EligibilityCall[] = [];
+            const verdicts: Record<number, EligibilityVerdict> = {};
+            try {
+                const {panel, requests, owned, firstStart} = await measuredOverFirstWindow(page, benchmarkId, {eligibilityCalls: calls, eligibilityVerdicts: verdicts});
+                const askedBefore = calls.length;
+                const loggedBefore = requests.length;
+
+                // From here the engine rules the benchmark out. The first window's verdict was given already — the
+                // row above stands on it — so only the new window's question reads this.
+                verdicts[benchmarkId] = TOO_FEW_QUOTES;
+                await moveToOneYear(page);
+
+                await expect.poll(() => newWindowVerdicts(calls, askedBefore, benchmarkId, firstStart).length, {timeout: 10_000, message: 'D378: the period moved and the picker did not ask the engine about the new window'}).toBeGreaterThan(0);
+                const [verdict] = newWindowVerdicts(calls, askedBefore, benchmarkId, firstStart);
+                const root = pickerRoot(panel);
+                await expect(root, "D378: the picker does not hold the new window's verdict").toHaveAttribute('data-eligibility', 'ready');
+                await expect(root, 'D378: a benchmark the engine rules out over the new window is not blocked').toHaveAttribute('data-benchmark-state', 'blocked');
+                await expect(panel.getByTestId('risk-l3-benchmark'), "L3's wrapper does not republish the picker's decision").toHaveAttribute('data-benchmark-state', 'blocked');
+                await expect(benchmarkRow(panel, benchmarkId), "D378: the benchmark's row outlived the verdict that rules it out").toHaveCount(0);
+
+                // Nothing measured over the new window. Barriers: the verdict above, and the new window's base wave
+                // asked and landed — the refresh control is back — with L3's table drawn from it.
+                const newWave = () =>
+                    new Set(
+                        requests
+                            .slice(loggedBefore)
+                            .filter((request) => portfolioOver(request, owned) && request.date_range.start === verdict.dateRange.start && !request.analytics.some((analytic) => analytic.analytic_code === 'comparison'))
+                            .map((request) => request.mode),
+                    );
+                await expect.poll(newWave, {timeout: 10_000, message: "premise: the new window's base wave was never asked"}).toEqual(new Set(['historical', 'current_composition']));
+                await expect(panel.getByTestId('risk-refresh-button'), "premise: the new window's base wave never landed").toBeEnabled({timeout: 15_000});
+                await expectBaseTable(panel);
+                expect(
+                    comparisonsAgainst(requests, owned, benchmarkId).filter(({at}) => at >= loggedBefore),
+                    'D378: a comparison was asked against a benchmark the engine rules out over the new window',
+                ).toEqual([]);
+            } finally {
+                await clearRiskBenchmark(page);
+            }
+        });
+
+        test('a failed question locks nothing: the stored benchmark is measured, and the picker lists nothing apart', async ({page}) => {
+            const benchmarkId = await unheldBenchmarkId(page);
+            const calls: EligibilityCall[] = [];
+            try {
+                const {panel, requests, owned} = await openWithStoredBenchmark(page, benchmarkId, {eligibilityFails: true, eligibilityCalls: calls});
+                const root = pickerRoot(panel);
+
+                await expect(root, 'D378: a failed question does not read failed on the picker').toHaveAttribute('data-eligibility', 'failed', {timeout: 10_000});
+                expect(answeredAbout(calls, benchmarkId), 'premise: the engine was asked about the stored benchmark, and failed').not.toEqual([]);
+                await expect(root, 'D378: a failed question locked the stored choice').toHaveAttribute('data-benchmark-state', 'set');
+                await expect(root).toHaveAttribute('data-benchmark-id', String(benchmarkId));
+
+                // Measured as if nothing had been asked: the comparison leaves, and the row is drawn.
+                await expect.poll(() => comparisonsAgainst(requests, owned, benchmarkId).length, {timeout: 15_000, message: 'D378: the benchmark was not measured after a failed question'}).toBeGreaterThan(0);
+                await expect(benchmarkRow(panel, benchmarkId), "the benchmark's row is not drawn after a failed question").toBeVisible({timeout: 15_000});
+
+                // Everything selectable. The choice's own option, on offer and current, is the presence the two
+                // absences are read against: nothing listed apart, no option disabled.
+                const picker = await openBenchmarkPicker(panel);
+                const option = picker.getByTestId(`search-select-option-${benchmarkId}`);
+                await expect(option, 'the stored benchmark is not on offer after a failed question').toBeVisible();
+                await expect(option).toBeEnabled();
+                await expect(option).toHaveAttribute('aria-selected', 'true');
+                await expect(picker.getByTestId('risk-l3-benchmark-select-blocked'), 'D378: a failed question listed benchmarks apart').toHaveCount(0);
+                await expect(picker.locator('[data-testid^="search-select-option-"][aria-disabled="true"]'), 'D378: a failed question left an option disabled').toHaveCount(0);
             } finally {
                 await clearRiskBenchmark(page);
             }
@@ -3868,10 +4338,19 @@ test.describe('Risk analysis functional integration', () => {
      * is a statement about an empty filter.
      */
     test.describe('the shared benchmark: a held asset is allowed, the choice is always shown, a dead id is ignored', () => {
-        const SCOPES: Array<{surface: string; open: (page: Page, brokerId: number) => Promise<{panel: Locator; brokerIds: number[]}>}> = [
-            // The Dashboard counts every broker the candidate can come from (`getOwnedBrokers()`), so what that broker holds, the portfolio holds.
-            {surface: 'Dashboard', open: async (page) => ({panel: await openDashboardRiskWithHoldings(page), brokerIds: []})},
-            {surface: 'Broker Detail', open: async (page, brokerId) => ({panel: await openBrokerRiskWithHoldings(page, brokerId), brokerIds: [brokerId]})},
+        const SCOPES: Array<{surface: string; open: (page: Page, brokerId: number) => Promise<{panel: Locator; brokerSets: BrokerSets}>}> = [
+            // The Dashboard counts every broker the candidate can come from (`getOwnedBrokers()`), so what that broker holds, the portfolio holds;
+            // and it asks its risk over every one of them (R2/N), read before the page loads and once it has settled (`ownedBrokerIds`).
+            {
+                surface: 'Dashboard',
+                open: async (page) => {
+                    const owned = [await ownedBrokerIds(page)];
+                    const panel = await openDashboardRiskWithHoldings(page);
+                    owned.push(await ownedBrokerIds(page));
+                    return {panel, brokerSets: owned};
+                },
+            },
+            {surface: 'Broker Detail', open: async (page, brokerId) => ({panel: await openBrokerRiskWithHoldings(page, brokerId), brokerSets: [[brokerId]]})},
         ];
 
         /** Positive and integral, so the store accepts it as an id; far above anything the seed or a spec creates. */
@@ -3887,7 +4366,7 @@ test.describe('Risk analysis functional integration', () => {
                     // Barriers, in the opener: the catalogue is ready, the base wave has landed,
                     // and the page knows what the scope holds — so the asset below is held *as far
                     // as the page is concerned*, not merely as far as this test is.
-                    const {panel, brokerIds} = await scope.open(page, held.brokerId);
+                    const {panel, brokerSets} = await scope.open(page, held.brokerId);
                     const benchmark = panel.getByTestId('risk-l3-benchmark');
                     await expect(benchmark).toBeVisible({timeout: 10_000});
 
@@ -3912,7 +4391,7 @@ test.describe('Risk analysis functional integration', () => {
                     // The server's face: shown and measured are one claim, or the picker names a
                     // reference nothing was compared with. Nothing was clicked, so the load alone has
                     // to put this id on the wire as this scope's comparison.
-                    await expect.soft.poll(() => comparisonAssetIds(requests, brokerIds), {timeout: 15_000, message: 'the stored benchmark was never measured against'}).toContain(held.assetId);
+                    await expect.soft.poll(() => comparisonAssetIds(requests, brokerSets), {timeout: 15_000, message: 'the stored benchmark was never measured against'}).toContain(held.assetId);
                 } finally {
                     await clearRiskBenchmark(page);
                 }

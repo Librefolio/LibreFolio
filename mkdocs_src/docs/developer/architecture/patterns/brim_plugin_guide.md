@@ -64,6 +64,16 @@ graph TD
 
 A file's `compatible_plugins` are what the import wizard offers for it, so `can_parse` must not claim a file that `parse` would refuse, fallback plugins included: the Generic CSV (`broker_generic_csv`, `detection_priority` 0) says `True` only for a `.csv` whose header row names both required columns, `date` and `type`, directly or through its multilingual aliases (`HEADER_MAPPINGS`: `data`, `fecha`, `datum`…; `tipo`, `operazione`, `action`…) — it used to claim any CSV with a header, then fail at parse. A file no plugin recognises is offered every plugin; parsing it with a single-file plugin whose `can_parse` says no answers 400 `Plugin '<code>' cannot parse file '<file_id><ext>'`, followed by `: <reason>` when the plugin says why ([`cannot_parse_reason`](#cannot-parse-reason)), and moves the file to `failed` with that message as its error.
 
+The rule has one **extension**: a plugin may claim a file it recognises as its own broker's even
+when it cannot import it, provided `parse` explains what is wrong — no transactions and one
+`BRIMNotice` in the file's language saying what to upload instead. The plugin does not fail to
+read such a file: it knows the file is its broker's, so `cannot_parse_reason` stays `None`, and
+`parse` succeeds instead of refusing it — the file moves to `parsed` with the notice. Reference:
+DEGIRO's **Transactions** export, the list of orders, which has no dividends, deposits,
+withdrawals or currency conversions. `broker_degiro` claims it next to the Account Statement
+(`_layout` tells the two apart), and its `parse` returns no transactions and the
+`degiro_orders_list` warning, which asks for the Account Statement.
+
 **Phase 2** runs when the user selects a specific plugin — the plugin parses the file, the user reviews the results, and confirms the import.
 
 **Plugin responsibility**: Read the broker-specific file format and convert to standard `TXCreateItem` DTOs.
@@ -360,6 +370,7 @@ Copy the structure of an existing, well-tested plugin rather than starting from 
 | `backend/app/services/brim_providers/broker_credit_agricole.py` | **Richest wizard integration**: two layouts in one plugin, 4-tier causale registry, evidence tables, `info` notices, blocking and splitting field todos — read it before designing any `field_todos`. Also: automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
 | `backend/app/services/brim_providers/broker_saxo.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
 | `backend/app/services/brim_providers/broker_danske_bank.py` | **Report set** (custody XLSX + cash CSV): roles, a pure `combine` with pairing, zones and truth points, the parse of its combined file, Finnish notices — see [Multi-report plugins](#report-sets) |
+| `backend/app/services/brim_providers/broker_degiro.py` | **One layout in many languages**: the Account Statement read by column position, the notice language picked from the header (`_detect_language`), **linked `FX_CONVERSION` pairs** (see [Linked pairs](#linked-pairs)), and its orders list (the Transactions export) claimed and answered with one notice instead of transactions (the rule's extension in [Flow](#flow)) |
 
 ## 📥 Canonical imports
 
@@ -426,6 +437,25 @@ transaction breaks these rules, so flip source signs as needed:
     reading. When a broker ships differently localized export layouts (a UK vs. IT Fineco
     file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
     warnings in its own language. Code, comments and docstrings stay in English.
+
+    A broker can also ship **one layout in many languages**: DEGIRO's Account Statement has
+    the same twelve columns in every language, so the layout cannot tell the language, but
+    the header can. `broker_degiro.py` (`_detect_language`) counts, for each language, how
+    many of the file's named columns are among that language's header names
+    (`_HEADER_WORDS`; `ISIN` and `FX`, the same everywhere, do not count) and picks the best
+    language only with at least three matches and no tie (`_MIN_LANGUAGE_MATCHES`). A word
+    two languages share decides nothing on its own — `Datum` is Dutch and German — and any
+    other header gets English. The language chooses the messages only (`_MESSAGES`:
+    English, Dutch, German, French, Spanish): rows are classified with the words of every
+    language, because one DEGIRO file can mix them.
+
+    The user reads the file's language only if the notice code has **no**
+    `importWizard.brimNotice.<code>` key. The wizard resolves a notice with
+    `resolveBrimNoticeMessage` (`frontend/src/lib/utils/transactions/resolveBrimNotice.ts`):
+    a key, when it exists, replaces the plugin's message with the text in the UI language;
+    without one, the plugin's `message` is shown as written. The `degiro_*` codes have no
+    key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
+    (`test_brim_degiro.py`) fails if one is added.
 
 !!! warning "`cost_basis_override` is PER-UNIT, never a total"
 
@@ -516,6 +546,60 @@ transaction breaks these rules, so flip source signs as needed:
     with the position pre-computed from succession legs, **and** the account cash-only
     `TITOLI SCADUTI O ESTRATTI` with the nominal recovered from the same-day coupon) and
     `broker_fineco.py` (`Rimborso` above par, nominal from the row).
+
+## 🔗 Linked pairs from a plugin {: #linked-pairs }
+
+A currency conversion is two transactions that only exist together: the cash that leaves one
+currency and the cash that arrives in another. A plugin emits both legs as `FX_CONVERSION` and
+gives them the same `link_uuid`; the batch turns the shared id into reciprocal
+`related_transaction_id`s and never stores the id itself (see
+[Transaction Service → Linked Pairs](../../backend/transactions/service.md#linked-pairs)).
+`broker_degiro.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
+skips its conversion legs with a warning, and the Generic CSV refuses the paired types.
+
+**What the batch accepts** — `resolve_create_links` in `transaction_batch_stages.py`, with
+`_validate_linked_pair` and `_validate_pair_description_tags` in `transaction_service.py`:
+
+- exactly **two** creates per `link_uuid`: a leg alone, or a third one, is `linkUuidPairCount`;
+- the **same type** on both legs (`pairTypeMismatch`);
+- an **identical description** (`pairDescriptionMismatch`) and **identical tags**
+  (`pairTagsMismatch`). Brokers word the two legs differently, so build one description for
+  both: DEGIRO keeps the text when both legs read the same, and joins the two otherwise
+  (`FX Credit / FX Debit`);
+- each leg valid on its own: an `FX_CONVERSION` has `quantity = 0`, a non-zero cash amount in
+  its own currency, and no asset.
+
+**The `link_uuid` is deterministic.** `test_parse_is_idempotent` compares two parses of each
+sample, and `test_sample_parses_identically_when_saved_as_windows_1252` compares a non-ASCII
+sample with its Windows-1252 copy: a `uuid4()` fails the first, an id hashed from the file's
+bytes fails the second. DEGIRO derives it with `uuid5` from a SHA-256 of the **decoded** rows of
+the whole file and the line numbers of the two legs, so the same statement always gives the same
+ids, whatever its encoding, and two statements that differ give different ones.
+
+**Recognise the legs without the rate.** [No forex system](#import-philosophy-currency-rules)
+still holds: the report's exchange rate neither converts nor matches anything. DEGIRO only asks
+whether a row's FX cell is filled — that makes the row a leg — and finds its partner by
+structure: the same order (same Order Id, or the same date and time when there is none), another
+currency, the opposite sign, and the adjacent row when several qualify. A leg whose partner is
+missing or ambiguous is listed in a notice (`degiro_unpaired_fx`) and not imported: never a
+guessed pair, and never a lone leg, which the batch would reject.
+
+**In the import wizard** a pair is one row of the review step: the leg that pays (the negative
+amount; the first one the plugin emitted when both legs have the same sign), with the leg
+that receives shown as its **To** and the rate the two amounts imply — computed from the
+amounts, not read from the report. The receiving leg is not a row of its own (`pairs.hidden`,
+`step4Rows`): the row's cash cell (`data-testid="import-tx-pair-cash"`) holds a **From** line
+and a **To** line in the bulk editor's markup (`renderFromToHtml` mirrors `renderDualHtml` of
+`TransactionBulkModal.svelte`), then a chip such as `USD → EUR @ 0.8554`
+(`renderImpliedRateHtml`: `|to| / |from|` through `computeFxConversionInfo`). Selecting the
+row selects both legs (`setPairSelected`: its tick shows the pair as selected only when both
+legs are, and select all, deselect all and select visible move both legs too), only complete
+pairs reach the bulk editor, and each pair reaches it with a fresh `link_uuid`, the same for
+both legs (`frontend/src/lib/utils/transactions/importPairs.ts`, and `pairCellHtml.ts` beside
+it for the cell): the plugin's ids repeat whenever the same statement is parsed again, so two
+uploads of one statement would share them. The counters and the `Import {n} transactions`
+button count transactions, not rows, so a pair counts as two (`step4SelectedCount` and
+`step4TotalCount`, over `step4LegRows`): the English sample shows 17 transactions in 15 rows.
 
 ## 📡 Talking to the import wizard
 
@@ -911,7 +995,10 @@ plugin has nothing to implement, but it is the contract every set lives in:
 - taking a file out of its set never changes its tick: the file keeps its tick and loses its
   plugin, waiting for a new choice — «not with this plugin» is not «not at all»;
 - *Read as* (another report-set plugin, or the files one by one) and *Read alone with ‹plugin›*
-  change only how the files are read, never which ones are ticked.
+  change only how the files are read, never which ones are ticked;
+- a set ticked only in part is not analysed: the analysis waits until the user ticks the whole set
+  or unticks it, and nothing ticks it for them — `exclude_file_ids` names only the files taken out
+  of the set, so `/sets/preview` and `/sets/combine` would read its unticked members too.
 
 A file taken out by mistake goes back when the set's plugin is chosen for it again
 ([Import Wizard → How a set is read](../../frontend/components/features/import-wizard.md#set-read-as)).

@@ -1,5 +1,6 @@
 /**
- * format — the R14 money and solver display of the planner's privacy adapter (Vitest, node).
+ * format — the R14 money and solver display, and the R7 plural counts, of the planner's privacy
+ * adapter (Vitest, node).
  *
  * Subject. `format.ts` is the only place where the planner turns a value into text, and R14
  * changed how a computed amount looks. An amount the backend computed, sent as an exact decimal
@@ -13,7 +14,17 @@
  *     public; squared money through the L2 formatter;
  *   - `formatPlannerL2`: squared money has no minor unit, so it is shown to two decimals, rounded
  *     exactly, with `≈` only when the rounding changed the value, whichever wire shape it came in;
- *   - `formatObjectiveValue` for a money unit.
+ *   - `formatObjectiveValue` for a money unit;
+ *   - R7, the plural counts `plannerQuantityCount`, `exactQuantityCount` and
+ *     `plannerPlainDecimalCount`. Each is the number an ICU plural selects on, the twin of a display
+ *     function (`formatPlannerQuantity`, `formatExactQuantity`, `formatPlannerPlainDecimal`) with
+ *     the same input and sensitivity. A count is read off the digits the user sees, never off
+ *     `Number(value)`: the integer part without its sign (plural operands are absolute), plus 0.5
+ *     when a fraction is shown. CLDR then gets the text's `i` and `v > 0`, so French reads 1.5 as
+ *     singular and English as plural. Twenty fraction digits, which `Number()` rounds to 1, stay a
+ *     fraction; a 21st digit is not shown, so it does not count. An exact ratio counts its display
+ *     projection. Over valid, invalid and absent values, with privacy off and on, the count is the
+ *     count of the shown text: the twin property.
  *
  * Expectations. The host locale decides digits, separators and grouping, so an expected amount
  * is never a literal. It is the output of the shared `formatCurrencyAmountPlain/Html` for the
@@ -25,12 +36,17 @@
  * format (`toLocaleString`, at most two decimals), so its expected text is that format applied to
  * the rounded value, its digits are checked in every case, and its values stay below 1000 so that
  * no grouping separator is involved. Masked strings and solver counts have no locale (a
- * placeholder, and `formatDecimalForDisplay`), so those are exact literals.
+ * placeholder, and `formatDecimalForDisplay`), so those are exact literals. So are the plural
+ * counts, plain numbers. `toBe` compares them with `Object.is`, so NaN matches NaN; a plural rule
+ * reads -0 as 0, and the table of counts does too.
  *
  * Privacy. Decision c: wealth is personal. With privacy on the number becomes the placeholder.
  * The `≈` marker, the sign and the currency (symbol, flag, code) stay outside the mask. A solver
  * count is not wealth and stays in the clear. Each masked case first proves that the flag is on,
  * then compares against an exact string, so an amount left in the clear cannot pass as masked.
+ * A plural count follows its display twin. A masked quantity counts NaN, which every plural rule
+ * selects as `other`: a singular next to the placeholder would reveal a hidden 1. A public decimal
+ * keeps its count.
  *
  * Catalogue. The currency catalogue answers with EUR and JPY, symbol and flag included, so every
  * optional part of the shared formatter is in the output. JPY has no minor unit (0 digits). The
@@ -67,7 +83,22 @@ import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.
 import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
-import {catalogCurrencyDigits, exactMoneyDisplay, formatExactMoneyHtml, formatExactMoneyPlain, formatObjectiveValue, formatPlannerL2, formatPlannerMoneyPlain, formatSolverNumber} from './format';
+import {
+    catalogCurrencyDigits,
+    exactMoneyDisplay,
+    exactQuantityCount,
+    formatExactMoneyHtml,
+    formatExactMoneyPlain,
+    formatExactQuantity,
+    formatObjectiveValue,
+    formatPlannerL2,
+    formatPlannerMoneyPlain,
+    formatPlannerPlainDecimal,
+    formatPlannerQuantity,
+    formatSolverNumber,
+    plannerPlainDecimalCount,
+    plannerQuantityCount,
+} from './format';
 import type {PacExactMoney, PacExactNumber, PacObjectiveUnit} from './types';
 
 const P = PRIVACY_PLACEHOLDER;
@@ -460,5 +491,181 @@ describe('formatObjectiveValue — an objective in valuation money', () => {
         privacy(true);
         expect(formatObjectiveValue(finite('1234.5678'), EUR_MONEY, digits)).toBe(`≈${P} € 🇪🇺 EUR`);
         expect(formatObjectiveValue(finite('1234.5'), JPY_MONEY, digits)).toBe(`≈${P} ¥ 🇯🇵 JPY`);
+    });
+});
+
+// R7 — the plural counts. A count is only ever called inside a test: until the functions exist, a
+// call fails that test alone, and the R14 cases above stay meaningful.
+
+/** Twenty fraction digits: all shown, while `Number()` reads the value as 1. */
+const TWENTY_DIGIT_ONE = '1.' + '0'.repeat(19) + '1';
+/** Twenty nines: all shown, while `Number()` rounds the value up to 1. */
+const TWENTY_NINES = '0.' + '9'.repeat(20);
+/** A 21st fraction digit: the display truncates it, so the user sees 1. */
+const TWENTY_ONE_DIGIT_ONE = '1.' + '0'.repeat(20) + '1';
+
+/** A count as a plural rule reads it: -0 is 0. NaN stays NaN. */
+function asPlural(count: number): number {
+    return count === 0 ? 0 : count;
+}
+
+interface CountCase {
+    input: string | null | undefined;
+    count: number;
+    why: string;
+}
+
+/** Privacy off, the same count for the three functions; `exactQuantityCount` reads a string input as an exact decimal. */
+const COUNT_CASES: CountCase[] = [
+    {input: '1', count: 1, why: 'one'},
+    {input: '1.000', count: 1, why: 'trailing zeros are not shown'},
+    {input: '1.', count: 1, why: 'a bare point is not shown'},
+    {input: '0', count: 0, why: 'zero'},
+    {input: '-0', count: 0, why: 'a negative zero is shown as 0'},
+    {input: '2', count: 2, why: 'two'},
+    {input: '1.5', count: 1.5, why: 'integer part 1, plus 0.5 for the fraction shown'},
+    {input: '0.25', count: 0.5, why: 'integer part 0, plus 0.5 for the fraction shown'},
+    {input: '123.456', count: 123.5, why: 'integer part 123, plus 0.5 for the fraction shown'},
+    {input: '-1', count: 1, why: 'plural operands are absolute'},
+    {input: '-1.5', count: 1.5, why: 'plural operands are absolute'},
+    {input: TWENTY_DIGIT_ONE, count: 1.5, why: 'twenty fraction digits are shown, so the fraction counts'},
+    {input: TWENTY_NINES, count: 0.5, why: 'twenty nines are shown, so the integer part is 0'},
+    {input: TWENTY_ONE_DIGIT_ONE, count: 1, why: 'a 21st fraction digit is not shown, so it does not count'},
+    {input: null, count: NaN, why: 'no value'},
+    {input: undefined, count: NaN, why: 'no value'},
+    {input: '', count: NaN, why: 'not a decimal'},
+    {input: 'abc', count: NaN, why: 'not a decimal'},
+    {input: '1e3', count: NaN, why: 'an exponent is not a plain decimal'},
+    {input: '1,5', count: NaN, why: 'a comma is not a plain decimal'},
+];
+
+describe('plural counts — the count of the digits the user sees, privacy off', () => {
+    it.each(COUNT_CASES)('$input counts $count: $why', ({input, count, why}) => {
+        privacy(false);
+        expect(asPlural(plannerQuantityCount(input)), `plannerQuantityCount: ${why}`).toBe(count);
+        expect(asPlural(plannerPlainDecimalCount(input)), `plannerPlainDecimalCount: ${why}`).toBe(count);
+        if (typeof input === 'string') expect(asPlural(exactQuantityCount(finite(input))), `exactQuantityCount of an exact decimal: ${why}`).toBe(count);
+    });
+
+    it('control: the precision cases test what they claim — Number() misreads two of them, the display drops the 21st digit', () => {
+        // What a count read off `Number(value)` would see: 1, twice.
+        expect(Number(TWENTY_DIGIT_ONE), 'as a double, twenty fraction digits are 1').toBe(1);
+        expect(Number(TWENTY_NINES), 'as a double, twenty nines are 1').toBe(1);
+        // What the user sees: every digit of the first two, and none past the twentieth.
+        expect(formatPlannerPlainDecimal(TWENTY_DIGIT_ONE)).toBe(TWENTY_DIGIT_ONE);
+        expect(formatPlannerQuantity(TWENTY_DIGIT_ONE)).toBe(TWENTY_DIGIT_ONE);
+        expect(formatPlannerPlainDecimal(TWENTY_NINES)).toBe(TWENTY_NINES);
+        expect(formatPlannerQuantity(TWENTY_NINES)).toBe(TWENTY_NINES);
+        expect(formatPlannerPlainDecimal(TWENTY_ONE_DIGIT_ONE)).toBe('1');
+        expect(formatPlannerQuantity(TWENTY_ONE_DIGIT_ONE)).toBe('1');
+    });
+});
+
+describe('exactQuantityCount — an exact ratio counts its display projection, privacy off', () => {
+    it.each([
+        {name: '1/3', value: ratio('1', '3', '0.333333'), shown: '≈0.333333', count: 0.5},
+        {name: '3/2', value: ratio('3', '2', '1.5'), shown: '1.5', count: 1.5},
+        {name: '10000001/10000000', value: ratio('10000001', '10000000', '1'), shown: '≈1', count: 1},
+    ])('$name, shown as $shown, counts $count', ({value, shown, count}) => {
+        privacy(false);
+        expect(formatExactQuantity(value), 'control: the text the count reads').toBe(shown);
+        expect(exactQuantityCount(value)).toBe(count);
+    });
+});
+
+describe('plural counts — privacy on: a masked quantity counts NaN, a public decimal keeps its count', () => {
+    it('plannerQuantityCount: a personal quantity is masked, so it counts NaN, never a hidden 1', () => {
+        privacy(true);
+        expect(formatPlannerQuantity('1'), 'control: the quantity is masked').toBe(P);
+        expect(plannerQuantityCount('1')).toBeNaN();
+        expect(plannerQuantityCount('2')).toBeNaN();
+
+        privacy(false);
+        expect(plannerQuantityCount('1'), 'control: in the clear, the same value counts 1').toBe(1);
+    });
+
+    it('exactQuantityCount: masked like its display, approximate or not', () => {
+        privacy(true);
+        expect(formatExactQuantity(finite('1')), 'control: the quantity is masked').toBe(P);
+        expect(exactQuantityCount(finite('1'))).toBeNaN();
+        expect(formatExactQuantity(ratio('10000001', '10000000', '1')), 'control: masked, with ≈ outside the mask').toBe('≈' + P);
+        expect(exactQuantityCount(ratio('10000001', '10000000', '1'))).toBeNaN();
+
+        privacy(false);
+        expect(exactQuantityCount(finite('1')), 'control: in the clear, the same value counts 1').toBe(1);
+    });
+
+    it('plannerPlainDecimalCount: a public decimal stays in the clear, and so does its count', () => {
+        privacy(true);
+        expect(formatPlannerPlainDecimal('1'), 'control: public, so in the clear').toBe('1');
+        expect(plannerPlainDecimalCount('1')).toBe(1);
+        expect(plannerPlainDecimalCount('1.5')).toBe(1.5);
+    });
+});
+
+/** A count function with its display twin. */
+interface CountTwin {
+    name: string;
+    /** The count and the shown text of one input; undefined when this twin takes no such input. */
+    read(input: string | null | undefined): {count: number; text: string} | undefined;
+}
+
+/** Every count with its display. The exact one reads a string both as an exact decimal and as the display projection of a ratio. */
+const COUNT_TWINS: CountTwin[] = [
+    {name: 'plannerQuantityCount / formatPlannerQuantity', read: (input) => ({count: plannerQuantityCount(input), text: formatPlannerQuantity(input)})},
+    {name: 'plannerPlainDecimalCount / formatPlannerPlainDecimal', read: (input) => ({count: plannerPlainDecimalCount(input), text: formatPlannerPlainDecimal(input)})},
+    {name: 'exactQuantityCount / formatExactQuantity, exact decimal', read: (input) => (typeof input === 'string' ? {count: exactQuantityCount(finite(input)), text: formatExactQuantity(finite(input))} : undefined)},
+    {name: 'exactQuantityCount / formatExactQuantity, ratio projection', read: (input) => (typeof input === 'string' ? {count: exactQuantityCount(ratio('1', '3', input)), text: formatExactQuantity(ratio('1', '3', input))} : undefined)},
+];
+
+/** Valid, invalid and absent values. Integer parts stay far below 2^52, where adding 0.5 is exact. */
+const TWIN_INPUTS: (string | null | undefined)[] = ['0', '-0', '1', '1.', '1.000', '2', '1.5', '-1', '-1.5', '0.25', '.5', '-.5', '123.456', '1000000', ' 1.5 ', TWENTY_DIGIT_ONE, TWENTY_NINES, TWENTY_ONE_DIGIT_ONE, '', ' ', 'abc', '1e3', '1,5', '-', '.', null, undefined];
+
+/**
+ * Why a count is not the count of its text, or null when it is. NaN exactly when no digit is shown
+ * (the empty cell and the placeholder carry none). Otherwise the integer part shown, its `≈` and
+ * sign set aside, and a fraction counted exactly when a point is shown.
+ */
+function twinMismatch(count: number, text: string): string | null {
+    const digitShown = /\d/.test(text);
+    if (Number.isNaN(count)) return digitShown ? 'NaN next to digits' : null;
+    if (!digitShown) return 'a number next to no digit';
+    const integerPart = text.replace(/^≈/, '').replace(/^-/, '').split('.')[0];
+    if (Math.trunc(count) !== Number(integerPart)) return `integer part ${Math.trunc(count)}, shown ${integerPart}`;
+    const fractionCounted = count % 1 !== 0;
+    const fractionShown = text.includes('.');
+    if (fractionCounted !== fractionShown) return fractionShown ? 'a fraction shown, none counted' : 'a fraction counted, none shown';
+    return null;
+}
+
+describe('plural counts — the count is the count of the shown text (twin property)', () => {
+    it.each([
+        {privacy: 'off', on: false},
+        {privacy: 'on', on: true},
+    ])('privacy $privacy', ({on}) => {
+        privacy(on);
+        const mismatches: string[] = [];
+        const texts = new Set<string>();
+        let read = 0;
+        for (const twin of COUNT_TWINS) {
+            for (const input of TWIN_INPUTS) {
+                const pair = twin.read(input);
+                if (pair === undefined) continue;
+                read += 1;
+                texts.add(pair.text);
+                const mismatch = twinMismatch(pair.count, pair.text);
+                if (mismatch !== null) mismatches.push(`${twin.name}, ${JSON.stringify(input)}: shown ${JSON.stringify(pair.text)}, counted ${pair.count}: ${mismatch}`);
+            }
+        }
+
+        // The walk read what it claims: every input through the two plain twins, every string through the two exact ones.
+        const strings = TWIN_INPUTS.filter((input) => typeof input === 'string').length;
+        expect(read, 'pairs read').toBe(2 * TWIN_INPUTS.length + 2 * strings);
+        // And it met every kind of text: digits, the empty cell, and the placeholder exactly when privacy is on.
+        const digitsShown = [...texts].some((text) => /\d/.test(text));
+        expect(digitsShown, 'some text shows digits').toBe(true);
+        expect(texts.has(EMPTY), 'some text is the empty cell').toBe(true);
+        expect(texts.has(P), 'the placeholder appears exactly when privacy is on').toBe(on);
+        expect(mismatches).toEqual([]);
     });
 });

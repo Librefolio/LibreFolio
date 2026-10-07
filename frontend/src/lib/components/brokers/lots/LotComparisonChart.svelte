@@ -444,7 +444,7 @@
         aggregateOpeningValue: translateOr($_, 'brokers.lots.aggregateOpeningValue', 'Opening value'),
         aggregateReturn: translateOr($_, 'brokers.lots.aggregateReturn', 'Aggregate return'),
         fifoPnl: translateOr($_, 'brokers.lots.fifoPnl', 'FIFO P&L'),
-        totalPnl: translateOr($_, 'brokers.lots.tooltip.totalPnl', 'Total P&L'),
+        totalPnl: translateOr($_, 'brokers.lots.totalPnl', 'Total P&L'),
         totalReturn: translateOr($_, 'brokers.lots.totalReturn', 'Total return'),
         yAuto: translateOr($_, 'brokers.lots.yAxisAuto', 'Auto'),
         yFromZero: translateOr($_, 'brokers.lots.yAxisFromZero', 'From 0'),

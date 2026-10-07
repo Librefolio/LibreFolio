@@ -32,13 +32,30 @@ The coefficient has three reference points, and only three that require no conve
 | $\rho = 0$ | No **linear** relationship between the two series over the observed window |
 | $\rho = -1$ | Perfect opposition: one series is an exact negative linear function of the other |
 
-Everything between those poles is a matter of degree, and LibreFolio deliberately does not slice that range into named bands: there is no level at which a pair becomes "too correlated", because the answer depends on how much of the portfolio those two positions represent — a question the correlation matrix alone cannot answer.
+Everything between those poles is a matter of degree. To make the matrix readable, LibreFolio reads each coefficient in one of four bands, wherever it draws a correlation matrix — on the Risk tab of the Dashboard and of a broker's page, and on the [Correlation tab](../../../user/assets/correlation.md#correlation) of the Assets page — in the tooltip of every cell and in the two lists of pairs beside the matrix:
+
+| Band | Range | Reading shown |
+|---|---|---|
+| High | $\rho > 0.7$ | they move together |
+| Moderate | $0.3 \le \rho \le 0.7$ | they move together in part |
+| Low | $-0.3 < \rho < 0.3$ | they move independently |
+| Inverse | $\rho \le -0.3$ | they move in opposite directions |
+
+The thresholds are symmetric about zero, so a weak coefficient reads as independence whatever its sign: $\rho = -0.01$ is no evidence that two assets offset each other. The two lists keep only the clear cases — *the most alike* the high band, *the ones that offset* the inverse band — and a pair with $\rho \ge 0.9$ is further flagged *near-identical*: two instruments that are, for practical purposes, a single exposure. A cell without a coefficient falls in no band: an unknown correlation is never read as a low one.
+
+The bands are reading aids, not verdicts. There is no level at which a pair becomes "too correlated", because the answer depends on how much of the portfolio those two positions represent — a question the correlation matrix alone cannot answer.
 
 ### 🧩 Why the Matrix Answers "Am I Diversified?" {: #why-the-matrix-answers-am-i-diversified }
 
 The number of positions is a count; diversification is a behaviour. Ten holdings that all respond to the same driver behave, in a bad month, like one position held ten times. The correlation matrix is what makes that visible: it is the map of the relationships, not a verdict on them.
 
 Read it for structure rather than for individual values — the clusters of positions that move together, the pairs that genuinely do not, and whether a supposed diversifier actually behaves like one. The diagonal carries no information: wherever it holds a value, that value is $+1$ by construction — but a flat series' own diagonal cell is `undefined`, and a matrix below the observation floor holds no values at all (see [How Each Cell Is Computed](#how-each-cell-is-computed)).
+
+The default order of the matrix serves that reading. It arranges the assets by agglomerative clustering with average linkage on the distance
+
+$$d_{ij} = 1 - |\rho_{ij}|$$
+
+so that strongly linked pairs — in the same direction or in opposite ones — end up side by side, and clusters show as blocks. Average rather than single linkage, because single linkage chains: two unrelated groups joined through one intermediate asset would be drawn as a single block. A pair without a coefficient is placed at the maximum distance, $d_{ij} = 1$, so that a missing value can never pull two assets into the same block; ties are broken by position, so the same matrix always produces the same order.
 
 Correlation answers *how* the positions move together. It says nothing about **how much** of the portfolio each one represents, which is why it is read alongside [Concentration](concentration.md) and [Risk Contribution](risk-contribution.md): a strong correlation between two marginal positions matters far less than a moderate one between the two largest.
 

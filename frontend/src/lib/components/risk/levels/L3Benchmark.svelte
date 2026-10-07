@@ -30,34 +30,47 @@
          * the same rate as the portfolio's, or its row would rate it on a different footing.
          */
         riskFreePercent: number;
+        /**
+         * The page's period and currency (D378, developer, 06/10/2026: «uguale su tutte le
+         * pagine»). With them the picker asks the engine which benchmarks can be measured over
+         * that period, lists the others apart with the engine's reasons, and publishes `blocked`
+         * for a stored choice that cannot be measured — which L3 then does not try.
+         */
+        period: {start: string; end: string};
+        currency: string;
     }
 
-    let {controller, riskFreePercent}: Props = $props();
+    let {controller, riskFreePercent, period, currency}: Props = $props();
 
     /** The choice in force, resolved by the picker: an id the asset list does not hold reads as null. */
     let selected = $state<number | null>(null);
-    /** Only `set` is a benchmark to measure against; `pending` is still being confirmed. */
+    /**
+     * Only `set` is a benchmark to measure against. `pending` is still being confirmed — with a
+     * period, until its verdict arrives — and `blocked` cannot be measured over this period.
+     */
     let benchmarkState = $state<RiskBenchmarkState>('none');
     /**
-     * The base epoch the benchmark was last asked for.
+     * The question last asked: the base epoch and the benchmark, as one key.
      *
      * A plain boolean latch would be wrong in both directions. Never re-arming
      * leaves the reader a benchmark *name* standing over an em dash the moment
      * they narrow the period, because a completed on-demand answer is discarded
      * on a signature change and only the in-flight ones are re-issued. Re-arming
      * on "there is no result" instead would spin forever the first time the run
-     * legitimately comes back empty. Keying on the epoch asks exactly once per
-     * move of the ground, which is the number of times the question changed.
+     * legitimately comes back empty. Keying on the epoch and the choice asks
+     * exactly once per question, which is the number of times the question changed.
      */
-    let launchedEpoch = $state<number | null>(null);
+    let askedFor = $state<string | null>(null);
 
     $effect(() => {
         controller.registerLauncher('comparison', run);
     });
 
-    // Launched by an effect, not at mount: the picker confirms a stored choice against
-    // the asset list asynchronously (`pending`), and only a confirmed one (`set`) is
-    // measured — a stored id that names no asset (`unknown`) is never sent.
+    // Launched by an effect, not at mount nor on the click: the picker confirms a choice
+    // asynchronously (`pending` — against the asset list, and with a period against the
+    // engine's verdict), and only a confirmed one (`set`) is measured. A stored id that names
+    // no asset (`unknown`) and a benchmark that cannot be measured here (`blocked`) are never
+    // sent.
     $effect(() => {
         // `catalogState` is read here for its *dependency*, not just its value.
         // The capability gate in `runSingle` returns null when the catalogue has
@@ -69,13 +82,28 @@
         // the moment it arrives.
         const ready = controller.catalogState === 'ready';
         const epoch = controller.baseEpoch;
+        if (benchmarkState !== 'set' || selected === null) return;
+        const key = `${epoch}|${selected}`;
         // A persisted benchmark that needed a click on every page load would make
         // the persistence worth nothing: the reader would re-choose the same
         // reference twice per visit, and the two pages would disagree in between.
-        if (launchedEpoch !== epoch && ready && benchmarkState === 'set' && selected !== null && !controller.comparisonResult) {
-            launchedEpoch = epoch;
+        if (askedFor !== key && ready && !controller.comparisonResult) {
+            askedFor = key;
             void run();
         }
+    });
+
+    // D378 (developer: «Non lo prova: la riga del benchmark sparisce, e il motivo lo dice solo
+    // il selettore»). When the choice stops being measurable here — `blocked`, or `pending`
+    // again because the period moved and its new verdict is not in yet — the comparison
+    // already on screen goes with it, so the benchmark's row and figures do not outlive the
+    // choice that justified them. Bumping first discards a reply still in flight.
+    $effect(() => {
+        if (benchmarkState === 'set') return;
+        if (askedFor === null && !controller.comparisonResult) return;
+        askedFor = null;
+        controller.bumpGeneration('comparison');
+        controller.resetAnalysis('comparison');
     });
 
     async function run(): Promise<void> {
@@ -114,10 +142,10 @@
         // reply to the old benchmark cannot land under the new one's name.
         controller.bumpGeneration('comparison');
         controller.resetAnalysis('comparison');
-        // Claim the current epoch so the effect reads this as already asked and
-        // does not fire a second, identical request behind the click.
-        launchedEpoch = controller.baseEpoch;
-        if (next !== null) void run();
+        // Not asked here: the effect asks once the picker confirms the choice as `set` — at
+        // once when it already knows the verdict, after it when it is still asking — so a
+        // click never asks for what D378 would then drop, and never twice.
+        askedFor = null;
     }
 </script>
 
@@ -127,6 +155,6 @@
 <div class="flex items-center gap-2" data-testid="risk-l3-benchmark" data-benchmark-id={selected ?? ''} data-benchmark-state={benchmarkState}>
     <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l3.benchmark')}</span>
     <div class="min-w-0 max-w-xs flex-1">
-        <BenchmarkSelect bind:value={selected} bind:state={benchmarkState} measuredAssetIds={[]} boxClass="w-full" testid="risk-l3-benchmark-select" onchange={choose} />
+        <BenchmarkSelect bind:value={selected} bind:state={benchmarkState} measuredAssetIds={[]} {period} {currency} boxClass="w-full" testid="risk-l3-benchmark-select" onchange={choose} />
     </div>
 </div>

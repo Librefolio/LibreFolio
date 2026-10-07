@@ -1,5 +1,8 @@
 # Piano — N: cambi FX nella Dashboard (sync dal banner, storia completa alla creazione, valute del menu) + V2 segno KPI
 
+> **Seguito**: [step 2 — cache del frontend tra le pagine](plan-phase00FxDashboardSyncStep2PageCache.prompt.md)
+> (06/10, analisi).
+
 > Workstream **N** di Release 2. Coordinator: «Release 2 backlog analysis» (`c8328a01-f208-4ade-a352-0486d1f14de2`).
 > Questo file è per ora **l'analisi** (sola lettura, nessun codice): l'implementazione parte solo dopo
 > l'autorizzazione esplicita del developer, inoltrata dal coordinator.

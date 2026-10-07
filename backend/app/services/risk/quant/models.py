@@ -20,6 +20,9 @@ from backend.app.services.risk.metrics import calendar_days_to_observations
 
 MAX_SOBOL_DIMENSION = 21_201
 MAX_HISTORY_OBSERVATIONS = 5_000
+# The plugin refuses a larger scope as RESOURCE_LIMIT before it builds a request; the field keeps
+# the same ceiling for any caller that bypasses the plugin.
+MAX_SIMULATION_ASSETS = 100
 # A history with no declared frequency is read as one observation per calendar day.
 DEFAULT_STEPS_PER_YEAR = 365.0
 
@@ -64,7 +67,7 @@ class SimulationEngineRequest(BaseModel):
     process: RiskSimulationProcess
     regime: RiskSimulationRegime = RiskSimulationRegime.NONE
     sampling_method: RiskSamplingStrategy
-    asset_ids: List[PositiveInt] = Field(..., min_length=1, max_length=100)
+    asset_ids: List[PositiveInt] = Field(..., min_length=1, max_length=MAX_SIMULATION_ASSETS)
     annual_drifts: List[FiniteFloat] | None = Field(None, min_length=1)
     annual_covariance: List[List[FiniteFloat]] | None = Field(None, min_length=1)
     historical_returns: List[List[FiniteFloat]] | None = Field(None, min_length=2, max_length=MAX_HISTORY_OBSERVATIONS)

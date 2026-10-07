@@ -27,7 +27,21 @@ import {untrack} from 'svelte';
 
 import {buildRiskAnalyticRequest, buildRiskQueryRequest, canonicalizeScope, type RiskAnalyticParameters} from '$lib/risk/riskRequest';
 import {riskDataQuality, type RiskDataQualityReport} from '$lib/risk/riskTypes';
-import {fetchRiskCatalog, fetchRiskScenarioCatalog, hasRiskCapability, invalidateRisk, queryRisk, RISK_DISCARD_ATTEMPTS, type RiskAnalyticResult, type RiskCatalogResponse, type RiskMode, type RiskScenarioCatalogResponse, type RiskScope} from '$lib/stores/risk/riskStore.svelte';
+import {
+    fetchRiskCatalog,
+    fetchRiskScenarioCatalog,
+    getRiskQuerySnapshot,
+    hasRiskCapability,
+    makeRiskRequestKey,
+    markRiskStale,
+    queryRisk,
+    RISK_DISCARD_ATTEMPTS,
+    type RiskAnalyticResult,
+    type RiskCatalogResponse,
+    type RiskMode,
+    type RiskScenarioCatalogResponse,
+    type RiskScope,
+} from '$lib/stores/risk/riskStore.svelte';
 
 import {buildBaseAnalytics, normalizeQualityIssue, resultByCode} from '$lib/components/risk/riskAnalysisHelpers';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -86,6 +100,12 @@ export interface RiskControllerInputs {
 export interface RiskControllerOptions {
     /** Called after a sync completes and the base wave has been reloaded. */
     onsynced?: () => void | Promise<void>;
+    /**
+     * Called when a refresh of a base wave already on screen fails (page cache, phase 1): the
+     * figures stay up and the host tells the user, with a toast. Without it a failed refresh is
+     * reported as today, through `loadError`, which the panels render in place of the levels.
+     */
+    onrefreshfailed?: () => void;
     /** Called once the scenario catalogue settles, successfully or not, so a host
      *  can seed its editors from the presets it just received. */
     scenarioCatalogLoaded?: () => void;
@@ -293,6 +313,12 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
 
     let initialLoading = $state(true);
     let refreshing = $state(false);
+    /** The base wave on screen came from the cache (fresh or stale) when the panel had nothing yet:
+     *  a host tells its tweened figures to start from their value instead of counting up from 0. */
+    let hydratedFromCache = $state(false);
+    /** The question the base results on screen answer — the request keys of its two waves — so a
+     *  failed refresh keeps them only when they answer the very question that failed. */
+    let shownQuestion: string | null = null;
     let loadError = $state(false);
     /** A load whose answer *arrived and was discarded* — the client session or the
      *  cache generation moved while the request was in flight. Kept apart from
@@ -383,6 +409,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         refreshing = hadResults;
         loadError = false;
         loadDiscarded = false;
+        let question: string | null = null;
 
         try {
             catalog = await fetchRiskCatalog();
@@ -408,24 +435,35 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
             };
             const historicalAnalytics = buildBaseAnalytics('historical', context);
             const currentAnalytics = buildBaseAnalytics('current_composition', context);
-
-            const [historical, current] = await Promise.all([
-                historicalAnalytics.length > 0 ? queryRisk(buildRiskQueryRequest({scope, dateStart, dateEnd, targetCurrency, mode: 'historical', analytics: historicalAnalytics}), force) : null,
+            const historicalRequest = historicalAnalytics.length > 0 ? buildRiskQueryRequest({scope, dateStart, dateEnd, targetCurrency, mode: 'historical', analytics: historicalAnalytics}) : null;
+            const currentRequest =
                 currentAnalytics.length > 0
-                    ? queryRisk(
-                          buildRiskQueryRequest({
-                              scope,
-                              dateStart,
-                              dateEnd,
-                              targetCurrency,
-                              mode: 'current_composition',
-                              compositionPolicy: 'current_buy_and_hold',
-                              analytics: currentAnalytics,
-                          }),
-                          force,
-                      )
-                    : null,
-            ]);
+                    ? buildRiskQueryRequest({
+                          scope,
+                          dateStart,
+                          dateEnd,
+                          targetCurrency,
+                          mode: 'current_composition',
+                          compositionPolicy: 'current_buy_and_hold',
+                          analytics: currentAnalytics,
+                      })
+                    : null;
+            question = [historicalRequest ? makeRiskRequestKey(historicalRequest) : '', currentRequest ? makeRiskRequestKey(currentRequest) : ''].join('||');
+
+            // Page cache (E1): whatever the store still holds for this very wave — fresh, or marked
+            // stale by a mutation — goes on screen at once, and the requests below refresh it.
+            const cachedHistorical = historicalRequest ? getRiskQuerySnapshot(historicalRequest).response : null;
+            const cachedCurrent = currentRequest ? getRiskQuerySnapshot(currentRequest).response : null;
+            if ((historicalRequest || currentRequest) && (!historicalRequest || cachedHistorical) && (!currentRequest || cachedCurrent)) {
+                historicalResults = cachedHistorical?.items ?? [];
+                currentResults = cachedCurrent?.items ?? [];
+                shownQuestion = question;
+                if (initialLoading) hydratedFromCache = true;
+                initialLoading = false;
+                refreshing = true;
+            }
+
+            const [historical, current] = await Promise.all([historicalRequest ? queryRisk(historicalRequest, force) : null, currentRequest ? queryRisk(currentRequest, force) : null]);
 
             if (generation !== requestGeneration) return;
 
@@ -458,9 +496,17 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
 
             historicalResults = historical?.items ?? [];
             currentResults = current?.items ?? [];
+            shownQuestion = question;
         } catch (error) {
             console.error('[Risk] Failed to load base analytics:', error);
-            if (generation === requestGeneration) loadError = true;
+            if (generation === requestGeneration) {
+                // Figures of another question (the period or the currency before the change) must
+                // not stay under the new inputs: only the refresh of the very question on screen
+                // keeps them, with the host's toast.
+                const answersThisQuestion = question !== null && question === shownQuestion && (historicalResults.length > 0 || currentResults.length > 0);
+                if (answersThisQuestion && options.onrefreshfailed) options.onrefreshfailed();
+                else loadError = true;
+            }
         } finally {
             if (generation === requestGeneration) {
                 initialLoading = false;
@@ -474,7 +520,8 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
      * answers in three: a response, a throw, and a *discard* (`null`, when the client session or
      * the cache generation moved while the request was in flight). Folding the discard into "no
      * result" made an analysis vanish without a word, which the live price polling of Asset Global
-     * (decision D11) turns from an accident into a routine: it invalidates the cache every 30 s.
+     * (decision D11) turned from an accident into a routine while it invalidated the cache every 30 s.
+     * Since the page cache a poll only marks the answers stale; a session change still discards.
      */
     async function runSingle(code: string, mode: RiskMode, parameters: RiskAnalyticParameters): Promise<SingleOutcome> {
         const {scope, dateStart, dateEnd, targetCurrency} = inputs();
@@ -560,7 +607,9 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
     }
 
     async function handleSynced(): Promise<void> {
-        invalidateRisk();
+        // A sync marks the answers stale instead of forgetting them: the figures stay on screen
+        // while the base wave is asked again, and the catalogs, which a sync cannot change, stay.
+        markRiskStale();
         discardOnDemand();
         await loadBase(true);
         await options.onsynced?.();
@@ -657,6 +706,9 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
         },
         get initialLoading() {
             return initialLoading;
+        },
+        get hydratedFromCache() {
+            return hydratedFromCache;
         },
         get refreshing() {
             return refreshing;

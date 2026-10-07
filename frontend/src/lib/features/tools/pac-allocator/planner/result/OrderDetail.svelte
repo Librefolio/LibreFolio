@@ -2,11 +2,11 @@
     import {t, locale} from '$lib/i18n';
     import OriginBadge from '../shared/OriginBadge.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
-    import {formatExactFxRate, formatExactMoneyPlain, formatExactQuantity, formatExactPricePlain, formatPlannerMoneyPlain, formatPlannerTimestamp, type CurrencyDigits} from '../format';
+    import {formatExactFxRate, formatExactMoneyPlain, formatExactPricePlain, formatPlannerMoneyPlain, formatPlannerTimestamp, type CurrencyDigits} from '../format';
     import type {PacConversion, PacOrderRow} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY} from '../ui';
     import {conversionsFor, type PacProvenanceRow, type PlanLookup, type ResultNames} from './model';
-    import {instructionStepText, instructionText, priceText, ratePercentText, routeCapText, routeMinimumText} from './text';
+    import {economicQuantityText, instructionStepText, instructionText, priceText, ratePercentText, routeCapText, routeMinimumText} from './text';
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
@@ -53,9 +53,7 @@
             <dd data-testid="pac-planner-order-detail-instruction">{[instructionText(order, $t, digits), instructionStepText(order, $t, digits)].join(' · ')}</dd>
             <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.economicQuantity`, {default: 'Economic quantity'})}</dt>
             <dd>
-                {order.economic_quantity.kind === 'exact'
-                    ? $t(`${KEY}.quantityExact`, {default: '{quantity} units (exact)', values: {quantity: formatExactQuantity(order.economic_quantity.value)}})
-                    : $t(`${KEY}.quantityEstimated`, {default: '{quantity} units (estimated)', values: {quantity: formatExactQuantity(order.economic_quantity.value)}})}
+                {economicQuantityText(order.economic_quantity, $t)}
             </dd>
 
             <dt class="font-medium text-gray-600 dark:text-gray-400">{$t(`${KEY}.sourcePrice`, {default: 'Source price'})}</dt>

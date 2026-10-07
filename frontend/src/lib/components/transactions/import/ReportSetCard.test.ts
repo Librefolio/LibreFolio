@@ -75,7 +75,16 @@
  *      are invented and no dictionary names them, so the card names them by their description — a value this test
  *      passed in.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0, §14 G.2 and §17.5.
+ * Step 7 (plan Step7ButtonAndR6 §2; the developer: «take it away, and let the notice say to untick the set») — written red
+ * first: the «Exclude from the import» button (report-set-exclude) and its prop onExclude are gone. A set that cannot be
+ * analysed — incomplete, or ticked only in part (R6) — is left out with its own checkbox, report-set-select, which the
+ * wizard owns (one click from 'all' or 'some' unticks the whole set). `mountCard` no longer passes onExclude. The upload of
+ * a missing export stays (guard). One more test there, outside the brief, was found writing R6-E1: from 'some', the click
+ * that unticks the set must leave its checkbox unticked — Svelte keeps the last `checked` it wrote, and from 'some' to
+ * 'none' that value does not change, so the browser's own toggle stays on screen.
+ *
+ * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0, §14 G.2 and §17.5;
+ * step 7: `plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md`, §2 and §4.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, type Component} from 'svelte';
@@ -292,7 +301,6 @@ async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: 
         onToggleSelected: vi.fn(),
         onToggleExpanded: vi.fn(),
         onUploadMissing: vi.fn(),
-        onExclude: vi.fn(),
         onPreviewFile: vi.fn(),
         onDeleteFile: vi.fn(),
         // G: how the set is read.
@@ -300,7 +308,7 @@ async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: 
         onReadAlone: vi.fn(),
         onRemoveFromSet: vi.fn(),
     };
-    render(card(), {
+    const view = render(card(), {
         set: options.set ?? SET,
         plugin: options.plugin ?? PLUGIN,
         previewState: {status: 'ready', preview: options.preview ?? PREVIEW, error: null},
@@ -314,7 +322,8 @@ async function mountCard(options: {set?: unknown; preview?: unknown; expanded?: 
     });
     // Barrier: the card is mounted before anything is read.
     await screen.findByTestId('report-set-card');
-    return callbacks;
+    // Step 7: `rerender` hands the card the selection the wizard computes after a click (the card is controlled).
+    return {...callbacks, rerender: view.rerender};
 }
 
 /** The one element with this testid and these data attributes; anything else fails with what was there. */
@@ -636,21 +645,18 @@ describe('ReportSetCard — the rest of the card is unchanged (guards)', () => {
         the('report-set-warning', {code: 'probe_warning_code'});
         the('report-set-history', {kind: 'later'});
         the('report-set-timeline');
-        expect(all('report-set-exclude'), 'a complete set does not block').toHaveLength(0);
     });
 
-    it('an incomplete set: its missing export is uploaded into the role, and the set can be excluded', async () => {
-        const {onUploadMissing, onExclude} = await mountCard({set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE});
+    it('an incomplete set: its missing export is uploaded into the role', async () => {
+        const {onUploadMissing} = await mountCard({set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE});
 
         expect(the('report-set-card')).toHaveAttribute('data-set-status', 'incomplete');
         const missing = the('report-set-missing', {role: 'cash'});
         the('report-set-upload-missing', {}, missing);
         const upload = new File(['probe'], 'probe-cash.csv', {type: 'text/csv'});
         await fireEvent.change(the('report-set-upload-input', {}, missing), {target: {files: [upload]}});
-        await fireEvent.click(the('report-set-exclude'));
 
         expect(onUploadMissing).toHaveBeenCalledWith('cash', upload);
-        expect(onExclude).toHaveBeenCalledTimes(1);
     });
 
     it('a folded card shows no body', async () => {
@@ -660,6 +666,59 @@ describe('ReportSetCard — the rest of the card is unchanged (guards)', () => {
         expect(all('report-set-timeline')).toHaveLength(0);
         expect(all('report-set-role-table')).toHaveLength(0);
         expect(all('report-set-unrecognised')).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Step 7 — no «Exclude from the import» button: the set's checkbox leaves it out (plan Step7ButtonAndR6, §2)
+// ---------------------------------------------------------------------------
+
+describe('ReportSetCard — step 7: the set is left out with its checkbox, not with a button', () => {
+    it.each(['all', 'some'] as const)('a set that is not complete, ticked (%s): no «Exclude from the import» button', async (selection) => {
+        await mountCard({set: SET_INCOMPLETE, preview: PREVIEW_INCOMPLETE, selection});
+
+        // Presence barrier: the open card has rendered its body — the missing export's block and its upload — and its checkbox.
+        expect(the('report-set-card')).toHaveAttribute('data-set-status', 'incomplete');
+        expect(the('report-set-card')).toHaveAttribute('data-selected', selection);
+        the('report-set-upload-missing', {}, the('report-set-missing', {role: 'cash'}));
+        the('report-set-select');
+        expect(all('report-set-exclude'), 'the card offers no «Exclude from the import» button: its checkbox leaves the set out').toHaveLength(0);
+    });
+
+    // Outside the brief (found writing R6-E1; the coordinator keeps or drops it). The card is controlled: a click asks the
+    // wizard, which from 'some' unticks the whole set, and the card is handed 'none'. Svelte writes `checked` only when the
+    // value it computes changes, and from 'some' to 'none' it stays false — so the tick the browser drew on the click stays.
+    it('R6 (step 7): from a set ticked only in part, the click that unticks it leaves its checkbox unticked', async () => {
+        const {onToggleSelected, rerender} = await mountCard({selection: 'some'});
+        const select = the('report-set-select') as HTMLInputElement;
+        // Premise: ticked only in part, the checkbox shows the dash, not the tick.
+        expect(select.indeterminate, 'a set ticked only in part shows the dash').toBe(true);
+        expect(select).not.toBeChecked();
+
+        await fireEvent.click(select);
+        expect(onToggleSelected).toHaveBeenCalledTimes(1);
+        // What the wizard does with that click from 'some' (toggleSetSelection): the whole set unticked.
+        await rerender({selection: 'none'});
+
+        expect(the('report-set-card')).toHaveAttribute('data-selected', 'none');
+        expect(select.indeterminate, 'no dash any more').toBe(false);
+        expect(select, 'the checkbox shows what the wizard holds: the set unticked').not.toBeChecked();
+    });
+
+    it('R6 (step 7, guard: true before step 7 too): from a set ticked whole the click unticks its checkbox, and from none it ticks it', async () => {
+        const {onToggleSelected, rerender} = await mountCard({selection: 'all'});
+        const select = the('report-set-select') as HTMLInputElement;
+        expect(select).toBeChecked();
+
+        await fireEvent.click(select);
+        await rerender({selection: 'none'});
+        expect(select, 'from all, the set unticked').not.toBeChecked();
+
+        await fireEvent.click(select);
+        await rerender({selection: 'all'});
+        expect(select, 'from none, the set ticked whole').toBeChecked();
+        expect(select.indeterminate).toBe(false);
+        expect(onToggleSelected).toHaveBeenCalledTimes(2);
     });
 });
 

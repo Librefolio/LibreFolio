@@ -32,6 +32,13 @@
  * skips the originals whose status is `failed`; the wizard agrees — `setPluginFor` is null for one,
  * even when a report-set plugin is chosen for it, so `groupBrokerFiles` lists it among the singles —
  * and `setRequest` never lists it in `exclude_file_ids` (a file no set holds is left out of none).
+ *
+ * Step 7, R6 (plan Step7ButtonAndR6 §2; the developer: «stop with a notice: tick the whole set or untick
+ * it»), written red first: a set ticked only in part blocks the analysis whatever its preview says.
+ * `setRequest` leaves out only the files that are no members, never a member without its tick, so the
+ * preview and the combine read the set whole: analysed half ticked, it would import files the user
+ * unticked. 'none' still never blocks, and 'all' blocks as before — until its preview is ready and
+ * complete. `setRequest` and `buildParseUnits` do not change.
  */
 import {describe, expect, it} from 'vitest';
 
@@ -657,10 +664,24 @@ describe('setBlocksAnalysis', () => {
         expect(setBlocksAnalysis(SET_NEW, ALL, {status: 'ready', preview: null})).toBe(true);
     });
 
-    it('lets a selected complete set through, wholly or partly selected', async () => {
+    it('lets a wholly selected complete set through', async () => {
         const setBlocksAnalysis = await c2('setBlocksAnalysis');
         expect(setBlocksAnalysis(SET_NEW, ALL, READY_COMPLETE)).toBe(false);
-        expect(setBlocksAnalysis(SET_NEW, SOME, READY_COMPLETE)).toBe(false);
+    });
+
+    it('R6 (step 7): blocks a set ticked only in part even when its preview is ready and complete', async () => {
+        const setBlocksAnalysis = await c2('setBlocksAnalysis');
+        // Either member ticked alone: the preview and the combine would still read both (setRequest), so neither may go on.
+        expect(setBlocksAnalysis(SET_NEW, SOME, READY_COMPLETE), 'the custody export ticked, the cash statement not').toBe(true);
+        expect(setBlocksAnalysis(SET_NEW, new Set(['cash-new', 'gen-1']), READY_COMPLETE), 'the cash statement ticked, the custody export not').toBe(true);
+    });
+
+    it('R6 (step 7, guard: true before step 7 too): a set ticked only in part blocks with every other preview state', async () => {
+        const setBlocksAnalysis = await c2('setBlocksAnalysis');
+        expect(setBlocksAnalysis(SET_NEW, SOME), 'no preview asked yet').toBe(true);
+        expect(setBlocksAnalysis(SET_NEW, SOME, {status: 'loading'}), 'preview loading').toBe(true);
+        expect(setBlocksAnalysis(SET_NEW, SOME, {status: 'error', error: 'HTTP 500'}), 'preview failed').toBe(true);
+        expect(setBlocksAnalysis(SET_NEW, SOME, {status: 'ready', preview: null}), 'ready without a preview').toBe(true);
     });
 });
 

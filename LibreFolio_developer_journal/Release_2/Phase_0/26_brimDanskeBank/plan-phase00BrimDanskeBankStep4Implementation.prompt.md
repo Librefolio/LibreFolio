@@ -2619,4 +2619,5 @@ Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui prop
   - la doc EN di `danske-bank.en.md` e `import-wizard.md`;
   - i test che usano `report-set-exclude`, tra cui R5-E1.
 - **R6 resta da decidere**: togliere il bottone non lo elimina, perché ci si arriva anche togliendo la spunta con la casella della scheda e poi rimettendo nel set un file spuntato. Si chiede al developer in parole semplici quando si apre il lotto.
+  - ✅ **Decisa il 2026-10-06** (developer, testuale): «Fermarsi con un avviso: spunta tutto il set o togli la spunta». Il bottone e R6 sono fatti in [plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md](plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md).
 - **Ordine** (coordinatore): voce 8 con F1 → robustezza dell'upload, F2–F4 (con 422, già deciso) → il bottone tolto più R6. Tre checkpoint, ognuno con le sue righe 🐛.

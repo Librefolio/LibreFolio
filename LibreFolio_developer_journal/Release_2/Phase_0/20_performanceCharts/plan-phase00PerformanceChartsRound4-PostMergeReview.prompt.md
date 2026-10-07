@@ -33,6 +33,9 @@ Precedenti e collegati:
   (R1…R21; §8 secondo passaggio).
 - Analisi statica: [09_reperti_analisi_statica_20260922.md](../09_feedbackJobs/09_reperti_analisi_statica_20260922.md)
   — **leggere la §9 prima di fidarsi della §1**: due voci sono state smentite dalla review.
+- Seguito: [plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md)
+  — i marcatori degli eventi spariscono con «Tutti» sul hit della cache prezzi (2026-10-07). È una regressione di
+  `2d22130bd`.
 
 ## Stato di esecuzione
 

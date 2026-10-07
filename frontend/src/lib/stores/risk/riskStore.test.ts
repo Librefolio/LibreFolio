@@ -31,6 +31,12 @@ let hasRiskCapability: typeof import('./riskStore.svelte').hasRiskCapability;
 let invalidateRisk: typeof import('./riskStore.svelte').invalidateRisk;
 let makeRiskRequestKey: typeof import('./riskStore.svelte').makeRiskRequestKey;
 let queryRisk: typeof import('./riskStore.svelte').queryRisk;
+/**
+ * The module the functions above were bound from, read by name for what the page cache adds
+ * (`markRiskStale`): a missing export fails the case that needs it, with the contract in the
+ * message, and the type check of this file does not depend on the export landing first.
+ */
+let store: Record<string, unknown>;
 
 const baseRequest = {
     scope: {kind: 'portfolio' as const},
@@ -46,7 +52,9 @@ describe('riskStore', () => {
             configurable: true,
             value: <T>(value: T): T => value,
         });
-        ({fetchRiskCatalog, fetchRiskScenarioCatalog, getRiskQuerySnapshot, hasRiskCapability, invalidateRisk, makeRiskRequestKey, queryRisk} = await import('./riskStore.svelte'));
+        const module = await import('./riskStore.svelte');
+        ({fetchRiskCatalog, fetchRiskScenarioCatalog, getRiskQuerySnapshot, hasRiskCapability, invalidateRisk, makeRiskRequestKey, queryRisk} = module);
+        store = module as unknown as Record<string, unknown>;
     });
 
     beforeEach(() => {
@@ -267,11 +275,13 @@ describe('riskStore', () => {
         expect(current).toEqual({items: [{instance_id: 'current'}]});
     });
 
-    it('re-issues a catalog fetch whose answer a mid-flight mutation discarded', async () => {
-        // Opening an asset page persists today's price, which notifies the portfolio
-        // mutation listeners, which invalidate risk — so a catalog request can be
-        // discarded for an entirely mundane reason. Handing the caller a null there
-        // leaves the panel stuck on an error it can never leave: nothing re-asks.
+    it('keeps a catalog answer across a portfolio mutation that lands while it is in flight (E6)', async () => {
+        // Contract changed by the page cache, phase 1 (E6, approved by the developer on 06/10). This
+        // case used to read 're-issues a catalog fetch whose answer a mid-flight mutation discarded'
+        // and expected a second fetch. The catalog describes the engine — which analytics exist, on
+        // which scopes and modes — not the portfolio, so a portfolio mutation (here the live price
+        // the asset page persists on opening) no longer touches it: the answer in flight is kept and
+        // nothing is asked twice. A session change still discards it (`invalidateRisk`, below).
         let resolveFirst: (value: unknown) => void = () => undefined;
         catalogApi.mockImplementationOnce(
             () =>
@@ -281,12 +291,38 @@ describe('riskStore', () => {
         );
         const pending = fetchRiskCatalog();
 
-        notifyPortfolioMutation('POST', '/api/v1/assets/prices/sync');
-        catalogApi.mockResolvedValueOnce({items: [{analytic_code: 'retried'}]});
+        notifyPortfolioMutation('POST', '/api/v1/assets/prices/current');
+        catalogApi.mockResolvedValueOnce({items: [{analytic_code: 'asked again'}]});
+        resolveFirst({items: [{analytic_code: 'kept'}]});
+
+        expect(await pending, 'a portfolio mutation discarded the catalog answer in flight').toEqual({items: [{analytic_code: 'kept'}]});
+        expect(catalogApi, 'the catalog was fetched again because of a portfolio mutation').toHaveBeenCalledTimes(1);
+        expect(await fetchRiskCatalog(), 'the kept answer is the cached one').toEqual({items: [{analytic_code: 'kept'}]});
+        expect(catalogApi).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-issues a catalog fetch whose answer a hard reset discarded in flight, and returns the second answer', async () => {
+        // The positive guard of the re-ask, restored beside the E6 case above (Risk family review): a
+        // portfolio mutation no longer discards a catalog answer, but a hard reset still does — a
+        // session change, a host's `invalidateRisk()` — and handing the caller the null of that
+        // discard leaves the panel stuck on an error nothing re-asks. One discard here; the bounded
+        // case below covers three in a row. `invalidateRisk` rather than a session transition, for
+        // the reason given there: it is bound with the fetch, so both reach the same module instance.
+        let resolveFirst: (value: unknown) => void = () => undefined;
+        catalogApi.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    resolveFirst = resolve;
+                }),
+        );
+        const pending = fetchRiskCatalog();
+
+        invalidateRisk();
+        catalogApi.mockResolvedValueOnce({items: [{analytic_code: 'second attempt'}]});
         resolveFirst({items: [{analytic_code: 'discarded'}]});
 
-        expect(await pending).toEqual({items: [{analytic_code: 'retried'}]});
-        expect(catalogApi).toHaveBeenCalledTimes(2);
+        expect(await pending, 'the discarded answer was handed back, or the fetch gave up on its first discard').toEqual({items: [{analytic_code: 'second attempt'}]});
+        expect(catalogApi, 'a discarded catalog answer was not asked again exactly once').toHaveBeenCalledTimes(2);
     });
 
     // One bound for every discarded risk answer: the two catalog fetches here, and the
@@ -321,19 +357,135 @@ describe('riskStore', () => {
         expect(api, 'the fetch is not bounded at three attempts').toHaveBeenCalledTimes(3);
     });
 
-    it('invalidates catalog and queries after portfolio-affecting mutations', async () => {
+    it('after a portfolio-affecting mutation, serves the catalog from its cache and asks the query again (E6)', async () => {
+        // Contract changed by the page cache, phase 1 (E6, approved by the developer on 06/10). This
+        // case used to read 'invalidates catalog and queries after portfolio-affecting mutations'
+        // and expected the catalog to be fetched twice. A mutation now marks the query answers stale
+        // (`markRiskStale`) — they follow the portfolio, so they are asked again — and leaves the
+        // catalog, which follows only the engine, in its cache.
         transitionClientSession(401);
         catalogApi.mockResolvedValue({items: []});
         queryApi.mockResolvedValue({items: []});
 
         await fetchRiskCatalog();
         await queryRisk(baseRequest);
-        notifyPortfolioMutation('POST', '/api/v1/assets/prices/sync');
+        notifyPortfolioMutation('POST', '/api/v1/transactions/commit');
         await fetchRiskCatalog();
         await queryRisk(baseRequest);
 
-        expect(catalogApi).toHaveBeenCalledTimes(2);
-        expect(queryApi).toHaveBeenCalledTimes(2);
+        expect(catalogApi, 'a portfolio mutation fetched the catalog again: it describes the engine, not the portfolio').toHaveBeenCalledTimes(1);
+        expect(queryApi, 'a portfolio mutation left the query answer fresh: it follows the portfolio').toHaveBeenCalledTimes(2);
+    });
+
+    // ------------------------------------------------------------------
+    // Page cache, phase 1 (R2 / N, decisions E1 and E6 of 06/10): show the old
+    // answer, refresh in background. A portfolio mutation calls `markRiskStale()`
+    // instead of `invalidateRisk()`: the cached query and eligibility answers are
+    // marked stale and kept, `getRiskQuerySnapshot` says so, and the next question
+    // asks again — once per key. The two catalogs are not touched, and a request
+    // in flight is not discarded by a mark: on Asset Global the live price ticks
+    // every 30-60 s, and a refresh discarded by each tick would never land.
+    // `invalidateRisk()` stays the hard reset of a session change, unchanged.
+    // ------------------------------------------------------------------
+    function markRiskStale(): void {
+        expect(typeof store.markRiskStale, 'riskStore exports no markRiskStale(): a portfolio mutation can only throw the risk answers away, so the panel blanks instead of showing them while it asks again').toBe('function');
+        (store.markRiskStale as () => void)();
+    }
+
+    function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
+        let resolve!: (value: T) => void;
+        const promise = new Promise<T>((settle) => {
+            resolve = settle;
+        });
+        return {promise, resolve};
+    }
+
+    const OLD_ANSWER = {items: [{instance_id: 'kpi', analytic_code: 'historical_kpi', marker: 'old'}]};
+    const NEW_ANSWER = {items: [{instance_id: 'kpi', analytic_code: 'historical_kpi', marker: 'new'}]};
+
+    it('says in the snapshot whether a cached answer is stale: fresh after an answer, stale after markRiskStale(), kept either way', async () => {
+        transitionClientSession(601);
+        queryApi.mockResolvedValueOnce(OLD_ANSWER);
+        await queryRisk(baseRequest);
+        expect(getRiskQuerySnapshot(baseRequest), 'the snapshot carries no stale flag, or calls a fresh answer stale').toMatchObject({status: 'success', response: OLD_ANSWER, error: null, stale: false});
+
+        markRiskStale();
+
+        expect(getRiskQuerySnapshot(baseRequest), 'markRiskStale() threw the answer away, or did not mark it').toMatchObject({status: 'success', response: OLD_ANSWER, error: null, stale: true});
+        expect(queryApi, 'a mark must not ask anything by itself').toHaveBeenCalledTimes(1);
+    });
+
+    it('asks a stale answer again, once however many callers, keeps it readable meanwhile, and stores the fresh one', async () => {
+        transitionClientSession(602);
+        queryApi.mockResolvedValueOnce(OLD_ANSWER);
+        await queryRisk(baseRequest);
+        markRiskStale();
+
+        const answer = deferred<unknown>();
+        queryApi.mockImplementationOnce(() => answer.promise);
+        const first = queryRisk(baseRequest);
+        const second = queryRisk({...baseRequest, target_currency: ' eur '});
+        await vi.waitFor(() => expect(queryApi, 'a stale answer was served as it is instead of being asked again').toHaveBeenCalledTimes(2));
+        expect(getRiskQuerySnapshot(baseRequest), 'while the refresh is in flight the old answer is what the panel shows').toMatchObject({response: OLD_ANSWER, stale: true});
+
+        answer.resolve(NEW_ANSWER);
+        expect(await first).toEqual(NEW_ANSWER);
+        expect(await second).toEqual(NEW_ANSWER);
+        expect(queryApi, 'two callers of one stale key sent two requests').toHaveBeenCalledTimes(2);
+        expect(getRiskQuerySnapshot(baseRequest)).toMatchObject({status: 'success', response: NEW_ANSWER, stale: false});
+    });
+
+    it('keeps an answer whose request was in flight when markRiskStale() ran: returned and cached, still stale', async () => {
+        transitionClientSession(603);
+        const answer = deferred<unknown>();
+        queryApi.mockImplementationOnce(() => answer.promise);
+        const inFlight = queryRisk(baseRequest);
+        await vi.waitFor(() => expect(queryApi).toHaveBeenCalledTimes(1));
+
+        markRiskStale();
+        answer.resolve(NEW_ANSWER);
+
+        expect(await inFlight, 'a mark discarded the answer in flight: on Asset Global a 30 s price tick would keep any slow question from ever landing').toEqual(NEW_ANSWER);
+        expect(getRiskQuerySnapshot(baseRequest), 'the answer was not cached, or the mark made during its flight was lost').toMatchObject({status: 'success', response: NEW_ANSWER, stale: true});
+        expect(queryApi).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks the answers stale on a portfolio-affecting mutation, instead of throwing them away', async () => {
+        transitionClientSession(604);
+        queryApi.mockResolvedValueOnce(OLD_ANSWER);
+        await queryRisk(baseRequest);
+
+        notifyPortfolioMutation('POST', '/api/v1/transactions/commit');
+
+        expect(getRiskQuerySnapshot(baseRequest), 'the mutation listener still calls invalidateRisk(): the answer is gone and the panel can only show a skeleton').toMatchObject({status: 'success', response: OLD_ANSWER, stale: true});
+        expect(queryApi).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves both catalogs cached through markRiskStale()', async () => {
+        catalogApi.mockResolvedValueOnce({items: [{analytic_code: 'cached'}]});
+        scenarioCatalogApi.mockResolvedValueOnce({items: [{scenario_code: 'cached'}]});
+        await fetchRiskCatalog();
+        await fetchRiskScenarioCatalog();
+
+        markRiskStale();
+
+        expect(await fetchRiskCatalog()).toEqual({items: [{analytic_code: 'cached'}]});
+        expect(await fetchRiskScenarioCatalog()).toEqual({items: [{scenario_code: 'cached'}]});
+        expect(catalogApi, 'markRiskStale() cleared the risk catalog').toHaveBeenCalledTimes(1);
+        expect(scenarioCatalogApi, 'markRiskStale() cleared the scenario catalog').toHaveBeenCalledTimes(1);
+    });
+
+    it('does not discard a catalog request in flight when markRiskStale() runs', async () => {
+        const pending = deferred<unknown>();
+        catalogApi.mockImplementationOnce(() => pending.promise);
+        const inFlight = fetchRiskCatalog();
+
+        markRiskStale();
+        catalogApi.mockResolvedValueOnce({items: [{analytic_code: 'asked again'}]});
+        pending.resolve({items: [{analytic_code: 'kept'}]});
+
+        expect(await inFlight).toEqual({items: [{analytic_code: 'kept'}]});
+        expect(catalogApi, 'a mark discarded the catalog answer in flight and asked again').toHaveBeenCalledTimes(1);
     });
 
     it('checks catalog scope and mode capabilities', () => {
@@ -639,6 +791,45 @@ describe('riskStore — queryEligibility', () => {
         expect((await fresh)?.items.size).toBe(3);
         late.resolve(answerTo({asset_ids: [1, 2, 3], date_range: PERIOD, target_currency: 'EUR'}));
         expect(await straddling).toBeNull();
+    });
+
+    // Page cache, phase 1 (R2 / N): a portfolio mutation marks the verdicts stale (`markRiskStale`)
+    // instead of forgetting them. They follow the prices, so the same question asks again; but a
+    // mark is not a session change, so an answer in flight is still handed back.
+    async function staleMarker(): Promise<() => void> {
+        const store = (await import('./riskStore.svelte')) as unknown as Record<string, unknown>;
+        expect(typeof store.markRiskStale, 'riskStore exports no markRiskStale(): a portfolio mutation can only throw the eligibility verdicts away').toBe('function');
+        return store.markRiskStale as () => void;
+    }
+
+    it('asks again after markRiskStale(): the verdicts follow the prices', async () => {
+        const {queryEligibility} = await subject();
+        const markRiskStale = await staleMarker();
+        engineAnswers();
+
+        await queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        markRiskStale();
+        const again = await queryEligibility([3, 2, 1], PERIOD, 'EUR');
+
+        expect(eligibilityApi, 'markRiskStale() left the eligibility answers fresh').toHaveBeenCalledTimes(2);
+        expect(again?.items.size).toBe(3);
+    });
+
+    it('hands back an answer whose question was in flight when markRiskStale() ran', async () => {
+        const {queryEligibility} = await subject();
+        const markRiskStale = await staleMarker();
+        const late = deferred<EligibilityAnswer>();
+        eligibilityApi.mockImplementationOnce(() => late.promise);
+
+        const straddling = queryEligibility([1, 2, 3], PERIOD, 'EUR');
+        await vi.waitFor(() => expect(eligibilityApi, 'the question never left').toHaveBeenCalledTimes(1));
+        markRiskStale();
+        late.resolve(answerTo({asset_ids: [1, 2, 3], date_range: PERIOD, target_currency: 'EUR'}));
+
+        const verdicts = await straddling;
+        expect(verdicts, 'a mark discarded the answer in flight, as only a session change may').not.toBeNull();
+        expect(verdicts?.items.size).toBe(3);
+        expect(eligibilityApi).toHaveBeenCalledTimes(1);
     });
 
     it('rejects when the request fails, and does not remember the failure: the same question asks again', async () => {

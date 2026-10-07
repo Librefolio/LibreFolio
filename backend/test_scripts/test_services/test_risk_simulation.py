@@ -23,6 +23,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.risk.base import RiskUnavailableError
 from backend.app.services.risk.quant import engine as simulation_engine_module
+from backend.app.services.risk.quant import models as simulation_models
 from backend.app.services.risk.quant import resampling as resampling_module
 from backend.app.services.risk.quant.engine import (
     MAX_HISTORY_CELLS,
@@ -36,6 +37,7 @@ from backend.app.services.risk.quant.estimation import (
     estimate_gbm_parameters,
 )
 from backend.app.services.risk.quant.models import (
+    MAX_HISTORY_OBSERVATIONS,
     MAX_SOBOL_DIMENSION,
     SimulationEngineRequest,
     SimulationEngineResult,
@@ -1885,6 +1887,19 @@ def test_parametric_qmc_refuses_an_oversized_sobol_dimension_as_resource_limit()
     assert refused.value.details["limit"] == MAX_SOBOL_DIMENSION
     assert refused.value.details["required_dimension"] == over * horizon
     assert refused.value.details["horizon_days"] == horizon
+    # D379: like every size limit, the refusal names its metric and the remedy that
+    # works. Sobol's dimension is positions x horizon and the paths play no part in
+    # it, so the cure is a shorter horizon or MC sampling -- never fewer paths. The
+    # four keys it already carried stay, beside the three every size limit shares.
+    assert refused.value.details == {
+        "required_dimension": over * horizon,
+        "limit": MAX_SOBOL_DIMENSION,
+        "assets": over,
+        "horizon_days": horizon,
+        "metric": "sobol_dimension",
+        "actual": over * horizon,
+        "remedy": "horizon_or_sampling",
+    }
 
     # CONTROL: one asset fewer, everything else identical, is accepted. The only
     # moving part between the refusal and this line is the size of the scope.
@@ -1918,3 +1933,141 @@ def test_mc_sampling_is_not_subject_to_the_sobol_dimension_limit():
         annualization_factor=252.0,
     )
     assert len(request.asset_ids) * request.horizon_days > MAX_SOBOL_DIMENSION
+
+
+# ---------------------------------------------------------------------------
+# Size limits (developer's decision D379, 07/10/2026)
+# ---------------------------------------------------------------------------
+#
+# A simulation too large to run says so: every size limit is RESOURCE_LIMIT --
+# never INVALID_PARAMETERS ("your parameters are wrong") nor EXECUTION_FAILED
+# ("we failed") -- and its details name the limit that was hit and the remedy
+# that actually works. `remedy` is a wire contract with the frontend, which turns
+# it into a sentence, so its literal values are asserted, never paraphrased.
+#
+# Positions and observations are both capped by the engine's own model. Until
+# D379 the builders constructed the request with no guard of their own, so a
+# scope over either cap failed pydantic validation outside the plugin's `try`: a
+# ValidationError escaped, and the service could only log a traceback and answer
+# EXECUTION_FAILED. The builders now refuse first, before any request exists.
+#
+# `MAX_SIMULATION_ASSETS` is read inside the test bodies, never imported at the
+# top: the constant is itself part of the contract under test, and a missing name
+# must fail the tests that use it, not the collection of this whole file.
+
+
+def _build_request_for(process: RiskSimulationProcess, asset_count: int, observations: int = 30):
+    """Call the builder `execute` dispatches to for `process`, on an equally weighted, fully invested scope."""
+    returns_by_asset = _returns_by_asset(asset_count, observations)
+    weights = [1.0 / asset_count] * asset_count
+    if process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
+        params = SimulationParams.model_validate({"process": "block_bootstrap"})
+        return SimulationAnalytic._build_bootstrap_request(params, returns_by_asset, tuple(returns_by_asset), weights, 0.0)
+    params = SimulationParams.model_validate({"process": "gbm", "sampling_method": "mc"})
+    return SimulationAnalytic._build_parametric_request(params, returns_by_asset, weights, 0.0, annualization_factor=252.0)
+
+
+@pytest.mark.parametrize(
+    "process",
+    [
+        pytest.param(RiskSimulationProcess.BLOCK_BOOTSTRAP, id="block-bootstrap"),
+        pytest.param(RiskSimulationProcess.GBM, id="gbm"),
+    ],
+)
+def test_both_builders_refuse_more_positions_than_the_engine_carries_as_resource_limit(process):
+    limit = simulation_models.MAX_SIMULATION_ASSETS
+    over = limit + 1
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        _build_request_for(process, over)
+
+    # `positions`: no setting makes one position too many fit -- not fewer paths,
+    # not a shorter horizon, not a shorter period -- so the remedy names the scope.
+    assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
+    assert refused.value.details == {"metric": "assets", "actual": over, "limit": limit, "remedy": "positions"}
+
+    # CONTROL -- one position fewer, same process, same history, is built. The only
+    # moving part between the refusal and this line is the size of the scope.
+    request, _observations = _build_request_for(process, limit)
+    assert request.process == process
+    assert len(request.asset_ids) == limit
+
+
+def test_bootstrap_refuses_more_observations_than_the_engine_carries_as_resource_limit():
+    params = SimulationParams.model_validate({"process": "block_bootstrap"})
+    over = MAX_HISTORY_OBSERVATIONS + 1
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        SimulationAnalytic._build_bootstrap_request(params, _returns_by_asset(1, over), (1,), [1.0], 0.0)
+
+    # `period`: the bootstrap carries the aligned history across the process boundary
+    # whole, and a shorter analysis period is what holds fewer observations. Fewer
+    # paths or a shorter horizon would change nothing here.
+    assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
+    assert refused.value.details == {"metric": "observations", "actual": over, "limit": MAX_HISTORY_OBSERVATIONS, "remedy": "period"}
+
+    # CONTROL -- exactly the limit, the same asset and parameters, is built with the
+    # whole history: the ceiling is inclusive, and nothing is trimmed to reach it.
+    request, observations = SimulationAnalytic._build_bootstrap_request(params, _returns_by_asset(1, MAX_HISTORY_OBSERVATIONS), (1,), [1.0], 0.0)
+    assert observations == MAX_HISTORY_OBSERVATIONS
+    assert len(request.historical_returns) == MAX_HISTORY_OBSERVATIONS
+
+
+def test_gbm_is_not_subject_to_the_bootstrap_observation_limit():
+    """The observation ceiling belongs to the process that carries the history.
+
+    GBM sends estimated drifts and a covariance across the boundary, whatever the
+    length of the history they come from. Inheriting the bootstrap's ceiling would
+    refuse a request the engine runs happily -- a working run reported as a limit,
+    the mirror of the defect being fixed. Green before D379, and it must stay so.
+    """
+    request, observations = _build_request_for(RiskSimulationProcess.GBM, 1, MAX_HISTORY_OBSERVATIONS + 1)
+
+    assert observations == MAX_HISTORY_OBSERVATIONS + 1
+    assert request.historical_returns is None
+
+
+def _diagonal_gbm_payload(asset_count: int) -> dict:
+    """`engine_request` overrides for `asset_count` uncorrelated, equally weighted positions."""
+    return {
+        "asset_ids": list(range(1, asset_count + 1)),
+        "annual_drifts": [0.03] * asset_count,
+        "annual_covariance": [[0.04 if row == column else 0.0 for column in range(asset_count)] for row in range(asset_count)],
+        "weights": [1 / asset_count] * asset_count,
+        "cash_weight": 0,
+    }
+
+
+def test_the_engine_contract_refuses_the_positions_the_plugin_guard_refuses():
+    """Defence in depth, on one constant.
+
+    The plugin refuses first, with a code the user can act on. The model refuses
+    anyway, so a caller that bypasses the plugin still cannot hand the worker a
+    scope no guard was written for. The two halves below go red if the guard's
+    limit and the model's `max_length` ever drift apart, in either direction.
+    """
+    limit = simulation_models.MAX_SIMULATION_ASSETS
+
+    with pytest.raises(ValidationError) as refused:
+        engine_request(**_diagonal_gbm_payload(limit + 1))
+
+    # Refused for the number of positions alone, not for another flaw of the payload.
+    assert [(error["loc"], error["type"]) for error in refused.value.errors()] == [(("asset_ids",), "too_long")]
+
+    # CONTROL -- the same payload one position smaller is a valid request.
+    assert len(engine_request(**_diagonal_gbm_payload(limit)).asset_ids) == limit
+
+
+def test_the_ceilings_cited_to_the_user_are_pinned():
+    """Pinned like `largest == 66`: the user reads these two ceilings as numbers.
+
+    Every limit test derives its threshold from these constants, so moving one keeps
+    the guards and the model in step, and those tests follow it in silence. The user,
+    though, is told the values themselves. A change here must be deliberate, and must
+    carry the texts that cite it.
+    """
+    # The frontend's sentence for the `positions` remedy says «at most 100 positions»
+    # in all four catalogues, and the CHANGELOG line cites 100 positions.
+    assert simulation_models.MAX_SIMULATION_ASSETS == 100
+    # The same CHANGELOG line cites 5,000 observations.
+    assert simulation_models.MAX_HISTORY_OBSERVATIONS == 5000

@@ -239,6 +239,17 @@ def external_brim_danske_bank(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM Danske Bank tests", verbose=verbose)
 
 
+def external_brim_degiro(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the DEGIRO plugin (Account Statement by position, any language)."""
+    print_section("External: BRIM DEGIRO Tests")
+    print_info("Testing: broker_degiro — recognition, reading by position, types, FX pairs, numbers, messages")
+    print_info("Tests: Dutch and English samples row by row, orders list, warnings with evidence")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_degiro.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM DEGIRO tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -284,6 +295,9 @@ These tests verify external API integrations:
     add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank",
              desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures",
              tests="Roles, combine (zones, pairing, truth points), parse of the combined file")
+    add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO",
+             desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures",
+             tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

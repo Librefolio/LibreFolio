@@ -14,6 +14,8 @@ If LibreFolio helps you manage your investments better, consider supporting deve
 
 Every donation — no matter how small — helps cover development tools, testing infrastructure, and motivates continued improvement.
 
+Inside LibreFolio, the same coffee link sits next to buttons that share the project on X, Reddit, Facebook, Instagram, and TikTok with a ready-made message: you find them in **Settings → About**, under **Support LibreFolio**, and in the donation popup that appears now and then after you sign in. See [Support LibreFolio in the app](../user/settings/about.md#support-librefolio) for how sharing works — nothing is ever published for you.
+
 ---
 
 ## :rocket: High-Impact Contributions

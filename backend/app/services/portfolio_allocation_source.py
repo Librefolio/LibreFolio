@@ -1310,7 +1310,8 @@ async def _build_planner_current_distribution(  # noqa: C901 — per-Asset valua
 ) -> PortfolioPlannerCurrentDistribution:
     """Weight the scenario Assets by the portfolio engine's market value at ``as_of``.
 
-    Same engine call as the portfolio summary, so values match the Allocation page.
+    Same engine call as the portfolio summary, so the market values match the Dashboard
+    positions for the same Brokers and date.
     The denominator is the scenario instead of every holding and cash stays out; a
     held Asset without a valuation withholds every weight instead of vanishing.
     """

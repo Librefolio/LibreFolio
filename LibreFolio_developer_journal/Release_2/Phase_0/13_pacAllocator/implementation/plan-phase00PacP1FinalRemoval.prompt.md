@@ -1,7 +1,9 @@
 # Piano D — Rimozione finale del P1, poi R7
 
 **Stato:** 🔄 iniziato il 2026-10-06 alle 19:39. Il via è del coordinator alle 19:25 («Via alla riga 13»),
-dopo la validazione di `7ba60a62f`.
+dopo la validazione di `7ba60a62f`. Il P1 è committato (`6ebad820b` + `838be2b6f`) e la revisione del
+treno 2 è validata (S10). R7 è partito alle 21:40 su `593293b78`, dopo il riallineamento ff del
+coordinator (§6.6).
 **Baseline:** `7ba60a62f` su `e-alfy-allocatore-pac`: merge `--no-ff` di `a8ad1a500` (slice di
 robustezza) con `6addaba05` (`dev_release2`), albero `59873db3e`. Verificata alle 19:39: albero
 pulito, stage vuoto, porte 6151 e 6161 libere.
@@ -626,29 +628,99 @@ Commit proposti:
 > prova con un albero finto in `/tmp`, con i loro moduli come file vuoti: ruff passa su tutte e tre le
 > copie (la loro, la mia e la fusa). Non è un errore loro né del merge.
 
+### S10 — validazione del treno 2 ✅ 2026-10-06 21:25
+
+Il P1 è entrato con `6ebad820b` + `838be2b6f`. Il coordinator ha poi preparato D' = `2c9671753`
+(albero `8704510fc`): i due commit più il merge di K' `e6f1bee25`, che contiene la base nuova con la
+famiglia Risk. Validata sulla 6151 dalle 21:15 alle 21:25, un comando per volta, con
+`/tmp/libreFolio_d_t2/run.sh` (log `/tmp/libreFolio_d_t2/t2_<nome>.log`). Il carico è la media di un
+minuto, letta prima e dopo.
+
+| # | Comando | Esito | Ora | Durata | Carico prima → dopo |
+|---|---|---|---|---|---|
+| 1 | `api sync` | rc 0; hash dei contratti dei tool `f636854e…e33a`, invariato | 21:15:57 | 11 s | 9,31 → 9,52 |
+| 2 | `front build --debug` | rc 0; svelte-check 0 errori, 0 avvisi | 21:16:13 | 88 s | 9,47 → 26,08 |
+| 3 | `front check` | 0 errori, 0 avvisi | 21:17:45 | 36 s | 25,27 → 24,51 |
+| 4 | `test … api portfolio` | 49 passati | 21:18:25 | 57 s | 24,51 → 24,55 |
+| 5 | `test … api risk` | 4 falliti, 11 passati: DB della corsia non popolato (vedi il Fuori pista) | 21:19:26 | 11 s | 24,55 → 23,45 |
+| 6 | `test … services portfolio-allocation-source` | 89 passati | 21:20:41 | 6 s | 25,96 → 26,49 |
+| 7 | `test … services roi-fifo-utils` | 506 passati | 21:20:51 | 14 s | 26,49 → 27,92 |
+| 8 | `test … db populate --force --clean`, concesso dal coordinator | rc 0; 6 900 record | 21:21:11 | 12 s | 27,77 → 33,92 |
+| 9 | `test … api risk`, rifatto | 15 passati | 21:21:27 | 19 s | 34,09 → 33,89 |
+| 10 | `test … api portfolio`, rifatto sul DB popolato | 49 passati | 21:21:57 | 28 s | 33,30 → 29,67 |
+| 11 | `test … front-utility core-unit` | 112 file, 3 317 test passati | 21:22:28 | 25 s | 29,13 → 26,03 |
+| 12 | `test … front-utility component-unit` | 108 file, 2 721 test passati | 21:22:58 | 102 s | 24,74 → 27,43 |
+| 13 | `test … check-orphans` | verde: 321 file unit frontend, 98 spec e2e, 236 file backend | 21:24:44 | 2 s | 25,96 → 25,96 |
+| 14 | `i18n audit` | rc 0; 4 355 chiavi per lingua | 21:24:50 | 5 s | 25,48 → 24,64 |
+| 15 | `lint` | «All checks passed!» | 21:25:09 | 1 s | 23,64 → 23,64 |
+| 16 | `mkdocs build` | rc 0; 0 WARNING, 0 ERROR | 21:25:14 | 28 s | 23,67 → 25,27 |
+| 17 | `mkdocs check-links` | rc 1 solo per il rosso accettato D28 (`#rolling-return` in it/fr/es); 89 link validi, 3 eccezioni note | 21:25:47 | 2 s | 26,05 → 26,05 |
+
+> **Note implementazione**: rapporto mandato al coordinator; il coordinator l'ha registrato e ha deciso
+> che entra nel journal del commit di R7. Poi il developer ha riallineato D con un ff a `593293b78`
+> (`dev_release2` col treno 2). Fra `2c9671753` e `593293b78` non cambia nessun file di `frontend/src`
+> né di `backend/app`.
+>
+> **⚠️ Fuori pista**: al punto 5 i 4 test di `test_risk_api.py` si fermavano al loro controllo iniziale,
+> «Test database is not populated: user 'e2e_test_user' is missing». Il DB della corsia aveva solo lo
+> schema, perché fino ad allora nessun gate di D lo popolava. I test non l'hanno modificato. Ho chiesto
+> l'ok per il punto 8, che cancella e ricrea solo `/tmp/librefolio-r2-d`; poi ho rifatto `api risk`
+> e `api portfolio`.
+
 ## 6. R7 — `fix(pac)`, dopo il checkpoint del P1
 
 **Perché dopo.** R7 cambia dei valori nei 4 file i18n, gli stessi da cui il P1 toglie 285 chiavi. Se
 i due lavori stanno nello stesso albero, il developer non può dividerli in due commit per percorso.
 Quindi prima il commit del P1, poi R7 sul nuovo HEAD, con i suoi gate.
 
-### 6.1 «La pagina Allocazione», che non esiste
+### 6.1 «La pagina Allocazione», che non esiste — variante B, decisa il 2026-10-06
 
 `distribution.source` (il suggerimento a `DistributionDialog.svelte:204`) e `distribution.differs`
 (`:66`) rimandano ai «valori della pagina Allocazione» e ai pesi che «differiscono dalla pagina», in
-tutte e 4 le lingue. Quella pagina non esiste: i valori sono quelli del pannello della Dashboard
-`dashboard.allocation` («Asset Allocation», «Allocazione Patrimoniale», «Allocation Patrimoniale»,
-«Asignación Patrimonial»). Correzione: i valori ×4 con `dev.py i18n update`, più i fallback EN nel
-componente, con il nome del pannello della Dashboard.
+tutte e 4 le lingue. Quella pagina non esiste.
+
+> **⚠️ Fuori pista**: la correzione prevista qui, «con il nome del pannello della Dashboard
+> `dashboard.allocation`», era sbagliata. Quel pannello («Asset Allocation»,
+> `AllocationPanel.svelte:106`) ha solo le schede per tipo, settore e area (`:21`, `:37-41`), nessun
+> peso per Asset. I pesi per Asset sono in «Your Positions» (`PositionsPanel.svelte:140`), nella
+> colonna Weight (`ExposureTable.svelte:354`) e nella treemap, e vengono tutti da
+> `nav_weight_percent`, cioè valore / NAV × 100, **cassa compresa** (`schemas/portfolio.py:392`). Il
+> planner divide invece solo per gli Asset dello scenario, senza cassa. Quindi anche il vecchio
+> `differs` era sbagliato nella sostanza: i pesi differiscono anche con tutti gli Asset nello
+> scenario, se c'è cassa. Nominare un pannello avrebbe promesso numeri uguali.
+
+> **Decisione del coordinator** (2026-10-06 19:38): variante B, senza nomi di pannelli né di colonne,
+> che possono cambiare, con i testi proposti nelle 4 lingue. Inclusa anche la docstring di
+> `portfolio_allocation_source.py:1313`, che cambia solo il commento. La variante A, scartata,
+> nominava «Your Positions» e la colonna Weight.
+
+Correzione: i valori ×4 con `dev.py i18n update`, più i fallback EN nel componente.
+
+| Chiave | Lingua | Testo |
+|---|---|---|
+| `distribution.source` | EN | Source: the portfolio engine, the same calculation the Dashboard uses. |
+| | IT | Fonte: il motore del portafoglio, lo stesso calcolo usato dalla Dashboard. |
+| | FR | Source : le moteur du portefeuille, le même calcul que celui du tableau de bord. |
+| | ES | Fuente: el motor de la cartera, el mismo cálculo que usa el Panel. |
+| `distribution.differs` | EN | On the Dashboard, an Asset’s weight is measured against the whole portfolio, cash included, so it can differ from the weight here. |
+| | IT | Nella Dashboard il peso di un Asset è misurato sull’intero portafoglio, cassa compresa, quindi può differire da quello mostrato qui. |
+| | FR | Dans le tableau de bord, le poids d’un actif est mesuré sur l’ensemble du portefeuille, liquidités comprises : il peut donc différer de celui affiché ici. |
+| | ES | En el Panel, el peso de un activo se mide sobre toda la cartera, efectivo incluido, así que puede diferir del que se muestra aquí. |
+
+Nell'aiuto, `differs` viene subito dopo «Denominator: the Assets of the scenario; cash does not
+enter.» (`DistributionDialog.svelte:65-66`). La docstring di `portfolio_allocation_source.py:1313`,
+«Same engine call as the portfolio summary, so values match the Allocation page.», diventa «Same
+engine call as the portfolio summary, so the market values match the Dashboard positions for the
+same Brokers and date.»
 
 ### 6.2 «1 units»
 
-Con una quantità di 1 il risultato scrive «buy 1 units». Le chiavi senza plurale sono sette:
+Con una quantità di 1 il risultato scrive «buy 1 units». Le chiavi senza plurale sono 6, in 7 punti:
 
 | Dove | Chiave | Valore |
 |---|---|---|
 | `result/text.ts:21` | `result.text.buyUnits` | quantità dell'ordine, personale |
-| `result/text.ts:29` | `result.text.stepUnits` | passo dell'ordine, pubblico; mancava nella lista originale |
+| `result/text.ts:30` | `result.text.stepUnits` | passo dell'ordine, pubblico; mancava nella lista originale |
 | `result/text.ts:39` | `result.text.pricePer` | base del prezzo, pubblica; si vede solo quando è diversa da 1 |
 | `result/text.ts:48` e `:54` | `result.text.units` | minimo e tetto della route, personali |
 | `result/OrderDetail.svelte:57` e `:58` | `result.detail.quantityExact`, `.quantityEstimated` | quantità economica, personale; trovate rileggendo per questo piano |
@@ -661,6 +733,36 @@ singolare).
 **Privacy.** Quando la quantità è mascherata, il `count` è sempre quello del plurale. Il singolare
 rivelerebbe che la quantità è 1. La funzione che sceglie il `count` va in `planner/format.ts`,
 l'unico adattatore privacy del planner.
+
+> **Decisioni del coordinator** (2026-10-06 19:38):
+>
+> - **Le parole.** Le 5 chiavi di quantità (`buyUnits`, `stepUnits`, `units`, `quantityExact`,
+>   `quantityEstimated`) si allineano al resto del planner (`brokers.stepUnits`, `units.shares`):
+>   quota/quote, titre/titres, título/títulos. In EN restano unit/units. `pricePer` resta
+>   unità/unité/unidad, come `assets.perUnits` e `review.price`, perché è la base del prezzo.
+> - **Il conteggio** viene dalle cifre mostrate, non da `Number(…)`; quando la quantità è mascherata,
+>   il plurale. Approvato.
+> - **Minimi e tetti delle route** restano personali, mascherati con la privacy: era il rinvio di
+>   `plan-phase00PacRound5-C0UiDelta.prompt.md:1239`, «patrimonio per default». Il commento di
+>   `text.ts:45` (nella domanda l'avevo citato come `:44`), «A route minimum: wealth by default until
+>   R7 decides otherwise.», diventa «A route minimum or cap is wealth, like the order it bounds: masked
+>   with privacy on.»
+
+**Il conteggio, in dettaglio.** Una funzione privata `pluralCount(value, sensitivity)` in `format.ts`:
+
+- dà `NaN`, cioè sempre la forma `other`, quando il valore è mascherato (`shouldMaskAmount`, lo stesso
+  predicato di `maskable`), nullo o non valido;
+- altrimenti prende le cifre di `formatDecimalForDisplay(canonicalDecimal(v), {maxFrac: 20})`, le
+  stesse che l'utente vede, e restituisce `Number(parte intera) + (parte decimale ? 0.5 : 0)`. Lo 0,5
+  conserva gli operandi CLDR `i` e `v > 0`: in francese 0 e 1,5 vanno al singolare, in en/it/es 1,5
+  al plurale.
+
+Esempi: «1.00000000000000000001» → 1,5, plurale (`Number` darebbe 1, singolare); con 21 cifre
+decimali si vede «1» → 1, singolare. Per una quantità `exact_ratio` conta il `display_decimal`
+(«≈1» → singolare). Nei plurali niente `#`: il `count` è un sostituto, non il numero mostrato.
+
+Tre funzioni esportate: `plannerQuantityCount` (personale), `exactQuantityCount` (personale, per la
+quantità economica) e `plannerPlainDecimalCount` (pubblica, per passo e base del prezzo).
 
 ### 6.3 La distanza L2 e la lingua — chiusa con (a) il 2026-10-06
 
@@ -681,12 +783,171 @@ Una lingua dei numeri uguale a quella dell'app, per tutto, è un lavoro più lar
 
 ### 6.4 File di R7
 
-`planner/steps/DistributionDialog.svelte`, `planner/result/text.ts`, `planner/result/OrderDetail.svelte`,
-`planner/format.ts`; i valori ×4 con `dev.py i18n update`; i test con il test-author
-(`planner/format.test.ts`, già nel runner; un eventuale `result/text.test.ts` chiede una riga in più
-in `_frontend_utility.py`).
+| File | Cambio |
+|---|---|
+| `planner/format.ts` | `pluralCount` privato e i tre conteggi esportati della §6.2 |
+| `planner/result/text.ts` | plurale ICU in `buyUnits`, `stepUnits`, `pricePer` e `units`; nuova `economicQuantityText` esportata; il commento di `:45` |
+| `planner/result/OrderDetail.svelte` | `:55-59` usa `economicQuantityText` |
+| `planner/steps/DistributionDialog.svelte` | fallback EN di `differs` (`:66`) e `source` (`:204`) |
+| `backend/app/services/portfolio_allocation_source.py` | solo la docstring di `:1313` |
+| `scripts/test_runner/_frontend_utility.py` | una riga, `result/text.test.ts`, dopo `result/model.test.ts`: concessa dal coordinator, in aggiunta |
+| `frontend/src/lib/i18n/{en,it,fr,es}.json` | 8 valori ×4 con `dev.py i18n update`; nessuna chiave aggiunta o tolta |
+| test, scritti dal test-author | `planner/format.test.ts`, già nel runner; nuovo `planner/result/text.test.ts` |
 
-Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator.
+Nessuna pagina MkDocs nomina la «pagina Allocazione»: la cercano solo i 4 cataloghi, la docstring e
+il fallback di `DistributionDialog.svelte:204`. R7 non chiede il docs-writer.
+
+Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator, che la scrive.
+
+### 6.5 Fuori da R7
+
+- Gli altri plurali del planner usano ancora `Number(…)` (`AssetsStep.svelte:125` e `:247`,
+  `ReviewCell.svelte:92`, e `modeText.ts:30`, trovato alla consegna di R7-S5) e hanno lo stesso
+  problema vicino a 1. Il coordinator li passa all'audit i18n.
+- Il journal del commit di R7 contiene anche la validazione del treno 2 (S10).
+
+### 6.6 Passi di R7
+
+| Passo | Cosa |
+|---|---|
+| R7-S0 | piano: S10, §6.1-§6.6, DoD, §8 |
+| R7-S1 | rossi con il test-author; io scrivo la riga del runner e verifico i rossi sulla 6151 |
+| R7-S2 | codice: i 5 file della §6.4 |
+| R7-S3 | `dev.py i18n update`, 8 valori ×4; controllo che il diff dei cataloghi sia solo quello |
+| R7-S4 | gate sulla 6151, un comando per volta, col carico: `api sync`, `front build --debug`, `front check`, `core-unit`, `component-unit`, `check-orphans`, `i18n audit`, `lint`, `services portfolio-allocation-source`, `git diff --check`, porta libera |
+| R7-S5 | consegna al coordinator, poi FROZEN |
+
+> **Note implementazione** (R7-S0, ✅ 2026-10-06 21:43): piano corretto come chiesto nella domanda 5 e
+> approvato dal coordinator: §6.1 con il Fuori pista e la variante B, §6.2 con 6 chiavi in 7 punti e
+> le decisioni, §6.4-§6.6, DoD, §8 e la validazione del treno 2 (S10). Prima di scrivere ho
+> verificato che fra `2c9671753` e `593293b78` non cambi nessun file di `frontend/src` né di
+> `backend/app`, quindi le righe citate nelle domande valgono ancora. Una sola differenza: il commento
+> di `text.ts` è a `:45`, non a `:44`.
+
+> **Note implementazione** (R7-S1, ✅ 2026-10-06 23:10): il test-author ha scritto i rossi in due
+> file, senza eseguire nulla.
+> - `planner/format.test.ts`: 29 test nuovi. Coprono la tabella dei conteggi (anche 20 cifre
+>   decimali, che `Number()` legge come 1, e la 21ª cifra non mostrata), i rapporti esatti, la
+>   privacy e la proprietà dei gemelli: il conteggio è NaN solo quando il testo mostrato non ha
+>   cifre, altrimenti ha la stessa parte intera e la stessa frazione del testo.
+> - Nuovo `planner/result/text.test.ts`: 95 test. Coprono i 7 punti con la privacy spenta e accesa,
+>   P-d, i 6 messaggi nelle 4 lingue (struttura ICU e scelta del plurale) e i due fallback della
+>   distribuzione.
+>
+> Io ho aggiunto la riga del runner dopo `result/model.test.ts`, uguale alla bozza. I rossi sulla
+> 6151:
+>
+> | Comando | Ora | Carico (prima → dopo) | Durata | Esito |
+> |---|---|---|---|---|
+> | `front-utility core-unit` | 23:07 | 18,6 → 27,7 | 30 s | 28 rossi, 3 318 verdi; tutti `TypeError: … is not a function` dei tre conteggi |
+> | `front-utility component-unit` | 23:08 | 30,2 → 21,5 | 1 min 49 s | 76 rossi, 2 740 verdi |
+>
+> I 76 rossi di `component-unit` sono quelli previsti: 25 punti con la privacy spenta e 25 con la
+> privacy accesa (manca `count`, oppure `economicQuantityText` non esiste), 2 P-d sui punti
+> economici, 24 messaggi × lingua senza plurale. I fallback della distribuzione sono verdi, perché
+> oggi coincidono con `en.json`. Log in `/tmp/libreFolio_d_r7/s1_*.log`.
+>
+> Il test fissa un comportamento che esiste già: una base di quotazione con una 21ª cifra decimale
+> si legge «per 1 unità», perché la 21ª cifra non viene mostrata.
+
+> **⚠️ Fuori pista** (R7-S1): il test-author ha trovato che `getMessageFormatter(message, locale)` di
+> svelte-i18n ignora la lingua. La memoizzazione (`node_modules/svelte-i18n/dist/runtime.js:383-392`,
+> `:496-500`) passa alla funzione solo il messaggio e usa il testo come chiave della cache. Quindi un
+> messaggio identico in due cataloghi viene compilato una volta sola, con le regole del plurale della
+> prima lingua che lo usa. Per R7 non conta: i 6 messaggi sono diversi in ogni lingua. Il test sceglie
+> il plurale con la classe del runtime e la lingua esplicita, e lo controlla con `resolvedOptions()`.
+> Lo segnalo al coordinator per l'audit i18n.
+
+> **Note implementazione** (R7-S2, ✅ 2026-10-06 23:14): ho copiato le 5 bozze della §6.4 dopo aver
+> controllato con `cmp` che gli originali fossero ancora uguali a HEAD. Il diff (+57 −16) è:
+> - in `format.ts`, `pluralCount` privato e i tre conteggi esportati;
+> - in `text.ts`, il plurale ICU nei 4 fallback, `economicQuantityText` e `unitsText` per minimo e
+>   tetto della rotta, più il commento sulla privacy;
+> - in `OrderDetail.svelte`, la quantità economica passa da `economicQuantityText`;
+> - in `DistributionDialog.svelte`, i due fallback della variante B;
+> - in `portfolio_allocation_source.py`, la docstring di `:1313`, che ora nomina la Dashboard.
+>
+> | Comando | Ora | Carico (prima → dopo) | Durata | Esito |
+> |---|---|---|---|---|
+> | `front-utility core-unit` | 23:10 | 12,1 → 12,6 | 21 s | ✅ 112 file, 3 346 verdi |
+> | `front-utility component-unit` | 23:11 | 12,1 → 24,7 | 1 min 42 s | 33 rossi, 2 783 verdi |
+>
+> I 33 rossi sono tutti in `text.test.ts` e aspettano i cataloghi:
+> - 7 P-d, uno per punto: il fallback ha il plurale, `en.json` ancora «… units»;
+> - 24 messaggi × lingua: nel catalogo non c'è ancora il plurale su `count`;
+> - 2 fallback della distribuzione: il codice ha il testo nuovo, `en.json` quello vecchio.
+>
+> Log in `/tmp/libreFolio_d_r7/s2_*.log`.
+
+> **Note implementazione** (R7-S3, ✅ 2026-10-06 23:17): ho lanciato `files/r7/i18n_update.py` della
+> sessione dalla radice del worktree: 8 `pipenv run python dev.py i18n update`, uno per chiave con le 4
+> lingue, tutti ✅ (23:14:19–23:14:30). Poi ho controllato i cataloghi con uno script che confronta
+> ogni file con HEAD:
+> - 4 355 chiavi per lingua, come prima; nessuna aggiunta né tolta;
+> - cambiano solo le 8 chiavi approvate, e ognuna ha esattamente il valore approvato;
+> - rimettendo i vecchi valori, ogni file torna identico byte per byte a HEAD;
+> - `git diff --numstat`: 8 righe tolte e 8 aggiunte per file.
+>
+> | Comando | Ora | Carico (prima → dopo) | Durata | Esito |
+> |---|---|---|---|---|
+> | `front-utility component-unit` | 23:14 | 13,9 → 27,8 | 2 min 19 s | ✅ 109 file, 2 816 verdi |
+>
+> I 33 rossi della R7-S2 sono diventati verdi. Log in `/tmp/libreFolio_d_r7/s3_*.log`.
+
+> **Note implementazione** (R7-S4, ✅ 2026-10-06 23:24): gate sulla 6151, un comando per volta, con
+> `/tmp/libreFolio_d_r7/run.sh` (log `/tmp/libreFolio_d_r7/r7_<nome>.log`). Il carico è la media di un
+> minuto, letta prima e dopo. HEAD `593293b78`.
+>
+> | # | Comando | Esito | Ora | Durata | Carico prima → dopo |
+> |---|---|---|---|---|---|
+> | 1 | `api sync` | rc 0; hash dei contratti dei tool `f636854e…e33a`, invariato; nessun file tracciato cambiato | 23:17:47 | 11 s | 26,55 → 26,26 |
+> | 2 | `front build --debug` | rc 0; svelte-check 0 errori, 0 avvisi | 23:18:02 | 93 s | 26,32 → 29,54 |
+> | 3 | `front check` | 0 errori, 0 avvisi | 23:19:39 | 34 s | 29,54 → 30,05 |
+> | 4 | `test … front-utility core-unit` | 112 file, 3 346 test passati | 23:20:15 | 22 s | 29,25 → 29,26 |
+> | 5 | `test … front-utility component-unit` | 109 file, 2 816 test passati | 23:20:40 | 85 s | 29,88 → 28,86 |
+> | 6 | `test … check-orphans` | verde: 322 file unit frontend (+1, `text.test.ts`), 98 spec e2e, 237 file backend | 23:22:08 | 1 s | 28,86 → 28,86 |
+> | 7 | `i18n audit` | rc 0; 4 355 chiavi complete per lingua, 0 mancanti, 250 forse inutilizzate | 23:22:21 | 5 s | 23,21 → 21,83 |
+> | 8 | `lint` | «All checks passed!» | 23:23:40 | 2 s | 15,15 → 15,15 |
+> | 9 | `test … services portfolio-allocation-source` | 89 passati | 23:23:45 | 6 s | 14,74 → 16,68 |
+> | 10 | `git diff --check`, anche sul file nuovo | pulito | 23:24 | — | 16,83 |
+> | 11 | `lsof -nP -iTCP:6151 -sTCP:LISTEN` | vuoto: porta libera | 23:24 | — | — |
+>
+> Tre controlli in più:
+> - **Audit**: il resto del rapporto è identico a quello del treno 2 (S10), compresi i due elenchi
+>   «non verificate» e «inutilizzate», nello stesso ordine. Cambiano solo due conteggi della
+>   scansione: 4 683 → 4 688 chiavi esatte e 107 → 108 prefissi. Con le regex dell'audit applicate
+>   ai file cambiati, HEAD contro il worktree, le 5 «chiavi» in più sono stringhe del test nuovo
+>   (`'1.000'`, `'a.b'`, `'a.bc'`, `'one'`, `'step'`), e il prefisso `1` viene dai due test. Nessuna
+>   è una chiave dei cataloghi, quindi nessun verdetto cambia.
+> - **File backend**: 236 → 237 viene dalla base. `593293b78` aggiunge
+>   `test_utilities/test_translation_code_blocks.py` rispetto a `2c9671753`; io non tocco
+>   `backend/test_scripts`.
+> - **Prettier** (`frontend/node_modules/.bin/prettier --check`, sola lettura): 5 file su 6
+>   formattati. `DistributionDialog.svelte` ha lo stesso debito che ha a HEAD: 106 righe in
+>   `:74-126`, lontane dalle mie (`:66`, `:204`). Non lo correggo: è fuori da R7.
+>
+> Nel codice e nei cataloghi non resta nessuna «pagina Allocazione» (ricerca su `frontend/src` e
+> `backend/app` in 4 lingue).
+
+> **Note implementazione** (R7-S5, ✅ 2026-10-06 23:30): CHECKPOINT READY inviato al coordinator,
+> poi FROZEN.
+> - **Delta**: 13 file tracciati e 1 nuovo (`planner/result/text.test.ts`). Due commit, come la
+>   riga 13: `fix(pac)` per codice, test, cataloghi e runner; `docs(journal)` per questo piano e il
+>   README.
+> - **DoD di R7** verificata sul codice: 6 chiavi (`buyUnits`, `stepUnits`, `pricePer`, `units`,
+>   `quantityExact`, `quantityEstimated`) in 7 punti, perché `units` serve sia il minimo sia il
+>   tetto; più i 2 testi della distribuzione. In tutto 8 valori ×4.
+> - **Esclusi**: le 9 istantanee del DB di test in `.testLog/00_archive/` (da
+>   `test-db_20261006_230741` a `_232350`, ignorate), i log in `/tmp/libreFolio_d_r7/` e l'output
+>   di build.
+> - **CHANGELOG**: nessuna versione rilasciata contiene il PAC o il P1 (in `v1.1.0` non ci sono né
+>   `features/tools` né `allocation_source`). Propongo quindi di non aggiungere la riga 🐛 e lascio
+>   al coordinator un testo di riserva.
+>
+> **⚠️ Fuori pista**: alla consegna ho trovato un quarto plurale con `Number(…)`: `modeText.ts:30`
+> (`brokers.stepUnits`), cioè proprio il modello citato nella §6.2. Il valore è pubblico (è il
+> passo), ma il problema vicino a 1 è lo stesso. È fuori da R7: l'ho aggiunto all'elenco della §6.5
+> per l'audit i18n.
 
 ## 7. Definition of done
 
@@ -698,7 +959,9 @@ Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator.
 - Parità i18n fra le 4 lingue e diff i18n limitato alle chiavi della lista.
 - Porta 6151 libera alla consegna.
 - Questo piano aggiornato dopo ogni passo.
-- R7: le sette chiavi col plurale, la privacy rispettata, il testo della Dashboard ×4, L2 come deciso.
+- R7: le 6 chiavi in 7 punti col plurale e il conteggio dalle cifre mostrate, la privacy rispettata
+  (mascherato → plurale), i due testi della distribuzione ×4 senza nomi di pannelli (variante B), la
+  docstring, L2 come deciso.
 
 ## 8. Avanzamento
 
@@ -714,7 +977,13 @@ Commit: `fix(pac): …`, con la riga 🐛 del CHANGELOG proposta al coordinator.
 | S7 docs | ✅ docs-writer, una riga | 2026-10-06 |
 | S8 gate | ✅ 18 controlli, tutti verdi (check-links rosso solo per D28, accettato) | 2026-10-06 20:45 |
 | S9 checkpoint | ✅ previsione rifatta: 0 conflitti con la famiglia Risk; CHECKPOINT READY, poi FROZEN | 2026-10-06 20:55 |
-| R7 | ⏳ | |
+| S10 validazione del treno 2 | ✅ 17 comandi; `api risk` verde dopo il popolamento concesso | 2026-10-06 21:25 |
+| R7-S0 piano | ✅ | 2026-10-06 21:43 |
+| R7-S1 rossi | ✅ 28 + 76 rossi, tutti per la ragione prevista | 2026-10-06 23:10 |
+| R7-S2 codice | ✅ `core-unit` verde; 33 rossi che aspettano i cataloghi | 2026-10-06 23:14 |
+| R7-S3 i18n | ✅ 8 valori ×4, nient'altro; `component-unit` verde | 2026-10-06 23:17 |
+| R7-S4 gate | ✅ 11 gate verdi, porta libera | 2026-10-06 23:24 |
+| R7-S5 consegna | ✅ CHECKPOINT READY, poi FROZEN | 2026-10-06 23:30 |
 
 ## Appendice A — le 285 chiavi tolte in S6
 

@@ -16,7 +16,10 @@
     Custody modal's full chronology (refinement v1 §5 / modal spec). PRICE_HISTORY +
     BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY feed the WAC/price chart.
   - Selection fetch (effectiveSelectionIds change): VALUE_HISTORY + RETURN_HISTORY scoped to
-    the effective lot set. Per plan v3 §13 an empty selectedLotIds means "all visible lots"
+    the effective lot set.
+  Both go through `lotsAnalysisStore` (page cache, phase 1): an answer already known — fresh, or
+  marked stale by a portfolio mutation or «Aggiorna» — is shown at once and refreshed in background;
+  a failed refresh keeps it on screen and says so with a toast. Per plan v3 §13 an empty selectedLotIds means "all visible lots"
     (effectiveSelectionIds), so the comparison chart shows the whole visible set by default and
     narrows only on an explicit selection.
 
@@ -29,12 +32,14 @@
   renders inside LotGanttChart.
 -->
 <script lang="ts">
-    import {tick} from 'svelte';
+    import {tick, untrack} from 'svelte';
     import {slide} from 'svelte/transition';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {ExternalLink, X} from 'lucide-svelte';
-    import {zodiosApi, schemas} from '$lib/api';
+    import {schemas} from '$lib/api';
+    import {fetchLotsAnalysis, peekLotsAnalysis, type LotsAnalysisResponse} from '$lib/stores/portfolio/lotsAnalysisStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import type {z} from 'zod';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import LotGanttChart from './LotGanttChart.svelte';
@@ -75,9 +80,13 @@
         currency: string;
         assetName?: string | null;
         onClose: () => void;
+        /** False while the host does not know the broker scope yet: nothing is asked until it does. */
+        ready?: boolean;
+        /** Bumped by the host's «Aggiorna»: both analyses are asked again. */
+        refreshVersion?: number;
     }
 
-    let {open, assetId, brokerIds, brokers, currency, assetName = null, onClose}: Props = $props();
+    let {open, assetId, brokerIds, brokers, currency, assetName = null, onClose, ready = true, refreshVersion = 0}: Props = $props();
 
     let loading = $state(false);
     let error = $state<string | null>(null);
@@ -155,93 +164,139 @@
         sharedZoomEnd = end;
     }
 
-    async function loadMain(currentAssetId: number, currentBrokerIds: number[]) {
+    const MAIN_ANALYSES = ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const;
+    const SELECTION_ANALYSES = ['VALUE_HISTORY', 'RETURN_HISTORY'] as const;
+    /** The answers last put on screen: a reload that finds the same cached answer leaves the charts alone. */
+    let shownMain: LotsAnalysisResponse | null = null;
+    let shownSelection: LotsAnalysisResponse | null = null;
+
+    function applyMain(response: LotsAnalysisResponse) {
+        shownMain = response;
+        lots = asArray<LotSummarySchema>(response.lots);
+        ganttSegments = asArray<GanttSegmentSchema>(response.gantt_segments);
+        // EVENT_HISTORY is a superset of the old CUSTODY_HISTORY filter (backend computes the
+        // full per-lot event list unconditionally either way — see lots_analysis_service.py
+        // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
+        // chart's transaction markers and the Custody modal's full chronology, no double fetch.
+        lotEvents = asArray<LotTimelineEventSchema>(response.lot_events);
+        priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
+        brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
+        cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
+        quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
+        incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
+            type: event.type,
+            date: event.date,
+            broker_id: event.broker_id ?? null,
+            amount: event.amount,
+            lot_ids: event.lot_ids ?? [],
+        }));
+        dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
+        calculationStatus = typeof response.calculation_status === 'string' ? response.calculation_status : null;
+
+        const metadata = response.calculation_metadata;
+        const computedFrom = asObject<string>(metadata?.computed_date_from);
+        const computedTo = asObject<string>(response.calculation_metadata?.computed_date_to);
+        computedRange = computedFrom && computedTo ? {min: computedFrom, max: computedTo} : null;
+
+        // Prune a selection that no longer resolves to a real lot (e.g. asset/broker change).
+        const validIds = new Set(lots.map((lot) => lot.lot_id));
+        selectedLotIds = selectedLotIds.filter((id) => validIds.has(id));
+    }
+
+    function clearMain() {
+        shownMain = null;
+        lots = [];
+        ganttSegments = [];
+        lotEvents = [];
+        priceHistory = [];
+        brokerWacHistory = [];
+        cumulativeWacHistory = [];
+        dataQualityIssues = [];
+        calculationStatus = null;
+        incomeEvents = [];
+        quoteBaseQuantity = 1;
+    }
+
+    async function loadMain(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, force = false) {
         const version = ++fetchVersion;
-        loading = true;
-        error = null;
+        const body = {
+            asset_id: currentAssetId,
+            broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
+            target_currency: currentCurrency,
+            requested_analyses: MAIN_ANALYSES,
+        };
+        // What the cache holds goes on screen at once; only a stale or missing answer is asked.
+        const cached = peekLotsAnalysis(body);
+        if (cached) {
+            error = null;
+            loading = false;
+            if (cached.response !== shownMain) applyMain(cached.response);
+            if (!cached.stale && !force) return;
+        } else {
+            loading = true;
+            error = null;
+        }
         try {
-            const body = {
-                asset_id: currentAssetId,
-                broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                target_currency: currency,
-                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const,
-            };
-            const response = await zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post(body);
-            if (version !== fetchVersion) return; // stale response from a since-superseded open/asset change
-
-            lots = asArray<LotSummarySchema>(response.lots);
-            ganttSegments = asArray<GanttSegmentSchema>(response.gantt_segments);
-            // EVENT_HISTORY is a superset of the old CUSTODY_HISTORY filter (backend computes the
-            // full per-lot event list unconditionally either way — see lots_analysis_service.py
-            // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
-            // chart's transaction markers and the Custody modal's full chronology, no double fetch.
-            lotEvents = asArray<LotTimelineEventSchema>(response.lot_events);
-            priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
-            brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
-            cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
-            quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
-            incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
-                type: event.type,
-                date: event.date,
-                broker_id: event.broker_id ?? null,
-                amount: event.amount,
-                lot_ids: event.lot_ids ?? [],
-            }));
-            dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
-            calculationStatus = typeof response.calculation_status === 'string' ? response.calculation_status : null;
-
-            const metadata = response.calculation_metadata;
-            const computedFrom = asObject<string>(metadata?.computed_date_from);
-            const computedTo = asObject<string>(response.calculation_metadata?.computed_date_to);
-            computedRange = computedFrom && computedTo ? {min: computedFrom, max: computedTo} : null;
-
-            // Prune a selection that no longer resolves to a real lot (e.g. asset/broker change).
-            const validIds = new Set(lots.map((lot) => lot.lot_id));
-            selectedLotIds = selectedLotIds.filter((id) => validIds.has(id));
+            const response = await fetchLotsAnalysis(body, force);
+            if (version !== fetchVersion || response === null) return; // superseded, or discarded by a session change
+            if (response !== shownMain) applyMain(response);
         } catch (e) {
             if (version !== fetchVersion) return;
             console.error('Failed to load lots analysis:', e);
-            error = $_('brokers.lots.loadFailed');
-            lots = [];
-            ganttSegments = [];
-            lotEvents = [];
-            priceHistory = [];
-            brokerWacHistory = [];
-            cumulativeWacHistory = [];
-            dataQualityIssues = [];
-            calculationStatus = null;
-            incomeEvents = [];
-            quoteBaseQuantity = 1;
+            if (cached) {
+                // A failed refresh keeps the lots it was refreshing on screen.
+                toasts.error($_('brokers.lots.loadFailed'));
+            } else {
+                error = $_('brokers.lots.loadFailed');
+                clearMain();
+            }
         } finally {
             if (version === fetchVersion) loading = false;
         }
     }
 
-    async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], ids: number[]) {
+    function applySelection(response: LotsAnalysisResponse) {
+        shownSelection = response;
+        valueHistory = asArray<LotValueHistoryPoint>(response.value_history);
+        returnHistory = asArray<LotReturnHistoryPoint>(response.return_history);
+    }
+
+    async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, ids: number[], force = false) {
         const version = ++selectionFetchVersion;
         if (ids.length === 0) {
+            shownSelection = null;
             valueHistory = [];
             returnHistory = [];
+            selectionLoading = false;
             return;
         }
-        selectionLoading = true;
+        const body = {
+            asset_id: currentAssetId,
+            broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
+            target_currency: currentCurrency,
+            selected_lot_ids: ids,
+            requested_analyses: SELECTION_ANALYSES,
+        };
+        const cached = peekLotsAnalysis(body);
+        if (cached) {
+            selectionLoading = false;
+            if (cached.response !== shownSelection) applySelection(cached.response);
+            if (!cached.stale && !force) return;
+        } else {
+            selectionLoading = true;
+        }
         try {
-            const body = {
-                asset_id: currentAssetId,
-                broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                target_currency: currency,
-                selected_lot_ids: ids,
-                requested_analyses: ['VALUE_HISTORY', 'RETURN_HISTORY'] as const,
-            };
-            const response = await zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post(body);
-            if (version !== selectionFetchVersion) return;
-            valueHistory = asArray<LotValueHistoryPoint>(response.value_history);
-            returnHistory = asArray<LotReturnHistoryPoint>(response.return_history);
+            const response = await fetchLotsAnalysis(body, force);
+            if (version !== selectionFetchVersion || response === null) return;
+            if (response !== shownSelection) applySelection(response);
         } catch (e) {
             if (version !== selectionFetchVersion) return;
             console.error('Failed to load selected-lot histories:', e);
-            valueHistory = [];
-            returnHistory = [];
+            if (!cached) {
+                shownSelection = null;
+                valueHistory = [];
+                returnHistory = [];
+            }
         } finally {
             if (version === selectionFetchVersion) selectionLoading = false;
         }
@@ -284,12 +339,30 @@
         panelEl.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
 
+    // The inputs are read here, so they are what the effects track; the loads run untracked,
+    // because putting a cached answer on screen reads and writes the selection synchronously.
     $effect(() => {
-        if (open && assetId != null) void loadMain(assetId, brokerIds);
+        if (!(open && assetId != null && ready)) return;
+        const [currentAssetId, currentBrokerIds, currentCurrency] = [assetId, brokerIds, currency];
+        untrack(() => void loadMain(currentAssetId, currentBrokerIds, currentCurrency));
     });
 
     $effect(() => {
-        if (open && assetId != null) void loadSelectionHistories(assetId, brokerIds, effectiveSelectionIds);
+        if (!(open && assetId != null && ready)) return;
+        const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+        untrack(() => void loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids));
+    });
+
+    let lastRefreshVersion = untrack(() => refreshVersion);
+    $effect(() => {
+        const version = refreshVersion;
+        if (version === lastRefreshVersion) return;
+        lastRefreshVersion = version;
+        untrack(() => {
+            if (!(open && assetId != null && ready)) return;
+            void loadMain(assetId, brokerIds, currency, true);
+            void loadSelectionHistories(assetId, brokerIds, currency, effectiveSelectionIds, true);
+        });
     });
 
     $effect(() => {

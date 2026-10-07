@@ -1,5 +1,7 @@
 name: LibreFolio Release
-run-name: Release ${{ github.event.release.tag_name }}
+# Release runs keep "Release vX.Y.Z"; nightlies and manual runs say what they are
+# instead of a bare "Release " with an empty tag.
+run-name: ${{ github.event_name == 'release' && format('Release {0}', github.event.release.tag_name) || (github.event_name == 'workflow_dispatch' && format('Manual run ({0})', github.ref_name) || format('Nightly ({0})', github.ref_name)) }}
 
 on:
   push:
@@ -20,6 +22,38 @@ jobs:
     name: Full Release Pipeline
     runs-on: ubuntu-latest
     steps:
+      # ==========================================
+      # 0. RELEASE TAG GUARD (before any work)
+      # ==========================================
+      # A prerelease is never promoted: the stable release is always published on a
+      # NEW vX.Y.Z tag (the pipeline listens only to `published`). So a prerelease tag
+      # must say it is a release candidate, vX.Y.Z-rc.N: then neither `latest` nor the
+      # in-app update prompt (stable vX.Y.Z only) can mistake it for a release. And a
+      # stable release must carry a plain vX.Y.Z tag: an -rc.N tag published as stable
+      # would deploy the docs and announce `latest` in its notes while `latest` (and the
+      # update prompt) ignore it. The tag reaches the script through env, never
+      # interpolated into it.
+      - name: Release tag must match the release kind
+        if: github.event_name == 'release'
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          # [[ =~ ]] matches the WHOLE string (grep would match any one line of it).
+          if [ "$PRERELEASE" = "true" ]; then
+            if ! [[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+              echo "::error title=Prerelease tag::'$TAG_NAME' is marked as a prerelease but its tag is not vX.Y.Z-rc.N. Publish a prerelease on an -rc.N tag; publish the stable release on a new vX.Y.Z tag."
+              exit 1
+            fi
+            echo "Prerelease tag OK: $TAG_NAME"
+          else
+            if ! [[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error title=Release tag::'$TAG_NAME' is published as a stable release but its tag is not a plain vX.Y.Z. Mark a release candidate (vX.Y.Z-rc.N) as a pre-release; publish the stable release on a plain vX.Y.Z tag."
+              exit 1
+            fi
+            echo "Release tag OK: $TAG_NAME"
+          fi
+
       # ==========================================
       # 1. BASE SETUP (Checkout & Environments)
       # ==========================================
@@ -44,21 +78,29 @@ jobs:
       # ==========================================
       # 2. CACHES
       # ==========================================
+      # ubuntu-latest moves from 24.04 to 26.04 (actions/runner-images#14748), and
+      # runner.os is "Linux" on both: keyed on it alone, a venv or browser build made
+      # on one image would be restored on the other. ImageOS (e.g. "ubuntu24") is a
+      # runner environment variable, not in the expression `env` context, so it is
+      # exported first.
+      - name: Expose the runner image for cache keys
+        run: echo "RUNNER_IMAGE_OS=${ImageOS:-unknown}" >> "$GITHUB_ENV"
+
       - name: Cache Pipenv
         uses: actions/cache@v5
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
+          key: ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pipenv-
+            ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-pipenv-
 
       - name: Cache NPM
         uses: actions/cache@v5
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-node-
 
       # For Playwright we use a fixed cache per version
       - name: Get Playwright version (from package.json)
@@ -70,7 +112,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-${{ env.RUNNER_IMAGE_OS }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
 
       # ==========================================
       # 3. INSTALLATION & ASSETS BUILD
@@ -79,9 +121,9 @@ jobs:
         run: pipenv install --dev
 
       - name: Generate VERSION file for Docker
-        # Must run BEFORE any step that writes tracked files (gallery PNGs,
-        # translate caches, regenerated API client): `git describe --dirty`
-        # would otherwise stamp the image version with a spurious "-dirty".
+        # Must run BEFORE any step that could write tracked files: `git describe
+        # --dirty` would otherwise stamp the image version with a spurious "-dirty".
+        # (Gallery PNGs and the generated API client are gitignored.)
         # The Dockerfile COPYs a VERSION file (gitignored build artifact) so the
         # image can report its version at runtime — the image has no .git/, so
         # git describe cannot run there. Freeze it here on the host (fetch-depth:0
@@ -134,9 +176,10 @@ jobs:
         id: build-mkdocs
         # BEFORE the gallery: the Playwright webServer (`dev.py server --test`)
         # serves /mkdocs and builds the 4-language site on startup when site/ is
-        # missing — ~40s+ inside the 120s webServer timeout, which is what made
-        # the gallery time out on 2026-09-04 after the docs growth (57 new
-        # translated files). With site/ already built, the server starts in seconds.
+        # missing — ~40s+ of the webServer start-up budget (120 s then, 300 s since
+        # 2026-10-06), which is what made the gallery time out on 2026-09-04 after
+        # the docs growth (57 new translated files). With site/ already built, the
+        # server starts in seconds.
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs build
 
@@ -151,13 +194,12 @@ jobs:
         # per-test timing (verified locally: --workers 2-3 gives a constant,
         # non-degrading ~21s/interaction rate with zero flakiness).
         #
-        # Gallery is best-effort: a partially-failed run still produces most
-        # screenshots, and the docs' gallery-img-loader falls back to the
-        # published site for any missing one. So we keep the screenshots that
-        # succeeded, mark the step as a warning, and let the release continue
-        # instead of failing the whole image build over a flaky screenshot.
-        run: |
-          pipenv run ./dev.py mkdocs gallery --workers 4 || echo "::warning::Gallery had failures — releasing with the screenshots that succeeded (missing ones load from the online docs site)."
+        # Release gate, like the docs checks above: the images bundle the gallery
+        # and a release deploys the docs site, so a release must not ship missing
+        # or broken screenshots. On dev it stays tolerant: the nightly continues
+        # with the screenshots that succeeded, and the report below lists it.
+        continue-on-error: ${{ github.ref_name == 'dev' }}
+        run: pipenv run ./dev.py mkdocs gallery --workers 4
 
       - name: Rebuild SvelteKit Frontend (production, for the images)
         # The gallery's Playwright webServer is `dev.py server --test`, which
@@ -177,8 +219,6 @@ jobs:
       # Nightly (dev) only: surface soft-failed steps as a yellow run banner + a
       # readable summary, instead of a green checkmark that hides them. Release
       # runs keep the hard-fail behaviour (no continue-on-error there).
-      # The gallery step is NOT here: it is best-effort (missing screenshots fall
-      # back to the published docs site) and reports itself as a ::warning above.
       - name: Report soft-failed steps (nightly)
         if: ${{ github.ref_name == 'dev' && always() }}
         run: |
@@ -190,6 +230,7 @@ jobs:
               ("Validate broken MkDocs translation links", "${{ steps.check-translate-validate.outcome }}"),
               ("Validate cross-boundary links", "${{ steps.check-cross-links.outcome }}"),
               ("Build MkDocs Documentation", "${{ steps.build-mkdocs.outcome }}"),
+              ("Generate Screenshots with Playwright", "${{ steps.gallery.outcome }}"),
               ("Rebuild MkDocs Documentation (with the gallery screenshots)", "${{ steps.rebuild-mkdocs.outcome }}"),
           ]
           failed = [name for name, outcome in steps if outcome == "failure"]
@@ -217,7 +258,7 @@ jobs:
         run: pipenv requirements > requirements.txt
 
       # ==========================================
-      # 4. DOCKER BUILD & PUSH (Single Image)
+      # 4. DOCKER BUILD & PUSH (light and full variants)
       # ==========================================
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v4
@@ -232,46 +273,63 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Tags (user guide, "Image Variants"): `latest` is the LIGHT variant; a release
+      # publishes the full variant as `X.Y.Z` and the light one as `X.Y.Z-light`;
+      # nightlies are `nightly` (full) and `nightly-light`. metadata-action adds
+      # `latest` on its own to every `type=semver` release (flavor latest=auto), so
+      # the full variant turns it off explicitly — before, both variants pushed
+      # `latest` and the light one won only because it was pushed second.
       - name: Extract Docker Metadata (Version)
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/librefolio/librefolio
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             type=raw,value=nightly,enable=${{ github.ref_name == 'dev' }}
           labels: |
             org.opencontainers.image.title=LibreFolio
             org.opencontainers.image.description=LibreFolio: Open Source Personal Finance & Portfolio Tracker
 
-      # Light variant: same tags with a "-light" suffix. The image ships without
-      # the documentation images (they load from the online docs site).
+      # Light variant: the version tag with a "-light" suffix, plus `latest`. The
+      # image ships without the documentation images (they load from the online
+      # docs site). `latest` moves only on a STABLE release (auto: metadata-action
+      # also skips semver prereleases such as 1.2.0-rc.1) and on a manual run from
+      # main (the raw tag). A GitHub prerelease publishes only its own tags, even
+      # with a plain vX.Y.Z tag. Never `latest=true`: it would add `latest` to every
+      # raw tag too (nightly-light included).
       - name: Extract Docker Metadata (Light Variant)
         id: meta-light
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/librefolio/librefolio
+          flavor: |
+            latest=${{ (github.event_name == 'release' && !github.event.release.prerelease) && 'auto' || 'false' }}
           tags: |
             type=semver,pattern={{version}},suffix=-light
-            type=raw,value=latest-light,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             type=raw,value=nightly-light,enable=${{ github.ref_name == 'dev' }}
           labels: |
             org.opencontainers.image.title=LibreFolio (light)
             org.opencontainers.image.description=LibreFolio (light variant, without documentation images): Open Source Personal Finance & Portfolio Tracker
 
 
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
+      # A variant whose metadata yields no tag has nothing documented to publish, and
+      # a push without a tag can only fail ("tag is needed when pushing to
+      # registry"). That is the full variant on a manual run from main (`latest` is
+      # the light one, and the full one is published only as X.Y.Z), and both
+      # variants on a manual run from any branch other than dev.
+      #
+      # The light variant is pushed FIRST. The in-app update prompt shows a release
+      # only once its image is pullable, and it checks the plain `X.Y.Z` tag (the
+      # full variant, see frontend/src/lib/features/update-check/updateCheck.ts);
+      # pushing that tag last means `latest` and `X.Y.Z-light` already exist when
+      # the prompt appears. If the light build fails, `X.Y.Z` is never pushed and
+      # no admin is told to update to an image they cannot get from `latest`.
       - name: Build and Push Docker Image (Light Variant)
+        if: steps.meta-light.outputs.tags != ''
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -283,6 +341,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and Push Docker Image
+        if: steps.meta.outputs.tags != ''
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       # ==========================================
       # 5. GITHUB PAGES DEPLOY
       # ==========================================
@@ -291,21 +360,40 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      # The public docs site follows stable releases only (and manual runs from main):
+      # a GitHub prerelease never deploys it.
       - name: Deploy to gh-pages branch
-        if: github.ref_name == 'main' || github.event_name == 'release'
+        if: github.ref_name == 'main' || (github.event_name == 'release' && !github.event.release.prerelease)
         run: pipenv run ./dev.py mkdocs deploy
 
 
       # ==========================================
-      # 6. ARTIFACTS (Optional, for archival)
+      # 6. ARTIFACTS (for archival and triage)
       # ==========================================
+      # `!cancelled()`: the gallery now fails a release, and a failed run is exactly
+      # when the screenshots and the Playwright report are worth having.
       - name: Archive Generated Screenshots
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
           name: playwright-screenshots
           path: |
             mkdocs_src/docs/gallery/**/*.png
           retention-days: 1
+          if-no-files-found: ignore
+
+      # Only when the gallery failed (on dev too, where it is soft): the HTML report
+      # with the failure screenshots, error context and the first-retry trace/video.
+      - name: Archive Playwright report (gallery failures)
+        if: ${{ !cancelled() && steps.gallery.outcome == 'failure' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-gallery-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 3
+          if-no-files-found: ignore
 
 
       # ==========================================
@@ -315,11 +403,21 @@ jobs:
         if: github.event.release.tag_name != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           TAG_NAME="${{ github.event.release.tag_name }}"
           # Images carry metadata-action's {{version}} tags, without the leading "v".
+          # `latest` is the light variant; the full one is published only as X.Y.Z.
+          # A prerelease does not move `latest`, so its notes have no `latest` line.
           IMAGE_TAG="${TAG_NAME#v}"
-          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n\n# Light variant (no documentation images — they load from the online docs site)\ndocker pull ghcr.io/librefolio/librefolio:%s-light\n```\n' "$IMAGE_TAG" "$IMAGE_TAG")
+          DOCKER_CMD=$(
+            printf '\n\n## 📦 Docker Installation\n\n```bash\n'
+            if [ "$PRERELEASE" != "true" ]; then
+              printf '# Latest release, light variant (documentation screenshots load from the online docs site)\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n'
+            fi
+            printf '# This release, full variant (documentation fully offline)\ndocker pull ghcr.io/librefolio/librefolio:%s\n\n' "$IMAGE_TAG"
+            printf '# This release, light variant\ndocker pull ghcr.io/librefolio/librefolio:%s-light\n```\n' "$IMAGE_TAG"
+          )
 
           # gh CLI has no --notes-append flag: fetch current notes and append manually
           CURRENT_NOTES=$(gh release view "$TAG_NAME" --json body -q .body)

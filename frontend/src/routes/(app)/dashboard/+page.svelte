@@ -34,6 +34,9 @@
     import {
         fetchReport,
         invalidate,
+        peekReport,
+        portfolioError,
+        type ReportOptions,
         type PortfolioReport,
         type PortfolioSummary,
         type PortfolioHistoryPoint,
@@ -46,7 +49,10 @@
         type PortfolioDepositHistorySeries,
         type PortfolioAcquisitionFundingSeries,
     } from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
+    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {readDashboardView, writeDashboardView} from '$lib/stores/portfolio/dashboardViewStore';
+    import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
@@ -98,6 +104,8 @@
     let allocationHistoryFromReport = $state<AllocationHistoryDimensions | null>(null);
     let positionsContribution = $state<PositionsContribution | null>(null);
     let contributionLoading = $state(false);
+    /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
+    let contributionRefreshing = $state(false);
     let reportLoading = $state(true);
     /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
     let summaryLoading = $derived(reportLoading && !summary);
@@ -105,16 +113,29 @@
     let syncLoading = $state(false);
     let syncingCode = $state<string | null>(null);
 
+    /** The currency and broker filter the user left (E3): they last the session, so a return asks
+     *  the key it left and the cache can serve it. */
+    const restoredView = readDashboardView();
+    /** The owned brokers, when the broker list is already in memory (any in-app return): the restored
+     *  scope can then be read from the cache before the first render. On a cold load the list arrives
+     *  in onMount, and nothing is asked before it (F2). */
+    const knownOwnedBrokers: BrokerLike[] | null = getAllBrokers().length > 0 ? getOwnedBrokers() : null;
+
     /** Broker IDs selected in the filter (empty = all brokers). */
-    let selectedBrokerIds = $state<number[]>([]);
-    let allBrokers = $state<BrokerLike[]>([]);
+    let selectedBrokerIds = $state<number[]>(knownOwnedBrokers ? restoredView.brokerIds.filter((id) => knownOwnedBrokers.some((broker) => broker.id === id)) : restoredView.brokerIds);
+    let allBrokers = $state<BrokerLike[]>(knownOwnedBrokers ?? []);
+    /** F2: the owned brokers are known. Until then nothing is asked: a request without them would be
+     *  widened by the backend to every broker the user can see, viewer and editor ones included. */
+    let brokersReady = $state(knownOwnedBrokers !== null);
+    /** Bumped by «Aggiorna»: the risk levels and the lots panel ask again too (E4). */
+    let refreshVersion = $state(0);
 
     /** FIFO lots analysis panel (Posizioni tab) — mirrors brokers/[id]/+page.svelte's pattern
      *  but in runes syntax (this file is Svelte 5 runes throughout, unlike the legacy broker
      *  detail page). Scope defaults to ALL accessible brokers when no broker filter is active
      *  (activeBrokerIds undefined = "All Brokers"), so the panel analyzes the same asset across
      *  every broker that holds it — see plan_ui_broker_holdings.md multi-broker evolution. */
-    let activeAssetId = $state<number | null>(null);
+    let activeAssetId = $state<number | null>(getAssetPanelAssetId($page.url.searchParams) ?? null);
     $effect(() => {
         const paramAssetId = getAssetPanelAssetId($page.url.searchParams) ?? null;
         if (paramAssetId !== activeAssetId) activeAssetId = paramAssetId;
@@ -154,10 +175,11 @@
     let urlDateFrom = $derived(dateRangeCtl.activePreset === 'MAX' ? 'min' : dateRangeCtl.start);
     let urlDateTo = $derived(dateRangeCtl.activePreset === 'MAX' ? 'max' : dateRangeCtl.end);
 
-    /** Display currency override — always concrete, defaults to user base currency. */
-    let targetCurrency = $state($globalSettings.default_currency || 'EUR');
-    let appliedCurrency = $state($globalSettings.default_currency || 'EUR');
-    let targetCurrencyManuallySet = $state(false);
+    /** Display currency override — always concrete, defaults to user base currency (or the one the user left). */
+    const initialCurrency = restoredView.targetCurrency ?? ($globalSettings.default_currency || 'EUR');
+    let targetCurrency = $state(initialCurrency);
+    let appliedCurrency = $state(initialCurrency);
+    let targetCurrencyManuallySet = $state(restoredView.targetCurrency !== null);
 
     /** Broker filter dropdown open state. */
     let brokerFilterOpen = $state(false);
@@ -199,6 +221,10 @@
      *  scaled by share; a 0% share behaves like editor/viewer and is excluded). */
     const ownedBrokerIds = $derived(allBrokers.map((b) => b.id));
 
+    /** F2: a request may leave only with an explicit owned scope. Without one the backend would
+     *  widen it to every broker the user can see; a user who owns nothing is asked nothing. */
+    const canAsk = $derived(brokersReady && ownedBrokerIds.length > 0);
+
     /** Which broker IDs to pass to the API — always the explicit owned set, so the
      *  backend never falls back to "every accessible broker" for the dashboard. */
     const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : ownedBrokerIds.length > 0 ? ownedBrokerIds : undefined);
@@ -233,7 +259,8 @@
         return DASHBOARD_TAB_IDS.includes(tabId as DashboardTabId);
     }
 
-    let activeTab = $state<DashboardTabId>(DEFAULT_DASHBOARD_TAB);
+    // Read at init too, so a return to another tab does not first mount the overview and tear it down.
+    let activeTab = $state<DashboardTabId>(getResolvedTabParam($page.url.searchParams, DASHBOARD_TAB_IDS, DEFAULT_DASHBOARD_TAB));
     const dashboardTabs = $derived([
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'dashboard-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
@@ -471,45 +498,108 @@
         dateRangeCtl.markMaxResolved(history.length > 0 ? history[0].date : null);
     }
 
+    /** What `loadAll` asks on top of the defaults: the main report, without contribution or candles. */
+    function mainReportOptions(): ReportOptions {
+        return {includeBrokerPnlHistory: wantsBrokerPnlHistory, includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
+    }
+
+    /** The report on screen: a page that finds the same cached report again leaves its charts alone. */
+    let shownReport: PortfolioReport | null = null;
+
+    function applyReport(report: PortfolioReport | null, requested: string) {
+        shownReport = report;
+        // Cast from the Zodios union types to the concrete types the dashboard expects
+        summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
+        history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        brokerPnlHistory = (report?.broker_pnl_history as PortfolioBrokerPnlHistory[] | null | undefined) ?? [];
+        // Always reassigned (defaulting to null since loadAll() never requests candles):
+        // this is also what invalidates a stale candle series from a prior broker/date-range
+        // scope. loadPnlCandles() re-fetches lazily once GrowthChart notices pnlCandles==null
+        // again while still in the candles submode.
+        pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
+        // Eager (unlike pnlCandles): requested on every ordinary load per plan §4.1's
+        // sparse-payload policy, so this is always fresh — no separate lazy loader needed.
+        incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
+        costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
+        depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
+        acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
+        allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
+        resolveMaxStartFromHistory();
+        appliedCurrency = requested;
+    }
+
+    let shownContribution: PortfolioReport['positions_contribution'] = null;
+
+    function setContribution(report: PortfolioReport | null) {
+        const contribution = report?.positions_contribution ?? null;
+        if (contribution === shownContribution) return;
+        shownContribution = contribution;
+        positionsContribution = (contribution as PositionsContribution | null | undefined) ?? null;
+    }
+
+    /** The contribution of the scope on screen as the cache holds it (null: never asked, PositionsPanel
+     *  asks when its Performance view needs it). Returns whether the cached one is stale. */
+    function showCachedContribution(): boolean {
+        const cached = peekReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, true, false, false, false);
+        setContribution(cached?.report ?? null);
+        return cached?.stale === true;
+    }
+
+    /**
+     * Page cache (E1): the report of the scope on screen comes from the cache at once — stale or
+     * not — and only a stale or missing one is asked again, in background: the figures stay up and
+     * move to the fresh values when they land. A refresh that fails keeps them, with a toast.
+     */
+    let loadSeq = 0;
+
     async function loadAll(force = false, propagateError = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
-        if (!current()) return;
-        reportLoading = true;
-        const requested = targetCurrency;
-        try {
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force, undefined, undefined, undefined, undefined, {
-                includeBrokerPnlHistory: wantsBrokerPnlHistory,
-                includeIncomeHistory: true,
-                includeCostHistory: true,
-                includeDepositHistory: true,
-                includeAcquisitionFunding: true,
-            });
-            if (!current()) return;
-            if (!report && propagateError) throw new Error($_('common.error'));
-            // Cast from the Zodios union types to the concrete types the dashboard expects
-            summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
-            history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
-            brokerPnlHistory = (report?.broker_pnl_history as PortfolioBrokerPnlHistory[] | null | undefined) ?? [];
-            // Always reassigned (defaulting to null since loadAll() never requests candles):
-            // this is also what invalidates a stale candle series from a prior broker/date-range
-            // scope. loadPnlCandles() re-fetches lazily once GrowthChart notices pnlCandles==null
-            // again while still in the candles submode.
-            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
-            // Eager (unlike pnlCandles): requested on every ordinary load per plan §4.1's
-            // sparse-payload policy, so this is always fresh — no separate lazy loader needed.
-            incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
-            costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
-            depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
-            acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
-            allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
-            // Contribution data comes from the same report when requested
-            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-            resolveMaxStartFromHistory();
-            appliedCurrency = requested;
-        } finally {
-            if (current()) reportLoading = false;
+        if (!current() || !brokersReady) return;
+        if (!canAsk) {
+            reportLoading = false;
+            return;
         }
+        const load = ++loadSeq;
+        const requested = targetCurrency;
+        const brokerIds = activeBrokerIds;
+        const start = dateRangeCtl.start || undefined;
+        const end = dateRangeCtl.end || undefined;
+        const options = mainReportOptions();
+
+        const cached = peekReport(brokerIds, start, end, requested, false, false, true, true, options);
+        if (cached && cached.report !== shownReport) applyReport(cached.report, requested);
+        const request = !cached || cached.stale || force ? fetchReport(brokerIds, start, end, requested, force, undefined, undefined, undefined, undefined, options) : null;
+        if (showCachedContribution()) void loadContribution();
+        if (!request) {
+            reportLoading = false;
+            return;
+        }
+
+        reportLoading = true;
+        try {
+            const report = await request;
+            if (!current() || load !== loadSeq) return;
+            if (report) {
+                if (report !== shownReport) applyReport(report, requested);
+            } else if (propagateError) {
+                throw new Error($_('common.error'));
+            } else if (cached) {
+                toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
+            } else {
+                applyReport(null, requested);
+            }
+        } finally {
+            if (current() && load === loadSeq) reportLoading = false;
+        }
+    }
+
+    function hydrateFromCache() {
+        if (!brokersReady || ownedBrokerIds.length === 0) return;
+        const cached = peekReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, false, false, true, true, mainReportOptions());
+        if (!cached) return;
+        applyReport(cached.report, targetCurrency);
+        showCachedContribution();
     }
 
     async function handleFxPairCreated() {
@@ -521,22 +611,43 @@
 
     async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail) {
         if (!pageAlive || !isClientSessionCurrent(detail.sessionGeneration)) return;
-        // The sync interceptor invalidates portfolio/risk caches at commit time.
+        // The sync interceptor marks portfolio/risk caches stale at commit time, when it wrote something.
         await loadAll(true, true);
     }
 
-    /** Lazy-load contribution data (called when user switches to Contribution view). */
+    /**
+     * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has
+     * none, and by `loadAll` when the cached one is stale — then in background, with the cached rows
+     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`).
+     */
     async function loadContribution() {
-        if (positionsContribution || contributionLoading) return;
-        contributionLoading = true;
+        if (!canAsk || contributionLoading || contributionRefreshing) return;
         const requested = targetCurrency;
+        const brokerIds = activeBrokerIds;
+        const start = dateRangeCtl.start || undefined;
+        const end = dateRangeCtl.end || undefined;
+        const scope = () => `${activeBrokerIds?.join(',')}|${dateRangeCtl.start}|${dateRangeCtl.end}|${targetCurrency}`;
+        const askedScope = scope();
+        const cached = peekReport(brokerIds, start, end, requested, true, false, false, false);
+        if (cached && !cached.stale) {
+            setContribution(cached.report);
+            return;
+        }
+        if (cached) contributionRefreshing = true;
+        else contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, true, false, false, false);
-            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-            appliedCurrency = requested;
+            const report = await fetchReport(brokerIds, start, end, requested, false, true, false, false, false);
+            if (!pageAlive || scope() !== askedScope) return;
+            if (report) {
+                setContribution(report);
+                appliedCurrency = requested;
+            } else if (!cached) {
+                setContribution(null);
+            }
         } finally {
             contributionLoading = false;
+            contributionRefreshing = false;
         }
     }
 
@@ -544,7 +655,7 @@
      *  onRequestPnlCandles when the user first activates the candles submode; caller
      *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports"). */
     async function loadPnlCandles() {
-        if (pnlCandles || pnlCandlesLoading) return;
+        if (!canAsk || pnlCandles || pnlCandlesLoading) return;
         pnlCandlesLoading = true;
         const requested = targetCurrency;
         try {
@@ -561,13 +672,14 @@
     // Event handlers
     // =========================================================================
 
-    function toggleBroker(id: number) {
-        if (selectedBrokerIds.includes(id)) {
-            selectedBrokerIds = selectedBrokerIds.filter((x) => x !== id);
-        } else {
-            selectedBrokerIds = [...selectedBrokerIds, id];
-        }
+    function selectBrokers(ids: number[]) {
+        selectedBrokerIds = ids;
+        writeDashboardView({brokerIds: ids});
         scheduleReload();
+    }
+
+    function toggleBroker(id: number) {
+        selectBrokers(selectedBrokerIds.includes(id) ? selectedBrokerIds.filter((x) => x !== id) : [...selectedBrokerIds, id]);
     }
 
     /** Fires loadAll after a 2-second quiet period (anti-bounce for rapid clicks). */
@@ -579,11 +691,16 @@
         }, 2000);
     }
 
+    /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. */
     async function handleSync() {
         syncLoading = true;
-        invalidate();
-        await loadAll(true);
-        syncLoading = false;
+        requestPortfolioRefresh();
+        refreshVersion += 1;
+        try {
+            await loadAll(true);
+        } finally {
+            syncLoading = false;
+        }
     }
 
     async function loadAiExportCompatibility() {
@@ -600,6 +717,9 @@
     }
 
     function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+        // F2: a portfolio export without the owned scope would be widened by the backend to every
+        // broker the user can see. The trigger is disabled until then; this guards the call itself.
+        if (!canAsk) return Promise.reject(new Error('Owned brokers are not loaded'));
         return prepareAiExport({
             context: {
                 domain: 'portfolio',
@@ -666,15 +786,28 @@
     // Lifecycle
     // =========================================================================
 
+    // Figures already known when a card mounts — served from the cache on a return, or kept from an
+    // earlier load on a tab switch — appear at their value instead of counting up from 0. The Risk
+    // panel sets its own context for its cards, which come from the risk cache, not from this report.
+    setTweenHydration(() => summary !== null);
+    hydrateFromCache();
+
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
         void loadAiExportCompatibility();
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
+            if (!pageAlive) return;
             // F2: dashboard scope = owned brokers only (share > 0). A user who owns
             // nothing (viewer/editor elsewhere, or fresh install) gets an empty
             // dashboard — no fetch, so viewer/editor data never leaks into totals.
             allBrokers = getOwnedBrokers();
+            const kept = selectedBrokerIds.filter((id) => allBrokers.some((broker) => broker.id === id));
+            if (kept.length !== selectedBrokerIds.length) {
+                selectedBrokerIds = kept;
+                writeDashboardView({brokerIds: kept});
+            }
+            brokersReady = true;
             if (allBrokers.length > 0) {
                 await loadAll();
             } else {
@@ -685,7 +818,7 @@
     });
 </script>
 
-<div class="space-y-4" data-testid="dashboard-page" use:guideAnchor={'page.dashboard'} aria-busy={reportLoading || contributionLoading || syncLoading} data-busy={reportLoading || contributionLoading || syncLoading ? 'true' : 'false'}>
+<div class="space-y-4" data-testid="dashboard-page" use:guideAnchor={'page.dashboard'} aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading} data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}>
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
@@ -733,6 +866,7 @@
                             }}
                             onchange={() => {
                                 targetCurrencyManuallySet = true;
+                                writeDashboardView({targetCurrency});
                                 void loadAll();
                             }}
                         />
@@ -769,18 +903,12 @@
                                 <button
                                     type="button"
                                     class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => {
-                                        selectedBrokerIds = allBrokers.map((b) => b.id);
-                                        scheduleReload();
-                                    }}>{$_('common.selectAll')}</button
+                                    onclick={() => selectBrokers(allBrokers.map((b) => b.id))}>{$_('common.selectAll')}</button
                                 >
                                 <button
                                     type="button"
                                     class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => {
-                                        selectedBrokerIds = [];
-                                        scheduleReload();
-                                    }}>{$_('common.clearAll')}</button
+                                    onclick={() => selectBrokers([])}>{$_('common.clearAll')}</button
                                 >
                             </div>
                             <!-- Broker list -->
@@ -821,7 +949,7 @@
                 compatibility={aiExportCompatibility}
                 memoryKey="portfolio"
                 defaultSelectionId="portfolio.pac_planning"
-                disabled={aiExportCatalogLoading || aiExportCatalogFailed}
+                disabled={aiExportCatalogLoading || aiExportCatalogFailed || !canAsk}
                 labels={aiExportLabels}
                 showLabel={showActionLabels}
                 onprepare={handleAiExport}
@@ -885,29 +1013,53 @@
         </div>
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
-            <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)} brokers={allBrokers} currency={activeAsset?.currency ?? appliedCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+            <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
+            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={canAsk ? loadContribution : undefined} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
+            <LotsAnalysisPanel
+                open={activeAssetId != null}
+                assetId={activeAssetId}
+                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
+                brokers={allBrokers}
+                currency={activeAsset?.currency ?? appliedCurrency}
+                assetName={activeAsset?.display_name ?? null}
+                onClose={closeAssetPanel}
+                ready={canAsk}
+                {refreshVersion}
+            />
         </div>
     {:else if activeTab === 'rischio'}
         <div data-testid="dashboard-risk-tab">
-            <!-- The risk scope is the *whole* portfolio even when a broker filter
-                 is on, which is what the subtitle announces. `summary` follows the
-                 filter, so its net worth belongs to a different question: passing
-                 it would print one broker's money beside every broker's risk. -->
-            <RiskLevelsPanel
-                scope={{kind: 'portfolio'}}
-                dateStart={dateRangeCtl.start}
-                dateEnd={dateRangeCtl.end}
-                targetCurrency={appliedCurrency}
-                assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
-                scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
-                title={$_('risk.dashboardTitle')}
-                subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
-                onsynced={async () => {
-                    invalidate();
-                    await loadAll(true);
-                }}
-            />
+            <!-- The risk scope is the *whole* portfolio — every broker the user owns (F2,
+                 as the rest of the Dashboard) — even when a broker filter is on, which is
+                 what the subtitle announces. Never without `broker_ids`: the backend would
+                 widen it to every broker the user can see, editor and viewer ones included,
+                 so the panel mounts only once the owned brokers are known. `summary` follows
+                 the filter, so its net worth belongs to a different question: passing it
+                 would print one broker's money beside every broker's risk. -->
+            {#if canAsk}
+                <RiskLevelsPanel
+                    scope={{kind: 'portfolio', broker_ids: ownedBrokerIds}}
+                    dateStart={dateRangeCtl.start}
+                    dateEnd={dateRangeCtl.end}
+                    targetCurrency={appliedCurrency}
+                    assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                    scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
+                    title={$_('risk.dashboardTitle')}
+                    subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
+                    {refreshVersion}
+                    onsynced={async () => {
+                        invalidate();
+                        await loadAll(true);
+                    }}
+                />
+            {:else if brokersReady}
+                <p class="py-12 text-center text-sm italic text-gray-400 dark:text-gray-500" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
+            {:else}
+                <!-- Owned brokers still loading (cold load): say so instead of an empty tab. -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center" data-testid="dashboard-risk-loading">
+                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                </div>
+            {/if}
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">

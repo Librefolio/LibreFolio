@@ -183,7 +183,7 @@ calls:
 | `groupBrokerFiles(brokerId, files, plugins, overrides?)` | `{sets, singles}` of one broker: one `ReportSetGroup` per plugin and `batch_id` (key `set:<broker>:<plugin>:<batch>`), newest first; combined files are in neither list. `overrides` maps a file id to its choice, read by `setPluginFor` (the wizard passes `choicesFor(brokerId)`) |
 | `setSelectionState(set, selectedIds)` | `all`, `some` or `none` |
 | `buildParseUnits(selected, sets)` | The analysis units: the selected files of a set, read with the set's plugin, become **one** `set` unit; every other file is a `file` unit |
-| `setBlocksAnalysis(set, selectedIds, state?)` | `true` when a selected set's preview is still loading, failed, or says `complete: false` |
+| `setBlocksAnalysis(set, selectedIds, state?)` | Whether a set holds the analysis back: `false` when none of its files is selected; `true` when only some are, whatever the preview says (rule R6, under Step `select` below); when all are, `true` until the preview is ready and says `complete: true` — while it is still loading, failed, or says `complete: false` |
 | `combinedFileForSet(set, files)` | The newest combined file of the same broker, batch and plugin whose live originals — its `derived_from` refs not marked `deleted` — are exactly the set's members, or `null`. A combined file built before a member was left out, or before one was added, belongs to another membership; an original deleted after the combine keeps the set analysed (v5.3) |
 | `buildSetTimeline(preview, roleOrder)` | The card's timeline, `null` when no member has a coverage. `rows`: one per role that has bars, in `roleOrder`, with a bar per coverage entry, ordered by start then end and carrying the file's `rows` (`null` when unknown), and the role's `gaps`: walking the bars by start and keeping the furthest end reached `e`, a bar starting after `e + 1` opens a gap from `e + 1` to the eve of its start — never before the first bar or after the last. `history`: from H0 to the later of H0 and `history_end` (an opening correction, dated the eve of H0, may be the history's last transaction), with `count` (`history_count`, else 0); `null` without H0. The span (`start`, `end`) includes the history's end; every bar, gap and history is placed in percentages of it |
 | `rememberedChoices(files, plugins)` | The memory of the last analysis: file id → choice, for the originals an analysis spoke about ([below](#set-memory)) |
@@ -219,6 +219,17 @@ files; when the broker has at least one set, that table is headed **Other files 
 (`import-wizard-other-files-<brokerId>`, absent for a broker without sets). The sets uploaded in
 this session are selected and open; older sets stay listed, unselected. Every set's preview runs in
 the background.
+
+**Which panels open, and the paging of the file tables.** `loadBrokerFiles()`, run when the wizard
+enters `select`, decides which broker panels start expanded (`expandedBrokers`): after an upload in
+this session, only the brokers that received one of the uploaded files; when the user went on
+without uploading anything, every broker that has stored files. The other panels stay collapsed
+behind their header (`import-wizard-broker-toggle-<brokerId>`, `toggleBrokerExpand`), which still
+shows how many sets and files they hold. Each broker's table of single files pages at five rows
+(`defaultPageSize={5}`, page sizes 5 / 10 / 25 / 50 / 100 / All); its pager appears only when the
+broker has more than five single files (`enablePagination` and `alwaysShowPagination` are both
+`singles.length > 5`), and the page size the user picks is remembered per broker through the
+table's `storageKey` (`import-wizard-files-<brokerId>`).
 
 - A set is selected or deselected **as a whole** (`toggleSetSelection`, which, when it selects a set
   whose preview was asked for other members, previews it again), and its members take the set's
@@ -285,9 +296,30 @@ the background.
   The bars take `minmax(0,1fr)`, and the period column (`max-content`) holds each row's overall
   span — first start → furthest end — or the history's. The date header (the span's first and
   last day) sits in the bar column, and the legend starts there too, spanning the period column.
-- While a selected set blocks (`setBlocksAnalysis`), **Parse** is disabled with the
-  `import-wizard-set-blocks` hint, and the card offers **Exclude from the import**
-  (`report-set-exclude`), which deselects the set so that the other files can go on.
+- While a selected set blocks (`blockingSets`: the sets for which `setBlocksAnalysis` is true),
+  **Parse** (`import-wizard-parse`) is disabled (`step2CanParse`) and the
+  `import-wizard-set-blocks` hint gives the reason in `data-reason`: `partly-selected`
+  (`importWizard.reportSet.partlySelectedBlocks`) while at least one set is selected only in part
+  (`partlySelectedSets`) — that reason comes first — else `incomplete`
+  (`importWizard.reportSet.incompleteBlocks`): a wholly selected set whose preview is not ready
+  and complete (still loading, failed, or `complete: false`). The card has no command of its own
+  to leave a set out: the user deselects it with its checkbox, `report-set-select` — what the
+  `incomplete` hint asks for, beside uploading the missing file — and the other files go on.
+- **A set selected only in part blocks** (rule R6): `setBlocksAnalysis` is true for `some`,
+  whatever the preview says. `buildParseUnits` would put only the selected members in the set's
+  unit, but `setRequest` leaves out only the files that are not members, so the preview and the
+  combine would read the whole set, its deselected members included. The set's checkbox resolves
+  it: `toggleSetSelection` deselects every member from `all` or `some` and selects them all from
+  `none`, so from `some`, where the box shows a dash, one click deselects the set and a second
+  one selects it whole. The card's `selectionState` action writes both `checked` and
+  `indeterminate` on every change of `selection`. A plain `checked={selection === 'all'}` would
+  not do: from `some` to `none` its value stays `false`, Svelte does not write it again, and the
+  tick the browser draws on the click would outlive the wizard's answer. Nothing selects the set
+  for the user: no command ticks or unticks a file ([How a set is read](#set-read-as)). In the
+  wizard a set ends up selected in part when a selected file goes back into a deselected set —
+  for example `removeFileFromSet` on a member (the file keeps its tick), the set deselected with
+  `report-set-select`, then the set's plugin chosen again in that file's `ImportPluginSelect`:
+  the card then reads `data-selected="some"`.
 - **Parse (n)** counts analysis units: a set counts once.
 
 ### 🔀 How a set is read {: #set-read-as }
@@ -794,8 +826,12 @@ state to the guide and renders anchors for it to point at:
   is open and no guide step is active; only its **Save All** button
   (`use:guideAnchor={'import.bulk.save-all'}`) is highlighted. `OnboardingOverlayHost` swaps the
   coachmark's **Next** button for **Finish guide** only on this step (and on the tour's last
-  step); pressing it calls `onboardingGuide.finish()`. In automatic pending mode, that is the
-  *only* guide path that POSTs `/api/v1/settings/onboarding/import_guide/complete`. In replay
+  step); pressing it calls `onboardingGuide.finish()`. In automatic pending mode, `finish()`
+  completes that step on the server: `import_guide` is step-managed, so every `import.*` step is
+  recorded on its own through `completeStep` — here
+  `POST /api/v1/settings/onboarding/import_guide/steps/import.bulk/complete`; the earlier steps are
+  completed the same way when the user activates the control their coachmark points at
+  (`handleTargetActivate` in `OnboardingOverlayHost.svelte`). In replay
   mode, the same button only removes `import.bulk` from the stored replay (deleting the key once
   no step remains) and never calls the endpoint. The guide never calls `Save All` itself —
   finishing the guide and saving the batch are two independent user actions.
