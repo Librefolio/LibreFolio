@@ -3056,3 +3056,213 @@ commit del checkpoint 1.
 >
 > **Checkpoint 12 consegnato**: un commit con il codice, i test, la guida, la chiave, il runner e il journal; il testo
 > per il CHANGELOG al coordinator. **Stato: FROZEN.** Dopo: il passo 24 (D378).
+
+### Checkpoint 12 committato, K fuso; la revisione combinata, cancello del push · ✅ 06/10
+
+> **Coordinator (23:09–23:11)**:
+> - checkpoint 12 verificato (12/12 blob, privacy 0 su 1409 righe, runner accettato);
+> - il mio testo per il CHANGELOG è nella voce ✨ «P&L view in the Growth chart», al posto della frase vecchia,
+>   con la precisione su 1D;
+> - commit `8c7b0c0a7` (albero `b38fead44`), poi il merge con la punta di K `3fdae5b16` → **`ff1ee3bbc`** (albero
+>   `31d049224`), uguale alla simulazione;
+> - il developer ha già integrato il treno 4 (`dev_release2` = `c8380156e`, non ancora pushato): la mia
+>   rivalidazione è il cancello del push.
+>
+> **Rivalidazione** (6153, carico 14–30):
+> - `front build --debug` OK (121 s); `front check` 0/0;
+> - `asset-unit` 654, `growth-chart-memo` 119, `core-unit` 3329, `component-unit` 2730;
+> - E2E `dashboard` 26/26 (21:17–21:20 UTC; 20 righe di provider, già nel backlog);
+> - i18n 4356 chiavi, nessuna traduzione mancante; `check-orphans` OK; `mkdocs build` strict OK.
+>
+> **Esito: verde**, mandato al coordinator. Parte il passo 24.
+
+### Passo 24 — D378: il periodo e la valuta della pagina al selettore di L3 · ✅ 07/10
+
+> **Codice**:
+> - `RiskLevelsPanel.svelte:341`: `period={{start: dateStart, end: dateEnd}}` e `currency={targetCurrency}` a
+>   `L3Benchmark`;
+> - `L3Benchmark.svelte`:
+>   - le due prop passano al `BenchmarkSelect`, che chiede da sé `POST /risk/eligibility`;
+>   - `launchedEpoch` diventa `askedFor`, con chiave `${baseEpoch}|${selected}`: l'effetto chiede solo su `set`, una
+>     volta per domanda;
+>   - un effetto nuovo, che azzera la comparazione (`bumpGeneration` + `resetAnalysis`) quando lo stato lascia `set`.
+>     Succede con `blocked`, e con `pending` dopo un cambio di finestra. Così la riga del benchmark sparisce;
+>   - `choose()` non chiede più: azzera e lascia chiedere all'effetto, quando il selettore conferma `set`.
+>
+> **⚠️ Fuori pista**: `choose()` chiedeva subito e rivendicava l'epoca. Con D378 una scelta passa per `pending`, e lì
+> la factory di `run()` rende `null`: la richiesta sarebbe stata saltata con l'epoca già rivendicata, e su `set`
+> l'effetto non avrebbe più chiesto. Ora chiede solo l'effetto.
+>
+> **Verifiche**: prettier invariato; `front check` 0/0; `risk-levels-component` 237 passed.
+>
+> **E2E `risk`: 4 rossi, 29 verdi.** I 4 rossi sono tutti nel blocco «L3's table» (`:3307`, `:3428`, `:3496`,
+> `:3547`): `openWithUnheldBenchmark` non vede mai la riga `ref-9`.
+>
+> **Diagnosi** (sonda Playwright sulla 6153, benchmark 9 memorizzato):
+> - `data-benchmark-state="blocked"`, `data-eligibility="ready"`;
+> - una sola `POST /risk/eligibility`, che per l'asset 9 risponde `ineligible` / `too_few_quotes`;
+> - nessuna comparazione.
+>
+> È D378 che funziona. Ai test manca lo stub dell'ammissibilità: le mock coprono catalogo, catalogo degli scenari e
+> query, quindi l'ammissibilità arrivava al backend di test.
+>
+> **Due sonde sulla corsa.** Il dubbio era questo: il selettore pubblica `pending` con un `$effect` del figlio, e
+> `applyBaseSignature` rilancia col launcher le analisi in volo, fuori dal cancello dell'effetto. Le misure:
+> - comparazione completata, poi clic su 1Y: ammissibilità a +316 ms, risposta a +460 ms, una sola comparazione a
+>   +461 ms;
+> - comparazione in volo, rallentata di 1,5 s, poi clic su 6M a +463 ms: nessuna richiesta subito. La comparazione
+>   del 6M parte a +896 ms, dopo il suo verdetto, la risposta vecchia è scartata e la tabella finisce con `ref-11`.
+>
+> Una richiesta per domanda, sempre dopo il verdetto: la corsa non c'è.
+>
+> **Review sui dati veri** (copia sulla 6163, 23:38–23:46; lo snapshot è di prima dell'aggiornamento dei prezzi delle
+> 20:12, e per l'ammissibilità pesa poco, perché una quotazione vecchia dà solo un avviso):
+> - il developer: «funzionalmente è tutto perfetto»;
+> - chiede un **banner** per l'avviso di un livello senza dati. Su 1W, in L3, oggi l'avviso è «… Non disponibile per
+>   i dati selezionati · … Non disponibile per i dati selezionati» seguito da «Storico insufficiente per questo
+>   calcolo.». Alla domanda sul perimetro ha scelto «**Ovunque: stessa cornice, stesso banner**»: Dashboard, Broker e
+>   le sezioni del lab;
+> - la cornice è `RiskLevelSection.svelte`, **di Risk**, e compone 10 testid di `risk-lab`. Ho girato la richiesta al
+>   coordinator: concessione a me, oppure la scrive Risk. La proposta: un riquadro nello stile di `RiskPartialNotice`,
+>   con health, errors e reasons nell'ordine di oggi, testo e testid invariati, e `{testId}-alert` in aggiunta;
+> - copia cancellata alle 23:46 con la prova (`lsof +D` vuoto, 6163 libera, `ls` dà la cartella assente), e una riga
+>   al coordinator.
+>
+> **Coordinator**: `RiskLevelsPanel.svelte` è anche nella fase 1 di N, per una riga, che N aggiunge dopo l'ingresso
+> del passo 24. Il passo 24 non si allarga a `riskStore`, `riskPanelController` e `TweenedValue`.
+>
+> **Prossimo**: test-author nella 6153. Prima lo stub dell'ammissibilità in `installRiskMocks`, che chiude i 4 rossi;
+> poi i casi di D378, coi rossi provati sul codice vecchio.
+
+### Passo 29 — il banner degli avvisi di livello, ovunque · ✅ 07/10
+
+> **Concessione del coordinator**: `RiskLevelSection.svelte` e `RiskLevelSection.test.ts`. I file sono di Risk, che ha
+> finito. Le condizioni:
+> - `RiskPartialNotice` come modello di stile, senza modificarlo;
+> - testo invariato, nessuna chiave i18n;
+> - tutti i testid restano dove sono, più `{testId}-alert`;
+> - cancelli: `front check`, il vitest della cornice, E2E `risk` e `risk-lab`;
+> - un commit a parte nel prossimo checkpoint, col passo 24, e una riga di CHANGELOG proposta (🔄, Risk Analysis).
+>
+> **Codice** (`RiskLevelSection.svelte`):
+> - le tre parti (`{testId}-health`, `-errors`, `-reasons`) stanno in un solo riquadro `{testId}-alert`. Ha bordo e
+>   fondo ambra con le stesse classi del tono `warning` di `RiskPartialNotice`, e `AlertTriangle` a sinistra, fuori
+>   dalle tre parti;
+> - la riga health è in `font-medium`, come il titolo del notice; le liste perdono `mb-3`, che resta solo sul
+>   riquadro;
+> - stesso ordine e stesso testo di prima. Il riquadro c'è solo se almeno una delle tre parti non è vuota.
+>
+> **Verifiche**: prettier invariato; `front check` 0/0; `risk-levels-component` 237/237. I test esistenti della
+> cornice passano senza modifiche: leggono il corpo come foglia opaca e la riga health per testo.
+>
+> **Controllo visivo mio** (6153, dati di prova; immagini in `files/s29-*`):
+> - Dashboard su 1W: il banner c'è in L1, L2 e L3, in chiaro e in scuro, con l'icona allineata alla prima riga;
+> - lab su 1M: il banner c'è in L1° («Bad month: Unavailable…» con la sua frase). Su 1W il lab esclude tutti gli asset
+>   e non disegna livelli; su 3M nessun banner.
+>
+> **Review del developer** (6153, dati di prova): «Va bene così».
+>
+> **test-author** (in background, corsia 6153), due lavori su due file:
+> - B, `RiskLevelSection.test.ts`: il banner c'è se e solo se c'è un problema, contiene le tre parti in ordine e sta
+>   prima dei figli; il testo resta invariato. Rossi provati sulla cornice di HEAD;
+> - A, `risk-analysis.spec.ts`: lo stub dell'ammissibilità in `installRiskMocks` (di default tutto `eligible`), i 4
+>   rossi chiusi, e i casi di D378 (`blocked`, `pending`, cambio di finestra, 500). Rossi provati su `L3Benchmark` e
+>   `RiskLevelsPanel` di HEAD, con gli sha ripristinati.
+>
+> **test-author, resoconto** (00:4x del 07/10), verificato da me: sha, hunk, 0 righe tolte.
+>
+> **B, `RiskLevelSection.test.ts`** (solo aggiunte, `@@ -336,0 +337,173`):
+> - 2 casi di harness e 8 di cornice:
+>   - il banner contiene ciascuna delle tre parti e tutte e tre, nell'ordine health, errors, reasons;
+>   - niente banner senza problemi, con un controllo positivo sullo stesso montaggio;
+>   - il banner sta dentro il corpo, prima dei figli;
+>   - l'icona è fuori dalle parti; la riga d'errore è esattamente la frase del catalogo;
+> - **rosso** sulla cornice di HEAD (`front-portfolio risk-levels-component`): 8 falliti e 239 passati, tutti in
+>   `theAlert()` con «the level does not draw exactly one banner — none: the blocks stand loose again…»;
+> - **verde**: 8 file e 247 test (prima 237).
+>
+> **A, `risk-analysis.spec.ts`** (+385 righe, 0 tolte):
+> - quattro opzioni nuove in `RiskMockOptions`: `eligibilityVerdicts`, `eligibilityFails`, `eligibilityGate`,
+>   `eligibilityCalls`. `askedAt` e `answeredAt` usano l'orologio del log delle query, così «la comparazione ha
+>   aspettato il verdetto» si legge da un solo log;
+> - la rotta in `installRiskMocks`; il tipo di ritorno resta `Promise<RiskRequest[]>`;
+> - una nota su `openWithUnheldBenchmark`, nessuna asserzione cambiata;
+> - il blocco nuovo di D378 con 5 test: `blocked`, `pending`, cambio di finestra, cambio verso una finestra non
+>   misurabile, 500;
+> - **rossi** sul codice di HEAD (`front-portfolio risk D378`): ciascuno cade su un'asserzione di D378, mai nel setup.
+>   Le attese contro i valori letti: `ready` → `none`; `pending` → `none`; nuova domanda all'engine > 0 → 0, due volte;
+>   `failed` → `none`;
+> - **verdi**: `risk` 38/38 a 1 worker, due volte; a 4 worker 38/38, due volte (46 s). I 4 rossi di prima sono verdi in
+>   tutte e quattro le passate.
+>
+> **Il resto**: prettier invariato, `front check` 0/0, `tsc` sullo spec 0 errori (con una config usa e getta in
+> `/tmp`), `check-orphans` pulito, 6153 libera.
+>
+> **Gli sha ripristinati sono identici**: `RiskLevelSection.svelte` `494a3111…`, `L3Benchmark.svelte` `348632c5…`,
+> `RiskLevelsPanel.svelte` `f855b0e1…`.
+>
+> **Decisione mia, su proposta del test-author**: lo stub valida la risposta con
+> `schemas.RiskEligibilityResponse.parse`, come `answerEligibility` di F. Senza, uno stub fuori contratto farebbe
+> leggere `failed` al selettore, e di default l'effetto è lo stesso di `set`: silenzioso. L'import in testa allo spec
+> l'ho concesso io, perché il file è mio.
+>
+> **Il perimetro dei cancelli, misurato**:
+> - `L3Benchmark` è montato solo da `RiskLevelsPanel`, cioè Dashboard e Broker;
+> - `RiskLevelSection` è montato da `RiskLevelsPanel`, `L2Diversification` e dalle tre sezioni `AssetSet*`, cioè il
+>   lab;
+> - `RiskAnalysisPanel` (Asset Detail) non importa nulla da `levels/`.
+>
+> Quindi i cancelli sono `risk`, `risk-lab`, `component-unit` (che contiene i test `AssetSet*`, quelli che montano la
+> cornice) e `front check`. `risk-asset-detail` e `risk-benchmark-shared` (la pagina dell'asset) non sono toccati.
+>
+> **Coordinator (00:40 del 07/10)**: il developer ha deciso che il tab Rischio della Dashboard userà solo i broker
+> posseduti, come il resto della Dashboard (F2). Lo farà N **dopo** l'ingresso del passo 24, cambiando i predicati di
+> `risk-analysis.spec.ts` che riconoscono le richieste della Dashboard da `broker_ids` vuoto (HEAD `:1422`, `:2779`,
+> `:3561`). Nel passo 24 non vanno rifattorizzati.
+> - Verificato: nello spec 0 righe tolte, quindi i tre predicati sono intatti;
+> - dichiarati al coordinator i **due punti nuovi** del blocco D378 con lo stesso predicato, che il cambio di N deve
+>   coprire: l'helper `comparisonsAgainst` e il filtro `newWave`. Non li ho accorpati.
+> - HEAD `:2082` (`askedScopes`) legge anch'esso `broker_ids`: segnalato.
+>
+> **test-author, la validazione dello stub** (00:5x):
+> - `import {schemas} from '../../src/lib/api/generated';` (`:8`). Il 200 si costruisce con
+>   `schemas.RiskEligibilityResponse.parse({...})`, il 500 resta senza validazione, e la doc di `eligibilityVerdicts`
+>   è corretta;
+> - **deriva provata rumorosa**: tolto `min_quotes`, un test di «L3's table» cade in 2,3 s con
+>   `ZodError … path ["min_quotes"] … Required`, nella `parse` dello stub (`:1255`). Playwright non cattura la
+>   promessa del gestore di rotta, quindi il lancio fa fallire il test in corso, senza `try`/`catch`. Poi è stato
+>   ripristinato byte per byte, sha uguale;
+> - `risk` 38/38 sullo spec finale; prettier invariato; `tsc` sullo spec exit 0.
+>
+> **Cancelli miei sulla revisione finale** (6153, uno per volta):
+>
+> | Comando | Esito |
+> |---|---|
+> | `front-utility component-unit` | 108 file, 2730 test, tutti passati (stesso conteggio di prima: i test `AssetSet*` che montano la cornice restano verdi) |
+> | `front-portfolio risk-lab` | 43/43 (1,7 min; build già aggiornata) |
+> | `dev.py front check` | 0 errori, 0 avvisi |
+>
+> Poi prettier `--check` pulito sui 5 file di codice e test, `git diff --check` pulito, 6153 libera.
+>
+> Dal test-author, sulla stessa revisione dei sorgenti:
+> - `risk-levels-component` 247/247;
+> - `risk` 38/38, e 38/38 a 4 worker per due volte prima dell'import, che tocca solo il corpo dello stub;
+> - `check-orphans` pulito.
+>
+> **Bersaglio**: HEAD `ff1ee3bbc` è antenato di `dev_release2` (`bae2515bd`, 12 commit dopo) e di
+> `origin/dev_release2` (`c9a602f74`). Quei 12 commit non toccano nessuno dei miei 6 file, né `BenchmarkSelect`,
+> `riskStore`, `riskPanelController` o `levels/`. La voce del CHANGELOG di Risk da aggiornare è identica sul bersaglio.
+>
+> **Privacy**: nelle 210 righe aggiunte al journal non ci sono cifre, nomi né impronte (lo scan trova solo un'intestazione
+> di hunk).
+>
+> **Checkpoint 13 consegnato al coordinator**, tre commit proposti:
+> 1. `feat(risk): L3 benchmark waits for eligibility`: `L3Benchmark.svelte`, `RiskLevelsPanel.svelte`,
+>    `risk-analysis.spec.ts`;
+> 2. `feat(risk): level warnings in one banner`: `RiskLevelSection.svelte`, `RiskLevelSection.test.ts`;
+> 3. `docs(journal): A, D378 and the level banner`: questo file.
+>
+> Le proposte per il CHANGELOG: una voce 🔄 nuova per il banner, e l'aggiornamento della voce di Risk «The benchmark
+> picker shows…», dove la parentesi «as their pages adopt it» con il passo 24 non è più vera.
+>
+> **Stato: FROZEN.**
