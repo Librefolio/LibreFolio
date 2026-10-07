@@ -1,6 +1,7 @@
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Page, type Request} from '../fixtures/playwright';
+import {TEST_USER} from '../fixtures/test-users';
 
-import {API_TIMEOUT, exportCurrentSelection, gotoDashboard, gotoFirstBroker, gotoFx, gotoSeededAsset, isSnapshotPost, numericScopeId, openAiExportPanel, selectAiExportSelection, setupAiExportPage, waitForClipboard} from './helpers';
+import {API_TIMEOUT, UI_TIMEOUT, exportCurrentSelection, gotoDashboard, gotoFirstBroker, gotoFx, gotoSeededAsset, isSnapshotPost, numericScopeId, openAiExportPanel, selectAiExportSelection, setupAiExportPage, waitForClipboard} from './helpers';
 
 const ASSET_OVERVIEW_FIXTURE = {
     displayName: 'Apple Inc.',
@@ -111,6 +112,67 @@ async function captureDatasetRequest(page: Page, id: string): Promise<Record<str
         await expect(panel.menu).toBeHidden({timeout: 2_000});
     }
     return request.postDataJSON() as Record<string, unknown>;
+}
+
+const BROKER_LIST_PATH = '/api/v1/brokers';
+const AI_EXPORT_CATALOG_PATH = '/api/v1/ai-export/catalog';
+/**
+ * How long a cold load of the Dashboard may take to bring the AI-export catalogue in while the broker list waits at
+ * the gate. Kept well below the page's own request timeout (`DEFAULT_TIMEOUT`, 30 s, zodios-client.ts): held past
+ * that, the broker list fails inside the page and the Dashboard is left with no scope at all — a different state from
+ * the one under test, which would surface as a confusing red further down.
+ */
+const HELD_LIST_BUDGET_MS = 20_000;
+
+interface BrokerListItem {
+    readonly id: number;
+    readonly user_role?: string | null;
+    readonly user_share_percentage?: string | number | null;
+}
+
+function isGetOf(request: Request, path: string): boolean {
+    return request.method() === 'GET' && new URL(request.url()).pathname === path;
+}
+
+/** The brokers the Dashboard aggregates: OWNER with a share unset or above zero, as `getOwnedBrokers()` keeps them (brokerStore.ts). Ascending. */
+function ownedBrokerIds(items: readonly BrokerListItem[] | undefined): number[] {
+    return (items ?? [])
+        .filter((broker) => broker.user_role === 'OWNER' && (broker.user_share_percentage == null || Number.parseFloat(String(broker.user_share_percentage)) > 0))
+        .map((broker) => broker.id)
+        .sort((left, right) => left - right);
+}
+
+interface BrokerListGate {
+    /** How many broker-list requests the page has sent into the gate so far. */
+    held(): number;
+    /** Lets every held request go on, and every later one straight through. Idempotent. */
+    release(): void;
+}
+
+/**
+ * Holds every `GET /api/v1/brokers` the page sends — the list `ensureBrokersLoaded()` asks for (brokerStore.ts) — until
+ * `release()`. The gate delays, it never answers: a held request leaves through `route.fallback()`, so any other route
+ * registered on the same URL still gets its turn and the backend answers as usual. Other methods on that path fall back
+ * at once, and the pattern stops at the path, so `/brokers/{id}` (icon hydration) and `/brokers/{id}/summary` never
+ * enter it. `page.request` does not go through page routes: the owned-set reading goes around the gate.
+ */
+async function holdBrokerList(page: Page): Promise<BrokerListGate> {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    let held = 0;
+    await page.route(/\/api\/v1\/brokers(?:\?.*)?$/, async (route) => {
+        if (!isGetOf(route.request(), BROKER_LIST_PATH)) {
+            await route.fallback();
+            return;
+        }
+        held += 1;
+        await released;
+        // A request the page abandoned meanwhile has nothing left to go on: the test reports the missing answer itself.
+        await route.fallback().catch(() => undefined);
+    });
+    return {held: () => held, release: () => release()};
 }
 
 // One test here exports four surfaces in sequence, so the whole-test budget has to
@@ -233,5 +295,59 @@ test.describe('AI Export request and clipboard contract', () => {
 
         const clipboard = await waitForClipboard(page, ['portfolio.fiscal_lots', 'dataset_id: portfolio.fifo', notes], 'Capital-loss offset Analysis clipboard was not populated');
         expect(clipboard).toContain('dataset_id: portfolio.fifo');
+    });
+
+    /**
+     * F2 on the Dashboard's AI Export. On a cold load the owned brokers arrive in `onMount` (`ensureBrokersLoaded()`),
+     * the AI-export catalogue in parallel. An export started before the brokers leaves with no `broker_ids`, which the
+     * backend widens to every broker the user can see: the clipboard would hold another portfolio than the one on screen.
+     * So the trigger may open only once the owned scope is known.
+     *
+     * The broker list is held at a gate across a cold load. With the catalogue in — the one thing the trigger waits for
+     * today — and the scope still unknown, the trigger must be disabled. Nothing on the page publishes "catalogue applied":
+     * the catalogue response having finished is the nearest signal there is. Released, the list lands, the trigger opens,
+     * and the export carries exactly the owned brokers of the list the page itself received — read off that very response,
+     * so a neighbour creating or deleting a broker of this user in the meantime cannot move the expectation.
+     */
+    test('the Dashboard enables AI Export only once the owned broker scope is known, and the export carries it', async ({page}) => {
+        const listed = await page.request.get(BROKER_LIST_PATH);
+        expect(listed.ok(), `GET ${BROKER_LIST_PATH} → HTTP ${listed.status()}`).toBe(true);
+        const ownedBefore = ownedBrokerIds(((await listed.json()) as {items?: BrokerListItem[]}).items);
+        if (ownedBefore.length === 0) throw new Error(`${TEST_USER.username} owns no broker with a share above zero, so the Dashboard has no scope to export. Check populate_mock_data.py seeding.`);
+
+        // A cold load is a new document with every store empty. The login left a live Dashboard behind: it is unloaded
+        // first, so that nothing it still has in flight can be held, counted or awaited as the new document's request.
+        await page.goto('about:blank');
+        const gate = await holdBrokerList(page);
+        try {
+            const trigger = page.getByTestId('ai-export-button');
+            const catalogAnswered = page.waitForResponse((response) => isGetOf(response.request(), AI_EXPORT_CATALOG_PATH), {timeout: HELD_LIST_BUDGET_MS});
+            // Awaited below; the empty catch only keeps a failure in between from also surfacing as an unhandled rejection.
+            void catalogAnswered.catch(() => undefined);
+            await gotoDashboard(page);
+            await expect.poll(() => gate.held(), {message: 'the cold load of /dashboard never asked for its broker list: nothing is held, so nothing here is tested', timeout: UI_TIMEOUT}).toBeGreaterThan(0);
+
+            const catalog = await catalogAnswered;
+            expect(catalog.status(), catalog.status() === 200 ? '' : await catalog.text()).toBe(200);
+            expect(await catalog.finished(), 'the AI-export catalogue never finished loading').toBeNull();
+            await expect(trigger).toBeVisible();
+            await expect(trigger, 'AI Export is enabled while the owned brokers are still unknown: an export from here leaves without broker_ids, and the backend widens it to every broker the user can see (F2)').toBeDisabled();
+
+            const listAnswered = page.waitForResponse((response) => isGetOf(response.request(), BROKER_LIST_PATH), {timeout: UI_TIMEOUT});
+            gate.release();
+            const answer = await listAnswered;
+            expect(answer.status(), answer.status() === 200 ? '' : await answer.text()).toBe(200);
+            const owned = ownedBrokerIds(((await answer.json()) as {items?: BrokerListItem[]}).items);
+            expect(owned.length, `the broker list the page received holds no owned broker (owned before the load: [${ownedBefore.join(', ')}]). Check populate_mock_data.py seeding.`).toBeGreaterThan(0);
+            await expect(trigger, 'the owned brokers are known, yet AI Export stays disabled').toBeEnabled({timeout: UI_TIMEOUT});
+
+            const payload = await exportDataset(page, 'portfolio.overview_and_history');
+            expect(payload.domain).toBe('portfolio');
+            expectCanonicalBrokerIds(payload.broker_ids);
+            expect(payload.broker_ids, `the export is not scoped to the brokers the user owns in the list the page received (owned before the load: [${ownedBefore.join(', ')}])`).toEqual(owned);
+        } finally {
+            gate.release();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
     });
 });
