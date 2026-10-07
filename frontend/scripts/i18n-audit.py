@@ -75,7 +75,7 @@ def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict[str, Any
 
 def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
     """
-    Scan all .svelte and .ts files in src/ to find translation keys being used.
+    Scan the product .svelte, .ts and .js files in src/ (never the tests) for translation keys.
 
     Returns:
         Tuple of (exact_keys, prefix_patterns)
@@ -127,41 +127,37 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
         re.compile(r"['\"]([a-zA-Z0-9_.]+)\.['\"]?\s*\+"),
         ]
 
-    # Scan all .svelte, .ts, and .js files
-    for ext in ["*.svelte", "*.ts", "*.js"]:
-        for file_path in src_dir.rglob(ext):
-            # Skip node_modules and build directories
-            if "node_modules" in str(file_path) or "/build/" in str(file_path):
-                continue
-            try:
-                content = file_path.read_text(encoding="utf-8")
+    # Scan the product sources only: a test, a dependency or a build artefact proves nothing
+    for file_path in _usage.iter_source_files(src_dir):
+        try:
+            content = file_path.read_text(encoding="utf-8")
 
-                # Find exact keys (direct calls)
-                for pattern in patterns_exact:
-                    matches = pattern.findall(content)
-                    exact_keys.update(matches)
+            # Find exact keys (direct calls)
+            for pattern in patterns_exact:
+                matches = pattern.findall(content)
+                exact_keys.update(matches)
 
-                # Find indirect keys (passed as props)
-                for pattern in patterns_indirect:
-                    matches = pattern.findall(content)
-                    # Flatten tuples from regex groups
-                    for match in matches:
-                        if isinstance(match, tuple):
-                            exact_keys.update(m for m in match if m)
-                        else:
-                            exact_keys.add(match)
+            # Find indirect keys (passed as props)
+            for pattern in patterns_indirect:
+                matches = pattern.findall(content)
+                # Flatten tuples from regex groups
+                for match in matches:
+                    if isinstance(match, tuple):
+                        exact_keys.update(m for m in match if m)
+                    else:
+                        exact_keys.add(match)
 
-                # Find dynamic prefixes
-                for pattern in patterns_dynamic:
-                    matches = pattern.findall(content)
-                    # Normalize away any trailing dot so e.g. "sectors" and "sectors."
-                    # (captured by different regex variants) collapse to one entry;
-                    # startswith() matching is unaffected since it's the more
-                    # permissive (superset) form.
-                    prefix_patterns.update(m.rstrip(".") for m in matches)
+            # Find dynamic prefixes
+            for pattern in patterns_dynamic:
+                matches = pattern.findall(content)
+                # Normalize away any trailing dot so e.g. "sectors" and "sectors."
+                # (captured by different regex variants) collapse to one entry;
+                # startswith() matching is unaffected since it's the more
+                # permissive (superset) form.
+                prefix_patterns.update(m.rstrip(".") for m in matches)
 
-            except Exception:
-                pass  # Skip files that can't be read
+        except Exception:
+            pass  # Skip files that can't be read
 
     return exact_keys, prefix_patterns
 
@@ -387,6 +383,10 @@ def generate_unused_keys_report(
     """
     usage = _usage.collect_from_source(I18N_DIR.parent.parent)
     usage.exact |= exact_keys
+    usage.exact |= _usage.harvest_backend_keys(BACKEND_DIR)
+    backend_families = _usage.harvest_backend_families(BACKEND_DIR)
+    for prefix, origin in backend_families.items():
+        usage.families.setdefault(prefix, origin)
     usage.vocabulary = _usage.harvest_vocabulary(BACKEND_DIR)
 
     verdicts = {key: _usage.classify(key, usage, prefix_patterns) for key in all_keys}
@@ -394,7 +394,12 @@ def generate_unused_keys_report(
     likely_dynamic = [k for k in all_keys if verdicts[k] == _usage.UNVERIFIED]
     likely_unused = unused_keys
 
-    if len(unused_keys) == 0 and not likely_dynamic:
+    # A backend family whose namespace exists but holds no key: built at runtime,
+    # rendered from nothing. Families outside every namespace are not i18n keys.
+    namespaces = {extract_section(k) for k in all_keys}
+    phantoms = [p for p in _usage.phantom_families(backend_families, all_keys) if extract_section(p) in namespaces]
+
+    if len(unused_keys) == 0 and not likely_dynamic and not phantoms:
         return "\n## ✅ No Unused Translation Keys\n\nAll translation keys are used in the codebase.\n", []
 
     lines = [
@@ -406,15 +411,22 @@ def generate_unused_keys_report(
         "- **dead** — no evidence anywhere\n\n",
         "Collapsing *not verified* into *used* absolves a whole namespace; collapsing it into "
         "*dead* condemns live keys. Only the **dead** list below is actionable.\n\n",
-        "Backend-driven keys (e.g. `message_i18n_key=\"ns.key\"` or signal `label_key=\"ns.key\"` metadata), "
-        "camelCase-continuation templates, constant namespaces (`` $t(`${NS}.leaf`) ``), ternary "
-        "arguments (`` $t(c ? 'a.b' : 'a.c') ``) and typed-union expansions "
-        "(`` `risk.${prefix}.${code}` `` where ``prefix: 'errors' | 'warnings'``) ARE detected and excluded.\n\n",
+        "Evidence comes from product sources only: `*.test.ts`, `*.spec.ts`, `__tests__/` and "
+        "`__mocks__/` prove nothing. A key written as a literal anywhere counts, whatever receives it "
+        "(`translateOr($_, 'k')`, `label('k')`, `afterCopyKey: 'k'`, a ternary across lines, a backend "
+        "dictionary). Also detected: backend `..._i18n_key=` fields and `f\"ns.family.{code}\"` families, "
+        "constant namespaces (`` $t(`${NS}.leaf`) ``), camelCase continuations, ternary arguments, "
+        "typed unions and single-literal parameter types (`` `risk.${prefix}.${code}` `` with "
+        "`prefix: 'errors'`), nested templates, `` `${key}Full` `` suffixes, and the members a file "
+        "names for the family it builds (`text('compute.title')`, `titleKey:` lists, indexed maps).\n\n",
         ]
 
     if prefix_patterns:
         lines.append(f"**Dynamic prefixes detected:** `{', '.join(sorted(prefix_patterns))}`\n")
-        lines.append("Keys under these prefixes are marked as potentially used.\n\n")
+        lines.append(
+            "A key under these legacy prefixes, and nothing more, is **not verified**: the prefix keeps "
+            "it out of the dead list but no longer proves it used.\n\n"
+        )
     if usage.suppressed_roots:
         lines.append(
             f"**Bare roots superseded by expansion:** `{', '.join(sorted(usage.suppressed_roots))}` — "
@@ -425,8 +437,9 @@ def generate_unused_keys_report(
     if likely_dynamic:
         lines.append(f"\n### 🔵 Not Verified ({len(likely_dynamic)} keys)\n")
         lines.append(
-            "These sit under a resolved dynamic family, but their final segment is produced at "
-            "runtime and was not found in the producer's vocabulary. **Not evidence of death.**\n"
+            "These sit under a resolved dynamic family, or only under a legacy prefix, but their final "
+            "segment is produced at runtime and neither the building file nor the producer's vocabulary "
+            "names it. **Not evidence of death.**\n"
         )
         sections_dyn: dict[str, list[str]] = {}
         for key in likely_dynamic:
@@ -451,6 +464,17 @@ def generate_unused_keys_report(
             for key in sorted(sections_dead[section]):
                 lines.append(f"- `{key}`")
             lines.append("")
+
+    # Section 3: backend families with no catalogue key. Informational, not blocking.
+    if phantoms:
+        lines.append(f"\n### 👻 Backend Families Without Catalogue Keys ({len(phantoms)})\n")
+        lines.append(
+            "The backend builds these key prefixes at runtime, but no catalogue key lives under them: "
+            "either nothing renders them or every rendering falls back to the raw key.\n"
+        )
+        for prefix in phantoms:
+            lines.append(f"- `{prefix}` ← {backend_families[prefix]}")
+        lines.append("")
 
     return "\n".join(lines), unused_keys
 
