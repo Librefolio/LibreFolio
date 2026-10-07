@@ -1,5 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForSettled} from '../fixtures/app-events';
 import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
@@ -1026,7 +1027,20 @@ async function selectBrokerSubmode(chart: Locator, submode: BrokerPnlSubmode): P
 
 test.describe('Broker detail — GrowthChart P&L mode', () => {
     test.beforeEach(async ({page}) => {
+        // A hook runs before the test can raise its own timeout, and this one waits for a
+        // whole-portfolio report: it gets the budget the three tests ask for themselves.
+        test.setTimeout(60_000);
         await login(page, TEST_USER);
+
+        // login() returns as soon as the login form is gone — before the Dashboard it lands on has
+        // finished loading, sometimes before it has even mounted — and that Dashboard asks its own
+        // report, with the income family and `broker_ids` set to every broker the user owns. A
+        // recorder armed before it has asked records it, and `reports.find(...)` then reads the
+        // portfolio's request as this broker's overview. So every test starts from a landing page
+        // that has finished asking.
+        const dashboard = page.getByTestId('dashboard-page');
+        await expect(dashboard, 'login() lands TEST_USER on the Dashboard').toBeVisible({timeout: 15_000});
+        await waitForSettled(dashboard, 30_000);
     });
 
     test('activating candles fetches a candle report scoped to this broker', async ({page}) => {
