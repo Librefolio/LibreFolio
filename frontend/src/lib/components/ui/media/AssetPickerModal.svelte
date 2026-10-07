@@ -197,7 +197,7 @@
         },
         {
             id: 'size',
-            header: () => $_('uploads.size') || 'Size',
+            header: () => $_('uploads.fileSize') || 'Size',
             cell: (row) => ({type: 'size' as const, bytes: row.size_bytes}),
             type: 'size',
             width: 90,
