@@ -31,16 +31,17 @@ The documentation is organized into three main areas:
 
 After each login, the browser of an **administrator** checks the GitHub Releases API for a newer **stable** LibreFolio release (drafts and pre-releases are never considered). To stay unobtrusive:
 
-- The check runs **at most once per hour** — the last result is cached in the browser's local storage.
+- The check runs **at most once per hour** — the last result is cached in the browser's local storage. A manual **Check for updates** from the [changelog modal](../user/settings/about.md#changelog-modal) skips this cache.
 - The modal only appears once the release is **actually installable**: the check also verifies that the Docker image for that tag exists on the registry, so a release whose build is still in progress is not announced yet.
-- Self-hosted installs without internet access simply fail the fetch silently: **no error, no banner**.
+- Self-hosted installs without internet access simply fail the fetch silently: **no error, no banner**. A manual check reports the failure instead.
+- The modal waits until no other window and no guide is open.
 
-When a newer stable release exists, an **update-available modal** appears showing the current and latest versions side by side, with links to the **[updating guide](../user/installation.md#updating)** and to the GitHub release page. Two ways to dismiss it:
+When a newer stable release exists, the **New version available** modal appears, showing the current and latest versions side by side, with a **How to update** link to the **[updating guide](../user/installation.md#updating)** and a **Release notes on GitHub** link to the release page. Two ways to dismiss it:
 
-- **"Later"** — the modal closes and will prompt again at the next login.
-- **"Skip this version"** — the modal never prompts for that specific version again (a future, newer version will still be announced).
+- **Remind me later** — the modal closes and will prompt again at the next login. Closing it with <kbd>Esc</kbd> or a click outside does the same.
+- **Skip this version** — the automatic check never prompts for that specific version again (a future, newer version will still be announced). A manual check from the changelog modal still reports it.
 
-Non-admin users are never probed at login. If a non-admin manually checks for updates from the [changelog modal](../user/settings/about.md#changelog-modal) and a newer release exists, they see a dialog listing the instance administrators (with e-mail addresses when available) instead, so they know whom to ask for the upgrade.
+Non-admin users are never probed at login. If a non-admin runs **Check for updates** from the [changelog modal](../user/settings/about.md#changelog-modal) and a newer release exists, they see the **Update available — contact an administrator** dialog instead. It lists the instance administrators (with e-mail addresses when available, each with a mailto link and a copy button), so they know whom to ask for the upgrade.
 
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">

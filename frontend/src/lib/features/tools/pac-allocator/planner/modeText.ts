@@ -6,7 +6,7 @@
  */
 import {canonicalInput, decimalScale, decimalSign} from './decimal';
 import type {DraftMode, ModeKind} from './draft.svelte';
-import {formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain} from './format';
+import {formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from './format';
 import {MODE_KIND_FALLBACKS} from './labels';
 
 /** The `$t` store value, narrowed to what the planner passes. */
@@ -27,7 +27,7 @@ export function modeIncrementText(tr: PlannerTranslate, mode: DraftMode): string
     const canonical = canonicalInput(mode.step);
     return tr('tools.pacAllocator.planner.brokers.stepUnits', {
         default: '{count, plural, one {{step} unit} other {{step} units}}',
-        values: {step: formatPlannerPlainDecimal(canonical ?? mode.step), count: canonical === null ? 0 : Number(canonical)},
+        values: {step: formatPlannerPlainDecimal(canonical ?? mode.step), count: plannerPlainDecimalCount(canonical ?? mode.step)},
     });
 }
 

@@ -79,6 +79,8 @@
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeHistory as isBeforeHistoryPure, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
     import {buildParseUnits, combinedFileForSet, groupBrokerFiles, isReportSetPlugin, readAlonePlugins, rememberedChoices, setBlocksAnalysis, setPluginFor, setRequest, setSelectionState, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import {completePairsOnly, freshLinkFor, linkedPairs, setPairSelected} from '$lib/utils/transactions/importPairs';
+    import {renderFromToHtml, renderImpliedRateHtml} from '$lib/utils/transactions/pairCellHtml';
     import {buildGapFixRequests, buildGapFixView, defaultGapFixSelection, gapFixHasSomethingToShow, gapFixSelectedCount, resolveTruthAssetId, selectedGapFixCreates, truthSourcesOf, type GapFixOutcome, type GapFixView, type TruthSource} from '$lib/utils/transactions/gapFixModel';
     import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet, carryResolverChoices, type ResolverChoices} from '$lib/utils/transactions/importDuplicateResolver';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -307,6 +309,8 @@
     let allReportSets = $derived([...brokerSetGroups.values()].flatMap((group) => group.sets));
     let selectedFileIdSet = $derived(new Set(selectedFiles.map((f) => f.fileId)));
     let blockingSets = $derived(allReportSets.filter((set) => setBlocksAnalysis(set, selectedFileIdSet, setPreviews.get(set.key))));
+    /** R6: a set ticked only in part blocks until it is ticked whole or unticked; its hint comes first. */
+    let partlySelectedSets = $derived(allReportSets.filter((set) => setSelectionState(set, selectedFileIdSet) === 'some'));
     let parseUnits = $derived(buildParseUnits(selectedFiles, allReportSets));
     let selectedSetCount = $derived(parseUnits.filter((unit) => unit.kind === 'set').length);
     let setPreviewsLoading = $derived([...setPreviews.values()].some((entry) => entry.status === 'loading'));
@@ -763,9 +767,24 @@
     }
 
     // Step 4 deriveds
-    let step4Rows = $derived(mergedTransactions.filter((t) => !isResolvedAwayDuplicate(t) && (showBeforeHistory || !beforeHistoryIndices.has(t.index))));
-    let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)).length);
-    let step4TotalCount = $derived(step4Rows.filter((t) => !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index)).length);
+    // A linked pair (a currency conversion's two legs) is one table row, its paying leg's; the counts stay in transactions.
+    let pairs = $derived(linkedPairs(mergedTransactions));
+    let mergedByIndex = $derived(new Map(mergedTransactions.map((t) => [t.index, t])));
+    let step4LegRows = $derived(mergedTransactions.filter((t) => !isResolvedAwayDuplicate(t) && (showBeforeHistory || !beforeHistoryIndices.has(t.index))));
+    let step4Rows = $derived(step4LegRows.filter((t) => !pairs.hidden.has(t.index)));
+    let step4SelectedCount = $derived(
+        completePairsOnly(
+            mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)),
+            pairs,
+        ).length,
+    );
+    let step4TotalCount = $derived(step4LegRows.filter((t) => !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index)).length);
+
+    /** The other leg of a pair's row, shown as its "To"; undefined for a row that is no pair. */
+    function pairPartner(mt: MergedTx): MergedTx | undefined {
+        const partner = pairs.partnerOf.get(mt.index);
+        return partner === undefined ? undefined : mergedByIndex.get(partner);
+    }
     let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
     let step4MissingAssetCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null && r.candidates.length === 0).length);
     let step4HasUnresolvedSelected = $derived(mergedTransactions.some((t) => t.selected && !beforeOpeningIndices.has(t.index) && !isRowAssetResolved(t)));
@@ -774,8 +793,8 @@
     let step4BeforeOpeningCount = $derived(beforeOpeningIndices.size);
     let step4BeforeHistoryCount = $derived(beforeHistoryIndices.size);
     // Reasons a visible step-4 row is pre-deselected (for the explanatory banner)
-    let step4DeselectPendingDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
-    let step4DeselectDbDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'likely').length);
+    let step4DeselectPendingDup = $derived(step4LegRows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
+    let step4DeselectDbDup = $derived(step4LegRows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'likely').length);
     let step4HasDeselectReasons = $derived(step4BeforeOpeningCount > 0 || step4DeselectPendingDup > 0 || step4DeselectDbDup > 0);
 
     interface BrokerOpeningIssue {
@@ -1342,17 +1361,20 @@
     }
 
     function buildFinalTxList(): Array<{tx: TransactionCreateItem; todos: ImportTodo[]}> {
-        return mergedTransactions
-            .filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index))
-            .map((t) => {
-                const tx = {...t.tx} as any;
-                const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
-                if (assetId !== null && isFakeAssetId(assetId)) {
-                    const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
-                    if (res?.resolvedAssetId) tx.asset_id = res.resolvedAssetId;
-                }
-                return {tx: tx as TransactionCreateItem, todos: t.todos};
-            });
+        // Whole pairs only, each under a fresh link_uuid: a plugin's ids repeat in every upload of one statement.
+        const freshLinks = new Map<string, string>();
+        const chosen = mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index));
+        return completePairsOnly(chosen, pairs).map((t) => {
+            const tx = {...t.tx} as any;
+            const link = freshLinkFor(t, freshLinks, generateUUID);
+            if (link) tx.link_uuid = link;
+            const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
+            if (assetId !== null && isFakeAssetId(assetId)) {
+                const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
+                if (res?.resolvedAssetId) tx.asset_id = res.resolvedAssetId;
+            }
+            return {tx: tx as TransactionCreateItem, todos: t.todos};
+        });
     }
 
     function clearGapFix() {
@@ -2099,13 +2121,14 @@
                 minWidth: 44,
                 cell: (mt) => {
                     const beforeOpening = beforeOpeningIndices.has(mt.index) || beforeHistoryIndices.has(mt.index);
+                    const partner = pairPartner(mt);
                     return {
                         type: 'editable-checkbox',
-                        value: beforeOpening ? false : mt.selected,
+                        value: beforeOpening ? false : mt.selected && (partner?.selected ?? true),
                         disabled: beforeOpening,
                         onchange: (v: boolean) => {
                             if (beforeOpening) return;
-                            mergedTransactions = mergedTransactions.map((t) => (t.index === mt.index ? {...t, selected: v} : t));
+                            mergedTransactions = setPairSelected(mergedTransactions, mt.index, v, pairs);
                         },
                     };
                 },
@@ -2327,6 +2350,13 @@ ${arrow}<span>${label}</span></span>`,
                     const cash = mt.tx.cash;
                     if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
                         const c = cash as {code: string; amount: string};
+                        const partnerCash = pairPartner(mt)?.tx.cash;
+                        if (partnerCash && typeof partnerCash === 'object' && !Array.isArray(partnerCash)) {
+                            const to = partnerCash as {code: string; amount: string};
+                            const fromTo = renderFromToHtml(formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true}), formatCurrencyAmountHtml(Number(to.amount), to.code, {showSign: true}), {from: $t('common.from'), to: $t('common.to')});
+                            const rate = renderImpliedRateHtml({code: c.code, amount: Number(c.amount)}, {code: to.code, amount: Number(to.amount)});
+                            return {type: 'html', html: `<div class="inline-flex flex-col items-end gap-0.5" data-testid="import-tx-pair-cash">${fromTo}${rate}</div>`};
+                        }
                         return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
                     }
                     return {type: 'html', html: '<span class="text-gray-400">—</span>'};
@@ -2402,6 +2432,11 @@ ${arrow}<span>${label}</span></span>`,
     function step4SelectVisible() {
         const ids = new Set(step4TableRef?.getPageRowIds() ?? []);
         if (ids.size === 0) return;
+        // A pair's row stands for both legs: its hidden leg is selected with it.
+        for (const id of [...ids]) {
+            const partner = pairs.partnerOf.get(Number(id));
+            if (partner !== undefined) ids.add(String(partner));
+        }
         mergedTransactions = mergedTransactions.map((t) => {
             if (!ids.has(String(t.index))) return t;
             if (beforeOpeningIndices.has(t.index) || beforeHistoryIndices.has(t.index)) return t;
@@ -3578,12 +3613,6 @@ ${arrow}<span>${label}</span></span>`,
         if (setPreviews.get(set.key)?.members !== memberSignature(set)) void previewSet(set);
     }
 
-    /** "Exclude from the import": the incomplete set stops blocking, and the other files go on (design §4.1, rule 6). */
-    function excludeSet(set: ReportSetGroup) {
-        const ids = new Set(set.files.map((file) => file.file_id));
-        selectedFiles = selectedFiles.filter((f) => !ids.has(f.fileId));
-    }
-
     /** The members a set preview is asked for: the cache key beside the set's own. */
     function memberSignature(set: ReportSetGroup): string {
         return set.files
@@ -4475,7 +4504,6 @@ ${arrow}<span>${label}</span></span>`,
                                                 onToggleSelected={() => toggleSetSelection(set)}
                                                 onToggleExpanded={() => toggleSetExpanded(set.key)}
                                                 onUploadMissing={(roleCode, file) => void uploadMissingIntoSet(set, roleCode, file)}
-                                                onExclude={() => excludeSet(set)}
                                                 onPreviewFile={(fileId) => openPreview(fileId)}
                                                 onDeleteFile={(file) => requestDeleteFile(file as BrimFile, broker.id)}
                                                 plugins={setPluginInfos}
@@ -5208,9 +5236,9 @@ ${arrow}<span>${label}</span></span>`,
                     ◀ {$t('common.back')}
                 </button>
                 {#if blockingSets.length > 0}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks">
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks" data-reason={partlySelectedSets.length > 0 ? 'partly-selected' : 'incomplete'}>
                         <AlertTriangle size={14} />
-                        {$t('importWizard.reportSet.incompleteBlocks')}
+                        {partlySelectedSets.length > 0 ? $t('importWizard.reportSet.partlySelectedBlocks') : $t('importWizard.reportSet.incompleteBlocks')}
                     </span>
                 {:else if selectedFiles.length > 0 && !step2CanParse}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">

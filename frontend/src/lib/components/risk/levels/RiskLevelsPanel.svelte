@@ -2,6 +2,8 @@
     import {_ as t} from '$lib/i18n';
     import type {RiskAnalyticResult, RiskScope} from '$lib/stores/risk/riskStore.svelte';
     import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES} from '$lib/stores/risk/riskPanelController.svelte';
+    import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -76,6 +78,8 @@
 
     const controller = createRiskPanelController(() => ({scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {
         onsynced: () => onsynced?.(),
+        // Page cache: a failed refresh of the figures on screen keeps them, and says so.
+        onrefreshfailed: () => toasts.error($t('risk.states.loadFailed')),
         // L1 is the only consumer of these two, and both are opt-in so that
         // turning them on here cannot change what any other surface requests.
         includeDrawdownSummary: true,
@@ -98,6 +102,8 @@
         // prints it, instead of anyone assuming which one is on screen.
         includeCurrentCompositionRiskReturn: true,
     });
+    // Cards served from the risk cache appear at their value instead of counting up from 0.
+    setTweenHydration(() => controller.hydratedFromCache);
 
     let historicalResults = $derived(controller.historicalResults);
     let currentResults = $derived(controller.currentResults);
@@ -338,7 +344,7 @@
         {/snippet}
 
         <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata} actions={l3Table ? l3Actions : undefined}>
-            <L3Benchmark {controller} riskFreePercent={appliedRiskFreePercent} />
+            <L3Benchmark {controller} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
             <L3RiskAdjusted bind:tableRef={l3Table} {historicalResults} {currentResults} {assetNames} {assetIcons} {appliedRiskFreePercent} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
         </RiskLevelSection>
 

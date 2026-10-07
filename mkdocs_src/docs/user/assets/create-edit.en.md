@@ -13,15 +13,20 @@ In LibreFolio, you can create new assets in two different ways:
 
     ```mermaid
     flowchart LR
-        A[Start: Click '+ New Asset'] --> B[Type Name, ISIN, or Ticker in Smart Search]
+        A[Start: Click '+ Add Asset'] --> B[Type Name, ISIN, or Ticker in Smart Search]
         B --> C{Match Found?}
         C -->|Yes| D[Auto-fill details from external providers]
-        C -->|No| E[Manually enter name, category, & currency]
+        C -->|No| E[Manually enter name, type, & currency]
         D --> F[Adjust config / Assign pricing provider]
         E --> F
-        F --> G[Click Save]
+        F --> G[Click 'Create Asset']
         G --> H[Asset added to library]
     ```
+
+    **Name** is required: while it is empty, the form says *Enter an asset name to continue.* The
+    ⓘ icon next to **Currency** explains what that field is for — the currency used to store this
+    asset's prices. Pick the currency its prices are quoted in: for a fund listed in euros that is
+    EUR, even when the fund itself is denominated in another currency.
 
 === "Broker Import Auto-Creation"
 
@@ -30,16 +35,27 @@ In LibreFolio, you can create new assets in two different ways:
         A[Start: Upload CSV report in Import Wizard] --> B[Parse report rows]
         B --> C{Asset ID recognized?}
         C -->|Yes| D[Auto-match with existing asset]
-        C -->|No| E[Flag warning ⚠️ and show 'Create' button]
-        E --> F[Click 'Create' to open pre-filled modal]
+        C -->|No| E[Flag warning ⚠️ and offer 'Create new asset']
+        E --> F[Choose 'Create new asset' to open pre-filled modal]
         F --> G[Save asset to resolve mapping]
         G --> D
         D --> H[Commit all transactions]
     ```
 
+    In the wizard's **Resolve Assets** section, each security found in the report has a card with
+    an asset selector. When LibreFolio finds no candidate at all for a security — typically the
+    first time you import it — an **Assets to create manually** note explains the choice: link it
+    to an existing asset, or choose **Create new asset** in the selector. Once the asset is saved,
+    later imports recognise it by its saved identifier whenever the match is unique.
+
+    The form opens pre-filled with what the report says: the security's codes, and a description
+    listing the names and codes found. If the report gives no name, the **Name** field starts with
+    the ISIN — or with the ticker when there is no ISIN — instead of staying blank; rename it as you
+    like.
+
 !!! info "Success notification"
 
-    Saving from the **+ New Asset** button on the asset list closes the modal at once and
+    Saving from the **Add Asset** button on the asset list closes the modal at once and
     shows a success toast whose asset name is a clickable link straight to the new asset's
     detail page. If the asset has a pricing provider, that page's own post-creation flow then
     triggers a price sync for it — when that sync succeeds, it shows its own **follow-up
@@ -62,6 +78,9 @@ Results are displayed inline with execution times. A ⚠️ warning means the op
 
 ## 🔎 Smart Search Details
 
+Smart Search is the **Search Online** box at the top of the asset form: type a name, ticker or ISIN
+and pick one of the results.
+
 Smart Search first asks each provider's own search. If a supported provider cannot find anything,
 LibreFolio may try a best-effort web link search and resolve provider pages back into asset
 candidates. For Borsa Italiana, this means a fund/detail URL can become a ready-to-save asset with
@@ -81,11 +100,68 @@ lending*) — followed by the specific ones, such as **Equity ETF** or **Real es
 Type a few letters to search across both levels, by name or by code (for example `etf_bond`); if the
 current type belongs to a family, that family is already open.
 
+<!-- [Screenshot Placeholder: assets/type-picker-open — the Type menu open with the ETF family expanded, each specific ETF type showing its composite icon] -->
+
 When Smart Search finds the instrument, the type is filled in from the provider — usually a general
 one such as **ETF**. If you know what the fund holds, refine it — for example to **Equity ETF**: the
 type then records what the fund contains as well as what it is, and its badge takes the colour of
 what it holds. Specific types show their family's icon with a small circle in the corner showing
-what they hold — the same icon you will see in the asset list and elsewhere in the app.
+what they hold — the same icon you will see in the asset list and elsewhere in the app. A later
+check against the provider's data keeps your refinement — see
+[Comparing with the Provider's Data](#provider-data-comparison).
+
+## ⚖️ Comparing with the Provider's Data {: #provider-data-comparison }
+
+Each time LibreFolio reads an asset's details from its provider, it compares them with what the
+form already holds. This happens automatically right after you pick a Smart Search result, and
+whenever you click **Ask Provider** — at the top of **Asset Details** to check every field, or next
+to **Identifiers** and in each distribution editor to check only that part. **Ask Provider** works
+once a provider and its identifier are set in **Provider Assignment**.
+
+- An empty field is simply filled in, alternative codes from the provider are added to
+  **Other identifiers**, and a field that already matches is left alone.
+- When the provider has no sector or geographic breakdown, a message names what is missing
+  (*Provider has no data for: …*).
+- If nothing differs and nothing is missing, a message confirms *All data matches provider*.
+- Everything that differs is gathered in the **Provider Data Comparison** dialog.
+
+<!-- [Screenshot Placeholder: assets/create-provider-compare — the Provider Data Comparison dialog with an identifier row and its main-code chooser, a Type row shown as icon badges, and a distribution row] -->
+
+The dialog groups the differences under **Identifiers**, **Asset Details** and **Classification**.
+Every row has a tick box and starts ticked; most rows show your **Current Value** next to the
+**Provider Value**:
+
+- **Identifiers** are never a plain swap: you choose which code is the main one, and the other is
+  kept under **Other identifiers** — see [One instrument, several codes](#one-instrument-several-codes).
+  The provider's code is proposed as the main one, since it is normally the quoted one.
+- **Type** is shown on both sides as the badge the asset cards use: the type's icon and its name in
+  your language.
+- **Sector Distribution** and **Geographic Distribution** show both breakdowns side by side,
+  largest share first.
+
+Untick the rows where you want to keep your own value (**Select All** and **Deselect All** help),
+then click **Apply Selected** — the button counts the rows you are taking, for example
+*Apply Selected (2/3)*. **Cancel** leaves the form as it is. Either way nothing is saved yet: the
+accepted values only fill in the form, and are stored when you save the asset.
+
+!!! tip "Your ETF subtype is kept"
+
+    Some providers know only an instrument's family: Borsa Italiana, for example, reports every
+    ETFplus instrument simply as **ETF**. If you have refined the type to a member of that family —
+    say **Equity ETF** — the comparison counts the provider's **ETF** as agreeing with it: no row
+    appears, and your type stays. The same goes for the **Crowdfunding** family. A provider that
+    proposes a *more specific* type than yours (for example **Equity ETF** for an asset still typed
+    **ETF**) is still shown, so you can take the refinement.
+
+!!! note "Each question is asked once"
+
+    Picking a Smart Search result can raise a question first: if the result carries an ISIN (or
+    another code) different from the one already in the form — typically one read from a broker
+    report — LibreFolio asks which of the two is the main code
+    (*Which ISIN is the main one for «…»?*). The comparison waits until you answer, or leave
+    without choosing, and then drops the rows that would ask the same thing again; if nothing else
+    is left, it does not open at all. It waits in the same way while the import wizard asks whether
+    to reuse an existing asset with the same name.
 
 ## 🔌 Provider Assignment
 
@@ -107,23 +183,32 @@ breakdown) arrive with none. You can always set or correct both distributions by
 asset modal: they feed the dashboard's **allocation charts** (geography and sector rings, now and
 over time) and the AI Export concentration context.
 
-In the asset modal ([create](#asset-creation-flows) or [edit](#editing-an-asset)) open
-the **Classification** area:
+In the asset modal ([create](#asset-creation-flows) or [edit](#editing-an-asset)) expand
+**More Info**: below the identifiers, its **Classification** part holds two editors.
 
-1. **Geographic distribution** — one row per country/area, with its weight in percent.
-2. **Sector distribution** — one row per sector, with its weight in percent.
+1. **Sector Distribution** — one row per sector, with its weight in percent.
+2. **Geographic Distribution** — one row per country/area, with its weight in percent.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-assets-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Sector Distribution" alt="Sector distribution editor in the asset modal">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Geographic Distribution" alt="Geographic distribution editor in the asset modal">
+</div>
 
 For each distribution you can:
 
-- **Add a row** and pick the area/sector from the dropdown, then type the weight.
+- **Add sector** / **Add country** to add a row: pick the sector or country from the dropdown, then
+  type the weight.
 - **Edit weights inline**; the running **total** sits at the bottom of the editor and turns
   **green when it is less than 0.005 percentage points away from 100%** — amber when
   something is missing, red when you overshoot.
-- **Remove** a row with its delete button.
+- **Balance to 100%** in a row's actions adds the whole gap to that row (or takes the excess from
+  it); select several rows and use **Balance selected rows** to share it among them in proportion
+  to their weights.
+- **Remove** a row from its actions.
 
 ### 📥 Importing a Distribution CSV {: #importing-a-distribution-csv }
 
-The import button accepts the same two-column format for geographic and sector data — a
+The **Import CSV** button accepts the same two-column format for geographic and sector data — a
 header row of `name,weight` (or `name;weight`, see separators below) followed by one row per
 country/area or sector:
 
@@ -184,9 +269,7 @@ each percentage is converted once to its stored fraction (`60` becomes `0.6`).
     A plain `.` decimal point (`Italy,12.5`) is never ambiguous with a comma-separated file and
     needs no quoting.
 
-*(Screenshots of the two distribution editors — `assets/detail-classification` already exists and shows the area; dedicated close-ups of the editors are planned for the next gallery run.)*
-
-## 🏷️ One instrument, several codes
+## 🏷️ One instrument, several codes {: #one-instrument-several-codes }
 
 The same security can be known by more than one code. When that happens, LibreFolio keeps **one
 asset** and stores the extra codes under **Other identifiers**, where they are searchable and are
@@ -232,9 +315,11 @@ entered.
 
 ## 🧲 Merging duplicate assets
 
-If the same instrument ended up in your library twice — a common outcome of importing a bond
-under its subscription code once and its market code another time — you can fold one into the
-other from the **Merge** action, available on the asset list and on the asset detail page.
+If you only notice later that the same instrument was created twice — by hand once and by an
+import another time, under slightly different names, or under its subscription code once and its
+market code another — each copy holds part of its history and neither shows the whole position.
+On the **Assets** page, the **Merge** action folds one into the other: a button on each card, or
+**Merge with…** in the right-click menu of the table.
 
 The operation is **destructive**, so it happens in two deliberate steps:
 

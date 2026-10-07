@@ -38,6 +38,10 @@ This is the indicator behind the legendary "Turtle Trading" breakout system: buy
 |---|---|---|---|
 | Period ($N$) | `period` | 20 | Lookback window for the rolling max/min, in sessions. |
 
+!!! note "Drawn across closed days"
+
+    The channels have a value on sessions only, while the chart's date axis runs through every calendar day. Over a weekend or a holiday, the shaded channel is drawn in a straight line from the last session before to the first one after, as the middle line is, so it does not break: the bridged stretch only shapes the fill and carries no value of its own.
+
 ---
 
 ## 🎛️ Signal Processing Equivalent — Sliding-Window Max/Min (Morphological Filter)

@@ -1639,7 +1639,7 @@
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
         if (!current()) return;
-        const requestedStart = dateStart;
+        let requestedStart = dateStart;
         const requestedEnd = dateEnd;
         const requestedDisplayCurrency = displayCurrency;
         const requestedNativeCurrency = assetInfo?.currency ?? '';
@@ -1703,6 +1703,8 @@
                     error = null;
                 }
                 resolveMaxStartFromChartData();
+                // This request resolved "All" itself: track the resolved start, so its own answer is not taken for a stale one.
+                requestedStart = dateStart;
                 pricesFromCache = true;
                 // No early return here: events travel in the same response as prices,
                 // so a price-cache hit would otherwise leave `events` empty and make
@@ -3289,7 +3291,7 @@
                     >
                 </div>
                 <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                    💡 {pageLayoutMode === 'oneColumn' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
+                    💡 {pageLayoutMode === 'oneColumn' ? $t('dataEditor.editorTipMobile') : $t('dataEditor.editorTipDesktop')}
                 </p>
                 <div class="px-4 py-4">
                     <AssetDataEditorSection

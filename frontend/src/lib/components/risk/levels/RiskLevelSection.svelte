@@ -1,6 +1,6 @@
 <script lang="ts">
     import type {Snippet} from 'svelte';
-    import {ChevronDown} from 'lucide-svelte';
+    import {AlertTriangle, ChevronDown} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -169,41 +169,54 @@
 
     {#if open}
         <div class="p-4 {collapsible ? 'pt-0' : ''}" data-testid="{testId}-body">
-            {#if health.length > 0}
-                <!-- `data-count` is the disclosure's own arity, published for the
-                     same reason `risk-replay-audit` publishes its proxy and
-                     exclusion counts: the entries are rendered as one sentence,
-                     so *how many* measurements fell short is otherwise legible
-                     only by reading a translated string. It is not decoration —
-                     L1 asks `historical_var` twice and the two horizons share an
-                     analytic code, so a disclosure that deduped by code would
-                     show one entry, look entirely plausible, and hide exactly
-                     the case the row exists for. -->
-                <p class="mb-3 text-xs text-amber-700 dark:text-amber-300" data-testid="{testId}-health" data-count={health.length}>
-                    {#each health as entry, index (entry.instanceId)}{index > 0 ? ' · ' : ''}{entry.label ? $t(entry.label) : analyticName(entry.code)}: {$t(`risk.states.${entry.status}`)}{/each}
-                </p>
-            {/if}
-            {#if errorSentences.length > 0}
-                <!-- Above `reasons` on purpose: a measurement that never ran
-                     explains the gap, while a warning only qualifies a number
-                     that is present. `data-code` carries the backend identifier
-                     for support without putting jargon in front of the reader. -->
-                <ul class="mb-3 space-y-1 text-xs text-amber-700 dark:text-amber-300" data-testid="{testId}-errors" data-count={errorSentences.length}>
-                    {#each errorSentences as entry (entry.code)}
-                        <li data-testid="{testId}-error" data-code={entry.code}>{entry.text}</li>
-                    {/each}
-                </ul>
-            {/if}
-            {#if reasons.length > 0}
-                <!-- `data-count` is the number of *distinct* sentences, while each
-                     entry publishes how many results carried it: identical text
-                     repeated would read as a rendering fault rather than as two
-                     affected assets, so the arity is published instead of drawn. -->
-                <ul class="mb-3 space-y-1 text-xs text-amber-700 dark:text-amber-300" data-testid="{testId}-reasons" data-count={reasons.length}>
-                    {#each reasons as reason (reason.key)}
-                        <li data-testid="{testId}-reason" data-occurrences={reason.occurrences}>{reason.message}</li>
-                    {/each}
-                </ul>
+            {#if health.length > 0 || errorSentences.length > 0 || reasons.length > 0}
+                <!-- One banner around what the level could not give, on every page that draws a
+                     level (developer's review of D378, 06/10/2026: «migliorerei con un banner il
+                     warning», «ovunque»). Loose amber lines read as a footnote, not as the reason
+                     the level below is empty. Same tone, border and icon as the notice above the
+                     levels (`RiskPartialNotice`), so the two read as one family. The icon sits
+                     outside the three blocks: their testids, counts and text are unchanged. -->
+                <div class="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300" data-testid="{testId}-alert">
+                    <AlertTriangle size={14} class="mt-px shrink-0" />
+                    <div class="min-w-0 flex-1 space-y-1">
+                        {#if health.length > 0}
+                            <!-- `data-count` is the disclosure's own arity, published for the
+                                 same reason `risk-replay-audit` publishes its proxy and
+                                 exclusion counts: the entries are rendered as one sentence,
+                                 so *how many* measurements fell short is otherwise legible
+                                 only by reading a translated string. It is not decoration —
+                                 L1 asks `historical_var` twice and the two horizons share an
+                                 analytic code, so a disclosure that deduped by code would
+                                 show one entry, look entirely plausible, and hide exactly
+                                 the case the row exists for. -->
+                            <p class="font-medium" data-testid="{testId}-health" data-count={health.length}>
+                                {#each health as entry, index (entry.instanceId)}{index > 0 ? ' · ' : ''}{entry.label ? $t(entry.label) : analyticName(entry.code)}: {$t(`risk.states.${entry.status}`)}{/each}
+                            </p>
+                        {/if}
+                        {#if errorSentences.length > 0}
+                            <!-- Above `reasons` on purpose: a measurement that never ran
+                                 explains the gap, while a warning only qualifies a number
+                                 that is present. `data-code` carries the backend identifier
+                                 for support without putting jargon in front of the reader. -->
+                            <ul class="space-y-0.5" data-testid="{testId}-errors" data-count={errorSentences.length}>
+                                {#each errorSentences as entry (entry.code)}
+                                    <li data-testid="{testId}-error" data-code={entry.code}>{entry.text}</li>
+                                {/each}
+                            </ul>
+                        {/if}
+                        {#if reasons.length > 0}
+                            <!-- `data-count` is the number of *distinct* sentences, while each
+                                 entry publishes how many results carried it: identical text
+                                 repeated would read as a rendering fault rather than as two
+                                 affected assets, so the arity is published instead of drawn. -->
+                            <ul class="space-y-0.5" data-testid="{testId}-reasons" data-count={reasons.length}>
+                                {#each reasons as reason (reason.key)}
+                                    <li data-testid="{testId}-reason" data-occurrences={reason.occurrences}>{reason.message}</li>
+                                {/each}
+                            </ul>
+                        {/if}
+                    </div>
+                </div>
             {/if}
             {@render children?.()}
             {#if metadata.length > 0}

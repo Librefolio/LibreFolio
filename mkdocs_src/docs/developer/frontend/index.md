@@ -33,7 +33,7 @@ frontend/src/
 │   │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
 │   │   ├── brokers/  # Broker cards, forms, icon, import
 │   │   ├── files/    # FilesTable with DataTable
-│   │   ├── layout/   # Sidebar, Header, LanguageSelector, LiveTicker
+│   │   ├── layout/   # Sidebar, Header, LanguageSelector
 │   │   ├── settings/ # Settings tabs (Profile, Preferences, Global, About)
 │   │   ├── table/    # DataTable suite (ModalBase, ConfirmModal, etc.)
 │   │   └── ui/       # Generic UI atoms
@@ -47,7 +47,10 @@ frontend/src/
 │   │   ├── app/          # Auth, Theme, Settings, DateRange
 │   │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
 │   │   ├── reference/    # brokerStore, assetStore, currencyStore
-│   │   ├── domain/       # portfolioStore, txStore, fxStore
+│   │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation, lotsAnalysisStore, dashboardViewStore
+│   │   ├── risk/         # riskStore, riskPanelController
+│   │   ├── transactions/ # txStore
+│   │   ├── fx/           # fxCardInversionStore
 │   │   └── registries/   # AssetPriceStoreRegistry, FxStoreRegistry
 │   ├── types/        # TypeScript type definitions
 │   └── utils/        # Utilities (imageCrop, upload, urlFilters)
@@ -92,6 +95,7 @@ runes child (e.g. `lib/components/ui/display/CurrencyAmount.svelte`) or migrate 
 - [Components](components/index.md) - Reusable UI components
 - [FX Chain Algorithm](fx-chain-algorithm.md) - DFS pathfinding for currency conversion chains
 - [Pages](pages/index.md) - Application pages and routing
+- [Onboarding Guides](onboarding.md) - Welcome setup, intro tour and contextual guides
 - [Store Client System](state/index.md) - Stores and reactive state
 - [Internationalization](i18n.md) - Multi-language support
 - [Styling](styling.md) - Tailwind CSS and theming

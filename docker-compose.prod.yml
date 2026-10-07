@@ -3,12 +3,16 @@
 # =============================================================================
 # Optimized for end-users running the official pre-built image from GHCR.
 #
-# Image variants:
-#   ghcr.io/librefolio/librefolio:latest        full — docs images included
-#   ghcr.io/librefolio/librefolio:latest-light  light — no docs images (lighter;
-#                                               viewing documentation images
+# Image variants (version tags have no "v" prefix, e.g. 1.2.3):
+#   ghcr.io/librefolio/librefolio:latest        light — the newest release without the
+#                                               documentation screenshots (they load from
+#                                               the online docs site, so viewing them
 #                                               requires an internet connection)
-# Every version tag (e.g. v1.2.3) has a "-light" counterpart (v1.2.3-light).
+#   ghcr.io/librefolio/librefolio:X.Y.Z         full — a pinned release, screenshots
+#                                               included (documentation fully offline)
+#   ghcr.io/librefolio/librefolio:X.Y.Z-light   light — a pinned release
+# To pin a tag, set LIBREFOLIO_IMAGE in .env to the full reference, e.g.
+#   LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.2.3   (default: …:latest)
 # =============================================================================
 
 services:

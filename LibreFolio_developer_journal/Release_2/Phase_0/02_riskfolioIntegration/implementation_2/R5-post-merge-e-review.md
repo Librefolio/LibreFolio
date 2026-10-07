@@ -3535,3 +3535,96 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >   concessione della fase 2 era per quella fase sola.
 >
 > **Il checkpoint**: 2 percorsi in 2 commit (lo spec e il diario), su HEAD `ebf4752e2`.
+
+### Limiti della simulazione: «troppo grande», con la cura che funziona (D379) · ✅ backend 07/10/2026 (FROZEN), ⏳ frontend dopo il treno 9
+
+> **La segnalazione** (coordinator, 07/10, pacchetto approvato dal developer): A ha misurato tre difetti sulla punta
+> `d07412899` (appunti in `q-verification-0710.md` della sessione di A).
+> - **2a**: `simulation.py` mappava ogni rifiuto del budget del motore (`engine.py`, `validate_resource_budget`) su
+>   `INVALID_PARAMETERS`, quindi l'utente leggeva «Parametri di calcolo non validi» anche con i default.
+> - **2b**: con i default (365 giorni, 8192 percorsi) il budget di 200 M celle rifiuta da 67 posizioni in su. Sopra
+>   100 posizioni il `max_length=100` di `SimulationEngineRequest` fa fallire la costruzione della richiesta, fuori dal
+>   `try`: l'esito è `EXECUTION_FAILED`, con l'eccezione nel log.
+> - **2c**: sopra 5000 osservazioni succede lo stesso (`historical_returns`, solo nel bootstrap).
+>
+> **L'istruttoria** (sola lettura, `d07412899`): i limiti di `SimulationParams` coincidono con quelli del modello del
+> motore (orizzonte 1–3650, percorsi 256–100 000, blocco ≤ 5000), quindi gli unici limiti che possono fallire alla
+> costruzione sono le posizioni e le osservazioni. Nessun consumatore del frontend confronta i codici della
+> simulazione con dei letterali. L'errore arriva all'utente per due strade: `resultErrorCodes` → `RiskLevelSection`
+> (Dashboard e Broker) e `RiskResultFrame` (Asset Detail). Il laboratorio non ha la simulazione.
+>
+> **La decisione** (D379): ogni limite di dimensione va su `RESOURCE_LIMIT`, e la cura cambia da caso a caso, perché
+> «meno percorsi o un orizzonte più corto» non aiuta per le posizioni, le osservazioni e il budget della storia.
+
+| # | Passo | Stato |
+|---|---|---|
+| 1 | Piano breve al coordinator: superfici, codice per caso, chiavi, test | ✅ 07/10 — via del coordinator: prima il backend, frontend e chiavi dopo il suo segnale del treno 9 |
+| 2 | Test rossi backend (test-author) | ✅ 07/10 — 13 casi nuovi o estesi, 12 rossi per il motivo atteso |
+| 3 | Backend: mappa per `metric`, guardie su posizioni e osservazioni prima della costruzione, `MAX_SIMULATION_ASSETS` | ✅ 07/10 — 13/13 verdi, `risk-all` 875/875, `api risk` 15/15 |
+| 4 | Mutanti e cancelli backend (6152) | ✅ 07/10 — mutanti 20/20, `risk-all` 876, `api risk` 15, ruff/black, orfani |
+| 5 | Frontend: `errorDisplayCode` in `levelHelpers.ts`, `RiskResultFrame`, 4 chiavi `risk.errors.resource_limit_*`; dopo il treno 9 | ⏳ secondo checkpoint, dopo il segnale del coordinator |
+| 6 | Docs: la pagina `simulation-modes.en.md` la aggiorna Q, che l'ha appena riscritta (`dfcbc0003`, non ancora nella mia base); io consegno la tabella dei casi (limite, metrica, cura) | ⏳ all'handoff |
+| 7 | Cancelli finali, privacy, FROZEN, consegna con la riga di CHANGELOG | ✅ 07/10 — backend FROZEN; il frontend avrà la sua consegna |
+
+> **Nota**: se il treno 9 tarda, il checkpoint si chiude con il solo backend: la UI mostra la frase generica
+> «troppo grande» per ogni caso, e le 4 chiavi si aggiungono dopo con `dev.py i18n` sulla base aggiornata (coordinator).
+>
+> **Note implementazione — passo 2** (test-author): in `test_risk_simulation.py` ci sono le guardie dei due costruttori
+> sulle posizioni, la guardia delle osservazioni del bootstrap con il controllo a 5000 esatte, il test di Sobol esteso
+> a tutto il dizionario dei `details` e l'invariante «guardia e modello rifiutano lo stesso numero di posizioni». Un test
+> in più, verde per costruzione: la soglia delle osservazioni non deve passare al GBM, che non porta la storia oltre il
+> confine del processo. In `test_risk_analytics.py`: la mappa di ogni metrica del motore sulla sua cura (con una
+> metrica sconosciuta, che resta senza cura), la soglia ai valori di default attraverso il budget vero (66 sì, 67 no,
+> e `largest == 66` fissato) e le posizioni oltre 100 attraverso `execute`, con il motore mai chiamato. Prima della
+> correzione: 12 rossi, ognuno per il motivo atteso; i 5 casi che leggono `MAX_SIMULATION_ASSETS` cadevano su
+> `AttributeError`, e con la costante aggiunta solo in memoria sul `ValidationError` di `simulation.py:409`/`:467`,
+> cioè il difetto vero. Il tredicesimo caso, la guardia GBM, è verde per scelta.
+>
+> **Note implementazione — passo 3**:
+> - `models.py`: nuova costante `MAX_SIMULATION_ASSETS = 100`, usata anche dal campo `asset_ids`; esportata da
+>   `quant/__init__.py`.
+> - `simulation.py`: una tabella sola, `_REMEDY_BY_METRIC`, e un helper `_resource_limit(...)` che costruisce sempre
+>   `RESOURCE_LIMIT` con `metric`, `actual`, `limit` e, solo per una metrica che conosce, `remedy`.
+> - La mappa del motore passa dall'helper.
+> - `_refuse_oversized_scope` sta in testa a entrambi i costruttori; nel GBM prima della stima, che non scarta
+>   posizioni (`asset_ids = tuple(returns_by_asset)`).
+> - La guardia delle osservazioni viene subito dopo l'allineamento, prima di quella del blocco.
+> - Sobol tiene le sue 4 chiavi e guadagna `metric`, `actual` e `remedy`.
+> - Il servizio non cambia. Un rifiuto dichiarato esce già `unavailable` con il suo codice e i suoi `details`, ed è
+>   fissato da `test_undeclared_value_error_is_reported_as_ours_while_a_declared_one_survives` e da
+>   `test_risk_service.py:547`/`:1896`. Il client generato non cambia: `details` è `Record<string, JsonValue>`.
+>
+> **⚠️ Fuori pista**: il primo `api risk` ha dato 4 rossi in 2,5 s, «Test database is not populated». È un rosso
+> d'ambiente: il riavvio ha svuotato `/tmp`, e con lui il database della corsia. Dopo `test db populate --force` nella
+> mia cartella dati, 15/15.
+>
+> **Note implementazione — passo 4**:
+> - **Il fermo dei due tetti** (test-author, secondo giro): `test_the_ceilings_cited_to_the_user_are_pinned` fissa
+>   `MAX_SIMULATION_ASSETS == 100` e `MAX_HISTORY_OBSERVATIONS == 5000`. Gli altri test leggono la costante, quindi
+>   spostarla non farebbe diventare rosso nessuno, ma la frase della cura `positions` e il CHANGELOG citano i numeri.
+>   È rosso con 99 e con 4999 spostati solo in memoria; `models.py` non è stato modificato e lo sha256 è identico.
+> - **I mutanti**: 20/20 uccisi, ognuno ripristinato e verificato con lo sha256 (`files/scripts-r2/mutants_sl.py`).
+>   - 17 su `simulation.py`:
+>     - la mappa del motore che resta `INVALID_PARAMETERS`, oppure che perde `actual`;
+>     - ogni voce della tabella delle cure, tolta o sbagliata;
+>     - una cura data per default a una metrica sconosciuta;
+>     - l'helper che risponde `INVALID_PARAMETERS`;
+>     - la guardia delle posizioni assente in ciascuno dei due costruttori, oppure fuori di uno;
+>     - la guardia delle osservazioni assente, fuori di uno, o estesa al GBM;
+>     - Sobol che perde una delle sue chiavi.
+>   - 3 su `models.py`: il campo che si stacca dalla costante, e i due tetti spostati.
+> - **I cancelli**: ruff e black puliti, `services risk-all` 876/876, `api risk` 15/15, orfani puliti. Privacy pulita
+>   sulle 416 righe aggiunte. `dev_release2` è ancora `d07412899`, quindi nessun conflitto; il Q1 di Q (`dfcbc0003`)
+>   tocca solo la documentazione.
+>
+> **⚠️ Fuori pista — l'ordine dei cancelli**: nella prima corsa dello script, `api risk` è di nuovo rosso (4 casi,
+> «Test database is not populated»). Il motivo: `services risk-all` ricrea il database della corsia pulito, e cancella
+> i dati di prova. Lo script ora popola il database subito prima di `api risk` (`gates_sl.sh`): 15/15.
+>
+> **Il checkpoint del solo backend**: il treno 9 non era ancora arrivato, e il coordinator aveva detto di fermarsi col
+> solo backend. Nell'interfaccia ogni caso dice ora la frase generica `risk.errors.resource_limit`, «This calculation
+> is too large to run.», al posto di «Invalid calculation parameters» o «The backend calculation failed». Le frasi con
+> la cura arrivano con il secondo checkpoint: `errorDisplayCode`, `RiskResultFrame` e le 4 chiavi, dopo il segnale.
+> La pagina `simulation-modes.en.md` la aggiorna Q: la sua sezione «Limits» descrive ancora il comportamento di prima,
+> con la riga «Size» su *Invalid calculation parameters*, e non ha né il caso delle oltre 100 posizioni né quello delle
+> oltre 5000 osservazioni. Gli mando la tabella dei casi tramite il coordinator.

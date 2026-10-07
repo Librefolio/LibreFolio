@@ -8098,3 +8098,242 @@ test.describe('Live price direction flash', () => {
         await expect(priceEl).toHaveText('102.00');
     });
 });
+
+// ============================================================================
+// "All" on a price-cache hit must still draw the event markers.
+//
+// Prices and events travel in one `/assets/prices/query` answer. On a price-
+// cache hit the detail page asks again for the events only (`include_price:
+// false`), but with "All" it first resolves `dateStart` from the '2000-01-01'
+// sentinel to the first cached close, after `loadChartData()` has already
+// captured the start it checks the answer against. Its own events-only answer
+// then fails `dataRequestIsCurrent()` and is dropped, so the chart draws no
+// event markers (and no backend signal overlays). Regression of 2d22130bd.
+//
+// Everything is served by route mocks for synthetic asset ids that no other
+// spec uses. Nothing is written to the database, so there is nothing to clean
+// up.
+// ============================================================================
+
+/** One price-query item that the cache-hit mock below has already delivered. */
+type PriceQueryLogEntry = {assetId?: number; includePrice?: boolean; includeEvents?: boolean; start?: string; end?: string};
+
+/** The fields of a `/assets/prices/query` item that the cache-hit mock reads. */
+type CacheHitPriceQueryItem = {asset_id?: number; include_price?: boolean; include_events?: boolean; target_currency?: string; date_range?: {start?: string; end?: string}};
+
+/** The local calendar day `offset` days from today, as `YYYY-MM-DD`. Built from date parts, so DST cannot shift it. */
+function localDayIso(offset: number): string {
+    const now = new Date();
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Serves one synthetic EUR asset with 600 daily closes ending today, and two
+ * dividends:
+ * - an old one, 500 days ago, outside "1Y";
+ * - a recent one, 45 days ago, inside every preset. 45 days rather than 30, so
+ *   it never falls in a week or month bucket that is still open.
+ *
+ * Events are sent only when asked for (`include_events`). Prices and events are
+ * sent only inside the requested range. The recent dividend's notes name the
+ * start it was asked from, so the chart shows which answer it is drawing.
+ * Every requested item is answered, because the list may ask for several. Each
+ * item is logged only after `fulfill` resolves, so a log entry means
+ * "delivered", not just "requested".
+ */
+async function mockCacheHitEventsAsset(page: Page, assetId: number) {
+    const asset = {
+        id: assetId,
+        display_name: `Cache-hit events asset ${assetId}`,
+        currency: 'EUR',
+        asset_type: 'STOCK',
+        active: true,
+        has_metadata: false,
+        provider_code: null,
+        tx_count: 0,
+        tx_count_own: 0,
+    };
+    const history = Array.from({length: 600}, (_, i) => localDayIso(i - 599));
+    const oldDate = localDayIso(-500);
+    const recentDate = localDayIso(-45);
+    const oldNotes = `cache-hit old dividend ${assetId}`;
+    const recentNotes = (askedFrom: string) => `cache-hit recent dividend ${assetId} (asked from ${askedFrom})`;
+    const log: PriceQueryLogEntry[] = [];
+
+    await page.route('**/api/v1/assets/query*', async (route) => {
+        await route.fulfill({json: [asset]});
+    });
+    await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+    });
+    await page.route('**/api/v1/assets/prices/query', async (route) => {
+        // postDataJSON throws on an empty or non-JSON body. An unhandled throw
+        // would leave the request pending and the page stuck at data-busy, so
+        // fall back to [].
+        let requested: CacheHitPriceQueryItem[] = [];
+        try {
+            const body: unknown = route.request().postDataJSON();
+            requested = Array.isArray(body) ? body.filter((item): item is CacheHitPriceQueryItem => item !== null && typeof item === 'object') : [];
+        } catch {
+            requested = [];
+        }
+        const items = requested.map((item) => {
+            const currency = item.target_currency ?? 'EUR';
+            const start = item.date_range?.start ?? '';
+            const end = item.date_range?.end ?? '9999-12-31';
+            const inRange = (date: string) => date >= start && date <= end;
+            const dividend = (date: string, notes: string, id: number) => ({date, type: 'DIVIDEND', value: {code: currency, amount: '2.5000'}, notes, id, is_auto: false});
+            return {
+                asset_id: item.asset_id,
+                prices: item.include_price === false ? [] : history.map((date, i) => ({date, close: (100 + i * 0.1).toFixed(4), currency})).filter((point) => inRange(point.date)),
+                events: item.include_events === true ? [dividend(oldDate, oldNotes, assetId * 10 + 1), dividend(recentDate, recentNotes(start), assetId * 10 + 2)].filter((event) => inRange(event.date)) : [],
+                errors: [],
+                signals: [],
+            };
+        });
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({items})});
+        for (const item of requested) {
+            log.push({assetId: item.asset_id, includePrice: item.include_price, includeEvents: item.include_events, start: item.date_range?.start, end: item.date_range?.end});
+        }
+    });
+    return {log, oldNotes, recentNotes, firstPriceDate: history[0]};
+}
+
+/** Waits until the mock has delivered, after log cursor `from`, an item matching `predicate`, and returns the first such item. */
+async function waitForDeliveredPriceQuery(log: PriceQueryLogEntry[], from: number, predicate: (entry: PriceQueryLogEntry) => boolean, message: string): Promise<PriceQueryLogEntry> {
+    await expect.poll(() => log.slice(from).some(predicate), {message, timeout: 15_000}).toBe(true);
+    const delivered = log.slice(from).find(predicate);
+    if (!delivered) throw new Error(message);
+    return delivered;
+}
+
+/**
+ * Returns the `notes` of every event marker the asset detail price chart draws,
+ * read from its ECharts option. Returns an empty list while the chart is not
+ * mounted.
+ *
+ * Only scatter series are read. A daily point carries one `marker`; a coarser
+ * bucket carries a `markers` array. The series name is hard-coded English, so
+ * it is deliberately not read.
+ */
+async function readDetailChartEventNotes(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+        type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown}}};
+        const root = document.querySelector<HTMLElement>('[data-testid="asset-detail-chart"]');
+        if (!root) return [];
+        const candidates = [root, ...root.querySelectorAll<HTMLElement>('*')];
+        const host = candidates.find((candidate) => typeof (candidate as ChartHost).__lfChart?.getOption === 'function') as ChartHost | undefined;
+        const series = host?.__lfChart?.getOption().series;
+        if (!Array.isArray(series)) return [];
+
+        const notes = new Set<string>();
+        for (const rawSeries of series) {
+            if (!rawSeries || typeof rawSeries !== 'object') continue;
+            const eventSeries = rawSeries as {type?: unknown; data?: unknown};
+            if (eventSeries.type !== 'scatter' || !Array.isArray(eventSeries.data)) continue;
+            for (const rawPoint of eventSeries.data) {
+                if (!rawPoint || typeof rawPoint !== 'object') continue;
+                const point = rawPoint as {marker?: unknown; markers?: unknown};
+                const markers = Array.isArray(point.markers) ? point.markers : point.marker ? [point.marker] : [];
+                for (const rawMarker of markers) {
+                    if (!rawMarker || typeof rawMarker !== 'object') continue;
+                    const markerNotes = (rawMarker as {notes?: unknown}).notes;
+                    if (typeof markerNotes === 'string') notes.add(markerNotes);
+                }
+            }
+        }
+        return [...notes].sort();
+    });
+}
+
+test.describe('All-range event markers on a price-cache hit', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // Path A, from the list. With the range on "All", the list bulk-queries
+    // ['2000-01-01', today] and marks that range as fetched in the shared
+    // in-memory price store. The detail opened from that list is therefore a
+    // cache hit: it resolves "All" and drops its own events-only answer.
+    //
+    // The navigation MUST be the client-side card click. A `page.goto` reloads
+    // the app and empties the store. The detail then misses the cache and the
+    // defect does not show.
+    test('keeps the event markers when the detail opens from a list that already cached All', async ({page}) => {
+        // Two page loads and several mocked round trips, each awaited on its own signal.
+        test.setTimeout(60_000);
+        const assetId = 920_071;
+        const {log, oldNotes, recentNotes, firstPriceDate} = await mockCacheHitEventsAsset(page, assetId);
+        await goToAssetsPage(page);
+
+        const listMaxPreset = page.getByTestId('assets-date-range').getByTestId('date-preset-max');
+        await expect(listMaxPreset, 'the list must offer the All preset').toBeVisible({timeout: 10_000});
+        await expect(listMaxPreset, 'the list opens on a shorter range, so All is a fresh query').toHaveAttribute('data-active', 'false');
+        const listMark = log.length;
+        await listMaxPreset.click();
+        await waitForDeliveredPriceQuery(log, listMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.start === '2000-01-01', 'the list must query the All prices from the 2000-01-01 sentinel');
+        // data-busy turns false only after that answer is merged and its range is marked as fetched.
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        const detailMark = log.length;
+        const card = page.getByTestId(`asset-card-${assetId}`);
+        await expect(card).toBeVisible({timeout: 10_000});
+        await card.click();
+        const detail = page.getByTestId('asset-detail-page');
+        await expect(detail).toBeVisible({timeout: 10_000});
+        await waitForSettled(detail, 20_000);
+
+        const eventsOnly = await waitForDeliveredPriceQuery(log, detailMark, (entry) => entry.assetId === assetId && entry.includePrice === false && entry.includeEvents === true, 'the detail must reuse the list cache and ask only for events');
+        expect(eventsOnly.start, 'All must resolve to the first cached close before asking for events').toBe(firstPriceDate);
+
+        // Red before the fix: that events-only answer was discarded, so the chart drew no markers.
+        await expect.poll(() => readDetailChartEventNotes(page), {message: 'the chart must draw both dividends of the All range', timeout: 10_000}).toEqual([oldNotes, recentNotes(firstPriceDate)].sort());
+    });
+
+    // Path B, inside the detail.
+    // 1. "All" is a cache miss: prices and events are fetched, and the store is
+    //    marked from '2000-01-01'.
+    // 2. "1Y" is a cache hit with nothing to resolve, so its events are kept.
+    // 3. "All" again is a cache hit that resolves the start, so its events-only
+    //    answer was dropped. The chart kept the 1Y events, and the old dividend
+    //    never came back.
+    test('restores older event markers when All follows a shorter preset', async ({page}) => {
+        // One page load and three range changes, each awaited on its own signal.
+        test.setTimeout(60_000);
+        const assetId = 920_072;
+        const {log, oldNotes, recentNotes, firstPriceDate} = await mockCacheHitEventsAsset(page, assetId);
+        await goToAssetDetailPage(page, String(assetId));
+        const detail = page.getByTestId('asset-detail-page');
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        const maxPreset = picker.getByTestId('date-preset-max');
+        const oneYearPreset = picker.getByTestId('date-preset-1y');
+        const isEventsOnly = (entry: PriceQueryLogEntry) => entry.assetId === assetId && entry.includePrice === false && entry.includeEvents === true;
+        const readNotes = () => readDetailChartEventNotes(page);
+
+        // "All" from the default range is a cache miss, answered with prices and events.
+        await expect(maxPreset, 'the detail opens on a shorter range, so All is a cache miss').toHaveAttribute('data-active', 'false', {timeout: 10_000});
+        const allMark = log.length;
+        await maxPreset.click();
+        await waitForDeliveredPriceQuery(log, allMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.includeEvents === true && entry.start === '2000-01-01', 'the first All must fetch prices and events from the 2000-01-01 sentinel');
+        await waitForSettled(detail, 20_000);
+        await expect.poll(readNotes, {message: 'the first All draws both dividends', timeout: 10_000}).toEqual([oldNotes, recentNotes('2000-01-01')].sort());
+
+        // "1Y" is a cache hit with nothing to resolve, so its events-only answer is kept.
+        const oneYearMark = log.length;
+        await oneYearPreset.click();
+        const oneYear = await waitForDeliveredPriceQuery(log, oneYearMark, (entry) => isEventsOnly(entry) && (entry.start ?? '') > firstPriceDate, '1Y must reuse the cache and ask only for its events');
+        await waitForSettled(detail, 20_000);
+        await expect.poll(readNotes, {message: '1Y replaces the events; the old dividend is out of its range', timeout: 10_000}).toEqual([recentNotes(oneYear.start ?? '')]);
+
+        // "All" again is a cache hit that resolves the start to the first cached close.
+        const allAgainMark = log.length;
+        await maxPreset.click();
+        const allAgain = await waitForDeliveredPriceQuery(log, allAgainMark, (entry) => isEventsOnly(entry) && (entry.start ?? '') < (oneYear.start ?? ''), 'the second All must reuse the cache and ask only for events');
+        expect(allAgain.start, 'All must resolve to the first cached close before asking for events').toBe(firstPriceDate);
+        await waitForSettled(detail, 20_000);
+
+        // Red before the fix: the answer was discarded, so the chart kept the 1Y events.
+        await expect.poll(readNotes, {message: 'the second All must bring the old dividend back', timeout: 10_000}).toEqual([oldNotes, recentNotes(firstPriceDate)].sort());
+    });
+});

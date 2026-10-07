@@ -29,6 +29,8 @@ from backend.app.services.risk.base import (
 )
 from backend.app.services.risk.metrics import calendar_days_to_observations
 from backend.app.services.risk.quant import (
+    MAX_HISTORY_OBSERVATIONS,
+    MAX_SIMULATION_ASSETS,
     MAX_SOBOL_DIMENSION,
     SimulationEngineRequest,
     SimulationResourceLimitError,
@@ -46,6 +48,44 @@ from backend.app.services.risk.quant.spawn_worker import (
 )
 
 _DEFAULT_SEED = 123456
+
+# D379: every size limit is RESOURCE_LIMIT, and `remedy` names the setting that brings that limit
+# back within reach. One table, because "fewer paths or a shorter horizon" cures only the two path
+# budgets: the history needs a shorter period, the Sobol dimension ignores the paths, and no
+# setting shrinks the number of positions. The frontend turns a remedy it knows into a sentence;
+# a metric missing here still answers RESOURCE_LIMIT, without a remedy nobody has checked.
+_REMEDY_BY_METRIC = {
+    "portfolio_cells": "paths_or_horizon",
+    "stochastic_cells": "paths_or_horizon",
+    "history_cells": "period",
+    "observations": "period",
+    "assets": "positions",
+    "sobol_dimension": "horizon_or_sampling",
+}
+
+
+def _resource_limit(message: str, *, metric: str, actual: int, limit: int, **context: int) -> RiskUnavailableError:
+    details: dict[str, int | str] = {**context, "metric": metric, "actual": actual, "limit": limit}
+    remedy = _REMEDY_BY_METRIC.get(metric)
+    if remedy is not None:
+        details["remedy"] = remedy
+    return RiskUnavailableError(message, code=RiskErrorCode.RESOURCE_LIMIT, details=details)
+
+
+def _refuse_oversized_scope(asset_count: int) -> None:
+    """Refuse a scope the engine request cannot carry, before a request exists.
+
+    The request's own `max_length` fails as a pydantic ValidationError outside the plugin's `try`,
+    which the service can only log and report as EXECUTION_FAILED: "we failed", for a portfolio
+    that is only too big.
+    """
+    if asset_count > MAX_SIMULATION_ASSETS:
+        raise _resource_limit(
+            f"Simulation carries at most {MAX_SIMULATION_ASSETS} positions, and this scope holds {asset_count}",
+            metric="assets",
+            actual=asset_count,
+            limit=MAX_SIMULATION_ASSETS,
+        )
 
 
 class SimulationParams(BaseModel):
@@ -243,14 +283,13 @@ class SimulationAnalytic(RiskAnalytic):
                 algorithm_version=(f"{self.analytic_code}@" f"{self.algorithm_version}"),
             )
         except SimulationResourceLimitError as exc:
-            raise RiskUnavailableError(
+            # A budget refusal is about size, never about the parameters' validity: at the
+            # defaults it refuses the 67th position.
+            raise _resource_limit(
                 str(exc),
-                code=RiskErrorCode.INVALID_PARAMETERS,
-                details={
-                    "metric": exc.metric,
-                    "actual": exc.actual,
-                    "limit": exc.limit,
-                },
+                metric=exc.metric,
+                actual=exc.actual,
+                limit=exc.limit,
             ) from exc
         except SpawnWorkerQueueFullError as exc:
             raise RiskUnavailableError(
@@ -372,8 +411,18 @@ class SimulationAnalytic(RiskAnalytic):
         steps_per_year: float | None = None,
     ) -> tuple[SimulationEngineRequest, int]:
         """Carry the real history across the boundary, and nothing estimated."""
+        _refuse_oversized_scope(len(asset_ids))
         matrix = align_simple_returns(returns_by_asset, asset_ids)
         observations = int(matrix.shape[0])
+        # The whole aligned history crosses the process boundary, so its length has the same
+        # ceiling as the request's field. A shorter period holds fewer observations.
+        if observations > MAX_HISTORY_OBSERVATIONS:
+            raise _resource_limit(
+                f"Simulation history holds {observations} observations, above the supported maximum of {MAX_HISTORY_OBSERVATIONS}",
+                metric="observations",
+                actual=observations,
+                limit=MAX_HISTORY_OBSERVATIONS,
+            )
         # DECLARED, because the engine's identical check cannot be: the engine
         # raises a bare ValueError, which the service can only report as "we
         # failed". The refusal below is a refusal of the USER'S CHOICE, so it
@@ -432,6 +481,7 @@ class SimulationAnalytic(RiskAnalytic):
         *,
         annualization_factor: float,
     ) -> tuple[SimulationEngineRequest, int]:
+        _refuse_oversized_scope(len(returns_by_asset))
         estimates = estimate_gbm_parameters(
             returns_by_asset,
             annualization_factor=annualization_factor,
@@ -449,20 +499,19 @@ class SimulationAnalytic(RiskAnalytic):
         # RESOURCE_LIMIT -- "This calculation is too large to run." -- because
         # that is literally the fact. Nothing is wrong with the parameters or
         # with the data: the requested sequence simply does not fit the
-        # generator, and the user can act on it by shortening the horizon or
-        # narrowing the scope.
+        # generator. The path count plays no part in the dimension, so the
+        # remedy is a shorter horizon or MC sampling (D379).
         if params.sampling_method == RiskSamplingStrategy.QMC:
             dimension = len(estimates.asset_ids) * params.horizon_days
             if dimension > MAX_SOBOL_DIMENSION:
-                raise RiskUnavailableError(
+                raise _resource_limit(
                     f"QMC needs {dimension} Sobol dimensions ({len(estimates.asset_ids)} assets x {params.horizon_days} days), above the supported maximum of {MAX_SOBOL_DIMENSION}",
-                    code=RiskErrorCode.RESOURCE_LIMIT,
-                    details={
-                        "required_dimension": dimension,
-                        "limit": MAX_SOBOL_DIMENSION,
-                        "assets": len(estimates.asset_ids),
-                        "horizon_days": params.horizon_days,
-                    },
+                    metric="sobol_dimension",
+                    actual=dimension,
+                    limit=MAX_SOBOL_DIMENSION,
+                    required_dimension=dimension,
+                    assets=len(estimates.asset_ids),
+                    horizon_days=params.horizon_days,
                 )
         request = SimulationEngineRequest(
             process=params.process,

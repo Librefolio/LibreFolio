@@ -38,7 +38,6 @@ graph TD
 
     UI1["UI: AAPL Row"]
     UI2["UI: TSLA Row"]
-    UI_Port["🧠 portfolioStore (Aggregator)"]
 
     API -->|Bulk Price Update| Registry
     Registry -->|Routes 140.50| S1
@@ -47,11 +46,9 @@ graph TD
 
     S1 -->|Subscribes| UI1
     S2 -->|Subscribes| UI2
-
-    S1 -->|Subscribes| UI_Port
-    S2 -->|Subscribes| UI_Port
-    S3 -->|Subscribes| UI_Port
 ```
+
+The portfolio figures do not subscribe to these stores: the backend computes the portfolio report, and `portfolioStore` keeps it as a session cache — see [Domain & Feature State](domain-state.md).
 
 ### 🧠 How it Works
 
