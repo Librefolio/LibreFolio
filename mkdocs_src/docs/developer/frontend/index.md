@@ -47,7 +47,10 @@ frontend/src/
 │   │   ├── app/          # Auth, Theme, Settings, DateRange
 │   │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
 │   │   ├── reference/    # brokerStore, assetStore, currencyStore
-│   │   ├── domain/       # portfolioStore, txStore, fxStore
+│   │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation, lotsAnalysisStore, dashboardViewStore
+│   │   ├── risk/         # riskStore, riskPanelController
+│   │   ├── transactions/ # txStore
+│   │   ├── fx/           # fxCardInversionStore
 │   │   └── registries/   # AssetPriceStoreRegistry, FxStoreRegistry
 │   ├── types/        # TypeScript type definitions
 │   └── utils/        # Utilities (imageCrop, upload, urlFilters)

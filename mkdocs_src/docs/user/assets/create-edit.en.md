@@ -232,9 +232,11 @@ entered.
 
 ## 🧲 Merging duplicate assets
 
-If the same instrument ended up in your library twice — a common outcome of importing a bond
-under its subscription code once and its market code another time — you can fold one into the
-other from the **Merge** action, available on the asset list and on the asset detail page.
+If you only notice later that the same instrument was created twice — by hand once and by an
+import another time, under slightly different names, or under its subscription code once and its
+market code another — each copy holds part of its history and neither shows the whole position.
+On the **Assets** page, the **Merge** action folds one into the other: a button on each card, or
+**Merge with…** in the right-click menu of the table.
 
 The operation is **destructive**, so it happens in two deliberate steps:
 
