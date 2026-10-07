@@ -117,6 +117,33 @@ function toNumber(value: unknown): number | null {
 }
 
 /**
+ * Each configured bucket's share of the scope, Σ wᵢ·eᵢ_b: every holding's weight times the part of
+ * it the bucket's shock applied to (its `bucket_audit`), summed — the notation of the
+ * hypothetical-shock theory page. Null on a scope without weights, where a bucket has no share.
+ *
+ * Not `asset_exposure_total`: the backend documents that field as an *unweighted* sum of exposures
+ * across the scope's assets, so three holdings wholly in one class read 3, «300%» under Weight
+ * (measured on 07/10/2026). An exposure no configured bucket took is no bucket's share.
+ */
+function bucketShares(impacts: unknown): Map<string, number> | null {
+    let weighted = false;
+    const shares = new Map<string, number>();
+    for (const raw of Array.isArray(impacts) ? impacts : []) {
+        const impact = raw as {weight?: unknown; bucket_audit?: unknown};
+        const weight = toNumber(impact.weight);
+        if (weight === null) continue;
+        weighted = true;
+        for (const rawAudit of Array.isArray(impact.bucket_audit) ? impact.bucket_audit : []) {
+            const audit = rawAudit as {applied_bucket_id?: unknown; exposure?: unknown};
+            const exposure = toNumber(audit.exposure);
+            if (typeof audit.applied_bucket_id !== 'string' || exposure === null) continue;
+            shares.set(audit.applied_bucket_id, (shares.get(audit.applied_bucket_id) ?? 0) + weight * exposure);
+        }
+    }
+    return weighted ? shares : null;
+}
+
+/**
  * The bars of the tornado, worst first.
  *
  * Prefers the **configured buckets** when the scenario had a dimension, because
@@ -135,6 +162,7 @@ export function tornadoRows(output: unknown): TornadoRow[] {
     const rows: TornadoRow[] = [];
 
     if (stress.dimension && buckets.length > 0) {
+        const shares = bucketShares(stress.impacts);
         for (const raw of buckets) {
             const bucket = raw as Record<string, unknown>;
             const bucketId = typeof bucket.bucket_id === 'string' ? bucket.bucket_id : '';
@@ -144,7 +172,7 @@ export function tornadoRows(output: unknown): TornadoRow[] {
             // first would make a 1%-weight bucket look as damaging as a 60% one.
             const value = toNumber(bucket.contribution_return);
             if (value === null) continue;
-            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight: toNumber(bucket.asset_exposure_total)});
+            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight: shares === null ? null : (shares.get(bucketId) ?? 0)});
         }
     } else {
         for (const raw of Array.isArray(stress.impacts) ? stress.impacts : []) {
