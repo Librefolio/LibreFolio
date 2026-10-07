@@ -8,6 +8,7 @@
 **Origin**: the two release blockers found by the cloud sizing study (`LibreFolio-cloud-sizing/REPORT.md`, items 1 and 7)
 **Autorizzazione developer**: plan approved in M's session on 2026-10-06 14:27 (exit from plan mode); D9 and O3 relayed by the coordinator at 14:37.
 **Follow-up**: the coordinator's «passo 8» (flattened code blocks in IT/FR/ES translations, the cause behind the step-6 hand fix) → [plan-phase00TranslatedCodeIndent.prompt.md](plan-phase00TranslatedCodeIndent.prompt.md)
+**Follow-up (R12)**: release pipeline — gallery repairs, release gate, Docker `latest` on light, translation alignment plan → [plan-phase00ReleaseGallery.prompt.md](plan-phase00ReleaseGallery.prompt.md)
 
 ## 0. Decisions (developer verbatim where quoted; relayed by the coordinator)
 
@@ -476,3 +477,6 @@ lsof -nP -iTCP:6158 -sTCP:LISTEN; lsof -nP -iTCP:6168 -sTCP:LISTEN   # free at h
 
 ### 9. ➡️ Translated code-block indentation (the coordinator's «passo 8») — 2026-10-06
 - Analysis approved (B + C, ERROR `code-block-indent`, repair only of the pages the next alignment does not re-translate). Executed in [plan-phase00TranslatedCodeIndent.prompt.md](plan-phase00TranslatedCodeIndent.prompt.md).
+
+### 10. ➡️ Release pipeline (R12) — 2026-10-07
+- Gallery repairs, the gallery as a release gate, Docker `latest` on the light variant, `ImageOS` cache keys, `release-pipeline.md`, translation alignment plan. Executed in [plan-phase00ReleaseGallery.prompt.md](plan-phase00ReleaseGallery.prompt.md).

@@ -128,7 +128,7 @@ Run LibreFolio using the official pre-built image. No development tools or compi
 
 Access: **http://localhost:6040**. The first registered user automatically becomes the administrator.
 
-> 🪶 **Image variants**: `latest` is the full image (docs images included, fully offline). `latest-light` is the same application **without the documentation images** — several hundred MB lighter. Docs text pages are still bundled; documentation images load on demand from the online docs site, so viewing them requires an internet connection. To use it, set `image: ghcr.io/librefolio/librefolio:latest-light` in `docker-compose.yml`.
+> 🪶 **Image variants**: `latest` is the **light** image: the same application **without the documentation screenshots**, which load on demand from the online docs site (so viewing them requires an internet connection); the documentation text pages are still bundled. Each release is also published as `X.Y.Z` — the **full** image, screenshots included, documentation fully offline — and `X.Y.Z-light`. Version tags have no `v` (e.g. `1.1.0`). See [Image Variants](https://librefolio.github.io/LibreFolio/user/installation/#image-variants-full-and-light).
 
 For complete guide, auto-updates (Watchtower), and backups, see the [🐳 User Installation Manual](https://librefolio.github.io/LibreFolio/user/installation/).
 
