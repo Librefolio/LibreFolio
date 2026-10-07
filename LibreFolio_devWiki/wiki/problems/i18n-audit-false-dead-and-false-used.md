@@ -53,11 +53,39 @@ keys the manual review had wrongly kept (`aiExport.additionalData.reason.{fifoDe
 no producer since `c9f840680`). Remaining limit: the backend vocabulary is shared by all families, so
 a common word can still make a dead key look used (`…planner.result.sections.assets`).
 
+### Second pass on the release tip (same day, `d07412899`)
+
+With the dashboard (N) and risk (A13) work merged, 78 live keys still read «not verified», and a
+component nobody imported (`planner/shared/AgeLabel.svelte`) still proved its five keys «used».
+Five more rules, each again proven in both halves (94 new gate cases, 195 in all):
+
+- **One import hop.** A narrow family also reads the words of the modules its file imports directly:
+  `CorrelationHeatmap.svelte` builds `risk.assetSet.band.${band}`, the bands are a union in the
+  imported `correlationHelpers.ts`. Two hops, an unimported neighbour or a wide family read nothing.
+- **Unreferenced sources.** Reachability from the SvelteKit entries (route files under `routes/`, the
+  root hooks, the service worker) through static and dynamic imports. The report lists under 📦 the
+  keys only unreachable files keep alive; informational, it changes no verdict.
+- **Generated clients are no sources.** `lib/api/generated.ts` exists only after `api sync`, so a verdict
+  resting on it flipped on a fresh clone; it is no import witness either.
+- **Codes in other spellings.** `"3m"` is a code, and `IN_TRANSIT` witnesses `in_transit`.
+- **Shapes.** `assets.providerParams.${code}.${kind}.${field.key}` keeps its shape: one-segment slots,
+  a union slot restricted to its members, every slot named by the file, its imports or the producer.
+
+Result: **0 dead, 3 not verified**, all live: `chartSettings.params.{amplitude,histogramScale}`, whose
+member sits two imports away, and `transactions.fields.cash_code`, built from the validation path
+`cash.code` of a Pydantic field the vocabulary cannot see. A fourth, `onboarding.settings.groups.contextual`,
+was dead in fact — its group was replaced in `580bd504f` — and only a per-key check could tell: the tool
+rightly refuses to call an unnamed member of a narrow family dead. It was removed with the batch.
+`AgeLabel.svelte` went with its keys; `onboardingTourSurfaces.svelte.ts` and `stores/core/EditBuffer.ts`
+are unreferenced too, but read no key (knip backlog).
+
 ## Lesson
 
 An audit that only ever answers «used» on partial evidence is not conservative, it is blind: the
 three verdicts (used / not verified / dead) only work if «used» needs proof and «not verified» is
-where every unproven-but-plausible key lands.
+where every unproven-but-plausible key lands. The converse holds too: a «not verified» list that
+shrinks to a handful is worth a per-key check, because that is where a dead member of a live family
+hides.
 
 ## Source files
 
