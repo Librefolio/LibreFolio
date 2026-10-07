@@ -102,6 +102,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/routes/documentTitle.guard.test.ts",
             "src/htmlInterpolation.gate.test.ts",
             "src/htmlSink.gate.test.ts",
+            "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
