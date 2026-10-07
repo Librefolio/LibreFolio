@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 COMPLETATO, FROZEN (2026-10-07), in attesa del commit del developer. Q2 non iniziato: parte solo su via libera.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 COMMITTATO (`dfcbc0003`, 2026-10-07). Q2 COMPLETATO, FROZEN (2026-10-07), in attesa del commit del developer.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -481,10 +481,165 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
 
 ### Q2 (dopo Q1, solo con il via libera)
 
-- **S8** ⏳ — Errori nella doc developer, compresi quelli precedenti alla 1.1 (§1.3).
-- **S9** ⏳ — Mancanze e incompletezze della 1.2 nella doc developer (§1.3), più la rinomina in `fifo_lot_engine` (D6) e i riferimenti rotti (§2.2).
-- **S10** ⏳ — Pagine nuove, onboarding e rischio, con le loro voci di nav in `mkdocs.yml`.
-- **S11** ⏳ — Verifica e handoff di Q2.
+> **Via a Q2** (coordinatore, 07/10 15:09, approvato dal developer): Q1 committato in `dfcbc0003`, albero verificato, worktree pulito.
+>
+> **Decisioni** (07/10, 15:08 e 15:09):
+> - **Stamp:** nessuno, nemmeno per le pagine che cambiano solo per commenti o ancore. Le ancore di `scheduled-investment` arriveranno in IT, FR ed ES con l'allineamento delle traduzioni.
+> - **Gallery `mobile.en.md`:** si corregge **all'inizio di Q2**, non in Q1, perché il checkpoint Q1 resti quello verificato.
+> - **CHANGELOG:** le 3 frasi che non coincidono col codice e i 4 cambiamenti mancanti li corregge il coordinatore nel treno 9.
+> - **Possibili bug** (pesi dello shock, limiti della simulazione): passati al proprietario del rischio.
+> - **`#coming-back-and-refreshing`:** esiste anche nella versione di N (`:80`), quindi il link regge.
+>
+> **Nuova esclusione:** `developer/backend/transactions/fifo_lot_engine.md:9`, il riferimento a `wac_utils.py`, lo corregge P insieme al codice. In quella pagina Q fa **solo** la rinomina di `eligible_income_quantity`.
+>
+> **Restano escluse:** le pagine dev di P (`wac.md`, sezione costo del motore, `data-quality-banner.md`), di L (`brim_plugin_guide.md`, `providers_list.md`) e di M (`release-pipeline.md`). Resta escluso anche il paragrafo Rischio di `domain-state.md` (N, già nel suo commit).
+>
+> **Regole:** come in Q1, poi checkpoint, FROZEN e handoff.
+>
+> **Nav:** i titoli della nav developer non hanno traduzioni (`nav_translations` non contiene nessuna voce developer), quindi le pagine nuove richiedono solo la voce EN in `mkdocs.yml`.
+>
+> **Lotti Q2** (file disgiunti; `mkdocs.yml` lo tocca un solo lotto):
+> - **G, gallery:**
+>   - `gallery/mobile.en.md`: classe `mobile` sulle 15 voci;
+>   - `gallery/{desktop,mobile}.en.md`: separatori `---`.
+> - **H, core UI e componenti:**
+>   - `core-ui/{index,atoms,modals,feedback,data-table}.md`;
+>   - `components/index.md`, `components/charts.md`, `styling.md`;
+>   - `features/{live-ticker,auth}.md`;
+>   - `frontend/pwa.md`.
+> - **I, feature, stato e pagine:**
+>   - `features/{settings,import-wizard,transaction-form}.md`;
+>   - `features/brokers/{modals,forms}.md`;
+>   - `state/{transaction-draft,reference-state}.md`;
+>   - `frontend/pages/index.md`: `/tools` e i riferimenti rotti `assets/detail` e `fx/detail`.
+> - **J1, backend e DB:**
+>   - `database/{index,users_access,assets_pricing,brokers_transactions}.md`;
+>   - `transactions/price_resolver.md`;
+>   - `transactions/fifo_lot_engine.md` (solo la rinomina);
+>   - `brim/architecture.md`;
+>   - `fx/architecture.md`;
+>   - `architecture/settings_cache.md`.
+> - **J2, pattern, sicurezza, API e test:**
+>   - `patterns/{tool_plugins.en,registry_pattern,signal_plugin_guide,ai_export_composition}.md`;
+>   - `architecture/security.md`;
+>   - `api/overview.md`;
+>   - `test-walkthrough/{index,utils,runner_architecture}.md`.
+> - **K, pagine nuove e indici:**
+>   - `developer/frontend/onboarding.md` (nuova);
+>   - `developer/backend/risk/architecture.md` (nuova);
+>   - `mkdocs.yml` (solo le voci di nav nuove);
+>   - `developer/index.md`, `architecture/overview.md`, `frontend/index.md`.
+
+- **S8a** ✅ 2026-10-07 — Lotto G, gallery.
+  > **Note implementazione** (`docs-writer`, verificato da Q):
+  > - In `mobile.en.md` le 15 voci senza classe `mobile` ora ce l'hanno: 58 container su 58, nessun altro mancava. Le immagini non cambiano: la classe aggiunge solo la cornice di 400 px. Desktop non toccato (0 modifiche ai container).
+  > - Separatori in entrambe le pagine: tolto lo `---` spurio prima di `### 📥 Import`, aggiunto quello prima di `## ⚙️ Settings`.
+  > - Segnaposto identici byte per byte a HEAD.
+  >
+  > **⚠️ Fuori pista**:
+  > - Tolto anche un terzo `---`, quello prima del blocco `<style>`: si vedeva come riga orizzontale dentro FX Rates, tra due `###`. Viene dal riordino della v0.9.0 (`3622c2c03`).
+  > - Ora ogni `##` ha esattamente un `---` davanti e nessun `###` ne ha uno.
+  > - Gli stessi difetti restano nelle traduzioni IT/FR/ES della gallery: 15 container senza `mobile` per ogni mobile tradotta e 3 separatori per pagina. È debito di traduzione meccanico, non toccato.
+- **S8** ✅ 2026-10-07 — Errori nella doc developer, compresi quelli precedenti alla 1.1 (§1.3), nei lotti H, I, J1, J2.
+  > **Note implementazione** (`docs-writer`, verificato da Q):
+  > - **H — core UI:**
+  >   - `modals.md`: prop di ModalBase (`trapFocus`/`restoreFocus` opt-in), varianti di ConfirmModal (primary, danger, warning ambra), `results[].action`, flussi di scarto bozza; tolti `DeleteBrokerDialog` come utente di ConfirmModal e `TransactionModal`, che non esiste;
+  >   - `feedback.md`: toast in alto al centro, `sanitizeHtml`, link senza swipe (errore precedente alla 1.1);
+  >   - `data-table.md`: prop complete (`stickyActions`, `pageSizeOptions`, `alwaysShowPagination`), `navigateToRowId`, avviso che le celle `html` non sono sanificate;
+  >   - `live-ticker.md` riscritta come «Live Prices» intorno a `livePriceService` (errore precedente alla 1.1): liste a 30 s, intestazione del grafico a 60 s via client generato, la Dashboard non legge prezzi live;
+  >   - `charts.md`: H1 rotto riparato, `needsFullInit`, sottomodi P&L, torta a due anelli;
+  >   - `styling.md`: font **LF Flags**, utility, dark mode con varianti `dark:`, non con variabili `--theme-*`;
+  >   - `auth.md`: contratto per i password manager; la sezione onboarding ridotta a un rimando a `onboarding.md`; tenuta l'ancora `#post-login-onboarding-gate`;
+  >   - `pwa.md`: icone opache, colori di splash e tema, endpoint di condivisione corretto.
+  > - **I — feature, stato e pagine:**
+  >   - `settings.md`: i 15 flow nei 6 gruppi, **Replay at next trigger** / **Cancel activation**;
+  >   - `import-wizard.md`: paginazione a 5 e broker espansi; endpoint per step;
+  >   - `transaction-form.md` largamente riscritta, sezione FX con ancore `#fx-conversion` e seguenti;
+  >   - `brokers/modals.md`: `BrokerSharingPanel` con Save/Reset (non esiste un pulsante «Undo»);
+  >   - `brokers/forms.md`: nomi duplicati e toast;
+  >   - `transaction-draft.md`: consegna dall'import validata una volta, **Save All**, banner, `#transactions-selection`;
+  >   - `reference-state.md`: `fxRoutesStore`, `#broker-icon-hydration`;
+  >   - `pages/index.md`: `/tools`, `/tools/[tool_code]`, `/welcome`; immagini corrette in `detail-chart`; `/fx/[pair]`.
+  > - **J1 — backend e DB:**
+  >   - pagine DB: tabelle dell'onboarding, `#migrations`, `#enum-column-length`, `is_benchmark`, `#asset-types` (18 valori, raggruppamento per famiglia solo nel frontend);
+  >   - `price_resolver.md`: OHLC opzionali;
+  >   - `fifo_lot_engine.md`: **solo** la rinomina `eligible_income_quantity`;
+  >   - `brim/architecture.md`: Generic CSV, `#report-sets`, sidecar, gapFix, lock;
+  >   - `fx/architecture.md`: `#convert-bulk-window` (PR #30), `#portfolio-cache-invalidation`;
+  >   - `settings_cache.md`: invalidazioni FX.
+  > - **J2 — pattern, sicurezza, API e test:**
+  >   - `tool_plugins`: budget veri (`schemas/tools.py:63-108`) e versione mostrata;
+  >   - `registry_pattern`: `RiskAnalyticRegistry`, `ToolPluginRegistry`, link al Risk Engine;
+  >   - `signal_plugin_guide`: matrice degli stati;
+  >   - `ai_export_composition`: «Validation Errors» (niente `assert`, quindi valgono anche con `-O`);
+  >   - `security`: «Output Escaping», «Container Image Check», endpoint privati della 1.2 (Risk, Tools, onboarding); `plugin-diagnostics` **autenticato**, per decisione del developer (fix di O nel treno 9); `/ai-export/catalog` pubblico per progetto (verificato con `test_ai_export_api.py:164,197-210`);
+  >   - `api/overview`: gzip;
+  >   - `api/index`: `/tools`, `/risk` senza «(beta)» generica, ReDoc `/api/v1/redoc`;
+  >   - `test-walkthrough`: `#isolated-runtime-lanes`, unità `gate-i18n-usage` e `runtime-isolation`; i 10 `file:///` di `runner_architecture` diventati percorsi inline.
+  > - **L — riferimenti a LiveTicker:** `frontend/index`, `scheduler`, `api/overview`, `backend/assets/architecture`; titolo nav «Live Prices».
+  >
+  > **⚠️ Fuori pista**:
+  > - **Molte correzioni fuori audit**, tutte con prova: endpoint, prop, colonne DB, nomi di componenti inesistenti (`Button`, `CashBalanceCard` nel catalogo, `TransactionModal`, `CashTransactionModal` in `brokers/modals`).
+  > - **Divergenze AI Export** (riportate, non cambiate, come chiede `ai-development.instructions.md`):
+  >   - 34 `assert` restano nel codice delle richieste;
+  >   - `ai_export_snapshot.md` non cita il 422 `selection_not_applicable` per un livello di dettaglio non supportato.
+- **S9** ✅ 2026-10-07 — Mancanze e incompletezze della 1.2 nella doc developer (§1.3), più la rinomina in `fifo_lot_engine` (D6) e i riferimenti rotti (§2.2).
+  > **Note implementazione**: coperte nei lotti H, I, J1, J2 e L (vedi S8). I riferimenti rotti `assets/detail` e `fx/detail` sono stati corretti in `detail-chart` (lotto I).
+  >
+  > **Backlog precedente alla 1.1**, segnalato e **non** corretto, perché fuori dal perimetro Q2:
+  > - `CashBalanceCard` in `features/brokers/{index,cards}.md`;
+  > - `CashTransactionModal` in `core-ui/datePickers.md:12,45` e `features/brokers/index.md:29`;
+  > - l'esempio JSON di `api/overview.md:157-171` (`as_of_date`, formato `source`, `success_count`/`errors`);
+  > - `scheduler.md:69-71` (il job chiama `get_current_prices_bulk`, non `bulk_refresh_prices`);
+  > - `external.md` usa `-v`, che non esiste;
+  > - `test-walkthrough/index.md` dice «11 categories»;
+  > - opzioni del runner non documentate (`--resume`, `--fresh-run`, `--run-status`, `--log-file`, `--no-shared-server`, `--assume-scoped`);
+  > - nella mappa di `runner_architecture` mancano 6 moduli;
+  > - lato utente: `user/assets/index.en.md` usa ancora «Live Ticker» (titolo con traduzioni).
+- **S10** ✅ 2026-10-07 — Pagine nuove, onboarding e rischio, con le loro voci di nav in `mkdocs.yml`.
+  > **Note implementazione** (`docs-writer`, verificato da Q):
+  > - **K1 — `developer/frontend/onboarding.md`** (nuova, 484 righe):
+  >   - contenuto: regole, i 15 flow (tutti alla versione 1), architettura con Mermaid, layout gate, Welcome e intro tour (8 s, `OnboardingIntroScene.svelte:18`), guide contestuali e step-managed, ancore e stall, mobile, regola «due», posizioni nel browser, replay, popup differiti, endpoint, account precedenti alla 1.2 (`004_release_1_2_0_schema.py:171,198`), checklist e test;
+  >   - una riga di link aggiunta in `frontend/index.md`.
+  >   - La sincronizzazione tra schede passa dall'evento `storage` di `localStorage`: non esiste un `BroadcastChannel`.
+  >   - I test e la gallery partono già con l'onboarding completato grazie a `populate_mock_data._grandfather_onboarding_for_test_users`, non grazie alla fixture e2e.
+  > - **K2 — `developer/backend/risk/architecture.md`** (nuova, 787 righe):
+  >   - contenuto: i cinque chiamanti, mappa dei sorgenti, flusso con Mermaid ELK (`service.py:143-447`), stati del risultato (`schemas/risk.py:90-96`; l'eccezione non dichiarata diventa `execution_failed` loggata senza `str(exc)`, `service.py:291-336`), contratto dei plugin e registry, tabella dei 15 analytic, qualità dati, idoneità e calendario, simulazione e worker (`MAX_SOBOL_DIMENSION`, link a `simulation-modes#limits` invece di ripetere la matematica), API, localizzazione dei warning, contratto frontend (`RISK_DISCARD_ATTEMPTS` = 3), checklist «Adding a Risk Analytic»;
+  >   - dei componenti della tab Rischio della Dashboard, che N sta cambiando, solo il minimo.
+  > - **Nav** (`mkdocs.yml`):
+  >   - `:1015` `"📉 Risk Engine"`, dopo Scheduler;
+  >   - `:1062` `"🧭 Onboarding Guides"`, dopo Data Quality Banner;
+  >   - solo EN, perché i titoli della nav developer non hanno traduzioni.
+  > - **Indici**: `developer/index.md` (Tool Plugins, Risk Engine, Onboarding Guides) e `architecture/overview.md` (nodi Risk Analytics e Tool Plugins nel diagramma, tre punti nei sottosistemi).
+  > - **Skill** `.github/skills/onboarding-tools/onboarding-guide/SKILL.md`, concessa dal coordinatore e scritta da Q:
+  >   - primo puntatore `developer/frontend/onboarding.md`;
+  >   - poi `import-wizard.md#import-guide-wiring` e `#guide-anchor-stall`, e `settings.md` per l'interfaccia del replay;
+  >   - tolto `auth.md`;
+  >   - lo step 7 punta alla checklist.
+  >
+  > **⚠️ Fuori pista** (reperti inoltrati al coordinatore):
+  > - La migrazione 004 non semina `import.gapFix` per gli account precedenti alla 1.2. Decisione: **resta così**, perché lo step è nuovo anche per loro.
+  > - `onboardingTourSurfaces.svelte.ts` e i flag `*TourPreview`, sempre false, sono codice non collegato: vanno nel backlog per knip.
+  > - Una finestra bootstrap oltre 5 000 osservazioni (`quant/models.py:70`, con `_build_bootstrap_request` fuori dal `try`) finirebbe in `execution_failed`. L'hanno trovato in modo indipendente i lotti B e K2: passato al proprietario del rischio.
+- **S11** ✅ 2026-10-07 — Verifica e handoff di Q2.
+  > **Note implementazione**:
+  > - **Gate finale** `q2final`: `Q_GATE_ARGS=--q2 /tmp/libreFolio_q_gate.sh q2final`, cioè `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs build`, poi `… mkdocs check-links`, poi `q_gate.py --q2`.
+  >   - build strict su EN/IT/FR/ES: **0 righe WARNING/ERROR**; l'unico avviso è il banner upstream di Material su MkDocs 2.0, che non è nostro;
+  >   - check-links: rotto **solo** il link della baseline (`chart/#rolling-return` in IT/FR/ES), nessuno nuovo;
+  >   - scope Q2 pulito: 48 file tracciati più 2 pagine nuove, tutti nel perimetro, compresa la skill concessa;
+  >   - stile ok: il controllo delle emoji ora ignora i blocchi di codice;
+  >   - `git diff --check` pulito;
+  >   - nessun `file:///` rimasto, tranne in `release-pipeline.md` (M).
+  > - **Diff**: +2530/−742 su 48 file, più `developer/backend/risk/architecture.md` (787 righe) e `developer/frontend/onboarding.md` (484 righe). Nav: Risk Engine, Onboarding Guides, «Live Ticker» → «Live Prices».
+  > - **Base**: HEAD `dfcbc0003` (Q1), `dev_release2` = `d07412899` invariata. Nessun server avviato: porta 6162 libera (`lsof` exit 1).
+  > - **Debito di traduzione Q2**:
+  >   - nessuno per le pagine developer, che sono solo EN e senza titoli tradotti nella nav;
+  >   - la gallery EN cambia ancora, ed era già stale da Q1; le traduzioni della gallery hanno gli stessi 15 container senza `mobile` e gli stessi 3 separatori, un debito meccanico.
+  > - **Reperti di codice per i proprietari** (nell'handoff):
+  >   - possibile loop di redirect su `/welcome` se si alza la versione di Welcome;
+  >   - `BrokerModal` in modifica prende un PATCH `success:false` per un successo;
+  >   - docstring superate in `models.py` (`AssetType`) e in `pac_allocator.py` (budget);
+  >   - 34 `assert` nell'AI Export.
 
 ## 4. Conflitti, rischi, definizione di fatto
 
