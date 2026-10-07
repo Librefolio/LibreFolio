@@ -56,6 +56,14 @@ Some banks split one account across several exports: [Danske Bank](../transactio
 
 You can preview, download and delete these files like any other report. Deleting one export of a set leaves its combined file in place, but to import the set again you first need to upload that export into it again.
 
+<!-- [Screenshot Placeholder: files/brim-report-sets — the Broker Reports tab with the Report set badges (Set of ‹date›, Combined, Used in a combined file) and the Uploaded by filter open] -->
+
+### 👤 Who uploaded each file {: #uploaded-by }
+
+In both tabs, the table shows who uploaded each file in its **Uploaded by** column, with the user's avatar and name. Click the column header to sort by uploader, or open its filter to keep only the files of one or more people: tick them in the list — each with avatar and name — or search them by name. A file whose uploader was not recorded shows *Uploader not recorded*.
+
+The filter also applies when you switch the **Static Resources** tab to grid view, and it is still there when you switch back to the list. It is written in the page address too (`?uploader=…`), so a bookmarked or shared link opens with the same filter.
+
 ---
 
 ## ⬆️ Uploading Files

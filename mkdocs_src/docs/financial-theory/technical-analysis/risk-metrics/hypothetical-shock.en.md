@@ -49,9 +49,23 @@ The asymmetry between the dimensions is worth knowing rather than judging: on se
 
 ---
 
+## 🖥️ What the Result Shows {: #what-the-result-shows }
+
+A hypothetical shock is offered on the **Risk** tab of the Dashboard and of a broker's page, as the second tool of **What if…?**, and on the **Risk & Scenarios** tab of an asset's detail page. The [Correlation tab](../../../user/assets/correlation.md#what-if) of the Assets page does not offer it: a selection has no weights to shock.
+
+On the Dashboard and on a broker's page, a scenario is one click. Each named scenario — *Global risk-off*, *Equity crash*, *Banking crisis*, *European Union shock* — runs as soon as it is chosen, along the dimension it is written for. **Show the shock per bucket** opens its buckets, each with its shock in whole percent; changing one sets the named scenario aside, since what is on screen is no longer that scenario, and **Run scenario** runs the edited one. The result reads:
+
+- the total, $r_{shock}$, as *This scenario would move the scope by …*, with the amount it stands for;
+- a table with **one row per bucket of the scenario**, not one per holding, worst first: the shock applied to the bucket (**Return**), what the holdings that landed in it did to the total (**Contribution**: each holding's weight times the part of its shock that this bucket supplied, summed over the holdings, so that the rows add up to the total), and a bar of that contribution (**Effect**), on one scale shared by every row;
+- when not every holding could be classified, a note giving the share that could — see [When the Classification Is Missing](#when-the-classification-is-missing).
+
+The holding-by-holding view, with the rule behind every applied shock, is the audit below. It appears on the asset's **Risk & Scenarios** tab, where the dimension and the shock of each bucket can also be set by hand.
+
+---
+
 ## 🔍 Reading the Audit {: #reading-the-audit }
 
-Every holding's impact can be expanded into a per-bucket audit, which is where a scenario stops being something you believe and becomes something you verify. Each row reports:
+On the asset's **Risk & Scenarios** tab, the impact comes with a per-bucket audit, which is where a scenario stops being something you believe and becomes something you verify. Each row reports:
 
 | Column | What it tells you |
 |---|---|

@@ -42,6 +42,10 @@ The post-login modal announcing a newer release, with current vs latest version 
 
 ---
 
+<!-- [Screenshot Placeholder: onboarding/welcome-setup — new section "## 🧭 Onboarding", gallery entry "### 👋 Welcome Setup": The first-run Welcome page, where a new user confirms language and default currency and can add a profile picture before starting.] -->
+<!-- [Screenshot Placeholder: onboarding/core-tour-step — gallery entry "### 🗺️ Core Tour": A step of the guided Core tour highlighting a part of the interface.] -->
+<!-- [Screenshot Placeholder: onboarding/contextual-guide — gallery entry "### 🧭 Contextual Guide": A contextual guide bubble on a page (for example the FX page guide).] -->
+
 ## 📊 Dashboard
 
 Your portfolio at a glance — key stats, allocation charts, and a clean empty state for new users.
@@ -62,6 +66,10 @@ Track your portfolio's growth over time, in absolute or percentage terms.
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Absolute" alt="Growth Chart — Absolute">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📊 Percentage" alt="Growth Chart — Percentage">
 </div>
+
+<!-- [Screenshot Placeholder: dashboard/growth-pnl-line — add to the "📈 Portfolio Growth" carousel above as item "💹 P&L Line": The cumulative total P&L line.] -->
+<!-- [Screenshot Placeholder: dashboard/growth-pnl-candles — add to the "📈 Portfolio Growth" carousel above as item "🕯️ P&L Candles": Synthetic P&L candles with the width picker.] -->
+<!-- [Screenshot Placeholder: dashboard/growth-pnl-income — add to the "📈 Portfolio Growth" carousel above as item "🧾 Income": Monthly bars of dividends and interest, fees and taxes, deposits and purchases.] -->
 
 ### 📊 Asset Allocation
 
@@ -133,6 +141,9 @@ When prices or FX rates are missing, the dashboard explains what is stale and li
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="🚩 Data-Quality Banner">
 </div>
+
+<!-- [Screenshot Placeholder: dashboard/data-quality-sync-rates — gallery entry "### 💱 Missing Exchange Rates": The data-quality banner listing missing exchange rates with its Sync rates button.] -->
+<!-- [Screenshot Placeholder: dashboard/privacy-masked — gallery entry "### 🙈 Privacy Mode": The dashboard with privacy mode on — the eye button in the header and every amount shown as •••.] -->
 
 ---
 
@@ -223,6 +234,8 @@ Cloning a row stages a copy — original date preserved — ready to adjust and 
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="🧬 Clone into the Bulk Workspace">
 </div>
 
+<!-- [Screenshot Placeholder: transactions/bulk-todo-banner — gallery entry "### 📝 Todo Banners": The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.] -->
+
 ## ⚙️ Settings
 
 ### 🎛️ User Preferences
@@ -232,6 +245,8 @@ All settings accessible on mobile with the same functionality.
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
 </div>
+
+<!-- [Screenshot Placeholder: settings/onboarding-replay — gallery entry "### 🔁 Guide Replay": The Onboarding category of Preferences with each guide's status and its Replay button.] -->
 
 ### 🛡️ Global Settings (Admin)
 
@@ -315,6 +330,10 @@ Per-registry plugin load health: what failed to load and why.
     <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="🧩 Plugin Diagnostics">
 </div>
 
+<!-- [Screenshot Placeholder: settings/about-tool-diagnostics — gallery entry "### 🧰 Tool Diagnostics": The Tool diagnostics panel inside Plugin diagnostics, with the PAC allocator among the loaded tools and its version.] -->
+<!-- [Screenshot Placeholder: support/donation-popup — gallery entry "### ☕ Support LibreFolio": The donation popup with the Buy Me a Coffee link and the social share actions.] -->
+<!-- [Screenshot Placeholder: support/social-share-modal — gallery entry "### 📣 Share LibreFolio": The share dialog with the platform's suggested message, the hashtags and Copy and go.] -->
+
 ---
 
 ## 📁 Files
@@ -342,6 +361,8 @@ Import and manage broker reports.
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
 </div>
+
+<!-- [Screenshot Placeholder: files/brim-report-sets — gallery entry "### 🗂️ Report Sets": The broker reports tab with report-set badges and the Uploaded by filter.] -->
 
 ### 👁️ File Preview
 
@@ -485,6 +506,12 @@ Any number of candidate transactions side by side, with differing fields highlig
     <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="🔍 N-Way Compare">
 </div>
 
+<!-- [Screenshot Placeholder: brokers/import-report-set-card — gallery entry "### 🧩 Report Set Card": A Danske Bank report set in Select Files — one table per kind of export, the timeline and the Read as menu.] -->
+<!-- [Screenshot Placeholder: brokers/import-report-set-missing — gallery entry "### ⚠️ Missing Export": A report set announcing which export is missing and for which period.] -->
+<!-- [Screenshot Placeholder: brokers/import-report-set-read-as — gallery entry "### 📖 Read As": The Read as menu of a report set and a file's menu with Remove from the set.] -->
+<!-- [Screenshot Placeholder: brokers/import-report-set-pairing — gallery entry "### 🔗 Combined File Analysis": The analysis detail of a combined file — trades paired with their cash, rows found in one file only and their reasons.] -->
+<!-- [Screenshot Placeholder: brokers/import-wizard-gapfix-step — gallery entry "### ⚖️ Import Wizard — Align with the Bank": The step comparing LibreFolio with the bank's balance — one card per point and the table of proposed gap_fix movements.] -->
+
 ---
 
 ## 💼 Assets
@@ -514,6 +541,8 @@ Interactive price chart with date range and currency toggle. Switch between line
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-chart" data-title="📈 Line chart" alt="Asset Detail Chart — Line">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Candlestick" alt="Asset Detail Chart — Candlestick">
 </div>
+
+<!-- [Screenshot Placeholder: assets/detail-chart-rolling-return — gallery entry "### 🗓️ Rolling Return": The asset chart in Rolling Return mode with a 1Y window and one comparison asset.] -->
 
 ### 📡 Signals Overlay
 
@@ -561,6 +590,8 @@ Create a new asset on mobile — or launch from the Import Wizard with pre-fille
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard" alt="Create Asset from Import Wizard">
 </div>
 
+<!-- [Screenshot Placeholder: assets/type-picker-open — gallery entry "### 🧬 Asset Type Picker": The searchable two-level type menu open, with the ETF family expanded and composite icons.] -->
+<!-- [Screenshot Placeholder: assets/create-provider-compare — gallery entry "### 🔍 Provider Data Comparison": The comparison between the asset and the provider's data after the ISIN choice.] -->
 
 ### 🌳 Grouped Indicator Search
 
@@ -596,6 +627,14 @@ Corporate events appear as colored markers on the chart; hovering reveals the de
 
 ---
 
+<!-- [Screenshot Placeholder: risk/lab-correlation — new section "## 📉 Risk Analysis", gallery entry "### 🔗 Correlation Matrix": The Correlation tab of the Assets page — the correlation matrix and the lists of the most alike and offsetting pairs.] -->
+<!-- [Screenshot Placeholder: risk/lab-asset-picker — gallery entry "### ➕ Lab Asset Picker": The + panel with type and currency filters and the assets that cannot be analysed listed apart.] -->
+<!-- [Screenshot Placeholder: risk/lab-hurt-table — gallery entry "### 📉 How Much Did Each of These Hurt?": The loss comparison table of the selected assets.] -->
+<!-- [Screenshot Placeholder: risk/lab-risk-return — gallery entry "### 🎯 Paid for Its Risk?": The risk/return table with the benchmark row and the chart with the benchmark diamond and the dashed line.] -->
+<!-- [Screenshot Placeholder: risk/lab-benchmark-picker — gallery entry "### 🧭 Benchmark Picker": The Compared with picker listing apart the assets that cannot be measured over the period.] -->
+<!-- [Screenshot Placeholder: risk/lab-notice — gallery entry "### 🚩 Partial Results Notice": The notice above the sections and a level banner explaining what could not be measured.] -->
+<!-- [Screenshot Placeholder: risk/lab-replay — gallery entry "### 🕰️ Historical Replay": The replay table with the left-out assets as badges and the common-period button.] -->
+<!-- [Screenshot Placeholder: risk/whatif-simulation — gallery entry "### 🎲 Simulation": The What if…? simulation step with its beta notice.] -->
 
 ## 💱 FX Rates
 
@@ -750,3 +789,14 @@ Chart aesthetics and signal overlay settings.
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
 </div>
+
+<!-- [Screenshot Placeholder: tools/hub — new section "## 🧰 Tools", gallery entry "### 🗂️ Tools Hub": The Tools catalogue with the PAC allocator card, its version pair and the Documentation and Reload buttons.] -->
+<!-- [Screenshot Placeholder: tools/pac-step-liquidity — gallery entry "### 💶 PAC — Liquidity": The Liquidity step with a new contribution and an external account.] -->
+<!-- [Screenshot Placeholder: tools/pac-step-brokers — gallery entry "### 🏦 PAC — Brokers": The broker editor with order mode, increment, fees and conversion mode.] -->
+<!-- [Screenshot Placeholder: tools/pac-step-assets — gallery entry "### 💼 PAC — Assets": The Assets step with automatic and manual prices and their origin badges.] -->
+<!-- [Screenshot Placeholder: tools/pac-step-routing — gallery entry "### 🔀 PAC — Routing": The Routing step with allow/exclude, minimum/required/maximum purchases and priorities.] -->
+<!-- [Screenshot Placeholder: tools/pac-step-targets — gallery entry "### 🎯 PAC — Targets": The target weights with Balance all.] -->
+<!-- [Screenshot Placeholder: tools/pac-step-review — gallery entry "### ✅ PAC — Review": The review step with the Calculate plan button.] -->
+<!-- [Screenshot Placeholder: tools/pac-result — gallery entry "### 📊 PAC — Result": The outcome header, key figures and the allocation per asset.] -->
+<!-- [Screenshot Placeholder: tools/pac-result-plan — gallery entry "### 🧾 PAC — Operational Plan": The orders by broker and route with their fees.] -->
+<!-- [Screenshot Placeholder: tools/pac-result-proof — gallery entry "### 🔬 PAC — Proof and Solver": The proof behind the outcome and the solver details.] -->
