@@ -3413,7 +3413,11 @@
       "execution_timeout": "El cálculo tardó demasiado y se detuvo.",
       "optimization_infeasible": "Ninguna asignación cumple las restricciones solicitadas.",
       "unknown": "Esta medición no devolvió ningún resultado.",
-      "answer_discarded": "La respuesta se descartó porque los datos cambiaron mientras llegaba. Vuelve a lanzar el análisis."
+      "answer_discarded": "La respuesta se descartó porque los datos cambiaron mientras llegaba. Vuelve a lanzar el análisis.",
+      "resource_limit_paths_or_horizon": "Esta simulación es demasiado grande para ejecutarse. Usa menos trayectorias simuladas o un horizonte más corto.",
+      "resource_limit_horizon_or_sampling": "Esta simulación cuasi-Monte Carlo es demasiado grande para ejecutarse. Acorta el horizonte o elige el muestreo Monte Carlo.",
+      "resource_limit_period": "Esta simulación es demasiado grande para ejecutarse: el periodo contiene demasiado historial. Elige un periodo más corto.",
+      "resource_limit_positions": "Una simulación puede incluir como máximo 100 posiciones, y esta cartera tiene más. Simula en su lugar un broker con menos posiciones."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe no está definido porque la volatilidad es cero.",
