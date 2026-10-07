@@ -204,8 +204,6 @@ Deleting a transaction that is part of a linked pair (FX trade, transfer) opens 
     <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Bulk delete workspace with a linked pair marked for deletion">
 </div>
 
----
-
 ### 📥 Import
 
 Import transactions from your broker's export files — via the quick modal or the full step-by-step wizard.
@@ -231,6 +229,8 @@ Cloning a row stages a copy — original date preserved — ready to adjust and 
 </div>
 
 <!-- [Screenshot Placeholder: transactions/bulk-todo-banner — gallery entry "### 📝 Todo Banners": The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.] -->
+
+---
 
 ## ⚙️ Settings
 
@@ -674,8 +674,6 @@ Configure provider priority and conversion routes for a currency pair.
 <div class="screenshot-container">
     <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
 </div>
-
----
 
 <style>
 .screenshot-container {

@@ -18,10 +18,14 @@ The `LoginCard` handles user authentication via username/email and password.
 
 ### ⚡ Features
 
-- **Input**: Username or Email field (autofocus).
+- **Input**: Username or Email field; the value is trimmed before the login call.
 - **Password**: Password field with visibility toggle (via `PasswordInput`).
-- **State**: Uses `$lib/stores/auth` to manage loading state and errors.
+- **State**: Uses `$lib/stores/app/auth` (`auth.login()`, `authError`, `isAuthLoading`) to manage loading state and errors.
+- **Props**: `redirectTo` (default `/dashboard`), `successMessage` (shown after a registration),
+  `onAuthenticated(requestedPath)` — when given, it replaces the plain `goto(redirectTo)` after a
+  successful login (the login page uses it for the [onboarding gate](#post-login-onboarding-gate)).
 - **Navigation**: Emits events to switch to Register or Forgot Password views.
+- **Password managers**: see the [password-manager contract](#password-manager-contract).
 
 ### 💻 Usage
 
@@ -47,13 +51,14 @@ The `RegisterCard` handles new user registration with client-side validation.
 
 ### ⚡ Features
 
-- **Validation**: Real-time validation for:
-    - Username (min length)
+- **Validation**: on blur of each field, and all together on submit:
+    - Username (at least 3 characters, after trimming)
     - Email (format)
-    - Password (strength rules)
+    - Password (the five strength rules: 8 characters, uppercase, lowercase, number, special character)
     - Confirm Password (match)
 - **Strength Meter**: Integrated `PasswordStrength` component.
-- **Error Handling**: Maps backend errors (e.g., "username taken") to user-friendly messages.
+- **Error Handling**: Maps backend errors to translated messages — username taken, email
+  already registered, registration disabled by the administrator, and field validation errors.
 
 ### 💻 Usage
 
@@ -69,6 +74,38 @@ The `RegisterCard` handles new user registration with client-side validation.
   }}
 />
 ```
+
+## 🔐 Password-manager contract {: #password-manager-contract }
+
+Browsers' password managers decide which saved account goes into which field from each field's
+`autocomplete` token, together with its `name`, its `id` and its label. The three credential forms
+follow one contract, so that the browser offers saved credentials on the username field and
+offers to save or update the password:
+
+| Form | Field | `id` | `name` | `autocomplete` |
+|---|---|---|---|---|
+| `LoginCard` | Username or email | `login-username` | `username` | `username` |
+| | Password | `login-password` | `password` | `current-password` |
+| `RegisterCard` | Username | `register-username` | `username` | `username` |
+| | Email | `register-email` | `email` | `email` |
+| | Password | `register-password` | `new-password` | `new-password` |
+| | Confirm password | `register-confirm-password` | `confirm-password` | `new-password` |
+| `PasswordChangeModal` | Hidden username | — | `username` | `username` |
+| | Current password | `currentPassword` | `current-password` | `current-password` |
+| | New password | `newPassword` | `new-password` | `new-password` |
+| | Confirm new password | `confirmPassword` | `confirm-password` | `new-password` |
+
+- Every field has a `<label for>` reading the same translation key as its placeholder — visually
+  hidden in the two cards, visible in the modal — which also gives screen readers a name that does
+  not vanish with the first keystroke.
+- Username fields set `autocapitalize="none"` and `spellcheck="false"`.
+- `PasswordChangeModal` carries a `hidden`, `readonly` text input with the signed-in username, so
+  the password manager knows which saved account the new password belongs to.
+- No element carries an empty `id`: `PasswordInput` omits `id` and `name` when they are not given.
+- The `data-testid`s are unchanged; E2E logins go through them.
+
+`LoginCard.test.ts`, `RegisterCard.test.ts` and `PasswordChangeModal.test.ts` pin the attributes.
+The autofill itself belongs to the browser and is checked by hand.
 
 ## 🔒 PasswordStrength
 
@@ -102,9 +139,11 @@ A reusable input component for passwords.
 
 ### ⚡ Features
 
-- **Toggle Visibility**: Eye icon to show/hide password.
-- **Styling**: Consistent styling with error state support.
-- **Events**: Forwards `input`, `blur`, `focus` events.
+- **Toggle Visibility**: Eye icon to show/hide password (the toggle button is out of the tab order).
+- **Styling**: Consistent styling with error state support (`hasError`).
+- **Attributes**: `autocomplete` (`current-password` by default, `new-password`, `off`, `on`),
+  `id`, `name`, `testId`, `placeholder`, `disabled`; `id` and `name` are omitted when empty.
+- **Events**: Forwards `input`, `blur` and `keydown` events.
 
 ### 💻 Usage
 
@@ -116,6 +155,9 @@ A reusable input component for passwords.
 
 <PasswordInput
   bind:value={password}
+  id="new-password"
+  name="new-password"
+  autocomplete="new-password"
   placeholder="Enter password"
   hasError={false}
 />
@@ -123,98 +165,26 @@ A reusable input component for passwords.
 
 ## 🚪 Post-login onboarding gate
 
-Once `LoginCard`/`RegisterCard` hand off to an authenticated session, `routes/(app)/+layout.svelte`
-runs `appBootstrap.load()` (`lib/features/onboarding/appBootstrap.svelte.ts`) before rendering any
-authenticated route. It `Promise.allSettled`s three loads — user settings, onboarding progress,
-global settings — and resolves to one of `'ready' | 'degraded' | 'blocked'`:
+After a successful login the auth cards hand over to the onboarding bootstrap. How it works — the
+bootstrap states, Welcome, the intro tour and the contextual guides — is documented in
+[Onboarding Guides](../../onboarding.md). What belongs to authentication:
 
-- **`blocked`** — user settings failed, or onboarding progress failed with no usable cached
-  welcome status. The layout renders `OnboardingBootstrapBlock.svelte`: a full-screen **Retry** /
-  **Logout** pair, nothing else. App routes stay inaccessible until a retry produces usable
-  bootstrap state or the user logs out.
-- **`degraded`** — onboarding progress failed to refresh but a previously-loaded `welcome` flow is
-  already non-pending (i.e. the user has completed or skipped it before). The app renders normally
-  behind a dismissible `OnboardingBootstrapBanner.svelte`, because a stale-but-known "not new
-  here" status is safe to proceed on.
-- **`ready`** — both loaded. `appBootstrap.resolveDestination(requestedPath)` then decides whether
-  the requested route should redirect to `/welcome?returnTo=<path>` first: it does, whenever the
-  cached `welcome` flow is `status === 'pending'` **or** a replay is armed
-  (`onboarding.hasReplay('welcome', current_version)`); `safeInternalPath` rejects any
-  `returnTo`/redirect target that isn't a same-origin absolute path (no `//`, no `\`), so the
-  round trip through a query string can't be used to redirect off-app.
-
-`WelcomePage.svelte` (`routes/(app)/welcome/+page.svelte`) itself only renders once
-`onboarding.findFlow('welcome')` and the user's own settings are hydrated — otherwise it shows a
-plain loading placeholder, never a form pre-filled with stale defaults. For an automatic pending
-Welcome, submit calls `complete_welcome_onboarding`
-(`backend/app/services/onboarding_service.py`), which writes the chosen
-language/currency/avatar **and** flips the `welcome` progress row to `completed` in one database
-transaction — an existing `UserSettings` row keeps its `theme` untouched; a first-ever row is
-created with the instance's `default_theme`. Automatic **Skip setup permanently** calls the
-sibling `transition_onboarding_progress(..., OnboardingStatus.SKIPPED, ...)` instead and writes
-nothing to `UserSettings`.
-
-Welcome replay deliberately takes a different path. **Continue** sends the explicitly selected
-language/currency/avatar through the existing `PUT /api/v1/settings/user`, then clears only the
-stored replay token; it does not call the onboarding complete endpoint, so the existing
-completed/skipped status is preserved. **Exit tour** clears the token and saves nothing — it
-does not call either the settings PUT or the onboarding skip endpoint.
-
-After either successful submit path, the route mirrors the submitted values into the
-user-settings store, calls `currentLanguage.set(draft.language)`, awaits
-`waitLocale(draft.language)` and a Svelte `tick()`, and only then calls
-`onboardingGuide.maybeStartIntro(returnTo)`. The chosen locale therefore owns the narrative intro
-and every coachmark from the first rendered frame. Automatic skipping and replay exit both
-discard the unsaved Welcome draft and hand off using the already-active locale.
-
-## 🧭 Narrative intro and tour
-
-`INTRO_TOUR_STEP_IDS` starts with `intro.scene`, rendered by
-`OnboardingIntroScene.svelte`. The scene rotates through three translation keys
-(`line1`/`line2`/`line3`) and offers a manual **Start** action. Its 10-second auto-start fires
-at most once if the user does nothing; a manual start invalidates the pending run so the
-transition cannot fire twice.
-
-The remaining ids are semantic stops in this exact order:
-
-1. `intro.dashboard`
-2. `intro.navigation` — `OnboardingOverlayHost` resolves this to the desktop sidebar toggle or
-   mobile hamburger at runtime
-3. `intro.transactions_nav`
-4. `intro.transactions_import`
-5. `intro.brokers_add` → `intro.brokers_currency`
-6. `intro.fx_add` → `intro.fx_pair`
-7. `intro.assets_add` → `intro.assets_config`
-8. `intro.tools`
-9. `intro.settings`
-
-The Broker, FX, and Asset detail stops request registered `*.create` tour surfaces. Those hosts
-open their real create modals with `tourPreview=true`; each modal guards its submit handler and
-removes its save/create action, so the preview cannot write.
-
-`OnboardingOverlayHost` passes `showSkip={false}`, so `OnboardingCoachmark.svelte` shows only
-**X** in the top action row, labelled *Skip this tour* for an automatic pending tour and *Exit
-tour* in replay mode. **X** calls `onboardingGuide.exit()`, which is `skip()`. The footer renders
-**Back** and **Next**, using **Finish** on `intro.settings`. Automatic **Finish** completes the
-pending flow and automatic **X** skips it. Replay **Finish** and **X** are strictly
-non-destructive: both only clear the stored replay token and never call complete/skip or change
-backend onboarding status. There is no Pause action.
-
-The same guide engine later drives the
-**[Import Wizard's contextual guide](import-wizard.md#import-guide-wiring)**.
-
-!!! note "Existing accounts are grandfathered, not migrated silently"
-
-    Migration `004_release_1_2_0_schema` (`backend/alembic/versions/`) seeds all fifteen registered
-    flows for every user that already existed when the flows were introduced, but only `welcome`
-    is stored as `completed` — their settings are demonstrably configured. The other fourteen,
-    `intro_tour` and every page/detail guide included, are stored as `skipped`, alongside twelve
-    `skipped` rows in `user_onboarding_step_progress`.
-
-    That split is deliberate. `skipped` suppresses the trigger exactly like `completed`, while
-    staying truthful that the flow was never shown to that user — which keeps the door open to
-    offering it retroactively. Marking those flows `completed` would erase the difference between
-    "was never shown this" and "went through it", and claim a walkthrough that never happened.
-
-    Accounts created afterwards receive no rows from the migration. They get `pending` rows
-    lazily, from `ensure_onboarding_progress`, the first time their progress is read.
+- **After a login**, `LoginCard` calls `onAuthenticated(redirectTo)`, which the login page
+  (`routes/+page.svelte`) wires to its `routeAuthenticated`: it runs `appBootstrap.load()`
+  (`lib/features/onboarding/appBootstrap.svelte.ts`), then navigates with `replaceState` to
+  `appBootstrap.resolveDestination(redirectTo)` — `/welcome?returnTo=…` while Welcome is due or a
+  Welcome replay is armed, the requested path otherwise. A visitor of `/` who is already signed in
+  (`auth.checkAuth()` on mount) takes the same route.
+- **`redirectTo`** is the login page's `redirect` query parameter, `/dashboard` when absent.
+  `resolveDestination` replaces anything that is not a same-origin absolute path — it must start
+  with `/`, not with `//`, and contain no `\` — with `/dashboard`, so the parameter cannot send
+  the user off the app.
+- **A `blocked` bootstrap** (user settings failed to load, or onboarding progress failed with no
+  usable cached Welcome) replaces the cards with `OnboardingBootstrapBlock`: **Retry** loads the
+  bootstrap again, **Logout** signs out (`auth.logout()`). The authenticated layout shows the same
+  block. A `degraded` bootstrap renders the app with `OnboardingBootstrapBanner`, whose only
+  action is **Retry**.
+- **Registration does not sign in**: `RegisterCard` dispatches `gotoLogin` with a success message,
+  which the login view shows above the form.
+- **Signed-out visitors** of an app route are sent back to `/` by `routes/(app)/+layout.svelte` —
+  also when its auth check does not answer within 5 s — without a `redirect` parameter.

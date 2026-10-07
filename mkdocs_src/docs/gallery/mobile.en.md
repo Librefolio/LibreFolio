@@ -36,7 +36,7 @@ Easy account creation with password strength feedback.
 
 The post-login modal announcing a newer release, with current vs latest version and links to the updating guide.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="⬆️ Update Available">
 </div>
 
@@ -138,7 +138,7 @@ Full navigation accessible via the hamburger menu.
 
 When prices or FX rates are missing, the dashboard explains what is stale and links straight to each affected asset.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="🚩 Data-Quality Banner">
 </div>
 
@@ -208,8 +208,6 @@ Deleting a transaction that is part of a linked pair opens the **bulk delete wor
     <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Bulk delete workspace with a linked pair marked for deletion">
 </div>
 
----
-
 ### 📥 Import
 
 Import transactions from your broker's export files — quick modal or full wizard.
@@ -230,11 +228,13 @@ Import transactions from your broker's export files — quick modal or full wiza
 
 Cloning a row stages a copy — original date preserved — ready to adjust and save.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="🧬 Clone into the Bulk Workspace">
 </div>
 
 <!-- [Screenshot Placeholder: transactions/bulk-todo-banner — gallery entry "### 📝 Todo Banners": The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.] -->
+
+---
 
 ## ⚙️ Settings
 
@@ -302,7 +302,7 @@ Your profile, avatar, and account settings on mobile.
 
 Every named backend cache with size and TTL, sortable columns, and admin clear actions.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="🧠 Server Caches (Memory)">
 </div>
 
@@ -310,7 +310,7 @@ Every named backend cache with size and TTL, sortable columns, and admin clear a
 
 The bundled changelog a click away from the version label — foldable releases, version index, and search.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="changelog-modal" alt="📜 Changelog Modal">
 </div>
 
@@ -318,7 +318,7 @@ The bundled changelog a click away from the version label — foldable releases,
 
 Searching descends into the folds and the result chips jump to the exact spot.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Changelog Search">
 </div>
 
@@ -326,7 +326,7 @@ Searching descends into the folds and the result chips jump to the exact spot.
 
 Per-registry plugin load health: what failed to load and why.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="🧩 Plugin Diagnostics">
 </div>
 
@@ -478,7 +478,7 @@ The same FIFO lot drill-down — WAC/price chart, custody timeline, unified tabl
 
 The conditional step that groups the same security found under different codes or names.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-assets-step" alt="🧬 Import Wizard — Unify Assets">
 </div>
 
@@ -486,7 +486,7 @@ The conditional step that groups the same security found under different codes o
 
 Rows the parser flagged get corrected, split or confirmed here before the duplicate check.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-fix-step" alt="🔧 Import Wizard — Corrections">
 </div>
 
@@ -494,7 +494,7 @@ Rows the parser flagged get corrected, split or confirmed here before the duplic
 
 Cross-file duplicate clusters with per-row keep control and file priority.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicates-step" alt="🧹 Import Wizard — Duplicates">
 </div>
 
@@ -502,7 +502,7 @@ Cross-file duplicate clusters with per-row keep control and file priority.
 
 Any number of candidate transactions side by side, with differing fields highlighted.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="🔍 N-Way Compare">
 </div>
 
@@ -597,7 +597,7 @@ Create a new asset on mobile — or launch from the Import Wizard with pre-fille
 
 The signal picker groups the 22 indicators by family with counts, search and keyboard navigation.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="detail-signals-tree" alt="🌳 Grouped Indicator Search">
 </div>
 
@@ -605,7 +605,7 @@ The signal picker groups the 22 indicators by family with counts, search and key
 
 The drawdown signal computes against the full available history — the toggle is on the card.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="📉 Drawdown with Full History">
 </div>
 
@@ -613,7 +613,7 @@ The drawdown signal computes against the full available history — the toggle i
 
 Indicator parameters preview live on a synthetic curve before anything is applied.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="🎨 Chart Settings with Live Preview">
 </div>
 
@@ -621,7 +621,7 @@ Indicator parameters preview live on a synthetic curve before anything is applie
 
 Corporate events appear as colored markers on the chart; hovering reveals the details.
 
-<div class="screenshot-container">
+<div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="detail-events" alt="📅 Event Markers">
 </div>
 
@@ -678,8 +678,6 @@ Configure provider priority and conversion routes.
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
 </div>
-
----
 
 <style>
 .screenshot-container {
