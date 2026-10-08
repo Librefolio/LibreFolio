@@ -232,7 +232,13 @@ Cloning a row stages a copy — original date preserved — ready to adjust and 
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="🧬 Clone into the Bulk Workspace">
 </div>
 
-<!-- [Screenshot Placeholder: transactions/bulk-todo-banner — gallery entry "### 📝 Todo Banners": The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.] -->
+### 📝 Todo Banners
+
+The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="📝 Todo Banners">
+</div>
 
 ---
 
@@ -382,7 +388,13 @@ Import and manage broker reports.
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
 </div>
 
-<!-- [Screenshot Placeholder: files/brim-report-sets — gallery entry "### 🗂️ Report Sets": The broker reports tab with report-set badges and the Uploaded by filter.] -->
+### 🗂️ Report Sets
+
+The broker reports tab with report-set badges and the Uploaded by filter.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="brim-report-sets" alt="🗂️ Report Sets">
+</div>
 
 ### 👁️ File Preview
 
@@ -526,11 +538,53 @@ Any number of candidate transactions side by side, with differing fields highlig
     <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="🔍 N-Way Compare">
 </div>
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-card — gallery entry "### 🧩 Report Set Card": A Danske Bank report set in Select Files — one table per kind of export, the timeline and the Read as menu.] -->
-<!-- [Screenshot Placeholder: brokers/import-report-set-missing — gallery entry "### ⚠️ Missing Export": A report set announcing which export is missing and for which period.] -->
-<!-- [Screenshot Placeholder: brokers/import-report-set-read-as — gallery entry "### 📖 Read As": The Read as menu of a report set and a file's menu with Remove from the set.] -->
-<!-- [Screenshot Placeholder: brokers/import-report-set-pairing — gallery entry "### 🔗 Combined File Analysis": The analysis detail of a combined file — trades paired with their cash, rows found in one file only and their reasons.] -->
-<!-- [Screenshot Placeholder: brokers/import-wizard-gapfix-step — gallery entry "### ⚖️ Import Wizard — Align with the Bank": The step comparing LibreFolio with the bank's balance — one card per point and the table of proposed gap_fix movements.] -->
+### 🧩 Report Set Card
+
+A Danske Bank report set in Select Files — one table per kind of export, the timeline and the Read as menu.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-card" alt="🧩 Report Set Card">
+</div>
+
+### ⚠️ Missing Export
+
+A report set announcing which export is missing and for which period.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-missing" alt="⚠️ Missing Export">
+</div>
+
+### 📖 Read As
+
+The Read as menu of a report set.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="📖 Read As">
+</div>
+
+### 🗃️ File Menu
+
+A file's ⋮ menu inside a report set: read it alone with another plugin, or remove it from the set.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="🗃️ File Menu">
+</div>
+
+### 🔗 Combined File Analysis
+
+The analysis detail of a combined file — trades paired with their cash, rows found in one file only and their reasons.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-pairing" alt="🔗 Combined File Analysis">
+</div>
+
+### ⚖️ Import Wizard — Align with the Bank
+
+The step comparing LibreFolio with the bank's balance — one card per point and the table of proposed gap_fix movements.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="⚖️ Import Wizard — Align with the Bank">
+</div>
 
 ---
 

@@ -56,7 +56,9 @@ Some banks split one account across several exports: [Danske Bank](../transactio
 
 You can preview, download and delete these files like any other report. Deleting one export of a set leaves its combined file in place, but to import the set again you first need to upload that export into it again.
 
-<!-- [Screenshot Placeholder: files/brim-report-sets — the Broker Reports tab with the Report set badges (Set of ‹date›, Combined, Used in a combined file) and the Uploaded by filter open] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="files" data-name="brim-report-sets" alt="Broker Reports tab with Danske Bank files, their Report set badges and the Uploaded by filter open" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ### 👤 Who uploaded each file {: #uploaded-by }
 

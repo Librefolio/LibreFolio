@@ -1,0 +1,693 @@
+/**
+ * Gallery, inventory group 3 — Danske Bank report sets: the accounts the shots run as, the data
+ * those accounts own, and the walk through the import wizard the shots stand on. Also the gallery-wide
+ * filter that keeps those temporary data out of every other shot ({@link hideGalleryTempData}).
+ *
+ * ## Isolation
+ *
+ * The gallery runs `mode: 'parallel'` and photographs whole pages, so nothing a group-3 shot needs
+ * may show up in another shot. So each test signs up its own account ({@link registerGalleryAccount}),
+ * takes it through the welcome with every guide skipped ({@link onboardGalleryAccount}), and lets it
+ * own its broker and its uploads; afterEach deletes the account with everything it owns
+ * ({@link cleanupGalleryAccount}): its BRIM files, its brokers (forced), itself.
+ *
+ * Owning is not enough on two surfaces, which are wider than one account by design: a superuser's
+ * Files page lists every BRIM file of the lane (`GET /brokers/import/files` with no `broker_ids`), and
+ * every session caches every broker's name (`GET /brokers?include_inaccessible=true`), which /brokers
+ * shows under "Other existing brokers". So every broker the gallery creates carries a mark in its name
+ * ({@link galleryBrokerName}), and every gallery test, from its outer beforeEach, filters out of those
+ * two responses the marked brokers its session cannot reach and their files. Seeded data carries no
+ * mark and is never touched; an account's own broker is reachable, so its own shots keep it.
+ *
+ * Nothing is ever committed. The wizard stops on its own steps — the review's Import only asks
+ * `POST /brokers/import/gap-fix`, which writes nothing (brim_gap_fix.py) — and the bulk editor is
+ * closed through its discard guard. A parse writes no transaction either: it moves the file and
+ * caches its result in the file's own metadata, which goes with the file.
+ *
+ * Data: the repository's synthetic Danske Bank samples (invented values), two statements written
+ * under the test's output folder, and nothing else. Copied, not imported, from
+ * transactions/tx-import-report-set.spec.ts and transactions/tx-bulk-import-handoff.spec.ts.
+ */
+
+import type {APIResponse, Route, TestInfo} from '@playwright/test';
+import {expect, type APIRequestContext, type Locator, type Page} from './playwright';
+import {waitForParseVerdict, waitForSettled} from './app-events';
+import {deleteDisposableUser, prepareOnboardingAccount, type DisposableUser} from './onboarding-accounts';
+import {uniqueToken} from './unique';
+import {randomUUID} from 'crypto';
+import {mkdirSync, readFileSync, writeFileSync} from 'fs';
+import path from 'path';
+import {fileURLToPath} from 'url';
+
+const API = '/api/v1';
+const BROKERS_PATH = `${API}/brokers`;
+const UPLOAD_PATH = `${API}/brokers/import/upload`;
+const FILES_PATH = `${API}/brokers/import/files`;
+const PREVIEW_PATH = `${API}/brokers/import/sets/preview`;
+const COMBINE_PATH = `${API}/brokers/import/sets/combine`;
+/** Every parse the wizard asks for: a single file's, or a set's combined file's. */
+const PARSE_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/parse$/;
+const SAMPLES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/app/services/brim_providers/sample_reports');
+
+export const DANSKE = 'broker_danske_bank';
+export const GENERIC = 'broker_generic_csv';
+
+/** The repository's synthetic Danske Bank exports: the main set, and the set with a gap. */
+export const DANSKE_SAMPLES = {
+    custody: path.join(SAMPLES, 'danske_bank-custody.xlsx'),
+    cash: path.join(SAMPLES, 'danske_bank-cash.csv'),
+    gapCustody1: path.join(SAMPLES, 'danske_bank-gap-custody-1.xlsx'),
+    gapCustody2: path.join(SAMPLES, 'danske_bank-gap-custody-2.xlsx'),
+    gapCash: path.join(SAMPLES, 'danske_bank-gap-cash.csv'),
+} as const;
+
+/**
+ * The truth points of the gap set (backend test_brim_danske_bank.py, TestGapSampleFacts): the
+ * starting point on the eve of the first custody export, the point after the gap on the eve of the
+ * second, and the end-of-period check on the last day of the second.
+ */
+export const GAP_POINTS = {opening: '2020-08-31', gap: '2021-01-04', verification: '2021-02-26'} as const;
+
+// ---------------------------------------------------------------------------
+// Shapes
+// ---------------------------------------------------------------------------
+
+/** A disposable account and what it owns: the brokers are recorded as soon as they exist. */
+export type GalleryAccount = {user: DisposableUser; token: string; brokerIds: number[]};
+
+/** A BRIM file as the upload, the list and the combine answer it (`BRIMFileInfo`), reduced to what is read here. */
+export type StoredFile = {
+    file_id: string;
+    filename: string;
+    uploaded_at: string;
+    target_broker_id: number | null;
+    batch_id?: string | null;
+    compatible_plugins?: string[] | null;
+    kind?: string | null;
+    combined_into?: string[] | null;
+};
+
+/** A parse response (`BRIMParseResponse`), reduced to what is read here. */
+export type ParsedFile = {
+    file_id: string;
+    plugin_code: string;
+    transactions: Array<{description?: string | null}>;
+    warnings?: unknown[];
+    field_todos?: Array<{tx_index: number; field: string; severity: string; reason_code: string; message: string}>;
+};
+
+/** A todo added to the parse of the row whose description is `description`. */
+export type InjectedTodo = {description: string; field: string; severity: 'warning' | 'blocker'; reason_code: string; message: string};
+
+/** What a statement writer needs of the test: its output folder. */
+type OutputFolder = Pick<TestInfo, 'outputPath'>;
+
+// ---------------------------------------------------------------------------
+// The account
+// ---------------------------------------------------------------------------
+
+/**
+ * Sign up a fresh account. Its name is visible in the shots — the sidebar, the "Uploaded by"
+ * column — so it is short and neutral: `demo_` and a random token. Randomness, not time, is what
+ * keeps two workers apart; six base-36 characters are ~2·10⁹ names.
+ */
+export async function registerGalleryAccount(request: APIRequestContext): Promise<GalleryAccount> {
+    const token = uniqueToken(6);
+    const username = `demo_${token.toLowerCase()}`;
+    const user = {username, email: `${username}@example.com`, password: `Demo9!_${token}${uniqueToken(4)}`};
+    const response = await request.post(`${API}/auth/register`, {data: user});
+    expect(response.status(), `the gallery signs up a disposable account, so registration must be enabled (HTTP ${response.status()} ${await response.text()})`).toBe(201);
+    const created = (await response.json()) as {user: {id: number}};
+    return {user: {...user, id: created.user.id}, token, brokerIds: []};
+}
+
+/**
+ * Sign in, finish the welcome with its defaults, close the intro scene, and skip every guide: no
+ * Welcome page and no overlay can sit over a shot. Read back by `skipDueFlowsExcept`, not assumed.
+ */
+export async function onboardGalleryAccount(page: Page, account: GalleryAccount): Promise<void> {
+    await prepareOnboardingAccount(page, account.user, []);
+}
+
+/** The mark of a broker the gallery creates: ` · ` (U+00B7) and the owning account's token, six of A–Z 0–9. */
+const GALLERY_BROKER_NAME = /^.+ \u00B7 [A-Z0-9]{6}$/;
+
+/**
+ * The name of every broker a gallery test creates: `‹label› · ‹TOKEN›`. The token is the owning
+ * account's ({@link registerGalleryAccount}), which also keeps the name unique — `brokers.name` is
+ * uniquely indexed. The mark is what {@link hideGalleryTempData} hides from other sessions: no seeded
+ * broker has a `·` in its name.
+ */
+export function galleryBrokerName(label: string, token: string): string {
+    const name = `${label} \u00B7 ${token}`;
+    if (!isGalleryTempBrokerName(name)) throw new Error(`"${name}" would not carry the gallery's broker mark: the label must not be empty, the token must be six of A-Z 0-9`);
+    return name;
+}
+
+/** Whether `name` is the name of a broker the gallery created ({@link galleryBrokerName}). */
+export function isGalleryTempBrokerName(name: unknown): boolean {
+    return typeof name === 'string' && GALLERY_BROKER_NAME.test(name);
+}
+
+/**
+ * A broker of the account, named {@link galleryBrokerName}`(label, token)` and recorded for cleanup
+ * before anything is checked.
+ *
+ * Precondition, read rather than assumed: a new broker carries no BRIM file. The lane's files
+ * outlive a database repopulate made without `--clean`, so a broker id reused from an earlier run
+ * could bring that run's leftovers along — and they would be in every shot of this broker.
+ */
+export async function createGalleryBroker(api: APIRequestContext, account: GalleryAccount, label: string, extra: Record<string, unknown> = {}): Promise<number> {
+    const name = galleryBrokerName(label, account.token);
+    const response = await api.post(`${API}/brokers`, {data: [{name, allow_cash_overdraft: true, ...extra}]});
+    expect(response.ok(), `create the broker "${name}": HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    const {results} = (await response.json()) as {results: Array<{name: string; success: boolean; broker_id: number | null; message?: string}>};
+    const created = results.find((result) => result.name === name);
+    if (!created?.success || typeof created.broker_id !== 'number') throw new Error(`The broker "${name}" was not created: ${JSON.stringify(results)}`);
+    account.brokerIds.push(created.broker_id);
+    const leftovers = await brimFilesOn(api, created.broker_id);
+    expect(
+        leftovers.map((file) => file.filename),
+        `broker ${created.broker_id} is new and must hold no BRIM file: these belong to an earlier run on a reused broker id (the gallery's populate --clean removes them)`,
+    ).toEqual([]);
+    return created.broker_id;
+}
+
+/**
+ * Delete what the account owns, then the account: its BRIM files (uploads and combined files —
+ * every file of a broker the test created, which held none when it was created, so all of them are
+ * the test's; the forced broker delete would drop them anyway), its brokers, forced, and itself.
+ *
+ * The page leaves first, so the wizard does not react while its files go away. The request
+ * context signs in as the account: it has its own cookie jar, so the page's session is untouched.
+ */
+export async function cleanupGalleryAccount(page: Page, request: APIRequestContext, account: GalleryAccount): Promise<void> {
+    if (!page.isClosed()) {
+        await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        await page.goto('about:blank').catch(() => undefined);
+    }
+    const failures: string[] = [];
+    try {
+        const signedIn = await request.post(`${API}/auth/login`, {data: {username: account.user.username, password: account.user.password}});
+        if (!signedIn.ok()) {
+            failures.push(`sign in as ${account.user.username}: HTTP ${signedIn.status()}`);
+        } else {
+            for (const brokerId of account.brokerIds) {
+                for (const file of await brimFilesOn(request, brokerId)) {
+                    const deleted = await request.delete(`${FILES_PATH}/${file.file_id}`);
+                    if (!deleted.ok()) failures.push(`BRIM file ${file.filename} (${file.file_id}): HTTP ${deleted.status()}`);
+                }
+            }
+        }
+    } catch (error) {
+        failures.push(String(error));
+    }
+    // The brokers (a forced delete also drops any file still on them), then the account itself.
+    await deleteDisposableUser(request, account.user, account.brokerIds);
+    expect(failures, `cleanup deletes every BRIM file of ${account.user.username}'s brokers`).toEqual([]);
+}
+
+/**
+ * Hide, from this page's session, the brokers the gallery created that the session cannot reach, and
+ * their files. Two `page.route` handlers, on the exact paths and for GET only — anything else falls
+ * back untouched:
+ *
+ * - `GET /api/v1/brokers` (any query): the marked items of `inaccessible` are dropped. That list feeds
+ *   every session's broker cache, hence "Other existing brokers" on /brokers.
+ * - `GET /api/v1/brokers/import/files` (any query): the files of the marked brokers the session cannot
+ *   reach are dropped — a superuser lists every file of the lane when it names no broker. The marked
+ *   ids come from the session's own unfiltered `GET /brokers?include_inaccessible=true`, asked through
+ *   `page.request` (same cookies; API requests are not routed).
+ *
+ * Only marked names are hidden, and only out of reach: seeded data is never touched, and an account
+ * keeps its own broker and files. When nothing is hidden the original answer goes on as it came;
+ * otherwise only the list changes — status, headers and every other field are passed on.
+ *
+ * Installed by the gallery's outer beforeEach, before any sign-in; routes registered later by a test
+ * run first, and take precedence only on the URLs they match.
+ */
+export async function hideGalleryTempData(page: Page): Promise<void> {
+    await page.route(
+        (url) => url.pathname === BROKERS_PATH,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            const response = await route.fetch();
+            const body = await jsonOf(response);
+            if (!response.ok() || body === null || typeof body !== 'object' || !Array.isArray((body as {inaccessible?: unknown}).inaccessible)) return route.fulfill({response});
+            const listing = body as {inaccessible: Array<{name?: unknown}>};
+            const kept = listing.inaccessible.filter((item) => !isGalleryTempBrokerName(item?.name));
+            if (kept.length === listing.inaccessible.length) return route.fulfill({response});
+            await fulfillWith(route, response, {...listing, inaccessible: kept});
+        },
+    );
+    await page.route(
+        (url) => url.pathname === FILES_PATH,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            const response = await route.fetch();
+            const files = await jsonOf(response);
+            if (!response.ok() || !Array.isArray(files) || files.length === 0) return route.fulfill({response});
+            const hidden = await galleryBrokersOutOfReach(page);
+            const kept = files.filter((file: {target_broker_id?: unknown}) => !hidden.has(file?.target_broker_id as number));
+            if (kept.length === files.length) return route.fulfill({response});
+            await fulfillWith(route, response, kept);
+        },
+    );
+}
+
+/** The ids of the brokers the gallery created that this page's session cannot reach. */
+async function galleryBrokersOutOfReach(page: Page): Promise<Set<number>> {
+    const response = await page.request.get(`${BROKERS_PATH}?include_inaccessible=true`);
+    const body = await jsonOf(response);
+    if (!response.ok() || body === null || typeof body !== 'object') return new Set();
+    const inaccessible = (body as {inaccessible?: Array<{id?: unknown; name?: unknown}>}).inaccessible ?? [];
+    return new Set(inaccessible.filter((item) => isGalleryTempBrokerName(item?.name) && typeof item?.id === 'number').map((item) => item.id as number));
+}
+
+/** A response's JSON body, or null when it has none. */
+async function jsonOf(response: APIResponse): Promise<unknown> {
+    try {
+        return await response.json();
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Answer `route` with the status and headers of `response` and a new JSON body. The headers that
+ * described the original body — its length, its compression (the backend gzips bodies from 1 KiB),
+ * its chunking — no longer describe this one, so they are left for the new body to set.
+ */
+async function fulfillWith(route: Route, response: APIResponse, json: unknown): Promise<void> {
+    const stale = new Set(['content-length', 'content-encoding', 'transfer-encoding']);
+    const headers = Object.fromEntries(Object.entries(response.headers()).filter(([name]) => !stale.has(name.toLowerCase())));
+    await route.fulfill({response, headers, json});
+}
+
+// ---------------------------------------------------------------------------
+// The files
+// ---------------------------------------------------------------------------
+
+/** The BRIM files stored on one broker; the list also returns legacy files with no broker, so the target is filtered. */
+export async function brimFilesOn(api: APIRequestContext, brokerId: number): Promise<StoredFile[]> {
+    const response = await api.get(`${FILES_PATH}?broker_ids=${brokerId}`);
+    expect(response.ok(), `list the BRIM files of broker ${brokerId}: HTTP ${response.status()}`).toBe(true);
+    return ((await response.json()) as StoredFile[]).filter((file) => file.target_broker_id === brokerId);
+}
+
+/** The BRIM files the account's Files page lists: the same request, with no `broker_ids` — legacy files with no broker included. */
+export async function brimFilesListed(api: APIRequestContext): Promise<StoredFile[]> {
+    const response = await api.get(FILES_PATH);
+    expect(response.ok(), `list the BRIM files as the Files page does: HTTP ${response.status()}`).toBe(true);
+    return (await response.json()) as StoredFile[];
+}
+
+/** Upload one file, as the wizard sends it (multipart); in `batchId` when given — the files of one batch are one report set. */
+export async function uploadFile(api: APIRequestContext, brokerId: number, filePath: string, batchId?: string): Promise<StoredFile> {
+    const name = path.basename(filePath);
+    const mimeType = name.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv';
+    const multipart: Record<string, string | {name: string; mimeType: string; buffer: Buffer}> = {broker_id: String(brokerId), file: {name, mimeType, buffer: readFileSync(filePath)}};
+    if (batchId) multipart.batch_id = batchId;
+    const response = await api.post(UPLOAD_PATH, {multipart});
+    const body = await response.text();
+    expect(response.status(), `upload ${name} to broker ${brokerId}: ${body}`).toBe(200);
+    const stored = JSON.parse(body) as StoredFile;
+    expect(stored, `${name} is stored on broker ${brokerId}`).toMatchObject({filename: name, target_broker_id: brokerId, ...(batchId ? {batch_id: batchId} : {})});
+    return stored;
+}
+
+/** Upload `files` together, in the order given: one upload batch, which is one report set. */
+export async function uploadSet(api: APIRequestContext, brokerId: number, files: readonly string[]): Promise<{batchId: string; files: StoredFile[]}> {
+    const batchId = randomUUID();
+    const stored: StoredFile[] = [];
+    for (const file of files) stored.push(await uploadFile(api, brokerId, file, batchId));
+    return {batchId, files: stored};
+}
+
+/** The preview of one Danske set (read-only): its members, what it misses and for which period. */
+export async function previewSet(api: APIRequestContext, brokerId: number, batchId: string): Promise<{complete: boolean; missing: Array<{role: string; start?: string | null; end?: string | null}>}> {
+    const response = await api.post(PREVIEW_PATH, {data: {broker_id: brokerId, plugin_code: DANSKE, batch_id: batchId}});
+    const body = await response.text();
+    expect(response.status(), `preview batch ${batchId}: ${body}`).toBe(200);
+    return JSON.parse(body) as {complete: boolean; missing: Array<{role: string; start?: string | null; end?: string | null}>};
+}
+
+/** Combine one complete Danske set into its combined file, as the analysis does first. */
+export async function combineSet(api: APIRequestContext, brokerId: number, batchId: string): Promise<StoredFile> {
+    const response = await api.post(COMBINE_PATH, {data: {broker_id: brokerId, plugin_code: DANSKE, batch_id: batchId}});
+    const body = await response.text();
+    expect(response.status(), `combine batch ${batchId}: ${body}`).toBe(200);
+    const combined = (JSON.parse(body) as {combined: StoredFile}).combined;
+    expect(combined.kind, 'the combine answers with the combined file').toBe('combined');
+    return combined;
+}
+
+/**
+ * The bank's cash statement, extended so the generic CSV reads it too: the sample's rows, plus four
+ * columns the generic CSV maps (`date`, `type`, `amount`, `currency`) after the bank's, which Danske
+ * Bank ignores. The bank's own statement names no `date` and no `type` column, so nothing but Danske
+ * Bank reads it and its ⋮ menu never offers "Read alone with…"; this one does (decision 1 of the
+ * report-set workstream, `writeDualCash` in tx-import-report-set.spec.ts). Latin-1 and `;`, like the
+ * sample; a fixed name, so the shots are the same on every run (the output folder is per test).
+ */
+export function writeExtendedCashStatement(testInfo: OutputFolder): string {
+    const filePath = testInfo.outputPath('danske_bank-cash-extended.csv');
+    const [header, ...rows] = readFileSync(DANSKE_SAMPLES.cash, 'latin1')
+        .split(/\r?\n/)
+        .filter((line) => line !== '');
+    const extended = rows.map((row) => {
+        const [day, , amount] = row.split(';');
+        const [dd, mm, yyyy] = day.split('.');
+        const value = Number(amount.replace(',', '.'));
+        return `${row};${yyyy}-${mm}-${dd};${value < 0 ? 'withdrawal' : 'deposit'};${value.toFixed(2)};EUR`;
+    });
+    mkdirSync(path.dirname(filePath), {recursive: true});
+    writeFileSync(filePath, Buffer.from([`${header};date;type;amount;currency`, ...extended, ''].join('\n'), 'latin1'));
+    return filePath;
+}
+
+/** The savings statement of the todo-banner shot: cash movements only (no asset, nothing to resolve), invented. */
+export const SAVINGS_ROWS = [
+    {date: '2024-01-05', type: 'DEPOSIT', amount: '1500.00', description: 'Savings plan January'},
+    {date: '2024-02-05', type: 'DEPOSIT', amount: '1500.00', description: 'Savings plan February'},
+    {date: '2024-02-20', type: 'WITHDRAWAL', amount: '-400.00', description: 'Transfer to current account'},
+    {date: '2024-03-05', type: 'DEPOSIT', amount: '1500.00', description: 'Savings plan March'},
+    {date: '2024-04-05', type: 'DEPOSIT', amount: '1500.00', description: 'Savings plan April'},
+    {date: '2024-04-18', type: 'WITHDRAWAL', amount: '-650.00', description: 'Transfer to holiday account'},
+] as const;
+
+/**
+ * Two fields to verify, added to the parse of the savings statement. The generic CSV raises no todo on
+ * plain cash rows, so they are injected (the recipe of F1-D4, tx-bulk-import-handoff.spec.ts). Both
+ * are warnings on fields the corrections step does not own (fixRowLifecycle.ts: no dup-relevant
+ * blocker, no `asset_id`, no `split_hint`), so they travel to the bulk editor untouched. Messages are
+ * a plugin's text, shown as they are in every language.
+ */
+export const SAVINGS_TODOS: readonly InjectedTodo[] = [
+    {description: 'Transfer to current account', field: 'cash', severity: 'warning', reason_code: 'gallery_amount_sign', message: 'Amount sign inferred from the movement type: check it against your statement.'},
+    {description: 'Savings plan April', field: 'date', severity: 'warning', reason_code: 'gallery_value_date', message: 'No value date in the file: the booking date was used.'},
+];
+
+/** Write the savings statement in the generic CSV's format, under a fixed name (the output folder is per test). */
+export function writeSavingsStatement(testInfo: OutputFolder): string {
+    const filePath = testInfo.outputPath('savings-account-2024.csv');
+    mkdirSync(path.dirname(filePath), {recursive: true});
+    writeFileSync(filePath, 'date,type,quantity,amount,currency,asset,description\n' + SAVINGS_ROWS.map((row) => `${row.date},${row.type},0,${row.amount},EUR,,${row.description}`).join('\n') + '\n');
+    return filePath;
+}
+
+/**
+ * Add `todos` to every parse response of this page, each on the row its description names, from now
+ * until `stop()`. Returns the descriptions that found their row, so the premise can be read back.
+ */
+export async function injectTodosIntoParses(page: Page, todos: readonly InjectedTodo[]): Promise<{injected: Set<string>; stop: () => Promise<void>}> {
+    const injected = new Set<string>();
+    const matches = (url: URL) => PARSE_PATH.test(url.pathname);
+    const handler = async (route: Route) => {
+        const response = await route.fetch();
+        if (!response.ok()) {
+            await route.fulfill({response});
+            return;
+        }
+        const body = (await response.json()) as ParsedFile;
+        const added = todos.flatMap(({description, ...todo}) => {
+            const txIndex = body.transactions.findIndex((tx) => tx.description === description);
+            if (txIndex < 0) return [];
+            injected.add(description);
+            return [{tx_index: txIndex, ...todo}];
+        });
+        // A new body, so not the original headers: their content-length is the old body's.
+        await route.fulfill({status: response.status(), contentType: 'application/json', body: JSON.stringify({...body, field_todos: [...(body.field_todos ?? []), ...added]})});
+    };
+    await page.route(matches, handler);
+    return {injected, stop: () => page.unroute(matches, handler)};
+}
+
+// ---------------------------------------------------------------------------
+// The wizard
+// ---------------------------------------------------------------------------
+
+export function currentStep(page: Page): Locator {
+    return page.getByTestId('import-wizard-stepper').locator('[aria-current="step"]');
+}
+
+/**
+ * Open the wizard from the Transactions toolbar and go on to Select Files with nothing to upload:
+ * step 2 reads the account's files again, as a user who uploaded earlier sees them. Ends settled —
+ * the files listed and every set's preview in (`data-busy`).
+ */
+export async function openWizardOnSelectFiles(page: Page): Promise<Locator> {
+    await page.getByTestId('tx-import-button').click();
+    await expect(page.getByTestId('import-wizard-stepper')).toBeVisible({timeout: 10_000});
+    const step1 = page.getByTestId('import-wizard-step1');
+    await expect(step1).toBeVisible({timeout: 10_000});
+    await waitForSettled(step1, 15_000);
+    await page.getByTestId('import-wizard-next').click();
+    const step2 = page.getByTestId('import-wizard-step2');
+    await expect(step2, 'Next with nothing to upload goes on to Select Files').toBeVisible({timeout: 15_000});
+    await waitForSettled(step2, 30_000);
+    return step2;
+}
+
+/** The broker's panel in Select Files, open: asked first, the end state asserted (a toggle). */
+export async function openBrokerPanel(page: Page, brokerId: number): Promise<Locator> {
+    const panel = page.getByTestId(`import-wizard-broker-files-${brokerId}`);
+    await expect(panel, `broker ${brokerId} has files listed in Select Files`).toBeVisible({timeout: 15_000});
+    const toggle = panel.getByTestId(`import-wizard-broker-toggle-${brokerId}`);
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    return panel;
+}
+
+/** The card of one Danske set, by its key: broker, plugin and upload batch (`reportSetKey`). */
+export function reportSetCard(page: Page, brokerId: number, batchId: string): Locator {
+    return page.getByTestId('import-wizard-step2').locator(`[data-testid="report-set-card"][data-set-key="set:${brokerId}:${DANSKE}:${batchId}"]`);
+}
+
+/** The row of one file in the table of its role, inside a set's card. */
+export function roleRow(card: Locator, role: string, fileId: string): Locator {
+    return card.locator(`[data-testid="report-set-role-table"][data-role="${role}"] tbody tr[data-row-id="${fileId}"]`);
+}
+
+/**
+ * Tick a set whole, as it is right after its upload. A reopened wizard ticks nothing, and nothing
+ * else here touches a tick: from 'none' one click ticks every member. The state is asked first and
+ * the end state asserted (a toggle); 'some' would mean another hand ticked part of it.
+ */
+export async function tickWholeSet(card: Locator): Promise<void> {
+    await expect(card, 'the set has its preview').toHaveAttribute('data-set-status', /^(complete|incomplete)$/, {timeout: 20_000});
+    await expect(card, 'a reopened wizard selects nothing, and nothing else ticks the set').toHaveAttribute('data-selected', /^(none|all)$/);
+    if ((await card.getAttribute('data-selected')) !== 'all') await card.getByTestId('report-set-select').click();
+    await expect(card, 'the set is ticked whole').toHaveAttribute('data-selected', 'all', {timeout: 5_000});
+}
+
+/**
+ * Open a set's card: whether it is open is asked, never assumed (a toggle), and the end state asserted.
+ * The card is settled when this runs (its status read), so the header's layout is final: a toggle with
+ * a box is clicked; one without is opened from the keyboard, the way a keyboard user opens it — focus
+ * and Enter need no box, and the end state is asserted all the same.
+ */
+export async function unfoldCard(card: Locator): Promise<void> {
+    const toggle = card.getByTestId('report-set-toggle');
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+        const box = await toggle.boundingBox();
+        // Product bug: on narrow screens ReportSetCard's header squeezes this toggle to zero width (status chip + Read as do not shrink).
+        if (box !== null && box.width >= 1 && box.height >= 1) {
+            await toggle.click();
+        } else {
+            await toggle.focus();
+            await expect(toggle, 'the toggle takes the keyboard focus, box or not').toBeFocused();
+            await toggle.press('Enter');
+            // A key press leaves a focus ring that a tap does not: dropped, so the shot is the one a tap gives.
+            await toggle.blur();
+        }
+    }
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}
+
+/** Scroll the wizard's content (or the page) so `target` starts at the top of what is shown. */
+export async function scrollToTop(target: Locator): Promise<void> {
+    await target.evaluate((element) => element.scrollIntoView({block: 'start', inline: 'nearest'}));
+}
+
+/**
+ * Click Parse and return the parse response, captured on the wire as it goes out: a single file's,
+ * or — for a set — its combined file's, after the combine. Ends on a usable verdict: every row of
+ * the analysis read (`data-parse-state="ok"`).
+ */
+export async function parseSelection(page: Page): Promise<ParsedFile> {
+    const parse = page.getByTestId('import-wizard-parse');
+    await expect(parse, 'the selection can be analysed').toBeEnabled({timeout: 10_000});
+    const [response] = await Promise.all([page.waitForResponse((candidate) => candidate.request().method() === 'POST' && PARSE_PATH.test(new URL(candidate.url()).pathname), {timeout: 60_000}), parse.click()]);
+    const body = await response.text();
+    expect(response.status(), `parse: ${body}`).toBe(200);
+    const step3 = page.getByTestId('import-wizard-step3');
+    await expect(step3).toBeVisible({timeout: 15_000});
+    await waitForParseVerdict(page, 60_000);
+    await expect(step3, 'the analysis read every row of the selection').toHaveAttribute('data-parse-state', 'ok');
+    return JSON.parse(body) as ParsedFile;
+}
+
+/** The steps the wizard may cross between the analysis and the review. */
+const LATER_STEP = /^(assets|fix|duplicates|review)$/;
+
+/**
+ * From the analysis to the review, through whichever conditional steps the wizard opens. The parse
+ * response says whether leaving the analysis asks to confirm its notices; the stepper says where the
+ * wizard is. Open unification proposals are confirmed and the corrections kept as read — the
+ * plugin's own reading, the one decision always available. Nothing of it is saved anywhere.
+ */
+export async function walkToReview(page: Page, parsed: ParsedFile): Promise<Locator> {
+    const marker = currentStep(page);
+    await expect(marker, 'the walk starts on the analysis').toHaveAttribute('data-step-id', 'analyze');
+    await page.getByTestId('import-wizard-continue').click();
+    if ((parsed.warnings ?? []).length > 0) {
+        const confirm = page.getByTestId('import-wizard-warning-confirm');
+        await expect(confirm, 'the parse raised notices: leaving the analysis asks to confirm them').toBeVisible({timeout: 10_000});
+        await confirm.click();
+        await expect(confirm).toBeHidden({timeout: 10_000});
+    }
+    for (let hop = 0; hop < 4; hop++) {
+        await expect(marker, 'the wizard goes on to a step after the analysis').toHaveAttribute('data-step-id', LATER_STEP, {timeout: 30_000});
+        const stepId = (await marker.getAttribute('data-step-id')) ?? '';
+        if (stepId === 'review') break;
+        if (stepId === 'assets') {
+            const assets = page.getByTestId('import-wizard-step-assets');
+            await expect(assets.getByTestId('asset-group-step')).toBeVisible({timeout: 10_000});
+            // The cards render together with the step, so the count read here is final.
+            const proposed = assets.locator('[data-testid^="asset-group-grp-"][data-state="proposed"]');
+            const open = await proposed.count();
+            if (open >= 2) await assets.getByTestId('asset-group-confirm-all').click();
+            else if (open === 1) await proposed.getByTestId(/^asset-group-confirm-grp-/).click();
+            await expect(proposed, 'every unification proposal is settled').toHaveCount(0, {timeout: 10_000});
+        }
+        if (stepId === 'fix') {
+            const fix = page.getByTestId('import-wizard-step-fix');
+            await fix.getByTestId('fix-step-accept-all').click();
+            await expect(fix.locator('[data-testid="fix-step-row"][data-decision="pending"]'), 'every flagged row is kept as read').toHaveCount(0, {timeout: 10_000});
+        }
+        const advance = page.getByTestId(`import-wizard-${stepId}-continue`);
+        await expect(advance, `the ${stepId} step lets the import go on`).toBeEnabled({timeout: 30_000});
+        await advance.click();
+        await expect(marker, `the wizard leaves the ${stepId} step`).not.toHaveAttribute('data-step-id', stepId, {timeout: 30_000});
+    }
+    await expect(marker, 'the wizard reaches the review').toHaveAttribute('data-step-id', 'review', {timeout: 30_000});
+    const step4 = page.getByTestId('import-wizard-step4');
+    await waitForSettled(step4, 30_000);
+    return step4;
+}
+
+/**
+ * Keep selected only the review rows that carry no asset — the cash movements — through the review's
+ * own controls: deselect all, the asset column filter on "no asset", select the rows shown. Import
+ * stays disabled while a selected row points at an unresolved asset, and the synthetic securities
+ * resolve against nothing that may be created here (an asset is a global row every shot would see).
+ * Import enabled is the proof that only cash rows are selected. Returns how many are.
+ */
+export async function keepOnlyCashRows(page: Page, step4: Locator): Promise<number> {
+    await page.getByTestId('import-wizard-deselect-all').click();
+    await expect(step4).toHaveAttribute('data-selected-count', '0', {timeout: 5_000});
+    const trigger = step4.getByTestId('col-filter-trigger-asset');
+    await trigger.click();
+    const filter = step4.getByTestId('dt-header-asset').getByTestId('column-filter');
+    await expect(filter).toBeVisible({timeout: 5_000});
+    const noAsset = filter.getByTestId('filter-enum-option-__null__');
+    await expect(noAsset).toHaveAttribute('data-checked', 'false');
+    await noAsset.click();
+    await expect(noAsset).toHaveAttribute('data-checked', 'true');
+    await trigger.click();
+    await expect(filter).toBeHidden({timeout: 5_000});
+    await expect(step4.locator('tbody tr[data-row-id]').first(), 'the review lists cash movements').toBeVisible({timeout: 5_000});
+    await page.getByTestId('import-wizard-select-visible').click();
+    await expect(step4, 'the cash movements are selected').not.toHaveAttribute('data-selected-count', '0', {timeout: 5_000});
+    await expect(page.getByTestId('import-wizard-import'), 'no selected row waits for an asset').toBeEnabled({timeout: 15_000});
+    return Number(await step4.getAttribute('data-selected-count'));
+}
+
+/** The wizard handed over and closed: the bulk editor underneath, settled. */
+export async function editorAfterHandoff(page: Page): Promise<Locator> {
+    await expect(page.getByTestId('import-wizard-stepper')).toHaveCount(0, {timeout: 15_000});
+    const root = page.getByTestId('tx-bulk-modal-root');
+    await expect(root).toBeVisible({timeout: 10_000});
+    await waitForSettled(root, 30_000);
+    return root;
+}
+
+/** Never Save All: close the editor through its unsaved-changes guard and discard. */
+export async function closeEditorWithoutSaving(page: Page, root: Locator): Promise<void> {
+    await page.getByTestId('tx-bulk-close').click();
+    const discard = page.getByTestId('confirm-modal-confirm');
+    await expect(discard, 'the editor holds the imported rows: closing it asks to discard them').toBeVisible({timeout: 5_000});
+    await discard.click();
+    await expect(root).toHaveCount(0, {timeout: 10_000});
+}
+
+// ---------------------------------------------------------------------------
+// Before a shot
+// ---------------------------------------------------------------------------
+
+/**
+ * `target` has stopped moving: two readings of its position in a row agree. A smooth scroll or a
+ * popover that follows its anchor runs on no animation the gallery can pause, and the browser
+ * publishes no end for it — this reads the position itself, the way Playwright's own actionability
+ * check does before a click.
+ */
+export async function waitForStillness(target: Locator, what: string): Promise<void> {
+    let previous = '';
+    await expect
+        .poll(
+            async () => {
+                const box = await target.boundingBox();
+                const now = box ? `${Math.round(box.x)},${Math.round(box.y)},${Math.round(box.width)},${Math.round(box.height)}` : 'none';
+                const still = now !== 'none' && now === previous;
+                previous = now;
+                return still;
+            },
+            {message: `${what} is still moving`, timeout: 10_000, intervals: [100, 150, 250]},
+        )
+        .toBe(true);
+}
+
+/** `target` is on screen and on top: nothing (a popover, a menu) covers its centre. */
+export async function expectUncovered(target: Locator, what: string): Promise<void> {
+    await expect(target, `${what} is in the viewport`).toBeInViewport();
+    await expect
+        .poll(
+            () =>
+                target.evaluate((element) => {
+                    const box = element.getBoundingClientRect();
+                    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+                    return hit !== null && (hit === element || element.contains(hit));
+                }),
+            {message: `${what} is covered by another element`, timeout: 5_000},
+        )
+        .toBe(true);
+}
+
+/** Every kind of toast the app shows: ToastContainer renders each as `toast-{variant}`. */
+const ANY_TOAST = ['success', 'error', 'warning', 'info'].map((variant) => `[data-testid="toast-${variant}"]`).join(', ');
+
+/**
+ * Close the success toasts on screen through their own ✕, and wait until they have slid out. A success
+ * toast also leaves on its own timer (8 s, toastStore), so the ✕ is pressed by its handler, all toasts in
+ * one page task: a toast that leaves meanwhile costs nothing, and no pointer can land on the page
+ * underneath it — the editor's backdrop, which would ask to discard. No pointer moves either, so nothing
+ * here touches the grid. Errors and warnings are left alone: they are news, for `expectNoToast` to fail on.
+ */
+export async function closeSuccessToasts(page: Page): Promise<void> {
+    const shown = page.getByTestId('toast-success');
+    await shown.evaluateAll((toasts) => {
+        for (const toast of toasts) toast.querySelector<HTMLElement>('[data-testid="toast-dismiss"]')?.click();
+    });
+    await expect(shown, 'the success toasts have slid out').toHaveCount(0, {timeout: 5_000});
+}
+
+/** Nothing lies over the shot: no toast of any kind on screen, not even one sliding out. */
+export async function expectNoToast(page: Page): Promise<void> {
+    await expect(page.locator(ANY_TOAST), 'no toast lies over the shot').toHaveCount(0);
+}
+
+/** The report-set badge kinds of one Files row, in the order they are shown. */
+export function badgeKinds(row: Locator): Promise<string[]> {
+    return row.locator('[data-testid="file-set-badge"]').evaluateAll((badges) => badges.map((badge) => badge.getAttribute('data-kind') ?? ''));
+}

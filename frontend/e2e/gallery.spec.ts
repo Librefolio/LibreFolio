@@ -11,9 +11,51 @@
  *   - Run `./dev.py db populate --force` before generating gallery
  *   - This ensures brokers with icons exist for realistic screenshots
  */
-import {expect, type Locator, type Page, test} from './fixtures/playwright';
+import {type APIRequestContext, expect, type Locator, type Page, test} from './fixtures/playwright';
 import {login, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
-import {waitForChart, waitForParseVerdict, waitForSettled} from './fixtures/app-events';
+import {validateRuns, waitForChart, waitForParseVerdict, waitForSettled} from './fixtures/app-events';
+import {
+    badgeKinds,
+    brimFilesListed,
+    brimFilesOn,
+    cleanupGalleryAccount,
+    closeEditorWithoutSaving,
+    closeSuccessToasts,
+    combineSet,
+    createGalleryBroker,
+    currentStep,
+    DANSKE,
+    DANSKE_SAMPLES,
+    editorAfterHandoff,
+    expectNoToast,
+    expectUncovered,
+    GAP_POINTS,
+    type GalleryAccount,
+    GENERIC,
+    hideGalleryTempData,
+    injectTodosIntoParses,
+    keepOnlyCashRows,
+    onboardGalleryAccount,
+    openBrokerPanel,
+    openWizardOnSelectFiles,
+    parseSelection,
+    previewSet,
+    registerGalleryAccount,
+    reportSetCard,
+    roleRow,
+    SAVINGS_ROWS,
+    SAVINGS_TODOS,
+    scrollToTop,
+    tickWholeSet,
+    unfoldCard,
+    uploadFile,
+    uploadSet,
+    waitForStillness,
+    walkToReview,
+    writeExtendedCashStatement,
+    writeSavingsStatement,
+} from './fixtures/galleryReportSets';
+import {selectBrokerFile} from './fixtures/import-wizard';
 import {optionsClosed} from './fixtures/probe';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
@@ -190,6 +232,20 @@ test.describe('Gallery Screenshots', () => {
     test.describe.configure({mode: 'parallel'});
     // A hung action must fail in seconds, naming the real step, not at the test timeout; explicit per-call timeouts keep their value.
     test.use({actionTimeout: 20_000});
+
+    // Tests running in parallel create temporary brokers and files (group 3: disposable accounts, brokers
+    // named `‹label› · ‹TOKEN›`). A session that cannot reach them still hears of them: every session caches
+    // every broker's name, and a superuser's Files page lists every file. Registered before any sign-in, so
+    // every page of every test is filtered; seeded data carries no mark and is never touched.
+    test.beforeEach(async ({page}) => {
+        await hideGalleryTempData(page);
+    });
+
+    // A listing still in flight when the test ends would make the filter throw on a closed page, against
+    // whichever test that is: the routes are dropped first, and what they were still doing is ignored.
+    test.afterEach(async ({page}) => {
+        if (!page.isClosed()) await page.unrouteAll({behavior: 'ignoreErrors'});
+    });
 
     test.describe('Auth Pages', () => {
         test('login page - all languages and themes', async ({page}, testInfo) => {
@@ -2641,6 +2697,399 @@ test.describe('Gallery Screenshots', () => {
                         if (!page.isClosed()) await cleanupUploadedFiles();
                     }
                 }
+            }
+        });
+    });
+
+    /**
+     * Inventory group 3: the Danske Bank report sets, from Select Files to the Files page, and the bulk
+     * editor's todo banner. Helpers and the reasons behind them: fixtures/galleryReportSets.ts.
+     *
+     * Each test signs up its own account — the admin's wizard shots list every file the admin reaches,
+     * so these uploads must never be the admin's — which owns its broker and its uploads, and afterEach
+     * deletes it with everything it owns. Its broker is named `‹label› · ‹TOKEN›` (galleryBrokerName): the
+     * mark the gallery's outer beforeEach hides from every session that cannot reach it (hideGalleryTempData).
+     * Nothing is ever committed: the wizard stops on its own steps, and the editor is closed through its
+     * discard guard.
+     *
+     * The data is uploaded once per test, over the API, into one upload batch per set — the same request
+     * the wizard sends — and every combination opens the wizard again. Select Files then lists the set as
+     * detection reads it (a set analysed earlier keeps the members it was analysed with, which are the
+     * same here), unticked and folded, so the test ticks it whole and unfolds it, as it is right after an
+     * upload. Language and theme are switched on the page behind the wizard, before it opens.
+     */
+    test.describe('Import report sets (Danske Bank)', () => {
+        let account: GalleryAccount | undefined;
+
+        test.beforeEach(() => {
+            account = undefined;
+        });
+
+        // afterEach, not `finally`: a cleanup that throws from `finally` would replace the error it follows.
+        test.afterEach(async ({page, request}) => {
+            if (account) await cleanupGalleryAccount(page, request, account);
+        });
+
+        /** A disposable account through the welcome, with every guide skipped, and its broker, named `‹label› · ‹TOKEN›` (galleryBrokerName). */
+        async function startAccount(page: Page, request: APIRequestContext, label: string, extra: Record<string, unknown> = {}): Promise<number> {
+            account = await registerGalleryAccount(request);
+            await onboardGalleryAccount(page, account);
+            return createGalleryBroker(page.request, account, label, extra);
+        }
+
+        /** One language and one theme, on the account's Transactions page, settled: the wizard opens from there. */
+        async function onTransactions(page: Page, lang: Language, theme: Theme): Promise<void> {
+            await navigateTo(page, '/transactions');
+            await setLanguage(page, lang);
+            await setTheme(page, theme);
+            await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 15_000});
+            await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+        }
+
+        /** The set's card in Select Files: its broker panel open, the set ticked whole and unfolded, settled. */
+        async function openSetCard(page: Page, brokerId: number, batchId: string, status: 'complete' | 'incomplete'): Promise<Locator> {
+            await openWizardOnSelectFiles(page);
+            await openBrokerPanel(page, brokerId);
+            const card = reportSetCard(page, brokerId, batchId);
+            await expect(card, `the upload is one ${status} set`).toHaveAttribute('data-set-status', status, {timeout: 20_000});
+            await tickWholeSet(card);
+            await unfoldCard(card);
+            await waitForSettled(card, 20_000);
+            return card;
+        }
+
+        test('report set card and its Read as menu - all languages and themes', async ({page, request}, testInfo) => {
+            // Account and upload ~20 s; per combination a full load, the wizard to Select Files and two shots,
+            // ~15 s, twice that under parallel load: 8 × 30 s + 60 s.
+            test.setTimeout(300_000);
+            const viewport = getViewport(testInfo);
+            const brokerId = await startAccount(page, request, 'Danske Bank');
+            // The bank's two exports, as it exports them, uploaded together: one set.
+            const {
+                batchId,
+                files: [custody, cash],
+            } = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.custody, DANSKE_SAMPLES.cash]);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await onTransactions(page, lang, theme);
+                    const card = await openSetCard(page, brokerId, batchId, 'complete');
+                    // One table per kind of export, the timeline, the note of a first import — nothing missing.
+                    await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+                    await expect(roleRow(card, 'cash', cash.file_id)).toBeVisible();
+                    await expect(card.getByTestId('report-set-missing')).toHaveCount(0);
+                    await expect(card.locator('[data-testid="report-set-history"][data-kind="first"]')).toBeVisible();
+                    await expect(page.getByTestId('import-wizard-parse'), 'a complete set, ticked whole, can be analysed').toBeEnabled();
+                    const readAs = card.getByTestId('report-set-read-as-button');
+                    await expect(readAs, 'Read as sits in the header, closed').toHaveAttribute('aria-expanded', 'false');
+                    await scrollToTop(card);
+                    await expect(card.getByTestId('report-set-timeline')).toBeInViewport();
+                    await freezeAnimations(page);
+                    await waitForMotionSettled(page.getByTestId('import-wizard-modal'), 'the import wizard');
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-report-set-card');
+
+                    // Read as, open: the set's plugin, detected and chosen, and reading the files one by one.
+                    await readAs.click();
+                    const list = card.getByTestId('report-set-read-as-dropdown');
+                    await expect(list).toBeVisible();
+                    await expect(list.getByTestId(`report-set-read-as-option-${DANSKE}`), 'the set is read with Danske Bank').toHaveAttribute('aria-selected', 'true');
+                    await expect(list.getByTestId('report-set-read-as-option-one-by-one')).toHaveAttribute('aria-selected', 'false');
+                    await expect(list).toBeInViewport();
+                    await waitForMotionSettled(list, 'the Read as list');
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-report-set-read-as');
+                    // Escape, never a choice: the set stays as it is. The next combination starts from a full load.
+                    await page.keyboard.press('Escape');
+                    await expect(list).toHaveCount(0);
+                }
+            }
+        });
+
+        test('report set file menu - all languages and themes', async ({page, request}, testInfo) => {
+            // Account and upload ~20 s; per combination a full load, the wizard to Select Files and one shot,
+            // ~12 s, twice that under parallel load: 8 × 24 s + 50 s.
+            test.setTimeout(240_000);
+            const viewport = getViewport(testInfo);
+            const brokerId = await startAccount(page, request, 'Danske Bank');
+            // "Read alone with…" is offered only for a file a single-file plugin reads too. The bank's own
+            // statement is read by Danske Bank alone, so the set holds the extended statement instead.
+            const {
+                batchId,
+                files: [custody, statement],
+            } = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.custody, writeExtendedCashStatement(testInfo)]);
+            expect(statement.compatible_plugins ?? [], 'premise: Danske Bank and the generic CSV both read the extended statement').toEqual(expect.arrayContaining([DANSKE, GENERIC]));
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await onTransactions(page, lang, theme);
+                    const card = await openSetCard(page, brokerId, batchId, 'complete');
+                    await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+                    const row = roleRow(card, 'cash', statement.file_id);
+                    await expect(row, 'the extended statement is the cash export of the set').toBeVisible();
+                    await scrollToTop(card);
+                    await freezeAnimations(page);
+
+                    await row.getByTestId(`row-actions-${statement.file_id}`).click();
+                    const menu = page.getByTestId('context-menu');
+                    await expect(menu).toBeVisible();
+                    await expect(menu.getByTestId(`context-menu-action-read-alone-${GENERIC}`), 'the file can be read alone with the generic CSV').toBeVisible();
+                    await expect(menu.getByTestId('context-menu-action-remove-from-set')).toBeVisible();
+                    await waitForStillness(menu, 'the file menu');
+                    await expect(menu).toBeInViewport();
+                    await waitForMotionSettled(menu, 'the file menu');
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-report-set-file-menu');
+                    // Escape, never an action: the set stays as it is. The next combination starts from a full load.
+                    await page.keyboard.press('Escape');
+                    await expect(menu).toHaveCount(0);
+                }
+            }
+        });
+
+        test('report set missing an export - all languages and themes', async ({page, request}, testInfo) => {
+            // Account and upload ~20 s; per combination a full load, the wizard to Select Files and one shot,
+            // ~12 s, twice that under parallel load: 8 × 24 s + 50 s.
+            test.setTimeout(240_000);
+            const viewport = getViewport(testInfo);
+            const brokerId = await startAccount(page, request, 'Danske Bank');
+            // The custody export alone: a set that misses its cash statement.
+            const {
+                batchId,
+                files: [custody],
+            } = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.custody]);
+            // Premise, read from the server: the missing statement comes with the period it must cover — the card shows it only then.
+            const missingCash = (await previewSet(page.request, brokerId, batchId)).missing.find((item) => item.role === 'cash');
+            expect(Boolean(missingCash?.start && missingCash?.end), `premise: the preview names the period the cash statement must cover (${JSON.stringify(missingCash)})`).toBe(true);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await onTransactions(page, lang, theme);
+                    const card = await openSetCard(page, brokerId, batchId, 'incomplete');
+                    await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
+                    const missing = card.locator('[data-testid="report-set-missing"][data-role="cash"]');
+                    await expect(missing, 'the card names the missing cash statement').toBeVisible();
+                    await expect(card.getByTestId('report-set-missing')).toHaveCount(1);
+                    await expect(missing.getByTestId('report-set-upload-missing')).toBeEnabled();
+                    // Ticked and incomplete, the set holds the analysis back, and the footer says why.
+                    await expect(page.getByTestId('import-wizard-set-blocks')).toHaveAttribute('data-reason', 'incomplete');
+                    await expect(page.getByTestId('import-wizard-parse')).toBeDisabled();
+                    await scrollToTop(card);
+                    await expect(missing).toBeInViewport();
+                    await freezeAnimations(page);
+                    await waitForMotionSettled(page.getByTestId('import-wizard-modal'), 'the import wizard');
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-report-set-missing');
+                }
+            }
+        });
+
+        test('report set pairing and Align with the bank - all languages and themes', async ({page, request}, testInfo) => {
+            // Account and upload ~20 s; per combination the wizard to the analysis (combine + parse, ≤60 s), the
+            // detail, the walk to the review, the gap-fix request and two shots: ~35 s, more under load. The first
+            // combination combines; the next ones reuse the identical combined file. 8 × 60 s + 100 s.
+            test.setTimeout(600_000);
+            const viewport = getViewport(testInfo);
+            const brokerId = await startAccount(page, request, 'Danske Bank');
+            // The gap set: two custody exports with a gap between them and one cash statement covering both — the
+            // set whose analysis has rows left out (the table of reasons) and a truth point after the gap.
+            const {batchId} = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.gapCustody1, DANSKE_SAMPLES.gapCustody2, DANSKE_SAMPLES.gapCash]);
+            const point = (gapFix: Locator, kind: string, asOf: string) => gapFix.locator(`[data-testid="gapfix-summary"][data-kind="${kind}"][data-as-of="${asOf}"]`);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await onTransactions(page, lang, theme);
+                    await openWizardOnSelectFiles(page);
+                    await openBrokerPanel(page, brokerId);
+                    const card = reportSetCard(page, brokerId, batchId);
+                    await expect(card, 'the three exports are one complete set').toHaveAttribute('data-set-status', 'complete', {timeout: 20_000});
+                    await tickWholeSet(card);
+                    const parsed = await parseSelection(page);
+
+                    // The set is one row of the analysis; its detail opens from the row's menu, on desktop and on touch.
+                    const setRow = page
+                        .getByTestId('import-wizard-step3')
+                        .locator('tbody tr[data-row-id]')
+                        .filter({has: page.getByTestId('parse-row-set')});
+                    await expect(setRow, 'the set is one row of the analysis').toHaveCount(1);
+                    await setRow.getByTestId(/^row-actions-/).click();
+                    await page.getByTestId('context-menu-action-viewDetail').click();
+                    const detail = page.getByTestId('parse-detail-modal');
+                    await expect(detail).toBeVisible({timeout: 10_000});
+                    const pairing = detail.getByTestId('parse-detail-pairing');
+                    await expect(pairing, 'the detail of a set shows how its exports were matched').toBeVisible();
+                    await expect(pairing.getByTestId('parse-detail-pairing-outcome'), 'one chip per outcome').toHaveCount(5);
+                    await expect(pairing.getByTestId('parse-detail-pairing-reason').first(), 'the rows left out, by reason').toBeVisible();
+                    await expect(pairing.getByTestId('parse-detail-pairing-reasons')).toBeInViewport();
+                    await freezeAnimations(page);
+                    await waitForMotionSettled(detail, 'the analysis detail');
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-report-set-pairing');
+                    await detail.getByTestId('parse-detail-close').click();
+                    await expect(detail).toHaveCount(0, {timeout: 10_000});
+
+                    // To the review, then only the cash movements: nothing waits for an asset, and Import asks the bank's
+                    // comparison (POST /gap-fix, which writes nothing). Its corrections reach no editor: Continue is never clicked.
+                    const step4 = await walkToReview(page, parsed);
+                    await keepOnlyCashRows(page, step4);
+                    await page.getByTestId('import-wizard-import').click();
+                    await expect(currentStep(page), 'Import on a report set stops on Align with the bank').toHaveAttribute('data-step-id', 'gapFix', {timeout: 60_000});
+                    const gapFix = page.getByTestId('import-wizard-gapfix');
+                    await expect(gapFix).toBeVisible();
+                    const gapPoint = point(gapFix, 'gap', GAP_POINTS.gap);
+                    const verificationPoint = point(gapFix, 'verification', GAP_POINTS.verification);
+                    await expect(point(gapFix, 'opening', GAP_POINTS.opening), 'the starting point has its card').toHaveCount(1);
+                    await expect(gapPoint, 'the point after the gap has its card').toHaveCount(1);
+                    await expect(verificationPoint, 'the end-of-period check has its card').toHaveCount(1);
+                    await expect(gapPoint, 'the point after the gap proposes a correction of its own').not.toHaveAttribute('data-proposals', '0');
+                    // Every correction selected by default, and none hidden: no card is active, so the table lists them all.
+                    await expect(gapFix.getByTestId('gapfix-point-details')).toHaveCount(0);
+                    await expect(gapFix).toHaveAttribute('data-selected-count', (await gapFix.getAttribute('data-proposal-count')) ?? '');
+                    const corrections = gapFix.locator('[data-testid="gapfix-table"] [data-testid="gapfix-proposal-toggle"]');
+                    await expect(page.getByTestId('import-wizard-content')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+                    // On desktop the three cards share one line under the step's intro, and the step starts the shot. On a
+                    // phone they stack one per line and push the table below the fold: the card after the gap starts the
+                    // shot instead (as far as the wizard's content scrolls), and the starting point may lie above it.
+                    await scrollToTop(viewport === 'mobile' ? gapPoint : gapFix);
+                    await expect(gapPoint, 'the point after the gap is in the shot').toBeInViewport();
+                    await expect(verificationPoint, 'the end-of-period check is in the shot').toBeInViewport();
+                    await expect(corrections.first(), 'the table of corrections is in the shot').toBeInViewport();
+                    await waitForMotionSettled(page.getByTestId('import-wizard-modal'), 'the import wizard');
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-gapfix-step');
+                }
+            }
+        });
+
+        test('Files page report-set badges and Uploaded by filter - all languages and themes', async ({page, request}, testInfo) => {
+            // Account and nine API calls ~20 s; per combination one page load and one filter, ~10 s, twice that
+            // under parallel load: 8 × 20 s + 60 s.
+            test.setTimeout(240_000);
+            const viewport = getViewport(testInfo);
+            const brokerId = await startAccount(page, request, 'Danske Bank');
+            const api = page.request;
+            // Over the API only, oldest first; the table lists the newest first.
+            // B1: both exports, then combined — the combined file, and two originals "Used in a combined file".
+            const b1 = await uploadSet(api, brokerId, [DANSKE_SAMPLES.custody, DANSKE_SAMPLES.cash]);
+            const combined = await combineSet(api, brokerId, b1.batchId);
+            // B2: the custody export alone — a set still missing its statement.
+            const b2 = await uploadSet(api, brokerId, [DANSKE_SAMPLES.custody]);
+            // B3: the gap set, uploaded last, so its three rows come first. The open filter lies over the top rows
+            // of the table: these keep B1 and its combined file — the rows the shot is about — below it.
+            const b3 = await uploadSet(api, brokerId, [DANSKE_SAMPLES.gapCustody1, DANSKE_SAMPLES.gapCustody2, DANSKE_SAMPLES.gapCash]);
+            const [b1Custody, b1Cash] = b1.files;
+            const [b2Custody] = b2.files;
+            // The premises the badges stand on, read back (R8 of tx-import-report-set.spec.ts pins the badges themselves).
+            const stored = new Map((await brimFilesOn(api, brokerId)).map((file) => [file.file_id, file]));
+            for (const original of b1.files) expect(stored.get(original.file_id)?.combined_into ?? [], `${original.filename} of B1 went into the combined file`).toContain(combined.file_id);
+            expect(stored.get(b2Custody.file_id)?.combined_into ?? [], 'the custody export of B2 was never combined').toEqual([]);
+            const listed = [...[...b3.files].reverse(), b2Custody, combined, ...[...b1.files].reverse()];
+            // The table holds what the page's own request returns: exactly these files, newest first — nothing of
+            // another account, and no legacy file without a broker (that request lists those too).
+            expect(
+                (await brimFilesListed(api)).map((file) => file.file_id),
+                'the Files page of the account lists exactly its seven files, newest first',
+            ).toEqual(listed.map((file) => file.file_id));
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/files?tab=brim');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    const table = page.getByTestId('files-table-brim');
+                    await expect(table).toBeVisible({timeout: 15_000});
+                    await expect(table, 'the uploaders are named, not numbered').toHaveAttribute('data-users-state', 'ready', {timeout: 15_000});
+                    const row = (fileId: string) => table.locator(`tbody tr[data-row-id="${fileId}"]`);
+                    for (const file of listed) await expect(row(file.file_id), `${file.filename} is listed`).toHaveCount(1, {timeout: 10_000});
+                    // `incomplete` waits for the preview of its set: once B2's is in, the badges have settled.
+                    await expect(row(b2Custody.file_id).locator('[data-testid="file-set-badge"][data-kind="incomplete"]'), 'the lone custody export is an incomplete set').toBeVisible({timeout: 20_000});
+                    await expect.poll(() => badgeKinds(row(combined.file_id)), {message: 'combined file'}).toEqual(['combined']);
+                    for (const original of b1.files) await expect.poll(() => badgeKinds(row(original.file_id)), {message: `${original.filename} of B1`}).toEqual(['usedInCombined', 'set']);
+                    for (const member of b3.files) await expect.poll(() => badgeKinds(row(member.file_id)), {message: `${member.filename} of the gap set`}).toEqual(['set']);
+
+                    // Uploaded by, open: one uploader — the account — and nothing filtered yet.
+                    await table.getByTestId('col-filter-trigger-uploader').click();
+                    const filter = table.getByTestId('dt-header-uploader').getByTestId('column-filter');
+                    await expect(filter).toBeVisible();
+                    const uploader = filter.getByTestId(`filter-enum-option-${account?.user.id}`);
+                    await expect(uploader, 'the filter lists the account as uploader').toBeVisible();
+                    await expect(uploader).toHaveAttribute('data-checked', 'false');
+                    await waitForMotionSettled(filter, 'the Uploaded by filter');
+                    // On a phone the Report set column lies right of the screen: the table is scrolled to it, and the
+                    // open filter follows its column. On desktop the column is in view and nothing moves.
+                    await table.getByTestId('dt-header-reportSet').evaluate((element) => element.scrollIntoView({block: 'nearest', inline: 'nearest'}));
+                    await waitForStillness(filter, 'the Uploaded by filter');
+                    await expectUncovered(row(combined.file_id).locator('[data-testid="file-set-badge"][data-kind="combined"]'), 'the Combined badge');
+                    await expectUncovered(row(b1Cash.file_id).locator('[data-testid="file-set-badge"][data-kind="usedInCombined"]'), 'the Used in a combined file badge');
+                    await expectUncovered(row(b1Custody.file_id).locator('[data-testid="file-set-badge"][data-kind="set"]'), 'the Set of ‹date› badge');
+                    await freezeAnimations(page);
+                    await screenshot(page, viewport, lang, theme, 'files', 'brim-report-sets');
+                }
+            }
+        });
+
+        test('bulk editor todo banner leading to its row - all languages and themes', async ({page, request}, testInfo) => {
+            // Account and upload ~20 s; per combination the wizard to the review (one parse, ≤60 s), the hand-over and
+            // its validation, the banner and one shot: ~25 s, more under load. 8 × 50 s + 80 s.
+            test.setTimeout(480_000);
+            const viewport = getViewport(testInfo);
+            // A broker that imports with the generic CSV, and a statement of cash movements only.
+            const brokerId = await startAccount(page, request, 'Demo Bank', {opened_at: '2020-01-01', default_import_plugin: GENERIC});
+            const statement = await uploadFile(page.request, brokerId, writeSavingsStatement(testInfo));
+            // The generic CSV raises no todo on cash rows: the parse of this statement gains two fields to verify.
+            const todos = await injectTodosIntoParses(page, SAVINGS_TODOS);
+            const target = SAVINGS_TODOS[SAVINGS_TODOS.length - 1];
+            try {
+                for (const lang of SUPPORTED_LANGUAGES) {
+                    for (const theme of THEMES) {
+                        await onTransactions(page, lang, theme);
+                        await openWizardOnSelectFiles(page);
+                        await selectBrokerFile(page, {brokerId, fileId: statement.file_id});
+                        const parsed = await parseSelection(page);
+                        expect([...todos.injected].sort(), 'every injected todo found the row it names').toEqual(SAVINGS_TODOS.map((todo) => todo.description).sort());
+                        expect(
+                            parsed.field_todos?.map((todo) => todo.reason_code),
+                            'the page received the injected todos',
+                        ).toEqual(expect.arrayContaining(SAVINGS_TODOS.map((todo) => todo.reason_code)));
+                        const step4 = await walkToReview(page, parsed);
+                        await expect(step4, 'every movement of the statement is selected').toHaveAttribute('data-selected-count', String(SAVINGS_ROWS.length));
+                        const importButton = page.getByTestId('import-wizard-import');
+                        await expect(importButton).toBeEnabled({timeout: 15_000});
+
+                        // The hand-over runs one validation: read before, awaited after, so the banners are final.
+                        const root = page.getByTestId('tx-bulk-modal-root');
+                        const runsBefore = await validateRuns(root);
+                        await importButton.click();
+                        await editorAfterHandoff(page);
+                        await expect.poll(() => validateRuns(root), {message: 'the hand-over runs its validation', timeout: 30_000}).toBeGreaterThan(runsBefore);
+                        await waitForSettled(root, 30_000);
+                        // The hand-over's "N transactions imported to editor" toast lies over the editor's header. It came with
+                        // the editor, in the same update: closed now, before the entry is clicked — afterwards nothing may stir.
+                        await closeSuccessToasts(page);
+
+                        // The banner of fields to verify folds its list by default, and its toggle publishes no state:
+                        // whether the list is open is read from its entries, after the banner is on screen.
+                        const banner = root.getByTestId('tx-bulk-todo-warnings');
+                        await expect(banner).toBeVisible();
+                        const entries = banner.getByTestId('tx-bulk-todo-goto');
+                        if (!(await entries.first().isVisible())) await banner.getByTestId('tx-bulk-todo-warnings-toggle').click();
+                        await expect(entries, 'one entry per field to verify').toHaveCount(SAVINGS_TODOS.length);
+                        // The entry is the plugin's own message — data, not a translation.
+                        const entry = entries.filter({hasText: target.message});
+                        await expect(entry).toHaveCount(1);
+                        const rowId = await entry.getAttribute('data-row-id');
+                        const row = root.getByTestId('tx-bulk-body').locator(`tr[data-row-id="${rowId}"]`);
+                        await expect(row).toHaveAttribute('data-highlighted', 'false');
+                        // Frozen before the click: the highlight's pulse starts paused, on the same frame on every run.
+                        await freezeAnimations(page);
+                        await entry.click();
+                        // From here the mouse stays where it is: any interaction with the grid clears the highlight.
+                        await expect(row, 'the entry leads to its row and highlights it').toHaveAttribute('data-highlighted', 'true');
+                        await waitForStillness(row, 'the highlighted row');
+                        await expect(row).toBeInViewport();
+                        await expect(entry).toBeInViewport();
+                        await waitForMotionSettled(page.getByTestId('tx-bulk-modal'), 'the bulk editor');
+                        await expectNoToast(page);
+                        await screenshot(page, viewport, lang, theme, 'transactions', 'bulk-todo-banner');
+                        await closeEditorWithoutSaving(page, root);
+                    }
+                }
+            } finally {
+                if (!page.isClosed()) await todos.stop().catch(() => undefined);
             }
         });
     });
