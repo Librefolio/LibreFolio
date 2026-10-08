@@ -218,6 +218,37 @@
  *   No other scenario here brings a file back into a set with a tick different from the set's: G-B, H-E2 (both), H-E3 and
  *   R5-E1 (both) bring a ticked file into a ticked set, R3's uploaded export follows the set's tick, and a reopened
  *   wizard (G-memory, G-no-memory) ticks nothing.
+ *
+ * Step 8 — the card on a phone (plan Step8MobileCard, §2 and §3), written red first. The developer: «L sistema la card su
+ * mobile». On the `mobile` project (iPhone 14 Pro Max: 430 px, touch, Chromium) the card's header is one row that never wraps —
+ * the checkbox, the toggle (the only part that shrinks), «Read as» (up to 208 px) and the status chip — so on a card of ~350 px
+ * the toggle is squeezed to nothing and the rest leaves the card; and the timeline keeps its three columns, so the track between
+ * a row's label and its period is a sliver, and the two axis dates written above it run into each other.
+ *
+ *   One test, one project: the runner runs this spec on desktop and on mobile. A test tagged `@mobile` runs on the mobile
+ *   project only, every other test on desktop only. beforeEach decides, after clearing `ownedBrokerId` (so afterEach never
+ *   deletes a broker an earlier test left there) and before the login (so a skipped test costs nothing). H-E7 keeps its own
+ *   desktop skip.
+ *   M1 (`@mobile`) the header of an incomplete set, folded with a dispatched click — R3's way in, the custody export alone, so
+ *      the chip says a file is missing: the toggle at least half as wide as the card; the checkbox, the toggle, «Read as» and
+ *      the status chip (`report-set-status`) inside the card, horizontally (±1 px), and no two of them overlapping (more than
+ *      1 px² in common); then a tap on the toggle (5 s: it fails fast) opens the card on the statement it misses. The geometry
+ *      comes first, on the folded card, so a red gives its numbers before any tap.
+ *   M2 (`@mobile`) the timeline of an open complete set with LibreFolio's history — H-E7's set, three rows: the axis dates
+ *      (`report-set-timeline-start`, `report-set-timeline-end`) on screen, inside the timeline and visibly apart — at least
+ *      4 px apart on one line, or the end wrapped onto a lower line: dates that touch («01/07/201907/03/2020», the developer's
+ *      report) share no pixel and still read as one; every track (`report-set-timeline-track`, `data-role` = the role code,
+ *      `history` for LibreFolio's) at least half as wide as the timeline; nothing wider than the timeline (scrollWidth ≤
+ *      clientWidth + 1). Whether a row's period (`report-set-timeline-span`, same `data-role`) shows on a phone is the fix's
+ *      choice: never asserted there. The card is opened, when it is not already (rule 14), with a dispatched click: opening it
+ *      by touch is M1's subject, and a squeezed toggle must not turn M2's setup red.
+ *   D1 (guard, desktop, green before the fix too) the same set on desktop: the header stays one row — the vertical centres of
+ *      the checkbox, the toggle, «Read as» and the status chip within 4 px of each other, their left edges in that order —
+ *      and the timeline keeps its third column: each row's period on screen, right of its track and centred on it (±6 px).
+ *
+ *   Boxes are read with `boundingBox()` once the parts are on screen, and polled only for as long as a settled layout may
+ *   still move (`LAYOUT_POLL`); every failure names the boxes it measured. One part is only required attached before its
+ *   measure, M1's toggle: Playwright calls a box of no width hidden, and that width is what M1 measures.
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
@@ -1196,6 +1227,145 @@ function dualCashUpload(uploaded: UploadedInfo[], filePath: string): UploadedInf
 }
 
 // ---------------------------------------------------------------------------
+// Step 8: the card's geometry — on a phone (M1, M2) and its guard on desktop (D1)
+// ---------------------------------------------------------------------------
+
+/** A layout box as `boundingBox()` reads it: CSS pixels, from the top left of the viewport. */
+type Box = {x: number; y: number; width: number; height: number};
+
+/** A part of the card to measure, with the name its failures give. */
+type Part = {name: string; locator: Locator};
+
+/** Budget of a geometry poll: on a settled card the layout only moves while fonts and icons land. */
+const LAYOUT_POLL = 5_000;
+
+/** A pixel of rounding on an edge, as layout boxes are fractional: "inside" allows it, and so does "on a lower line" (M2's axis). */
+const EDGE_PX = 1;
+
+/** Visibly apart (M2): two axis dates on one line leave at least this between them — touching reads as one date. */
+const AXIS_GAP_PX = 4;
+
+/** Two boxes overlap when they share more than this area: a common edge, or rounding, is not an overlap. */
+const OVERLAP_PX2 = 1;
+
+/** One row (D1): the vertical centres of the header's parts lie within this of each other. */
+const ROW_CENTRE_PX = 4;
+
+/** Beside its track (D1): a row's period is vertically centred on its track within this. */
+const SPAN_CENTRE_PX = 6;
+
+/** The rows of the timeline of a set with LibreFolio's history (H-E7): its two roles, then the history. */
+const HISTORY_ROWS = ['custody', 'cash', 'history'] as const;
+
+function px(value: number): string {
+    return value.toFixed(1);
+}
+
+/** Where a box is, for a failure message. */
+function where(box: Box): string {
+    return `x ${px(box.x)}–${px(box.x + box.width)}, y ${px(box.y)}–${px(box.y + box.height)}`;
+}
+
+function centreY(box: Box): number {
+    return box.y + box.height / 2;
+}
+
+/** The area two boxes share: 0 when they are apart, or only touch. */
+function overlapArea(a: Box, b: Box): number {
+    const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+    const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+    return width > 0 && height > 0 ? width * height : 0;
+}
+
+/**
+ * The boxes of `parts`, read together and kept in their order, or the names of the parts that have none. A geometry poll
+ * returns `missing` as its offenders: it has to return to be retried — a throw would end the poll at once.
+ */
+async function boxesOf(parts: readonly Part[]): Promise<{boxes: Array<{name: string; box: Box}>; missing: string[]}> {
+    const measured = await Promise.all(parts.map(async ({name, locator}) => ({name, box: await locator.boundingBox()})));
+    const boxes: Array<{name: string; box: Box}> = [];
+    const missing: string[] = [];
+    for (const {name, box} of measured) {
+        if (box) boxes.push({name, box});
+        else missing.push(`${name}: not laid out`);
+    }
+    return {boxes, missing};
+}
+
+/** The parts not inside `frame` — horizontally, and vertically when asked — with EDGE_PX of rounding; `[]` when all are. */
+async function partsOutside(frame: Part, parts: readonly Part[], vertically: boolean): Promise<string[]> {
+    const {boxes, missing} = await boxesOf([frame, ...parts]);
+    if (missing.length > 0) return missing;
+    const [outer, ...inner] = boxes;
+    const f = outer.box;
+    const isOutside = (box: Box) => box.x < f.x - EDGE_PX || box.x + box.width > f.x + f.width + EDGE_PX || (vertically && (box.y < f.y - EDGE_PX || box.y + box.height > f.y + f.height + EDGE_PX));
+    return inner.filter(({box}) => isOutside(box)).map(({name, box}) => `${name} at ${where(box)}: outside ${frame.name} at ${where(f)}`);
+}
+
+/** Every pair of `parts` that shares more than OVERLAP_PX2, with the area; `[]` when no two overlap. */
+async function partsOverlapping(parts: readonly Part[]): Promise<string[]> {
+    const {boxes, missing} = await boxesOf(parts);
+    if (missing.length > 0) return missing;
+    const offenders: string[] = [];
+    for (let i = 0; i < boxes.length; i += 1) {
+        for (let j = i + 1; j < boxes.length; j += 1) {
+            const area = overlapArea(boxes[i].box, boxes[j].box);
+            if (area > OVERLAP_PX2) offenders.push(`${boxes[i].name} at ${where(boxes[i].box)} and ${boxes[j].name} at ${where(boxes[j].box)} share ${px(area)} px²`);
+        }
+    }
+    return offenders;
+}
+
+/** The parts of a card's header, in their order on one row: the checkbox, the toggle, «Read as», the status chip. */
+function headerParts(card: Locator): [checkbox: Part, toggle: Part, readAs: Part, status: Part] {
+    return [
+        {name: 'the checkbox (report-set-select)', locator: card.getByTestId('report-set-select')},
+        {name: 'the toggle (report-set-toggle)', locator: card.getByTestId('report-set-toggle')},
+        {name: '«Read as» (report-set-read-as)', locator: card.getByTestId('report-set-read-as')},
+        {name: 'the status chip (report-set-status)', locator: card.getByTestId('report-set-status')},
+    ];
+}
+
+/** The track holding one row's bars: `data-role` is the role code, `history` for LibreFolio's. */
+function timelineTrack(timeline: Locator, role: string): Locator {
+    return timeline.locator(`[data-testid="report-set-timeline-track"][data-role="${role}"]`);
+}
+
+/** The period of one row, in the timeline's third column. */
+function timelineSpan(timeline: Locator, role: string): Locator {
+    return timeline.locator(`[data-testid="report-set-timeline-span"][data-role="${role}"]`);
+}
+
+/**
+ * Open or fold a card with a click dispatched on its toggle: no finger, no pointer, no geometry. For the phone scenarios, whose
+ * subject is the card's layout: before the fix the toggle can be squeezed to no width, and a real tap or click would wait on it
+ * during the setup instead of failing on the measure. Asked first, once the card has settled (rule 14), and ended on the state
+ * it promises.
+ */
+async function dispatchToggle(card: Locator, open: boolean) {
+    await expect(card).toHaveAttribute('data-set-status', /^(complete|incomplete|error)$/, {timeout: 15_000});
+    const toggle = card.getByTestId('report-set-toggle');
+    if ((await toggle.getAttribute('aria-expanded')) !== String(open)) await toggle.dispatchEvent('click');
+    await expect(toggle, open ? 'the card is open' : 'the card is folded to its header').toHaveAttribute('aria-expanded', String(open));
+}
+
+/**
+ * The timeline of an open card on H-E7's set, its premise read rather than inferred: the preview found LibreFolio's history, and
+ * the timeline has its three rows — a track each for the custody export, the cash statement and the history — on screen.
+ */
+async function historyTimeline(card: Locator): Promise<Locator> {
+    await expect(card.locator('[data-testid="report-set-history"][data-kind="later"]'), 'premise: the preview found the seeded history').toBeVisible({timeout: 8_000});
+    const timeline = card.getByTestId('report-set-timeline');
+    await expect(timeline).toBeVisible();
+    const tracks = timeline.getByTestId('report-set-timeline-track');
+    await expect
+        .poll(() => tracks.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-role') ?? '').sort()), {message: 'premise: one track per row of the timeline — the custody export, the cash statement, LibreFolio’s history', timeout: 8_000})
+        .toEqual(['cash', 'custody', 'history']);
+    for (const role of HISTORY_ROWS) await expect(timelineTrack(timeline, role), `the ${role} track is on screen`).toBeVisible();
+    return timeline;
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1203,8 +1373,13 @@ test.describe('Import Wizard — report sets', () => {
     let ownedBrokerId: number | undefined;
     let ownedSince = 0;
 
-    test.beforeEach(async ({page}) => {
+    test.beforeEach(async ({page}, testInfo) => {
         ownedBrokerId = undefined;
+        // One test, one project (step 8): the runner runs this spec on desktop and on mobile. A test tagged @mobile is a phone
+        // contract and runs on the mobile project only; every other test runs on desktop only. Decided after ownedBrokerId is
+        // cleared, so afterEach never deletes a broker an earlier test left there; before the login, so a skip costs nothing.
+        const phone = testInfo.tags.includes('@mobile');
+        test.skip(testInfo.project.name !== (phone ? 'mobile' : 'desktop'), phone ? 'tagged @mobile: a phone contract, run on the mobile project only' : 'not tagged @mobile: run on the desktop project only');
         await login(page, TEST_USER);
     });
 
@@ -2423,5 +2598,204 @@ test.describe('Import Wizard — report sets', () => {
         await expect(card, 'the set is ticked whole').toHaveAttribute('data-selected', 'all', {timeout: 5_000});
         await expect(parse, 'the set, whole and ticked, can be analysed').toBeEnabled({timeout: 10_000});
         await expect(setBlocks).toHaveCount(0);
+    });
+
+    // -----------------------------------------------------------------------
+    // Step 8 — the card on a phone: M1, M2, and their desktop guard D1 (plan Step8MobileCard, §2 and §3)
+    // -----------------------------------------------------------------------
+
+    /**
+     * H-E7's set, for M2 and D1: the owned broker with a Danske history in LibreFolio — two transactions tagged danske_bank,
+     * seeded over the API, so the timeline has its third row — and both exports uploaded in one session. The complete set, on step 2.
+     */
+    async function completeSetWithHistory(page: Page, tag: string): Promise<Locator> {
+        const brokerId = await startOnOwnedBroker(page, tag);
+        await seedDanskeHistory(page, brokerId, ['2020-04-20', '2019-11-04']);
+        const uploaded = await uploadToStep2(page, brokerId, [CUSTODY_XLSX, CASH_CSV]);
+        const batchId = expectUuid(uploadNamed(uploaded, 'danske_bank-custody.xlsx').batch_id, 'batch_id of the step-1 session');
+        const card = setCard(page, brokerId, batchId);
+        await expect(card, 'premise: both exports make a complete set').toHaveAttribute('data-set-status', 'complete', {timeout: 15_000});
+        return card;
+    }
+
+    /**
+     * M1. R3's incomplete set on a phone, folded to its header. Measured first, so a red gives its numbers: the toggle keeps at
+     * least half of the card; the checkbox, the toggle, «Read as» and the status chip lie inside the card, and apart. Then what
+     * the user does: a tap on the toggle opens the card, on the statement the set misses.
+     */
+    test('M1 (step 8): on a phone the header of a folded incomplete set leaves the toggle at least half the card, keeps checkbox, toggle, «Read as» and status chip inside the card and apart, and a tap on the toggle opens it', {tag: '@mobile'}, async ({page}) => {
+        test.setTimeout(90_000);
+        const brokerId = await startOnOwnedBroker(page, 'M1');
+
+        // R3's way in: the custody export alone. The first Next stops on the warning, a second one goes on with the set incomplete.
+        await dropFiles(page, [CUSTODY_XLSX]);
+        await expect(pendingRows(page)).toHaveCount(1);
+        await assignOwnedBroker(page, brokerId);
+        const next = page.getByTestId('import-wizard-next');
+        const [custody] = await uploadsDuring(page, 1, () => next.click());
+        const batchId = expectUuid(custody.batch_id, 'batch_id of the step-1 session');
+        await expect(setWarning(page, 'cash'), 'premise: step 1 warns about the missing cash export of the set').toBeVisible({timeout: C2_FIRST});
+        await waitForSettled(page.getByTestId('import-wizard-step1'));
+        await next.click();
+        const step2 = page.getByTestId('import-wizard-step2');
+        await expect(step2).toBeVisible({timeout: 15_000});
+        await waitForSettled(step2, 20_000);
+
+        const card = setCard(page, brokerId, batchId);
+        await expect(card, 'premise: the set is incomplete, its statement missing').toHaveAttribute('data-set-status', 'incomplete', {timeout: 15_000});
+        // Folded, the header is the whole card. Dispatched, not tapped: the tap is the subject, at the end.
+        await dispatchToggle(card, false);
+        const missingCash = card.locator('[data-testid="report-set-missing"][data-role="cash"]');
+        await expect(missingCash, 'folded, the card does not show the statement it misses').toBeHidden();
+
+        const header = headerParts(card);
+        const [checkbox, toggle, readAs, status] = header;
+        const cardPart: Part = {name: 'the card', locator: card};
+        await expect(card).toBeVisible();
+        for (const part of [checkbox, readAs, status]) await expect(part.locator, `${part.name} is on screen`).toBeVisible();
+        // Attached, not "visible": Playwright calls a box of no width hidden, and that width is the measure — the red gives its number.
+        await expect(toggle.locator, 'the toggle is in the header').toBeAttached();
+
+        // The toggle keeps a real width: at least half of the card.
+        await expect
+            .poll(
+                async () => {
+                    const {boxes, missing} = await boxesOf([cardPart, toggle]);
+                    if (missing.length > 0) return missing;
+                    const [frame, own] = boxes;
+                    return own.box.width >= frame.box.width / 2 ? [] : [`the toggle is ${px(own.box.width)} px wide: ${px((100 * own.box.width) / frame.box.width)}% of the card's ${px(frame.box.width)} px`];
+                },
+                {message: 'on a phone the toggle keeps a real width: at least half of the card', timeout: LAYOUT_POLL},
+            )
+            .toEqual([]);
+        // Every part inside the card, horizontally; no two of them overlapping.
+        await expect.poll(() => partsOutside(cardPart, header, false), {message: 'on a phone the checkbox, the toggle, «Read as» and the status chip lie inside the card, horizontally (±1 px)', timeout: LAYOUT_POLL}).toEqual([]);
+        await expect.poll(() => partsOverlapping(header), {message: 'on a phone no two parts of the header overlap (more than 1 px² in common)', timeout: LAYOUT_POLL}).toEqual([]);
+
+        // What the user does: a tap on the toggle opens the card. Five seconds, so a toggle a finger cannot reach fails here, fast.
+        await toggle.locator.tap({timeout: 5_000});
+        await expect(toggle.locator, 'a tap on the toggle opens the card').toHaveAttribute('aria-expanded', 'true', {timeout: 5_000});
+        await expect(missingCash, 'the open card shows the statement the set misses').toBeVisible({timeout: 5_000});
+    });
+
+    /**
+     * M2. H-E7's set on a phone, open: the axis keeps its two dates inside the timeline and visibly apart, every track keeps at
+     * least half of the timeline, and nothing is wider than the timeline. A row's period is not looked at: whether a phone shows
+     * it is the fix's choice. The card is opened, if it is not already, with a dispatched click — opening it by touch is M1's subject.
+     */
+    test('M2 (step 8): on a phone the timeline of a set with LibreFolio’s history keeps its axis dates inside it and apart, gives every track at least half its width, and overflows nothing', {tag: '@mobile'}, async ({page}) => {
+        test.setTimeout(90_000);
+        const card = await completeSetWithHistory(page, 'M2');
+        await dispatchToggle(card, true);
+        const timeline = await historyTimeline(card);
+        const frame: Part = {name: 'the timeline', locator: timeline};
+
+        // The axis: its two dates on screen, inside the timeline, and visibly apart.
+        const axis: Part[] = [
+            {name: 'the axis start (report-set-timeline-start)', locator: timeline.getByTestId('report-set-timeline-start')},
+            {name: 'the axis end (report-set-timeline-end)', locator: timeline.getByTestId('report-set-timeline-end')},
+        ];
+        for (const date of axis) await expect(date.locator, `${date.name} is on screen`).toBeVisible();
+        await expect.poll(() => partsOutside(frame, axis, true), {message: 'on a phone both dates of the axis lie inside the timeline (±1 px)', timeout: LAYOUT_POLL}).toEqual([]);
+        // Visibly apart, not merely without a common area: two dates that touch — «01/07/201907/03/2020», the developer's
+        // report — share no pixel and still read as one. On one line at least AXIS_GAP_PX between them, or the end wrapped
+        // onto a lower line (its top at the start's bottom, a pixel of rounding allowed).
+        await expect
+            .poll(
+                async () => {
+                    const {boxes, missing} = await boxesOf(axis);
+                    if (missing.length > 0) return missing;
+                    const [start, end] = boxes;
+                    const gap = end.box.x - (start.box.x + start.box.width);
+                    const wrapped = end.box.y >= start.box.y + start.box.height - EDGE_PX;
+                    return gap >= AXIS_GAP_PX || wrapped ? [] : [`the axis dates share a line ${px(gap)} px apart, under ${AXIS_GAP_PX} px: ${start.name} at ${where(start.box)}; ${end.name} at ${where(end.box)}`];
+                },
+                {message: 'on a phone the two dates of the axis are visibly apart: at least 4 px apart on one line, or the end wrapped onto a lower line', timeout: LAYOUT_POLL},
+            )
+            .toEqual([]);
+
+        // Every track keeps at least half of the timeline.
+        const tracks = HISTORY_ROWS.map((role): Part => ({name: `the ${role} track`, locator: timelineTrack(timeline, role)}));
+        await expect
+            .poll(
+                async () => {
+                    const {boxes, missing} = await boxesOf([frame, ...tracks]);
+                    if (missing.length > 0) return missing;
+                    const [outer, ...rows] = boxes;
+                    const width = outer.box.width;
+                    return rows.filter(({box}) => box.width < width / 2).map(({name, box}) => `${name} is ${px(box.width)} px wide: ${px((100 * box.width) / width)}% of the timeline's ${px(width)} px`);
+                },
+                {message: 'on a phone every track of the timeline keeps at least half of its width', timeout: LAYOUT_POLL},
+            )
+            .toEqual([]);
+
+        // Nothing wider than the timeline.
+        await expect
+            .poll(
+                async () => {
+                    const {scrollWidth, clientWidth} = await timeline.evaluate((element) => ({scrollWidth: element.scrollWidth, clientWidth: element.clientWidth}));
+                    return scrollWidth <= clientWidth + 1 ? [] : [`the timeline's content is ${scrollWidth} px wide, in ${clientWidth} px`];
+                },
+                {message: 'on a phone nothing overflows the timeline: scrollWidth ≤ clientWidth + 1', timeout: LAYOUT_POLL},
+            )
+            .toEqual([]);
+    });
+
+    /**
+     * D1, the guard: what the fix leaves alone on desktop, on H-E7's set — green before the fix too. The header stays one row, in
+     * its order; the timeline keeps its third column, each row's period to the right of its track and centred on it.
+     */
+    test('D1 (step 8, guard): on desktop the header of the set stays one row — checkbox, toggle, «Read as», status chip, in that order — and the timeline keeps each row’s period beside its track', async ({page}) => {
+        test.setTimeout(90_000);
+        const card = await completeSetWithHistory(page, 'D1');
+        await expandCard(card);
+        const timeline = await historyTimeline(card);
+
+        // The header: one row — vertical centres together — and left edges in order.
+        const header = headerParts(card);
+        for (const part of header) await expect(part.locator, `${part.name} is on screen`).toBeVisible();
+        await expect
+            .poll(
+                async () => {
+                    const {boxes, missing} = await boxesOf(header);
+                    if (missing.length > 0) return missing;
+                    const offenders: string[] = [];
+                    const centres = boxes.map(({box}) => centreY(box));
+                    const spread = Math.max(...centres) - Math.min(...centres);
+                    if (spread > ROW_CENTRE_PX) offenders.push(`vertical centres ${px(spread)} px apart: ${boxes.map(({name, box}) => `${name} at y ${px(centreY(box))}`).join(', ')}`);
+                    for (let i = 1; i < boxes.length; i += 1) {
+                        if (!(boxes[i - 1].box.x < boxes[i].box.x)) offenders.push(`${boxes[i - 1].name} starts at x ${px(boxes[i - 1].box.x)}, not left of ${boxes[i].name} at x ${px(boxes[i].box.x)}`);
+                    }
+                    return offenders;
+                },
+                {message: 'on desktop the header is one row: vertical centres within 4 px of each other, left edges in order checkbox < toggle < «Read as» < status chip', timeout: LAYOUT_POLL},
+            )
+            .toEqual([]);
+
+        // The timeline's third column: each row's period on screen, right of its track, centred on it.
+        for (const role of HISTORY_ROWS) await expect(timelineSpan(timeline, role), `the ${role} row shows its period`).toBeVisible();
+        await expect
+            .poll(
+                async () => {
+                    const offenders: string[] = [];
+                    for (const role of HISTORY_ROWS) {
+                        const {boxes, missing} = await boxesOf([
+                            {name: `the ${role} period`, locator: timelineSpan(timeline, role)},
+                            {name: `the ${role} track`, locator: timelineTrack(timeline, role)},
+                        ]);
+                        if (missing.length > 0) {
+                            offenders.push(...missing);
+                            continue;
+                        }
+                        const [span, track] = boxes;
+                        if (span.box.x < track.box.x + track.box.width) offenders.push(`${span.name} starts at x ${px(span.box.x)}, before ${track.name} ends at x ${px(track.box.x + track.box.width)}`);
+                        const drift = Math.abs(centreY(span.box) - centreY(track.box));
+                        if (drift > SPAN_CENTRE_PX) offenders.push(`${span.name} is centred ${px(drift)} px off ${track.name}: y ${px(centreY(span.box))} against y ${px(centreY(track.box))}`);
+                    }
+                    return offenders;
+                },
+                {message: 'on desktop the timeline keeps its third column: each row’s period right of its track and centred on it (±6 px)', timeout: LAYOUT_POLL},
+            )
+            .toEqual([]);
     });
 });
