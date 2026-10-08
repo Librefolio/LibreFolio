@@ -3718,7 +3718,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > **Committato**: `3fd9fed9a` · `9590a3763` · `11baf223a` su `9ea2d519b`, albero `33722fd63`, verificato da me. Entra col
 > treno 11; la riga di CHANGELOG la sostituisce il coordinator, la tabella «Limits» della pagina utente è passata a Q.
 
-#### Le cinque lacune di Q sulla pagina per sviluppatori · ✅ 08/10/2026 (FROZEN)
+#### Le cinque lacune di Q sulla pagina per sviluppatori · ✅ 08/10/2026 (`5f0f9e1a3`, nel treno 11)
 
 > **La segnalazione** (coordinator, 08/10): Q ha confrontato la sua bozza con la mia pagina committata (`9590a3763`).
 > Sul resto la mia versione è equivalente o migliore, ma Q trova 5 lacune, che restano mie. Le ho verificate tutte nel
@@ -3756,3 +3756,61 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `max_length=100`, la richiesta si costruisce dentro il `try` del plugin, e il `ValidationError`, che è un
 > `ValueError`, cade nel ramo `except ValueError` (`portfolio_optimization.py:224`). Oggi nessun pannello chiede
 > l'ottimizzazione; la regola di D379 riguardava la simulazione. Passato al coordinator.
+
+#### Il pin di `risk.errors` non conosceva i codici di visualizzazione · ✅ 08/10/2026 (FROZEN)
+
+> **La segnalazione** (coordinator, 08/10): un rosso nella mia area dalla run completa con coverage sul treno 14
+> (`9eb01c756`, corsia 6150). `test_risk_schemas.py::test_risk_error_catalogues_agree_across_languages` richiede che
+> le chiavi di `risk.errors` siano esattamente i codici di `RiskErrorCode` più quelli del frontend. All'ultima
+> asserzione (`:1586`) trova 4 chiavi in più: le `resource_limit_*` di `3fd9fed9a`. La categoria `schemas` non era nei
+> controlli dei treni, quindi nessuno l'aveva visto.
+>
+> **Il triage** (`test-triage`): riprodotto nella 6152 in 0,55 s, ogni volta. Non c'entrano la posizione, il tempo o
+> uno stato condiviso, e passano anche le asserzioni sulla parità fra le lingue e sulle frasi vuote. Il prodotto è
+> coerente: le 4 chiavi ci sono in tutte e 4 le lingue, le genera `errorDisplayCode.ts` e nessuna coincide con un
+> codice del backend. Il pin invece conosce come codici del frontend solo `unknown` e `answer_discarded`
+> (`_frontend_risk_error_codes`). Per ognuno vuole il motivo, cioè la riga del frontend che lo usa. **Verdetto:
+> assunzione** del test, che dava per chiuso l'elenco dei codici del frontend. Si corregge il test, insegnandogli la
+> famiglia. Gli altri test che leggono `risk.errors` non sono pin chiusi: quello del controller verifica solo
+> `answer_discarded`.
+>
+> **⚠️ Fuori pista — la dimenticanza è mia**: in `3fd9fed9a` ho aggiunto la famiglia senza insegnarla al pin, che
+> esiste proprio per chiedere un motivo a ogni chiave nuova. E fra i miei cancelli del secondo checkpoint mancava
+> `schemas risk`, che costa meno di un secondo. Regola per me: ogni modifica a `risk.errors` mette `schemas risk` nei
+> cancelli.
+>
+> **La cura** (test-author, solo `test_risk_schemas.py`):
+> - il pin legge la `Map` `RESOURCE_LIMIT_DISPLAY_CODES` di `errorDisplayCode.ts` per nome, come già legge la costante
+>   di F9, e diventa rosso se non riesce a leggerla;
+> - un test nuovo, una mia decisione: i rimedi che il backend può dare (`_REMEDY_BY_METRIC`) sono esattamente quelli
+>   che il frontend sa dire. Oggi ogni lato fissa i suoi letterali per conto suo, e un rimedio nuovo del backend
+>   mostrerebbe in silenzio la frase generica.
+>
+> **Note implementazione** (test-author, solo `test_risk_schemas.py`):
+> - `_frontend_string_map()` legge per nome una `const … = new Map([ … ]);` del frontend. Toglie prima i commenti
+>   `//`, così una voce commentata non conta come viva e un `]);` dentro un commento non chiude il corpo. Ogni voce
+>   deve essere una coppia `['<snake_case>', '<snake_case>']`. Una voce che non sa leggere (doppi apici, template
+>   literal, spread, valore calcolato) è un rosso che la nomina, mai un salto. Sono rossi anche una `Map` vuota, una
+>   chiave ripetuta, una costante assente o dichiarata due volte.
+> - `_resource_limit_display_codes()` la legge e pretende la forma `resource_limit_<cura>`: un valore staccato dalla sua
+>   cura direbbe una cura con la chiave di un'altra.
+> - `_frontend_risk_error_codes()` aggiunge i valori della `Map`. La sua docstring ha il terzo motivo: la riga che
+>   usa i codici, cioè `errorDisplayCode()` con i suoi due chiamanti.
+> - Test nuovo `test_resource_limit_remedies_agree_between_backend_and_frontend`: i rimedi di `_REMEDY_BY_METRIC`
+>   sono esattamente le chiavi della `Map`. Il messaggio elenca le due differenze: emessi e non detti, detti e mai
+>   emessi. L'import sta dentro il test (`# noqa: PLC0415`, come `test_asset_schemas.py:852`), così il file importa
+>   solo schemi in cima.
+> - Test tenuto, `test_the_map_reader_names_an_entry_it_cannot_parse` (4 forme): il file vero non passa mai per il ramo
+>   «cannot parse», quindi senza questo test un lettore più lasco resterebbe verde.
+>
+> **Verifiche**:
+> - rosso prima, sul file intatto: `unexpected=[4 chiavi]`. Verde dopo.
+> - 28 sonde di test-author, solo con monkeypatch, in un modulo usa e getta fuori dal repo. Ogni guasto finto dà un
+>   rosso con il suo messaggio: voce tolta, costante rinominata, voci illeggibili, valori nella forma sbagliata, chiave
+>   estranea nei cataloghi, rimedio nuovo nel backend, rimedio rinominato da un lato solo.
+> - un mio mutante sul file vero: tolta la voce `period` da `errorDisplayCode.ts`, cadono entrambi i test
+>   (`unexpected=['resource_limit_period']` ed `emitted-but-unworded=['period']`). Ripristino verificato con lo sha256.
+> - cancelli nella 6152: `schemas risk` 69/69, `schemas all` 1696/1696, `i18n audit` senza chiavi mancanti o
+>   incomplete, ruff e black puliti.
+>
+> **Il checkpoint**: 2 percorsi in 2 commit (il test, il diario), su HEAD `9eb01c756`.
