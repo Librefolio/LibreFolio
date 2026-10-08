@@ -3536,7 +3536,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >
 > **Il checkpoint**: 2 percorsi in 2 commit (lo spec e il diario), su HEAD `ebf4752e2`.
 
-### Limiti della simulazione: «troppo grande», con la cura che funziona (D379) · ✅ backend 07/10/2026 (FROZEN), ⏳ frontend dopo il treno 9
+### Limiti della simulazione: «troppo grande», con la cura che funziona (D379) · ✅ backend 07/10/2026 (`b72d22ab1` · `906d49854`), ✅ frontend 07/10/2026 (FROZEN)
 
 > **La segnalazione** (coordinator, 07/10, pacchetto approvato dal developer): A ha misurato tre difetti sulla punta
 > `d07412899` (appunti in `q-verification-0710.md` della sessione di A).
@@ -3562,8 +3562,8 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 | 2 | Test rossi backend (test-author) | ✅ 07/10 — 13 casi nuovi o estesi, 12 rossi per il motivo atteso |
 | 3 | Backend: mappa per `metric`, guardie su posizioni e osservazioni prima della costruzione, `MAX_SIMULATION_ASSETS` | ✅ 07/10 — 13/13 verdi, `risk-all` 875/875, `api risk` 15/15 |
 | 4 | Mutanti e cancelli backend (6152) | ✅ 07/10 — mutanti 20/20, `risk-all` 876, `api risk` 15, ruff/black, orfani |
-| 5 | Frontend: `errorDisplayCode` in `levelHelpers.ts`, `RiskResultFrame`, 4 chiavi `risk.errors.resource_limit_*`; dopo il treno 9 | ⏳ secondo checkpoint, dopo il segnale del coordinator |
-| 6 | Docs: la pagina `simulation-modes.en.md` la aggiorna Q, che l'ha appena riscritta (`dfcbc0003`, non ancora nella mia base); io consegno la tabella dei casi (limite, metrica, cura) | ⏳ all'handoff |
+| 5 | Frontend: `errorDisplayCode` in `levelHelpers.ts`, `RiskResultFrame`, 4 chiavi `risk.errors.resource_limit_*`; dopo il treno 9 | ✅ 07/10 — secondo checkpoint, FROZEN |
+| 6 | Docs: la pagina `simulation-modes.en.md` la aggiorna Q, che l'ha appena riscritta (`dfcbc0003`, non ancora nella mia base); io consegno la tabella dei casi (limite, metrica, cura) | ✅ 07/10 — tabella e frasi a Q tramite il coordinator; la pagina per sviluppatori `architecture.md` corretta qui (docs-writer) |
 | 7 | Cancelli finali, privacy, FROZEN, consegna con la riga di CHANGELOG | ✅ 07/10 — backend FROZEN; il frontend avrà la sua consegna |
 
 > **Nota**: se il treno 9 tarda, il checkpoint si chiude con il solo backend: la UI mostra la frase generica
@@ -3628,3 +3628,131 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > La pagina `simulation-modes.en.md` la aggiorna Q: la sua sezione «Limits» descrive ancora il comportamento di prima,
 > con la riga «Size» su *Invalid calculation parameters*, e non ha né il caso delle oltre 100 posizioni né quello delle
 > oltre 5000 osservazioni. Gli mando la tabella dei casi tramite il coordinator.
+>
+> **Committato**: `b72d22ab1` · `906d49854` su `d07412899`, albero `c31eb4cc5`, verificato da me (messaggi, 7 blob,
+> worktree pulito). È entrato col treno 9: il ramo è a `9ea2d519b`.
+
+#### Secondo checkpoint: la frase con la cura, e la pagina per sviluppatori · ✅ 07/10/2026 (`3fd9fed9a` · `9590a3763` · `11baf223a`)
+
+> **Il via** (coordinator, dopo il treno 9): il frontend e le 4 chiavi con `dev.py i18n add`, sulla 6152. In più mi assegna
+> la pagina per sviluppatori `developer/backend/risk/architecture.md` (docs-writer, solo inglese, nessuno stamp): il
+> mio backend l'aveva resa falsa in quattro punti. Rosso noto sulla base, da non toccare: `core-unit`,
+> `optionFilter.test.ts` › R13, di L nel treno 10.
+>
+> **Note implementazione — test** (test-author, rossi prima): 54 test nuovi. In `levelHelpers.test.ts`:
+> - la lista delle cure, in ordine;
+> - `errorDisplayCode`: ogni cura, il codice ripulito dagli spazi, un codice assente o vuoto, una cura sconosciuta,
+>   dei `details` malformati, un nome del prototipo come cura, gli altri codici lasciati com'erano;
+> - `resultErrorCodes` con i codici raffinati;
+> - `translateErrorCode` sul catalogo vero;
+> - i 4 cataloghi: ogni cura ha la sua frase, diversa da quella generica e dalle altre, senza graffe ICU, e la frase
+>   delle posizioni cita 100.
+>
+> In `RiskResultFrame.test.ts`: la cura del periodo arriva a chi legge, anche con l'errore dentro una lista, e una cura
+> sconosciuta tiene la frase generica. Prima della correzione: 53 rossi per il motivo atteso; il 54°, la cura
+> sconosciuta nel frame, era già verde. Le esportazioni nuove si leggono attraverso il namespace del modulo, così la
+> loro assenza fa cadere solo i test che le usano, e `svelte-check` resta a 0.
+>
+> **Note implementazione — codice**:
+> - **`levels/errorDisplayCode.ts`**, modulo nuovo e riesportato da `levelHelpers.ts`, che è al suo limite di
+>   dimensione come dice il suo commento d'apertura: la `Map` dei codici di visualizzazione scritti per intero (l'audit
+>   i18n prova usata una chiave solo se il suo nome intero è scritto nel file che la costruisce o in un modulo che quel
+>   file importa), `RESOURCE_LIMIT_REMEDIES` ed `errorDisplayCode()`.
+> - **Solo `resource_limit`** si raffina, e solo con una cura conosciuta. Una cura che un backend più nuovo aggiungesse
+>   tiene la frase generica, invece di cadere su «did not return a result».
+> - **I chiamanti**: `resultErrorCodes()` (i livelli) e `RiskResultFrame` (Asset Detail). `RiskLevelSection` non
+>   cambia: il suo `data-code` porta ora `resource_limit_<cura>`, ancora un identificativo e non una frase. A era stata
+>   avvisata dal coordinator.
+> - **Le 4 chiavi**, con `dev.py i18n add` (`files/scripts-r2/i18n_add_sl.sh`). I termini sono quelli dei comandi della
+>   L4 («Simulation paths», «Horizon (days)», «Monte Carlo»); il tu in IT/ES e il vous in FR, come il resto del
+>   catalogo. EN:
+>   - `paths_or_horizon`: «This simulation is too large to run. Use fewer simulation paths or a shorter horizon.»
+>   - `horizon_or_sampling`: «This quasi-Monte Carlo simulation is too large to run. Shorten the horizon or choose Monte
+>     Carlo sampling.»
+>   - `period`: «This simulation is too large to run: the period holds too much history. Choose a shorter period.»
+>   - `positions`: «A simulation can include at most 100 holdings, and this portfolio has more. Simulate a broker with
+>     fewer holdings instead.»
+> - **Il commento del test backend** sui tetti citati citava «at most 100 positions»; ora riporta le quattro frasi vere
+>   (test-author, solo il commento).
+>
+> **Verifiche fin qui**:
+> - i due file di test: 209/209;
+> - `front check` 0/0; Prettier pulito, cataloghi compresi;
+> - `i18n audit`: 4156 chiavi (+4), le 4 nuove contate come usate, nessuna mancante o incompleta;
+> - unità del runner: `risk-levels-unit` 433, `risk-frame-component` 17, `risk-levels-component` 247, `risk-unit` 40,
+>   `component-unit` 2829; `core-unit` 3402 passati, con 1 file rosso, quello noto (R13);
+> - mutanti 13/13 (`files/scripts-r2/mutants_sl2.py`): i livelli o il frame che leggono il codice grezzo; niente
+>   raffinato; qualsiasi cura raffinata; qualsiasi codice raffinato; una lista letta come `details`; il codice non
+>   ripulito; la cura del periodo con la frase delle posizioni; le cure fuori ordine; la ricerca su un oggetto, dove
+>   `constructor` passerebbe; una frase che manca in IT; la frase EN delle posizioni senza il 100; la frase EN del
+>   periodo uguale a quella generica.
+>
+> **Note implementazione — la pagina per sviluppatori** (docs-writer, solo inglese, nessuno stamp: la cartella ha solo
+> `architecture.md`, e la pagina non ha una data di aggiornamento):
+> - nella tabella dei codici, `invalid_parameters` non elenca più la simulazione oltre il budget, e `resource_limit`
+>   elenca ogni limite di dimensione della simulazione, con un link ai budget;
+> - la tabella «📏 Budgets» dà `resource_limit` ai tre budget del motore e ha due righe nuove: le posizioni (100) e le
+>   osservazioni del bootstrap (5000);
+> - sotto la tabella, un paragrafo sui `details` (`metric`, `actual`, `limit`, `remedy` da `_REMEDY_BY_METRIC`, nessuna
+>   cura per una metrica sconosciuta) e sul perché il plugin controlla da sé posizioni e osservazioni;
+> - il punto «Errors» del contratto con il frontend dice che `errorDisplayCode()` legge anche `details.remedy`, con i
+>   due chiamanti. docs-writer ha corretto il mio brief: `resultErrorCodes()` serve anche le sezioni del laboratorio,
+>   dove però nessuna simulazione arriva.
+>
+> **I cancelli finali** (6152, uno alla volta):
+> - `mkdocs build` strict pulito; `check-links` 89 validi, con 1 rotto che c'era già sulla base: `#rolling-return`
+>   della pagina del grafico, presente in inglese e assente in it/fr/es dopo il Q1 di Q; non ho toccato nessuno dei file
+>   coinvolti;
+> - `i18n audit` 4156 chiavi, nessuna incompleta; orfani puliti;
+> - ruff e black sul test backend; `services risk-simulation` 70/70;
+> - `front build --debug` 0/0;
+> - E2E: `risk-asset-detail` 5/5, `risk` 38/38, `risk-lab` 44/44.
+> - Privacy pulita sulle 515 righe aggiunte.
+>
+> **Rossi noti della base, non miei**: `core-unit`, 1 file (`optionFilter.test.ts` › R13, di L nel treno 10), e il link
+> `#rolling-return` di `check-links`.
+>
+> **Il checkpoint**: 12 percorsi in 3 commit (il frontend con i suoi test e il commento del test backend; la pagina per
+> sviluppatori; il diario), su HEAD `9ea2d519b`.
+>
+> **Committato**: `3fd9fed9a` · `9590a3763` · `11baf223a` su `9ea2d519b`, albero `33722fd63`, verificato da me. Entra col
+> treno 11; la riga di CHANGELOG la sostituisce il coordinator, la tabella «Limits» della pagina utente è passata a Q.
+
+#### Le cinque lacune di Q sulla pagina per sviluppatori · ✅ 08/10/2026 (FROZEN)
+
+> **La segnalazione** (coordinator, 08/10): Q ha confrontato la sua bozza con la mia pagina committata (`9590a3763`).
+> Sul resto la mia versione è equivalente o migliore, ma Q trova 5 lacune, che restano mie. Le ho verificate tutte nel
+> codice a `11baf223a`:
+> 1. **L'ordine dei controlli** non c'era, e le righe dei budget non lo seguivano (Sobol era in cima). Nel bootstrap: le
+>    posizioni (`simulation.py:414`), le osservazioni (`:419`), il blocco (`:443`), poi la richiesta (`:458`). Nel GBM:
+>    le posizioni (`:484`), la stima, Sobol solo in QMC (`:504`), poi la richiesta (`:516`). Poi `run_simulation()`, che
+>    comincia con `validate_resource_budget()` (`engine.py:64`), prima della cache: matrice dei percentili, carico
+>    stocastico, storia (solo bootstrap). Ogni controllo solleva un'eccezione, quindi il primo limite superato ferma la
+>    richiesta: 101 posizioni ai valori di default leggono `positions`, non `paths_or_horizon`.
+> 2. **«Assets in the scope»** era impreciso: si contano solo i titoli con una serie di rendimenti utilizzabile. Lo scope
+>    è `usable_scope_asset_ids` (`service.py:818`, passato a `:894`), e gli esclusi non contano.
+> 3. **Mancava il percorso** dei tre budget del motore: `SimulationResourceLimitError`, catturata dal plugin intorno a
+>    `run_simulation()` (`simulation.py:285`) e rilanciata da `_resource_limit()`.
+> 4. **L'ottimizzazione** risponde `resource_limit` con solo `actual` e `limit` (`portfolio_optimization.py:189-197`),
+>    senza `metric` né `remedy`, quindi con la frase generica. Il controllo sta all'inizio di `run_optimization()`, prima
+>    della cache (`optimization_engine.py:59-64`).
+> 5. **La riga di Sobol** diceva «checked by the plugin»: la controlla il builder GBM, `_build_parametric_request()`, solo
+>    in QMC.
+>
+> **Note implementazione** (docs-writer, lo stesso della pagina, solo inglese, nessuno stamp; tutto nella sezione
+> «📏 Budgets»):
+> - una frase d'apertura sull'ordine e sull'arresto al primo limite, con l'esempio delle 101 posizioni;
+> - le righe nell'ordine dei controlli;
+> - la riga delle posizioni dice «with a usable return series»;
+> - il percorso dei budget del motore nel paragrafo sui `details`;
+> - un paragrafo sull'ottimizzazione;
+> - la riga di Sobol nomina il builder GBM.
+>
+> Su sua segnalazione, la riga `resource_limit` della tabella dei codici (`:218`) dice anch'essa «usable». È la stessa
+> lacuna 2, nell'altro punto della pagina.
+>
+> **Fuori pista, per il backlog** (segnalato da docs-writer, verificato da me): l'ottimizzazione oltre 100 titoli
+> utilizzabili risponde `invalid_parameters`, non `resource_limit`. `OptimizationEngineRequest.asset_ids` ha
+> `max_length=100`, la richiesta si costruisce dentro il `try` del plugin, e il `ValidationError`, che è un
+> `ValueError`, cade nel ramo `except ValueError` (`portfolio_optimization.py:224`). Oggi nessun pannello chiede
+> l'ottimizzazione; la regola di D379 riguardava la simulazione. Passato al coordinator.

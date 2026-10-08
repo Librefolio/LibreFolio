@@ -2066,8 +2066,10 @@ def test_the_ceilings_cited_to_the_user_are_pinned():
     though, is told the values themselves. A change here must be deliberate, and must
     carry the texts that cite it.
     """
-    # The frontend's sentence for the `positions` remedy says «at most 100 positions»
-    # in all four catalogues, and the CHANGELOG line cites 100 positions.
+    # The frontend's sentence for the `positions` remedy cites 100 in all four catalogues:
+    # EN «at most 100 holdings», IT «al massimo 100 posizioni», FR «au plus 100 positions»,
+    # ES «como máximo 100 posiciones» (`levelHelpers.test.ts` pins that 100 in each one).
+    # The CHANGELOG line cites 100 holdings.
     assert simulation_models.MAX_SIMULATION_ASSETS == 100
     # The same CHANGELOG line cites 5,000 observations.
     assert simulation_models.MAX_HISTORY_OBSERVATIONS == 5000
