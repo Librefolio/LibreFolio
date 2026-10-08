@@ -22,6 +22,8 @@ The current contract excludes:
 
 A future service-layer integration is not part of this contract. The backend owns calculation semantics; a Tool-specific frontend owns its form, host, and result presentation.
 
+Filling a draft from the user's own data is therefore a renderer action that runs before dispatch, through an ordinary domain endpoint rather than the Tool API. The PAC planner's copies are explicit: each one is a single read of the authenticated, uncached, read-only `POST /api/v1/portfolio/allocation-source` (`backend/app/api/v1/portfolio_api.py`; client in `frontend/src/lib/features/tools/pac-allocator/planner/source.ts`), previewed in a dialog before it is written into the draft. From then on the copied facts are ordinary compute parameters; neither the copy nor the calculation refreshes a missing price or rate from a provider.
+
 ## 🗺️ Source map
 
 Paths below are relative to the repository root.
@@ -142,7 +144,7 @@ The route module declares handlers on a `/tools` router. `api/v1/router.py` incl
 | `POST /api/v1/tools/compute` | One heterogeneous batch of atomic calculation items. |
 | `GET /api/v1/tools/diagnostics` | Sanitized, read-only diagnostics for the API process handling the request. |
 
-**All three handlers depend on `get_current_user`. Diagnostics does not require an administrator.** The mount and executor dependency are present in source; this is not a claim that these endpoints have passed runtime verification.
+**All three handlers depend on `get_current_user`. Diagnostics does not require an administrator.** The same dependency rejects a disabled account with `401`, so catalogue, compute, and diagnostics share one active-account boundary. The mount and executor dependency are present in source; this is not a claim that these endpoints have passed runtime verification.
 
 At startup, the application initializes the catalogue with `await asyncio.to_thread(ToolPluginRegistry.get_snapshot)`. This is discovery, not worker prewarming. The lifespan wraps its serving `yield` in `try/finally` and awaits `shutdown_tool_executor()` on exit.
 
@@ -156,7 +158,7 @@ A request carries `request_id` and one to four items. Each item includes:
 
 For a returned batch, `ToolExecutor.compute` gathers one task per input item in submission order and retains `request_id`; `_identity` copies each item's correlation and version pins into its result. The DTOs additionally enforce distinct correlations and bounded arrays; those checks alone do not establish input-to-response order or cardinality.
 
-Results discriminate on `status`: `"success"` carries `result`, while `"error"` carries `error`. These payloads are exclusive. A success requires `execution_id`; a failure can have no execution identifier when execution never started. The child rechecks all four Tool identity fields against its own discovered definition.
+Results discriminate on `status`: `"success"` carries `result`, while `"error"` carries `error`. These payloads are exclusive. A success requires `execution_id`; a failure can have no execution identifier when execution never started. Before queueing an item, the executor compares its `contract_version`, `implementation_version`, and `schema_fingerprint` with the live definition: a stale pin returns a per-item `version_mismatch` without starting a worker, which is a compatibility error rather than a result for the submitted scenario. The child rechecks all four Tool identity fields against its own discovered definition.
 
 `success_count` and `failed_count` count **platform outcomes**, not domain readiness. A valid domain response such as `invalid` or `needs_input` can be a platform success. Likewise, a domain's initial-valuation `ready` status must not be presented as proof of trade feasibility or an optimized plan.
 
@@ -173,9 +175,11 @@ Results discriminate on `status`: `"success"` carries `result`, while `"error"` 
 
 A crash, hard timeout, memory-limit breach, invalid output, or failed cleanup is a platform failure. Do not turn it into a domain answer such as “infeasible” or “needs more input.”
 
-Transport failures are distinct from per-item results. The route rejects malformed JSON, duplicate object keys, and nonfinite numbers as invalid requests. It bounds received bytes, sanitizes envelope validation failures, and applies request deadlines. Whole-request errors include HTTP `400` for invalid JSON, `413` for oversized input, and `422` for an invalid envelope. A top-level `queue_full` execution error is mapped to `429`; other raised execution errors and request deadline failures use `503`.
+Transport failures are distinct from per-item results. The route rejects malformed JSON, duplicate object keys, and nonfinite numbers as invalid requests. It bounds received bytes, sanitizes envelope validation failures, and applies request deadlines. Whole-request errors include HTTP `400` for invalid JSON, `413` for oversized input, and `422` for an invalid envelope. Admission is decided once per batch, before any item task exists (`ToolExecutor._admit`): a batch that would exceed the batch, process, or per-principal capacity — including a second concurrent batch from the same principal — is refused whole with `queue_full`, and a closed, non-POSIX, or fully quarantined pool refuses it with `service_unavailable`. A top-level `queue_full` execution error is mapped to `429`; other raised execution errors and request deadline failures use `503`.
 
 Per-item `ToolError` exposes a code, `retryable`, and bounded validation issues. The sanitizer omits input values, validator context, URLs, and raw messages. It returns at most 32 issues, each with at most 16 safe path segments; `issue_count` retains the total issue count.
+
+The platform sets `retryable=True` only on `queue_full`, `queue_timeout`, `execution_limit`, `execution_timeout`, `version_mismatch`, and a `service_unavailable` raised by the supervisor. Every other platform code — and the `service_unavailable` of the child's non-POSIX guard — carries `retryable=False`; a plugin's own `ToolExecutionError` keeps the flag it was raised with. Renderers read this flag to decide whether to offer a retry: the PAC planner's `ToolErrorPanel.svelte` shows **Retry** only when it is set.
 
 The handler watches for client disconnection and cancels the awaited computation task. The executor propagates cancellation to item tasks and signals owned jobs; tickets and cleanup callbacks govern capacity release. Cancellation alone is not evidence that physical cleanup has completed.
 
@@ -185,7 +189,7 @@ The handler watches for client disconnection and cancels the awaited computation
 
 Pool fields report availability, active, queued, pending, degraded lanes, completed, and failed counts, plus `resources`: the memory capacity (`workers × memory_limit_bytes`) and the memory limits reserved by the jobs the executor still tracks. They describe one API process, **not global deployment capacity**. The catalogue exposes only coarse unavailable summaries; diagnostics adds safe filenames and bounded failure reasons.
 
-`_item_finished` increments `completed` for every tracked item task that reaches a terminal state, including cancellation or an exception. `failed` is the subset without a platform-success result, not an additional disjoint total. These counters can advance while physical cleanup remains outstanding; `completed` does not certify process termination or released capacity.
+`_item_finished` increments `completed` for every tracked item task that reaches a terminal state, including cancellation or an exception. `failed` is the subset without a platform-success result, not an additional disjoint total. These counters can advance while physical cleanup remains outstanding; `completed` does not certify process termination or released capacity. Both start at zero when `get_tool_executor()` lazily creates the process-local executor, on the first Tool request the process serves, and they count the items of every principal: they are neither installation-wide totals nor a per-user history.
 
 Diagnostics must not expose submitted scenarios, results, cookies, raw traces, or logs. It is not a probe, reset, repair, or other mutation interface.
 
@@ -288,9 +292,11 @@ Each job also runs under its `memory_limit_bytes`. On Linux, when the API proces
 
 Per-item metrics are `queue_wait_ms`, `startup_ms`, `input_validation_ms`, `compute_ms`, `output_validation_ms`, `serialization_ms`, `execution_ms`, `cleanup_ms`, and `total_ms`. They are measured monotonic durations in milliseconds, not estimates derived from the requested budgets. An unobserved phase is `null`, not an invented zero. Once a started job has gone through cleanup, `resources.memory` adds its enforcement mode, its limit, and the peak observed bytes (`null` when nothing was observed).
 
-The child measures its validation, computation, and serialization phases. The executor records queue wait from admission, startup through the accepted `ready` frame, execution from lane allocation until cleanup begins, and cleanup duration. `total_ms` measures elapsed time from item admission to its recorded outcome, not from HTTP request arrival. For API calls, batch `server_processing_ms` uses the request start supplied by the route. Neither these timings nor result counts are a benchmark or SLA.
+The child measures its validation, computation, and serialization phases. The executor records queue wait from admission, startup through the accepted `ready` frame, execution from lane allocation until cleanup begins (so `execution_ms` already contains `startup_ms` and the child's phases), and cleanup duration. `total_ms` measures elapsed time from item admission to its recorded outcome, not from HTTP request arrival. For API calls, batch `server_processing_ms` runs from the start that `ToolRoute`'s bounded handler records, before the request body is read, until every item of the batch has an outcome; response encoding and network transport are outside it. Neither these timings nor result counts are a benchmark or SLA.
 
 Do not sum parallel item durations and label the sum as request latency: their execution windows can overlap. Phase measurements and aggregate fields can overlap too. Browser network round-trip time is a distinct observation, not another name for `compute_ms` or the batch's `server_processing_ms`.
+
+The shared `ToolExecutionMetrics.svelte` (`frontend/src/lib/features/tools/components/`) renders these fields under **Backend timings**: batch `server_processing_ms` and item `total_ms` first, then queue wait, worker startup, compute, worker execution, and cleanup, with the two validation phases and serialization behind a **Detail** disclosure. A `null` renders as the localized *No data available* label, never as `0 ms`, and the caption states that the values are backend measurements excluding network time, that phases can overlap, and that parallel items are not added together. The PAC planner shows it in its result proof panel (`ProofPanel.svelte`).
 
 ## 🖥️ Frontend and documentation
 
@@ -299,6 +305,21 @@ Frontend compatibility first resolves the exact service code and contract versio
 `registry.ts` accepts only source-owned literal component imports. A registration repeats the service code, contract version, component key, and UI SemVer and must agree with the generated contract before it can bind a catalogue descriptor. Duplicate code/version registrations, cross-tool component-key collisions, missing registrations, and mismatches stay unavailable. A server descriptor never becomes an arbitrary module URL, and incompatibility never falls back to a generic generated financial form.
 
 The compiled registry currently holds one registration: the `pac_allocator` service at contract version `1.0.0`, with component key `pac-allocator`, UI version `1.0.0`, and a lazy import of `frontend/src/lib/features/tools/pac-allocator/planner/PacPlannerTool.svelte`. A compatible catalogue descriptor without a registration resolves as unavailable with `renderer_missing`, while its backend service stays listed in the catalogue. When a custom component exists, it owns domain-specific input and result presentation while the backend owns the calculation. A descriptor and schema still do not make a service usable until its generated contract and compiled renderer registration are present and compatible.
+
+`resolveToolRenderer` returns either a `ready` binding or one `unavailable` reason. The hub card (`ToolsHub.svelte`) and the Tool host (`ToolHost.svelte`) then show that reason's `unavailableMessage` (`presentation.ts`, keys under `tools.availability.*`) instead of a link or a mounted renderer, so no calculation can start:
+
+| Reason | Source | Cause | Message key |
+|--------|--------|-------|-------------|
+| `tool_not_installed` | `inspectToolCompatibility` | The code is neither in `items` nor in the `unavailable` summaries, for example a stale `/tools/<tool_code>` URL. | `notInstalled` |
+| `tool_unavailable` | `inspectToolCompatibility` | The backend lists the code only as an `unavailable` summary. | `backendUnavailable` |
+| `contract_not_compiled` | `inspectToolCompatibility` | No generated contract exists for that code and `contract_version`. | `incompatible` |
+| `schema_mismatch` | `inspectToolCompatibility` | The live schema fingerprint differs from the generated one. | `incompatible` |
+| `ui_mismatch` | `inspectToolCompatibility` | `ui.kind`, `ui.component_key`, or `ui.version` differs from the generated contract. | `incompatible` |
+| `operation_mismatch` | `inspectToolCompatibility` | The descriptor's operation set differs from the generated one. | `incompatible` |
+| `renderer_missing` | Renderer registry | The contract is compatible, but no compiled registration exists. | `rendererMissing` |
+| `renderer_registration_invalid`, `renderer_collision` | Renderer registry | A registration disagrees with its generated contract, repeats a code/version, or shares a component key with another tool. | `rendererInvalid` |
+
+The hub counts the two failure families separately in one banner — backend `unavailable` summaries, and descriptors whose interface is unavailable or whose compiled module failed to load — and points to **Settings → About → Plugin diagnostics**, where `ToolAboutPanel.svelte` resolves the same reasons per service. An empty `items` list renders the **No tools available** state.
 
 A renderer that shows money, holdings, or rates must follow the privacy masking contract: money only through the D8 currency formatters with an explicit `sensitivity`, held quantities through `maskableQuantity`, rates and percentages explicitly `public`, and `—` for a missing value. See [Contract for Tool renderers](../../frontend/state/app-state.md#tool-renderer-privacy-contract).
 
@@ -311,6 +332,8 @@ where the client pins it per request and checks it on each result (`client.ts`).
 implementation, not the frontend contract users need to match.
 
 Use `DocsLink` for documentation destinations. It builds `/mkdocs/` URLs from the current language and a relative path rather than forcing English. For an EN-only destination, a caller can supply an existing localized destination through `localizedFallbackPath`; the helper selects that fallback for non-English languages. It does not discover missing pages automatically.
+
+Tool documentation follows this path. The hub card, the Tool header, and both About panels pass `descriptor.documentation.path` through `toolDocumentationPath` (`presentation.ts`), which accepts only `/`-separated segments of letters, digits, `-`, and `_`, with an optional trailing slash, and refuses a `mkdocs/` or language prefix (`en/`, `it/`, `fr/`, `es/`). A refused path shows **Documentation link unavailable** instead of a link; the diagnostics list simply omits it. `DocsLink` then opens `/mkdocs/<path>` in English or `/mkdocs/<lang>/<path>` in another language, in a new tab and without a `localizedFallbackPath`, so a Tool guide opens in the app's current language.
 
 Keep submitted financial data out of documentation URLs, logs, and HTML attributes. Documentation metadata identifies a page and its version, not a scenario transport channel.
 

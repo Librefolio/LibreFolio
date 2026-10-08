@@ -343,6 +343,15 @@ and shows the next one when both are gone. A prompt the user did ask for — a m
 shown with `updateAvailable.show(release, {requested: true})` — appears at once, above a guide or
 a modal.
 
+The backend decides the donation prompt at sign-in: `record_login_and_maybe_show_popup()`
+(`backend/app/services/donation_popup_service.py`) counts the login and sets `show_donation_popup`
+in the login response (`backend/app/api/v1/auth.py:112,146`). Counting from the last prompt, or
+from the account's creation if there was none, it fires after `MAX_DAYS_WITHOUT_PROMPT` (60) days,
+or after `MIN_LOGINS_BETWEEN_PROMPTS` (10) sign-ins once `MIN_DAYS_BETWEEN_PROMPTS` (7) days have
+passed. `DonationPopupModal.svelte` has no close button and ignores backdrop clicks and
+<kbd>Esc</kbd> (`closeOnBackdropClick={false}`, `closeOnEscape={false}`): only **Buy Me a Coffee**
+and **Maybe later** dismiss it, and a share button opens the share dialog above it.
+
 ## 🗄️ Backend {: #backend }
 
 `backend/app/services/onboarding_service.py` holds the registry and the transitions:

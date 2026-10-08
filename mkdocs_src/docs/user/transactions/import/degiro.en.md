@@ -1,9 +1,5 @@
 # <img src="https://www.degiro.com/favicon.ico" alt=""> Degiro
 
-!!! info "Beta"
-
-    This plugin is in **Beta** — tested with sample files but edge cases may exist.
-
 ## 📥 How to Export
 
 LibreFolio imports DEGIRO's **Account Statement**, the CSV export that records every movement of your account (usually saved as `Account.csv`). To export it:

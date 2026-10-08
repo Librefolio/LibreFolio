@@ -116,12 +116,30 @@ The visual grammar is three states, and it is the whole interface:
   (`fileId|isin|symbol|name`) rather than by `fakeAssetId` — which the wizard reallocates on
   every re-merge. That is what lets an override survive a re-parse of the same files, and what
   makes a **Restore automatic grouping** button meaningful.
+- **Confirming does not reshape.** *Confirm* (`confirmGroupProposal`) and **Confirm all (N)**
+  (`asset-group-confirm-all`, `confirmAllGroupProposals`) only add the cluster signatures of
+  `proposed` groups to `assetGroupConfirmed`, so the automatic partition still applies and
+  confirmed, split or hand-made groups are left alone. The bulk button renders only from two open
+  proposals (`openProposalCount >= 2`), and the step's **Continue** stays disabled while any group
+  is `proposed` (`assetGroupOpenProposals > 0`). `resetGrouping()` — **Restore automatic
+  grouping** — clears the override, the confirmations and the elected primaries in one go.
 
 ### 🔧 `FixFlaggedStep.svelte` — corrections
 
 Renders the rows a plugin booked but could not fully understand: `blocker` (red, blocks Save) and
 `warning` (amber, advisory), grouped by the nature of the question so similar cases are settled
 together. Fee/tax rows have no quantity field and may legitimately carry **no asset at all**.
+
+Which rows enter the step is decided by the pure module `lib/utils/transactions/fixRowLifecycle.ts`.
+`isFixStepTodo` keeps three kinds of todo: a `blocker` on a field the duplicate comparison keys on
+(`DUP_RELEVANT_FIELDS`: `type`, `date`, `quantity`, `asset_id`, `cash`, `cash.amount`,
+`cash.code`), a `warning` on `asset_id` (a charge or income attached to no instrument), and a
+`warning` carrying a `split_hint`. A missing cost basis is left to the bulk editor, which has the
+per-unit tooling for it; `rowStaysInFixStep` keeps a settled row listed. The field list is also
+why `fix` precedes `duplicates`: a purchase that a plugin could only book as a cash withdrawal
+would be compared against withdrawals, missing a real twin or inventing one. Today only
+`broker_credit_agricole` and `broker_danske_bank` emit such todos; `broker_generic_csv` emits only
+the `cost_basis_override` blocker, which the bulk editor handles.
 
 Two invariants are worth knowing before touching it:
 
@@ -233,7 +251,11 @@ table's `storageKey` (`import-wizard-files-<brokerId>`).
 
 - A set is selected or deselected **as a whole** (`toggleSetSelection`, which, when it selects a set
   whose preview was asked for other members, previews it again), and its members take the set's
-  plugin (`pickBestPlugin` returns the choice in force first, then asks `setPluginFor`). Which
+  plugin (`pickBestPlugin` returns the choice in force first, then asks `setPluginFor`; for a
+  single file it then takes the broker's `default_import_plugin` when the file's
+  `compatible_plugins` include it, else the first of them — the backend sorts them by
+  `detection_priority`, best first — and, when no plugin recognised the file, the broker's default
+  anyway, `''` when the broker has none). Which
   plugin reads the set, and which files it holds, is the user's choice: see
   [How a set is read](#set-read-as).
 - **The single files** are ticked one by one in the broker's `DataTable`: `handleSelectionChange`

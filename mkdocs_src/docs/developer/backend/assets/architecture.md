@@ -205,10 +205,15 @@ Operations (selectable per request):
 | Operation | What it tests |
 |---|---|
 | `current_price` | Fetches latest price → validates provider can reach the asset |
-| `history` | Fetches last 30 days of data → validates historical data availability |
+| `history` | Fetches the last 7 days of data → validates historical data availability |
 | `metadata` | Fetches asset metadata → validates identifier resolution |
 
-Each operation returns `success`, `execution_time_ms`, and operation-specific data. The probe is used by the frontend "Test Configuration" button in the provider assignment section.
+Each operation returns `success`, `execution_time_ms`, and operation-specific data. The frontend
+runs `current_price` + `history` for the **Test Configuration** button in the provider assignment
+section, and automatically after a search result is picked; it counts `NO_DATA` and
+`NOT_IMPLEMENTED` as soft failures (a ⚠️ that still passes the test). The asset modal's
+**Ask Provider**, and the comparison that follows a search selection, run `metadata` alone and
+diff its `patch_data` against the form in the browser: nothing is written until the asset is saved.
 
 ---
 
