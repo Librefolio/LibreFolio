@@ -27,13 +27,19 @@ import {
     DANSKE,
     DANSKE_SAMPLES,
     editorAfterHandoff,
+    expectGalleryOffline,
+    expectFaviconImagesLoading,
     expectNoToast,
+    expectOfflinePricesDrawn,
     expectUncovered,
     GAP_POINTS,
     type GalleryAccount,
+    galleryOfflineGuard,
     GENERIC,
+    guardGalleryOffline,
     hideGalleryTempData,
     injectTodosIntoParses,
+    keepFaviconImagesLoading,
     keepOnlyCashRows,
     onboardGalleryAccount,
     openBrokerPanel,
@@ -79,6 +85,23 @@ import {
     scrollBackToHeader,
     seedLabStorage,
 } from './fixtures/galleryRiskLab';
+import {
+    chartsDrawn,
+    chooseOnboardingCategory,
+    CORE_TOUR_FX_STEP,
+    expectGuideStep,
+    expectLanguageAndTheme,
+    expectOnboardingCategory,
+    frameOnboardingCategory,
+    frameWelcome,
+    FX_PAGE_FILTERS_STEP,
+    FX_PAGE_OVERVIEW_STEP,
+    holdPanelAtFullStrength,
+    seedLanguageAndTheme,
+    setAccountLanguage,
+    walkCoreTourToFx,
+} from './fixtures/galleryOnboarding';
+import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage, navigateToAssetByName} from './assets/assets-helpers';
@@ -259,14 +282,26 @@ test.describe('Gallery Screenshots', () => {
     // named `‹label› · ‹TOKEN›`). A session that cannot reach them still hears of them: every session caches
     // every broker's name, and a superuser's Files page lists every file. Registered before any sign-in, so
     // every page of every test is filtered; seeded data carries no mark and is never touched.
+    // The gallery is offline and deterministic as well: no page reaches a real price or exchange-rate provider, or
+    // writes a price. The live-price poll and the provider catalogue are answered from fixtures, a provider search as
+    // offline, and a sync, a metadata refresh or a provider probe is aborted (galleryReportSets.ts, guardGalleryOffline).
+    // With any route installed Playwright aborts every image whose URL ends in /favicon.ico — the brokers' logos, most
+    // import plugins' icons, FED's and SNB's — so the pages write those URLs with a query that keeps them loading: an
+    // init script, in force from the next document, so before the first navigation (keepFaviconImagesLoading).
     test.beforeEach(async ({page}) => {
         await hideGalleryTempData(page);
+        await guardGalleryOffline(page);
+        await keepFaviconImagesLoading(page);
     });
 
     // A listing still in flight when the test ends would make the filter throw on a closed page, against
     // whichever test that is: the routes are dropped first, and what they were still doing is ignored.
+    // Then the offline guard's record: a sync attempted, or a call it could not answer as designed, fails the test.
+    // And the favicon fix was in force on the page the test ended on.
     test.afterEach(async ({page}) => {
         if (!page.isClosed()) await page.unrouteAll({behavior: 'ignoreErrors'});
+        expectGalleryOffline(page);
+        await expectFaviconImagesLoading(page);
     });
 
     test.describe('Auth Pages', () => {
@@ -397,6 +432,148 @@ test.describe('Gallery Screenshots', () => {
                     await screenshot(page, viewport, lang, theme, 'auth', 'update-available-modal');
                 }
             }
+        });
+    });
+
+    /**
+     * Inventory group 5: onboarding — the first-run Welcome page, a step of the Core tour, and a contextual guide on the
+     * FX page (the Onboarding category of Preferences is under Settings). Helpers and the reasons behind them:
+     * fixtures/galleryOnboarding.ts.
+     *
+     * The canonical users have completed every flow, so each test signs up its own account, and afterEach deletes it
+     * with everything it owns, failure or not. One account per test, so the variants of a shot show the same account:
+     * the language and the theme are written into the browser before every full load (the Welcome page has no theme
+     * toggle, and a guide's overlay lies over the header's controls), and the Welcome form, pre-filled from the
+     * account's settings, gets the account's language first. A guide is walked once to its step and resumes there after
+     * each load — its position is kept per account in the browser — which every combination asserts. Nothing reaches a
+     * provider: the gallery-wide offline guard answers the FX page's catalogue read from its fixture and aborts any sync.
+     */
+    test.describe('Onboarding', () => {
+        let account: GalleryAccount | undefined;
+
+        test.beforeEach(() => {
+            account = undefined;
+        });
+
+        // afterEach, not `finally`: a cleanup that throws from `finally` would replace the error it follows.
+        test.afterEach(async ({page, request}) => {
+            if (account) await cleanupGalleryAccount(page, request, account);
+        });
+
+        test('welcome setup - all languages and themes', async ({page, request}, testInfo) => {
+            // Account and sign-in ~5 s; per combination the account's language, one full load of the page and one shot,
+            // ~4 s, twice that under parallel load: 8 × 8 s + 30 s.
+            test.setTimeout(180_000);
+            const viewport = getViewport(testInfo);
+            account = await registerGalleryAccount(request);
+            await login(page, account.user);
+            await expect(page, 'a new account signs in to the Welcome page').toHaveURL(/\/welcome(?:[/?#]|$)/, {timeout: 15_000});
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    // Pre-filled from the account's settings: its language is the combination's, its currency its own.
+                    const defaults = await setAccountLanguage(page.request, lang);
+                    await seedLanguageAndTheme(page, lang, theme);
+                    await navigateTo(page, '/welcome');
+                    await expectLanguageAndTheme(page, lang, theme);
+                    const welcome = page.getByTestId('welcome-page');
+                    await expect(welcome, 'Welcome is still due: never confirmed, never skipped').toHaveAttribute('data-outcome', 'pending', {timeout: 15_000});
+                    const form = welcome.getByTestId('welcome-form');
+                    await expect(form).toHaveAttribute('data-busy', 'false');
+                    await expect(form.getByTestId('welcome-language')).toBeVisible();
+                    // The currency select draws its value once the currency list is in; until then it shows its placeholder.
+                    await expect(form.getByTestId('welcome-currency').getByRole('combobox'), 'the default currency is pre-filled').toContainText(defaults.base_currency, {timeout: 15_000});
+                    await expect(form.getByTestId('welcome-avatar-preview')).toBeVisible();
+                    await expect(form.getByTestId('welcome-avatar-clear'), 'no picture: the initials stand in').toHaveCount(0);
+                    await expect(form.getByTestId('welcome-avatar-choose')).toBeEnabled();
+                    await expect(form.getByTestId('welcome-skip')).toBeEnabled();
+                    await expect(form.getByTestId('welcome-continue')).toBeEnabled();
+                    await expect(form.getByTestId('welcome-error')).toHaveCount(0);
+                    await frameWelcome(page);
+                    await parkPointer(page);
+                    await freezeAnimations(page);
+                    await waitForMotionSettled(welcome, 'the Welcome page');
+                    await expectNoToast(page);
+                    await screenshot(page, viewport, lang, theme, 'onboarding', 'welcome-setup');
+                }
+            }
+        });
+
+        test('core tour step - all languages and themes', async ({page, request}, testInfo) => {
+            // Account, Welcome and the walk to the step ~15 s; per combination one full load of the dashboard, the tour
+            // resumed on its step, the panel's 3 s fade and one shot, ~8 s, twice that under parallel load: 8 × 16 s + 40 s.
+            test.setTimeout(300_000);
+            const viewport = getViewport(testInfo);
+            account = await registerGalleryAccount(request);
+            await login(page, account.user);
+            // Welcome confirmed as it comes — the account's own language and currency — hands over to the intro; the tour
+            // is walked once, Next by Next, to the Exchange rates destination in the sidebar.
+            await completeWelcome(page);
+            await walkCoreTourToFx(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await seedLanguageAndTheme(page, lang, theme);
+                    await navigateTo(page, '/dashboard');
+                    await expectLanguageAndTheme(page, lang, theme);
+                    // The dashboard lies dimmed under the tour: settled all the same.
+                    await waitForSettled(page.getByTestId('dashboard-page'), 20_000);
+                    // After a full load the tour resumes on its step: its position is kept per account in the browser.
+                    await expectGuideStep(page, CORE_TOUR_FX_STEP, 20_000);
+                    if (viewport === 'mobile') await expect(page.getByTestId('app-header'), 'on a phone the step opens the menu its destination is in').toHaveAttribute('data-sidebar-open', 'true');
+                    await freezeAnimations(page);
+                    const panel = await holdPanelAtFullStrength(page);
+                    await waitForMotionSettled(page.getByTestId('onboarding-coachmark'), 'the Core tour');
+                    await waitForStillness(panel, 'the message panel');
+                    // One last reading before the shot: still on its step, anchored on a still target.
+                    await expectGuideStep(page, CORE_TOUR_FX_STEP);
+                    await expect(page.getByTestId('deferred-app-popups'), 'a popup waits for the tour to end, never over it').toHaveAttribute('data-active-popup', 'none');
+                    await expectNoToast(page);
+                    await screenshot(page, viewport, lang, theme, 'onboarding', 'core-tour-step');
+                }
+            }
+        });
+
+        test('contextual guide on the FX page - all languages and themes', async ({page, request}, testInfo) => {
+            // Account, Welcome, the skips and the walk to the step ~20 s; per combination one full load of the FX page — its
+            // two waves and its charts — the guide resumed on its step, the panel's 3 s fade and one shot, ~10 s, twice
+            // that under parallel load: 8 × 20 s + 50 s.
+            test.setTimeout(300_000);
+            const viewport = getViewport(testInfo);
+            account = await registerGalleryAccount(request);
+            // Welcome confirmed as it comes, the intro closed, every guide skipped but the FX page's: no other guide competes
+            // for the overlay. It opens on the page's title; Next takes it to the currency filters, real controls it pulses.
+            await prepareOnboardingAccount(page, account.user, ['fx_page_guide']);
+            await navigateTo(page, '/fx');
+            await expectGuideStep(page, FX_PAGE_OVERVIEW_STEP, 30_000);
+            await page.getByTestId('onboarding-coachmark-next').click();
+            await expectGuideStep(page, FX_PAGE_FILTERS_STEP);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await seedLanguageAndTheme(page, lang, theme);
+                    await navigateTo(page, '/fx');
+                    await expectLanguageAndTheme(page, lang, theme);
+                    // Two waves — the pairs, then each pair's rates — then the cards' charts.
+                    const fx = page.getByTestId('fx-page');
+                    await waitForSettled(fx, 30_000);
+                    await chartsDrawn(fx, 'the FX cards');
+                    // After a full load the guide resumes on its step: its position is kept per account in the browser.
+                    await expectGuideStep(page, FX_PAGE_FILTERS_STEP, 30_000);
+                    await freezeAnimations(page);
+                    const panel = await holdPanelAtFullStrength(page);
+                    await waitForMotionSettled(page.getByTestId('onboarding-coachmark'), 'the FX page guide');
+                    await waitForStillness(panel, 'the message panel');
+                    // One last reading before the shot: still on its step, anchored on a still target.
+                    await expectGuideStep(page, FX_PAGE_FILTERS_STEP);
+                    await expect(page.getByTestId('deferred-app-popups'), 'a popup waits for the guide to end, never over it').toHaveAttribute('data-active-popup', 'none');
+                    await expectNoToast(page);
+                    await screenshot(page, viewport, lang, theme, 'onboarding', 'contextual-guide');
+                }
+            }
+            // Positive control: the FX page reads the provider catalogue on every load, and the gallery-wide offline guard
+            // answered it — a guard on the wrong path would let the backend ask ECB and SNB unseen.
+            expect(galleryOfflineGuard(page).catalogueReads, 'the FX page read no provider catalogue: the offline guard no longer matches what the page asks for').toBeGreaterThan(0);
         });
     });
 
@@ -1063,7 +1240,7 @@ test.describe('Gallery Screenshots', () => {
                 await expectNoToast(page);
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'data-quality-sync-rates');
             });
-            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
         });
     });
 
@@ -1433,6 +1610,35 @@ test.describe('Gallery Screenshots', () => {
                     await screenshot(page, viewport, lang, theme, 'settings', 'about-tool-diagnostics');
                 }
             }
+        });
+
+        test('onboarding replay - all languages and themes', async ({page}, testInfo) => {
+            // As the admin, read-only: the category is a view of Preferences, and neither Replay nor Replay all is pressed —
+            // each arms a replay. The admin's browser asks GitHub for the latest release on load: the gallery-wide offline
+            // guard aborts it, so no update prompt depends on the day. Per combination one full load and one shot.
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await navigateTo(page, '/settings?tab=preferences');
+                await expectLanguageAndTheme(page, lang, theme);
+                await expect(page.getByTestId('settings-tab-preferences')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                await waitForSettled(page.getByTestId('settings-layout'), 15_000);
+                // Every load opens on All; the Onboarding category is chosen in the sidebar, or in the dropdown on a phone.
+                await chooseOnboardingCategory(page, viewport);
+                // As every load opens it: Setup and Core tour open on their flow, the other four areas folded, nothing armed.
+                const section = await expectOnboardingCategory(page);
+                // On a phone the card's own header is brought to the top of the screen, so the Core tour's area is on show too.
+                await frameOnboardingCategory(page, viewport);
+                await parkPointer(page);
+                await freezeAnimations(page);
+                await waitForMotionSettled(section, 'the Onboarding category');
+                await expect(page.getByTestId('deferred-app-popups'), 'a popup lies over the shot').toHaveAttribute('data-active-popup', 'none');
+                await expectNoToast(page);
+                await screenshot(page, viewport, lang, theme, 'settings', 'onboarding-replay');
+                // The next combination starts in the header: on a phone it slid away with the scroll down.
+                if (viewport === 'mobile') await scrollBackToHeader(page);
+            });
         });
     });
 
@@ -3499,22 +3705,46 @@ test.describe('Gallery Screenshots', () => {
                     const chainSection = modal.locator('[data-testid^="fx-route-chain-section"]').first();
                     await chainSection.waitFor({state: 'visible', timeout: 5000});
 
-                    // Click the chain section header to expand it (collapsed by default when direct routes exist)
-                    const chainHeader = chainSection.locator('button').first();
-                    if (await chainHeader.isVisible({timeout: 1000}).catch(() => false)) {
-                        await chainHeader.click();
-                        await page.waitForTimeout(500); // Let chain routes expand
+                    // The first chain group opens by itself only when the pair has no direct route (FxProviderSelect): a toggle,
+                    // so its state is asked and it is opened only when closed. NOK/CHF has one — the SNB's, which quotes NOK
+                    // (galleryOfflineData.ts) — so the group comes folded and is opened here. On its chevron, at the header's left
+                    // edge: the header also holds a Tooltip (the chain warning's icon), which a click on it would pin instead.
+                    const chainToggle = chainSection.getByTestId(/^fx-route-chain-toggle-\d+$/);
+                    if ((await chainToggle.getAttribute('data-expanded')) !== 'true') {
+                        const toggleBox = await chainToggle.boundingBox();
+                        if (!toggleBox) throw new Error('the chain group toggle has no box');
+                        await chainToggle.click({position: {x: 5, y: Math.round(toggleBox.height / 2)}});
                     }
+                    await expect(chainToggle).toHaveAttribute('data-expanded', 'true');
 
-                    // Click the first chain route item to add it — this shows the 2-step route in the selected panel
-                    const firstChainRoute = chainSection.locator('[data-testid^="fx-route-chain-"]').first();
-                    if (await firstChainRoute.isVisible({timeout: 2000}).catch(() => false)) {
-                        await firstChainRoute.click();
-                        await page.waitForTimeout(500); // Wait for route to appear in the selected list
-                    }
+                    // Click the first chain route item to add it — this shows the 2-step route in the selected panel. By the
+                    // route's own test id: `fx-route-chain-` alone also names the group's toggle, which the click folded again.
+                    // And on its "+", at the row's left edge — the button's 10 px padding plus half the 12 px icon: a click lands
+                    // on an element's centre, which on a phone's narrow row is a provider badge. A badge is a Tooltip, and a
+                    // mouse click on one pins it and stops there (Tooltip.svelte `toggle`): the route would never be added.
+                    const selectedRoutes = modal.getByTestId('fx-route-selected');
+                    const selectedBefore = await selectedRoutes.count();
+                    const firstChainRoute = chainSection.getByTestId(/^fx-route-chain-\d+step-/).first();
+                    await expect(firstChainRoute).toBeVisible();
+                    const routeBox = await firstChainRoute.boundingBox();
+                    if (!routeBox) throw new Error('the first chain route has no box');
+                    await firstChainRoute.click({position: {x: 16, y: Math.round(routeBox.height / 2)}});
+                    await expect(selectedRoutes, 'the chain route joins the selected routes').toHaveCount(selectedBefore + 1);
 
-                    // Scroll modal body to bottom so the selected chain route + detail are in view
-                    await modal.locator('.overflow-y-auto').evaluate((el) => (el.scrollTop = el.scrollHeight));
+                    // Frame the routes block at the top of the modal body: the chain route just added — the selected list sits
+                    // above the picker, and a route joins it at its end — the direct SNB route at the head of the picker, and the
+                    // chain group opened under it. Scrolled to its bottom, the body would show the end of the picker instead.
+                    await modal.getByTestId('fx-tour-providers').evaluate((block) => {
+                        let body = block.parentElement;
+                        while (body && getComputedStyle(body).overflowY !== 'auto') body = body.parentElement;
+                        if (!body) throw new Error('the routes block sits in no scrolling body');
+                        body.scrollTop += block.getBoundingClientRect().top - body.getBoundingClientRect().top - 8;
+                    });
+                    await expect(selectedRoutes.last(), 'the chain route just added is out of the frame').toBeInViewport({ratio: 1});
+                    await expect(modal.getByTestId('fx-route-direct-SNB'), 'the direct SNB route is out of the frame').toBeInViewport({ratio: 1});
+                    await expect(chainToggle, 'the opened chain group is out of the frame').toBeInViewport({ratio: 1});
+                    // Then the pointer off the rows — they moved under it — and no tooltip over the shot, pinned or hovered.
+                    await parkPointer(page);
                     await page.waitForTimeout(500); // Extra settle time for provider icons
 
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-chain');
@@ -3762,9 +3992,12 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const polled = galleryOfflineGuard(page).pricedPolls;
                 await goToAssetsPage(page);
                 await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+                // The live prices are not part of the list's data-busy: wait for this load's, drawn on the cards.
+                await expectOfflinePricesDrawn(page, polled);
                 await freezeAnimations(page);
                 await page.waitForTimeout(1500);
                 await screenshot(page, viewport, lang, theme, 'assets', 'list');
@@ -3776,9 +4009,11 @@ test.describe('Gallery Screenshots', () => {
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    const polled = galleryOfflineGuard(page).pricedPolls;
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await expectOfflinePricesDrawn(page, polled);
                     await freezeAnimations(page);
 
                     // Switch to table view
@@ -3797,9 +4032,12 @@ test.describe('Gallery Screenshots', () => {
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    const polled = galleryOfflineGuard(page).pricedPolls;
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    // Before the search, while every card stands still: the ETFs it keeps show the fixture's prices.
+                    await expectOfflinePricesDrawn(page, polled);
                     await freezeAnimations(page);
 
                     // Type search text
@@ -4838,7 +5076,7 @@ test.describe('Gallery Screenshots', () => {
 
                 await scrollBackToHeader(page);
             });
-            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
         });
 
         test('risk lab asset and benchmark pickers - all languages and themes', async ({page}, testInfo) => {
@@ -4864,8 +5102,8 @@ test.describe('Gallery Screenshots', () => {
                 await expectLabClean(page, selection);
 
                 // The "+", open over the selection card: two rows ticked, so Add counts them — never pressed — and the
-                // assets the engine rules out for the period listed apart, read-only, each with its reason. NVIDIA (a
-                // single quote) and the KRW stock (none) are among them in the seed.
+                // assets the engine rules out for the period listed apart, read-only, each with its reason. NVIDIA and the
+                // KRW stock are among them: the seed gives them no quote, and the gallery's offline guard writes none.
                 const card = panel.getByTestId('risk-asset-set-controls');
                 await frameFromTop(page, card);
                 const add = page.getByTestId('risk-asset-add-panel');
@@ -4929,7 +5167,7 @@ test.describe('Gallery Screenshots', () => {
 
                 await scrollBackToHeader(page);
             });
-            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
         });
 
         test('risk lab partial results notice (injected stale price) - all languages and themes', async ({page}, testInfo) => {
@@ -5002,7 +5240,7 @@ test.describe('Gallery Screenshots', () => {
 
                 await scrollBackToHeader(page);
             });
-            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
         });
 
         test('risk lab historical replay with a left-out asset (injected) - all languages and themes', async ({page}, testInfo) => {
@@ -5067,7 +5305,7 @@ test.describe('Gallery Screenshots', () => {
 
                 await scrollBackToHeader(page);
             });
-            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
         });
 
         test('risk what-if simulation on the dashboard - all languages and themes', async ({page}, testInfo) => {
@@ -5135,7 +5373,7 @@ test.describe('Gallery Screenshots', () => {
 
                 await scrollBackToHeader(page);
             });
-            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
         });
     });
 });

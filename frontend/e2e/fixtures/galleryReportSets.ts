@@ -27,11 +27,24 @@
  * Data: the repository's synthetic Danske Bank samples (invented values), two statements written
  * under the test's output folder, and nothing else. Copied, not imported, from
  * transactions/tx-import-report-set.spec.ts and transactions/tx-bulk-import-handoff.spec.ts.
+ *
+ * ## Offline, gallery-wide
+ *
+ * The same outer beforeEach installs {@link guardGalleryOffline} on every page: no gallery scenario reaches a real
+ * price or exchange-rate provider, or writes a price. The section of that name below lists every endpoint of the API
+ * client that would, and what the gallery answers instead (galleryOfflineData.ts).
+ *
+ * ## Favicon images, gallery-wide
+ *
+ * Those routes have a side effect in Playwright: with any route registered, an image whose URL ends in `/favicon.ico`
+ * is aborted before a handler runs — every broker logo drawn from its portal, most import plugins' icons, the FED and
+ * SNB icons. So the same beforeEach also installs {@link keepFaviconImagesLoading}, which keeps them loading.
  */
 
 import type {APIResponse, Route, TestInfo} from '@playwright/test';
 import {expect, type APIRequestContext, type Locator, type Page} from './playwright';
 import {waitForParseVerdict, waitForSettled} from './app-events';
+import {OFFLINE_CURRENT_PRICES, OFFLINE_FX_PROVIDERS, type OfflineCurrentPrice} from './galleryOfflineData';
 import {deleteDisposableUser, prepareOnboardingAccount, type DisposableUser} from './onboarding-accounts';
 import {uniqueToken} from './unique';
 import {randomUUID} from 'crypto';
@@ -285,6 +298,329 @@ async function fulfillWith(route: Route, response: APIResponse, json: unknown): 
 }
 
 // ---------------------------------------------------------------------------
+// Offline: no scenario reaches a real provider
+// ---------------------------------------------------------------------------
+
+/**
+ * Every endpoint of the API client (src/lib/api/generated.ts) whose backend reaches a provider, as the gallery
+ * answers it. The backend's providers fetch over the network — yfinance, JustETF, the CSS scraper, ECB, SNB, FED,
+ * BOE — and most of these calls also write what they fetched into the test database.
+ *
+ * Pressed on purpose only — aborted, recorded in `syncs`, and a red at the end of the test (no scenario presses one):
+ * - `POST /api/v1/assets/prices/sync` — a price history sync: fetches, and writes prices and events;
+ * - `POST /api/v1/assets/provider/refresh` — a metadata refresh: fetches, and writes the asset's classification;
+ * - `POST /api/v1/assets/provider/probe` — a provider dry run (Test configuration, Ask the provider): fetches;
+ * - `POST /api/v1/fx/currencies/sync` — an exchange-rate sync: fetches, and writes rates.
+ *
+ * Asked by a page on its own — answered here, never by the backend:
+ * - `POST /api/v1/assets/prices/current` — the Assets pages' live-price poll (on load, then every 30 s while the
+ *   period ends today; the detail page also merges a tick into its chart): it asks each asset's provider, and writes
+ *   today's candle. Answered from {@link OFFLINE_CURRENT_PRICES}, dated today, only for the requested assets the
+ *   fixture names; aborted instead while `livePrices` is `'abort'` (the risk lab, galleryRiskLab.ts).
+ * - `GET /api/v1/fx/providers` — the exchange-rate provider catalogue: the backend asks ECB and SNB for their
+ *   currencies. The FX page, its Add pair and provider modals and the About tab show it, so it is answered from
+ *   {@link OFFLINE_FX_PROVIDERS} (the `providers` filter applied as the backend applies it).
+ * - `GET /api/v1/assets/provider/search` and `…/search/stream` — a search across the providers (and the web link
+ *   finder), which the asset modal runs by itself when the import wizard opens it pre-filled. Answered as the backend
+ *   answers when no provider can be reached: one error per provider asked, no result.
+ *
+ * And outside the backend: an admin's browser asks GitHub for the latest release on load (updateCheck.ts) — aborted,
+ * so no update prompt can depend on the day the gallery runs.
+ */
+export interface GalleryOfflineGuard {
+    /** How the live-price poll is answered: from the fixture (the default), or aborted. */
+    livePrices: 'fixture' | 'abort';
+    /** Live-price polls the page sent, answered or aborted. */
+    livePolls: number;
+    /** Live-price polls answered from the fixture: the counter {@link expectOfflinePricesDrawn} reads as a delta. */
+    pricedPolls: number;
+    /** The fixture's prices by asset id, once the first poll has matched them to the database (empty until then). */
+    pricedAssets: ReadonlyMap<number, OfflineCurrentPrice>;
+    /** Provider catalogue reads, answered from the fixture. */
+    catalogueReads: number;
+    /** Searches across the providers, answered as offline. */
+    searches: number;
+    /** GitHub requests (the admin's release probe), aborted. */
+    releaseProbes: number;
+    /** Syncs, metadata refreshes and provider probes attempted, by method and path: aborted, each one a red. */
+    syncs: string[];
+    /** What the guard could not answer as designed (a fixture asset not in the database, a request it cannot read): each one a red. */
+    problems: string[];
+}
+
+const LIVE_PRICES = `${API}/assets/prices/current`;
+const PROVIDER_CATALOGUE = `${API}/fx/providers`;
+const PROVIDER_SEARCH = `${API}/assets/provider/search`;
+const PROVIDER_SEARCH_STREAM = `${API}/assets/provider/search/stream`;
+const PROVIDER_CALLS = new Set([`${API}/assets/prices/sync`, `${API}/assets/provider/refresh`, `${API}/assets/provider/probe`, `${API}/fx/currencies/sync`]);
+/** What each provider reports, as the search stream does for a provider that raised (asset_sources/search.py). */
+const OFFLINE_SEARCH_ERROR = 'provider not reached: the gallery runs offline';
+
+const offlineGuards = new WeakMap<Page, GalleryOfflineGuard>();
+
+/** Today, in the runner's local time — the day the backend dates a fresh quote (`date.today()`). */
+function localDay(now = new Date()): string {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+/** The provider codes a search names, as the backend reads them: repeated or comma-separated. */
+function searchedProviders(url: URL): string[] {
+    return url.searchParams
+        .getAll('providers')
+        .flatMap((value) => value.split(','))
+        .map((code) => code.trim())
+        .filter((code) => code !== '');
+}
+
+/**
+ * The fixture's prices by asset id. The ids are looked up by display name in the database the page reads
+ * (`GET /assets/query`, through the page's own session), never assumed; a name that does not match exactly one asset
+ * is a problem, and its price is not served.
+ */
+async function offlinePricesById(page: Page, guard: GalleryOfflineGuard): Promise<Map<number, OfflineCurrentPrice>> {
+    const byId = new Map<number, OfflineCurrentPrice>();
+    const response = await page.request.get(`${API}/assets/query`);
+    const assets = await jsonOf(response);
+    if (!response.ok() || !Array.isArray(assets)) {
+        guard.problems.push(`GET ${API}/assets/query answered HTTP ${response.status()}: no fixture price can be matched to its asset`);
+        return byId;
+    }
+    for (const price of OFFLINE_CURRENT_PRICES) {
+        const matches = assets.filter((asset: {display_name?: unknown}) => asset?.display_name === price.displayName);
+        const id = matches.length === 1 ? (matches[0] as {id?: unknown}).id : null;
+        if (typeof id !== 'number') {
+            guard.problems.push(`the fixture's "${price.displayName}" names ${matches.length} assets, expected one: check populate_mock_data.py`);
+            continue;
+        }
+        byId.set(id, price);
+    }
+    return byId;
+}
+
+/**
+ * Keep every page of the test from reaching a provider ({@link GalleryOfflineGuard} says what is answered, and how).
+ * Installed by the gallery's outer beforeEach, before any sign-in; a test reads it with {@link galleryOfflineGuard},
+ * and the outer afterEach fails the test on any sync or problem it recorded ({@link expectGalleryOffline}).
+ */
+export async function guardGalleryOffline(page: Page): Promise<GalleryOfflineGuard> {
+    const guard: GalleryOfflineGuard = {livePrices: 'fixture', livePolls: 0, pricedPolls: 0, pricedAssets: new Map(), catalogueReads: 0, searches: 0, releaseProbes: 0, syncs: [], problems: []};
+    offlineGuards.set(page, guard);
+    let pricesById: Promise<Map<number, OfflineCurrentPrice>> | null = null;
+
+    await page.route(
+        (url) => PROVIDER_CALLS.has(url.pathname),
+        async (route) => {
+            guard.syncs.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+            await route.abort();
+        },
+    );
+    await page.route(
+        (url) => url.pathname === LIVE_PRICES,
+        async (route) => {
+            if (route.request().method() !== 'POST') return route.fallback();
+            guard.livePolls += 1;
+            if (guard.livePrices === 'abort') return route.abort();
+            let requested: unknown = null;
+            try {
+                requested = route.request().postDataJSON();
+            } catch {
+                /* not JSON: told apart below */
+            }
+            if (!Array.isArray(requested) || !requested.every((id) => Number.isInteger(id))) {
+                guard.problems.push(`a live-price poll asked ${JSON.stringify(requested)}, not a list of asset ids: aborted`);
+                return route.abort();
+            }
+            pricesById ??= offlinePricesById(page, guard);
+            let known: Map<number, OfflineCurrentPrice>;
+            try {
+                known = await pricesById;
+            } catch (error) {
+                guard.problems.push(`the fixture prices could not be matched to their assets (${String(error)}): the poll was aborted`);
+                return route.abort();
+            }
+            guard.pricedAssets = known;
+            const asOf = localDay();
+            const results = (requested as number[]).flatMap((assetId) => {
+                const price = known.get(assetId);
+                return price ? [{asset_id: assetId, value: price.value, currency: price.currency, as_of_date: asOf, source: price.source, error: null}] : [];
+            });
+            await route.fulfill({json: {results, success_count: results.length, errors: []}});
+            guard.pricedPolls += 1;
+        },
+    );
+    await page.route(
+        (url) => url.pathname === PROVIDER_CATALOGUE,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            guard.catalogueReads += 1;
+            const filter = new Set(searchedProviders(new URL(route.request().url())).map((code) => code.toUpperCase()));
+            await route.fulfill({json: OFFLINE_FX_PROVIDERS.filter((provider) => filter.size === 0 || filter.has(provider.code.toUpperCase()))});
+        },
+    );
+    await page.route(
+        (url) => url.pathname === PROVIDER_SEARCH || url.pathname === PROVIDER_SEARCH_STREAM,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            guard.searches += 1;
+            const url = new URL(route.request().url());
+            const codes = searchedProviders(url);
+            if (url.pathname === PROVIDER_SEARCH) {
+                await route.fulfill({json: {query: url.searchParams.get('q') ?? '', total_results: 0, results: [], providers_queried: codes, providers_with_errors: codes}});
+                return;
+            }
+            const events = [...codes.map((code) => ({event: 'provider_error', provider_code: code, error: OFFLINE_SEARCH_ERROR})), {event: 'done', total_results: 0, providers_queried: codes, providers_with_errors: codes}];
+            await route.fulfill({status: 200, contentType: 'text/event-stream', body: events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')});
+        },
+    );
+    await page.route(
+        (url) => url.hostname === 'api.github.com',
+        async (route) => {
+            guard.releaseProbes += 1;
+            await route.abort();
+        },
+    );
+    return guard;
+}
+
+/** The offline guard of `page`, installed by the gallery's outer beforeEach. */
+export function galleryOfflineGuard(page: Page): GalleryOfflineGuard {
+    const guard = offlineGuards.get(page);
+    if (!guard) throw new Error("the gallery's offline guard is not installed on this page: the outer beforeEach installs it (guardGalleryOffline)");
+    return guard;
+}
+
+/**
+ * The Assets list's live prices for its latest load, answered from the fixture and drawn. The poll is outside the page's
+ * `data-busy` — it never holds the list back — so a list settled on `data-busy="false"` may still show the fixture's
+ * assets without a price. Waits for a poll answered after `since` (`pricedPolls`, read before the load), then for every
+ * card of a fixture asset on the page to show its figure, which the card prints with two decimals. Call it while the
+ * cards stand still — before a search filters some away; in the table view, where no card is drawn, only the poll is
+ * waited for (the rows print the figure in the language's format).
+ */
+export async function expectOfflinePricesDrawn(page: Page, since: number): Promise<void> {
+    const guard = galleryOfflineGuard(page);
+    await expect.poll(() => guard.pricedPolls, {message: 'no live-price poll of this load of the Assets page was answered from the fixture', timeout: 20_000}).toBeGreaterThan(since);
+    for (const [assetId, price] of guard.pricedAssets) {
+        const card = page.getByTestId(`asset-card-${assetId}`);
+        // The cards are drawn before the poll leaves (it asks for the ids of the loaded list): absent now is absent from this view.
+        if ((await card.count()) === 0) continue;
+        await expect(card, `the card of "${price.displayName}" does not show its fixture price`).toContainText(Number(price.value).toFixed(2));
+    }
+}
+
+/** Nothing tried to sync, refresh or probe, and every call the guard answered was answered as designed. */
+export function expectGalleryOffline(page: Page): void {
+    const guard = galleryOfflineGuard(page);
+    expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started: the gallery never presses one (it was aborted, nothing reached a provider)').toEqual([]);
+    expect(guard.problems, "the gallery's offline guard could not answer as designed").toEqual([]);
+}
+
+// ---------------------------------------------------------------------------
+// Favicon images: kept loading while routes are installed
+// ---------------------------------------------------------------------------
+
+/** The query the gallery gives an image URL that ends in `/favicon.ico`. */
+const FAVICON_MARK = 'lf-gallery';
+
+/**
+ * Keep every image whose URL ends in `/favicon.ico` loading, although the gallery has routes installed.
+ *
+ * Playwright 1.61 takes any request whose URL ends in `/favicon.ico` for the page's own favicon (playwright-core,
+ * `coreBundle.js`: `_isFavicon`), and once a route is registered — on the page or its context, whatever it matches —
+ * it aborts that request before a single handler runs (`requestStarted`). The outer beforeEach registers routes on every
+ * gallery page (hideGalleryTempData, guardGalleryOffline), so every such <img> failed and drew its fallback: the
+ * brokers' logos — `BrokerIcon` falls back to the portal's origin + /favicon.ico (brokerIconChain.svelte.ts,
+ * brokerHelpers.ts) — most import plugins' icons, and the FED and SNB provider icons. The published 1.1 gallery,
+ * taken with no route installed, shows the logos.
+ *
+ * So the page writes those URLs with a query, `…/favicon.ico?lf-gallery`: Playwright no longer takes it for the
+ * favicon, and every host involved answers it with the same bytes. Only the URL written into an image changes — through
+ * the `src` property, `setAttribute('src', …)`, and the `src` attributes of HTML set through `innerHTML` (`{@html}`,
+ * raw-HTML table cells, Svelte's own templates) — so each is the same live image from the same host, and no product code
+ * is touched. A URL that does not end in /favicon.ico (BOE's `favicon.svg?ver=…`) is left alone; the fragment, if any,
+ * stays last, and a URL whose query ends in /favicon.ico gets `&lf-gallery` instead.
+ *
+ * An init script applies from the next document on, so the outer beforeEach installs it before the first navigation.
+ * {@link expectFaviconImagesLoading} checks it is in force at the end of each test.
+ */
+export async function keepFaviconImagesLoading(page: Page): Promise<void> {
+    await page.addInitScript((mark: string) => {
+        const marked = (url: string): string => {
+            const hash = url.indexOf('#');
+            const head = hash < 0 ? url : url.slice(0, hash);
+            if (!/\/favicon\.ico$/i.test(head)) return url;
+            return `${head}${head.includes('?') ? '&' : '?'}${mark}${url.slice(head.length)}`;
+        };
+        const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+        if (src?.get && src.set) {
+            const {get, set} = src;
+            Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                configurable: true,
+                enumerable: src.enumerable,
+                get() {
+                    return get.call(this);
+                },
+                set(value: unknown) {
+                    set.call(this, marked(String(value)));
+                },
+            });
+        }
+        const setAttribute = Element.prototype.setAttribute;
+        Element.prototype.setAttribute = function (name: string, value: string): void {
+            setAttribute.call(this, name, this instanceof HTMLImageElement && String(name).toLowerCase() === 'src' ? marked(String(value)) : value);
+        };
+        // Only the value of a `src` attribute: a text, or a link, that names /favicon.ico is not an image the page loads.
+        const SRC_ATTRIBUTE = /(\bsrc\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+        const innerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+        if (innerHTML?.get && innerHTML.set) {
+            const {get, set} = innerHTML;
+            Object.defineProperty(Element.prototype, 'innerHTML', {
+                configurable: true,
+                enumerable: innerHTML.enumerable,
+                get() {
+                    return get.call(this);
+                },
+                set(value: unknown) {
+                    const html =
+                        typeof value === 'string'
+                            ? value.replace(SRC_ATTRIBUTE, (_all: string, lead: string, double?: string, single?: string, bare?: string) => (double !== undefined ? `${lead}"${marked(double)}"` : single !== undefined ? `${lead}'${marked(single)}'` : `${lead}${marked(bare ?? '')}`))
+                            : value;
+                    set.call(this, html);
+                },
+            });
+        }
+    }, FAVICON_MARK);
+}
+
+/**
+ * {@link keepFaviconImagesLoading} is in force in the page's current document: an image given a URL ending in
+ * /favicon.ico holds it with the gallery's query, set through `setAttribute` and through the `src` property. The
+ * images belong to a document of their own, which has no window, so nothing loads. A page still on about:blank never
+ * loaded a document for the script to run in; a closed page has none.
+ */
+export async function expectFaviconImagesLoading(page: Page): Promise<void> {
+    if (page.isClosed() || page.url() === 'about:blank') return;
+    const probe = 'https://x.test/favicon.ico';
+    await expect
+        .poll(
+            // A document being replaced has no context to evaluate in: read again, the poll does not retry a throw.
+            () =>
+                page
+                    .evaluate((url) => {
+                        const inert = document.implementation.createHTMLDocument('');
+                        const byAttribute = inert.createElement('img');
+                        byAttribute.setAttribute('src', url);
+                        const byProperty = inert.createElement('img');
+                        byProperty.src = url;
+                        return [byAttribute.getAttribute('src'), byProperty.getAttribute('src')];
+                    }, probe)
+                    .catch((error: Error) => [`unreadable: ${error.message}`]),
+            {message: 'the favicon images fix is not in force on this page: keepFaviconImagesLoading must run before the first navigation', timeout: 5_000},
+        )
+        .toEqual([`${probe}?${FAVICON_MARK}`, `${probe}?${FAVICON_MARK}`]);
+}
+
+// ---------------------------------------------------------------------------
 // The files
 // ---------------------------------------------------------------------------
 
@@ -483,25 +819,12 @@ export async function tickWholeSet(card: Locator): Promise<void> {
 
 /**
  * Open a set's card: whether it is open is asked, never assumed (a toggle), and the end state asserted.
- * The card is settled when this runs (its status read), so the header's layout is final: a toggle with
- * a box is clicked; one without is opened from the keyboard, the way a keyboard user opens it — focus
- * and Enter need no box, and the end state is asserted all the same.
+ * The toggle is clicked, as a user taps it, on every viewport: a toggle the header leaves no box to
+ * click is a product defect, and it fails here, loudly, rather than being opened some other way.
  */
 export async function unfoldCard(card: Locator): Promise<void> {
     const toggle = card.getByTestId('report-set-toggle');
-    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-        const box = await toggle.boundingBox();
-        // Product bug: on narrow screens ReportSetCard's header squeezes this toggle to zero width (status chip + Read as do not shrink).
-        if (box !== null && box.width >= 1 && box.height >= 1) {
-            await toggle.click();
-        } else {
-            await toggle.focus();
-            await expect(toggle, 'the toggle takes the keyboard focus, box or not').toBeFocused();
-            await toggle.press('Enter');
-            // A key press leaves a focus ring that a tap does not: dropped, so the shot is the one a tap gives.
-            await toggle.blur();
-        }
-    }
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 }
 

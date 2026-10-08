@@ -42,9 +42,33 @@ The post-login modal announcing a newer release, with current vs latest version 
 
 ---
 
-<!-- [Screenshot Placeholder: onboarding/welcome-setup — new section "## 🧭 Onboarding", gallery entry "### 👋 Welcome Setup": The first-run Welcome page, where a new user confirms language and default currency and can add a profile picture before starting.] -->
-<!-- [Screenshot Placeholder: onboarding/core-tour-step — gallery entry "### 🗺️ Core Tour": A step of the guided Core tour highlighting a part of the interface.] -->
-<!-- [Screenshot Placeholder: onboarding/contextual-guide — gallery entry "### 🧭 Contextual Guide": A contextual guide bubble on a page (for example the FX page guide).] -->
+## 🧭 Onboarding
+
+### 👋 Welcome Setup
+
+The first-run Welcome page, where a new user confirms language and default currency and can add a profile picture before starting.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="👋 Welcome Setup">
+</div>
+
+### 🗺️ Core Tour
+
+A step of the guided Core tour highlighting a part of the interface.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="onboarding" data-name="core-tour-step" alt="🗺️ Core Tour">
+</div>
+
+### 🧭 Contextual Guide
+
+A contextual guide bubble on a page (for example the FX page guide).
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="onboarding" data-name="contextual-guide" alt="🧭 Contextual Guide">
+</div>
+
+---
 
 ## 📊 Dashboard
 
@@ -259,7 +283,13 @@ All settings accessible on mobile with the same functionality.
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
 </div>
 
-<!-- [Screenshot Placeholder: settings/onboarding-replay — gallery entry "### 🔁 Guide Replay": The Onboarding category of Preferences with each guide's status and its Replay button.] -->
+### 🔁 Guide Replay
+
+The Onboarding category of Preferences with each guide's status and its Replay button.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Guide Replay">
+</div>
 
 ### 🛡️ Global Settings (Admin)
 

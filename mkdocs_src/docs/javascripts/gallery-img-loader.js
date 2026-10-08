@@ -22,9 +22,10 @@
      * self-hosted or nightly image legitimately ships without them — this fallback is
      * the only thing standing between that and a page full of broken images.
      *
-     * The value is injected from `config.site_url` by `overrides/main.html`, so it
-     * cannot drift from the real address. The literal below is only a safety net for
-     * a page rendered without that template; it must stay in sync with `site_url`.
+     * The value is injected by `overrides/main.html` from the canonical address that
+     * `hooks/jsonld.py` publishes — not from `config.site_url`, which `mkdocs serve`
+     * rewrites to the local server. The literal below is only a safety net for a page
+     * rendered without that template; it must stay in sync with `_SITE_URL` there.
      */
     var GITHUB_PAGES_BASE = (function () {
         var injected = typeof window !== 'undefined' ? window.LF_GALLERY_FALLBACK_BASE : null;
