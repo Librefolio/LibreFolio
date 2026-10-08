@@ -1,6 +1,9 @@
 # Performance charts — Proventi: dividendo oro ed etichette dell'asse X (Candele e Proventi)
 
-**Stato:** IN CORSO dal 2026-10-07 18:10. Lotto approvato dal developer il 2026-10-07 (via coordinator, 17:37).
+**Stato:** COMPLETATO il 2026-10-08. Lotto approvato dal developer il 2026-10-07 (via coordinator, 17:37), in corso dal
+2026-10-07 18:10. Commit del developer il 2026-10-08 alle 12:18, su `9ea2d519b`: `bc08101d6` (codice, test e
+cataloghi), `835c65d7d` (docs) e `e379cff59` (giornale). Poi il merge della punta del treno 12, `ffa72cc2b`, nel ramo:
+`56483392c`, alle 12:54. L'integrazione in `dev_release2` è nel treno 13.
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** HEAD = `dev_release2` = `9ea2d519b`, la punta del treno 9, dopo il fast-forward segnalato dal
@@ -74,6 +77,8 @@ Il resto resta com'era: test rossi dal test-author, poi il codice, poi le docs d
 | P7b | M‴ e k su una riga di 14,3 px: test rossi, correzione e contratto, gate, schermate a 1920 e 2560 | ✅ 2026-10-08 |
 | P8 | Docs (docs-writer): un punto in `charts.en.md` `#pnl-width` | ✅ 2026-10-08 11:58 |
 | P9 | Pulizia, CHECKPOINT READY, FROZEN | ✅ 2026-10-08 12:03 |
+| P10 | Merge del treno 12 (`ffa72cc2b`) nel ramo: i 4 cataloghi in unione, solo loro in stage, gate sulla revisione unita, MERGE RESOLVED | ✅ 2026-10-08 12:37 (merge `56483392c`, 12:54) |
+| P11 | Le note del merge in questo piano, in un commit a parte; pulizia di `/tmp`; checkpoint piccolo, FROZEN | ✅ 2026-10-08 12:55 |
 
 ## 1. Colori
 
@@ -752,3 +757,105 @@ Le pagine non nominano i colori. Il debito di traduzione delle pagine charts è 
   > **⚠️ Fuori pista**: il primo giro dello script di pulizia si è fermato alla verifica, prima di cancellare
   > qualsiasi cosa. Il log del `tee` portava il mio stesso prefisso e cresceva mentre lo confrontavo. Ho rifatto
   > l'archivio da zero, con il log fuori da `/tmp`.
+- 2026-10-08 12:13 ✅ **Checkpoint verificato dal coordinator.** 14 percorsi, albero `00085452dd4c`, privacy pulita
+  su 3403 righe, prova sul clone.
+  > **⚠️ Fuori pista**: il coordinator ha accorciato due oggetti a 50 caratteri, la regola del progetto. I corpi non
+  > cambiano.
+  > - C1: `feat(charts): gold dividends, period axis labels`. Io avevo proposto
+  >   `feat(charts): gold dividends, period-start P&L axis labels`, 58 caratteri.
+  > - C3: `docs(journal): income colors and axis labels`. Io avevo proposto
+  >   `docs(journal): record income colors and axis labels batch`, 57 caratteri.
+  > - La regola, per i prossimi messaggi: oggetto di al massimo 50 caratteri, righe del corpo di al massimo 72.
+- 2026-10-08 12:18 ✅ **I commit del developer**, su `9ea2d519b`: `bc08101d6` (C1), `835c65d7d` (C2) e `e379cff59`
+  (C3), con l'albero uguale a quello rivisto. Nello stesso lotto il treno 12 (K19 e L34) è entrato in `dev_release2`.
+  Poi il developer ha avviato il merge della punta del treno 12, `ffa72cc2b`, nel mio ramo, e l'ha lasciato aperto sui
+  4 cataloghi.
+- 2026-10-08 12:37 ✅ **P10: il merge del treno 12 nel ramo, MERGE RESOLVED.**
+  > **Note implementazione**:
+  > - **Lo stato.** HEAD `e379cff59`, MERGE_HEAD `ffa72cc2b`, base comune `9ea2d519b`.
+  >   - In conflitto solo i 4 cataloghi, un pezzo per file in coda a `dashboard`, dopo `allocationGeneric`: quello
+  >     previsto in P9.
+  >   - Gli altri 176 percorsi del target (32 aggiunti, 2 cancellati, 142 modificati) li ha fusi Git da solo.
+  > - **La soluzione: l'unione, prima le mie.** In ogni catalogo vengono prima `pnlAxisQuarter` e `pnlAxisWithYear`,
+  >   con la virgola, poi le tre `unrealized*` di Risk (`2d8914be4`).
+  >   - Il perché: rispetto a `dev_release2` è un inserimento puro di 2 righe. Nessuna riga altrui cambia, e la sua
+  >     blame resta di chi l'ha scritta. L'unica riga che non appartiene a nessuno dei due genitori è la mia
+  >     `pnlAxisWithYear`, con la virgola.
+  >   - L'ordine opposto avrebbe modificato la riga `unrealizedUnsplit` di Risk, per aggiungerle la virgola.
+  > - **La verifica**, a tre vie sugli stage `:1`, `:2` e `:3`:
+  >   - JSON valido, nessuna chiave doppia;
+  >   - il risultato appiattito è uguale alla fusione semantica a tre vie di base, mio e target;
+  >   - rispetto a MERGE_HEAD, esattamente 2 righe in più, alla 1633;
+  >   - chiavi per lingua: base 4152, mio 4154, target 4162, risultato 4164;
+  >   - dal target, rispetto alla base: 10 chiavi nuove (`auth.serverUnreachable.{title,body}`,
+  >     `dashboard.unrealized{AssetEffect,FxEffect,Unsplit}`, `dataQuality.missingCostBasis` e 4
+  >     `risk.errors.resource_limit_*`), 2 valori cambiati (`settings.deleteAccount{Description,Warning}`), nessuna
+  >     chiave tolta.
+  > - **Lo stage.** `git add` dei soli 4 cataloghi; blob en `10d96ee326c3`, it `befe01828881`, fr `e70bd4a2d5f3`, es
+  >   `7d73bc538522`.
+  >   - Nessun percorso non fuso, worktree uguale all'indice, nessun file non tracciato.
+  >   - `git diff --cached --check` è pulito contro entrambi i genitori, e la regola a tre vie, percorso per percorso,
+  >     non trova scarti.
+  >   - L'albero in stage è `08b4960930eb`, calcolato con un indice e un archivio di oggetti temporanei.
+  > - **I gate sulla revisione unita**, sulla 6157, uno alla volta:
+  >
+  >   | Gate | Prima del merge (P7b) | Revisione unita |
+  >   |---|---|---|
+  >   | `front build --debug` | verde | verde |
+  >   | `front check` | 0 errori, 0 avvisi | 0 errori, 0 avvisi |
+  >   | `core-unit` | 3402 verdi e 3 saltati; rosso R13 | 3430 su 3430 in 117 file, 0 saltati: R13 è verde |
+  >   | `component-unit` | 2829 | 2846 in 110 file |
+  >   | `growth-chart-memo` | 132 | 132 |
+  >   | `asset-unit` | 730 | 730 in 20 file |
+  >   | `i18n audit` | 4154 chiavi complete | 4164 complete; 0 incomplete, 0 mancanti, 0 inutilizzate |
+  >   | E2E `front-portfolio dashboard` | 27 su 27 | 27 su 27 (1,6 min) |
+  >   | E2E `front-broker detail` | 33 su 33 | 33 su 33 (1,4 min) |
+  >
+  >   - Nell'audit restano i 3 «non verificati» e la famiglia backend di prima.
+  >   - Non lanciati, perché fuori dalla lista del coordinator: le suite backend (il mio delta è solo frontend),
+  >     `check-orphans`, il `prettier --check` dei cataloghi, `mkdocs build` e `check-links`.
+  > - **Il database della corsia.** Il treno 12 non porta migrazioni nuove: `298ed96f3` (L) modifica `001_initial.py`
+  >   sul posto, e il pacchetto `backend/app/db/post_migration/` corregge all'avvio i database esistenti.
+  >   - Il DB della corsia (Alembic `004`, senza AUTOINCREMENT) è stato convertito al primo avvio del server
+  >     dell'E2E, alle 12:30. Il log della corsia, `/tmp/librefolio-r2-i/logs/librefolio.log`, dice «Orphan broker
+  >     folders quarantined» (le 3 cartelle `broker_9`), poi «Post-migration fixes applied and verified»,
+  >     correzione `autoincrement`, 0,01 s.
+  >   - Dopo: 6 tabelle con AUTOINCREMENT, conteggi invariati, integrità ok, 0 violazioni di chiave esterna, nessun
+  >     backup e nessuna cartella in quarantena rimasti. Nessun repopulate.
+  >   - L'E2E del broker ha poi creato e cancellato i broker 9 e 10. Il 9 riusa l'ID una volta, come prevede il
+  >     docstring di `autoincrement.py` (piano `34_accountAndIdReuse` §2.3, decisioni D1 e D4): le vecchie cartelle
+  >     erano già sparite.
+  >   - Ora la sequenza dei broker vale 10, e in `uploaded`, `parsed` e `failed` restano le cartelle vuote
+  >     `broker_9` e `broker_10`: orfane innocue, perché gli ID non tornano più.
+  > - Le porte 6157 e 6167 sono libere.
+  > - Il messaggio del merge proposto: `/tmp/libreFolio_commit_i_axis_merge.msg`,
+  >   `merge(charts): dev_release2 into I for train 13`, 47 caratteri, ASCII, righe del corpo di al massimo 68.
+  >
+  > **⚠️ Fuori pista**:
+  > - **4164 chiavi, non 4162.** La previsione di P9, fatta su `58fc35174`, non poteva contare le 2 chiavi
+  >   `auth.serverUnreachable.*` di K (`93fd33702`), arrivate col treno 12. Stanno fuori dal pezzo in conflitto: le
+  >   ha fuse Git da solo.
+  > - **Due frasi dell'handoff da correggere.**
+  >   - «È lo stesso ordine della simulazione del checkpoint (`git merge-file --union`)»: non è verificabile. Lo
+  >     script della simulazione di P9 non è archiviato, e P9 qui dice solo `git merge-file -p`. Ritiro la frase:
+  >     l'ordine si giustifica da solo, come sopra.
+  >   - «Indice invariato dopo ciascuno»: esagerato. Ho controllato indice e worktree dopo la build e alla fine,
+  >     sempre sull'albero `08b4960930eb`, non dopo ogni gate.
+  > - **`grep -P` non esiste su macOS.** Il primo controllo ASCII del messaggio ha stampato «ascii ok» dopo un
+  >   errore di `grep`. L'ho rifatto in Python: 0 byte non ASCII.
+- 2026-10-08 12:38 ✅ **Il coordinator verifica il merge.** Lo stage `08b4960930eb` differisce dal merge automatico
+  solo nei 4 cataloghi: nessun marcatore, nessuna riga persa da nessuna delle due parti, JSON validi, 4164 chiavi per
+  lingua. Il messaggio va bene: il file dello script, `/tmp/libreFolio_commits/i_merge_t12.txt`, è identico al mio.
+  Lo script `/tmp/libreFolio_i_merge_t12.sh`, provato su un clone, lo lancia il developer.
+- 2026-10-08 12:54 ✅ **Il merge è committato: `56483392c`.** Genitori `e379cff59` e `ffa72cc2b`, albero
+  `08b4960930eb`, messaggio identico byte per byte a quello proposto, worktree pulito.
+- 2026-10-08 12:55 ✅ **P11: queste note, la pulizia, il checkpoint piccolo.**
+  > **Note implementazione**:
+  > - Le prove del merge, 23 file, sono nella cartella `files/i_ax_merge_20261008/` della sessione, non versionata:
+  >   i 9 log dei gate, i 4 messaggi di commit, gli script e i log della risoluzione e della verifica. Confrontate
+  >   con `cmp` prima di cancellare gli originali.
+  > - I percorsi `/tmp/libreFolio_i_ax_merge_*.log` e `/tmp/libreFolio_commit_i_axis_merge.msg` citati qui non
+  >   esistono più. Il log della corsia resta, con la cartella dati.
+  > - Il commit proposto per queste note, a parte: `/tmp/libreFolio_commit_i_t12_journal.msg`,
+  >   `docs(journal): record train-12 merge into I`.
+  > - Le porte 6157 e 6167 sono libere. FROZEN fino al commit; poi il treno 13, con N e il G3 di M.
