@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Borsa Italiana ETFs and ETCs take the currency they are quoted in (EUR), not the fund's denomination currency, whether they are found by search or added from their page address.
 - The provider comparison shows the asset type with its icon and name in your language, and no longer offers to downgrade an ETF subtype (for example Equity ETF) to plain ETF when the provider only knows the family, as Borsa Italiana does for every ETFplus instrument.
 - The Dashboard again warns about assets whose provider has not delivered a new price for more than 7 days. The warning now has a **Sync** button that refreshes those assets; manual assets are never flagged.
+- Delete and upload messages show their number again instead of a raw `{n}`: deleted or blocked asset events, the result of deleting exchange-rate pairs, uploaded and deleted broker reports with their bulk-delete confirmation, and the confirmation before deleting distribution entries.
 
 #### 📈 Charts
 
@@ -135,6 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new currency pair downloads its whole rate history, whichever page it is added from, instead of only that page's period. Pairs added earlier may have a gap at the start of their history: on the FX page choose **All** and click **Sync All** once.
 - The display-currency menus of the Dashboard and of an asset page list only the currencies you can convert to — both ends of each configured pair; the currency a chain route passes through is no longer offered unless it belongs to a configured pair. Preferences and broker settings still list every currency.
 - The daily change percentage on the Dashboard and Broker KPI cards no longer shows "+-": it is the change over the absolute value of the previous day's figure, so its sign and colour follow the direction of the change, and it is hidden only when that figure is zero.
+- **The Returns card no longer shows 0.00% for a return it cannot compute.** A missing TWRR or MWRR now shows "—", and so does the Timing effect when either of the two is missing: it used to show a difference that does not exist, coloured and labelled as favorable or unfavorable timing.
+- **Pages open in your own Default Currency.** The Dashboard, the broker list and broker pages, the risk panel of the Assets page and the AI Export of an exchange-rate pair started from the instance's *Default currency for new users* instead of the **Default Currency** in your preferences. A currency you pick on the Dashboard still stays for the session.
 - **Coming back to the Dashboard no longer reloads what you just saw.** With the same period, currency and broker filter, the KPIs, charts, Performance table, lots and Risk tab appear at once, also after opening an asset and returning with its back button (←), and KPI figures already known no longer count up from zero. If something changed meanwhile — a new transaction, new prices, or the live price an asset page checks — the figures stay on screen and move to the new values when the background refresh lands. A price or rate sync that brought nothing new no longer forces a reload, the currency and broker filter now stay for the session like the period, and **Refresh** reloads everything, risk and lots included.
 - On the Risk tab, a failed refresh now keeps the figures on screen and tells you so, like the rest of the Dashboard; figures for a period or currency you just switched to are not kept.
 - **The Dashboard's Performance table and lots panel show only the brokers you own**, also when you come back to them. Coming back to the Positions tab used to include brokers shared with you as viewer or editor.
@@ -161,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On phones, the asset dialog no longer shows its form through the footer on Android, and the Active and Benchmark switches spread across the row — Benchmark on the right, also when it wraps.
 - The top toolbars of the Assets, asset detail, Dashboard, broker detail and FX pages no longer push buttons out of the bar at intermediate widths, in every interface language.
 - With a single broker selected, a long broker name in the Dashboard's broker filter is shortened with an ellipsis instead of sticking out of the bar on narrow screens.
+- Saving a preference (language, base currency or theme) no longer makes your avatar disappear from the sidebar.
 
 #### 🐳 Docker and self-hosting
 
@@ -175,7 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### 📚 Documentation
 
 - **Code examples in the Italian, French and Spanish documentation keep their indentation.** The translation step flattened them, so a compose file copied from those pages could be invalid; it no longer does, and the pages already affected are fixed as they are translated again.
-- **The English documentation follows this release, and its user pages are simpler.** User, administrator and theory pages were checked against the code: wrong claims are fixed (the Generic CSV has no manual column mapping, correlation bands and thresholds, the PAC allocator's outcomes, the IBKR importer reads a Trades Flex Query, not the Activity Statement, and the transaction form asks for the total amount) and the new features are described. User pages keep what you see and do, with a new *Dashboard › Risk* page; technical detail moves to the developer manual, which gains Risk Engine, Risk UI, Onboarding Guides, Danske Bank Importer and Crédit Agricole Importer pages, and the screenshot gallery gains a Risk Analysis section. DEGIRO is now marked stable, tested on real exports. The Italian, French and Spanish pages follow in a later translation pass.
+- **The English documentation follows this release, and its user pages are simpler.** User, administrator and theory pages were checked against the code: wrong claims are fixed (the Generic CSV has no manual column mapping, correlation bands and thresholds, the PAC allocator's outcomes, the IBKR importer reads a Trades Flex Query, not the Activity Statement, and the transaction form asks for the total amount) and the new features are described. User pages keep what you see and do, with a new *Dashboard › Risk* page; technical detail moves to the developer manual, which gains Risk Engine, Risk UI, Onboarding Guides, Danske Bank Importer and Crédit Agricole Importer pages, and the screenshot gallery gains Risk Analysis and Onboarding sections. DEGIRO is now marked stable, tested on real exports. The Italian, French and Spanish pages follow in a later translation pass.
 
 ### 🔄 Changed
 
