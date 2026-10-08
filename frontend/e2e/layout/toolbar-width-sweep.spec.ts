@@ -71,7 +71,9 @@
  *
  * Language. `setLanguage` goes through the header selector, which writes `librefolio-locale` in this
  * context's localStorage and nothing on the server; the account's saved language is applied only at login,
- * which happens before the switch. There is nothing to restore.
+ * which happens before the switch. There is nothing to restore. `login()` returns once the login form is gone,
+ * while the root page still loads the bootstrap and has yet to route to /dashboard, whose header holds the
+ * selector: the switch waits for that routing, not for a guess at its duration.
  *
  * Subjects. /assets, /dashboard and /fx need none. The detail pages choose theirs over the API, by property.
  * The asset is the header's worst case: its title is capped at 15ch inside two flex wrappers that cannot
@@ -93,7 +95,8 @@
  * fresh context opens both in the grid view. The pixel widths are those of the fonts on the machine that
  * runs the sweep (Inter when installed, else system-ui).
  */
-import {expect, test as base, type Page} from '../fixtures/playwright';
+import type {Frame} from '@playwright/test';
+import {expect, test as base, type Page, type Request, type Response} from '../fixtures/playwright';
 import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso} from '../fixtures/dates';
@@ -371,6 +374,88 @@ async function keepOffline(page: Page, origin: string): Promise<void> {
     // /assets and /assets/{id} poll this on load and every 30 s. It asks the live providers and upserts today's
     // OHLC row on the shared seeded assets. Answered empty, the price summary shows the last stored close.
     await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+}
+
+/**
+ * The requests that decide whether a full load stays on its page. GET /auth/me: the (app) layout waits 5 s for it
+ * and, on a failure or a later answer, goes to /, where the root page sends a signed-in user to /dashboard.
+ * GET /settings/onboarding: when it reports the intro tour due, the tour opens on /dashboard (OnboardingOverlayHost).
+ */
+const ARRIVAL_REQUESTS: readonly string[] = [`${API}/auth/me`, `${API}/settings/onboarding`];
+
+/** How the page got where it is, from navigateTo on. Quoted and attached when the subject never gets ready. */
+interface Arrival {
+    /** Where the page is when this is read: path and query. */
+    url: string;
+    /** Main-frame URLs (path and query), ms after navigateTo began: the document, then each client-side navigation. */
+    navigations: Array<{ms: number; url: string}>;
+    /** Each request to ARRIVAL_REQUESTS, sub-paths included: when it left, and its status, failure or silence, with how long. */
+    requests: Array<{ms: number; request: string; outcome: string}>;
+    /** The onboarding surfaces on screen when this is read, by test id, and the app shell's intro-tour flag. */
+    onboarding: string[];
+}
+
+/** Runs inside the page: the outermost `onboarding-*` test ids, with their step or phase, and the app shell's guide flag. */
+function onboardingOnScreen(): string[] {
+    const outermost = Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="onboarding-"]')).filter((element) => !element.parentElement?.closest('[data-testid^="onboarding-"]'));
+    const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
+    const named = outermost.map((element) => [element.dataset.testid, element.dataset.stepId && `step ${element.dataset.stepId}`, element.dataset.phase && `phase ${element.dataset.phase}`].filter(Boolean).join(' '));
+    return [...named, shell ? `app-shell data-guide-inert="${shell.dataset.guideInert}"` : 'no app-shell'];
+}
+
+/**
+ * Records, until `stop()`, how the page arrives where it arrives: each main-frame navigation (a repeat of the same
+ * URL is folded) and each request to ARRIVAL_REQUESTS. Only the page's own traffic: `page.request` is not seen.
+ */
+function recordArrival(page: Page): {read: () => Promise<Arrival>; stop: () => void} {
+    const started = Date.now();
+    const elapsed = (): number => Date.now() - started;
+    const pathOf = (href: string): string => {
+        const {pathname, search} = new URL(href);
+        return pathname + search;
+    };
+    const navigations: Arrival['navigations'] = [];
+    const requests = new Map<Request, {ms: number; request: string; outcome?: string}>();
+    const onNavigated = (frame: Frame): void => {
+        if (frame !== page.mainFrame()) return;
+        const url = pathOf(frame.url());
+        if (navigations.at(-1)?.url !== url) navigations.push({ms: elapsed(), url});
+    };
+    const onRequest = (request: Request): void => {
+        const {pathname} = new URL(request.url());
+        if (ARRIVAL_REQUESTS.some((watched) => pathname === watched || pathname.startsWith(`${watched}/`))) requests.set(request, {ms: elapsed(), request: `${request.method()} ${pathname}`});
+    };
+    const settle = (request: Request, outcome: string): void => {
+        const entry = requests.get(request);
+        if (entry && entry.outcome === undefined) entry.outcome = `${outcome} after ${elapsed() - entry.ms} ms`;
+    };
+    const onResponse = (response: Response): void => settle(response.request(), `HTTP ${response.status()}`);
+    const onFailed = (request: Request): void => settle(request, `failed (${request.failure()?.errorText ?? 'no reason given'})`);
+    page.on('framenavigated', onNavigated);
+    page.on('request', onRequest);
+    page.on('response', onResponse);
+    page.on('requestfailed', onFailed);
+    return {
+        read: async () => ({
+            url: pathOf(page.url()),
+            navigations: [...navigations],
+            requests: [...requests.values()].map(({ms, request, outcome}) => ({ms, request, outcome: outcome ?? `no answer after ${elapsed() - ms} ms`})),
+            onboarding: await page.evaluate(onboardingOnScreen).catch((error: unknown) => [`unreadable: ${String(error).split('\n')[0]}`]),
+        }),
+        stop: () => {
+            page.off('framenavigated', onNavigated);
+            page.off('request', onRequest);
+            page.off('response', onResponse);
+            page.off('requestfailed', onFailed);
+        },
+    };
+}
+
+/** The arrival in a failure message: the navigations on one line, one line per request, the onboarding surfaces. */
+function describeArrival({navigations, requests, onboarding}: Arrival): string {
+    const trail = navigations.map(({ms, url}) => `+${ms} ms ${url}`).join(' → ') || 'none';
+    const sent = requests.map(({ms, request, outcome}) => `  ${request} sent +${ms} ms: ${outcome}`);
+    return [`  main frame since navigateTo: ${trail}`, ...(sent.length > 0 ? sent : [`  no request to ${ARRIVAL_REQUESTS.join(' or ')}`]), `  onboarding on screen: ${onboarding.join(', ')}`].join('\n');
 }
 
 // =============================================================================
@@ -789,15 +874,28 @@ test.describe('Top toolbars: every control inside its bar at every width (K step
                     if (!baseURL) throw new Error('The sweep needs the runner-provided baseURL');
                     await keepOffline(page, new URL(baseURL).origin);
                     await login(page, TEST_USER);
+                    // login() returns once the login form is gone: the root page still loads the bootstrap, then routes
+                    // to /dashboard, whose header holds the language selector. Wait for that routing, then the selector.
+                    await page.waitForURL((url) => url.pathname !== '/', {timeout: 30_000});
+                    await expect(page.getByTestId('language-selector-button'), 'the app shell is up after the post-login redirect').toBeVisible({timeout: 30_000});
                     await setLanguage(page, lang);
                     const subject = await bar.subject(page, owned);
 
                     await page.setViewportSize({width: SWEEP_FROM_PX, height: VIEWPORT_HEIGHT_PX});
-                    await navigateTo(page, subject.path);
-                    // A page that never settles is usually a page that is not there: say where the app went instead.
-                    await bar.ready(page).catch((error: unknown) => {
-                        throw new Error(`precondition: ${subject.path} finished loading — the page is at ${new URL(page.url()).pathname} instead.\n${String(error)}`);
-                    });
+                    // A page that never settles is usually a page that is not there: say where the app went instead, how it
+                    // got there and what the requests that decide it answered. Never retried: a full load that lands
+                    // elsewhere is a finding.
+                    const arrival = recordArrival(page);
+                    try {
+                        await navigateTo(page, subject.path);
+                        await bar.ready(page);
+                    } catch (error: unknown) {
+                        const evidence = await arrival.read();
+                        await testInfo.attach(`${bar.name}-${lang}-arrival.json`, {body: JSON.stringify({subject: subject.path, ...evidence}, null, 1), contentType: 'application/json'});
+                        throw new Error(`precondition: ${subject.path} finished loading — the page is at ${evidence.url} instead.\n${describeArrival(evidence)}\n${String(error)}`);
+                    } finally {
+                        arrival.stop();
+                    }
                     await expect(page.locator('html'), `precondition: ${subject.path} renders in ${lang}`).toHaveAttribute('lang', lang);
                     await expect(page.getByTestId(bar.root)).toBeVisible();
                     await expect
