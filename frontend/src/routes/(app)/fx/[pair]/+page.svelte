@@ -54,7 +54,7 @@
     import {DEFAULT_AXIS_SCALE, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
@@ -222,7 +222,7 @@
     let fxAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
     let fxAiExportCatalogLoading = $state(true);
     let fxAiExportCatalogFailed = $state(false);
-    let fxAiExportTargetCurrency = $derived($globalSettings.default_currency || data.canonicalQuote);
+    let fxAiExportTargetCurrency = $derived($defaultDisplayCurrency);
     let fxAiExportLabels = $derived(buildAiExportMenuLabels($t, fxAiExportCompatibility, $t('fxDetail.aiExport')));
 
     // Panel states before edit mode (to restore when exiting)
