@@ -191,6 +191,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/media/ImageEditModal.test.ts",
             "src/lib/components/ui/modals/SyncModalBase.test.ts",
             "src/lib/components/ui/modals/ModalBase.test.ts",
+            "src/lib/components/ui/modals/ModalBase.escapeLayers.test.ts",
             "src/lib/components/ui/modals/SyncResultRow.test.ts",
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
