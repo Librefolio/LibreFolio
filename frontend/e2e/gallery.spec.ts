@@ -57,6 +57,28 @@ import {
 } from './fixtures/galleryReportSets';
 import {selectBrokerFile} from './fixtures/import-wizard';
 import {optionsClosed} from './fixtures/probe';
+import {
+    chooseLabYear,
+    currentUserId,
+    expectLabClean,
+    forgetWhatIfTools,
+    frameBlock,
+    frameFromTop,
+    guardReadOnly,
+    idSet,
+    imagesSettled,
+    injectReplayLeftOut,
+    injectStalePrice,
+    LAB_ASSET_NAMES,
+    labSelection,
+    openLab,
+    pairTestId,
+    parkPointer,
+    resolveLabIds,
+    revealListSection,
+    scrollBackToHeader,
+    seedLabStorage,
+} from './fixtures/galleryRiskLab';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage, navigateToAssetByName} from './assets/assets-helpers';
@@ -983,6 +1005,65 @@ test.describe('Gallery Screenshots', () => {
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'data-quality-banner');
             });
+        });
+
+        test('dashboard data-quality banner missing exchange rates (mocked issue) - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            // Shown, never pressed: Sync rates asks the exchange-rate provider and writes the rates. The guard makes a
+            // stray press fail closed, and the end of the test proves none happened.
+            const guard = await guardReadOnly(page);
+
+            // The populated DB holds every rate the dashboard asks for, so the backend never reports one missing: the
+            // issue is written into the served snapshot, with the helper and the flow of the shot above, whose content
+            // stays as it is. Its shape is the one portfolio_engine.py builds for configured pairs that have a provider:
+            // the pairs in its sorted order, the first one the target of Sync rates, and the dates they lack — three
+            // days inside the default range, before the pairs' first stored rate (a date is missing only when no rate
+            // exists on or before it). Only `issues` is written, as above.
+            const daysAgo = (days: number) => getLocalDateString(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+            await setupDashboardMockReport(page, (report) => {
+                report.summary.data_quality = {
+                    ...report.summary.data_quality,
+                    issues: [
+                        {
+                            domain: 'portfolio',
+                            code: 'MISSING_FX_RATES',
+                            severity: 'warning',
+                            message_i18n_key: 'dataQuality.missingFxRates',
+                            message_params: {count: 2, date_from: daysAgo(88), date_to: daysAgo(86), dates_count: 3},
+                            count: 2,
+                            affected_fx_pairs: ['EUR-GBP', 'EUR-USD'],
+                            cta_action: 'sync_fx_pair',
+                            cta_target: 'EUR-GBP',
+                            group_key: 'missing_fx_rates',
+                        },
+                    ],
+                };
+            });
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+
+                // Collapsed on every load. A toggle: open it only when closed, then assert the end state, the issue the
+                // shot is for and its Sync rates button.
+                const bannerToggle = page.getByTestId('data-quality-toggle');
+                await expect(bannerToggle).toBeVisible({timeout: 10_000});
+                if ((await bannerToggle.getAttribute('aria-expanded')) !== 'true') await bannerToggle.click();
+                await expect(bannerToggle).toHaveAttribute('aria-expanded', 'true');
+                const issue = page.getByTestId('data-quality-issue-MISSING_FX_RATES');
+                await expect(issue).toBeVisible();
+                await expect(issue).toHaveAttribute('data-severity', 'warning');
+                const syncRates = issue.getByTestId('data-quality-cta-MISSING_FX_RATES');
+                await expect(syncRates).toBeVisible();
+                await expect(syncRates).toBeEnabled();
+                await freezeAnimations(page);
+                await parkPointer(page);
+                await expectNoToast(page);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'data-quality-sync-rates');
+            });
+            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
         });
     });
 
@@ -4647,6 +4728,414 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(200);
                 }
             }
+        });
+    });
+
+    /**
+     * Inventory group 4: the risk lab — the Correlation tab of the Assets page — and the Dashboard's What if…?
+     * simulation. Everything runs as the admin, read-only: the lab's selection and benchmark, and the Dashboard's open
+     * What if…? tools, live in the browser's storage and are written there before every load
+     * (fixtures/galleryRiskLab.ts); the live-price poll and every sync are aborted. Two shots edit a real answer where
+     * the gallery's clean data cannot show the state: the partial-results notice and the replay that leaves an asset
+     * out — galleryRiskLab.ts says which fields, and why.
+     */
+    test.describe('Risk Analysis', () => {
+        test.beforeEach(async ({page}) => {
+            await login(page, TEST_ADMIN);
+        });
+
+        /** The simulation's run: fewer paths than the default 8192, for speed — 2048 still draw a smooth cone — and a fixed seed. */
+        const SIMULATION_PATHS = 2048;
+        const SIMULATION_SEED = 123456;
+
+        /**
+         * The last steps before a shot: the pointer parked where nothing reacts to it and no tooltip left, every image of
+         * the framed region loaded, nothing in it still animating or moving, no toast over the page.
+         */
+        async function settleShot(page: Page, region: Locator, what: string): Promise<void> {
+            await parkPointer(page);
+            await imagesSettled(region);
+            await waitForMotionSettled(region, what);
+            await waitForStillness(region, what);
+            await expectNoToast(page);
+        }
+
+        test('risk lab correlation, loss table and risk/return - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh load of the lab: the eligibility engine, three risk waves over a year of
+            // prices (the matrix's, L1°'s, and L3°'s with the S&P 500 comparison), the assets' metadata and two charts.
+            // About 15 s a combination on a quiet lane; risk answers slow down under load.
+            test.setTimeout(360_000); // 6 minutes
+            const viewport = getViewport(testInfo);
+            const ids = await resolveLabIds(page);
+            const selection = labSelection(ids);
+            const guard = await guardReadOnly(page);
+            await seedLabStorage(page, ids.userId, {selection, benchmark: ids.sp500});
+            await chooseLabYear(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await openLab(page, selection);
+                await freezeAnimations(page);
+                const panel = page.getByTestId('asset-global-risk-panel');
+
+                // The matrix: drawn over the selection, its grouping metadata in — the sector and area orders, and the
+                // badge rows above the matrix, appear only once the assets' metadata is read — and both rankings on the page.
+                // The two loans are near-identical by construction (populate_mock_data.py, `correlation_plan`: 0.93), so they
+                // rank among the most alike on any populate day; no other pair is required — a pair's value depends on the
+                // selection's joint calendar — and with the seed's pairs the offsetting list may show its empty state.
+                const correlation = panel.getByTestId('risk-correlation-section');
+                const heatmap = correlation.getByTestId('risk-correlation-heatmap');
+                await waitForChart(heatmap, 30_000);
+                await expect.poll(async () => idSet(await heatmap.getAttribute('data-asset-order')), {message: 'the matrix does not draw the seeded selection'}).toEqual(selection);
+                await expect(correlation.getByTestId('risk-correlation-ordering-similarity')).toHaveAttribute('aria-pressed', 'true');
+                await expect(correlation.getByTestId('risk-correlation-ordering-sector'), 'the assets metadata never reached the matrix').toBeVisible({timeout: 15_000});
+                await expect(correlation.getByTestId('risk-correlation-ordering-region')).toBeVisible();
+                await expect(correlation.getByTestId('risk-correlation-groups')).toBeVisible();
+                await expect(correlation.getByTestId('risk-correlation-pairs-correlated').getByTestId(pairTestId(ids.milano, ids.roma)), 'the two loans are not ranked among the most alike').toBeVisible();
+                await expect(correlation.getByTestId('risk-correlation-pairs-offsetting')).toBeVisible();
+
+                // How much did each of these hurt?: one row per asset, the bad day, the bad month and the worst fall
+                // measured for every one, and the fall's duration under it.
+                const loss = panel.getByTestId('risk-asset-set-loss');
+                const lossTable = loss.getByTestId('risk-asset-set-l1-table');
+                await expect(lossTable).toHaveAttribute('data-row-count', String(selection.length), {timeout: 30_000});
+                await expect(loss.getByTestId('risk-asset-set-l1-loading')).toHaveCount(0);
+                for (const column of ['badDay', 'badMonth', 'worstFall'] as const) {
+                    await expect(lossTable.locator(`[data-testid="risk-asset-set-l1-${column}"][data-measured="true"]`), `${column} is not measured for every asset`).toHaveCount(selection.length);
+                }
+                await expect(lossTable.getByTestId('risk-asset-set-l1-worstFall-days')).not.toHaveCount(0);
+
+                // What did each of these pay for its risk?: the S&P 500 confirmed and its comparison back whole, the table
+                // opened by its tinted row, the period line, and the chart with its diamond and the line through it.
+                const paid = panel.getByTestId('risk-asset-set-paid');
+                const benchmark = paid.getByTestId('risk-asset-set-benchmark-control');
+                await expect(benchmark).toHaveAttribute('data-benchmark-state', 'set', {timeout: 20_000});
+                await expect(benchmark).toHaveAttribute('data-benchmark-id', String(ids.sp500));
+                await expect(paid.getByTestId('risk-asset-set-l3'), 'the S&P 500 comparison did not come back whole').toHaveAttribute('data-benchmark', 'true', {timeout: 30_000});
+                await expect(paid.getByTestId('risk-asset-set-l3-loading')).toHaveCount(0);
+                const paidTable = paid.getByTestId('risk-asset-set-l3-table');
+                await expect(paidTable).toHaveAttribute('data-reference-count', '1');
+                await expect(paidTable.locator(`[data-testid="risk-asset-set-l3-ref-name"][data-reference="benchmark"][data-asset-id="${ids.sp500}"]`)).toBeVisible();
+                await expect(paid.getByTestId('risk-asset-set-l3-period')).toBeVisible();
+                const scatter = paid.getByTestId('risk-asset-set-l3-scatter');
+                await waitForChart(scatter, 30_000);
+                await expect(scatter).toHaveAttribute('data-dropped-count', '0');
+                await expect(paid.getByTestId('risk-asset-set-l3-scatter-line')).toHaveAttribute('data-anchor', 'benchmark');
+                await expectLabClean(page, selection);
+
+                // Each frame comes down from the top of the page, so the header has slid out of every shot.
+                await frameFromTop(page, correlation);
+                await settleShot(page, correlation, 'the correlation section');
+                await screenshot(page, viewport, lang, theme, 'risk', 'lab-correlation');
+
+                await frameFromTop(page, loss);
+                await settleShot(page, loss, 'the loss table');
+                await screenshot(page, viewport, lang, theme, 'risk', 'lab-hurt-table');
+
+                // The section from its title when it fits on the screen, otherwise from the table's benchmark row.
+                await frameBlock(page, {first: paid, last: scatter, fallback: paidTable});
+                await settleShot(page, paid, 'the risk/return section');
+                await screenshot(page, viewport, lang, theme, 'risk', 'lab-risk-return');
+
+                await scrollBackToHeader(page);
+            });
+            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+        });
+
+        test('risk lab asset and benchmark pickers - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh load of the lab with every wave in before a picker opens. About 12 s a
+            // combination on a quiet lane.
+            test.setTimeout(300_000); // 5 minutes
+            const viewport = getViewport(testInfo);
+            const ids = await resolveLabIds(page);
+            const selection = labSelection(ids);
+            const guard = await guardReadOnly(page);
+            await seedLabStorage(page, ids.userId, {selection, benchmark: ids.sp500});
+            await chooseLabYear(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await openLab(page, selection);
+                await freezeAnimations(page);
+                const panel = page.getByTestId('asset-global-risk-panel');
+                const paid = panel.getByTestId('risk-asset-set-paid');
+                const benchmark = paid.getByTestId('risk-asset-set-benchmark-control');
+                await expect(benchmark).toHaveAttribute('data-benchmark-state', 'set', {timeout: 20_000});
+                await expect(benchmark).toHaveAttribute('data-benchmark-id', String(ids.sp500));
+                await expect(paid.getByTestId('risk-asset-set-l3'), 'the S&P 500 comparison did not come back whole').toHaveAttribute('data-benchmark', 'true', {timeout: 30_000});
+                await expectLabClean(page, selection);
+
+                // The "+", open over the selection card: two rows ticked, so Add counts them — never pressed — and the
+                // assets the engine rules out for the period listed apart, read-only, each with its reason. NVIDIA (a
+                // single quote) and the KRW stock (none) are among them in the seed.
+                const card = panel.getByTestId('risk-asset-set-controls');
+                await frameFromTop(page, card);
+                const add = page.getByTestId('risk-asset-add-panel');
+                await expect(add, 'the + opens closed on every load').toHaveCount(0);
+                await card.getByTestId('risk-asset-add-button').click();
+                await expect(add).toBeVisible();
+                await expect(add.getByTestId('risk-asset-add-search')).toBeVisible();
+                await expect(add.getByTestId('risk-asset-add-filters')).toBeVisible();
+                for (const assetId of [ids.microsoft, ids.tesla]) {
+                    const row = add.getByTestId(`risk-asset-add-option-${assetId}`);
+                    await row.click();
+                    await expect(row, `the + must let asset ${assetId} be ticked`).toHaveAttribute('aria-selected', 'true');
+                }
+                await expect(add.getByTestId('risk-asset-add-confirm')).toBeEnabled();
+                const blocked = add.getByTestId('risk-asset-add-blocked');
+                for (const assetId of [ids.nvidia, ids.krw]) {
+                    const row = blocked.getByTestId(`risk-asset-add-option-${assetId}`);
+                    await expect(row).toHaveAttribute('data-level', 'ineligible');
+                    await expect(row, `asset ${assetId} is listed apart without a reason`).toHaveAttribute('data-reasons', /\S/);
+                }
+                // The list scrolls inside the panel: the ticked rows and the start of the read-only part share its view.
+                await expect(add.getByTestId(`risk-asset-add-option-${ids.tesla}`)).toBeInViewport();
+                await expect(blocked.getByTestId(/^risk-asset-add-option-\d+$/).first()).toBeInViewport();
+                await waitForStillness(add, 'the + panel');
+                await settleShot(page, card, 'the selection card');
+                await screenshot(page, viewport, lang, theme, 'risk', 'lab-asset-picker');
+                await page.keyboard.press('Escape');
+                await expect(add).toHaveCount(0);
+                await expect(panel.getByTestId('risk-selected-count'), 'the ticked rows were added').toHaveAttribute('data-selected', String(selection.length));
+
+                // The benchmark picker, open at the top of «What did each of these pay for its risk?» on the current
+                // benchmark, its list scrolled to the read-only part at its bottom: the assets that cannot be measured over
+                // the period, each with its reason. Only the list scrolls — the panel is placed in the viewport and
+                // follows its trigger — so it is scrolled from the list that holds that part: its header at the top of
+                // what the list shows, the first entries under it (the phone); where the whole part fits, the list
+                // stops at its end, as before (the desktop).
+                await frameFromTop(page, paid);
+                const trigger = paid.getByTestId('risk-asset-set-benchmark-trigger');
+                const picker = page.getByTestId('risk-asset-set-benchmark-panel');
+                await expect(picker, 'the benchmark picker opens closed on every load').toHaveCount(0);
+                await trigger.click();
+                await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+                await expect(picker).toBeVisible();
+                await expect(picker.getByTestId('risk-asset-set-benchmark-search')).toBeVisible();
+                await expect(picker.getByTestId(`search-select-option-${ids.sp500}`), 'the picker does not open on the current benchmark').toHaveAttribute('aria-selected', 'true');
+                const unusable = picker.getByTestId('risk-asset-set-benchmark-blocked');
+                for (const assetId of [ids.nvidia, ids.krw]) {
+                    const row = unusable.getByTestId(`search-select-option-${assetId}`);
+                    await expect(row).toHaveAttribute('data-level', 'ineligible');
+                    await expect(row, `asset ${assetId} is listed apart without a reason`).toHaveAttribute('data-reasons', /\S/);
+                }
+                await revealListSection(unusable);
+                await waitForStillness(picker, 'the benchmark picker');
+                await expect(unusable.getByTestId(/^search-select-option-\d+$/).first(), 'the first unusable asset is not on screen').toBeInViewport();
+                await settleShot(page, picker, 'the benchmark picker');
+                await screenshot(page, viewport, lang, theme, 'risk', 'lab-benchmark-picker');
+                await page.keyboard.press('Escape');
+                await expect(picker).toHaveCount(0);
+                await optionsClosed(page);
+                await expect(benchmark, 'another benchmark was chosen').toHaveAttribute('data-benchmark-id', String(ids.sp500));
+
+                await scrollBackToHeader(page);
+            });
+            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+        });
+
+        test('risk lab partial results notice (injected stale price) - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh load of the lab whose three base waves and two eligibility answers are fetched
+            // and edited on their way.
+            test.setTimeout(300_000); // 5 minutes
+            const viewport = getViewport(testInfo);
+            const ids = await resolveLabIds(page);
+            const selection = labSelection(ids);
+            const guard = await guardReadOnly(page);
+            // No benchmark: L3° measures without a comparison, so the notice counts exactly five measurements.
+            await seedLabStorage(page, ids.userId, {selection, benchmark: null});
+            // INJECTED (galleryRiskLab.ts, injectStalePrice): RE Loan Roma's price 12 days old on every base wave, and the
+            // matrix's own answer not back; the eligibility answers about Roma carry the matching stale-end verdict
+            // (warning, so Roma stays analysed). The gallery's prices are all fresh, so no real answer carries any of them.
+            const injection = await injectStalePrice(page, {id: ids.roma, name: LAB_ASSET_NAMES.roma});
+            await chooseLabYear(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const editedBefore = injection.edited;
+                const verdictsBefore = injection.verdictsEdited;
+                await openLab(page, selection);
+                await freezeAnimations(page);
+                const panel = page.getByTestId('asset-global-risk-panel');
+                // Both levels have their tables, so every result the notice reads is in; and this load's three base waves
+                // (the matrix's, L1°'s, L3°'s) all went through the edit.
+                await expect(panel.getByTestId('risk-asset-set-l1-table')).toHaveAttribute('data-row-count', String(selection.length), {timeout: 30_000});
+                await expect(panel.getByTestId('risk-asset-set-l3-table')).toHaveAttribute('data-row-count', String(selection.length), {timeout: 30_000});
+                await expect.poll(() => injection.edited - editedBefore + injection.problems.length, {message: 'the lab asked fewer than three base waves', timeout: 30_000}).toBeGreaterThanOrEqual(3);
+                // Both eligibility answers of this load name Roma: the catalogue's, behind the chips, and the selection's.
+                await expect.poll(() => injection.verdictsEdited - verdictsBefore + injection.problems.length, {message: "the lab's eligibility answers about RE Loan Roma were not both edited", timeout: 30_000}).toBeGreaterThanOrEqual(2);
+                expect(injection.problems, 'an answer went through unedited').toEqual([]);
+
+                // The chips agree with the notice: Roma's is the amber one, stale at the end, and still analysed (openLab:
+                // five selected, none parked); the other four keep their clean, real verdicts.
+                const roma = panel.getByTestId(`risk-selected-asset-${ids.roma}`);
+                await expect(roma).toHaveAttribute('data-level', 'warning');
+                await expect(roma).toHaveAttribute('data-reasons', 'stale_at_end');
+                await expect(roma).toHaveAttribute('data-variant', 'warning');
+                for (const assetId of selection.filter((id) => id !== ids.roma)) {
+                    await expect(panel.getByTestId(`risk-selected-asset-${assetId}`), `asset ${assetId} is not clean over the year: the gallery data went stale`).toHaveAttribute('data-level', 'eligible');
+                }
+
+                // The notice: amber, one cause — the stale price — and the five partial measurements of the two levels.
+                const notice = panel.getByTestId('risk-partial-notice');
+                await expect(notice).toBeVisible();
+                await expect(notice).toHaveAttribute('data-tone', 'warning');
+                await expect(notice.getByTestId('risk-partial-reasons')).toHaveAttribute('data-count', '1');
+                await expect(notice.getByTestId('risk-partial-measurements')).toHaveAttribute('data-count', '5');
+                // Above it the banner, folded as every load opens it; under it the matrix's own banner, naming the measurement
+                // that did not come back, and why. No other section banner, and no period offer, in the shot: the selection's
+                // eligibility answer keeps the engine's suggestion, which over a year of fresh prices is none.
+                const banner = panel.getByTestId('data-quality-banner');
+                await expect(banner).toBeVisible();
+                await expect(banner.getByTestId('data-quality-toggle')).toHaveAttribute('aria-expanded', 'false');
+                const correlation = panel.getByTestId('risk-correlation-section');
+                const alert = correlation.getByTestId('risk-correlation-section-alert');
+                await expect(alert).toBeVisible();
+                await expect(alert.getByTestId('risk-correlation-section-health')).toHaveAttribute('data-count', '1');
+                await expect(alert.getByTestId('risk-correlation-section-error')).toHaveAttribute('data-code', 'insufficient_history');
+                await expect(correlation.getByTestId('risk-correlation-empty')).toBeVisible();
+                for (const section of ['risk-asset-set-loss', 'risk-asset-set-paid']) await expect(panel.getByTestId(`${section}-alert`)).toHaveCount(0);
+                await expect(panel.getByTestId('risk-fit-period-banner')).toHaveCount(0);
+
+                const card = panel.getByTestId('risk-asset-set-controls');
+                await frameFromTop(page, card);
+                await settleShot(page, card, 'the selection card');
+                await expect(alert, 'the matrix banner falls outside the shot').toBeInViewport();
+                await screenshot(page, viewport, lang, theme, 'risk', 'lab-notice');
+
+                await scrollBackToHeader(page);
+            });
+            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+        });
+
+        test('risk lab historical replay with a left-out asset (injected) - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh load of the lab, then a replay over a year of prices run and edited on its way.
+            test.setTimeout(360_000); // 6 minutes
+            const viewport = getViewport(testInfo);
+            const ids = await resolveLabIds(page);
+            const selection = labSelection(ids);
+            const guard = await guardReadOnly(page);
+            await seedLabStorage(page, ids.userId, {selection, benchmark: null});
+            // INJECTED (galleryRiskLab.ts, injectReplayLeftOut): RE Loan Roma left out of the replay, first quoted 60 days
+            // into the window, with the common period that brings it back. Every asset of the seed starts on the same day,
+            // so a real window covers all of them or none: it never leaves one out while replaying the others.
+            const injection = await injectReplayLeftOut(page, {id: ids.roma, name: LAB_ASSET_NAMES.roma});
+            await chooseLabYear(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await openLab(page, selection);
+                await freezeAnimations(page);
+                await expectLabClean(page, selection);
+                const panel = page.getByTestId('asset-global-risk-panel');
+
+                // What if…? is born closed on every load: opened from its title, the end state asserted.
+                const section = panel.getByTestId('risk-replay-section');
+                await expect(section).toHaveAttribute('data-open', 'false');
+                await section.getByTestId('risk-replay-section-toggle').click();
+                await expect(section).toHaveAttribute('data-open', 'true');
+                const replay = section.getByTestId('risk-replay');
+                const run = replay.getByTestId('risk-replay-run');
+                await expect(run).toBeEnabled();
+
+                // Run replay over the page's period: the replay follows it until its own dates are touched.
+                const editedBefore = injection.edited;
+                await run.click();
+                await expect.poll(() => injection.edited - editedBefore + injection.problems.length, {message: 'the replay was never asked', timeout: 60_000}).toBeGreaterThanOrEqual(1);
+                expect(injection.problems, 'the replay went through unedited').toEqual([]);
+                const suggested = injection.suggested;
+                if (!suggested) throw new Error('the edited replay offers no common period');
+
+                // The box of what was left out first: one badge under its reason, and the common-period button — shown,
+                // never pressed: it would run a second replay. Then the table of the assets replayed, without the one left out.
+                const box = replay.getByTestId('risk-replay-excluded');
+                await expect(box).toBeVisible({timeout: 30_000});
+                await expect(box).toHaveAttribute('data-count', '1');
+                await expect(box).toHaveAttribute('data-treatment', 'omitted_from_replay');
+                await expect(box.locator(`[data-testid="risk-replay-excluded-group"][data-reason="starts_after_window_start"] [data-testid="risk-replay-excluded-asset"][data-asset-id="${ids.roma}"]`)).toBeVisible();
+                const offer = box.getByTestId('risk-replay-suggested');
+                await expect(offer).toHaveAttribute('data-start', suggested.start);
+                await expect(offer).toHaveAttribute('data-end', suggested.end);
+                await expect(offer).toHaveAttribute('data-recovers', '1');
+                await expect(offer).toBeEnabled();
+                const tornado = replay.getByTestId('risk-replay-tornado');
+                await expect(tornado.getByTestId('risk-replay-tornado-row')).toHaveCount(selection.length - 1);
+                await expect(tornado.locator(`[data-testid="risk-replay-tornado-row"][data-row-key="asset:${ids.roma}"]`)).toHaveCount(0);
+                await expect(run).toBeEnabled();
+                await expect(section.getByTestId('risk-replay-section-health'), 'the section does not mark the replay partial').toBeVisible();
+
+                // The section from its title when it fits on the screen, otherwise from the box of what was left out.
+                await frameBlock(page, {first: section, last: tornado, fallback: box});
+                await settleShot(page, section, 'the replay');
+                await screenshot(page, viewport, lang, theme, 'risk', 'lab-replay');
+
+                await scrollBackToHeader(page);
+            });
+            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
+        });
+
+        test('risk what-if simulation on the dashboard - all languages and themes', async ({page}, testInfo) => {
+            // The heaviest scenario of the group: eight live dashboard loads, each the risk tab's base wave over a year of
+            // the admin's portfolio, then a 2048-path bootstrap over a 365-day horizon.
+            test.setTimeout(480_000); // 8 minutes
+            const viewport = getViewport(testInfo);
+            const guard = await guardReadOnly(page);
+            await forgetWhatIfTools(page, await currentUserId(page));
+            await navigateTo(page, '/dashboard');
+            await selectOneYearPreset(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // The live report, not the snapshot: the risk tab measures the gallery DB's own portfolio.
+                await navigateTo(page, '/dashboard');
+                await page.getByTestId('dashboard-tab-risk').click();
+                await expect(page.getByTestId('dashboard-risk-tab')).toBeVisible({timeout: 15_000});
+                await freezeAnimations(page);
+                const levels = page.getByTestId('risk-levels-panel');
+                await expect(levels).toHaveAttribute('data-catalog', 'ready', {timeout: 30_000});
+                await expect(levels).toHaveAttribute('data-busy', 'false', {timeout: 60_000});
+
+                // What if…? is born closed, and with no tool open (the init script forgets the ones left open): opened from
+                // its title, then the simulation added the way a user adds it.
+                const whatIf = levels.getByTestId('risk-level-4');
+                await expect(whatIf).toHaveAttribute('data-open', 'false');
+                await whatIf.getByTestId('risk-level-4-toggle').click();
+                await expect(whatIf).toHaveAttribute('data-open', 'true');
+                await expect(whatIf.getByTestId('risk-l4-tools')).toBeVisible();
+                const box = whatIf.getByTestId('risk-l4-simulation');
+                await expect(box, 'a What if…? tool came back open').toHaveCount(0);
+                await whatIf.getByTestId('risk-l4-add-simulation').click();
+                await expect(box).toBeVisible();
+                await expect(box.locator('[data-testid="risk-beta-banner"][data-scope="simulation"]')).toBeVisible();
+                await expect(box.getByTestId('risk-l4-model-warning')).toBeVisible();
+
+                // The five modes, the recommended one chosen; a 365-day horizon, the paths and the seed fixed, so every
+                // combination draws the same answer.
+                const simulation = box.getByTestId('risk-simulation');
+                await expect(simulation.getByTestId('risk-simulation-mode')).toHaveCount(5);
+                await expect(simulation.locator('[data-testid="risk-simulation-mode"][data-mode-id="block_bootstrap"]')).toHaveAttribute('data-selected', 'true');
+                await expect(simulation.getByTestId('risk-simulation-horizon')).toHaveValue('365');
+                const paths = simulation.getByTestId('risk-simulation-paths');
+                await paths.fill(String(SIMULATION_PATHS));
+                await expect(paths).toHaveValue(String(SIMULATION_PATHS));
+                const seed = simulation.getByTestId('risk-simulation-seed');
+                await seed.fill(String(SIMULATION_SEED));
+                await expect(seed).toHaveValue(String(SIMULATION_SEED));
+                const run = simulation.getByTestId('risk-simulation-run');
+                await expect(run).toBeEnabled();
+                await run.click();
+
+                // A result: the terminal figures, the cone drawn (its LineChart has no test id of its own: it is the one
+                // chart under the simulation root), and what the simulation assumed.
+                await expect(simulation.getByTestId('risk-simulation-terminal')).toBeVisible({timeout: 120_000});
+                await expect(run).toBeEnabled({timeout: 30_000});
+                await waitForChart(simulation, 30_000);
+                await expect(box.getByTestId('risk-l4-provenance')).toBeVisible();
+
+                // From the top of the step: the beta notice and the model warning above the modes come first. The whole
+                // step is taller than a screen, so the shot ends inside the result.
+                await frameFromTop(page, box);
+                await settleShot(page, box, 'the simulation');
+                await screenshot(page, viewport, lang, theme, 'risk', 'whatif-simulation');
+
+                await scrollBackToHeader(page);
+            });
+            expect(guard.syncs, 'a sync, or a read of the provider catalogue, was started').toEqual([]);
         });
     });
 });
