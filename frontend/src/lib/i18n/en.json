@@ -628,7 +628,8 @@
     "todoBlockerVerifyHint": "{n, plural, one {# row was not fully understood by the importer and must be reviewed before saving.} other {# rows were not fully understood by the importer and must be reviewed before saving.}}",
     "parseErrorsTitle": "{n} file(s) could not be parsed",
     "brimNotice": {
-      "ca_succession_transfer_in": "Securities transferred in from another custody account were detected ({n} rows).\nThey were recorded as «Adjustment» transactions because they have no matching cash movement: the assumption is that you already owned them at a different broker.\nIf that is the case, and that broker is tracked in LibreFolio, then when you import the other half of the transaction the system will offer to link the two and turn them into a «Securities transfer».\nThe rows in detail:"
+      "ca_succession_transfer_in": "Securities transferred in from another custody account were detected ({n} rows).\nThey were recorded as «Adjustment» transactions because they have no matching cash movement: the assumption is that you already owned them at a different broker.\nIf that is the case, and that broker is tracked in LibreFolio, then when you import the other half of the transaction the system will offer to link the two and turn them into a «Securities transfer».\nThe rows in detail:",
+      "corporate_action": "Missing inherited per-unit cost (WAC): enter the cost of a single unit, not the total, to import this row."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -4041,7 +4042,7 @@
           "feeMin": "min {amount}",
           "fundingHelp": "The money the plan may use to buy on this Broker: its own cash, plus the contributions and the cash of other accounts you allow in Edit. Everything is allowed at first; in Edit, click a source to exclude it.",
           "fundingLabel": "Usable liquidity",
-          "incrementHelp": "Every proposed order is a multiple of this value. By number of units: 1 = whole units only, 0.001 = fractions down to three decimals. By amount: the smallest amount you can enter, for example 0.01.",
+          "incrementHelp": "Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.",
           "orderKindHelp": "How you enter an order at this Broker: by number of units (you buy 3 units) or by amount (you invest 150). It sets the unit of the increment and of the limits on each order.",
           "fundingChipHelp": "{kind, select, local {The cash already on {name} in {currency}: the plan uses it here, with no transfer.} account {The cash of {name} in {currency}: you allowed it to pay for purchases on this Broker.} other {The contribution {name}: you allowed it to pay for purchases on this Broker.}}",
           "conversionValueAuto": "The Broker converts when you buy, at the rate of the FX step minus the spread."

@@ -628,7 +628,8 @@
     "todoBlockerVerifyHint": "{n, plural, one {# ligne n'a pas été entièrement comprise par l'import et doit être vérifiée avant l'enregistrement.} other {# lignes n'ont pas été entièrement comprises par l'import et doivent être vérifiées avant l'enregistrement.}}",
     "parseErrorsTitle": "{n} fichier(s) n'ont pas pu être analysés",
     "brimNotice": {
-      "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :"
+      "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :",
+      "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -4041,7 +4042,7 @@
           "feeMin": "min {amount}",
           "fundingHelp": "L’argent que le plan peut utiliser pour acheter chez ce courtier : ses propres liquidités, plus les versements et les liquidités d’autres comptes que vous autorisez dans Modifier. Au départ, tout est autorisé ; dans Modifier, cliquez sur une source pour l’exclure.",
           "fundingLabel": "Liquidités utilisables",
-          "incrementHelp": "Chaque ordre proposé est un multiple de cette valeur. Par nombre de titres : 1 = titres entiers uniquement, 0,001 = fractions jusqu’à trois décimales. Par montant : le plus petit montant que vous pouvez saisir, par exemple 0,01.",
+          "incrementHelp": "Chaque ordre proposé est un multiple de cette valeur. Par nombre de titres : un nombre entier, par exemple 1. Par montant : le plus petit montant que vous pouvez saisir, par exemple 0,01 ; c’est ainsi que l’on achète des fractions de titre.",
           "orderKindHelp": "Comment vous saisissez un ordre chez ce courtier : par nombre de titres (vous achetez 3 titres) ou par montant (vous investissez 150). Cela fixe l’unité de l’incrément et des limites de chaque ordre.",
           "fundingChipHelp": "{kind, select, local {Les liquidités en {currency} déjà chez {name} : le plan les utilise ici, sans transfert.} account {Les liquidités en {currency} de {name} : vous avez autorisé leur usage pour les achats chez ce courtier.} other {Le versement {name} : vous avez autorisé son usage pour les achats chez ce courtier.}}",
           "conversionValueAuto": "Le courtier convertit à l’achat, au taux de l’étape Change moins le spread."

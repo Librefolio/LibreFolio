@@ -13,6 +13,7 @@
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getIndexColor} from '$lib/utils/colors';
     import {resolveIssueMessage, translateFieldName} from '$lib/utils/transactions/resolveValidationMessage';
+    import {resolveBrimTodoMessage} from '$lib/utils/transactions/resolveBrimNotice';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
     import BrimEvidenceTable from '$lib/components/transactions/import/BrimEvidenceTable.svelte';
@@ -177,12 +178,10 @@
         return formatCurrencyAmountPlain(amount, code);
     }
 
-    /** Same rule as the fix step: the localised wording of the reason code, else the plugin's own message. */
+    /** The shared todo rule: the localised wording of the reason code, else the plugin's own message. */
     function todoView(todo: BrimFieldTodo): TodoView {
-        const key = `importWizard.brimNotice.${todo.reason_code}`;
-        const translated = $t(key);
-        const message = translated === key ? todo.message : translated;
         const ctx = (todo.context ?? {}) as Record<string, unknown>;
+        const message = resolveBrimTodoMessage({reasonCode: todo.reason_code, message: todo.message, context: ctx}, $t);
         const used = new Set<string>(TODO_SILENT_KEYS);
         const facts: TodoView['facts'] = [];
 
