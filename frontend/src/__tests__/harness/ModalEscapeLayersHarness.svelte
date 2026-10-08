@@ -10,7 +10,10 @@
       by its own `onClose`, as DataTable and AssetGroupStep do. `onMenuClose` reports every close,
       so a spec can prove the menu's own Escape listener ran;
     - a SearchSelect with its search box in the dropdown, and one with the search inline in its
-      trigger (the layout of CurrencySearchSelect).
+      trigger (the layout of CurrencySearchSelect);
+    - a SimpleSelect (`esc-simple`), the select of «Read as» in the import wizard's ReportSetCard: a
+      combobox that keeps the focus on its trigger while its list is open and handles the keys there,
+      naming the highlighted option with `aria-activedescendant`.
 
   The ids are the harness's own (`esc-*`), except `context-menu`, which ContextMenu fixes itself.
   Lives under `src/__tests__/`, which `vitest.config.ts` excludes from coverage.
@@ -19,6 +22,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
+    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
 
     interface Props {
@@ -55,5 +59,6 @@
         {/if}
         <SearchSelect value="EUR" {options} testId="esc-select" />
         <SearchSelect value="EUR" {options} testId="esc-inline" inlineSearch={true} />
+        <SimpleSelect value="EUR" {options} testId="esc-simple" />
     </div>
 </ModalBase>
