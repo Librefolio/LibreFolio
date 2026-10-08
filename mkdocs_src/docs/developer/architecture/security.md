@@ -46,9 +46,23 @@ The JWT signing key (`JWT_SECRET`) is:
 
     On macOS, Uvicorn uses `spawn` (not `fork`) for worker processes. Each worker re-imports all modules, so the JWT secret **must** be shared via environment variable. `dev.py` handles this automatically by generating the secret before launching Uvicorn.
 
+How the key is resolved:
+
+- `backend/app/services/auth_service.py` reads `JWT_SECRET` once, at import, straight from
+  `os.environ`: it is not a field of the Pydantic `Settings`. Tokens are signed with HS256. When
+  the variable is unset or empty, each process falls back to its own
+  `secrets.token_urlsafe(64)`.
+- `dev.py` copies `.env` into the environment first, then calls
+  `env.setdefault("JWT_SECRET", …)`, so an explicit value wins. An empty `JWT_SECRET=` line
+  counts as set: `dev.py` keeps the empty string and every worker generates its own key, so a
+  multi-worker server logs users out at random. Omit the line instead.
+- The Docker image starts a single uvicorn worker (`CMD` in the `Dockerfile`): without the
+  variable, every container start invalidates all sessions.
+
 ### ⏰ Token Expiration
 
 - Configurable via [Global Settings](../../admin/settings.md): `session_ttl_hours` (default: 24 hours)
+- Read at login, it sets both the token's `exp` and the cookie's `max_age`: a new value applies from the next login
 - After expiration, the user must log in again
 - There is no token refresh mechanism — a new login is required
 
@@ -150,6 +164,12 @@ browser that the table and card views of `/assets` show it as text and run nothi
     and adds the two gates above.
 
 ## 🐳 Container Image Check
+
+The automatic update check runs only for superusers, after login
+(`frontend/src/routes/(app)/+layout.svelte`). Its release lookup is cached in `localStorage`
+(`librefolio-update-check`) for one hour (`CHECK_INTERVAL_MS`), and **Skip this version** is
+stored in the same entry. A manual **Check for updates** in the changelog modal bypasses both the
+cache and the dismissal, and reports errors.
 
 The update check reports a new release only once its Docker image can be pulled from GHCR.
 GHCR's anonymous token handshake is not available to browsers through CORS, so the frontend

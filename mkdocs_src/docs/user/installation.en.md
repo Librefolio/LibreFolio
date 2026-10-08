@@ -1,48 +1,51 @@
 # 🐳 Installation with Docker (User)
 
-This guide explains how to install and run LibreFolio for regular use using the official pre-built Docker image. This is the simplest and recommended method for end users.
+This guide installs LibreFolio with the official pre-built Docker image: the simplest and recommended way to run it at home.
 
-You do not need to install development tools or compile code on your host machine (no Python, Node.js, or Pipenv requirements).
+You only need Docker: no Python, Node.js or Pipenv, and nothing to compile.
 
 ---
 
 ## ✅ Prerequisites
 
-Before starting, ensure you have **Docker** (which includes Docker Compose) installed on your host machine. Depending on your operating system, you can follow these steps:
+Install **Docker**, which includes Docker Compose, on the computer that will run LibreFolio:
 
 === "Linux"
 
-    Most Linux distributions allow installation through their official repositories.
-    
-    For Debian/Ubuntu-based distributions:
+    Follow Docker's official guide for your distribution: [Install Docker Engine](https://docs.docker.com/engine/install/). On Debian and Ubuntu, the guide first adds Docker's package repository, then installs:
+
     ```bash
     sudo apt-get update
     sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     ```
-    
+
     !!! warning "Docker group permissions (Linux)"
+
         On Linux, your system user must belong to the `docker` group to run commands without `sudo`:
+
         ```bash
         sudo usermod -aG docker $USER
         ```
+
         Then **log out and log back in** (or run `newgrp docker`) to apply the changes to your current terminal session.
 
 === "macOS"
 
-    On macOS, the recommended way is to install **Docker Desktop**:
-    
-    - [Download Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) (available for Apple Silicon or Intel).
-    - Alternatively, if you use Homebrew, you can install it via terminal:
+    Install **Docker Desktop**:
+
+    - [Download Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) (Apple Silicon or Intel).
+    - Or, with Homebrew:
+
       ```bash
-      brew install --cask docker
+      brew install --cask docker-desktop
       ```
 
 === "Windows"
 
-    On Windows, install **Docker Desktop**:
-    
+    Install **Docker Desktop**:
+
     - Download and install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/).
-    - Make sure to enable the **WSL 2** backend during installation for the best performance.
+    - Enable the **WSL 2** backend during installation for the best performance.
 
 ---
 
@@ -50,7 +53,7 @@ Before starting, ensure you have **Docker** (which includes Docker Compose) inst
 
 ### 📁 1. Create a project folder
 
-📂 Navigate to the folder where you want to save the project (for example, your user folder or documents), create a new directory for LibreFolio, and enter it:
+Open a terminal, go to the folder where you want to keep LibreFolio (for example your Documents folder), then create a `librefolio` folder and enter it:
 
 ```bash
 # 🏠 Go to the main folder where you want to place the project (e.g. Documents)
@@ -63,9 +66,7 @@ cd librefolio
 
 ### 📥 2. Get the base configuration files
 
-⚙️ To start LibreFolio, you will need the `docker-compose.yml` file (which describes the container stack) and the `.env` file (which contains your custom environment settings).
-
-⬇️ You can download them directly from the official GitHub repository using one of the following commands:
+LibreFolio needs two files: `docker-compose.yml`, which describes the container, and `.env`, which holds your settings. Download both from the official repository with one of these commands:
 
 === "wget"
 
@@ -87,146 +88,145 @@ cd librefolio
     curl -L https://raw.githubusercontent.com/Librefolio/LibreFolio/main/.env.example -o .env
     ```
 
-This installs the official GHCR image-based production stack and stores persistent data in `./LibreFolio-data` beside `docker-compose.yml`.
+The stack runs the official image from the GitHub Container Registry (GHCR) and keeps all your data in a `LibreFolio-data` folder next to `docker-compose.yml`.
 
-✍️ Alternatively, you can manually create a file named `docker-compose.yml` and paste the following code inside:
+??? example "✍️ Prefer to write `docker-compose.yml` by hand?"
 
-```yaml
-services:
-  librefolio:
-    image: ghcr.io/librefolio/librefolio:latest
-    container_name: librefolio
-    restart: unless-stopped
-    ports:
-      - "6040:6040"
-    volumes:
-      - ./LibreFolio-data:/app/backend/data/prod-docker
-    env_file: .env
-    environment:
-      - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
-      - HOST=0.0.0.0
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
-      interval: 30s
-      timeout: 10s
-      start_period: 15s
-      retries: 3
-```
+    Create a file named `docker-compose.yml` and paste this content, the same service as the official file:
 
-💡 *(If you did not download the `.env.example` file, remove the `env_file: .env` line from the code above, or create an empty `.env` file, to prevent startup errors).*
+    ```yaml
+    services:
+      librefolio:
+        image: ${LIBREFOLIO_IMAGE:-ghcr.io/librefolio/librefolio:latest}
+        container_name: librefolio
+        restart: unless-stopped
+        ports:
+          - "${PORT:-6040}:6040"
+        volumes:
+          - ./LibreFolio-data:/app/backend/data/prod-docker
+        env_file: .env
+        environment:
+          - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
+          - HOST=0.0.0.0
+        healthcheck:
+          test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
+          interval: 30s
+          timeout: 10s
+          start_period: 15s
+          retries: 3
+    ```
+
+    The `env_file: .env` line needs a `.env` file in the same folder: download it as shown above, or create an empty one, otherwise Docker stops with an error.
 
 ### ▶️ 3. Start the application
 
-🚀 Start the container in the background (detached mode) by running:
+Start LibreFolio in the background:
 
 ```bash
 docker compose up -d
 ```
 
-📦 Docker will download the official image from the GitHub Container Registry (GHCR) and start LibreFolio. The `latest` tag is the [light variant](#image-variants-full-and-light) of the image, the recommended default.
+Docker downloads the official image from GHCR and starts LibreFolio. The `latest` tag is the [light variant](#image-variants-full-and-light) of the image, the recommended default.
 
 ### 🌐 4. Access LibreFolio
 
-🖥️ Once the container has started, open your browser and go to:
+Open your browser at **`http://localhost:6040`**.
 
-**`http://localhost:6040`**
+On your first visit, LibreFolio shows the registration page: the first account you create automatically becomes the **administrator**.
 
-👤 On first access, you will be presented with the registration page to create the LibreFolio administrator account. The first user to register will automatically receive administrator privileges.
+??? tip "🖥️ Watch the status and the logs (optional)"
 
-!!! tip "Monitoring Status and Logs with Portainer"
-
-    If you prefer a convenient graphical interface to monitor the status of your LibreFolio container and view its logs in real time, we recommend using **[Portainer](https://github.com/portainer/portainer)**, a lightweight and widely used Docker management tool.
+    From the terminal, `docker compose logs -f` follows LibreFolio's logs (`Ctrl+C` stops following). For a graphical view of your containers and their logs in real time, try **[Portainer](https://github.com/portainer/portainer)**, a lightweight and widely used Docker management tool.
 
 ### 📶 5. Local and Remote Network Access
 
-Once started, LibreFolio will be reachable:
+Once started, LibreFolio is reachable:
 
-- 💻 Directly from the **host computer** by visiting `http://localhost:6040`.
-- 📱 From **other devices on the same local network (LAN)** (e.g. smartphones, tablets, other PCs) by entering the host computer's local IP address in the browser (e.g. `http://192.168.1.100:6040`).
+- 💻 from the **host computer**, at `http://localhost:6040`;
+- 📱 from **other devices on the same local network** (smartphones, tablets, other PCs), at the host computer's local IP address, for example `http://192.168.1.100:6040`.
 
-#### 🛡️ Firewall Configuration (optional)
-If you cannot access LibreFolio from other devices on the local network, you may need to open port `6040` in the host computer's firewall:
+??? note "🛡️ Firewall — only if other devices cannot connect"
 
-=== "Debian / Ubuntu (UFW)"
+    Open port `6040` in the host computer's firewall:
 
-    ```bash
-    sudo ufw allow 6040/tcp
-    ```
+    === "Debian / Ubuntu (UFW)"
 
-=== "RHEL / Rocky Linux / Fedora (Firewalld)"
+        ```bash
+        sudo ufw allow 6040/tcp
+        ```
 
-    ```bash
-    sudo firewall-cmd --add-port=6040/tcp --permanent
-    sudo firewall-cmd --reload
-    ```
+    === "RHEL / Rocky Linux / Fedora (Firewalld)"
 
-#### 🌐 Remote Access
-To access LibreFolio securely when you are away from home (outside the local network), you are free to configure your preferred solution (such as a reverse proxy with an SSL certificate).
+        ```bash
+        sudo firewall-cmd --add-port=6040/tcp --permanent
+        sudo firewall-cmd --reload
+        ```
 
-However, for maximum simplicity and security without opening ports on your router, **we recommend using Tailscale**. You can find all the details and a step-by-step guide on the [Exposure with Tailscale](../admin/service_exposure.md) page.
+🌍 **Away from home**, use the solution you prefer, such as a reverse proxy with an SSL certificate. For the simplest and safest setup, with no ports opened on your router, **we recommend Tailscale**: see [Exposure with Tailscale](../admin/service_exposure.md).
 
 ---
 
 ## 🏷️ Image Variants: Full and Light {: #image-variants-full-and-light }
 
-The official image is published in two variants. Both contain the same application and all the documentation text pages, in all four languages; they differ only in the documentation screenshots:
+The official image comes in two variants. Both contain the whole application and all documentation text pages, in all four languages; they differ only in the documentation screenshots:
 
-- 🪶 **Light** (the recommended default) — **without the documentation screenshots**: when you open a documentation page that contains screenshots, they are loaded on demand from the online documentation site. About 450 MB to download, about 1.6 GB on disk.
-- 🗂️ **Full** — also includes about 2,000 documentation screenshots (desktop and mobile, in all four languages, in light and dark themes), so the built-in documentation works fully offline. About 0.8 GB to download, about 2 GB on disk.
+- 🪶 **Light** (the recommended default): **without the documentation screenshots**, which load on demand from the online documentation site. About 450 MB to download.
+- 🗂️ **Full**: also includes the documentation screenshots (desktop and mobile, in all four languages, in light and dark themes), so the built-in documentation works fully offline. A larger download.
 
-Sizes are approximate and vary slightly from one release to the next.
-
-Each release is published on the registry with these tags:
+Each release is published with these tags:
 
 | Tag | Variant | Use it to |
 |-----|---------|-----------|
-| `latest` | 🪶 Light | Follow the newest release (the tag used in the `docker-compose.yml` above) |
+| `latest` | 🪶 Light | Follow the newest release (the tag used by the `docker-compose.yml` above) |
 | `X.Y.Z` (e.g. `1.1.0`) | 🗂️ Full | Pin a version, with the documentation fully offline |
 | `X.Y.Z-light` (e.g. `1.1.0-light`) | 🪶 Light | Pin a version and stay on the light variant |
 
-Version tags are plain version numbers, without the `v` of the GitHub release tags (for example `1.1.0`). `latest` itself is the light variant, so it has no separate `-light` tag, and a release publishes its full variant only under its version number: to use the full variant, you pin a version — and a pinned image does not move to newer releases on its own (see [Updating LibreFolio](#updating)).
+- Version tags have no `v`: `1.1.0`, not `v1.1.0` as on the GitHub releases page.
+- There is no `latest-light` tag: `latest` already is the light variant.
+- The full variant exists only under a version number. Using it means pinning a version, and a pinned image does not move to newer releases on its own (see [Updating LibreFolio](#updating)).
 
 !!! warning "The light variant needs internet for documentation screenshots"
 
     With the light variant (`latest` or any `-light` tag), viewing the screenshots inside the built-in documentation (Help menu) requires an **internet connection**, because they are fetched from the online documentation site. Everything else — the whole application and all documentation text — is served from the image itself.
 
-To use the full variant, replace the image tag in your `docker-compose.yml` with a version tag without suffix, for example:
+??? example "🗂️ Switch to the full variant"
 
-```yaml
-services:
-  librefolio:
-    image: ghcr.io/librefolio/librefolio:1.1.0
-```
+    Add this line to your `.env` file, with the version you want:
+
+    ```bash
+    LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0
+    ```
+
+    Then run `docker compose up -d`: Docker downloads that image and restarts LibreFolio on it. If your `docker-compose.yml` has a fixed `image:` line, without `LIBREFOLIO_IMAGE`, put the tag on that line instead.
 
 ---
 
 ## ⚙️ Configuration Options
 
-All LibreFolio settings (such as ports, base currency, and session security keys) are managed via environment variables in the `.env` file.
+All LibreFolio settings, such as the port and the session security key, live in the `.env` file as environment variables.
 
-For full details on each option and how variables are resolved, see the [Configuration Guide in the Admin Manual](../admin/configuration.md).
+For every option and how its value is resolved, see the [Configuration Guide in the Admin Manual](../admin/configuration.md).
 
 ---
 
-## 💾 Data Backup
+## 💾 Data Backup {#data-backup}
 
-All LibreFolio data (SQLite database, user-uploaded files, loaded reports, and logs) are saved locally inside the `./librefolio-data` folder created alongside the `docker-compose.yml` file.
+All your data (the SQLite database, uploaded files, broker reports and logs) lives in the `./LibreFolio-data` folder next to `docker-compose.yml`. Back up that folder, stopping the container first for a consistent copy.
 
-For detailed instructions on what to save and how to perform consistent backups, see the [Backup Section of the Admin Manual](../admin/filesystem.md#backup).
+For what to save and how, see the [Backup section of the Admin Manual](../admin/filesystem.md#backup).
 
 ---
 
 ## 🔄 Updating LibreFolio {#updating}
 
-### ⚠️ Warning: Beta Status
-LibreFolio is currently in **Beta** (version 1.1.0). Database migrations run automatically at container start and are designed to preserve existing installs, but between versions there can still be structural changes — some subsystems (such as Risk Analysis) are explicitly marked as beta. Having a [backup](#data-backup) before updating is always a good idea.
+Database migrations run automatically when the container starts and are designed to keep existing data, while some features, such as the **What if…?** risk simulation, are [still in beta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) and can change between versions. Take a [backup](#data-backup) before updating: it is your way back if something goes wrong.
 
-- By using the `:latest` tag in the `docker-compose.yml` file, you will immediately receive the latest features but expose yourself to potential incompatibilities during automatic updates.
-- If you prefer stability and absolute control, we recommend pinning the image by replacing `:latest` with a specific version tag: for example `ghcr.io/librefolio/librefolio:1.1.0` (full variant) or `ghcr.io/librefolio/librefolio:1.1.0-light` (to stay on the light variant). See [Image Variants](#image-variants-full-and-light) for the difference.
+- With the `latest` tag you always get the newest release, along with any change it brings.
+- To update only when you decide, pin a version instead of `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (full variant) or `ghcr.io/librefolio/librefolio:1.1.0-light` (light variant). See [Image Variants](#image-variants-full-and-light).
 
 ### 🛠️ 1. Manual Update {: #manual-update }
 
-To update LibreFolio manually to the latest available version:
+To update LibreFolio to the newest image:
 
 ```bash
 # 🛑 Stop the running container
@@ -239,40 +239,34 @@ docker compose pull
 docker compose up -d
 ```
 
-Database migrations will be executed automatically when the container starts.
+The database migrations run on their own when the container starts.
+
+??? warning "🧯 LibreFolio does not come back after an update"
+
+    If a database migration fails, LibreFolio stops and its log (`docker compose logs librefolio`) shows `Failed to apply database migrations` with the error; Docker then keeps restarting the container. Stop it with `docker compose down`, restore your [backup](#data-backup) of `LibreFolio-data`, and pin the version you were using until the problem is solved.
 
 ### 🤖 2. Automatic Update (Watchtower)
 
-If you want to automate container updates as soon as a new image is released on the registry, you can use **Watchtower** (we recommend the active and updated fork [nicholas-fedor/watchtower](https://github.com/nicholas-fedor/watchtower)).
-
-!!! note "Default behavior"
-
-    By default, Watchtower monitors and updates all active containers on the system. For more details and advanced options, see the [official project repository](https://github.com/nicholas-fedor/watchtower).
-
-For convenience, if you want to limit software checks only to LibreFolio and run the verification weekly (for example, every Sunday at 4:00 AM using a Cron expression), you can start Watchtower with this command:
+**Watchtower** updates containers as soon as a new image is published. We recommend its active and updated fork, [nicholas-fedor/watchtower](https://github.com/nicholas-fedor/watchtower). By default it watches **every** running container on the system: this command limits it to LibreFolio and checks once a week, on Sunday at 04:00:
 
 ```bash
 docker run -d \
   --name watchtower \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e TZ=Europe/Rome \
-  nicholas-fedor/watchtower \
+  nickfedor/watchtower \
   --cleanup \
   --schedule "0 0 4 * * 0" \
   librefolio
 ```
-💡 *(This command starts Watchtower in the background with access to the Docker socket. It will check for new images on the registry only for the `librefolio` container every Sunday at 04:00:00, deleting old images to save space. Adjust `TZ` to set your reference timezone).*
+
+- `--schedule` takes a cron expression with six fields, seconds first; set `TZ` to your timezone.
+- `--cleanup` deletes the old images to save space.
+- For every other option, see the [project repository](https://github.com/nicholas-fedor/watchtower).
 
 ### 🔌 3. Other Management Alternatives
 
-If you want a different approach or more control over notifications and release deployment, there are excellent alternatives:
+For more control over notifications and over when to update:
 
-- **[WUD (What's Up Docker)](https://github.com/fmartinou/whats-up-docker)**  
-  A modern tool for homelabs featuring a convenient **web interface**.  
-  It is highly modular and supports notifications via Telegram, Discord, and Gotify.  
-  It allows sending alerts about new releases without automatically updating, leaving the choice of when to do so to you.  
-  
-- **[Diun (Docker Image Update Notifier)](https://github.com/crazy-max/diun)**  
-  A pure, lightweight, and secure notifier.  
-  It does not require write permissions on the Docker socket.  
-  It monitors image registries in read-only mode and notifies you when a new version of LibreFolio is published.
+- **[WUD (What's Up Docker)](https://github.com/getwud/wud)**: a homelab tool with a convenient **web interface** and notifications via Telegram, Discord, Gotify and more. It can alert you about new releases without updating, leaving the choice of when to you.
+- **[Diun (Docker Image Update Notifier)](https://github.com/crazy-max/diun)**: a lightweight notifier that needs no write access to the Docker socket. It watches the image registries read-only and tells you when a new version of LibreFolio is published.

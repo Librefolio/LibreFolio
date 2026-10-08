@@ -1,24 +1,31 @@
 # 🌐 Exposing Securely
 
-Exposing self-hosted services securely on the internet is one of the most common challenges. This guide explains how to make LibreFolio (or any other service in your local network) accessible by leveraging [Tailscale](https://tailscale.com/), a secure, high-performance, and free mesh VPN solution for home use.
+This guide shows how to reach LibreFolio away from home **without opening any port on your router**, using [Tailscale](https://tailscale.com/), a secure mesh VPN that is free for home use. The same steps work for any other service on your local network.
 
-!!! tip "Our Configuration Recommendation"
+You need **Step 0** plus the one level that fits you. Levels 3 and 4 also need the one-time [Funnel setup on the console](#enabling-funnel-and-acls-on-the-console).
 
-    Among the different approaches presented, we believe that **Level 4 (Multi-Funnel via Docker)** is the absolute best solution: it requires very little additional configuration compared to the other methods, offers the maximum advantages in terms of isolation and modularity, and resolves the structural limitations of the other methods. The other levels are presented both as alternatives and to understand the technical path to get there.
+| Level | Best for | Tailscale on your phone/PC | Public HTTPS address |
+|---|---|---|---|
+| 🏃 1. Private VPN | Just you, with the quickest setup | Needed | No |
+| 🥉 2. Subnet router | Every device of your home LAN, not only LibreFolio | Needed | No |
+| 🥈 3. Funnel | A public address for LibreFolio, and installing it as an app | Not needed | Yes |
+| 🥇 4. Multi-Funnel with Docker | One public address per service, each in its own container | Not needed | Yes |
+
+!!! tip "⭐ Our recommendation: Level 4"
+
+    Level 4 needs little more setup than Level 3, keeps every service isolated in its own container and gives each one its own public address. Levels 1–3 are simpler alternatives, and they show the path that leads there.
+
+Everywhere below, `6040` is LibreFolio's default port: if you set a different `PORT` in your `.env`, use that number instead. LibreFolio serves the web app, its API and the built-in documentation on this one port, so it is the only port to expose.
 
 ---
 
-## 🔒 Security and Risks of Traditional Port Forwarding
+## 🔒 Why not plain port forwarding?
 
-The traditional method for making a service accessible from the outside involves opening ports on your home router (port forwarding) associated with a public IP (often dynamic) and a DDNS service (like DuckDNS). 
+The classic way is to open a port on your home router and point a dynamic DNS name (such as DuckDNS) at your public IP. It works, but:
 
-This approach presents significant risks:
-
-1. **Exposure to the entire web**: Anyone can scan your public IP and attempt to attack the open port.
-2. **Management complexity**: It is necessary to manually configure and renew SSL certificates (HTTPS) via a reverse proxy (Nginx, Caddy, etc.).
-3. **HTTP protocol risks**: Without a correctly configured HTTPS encryption, your credentials and financial data travel in plain text over the local and public network, making them interceptable by malicious actors (packet sniffing).
-
-The following diagram shows the initial remote exposure problem:
+- **The whole internet can see it**: anyone can scan your public IP and attack the open port.
+- **HTTPS is your job**: you must run a reverse proxy (Nginx, Caddy…) and keep its SSL certificates renewed.
+- **Without HTTPS, data travels in clear**: your password and financial data can be intercepted on the way.
 
 ```mermaid
 graph LR
@@ -26,21 +33,15 @@ graph LR
     Cloud --- Server["🖥️ Local Server<br>(Port 6040)"]
 ```
 
----
-
-## 🚀 What is Tailscale?
-
-[Tailscale](https://tailscale.com/) is a zero-configuration mesh VPN service based on the modern **WireGuard** encryption protocol. 
-
-* **Free Plan (Personal)**: Allows connecting up to **100 devices** for free.
-* **Mesh Network**: All configured devices connect directly to each other in an encrypted peer-to-peer fashion, without traffic passing through intermediate servers.
-* **Compatibility**: Works on all major operating systems (Linux, macOS, Windows, iOS, Android) and can be installed on a NAS or inside Docker containers.
+Tailscale avoids all three: no router port is opened, the traffic between your devices is encrypted, and Funnel (Levels 3 and 4) adds HTTPS with certificates that Tailscale manages for you.
 
 ---
 
-## 🏁 Step 0: Installing Tailscale on Your Devices
+## 🏁 Step 0: Install Tailscale on your devices
 
-To make any VPN work, **at least 2 connected devices** are required: the *client* (e.g., your smartphone or laptop) and the *server* (the node on which LibreFolio is running). Before proceeding with the levels, install and log into Tailscale on your devices:
+[Tailscale](https://tailscale.com/) is a mesh VPN built on the **WireGuard** protocol: your devices join a private network (your *tailnet*) and talk to each other through encrypted tunnels. It runs on Linux, macOS, Windows, iOS and Android, on a NAS or inside Docker, and its free **Personal** plan is enough for home use (see [Tailscale pricing](https://tailscale.com/pricing) for the current limits).
+
+Install it and log in on at least two devices: the **server** that runs LibreFolio and a **client**, such as your phone or laptop.
 
 === "Linux"
 
@@ -78,15 +79,19 @@ To make any VPN work, **at least 2 connected devices** are required: the *client
 
     Install the official application from the [Apple App Store](https://apps.apple.com/us/app/tailscale/id1470499037).
 
+??? tip "🔑 Keep the server connected — disable key expiry"
+
+    By default, Tailscale asks every device to log in again after 180 days. A server should not drop off your tailnet for that, so turn it off for the server:
+
+    1. On the **Machines** page of the admin console, locate your server.
+    2. Click the **three dots (...) icon** on the right of the device row.
+    3. Select the **Disable Key Expiry** option.
+
 ---
 
-## 🛠️ The 4 Levels of Configuration and Exposure
+## 🏃 Level 1: Private point-to-point VPN
 
----
-
-## 🏃 Level 1: Private Point-to-Point VPN Connection (Start)
-
-This consists of connecting the server and the client to the same private Tailscale network. On the server, the service port is exposed using the `serve` command.
+**Best for you alone, with the quickest setup.** Your phone or laptop reaches LibreFolio through your private tailnet, and nothing is exposed to the internet.
 
 ```mermaid
 graph LR
@@ -97,44 +102,34 @@ graph LR
     style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
 ```
 
-On the server, use the command to expose the local LibreFolio port (default port `6040`):
+### ▶️ Step 1: Check that LibreFolio answers on its port
 
-```bash
-tailscale serve tcp:6040 /
-```
+Nothing to share: with Tailscale switched on on the server, LibreFolio's port `6040` is already
+reachable from your tailnet at the server's Tailscale IP.
 
-At this point, with the VPN active on your smartphone or PC, simply enter the server's Tailscale IP (or its MagicDNS) followed by the port in the browser to access LibreFolio remotely.
+??? tip "Prefer an HTTPS address inside your tailnet?"
 
-<table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
-  <thead>
-    <tr style="background-color: #f3f4f6;">
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🟢 Advantages (Pros)</th>
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🔴 Disadvantages (Cons)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(76, 175, 80, 0.08); vertical-align: top;">
-        <ul>
-          <li>Instant and minimal configuration.</li>
-          <li>Maximum security: your data does not pass over the public internet, the port is closed outside the VPN.</li>
-        </ul>
-      </td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(244, 67, 54, 0.08); vertical-align: top;">
-        <ul>
-          <li><strong>Requires the Tailscale VPN to be active and connected</strong> on each client (e.g., on the phone) to reach the service.</li>
-          <li><strong>Exposes only one single service</strong> per host.</li>
-        </ul>
-      </td>
-    </tr>
-  </tbody>
-</table>
+    Run this on the server, then open `https://<server-name>.your-tailnet.ts.net` instead of the IP:
+
+    ```bash
+    tailscale serve --bg 6040
+    ```
+
+    `--bg` keeps it running after you close the terminal; `tailscale serve reset` removes it. The
+    first time, Tailscale may ask you to enable HTTPS certificates for your tailnet. The address is
+    still private: only your tailnet devices can open it.
+
+### 📱 Step 2: Open LibreFolio from your device
+
+With Tailscale switched on on your phone or PC, type the server's Tailscale IP (or its MagicDNS name) followed by the port in the browser, for example `http://100.a.b.c:6040`.
+
+⚠️ **Limits:** every device you connect from needs Tailscale switched on, and you reach only the server, not the rest of your home LAN (Level 2 adds that).
 
 ---
 
-## 🥉 Level 2: Subnet Router Configuration (LAN Tunneling)
+## 🥉 Level 2: Subnet router for your whole home LAN
 
-This level transforms your server into a "sub-router". When you are away from home with the VPN turned on on the client, you can reach not only the server but **any device or service on your home LAN** by simply entering its local IP.
+**Best for reaching every device at home, not only LibreFolio.** The server becomes a *subnet router*: with Tailscale on, your client opens any local IP as if it were at home, for example `http://192.168.1.2:6040` for LibreFolio.
 
 ```mermaid
 graph LR
@@ -146,7 +141,7 @@ graph LR
     style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
 ```
 
-### 1. Enable Subnet Routing on the Server OS
+### 🔀 Step 1: Enable subnet routing on the server
 
 === "Linux"
 
@@ -180,72 +175,41 @@ graph LR
     tailscale up --advertise-routes=192.168.1.0/24
     ```
 
-### 2. Approve the Route in the Admin Console
+### ✅ Step 2: Approve the route in the admin console
 
 1. Go to the [Tailscale Admin Console](https://login.tailscale.com/admin/machines).
 2. Click the three dots next to your server -> **Edit route settings**.
 3. Enable the advertised subnet.
 
-!!! tip "Disable Key Expiry for the Server"
+A subnet router is part of your network's plumbing: if you skipped it, disable key expiry for the server now (tip at the end of Step 0).
 
-    Since the server acts as network infrastructure (subnet router), it is recommended to disable automatic key expiry for this node to prevent it from disconnecting and requiring periodic interactive reauthentication (every 180 days by default):
-
-    1. On the **Machines** page of the admin console, locate your server.
-    2. Click the **three dots (...) icon** on the right of the device row.
-    3. Select the **Disable Key Expiry** option.
-
-<table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
-  <thead>
-    <tr style="background-color: #f3f4f6;">
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🟢 Advantages (Pros)</th>
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🔴 Disadvantages (Cons)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(76, 175, 80, 0.08); vertical-align: top;">
-        <ul>
-          <li>Access to all devices in the house (printers, cameras, LibreFolio, home automation) with only one active node.</li>
-          <li>No need to configure ports or reverse proxies for each service.</li>
-        </ul>
-      </td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(244, 67, 54, 0.08); vertical-align: top;">
-        <ul>
-          <li><strong>The VPN on the client must be active</strong> to allow communication.</li>
-          <li><strong>You must know the local IPs</strong> of the devices to reach them.</li>
-          <li>Once inside the home, <strong>packets travel in plain text (HTTP)</strong> on the private LAN.</li>
-        </ul>
-      </td>
-    </tr>
-  </tbody>
-</table>
+⚠️ **Limits:** the client still needs Tailscale switched on, you must know the local IPs of your devices, and inside your LAN the traffic travels as plain HTTP.
 
 ---
 
-## 🔑 Enabling Funnel and ACLs on the Console {: #enabling-funnel-and-acls-on-the-console }
+## 🔑 Enabling Funnel and ACLs on the console {: #enabling-funnel-and-acls-on-the-console }
 
-*One-time configuration required for Level 3 and Level 4*
+**One-time setup, needed by Levels 3 and 4.** It allows Funnel in the access control rules (ACLs) of your whole tailnet.
 
-Before you can use Tailscale Funnel (either on the local server in Level 3 or inside Docker containers in Level 4), you must enable Funnel and define the global access control rules (ACLs) for your entire Tailnet. This is a one-time setup performed directly in the Tailscale admin console.
+!!! warning "🔐 Before you go public"
 
-### 1. Enable HTTPS and Funnel on the Control Panel
+    With Funnel, anyone on the internet can open your LibreFolio login page. Create your own account first: the first account registered becomes the administrator. Sign-ups stay open after that (**Enable Registration**, `enable_registration`, is on by default): turn it off in the **Global Settings** if you do not want strangers to register (see [Global Settings](settings.md)).
 
 1. Visit the [Access Controls](https://login.tailscale.com/admin/acls) page in the Tailscale admin console.
-2. Click the **Add node attribute** button to create the required authorization.
+2. Click the **Add node attribute** button.
+3. Fill in the form:
+    * **Targets**: the nodes allowed to use Funnel. **We suggest `tag:external_access`** (you will give this tag to the Docker containers of Level 4) or `autogroup:member` (all the devices registered under your personal account).
+    * **Attributes**: enter `funnel`.
+    * **Note**: a few words on why the rule exists.
+    * **IP Pools, App, Capability, etc.**: not needed here; leave them empty or at their default values.
 
 ![Add Node Attribute](../static/tailscale-guide/TailscaleNodeAttribute.png)
 
-3. Configure the following options in the form:
-    * **Targets**: Enter the tag or group you want to authorize for Funnel activation. A *Target* defines which nodes the rule applies to. **We suggest using `tag:external_access`** (to selectively associate it with Docker containers) or `autogroup:member` (if you want to allow exposure for all devices registered under your personal account).
-    * **Attributes**: Enter `funnel`.
-    * **Note**: Enter some text to record the reason for this rule.
-    * **IP Pools, App, Capability, etc.**: These extra fields are not needed for this exposure setup, so leave them empty or at their default values.
+This rule is not an auth key: auth keys (Level 4) only register a new device or container in your tailnet.
 
-*Important: ACL configuration defines the global security policies required to enable Funnel. It is independent from authentication keys (Auth Keys), which are used only to register a new device or container on the network for the first time.*
+??? example "📄 View the complete ACL JSON configuration to enable Funnel"
 
-Alternatively, if you prefer to edit the ACL JSON configuration directly, you can use the following working example (updated to support both your own devices and the containers tagged with `tag:external_access`):
-
-??? example "View the complete ACL JSON configuration to enable Funnel"
+    If you prefer to edit the policy file directly, this working example enables Funnel for your own devices and for the containers tagged `tag:external_access`:
 
     ```json
     {
@@ -285,13 +249,11 @@ Alternatively, if you prefer to edit the ACL JSON configuration directly, you ca
 
 ---
 
-## 🥈 Level 3: Public Exposure via Tailscale Funnel (No VPN on Client)
+## 🥈 Level 3: Public HTTPS address with Tailscale Funnel
 
-!!! warning "Fundamental Prerequisite"
+**Best for a public address, with no VPN on the client.** Funnel publishes LibreFolio at a secure `https://<server-name>.your-tailnet.ts.net` address that anyone can open **without installing Tailscale**. HTTPS is also what lets you [install LibreFolio as an app (PWA)](../user/pwa.md) on your phone.
 
-    Before proceeding, make sure you have completed the [one-time Funnel and ACL configuration on the console](#enabling-funnel-and-acls-on-the-console).
-
-**Tailscale Funnel** lets you expose a service publicly on the internet. Anyone can access your LibreFolio instance through a secure HTTPS URL provided by MagicDNS, **without needing to install or activate Tailscale** on their smartphone or PC. This is essential if you want to install LibreFolio as a PWA on mobile devices and get the automatic install prompt (for more details, see the guide [📱 Install as App (PWA)](../user/pwa.md)).
+**Before you start:** complete the [one-time Funnel and ACL configuration on the console](#enabling-funnel-and-acls-on-the-console).
 
 ```mermaid
 graph LR
@@ -306,19 +268,21 @@ graph LR
     linkStyle 3 stroke:#dc3545,stroke-width:2px;
 ```
 
-### 1. Start the Funnel on the Server
+### ▶️ Step 1: Start the Funnel on the server
 
-Associate the funnel with the local LibreFolio port:
+On the server, publish the local LibreFolio port:
 
 ```bash
-tailscale funnel 6040 on
+tailscale funnel --bg 6040
 ```
 
-*Note: For this level, no authentication key (Auth Key) is required as the server machine has already been logged in and registered interactively to your Tailnet during **Step 0**.*
+Funnel serves it at `https://<server-name>.your-tailnet.ts.net` on port 443; `--bg` keeps it running
+after you close the terminal, and `tailscale funnel reset` stops it. No auth key is needed here: the
+server already joined your tailnet in Step 0.
 
-### 2. Approve and Wait for Propagation
+### ✅ Step 2: Approve and wait for propagation
 
-Once the command is launched, a warning will appear in the terminal indicating that the Funnel is enabled but not yet authorized for your node, showing a link similar to the following:
+The first time, the terminal warns that Funnel is not yet allowed for this node and shows a link like this one:
 
 ```text
 Funnel is enabled, but the list of allowed nodes in the tailnet policy file does not include the one you are using.
@@ -327,52 +291,25 @@ To give access to this node you can edit the tailnet policy file, or visit:
          https://login.tailscale.com/f/funnel?node=xxxxxx
 ```
 
-* Visit the link shown in the browser, log in to Tailscale, and approve the activation of the Funnel for this node.
-* Once approved, the terminal will display the generated public URL.
-* Wait a few minutes for the MagicDNS records to propagate globally to reach the service from any external network.
+1. Open the link in your browser, log in to Tailscale and approve Funnel for this node.
+2. The terminal then shows your public URL.
+3. Wait a few minutes for the MagicDNS records to propagate before you open it from an outside network.
 
-<table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
-  <thead>
-    <tr style="background-color: #f3f4f6;">
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🟢 Advantages (Pros)</th>
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🔴 Disadvantages (Cons)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(76, 175, 80, 0.08); vertical-align: top;">
-        <ul>
-          <li>Universal public access via free HTTPS managed by Tailscale.</li>
-          <li>No SSL certificate or reverse proxy to configure on the server.</li>
-          <li>Allows native PWA installation on smartphones without turning on the VPN.</li>
-        </ul>
-      </td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(244, 67, 54, 0.08); vertical-align: top;">
-        <ul>
-          <li><strong>You can expose at most 1 single service</strong> Funnel per host machine.</li>
-        </ul>
-      </td>
-    </tr>
-  </tbody>
-</table>
+⚠️ **Limits:** one machine has one public name, which every service you publish from it must share. Level 4 gives each service its own.
 
 ---
 
-## 🥇 Level 4: Advanced Multi-Funnel Exposure via Docker (Sidecars)
+## 🥇 Level 4: Multi-Funnel with Docker sidecars
 
-!!! warning "Fundamental Prerequisite"
+**Best for Docker users who want one public address per service.** Each service gets a small Tailscale container (a *sidecar*) that joins your tailnet as its own node, with its own `https://<name>.your-tailnet.ts.net` address. A startup script installs **socat** in the sidecar, and socat forwards the Funnel traffic to the static LAN IP of the service.
 
-    Before proceeding with the container configuration, make sure you have completed the [one-time Funnel and ACL configuration on the console](#enabling-funnel-and-acls-on-the-console).
+**Before you start:** complete the [one-time Funnel and ACL configuration on the console](#enabling-funnel-and-acls-on-the-console).
 
-To overcome the limit of one Funnel per host node, we can run multiple parallel Tailscale nodes inside Docker containers. Each container will register as an independent node on your Tailnet, obtaining its own dedicated MagicDNS URL.
+??? info "🧰 What is socat?"
 
-Our solution uses a small custom startup script that installs **socat** in the container and redirects incoming HTTPS traffic to the static LAN IP of the target service.
+    **socat** (SOcket CAT) is a small command-line tool that relays data between two connections. Here it works as a **mini forwarder**: it listens on a port inside the Tailscale container and passes everything it receives to the real port of the service on your LAN.
 
-??? info "What is socat?"
-
-    **socat** (SOcket CAT) is an extremely flexible command-line utility that establishes two bidirectional byte streams and transfers data between them. In our case, we use it as a **mini proxy-forwarder**: it listens on the local port of the Tailscale container and forwards all received packets to the real port of the service on the local server.
-
-The network diagram illustrates the multi-node scenario exposed in parallel, where Tailscale containers 1 and 2 run on the first host (Server 1) and Tailscale containers 3 and 4 run on the second host (Server 2):
+Add one sidecar for every service you want to publish, on one host or several; the only limit is the number of tagged devices your [Tailscale plan](https://tailscale.com/pricing) allows. In this example, two hosts run two sidecars each:
 
 ```mermaid
 graph LR
@@ -399,13 +336,9 @@ graph LR
     style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
 ```
 
-!!! note "Multiple Nodes and Services"
+### 📁 Step 1: Prepare the folder and the script
 
-    With this architecture, you can add and expose all desired services simply by starting new Tailscale containers associated with the relevant script. The only limit is set by the terms of your Tailscale subscription plan (which covers up to 100 devices in the free version).
-
-### 1. Folder and Script Preparation
-
-Create a folder on the server (e.g., inside the path where you keep your Docker persistent volumes):
+Create a folder on the server, for example where you keep your Docker persistent volumes:
 
 ```bash
 # Create a folder for the Tailscale nodes and enter it
@@ -413,7 +346,7 @@ mkdir -p <path_chosen>/tailscale-nodes
 cd <path_chosen>/tailscale-nodes
 ```
 
-Download the custom startup script <a href="https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh" target="_blank" rel="noopener noreferrer">custom_startup.sh</a> inside this folder:
+Then download the startup script <a href="https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh" target="_blank" rel="noopener noreferrer">custom_startup.sh</a> into it:
 
 ```bash
 # Download the script from the official repository
@@ -422,11 +355,11 @@ wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/doc
 chmod +x custom_startup.sh
 ```
 
-??? info "Upgrading from an earlier version of the script"
+??? info "🔄 Set up the sidecar before? Update your copy of the script"
 
-    The current script also works as a **watchdog** and comes with a Docker health check (both are explained in the next section). If your Tailscale container runs an earlier version, update it as follows:
+    The current script also works as a **watchdog** and comes with a Docker health check (see Step 2). If your sidecar runs an older copy, update it:
 
-    1. **Download the script again** into the same folder. The `-O custom_startup.sh` option makes the new version overwrite the old file: without it, `wget` keeps the existing file and saves the download as `custom_startup.sh.1`. Then make sure the script is executable:
+    1. **Download the script again** into the same folder. The `-O custom_startup.sh` option overwrites the old file (without it, `wget` saves the download as `custom_startup.sh.1`). Then make sure the script is executable:
 
         ```bash
         cd <path_chosen>/tailscale-nodes
@@ -434,15 +367,15 @@ chmod +x custom_startup.sh
         chmod +x custom_startup.sh
         ```
 
-    2. **Update your compose file**: in the Tailscale service, add the new environment variables `TS_ENABLE_HEALTH_CHECK`, `TS_LOCAL_ADDR_PORT` and, optionally, `STARTUP_TIMEOUT`, together with the `healthcheck` block, exactly as shown in the compose file of the next section.
+    2. **Update your compose file**: add `TS_ENABLE_HEALTH_CHECK`, `TS_LOCAL_ADDR_PORT` and, optionally, `STARTUP_TIMEOUT` to the Tailscale service, together with the `healthcheck` block, exactly as in Step 2.
 
-    3. **Recreate the container**: a simple restart does not apply compose changes. Run `docker compose up -d` from the folder that contains your `docker-compose.yml` (it recreates the services whose configuration changed), or use the *Recreate* / re-deploy action of Portainer or CasaOS.
+    3. **Recreate the container**: a restart does not apply compose changes. Run `docker compose up -d` in the folder of your `docker-compose.yml` (it recreates the services whose configuration changed), or use the *Recreate* / re-deploy action of Portainer or CasaOS.
 
-    4. **Check the log** with `docker logs -f tailscale-librefolio`: you should see `Tailscale is running.`, then `Starting the funnel on port 6040...` and the Funnel's own `Available on the internet:` message with your public URL. Shortly afterwards (normally within the 2-minute `start_period` of the health check), Docker reports the container as **healthy**, as shown in the status column of `docker ps` or in Portainer and CasaOS. If instead the container keeps restarting in a loop, see the troubleshooting note in [3. Startup and Approval](#3-startup-and-approval).
+    4. **Check the log** with `docker logs -f tailscale-librefolio`: you should see `Tailscale is running.`, then `Starting the funnel on port 6040...` and `Available on the internet:` with your public URL. Within the 2-minute `start_period` of the health check, Docker shows the container as **healthy** (`docker ps`, Portainer, CasaOS). If it keeps restarting instead, see the troubleshooting panel in [Step 3](#3-startup-and-approval).
 
-### 2. Docker Compose Configuration
+### 🐳 Step 2: Configure Docker Compose
 
-We suggest defining and declaring the Tailscale service **within the same `docker-compose.yml` file as the service** you want to expose (e.g., LibreFolio) to keep them close and logically coupled. Add the service block as shown below:
+Add the Tailscale service to the **same `docker-compose.yml` as the service** it exposes (for example LibreFolio), so the two stay together:
 
 ```yaml
 services:
@@ -454,17 +387,13 @@ services:
     privileged: false
     network_mode: bridge
     cap_add:
-
       - NET_ADMIN
       - NET_RAW
     devices:
-
       - /dev/net/tun:/dev/net/tun
     command:
-
       - /custom_startup.sh
     environment:
-
       - HOST_IP=192.168.1.10                # Local IP of the service to expose (e.g. Server 1)
       - HOST_PORT=6040                      # Real port of the service to expose
       - TAILSCALE_FUNNEL_PORT=6040          # Internal Funnel port
@@ -477,7 +406,6 @@ services:
       - TS_LOCAL_ADDR_PORT=127.0.0.1:9002   # Where /healthz listens: inside the container only
       - STARTUP_TIMEOUT=180                 # Optional: seconds to reach the Running state (default 180)
     volumes:
-
       - <path_chosen>/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
       - <path_chosen>/tailscale-nodes/custom_startup.sh:/custom_startup.sh
       - /etc/localtime:/etc/localtime:ro
@@ -491,78 +419,44 @@ services:
       start_period: 120s
 ```
 
-The startup script also works as a **watchdog**, while the `healthcheck` block makes the state of the container visible:
+Then set these values for your network:
 
-* **Watchdog (automatic restart)**: if Tailscale cannot start (for example, `tailscale up` fails because there is no internet connection at boot or because of a wrong flag), does not reach the *Running* state within `STARTUP_TIMEOUT` seconds, or if Tailscale, socat or the Funnel stop later on, the script exits with an error and Docker restarts the container (`restart: unless-stopped`). The container never stays "running" with nothing behind it. A `docker stop`, instead, shuts everything down cleanly in about a second.
-* **Health check (status only)**: `TS_ENABLE_HEALTH_CHECK=true` enables Tailscale's `/healthz` endpoint (Tailscale 1.78 or later), which answers successfully only while the node has a Tailscale IP address; `TS_LOCAL_ADDR_PORT=127.0.0.1:9002` keeps it reachable from inside the container only. Docker queries it every 30 seconds and marks the container as *healthy* or *unhealthy* (Portainer and CasaOS show the same status).
+| Value | What to put |
+|---|---|
+| `<path_chosen>` | The absolute path chosen in Step 1, where the script and the state data live (e.g. `/home/user/docker`). |
+| `HOST_IP` | The static LAN IP of the machine that runs the service. |
+| `HOST_PORT` | The real port of the service on that machine: for LibreFolio, the `PORT` of your `.env` (`6040` by default). |
+| `TAILSCALE_FUNNEL_PORT` | The port the container listens on and publishes through Funnel. Set it to the same value as `HOST_PORT`. |
+| `TS_HOSTNAME` | The name of the node: the public address becomes `https://TS_HOSTNAME.your-tailnet.ts.net`. |
+| `TS_AUTHKEY` | The auth key that registers the container in your tailnet (see below). |
 
-Plain Docker (outside Swarm mode) does **not** restart a container marked *unhealthy*: it only flags it. The restart comes from the script exiting, so you do not need an extra "autoheal" container (such helpers also need access to the Docker socket, which means full control of the host).
+To get the auth key for `TS_AUTHKEY`:
 
-#### Configuration Parameters Description
+1. Go to [Tailscale Admin Settings Keys](https://login.tailscale.com/admin/settings/keys).
+2. Under the **Auth keys** section (*not* under the API access tokens section), click the **Generate auth key...** button.
+3. Turn on the **Tags** toggle and select your tag (e.g. `tag:external_access`). Add a description you will recognize, such as `docker-librefolio-funnel`.
+4. Click **Generate** and copy the key (`tskey-auth-...`).
 
-<table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
-  <thead>
-    <tr style="background-color: #f3f4f6;">
-      <th style="width: 35%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold; white-space: nowrap;">Parameter</th>
-      <th style="width: 65%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">&lt;path_chosen&gt;</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">The absolute path (full-path) on the local server where the script and state data are saved (e.g. <code>/home/user/docker</code>).</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">HOST_IP</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">The static LAN IP of the machine hosting the service.</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">HOST_PORT</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">The real port on the LAN server to connect to (e.g. <code>6040</code> for LibreFolio).</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">TAILSCALE_FUNNEL_PORT</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">The port on which the Tailscale container will listen and activate the Funnel. In principle, the best approach is to set this parameter to the same value as the internal service port (<code>HOST_PORT</code>) for consistency; it is left as a separate parameter to support potential future special cases.</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">TS_HOSTNAME</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">The custom hostname for the node. The generated public address will be <code>https://TS_HOSTNAME.your-tailnet.ts.net</code>.</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">TS_AUTHKEY</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">
-        The authentication key (Auth Key) generated by Tailscale. To obtain it:<br>
+Once the container has started, the one-time key is used up: it disappears from the **Keys** list, and the new device appears in **Machines**.
 
-        1. Go to <a href="https://login.tailscale.com/admin/settings/keys" target="_blank" rel="noopener noreferrer">Tailscale Admin Settings Keys</a>.<br>
-        2. Under the <strong>Auth keys</strong> section (<em>not</em> under the API access tokens section), click the <strong>Generate auth key...</strong> button.<br>
-        3. You must <strong>enable the Tags toggle</strong> to select the desired tag (e.g., <code>tag:external_access</code>). In the key description, enter a descriptive note to make it easily recognizable (e.g., <code>docker-librefolio-funnel</code>).<br>
-        4. Click <strong>Generate</strong> and copy the generated key (e.g., <code>tskey-auth-...</code>).<br>
-        <br>
-        <em>Note: Once the container has successfully started, the one-time key is consumed and automatically disappears from the "Keys" list in the admin console, while the new registered device will appear in "Machines".</em>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">TS_ENABLE_HEALTH_CHECK</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">Set to <code>true</code> to enable Tailscale's <code>/healthz</code> endpoint (Tailscale 1.78 or later), which the <code>healthcheck</code> block queries. It answers <code>200</code> (OK) when the node has at least one Tailscale IP address and <code>503</code> otherwise. The endpoint requires no authentication.</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">TS_LOCAL_ADDR_PORT</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;">The address and port where the <code>/healthz</code> endpoint listens. Tailscale's default, <code>[::]:9002</code>, listens on all interfaces; <code>127.0.0.1:9002</code> makes it reachable from inside the container only. If you change it, update the URL in the <code>healthcheck</code> test as well.</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">STARTUP_TIMEOUT</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;"><em>Optional</em> (default <code>180</code>). How many seconds the script waits for Tailscale to reach the <em>Running</em> state; when the time runs out, the script exits and Docker restarts the container. Increase it only if your server is very slow to start.</td>
-    </tr>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; font-family: monospace; white-space: nowrap;">DEBUG</td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb;"><em>Optional</em>, not included in the example above. Set <code>DEBUG=1</code> to have the script print every command it runs to the container log, which helps with troubleshooting. It is off by default to keep the log readable.</td>
-    </tr>
-  </tbody>
-</table>
+??? info "🩺 Watchdog and health check — what the extra settings do"
 
-??? example "View the complete production Docker Compose file (LibreFolio + Tailscale)"
+    The startup script also works as a **watchdog**, while the `healthcheck` block makes the state of the container visible:
 
-    Below is a real and complete example of a production `docker-compose.yml` file that runs the official LibreFolio production image alongside the Tailscale sidecar for automatic exposure:
+    * **Watchdog (automatic restart)**: if Tailscale cannot start (for example, no internet connection at boot or a wrong flag), does not reach the *Running* state within `STARTUP_TIMEOUT` seconds, or if Tailscale, socat or the Funnel stop later on, the script exits with an error and Docker restarts the container (`restart: unless-stopped`). The container never stays "running" with nothing behind it, and a `docker stop` still shuts everything down cleanly.
+    * **Health check (status only)**: `TS_ENABLE_HEALTH_CHECK=true` turns on Tailscale's `/healthz` endpoint (Tailscale 1.78 or later), which answers `200` while the node has a Tailscale IP address and `503` otherwise. Docker queries it regularly and marks the container *healthy* or *unhealthy*; Portainer and CasaOS show the same status.
+
+    Plain Docker (outside Swarm mode) does **not** restart a container marked *unhealthy*: the restart comes from the script exiting, so you need no extra "autoheal" container (such helpers also need the Docker socket, which means full control of the host).
+
+    | Optional setting | What it does |
+    |---|---|
+    | `TS_LOCAL_ADDR_PORT` | Where `/healthz` listens. The endpoint needs no authentication, and Tailscale's default, `[::]:9002`, listens on all interfaces: `127.0.0.1:9002` keeps it inside the container. If you change it, update the URL of the `healthcheck` test too. |
+    | `STARTUP_TIMEOUT` | Seconds the script waits for the *Running* state (default `180`) before it exits and Docker restarts the container. Raise it only on a very slow server. |
+    | `DEBUG` | Not in the example above. `DEBUG=1` prints every command the script runs to the container log, for troubleshooting. Off by default to keep the log readable. |
+
+??? example "📄 View the complete production Docker Compose file (LibreFolio + Tailscale)"
+
+    A complete `docker-compose.yml`: the `librefolio` service of the official `docker-compose.prod.yml`, with the Tailscale sidecar next to it:
 
     ```yaml
     # =============================================================================
@@ -573,18 +467,15 @@ Plain Docker (outside Swarm mode) does **not** restart a container marked *unhea
 
     services:
       librefolio:
-        image: ghcr.io/librefolio/librefolio:nightly
+        image: ${LIBREFOLIO_IMAGE:-ghcr.io/librefolio/librefolio:latest}
         container_name: librefolio
         restart: unless-stopped
         ports:
-
           - "${PORT:-6040}:6040"
         volumes:
-
           - ./LibreFolio-data:/app/backend/data/prod-docker
         env_file: .env
         environment:
-
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
           - HOST=0.0.0.0
         healthcheck:
@@ -602,17 +493,13 @@ Plain Docker (outside Swarm mode) does **not** restart a container marked *unhea
         privileged: false
         network_mode: bridge
         cap_add:
-
           - NET_ADMIN
           - NET_RAW
         devices:
-
           - /dev/net/tun:/dev/net/tun
         command:
-
           - /custom_startup.sh
         environment:
-
           - HOST_IP=192.168.1.10                # Local IP of the service to expose (e.g. Server 1)
           - HOST_PORT=6040                      # Real port of the service to expose
           - TAILSCALE_FUNNEL_PORT=6040          # Internal Funnel port
@@ -625,7 +512,6 @@ Plain Docker (outside Swarm mode) does **not** restart a container marked *unhea
           - TS_LOCAL_ADDR_PORT=127.0.0.1:9002   # Where /healthz listens: inside the container only
           - STARTUP_TIMEOUT=180                 # Optional: seconds to reach the Running state (default 180)
         volumes:
-
           - /DATA/AppData/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
           - /DATA/AppData/tailscale-nodes/custom_startup.sh:/custom_startup.sh
           - /etc/localtime:/etc/localtime:ro
@@ -639,21 +525,21 @@ Plain Docker (outside Swarm mode) does **not** restart a container marked *unhea
           start_period: 120s
     ```
 
-### 3. Startup and Approval {: #3-startup-and-approval }
+### 🚀 Step 3: Start and approve the Funnel {: #3-startup-and-approval }
 
-Start the compose container of your service (inclusive of the Tailscale sidecar):
+Start the stack, the service and its Tailscale sidecar together:
 
 ```bash
 docker compose up -d
 ```
 
-View the logs of the Tailscale container to extract the Funnel approval link (required on first startup):
+Then follow the log of the Tailscale container:
 
 ```bash
 docker logs -f tailscale-librefolio
 ```
 
-In the container logs, a warning line will appear with the specific authorization link for your node:
+On the first start, the log shows the approval link for the new node:
 
 ```text
 Funnel is enabled, but the list of allowed nodes in the tailnet policy file does not include the one you are using.
@@ -662,8 +548,8 @@ To give access to this node you can edit the tailnet policy file, or visit:
          https://login.tailscale.com/f/funnel?node=nsKGo6k9ZF11CNTRL
 ```
 
-* Open the link shown in the browser, log in to Tailscale, and approve the Funnel activation.
-* Immediately after approval, you will see confirmation of successful exposure in the container logs with the public URL and the local proxy:
+* Open the link in your browser, log in to Tailscale and approve the Funnel activation.
+* Right after approval, the log confirms the public URL and the local proxy:
 
 ```text
 Available on the internet:
@@ -674,13 +560,13 @@ https://librefolio.yourtailnet.ts.net/
 Press Ctrl+C to exit.
 ```
 
-* **Note**: At this point, the service is online, but you must wait a few minutes for the MagicDNS record propagation to complete globally.
+The service is now online: wait a few minutes for the MagicDNS records to propagate, then open the URL.
 
-??? question "The container restarts in a loop or is marked unhealthy"
+??? question "🛠️ The container restarts in a loop or is marked unhealthy"
 
-    With the current script, a persistent problem shows up as a container that keeps restarting (Docker, Portainer or CasaOS may also mark it as *unhealthy*), instead of a container that looks "running" but does not work. Read the log with `docker logs tailscale-librefolio`: before each restart, the script prints what went wrong, usually followed by `Exiting so Docker restarts the container.` The most common causes are:
+    A persistent problem shows up as a container that keeps restarting (Docker, Portainer or CasaOS may also mark it *unhealthy*), not as one that looks "running" but does not work. Read the log with `docker logs tailscale-librefolio`: before each restart, the script prints what went wrong, usually followed by `Exiting so Docker restarts the container.` The most common causes:
 
-    * **A flag in `TS_EXTRA_ARGS` has no value.** This optional variable (not used in the compose above) passes extra flags to `tailscale up`: the container splits its value on spaces and passes each word to the command. If a flag lacks its value, `tailscale up` fails: the reason is on the line right after `Running 'tailscale up'`, just above the help text that starts with `USAGE` (for example `flag needs an argument: -advertise-tags`). The log then shows `failed to auth tailscale: … tailscale up failed: exit status 2` and `containerboot exited before Tailscale was running.` Write each value either as `--flag=value` or as `--flag value`: `--advertise-tags=tag:container` and `--advertise-tags tag:container` both work.
+    * **A flag in `TS_EXTRA_ARGS` has no value.** This optional variable (not in the compose above) passes extra flags to `tailscale up`, split on spaces. A flag without its value makes `tailscale up` fail: the reason is on the line right after `Running 'tailscale up'`, above the help text that starts with `USAGE` (for example `flag needs an argument: -advertise-tags`), followed by `failed to auth tailscale: … tailscale up failed: exit status 2` and `containerboot exited before Tailscale was running.` Write each value as `--flag=value` or `--flag value`: `--advertise-tags=tag:container` and `--advertise-tags tag:container` both work.
     * **A management panel cut the value.** The environment-variable editor of CasaOS (and of similar panels) truncates a value at its second `=`: `TS_EXTRA_ARGS=--advertise-tags=tag:container` becomes `--advertise-tags`, which fails as described above. In these panels, write flag values with a space: `--advertise-tags tag:container`.
     * **A required variable is missing**: the script stops at once with `HOST_IP is not set` (or the same message for `HOST_PORT` or `TAILSCALE_FUNNEL_PORT`).
     * **No internet connection at boot**: the container keeps restarting until Tailscale can start, then works normally. This is expected.
@@ -689,77 +575,39 @@ Press Ctrl+C to exit.
 
     To trace every command of the script, add `DEBUG=1` to the `environment` section, recreate the container and read the log again.
 
-!!! tip "Disable Key Expiry for the Container"
+Because its auth key carries a tag, Tailscale disables key expiry for the container by default. With an untagged key, disable it as for the server (tip at the end of Step 0).
 
-    To prevent the sidecar container from expiring and disconnecting from your Tailnet after the default period (180 days):
-
-    1. Go to the **Machines** page of the Tailscale Admin Console.
-    2. Find the container node (e.g., `librefolio` or `tailscale-librefolio`) in the list.
-    3. Click the **three dots (...) icon** on the right of the device row.
-    4. Select the **Disable Key Expiry** option.
-
-<table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
-  <thead>
-    <tr style="background-color: #f3f4f6;">
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🟢 Advantages (Pros)</th>
-      <th style="width: 50%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">🔴 Disadvantages (Cons)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(76, 175, 80, 0.08); vertical-align: top;">
-        <ul>
-          <li>Ability to create <strong>infinite independent public Funnels</strong> on a single physical machine.</li>
-          <li>Separate and dedicated URLs for each home service.</li>
-          <li>Local network packets travel securely and directly between the container and the target service.</li>
-        </ul>
-      </td>
-      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(244, 67, 54, 0.08); vertical-align: top;">
-        <ul>
-          <li><strong>Requires terminal use</strong> and manual configuration of Docker Compose files.</li>
-        </ul>
-      </td>
-    </tr>
-  </tbody>
-</table>
+⚠️ **Limits:** it takes a terminal and some editing of Docker Compose files.
 
 ---
 
-## 🔮 MagicDNS and Custom Domains
+## 🔮 MagicDNS and custom domains
 
-### What is MagicDNS?
+**MagicDNS** gives each device of your tailnet a name: instead of an IP like `100.110.222.112`, you can type `http://your-server` in the browser. Public Funnel addresses end in `.ts.net` (for example, `https://librefolio.your-tailnet.ts.net`, where `librefolio` is the `TS_HOSTNAME` of Level 4).
 
-**MagicDNS** automatically assigns a local and public DNS domain name to each of your devices registered in the Tailnet. Instead of having to remember IP addresses like `100.110.222.112`, you can type `http://your-server` in the browser. 
-Public domains assigned by MagicDNS end with the suffix `*.ts.net` (for example, `https://librefolio.your-tailnet.ts.net`).
+Prefer your own domain, such as `librefolio.mydomain.com`? Two methods work for **private** access, through the VPN:
 
-### How to Use a Custom Domain with Tailscale
+??? tip "🌍 Method 1 — A public DNS record pointing to the Tailscale IP (simplest)"
 
-If you own your own personal domain (e.g., `mydomain.com`) and want to use it to reach your private Tailscale nodes instead of using the standard `*.ts.net` URL, you can proceed with two main techniques:
+    1. Log into your domain registrar's console (e.g., Cloudflare, GoDaddy, Namecheap).
+    2. Create a type **A** (or **AAAA** for IPv6) DNS record for the chosen subdomain (e.g., `librefolio.mydomain.com`).
+    3. Point the record directly to the **private Tailscale IP** of your server (e.g., `100.77.72.90`).
 
-#### Method 1: Public DNS Mapped to Tailscale IP (Recommended for Private Network)
+    Addresses in the `100.64.0.0/10` network are not routable on the internet, so the name works **only** while you are connected to your tailnet: no outsider can reach or scan the service. For details, see the [Official documentation on DNS settings](https://tailscale.com/kb/1054/dns#public-dns).
 
-This is the simplest solution to access your devices privately using your domain.
+??? tip "🧭 Method 2 — Split DNS with your own DNS server"
 
-1. Log into your domain registrar's console (e.g., Cloudflare, GoDaddy, Namecheap).
-2. Create a type **A** (or **AAAA** for IPv6) DNS record for the chosen subdomain (e.g., `librefolio.mydomain.com`).
-3. Point the record directly to the **private Tailscale IP** of your server (e.g., `100.77.72.90`).
-4. **How it works**: Since IP addresses in the `100.64.0.0/10` network are not publicly routable globally, the domain will resolve and work **only** when you are connected to your Tailscale VPN, ensuring that no external user can access or scan the service. For details, see the [Official documentation on DNS settings](https://tailscale.com/kb/1054/dns#public-dns).
+    For internal records that you manage yourself and never publish on the internet:
 
-#### Method 2: Split DNS (With Internal DNS Server)
+    1. Configure a private DNS server in your LAN (such as Pi-hole, AdGuard Home, or CoreDNS).
+    2. Add local records of your domain pointing them to your Tailscale IPs.
+    3. In the Tailscale admin console, go to *DNS -> Nameservers -> Add Nameserver* and add the Tailscale IP of your private DNS as a global nameserver or restricted to your domain. For details, see the [Official documentation on Split DNS](https://tailscale.com/kb/1054/dns#split-dns).
 
-If you want to dynamically manage internal records and not publish them on the internet:
-
-1. Configure a private DNS server in your LAN (such as Pi-hole, AdGuard Home, or CoreDNS).
-2. Add local records of your domain pointing them to your Tailscale IPs.
-3. In the Tailscale admin console, go to *DNS -> Nameservers -> Add Nameserver* and add the Tailscale IP of your private DNS as a global nameserver or restricted to your domain. For details, see the [Official documentation on Split DNS](https://tailscale.com/kb/1054/dns#split-dns).
-
-!!! warning "Caution on Public Funnel Exposure"
-
-    Since Tailscale public Funnels are exposed on the internet only via the secure `*.ts.net` domain (thanks to SSL certificates signed by Tailscale), direct CNAME mapping from your custom domain to a Funnel address will cause SSL/TLS security errors in browsers, unless a separate reverse proxy (such as Caddy or Nginx) is used to manage your zone's certificates. The public address of your instance will be `librefolio.your-tailnet.ts.net`, where the initial part `librefolio` is automatically defined by the value assigned to the `TS_HOSTNAME` variable.
+For **public** access, keep the `*.ts.net` address: Funnel serves it with a certificate signed for that name, so pointing your own domain at it (CNAME) causes SSL/TLS errors in browsers, unless you add your own reverse proxy (such as Caddy or Nginx) with certificates for your domain.
 
 ---
 
-## 🔗 Useful Links and Resources
+## 🔗 Useful links
 
 * 🖥️ [Tailscale Administration Console (Machines)](https://login.tailscale.com/admin/machines)
 * 🔐 [Access Controls Management (ACLs)](https://login.tailscale.com/admin/acls)
