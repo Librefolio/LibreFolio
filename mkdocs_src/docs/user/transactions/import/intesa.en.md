@@ -4,61 +4,77 @@
 
     This plugin is in **Beta** — tested with sample files but edge cases may exist.
 
-## 📥 How to Export
+LibreFolio reads two Intesa Sanpaolo exports, in **CSV** or **Excel (XLSX)**, just as you download them:
 
-LibreFolio reads Intesa Sanpaolo exports in **CSV** *or* **XLSX** — you do not need to
-convert the file, just import it as downloaded. Two different reports are supported and
-they cover two different situations:
-
-- The **movements list** (*lista movimenti*) — the account activity for a period.
-- The **portfolio snapshot** (*patrimonio*) — the current holdings with their fiscal
-  cost basis and the cash balance.
-
-From your Intesa Sanpaolo online banking, download the movements list for the period you
-want and, if you also need to seed historical positions, the portfolio snapshot of your
-*Deposito Amministrato*.
+- the **movements list** — the coupons, dividends, fees and taxes of a period;
+- the **portfolio snapshot** (*patrimonio*) — your holdings at their fiscal cost, and your cash balance.
 
 ## 🧭 Which files should I import?
 
 === "Brand-new account"
 
-    If the account was **opened recently** and every purchase is inside the exported
-    period, importing only the **movements list** is enough — there is no back-history to
-    reconstruct.
+    Import the **movements list**: it brings the coupons, dividends, fees and taxes. LibreFolio
+    takes no buys or sells from it, so add your purchases by hand with the
+    [transaction form](../form.md), or with a [Generic CSV](generic-csv.md) file.
 
 === "Account with history (recommended)"
 
-    Intesa only exports about **one year** of movements and does **not** include the
-    original purchase transactions. To represent positions bought earlier, first import
-    the **portfolio snapshot**: it seeds the account with
+    Intesa exports about **one year** of movements, and LibreFolio takes no buys or sells from
+    them. Start from the portfolio snapshot instead:
 
-    - one **cash deposit** for the reported liquidity (when the snapshot contains a non-zero cash balance), and
-    - one **cost-basis adjustment per holding** (quantity from the snapshot, with the
-      fiscal cost stored as a **per-unit** cost-basis override),
+    1. Import the **portfolio snapshot**. It adds one **Deposit** for your cash balance and one
+       **Adjustment** per holding, at its fiscal cost, all dated the snapshot date: the latest
+       quote date in the report.
+    2. Set the broker's **Account Opened** date to that day. Older movements are already counted
+       in the snapshot: the wizard marks them **Before opening** and leaves them out
+       ([how it works](how-to.md#opening-date)).
+    3. From then on, import the **movements list** for the new coupons, dividends, fees and taxes.
 
-    all dated at the snapshot date. Then import the **movements list** to add the recent
-    coupons and fees.
+## 📥 How to Export
 
-## 📝 Notes
+### 🔍 Step 1 — Open the advanced search
 
-- **Movements list** — the parser maps operation labels by keyword: *Cedole* → interest,
-  *Dividend...* → dividend, *Commission...* → fee, and *Ritenut...* / *Imposta...* /
-  *Bollo...* → tax. Everyday current-account operations that may appear in the same export
-  (transfers, card payments, salary, etc.) are **not recognised as securities activity and
-  are skipped**, with a warning — the import never fails because of them.
-- **No ISIN in the movements list** — the security is taken from the free-text *Dettagli*
-  field, so assets are matched **by name**. The portfolio snapshot *does* carry the ISIN.
-  Because the two reports identify the same security differently (name vs ISIN), LibreFolio
-  will not merge them automatically — confirm the asset in **Step 4** of the wizard.
-- **Snapshot seed** — each adjustment stores `cost_basis_override` as the **per-unit** fiscal cost. Intesa reports *Controvalore di carico fiscale €* as a total position value, so LibreFolio divides it by the holding quantity before storing it. The engine later multiplies the per-unit value by quantity to reconstruct the total cost basis. The snapshot date is the latest quote date in the report.
-- **Maturity notices** — if parsed Intesa rows contain maturity/redemption cues, the asset-create dialog may show an amber advisory notice warning that the security may be matured or delisted.
-- **Amounts are imported verbatim** in EUR, exactly as they appear in the report. No
-  currency conversion is performed.
+On the home page of your online banking, click **RICERCA AVANZATA**, next to **Ultime Operazioni**.
 
-## ⛔ Before the broker's opening date
+![Intesa Sanpaolo — home page, RICERCA AVANZATA next to Ultime Operazioni](../../../static/broker-guides/IntesaSanPaolo/01_ISP_RicercaAvanzata.jpg){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-When your broker has an **opening date** set, movements dated **strictly before** that date are flagged in the wizard as **"Before opening"** and cannot be imported (their checkbox is disabled). The opening day itself is valid: the shipped check is `txDate < info.openedAt`, not `<=`. This prevents duplicating positions that are already represented by the snapshot seed. If a row is flagged incorrectly, use the inline **Edit broker date** action, then re-check/refresh so the wizard evaluates the updated broker date.
+### 🗓️ Step 2 — Filter and download the movements
+
+Set **Tipologia Operazione** to **Operazioni titoli**, choose the period in **Da** and **A**, click **APPLICA**, then **SCARICA EXCEL**.
+
+![Intesa Sanpaolo — Tipologia Operazione set to Operazioni titoli, period, APPLICA and SCARICA EXCEL](../../../static/broker-guides/IntesaSanPaolo/02_ISP_FiltraExport.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+
+### 📊 Step 3 — Download the portfolio snapshot
+
+For an account with history, open **Patrimonio** from the home page and download the holdings of
+your *Deposito Amministrato*.
+
+## 🔄 What Gets Imported
+
+| In the movements list (**Operazione**) | Imported as |
+|:---------------------------------------|:------------|
+| *Cedole* (coupons) | **Interest**, linked to the security named in **Dettagli** |
+| *Dividend…* | **Dividend**, linked the same way |
+| *Commission…* | **Fee** |
+| *Ritenut…*, *Imposta…*, *Bollo…* | **Tax** |
+
+Any other operation — buys, sells and everyday banking rows such as card payments or transfers
+included — is skipped with a warning: the import never fails because of it.
+
+From the **portfolio snapshot**: one **Adjustment** per holding (its quantity, at its fiscal cost)
+and one **Deposit** for the cash balance when it is not zero, all on the snapshot date.
+
+## ⚠️ Good to know
+
+- **Filter on Operazioni titoli.** Without that filter, every card payment or transfer of the
+  period shows up in the warnings as a skipped row.
+- **The same security, two names.** The movements list names a security only in free text, while
+  the snapshot gives its ISIN. Match both to the same asset in the **Resolve Assets** panel of
+  [Review](how-to.md#review).
+- **Amounts as written.** Movements keep the currency of their **Valuta** column, and the snapshot
+  is in euro: nothing is converted.
+- **Messages in Italian.** The import warnings are in Italian, like the report.
 
 ## 🔗 Developer Reference
 
-→ [BRIM Providers — Implementation Details](../../../developer/backend/brim/providers_list.md)
+→ [BRIM Architecture — Intesa Sanpaolo notes](../../../developer/backend/brim/architecture.md#plugin-intesa)

@@ -37,7 +37,33 @@ The `SettingsLayout` component provides the structural shell for all settings ta
 </div>
 
 Manages user-specific settings (Language, Currency, Theme) and hosts the **Onboarding** category
-described below.
+described below. Its categories are `display` (Language), `currency` (Default Currency),
+`appearance` (Theme) and `onboarding`, plus *All Settings* when none is selected.
+
+**Logic** (`lib/components/settings/tabs/PreferencesTab.svelte`):
+
+1. **Load**: Fetches Global Defaults (`/settings/global`) and User Settings (`/settings/user`) in parallel.
+2. **State Tracking**:
+    - `originalValues`: The values currently saved in the DB.
+    - `editedValues`: The values currently in the form inputs.
+    - `globalDefaults`: The system-wide default values — `FALLBACK_DEFAULTS` (`en`, `EUR`, `auto`)
+      when `/settings/global` cannot be loaded.
+3. **Computed States**:
+    - `isModified`: `editedValues !== originalValues` (Shows Save/Undo).
+    - `isNonDefault`: `originalValues !== globalDefaults` (Shows Reset, but only while the field
+      has no pending edit: `SettingActions.svelte`).
+4. **Persistence**: Saves to `/settings/user` via `PUT`, one field per request. **Save** sends that
+    field; **Save All** sends the modified fields one after the other, then reports what was saved
+    and what failed in a single toast (success, partial or error). Language and theme take effect
+    only once their write succeeds (`currentLanguage.set()`, `applyTheme()`), and
+    `userSettings.setDirect()` then writes the saved language, currency and theme into the store.
+    **Reset** only copies the global default into `editedValues`: it still has to be saved.
+
+The Default Currency (`base_currency`) is proposed when something new is created: `BrokerForm.svelte`
+uses it for the first initial balance, `AssetModal.svelte` for a new asset's currency and
+`PacPlannerTool.svelte` for a new plan's valuation currency. The Dashboard, the Brokers list and
+detail pages, and the risk panel of the Assets page start their display currency from the global
+`default_currency` (`$globalSettings`) instead.
 
 ### 🧭 OnboardingReplaySection
 
@@ -145,18 +171,6 @@ Read-only system information:
 
 - Version (from Git tag)
 - Backend/frontend info
-
-**Logic:**
-
-1. **Load**: Fetches Global Defaults (`/settings/global`) and User Settings (`/settings/user`) in parallel.
-2. **State Tracking**:
-    - `originalValues`: The values currently saved in the DB.
-    - `editedValues`: The values currently in the form inputs.
-    - `globalDefaults`: The system-wide default values.
-3. **Computed States**:
-    - `isModified`: `editedValues !== originalValues` (Shows Save/Undo).
-    - `isNonDefault`: `originalValues !== globalDefaults` (Shows Reset).
-4. **Persistence**: Saves to `/settings/user` via `PUT`.
 
 ### 🔧 Field Components
 
