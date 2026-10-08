@@ -19,9 +19,11 @@
  * components, so all of it is assertable without mounting anything.
  */
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 import {DAILY_VAR_INSTANCE, resultByCode, resultByInstance} from '../../riskAnalysisHelpers';
 import {finite, lossMagnitude, okOutput, record} from '../levelHelpers';
+import {formatShare} from '../shareFormat';
 
 /* ---------------------------------------------------------- underwater --- */
 
@@ -175,6 +177,45 @@ export function buildReturnHistogram(historicalResults: RiskAnalyticResult[], in
     }));
 
     return {bins, observations, cut: edge === null ? null : edge * 100};
+}
+
+/* ------------------------------------------------------------- figures --- */
+
+/** The minus this panel writes everywhere; `formatPercent` and `formatShare` emit a hyphen. */
+const MINUS = '\u2212';
+
+/**
+ * A position on the return axis, in percent units: one decimal (D380, «0.0%» on the axes).
+ *
+ * The minus appears only when the printed digits are not all zero. Deciding it on the
+ * unrounded value printed a cut at −0.04 as «−0.0%»: a loss the reader cannot see.
+ */
+export function axisPercent(percent: number): string {
+    const magnitude = Math.abs(percent);
+    const text = formatPercent(magnitude, {signed: false, digits: 1});
+    return Number.isFinite(percent) && percent < 0 && Number(magnitude.toFixed(1)) !== 0 ? `${MINUS}${text}` : text;
+}
+
+/**
+ * A signed return as a figure, given as a fraction (D380, «−0.04%» in the figures).
+ *
+ * The precision of the shares (`formatShare`, the developer's rule of 01/10): one decimal
+ * from 1% up, at least one below it, two below 0.1%, and a bound where two decimals would
+ * still read zero. So only a true zero reads «0.0%», and a small loss keeps its sign.
+ */
+export function figurePercent(fraction: number): string {
+    return formatShare(fraction, 1).replace(/-/g, MINUS);
+}
+
+/** A loss magnitude as a fall; a loss of zero reads «0.0%», never «−0.0%». */
+export function lossPercent(magnitude: number): string {
+    return figurePercent(-magnitude);
+}
+
+/** A gain magnitude as a rise: «+» before a figure, never before a zero or a bound. */
+export function gainPercent(magnitude: number): string {
+    const figure = figurePercent(magnitude);
+    return magnitude > 0 && /^\d/.test(figure) ? `+${figure}` : figure;
 }
 
 /* --------------------------------------------------------------- tails --- */
