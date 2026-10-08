@@ -7,7 +7,7 @@
 
     import {formatCurrencyAmount} from '../riskAnalysisHelpers';
     import {buildCurrentDrawdown, buildHurtRows} from './levelHelpers';
-    import {buildReturnHistogram, buildTailMeasures, buildUnderwater, gainPercent, lossPercent} from './l1/l1Helpers';
+    import {buildReturnHistogram, buildTailMeasures, buildUnderwater, gainPercent, lossAmount, lossPercent} from './l1/l1Helpers';
     import ReturnHistogram from './l1/ReturnHistogram.svelte';
     import UnderwaterChart from './l1/UnderwaterChart.svelte';
 
@@ -68,10 +68,10 @@
     // of the shares, writes U+2212 — the minus this panel's E2E net asserts — and never prints
     // a sign before a zero.
 
-    /** The money a loss fraction costs at the current scope value. */
+    /** The money a loss fraction costs at the current scope value; a zero loss carries no minus. */
     function lossMoney(fraction: number): string {
         if (!showMoney || scopeValue == null) return '';
-        return `\u2212${formatCurrencyAmount(String(scopeValue * fraction), currency)}`;
+        return lossAmount(scopeValue * fraction, (value) => formatCurrencyAmount(value, currency));
     }
 
     /**

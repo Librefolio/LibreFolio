@@ -218,6 +218,19 @@ export function gainPercent(magnitude: number): string {
     return magnitude > 0 && /^\d/.test(figure) ? `+${figure}` : figure;
 }
 
+/**
+ * A loss of money as a fall (D381): the minus only when the amount, at the cents the caption
+ * prints, is not zero.
+ *
+ * Decided on the number, never on the formatted text: with privacy on, the amount's digits are
+ * masked, and the text can no longer say whether it is zero. A loss of zero reads «0,00 €».
+ */
+export function lossAmount(amount: number, format: (value: string) => string): string {
+    const magnitude = Math.abs(amount);
+    const text = format(String(magnitude));
+    return Number.isFinite(magnitude) && Math.round(magnitude * 100) !== 0 ? `${MINUS}${text}` : text;
+}
+
 /* --------------------------------------------------------------- tails --- */
 
 /**
