@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`, base `108a2adf5`) è stata approvata dal developer il 2026-10-08 alle 21:22: checkpoint pronto, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono pronti per il checkpoint, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -1230,6 +1230,9 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - O: stringhe FX, aiuto di Borsa, timeout del sync, testi di justETF, conteggi delle valute e AI Export;
   >   - I: eventi;
   >   - il resto (L, etichette, Total Value, codice morto, docstring) in backlog.
+  > - **Reperti AI Export per il coordinatore**, spostati qui il 2026-10-08: per un errore di inserimento erano finiti in coda a S18.
+  >   - I tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valevano solo per i prezzi, mentre gli indicatori arrivano a 84/28/14. **Corretto da O nel treno 19** (`aiExport.detailLevelHelp.*`).
+  >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
 
 - **S18** ✅ 2026-10-08 — Onda 3: le pagine admin, su base `108a2adf5` (treno 17). Chiusa con l'approvazione del developer alle 21:22: «chiudi l'onda 3 e sistemiamo gli effetti del treno 18, ma non avviamo ancora le traduzioni». Checkpoint pronto, FROZEN.
   > **Via libera** (coordinatore 17:44 e 17:50, con l'approvazione del developer «Sì, Q parte con l'onda 3 dopo il treno 17»). Nessuna pagina riservata a M, né di P o di L. `mkdocs.yml` e i CSS restano di Q.
@@ -1465,10 +1468,44 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - **dopo il treno 19, al via del coordinatore:** togliere l'avviso Docker e aggiornare `cli_tools:8,78` e `dev_workflow:143-144`;
   >   - **sempre dopo il treno 19:** confrontare le pagine EN con i testi cambiati da O;
   >   - **traduzioni:** quando le decide il developer.
-  > - In attesa della review del developer.
-  > - **Reperti per il coordinatore:**
-  >   - i tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valgono solo per i prezzi; gli indicatori arrivano a 84/28/14;
-  >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
+
+- **S19** ✅ 2026-10-08 — Seguiti del treno 19, su base `4d09ac2ac`. Il treno contiene l'onda 3 (`22d80282a`, merge `bd60dbdaf`), L (Docker), O (FX e i18n), I (eventi) e N. HEAD e worktree sono verificati: `4d09ac2ac` = `dev_release2`, worktree pulito, `22d80282a` antenato. Checkpoint pronto, FROZEN.
+  > **Via libera** (coordinatore, 22:17):
+  > - i seguiti di L: l'avviso `docker_advanced#docker-exec`, `cli_tools.en.md:8,78` e `dev_workflow.en.md:143-144`;
+  > - poi il confronto tra i testi cambiati da O e le pagine EN, e la pagina `data-editor` di I.
+  > - Niente pagine riservate a M, niente `getting-started` né `preferences`. Anteprima solo sulla 6162, perché sulla 6150 girano i gate del treno 19.
+  >
+  > **Note implementazione, L** (il codice di `cdde3bc4d`):
+  > - **Comportamento nel container:** `dev.py` registra un gruppo di comandi solo se esistono le directory da cui dipende (`_has()`). `test`, `i18n`, `mkdocs translate` e `translate-validate` restano elencati, ma rispondono «'…' is not available in this installation: … is not part of it» ed escono con 2. `user`, `db` e `info` funzionano. L'`HEALTHCHECK` sonda la 6040. La card Forgot Password ora mostra `# Docker` e `# Manual install` (`ForgotPasswordCard.svelte:41-46`).
+  > - **`admin/docker_advanced.en.md`:** l'avviso «Not available with the current image» diventa una nota: nell'immagine funzionano `user`, `db` e `info`, mentre i comandi di sviluppo sono elencati ma «not available in this installation».
+  > - **`admin/cli_tools.en.md`:**
+  >   - `:8`: i comandi utente e database funzionano nell'immagine; quelli di sviluppo, come `test`, no, con link a `docker_advanced#docker-exec`;
+  >   - `:78`: la card mostra il comando nelle due forme, Docker e host; quella host va lanciata dopo `pipenv shell` o con `pipenv run`.
+  > - **`developer/dev_workflow.en.md#docker-test-mode`:** al posto del blocco «`dev.py` cannot start», `test` non fa parte dell'immagine (`_has()`, uscita 2, `./dev.py test utils dev-cli-image`). Resta l'ostacolo di `server --test`, perché manca Node.
+  > - **`developer/architecture/overview.md#docker-image`:** aggiunti i comandi non disponibili e la porta 6040 dell'`HEALTHCHECK`.
+  >
+  > **Note implementazione, O** (`bc700c8e8`; `en.json` fra `70d02cd8e` e `4d09ac2ac`: 6 valori cambiati, 32 chiavi nuove, nessuna rimossa):
+  > - **`aiExport.detailLevelHelp.*`:** le pagine utente non citano i bucket. Le tabelle di `ai_export_sampling.md:68-104` hanno già K 30/14/7 per i prezzi e 84/28/14 per gli indicatori più lenti, coerenti col nuovo aiuto: nessuna modifica.
+  > - **Avvisi dei report set, ora «Parse»:** la doc diceva già **Parse** (`how-to.en.md:83`, `danske-bank.en.md:49`): nessuna modifica.
+  > - **Le 32 chiavi nuove:** sono stringhe che prima erano scritte fisse nel codice (errori CSV, messaggi FX), con lo stesso significato. La pagina `fx/detail/data-editor` diceva già che un tasso zero, negativo o vuoto viene saltato (`:45`).
+  > - **Provider:**
+  >   - BOE con 15 valute e justETF con «latest daily price» erano già coerenti;
+  >   - l'aiuto di Borsa ora apre la pagina utente;
+  >   - **ECB era sbagliata:** diceva «approximately 45». Il feed ufficiale `eurofxref-daily.xml` del 2026-10-08 ha 29 valute; BGN non c'è più (l'API `EXR` ha l'ultimo dato al 2025-12-31). Corrette `user/fx/providers/ecb.en.md` (circa 30 valute, ISK aggiunta, BGN tolta dall'elenco, le valute dismesse restano nello storico) e `developer/backend/fx/providers/ecb.md` (scoperta a runtime con `get_supported_currencies()`, le 29 valute giornaliere, quelle solo storiche).
+  > - **Timeout del sync:** il campo **Timeout** ora allunga davvero la richiesta, `max(120 s, campo + 5 s)` (`syncRequestTimeoutMs()`).
+  >   - **`developer/backend/fx/architecture.md:61-64` era sbagliata:** diceva «drives only the countdown… not the request». Corretta: 120 s fissi solo per la sync della coppia nuova e per la Dashboard, mentre le finestre di sync usano il campo.
+  >   - Aggiunta la regola in `core-ui/modals.md` (Sync modals), e una riga in `user/fx/sync.en.md`: con *Request timed out*, alzare **Timeout** e usare **Retry N failed**.
+  >
+  > **Note implementazione, I** (`5423c334f`): `user/assets/detail/data-editor.en.md` ha nuove regole: modificare un evento ne cambia anche il tipo; un tipo doppio nella stessa data viene rifiutato; l'import aggiorna o salta righe. È coerente con `events.en.md:39` (gli eventi del provider sono di sola lettura e un import non li cambia) e con `create-edit.en.md:108-115` (il backup al cambio di valuta). Nessuna modifica.
+  >
+  > **Note implementazione, checkpoint** (circa 22:40):
+  > - **Cancello `t19a`:** `Q_GATE_ARGS=--t19` (nuova modalità di `q_gate.py`). Build strict exit 0, 0 WARNING/ERROR; `check-links` con 89 validi e il solo link rotto di base; scope 10 path, segnaposto, stile e `git diff --check` verdi. Self-check su 212 pagine EN/dev, 0 problemi.
+  > - **Delta:** 10 file tracciati modificati, nessun file nuovo. HEAD = target = `4d09ac2ac`, quindi nessuna divergenza. Nessuna pagina riservata a M, né `getting-started` o `preferences`; nessuna traduzione.
+  > - **Privacy:** 60 righe aggiunte, nessun percorso personale, e-mail o segreto.
+  > - **Server:** nessuno avviato in questo giro; 6162 e 6042 libere (`lsof` rc 1).
+  > - **Commit proposto:** `/tmp/libreFolio_commit_t19.txt`, «docs: align EN docs with train 19».
+  > - **Fuori pista:** in coda a S18 erano rimaste 4 righe di S17 (un «In attesa della review» superato e due reperti AI Export). Le ho riportate in S17, annotando che il primo reperto l'ha corretto O nel treno 19.
+  > - **Nota per L, non bloccante:** la card mostra la forma host `./dev.py user reset …` senza `pipenv run`. Fuori da `pipenv shell` fallisce con `ModuleNotFoundError` (`host_installation.en.md:71`). La doc lo spiega.
 
 ## 4. Conflitti, rischi, definizione di fatto
 
