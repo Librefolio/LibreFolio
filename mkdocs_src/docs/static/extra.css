@@ -972,16 +972,18 @@
 }
 
 @media screen and (max-width: 76.1875em) {
+    /* Keep emoji, favicon and name on one row; wrap only when the title does not fit. */
     .md-content h1 {
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
         justify-content: center;
         text-align: center;
         align-items: center;
-        gap: 0.6rem;
+        gap: 0.4rem;
     }
     .md-content h1 img, .md-content h1 svg {
         margin-right: 0;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0;
     }
 }
 

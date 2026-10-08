@@ -6,39 +6,31 @@
 
 ## 📥 How to Export
 
-To export your transactions from Interactive Brokers, follow these steps:
+LibreFolio reads the trades of an **Activity Flex Query** exported as CSV. The standard
+**Activity Statement** is not supported.
 
-1. Log in to the [Interactive Brokers Client Portal](https://www.interactivebrokers.com).
-2. Navigate to **Reports** in the top menu, then select **Statements**.
-3. Under the **Activity** section, click the **Activity Statement** card.
-4. Select the desired **Date Range** (e.g., Year to Date, Custom) and choose **CSV** as the format.
-5. Click **Run** or download the generated CSV report to your computer.
-
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <!-- [Screenshot Placeholder: Interactive Brokers Portal - Statements & Reports menu] -->
-</div>
-
-### ⚙️ Using Flex Queries (Recommended)
-
-For more advanced portfolios, you can configure a **Flex Query** to export specific data:
-
-1. Under **Reports**, go to **Flex Queries** and click the **+ (Create)** button.
-2. Select **Activity Flex Query**.
-3. Add **Trades**, **Cash Transactions** (for dividends and fees), and **Corporate Actions** to the query.
-4. Set the format to **CSV** and save the query. You can run this custom query at any time.
+1. Log in to the [Interactive Brokers Client Portal](https://www.interactivebrokers.com) and open
+   **Flex Queries**, in the reports menu.
+2. Create an **Activity Flex Query** with only the **Trades** section, and select the fields that
+   give these columns: `Buy/Sell`, `TradeDate`, `ISIN`, `Quantity`, `TradeMoney`,
+   `CurrencyPrimary`, `IBCommission`, `IBCommissionCurrency`.
+3. Choose **CSV** as the format and `yyyyMMdd` as the date format (for example `20240315`), then
+   save the query.
+4. Run it for the period you want and download the file.
 
 ## ⚠️ Common Pitfalls
 
-!!! warning "File Format"
+- **The first line must be the column names.** LibreFolio recognises the file by the quoted
+  `Buy/Sell`, `TradeDate`, `ISIN` and `IBCommission` headers on its first line: keep column
+  headers on, and leave header and trailer records and section codes off.
+- **CSV only**: PDF and XML exports are not read.
 
-    Make sure you export as a **CSV** file. PDF statements are not supported by the parser and will fail to upload.
+## 📝 What Is Imported
 
-!!! warning "Language Settings"
-
-    The parser is designed for English CSV headers. Ensure your IBKR Client Portal language is set to English before running the export.
-
-## 📝 Notes
-
-- Supports standard IBKR activity reports (trades, dividends, tax withholdings, fees, deposits, withdrawals).
-- Multi-currency accounts are supported.
-- Corporate actions (splits, mergers) may require manual adjustments inside the staging grid.
+- **Buys and sells** of instruments with an ISIN, in the trade's currency (`CurrencyPrimary`;
+  USD when the column is empty).
+- **Commissions**, each as a separate **Fee** on the same asset and date, in
+  `IBCommissionCurrency` (or the trade's currency when that column is empty).
+- **Not imported**: dividends, interest, taxes, deposits and withdrawals, currency conversions
+  (rows without an ISIN are skipped with a warning) and corporate actions. Add them by hand, or
+  with a [Generic CSV](generic-csv.md) file.
