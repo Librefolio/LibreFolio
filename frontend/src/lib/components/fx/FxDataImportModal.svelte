@@ -13,7 +13,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {ArrowRight} from 'lucide-svelte';
-    import {locale, t} from '$lib/i18n';
+    import {t} from '$lib/i18n';
 
     // =========================================================================
     // Types
@@ -23,13 +23,6 @@
         from: string;
         to: string;
     }
-
-    const HEADER_MISMATCH_MESSAGES = {
-        en: "Header currencies don't match",
-        it: "Le valute dell'intestazione non corrispondono",
-        fr: "Les devises de l'en-tête ne correspondent pas",
-        es: 'Las monedas del encabezado no coinciden',
-    } as const;
 
     // =========================================================================
     // Props
@@ -77,10 +70,7 @@
 
     let displayFrom = $derived(directionFrom || displayBase);
     let displayTo = $derived(directionTo || displayQuote);
-    let headerMismatchMessage = $derived.by(() => {
-        const lang = ($locale ?? 'en').split('-')[0] as keyof typeof HEADER_MISMATCH_MESSAGES;
-        return HEADER_MISMATCH_MESSAGES[lang] ?? HEADER_MISMATCH_MESSAGES.en;
-    });
+    let headerMismatchMessage = $derived($t('csvImport.headerMismatch'));
 
     /** CSV column: single rate column with direction in label */
     let fxColumns: CsvColumnDef[] = $derived([

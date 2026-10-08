@@ -780,7 +780,7 @@
       "historyFirst": "Primera importación de este broker: al final proponemos el saldo y las posiciones al {date}; a partir de ahí se importa cada movimiento.",
       "historyLater": "LibreFolio ya tiene el historial de este broker desde el {date}: los movimientos ya presentes aparecerán como duplicados, y los anteriores no se vuelven a importar.",
       "selectedCount": "{sets} conjunto(s) y {n} archivo(s) seleccionado(s) de {b} broker(s)",
-      "incompleteBlocks": "Continuar está desactivado mientras un conjunto seleccionado esté incompleto: sube el archivo que falta o deselecciona el conjunto.",
+      "incompleteBlocks": "Analizar está desactivado mientras un conjunto seleccionado esté incompleto: sube el archivo que falta o deselecciona el conjunto.",
       "step1Missing": "{plugin} también necesita: {role} ({ext}).",
       "step1MissingHint": "Suéltalo aquí: se une al mismo conjunto. También puedes continuar: el conjunto aparecerá incompleto.",
       "analyzeRowLabel": "Conjunto del {date} · combinado ({n} archivos)",
@@ -898,8 +898,8 @@
       "removeFromSet": "Quitar del conjunto",
       "defaultPluginNote": "Leído como conjunto {plugin}, no con el plugin predeterminado del bróker ({defaultPlugin}). Para cambiarlo, usa «Leído como» o el menú ⋮ de un archivo.",
       "alsoRecognisedBy": "{file} también es reconocido por: {plugins}",
-      "partlySelectedBlocks": "Continuar está desactivado mientras un conjunto esté seleccionado solo en parte: selecciona todo el conjunto o deselecciónalo.",
-      "ungroupedBlocks": "Continuar está desactivado mientras haya seleccionado un archivo que solo se lee con su conjunto pero no está en ninguno: {files}. Vuelve a subir juntas, de una sola vez, todas las exportaciones del conjunto y selecciona el conjunto, o deselecciona el archivo."
+      "partlySelectedBlocks": "Analizar está desactivado mientras un conjunto esté seleccionado solo en parte: selecciona todo el conjunto o deselecciónalo.",
+      "ungroupedBlocks": "Analizar está desactivado mientras haya seleccionado un archivo que solo se lee con su conjunto pero no está en ninguno: {files}. Vuelve a subir juntas, de una sola vez, todas las exportaciones del conjunto y selecciona el conjunto, o deselecciona el archivo."
     },
     "parseDetail": {
       "sourceRow": "Línea del archivo",
@@ -1467,7 +1467,8 @@
     "uploading": "Subiendo...",
     "user": "Usuario",
     "backToDefault": "Volver al predeterminado",
-    "createForex": "Crear forex…"
+    "createForex": "Crear forex…",
+    "unknownError": "error desconocido"
   },
   "csvImport": {
     "title": "Importar datos CSV",
@@ -1487,7 +1488,22 @@
     "discardMessage": "Has editado los datos CSV. ¿Estás seguro de que quieres cerrar sin importar?",
     "sep": "sep",
     "decimal": "decimal",
-    "thousands": "miles"
+    "thousands": "miles",
+    "placeholder": "Pega aquí los datos CSV o suelta un archivo arriba...",
+    "headerMismatch": "Las monedas del encabezado no coinciden",
+    "errors": {
+      "missingColumns": "Faltan columnas obligatorias: {columns}",
+      "expectedHeader": "Encabezado esperado: {header}",
+      "fixHeaderFirst": "Corrige primero el encabezado",
+      "invalidQuotedField": "Campo CSV entre comillas no válido",
+      "invalidIdentity": "Valor no válido para {label}: \"{value}\"",
+      "invalidDateFormat": "Formato de fecha no válido: \"{value}\". Usa YYYY-MM-DD",
+      "invalidDate": "Fecha no válida: \"{value}\"",
+      "requiredEmpty": "La columna obligatoria \"{column}\" está vacía",
+      "invalidNumber": "Número no válido en \"{column}\": \"{value}\"",
+      "invalidValue": "Valor no válido en \"{column}\": \"{value}\"",
+      "duplicate": "Valor duplicado para {label}: {key}"
+    }
   },
   "dashboard": {
     "netWorth": "Patrimonio Neto",
@@ -1699,7 +1715,8 @@
     "importCsv": "Importar CSV",
     "emptyMessage": "Sin datos. Usa 'Agregar fila' o 'Importar CSV' para agregar.",
     "editorTipDesktop": "Doble clic en el gráfico para ir a esa fecha",
-    "editorTipMobile": "Mantén presionado en el gráfico para ir a esa fecha"
+    "editorTipMobile": "Mantén presionado en el gráfico para ir a esa fecha",
+    "saveFailed": "No se pudo guardar: {error}"
   },
   "datePicker": {
     "presets": {
@@ -1819,7 +1836,11 @@
       "legBreakdown": "Detalle por tramo",
       "legNoData": "0 fechas — sin datos",
       "legDates": "fechas",
-      "inProgress": "Sincronizando tasas FX…"
+      "inProgress": "Sincronizando tasas FX…",
+      "timeoutAfter": "Tiempo agotado tras {seconds} s",
+      "requestTimedOut": "La solicitud agotó el tiempo tras {seconds} s. Aumenta el tiempo de espera y vuelve a intentarlo.",
+      "failed": "Error de sincronización",
+      "retryFailed": "{n, plural, one {Reintentar el fallido} other {Reintentar los # fallidos}}"
     },
     "route": {
       "title": "Rutas de Conversión",
@@ -1845,7 +1866,13 @@
       "toastFailed": "Error al eliminar {pair}",
       "resultDeleted": "eliminado ({n} tasas)"
     },
-    "rateNotAvailable": "Tipo de cambio no disponible"
+    "rateNotAvailable": "Tipo de cambio no disponible",
+    "rate": "Tasa",
+    "card": {
+      "manualOnly": "Par solo manual",
+      "syncFromProvider": "Sincronizar las tasas desde el proveedor"
+    },
+    "loadFailed": "No se pudieron cargar los pares FX"
   },
   "fxDetail": {
     "editRates": "Editar tasas",
@@ -1858,7 +1885,16 @@
     "noDataManual": "No hay datos disponibles — inserte las tasas manualmente",
     "insertManually": "Insertar manualmente",
     "syncDisabledManual": "Sync deshabilitado — ningún proveedor configurado. Agregue un proveedor o inserte las tasas manualmente.",
-    "aiExport": "Exportar IA"
+    "aiExport": "Exportar IA",
+    "syncFailed": "Error de sincronización: {error}",
+    "loadFailed": "No se pudieron cargar las tasas",
+    "assetFallback": "Activo n.º {id}",
+    "invalidRates": "{n, plural, one {# fila tiene una tasa no válida} other {# filas tienen una tasa no válida}}: la tasa debe ser estrictamente mayor que cero (0 no está permitido).",
+    "savedSummary": "Tasas FX: {details}",
+    "savedCount": "{n, plural, one {# guardado} other {# guardados}}",
+    "deletedCount": "{n, plural, one {# eliminado} other {# eliminados}}",
+    "skippedCount": "{n, plural, one {# omitido (no válido)} other {# omitidos (no válidos)}}",
+    "saveFailed": "Error al guardar las tasas FX: {error}"
   },
   "help": {
     "helpAndSupport": "Ayuda y Soporte",
@@ -2767,9 +2803,9 @@
     "selection": "Conjunto de datos o análisis",
     "detailLevel": "Nivel de detalle",
     "detailLevelHelp": {
-      "compact": "Mismo universo de datos, con intervalos temporales de hasta 30 días.",
-      "standard": "Mismo universo de datos, con intervalos temporales de hasta 14 días.",
-      "full": "Mismo universo de datos, con intervalos temporales de hasta 7 días."
+      "compact": "Mismo universo de datos, con intervalos temporales de hasta 30 días para los precios y de hasta 84 días para los indicadores más lentos.",
+      "standard": "Mismo universo de datos, con intervalos temporales de hasta 14 días para los precios y de hasta 28 días para los indicadores más lentos.",
+      "full": "Mismo universo de datos, con intervalos temporales de hasta 7 días para los precios y de hasta 14 días para los indicadores más lentos."
     },
     "details": {
       "compact": "Compacto",

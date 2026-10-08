@@ -317,7 +317,7 @@
                         text: line,
                         valid: false,
                         isHeader: true,
-                        error: `Missing required columns: ${hmap.missingRequired.join(', ')}`,
+                        error: $t('csvImport.errors.missingColumns', {values: {columns: hmap.missingRequired.join(', ')}}),
                     };
                 }
                 return {
@@ -325,19 +325,19 @@
                     text: line,
                     valid: false,
                     isHeader: true,
-                    error: `Expected header: ${expectedHeader}`,
+                    error: $t('csvImport.errors.expectedHeader', {values: {header: expectedHeader}}),
                 };
             }
 
             // If header is invalid, don't validate data rows
             if (!headerValid || !hmap) {
-                return {lineNumber, text: line, valid: false, error: 'Fix header first'};
+                return {lineNumber, text: line, valid: false, error: $t('csvImport.errors.fixHeaderFirst')};
             }
 
             // Parse data row using the by-name column mapping (I-bis #5).
             const parts = parseRecord(trimmed, sep);
             if (!parts) {
-                return {lineNumber, text: line, valid: false, error: 'Invalid quoted CSV field'};
+                return {lineNumber, text: line, valid: false, error: $t('csvImport.errors.invalidQuotedField')};
             }
             // NOTE: extra columns (parts.length > declared header width) are
             // accepted and silently ignored — the header decides which slots
@@ -348,15 +348,15 @@
             if (identity) {
                 parsedIdentity = identity.parse ? (identity.parse(identityRaw) ?? '') : identityRaw;
                 if (!identityRaw || !parsedIdentity) {
-                    return {lineNumber, text: line, valid: false, error: `Invalid ${identity.label}: "${identityRaw}"`};
+                    return {lineNumber, text: line, valid: false, error: $t('csvImport.errors.invalidIdentity', {values: {label: identity.label, value: identityRaw}})};
                 }
             } else {
                 if (!/^\d{4}-\d{2}-\d{2}$/.test(identityRaw)) {
-                    return {lineNumber, text: line, valid: false, error: `Invalid date format: "${identityRaw}". Use YYYY-MM-DD`};
+                    return {lineNumber, text: line, valid: false, error: $t('csvImport.errors.invalidDateFormat', {values: {value: identityRaw}})};
                 }
                 const dateObj = new Date(identityRaw + 'T00:00:00Z');
                 if (isNaN(dateObj.getTime())) {
-                    return {lineNumber, text: line, valid: false, error: `Invalid date: "${identityRaw}"`};
+                    return {lineNumber, text: line, valid: false, error: $t('csvImport.errors.invalidDate', {values: {value: identityRaw}})};
                 }
             }
 
@@ -370,7 +370,7 @@
 
                 if (!rawVal) {
                     if (col.required) {
-                        parseError = `Required column "${col.label}" is empty`;
+                        parseError = $t('csvImport.errors.requiredEmpty', {values: {column: col.label}});
                         break;
                     }
                     values[col.key] = null;
@@ -380,14 +380,14 @@
                 if (col.type === 'number') {
                     const num = col.parse ? col.parse(rawVal) : parseNumber(rawVal);
                     if (num === null || typeof num !== 'number' || !Number.isFinite(num)) {
-                        parseError = `Invalid number in "${col.label}": "${rawVal}"`;
+                        parseError = $t('csvImport.errors.invalidNumber', {values: {column: col.label, value: rawVal}});
                         break;
                     }
                     values[col.key] = num;
                 } else {
                     const parsed = col.parse ? col.parse(rawVal) : rawVal;
                     if (parsed === null) {
-                        parseError = `Invalid value in "${col.label}": "${rawVal}"`;
+                        parseError = $t('csvImport.errors.invalidValue', {values: {column: col.label, value: rawVal}});
                         break;
                     }
                     values[col.key] = parsed;
@@ -427,7 +427,7 @@
                     const parsedKey = v.parsed?.kind === 'dated' ? v.parsed.date : v.parsed?.identity;
                     if (v.parsed && parsedKey === key) {
                         v.duplicate = true;
-                        v.error = `Duplicate ${identityLabel}: ${key}`;
+                        v.error = $t('csvImport.errors.duplicate', {values: {label: identityLabel, key}});
                     }
                 }
             }
