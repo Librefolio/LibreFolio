@@ -31,11 +31,13 @@ from backend.app.config import (
     PROJECT_NAME,
     PROJECT_ROOT,
     ensure_data_dirs,
+    get_data_dir,
     get_settings,
     get_version,
     is_test_mode,
     set_test_mode,
 )
+from backend.app.db.post_migration import configured_sqlite_path, run_post_migration_fixes
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
 from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
@@ -217,6 +219,27 @@ def ensure_database_exists():  # noqa: C901 — sequential DB bootstrap state ch
                 sys.exit(1)
 
 
+def run_post_migration_fixes_at_startup():
+    """Run the post-migration fixes on the configured SQLite database and data dir.
+
+    The repairs that cannot be Alembic migrations (``backend.app.db.post_migration``), right
+    after them. Returns their report, or ``None`` when the run itself failed. Never raises:
+    a repair that cannot run leaves the database as it was, and the server starts anyway.
+    Plan ``34_accountAndIdReuse`` §2.3.
+    """
+    try:
+        db_path = configured_sqlite_path()
+        if db_path is None:
+            return None
+        report = run_post_migration_fixes(db_path, get_data_dir())
+    except Exception as exc:  # noqa: BLE001 — startup never blocks on a repair
+        logger.warning("Post-migration fixes could not run; starting normally", error=str(exc))
+        return None
+    if report.failed:
+        logger.warning("Post-migration fixes failed; starting normally", outcomes=report.outcomes, backup=str(report.backup_path) if report.backup_path else None, errors=report.errors)
+    return report
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """
@@ -262,6 +285,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     # Ensure database exists and is migrated
     ensure_database_exists()
+
+    # Then the repairs that cannot be migrations, before anything else opens the database
+    await asyncio.to_thread(run_post_migration_fixes_at_startup)
 
     # Initialize global settings with defaults (if not already present)
     await _initialize_global_settings()

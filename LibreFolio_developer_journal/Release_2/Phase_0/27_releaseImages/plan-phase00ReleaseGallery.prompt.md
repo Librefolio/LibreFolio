@@ -323,3 +323,168 @@
 > - Ruff and black: clean.
 > - `release-pipeline.md` (docs-writer): «🔖 Release Tags and Publishing» (anchor `#prereleases` kept) with a two-branch table, the refreshed YAML, both «why» bullets, «How to publish», the diagram box «Tag matches its kind? (rc / plain)», the gate and contract sentences, and the closed gap.
 > - `mkdocs build` strict: 0 warnings. `check-links`: 89 valid plus the pre-existing `#rolling-return`. `git diff --check`: clean.
+
+## Batch 3 — Q's screenshot inventory (base `9d79c2dbe`, train 10, Q's pages included)
+
+### 13. ✅ Inventory: start, the event popover after I's fix, and group 1 — 2026-10-07 (committed 2026-10-08: `fb40d275b`, `1ac5d0a0a`)
+> **Note implementazione**:
+> - Clean base `9d79c2dbe`. Q's placeholders: 125 occurrences in EN pages, 40 names.
+>   - 8 are third-party broker-portal screenshots (Coinbase, Degiro, IBKR, …), which are out of scope because the gallery cannot produce them.
+>   - One more is a `gallery-index` editorial note (add Tools / Risk Analysis / Onboarding bullets once those shots exist).
+>   - Reference list: session file `placeholders_9d79c2dbe.txt`.
+> - **`:3383` Asset detail event popover**, re-run after I's fix (train 9): ✅ desktop 43 s, mobile 45 s, 16 shots (es/dark checked: dividend tooltip on the marker). All 7 scenarios red on the 10-06 nightly are now green on the lane.
+> - Order approved by the coordinator: groups 1 (single screens, plus `assets/detail-chart-rolling-return`, unblocked), 3 (Danske), 4 (risk lab, plus `whatif-simulation`, unblocked with N), 5 (onboarding), 6 (PAC), 7 (provider compare).
+>   - Group 2 (P&L, privacy) waits for I's chart batch.
+>   - `dashboard/data-quality-sync-rates` is pending a coordinator confirmation that N's part is complete.
+> - One test-author at a time on `gallery.spec.ts` (shared file within M): group 1 is in progress.
+>
+> **Group 1** (test-author, `gallery.spec.ts` only):
+> - 6 of 7 scenarios written, plus the shared helper `waitForMotionSettled`:
+>   - `settings/about-tool-diagnostics`;
+>   - `tools/hub` (new `Tools` describe);
+>   - `support/donation-popup` (new `Support` describe; the login response is intercepted to set `show_donation_popup` and the language/theme for each combination, no DB writes);
+>   - `support/social-share-modal` (Reddit);
+>   - `assets/detail-chart-rolling-return`;
+>   - `assets/type-picker-open`.
+> - Lane run (6158, 1 worker, desktop + mobile): **12/12 passed**, 96 PNGs, 3.4 min. Evidence: `release-pipeline/runs/G1_run1.log`.
+> - Visual check of a sample (4 languages, both themes, desktop + mobile): `hub`, type picker (on mobile it opens upward, the picker's own behaviour), rolling return, donation popup and diagnostics are correct.
+> - Rolling return: page range **1W** with window **1Y** (Q's placeholder asks for the 1Y window). The seeded prices start 2025-09-23, so a 1Y page would show a mostly partial 1Y window. A wider axis needs ≥ 2 years of mock prices (`populate_mock_data.py`, not M's surface).
+> - `settings/onboarding-replay` is **blocked**: the category buttons in `SettingsLayout.svelte` have neither a testid nor a selected state. Proposal: `settings-category-{id}` + `aria-pressed`, and `settings-mobile-category-trigger` / `settings-mobile-category-{id}`. Owner to be decided by the coordinator.
+>
+> **⚠️ Fuori pista — product bug found by the visual check (not fixed by M):**
+> - `support/social-share-modal` (desktop and mobile) shows a 32 px strip at the bottom of the viewport that the backdrop does not dim. The donation popup does not.
+> - DOM probe on the lane (`release-pipeline/scripts/probe_share_backdrop{,_v2,_v3}.cjs`, outputs `runs/probe_share_backdrop*.json`): the ModalBase `.modal-backdrop` (`position:fixed; inset:0`) computes **`margin-bottom: 32px`**, so its box is 688 px instead of 720. This holds at scroll 0, 100 and at the bottom; no ancestor creates a containing block.
+> - Cause: `AboutTab.svelte:586` mounts `<SocialShareModal>` as a non-last child of `div.space-y-8` (`:247`). Tailwind `space-y-8` puts `margin-block-end: 2rem` on every child but the last, and that includes the in-place backdrop.
+> - Effect for users: the strip is not dimmed and stays **clickable** under an `aria-modal` dialog. `elementFromPoint(100,700)` is `sidebar-version`.
+> - Generic fix proposed: `margin: 0` on `.modal-backdrop`. Unlayered Svelte CSS beats Tailwind's `@layer utilities` `:where()` rules, and the fix also covers `space-x-*`.
+> - Reported to the coordinator. After the fix, only this scenario is re-shot.
+>
+> **Group 1: placeholders in the EN docs** (`docs-writer`, EN only, no stamp: the pages were already stale because of Q's placeholders, and the debt stays real until the alignment):
+> - 19 occurrences replaced:
+>   - `gallery/{desktop,mobile}.en.md`: 3 Settings entries, Rolling Return, Asset Type Picker, and the new section `---` + `## 🧰 Tools` + «Tools Hub». The 9 `tools/pac-*` placeholders remain inside the section; mobile entries use `screenshot-container mobile`.
+>   - `user/settings/about` (3), `user/tools/index`, `user/assets/create-edit`, `user/assets/detail/chart`.
+>   - `index.en.md` DD6 «Planning Tools» back to `deep-dive reverse` with an image column, modelled on DD2.
+>   - `gallery/index` gets the Tools bullet; the comment now names only Risk Analysis and Onboarding.
+> - Text taken byte for byte from the placeholders. Each gallery page has 10 `##` and 10 `---`; no `###` has one.
+>
+> **Gates** (load ~16–20):
+> - `mkdocs build` strict: exit 0, 0 WARNING/ERROR (`runs/G1_mkdocs_build.log`).
+> - `check-links`: 89 valid, 3 known exceptions, plus the pre-existing `#rolling-return`, unchanged from the baseline (`runs/G1_check_links.log`).
+> - Prettier on `gallery.spec.ts`: ok. `git diff --check`: clean.
+> - Built site served statically on 6168 (`scripts/site_visual_check_g1.cjs`): DD6 renders `reverse` with `tools/hub`; the gallery and `user/tools` images resolve (`runs/G1_site_*.png`).
+> - Ports 6158 and 6168 free after the run.
+
+### 14. ✅ Coordinator decisions on group 1, the `onboarding-replay` hook, and feasibility of groups 3–7 — 2026-10-08
+
+> **Note implementazione**:
+>
+> **Decisions** (coordinator, 2026-10-08):
+> 1. ModalBase fix (`margin: 0` on `.modal-backdrop`) goes to K, in its next batch, with a red test. After integration M re-shoots only `support/social-share-modal`.
+> 2. `onboarding-replay` hook granted to M, only in `SettingsLayout.svelte`, no visual change. The scenario goes through test-author.
+> 3. Rolling return with a 1W page and a 1Y window: accepted.
+> 4. `dashboard/data-quality-sync-rates` unblocked: the **Sync rates** button is N's, in `dev_release2` since train 8. It goes to group 4, with the fixture and injected issues.
+> 5. The 8 broker-portal screenshots stay placeholders until after 1.2 (developer).
+> 6. New name approved: `brokers/import-report-set-file-menu` (the ⋮ menu of a set's file), next to `brokers/import-report-set-read-as` (the Read as menu). The two popovers cannot be open together. M updates `danske-bank:69` and `how-to:94` (EN, docs-writer).
+> 7. Approved for groups 3–7:
+>    - disposable users, deleted at the end with their brokers and files;
+>    - injected responses only where real data is not enough;
+>    - no change to `populate_mock_data.py`;
+>    - one checkpoint per group: G3, G4, G5 with the hook, G6+G7.
+> 8. G6: ask before touching PAC files. None needed: verified below.
+>
+> **Hook** (`frontend/src/lib/components/settings/SettingsLayout.svelte`, uncommitted, goes with the G5 checkpoint):
+> - desktop: `settings-category-all` / `settings-category-{id}`;
+> - phone: `settings-mobile-category-trigger`, `settings-mobile-category-all` / `settings-mobile-category-{id}`;
+> - `aria-pressed` written as the strings `'true'|'false'`, the same style as `data-busy` in that file;
+> - one docblock line; no class or style changed;
+> - convention copied from `GlobalSettingsTab.svelte:435-505`.
+>
+> Evidence: Prettier ok; `frontend/node_modules/.bin/vitest run src/lib/components/settings/SettingsLayout.test.ts` 34/34 (`release-pipeline/runs/G5_settingsLayout_vitest.log`).
+>
+> Follow-up for test-author in G5: the docblock of `SettingsLayout.test.ts` says «publishes no `data-testid`, anywhere». That is now stale: update it and add direct assertions on the new attributes.
+>
+> **Feasibility of groups 3–7** (3 read-only explorers plus M's own checks; summary in the session file `r12_feasibility_g3-7.md`): **no new product hook** beyond `SettingsLayout`.
+> - Visibility: broker access is strictly per user (`broker_service.get_accessible_broker_ids` → `BrokerUserAccess`, no admin bypass). So G3 runs as a disposable user, and its Danske broker and uploads stay invisible to admin shots running in parallel. Example: `import wizard step 2` photographs every file the admin uploaded.
+> - Registration: `enable_registration` = true in the test DB.
+> - Charts publish `data-chart-ready` / `data-chart-renders` (`chartReady.ts`), so the simulation cone can be awaited with no new testid.
+> - Danske missing-file card: it already shows the missing export, its period and «Upload the missing file» (`ReportSetCard.svelte:420-431`). One shot is enough.
+> - PAC: the needed hooks exist:
+>   - `pac-planner-scenario-currency`, `pac-planner-contribution-currency`, the amount through `ExactDecimalInput`;
+>   - copy dialog `BrokerScopeCopyDialog` `{testid}-body/-broker/-check/-apply`;
+>   - `CopyFlowView` only wraps `CopyNotice` and `ConflictDialog`, which have their own testids.
+> - Lane risk data (read-only on the test DB, `runs/G4_lane_price_spans.txt`):
+>   - 9 assets priced 2025-09-23 → 2026-10-07, including S&P 500 and MSCI World;
+>   - 7 assets with a single quote: NVIDIA, 3 ETFs, 2 BTPs, Gold. These are the natural «cannot be analysed» cases;
+>   - Test KRW Stock has no prices;
+>   - no asset starts late or ends stale, so `lab-notice` and `lab-replay` will very likely need injected responses.
+>
+> **⚠️ Fuori pista**: the group 1 batch was committed by path while the `SettingsLayout.svelte` hook sat in the worktree. Until the SHAs arrived M did not touch the 10 batch paths, and warned the coordinator to stage them explicitly. The hook stayed out of the commits as planned.
+
+### 15. ✅ Group 3: Danske Bank report sets — 2026-10-08
+
+> **Note implementazione**:
+> - Base `1ac5d0a0a`.
+> - test-author is writing 8 shots:
+>   - `brokers/import-report-set-card`, `-missing`, `-read-as`, `-file-menu`, `-pairing`;
+>   - `brokers/import-wizard-gapfix-step`;
+>   - `files/brim-report-sets`;
+>   - `transactions/bulk-todo-banner`.
+> - Every test has its own disposable user and broker, cleaned up in `finally`. No import is committed.
+>
+> **Tests** (test-author, `frontend/e2e/gallery.spec.ts` + new `frontend/e2e/fixtures/galleryReportSets.ts`): 6 tests in `test.describe('Import report sets (Danske Bank)')`, after `Brokers`.
+> - **Setup per test:**
+>   - a disposable account `demo_<token>`, taken through the Welcome with every guide skipped;
+>   - one broker `Label · TOKEN`;
+>   - uploads over the API, one batch per set;
+>   - language and theme switched before the wizard is reopened.
+> - **Cleanup** in `afterEach`: files (the combined one included), then the broker, then the account. **No import is committed**: parse, gap fix and validate write nothing, and the bulk editor is closed by discarding.
+> - **8 names × 16 shots:**
+>   - `brokers/import-report-set-card`, `-read-as`;
+>   - `-file-menu`: an extended cash statement that Generic CSV can read too; with the bank's own statement «Read alone with…» never appears;
+>   - `-missing`;
+>   - `-pairing`: on the gap set, because the table of reasons only appears when rows are excluded;
+>   - `brokers/import-wizard-gapfix-step`: on the gap set, cash rows only, so the end-of-period check reads «Does not match»;
+>   - `files/brim-report-sets`;
+>   - `transactions/bulk-todo-banner`: a generic CSV, with 2 `field_todos` injected into the parse response.
+> - **Isolation:**
+>   - a universal filter `hideGalleryTempData`, installed by a `beforeEach` of `Gallery Screenshots` (`gallery.spec.ts:238`), plus `unrouteAll` in `afterEach`;
+>   - it removes `Label · TOKEN` brokers (U+00B7) and their files from the lists of anyone who cannot access them;
+>   - with nothing marked, the response passes through unchanged.
+>
+> **Lane runs** (6158, 1 worker, `--no-populate`):
+> - Run 1, load 34 → 20: 10/12 in 5.8 min. Desktop 6/6; mobile had 2 red, see «Fuori pista».
+> - Run 2, load 24 → 11: **14/14** in 6.1 min. It covered the 3 corrected tests and 4 existing admin scenarios that go through the filter: Files broker reports tab, BRIM file preview, broker list, import wizard step 2.
+> - Lane DB afterwards: 0 `demo_*` users, 0 marked brokers.
+> - Logs: `release-pipeline/runs/G3_run{1,2}.log`.
+> - Visual check of a sample (4 languages, both themes, desktop and mobile): all correct.
+>
+> **Docs** (docs-writer, EN only, no stamp):
+> - 23 placeholders replaced, plus a new «🗃️ File Menu» entry in both gallery pages. The «📖 Read As» description is trimmed to the Read as menu alone.
+> - User pages:
+>   - `transactions/index`;
+>   - `danske-bank`: card, pairing, missing, Read as only, gap fix;
+>   - `how-to`: Read as plus file menu, and gap fix;
+>   - `files/index`.
+>
+> **Gates:**
+> - `mkdocs build` strict: 0 WARNING/ERROR.
+> - `check-links`: identical to the baseline (89 valid, 3 known exceptions, plus the pre-existing `#rolling-return`).
+> - Prettier: ok on the spec and the fixture.
+> - `tsc -p tsconfig.e2e.json`: only the 2 pre-existing errors, both outside these files (`onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`).
+> - `git diff --check`: clean. Ports 6158 and 6168 free.
+>
+> **⚠️ Fuori pista**:
+> - **Isolation premise was wrong.**
+>   - What I assumed: «no admin bypass».
+>   - What test-author found: the superuser lists **every** BRIM file (`brokers.py:673-675`), and every user sees other users' broker names in «Other existing brokers» (`brokerStore.ts:107`).
+>   - Consequence: in the seed the admin owns all 8 brokers, so during a parallel full gallery the temporary data would have appeared in the admin shots.
+>   - Fix: the universal filter above. M's decision, inside `gallery.spec.ts` only, touching neither the product nor the runner.
+> - **Product bugs**, reported to the coordinator and not fixed:
+>   1. `ReportSetCard` header on mobile: the toggle (`flex-1 min-w-0`) is squeezed to zero width. With «A file is missing» the card cannot be opened by tapping, and even with «Complete» the set label disappears.
+>   2. The set timeline on mobile: the start and end dates overlap.
+>   3. Escape on the Read as list or the ⋮ menu bubbles up to the wizard's discard prompt.
+>   - On mobile the gallery opens the card from the keyboard when the toggle has no box, as the card arrives open after a real upload.
+> - **Bulk banner in English:** it shows the todo's `message`, the English fallback (`TransactionBulkModal.svelte:3171`), in every language. The FR/IT/ES shots show English entries, faithful to the product: a small i18n gap.
+> - **Q's text corrected:** `danske-bank.en.md:152` said only «Deposit», but the code proposes a Deposit or a Withdrawal (`brim_gap_fix.py:145`), and our gap-fix image shows a Withdrawal. Changed to «a **Deposit** or a **Withdrawal**». EN only; the page has no translations.
+> - **Toasts:** they close on a JS timer that `freezeAnimations` does not pause, so a shot taken within 8 s of an action that raises one can catch it. `expectNoToast` is exported but only used in the bulk test. The risk already existed in other scenarios and was not widened.
+> - **Timeouts:** test-author's 240–600 s budgets stay. Runs measured 15–28 s per test, but the 20 s `actionTimeout` already fails a stuck step quickly, and CI is slower.

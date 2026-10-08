@@ -477,17 +477,6 @@ class TransactionService:
         result = await self.session.execute(stmt)
         return {asset_id: qty for asset_id, qty in result.all() if asset_id}
 
-    async def get_cost_basis(self, broker_id: int, asset_id: int) -> Decimal:
-        """
-        Get total cost basis for an asset holding (sum of BUY amounts, absolute).
-
-        TODO: FIFO matching for accurate cost basis.
-        """
-        stmt = select(func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.asset_id == asset_id).where(Transaction.type == TransactionType.BUY)
-        result = await self.session.execute(stmt)
-        value = result.scalar_one_or_none()
-        return abs(value or Decimal("0"))
-
     # =========================================================================
     # EVENTS SUGGEST (Block C.2)
     # =========================================================================
@@ -973,8 +962,8 @@ class TransactionService:
                 source_broker_id = db_tx.broker_id
 
             # SPLIT-linked ADJUSTMENT: cost is derived live from the ratio at WAC/FIFO
-            # computation time (wac_utils.compute_wac_from_txlist / portfolio_engine.py
-            # split-rescale path), never from a stored override. Writing "current WAC
+            # computation time (the split rescale of financial_math.average_cost), never
+            # from a stored override. Writing "current WAC
             # before this tx" here — the normal auto-mode fallback — would double the
             # cost basis for a forward split (or halve it for a reverse split). Skip.
             is_split_linked = False

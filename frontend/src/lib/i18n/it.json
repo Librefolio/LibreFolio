@@ -430,6 +430,10 @@
         "hasNumber": "Un numero",
         "hasSpecial": "Un carattere speciale"
       }
+    },
+    "serverUnreachable": {
+      "title": "Il server non risponde",
+      "body": "Questa pagina resta aperta e la tua sessione non è stata chiusa. Riprova tra un momento."
     }
   },
   "importWizard": {
@@ -624,7 +628,8 @@
     "todoBlockerVerifyHint": "{n, plural, one {# riga non è stata compresa del tutto dall'importazione e va rivista prima di salvare.} other {# righe non sono state comprese del tutto dall'importazione e vanno riviste prima di salvare.}}",
     "parseErrorsTitle": "Non è stato possibile analizzare {n} file",
     "brimNotice": {
-      "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:"
+      "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:",
+      "corporate_action": "Manca il costo unitario ereditato (PMC): inserisci il costo di una singola unità, non il totale, per importare questa riga."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -1625,7 +1630,12 @@
     "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
     "pnlAcqNewCapital": "Nuovo capitale",
     "pnlAcqReinvested": "Reinvestito",
-    "allocationGeneric": "{type} generico"
+    "allocationGeneric": "{type} generico",
+    "pnlAxisQuarter": "T{quarter}",
+    "pnlAxisWithYear": "{label} {year}",
+    "unrealizedAssetEffect": "Asset in {currency}",
+    "unrealizedFxEffect": "Cambio {from} → {to}",
+    "unrealizedUnsplit": "{currency}, non scomposto"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",
@@ -1663,7 +1673,8 @@
     "missingFxRatesManual": "Mancano tassi FX per {count} coppia/e manuale/i — inserisci i tassi manualmente",
     "assetIncomeNoEligibleLots": "Nessun lotto aperto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — provento non allocato",
     "assetCostNoEligibleLots": "Nessun lotto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — costo non allocato",
-    "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia."
+    "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia.",
+    "missingCostBasis": "{count} asset con un'acquisizione senza costo d'acquisto — conteggiata a zero finché non lo imposti"
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",
@@ -1936,9 +1947,9 @@
     "changePassword": "Cambia Password",
     "changePasswordDescription": "Aggiorna la password del tuo account",
     "deleteAccount": "Elimina Account",
-    "deleteAccountDescription": "Elimina permanentemente il tuo account e tutti i dati",
+    "deleteAccountDescription": "Elimina permanentemente il tuo account, le sue impostazioni e i broker di cui sei l'unico owner",
     "deleteAccountConfirm": "Eliminare l'Account?",
-    "deleteAccountWarning": "Questa azione non può essere annullata. Tutti i tuoi dati inclusi broker, transazioni e impostazioni saranno eliminati permanentemente.",
+    "deleteAccountWarning": "Questa azione non può essere annullata. I broker di cui sei l'unico owner vengono eliminati con tutte le loro transazioni e i report importati, anche se li hai condivisi con visualizzatori o editor. Un broker con un altro owner resta a lui: viene rimosso solo il tuo accesso. Le tue impostazioni vengono eliminate.",
     "typeUsernameToConfirm": "Digita \"{username}\" per confermare",
     "deleteAccountPermanently": "Elimina Permanentemente",
     "deleteAccountFailed": "Errore nell'eliminazione dell'account",
@@ -3413,7 +3424,11 @@
       "execution_timeout": "Il calcolo ha richiesto troppo tempo ed è stato interrotto.",
       "optimization_infeasible": "Nessuna allocazione soddisfa i vincoli richiesti.",
       "unknown": "Questa misurazione non ha restituito un risultato.",
-      "answer_discarded": "La risposta è stata scartata perché i dati sono cambiati mentre arrivava. Rilancia l'analisi."
+      "answer_discarded": "La risposta è stata scartata perché i dati sono cambiati mentre arrivava. Rilancia l'analisi.",
+      "resource_limit_paths_or_horizon": "Questa simulazione è troppo grande per essere eseguita. Usa meno percorsi simulati o un orizzonte più breve.",
+      "resource_limit_horizon_or_sampling": "Questa simulazione Quasi-Monte Carlo è troppo grande per essere eseguita. Accorcia l'orizzonte o scegli il campionamento Monte Carlo.",
+      "resource_limit_period": "Questa simulazione è troppo grande per essere eseguita: il periodo contiene troppa storia. Scegli un periodo più breve.",
+      "resource_limit_positions": "Una simulazione può includere al massimo 100 posizioni, e questo portafoglio ne ha di più. Simula invece un broker con meno posizioni."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",
@@ -4027,7 +4042,7 @@
           "feeMin": "min {amount}",
           "fundingHelp": "Il denaro che il piano può usare per comprare su questo Broker: la sua liquidità, più i versamenti e la liquidità di altri conti che consenti in Modifica. All’inizio è tutto consentito; in Modifica, clicca una fonte per escluderla.",
           "fundingLabel": "Liquidità utilizzabile",
-          "incrementHelp": "Ogni ordine proposto è un multiplo di questo valore. Per numero di quote: 1 = solo quote intere, 0,001 = frazioni fino a tre decimali. Per importo: l’importo più piccolo che puoi inserire, per esempio 0,01.",
+          "incrementHelp": "Ogni ordine proposto è un multiplo di questo valore. Per numero di quote: un numero intero, per esempio 1. Per importo: l’importo più piccolo che puoi inserire, per esempio 0,01; è così che si comprano frazioni di quota.",
           "orderKindHelp": "Come inserisci un ordine su questo Broker: per numero di quote (compri 3 quote) o per importo (investi 150). Stabilisce l’unità dell’incremento e dei limiti di ogni ordine.",
           "fundingChipHelp": "{kind, select, local {La liquidità in {currency} già su {name}: il piano la usa qui, senza trasferimenti.} account {La liquidità in {currency} di {name}: hai consentito di usarla per gli acquisti su questo Broker.} other {Il versamento {name}: hai consentito di usarlo per gli acquisti su questo Broker.}}",
           "conversionValueAuto": "Converte il Broker quando compri, al tasso del passo FX meno lo spread."

@@ -24,13 +24,25 @@
  *      `cost_basis_override`, two warnings on other fields) — kinds the correction step does not own,
  *      so they travel to the editor untouched. They sit on rows dated last, on the grid's second page.
  *
+ * S19 — the banners word a todo by its reason code (i18n audit, decisions A and B). A todo's `message` is
+ *      the plugin's own, in the language of the parsed file; when `importWizard.brimNotice.<reason_code>`
+ *      exists, its wording replaces it, in the UI language — the rule of the notices
+ *      (`resolveBrimNotice.ts`), of ParseDetailModal and of the fix step. The parse response of a cash-only
+ *      file is extended with a blocker and a warning on `corporate_action` (the generic CSV plugin's
+ *      blocker, which the catalogue words) and with a blocker and a warning on a probe code no catalogue
+ *      words, every message carrying its own marker. Each entry is found by the `data-row-id` of its row:
+ *      the probe code's entries read the plugin's message; the `corporate_action` entries never show their
+ *      marker nor a raw key, and read the catalogue's wording in the language of `<html lang>` — taken from
+ *      the catalogue JSON at test time, so no translated copy is written here.
+ *
  * Data: every test creates its own broker over the API (generic CSV plugin, opened 2020-01-01) and
  * writes its CSVs under `testInfo.outputPath()`; invented dates, amounts and descriptions. Nothing is
  * ever saved: the editor is closed through its unsaved-changes guard. afterEach leaves the page,
  * deletes the BRIM files uploaded to the broker since the test created it, the broker (force) and
  * the CSVs it wrote.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D4, D5).
+ * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D4, D5);
+ * `LibreFolio_developer_journal/Release_2/Phase_0/29_i18nAudit/plan-phase00I18nAudit.prompt.md`, S18-S19 (A, B).
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
@@ -39,6 +51,7 @@ import {validateRuns, waitForParseVerdict, waitForSettled} from '../fixtures/app
 import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 import {TEST_USER} from '../fixtures/test-users';
+import {SUPPORTED_LANGUAGES, t as catalogueText} from '../fixtures/i18n-data';
 import {mkdirSync, rmSync, writeFileSync} from 'fs';
 import path from 'path';
 
@@ -63,6 +76,16 @@ type ValidatePayload = {creates?: unknown[]; updates?: unknown[]; deletes?: unkn
 
 /** Margin on "uploaded after the broker was created": the server and the browser share this machine's clock. */
 const CLOCK_SLACK_MS = 1_000;
+
+/** Where a BRIM todo or notice finds its wording: `importWizard.brimNotice.<reason_code>`. */
+const BRIM_NOTICE_NAMESPACE = 'importWizard.brimNotice.';
+/** The generic CSV plugin's blocker (`broker_generic_csv.py`), worded by the catalogue (decision B). */
+const WORDED_CODE = 'corporate_action';
+/** A reason code no catalogue words: its message is the plugin's, whatever the UI language. */
+const UNWORDED_CODE = 's19_probe_unworded';
+
+/** A todo to add to a parse response, on the transaction whose description it names. */
+type InventedTodo = {description: string; field: string; severity: 'blocker' | 'warning'; reason_code: string; message: string};
 
 // ---------------------------------------------------------------------------
 // Owned data
@@ -191,6 +214,31 @@ async function uploadsDuring(page: Page, expected: number, action: () => Promise
 
 function currentStep(page: Page): Locator {
     return page.getByTestId('import-wizard-stepper').locator('[aria-current="step"]');
+}
+
+/**
+ * Extend the parse responses of this page with `invented` todos, each on the transaction whose description
+ * it names (the F1-D4 injection, as a helper). Returns the set of descriptions that found their transaction,
+ * filled as the parses go by.
+ */
+async function injectFieldTodos(page: Page, invented: InventedTodo[]): Promise<Set<string>> {
+    const injected = new Set<string>();
+    await page.route(
+        (url) => /^\/api\/v1\/brokers\/import\/files\/[^/]+\/parse$/.test(url.pathname),
+        async (route) => {
+            const response = await route.fetch();
+            const body = (await response.json()) as ParseResponse;
+            const todos = invented.flatMap(({description, ...todo}) => {
+                const txIndex = body.transactions.findIndex((tx) => tx.description === description);
+                if (txIndex < 0) return [];
+                injected.add(description);
+                return [{tx_index: txIndex, ...todo}];
+            });
+            // A new body, so not the original headers: their content-length is the old body's.
+            await route.fulfill({status: response.status(), contentType: 'application/json', body: JSON.stringify({...body, field_todos: [...(body.field_todos ?? []), ...todos]})});
+        },
+    );
+    return injected;
 }
 
 /**
@@ -334,6 +382,35 @@ async function followGoto(root: Locator, goto: Locator, firstDescription: string
     const reached = targets.filter((target) => rowText.includes(target));
     expect(reached, `the goto leads to one of ${JSON.stringify(targets)}; the row reads: ${rowText}`).toHaveLength(1);
     return reached[0];
+}
+
+/**
+ * The entry of an unfolded todo banner for the editor row holding `description`: the goto whose `data-row-id`
+ * is that row's — found by the row, never by the entry's text, which is what is under test.
+ */
+async function bannerEntryFor(root: Locator, banner: Locator, description: string): Promise<Locator> {
+    const row = editorRow(root, description);
+    await expect(row, `the editor shows the row "${description}"`).toHaveCount(1, {timeout: UI_TIMEOUT});
+    const rowId = await row.getAttribute('data-row-id');
+    expect(rowId, 'an editor row carries its op tempId as data-row-id').toBeTruthy();
+    const entry = banner.locator(`[data-testid="tx-bulk-todo-goto"][data-row-id="${rowId}"]`);
+    await expect(entry, `the banner has one entry for the row "${description}"`).toHaveCount(1, {timeout: 5_000});
+    return entry;
+}
+
+/**
+ * The catalogue's wording of `key` in the language the page is drawn in: `<html lang>`, which the root layout
+ * keeps on the language shown, read once `data-i18n-ready` says its dictionary is in — the reading of
+ * `risk-lab.spec.ts`, replicated rather than imported (a spec does not reach into another spec's helpers).
+ * A key that catalogue lacks fails here, by name.
+ */
+async function catalogueWording(page: Page, key: string): Promise<string> {
+    const html = page.locator('html');
+    await expect(html).toHaveAttribute('data-i18n-ready', 'true');
+    const lang = ((await html.getAttribute('lang')) ?? '').split('-')[0];
+    const wording = catalogueText(lang, key);
+    expect(wording, `the "${lang}" catalogue has no message for ${key}`).not.toBe(key);
+    return wording;
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +569,80 @@ test.describe('Bulk editor after an import hand-over (F1: D4, D5)', () => {
         const reached: string[] = [];
         for (let i = 0; i < 2; i++) reached.push(await followGoto(root, warningGotos.nth(i), firstRow, warningTargets));
         expect([...reached].sort(), 'the two warnings lead to their two rows').toEqual([...warningTargets].sort());
+
+        await closeEditorWithoutSaving(page, root);
+    });
+
+    test('S19 (A, B): a todo whose reason code the catalogue words reads in the UI language in both banners; an unworded code keeps the plugin message', async ({page}, testInfo) => {
+        test.setTimeout(120_000);
+        const unwordedKey = `${BRIM_NOTICE_NAMESPACE}${UNWORDED_CODE}`;
+        // Verified, not assumed: no catalogue words the probe code, so its entries can only read the plugin's message.
+        expect(
+            SUPPORTED_LANGUAGES.filter((lang) => catalogueText(lang, unwordedKey) !== unwordedKey),
+            `premise: no catalogue has ${unwordedKey}`,
+        ).toEqual([]);
+
+        const brokerId = await startOnOwnedBroker(page, 'S19');
+        const marker = uniqueSuffix();
+        const rows = 4;
+        const describe = (n: number) => `S19 todo wording row ${String(n).padStart(2, '0')} ${marker}`;
+        const csv = writeCashCsv(testInfo.outputPath(`s19-todo-wording-${marker}.csv`), cashRows(rows, '2024-04-01', describe));
+        writtenFiles.push(csv);
+        /** A todo on row `n` whose message carries its own mark: whether the mark reaches the screen says whose words the entry reads. */
+        const probe = (n: number, severity: 'blocker' | 'warning', reasonCode: string) => {
+            const mark = uniqueSuffix();
+            // Fields the correction step does not own (a blocker on the cost basis, a warning on the description): both reach the editor.
+            const todo: InventedTodo = {description: describe(n), field: severity === 'blocker' ? 'cost_basis_override' : 'description', severity, reason_code: reasonCode, message: `Plugin wording of a ${reasonCode} ${severity} ${mark}`};
+            return {todo, mark};
+        };
+        const probes = {
+            wordedBlocker: probe(1, 'blocker', WORDED_CODE),
+            unwordedBlocker: probe(2, 'blocker', UNWORDED_CODE),
+            wordedWarning: probe(3, 'warning', WORDED_CODE),
+            unwordedWarning: probe(4, 'warning', UNWORDED_CODE),
+        };
+        const invented = Object.values(probes).map((each) => each.todo);
+
+        const injected = await injectFieldTodos(page, invented);
+        const {parsed} = await walkCsvToReview(page, brokerId, csv, rows);
+        expect([...injected], 'every invented todo found the row it names').toEqual(invented.map((todo) => todo.description));
+        expect(
+            parsed.field_todos?.map((todo) => todo.reason_code),
+            'the page received the invented todos, and only them',
+        ).toEqual(invented.map((todo) => todo.reason_code));
+        await page.getByTestId('import-wizard-import').click();
+        const root = await editorAfterHandoff(page);
+
+        // Both banners unfolded; every entry found by its row.
+        const blockers = root.getByTestId('tx-bulk-todo-blockers');
+        await expect(await bannerGotos(blockers, 'tx-bulk-todo-blockers-toggle'), 'one blockers entry per blocker').toHaveCount(2, {timeout: 5_000});
+        const warnings = root.getByTestId('tx-bulk-todo-warnings');
+        await expect(await bannerGotos(warnings, 'tx-bulk-todo-warnings-toggle'), 'one warnings entry per warning').toHaveCount(2, {timeout: 5_000});
+        const entries = {
+            wordedBlocker: await bannerEntryFor(root, blockers, probes.wordedBlocker.todo.description),
+            unwordedBlocker: await bannerEntryFor(root, blockers, probes.unwordedBlocker.todo.description),
+            wordedWarning: await bannerEntryFor(root, warnings, probes.wordedWarning.todo.description),
+            unwordedWarning: await bannerEntryFor(root, warnings, probes.unwordedWarning.todo.description),
+        };
+
+        // ① No catalogue words the probe code: its entries read the plugin's message, never a raw key.
+        for (const which of ['unwordedBlocker', 'unwordedWarning'] as const) {
+            await expect(entries[which], `${which} (${UNWORDED_CODE}): no key, the plugin's message`).toContainText(probes[which].todo.message);
+            await expect(entries[which], `${which} (${UNWORDED_CODE}): never a raw i18n key`).not.toContainText(BRIM_NOTICE_NAMESPACE);
+        }
+
+        // ② corporate_action has a key: the plugin's message gives way to it, in both banners. Soft, so that one
+        //    banner's verdict does not hide the other's.
+        for (const which of ['wordedBlocker', 'wordedWarning'] as const) {
+            await expect.soft(entries[which], `${which} (${WORDED_CODE}): the plugin's message gives way to the catalogue's wording`).not.toContainText(probes[which].mark);
+            await expect.soft(entries[which], `${which} (${WORDED_CODE}): never a raw i18n key`).not.toContainText(BRIM_NOTICE_NAMESPACE);
+        }
+
+        // ③ … and what replaces it is the catalogue's wording, in the language the page is drawn in.
+        const wording = await catalogueWording(page, `${BRIM_NOTICE_NAMESPACE}${WORDED_CODE}`);
+        for (const which of ['wordedBlocker', 'wordedWarning'] as const) {
+            await expect(entries[which], `${which} (${WORDED_CODE}): the catalogue's wording, in the UI language`).toContainText(wording);
+        }
 
         await closeEditorWithoutSaving(page, root);
     });

@@ -19,6 +19,7 @@ from backend.app.db.models import TransactionType
 from backend.app.services.portfolio_engine import ClassifiedTransaction, DailyStateBuilder, DerivedViewsBuilder
 from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.utils.financial.roi_utils import calculate_simple_roi_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 
 
 def _tx(*, id: int, type: str, dt: str, amount: str = "0", currency: str | None = "EUR", quantity: str = "0", asset_id: int | None = None, cost_basis_override: str | None = None, cost_basis_currency: str | None = None) -> MagicMock:
@@ -76,6 +77,7 @@ def _build_states(txs, ecfs, date_from, date_to):
         asset_classifications={},
         asset_types={},
         asset_currencies=asset_currencies,
+        average_costs=engine_average_costs(txs, asset_currencies=asset_currencies, target_currency="EUR", fx_rate_map={}, date_to=date_to),
         mark_series=_mark_series_from(txs, price_map, asset_currencies),
         target_currency="EUR",
         date_from=date_from,
@@ -136,6 +138,7 @@ class TestPerformanceInputsInKind:
             asset_classifications={},
             asset_types={},
             asset_currencies=asset_currencies,
+            average_costs=engine_average_costs(classified, asset_currencies=asset_currencies, target_currency="EUR", fx_rate_map={}, split_linked_tx_ids={3}, date_to=date(2025, 1, 1)),
             mark_series=_mark_series_from(classified, price_map, asset_currencies, split_linked_tx_ids={3}),
             target_currency="EUR",
             date_from=date(2025, 1, 1),

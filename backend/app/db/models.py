@@ -363,6 +363,7 @@ class User(SQLModel, table=True):
     """
 
     __tablename__ = "users"
+    __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True, nullable=False, min_length=3, max_length=50)
@@ -531,6 +532,7 @@ class Broker(SQLModel, table=True):
     """
 
     __tablename__ = "brokers"
+    __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True, nullable=False)
@@ -627,6 +629,7 @@ class Asset(SQLModel, table=True):
         UniqueConstraint("display_name", name="uq_assets_display_name"),
         Index("ix_assets_identifier_isin", "identifier_isin"),
         Index("ix_assets_identifier_ticker", "identifier_ticker"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -739,6 +742,7 @@ class Transaction(SQLModel, table=True):
         Index("idx_transactions_asset_date", "asset_id", "date"),
         Index("idx_transactions_related", "related_transaction_id"),
         Index("idx_transactions_asset_event", "asset_event_id"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -912,6 +916,7 @@ class AssetEvent(SQLModel, table=True):
         Index("idx_asset_event_asset_date", "asset_id", "date"),
         Index("idx_asset_event_asset_type_date", "asset_id", "type", "date"),
         Index("idx_asset_event_provider_assignment", "provider_assignment_id"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -1011,6 +1016,7 @@ class FxConversionRoute(SQLModel, table=True):
         UniqueConstraint("base", "quote", "priority", name="uq_route_base_quote_priority"),
         CheckConstraint("base < quote", name="ck_route_base_less_than_quote"),
         Index("idx_route_base_quote", "base", "quote"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
