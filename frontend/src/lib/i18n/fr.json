@@ -1625,7 +1625,9 @@
     "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés",
     "pnlAcqNewCapital": "Nouveau capital",
     "pnlAcqReinvested": "Réinvesti",
-    "allocationGeneric": "{type} générique"
+    "allocationGeneric": "{type} générique",
+    "pnlAxisQuarter": "T{quarter}",
+    "pnlAxisWithYear": "{label} {year}"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",

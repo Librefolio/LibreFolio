@@ -1625,7 +1625,9 @@
     "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos",
     "pnlAcqNewCapital": "Nuevo capital",
     "pnlAcqReinvested": "Reinvertido",
-    "allocationGeneric": "{type} genérico"
+    "allocationGeneric": "{type} genérico",
+    "pnlAxisQuarter": "T{quarter}",
+    "pnlAxisWithYear": "{label} {year}"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
