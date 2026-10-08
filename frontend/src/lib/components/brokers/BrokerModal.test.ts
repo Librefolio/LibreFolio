@@ -406,3 +406,156 @@ describe('BrokerModal — opening-context resets and stale responses', () => {
         expect(mocks.merge).not.toHaveBeenCalled();
     });
 });
+
+describe('BrokerModal — edit refusals answered with HTTP 200', () => {
+    /*
+     * PATCH /api/v1/brokers/{id} always answers HTTP 200 with a BRBulkUpdateResponse.
+     * A refused item (duplicate name, balance validation, not found, access denied)
+     * comes back as results[0].success === false with its reason in `error`, after a
+     * server-side rollback. That is the per-item contract of the header, not an HTTP
+     * error: trySave reports success, so the modal itself must read the item, as the
+     * create branch already does.
+     */
+    const BROKER_ID = 8301;
+    const EDIT_INITIAL_DATA = {
+        name: 'R1 edit original desk',
+        description: 'Synthetic R1 edit draft',
+        portal_url: '',
+        icon_url: '',
+        default_import_plugin: '',
+        allow_cash_overdraft: true,
+        allow_asset_shorting: false,
+        is_active: true,
+        opened_at: '2019-05-06',
+    };
+    // Edit mode sends every field; '' means "clear", so the untouched draft sends this.
+    const UNCHANGED_PATCH = {
+        name: EDIT_INITIAL_DATA.name,
+        description: EDIT_INITIAL_DATA.description,
+        portal_url: '',
+        icon_url: '',
+        default_import_plugin: '',
+        allow_cash_overdraft: true,
+        allow_asset_shorting: false,
+        is_active: true,
+        opened_at: EDIT_INITIAL_DATA.opened_at,
+    };
+    const VALIDATION_REFUSAL = 'Synthetic balance refusal: EUR would fall to -125.40 on 2024-03-05';
+    const OVERDRAFT_LABEL = 'overdraft-marker';
+    type Callbacks = ReturnType<typeof mountModal>['callbacks'];
+
+    beforeEach(() => {
+        // The overdraft checkbox publishes no testid: reach it by role, through a
+        // synthetic label from the catalogue mechanism this file already uses.
+        addMessages('en', {brokers: {allowOverdraft: OVERDRAFT_LABEL}});
+    });
+
+    afterEach(() => {
+        // PATCH is this block's subject and each test asserts its single call in-body.
+        // Release the file-level guard, which proves the create-path blocks never PATCH.
+        mocks.update.mockReset();
+    });
+
+    function mountEdit() {
+        return mountModal({mode: 'edit', brokerId: BROKER_ID, initialData: EDIT_INITIAL_DATA});
+    }
+
+    function updateResponse(result: {success: boolean; validation_triggered?: boolean; error?: string | null}) {
+        return schemas.BRBulkUpdateResponse.parse({
+            results: [{id: BROKER_ID, ...result}],
+            success_count: result.success ? 1 : 0,
+            errors: [],
+        });
+    }
+
+    async function untickOverdraft() {
+        const overdraft = screen.getByRole('checkbox', {name: OVERDRAFT_LABEL});
+        expect(overdraft).toBeChecked();
+        await fireEvent.click(overdraft);
+        expect(overdraft).not.toBeChecked();
+        return overdraft;
+    }
+
+    /** Submit, prove the exact PATCH left, deliver `response`, return once handleSubmit has finished. */
+    async function submitEdit(patch: typeof UNCHANGED_PATCH, response: unknown) {
+        const pending = deferred<unknown>();
+        mocks.update.mockReturnValueOnce(pending.promise as never);
+        expect(screen.getByTestId('broker-form-submit')).toBeEnabled();
+        await fireEvent.click(screen.getByTestId('broker-form-submit'));
+        await waitFor(() => expect(screen.getByTestId('broker-form-submit')).toBeDisabled());
+        expect(mocks.update).toHaveBeenCalledExactlyOnceWith(patch, {params: {broker_id: BROKER_ID}});
+        pending.resolve(response);
+        // `loading` is cleared only in handleSubmit's `finally`, after its branch has run.
+        await waitFor(() => expect(screen.getByTestId('broker-form-submit')).toBeEnabled());
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(trySave).toHaveBeenCalledTimes(1);
+        // HTTP said yes: whatever went wrong lives in the item, not in trySave.
+        expect(await vi.mocked(trySave).mock.results[0].value).toEqual({status: 'success', data: response});
+    }
+
+    function expectRefusalRetained(callbacks: Callbacks) {
+        // Soft, so that a regression reports every escaped side effect at once.
+        expect.soft(mocks.merge, 'a refused update must not reach the broker cache').not.toHaveBeenCalled();
+        expect.soft(callbacks.onupdated, 'a refused update must not be announced as saved').not.toHaveBeenCalled();
+        expect.soft(callbacks.onclose, 'a refused update must not close the modal').not.toHaveBeenCalled();
+        expect(screen.getByTestId('broker-modal')).toBeVisible();
+        expect(callbacks.oncreated).not.toHaveBeenCalled();
+        expect(mocks.notify).not.toHaveBeenCalled();
+        expect(mocks.toasts.success).not.toHaveBeenCalled();
+        // A per-item failure is told in the form, never as an HTTP error toast.
+        expect(mocks.toasts.error).not.toHaveBeenCalled();
+    }
+
+    async function expectDraftStillUnsaved(callbacks: Callbacks) {
+        // Nothing was saved, so leaving must still ask before discarding the draft.
+        await fireEvent.click(screen.getByTestId('broker-modal-close'));
+        await waitFor(() => expect(screen.getByTestId('broker-modal-discard-confirm')).toBeVisible());
+        expect(callbacks.onclose).not.toHaveBeenCalled();
+    }
+
+    it('keeps a rename refused as a duplicate open, out of the cache, and explains it in the form', async () => {
+        const {callbacks} = mountEdit();
+        const name = screen.getByTestId('broker-name-input');
+        expect(name).toHaveValue(EDIT_INITIAL_DATA.name);
+        await fireEvent.input(name, {target: {value: `  ${NAME}  `}});
+        await submitEdit({...UNCHANGED_PATCH, name: NAME}, updateResponse({success: false, error: `Broker with name '${NAME}' already exists`}));
+
+        expectRefusalRetained(callbacks);
+        expect(screen.getByTestId('broker-name-input')).toHaveValue(`  ${NAME}  `);
+        const banner = screen.queryByTestId('info-banner-error');
+        expect(banner?.textContent?.trim(), 'the refusal must be explained in the form').toBe(`duplicate-exists[${NAME}] recovery-marker`);
+        // The synthetic <b> stays text, not rendered markup.
+        expect(banner?.querySelector('b, i')).toBeNull();
+        await expectDraftStillUnsaved(callbacks);
+    });
+
+    it('keeps a flag change refused by balance validation open, out of the cache, and shows the reason as given', async () => {
+        const {callbacks} = mountEdit();
+        const overdraft = await untickOverdraft();
+        await submitEdit({...UNCHANGED_PATCH, allow_cash_overdraft: false}, updateResponse({success: false, validation_triggered: true, error: VALIDATION_REFUSAL}));
+
+        expectRefusalRetained(callbacks);
+        expect(overdraft).not.toBeChecked();
+        expect(screen.getByTestId('broker-name-input')).toHaveValue(EDIT_INITIAL_DATA.name);
+        // Not a duplicate-name message, so there is nothing to localize: shown as given.
+        expect(screen.queryByTestId('info-banner-error')?.textContent?.trim(), 'the refusal must be explained in the form').toBe(VALIDATION_REFUSAL);
+        await expectDraftStillUnsaved(callbacks);
+    });
+
+    it('control: an accepted update, balance validation included, is merged, announced and closed', async () => {
+        const {callbacks} = mountEdit();
+        await fireEvent.input(screen.getByTestId('broker-name-input'), {target: {value: `  ${NAME}  `}});
+        await untickOverdraft();
+        const patch = {...UNCHANGED_PATCH, name: NAME, allow_cash_overdraft: false};
+        await submitEdit(patch, updateResponse({success: true, validation_triggered: true, error: null}));
+
+        expect(mocks.merge).toHaveBeenCalledExactlyOnceWith([{id: BROKER_ID, ...patch}]);
+        expect(callbacks.onupdated).toHaveBeenCalledExactlyOnceWith({id: BROKER_ID});
+        expect(callbacks.onclose).toHaveBeenCalledTimes(1);
+        expect(mocks.merge.mock.invocationCallOrder[0]).toBeLessThan(callbacks.onupdated.mock.invocationCallOrder[0]);
+        expect(callbacks.onupdated.mock.invocationCallOrder[0]).toBeLessThan(callbacks.onclose.mock.invocationCallOrder[0]);
+        expect(screen.queryByTestId('info-banner-error')).toBeNull();
+        expect(mocks.toasts.error).not.toHaveBeenCalled();
+        expect(callbacks.oncreated).not.toHaveBeenCalled();
+    });
+});

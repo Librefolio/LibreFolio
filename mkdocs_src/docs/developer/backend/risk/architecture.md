@@ -211,11 +211,11 @@ forbid `output`.
 | `error.code` | Typical origin |
 |---|---|
 | `analytic_not_found`, `incompatible_scope`, `incompatible_mode` | Pre-flight: an unknown code, or a scope or mode the plugin does not declare. |
-| `invalid_parameters` | `params_model` rejects the parameters; a benchmark or replay proxy that does not exist; replay options naming assets outside the scope; a bootstrap block longer than the history; a simulation over its size budget. |
+| `invalid_parameters` | `params_model` rejects the parameters; a benchmark or replay proxy that does not exist; replay options naming assets outside the scope; a bootstrap block longer than the history. |
 | `insufficient_history` | The observation gate, or a plugin (for example an optimization with fewer than two usable assets). |
 | `data_unavailable` | No usable series, or an invalid current composition. |
 | `invalid_covariance` | The GBM simulation worker rejected the estimated covariance. |
-| `resource_limit` | QMC needs more Sobol dimensions than `MAX_SOBOL_DIMENSION`; the optimization return matrix exceeds its budget. |
+| `resource_limit` | Every size limit of `simulation` ([Budgets](#budgets)): a request over one of the three engine budgets, more than `MAX_SIMULATION_ASSETS` assets with a usable return series, a bootstrap window over `MAX_HISTORY_OBSERVATIONS` observations, or QMC needing more Sobol dimensions than `MAX_SOBOL_DIMENSION`; the optimization return matrix exceeds its budget. |
 | `worker_busy`, `execution_timeout` | The spawn pool and its queue are full; the job exceeded the pool's timeout. |
 | `optimization_infeasible` | Riskfolio-Lib found no feasible portfolio. |
 | `execution_failed` | Status `failed` for an undeclared exception. `simulation` and `portfolio_optimization` also return it, as `unavailable`, when the worker's handler raised an unexpected exception type. |
@@ -477,14 +477,43 @@ and the refusals users meet are listed in its
 
 ### 📏 Budgets {: #budgets }
 
+The `simulation` rows follow the order of its checks, and the first limit exceeded refuses the
+request: every check raises, so the ones after it never run. A scope over two limits is told only
+the first: at the defaults, 101 holdings with a usable return series get the remedy `positions`, not
+`paths_or_horizon`. The request builder of the chosen process runs its checks before a request
+exists; `run_simulation()` then starts with `validate_resource_budget()`, before its cache lookup.
+All these checks run after the service's parameter validation and observation gate
+([Request Flow](#request-flow)), which are not size limits.
+
 | Limit | Value | Where | Answer |
 |---|---|---|---|
-| Sobol dimension, QMC only: assets × horizon days | `MAX_SOBOL_DIMENSION = 21_201` | `quant/models.py`, checked by the plugin | `unavailable` · `resource_limit` |
+| Assets with a usable return series, both processes (excluded holdings do not count) | `MAX_SIMULATION_ASSETS = 100` | `quant/models.py`, checked by the plugin before the request is built | `unavailable` · `resource_limit` |
+| Bootstrap window: aligned observations | `MAX_HISTORY_OBSERVATIONS = 5_000` | `quant/models.py`, checked by the plugin | `unavailable` · `resource_limit` |
 | Bootstrap block longer than the window | Block, converted to observations, above the history's count | `risk_plugins/simulation.py` | `unavailable` · `invalid_parameters` |
-| Percentile matrix: paths × (horizon + 1) | 20 000 000 | `quant/engine.py` | `unavailable` · `invalid_parameters` |
-| Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `invalid_parameters` |
-| Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `invalid_parameters` |
+| Sobol dimension, QMC only: assets × horizon days | `MAX_SOBOL_DIMENSION = 21_201` | `quant/models.py`, checked by the GBM builder `_build_parametric_request()` | `unavailable` · `resource_limit` |
+| Percentile matrix: paths × (horizon + 1) | 20 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
+| Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
+| Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
+
+`simulation` builds every `resource_limit` with `_resource_limit()` (`risk_plugins/simulation.py`).
+The builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
+`quant/engine.py`, which the plugin catches around `run_simulation()` and re-raises through
+`_resource_limit()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
+three, plus the `remedy` that one table, `_REMEDY_BY_METRIC`, maps the metric to (`portfolio_cells`
+and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` → `period`,
+`assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`). A metric missing from the table
+still answers `resource_limit`, with no `remedy`. The plugin checks the assets and the observations
+itself, before it builds the request: the request's `asset_ids` and `historical_returns` carry the
+same ceilings as their `max_length`, but a pydantic `ValidationError` raised while the builder
+constructs it lands outside the plugin's `try`, where the service can only log a traceback and
+answer `failed` · `execution_failed` ([Result Statuses](#statuses)).
+
+The optimization row belongs to `portfolio_optimization`, a separate analytic: `run_optimization()`
+checks observations × assets against `MAX_OPTIMIZATION_CELLS` as its first step, before the cache
+lookup. The plugin answers `resource_limit` with only `actual` and `limit` in `details`, copied from
+`OptimizationResourceLimitError`: no `metric` and no `remedy`, so its wording is the generic
+`risk.errors.resource_limit`.
 
 The engine request models (`SimulationEngineRequest`, `OptimizationEngineRequest`) are
 library-neutral and validated again inside the worker. `SimulationEngineRequest` keeps the two
@@ -568,7 +597,13 @@ in its four catalogues (`frontend/src/lib/i18n/{en,it,fr,es}.json`, see
   (`frontend/src/lib/components/risk/levels/warningSentence.ts`) translates the key with those
   parameters, and falls back to the English `message` when the catalogue lacks the key or the ICU
   format fails: never a raw key, never a placeholder.
-- **Errors.** The UI words a refusal or a failure from `error.code` alone. `translateErrorCode()`
+- **Errors.** The UI words a refusal or a failure from `error.code` alone, except for a size
+  limit: `errorDisplayCode()` (`frontend/src/lib/components/risk/levels/errorDisplayCode.ts`,
+  re-exported from `levelHelpers.ts`) also reads `details.remedy`, and turns a `resource_limit`
+  whose remedy it knows into the display code `resource_limit_<remedy>`. Any other code stays as
+  it is, and an unknown remedy keeps the generic `risk.errors.resource_limit`. It has two
+  callers: `resultErrorCodes()` in `levelHelpers.ts` (the four levels and the lab sections) and
+  `RiskResultFrame.svelte` (Asset Detail). `translateErrorCode()`
   (`frontend/src/lib/components/risk/levels/levelHelpers.ts`) reads `risk.errors.<code>` and falls
   back to a generic sentence (`risk.errors.unknown` in the levels). The client-side
   `answer_discarded` code is worded the same way.

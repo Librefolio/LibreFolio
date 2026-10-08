@@ -4,6 +4,7 @@ Authentication API Endpoints
 Provides login, logout, and JWT-based session management.
 """
 
+import asyncio
 from typing import Literal
 
 import structlog
@@ -25,7 +26,7 @@ from backend.app.schemas.auth import (
     UpdateProfileRequest,
     UpdateProfileResponse,
 )
-from backend.app.services import settings_service, user_service
+from backend.app.services import brim_provider, settings_service, user_service
 from backend.app.services.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -282,9 +283,11 @@ async def delete_own_account(
     """
     Delete the currently authenticated user's account.
 
-    This is a destructive action that:
-    - Deletes all user data (brokers, transactions, settings)
-    - Cannot be undone
+    This is a destructive action that, broker by broker, applies the last-owner rule (the
+    same as leaving a broker): a broker the user was the last owner of is deleted with its
+    transactions and its BRIM report files; on the others only the user's access goes.
+    Then the user and its settings. All or nothing: a technical error deletes nothing.
+    Cannot be undone.
 
     Constraints:
     - Cannot delete if you are the only superuser
@@ -296,10 +299,17 @@ async def delete_own_account(
         if superuser_count <= 1:
             raise HTTPException(status_code=400, detail="Cannot delete account: you are the only administrator")
 
-    # Delete the user (cascades to related data)
-    await user_service.delete_user(session, current_user.id)
+    try:
+        deletion = await user_service.delete_user(session, current_user.id)
+    except Exception as exc:
+        logger.exception("Account deletion failed: nothing was deleted", user_id=current_user.id)
+        raise HTTPException(status_code=500, detail="Account deletion failed: nothing was deleted") from exc
 
-    logger.warning("User account deleted", user_id=current_user.id, username=current_user.username)
+    # The deleted brokers' report files live on disk: removed after the commit, like DELETE /brokers
+    deleted_broker_ids = deletion.deleted_broker_ids if deletion else []
+    files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, deleted_broker_ids) if deleted_broker_ids else 0
+
+    logger.warning("User account deleted", user_id=current_user.id, username=current_user.username, brokers_deleted=deleted_broker_ids, brim_files_removed=files_removed)
 
     # Clear session cookie
     response.delete_cookie(

@@ -1021,8 +1021,12 @@ test.describe('Chart axes under privacy (S2a/S2b)', () => {
  * in part (the window starts mid-period) is drawn translucent, and the period still
  * running on the page's today is drawn whole, its missing days being the future;
  * Candles and Income sit on one category axis whose data are the closing dates; its
- * labels are planned (never a raw ISO date, never repeated, never overlapping, never
- * cut by the canvas edge); every bucket has its split line while a slot is at least
+ * labels follow the developer's label contract that replaced D4/D4-bis: one text on
+ * every bucket, all of them rotated 45° as soon as one does not fit horizontally, and
+ * thinned to every k-th bucket, counted from the last, only when even rotated they do
+ * not fit — never a raw ISO date, never the same text on two consecutive labels (a day
+ * number such as 12 may repeat across months), never overlapping, never cut by the
+ * canvas edge; every bucket has its split line while a slot is at least
  * 8px wide, and below that only the buckets that hold a 1st of the month do, each on
  * its own left edge; each Income bar takes its share of its bucket's slot, 30% of the
  * slot left between buckets and 10% of a bar between the three columns of one; and a
@@ -1038,7 +1042,7 @@ test.describe('Chart axes under privacy (S2a/S2b)', () => {
  * from the component's bucket module: an oracle that called the code it checks would
  * agree with it by construction.
  *
- * Each contract letter (C, P, D, A, E, G, B, T, W, Z, M) is a soft poll whose message
+ * Each contract letter (C, P, D, A, E, G, R, H, B, T, W, Z, M) is a soft poll whose message
  * starts with the letter, so one run names every broken letter; hard preconditions
  * keep a letter from passing vacuously, except E2's P (see its note in the test).
  *
@@ -1081,9 +1085,10 @@ const LADDER_E1_CASES = [{rung: '1m'}, {rung: '1w'}] as const;
 /**
  * The rungs the S7 oracle reads, by test-id suffix. E3, the phone case and E4 still name
  * their rung by the day span of the old ladder (30, 1): `logLadder` maps that span to the
- * calendar rung it now stands for, through RUNG_OF_LEGACY_SPAN.
+ * calendar rung it now stands for, through RUNG_OF_LEGACY_SPAN. A quarter (3m) never had
+ * a day span: E5 names it by its suffix.
  */
-type OracleRung = '1d' | '1w' | '1m';
+type OracleRung = '1d' | '1w' | '1m' | '3m';
 const RUNG_OF_LEGACY_SPAN: Readonly<Record<number, OracleRung>> = {1: '1d', 7: '1w', 30: '1m'};
 
 /** One bucket of the served days: the served indices it holds, its calendar period, and its closing date — the last served day it holds. */
@@ -1102,8 +1107,10 @@ const isoOfUtcDay = (day: number): string => new Date(day * UTC_DAY_MS).toISOStr
 
 /**
  * The calendar period a served day falls in: the day itself (1d), its ISO week from
- * Monday to Sunday (1w), its month from the 1st to its last day (1m). Written from the
- * decision with the calendar's own fields, never imported from the component.
+ * Monday to Sunday (1w), its month from the 1st to its last day (1m), its calendar
+ * quarter from January, April, July or October 1st to the last day of the quarter's
+ * third month (3m). Written from the decision with the calendar's own fields, never
+ * imported from the component.
  */
 function calendarPeriod(iso: string, rung: OracleRung): {start: string; end: string} {
     if (rung === '1d') return {start: iso, end: iso};
@@ -1113,7 +1120,10 @@ function calendarPeriod(iso: string, rung: OracleRung): {start: string; end: str
         return {start: isoOfUtcDay(monday), end: isoOfUtcDay(monday + 6)};
     }
     const [year, month0] = [date.getUTCFullYear(), date.getUTCMonth()];
-    return {start: isoOfUtcDay(Date.UTC(year, month0, 1) / UTC_DAY_MS), end: isoOfUtcDay(Date.UTC(year, month0 + 1, 0) / UTC_DAY_MS)};
+    const months = rung === '3m' ? 3 : 1;
+    const first0 = month0 - (month0 % months);
+    // Day 0 of the month after the period is the period's last day, across a year end too.
+    return {start: isoOfUtcDay(Date.UTC(year, first0, 1) / UTC_DAY_MS), end: isoOfUtcDay(Date.UTC(year, first0 + months, 0) / UTC_DAY_MS)};
 }
 
 /** The buckets the served days make on `rung`: one per calendar period they touch, oldest first. */
@@ -1175,11 +1185,28 @@ interface LadderRect {
     height: number;
 }
 
-/** One painted x label: its element id, its plain text (the tspans'), its glyph box. */
+/** A point in canvas pixels, the space of `W` and `H`. */
+interface LadderPoint {
+    x: number;
+    y: number;
+}
+
+/**
+ * One painted x label: its element id, its plain text (the tspans'), its glyph box, its
+ * rotation and its glyph corners.
+ *
+ * `box` is axis-aligned, the bounds of the glyphs on screen: on a rotated label it is a
+ * diamond's bounding square, wider than the text, so it neither tells two rotated labels
+ * apart nor follows their outline. `corners` is the glyph rectangle itself, oriented as
+ * painted: four canvas points in order around it, null when it could not be measured.
+ * `rotation` is the element's own, in radians, null when unreadable.
+ */
 interface LadderLabel {
     anid: string;
     text: string;
     box: LadderRect | null;
+    rotation: number | null;
+    corners: LadderPoint[] | null;
 }
 
 /** One data item of a bar or candlestick series, as laid out and painted. `raw` is the bucket index. */
@@ -1201,7 +1228,9 @@ interface LadderSeries {
 
 /** Everything the ladder checks read, taken in one pass over the chart: plain JSON, no live reference. */
 interface LadderSnapshot {
+    /** The canvas size, in the CSS pixels the scene is laid out in. */
     W: number;
+    H: number;
     plot: LadderRect | null;
     xType: string | null;
     xData: string[] | null;
@@ -1228,14 +1257,20 @@ interface LadderSnapshot {
  * lines exist and where they stand. A label's plain text is the concatenation of its tspans, never its
  * `style.text` (a rich label keeps its `{style|text}` markup there); its box is the union
  * of the tspans' rects in canvas space, because rich padding moves a glyph off its anchor.
- * A label that paints no text is counted, not listed: it has no glyph to check. `raw` is
- * always the raw index, because a filtering zoom re-indexes the items, not the buckets.
+ * Its corners are the same union taken in the label's own frame (each tspan's rect through
+ * its local transform, if it has one: a tspan is normally placed by its style alone) and
+ * mapped to canvas space by the label's computed transform, x' = a·x + c·y + e and
+ * y' = b·x + d·y + f, so a rotated label keeps its real outline. Its rotation is the
+ * element's: ECharts decomposes the label's layout transform into it, π/4 under
+ * `rotate: 45`, 0 — possibly −0 — when horizontal. A label that paints no text is counted,
+ * not listed: it has no glyph to check. `raw` is always the raw index, because a filtering
+ * zoom re-indexes the items, not the buckets.
  */
 async function ladderSnapshot(host: Locator): Promise<LadderSnapshot> {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     return host.evaluate((node): LadderSnapshot => {
         const chart = (node as any).__lfChart;
-        const empty: LadderSnapshot = {W: 0, plot: null, xType: null, xData: null, zoom: {start: null, end: null}, extent: null, labels: [], blankLabels: 0, lines: [], lineXs: [], series: []};
+        const empty: LadderSnapshot = {W: 0, H: 0, plot: null, xType: null, xData: null, zoom: {start: null, end: null}, extent: null, labels: [], blankLabels: 0, lines: [], lineXs: [], series: []};
         if (!chart || chart.isDisposed?.()) return empty;
         const model = chart.getModel?.();
         if (!model) return empty;
@@ -1280,13 +1315,31 @@ async function ladderSnapshot(host: Locator): Promise<LadderSnapshot> {
                 return;
             }
             let box: any = null;
+            // The oriented rectangle, gathered in the label's own frame: [x0, x1] × [y0, y1].
+            let local: {x0: number; y0: number; x1: number; y1: number} | null = null;
             for (const span of spans) {
                 const rect = span.getBoundingRect().clone();
                 rect.applyTransform(span.getComputedTransform());
                 if (box) box.union(rect);
                 else box = rect;
+
+                const own = span.getBoundingRect().clone();
+                if (span.needLocalTransform?.()) own.applyTransform(span.getLocalTransform());
+                const [x0, y0, x1, y1] = [own.x, own.y, own.x + own.width, own.y + own.height];
+                local = local ? {x0: Math.min(local.x0, x0), y0: Math.min(local.y0, y0), x1: Math.max(local.x1, x1), y1: Math.max(local.y1, y1)} : {x0, y0, x1, y1};
             }
-            labels.push({anid, text, box: toRect(box)});
+            // The label's computed transform: null while it is the identity.
+            const m: number[] = el.getComputedTransform?.() ?? [1, 0, 0, 1, 0, 0];
+            const mapped = local
+                ? [
+                      [local.x0, local.y0],
+                      [local.x1, local.y0],
+                      [local.x1, local.y1],
+                      [local.x0, local.y1],
+                  ].map(([x, y]) => ({x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5]}))
+                : null;
+            const corners = mapped && mapped.every((point) => num(point.x) !== null && num(point.y) !== null) ? mapped : null;
+            labels.push({anid, text, box: toRect(box), rotation: num(el.rotation), corners});
         });
 
         const series: LadderSeries[] = [];
@@ -1316,6 +1369,7 @@ async function ladderSnapshot(host: Locator): Promise<LadderSnapshot> {
 
         return {
             W: num(chart.getWidth?.()) ?? 0,
+            H: num(chart.getHeight?.()) ?? 0,
             plot: toRect(model.getComponent?.('grid', 0)?.coordinateSystem?.getRect?.()),
             xType: typeof xAxisOption.type === 'string' ? xAxisOption.type : null,
             xData: Array.isArray(xAxisOption.data) ? xAxisOption.data.map((d: any) => String(d !== null && typeof d === 'object' ? d.value : d)) : null,
@@ -1384,24 +1438,145 @@ function isoLabelTexts(snap: LadderSnapshot): string[] {
     return snap.labels.map((label) => label.text).filter((text) => /\d{4}-\d{2}-\d{2}/.test(text));
 }
 
-/** A: every label text painted more than once. */
+/** A painted label with the bucket it names: `label_<i>` is bucket i, its raw category index. */
+type IndexedLabel = LadderLabel & {index: number};
+
+/**
+ * The painted labels in bucket order. An id that names no bucket (T reports it) sorts last,
+ * by id, so it still takes part in every check that walks the labels.
+ */
+function orderedLabels(snap: LadderSnapshot): IndexedLabel[] {
+    return snap.labels
+        .map((label) => {
+            const match = /^label_(\d+)$/.exec(label.anid);
+            return {...label, index: match ? Number(match[1]) : Infinity};
+        })
+        .sort((a, b) => a.index - b.index || a.anid.localeCompare(b.anid));
+}
+
+/** A label as the messages name it: its bucket and its text. */
+function labelTag(label: IndexedLabel): string {
+    return `${Number.isFinite(label.index) ? `#${label.index}` : label.anid} ${label.text}`;
+}
+
+/**
+ * A: the consecutive painted labels, in bucket order, that print the same text. Only
+ * neighbours: a day number such as 12 legitimately comes back in another month, but two
+ * labels next to each other with one text read as one.
+ */
 function duplicatedLabelTexts(snap: LadderSnapshot): string[] {
-    const texts = snap.labels.map((label) => label.text);
-    return [...new Set(texts.filter((text, i) => texts.indexOf(text) !== i))];
+    const ordered = orderedLabels(snap);
+    return ordered.slice(1).flatMap((label, i) => (label.text === ordered[i].text ? [`${labelTag(ordered[i])} → ${labelTag(label)}`] : []));
 }
 
-/** E: the labels whose glyph box leaves the canvas [0, W], or could not be measured. */
+/** E: the labels with a glyph corner outside the canvas [0, W] × [0, H], or with no corners to judge. */
 function labelsOutsideCanvas(snap: LadderSnapshot): string[] {
-    return snap.labels.filter((label) => !label.box || label.box.x < 0 || label.box.x + label.box.width > snap.W).map((label) => (label.box ? `${label.text} [${round2(label.box.x)}, ${round2(label.box.x + label.box.width)}] outside [0, ${snap.W}]` : `${label.text}: no glyph box`));
+    return orderedLabels(snap).flatMap((label) => {
+        if (!label.corners) return [`${labelTag(label)}: no glyph corners`];
+        const outside = label.corners.filter((point) => point.x < 0 || point.x > snap.W || point.y < 0 || point.y > snap.H);
+        return outside.length > 0 ? [`${labelTag(label)}: corners ${outside.map((point) => `(${round2(point.x)}, ${round2(point.y)})`).join(' ')} outside [0, ${snap.W}] × [0, ${snap.H}]`] : [];
+    });
 }
 
-/** G: adjacent labels, sorted by x, whose glyph boxes overlap (a negative gap). */
-function overlappingLabels(snap: LadderSnapshot): string[] {
-    const boxed = snap.labels.filter((label): label is LadderLabel & {box: LadderRect} => label.box !== null).sort((a, b) => a.box.x - b.box.x);
-    return boxed.slice(1).flatMap((label, i) => {
-        const gap = label.box.x - (boxed[i].box.x + boxed[i].box.width);
-        return gap < 0 ? [`${boxed[i].text} → ${label.text}: gap ${round2(gap)}px`] : [];
+/**
+ * The unit normals of a rectangle's edges, given its corners in order around it: the
+ * normals of edges 0→1 and 1→2, the other two edges being parallel to these. A degenerate
+ * edge has no normal.
+ */
+function edgeNormals(corners: LadderPoint[]): LadderPoint[] {
+    return [0, 1].flatMap((i) => {
+        const [dx, dy] = [corners[i + 1].x - corners[i].x, corners[i + 1].y - corners[i].y];
+        const length = Math.hypot(dx, dy);
+        return length > 1e-9 ? [{x: -dy / length, y: dx / length}] : [];
     });
+}
+
+/**
+ * How far two oriented rectangles overlap, by the separating-axis test: projected on each of
+ * their four edge normals, the length the two shadows share, and the least of these. ≤ 0 when
+ * some axis separates them; null when neither has an edge to project on. Two axis-aligned
+ * rectangles on one baseline reduce to their x overlap, the negative of their x gap.
+ */
+function glyphOverlap(a: LadderPoint[], b: LadderPoint[]): number | null {
+    const axes = [...edgeNormals(a), ...edgeNormals(b)];
+    if (axes.length === 0) return null;
+    const shadow = (corners: LadderPoint[], axis: LadderPoint) => {
+        const along = corners.map((point) => point.x * axis.x + point.y * axis.y);
+        return {lo: Math.min(...along), hi: Math.max(...along)};
+    };
+    return Math.min(
+        ...axes.map((axis) => {
+            const [sa, sb] = [shadow(a, axis), shadow(b, axis)];
+            return Math.min(sa.hi, sb.hi) - Math.max(sa.lo, sb.lo);
+        }),
+    );
+}
+
+/**
+ * G: consecutive painted labels, in bucket order, whose oriented glyph rectangles overlap —
+ * their shadows share more than 0.5px on every edge normal — and the labels with no corners
+ * to judge. Rotated or not, the pair is judged by its real outlines, never by the boxes
+ * around them; horizontal, it is the x gap of two neighbours, within half a pixel.
+ */
+function overlappingLabels(snap: LadderSnapshot): string[] {
+    const ordered = orderedLabels(snap);
+    const unmeasured = ordered.filter((label) => !label.corners).map((label) => `${labelTag(label)}: no glyph corners`);
+    const measured = ordered.filter((label): label is IndexedLabel & {corners: LadderPoint[]} => label.corners !== null);
+    const overlaps = measured.slice(1).flatMap((label, i) => {
+        const overlap = glyphOverlap(measured[i].corners, label.corners);
+        if (overlap === null) return [`${labelTag(measured[i])} → ${labelTag(label)}: degenerate glyph rectangles`];
+        return overlap > 0.5 ? [`${labelTag(measured[i])} → ${labelTag(label)}: glyphs overlap by ${round2(overlap)}px`] : [];
+    });
+    return [...unmeasured, ...overlaps];
+}
+
+/** The tolerance on a label rotation, in radians: decomposing the layout transform leaves an ulp or two. */
+const LABEL_ROTATION_TOLERANCE = 1e-6;
+
+/**
+ * The rotation every painted label shares, as a literal: 0 when all lie flat, 45 when all
+ * are turned π/4, null otherwise — mixed, unread, another angle, or no label at all. A
+ * literal, because a horizontal label decomposes to −0, which `toBe(0)` tells apart from 0.
+ */
+function commonLabelDegrees(snap: LadderSnapshot): 0 | 45 | null {
+    const rotations = snap.labels.map((label) => label.rotation);
+    const all = (radians: number) => rotations.length > 0 && rotations.every((rotation) => rotation !== null && Math.abs(rotation - radians) <= LABEL_ROTATION_TOLERANCE);
+    if (all(0)) return 0;
+    if (all(Math.PI / 4)) return 45;
+    return null;
+}
+
+/**
+ * R: [] when every painted label shares one rotation and it is 0 or π/4 (within 1e-6 rad);
+ * otherwise each distinct rotation, with how many labels carry it.
+ */
+function labelRotationBreaks(snap: LadderSnapshot): string[] {
+    if (snap.labels.length === 0) return ['no painted label to read a rotation from'];
+    if (commonLabelDegrees(snap) !== null) return [];
+    const counts = new Map<string, number>();
+    for (const {rotation} of snap.labels) {
+        const key = rotation === null ? 'unread' : `${rotation.toFixed(6)} rad (${round2((rotation * 180) / Math.PI)}°)`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts].map(([key, count]) => `${key} × ${count}`);
+}
+
+/**
+ * H: while the labels lie flat, the buckets the x scale shows — every index of
+ * [extent[0], extent[1]] — that paint no label. Thinning belongs to the rotated axis
+ * alone, so at 45° H holds by construction ([]). It names what keeps it from judging
+ * instead of passing: no common rotation (R says which), no extent.
+ */
+function unlabelledVisibleBuckets(snap: LadderSnapshot): string[] {
+    const degrees = commonLabelDegrees(snap);
+    if (degrees === 45) return [];
+    if (degrees === null) return ['no common label rotation to judge the thinning by (see R)'];
+    const [lo, hi] = snap.extent ?? [];
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return [`no x scale extent to judge the thinning by: ${JSON.stringify(snap.extent)}`];
+    const painted = new Set(orderedLabels(snap).map((label) => label.index));
+    const missing: string[] = [];
+    for (let i = Math.ceil(lo); i <= Math.floor(hi); i++) if (!painted.has(i)) missing.push(`#${i}`);
+    return missing;
 }
 
 /** B: the buckets 0 … n−1 with no split line on their left edge (on a band axis, tick i is bucket i's left edge). */
@@ -1502,10 +1677,10 @@ async function dispatchZoom(host: Locator, start: number, end: number): Promise<
  *
  * A letter's verdict says *that* the axis broke the contract; the digest says *how* — the
  * closings against the expected ones, the first and last periods, the partial buckets,
- * each label's text and glyph box, the split lines, every item's width against the slot,
- * element against visual opacity, the zoom and the scale extent. The list reporter prints
- * a test's stdout whether it passes or fails, so a green run carries the same evidence as
- * a red one.
+ * each label's text, glyph box, rotation and oriented corners, the split lines, every
+ * item's width against the slot, element against visual opacity, the zoom and the scale
+ * extent. The list reporter prints a test's stdout whether it passes or fails, so a green
+ * run carries the same evidence as a red one.
  *
  * `rung` is the calendar rung, or the day span E3, the phone case and E4 still pass (see
  * RUNG_OF_LEGACY_SPAN). The partial buckets need the page's `today`; without it they are
@@ -1519,6 +1694,8 @@ function logLadder(tag: string, snap: LadderSnapshot, served: string[], rung: Or
     const slot = slotWidth(snap, n);
     const ends = (list: string[] | null) => (list ? {count: list.length, first3: list.slice(0, 3), last3: list.slice(-3)} : null);
     const box = (rect: LadderRect | null) => (rect ? [round2(rect.x), round2(rect.y), round2(rect.width), round2(rect.height)] : null);
+    const degrees = (radians: number | null) => (radians === null ? null : round2((radians * 180) / Math.PI));
+    const corners = (points: LadderPoint[] | null) => (points ? points.flatMap((point) => [round2(point.x), round2(point.y)]) : null);
     const period = (bucket: CalendarBucket | undefined) => (bucket ? [bucket.start, bucket.end] : null);
     const digest = {
         len: served.length,
@@ -1526,6 +1703,7 @@ function logLadder(tag: string, snap: LadderSnapshot, served: string[], rung: Or
         today: today ?? null,
         n,
         W: snap.W,
+        H: snap.H,
         plot: box(snap.plot),
         slot: round2(slot),
         xType: snap.xType,
@@ -1535,7 +1713,8 @@ function logLadder(tag: string, snap: LadderSnapshot, served: string[], rung: Or
         partial: today ? [...partialBuckets(buckets, served, today)] : null,
         zoom: snap.zoom,
         extent: snap.extent,
-        labels: snap.labels.map((label) => [label.anid, label.text, box(label.box)]),
+        // Per label: [id, text, box [x, y, w, h], rotation in degrees, corners [x0, y0, … x3, y3]].
+        labels: snap.labels.map((label) => [label.anid, label.text, box(label.box), degrees(label.rotation), corners(label.corners)]),
         blankLabels: snap.blankLabels,
         lines: [...snap.lines].sort((a, b) => a - b),
         lineXs: [...snap.lineXs].sort((a, b) => a - b).map(round2),
@@ -1625,13 +1804,18 @@ async function openLadder(page: Page, opts: {viewport: {width: number; height: n
     return {chart, host, served};
 }
 
-/** The E1(c) label checks: at least two painted labels (hard), then D, A, E and G. */
+/**
+ * The label checks of E1(c), E2, the phone case and E5: at least two painted labels (hard),
+ * then D, A, E, G, R and H, each a soft poll that re-reads the scene.
+ */
 async function expectLadderLabels(host: Locator): Promise<void> {
     await expect.poll(async () => (await ladderSnapshot(host)).labels.length, {message: 'precondition: the x axis paints at least two labels'}).toBeGreaterThanOrEqual(2);
     await expect.soft.poll(async () => isoLabelTexts(await ladderSnapshot(host)), {message: 'D — no x label prints a raw ISO date'}).toEqual([]);
-    await expect.soft.poll(async () => duplicatedLabelTexts(await ladderSnapshot(host)), {message: 'A — no two x labels print the same text'}).toEqual([]);
-    await expect.soft.poll(async () => labelsOutsideCanvas(await ladderSnapshot(host)), {message: 'E — every x label glyph lies inside the canvas [0, W]'}).toEqual([]);
-    await expect.soft.poll(async () => overlappingLabels(await ladderSnapshot(host)), {message: 'G — no two x labels overlap: sorted by x, every gap is ≥ 0'}).toEqual([]);
+    await expect.soft.poll(async () => duplicatedLabelTexts(await ladderSnapshot(host)), {message: 'A — no two consecutive x labels, in bucket order, print the same text (a day number may come back in another month, never next to itself)'}).toEqual([]);
+    await expect.soft.poll(async () => labelsOutsideCanvas(await ladderSnapshot(host)), {message: 'E — every corner of every x label glyph lies inside the canvas [0, W] × [0, H]'}).toEqual([]);
+    await expect.soft.poll(async () => overlappingLabels(await ladderSnapshot(host)), {message: 'G — no two consecutive x labels overlap: some edge normal separates their oriented glyph rectangles, within 0.5px'}).toEqual([]);
+    await expect.soft.poll(async () => labelRotationBreaks(await ladderSnapshot(host)), {message: 'R — every x label has one common rotation: 0° when all fit horizontally, 45° when any does not'}).toEqual([]);
+    await expect.soft.poll(async () => unlabelledVisibleBuckets(await ladderSnapshot(host)), {message: 'H — horizontal labels are never thinned: every bucket in the visible extent paints its label (thinning only at 45°)'}).toEqual([]);
 }
 
 /** The E1(d) check: a slot wide enough to carry a separator (hard, CANDLE_MIN_SLOT_PX = 8), then B. */
@@ -1829,6 +2013,20 @@ test.describe('GrowthChart ladder x axis (S7)', () => {
                 await restorePrivacyOff(page);
             }
         }
+    });
+
+    test('S7-E5 income 3m at 1440px stays horizontal and labels every quarter', async ({page}) => {
+        // E2's opening on the quarter rung, then soft polls that each run their full timeout
+        // while the axis is wrong: more than one interaction's budget.
+        test.setTimeout(60_000);
+        const {host, served} = await openLadder(page, {viewport: LADDER_DESKTOP, submode: 'income', rung: '3m'});
+        logLadder('E5', await ladderSnapshot(host), served, '3m', await pageToday(page));
+
+        // The guard behind H: four or five quarters on a plot of about 573px leave every label
+        // room to lie flat, so the axis must neither rotate nor, flat, skip a quarter. Hard,
+        // because at 45° H holds by construction and would pass without judging a bucket.
+        await expect.poll(async () => commonLabelDegrees(await ladderSnapshot(host)), {message: 'precondition: at 1440px the 3m Income labels lie flat (0°), so H judges every visible quarter'}).toBe(0);
+        await expectLadderLabels(host);
     });
 });
 

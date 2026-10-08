@@ -48,7 +48,7 @@ class WACSeriesPoint(StrictModel):
     date: date_type
     wac: SafeDecimal = Field(..., description="WAC per unit after this transaction")
     pool_qty: SafeDecimal = Field(..., description="Pool quantity after this transaction")
-    effect: str = Field(..., description="Effect on pool: add, reduce, add_zero_cost, add_at_wac")
+    effect: str = Field(..., description="Effect on pool: add, add_zero_cost, reduce, split_rescale")
 
 
 class WACAnalyticsResultItem(StrictModel):
@@ -168,6 +168,7 @@ class IssueCode(StrEnum):
     STALE_PRICE = "STALE_PRICE"
     MISSING_FX_MARKET = "MISSING_FX_MARKET"
     MISSING_FX_RATES = "MISSING_FX_RATES"
+    MISSING_COST_BASIS = "MISSING_COST_BASIS"
     NAV_INCOMPLETE = "NAV_INCOMPLETE"
     MWRR_NOT_CALCULABLE = "MWRR_NOT_CALCULABLE"
     MWRR_SERIES_UNRELIABLE = "MWRR_SERIES_UNRELIABLE"
@@ -461,6 +462,23 @@ class BrokerBreakdown(StrictModel):
     cash_balances: List[Currency] = Field(default_factory=list, description="Cash balance per currency, native (unconverted)")
 
 
+class UnrealizedBreakdownRow(StrictModel):
+    """One row of the period's unrealized change, split by cause (Dashboard tooltip).
+
+    For the assets priced in ``asset_currency`` (A), valued in the report currency (T), with r
+    the A→T rate of the day, C_A and C_T their historical cost in A and in T:
+
+    * ``asset`` — change of MV − C_A × r: what the assets did in their own currency;
+    * ``fx`` — change of C_A × r − C_T: what the exchange rate did to their cost (A ≠ T only);
+    * ``unsplit`` — change of MV − C_T for positions that could not be split on a boundary day
+      (no market value, no rate, or a cost incomplete in either currency).
+    """
+
+    kind: Literal["asset", "fx", "unsplit"]
+    asset_currency: str = Field(..., description="Currency the assets of this row are priced in")
+    period_delta: Currency = Field(..., description="Change over the period, in the report currency")
+
+
 class PortfolioSummary(StrictModel):
     """Full portfolio summary response."""
 
@@ -488,6 +506,10 @@ class PortfolioSummary(StrictModel):
     period_unrealized_gain_loss_start: Optional[Currency] = Field(None, description="Unrealized G/L at start of period")
     period_unrealized_gain_loss_end: Optional[Currency] = Field(None, description="Unrealized G/L at end of period (snapshot)")
     period_unrealized_gain_loss_delta: Optional[Currency] = Field(None, description="Change in unrealized G/L over the period")
+    period_unrealized_breakdown: List[UnrealizedBreakdownRow] = Field(
+        default_factory=list,
+        description="period_unrealized_gain_loss_delta split by asset currency into the assets' own change and the exchange-rate effect on their historical cost; the rows add up to it exactly",
+    )
     period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L from sales in period (WAC-based)")
     period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period, signed — a legacy negative correction reduces this value rather than being folded into the reconciliation residual")
     period_fees_taxes: Optional[Currency] = Field(None, description="FEE + TAX in period (positive value, shown negative in UI)")
@@ -691,17 +713,12 @@ class AcquisitionFundingSeries(StrictModel):
     """The full new-vs-reinvested BUY funding history (batch 2 — GrowthChart Income
     submode's acquisition-size dimension, rendered as a 2-zone stacked bar).
 
-    KNOWN LIMITATION — no ``missing_fx_pairs`` channel, unlike its co-rendered
-    Income-submode siblings (income/cost/deposit). A BUY whose currency has no FX
-    route on its date is skipped by the engine's own pre-existing
-    ``amount_target is None -> continue`` guard before it ever reaches the funding
-    split, so it silently contributes nothing and no data-quality signal surfaces
-    in THIS dimension. That guard is pre-existing engine behaviour (it equally
-    affects the 3-pool/cash-decomposition accounting, not just this series) and the
-    engine's ``missing_fx_pairs`` set is populated only from valuation paths, never
-    from transaction-amount conversion failures — so closing this properly means
-    giving the engine a transaction-level FX-failure output channel, not patching
-    this schema. Documented rather than silently implied complete; same omission as
+    No ``missing_fx_pairs`` field of its own, unlike its co-rendered Income-submode
+    siblings (income/cost/deposit). A BUY whose currency has no FX rate on its date is
+    skipped by the engine's ``amount_target is None -> continue`` guard before it reaches
+    the funding split, so it contributes nothing here; the engine records that failed
+    conversion in its movement-level ``missing_fx`` channel, which reaches the report's
+    ``data_quality`` (pair and date) whenever the summary is built. Same as
     PnlCandleSeries, which shipped with it.
     """
 
