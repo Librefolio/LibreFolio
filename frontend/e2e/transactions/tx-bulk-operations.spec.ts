@@ -13,10 +13,21 @@
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates multiple TX types on
  * editable brokers (IB=OWNER, Directa=EDITOR). DEGIRO=VIEWER.
+ *
+ * Shared data: `Transaction` is a global table, and the category's specs share one
+ * database. Every test here but one stages changes on mock rows taken from the top
+ * of the table and then discards them (Cancel → Discard, Reset): nothing reaches the
+ * database. The mixed commit does write, so it never touches a mock row: it creates
+ * its own through the API, narrows the table to them, and deletes everything it made
+ * afterwards. It used to rewrite "the first editable row", which is the `[delete-safe]`
+ * FEE that tx-delete A1-confirm looks up by its description.
  */
 import {expect, test, type Page, type Locator} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {validateRuns, waitForSettled, waitForValidateRun} from '../fixtures/app-events';
+import {daysAgoIso} from '../fixtures/dates';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(30_000);
 
@@ -106,6 +117,94 @@ async function closeFormModalIfOpen(page: Page) {
         const cancelForm = page.getByTestId('tx-form-cancel');
         await cancelForm.click();
     }
+}
+
+// ---------------------------------------------------------------------------
+// Owned rows — for the one test in this file that commits
+// ---------------------------------------------------------------------------
+
+const API = '/api/v1';
+
+/** What the committing test made: the ids it was told about, and the marker every row it made carries. */
+interface OwnedRows {
+    marker: string;
+    ids: number[];
+}
+
+interface CommitBody {
+    committed: boolean;
+    issues?: unknown[];
+    results: Array<{operation: string; index: number; ids?: number[]; status: string}>;
+}
+
+/** POST a batch through the API (`page.request` shares the login cookie). A refused batch
+ *  still answers 200, so `committed` is checked as well as the status. */
+async function commitViaApi(page: Page, batch: {creates?: unknown[]; deletes?: number[]}, what: string): Promise<CommitBody> {
+    const resp = await page.request.post(`${API}/transactions/commit`, {data: {creates: [], updates: [], deletes: [], ...batch}});
+    expect(resp.ok(), `${what}: HTTP ${resp.status()}`).toBe(true);
+    const body = (await resp.json()) as CommitBody;
+    expect(body.committed, `${what} rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+    return body;
+}
+
+/**
+ * The broker the mock contract makes TEST_USER's OWNER (populate_mock_data.py), found by
+ * name and checked. Not "the first editable one": specs create brokers too, and one of
+ * those could sort first and be deleted, with our rows on it, while this test runs.
+ */
+async function ownedMockBrokerId(page: Page): Promise<number> {
+    const resp = await page.request.get(`${API}/brokers`);
+    expect(resp.ok(), `GET ${API}/brokers returned ${resp.status()}`).toBe(true);
+    const {items} = (await resp.json()) as {items: Array<{id: number; name: string; user_role: string | null}>};
+    const broker = items.find((b) => b.name === 'Interactive Brokers');
+    expect(broker?.user_role, 'TEST_USER must be OWNER of "Interactive Brokers" — check populate_mock_data.py').toBe('OWNER');
+    return broker!.id;
+}
+
+/** A small cash DEPOSIT: creating it only raises the broker's cash, deleting it puts the cash back. */
+function depositPayload(brokerId: number, date: string, amount: string, description: string) {
+    return {broker_id: brokerId, type: 'DEPOSIT', date, quantity: '0', cash: {code: 'EUR', amount}, tags: [], description};
+}
+
+/**
+ * Delete what the test owns: the ids it recorded, plus every row carrying its marker —
+ * which is how the row the UI commit creates still goes when the test died before
+ * reading the commit response. Fails loud: a silent leftover is how this spec used to
+ * break tx-delete.
+ */
+async function deleteOwnedRows(page: Page, owned: OwnedRows): Promise<void> {
+    const resp = await page.request.get(`${API}/transactions`);
+    expect(resp.ok(), `cleanup: GET ${API}/transactions returned ${resp.status()}`).toBe(true);
+    const rows = (await resp.json()) as Array<{id: number; description: string | null}>;
+    const ids = new Set(owned.ids);
+    const deletes = rows.filter((r) => ids.has(r.id) || (r.description ?? '').includes(owned.marker)).map((r) => r.id);
+    if (deletes.length > 0) await commitViaApi(page, {deletes}, `cleanup of rows ${deletes.join(', ')}`);
+}
+
+/** Open the table narrowed to `ids` through the `id_min`/`id_max` URL filter, ending with every one on screen. */
+async function goToTransactionsByIds(page: Page, ids: number[]) {
+    await navigateTo(page, `/transactions?id_min=${Math.min(...ids)}&id_max=${Math.max(...ids)}`);
+    // Visible is not loaded: the page renders empty, then fills, and says so through data-busy.
+    await waitForSettled(page.getByTestId('transactions-page'));
+    for (const id of ids) {
+        await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${id}"]`)).toBeVisible({timeout: 10_000});
+    }
+}
+
+/** Bring a row checkbox to `checked` whatever its starting state: a blind click is a toggle. */
+async function ensureChecked(checkbox: Locator) {
+    await expect(checkbox).toBeVisible({timeout: 5_000});
+    if ((await checkbox.getAttribute('data-state')) !== 'checked') await checkbox.click();
+    await expect(checkbox).toHaveAttribute('data-state', 'checked');
+}
+
+/** Open the FormModal's optional `<details>` (tags + description). It starts closed and the
+ *  summary is a toggle, so ask for the state and assert the end state. */
+async function ensureOptionalOpen(page: Page) {
+    const details = page.locator('details:has([data-testid="tx-form-optional-toggle"])');
+    await expect(details).toBeVisible({timeout: 3_000});
+    if (!(await details.evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByTestId('tx-form-optional-toggle').click();
+    await expect(details).toHaveAttribute('open', '');
 }
 
 // ---------------------------------------------------------------------------
@@ -271,60 +370,6 @@ test.describe('Transaction Bulk Operations', () => {
         expect(rowTextAfter).not.toContain('edit');
 
         await closeModals(page);
-    });
-
-    test('mixed commit (create+update+delete) → toast with count', async ({page}) => {
-        // This test creates a new TX, modifies another, and deletes a third
-        // all in one batch commit, then checks the toast message.
-        const ids = await getEditableRowIds(page, 2);
-        expect(ids.length).toBeGreaterThanOrEqual(2);
-
-        // Select 2 rows for edit
-        await selectRow(page, ids[0]);
-        await selectRow(page, ids[1]);
-
-        const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
-        await expect(editBtn).toBeVisible({timeout: 2_000});
-        await editBtn.click();
-
-        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
-
-        // Modify the first row: double-click to open FormModal
-        const bulkRows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        await bulkRows.first().dblclick();
-
-        const formModal = page.getByTestId('tx-form-modal');
-        await expect(formModal).toBeVisible({timeout: 5_000});
-
-        // Change description
-        const optionalToggle = page.getByTestId('tx-form-optional-toggle');
-        if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
-            await optionalToggle.click();
-        }
-        const descInput = page.getByTestId('tx-form-description');
-        if (await descInput.isVisible({timeout: 1_000}).catch(() => false)) {
-            await descInput.fill(`E2E-mixed-commit-${Date.now()}`);
-        }
-        const saveBtn = page.getByTestId('tx-form-save');
-        await saveBtn.click();
-
-        // Now intercept commit
-        const commitPromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 10_000});
-
-        const commitBtn = page.getByTestId('tx-bulk-commit');
-        await expect(commitBtn).toBeEnabled({timeout: 8_000});
-        await commitBtn.click();
-
-        const resp = await commitPromise;
-        const payload = resp.request().postDataJSON();
-
-        // Payload should have updates
-        expect(payload.updates?.length || 0).toBeGreaterThanOrEqual(1);
-
-        // Toast should appear with success message — `toBeVisible` already
-        // retries, so there is nothing to sleep through.
-        const toast = page.locator('[data-testid="toast-success"]').first();
-        await expect(toast).toBeVisible({timeout: 5_000});
     });
 
     test('picker: no context menu and no action buttons', async ({page}) => {
@@ -639,5 +684,117 @@ test.describe('Transaction Bulk Operations', () => {
         expect(clsNew).toContain('row-appended');
 
         await closeModals(page);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The one test that commits — on rows it creates, all deleted afterwards
+// ---------------------------------------------------------------------------
+
+test.describe('Transaction Bulk Operations — commit on owned rows', () => {
+    let owned: OwnedRows | null = null;
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // afterEach rather than a `finally`: it also runs after a timeout, with `page.request` still usable.
+    test.afterEach(async ({page}) => {
+        try {
+            if (owned) await deleteOwnedRows(page, owned);
+        } finally {
+            owned = null;
+        }
+    });
+
+    test('mixed commit (create+update+delete) → toast with count', async ({page}) => {
+        const mine: OwnedRows = {marker: `E2E-mixed-commit-${uniqueSuffix()}`, ids: []};
+        owned = mine;
+        const keepDesc = `${mine.marker} keep`;
+        const dropDesc = `${mine.marker} drop`;
+        const editedDesc = `${mine.marker} edited`;
+
+        // Two standalone DEPOSITs of our own, dated 300 days back: far below the top of the
+        // date-desc table, which is where the specs that pick rows by position look.
+        const brokerId = await ownedMockBrokerId(page);
+        const date = daysAgoIso(300);
+        const setup = await commitViaApi(page, {creates: [depositPayload(brokerId, date, '3.17', keepDesc), depositPayload(brokerId, date, '4.29', dropDesc)]}, 'setup commit');
+        mine.ids.push(...setup.results.flatMap((r) => r.ids ?? []));
+        const createdId = (index: number): number => {
+            const id = setup.results.find((r) => r.operation === 'create' && r.index === index)?.ids?.[0];
+            if (id == null) throw new Error(`setup commit reported no id for create #${index}: ${JSON.stringify(setup.results)}`);
+            return id;
+        };
+        const keepId = createdId(0);
+        const dropId = createdId(1);
+
+        // Select both → Edit: two rows open the grid without auto-opening the FormModal.
+        await goToTransactionsByIds(page, [keepId, dropId]);
+        await ensureChecked(page.getByTestId(`dt-row-checkbox-tx-${keepId}`));
+        await ensureChecked(page.getByTestId(`dt-row-checkbox-tx-${dropId}`));
+        const editBtn = page.getByTestId('toolbar-action-edit');
+        await expect(editBtn).toBeEnabled({timeout: 5_000});
+        await editBtn.click();
+
+        const modal = page.getByTestId('tx-bulk-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
+        const modalRows = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]');
+        const editedRows = modalRows.filter({hasText: editedDesc});
+
+        // UPDATE — the first of our rows, through the FormModal (double-click opens it).
+        await modalRows.filter({hasText: keepDesc}).dblclick();
+        const formModal = page.getByTestId('tx-form-modal');
+        await expect(formModal).toBeVisible({timeout: 5_000});
+        await ensureOptionalOpen(page);
+        const descInput = page.getByTestId('tx-form-description');
+        await descInput.fill(editedDesc);
+        await expect(descInput).toHaveValue(editedDesc);
+        const applyBtn = page.getByTestId('tx-form-save');
+        await expect(applyBtn).toBeEnabled({timeout: 5_000});
+        await applyBtn.click();
+        await expect(formModal).toBeHidden({timeout: 5_000});
+        await expect(editedRows).toHaveCount(1);
+
+        // DELETE — the second. A menu must be gone before the next one opens: their items share testids.
+        await clickRowAction(modalRows.filter({hasText: dropDesc}), 'mark-delete');
+        await expect(page.getByTestId('context-menu')).toHaveCount(0);
+
+        // CREATE — clone the edited row: a new draft carrying the same marked description.
+        const root = page.getByTestId('tx-bulk-modal-root');
+        const runsBefore = await validateRuns(root);
+        await clickRowAction(editedRows, 'clone');
+        await expect(page.getByTestId('context-menu')).toHaveCount(0);
+        await expect(editedRows).toHaveCount(2);
+        await expect(modalRows).toHaveCount(3); // the grid holds only rows this test made
+
+        // Commit against a verdict on the final batch, not on an earlier draft.
+        await waitForValidateRun(root, runsBefore);
+        const commitBtn = page.getByTestId('tx-bulk-commit');
+        await expect(commitBtn).toBeEnabled();
+        const commitResponse = page.waitForResponse((r) => r.url().includes('/transactions/commit') && r.request().method() === 'POST', {timeout: 15_000});
+        await commitBtn.click();
+        const resp = await commitResponse;
+        const body = (await resp.json()) as CommitBody;
+        // Recorded before any assertion, so afterEach deletes the clone whatever happens next.
+        mine.ids.push(...body.results.filter((r) => r.operation === 'create').flatMap((r) => r.ids ?? []));
+        expect(body.committed, `commit rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+
+        // The wire carries exactly our three operations.
+        const payload = resp.request().postDataJSON() as {creates?: unknown[]; updates?: unknown[]; deletes?: number[]};
+        expect(payload.updates).toEqual([expect.objectContaining({id: keepId, description: editedDesc})]);
+        expect(payload.deletes).toEqual([dropId]);
+        expect(payload.creates).toEqual([expect.objectContaining({broker_id: brokerId, type: 'DEPOSIT', description: editedDesc})]);
+
+        // The toast's text is localized, its counts are not: the page computes them from these
+        // results (handleBulkCommitted, routes/(app)/transactions/+page.svelte).
+        const succeeded = (operation: string) => body.results.filter((r) => r.operation === operation && r.status === 'success').length;
+        expect({created: succeeded('create'), updated: succeeded('update'), deleted: succeeded('delete')}).toEqual({created: 1, updated: 1, deleted: 1});
+        await expect(page.getByTestId('toast-success')).toBeVisible({timeout: 5_000});
+        await expect(modal).toBeHidden({timeout: 10_000});
+
+        // The table reloads from the server: the edit shows, the deleted row is gone.
+        const tableRow = (id: number) => page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${id}"]`);
+        await expect(tableRow(keepId)).toContainText(editedDesc, {timeout: 10_000});
+        await expect(tableRow(dropId)).toHaveCount(0);
     });
 });
