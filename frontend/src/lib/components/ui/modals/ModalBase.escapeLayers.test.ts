@@ -166,6 +166,28 @@ describe('ModalBase — one Escape closes the top layer only', () => {
         expect(onRequestClose, 'with the list closed, the next Escape must close the modal').toHaveBeenCalledTimes(1);
     });
 
+    // K, step 19. With the search box in the list, the trigger of an open select handles no key at all, so
+    // an Escape there bubbles to ModalBase: the modal closes and the list stays open over nothing. The
+    // approved cure: on Escape, the trigger of an open list (search box in the list) prevents the default,
+    // stops the propagation and closes the list, as the inline layout already does.
+    it('select, search box in the list: Escape on the trigger of the open list closes the list, not the modal, and the next Escape closes the modal', async () => {
+        const {modal, onRequestClose} = await mountModal();
+        const {root, trigger} = await openList('esc-select');
+        // Shift+Tab out of the search box in the list lands on the trigger, and nothing closes the list on the
+        // way: SearchSelect has no focusout handler. jsdom navigates no Tab, so the test puts the focus where
+        // Shift+Tab leaves it.
+        trigger.focus();
+        expectListOpen(root, trigger, 'premise: the list stays open with the focus on its trigger');
+
+        await pressEscape(modal, trigger);
+
+        expectListClosed(root, trigger, 'the Escape on the trigger must close the open list');
+        expect(onRequestClose, 'one Escape on the trigger of an open select must close its list only, not the modal under it').not.toHaveBeenCalled();
+
+        await pressEscape(modal, trigger);
+        expect(onRequestClose, 'with the list closed, the next Escape must close the modal').toHaveBeenCalledTimes(1);
+    });
+
     it('guard — select, search inline in the trigger: Escape in the inline search box closes the list, not the modal (safe today: the box stops its own keydowns)', async () => {
         const {modal, onRequestClose} = await mountModal();
         const {root, trigger, search} = await openList('esc-inline');
