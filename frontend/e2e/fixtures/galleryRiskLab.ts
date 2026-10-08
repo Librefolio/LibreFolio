@@ -17,12 +17,13 @@
  *
  * The page writes on its own in one place: while the period ends today, the Assets page polls
  * `POST /assets/prices/current` (on load, then every 30 s), which asks each asset's price provider for
- * today's quote and stores it (assets.py, `get_current_prices_bulk`). {@link guardReadOnly} aborts
- * that call, the two syncs a mistaken click would start, and the provider catalogue the sync modal
- * reads (which sends the backend to ECB and SNB). The poll catches the failure and logs one warning,
- * with no toast; and an aborted call, unlike an answered one, marks no risk answer stale
- * (portfolioMutation.ts). Held unanswered instead, as risk-lab.spec.ts holds it, it would keep the
- * page from ever going network-idle, which every gallery shot waits for.
+ * today's quote and stores it (assets.py, `get_current_prices_bulk`). The gallery-wide offline guard
+ * (galleryReportSets.ts, `guardGalleryOffline`) keeps every page from reaching a provider — it aborts the
+ * syncs a mistaken click would start and answers the provider catalogue from a fixture — and answers that
+ * poll from fixed prices. In the lab {@link guardReadOnly} has it abort the poll instead: the poll catches
+ * the failure and logs one warning, with no toast; and an aborted call, unlike an answered one, marks no risk
+ * answer stale (portfolioMutation.ts). Held unanswered instead, as risk-lab.spec.ts holds it, it would keep
+ * the page from ever going network-idle, which every gallery shot waits for.
  *
  * ## What is injected, and why
  *
@@ -51,21 +52,13 @@
 import type {APIResponse, Route} from '@playwright/test';
 import {expect, type Locator, type Page} from './playwright';
 import {navigateTo} from './auth-helpers';
-import {waitForStillness} from './galleryReportSets';
+import {galleryOfflineGuard, type GalleryOfflineGuard, waitForStillness} from './galleryReportSets';
 
 /** The lab: the Assets page on its Correlation tab. */
 export const LAB_URL = '/assets?tab=correlation';
 
 const RISK_QUERY = '**/api/v1/risk/query';
 const RISK_ELIGIBILITY = '**/api/v1/risk/eligibility';
-const LIVE_PRICES = '/api/v1/assets/prices/current';
-const SYNCS = ['/api/v1/assets/prices/sync', '/api/v1/fx/currencies/sync'];
-/**
- * The exchange-rate provider catalogue, on its bare path only (`/fx/providers/routes` is a database read the lab
- * needs): the backend answers it by asking every installed provider for its currencies, ECB and SNB over the network.
- * Only the sync modal asks for it, and no shot opens that modal.
- */
-const PROVIDER_CATALOGUE = '/api/v1/fx/providers';
 /** A risk answer is computed on the shared backend: under load it takes seconds, never this long. */
 const ANSWER_TIMEOUT = 120_000;
 
@@ -186,45 +179,19 @@ export async function forgetWhatIfTools(page: Page, userId: number): Promise<voi
     );
 }
 
-export interface ReadOnlyGuard {
-    /** Live-price polls aborted: the Assets page asks on load and every 30 s while its period ends today. */
-    livePolls: number;
-    /** Syncs, and provider catalogue reads, attempted — by path: none, unless a click went astray. */
-    syncs: string[];
-}
+/** The part of the gallery's offline guard a lab shot reads: the polls it aborted, and the syncs a stray click started. */
+export type ReadOnlyGuard = Pick<GalleryOfflineGuard, 'livePolls' | 'syncs'>;
 
 /**
- * Abort what would reach a price or exchange-rate provider, or write: the Assets page's live-price poll,
- * the price and exchange-rate syncs (the toolbar's Sync selection, a banner's Sync prices or Sync rates),
- * and the provider catalogue the sync modal reads. The shots never press a sync; the guard makes a stray
- * press fail closed, and records it.
+ * The lab's read-only switch on the gallery-wide offline guard (galleryReportSets.ts), which is the one owner of the
+ * routes: it already aborts the price and exchange-rate syncs (the toolbar's Sync selection, a banner's Sync prices
+ * or Sync rates) and records them, failing the test at its end. Here it also aborts the Assets page's live-price
+ * poll, which it answers from fixed prices elsewhere: an answered poll marks every risk answer stale. Returns the
+ * guard itself, so `syncs` lists what the whole test attempted.
  */
 export async function guardReadOnly(page: Page): Promise<ReadOnlyGuard> {
-    const guard: ReadOnlyGuard = {livePolls: 0, syncs: []};
-    await page.route(
-        (url) => url.pathname === LIVE_PRICES,
-        async (route) => {
-            if (route.request().method() !== 'POST') return route.fallback();
-            guard.livePolls += 1;
-            await route.abort();
-        },
-    );
-    await page.route(
-        (url) => SYNCS.includes(url.pathname),
-        async (route) => {
-            if (route.request().method() !== 'POST') return route.fallback();
-            guard.syncs.push(new URL(route.request().url()).pathname);
-            await route.abort();
-        },
-    );
-    await page.route(
-        (url) => url.pathname === PROVIDER_CATALOGUE,
-        async (route) => {
-            if (route.request().method() !== 'GET') return route.fallback();
-            guard.syncs.push(PROVIDER_CATALOGUE);
-            await route.abort();
-        },
-    );
+    const guard = galleryOfflineGuard(page);
+    guard.livePrices = 'abort';
     return guard;
 }
 
