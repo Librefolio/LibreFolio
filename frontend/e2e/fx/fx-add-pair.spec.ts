@@ -162,10 +162,10 @@ test.describe('FX Add Pair Modal', () => {
 
                 try {
                     // Authentication is provided by the enclosing beforeEach.
-                    await page.goto(`/fx?start=${range.start}&end=${range.end}`);
+                    // The first full load includes the app bootstrap: it waits with the helper's
+                    // tolerances, not the 3 s default meant for localhost assertions.
+                    await goToFxPage(page, range);
                     const fxPage = page.getByTestId('fx-page');
-                    await expect(fxPage).toBeVisible();
-                    await expect(fxPage).toHaveAttribute('data-busy', 'false');
                     await page.getByTestId('view-mode-grid').click();
                     await openAddPairModal(page);
                     const modal = page.getByTestId('fx-add-pair-modal');

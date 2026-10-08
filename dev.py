@@ -842,6 +842,32 @@ def cmd_mkdocs_normalize_dashboard_fixture(args):
     return normalize_file(Path(args.path), getattr(args, "dry_run", False))
 
 
+def _reuse_gallery_test_db() -> bool:
+    """`mkdocs gallery --no-populate`: reuse the test database of an earlier run, as it is.
+
+    Playwright's global-setup may only be told to stand down (``LF_SETUP_DONE``) once the database
+    and the E2E users are really there; told nothing, it runs its own ``populate --force`` — a
+    different dataset, without the static resources — under the freshly started backend.
+    """
+    from backend.app.config import get_test_data_dir  # noqa: PLC0415 — CLI-only import
+
+    try:
+        test_db = get_test_data_dir() / "sqlite" / "app.db"
+    except ValueError as exc:
+        print_error(f"Invalid test data directory: {exc}")
+        return False
+    if not test_db.is_file():
+        print_error(f"--no-populate reuses an existing test database, and there is none at {test_db}: run once without --no-populate")
+        return False
+    from scripts.test_runner import _ensure_test_users  # noqa: PLC0415 — CLI-only import
+
+    if not _ensure_test_users():
+        print_error("Failed to create test users")
+        return False
+    print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate): reusing {test_db}{Colors.NC}")
+    return True
+
+
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
 
@@ -904,8 +930,8 @@ def cmd_mkdocs_gallery(args):
             print_error("Failed to create test users")
             return 1
         print_success("Test users ready")
-    else:
-        print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate){Colors.NC}")
+    elif not _reuse_gallery_test_db():
+        return 1
 
     failures = []
     # Determine worker count: --workers flag or CPU count
@@ -987,15 +1013,14 @@ def cmd_mkdocs_gallery(args):
     # Always disable the scheduler during gallery runs — prevents live data updates
     # from changing charts/numbers between screenshots.
     gallery_env["LIBREFOLIO_NO_SCHEDULER"] = "1"
-    if not no_populate:
-        # We already populated (and created users) above — tell Playwright's
-        # global-setup to stand down. Without this flag it re-runs
-        # `populate --force` under the freshly started backend, wiping and
-        # rewriting the DB while the first browser workers are already logging
-        # in (the first ~17 tests raced exactly that on 04/09).
-        # Note: global-setup step 3 (initGlobalSettings via API) still runs —
-        # the flag only stands down the DB populate + user creation.
-        gallery_env["LF_SETUP_DONE"] = "1"
+    # Both branches above leave a prepared DB with its E2E users (populated now, or
+    # reused with --no-populate) — tell Playwright's global-setup to stand down.
+    # Without this flag it re-runs `populate --force` under the freshly started
+    # backend, wiping and rewriting the DB while the first browser workers are
+    # already logging in (the first ~17 tests raced exactly that on 04/09).
+    # Note: global-setup step 3 (initGlobalSettings via API) still runs —
+    # the flag only stands down the DB populate + user creation.
+    gallery_env["LF_SETUP_DONE"] = "1"
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
 
@@ -1704,7 +1729,7 @@ def cmd_docker_exec(args):
 
     Examples:
         ./dev.py docker exec server --test
-        ./dev.py docker exec test db populate --force
+        ./dev.py docker exec user list
         ./dev.py docker exec user create admin admin@test.com Pass123!
         ./dev.py docker exec db upgrade
     """
@@ -1713,7 +1738,7 @@ def cmd_docker_exec(args):
         print_error("No command specified. Usage: ./dev.py docker exec <command> [args...]")
         print(Colors.info("Examples:"))
         print(f"  ./dev.py docker exec server --test")
-        print(f"  ./dev.py docker exec test db populate --force")
+        print(f"  ./dev.py docker exec user list")
         print(f"  ./dev.py docker exec user create admin admin@test.com Pass123!")
         return 1
 
@@ -2213,6 +2238,35 @@ def update_js_cache(strict: bool = False, required_for: str | None = None):
 
 
 # =============================================================================
+# Command groups that need part of the development tree
+# =============================================================================
+# The Docker image ships the application, not the development tree: no
+# backend/test_scripts, no frontend sources, no docs sources. A group is
+# registered (and its modules imported) only when what it needs is there;
+# otherwise it stays listed and says so. Checked before importing, never by
+# catching ImportError: in a full checkout a broken import must stay loud.
+
+
+def _has(*relative_paths: str) -> bool:
+    """True when every path a command group needs is part of this installation."""
+    return all((PROJECT_ROOT / path).exists() for path in relative_paths)
+
+
+def _add_unavailable(subparsers, name: str, help_text: str, missing: str) -> None:
+    """List a command this installation cannot run; running it says what is missing and exits 2."""
+    # No option prefix: every word after the command, --help or --coverage too, lands in `rest`,
+    # so any invocation gets the explanation instead of argparse's "unrecognized arguments".
+    p = subparsers.add_parser(name, help=f"{help_text} — not available in this installation", add_help=False, prefix_chars="\x00")
+    p.add_argument("rest", nargs=argparse.REMAINDER, metavar="...", help=argparse.SUPPRESS)
+
+    def _explain(_args):
+        print_error(f"'{name}' is not available in this installation: {missing} is not part of it (the Docker image ships the application, not the development tree).")
+        return 2
+
+    p.set_defaults(func=_explain)
+
+
+# =============================================================================
 # Main Entry Point
 # =============================================================================
 
@@ -2347,8 +2401,12 @@ Examples:
     # 🧪 Testing Commands - Import from test_runner
     # =========================================================================
 
-    from scripts.test_runner import register_subparser as register_test_parser
-    register_test_parser(subparsers)
+    has_test_runner = _has("backend/test_scripts")
+    if has_test_runner:
+        from scripts.test_runner import register_subparser as register_test_parser
+        register_test_parser(subparsers)
+    else:
+        _add_unavailable(subparsers, "test", "🧪 Run tests", "backend/test_scripts")
 
     # =========================================================================
     # 👤 User Commands - Import from user_cli
@@ -2386,7 +2444,7 @@ Examples:
     mk_p.add_argument("--mobile-only", action="store_true",
                       help="Only generate mobile screenshots")
     mk_p.add_argument("--no-populate", action="store_true",
-                      help="Skip DB population (faster for re-runs)")
+                      help="Reuse the existing test database as it is (faster re-runs; needs one earlier full run)")
     mk_p.add_argument("--workers", "-w", type=int, default=None,
                       help="Number of Playwright workers (default: CPU count)")
     mk_p.add_argument("--test-port", type=int, default=None,
@@ -2415,8 +2473,8 @@ Examples:
     mk_p.set_defaults(func=cmd_mkdocs_check_links)
 
     # Translate - Import from mkdocs_src/aphra-pipeline/translate_docs.py
-    # (not available inside Docker — aphra-pipeline is excluded from image)
-    try:
+    # (not part of the Docker image: aphra-pipeline is excluded from it)
+    if _has("mkdocs_src/aphra-pipeline"):
         sys.path.insert(0, str(PROJECT_ROOT / "mkdocs_src" / "aphra-pipeline"))
         from translate_docs import register_subparser as register_translate_parser
         register_translate_parser(mk_sub)
@@ -2424,8 +2482,9 @@ Examples:
         # Translate-validate - structural validation of translated files
         from validate_translations import register_subparser as register_validate_parser
         register_validate_parser(mk_sub)
-    except (ImportError, ModuleNotFoundError):
-        pass  # Not available in Docker runtime
+    else:
+        _add_unavailable(mk_sub, "translate", "Translate the documentation (Aphra pipeline)", "mkdocs_src/aphra-pipeline")
+        _add_unavailable(mk_sub, "translate-validate", "Validate the translated documentation", "mkdocs_src/aphra-pipeline")
 
     # =========================================================================
     # 📦 Tools Commands Group
@@ -2448,14 +2507,14 @@ Examples:
     api_p.set_defaults(func=cmd_api_sync)
 
     # i18n - Import from frontend/scripts/i18n-audit.py
-    # (not available inside Docker — frontend/scripts is excluded from image)
-    try:
+    # (not part of the Docker image: frontend/scripts is excluded from it)
+    if _has("frontend/scripts/i18n-audit.py"):
         sys.path.insert(0, str(PROJECT_ROOT / "frontend" / "scripts"))
         from importlib import import_module
         i18n_module = import_module("i18n-audit")
         i18n_module.register_subparser(subparsers)
-    except (ImportError, ModuleNotFoundError):
-        pass  # Not available in Docker runtime
+    else:
+        _add_unavailable(subparsers, "i18n", "📦 Translation commands", "frontend/scripts")
 
     # Cache - Import from scripts/update_js_cache.py
     from scripts.update_js_cache import register_subparser as register_cache_parser
@@ -2582,9 +2641,12 @@ Examples:
     if HAS_ARGCOMPLETE:
         argcomplete.autocomplete(parser)
 
-    from scripts.test_runner._cli import normalize_coverage_argv
+    argv = sys.argv[1:]
+    if has_test_runner:
+        from scripts.test_runner._cli import normalize_coverage_argv
+        argv = normalize_coverage_argv(argv, only_command="test")
 
-    args = parser.parse_args(normalize_coverage_argv(sys.argv[1:], only_command="test"))
+    args = parser.parse_args(argv)
 
     if args.command is None:
         parser.print_help()

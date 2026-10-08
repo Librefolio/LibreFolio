@@ -31,7 +31,7 @@ Set up your local development environment and learn the daily workflow:
     - 🔌 [Registry & Plugin System](architecture/patterns/registry_pattern.md) — Provider plugins for BRIM, Assets, FX
     - 🧰 [Tool Plugins](architecture/patterns/tool_plugins.md) — Atomic, typed calculations behind a versioned catalogue (first tool: the PAC allocator), each computed in a spawned process the executor owns
     - 🗄️ [Database Migrations](architecture/patterns/alembic.md) — Alembic workflow, SQLite batch mode
-    - ⚙️ [Configuration](../admin/configuration.md) — `.env`, Pydantic BaseSettings
+    - ⚙️ [Configuration](architecture/settings.md) — `.env` loading, Pydantic `BaseSettings`, global settings (admin options: [Configuration](../admin/configuration.md))
 - 🔐 **Core Systems**:
     - 🛡️ [Security & Authentication](architecture/security.md) — JWT cookies, endpoint protection
     - 👤 [Users & Roles](architecture/users_and_brokers.md) — Login flow, session, user roles

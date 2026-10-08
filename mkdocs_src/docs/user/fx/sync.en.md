@@ -1,66 +1,76 @@
 # 🔄 FX Synchronization
 
-Once a currency pair is configured with a data provider, LibreFolio can **automatically synchronize** exchange rates from official central bank sources.
+Pairs with a provider get their rates from official central bank sources. LibreFolio downloads
+them when you add a pair, whenever you ask, and — if your administrator turned it on — on a
+schedule.
 
 ---
 
-## 🔄 Sync All
+## 🔄 Sync all pairs
 
-From the FX list page, use the **Sync All** button to synchronize all configured pairs at once — every pair with a data provider, since a pair whose only provider is MANUAL has nothing to download. It downloads the period selected on the page, or the whole history when the period is set to **All**:
+1. On the [FX page](index.md), choose the period in the date picker. Pick **All** for the whole
+   history.
+2. Click **Sync All**. The **Sync FX Rates** window lists every pair with a provider: pairs with
+   manual rates only have nothing to download.
+3. Click **Start Sync**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Sync Progress" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-The sync modal shows:
+### 📊 Reading the results
 
-- 📊 **Progress** for each pair being synced
-- ✅ **Status** indicators (success, error, skipped)
-- 🆕 **New data points** count for each pair
-
-!!! tip "Pairs added before LibreFolio 1.2.0"
-
-    A new pair with a data provider downloads its whole rate history as soon as you add it, whichever page you add it from: the FX page, the Dashboard, an asset page, or the FX step of the PAC allocator. Pairs added with an earlier version downloaded only the period of the page they were added from, so the oldest part of their history may be missing. To fill it in, open the FX page, set the period to **All**, and click **Sync All** once.
-
----
-
-## 🎯 Individual Pair Sync
-
-You can also sync a single pair from its [detail page](detail/index.md) using the sync button. This is useful when you want to update only one specific pair.
+- Each row shows a pair, the provider that answered, **↓** the rates downloaded and **Δ** the rates
+  that were new or changed.
+- An amber row means the provider sent no rates for the period; a red row means the sync failed.
+  Hover the message to read it in full, and click the row's ↻ button to try that pair again.
+- The summary at the bottom shows how many pairs synced and the totals. **Retry N failed** runs
+  every failed pair again.
 
 ---
 
-## ⚙️ How Sync Works
+## 🎯 Sync one pair
 
-The sync process:
+- On the FX page, the **Sync** button of a pair's card, or of a table row, downloads that pair's
+  rates for the selected period. A message reports the result.
+- On the pair's [detail page](detail/index.md), **Sync** opens the sync window for the pair and for
+  any pair or asset you compare it with on the chart.
 
-1. Fetches rates from the configured provider's API (ECB, FED, BOE, SNB, etc.)
-2. **Overwrites** existing data points in the downloaded date range with the provider's values — the provider is treated as the authoritative source
-3. Adds new data points for dates not yet in the database
-4. If the primary provider fails, the system automatically falls back to the next configured provider
-
-After sync, you'll see the number of **points downloaded** and how many were **actually new** (not previously present in the database).
-
-!!! warning "Provider is authoritative"
-
-    Re-syncing a pair will overwrite any manually edited values in the synced date range. If you need to preserve manual edits, consider using a pair configured with the MANUAL provider (no automatic data source).
-
-!!! info "Chain conversion precision"
-
-    When using chain routes (e.g., RON → EUR → JPY), each intermediate conversion introduces a minimal rounding error. While negligible for most purposes, be aware that chain-converted rates may differ slightly from direct market quotes.
+**Sync** is greyed out for pairs with manual rates only.
 
 ---
 
-## 🌐 Data Supply Chains
+## ⚠️ What a sync changes
 
-For advanced users: LibreFolio uses a sophisticated **routing system** for FX data. Each currency pair can have multiple providers configured with priorities and fallback chains.
+- Dates of the period that are already stored take the provider's value; missing dates are added.
+- Dates outside the period are left untouched.
+- If a pair's first route fails, LibreFolio tries the next one: see
+  [Provider Config](detail/provider.md).
 
-This means:
+!!! warning "The provider has the last word"
 
-- 🔄 If your primary provider (e.g., ECB) is down, the system falls back to the next provider (e.g., FED)
-- 🔀 Exotic pairs use multi-step chains through intermediate currencies (e.g., RON → EUR → JPY)
-- ⚙️ You can customize which provider to use for each pair
+    A sync overwrites the rates you edited by hand within its period. To keep your own rates, use a
+    pair without a provider (manual rates only).
 
-For the list of supported providers, see the [FX Providers](providers/index.md).
+??? tip "🕰️ Older history missing — when a pair's chart starts later than expected"
 
-For technical details on the routing algorithm and configuration, see the developer documentation: [FX Configuration & Routing](../../developer/backend/fx/configuration.md).
+    A pair you add with a provider downloads its whole history by itself. If an older pair's chart
+    starts later than the provider's history, set the period on the FX page to **All** and click
+    **Sync All** once: LibreFolio downloads everything the providers publish, up to today.
+
+---
+
+## 🕐 Automatic sync
+
+When your administrator turns on the background scheduler, LibreFolio refreshes the recent rates of
+every pair with a provider on its own, at the times they choose: see
+[Market Data Scheduler](../../admin/settings.md#market-data-scheduler).
+
+---
+
+## 🔗 Related
+
+- ➕ **[Adding a Pair](add-pair.md)** — Direct and chain routes
+- 🔌 **[FX Providers](providers/index.md)** — The central banks LibreFolio reads rates from
+- ⚙️ **[Provider Config](detail/provider.md)** — Routes, priorities and fallbacks of a pair
+- 🧑‍💻 For developers: **[FX Configuration & Routing](../../developer/backend/fx/configuration.md)**

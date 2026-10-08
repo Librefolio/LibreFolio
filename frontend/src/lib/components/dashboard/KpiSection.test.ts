@@ -421,3 +421,120 @@ describe('KpiSection — unrealized change breakdown tooltip (P9)', () => {
         expect(norm(tooltip.textContent).length).toBeGreaterThan(0);
     });
 });
+
+/**
+ * Card 2 «Returns» — a return the backend did not compute reads «—», never 0.
+ *
+ * `twrr_percent`, `mwrr_cumulative_percent` and `mwrr_annualized_percent` are optional and nullable
+ * in the schema: TWRR is None when it cannot be calculated, MWRR when its solver does not converge.
+ * A figure nobody computed is not a zero return. The defect pinned here parsed each missing one as 0:
+ * its bar read «0.00%», and Timing effect subtracted that invented zero — a missing MWRR cumulative
+ * came out as «-40.00 pp», labelled unfavourable. Contract:
+ *
+ *   - a missing TWRR / MWRR cumulative / MWRR annualized reads «—» (U+2014) as its bar value: no digits;
+ *   - Timing effect is `mwrr_cumulative − twrr` in percentage points, signed, two decimals; when either
+ *     input is missing it reads «—», and its label claims nothing — neither favourable, neutral nor
+ *     unfavourable;
+ *   - MWRR annualized is not an input of Timing effect: its absence leaves Timing effect untouched;
+ *   - `null` and an absent key are the same «missing»: every case runs with both.
+ *
+ * Read through `kpi-return-{roi,twrr-cum,mwrr-cum,mwrr-ann}-value`, `kpi-timing-effect-value` and
+ * `kpi-timing-effect-label`, inside `kpi-returns`. The bars tween for 700 ms, so every assertion also
+ * requires ROI — required by the schema, never missing here — at its settled «50.00%»: a «—» counts
+ * only once the card has stopped moving. The anchors are compared together, so a red lists every one
+ * that disagrees. Timing effect is locale-formatted with a translated unit, so only its sign and
+ * digits are matched; the label is translated, so it is only read as empty or not.
+ */
+describe('KpiSection — Returns card: a missing return reads «—», never 0 (Card 2)', () => {
+    const EM_DASH = '\u2014';
+    /** ±5.00 pp: the decimal separator is the locale's and the unit is translated, so only sign and digits are matched. */
+    const PLUS_5_PP = expect.stringMatching(/^\+5[.,]00(?!\d)/);
+    const MINUS_5_PP = expect.stringMatching(/^-5[.,]00(?!\d)/);
+    /** A label that claims a reading (favourable, neutral or unfavourable): its wording is translated, so only its presence is read. */
+    const A_CLAIM = expect.stringMatching(/\S/);
+
+    const ANCHORS = {
+        roi: 'kpi-return-roi-value',
+        twrrCum: 'kpi-return-twrr-cum-value',
+        mwrrCum: 'kpi-return-mwrr-cum-value',
+        mwrrAnn: 'kpi-return-mwrr-ann-value',
+        timing: 'kpi-timing-effect-value',
+        timingLabel: 'kpi-timing-effect-label',
+    } as const;
+    type Anchor = keyof typeof ANCHORS;
+
+    type ReturnField = 'twrr_percent' | 'mwrr_cumulative_percent' | 'mwrr_annualized_percent';
+    type Missing = 'null' | 'absent';
+    /** The fixture as the schema types it: the three returns are optional and nullable. */
+    type ReturnsSummary = Omit<ReturnType<typeof summary>, ReturnField> & Partial<Record<ReturnField, string | null>>;
+
+    const norm = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** The fixture with `fields` missing: set to null, or with their keys removed. */
+    function summaryMissing(fields: readonly ReturnField[], how: Missing): ReturnsSummary {
+        const s: ReturnsSummary = summary();
+        for (const field of fields) {
+            if (how === 'null') s[field] = null;
+            else delete s[field];
+        }
+        return s;
+    }
+
+    function renderReturns(s: ReturnsSummary): void {
+        render(KpiSection, {summary: s, history: [], loading: false, displayCurrency: 'EUR'});
+    }
+
+    /** What the Returns card shows at each anchor. Every value must be on screen; a label that is not rendered claims nothing either, so it reads as empty. */
+    function readReturns(anchors: readonly Anchor[]): Record<string, string> {
+        const card = within(screen.getByTestId('kpi-returns'));
+        const read = (anchor: Anchor): string => norm((anchor === 'timingLabel' ? card.queryByTestId(ANCHORS[anchor]) : card.getByTestId(ANCHORS[anchor]))?.textContent);
+        return Object.fromEntries(anchors.map((anchor) => [anchor, read(anchor)]));
+    }
+
+    /** Polls until the card reads `expected` at its anchors, with ROI settled at «50.00%» as the barrier. On timeout the diff is the whole reading, not only its first mismatch. */
+    async function expectReturnsCard(expected: Partial<Record<Anchor, unknown>>): Promise<void> {
+        const want: Partial<Record<Anchor, unknown>> = {roi: '50.00%', ...expected};
+        await waitFor(() => expect(readReturns(Object.keys(want) as Anchor[])).toEqual(want), {timeout: 3000, onTimeout: (error) => error});
+    }
+
+    it.each([
+        {reading: 'favourable', twrr: '0.40', mwrrCum: '0.45', twrrBar: '40.00%', mwrrCumBar: '45.00%', timing: PLUS_5_PP},
+        {reading: 'unfavourable', twrr: '0.45', mwrrCum: '0.40', twrrBar: '45.00%', mwrrCumBar: '40.00%', timing: MINUS_5_PP},
+    ])('control, every return present ($reading): each bar reads its value; Timing effect is mwrr_cum − twrr in pp, signed, with a claim', async ({twrr, mwrrCum, twrrBar, mwrrCumBar, timing}) => {
+        renderReturns({...summary(), twrr_percent: twrr, mwrr_cumulative_percent: mwrrCum});
+
+        await expectReturnsCard({twrrCum: twrrBar, mwrrCum: mwrrCumBar, mwrrAnn: '30.00%', timing, timingLabel: A_CLAIM});
+    });
+
+    describe.each<Missing>(['null', 'absent'])('a return missing as %s', (how) => {
+        it('mwrr_cumulative_percent: its bar reads «—»; Timing effect reads «—» and claims nothing', async () => {
+            renderReturns(summaryMissing(['mwrr_cumulative_percent'], how));
+
+            await expectReturnsCard({twrrCum: '40.00%', mwrrCum: EM_DASH, mwrrAnn: '30.00%', timing: EM_DASH, timingLabel: ''});
+        });
+
+        it('twrr_percent: its bar reads «—»; Timing effect reads «—» and claims nothing', async () => {
+            renderReturns(summaryMissing(['twrr_percent'], how));
+
+            await expectReturnsCard({twrrCum: EM_DASH, mwrrCum: '45.00%', mwrrAnn: '30.00%', timing: EM_DASH, timingLabel: ''});
+        });
+
+        it('mwrr_annualized_percent: its bar reads «—», the other bars keep their values', async () => {
+            renderReturns(summaryMissing(['mwrr_annualized_percent'], how));
+
+            await expectReturnsCard({twrrCum: '40.00%', mwrrCum: '45.00%', mwrrAnn: EM_DASH});
+        });
+
+        it('mwrr_annualized_percent: Timing effect does not read it, still +5.00 pp with its claim', async () => {
+            renderReturns(summaryMissing(['mwrr_annualized_percent'], how));
+
+            await expectReturnsCard({timing: PLUS_5_PP, timingLabel: A_CLAIM});
+        });
+
+        it('twrr_percent and mwrr_cumulative_percent: both bars read «—»; Timing effect reads «—» and claims nothing', async () => {
+            renderReturns(summaryMissing(['twrr_percent', 'mwrr_cumulative_percent'], how));
+
+            await expectReturnsCard({twrrCum: EM_DASH, mwrrCum: EM_DASH, mwrrAnn: '30.00%', timing: EM_DASH, timingLabel: ''});
+        });
+    });
+});

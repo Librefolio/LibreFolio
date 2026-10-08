@@ -17,23 +17,30 @@
  * *with* unsaved changes, where the save button is withdrawn), are not reachable
  * from there without an admin flipping a global lock in a shared database.
  *
- * Two notes on how things are addressed, both forced by the component:
+ * Two notes on how things are addressed:
  *
- *   - **It publishes no `data-testid`, anywhere.** The action buttons are
- *     distinguishable only by their `title`, and the active category only by a
- *     Tailwind class plus a chevron. `$lib/i18n` is therefore mocked with an
- *     identity translator, so `title={$_('common.saveAll')}` renders as the
- *     literal key: every query below names a *key*, stable in all four
- *     languages, never a sentence. Where a state has no attribute at all, the
- *     test asserts a *consequence* instead — selecting a category is observed
- *     through the mobile trigger's label, which is derived from it. The report
- *     asks for the attributes that would make this direct.
+ *   - **What it publishes.** Every category button carries a `data-testid` and
+ *     its selected state as `aria-pressed` — "true" on the selected one, "false"
+ *     on every other: `settings-category-all` and `settings-category-{id}` in the
+ *     sidebar; `settings-mobile-category-all` and `settings-mobile-category-{id}`
+ *     in the phone dropdown, rendered only while it is open, behind
+ *     `settings-mobile-category-trigger`. The selection is therefore asserted
+ *     directly. The tests that read it off the phone trigger's label stay: that
+ *     label is a behaviour of its own — derived from the selection, falling back
+ *     to All, carrying the category's icon — and nothing else covers it.
+ *     The root is `settings-layout`, with `data-busy`, and the save-all /
+ *     undo-all / reset-all buttons come from `SettingBulkActions` with ids of
+ *     their own; the lock button has none. So the table of actions still names
+ *     every button by its `title`: `$lib/i18n` is mocked with an identity
+ *     translator, `title={$_('common.saveAll')}` renders as the literal key, and
+ *     every query names a *key*, stable in all four languages, never a sentence.
  *
  *   - **Both layouts are in the DOM at once.** `sm:hidden` and `hidden sm:block`
  *     are Tailwind, and jsdom has no stylesheet, so the phone dropdown and the
  *     desktop sidebar both render and every category label appears at least
  *     twice. Every query is therefore scoped — to `<nav>` for the sidebar, to
- *     the block owning the `settings.category` label for the dropdown — rather
+ *     the block owning the `settings.category` label for the dropdown — or goes
+ *     through a test id, which belongs to one layout by construction, rather
  *     than reaching for a global `getByText` that would resolve ambiguously.
  */
 import {afterEach, describe, expect, it, vi} from 'vitest';
@@ -91,9 +98,22 @@ function mobileBlock(): HTMLElement {
     return el;
 }
 
-/** The dropdown trigger: the first button of the phone block, captured closed. */
+/** The dropdown trigger, by its test id: it is rendered open or closed. */
 function mobileTrigger(): HTMLElement {
-    return within(mobileBlock()).getAllByRole('button')[0];
+    return screen.getByTestId('settings-mobile-category-trigger');
+}
+
+/** All, then every category, by the id their test ids end with. */
+const CATEGORY_KEYS = ['all', ...CATEGORIES.map((category) => category.id)];
+
+/** `aria-pressed` of All and of every category, in the sidebar or in the open dropdown. */
+function pressed(layout: 'settings-category' | 'settings-mobile-category'): Record<string, string | null> {
+    return Object.fromEntries(CATEGORY_KEYS.map((key) => [key, screen.getByTestId(`${layout}-${key}`).getAttribute('aria-pressed')]));
+}
+
+/** What `pressed()` reads when `selected` — `all`, or a category id — is the selection: "true" there, "false" everywhere else. */
+function onlyPressed(selected: string): Record<string, string> {
+    return Object.fromEntries(CATEGORY_KEYS.map((key) => [key, key === selected ? 'true' : 'false']));
 }
 
 /** Every action button currently offered, by the i18n key of its title. */
@@ -155,9 +175,9 @@ describe('SettingsLayout — the category list', () => {
     });
 
     it('switches category when the sidebar is used', async () => {
-        // `selectedCategory` is a bound prop, so the change leaves through the
-        // binding and is invisible from here; what *is* observable is the label
-        // the phone trigger derives from it.
+        // The selection is a bound prop; besides its `aria-pressed` (the
+        // describe below), the label the phone trigger derives from it must
+        // follow a change made in the sidebar.
         const {container} = mount({selectedCategory: ''});
 
         await fireEvent.click(within(sidebar(container)).getByRole('button', {name: 'settings.categorySecurity'}));
@@ -258,6 +278,83 @@ describe('SettingsLayout — the phone dropdown', () => {
 
         expect(remove).toHaveBeenCalledWith('click', expect.any(Function));
         remove.mockRestore();
+    });
+});
+
+describe('SettingsLayout — the selected category, as each button publishes it', () => {
+    it('gives All and every category a test id in the sidebar, each on its own button', () => {
+        const {container} = mount();
+
+        const nav = sidebar(container);
+        expect(within(nav).getByTestId('settings-category-all')).toHaveTextContent('settings.all');
+        for (const category of CATEGORIES) {
+            expect(within(nav).getByTestId(`settings-category-${category.id}`)).toHaveTextContent(category.labelKey);
+        }
+    });
+
+    it('gives the phone trigger a test id, and All and every category one once the dropdown is open', async () => {
+        mount();
+
+        // Closed, the block's only button is the one carrying the trigger's id, and no option is rendered.
+        const block = mobileBlock();
+        expect(within(block).getAllByRole('button')).toEqual([within(block).getByTestId('settings-mobile-category-trigger')]);
+        expect(screen.queryByTestId('settings-mobile-category-all')).toBeNull();
+
+        await fireEvent.click(mobileTrigger());
+
+        expect(within(block).getByTestId('settings-mobile-category-all')).toHaveTextContent('settings.all');
+        for (const category of CATEGORIES) {
+            expect(within(block).getByTestId(`settings-mobile-category-${category.id}`)).toHaveTextContent(category.labelKey);
+        }
+    });
+
+    it('presses All alone when nothing is filtered, in the sidebar and in the dropdown', async () => {
+        mount({selectedCategory: ''});
+
+        expect(pressed('settings-category')).toEqual(onlyPressed('all'));
+        await fireEvent.click(mobileTrigger());
+        expect(pressed('settings-mobile-category')).toEqual(onlyPressed('all'));
+    });
+
+    it('presses the selected category alone, in the sidebar and in the dropdown', async () => {
+        mount({selectedCategory: 'global'});
+
+        expect(pressed('settings-category')).toEqual(onlyPressed('global'));
+        await fireEvent.click(mobileTrigger());
+        expect(pressed('settings-mobile-category')).toEqual(onlyPressed('global'));
+    });
+
+    it('moves the pressed state with a choice made in the sidebar, in both layouts', async () => {
+        mount({selectedCategory: ''});
+
+        await fireEvent.click(screen.getByTestId('settings-category-security'));
+
+        expect(pressed('settings-category')).toEqual(onlyPressed('security'));
+        await fireEvent.click(mobileTrigger());
+        expect(pressed('settings-mobile-category')).toEqual(onlyPressed('security'));
+
+        await fireEvent.click(screen.getByTestId('settings-category-all'));
+
+        expect(pressed('settings-category')).toEqual(onlyPressed('all'));
+    });
+
+    it('moves the pressed state with a choice made in the dropdown, in both layouts', async () => {
+        mount({selectedCategory: 'global'});
+        await fireEvent.click(mobileTrigger());
+
+        await fireEvent.click(screen.getByTestId('settings-mobile-category-profile'));
+
+        // The choice closes the dropdown; reopened, it presses the new category alone.
+        expect(screen.queryByTestId('settings-mobile-category-profile')).toBeNull();
+        expect(pressed('settings-category')).toEqual(onlyPressed('profile'));
+        await fireEvent.click(mobileTrigger());
+        expect(pressed('settings-mobile-category')).toEqual(onlyPressed('profile'));
+
+        await fireEvent.click(screen.getByTestId('settings-mobile-category-all'));
+
+        expect(pressed('settings-category')).toEqual(onlyPressed('all'));
+        await fireEvent.click(mobileTrigger());
+        expect(pressed('settings-mobile-category')).toEqual(onlyPressed('all'));
     });
 });
 

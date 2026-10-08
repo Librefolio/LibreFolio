@@ -1004,6 +1004,179 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   (English)», contro la regola della lingua del file. Non l'ho toccata.
   > - **`svelte-check` dal test-author.** I 2 errori in `KpiSection.svelte` che aveva visto venivano da un
   >   client generato vecchio; il rebuild li ha tolti, e il mio `front check` è a 0.
+  >
+  > **Integrazione**: `a312797bf` · `2a8b18aad` · `be2954522` · `ec0a698cc`, merge `5d9e9af01`, nel treno
+  > 14 (`dev_release2` = `9eb01c756`).
+- **S20** ✅ 2026-10-08 — Sei reperti di Q, approvati dal developer («Affidali tutti e tre a O, prima della
+  1.2», più tre testi): analisi breve, poi correzione, test rossi prima dove ha senso. Base `108a2adf5`
+  (treno 17: solo doc e CHANGELOG rispetto a `cf4248bd9`).
+  > **Analisi**, confermato / non confermato:
+  > 1. **Stringhe FX in inglese: confermato.**
+  >    - In `fx/[pair]/+page.svelte`: `:1120` e `:1184` («Sync failed: …»), `:838` (ripiego «Failed to
+  >      load rates»), `:385` e `:442` (`Asset #${id}`, nome di riserva della serie di confronto).
+  >    - In `FxCard.svelte:286`: i titoli del pulsante di sync.
+  >    - In `FxDataEditorSection.svelte`:
+  >      - le colonne `:56` «Rate» e `:125` «Preview»;
+  >      - l'errore `:166` «N row(s) have invalid rate values…»;
+  >      - il toast `:224-227` con i contatori «saved», «deleted», «skipped»;
+  >      - `:246-248` «unknown error», «Failed to save:» e «FX save failed»;
+  >      - `:318-322` Saving…, Save (N) e Cancel.
+  >    - In `FxTable.svelte:193`: l'intestazione «Rate».
+  >    - In `FxDataImportModal`: una mappa di 4 lingue scritta a mano (`:27-31`) fuori dal catalogo.
+  >      Il `title` mancante invece è **non confermato** (correzione del test-author): `:184` passa già
+  >      `title={$t('csvImport.title')}`, e il default «Import CSV Data» di `DataImportModal:54` non si
+  >      vede mai, perché tutti i chiamanti passano un titolo.
+  >    - Nei componenti condivisi usati dall'area FX:
+  >      - `SyncModalBase` `:192` e `:196` (timeout), `:199` («Sync failed»), `:439` e `:511`
+  >        («Retry N failed»);
+  >      - `DataImportModal:265` (placeholder);
+  >      - `CsvEditor:320-430` (11 errori CSV).
+  >    - Non confermati: i `$t(…) ?? 'English'` di `SyncModalBase`, `FxSyncModal` e `PageSyncModal`
+  >      sono ripieghi morti, perché `$t` non restituisce mai null; `FxCard:170` `'Enter'` è un tasto.
+  >    - `fx/+page.svelte:355` e `:870` sono veri, ma il file era di K: li ho fatti dopo che K ha
+  >      chiuso (messaggio del coordinatore), con `fx.loadFailed` e `common.error`. La `:864` di K
+  >      (`count` → `n`, treno 18) non l'ho toccata: fra le due modifiche restano 5 righe invariate,
+  >      quindi la fusione è pulita.
+  > 2. **Aiuto di Borsa Italiana: confermato.** `borsa_italiana.py:376-377` punta alla pagina sviluppatori;
+  >    gli altri quattro provider puntano a `/mkdocs/user/assets/providers/<slug>/`, e
+  >    `user/assets/providers/borsa-italiana.*.md` esiste in 4 lingue.
+  > 3. **Sync a 120 s: confermato, e vale anche per `AssetSyncModal:52`.**
+  >    - Le richieste sono fisse a 120 s: `FxSyncModal:45`, `PageSyncModal:90` e `:120`,
+  >      `AssetSyncModal:52`.
+  >    - Il campo Timeout di `SyncModalBase` muove solo il conto alla rovescia.
+  >    - Cura: la richiesta dura `max(120 s, timeout scelto + 5 s)`, così non si accorcia nulla rispetto a
+  >      oggi; il messaggio cita il limite applicato.
+  > 4. **justETF «history only»: confermato.** `justetf.py:227`: per USD, CHF e GBP il provider dà il
+  >    `latestQuote` giornaliero (`:262-264`, `:294-303`). Il tooltip è la descrizione del backend; non
+  >    esistono chiavi `assets.providerParams.justetf.*`.
+  > 5. **Conteggi delle valute.**
+  >    - BOE «20+»: **confermato**, la mappa ne ha 15.
+  >    - ECB «30+» nei testi per l'utente: **confermato**; misurato sull'API pubblica il 2026-10-08, le
+  >      valute pubblicate ogni giorno sono 29 (BGN si ferma al 2025-12-31).
+  >    - ECB «45+» nella docstring: **non confermato**, perché la scoperta restituisce 44 valute più EUR,
+  >      dismesse comprese. Va solo chiarito.
+  >    - FED «20+» con 20 valute: vero, non lo tocco.
+  > 6. **Tooltip dei livelli di AI Export: confermato.** `aiExport.detailLevelHelp.*` dice «fino a
+  >    30/14/7 giorni». È vero per i prezzi (`policy.py:48-52`); per gli indicatori, secondo la classe
+  >    temporale, si arriva a 84/28/14 giorni (`:54-82`). La doc utente non cita i numeri, la tabella per
+  >    sviluppatori (`ai_export_sampling.md`) concorda col codice. L'E2E `ai-export-panel.spec.ts:194`
+  >    fissa il testo inglese attuale e va aggiornato.
+  >
+  > **Note implementazione** (2026-10-08, base `108a2adf5`):
+  > - **Rossi prima, dal test-author.**
+  >   - 5 nel backend, in `services provider-contracts`: l'URL d'aiuto di Borsa e la copertura «20+» di
+  >     BOE nelle 4 lingue (log del 18:27: 5 falliti, 15 passati).
+  >   - 1 E2E `front-fx fx-editor` (Save/Cancel in italiano).
+  >   - I vitest dei 4 modali di sync: il limite della richiesta e il banner del timeout.
+  >   - In totale 21 rossi nel frontend, dal suo rapporto.
+  >   - Adattato senza rosso: `ai-export-panel.spec.ts:194` ora legge la frase da `en.json`.
+  > - **Timeout del sync (punto 3).**
+  >   - `syncRequestTimeoutMs(sec) = max(120 000, sec × 1000 + 5000)` in `utils/sync/syncHelpers.ts`.
+  >   - `SyncModalBase.doSyncSection` lo ricalcola a ogni richiesta, retry compresi, e lo passa a
+  >     `doSyncFn(ids, {timeoutMs})`.
+  >   - `FxSyncModal`, `PageSyncModal` (2 chiamate) e `AssetSyncModal` lo passano ad axios come `{timeout}`.
+  >   - I due testi di timeout citano i secondi applicati: `fx.sync.timeoutAfter` e `fx.sync.requestTimedOut`.
+  > - **Stringhe FX (punto 1).**
+  >   - 32 chiavi nuove nelle 4 lingue con `dev.py i18n add`:
+  >     - `common.unknownError`, `fx.rate`, `fx.loadFailed`, `fx.card.{manualOnly,syncFromProvider}`;
+  >     - `fx.sync.{timeoutAfter,requestTimedOut,failed,retryFailed}`;
+  >     - `fxDetail.{syncFailed,loadFailed,assetFallback,invalidRates,savedSummary,savedCount,deletedCount,skippedCount,saveFailed}`;
+  >     - `dataEditor.saveFailed`, `csvImport.{placeholder,headerMismatch}`, `csvImport.errors.*` (11).
+  >   - Riusate: `common.{preview,cancel,error}` e `dataEditor.{save,saving}`.
+  >   - `FxDataImportModal` perde la mappa scritta a mano.
+  > - **Testi del backend (punti 2, 4 e 5).**
+  >   - `borsa_italiana.py:377` → `/mkdocs/user/assets/providers/borsa-italiana/`.
+  >   - `justetf.py:227` descrive l'ultimo prezzo giornaliero per USD, CHF e GBP.
+  >   - BOE «20+» → «15».
+  >   - ECB «30+» → «circa 30» nelle 4 lingue; la docstring `:30` è riscritta (44 valute più EUR, 29
+  >     pubblicate ogni giorno).
+  > - **Tooltip AI Export (punto 6).** `aiExport.detailLevelHelp.{compact,standard,full}` aggiornate con
+  >   `dev.py i18n update`: 30/14/7 giorni per i prezzi, 84/28/14 per gli indicatori più lenti.
+  > - **Cambi di testo voluti, in inglese:**
+  >   - «row(s) have invalid rate values» diventa un plurale ICU;
+  >   - «Sync failed: unknown» → «Sync failed: unknown error», lo stesso ripiego dell'editor;
+  >   - «Saving...» → «Saving…»: è la stessa chiave dell'editor degli asset (`AssetDataEditorSection:565`),
+  >     fissata dallo spec del test-author;
+  >   - il timeout cita il limite applicato.
+  >
+  >   Ogni altro testo spostato nel catalogo è identico all'originale.
+  >
+  > **⚠️ Fuori pista**:
+  > - **Il primo `front-fx all` ha dato 1 rosso su 103.** `fx-csv-import.spec.ts:227` fissa «Header
+  >   currencies don't match», e io avevo messo l'apostrofo tipografico (’), cambiando il testo visibile.
+  >   - Corretto con `dev.py i18n update`, tornando ai testi originali della mappa (apostrofo ASCII in
+  >     EN, IT e FR).
+  >   - Con la stessa regola il placeholder torna a «...».
+  >   - L'errore in linea dell'editor torna a «Failed to save: X», con la chiave nuova
+  >     `dataEditor.saveFailed`, distinta dal toast `fxDetail.saveFailed`.
+  >   - Il test non è stato toccato.
+  > - **Prettier.** Una riga vuota doppia in `FxDataImportModal.svelte`, rimasta dopo aver tolto la mappa:
+  >   corretta. La base era pulita.
+  > - **La guardia di K sui nomi in `values`** (treno 18) non è ancora nel mio albero. L'ho approssimata
+  >   con uno script che usa il parser ICU di `node_modules`, sui 13 file toccati: 181 chiamate, tutte
+  >   coerenti, tranne due casi non miei:
+  >   - `fx/+page.svelte:864`, la riga di K;
+  >   - `fx/[pair]/+page.svelte:1484-1485` (`chart.tooltip.stale` e `fxStale`), preesistenti dal
+  >     2026-04-17: passano il testo grezzo senza `values`, e il grafico sostituisce `{days}` da sé.
+  > - **Fuori dall'area FX, non toccati:**
+  >   - `AssetDataEditorSection.svelte:458-462` ha le stesse stringhe fisse («Failed to save:», «Save
+  >     failed:»);
+  >   - i parametri di justETF non hanno chiavi `assets.providerParams.justetf.*`;
+  >   - FED «20+» con 20 valute è vero;
+  >   - `test_provider_contracts.py` è offline, ma catalogato `write-scoped`.
+  >
+  > **Gate** (corsia 6160, `/tmp/librefolio-r2-o`, uno per volta):
+  > - `front-utility component-unit`: 111 file, 2863 test ✅ (prima il filtro `"SyncModal"`: 4 file, 89);
+  > - `front-utility core-unit`: 117 file, 3435 ✅, `catalogIcuLocale` compreso;
+  > - backend:
+  >   - `services provider-contracts`: 419 ✅, 1 saltato (`mockprov` senza URL, voluto);
+  >   - `borsa-italiana-search` 5 ✅, `borsa-italiana-funds` 17 ✅, `provider-errors` 134 ✅;
+  > - E2E:
+  >   - `front-fx all` sull'albero finale: 103 E2E e 126 vitest ✅, 13 azioni;
+  >   - `front-portfolio risk-lab`, il sync della pagina (`:6809` e `:6903`): 2 ✅;
+  >   - `front-ai-export panel`: 6 ✅;
+  > - `utils gate-i18n-usage`: 195 ✅;
+  > - `i18n audit`: 4198 chiavi per lingua, complete, 0 morte. Le 3 non verificate sono preesistenti:
+  >   `chartSettings.params.{amplitude,histogramScale}` e `transactions.fields.cash_code`;
+  > - cataloghi contro `108a2adf5`: +32 chiavi, stesso insieme nelle 4 lingue, 3 valori cambiati
+  >   (`detailLevelHelp`), forma canonica;
+  > - controlli statici:
+  >   - `front check`: 0 errori, 0 avvisi;
+  >   - Prettier pulito sui 20 file toccati e sui 4 cataloghi;
+  >   - `dev.py lint` ✅; black lascia invariati i 5 file;
+  >   - `git diff --check` pulito;
+  > - porte 6160 e 6170 libere.
+  >
+  > **Aggiunta prima del commit** (2026-10-08, reperto di M, girato dal coordinatore): i 3 avvisi
+  > `importWizard.reportSet.{incompleteBlocks,partlySelectedBlocks,ungroupedBlocks}` dicevano «Continue /
+  > Continua / Continuer / Continuar è disattivato».
+  > - **Verificato.**
+  >   - Gli avvisi compaiono solo nel piede del passo `select` (`ImportWizardModal.svelte:5257-5266`),
+  >     accanto a `import-wizard-parse`, che è disattivato da `!step2CanParse` (`:338`, `:5280`) e ha
+  >     l'etichetta `importWizard.parse` («Parse ({n})»).
+  >   - `common.continue` è il pulsante dei passi successivi (`:5323` e seguenti).
+  >   - Le chiavi vengono da `8c3271235` (01/10), `955148dfb` (07/10) e `38dd5d1b4` (08/10); nessuna è
+  >     in `v1.1.0`.
+  > - **Cambia solo il nome del pulsante**, in 12 stringhe, con `dev.py i18n update`
+  >   (`/tmp/libreFolio_o_s20_parse_button.py`).
+  >   - I nomi li ricava dai cataloghi: il vecchio da `common.continue`, il nuovo da `importWizard.parse`
+  >     senza « ({n})». Così diventano Parse, Analizza, Analyser e Analizar.
+  >   - Prima di scrivere controlla che il nome compaia una volta sola; dopo, rilegge i valori scritti.
+  >   - Accordo e genere restano: entrambe le etichette sono verbi usati come nome, e il participio
+  >     (disabled, disattivato, désactivé, desactivado) va bene così.
+  > - **La doc era già giusta.** `developer/frontend/components/features/import-wizard.md:322` e
+  >   `user/transactions/import/danske-bank.en.md:49,60` dicono che il set blocca **Parse**. Il piano di
+  >   L (`26_brimDanskeBank/plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md:130`) aveva già notato
+  >   la discrepanza e l'aveva messa nel backlog.
+  > - **Gate:**
+  >   - `i18n audit`: 4198 chiavi, 0 morte, le stesse 3 non verificate;
+  >   - `front-utility core-unit`: 117 file, 3435 ✅;
+  >   - `front-transaction tx-import-report-set`: 32 ✅. I 32 saltati sono la divisione per progetto
+  >     (`@mobile` solo su mobile); R3, R4, R6-E1 e U1, i test dell'avviso, sono verdi;
+  >   - cataloghi contro `108a2adf5`: +32 chiavi e 6 valori cambiati (3 `detailLevelHelp` e i 3 avvisi),
+  >     forma canonica.
+  > - **Backlog per il test-author.** Il titolo di U1 (`tx-import-report-set.spec.ts:2863`) dice «block
+  >   Continue», mentre il test controlla `import-wizard-parse`. Non l'ho toccato.
 
 ## 12. Definition of done
 

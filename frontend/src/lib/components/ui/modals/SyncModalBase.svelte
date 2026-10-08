@@ -19,7 +19,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
-    import {formatTime} from '$lib/utils/sync/syncHelpers';
+    import {formatTime, syncRequestTimeoutMs} from '$lib/utils/sync/syncHelpers';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
@@ -184,19 +184,23 @@
 
     /** Sync specific IDs within a single section */
     async function doSyncSection(section: SyncSection, ids: string[], epoch: number): Promise<SyncResult[]> {
+        // Read the field at every request, retries included: the user may have raised it after a timeout.
+        const timeoutMs = syncRequestTimeoutMs(timeoutSec);
         try {
-            return await section.doSyncFn(ids);
+            return await section.doSyncFn(ids, {timeoutMs});
         } catch (e: any) {
             let errMsg: string;
             if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout')) {
-                errMsg = `Timeout after ${timeoutSec}s`;
+                // Name the limit the request actually had, which may exceed the field (120 s floor).
+                const seconds = Math.round(timeoutMs / 1000);
+                errMsg = $t('fx.sync.timeoutAfter', {values: {seconds}});
                 // The banner and the timeout flag belong to a session on screen.
                 if (current(epoch)) {
                     isTimeout = true;
-                    error = `Request timed out after ${timeoutSec}s. Increase the timeout and retry.`;
+                    error = $t('fx.sync.requestTimedOut', {values: {seconds}});
                 }
             } else {
-                errMsg = e?.response?.data?.detail || e?.message || 'Sync failed';
+                errMsg = e?.response?.data?.detail || e?.message || $t('fx.sync.failed');
                 if (current(epoch)) error = errMsg;
             }
             return ids.map((id) => ({
@@ -436,7 +440,7 @@
                     onclick={handleRetryFailed}
                 >
                     <SkipForward size={13} />
-                    Retry {failedItems.length} failed
+                    {$t('fx.sync.retryFailed', {values: {n: failedItems.length}})}
                 </button>
             {/if}
 
@@ -508,7 +512,7 @@
             >
                 <RefreshCw size={15} class={syncing ? 'animate-spin' : ''} />
                 {#if failedItems.length > 0 && hasResults}
-                    {$t('common.retry') ?? 'Retry'} {failedItems.length} failed
+                    {$t('fx.sync.retryFailed', {values: {n: failedItems.length}})}
                 {:else if syncing}
                     {$t('common.syncing') ?? 'Syncing...'}
                 {:else}

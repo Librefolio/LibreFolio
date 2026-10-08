@@ -100,6 +100,13 @@ The two stable validation codes are:
 | `balanceCashNegative` | A currency closes a day below zero |
 | `balanceAssetNegative` | An asset quantity closes a day below zero |
 
+The frontend turns each code into `transactions.errors.<code>`
+(`resolveIssueMessage()` in `lib/utils/transactions/resolveValidationMessage.ts`):
+*Saving would cause … to go negative … on {date} at {brokerName}*. The bulk
+workspace groups these issues under *This configuration causes data
+inconsistencies* (`transactions.validate.balanceIssuesHeader`), each with the
+workspace rows that contribute to it.
+
 When possible, the replay attributes the issue to the last staged batch
 transaction that reduced that currency or asset on the failing date. Otherwise
 it uses operation `create` and index `-1` as a broker-level fallback.

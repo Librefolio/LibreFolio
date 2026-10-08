@@ -54,7 +54,7 @@
     import {DEFAULT_AXIS_SCALE, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
@@ -222,7 +222,7 @@
     let fxAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
     let fxAiExportCatalogLoading = $state(true);
     let fxAiExportCatalogFailed = $state(false);
-    let fxAiExportTargetCurrency = $derived($globalSettings.default_currency || data.canonicalQuote);
+    let fxAiExportTargetCurrency = $derived($defaultDisplayCurrency);
     let fxAiExportLabels = $derived(buildAiExportMenuLabels($t, fxAiExportCompatibility, $t('fxDetail.aiExport')));
 
     // Panel states before edit mode (to restore when exiting)
@@ -382,7 +382,7 @@
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
                 const targetAsset = allAssets.find((a) => a.id === targetId);
-                instance.params._assetDisplayName = targetAsset?.display_name ?? `Asset #${targetId}`;
+                instance.params._assetDisplayName = targetAsset?.display_name ?? $t('fxDetail.assetFallback', {values: {id: String(targetId)}});
                 instance.params._assetIconUrl = targetAsset?.icon_url ?? null;
                 instance.params._assetType = targetAsset?.asset_type ?? null;
                 if (!instance.params._resolvedData) continue;
@@ -439,7 +439,7 @@
         const markers: EventMarker[] = [];
         for (const [aid, evts] of comparisonEvents) {
             const targetAsset = allAssets.find((a) => a.id === aid);
-            const label = targetAsset?.display_name ?? `Asset #${aid}`;
+            const label = targetAsset?.display_name ?? $t('fxDetail.assetFallback', {values: {id: String(aid)}});
             const sigColor = overlaySignals.find((s) => s.label === label)?.color;
             for (const ev of evts) {
                 markers.push({
@@ -835,7 +835,7 @@
             } else {
                 console.error('Failed to load chart data:', e);
                 chartData = [];
-                error = e?.message || 'Failed to load rates';
+                error = e?.message || $t('fxDetail.loadFailed');
             }
             if (propagateError && e?.response?.status !== 404) throw e;
         } finally {
@@ -1117,7 +1117,7 @@
                 overlayDataVersion++;
             }
         } catch (e: any) {
-            toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+            toasts.error($t('fxDetail.syncFailed', {values: {error: e?.message || $t('common.unknownError')}}));
         } finally {
             syncing = false;
         }
@@ -1181,7 +1181,7 @@
             if (r?.status !== 'ok' && r?.status !== 'partial') return;
             await maybeLoadComparison(requestedSignals, true);
         } catch (e: any) {
-            if (current()) toasts.error('Sync failed: ' + (e?.message || 'unknown'));
+            if (current()) toasts.error($t('fxDetail.syncFailed', {values: {error: e?.message || $t('common.unknownError')}}));
         }
     }
 

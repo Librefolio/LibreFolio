@@ -1,4 +1,5 @@
 import {expect, test} from '../fixtures/playwright';
+import {t} from '../fixtures/i18n-data';
 
 import {API_TIMEOUT, assertPanelAboveOverlay, assertPanelWithinViewport, gotoDashboard, gotoFirstAsset, isSnapshotPost, isVisibleWithin, openAiExportPanel, readClipboard, selectAiExportSelection, setupAiExportPage} from './helpers';
 
@@ -191,7 +192,12 @@ test.describe('AI Export panel', () => {
 
         const compactHelp = page.getByTestId('ai-export-detail-help-compact');
         await compactHelp.click();
-        await expect(page.getByTestId('tooltip-content')).toContainText('Same data universe, with temporal buckets up to 30 days.', {timeout: 2_000});
+        // The sentence is the catalogue's, in the language setupAiExportPage selects:
+        // its wording — and the bucket widths it quotes from policy.py — may change
+        // without this panel test having to.
+        const compactSentence = t('en', 'aiExport.detailLevelHelp.compact');
+        expect(compactSentence, 'aiExport.detailLevelHelp.compact is missing from en.json').not.toBe('aiExport.detailLevelHelp.compact');
+        await expect(page.getByTestId('tooltip-content')).toContainText(compactSentence, {timeout: 2_000});
         await compactHelp.click();
         await expect(page.getByTestId('tooltip-content')).toBeHidden({timeout: 2_000});
 

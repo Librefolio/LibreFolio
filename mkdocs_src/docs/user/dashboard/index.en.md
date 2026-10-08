@@ -40,13 +40,7 @@ When you apply a broker filter, the cash balances automatically update to reflec
 
 ## 🛡️ Risk Tab {: #risk-tab }
 
-The Risk tab holds the **Portfolio risk** panel, which answers four questions in turn: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?**, and **What if…?**
-
-It always covers your whole portfolio, meaning every broker you own with a share above 0%: it follows the dashboard date range and target currency, but not the broker filter — when a filter is on, a subtitle says so.
-
-**What if…?** opens on a selector: add the historical replay, the hypothetical shock or the simulation; the tools you leave open come back the next time, in this browser, and closing a tool with its **×** removes it together with its answer.
-
-See [Risk Metrics](../../financial-theory/technical-analysis/risk-metrics/index.md) for the theory behind it.
+The Risk tab holds the **Portfolio risk** panel, which answers four questions about your portfolio's risk: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?** and **What if…?** It always covers your whole portfolio — every broker you own with a share above 0% — and follows the dashboard date range and target currency, but not the broker filter: when a filter is on, a subtitle says so. See [Risk Tab](risk.md) for the blocks and the tools they show.
 
 ---
 
