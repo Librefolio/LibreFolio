@@ -2262,3 +2262,11 @@ Welcome language preview whose catalogue took more than 200 ms was rebuilt back 
 Fixed with a first-dictionary latch; regression E2E 3c and a layout unit case.
 Filed: [[problems/i18n-loading-gate-remounts-app]].
 Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-08] update | Import Todo Signals: todos reach the bulk editor, worded like notices
+The concept page still said todos never leave the wizard and that `message` is an English fallback. Todos travel
+with their rows into the bulk editor (blockers gate Save All, warnings feed the save gate); `message` is the
+plugin's wording in the file's language, and `resolveBrimTodoMessage` now words them on every surface,
+the bulk editor included (workstream O, S19).
+Updated: [[concepts/import-todo-signals]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
