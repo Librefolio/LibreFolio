@@ -294,3 +294,8 @@ Corsia 6155, un comando per volta, prima di toccare la voce 15.
 1. Ogni voce è rossa sulla baseline e verde dopo la cura, sui mock della 6155.
 2. Le regressioni sono verdi e i controlli statici restano a 0/0 (`front check`).
 3. Porte libere, nessun venv del worktree, nel worktree solo i file previsti.
+
+## Seguito
+
+- Lo step 18 è il triage dei rossi della coverage completa del 07/10, più la cura di BrokerModal:
+  [`plan-phase00TaxonomySelectStep18CoverageTriage.prompt.md`](plan-phase00TaxonomySelectStep18CoverageTriage.prompt.md).

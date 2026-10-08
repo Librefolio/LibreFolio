@@ -4,11 +4,13 @@ category: problem
 status: resolved
 date: 2026-07-07
 resolved_date: 2026-07-13
-tags: [backend, testing, portfolio-engine, pre-existing, low-priority]
+updated: 2026-10-07
+tags: [backend, testing, portfolio-engine, pre-existing, low-priority, test-helpers]
 related:
   - entities/portfolio-engine
   - concepts/inline-wac-computation
   - sources/phase09-m1-m2-archive-2026-07
+  - decisions/financial-math-single-average-cost
 ---
 
 # Problem: `test_transaction_implied.py` Fails — `DailyStateBuilder` Constructor Mismatch
@@ -105,11 +107,33 @@ Resolved — see Solution above. The original "Low / no production risk" assessm
 (V(u)-wide last BUY price), not `TRANSACTION_IMPLIED` (WAC-as-price). The `TRANSACTION_IMPLIED` mechanism
 this test file exercised was intentionally removed in commit `39106380`, not merely renamed.
 
+## Recurrence 2026-10-07
+
+The structural pressure came back — this time handled inside the same change. Release 2 workstream P (issue #32,
+[[decisions/financial-math-single-average-cost]]) gave `DailyStateBuilder.__init__` a new **required** keyword-only
+parameter, `average_costs` (the `compute_average_costs()` result keyed `(asset_id, broker_id)`), deliberately without a
+default so that no construction can fall back to silent zero costs.
+
+- The 13 `DailyStateBuilder(` constructions in 10 test files were adapted through one shared helper,
+  `engine_average_costs()` in `backend/test_scripts/test_services/_engine_average_costs.py`: it builds the same
+  positions as `calculate()` (`build_cost_positions`) and answers the conversion requests from the test's own
+  `fx_rate_map`, so a pure builder test replays the cost a real run would compute with those rates.
+- That is half of the Prevention above: the `average_costs` argument has one update site, but each file still keeps its
+  own local `_builder()` / construction, so the next constructor change will again touch every file.
+- **One construction lives outside the engine test selectors**: `backend/test_scripts/test_external/test_brim_providers.py`
+  (a Crédit Agricole replay, run by `./dev.py test external brim-providers`). Running `services roi-fifo-utils` and
+  `services portfolio-engine` after a constructor change does not exercise it — exactly the structural risk this page
+  describes. Workstream P updated it explicitly (with a test-local import of the helper).
+
 ## Source files
 
 | Role | Path |
 |------|------|
-| Deleted test file (was failing) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_transaction_implied.py` |
 | Constructor (current signature) | `backend/app/services/portfolio_engine.py` (`DailyStateBuilder.__init__`, `_market_value_for`) |
 | Sibling test (fixed, same signature update) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_daily_state_builder.py` |
-| Replacement coverage (LAST_BUY_PRICE) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` (`TestLastBuyPrice`) |
+| Replacement coverage (LAST_BUY_PRICE; `TestLastBuyPrice` until 2026-07-31, when commit `1c5082f81` made the unified price resolver the single valuation brain — now `TestResolverValuation`) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |
+| Shared `average_costs` helper for builder tests (2026-10-07) | `backend/test_scripts/test_services/_engine_average_costs.py` |
+| Construction outside the engine selectors (2026-10-07) | `backend/test_scripts/test_external/test_brim_providers.py` |
+
+> The failing file itself, `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_transaction_implied.py`,
+> was deleted on 2026-07-13 (see Solution) and is cited here only as history.

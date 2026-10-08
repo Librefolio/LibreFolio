@@ -85,9 +85,12 @@ export function lotColor(lotId: number, isDark: boolean): string {
     return isDark ? `hsl(${hue} 78% 68%)` : `hsl(${hue} 68% 44%)`;
 }
 
-/** Teal for dividends, violet for interest, per theme. */
+/**
+ * Gold for dividends, violet for interest, per theme. The dividend gold is the pair of
+ * GrowthChart's `COLORS.dividend`: there is no shared palette module, so change both together.
+ */
 export function incomeEventColor(type: 'DIVIDEND' | 'INTEREST', isDark: boolean): string {
-    if (type === 'DIVIDEND') return isDark ? '#2dd4bf' : '#0f766e';
+    if (type === 'DIVIDEND') return isDark ? '#facc15' : '#b08d00';
     return isDark ? '#a78bfa' : '#6d28d9';
 }
 

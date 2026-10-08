@@ -1559,9 +1559,12 @@ class TestBrokerParserCoverageHelpers:
                 quote_base_quantity=1,
             )
         }
+        from backend.test_scripts.test_services._engine_average_costs import engine_average_costs  # noqa: PLC0415 — test-local: the only DailyStateBuilder replay in this suite
+
+        classified_txs = [ClassifiedTransaction(tx=tx, classification="normal", share=Decimal("1"), paired_tx=None) for tx in engine_txs]
         states = (
             DailyStateBuilder(
-                classified_txs=[ClassifiedTransaction(tx=tx, classification="normal", share=Decimal("1"), paired_tx=None) for tx in engine_txs],
+                classified_txs=classified_txs,
                 in_transit_intervals=[],
                 external_cash_flows=[],
                 price_map={},
@@ -1570,6 +1573,7 @@ class TestBrokerParserCoverageHelpers:
                 asset_classifications={},
                 asset_types={},
                 asset_currencies={sell.asset_id: "EUR"},
+                average_costs=engine_average_costs(classified_txs, asset_currencies={sell.asset_id: "EUR"}, target_currency="EUR", fx_rate_map={}, date_to=date(2025, 5, 27)),
                 mark_series=mark_series,
                 target_currency="EUR",
                 date_from=date(2025, 5, 25),
@@ -2236,6 +2240,24 @@ class TestBrokerParserCoverageHelpers:
 
         derived = [ft for ft in out.field_todos if ft.reason_code == "derived_quantity"]
         assert len(derived) == 1, "orphan redemption must flag the derived nominal for verification"
+
+    def test_credit_agricole_derived_quantity_todo_speaks_italian_and_names_the_bond(self, tmp_path):
+        """Decision C of the i18n audit (S18-S19): the ``derived_quantity`` todo is worded in Italian, like the
+        plugin's other todos and like the file it reads. No ``importWizard.brimNotice.derived_quantity`` key
+        rewords it, so its ``message`` is what the user reads, in every UI language. Same partial download as
+        the test above: the English sentence must be gone, and the bond it is about must still be named."""
+        header = "Data operazione;Nome;Divisa;Causale;Prezzo;Divisa;Cambio;Quantità;Controvalore in Euro;Data valuta"
+        row = "21/05/2026;BTP 05/26 0.55FOICUM;EUR;TITOLI SCADUTI;100,40;000;1;0;30.105,00;21/05/2026"
+        csv_path = tmp_path / "credit_agricole-partial.csv"
+        csv_path.write_text("\n".join([header, row]) + "\n", encoding="utf-8")
+
+        out = CreditAgricoleBrokerProvider().parse(csv_path, broker_id=1)
+
+        derived = [ft for ft in out.field_todos if ft.reason_code == "derived_quantity"]
+        assert len(derived) == 1, f"premise: the orphan redemption raises one derived_quantity todo, got {[(ft.reason_code, ft.message) for ft in out.field_todos]}"
+        message = derived[0].message
+        english = ("Matured bond", "no prior position was found", "partial download", "was inferred from", "Verify it matches the holding you are closing")
+        assert ([fragment for fragment in english if fragment in message], "BTP 05/26 0.55FOICUM" in message) == ([], True), f"(English left, bond named) — the derived_quantity todo reads: {message!r}"
 
     def test_model_bond_maturity_below_par_has_no_negative_surplus(self):
         """A redemption priced below par yields no surplus (no invented negative

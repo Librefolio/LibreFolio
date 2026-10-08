@@ -50,6 +50,7 @@ from backend.app.services.portfolio_engine import (
     DailyStateBuilder,
 )
 from backend.app.services.price_resolver import build_asset_price_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 
 # =============================================================================
 # HELPERS — mirror the established conventions in this test directory
@@ -136,6 +137,15 @@ def _builder(txs, ecfs, *, date_from=date(2025, 1, 1), date_to=date(2025, 1, 1),
             defaults["price_map"],
             defaults["asset_currencies"],
             defaults["quote_base_map"],
+        )
+    if "average_costs" not in defaults:
+        defaults["average_costs"] = engine_average_costs(
+            defaults["classified_txs"],
+            asset_currencies=defaults["asset_currencies"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
+            split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
         )
     return DailyStateBuilder(**defaults)
 

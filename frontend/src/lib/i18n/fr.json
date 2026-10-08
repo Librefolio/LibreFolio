@@ -430,6 +430,10 @@
         "hasNumber": "Un chiffre",
         "hasSpecial": "Un caractère spécial"
       }
+    },
+    "serverUnreachable": {
+      "title": "Le serveur ne répond pas",
+      "body": "Cette page reste ouverte et votre session n'a pas été fermée. Réessayez dans un instant."
     }
   },
   "importWizard": {
@@ -624,7 +628,8 @@
     "todoBlockerVerifyHint": "{n, plural, one {# ligne n'a pas été entièrement comprise par l'import et doit être vérifiée avant l'enregistrement.} other {# lignes n'ont pas été entièrement comprises par l'import et doivent être vérifiées avant l'enregistrement.}}",
     "parseErrorsTitle": "{n} fichier(s) n'ont pas pu être analysés",
     "brimNotice": {
-      "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :"
+      "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :",
+      "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -1625,7 +1630,12 @@
     "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés",
     "pnlAcqNewCapital": "Nouveau capital",
     "pnlAcqReinvested": "Réinvesti",
-    "allocationGeneric": "{type} générique"
+    "allocationGeneric": "{type} générique",
+    "pnlAxisQuarter": "T{quarter}",
+    "pnlAxisWithYear": "{label} {year}",
+    "unrealizedAssetEffect": "Actifs en {currency}",
+    "unrealizedFxEffect": "Taux {from} → {to}",
+    "unrealizedUnsplit": "{currency}, non décomposé"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",
@@ -1663,7 +1673,8 @@
     "missingFxRatesManual": "Taux FX manquants pour {count} paire(s) manuelle(s) — ajoutez les taux manuellement",
     "assetIncomeNoEligibleLots": "Aucun lot ouvert éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — revenu non alloué",
     "assetCostNoEligibleLots": "Aucun lot éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — coût non alloué",
-    "missingFxRatesAfterSync": "Il manque encore des taux FX pour {pairs} entre {date_from} et {date_to} ({dates_count} date(s)) : le fournisseur n’en a renvoyé aucun pour ces dates. Saisissez-les à la main sur la page de la paire."
+    "missingFxRatesAfterSync": "Il manque encore des taux FX pour {pairs} entre {date_from} et {date_to} ({dates_count} date(s)) : le fournisseur n’en a renvoyé aucun pour ces dates. Saisissez-les à la main sur la page de la paire.",
+    "missingCostBasis": "{count} actif(s) avec une acquisition sans coût d'achat — comptée à zéro tant que vous ne le saisissez pas"
   },
   "dataEditor": {
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",
@@ -1936,9 +1947,9 @@
     "changePassword": "Changer le Mot de Passe",
     "changePasswordDescription": "Mettre à jour le mot de passe de votre compte",
     "deleteAccount": "Supprimer le Compte",
-    "deleteAccountDescription": "Supprimer définitivement votre compte et toutes les données",
+    "deleteAccountDescription": "Supprimer définitivement votre compte, ses paramètres et les courtiers dont vous êtes le seul propriétaire",
     "deleteAccountConfirm": "Supprimer le Compte ?",
-    "deleteAccountWarning": "Cette action est irréversible. Toutes vos données, y compris les courtiers, transactions et paramètres, seront définitivement supprimées.",
+    "deleteAccountWarning": "Cette action est irréversible. Les courtiers dont vous êtes le seul propriétaire sont supprimés avec toutes leurs transactions et les rapports importés, même si vous les avez partagés avec des lecteurs ou des éditeurs. Un courtier qui a un autre propriétaire lui reste : seul votre accès est supprimé. Vos paramètres sont supprimés.",
     "typeUsernameToConfirm": "Tapez \"{username}\" pour confirmer",
     "deleteAccountPermanently": "Supprimer Définitivement",
     "deleteAccountFailed": "Échec de la suppression du compte",
@@ -3413,7 +3424,11 @@
       "execution_timeout": "Le calcul a pris trop de temps et a été interrompu.",
       "optimization_infeasible": "Aucune allocation ne satisfait les contraintes demandées.",
       "unknown": "Cette mesure n'a pas renvoyé de résultat.",
-      "answer_discarded": "La réponse a été écartée parce que les données ont changé pendant son arrivée. Relancez l'analyse."
+      "answer_discarded": "La réponse a été écartée parce que les données ont changé pendant son arrivée. Relancez l'analyse.",
+      "resource_limit_paths_or_horizon": "Cette simulation est trop volumineuse pour être exécutée. Utilisez moins de trajectoires simulées ou un horizon plus court.",
+      "resource_limit_horizon_or_sampling": "Cette simulation quasi-Monte-Carlo est trop volumineuse pour être exécutée. Raccourcissez l'horizon ou choisissez l'échantillonnage Monte-Carlo.",
+      "resource_limit_period": "Cette simulation est trop volumineuse pour être exécutée : la période contient trop d'historique. Choisissez une période plus courte.",
+      "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
@@ -4027,7 +4042,7 @@
           "feeMin": "min {amount}",
           "fundingHelp": "L’argent que le plan peut utiliser pour acheter chez ce courtier : ses propres liquidités, plus les versements et les liquidités d’autres comptes que vous autorisez dans Modifier. Au départ, tout est autorisé ; dans Modifier, cliquez sur une source pour l’exclure.",
           "fundingLabel": "Liquidités utilisables",
-          "incrementHelp": "Chaque ordre proposé est un multiple de cette valeur. Par nombre de titres : 1 = titres entiers uniquement, 0,001 = fractions jusqu’à trois décimales. Par montant : le plus petit montant que vous pouvez saisir, par exemple 0,01.",
+          "incrementHelp": "Chaque ordre proposé est un multiple de cette valeur. Par nombre de titres : un nombre entier, par exemple 1. Par montant : le plus petit montant que vous pouvez saisir, par exemple 0,01 ; c’est ainsi que l’on achète des fractions de titre.",
           "orderKindHelp": "Comment vous saisissez un ordre chez ce courtier : par nombre de titres (vous achetez 3 titres) ou par montant (vous investissez 150). Cela fixe l’unité de l’incrément et des limites de chaque ordre.",
           "fundingChipHelp": "{kind, select, local {Les liquidités en {currency} déjà chez {name} : le plan les utilise ici, sans transfert.} account {Les liquidités en {currency} de {name} : vous avez autorisé leur usage pour les achats chez ce courtier.} other {Le versement {name} : vous avez autorisé son usage pour les achats chez ce courtier.}}",
           "conversionValueAuto": "Le courtier convertit à l’achat, au taux de l’étape Change moins le spread."

@@ -457,6 +457,12 @@ transaction breaks these rules, so flip source signs as needed:
     key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
     (`test_brim_degiro.py`) fails if one is added.
 
+    Field todos follow the same rule, keyed by their `reason_code` under the same namespace
+    and resolved by `resolveBrimTodoMessage` (same file), wherever the wizard and the bulk
+    editor list them. A todo is worth a key only when its message has no file language to
+    honour, like the Generic CSV's `corporate_action`; every other todo keeps the file's
+    language on purpose.
+
 !!! warning "`cost_basis_override` is PER-UNIT, never a total"
 
     When a plugin freezes an inherited cost basis (WAC) on a `TRANSFER`/`ADJUSTMENT`

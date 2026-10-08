@@ -533,7 +533,7 @@ async def scenario(session, test_user) -> Scenario:
         classification_params='{"short_description": "<script>alert(1)</script> normal text \u00e9\u00e8 \u2603", "geographic_area": null, "sector_area": null}',
     )
     await _buy(session, broker1, usd_asset, quantity="10", amount="-900", currency="EUR", day=PERIOD_START)
-    await _sell(session, broker1, usd_asset, quantity="4", amount="410", currency="EUR", day=date(2025, 9, 5))
+    await _sell(session, broker1, usd_asset, quantity="-4", amount="410", currency="EUR", day=date(2025, 9, 5))
     await _buy(session, broker2, usd_asset, quantity="5", amount="-480", currency="EUR", day=date(2025, 9, 2))
 
     await _seed_asset_warmup_anchor(session, usd_asset, close="85", currency="USD")

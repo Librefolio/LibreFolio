@@ -228,7 +228,13 @@ Cloning a row stages a copy — original date preserved — ready to adjust and 
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="🧬 Clone into the Bulk Workspace">
 </div>
 
-<!-- [Screenshot Placeholder: transactions/bulk-todo-banner — gallery entry "### 📝 Todo Banners": The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.] -->
+### 📝 Todo Banners
+
+The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="📝 Todo Banners">
+</div>
 
 ---
 
@@ -326,9 +332,29 @@ Per-registry plugin load health: what failed to load and why.
     <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="🧩 Plugin Diagnostics">
 </div>
 
-<!-- [Screenshot Placeholder: settings/about-tool-diagnostics — gallery entry "### 🧰 Tool Diagnostics": The Tool diagnostics panel inside Plugin diagnostics, with the PAC allocator among the loaded tools and its version.] -->
-<!-- [Screenshot Placeholder: support/donation-popup — gallery entry "### ☕ Support LibreFolio": The donation popup with the Buy Me a Coffee link and the social share actions.] -->
-<!-- [Screenshot Placeholder: support/social-share-modal — gallery entry "### 📣 Share LibreFolio": The share dialog with the platform's suggested message, the hashtags and Copy and go.] -->
+### 🧰 Tool Diagnostics
+
+The Tool diagnostics panel inside Plugin diagnostics, with the PAC allocator among the loaded tools and its version.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="about-tool-diagnostics" alt="🧰 Tool Diagnostics">
+</div>
+
+### ☕ Support LibreFolio
+
+The donation popup with the Buy Me a Coffee link and the social share actions.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="support" data-name="donation-popup" alt="☕ Support LibreFolio">
+</div>
+
+### 📣 Share LibreFolio
+
+The share dialog with the platform's suggested message, the hashtags and Copy and go.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="support" data-name="social-share-modal" alt="📣 Share LibreFolio">
+</div>
 
 ---
 
@@ -358,7 +384,13 @@ Import and manage broker transaction reports.
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
 </div>
 
-<!-- [Screenshot Placeholder: files/brim-report-sets — gallery entry "### 🗂️ Report Sets": The broker reports tab with report-set badges and the Uploaded by filter.] -->
+### 🗂️ Report Sets
+
+The broker reports tab with report-set badges and the Uploaded by filter.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="brim-report-sets" alt="🗂️ Report Sets">
+</div>
 
 ### 👁️ File Preview
 
@@ -502,11 +534,53 @@ Any number of candidate transactions side by side, with differing fields highlig
     <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="🔍 N-Way Compare">
 </div>
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-card — gallery entry "### 🧩 Report Set Card": A Danske Bank report set in Select Files — one table per kind of export, the timeline and the Read as menu.] -->
-<!-- [Screenshot Placeholder: brokers/import-report-set-missing — gallery entry "### ⚠️ Missing Export": A report set announcing which export is missing and for which period.] -->
-<!-- [Screenshot Placeholder: brokers/import-report-set-read-as — gallery entry "### 📖 Read As": The Read as menu of a report set and a file's menu with Remove from the set.] -->
-<!-- [Screenshot Placeholder: brokers/import-report-set-pairing — gallery entry "### 🔗 Combined File Analysis": The analysis detail of a combined file — trades paired with their cash, rows found in one file only and their reasons.] -->
-<!-- [Screenshot Placeholder: brokers/import-wizard-gapfix-step — gallery entry "### ⚖️ Import Wizard — Align with the Bank": The step comparing LibreFolio with the bank's balance — one card per point and the table of proposed gap_fix movements.] -->
+### 🧩 Report Set Card
+
+A Danske Bank report set in Select Files — one table per kind of export, the timeline and the Read as menu.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-card" alt="🧩 Report Set Card">
+</div>
+
+### ⚠️ Missing Export
+
+A report set announcing which export is missing and for which period.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-missing" alt="⚠️ Missing Export">
+</div>
+
+### 📖 Read As
+
+The Read as menu of a report set.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="📖 Read As">
+</div>
+
+### 🗃️ File Menu
+
+A file's ⋮ menu inside a report set: read it alone with another plugin, or remove it from the set.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="🗃️ File Menu">
+</div>
+
+### 🔗 Combined File Analysis
+
+The analysis detail of a combined file — trades paired with their cash, rows found in one file only and their reasons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-pairing" alt="🔗 Combined File Analysis">
+</div>
+
+### ⚖️ Import Wizard — Align with the Bank
+
+The step comparing LibreFolio with the bank's balance — one card per point and the table of proposed gap_fix movements.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="⚖️ Import Wizard — Align with the Bank">
+</div>
 
 ---
 
@@ -538,7 +612,13 @@ Full-size interactive price chart with date range selector and currency toggle. 
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Candlestick chart" alt="Asset Detail Chart — Candlestick">
 </div>
 
-<!-- [Screenshot Placeholder: assets/detail-chart-rolling-return — gallery entry "### 🗓️ Rolling Return": The asset chart in Rolling Return mode with a 1Y window and one comparison asset.] -->
+### 🗓️ Rolling Return
+
+The asset chart in Rolling Return mode with a 1Y window and one comparison asset.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="🗓️ Rolling Return">
+</div>
 
 ### 📡 Signals Overlay
 
@@ -586,7 +666,14 @@ Create a new asset with name, type, currency, identifiers, provider, and classif
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard (pre-filled)" alt="Create Asset from Import Wizard">
 </div>
 
-<!-- [Screenshot Placeholder: assets/type-picker-open — gallery entry "### 🧬 Asset Type Picker": The searchable two-level type menu open, with the ETF family expanded and composite icons.] -->
+### 🧬 Asset Type Picker
+
+The searchable two-level type menu open, with the ETF family expanded and composite icons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="type-picker-open" alt="🧬 Asset Type Picker">
+</div>
+
 <!-- [Screenshot Placeholder: assets/create-provider-compare — gallery entry "### 🔍 Provider Data Comparison": The comparison between the asset and the provider's data after the ISIN choice.] -->
 
 ### 🌳 Grouped Indicator Search
@@ -778,7 +865,18 @@ Global and per-chart settings for aesthetics and signal overlay configuration.
     <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
 </div>
 
-<!-- [Screenshot Placeholder: tools/hub — new section "## 🧰 Tools", gallery entry "### 🗂️ Tools Hub": The Tools catalogue with the PAC allocator card, its version pair and the Documentation and Reload buttons.] -->
+---
+
+## 🧰 Tools
+
+### 🗂️ Tools Hub
+
+The Tools catalogue with the PAC allocator card, its version pair and the Documentation and Reload buttons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="hub" alt="🗂️ Tools Hub">
+</div>
+
 <!-- [Screenshot Placeholder: tools/pac-step-liquidity — gallery entry "### 💶 PAC — Liquidity": The Liquidity step with a new contribution and an external account.] -->
 <!-- [Screenshot Placeholder: tools/pac-step-brokers — gallery entry "### 🏦 PAC — Brokers": The broker editor with order mode, increment, fees and conversion mode.] -->
 <!-- [Screenshot Placeholder: tools/pac-step-assets — gallery entry "### 💼 PAC — Assets": The Assets step with automatic and manual prices and their origin badges.] -->

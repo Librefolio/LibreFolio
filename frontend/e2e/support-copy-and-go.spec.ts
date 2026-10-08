@@ -455,4 +455,42 @@ test.describe('Support copy-and-go', () => {
             await expect(page.getByTestId('about-support-card')).toBeVisible();
         }
     });
+
+    // K step 19: ModalBase's backdrop is `position: fixed; inset: 0`, but inside About's `space-y-8` container it
+    // inherited Tailwind 4's `margin-block-end: 2rem` (`:where(.space-y-8 > :not(:last-child))`) and stopped 32 px
+    // short of the bottom, leaving a strip of the page reachable under an aria-modal dialog.
+    test('the share dialog backdrop covers the viewport down to its bottom edge, so nothing under the dialog can be reached', async ({page}) => {
+        await openAboutShareModal(page, 'x', 'en');
+        const backdrop = page.getByTestId('support-social-share-modal');
+        // Open state: ModalBase fades the backdrop in and scales its content in, both as Web Animations (Svelte
+        // transitions). The dialog is open once no animation runs on the backdrop or inside it.
+        await expect
+            .poll(() => backdrop.evaluate((element) => element.getAnimations({subtree: true}).filter((animation) => animation.playState === 'running').length), {
+                message: 'the share dialog has finished opening: no transition left running on its backdrop or inside it',
+            })
+            .toBe(0);
+
+        const reading = await backdrop.evaluate((element) => {
+            const box = element.getBoundingClientRect();
+            const probe = {x: window.innerWidth / 2, y: window.innerHeight - 2};
+            const hit = document.elementFromPoint(probe.x, probe.y);
+            const describe = (node: Element | null): string => {
+                if (!node) return 'nothing';
+                const testId = node.getAttribute('data-testid');
+                const className = typeof node.className === 'string' ? node.className.trim().slice(0, 80) : '';
+                return `<${node.tagName.toLowerCase()}${testId ? ` data-testid="${testId}"` : ''}${className ? ` class="${className}"` : ''}>`;
+            };
+            return {
+                viewport: {width: window.innerWidth, height: window.innerHeight},
+                bottom: box.bottom,
+                marginBlockEnd: getComputedStyle(element).marginBlockEnd,
+                probe,
+                hit: describe(hit),
+                hitInsideBackdrop: hit !== null && element.contains(hit),
+            };
+        });
+
+        expect.soft(Math.abs(reading.bottom - reading.viewport.height), `the backdrop's bottom edge is the viewport's: it ends at ${reading.bottom} px of ${reading.viewport.height} (its margin-block-end: ${reading.marginBlockEnd})`).toBeLessThanOrEqual(0.5);
+        expect(reading.hitInsideBackdrop, `the point (${reading.probe.x}, ${reading.probe.y}), 2 px above the viewport bottom, belongs to the aria-modal dialog: it hits ${reading.hit}`).toBe(true);
+    });
 });

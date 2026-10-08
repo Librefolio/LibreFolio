@@ -51,7 +51,7 @@ Per-lot accounting: tracks each acquisition batch through its own lifecycle inst
 
 | Metric / Concept | Description |
 |------------------|-------------|
-| **[Weighted Average Cost](weighted-average-cost.md)** | Inventory-aware iterative WAC per position (broker, asset). Computed inline during the engine's daily loop. |
+| **[Weighted Average Cost](weighted-average-cost.md)** | Inventory-aware iterative WAC per position (broker, asset), each acquisition at its own date's exchange rate. Computed once per report, then replayed by the engine's daily loop. |
 
 ---
 

@@ -45,14 +45,40 @@ This line only appears once the history has at least two daily points. The perce
 
 | Row | What it measures |
 |-----|-----------------|
-| **Unrealized change** | How much your open positions' [unrealized gain/loss](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) changed during the period |
-| **Sales** | Realized gain or loss from positions closed during the period (sell price − average cost) |
+| **Unrealized change** | How much your open positions' [unrealized gain/loss](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) changed during the period. For assets priced in another currency it includes the effect of the exchange rate — hover the label to see it split by currency (below) |
+| **Sales** | Realized gain or loss of the sales made during the period: what each sale brought in, minus what you paid for the units sold (their average cost) |
 | **Dividends & interest** | Cash income from dividends, bond coupons, and P2P interest |
 | **Fees & taxes** | Commissions and taxes recorded as transactions |
 
 !!! tip "Identity check"
 
-    All four rows add up to the Period P&L hero number (± small residuals from FX rounding).
+    The four rows explain your Period P&L: realized results (**Sales**), unrealized results with their exchange-rate effect (**Unrealized change**), **Dividends & interest**, and **Fees & taxes**. Whatever they cannot see belongs to the period's *other effects* — for example assets travelling between two of your brokers on the first or last day, or a sale whose amount could not be converted. You find it in the **Other / reconciliation residual** row of the **Other Period Effects** table, in the Performance view of [Positions](positions.md).
+
+#### Unrealized change by currency {: #unrealized-change-by-currency }
+
+Hover **Unrealized change** to see where it comes from. The tooltip splits it by the currency your assets are priced in — here with euro as display currency:
+
+| Row | What it shows |
+|-----|---------------|
+| 📈 **Assets in USD** | What your dollar assets did *in dollars* — their own price change — counted at the exchange rate of the day |
+| 💱 **USD → EUR rate** | What the exchange rate did to what you paid for them |
+| **USD, not split** | Only when, on the first or last day of the period, some of those assets had no price, no exchange rate, or an incomplete purchase cost: their change is shown in one piece |
+
+There is a 📈 row for every currency your assets are priced in, euro included, and a 💱 row for every currency other than your display currency: assets already in euro have no exchange-rate effect. For the assets priced in dollars, on a given day:
+
+\[\text{Assets in USD} = (\text{Value in USD} - \text{Paid, in USD}) \times \text{Day's rate}\]
+
+\[\text{USD → EUR rate} = \text{Paid, in USD} \times \text{Day's rate} - \text{Paid, in EUR}\]
+
+Each row shows how its figure changed between the first and the last day of the period, and together the rows add up **exactly** to the Unrealized change. *Paid, in EUR* is what you really paid, each purchase at its own date's rate; *Paid, in USD* is the same amount expressed in dollars at those dates.
+
+!!! example "A US ETF on a euro dashboard"
+
+    During the period you bought 10 units for €400, when they were worth 500 USD. At the end of the period they are worth 550 USD, and 1 USD = €0.75. The tooltip shows:
+
+    - 📈 **Assets in USD**: (550 − 500) × 0.75 = **+€37.50** — your ETF gained 10% in dollars;
+    - 💱 **USD → EUR rate**: 500 × 0.75 − 400 = **−€25.00** — the dollar lost value against the euro;
+    - together, the **Unrealized change**: 550 × 0.75 − 400 = **+€12.50**.
 
 🔗 **Theory**: [Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) · [Book Value / WAC](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 
@@ -132,7 +158,7 @@ Note: "Net Capital Invested Since Inception" here is the sum of **all** deposits
 | Row | Definition |
 |-----|-----------|
 | **[Market Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Current market price × quantity for all held assets |
-| **[Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)** | What you paid for your open positions (average cost × qty) |
+| **[Purchase Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)** | What you paid for your open positions (average cost × qty), in your display currency: each purchase counts at the exchange rate of its own date, so this figure does not move with today's rates |
 | **Cash** | Liquid balance held in broker accounts |
 | **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Net external capital contributed to this scope |
 
@@ -147,7 +173,7 @@ The hero number shows the net balance (deposited − withdrawn).
 
 !!! info "Point-in-time vs. period"
 
-    Market Value, Book Value, and Cash are **snapshots** at the end date — they are independent of the start date.
+    Market Value, Purchase Cost, and Cash are **snapshots** at the end date — they are independent of the start date.
     Deposited Capital is **period-scoped** — it counts deposits and withdrawals between the start and end of the selected range.
 
 ---

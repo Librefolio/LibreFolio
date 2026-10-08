@@ -102,6 +102,9 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
             shutil.rmtree(be_dir)
             print(f"{Colors.GREEN}🗑️  Removed htmlcov-backend/{Colors.NC}")
         _archive_and_remove(data_dir / "backend", "backend")
+        from ._coverage import clean_coverage_parts
+
+        clean_coverage_parts(data_dir / "parts")
 
     if clean_frontend:
         fe_dir = cwd / "htmlcov-backend-e2e"

@@ -45,7 +45,7 @@ def upgrade() -> None:
     print("📦 Creating table: users...")
     conn.execute(sa.text("""CREATE TABLE users
                (
-                   id                                 INTEGER PRIMARY KEY,
+                   id                                 INTEGER PRIMARY KEY AUTOINCREMENT,
                    username                           VARCHAR(50) NOT NULL UNIQUE,
                    email                              VARCHAR     NOT NULL UNIQUE,
                    hashed_password                    VARCHAR     NOT NULL,
@@ -97,7 +97,7 @@ def upgrade() -> None:
     print("📦 Creating table: assets...")
     conn.execute(sa.text("""CREATE TABLE assets
                (
-                   id                    INTEGER PRIMARY KEY,
+                   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
                    display_name          VARCHAR     NOT NULL UNIQUE,
                    currency              VARCHAR     NOT NULL,
                    icon_url              VARCHAR,
@@ -126,7 +126,7 @@ def upgrade() -> None:
     print("📦 Creating table: brokers...")
     conn.execute(sa.text("""CREATE TABLE brokers
                (
-                   id                    INTEGER PRIMARY KEY,
+                   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
                    name                  VARCHAR  NOT NULL UNIQUE,
                    description           TEXT,
                    portal_url            VARCHAR,
@@ -187,7 +187,7 @@ def upgrade() -> None:
     print("📦 Creating table: fx_conversion_routes...")
     conn.execute(sa.text("""CREATE TABLE fx_conversion_routes
                (
-                   id             INTEGER PRIMARY KEY,
+                   id             INTEGER PRIMARY KEY AUTOINCREMENT,
                    base           VARCHAR  NOT NULL,
                    quote          VARCHAR  NOT NULL,
                    priority       INTEGER  NOT NULL DEFAULT 1,
@@ -250,7 +250,7 @@ def upgrade() -> None:
     print("📦 Creating table: asset_events...")
     conn.execute(sa.text("""CREATE TABLE asset_events
                (
-                   id                     INTEGER PRIMARY KEY,
+                   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
                    asset_id               INTEGER        NOT NULL,
                    date                   DATE           NOT NULL,
                    type                   VARCHAR        NOT NULL,
@@ -276,7 +276,7 @@ def upgrade() -> None:
     print("📦 Creating table: transactions (UNIFIED)...")
     conn.execute(sa.text("""CREATE TABLE transactions
                (
-                   id                     INTEGER PRIMARY KEY,
+                   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
                    broker_id              INTEGER        NOT NULL,
                    asset_id               INTEGER,
                    type                   VARCHAR(32)    NOT NULL,

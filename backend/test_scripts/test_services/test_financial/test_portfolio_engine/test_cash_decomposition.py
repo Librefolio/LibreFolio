@@ -27,6 +27,7 @@ from backend.app.services.portfolio_engine import (
     DailyStateBuilder,
 )
 from backend.app.services.price_resolver import build_asset_price_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 
 # =============================================================================
 # HELPERS
@@ -101,8 +102,8 @@ def _mark_series_from(txs, price_map, asset_currencies, quote_base_map):
 
 
 def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
-    """Build with cost basis for asset 100 provided implicitly by its BUY tx (WAC is
-    computed inline by the builder — no external wac_series needed anymore)."""
+    """Build with cost basis for asset 100 provided implicitly by its BUY tx (the average
+    costs are computed from the transactions, as PortfolioCalculationEngine does)."""
     defaults = {
         "classified_txs": txs,
         "in_transit_intervals": [],
@@ -124,6 +125,15 @@ def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
             defaults["price_map"],
             defaults["asset_currencies"],
             defaults["quote_base_map"],
+        )
+    if "average_costs" not in defaults:
+        defaults["average_costs"] = engine_average_costs(
+            defaults["classified_txs"],
+            asset_currencies=defaults["asset_currencies"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
+            split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
         )
     return DailyStateBuilder(**defaults)
 

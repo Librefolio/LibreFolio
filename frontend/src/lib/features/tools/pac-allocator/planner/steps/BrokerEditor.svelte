@@ -223,7 +223,7 @@
                                         <label for="{ids}-{mode.key}-step">{$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})} *</label>
                                         <HelpTip
                                             label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
-                                            help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {default: 'Every proposed order is a multiple of this value. By number of units: 1 = whole units only, 0.001 = fractions down to three decimals. By amount: the smallest amount you can enter, for example 0.01.'})}
+                                            help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {default: 'Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.'})}
                                         />
                                     </div>
                                     <div class="flex items-center gap-2">

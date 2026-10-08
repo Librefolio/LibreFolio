@@ -30,8 +30,9 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
     - **Media & Upload**: Image crop/edit, asset picker, file renaming
     - **FX Rates**: Currency pairs, charts, sync, data editor, CSV import
     - **Assets**: Track stocks, ETFs, bonds, crypto with charts, signals, measures & classification
+    - **Tools**: Catalogue of standalone calculations, with the PAC allocator
 
-<!-- [Screenshot Placeholder: gallery-index — when the Tools, Risk Analysis and Onboarding screenshots exist, add "Tools", "Risk Analysis" and "Onboarding" bullets to "What You'll See"] -->
+<!-- [Screenshot Placeholder: gallery-index — when the Risk Analysis and Onboarding screenshots exist, add "Risk Analysis" and "Onboarding" bullets to "What You'll See"] -->
 
 ## 🌍 Language Support
 

@@ -364,7 +364,8 @@ class TestPortfolioWACSplit:
             )
             # transaction_service.py hygiene fix: auto-mode must NOT write "current
             # WAC" as cost_basis_override for a SPLIT-linked item (it would be
-            # misleading — WAC/FIFO ignore it regardless, see wac_utils.py).
+            # misleading — WAC/FIFO ignore it regardless: a split only rescales the
+            # pool, see financial_math/average_cost.py).
             assert adj_result["wac_results"][0]["wac"] is None
             result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
             s = result["results"][0]["series"]

@@ -96,9 +96,8 @@ Capital correctly returns to $K$; only €5 gain to $R$. **Not** all €1,005 to
 
 The 3-pool model runs in a **single per-transaction loop** (event-driven, not daily-delta):
 
-1. Read WAC before pool mutation
-2. Update K/R/W per transaction type rules
-3. Then reduce WAC pool (for SELLs)
+1. Take the transaction's step of its position's average-cost pool, computed before the replay — for a SELL, the cost it removes ($C$ = pre-sale WAC × quantity sold, at historical rates)
+2. Update K/R/W per transaction type rules, with that $C$ for a SELL
 
 The ROI/TWRR/MWRR input series is derived from day-over-day changes in `cumulative_external_cash_flow`, the capital baseline. It is not derived from the cash-only `external_cash_flow` field.
 

@@ -1140,7 +1140,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                         field="quantity",
                         severity="warning",
                         reason_code="derived_quantity",
-                        message=f"Matured bond '{name}': no prior position was found in this file (e.g. a partial download), so the nominal was inferred from countervalue/price. Verify it matches the holding you are closing.",
+                        message=f"Obbligazione scaduta '{name}': nel file non c'è la posizione di partenza (per esempio perché l'estratto è parziale), quindi il nominale è ricavato da controvalore e prezzo. Verifica che corrisponda alla posizione che stai chiudendo.",
                         context={"causale": causale, "ctv": str(ctv), "price": str(price)},
                     )
                 )
