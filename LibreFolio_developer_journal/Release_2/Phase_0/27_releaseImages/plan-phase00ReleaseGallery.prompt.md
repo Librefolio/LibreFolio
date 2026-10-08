@@ -420,7 +420,7 @@
 >
 > **⚠️ Fuori pista**: the group 1 batch was committed by path while the `SettingsLayout.svelte` hook sat in the worktree. Until the SHAs arrived M did not touch the 10 batch paths, and warned the coordinator to stage them explicitly. The hook stayed out of the commits as planned.
 
-### 15. ✅ Group 3: Danske Bank report sets — 2026-10-08
+### 15. ✅ Group 3: Danske Bank report sets — 2026-10-08 (committed: `f1bda660f`, `88b30ac1a`)
 
 > **Note implementazione**:
 > - Base `1ac5d0a0a`.
@@ -488,3 +488,67 @@
 > - **Q's text corrected:** `danske-bank.en.md:152` said only «Deposit», but the code proposes a Deposit or a Withdrawal (`brim_gap_fix.py:145`), and our gap-fix image shows a Withdrawal. Changed to «a **Deposit** or a **Withdrawal**». EN only; the page has no translations.
 > - **Toasts:** they close on a JS timer that `freezeAnimations` does not pause, so a shot taken within 8 s of an action that raises one can catch it. `expectNoToast` is exported but only used in the bulk test. The risk already existed in other scenarios and was not widened.
 > - **Timeouts:** test-author's 240–600 s budgets stay. Runs measured 15–28 s per test, but the 20 s `actionTimeout` already fails a stuck step quickly, and CI is slower.
+
+### 16. ✅ Group 4: risk lab, What if simulation, missing exchange rates — 2026-10-08
+
+> **Note implementazione**:
+> - Base `88b30ac1a`.
+> - test-author is writing 9 shots:
+>   - `risk/lab-correlation`, `-asset-picker`, `-hurt-table`, `-risk-return`, `-benchmark-picker`, `-notice`, `-replay`;
+>   - `risk/whatif-simulation`;
+>   - `dashboard/data-quality-sync-rates`.
+> - All of it runs as the admin, read-only: the selection and the benchmark live in localStorage. No live provider is ever called.
+> - Coordinator note for G6: the PAC images in `user/tools/pac-allocator/index.en.md` go in only after Q's checkpoint (which restructures that page) is in M's base. The scenarios can be written before.
+>
+> **Real-data probes on the lane** (read-only; only localStorage is written). Scripts: `release-pipeline/scripts/probe_risk_lab_real_data{,_v2,_v3}.cjs`; output: `runs/G4_probe*`.
+> - The Assets page opens on 3M, so the shots select 1Y with the top preset.
+> - At 1Y, the 7 priced assets (AAPL, MSFT, TSLA, the two loans, BTC, ETH) give:
+>   - «The most alike»: Roma↔Milano 0.94 and ETH↔BTC 0.93;
+>   - «The ones that offset»: empty (no ρ ≤ −0.30 in the mock data).
+> - Ineligible assets (the 7 with a single quote, and KRW) are **parked**: struck-through chips and `risk-parked-note`. They raise no `risk-partial-notice`. So `lab-notice` very likely needs an injection.
+> - A 2Y replay gives the left-out box `starts_after_window_start` and the «Replay from 2025-09-24 to …» button with real data.
+>
+> **Tests** (test-author: `frontend/e2e/gallery.spec.ts` and the new `frontend/e2e/fixtures/galleryRiskLab.ts`):
+> - A `Risk Analysis` describe after `Assets` with 5 tests, plus 1 test in `Dashboard` next to the existing data-quality test, which is unchanged.
+> - **Setup:**
+>   - the admin, read-only;
+>   - selection in localStorage: Apple, RE Loan Milano, RE Loan Roma, Bitcoin, Ethereum;
+>   - benchmark S&P 500, also in localStorage;
+>   - 1Y period from the top preset;
+>   - asset ids resolved through the API.
+> - **Guards:** each test aborts `POST /assets/prices/current` (the page's 30 s poll, which would reach providers and store a price), `/assets/prices/sync`, `/fx/currencies/sync` and `GET /fx/providers`, and asserts at the end that no attempt was made.
+> - **Real data:** correlation, hurt table, risk-return, both pickers, and the simulation (paths 2048, seed 123456).
+> - **Injected:**
+>   - `lab-notice`: RE Loan Roma stale by 12 days in the `/risk/query` answers, plus a `stale_at_end` warning in the eligibility answer (amber chip, still analysed), plus Correlation `unavailable` / `insufficient_history` for the section banner. The real engine has no trigger: the eligibility check filters stale assets out before the query.
+>   - `lab-replay`: Roma left out as «quoted after the period start», with a suggested period. All the seeded prices start on the same day.
+>   - `data-quality-sync-rates`: the dashboard fixture plus a `MISSING_FX_RATES` issue, shaped as the backend builds it (pairs sorted EUR-GBP, EUR-USD).
+>
+> **Lane runs** (6158, 1 worker):
+> - Run 1 (load ~10): 10/12. The correlation test was red on both viewports because it required BTC↔ETH, a pair the selection's joint calendar no longer ranks.
+> - Run 2 (load 7→12): 6/6 for the 3 corrected tests.
+> - Run 3, final with the final code (load 10→15): **12/12 in 7.2 min**.
+> - Logs: `release-pipeline/runs/G4_run{1,2,3}.log`.
+> - Visual check of a sample (4 languages, both themes, desktop and mobile): correct.
+>
+> **Docs** (docs-writer, gallery pages only, by the coordinator's rule during Q's wave 1):
+> - `gallery/{desktop,mobile}.en.md`: «💱 Missing Exchange Rates» in Dashboard, plus the new section `---` / `## 📉 Risk Analysis` with 8 entries and the following `---`.
+> - `gallery/index.en.md`: a «Risk Analysis» bullet; the comment now names only Onboarding.
+> - Placeholders left in place on purpose, for the batch after Q's wave 1: `user/assets/correlation.en.md` (7) and `financial-theory/.../risk-metrics/{benchmark-selection,historical-replay,simulation-modes}.en.md` (1 each).
+>
+> **Gates:**
+> - `mkdocs build` strict: 0 WARNING/ERROR.
+> - `check-links`: identical to the baseline.
+> - Prettier: ok.
+> - `tsc` e2e: only the 2 known errors.
+> - `git diff --check`: clean. Ports 6158 and 6168 free.
+>
+> **⚠️ Fuori pista**:
+> - **Tooling bug** in `dev.py mkdocs gallery --no-populate`. The help says «Skip DB population». But `LF_SETUP_DONE` is set only when dev.py has populated the DB itself (`dev.py:990-999`), so Playwright's `global-setup.ts:48` runs `populate_mock_data --force --with-reports` at **every** run. That is a different dataset from dev.py's own `--force --clean --with-static --with-reports`.
+>   - Effects: `--no-populate` reruns are neither faster nor on the same DB.
+>   - Proposed fix: one line, set `LF_SETUP_DONE=1` with `--no-populate` too. `dev.py` is shared, so it goes to the coordinator.
+>   - This also explains why the lane DB changed between runs (prices regenerated up to today).
+> - **Correction to my earlier facts:** NVIDIA, the ETFs, the BTPs and Gold now have **no** price rows, so the reason «No price has ever been recorded» is correct. The single row each had on 2026-10-07 is not reproduced by today's populate, and its origin is unknown.
+> - **Prices are deterministic but correlations are not portable:** the mock prices are seeded per asset and date (`_stable_seed`), but the correlation of a pair depends on the selection's joint calendar. Gallery assertions use only the Roma↔Milano pair, near-identical by construction.
+> - **Italian hurt table:** the last column («Risalita al massimo») is cut on the right by the longer labels. Product layout, minor.
+> - **Simulation framing:** the shot starts at the top of the step. The cone is partly in frame and «What this simulation assumed» is out of frame. To revisit with the new `dashboard/risk-whatif` shots after Q's wave 1.
+> - **Q's G3 finding:** `brokers/import-report-set-file-menu` used an extended test cash statement, so it showed «Read alone with Generic CSV». Danske is the only plugin with report sets (`report_roles`, `broker_danske_bank.py:1644`). Decision sent to Q: reshoot with the real Danske cash export, whose menu has Preview / Remove from the set / Delete, in the batch after Q's wave 1. Q has added the placeholder in `danske-bank` after `-read-as`.
