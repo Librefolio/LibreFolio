@@ -226,31 +226,36 @@
     }
 
     const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
-    const twrrCumVal = $derived.by(() => {
-        const v = summary ? safeString(summary.twrr_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const mwrrCumVal = $derived.by(() => {
-        const v = summary ? safeString(summary.mwrr_cumulative_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const mwrrAnnVal = $derived.by(() => {
-        const v = summary ? safeString(summary.mwrr_annualized_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const timingEffectVal = $derived(mwrrCumVal - twrrCumVal);
-    const timingIntensity = $derived(Math.min(Math.abs(timingEffectVal) / 3, 1));
+    /** A return in percent, or null when the backend could not compute it (the field is optional and nullable). */
+    function returnPct(raw: unknown): number | null {
+        const text = safeString(raw);
+        if (text == null) return null;
+        const pct = parseFloat(text) * 100;
+        return Number.isFinite(pct) ? pct : null;
+    }
+    const twrrCumVal = $derived(summary ? returnPct(summary.twrr_percent) : null);
+    const mwrrCumVal = $derived(summary ? returnPct(summary.mwrr_cumulative_percent) : null);
+    const mwrrAnnVal = $derived(summary ? returnPct(summary.mwrr_annualized_percent) : null);
+    // Timing effect needs both returns: a missing one counted as 0 would show a difference that does not exist.
+    const timingEffectVal = $derived(twrrCumVal != null && mwrrCumVal != null ? mwrrCumVal - twrrCumVal : null);
+    const timingIntensity = $derived(timingEffectVal != null ? Math.min(Math.abs(timingEffectVal) / 3, 1) : 0);
     const timingLabel = $derived.by(() => {
+        if (timingEffectVal == null) return '';
         if (Math.abs(timingEffectVal) < 0.05) return $_('dashboard.timingNeutral');
         return timingEffectVal > 0 ? $_('dashboard.timingFavorable') : $_('dashboard.timingUnfavorable');
     });
+    function timingColor(base: number, span: number): string | undefined {
+        if (timingEffectVal == null) return undefined;
+        const alpha = base + timingIntensity * span;
+        return timingEffectVal >= 0 ? `color: rgba(22, 163, 74, ${alpha})` : `color: rgba(220, 38, 38, ${alpha})`;
+    }
     const roiPct = $derived(summary ? `${roiVal.toFixed(2)}%` : '—');
-    const twrrCumPct = $derived(summary ? `${twrrCumVal.toFixed(2)}%` : '—');
-    const mwrrCumPct = $derived(summary ? `${mwrrCumVal.toFixed(2)}%` : '—');
-    const mwrrAnnPct = $derived(summary ? `${mwrrAnnVal.toFixed(2)}%` : '—');
+    const twrrCumPct = $derived(twrrCumVal != null ? `${twrrCumVal.toFixed(2)}%` : '—');
+    const mwrrCumPct = $derived(mwrrCumVal != null ? `${mwrrCumVal.toFixed(2)}%` : '—');
+    const mwrrAnnPct = $derived(mwrrAnnVal != null ? `${mwrrAnnVal.toFixed(2)}%` : '—');
     const roiIsPositive = $derived(summary ? parseFloat(summary.simple_roi_percent) >= 0 : undefined);
 
-    const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal), Math.abs(mwrrCumVal), Math.abs(mwrrAnnVal)) || 1);
+    const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal ?? 0), Math.abs(mwrrCumVal ?? 0), Math.abs(mwrrAnnVal ?? 0)) || 1);
     function retBarPct(val: number) {
         return (Math.abs(val) / retBarMax) * 100;
     }
@@ -334,21 +339,21 @@
                 <Tooltip text={$_('dashboard.timingEffectTooltip')} position="top">
                     <div class="flex flex-col cursor-help">
                         <span class="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide border-b border-dotted border-gray-300 dark:border-gray-600 inline-block">{$_('dashboard.timingEffect')}</span>
-                        <span class="text-[10px] italic" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.4 + timingIntensity * 0.6})` : `rgba(220, 38, 38, ${0.4 + timingIntensity * 0.6})`}">{timingLabel}</span>
+                        <span class="text-[10px] italic" data-testid="kpi-timing-effect-label" style={timingColor(0.4, 0.6)}>{timingLabel}</span>
                     </div>
                 </Tooltip>
-                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">
-                    <TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />
+                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors {timingEffectVal == null ? 'text-gray-400 dark:text-gray-500' : ''}" data-testid="kpi-timing-effect-value" style={timingColor(0.3, 0.7)}>
+                    {#if timingEffectVal == null}—{:else}<TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />{/if}
                 </span>
             </div>
             {#if pnlDeltaDayPct != null}
                 <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct" data-direction={pnlDeltaDayDirection}>{formatPercent(pnlDeltaDayPct)}</p>
             {/if}
             <div class="flex flex-col gap-2 mt-1">
-                <KpiMetricBar label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
-                <KpiMetricBar label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} numericValue={twrrCumVal} formatValue={fmtPct} barPct={retBarPct(twrrCumVal)} barColor={retBarColor(twrrCumVal)} />
-                <KpiMetricBar label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} numericValue={mwrrCumVal} formatValue={fmtPct} barPct={retBarPct(mwrrCumVal)} barColor={retBarColor(mwrrCumVal)} />
-                <KpiMetricBar label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} numericValue={mwrrAnnVal} formatValue={fmtPct} barPct={retBarPct(mwrrAnnVal)} barColor={retBarColor(mwrrAnnVal)} />
+                <KpiMetricBar testid="kpi-return-roi" label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
+                <KpiMetricBar testid="kpi-return-twrr-cum" label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} numericValue={twrrCumVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(twrrCumVal ?? 0)} barColor={retBarColor(twrrCumVal ?? 0)} />
+                <KpiMetricBar testid="kpi-return-mwrr-cum" label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} numericValue={mwrrCumVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(mwrrCumVal ?? 0)} barColor={retBarColor(mwrrCumVal ?? 0)} />
+                <KpiMetricBar testid="kpi-return-mwrr-ann" label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} numericValue={mwrrAnnVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(mwrrAnnVal ?? 0)} barColor={retBarColor(mwrrAnnVal ?? 0)} />
             </div>
             <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodBasedReturns')}</p>
         {/if}
