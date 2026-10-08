@@ -1,11 +1,13 @@
 ---
 title: "Pre-Frame / Frame Separation"
 category: concept
+updated: 2026-10-07
 tags: [backend, portfolio, engine, performance, pre-frame, daily-state, computation-window]
 related:
   - entities/portfolio-engine
   - concepts/inline-wac-computation
   - concepts/3-pool-cash-model
+  - decisions/financial-math-single-average-cost
   - features/F-054
   - features/F-055
 ---
@@ -44,6 +46,11 @@ For each transaction with `tx.date < t0`, in chronological order:
 5. Accumulate realized gain/loss into period accumulators
 ```
 
+*Since 2026-10-07, step 3 computes nothing in the loop:* the engine advances to the position's next average-cost step,
+precomputed once before the replay by `compute_average_costs()` with every cost in the report currency at its
+acquisition's date. The pool arithmetic is the same — see [[concepts/inline-wac-computation]] and
+[[decisions/financial-math-single-average-cost]].
+
 **What the pre-frame does NOT do:**
 - Fetch or use market prices
 - Compute market value
@@ -61,12 +68,19 @@ For each day `t` in the requested range:
 3. Fetch FX rate(from_ccy, to_ccy, t)
 4. Compute DailyPositionState per position:
    - market_value = qty × valuation_price × FX
-   - cost_basis = qty × wac × FX
+   - cost_basis = qty × wac × FX       ← until 2026-10-07 (WAC in the asset currency × the day's rate)
+   - cost_basis = C_T × qty / Q        ← since 2026-10-07: historical cost in the report currency T, no rate
+                                         (cost_report_for(qty) of the position's average-cost step)
    - unrealized_pnl = market_value − cost_basis
 5. Aggregate DailyPortfolioState (sum over positions in S)
 6. Emit 3-pool snapshot (K, R, W at end of day)
 7. Compute derived fields (NAV, book_value, unrealized_gain_loss)
 ```
+
+Since 2026-10-07 only the market value uses the day's rate. `wac` is `C_T / Q`, in T; `wac` and `unrealized_pnl` are
+`None` while the position's cost is incomplete (a missing rate or cost basis). A foreign position's `unrealized_pnl`
+therefore includes the exchange-rate effect, which the engine splits per asset currency in
+`DailyPortfolioState.unrealized_by_currency`.
 
 ## Valuation Price Hierarchy (Frame Only)
 
@@ -117,6 +131,7 @@ The pre-frame cannot be skipped because the engine requires:
 | Role | Path |
 |------|------|
 | Engine implementation | `backend/app/services/portfolio_engine.py` |
+| Average-cost steps the replay follows (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Math spec §3, §7 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | Blob cache spec §12 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | Architecture overview | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` |

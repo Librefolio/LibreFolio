@@ -53,10 +53,26 @@ their names:
   explicit ``flavor: latest=false``, no raw ``latest``) and ``latest-light`` appears
   nowhere. A manual run from ``main``, which the guide does not cover, moves only
   ``latest``: the light image gets exactly that, the full one no tag;
+* **a release's tag matches its kind**: a prerelease is tagged vX.Y.Z-rc.N, a stable
+  release a plain vX.Y.Z (the developer's rules: a prerelease is never promoted, the stable
+  release is published on a new tag, and the check is symmetric: an ``-rc.N`` tag published
+  as stable would deploy the docs site and print a ``:latest`` line in its notes, while
+  ``latest`` and the in-app update prompt both ignore it). The tag guard is found by what
+  it does, the one step whose script reads ``github.event.release.tag_name`` and exits
+  non-zero, and then held to what makes it the guard: it runs on every release and on no
+  other run, reads the tag and the prerelease flag only through ``env`` (never a ``${{ }}``
+  in its script) and is the job's first step. Its script, run in bash on fourteen tags per
+  kind, passes exactly the ``vX.Y.Z-rc.N`` ones on a prerelease and the ``vX.Y.Z`` ones on
+  a stable release (the ``v`` optional), each as a whole string, so a newline within or
+  after the tag is part of it and ``$( )`` or quotes stay text, and fails every other with
+  an ``::error`` titled for the kind (``Prerelease tag``, ``Release tag``). A prerelease on
+  a plain ``v1.2.0`` tag and a stable release on ``v1.2.0-rc.1`` fail there, first, before
+  anything else has run;
 * **a prerelease publishes only its own tags** (the developer's rule): ``v1.2.0-rc.1``
-  gives ``1.2.0-rc.1`` and ``1.2.0-rc.1-light``, a prerelease on a plain ``v1.2.0`` tag
-  ``1.2.0`` and ``1.2.0-light``. Neither moves ``latest`` nor deploys the docs site, which
-  only a stable release and a manual run from ``main`` do;
+  gives ``1.2.0-rc.1`` and ``1.2.0-rc.1-light``, a prerelease on a plain ``v1.2.0`` tag,
+  were the tag guard ever weakened, ``1.2.0`` and ``1.2.0-light``. Neither moves
+  ``latest`` nor deploys the docs site, which only a stable release and a manual run from
+  ``main`` do;
 * **an image build runs only when it has a tag**: every pushing build is guarded by
   ``if: steps.<id>.outputs.tags != ''`` on its own metadata step, read from its
   ``tags:``, since a push without a tag can only fail (the full build on a manual run
@@ -75,8 +91,8 @@ the same functions are run on mutated copies too: a check that cannot fail prove
 nothing.
 
 PURE: reads ``.github/workflows/release.yml`` and ``Dockerfile`` and mutates copies in
-memory; the release-notes script runs in bash with the stand-in ``gh``. No DB, no
-server, no network, no writes.
+memory; the release-notes script runs in bash with the stand-in ``gh``, the tag guard's
+in bash alone. No DB, no server, no network, no writes.
 """
 
 import copy
@@ -396,6 +412,7 @@ VERSION = "1.2.0"
 STABLE = Run(f"stable release v{VERSION}", "release", f"v{VERSION}")
 RC = Run(f"prerelease v{VERSION}-rc.1", "release", f"v{VERSION}-rc.1", prerelease=True)
 PLAIN_PRERELEASE = Run(f"prerelease v{VERSION} (plain tag)", "release", f"v{VERSION}", prerelease=True)
+RC_AS_STABLE = Run(f"stable release v{VERSION}-rc.1 (rc tag)", "release", f"v{VERSION}-rc.1")  # only the tag guard stops it: see TAG_GUARD
 NIGHTLY = Run("nightly", "push", "dev")
 MAIN = Run("manual run from main", "workflow_dispatch", "main")
 
@@ -492,6 +509,17 @@ def holds(condition, run: Run) -> bool:
     return bool(_Expression(wrapped.group(1) if wrapped else condition, run).value())
 
 
+def run_script(step: dict, run: Run, prelude: str = "") -> subprocess.CompletedProcess[str]:
+    """The step's script on ``run``, as GitHub runs it: the ``${{ }}`` of its env and script evaluated, then ``bash -e``.
+
+    Only PATH and the step's env, no profile or rc file, the temp directory as working directory; ``prelude`` goes ahead of
+    the script (a stand-in for a command, say).
+    """
+    env = {"PATH": os.environ.get("PATH", os.defpath)} | {name: substitute(value, run) for name, value in (step.get("env") or {}).items()}
+    command = ["bash", "--noprofile", "--norc", "-e", "-c", prelude + substitute(step.get("run"), run)]
+    return subprocess.run(command, env=env, cwd=tempfile.gettempdir(), capture_output=True, encoding="utf-8", timeout=30, check=False)
+
+
 # ---------------------------------------------------------------------------
 # release.yml, R12: the image tags are the user guide's
 # ---------------------------------------------------------------------------
@@ -513,7 +541,8 @@ GUIDE_TAGS = {
 # variant has no tag there, none is invented for it, and build_guard_violations' guard skips its build.
 MAIN_RUN_TAGS = {MAIN: {"full": set(), "light": {"latest"}}}
 # The developer's rule: a GitHub prerelease publishes only its own tags and never moves `latest`, also on
-# a plain vX.Y.Z git tag, where metadata-action's own semver-prerelease skip does not apply.
+# a plain vX.Y.Z git tag, where metadata-action's own semver-prerelease skip does not apply. That run now
+# fails first, at the tag guard (TAG_GUARD): this is the second line, should the guard ever be weakened.
 PRERELEASE_TAGS = {
     RC: {"full": {f"{VERSION}-rc.1"}, "light": {f"{VERSION}-rc.1-light"}},
     PLAIN_PRERELEASE: {"full": {VERSION}, "light": {f"{VERSION}-light"}},
@@ -828,9 +857,7 @@ def edits_release_notes(step: dict) -> bool:
 
 def release_notes(step: dict, run: Run) -> tuple[str, str | None]:
     """What the step appends to the release notes on ``run``, and why its script failed if it did: ``bash -e``, as GitHub runs it."""
-    env = {"PATH": os.environ.get("PATH", os.defpath)} | {name: substitute(value, run) for name, value in (step.get("env") or {}).items()}
-    command = ["bash", "--noprofile", "--norc", "-e", "-c", FAKE_GH + substitute(step.get("run"), run)]
-    result = subprocess.run(command, env=env, cwd=tempfile.gettempdir(), capture_output=True, encoding="utf-8", timeout=30, check=False)
+    result = run_script(step, run, FAKE_GH)
     failure = (result.stderr.strip() or f"exit status {result.returncode}") if result.returncode else None
     return result.stdout, failure
 
@@ -861,6 +888,211 @@ def release_notes_violations(workflow_text: str) -> list[str]:
             problems.append(f"on a {run.name}, the release notes pull {sorted(pulls.values())}, not {sorted(expected)}")
         problems += [f"on a {run.name}, the comment by `docker pull …:latest` does not name the light variant: {_comment_by(lines, n)!r}" for n, tag in pulls.items() if tag == "latest" and "light" not in _comment_by(lines, n).lower()]
     return problems
+
+
+# ---------------------------------------------------------------------------
+# release.yml, R12: a release's tag matches its kind
+# ---------------------------------------------------------------------------
+
+RELEASE_TAG = "github.event.release.tag_name"
+RELEASE_PRERELEASE = "github.event.release.prerelease"
+# What the guard reads of the release, each only through an env variable: its tag and GitHub's prerelease flag.
+GUARD_INPUTS = {RELEASE_TAG: "tag", RELEASE_PRERELEASE: "prerelease flag"}
+NON_ZERO_EXIT = re.compile(r"\bexit\s+[1-9]\d*\b")
+# The tag guard on each run of the model: run on every release and on no other run, it passes a tag that matches
+# the release's kind and fails one that does not, the plain-tag prerelease and the rc-tagged stable release. That
+# is the run's first failure, nothing has run before it. PRERELEASE_TAGS, DEPLOYS and NOTES_PULLS still follow the
+# plain-tag prerelease past it, the second line should the guard ever be weakened. The rc-tagged stable release
+# has none: the docs deploy and the release notes read only the prerelease flag, so past the guard it would deploy
+# the docs site and print a `:latest` line, while `latest` and the update prompt ignore its semver prerelease tag.
+TAG_GUARD = {STABLE: "success", RC: "success", PLAIN_PRERELEASE: "failure", RC_AS_STABLE: "failure", NIGHTLY: "skipped", MAIN: "skipped"}
+# Each kind of release: GitHub's prerelease flag, the tag the developer's rules give it, and the title of the
+# guard's ::error on any other tag, which names on the run page the rule the tag broke.
+RELEASE_KINDS = {"prerelease": (True, "vX.Y.Z-rc.N", "Prerelease tag"), "stable release": (False, "vX.Y.Z", "Release tag")}
+# GitHub's error command, ::error title=…,file=…::message: its parameters end at the first "::".
+ERROR_COMMAND = re.compile(r"::error(?: (?P<parameters>.*?))?::")
+# The developer's rules as tags, the "v" optional and the whole string: a prerelease is tagged vX.Y.Z-rc.N, a
+# stable release a plain vX.Y.Z. A newline within or after the tag is part of it, not a line of its own that
+# happens to match (grep accepts both), and quotes or $( ) are text, never shell. By test id: the kind of
+# release, its tag, and whether the guard passes it (True) or fails it (False).
+TAG_VERDICTS = {
+    "prerelease-rc": ("prerelease", "v1.2.0-rc.1", True),
+    "prerelease-rc-without-v": ("prerelease", "1.2.0-rc.12", True),
+    "prerelease-rc-zero-wide-fields": ("prerelease", "v10.20.30-rc.0", True),
+    "prerelease-plain": ("prerelease", "v1.2.0", False),
+    "prerelease-beta": ("prerelease", "v1.2.0-beta.1", False),
+    "prerelease-rc-without-number": ("prerelease", "v1.2.0-rc", False),
+    "prerelease-rc-extra-field": ("prerelease", "v1.2.0-rc.1.2", False),
+    "prerelease-capital-v": ("prerelease", "V1.2.0-rc.1", False),
+    "prerelease-leading-space": ("prerelease", " v1.2.0-rc.1", False),
+    "prerelease-quote-injection": ("prerelease", "v1.2.0-rc.1'; echo pwned; '", False),
+    "prerelease-embedded-newline": ("prerelease", "v1.2.0-rc.1\nv9", False),
+    "prerelease-trailing-newline": ("prerelease", "v1.2.0-rc.1\n", False),
+    "prerelease-command-substitution": ("prerelease", "$(id)", False),
+    "prerelease-empty": ("prerelease", "", False),
+    "stable-plain": ("stable release", "v1.2.0", True),
+    "stable-plain-without-v": ("stable release", "1.2.0", True),
+    "stable-plain-wide-fields": ("stable release", "v10.20.30", True),
+    "stable-rc": ("stable release", "v1.2.0-rc.1", False),
+    "stable-beta": ("stable release", "v1.2.0-beta.1", False),
+    "stable-without-patch": ("stable release", "v1.2", False),
+    "stable-extra-field": ("stable release", "v1.2.0.1", False),
+    "stable-capital-v": ("stable release", "V1.2.0", False),
+    "stable-leading-space": ("stable release", " v1.2.0", False),
+    "stable-quote-injection": ("stable release", "v1.2.0'; echo pwned; '", False),
+    "stable-embedded-newline": ("stable release", "v1.2.0\nv9", False),
+    "stable-trailing-newline": ("stable release", "v1.2.0\n", False),
+    "stable-command-substitution": ("stable release", "$(id)", False),
+    "stable-empty": ("stable release", "", False),
+}
+
+
+def _reads_release_tag(step: dict) -> bool:
+    """Whether the release's tag reaches the step's script: a ``${{ }}`` that reads it, in an env value or in the script itself."""
+    texts = [*map(str, (step.get("env") or {}).values()), str(step.get("run") or "")]
+    return any(RELEASE_TAG in expression for text in texts for expression in EXPRESSION.findall(text))
+
+
+def is_tag_guard(step: dict) -> bool:
+    """A step that can fail a release on its tag: its script reads the tag and exits non-zero (quoted text aside)."""
+    return _reads_release_tag(step) and any(NON_ZERO_EXIT.search(QUOTED.sub("_", line)) for line in _logical_lines(step))
+
+
+def _the_tag_guard(steps: list[dict]) -> tuple[int | None, list[str]]:
+    """The index of the one tag guard, or why there is not exactly one."""
+    found = _indexes(steps, is_tag_guard)
+    if len(found) == 1:
+        return found[0], []
+    if not found:
+        return None, [f"no step reads {RELEASE_TAG} and exits non-zero: a release goes on to build and publish whatever its tag"]
+    return None, [f"{len(found)} steps read {RELEASE_TAG} and exit non-zero (steps {found}): this test reads exactly one tag guard"]
+
+
+def _what(step: dict) -> str:
+    """A step, for a message: the action it uses, else its name."""
+    return (step.get("uses") or "").partition("@")[0] or repr(step.get("name") or "an unnamed step")
+
+
+def _tag_guard_trigger_violations(guard: int, step: dict) -> list[str]:
+    """The guard's ``if:`` holds on the model's releases, of either kind, and on no other run."""
+    condition = f"if: {step['if']!r}" if "if" in step else "no if:"
+    problems = []
+    for run, outcome in TAG_GUARD.items():
+        runs = holds(step.get("if"), run)
+        if runs != (outcome != "skipped"):
+            problems.append(f"the tag guard (step {guard}) {'runs' if runs else 'does not run'} on a {run.name} ({condition}): it must run on every release and on no other run")
+    return problems
+
+
+def _env_reading(step: dict, path: str) -> list[str]:
+    """The step's env variables whose value is exactly ``${{ <path> }}``."""
+    exactly = re.compile(r"\$\{\{\s*" + re.escape(path) + r"\s*\}\}")
+    return [name for name, value in (step.get("env") or {}).items() if exactly.fullmatch(str(value).strip())]
+
+
+def _tag_guard_input_violations(guard: int, step: dict) -> list[str]:
+    """The tag and the prerelease flag reach the guard's script only through env variables: a ``${{ }}`` in the script pastes its value into the shell source."""
+    problems = []
+    pasted = list(dict.fromkeys(match.group(0) for match in EXPRESSION.finditer(str(step.get("run") or ""))))
+    if pasted:
+        problems.append(f"the tag guard (step {guard}) interpolates {pasted} into its script, where a value is shell source: it must read the release through env")
+    for path, what in GUARD_INPUTS.items():
+        names = _env_reading(step, path)
+        if not names:
+            problems.append(f"no env variable of the tag guard (step {guard}) is exactly ${{{{ {path} }}}}")
+        elif not any(re.search(r"\$\{?" + re.escape(name) + r"\b", line) for name in names for line in _logical_lines(step)):
+            problems.append(f"the tag guard's script (step {guard}) never reads {names}: it does not check the {what} it is given")
+    return problems
+
+
+def tag_guard_violations(workflow_text: str) -> list[str]:
+    """The one step that reads the release's tag and exits non-zero runs on every release and on no other run, and reads the tag and the prerelease flag only through env."""
+    steps = pipeline_steps(workflow_text)
+    guard, problems = _the_tag_guard(steps)
+    if guard is None:
+        return problems
+    return _tag_guard_trigger_violations(guard, steps[guard]) + _tag_guard_input_violations(guard, steps[guard])
+
+
+def tag_guard_position_violations(workflow_text: str) -> list[str]:
+    """The guard is the job's first step: a bad tag fails the job before it checks out, installs or caches anything."""
+    steps = pipeline_steps(workflow_text)
+    guard, problems = _the_tag_guard(steps)
+    if guard is not None and guard > 0:
+        problems.append(f"the tag guard is step {guard}, after {', '.join(_what(step) for step in steps[:guard])}: it must come before every other step")
+    return problems
+
+
+def _error_titles(lines: list[str]) -> list[str | None]:
+    """The ``title`` of each ``::error`` line, None for one without."""
+    titles = []
+    for line in lines:
+        if command := ERROR_COMMAND.match(line):
+            parameters = dict(field.split("=", 1) for field in (command["parameters"] or "").split(",") if "=" in field)
+            titles.append(parameters.get("title"))
+    return titles
+
+
+def _verdict_problems(step: dict, kind: str, tag: str, accepted: bool) -> list[str]:
+    """The guard's script on a ``kind`` of release tagged ``tag``: exit status 0 if ``accepted``, else non-zero with an ``::error`` line titled for the kind."""
+    prerelease, rule, title = RELEASE_KINDS[kind]
+    result = run_script(step, Run(f"{kind} tagged {tag!r}", "release", tag, prerelease=prerelease))
+    lines = f"{result.stdout}\n{result.stderr}".splitlines()
+    release = f"a {kind} tagged {tag!r}"
+    if accepted:
+        return [f"the tag guard rejects {release}: {' | '.join(line for line in lines if line.strip()) or f'exit status {result.returncode}'}"] if result.returncode else []
+    if not result.returncode:
+        return [f"the tag guard accepts {release}: a {kind} is tagged {rule}"]
+    titles = _error_titles(lines)
+    if not titles:
+        return [f"the tag guard fails {release} without an ::error line, so the run page gives no reason: {lines}"]
+    if set(titles) != {title}:
+        return [f"the tag guard fails {release} under the ::error title {titles}, not {title!r}: the run page names the wrong rule"]
+    return []
+
+
+def tag_verdict_violations(workflow_text: str, verdicts=None) -> list[str]:
+    """The guard's script, run in bash on a release for each of ``verdicts`` (``(kind, tag, accepted)``, all of TAG_VERDICTS by default)."""
+    steps = pipeline_steps(workflow_text)
+    guard, problems = _the_tag_guard(steps)
+    if guard is None:
+        return problems
+    return [problem for kind, tag, accepted in verdicts or TAG_VERDICTS.values() for problem in _verdict_problems(steps[guard], kind, tag, accepted)]
+
+
+def first_failure(steps: list[dict], run: Run) -> tuple[int | None, list[int]]:
+    """Where ``run`` first fails, and the steps that run before it.
+
+    A tag guard is the one step this model fails (every other is taken to pass), so the walk ends at the last one: past it, a
+    ``!cancelled()`` or ``always()`` would need the job's status, which ``holds`` refuses to guess.
+    """
+    guards, ran = _indexes(steps, is_tag_guard), []
+    for i in range(max(guards, default=-1) + 1):
+        if not holds(steps[i].get("if"), run):
+            continue
+        if i in guards and run_script(steps[i], run).returncode:
+            return i, ran
+        ran.append(i)
+    return None, ran
+
+
+def first_failure_violations(workflow_text: str) -> list[str]:
+    """On each run of the model, the job fails where TAG_GUARD says: only the plain-tag prerelease and the rc-tagged stable release, at the guard, with nothing run before it."""
+    steps = pipeline_steps(workflow_text)
+    problems = []
+    for run, outcome in TAG_GUARD.items():
+        failed_at, ran = first_failure(steps, run)
+        if outcome != "failure":
+            if failed_at is not None:
+                problems.append(f"on a {run.name}, the job fails at the tag guard (step {failed_at})")
+        elif failed_at is None:
+            problems.append(f"on a {run.name}, no step fails the job: it goes on to build and publish")
+        elif ran:
+            problems.append(f"on a {run.name}, {', '.join(_what(steps[i]) for i in ran)} run before the tag guard (step {failed_at}) fails the job")
+    return problems
+
+
+TAG_GUARD_CHECKS = (tag_guard_violations, tag_guard_position_violations, tag_verdict_violations, first_failure_violations)
 
 
 # ---------------------------------------------------------------------------
@@ -1070,6 +1302,13 @@ GALLERY_COMMAND = r"(mkdocs gallery[^\n]*)"  # the gallery's command line, to ch
 LATEST_COMMENT = r"#[^\\]*(?=\\ndocker pull \S+:latest\\n)"  # the snippet's comment above `docker pull …:latest`
 LIGHT_FLAVOR_LATEST = r"latest=[^\n]*"  # the light metadata's flavor line, whatever its value
 LATEST_PRINTF_IN_IF = r'[ \t]*if \[ "\$PRERELEASE" != "true" \]; then\n([^\n]*\n)[ \t]*fi\n'  # the `latest` printf, in its if
+RC_SUFFIX = re.escape(r"-rc\.[0-9]+$")  # the prerelease regex past the patch number, to its end anchor
+STABLE_TAIL = re.escape(r"\.[0-9]+\.[0-9]+") + r"(?=\$)"  # the stable regex's .minor.patch, right before its end anchor (the prerelease one has -rc.N there)
+WHOLE_STRING_TEST = r'\[\[ ("\$\w+") =~ (\S+) \]\]'  # each of the tag guard's [[ "$VAR" =~ regex ]]: the variable, the regex
+TESTED_VARIABLE = r'"\$\w+"(?= =~)'  # the variable each of the tag guard's [[ =~ ]] tests
+FLAG_VARIABLE = r'"\$\w+"(?= = "true" \])'  # the variable the tag guard compares to "true": the prerelease flag
+ELSE_BRANCH = r"(?m)^([ \t]*)else\n(?:\1[ \t]+.*\n)+"  # the tag guard's else branch: its line and the lines indented below it
+PRERELEASE_ONLY = "github.event_name == 'release' && github.event.release.prerelease"  # the tag guard's if: before the stable branch
 
 
 def _the_index(steps: list[dict], predicate) -> int:
@@ -1102,6 +1341,13 @@ def rewrite(predicate, pattern: str, replacement: str, field: str = "run", times
 def set_key(predicate, key: str, value):
     def mutation(steps: list[dict]) -> None:
         steps[_the_index(steps, predicate)][key] = value
+
+    return mutation
+
+
+def drop_key(predicate, key: str):
+    def mutation(steps: list[dict]) -> None:
+        del steps[_the_index(steps, predicate)][key]
 
     return mutation
 
@@ -1175,6 +1421,16 @@ def drop_gallery_evidence(steps: list[dict]) -> None:
 def move_gallery_evidence_before_gallery(steps: list[dict]) -> None:
     step = steps.pop(_the_index(steps, uploads_gallery_evidence))
     steps.insert(_the_index(steps, is_gallery), step)
+
+
+def drop_tag_guard(steps: list[dict]) -> None:
+    del steps[_the_index(steps, is_tag_guard)]
+
+
+def move_tag_guard_after_the_caches(steps: list[dict]) -> None:
+    """The guard moved after checkout, the setup steps and the caches: still there, still failing a bad tag, too late."""
+    guard = steps.pop(_the_index(steps, is_tag_guard))
+    steps.insert(max(_indexes(steps, is_cache)) + 1, guard)
 
 
 def assert_rejected(problems: list[str], *fragments: str) -> None:
@@ -1260,6 +1516,10 @@ class TestReleaseWorkflow:
             build_guard_violations,
             build_order_violations,
             release_notes_violations,
+            tag_guard_violations,
+            tag_guard_position_violations,
+            tag_verdict_violations,
+            first_failure_violations,
         ],
         ids=lambda check: check.__name__,
     )
@@ -1467,6 +1727,60 @@ class TestPrereleases:
     )
     def test_prerelease_rule_fails_on_a_broken_copy(self, workflow_text, mutation, check, expected):
         assert_rejected(check(mutate_steps(workflow_text, mutation)), *expected)
+
+
+class TestPrereleaseTagGuard:
+    """The developer's rules: a prerelease is tagged vX.Y.Z-rc.N and never promoted, the stable release is published on a new, plain vX.Y.Z tag; a release whose tag does not match its kind fails the job at once."""
+
+    def test_the_tag_guard_runs_on_every_release_and_reads_tag_and_flag_through_env(self, workflow_text):
+        """Found by what it does: the one step whose script reads the release's tag and exits non-zero. It runs on every release, of either kind, and on no other run."""
+        assert tag_guard_violations(workflow_text) == []
+
+    def test_the_tag_guard_is_the_first_step(self, workflow_text):
+        assert tag_guard_position_violations(workflow_text) == []
+
+    @pytest.mark.parametrize(("kind", "tag", "accepted"), list(TAG_VERDICTS.values()), ids=list(TAG_VERDICTS))
+    def test_the_tag_guard_verdict(self, workflow_text, kind, tag, accepted):
+        """The guard's script in bash, the tag and the prerelease flag in its env: exit status 0 for a tag that matches the release's kind, else non-zero with an ::error line titled for that kind."""
+        assert tag_verdict_violations(workflow_text, [(kind, tag, accepted)]) == []
+
+    def test_a_tag_of_the_wrong_kind_fails_first_at_the_tag_guard(self, workflow_text):
+        """The model's runs: the rc prerelease and the stable release pass the guard, the plain-tag prerelease and the rc-tagged stable release fail there before anything else has run, the others skip it."""
+        assert first_failure_violations(workflow_text) == []
+
+    @pytest.mark.parametrize(
+        ("mutation", "expected"),
+        [
+            (drop_tag_guard, (f"no step reads {RELEASE_TAG} and exits non-zero", "on a prerelease v1.2.0 (plain tag), no step fails the job", "on a stable release v1.2.0-rc.1 (rc tag), no step fails the job")),
+            # The if: before this round: a stable release skips the guard, whatever its tag.
+            (set_key(is_tag_guard, "if", PRERELEASE_ONLY), (f"does not run on a stable release v1.2.0 (if: {PRERELEASE_ONLY!r})", "on a stable release v1.2.0-rc.1 (rc tag), no step fails the job")),
+            (drop_key(is_tag_guard, "if"), ("runs on a nightly (no if:)", "runs on a manual run from main (no if:)", "on a nightly, the job fails at the tag guard", "on a manual run from main, the job fails at the tag guard")),
+            # The prerelease regex loosened: any suffix passes as a release candidate.
+            (rewrite(is_tag_guard, RC_SUFFIX, "-.+$"), ("the tag guard accepts a prerelease tagged 'v1.2.0-beta.1'", "the tag guard accepts a prerelease tagged 'v1.2.0-rc'")),
+            # The grep version, back in both branches: it matches any one line of the tag, so a newline smuggles a bad tag through.
+            (
+                rewrite(is_tag_guard, WHOLE_STRING_TEST, r"printf '%s\\n' \1 | grep -Eq '\2'", times=2),
+                ("the tag guard accepts a prerelease tagged 'v1.2.0-rc.1\\nv9'", "the tag guard accepts a prerelease tagged 'v1.2.0-rc.1\\n'", "the tag guard accepts a stable release tagged 'v1.2.0\\nv9'", "the tag guard accepts a stable release tagged 'v1.2.0\\n'"),
+            ),
+            (rewrite(is_tag_guard, TESTED_VARIABLE, '"${{ github.event.release.tag_name }}"', times=2), ("the tag guard (step 0) interpolates ['${{ github.event.release.tag_name }}'] into its script",)),
+            (rewrite(is_tag_guard, FLAG_VARIABLE, '"${{ github.event.release.prerelease }}"'), ("the tag guard (step 0) interpolates ['${{ github.event.release.prerelease }}'] into its script",)),
+            # The prerelease check alone, as before this round: a stable release passes, whatever its tag.
+            (rewrite(is_tag_guard, ELSE_BRANCH, ""), ("on a stable release v1.2.0-rc.1 (rc tag), no step fails the job", "the tag guard accepts a stable release tagged 'v1.2.0-rc.1'")),
+            # A suffix allowed on a stable tag: the release candidate's tag, published as stable, passes.
+            (rewrite(is_tag_guard, STABLE_TAIL, r"\g<0>(-.+)?"), ("the tag guard accepts a stable release tagged 'v1.2.0-rc.1'", "the tag guard accepts a stable release tagged 'v1.2.0-beta.1'", "on a stable release v1.2.0-rc.1 (rc tag), no step fails the job")),
+            # The stable branch's error copied from the prerelease one, title included: the run page names the wrong rule.
+            (rewrite(is_tag_guard, re.escape("title=Release tag::"), "title=Prerelease tag::"), ("the tag guard fails a stable release tagged 'v1.2.0-rc.1' under the ::error title ['Prerelease tag'], not 'Release tag'",)),
+            (
+                move_tag_guard_after_the_caches,
+                ("after actions/checkout, actions/setup-python", "actions/cache: it must come before every other step", "on a prerelease v1.2.0 (plain tag), actions/checkout", "on a stable release v1.2.0-rc.1 (rc tag), actions/checkout", "run before the tag guard"),
+            ),
+        ],
+        ids=["removed", "if-prerelease-only", "if-dropped", "any-suffix", "grep-restored", "tag-in-script", "prerelease-in-script", "stable-branch-dropped", "stable-regex-loosened", "stable-error-titled-as-prerelease", "after-checkout-and-caches"],
+    )
+    def test_tag_guard_check_fails_on_a_broken_copy(self, workflow_text, mutation, expected):
+        mutated = mutate_steps(workflow_text, mutation)
+
+        assert_rejected([problem for check in TAG_GUARD_CHECKS for problem in check(mutated)], *expected)
 
 
 class TestDockerfile:

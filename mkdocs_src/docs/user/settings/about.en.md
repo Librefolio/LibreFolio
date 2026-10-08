@@ -29,7 +29,9 @@ A share button opens a **Share on …** dialog with a **Suggested message** writ
 network, in the language of the interface. Whatever the language, every message ends with the
 same five hashtags: `#LibreFolio #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance`.
 
-<!-- [Screenshot Placeholder: support/social-share-modal — the Share on Reddit dialog with the Suggested title, the Suggested message ending with the five hashtags, and the Close and Copy and go buttons] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="support" data-name="social-share-modal" alt="Share on Reddit dialog with the suggested title, a message ending in the five hashtags, and Copy and go">
+</div>
 
 **Copy and go** copies the message, followed by the link to the project's public website, and
 opens the social network in a new tab: LibreFolio stays open in its own tab. Each network accepts
@@ -62,7 +64,9 @@ The popup has no close button, and clicking outside it or pressing <kbd>Esc</kbd
 dismiss it: choose **Buy Me a Coffee**, which also closes it, or **Maybe later**. Sharing from the
 popup opens the share dialog and leaves the popup open behind it.
 
-<!-- [Screenshot Placeholder: support/donation-popup — the donation popup shown after sign-in, with Buy Me a Coffee, the five share buttons, and Maybe later] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="support" data-name="donation-popup" alt="Donation popup after sign-in, with Buy Me a Coffee, the five share buttons and Maybe later">
+</div>
 
 ---
 
@@ -100,7 +104,9 @@ The snapshot describes one server process, not the whole instance, and does not 
 reload it to read it again. The [Tools overview](../tools/index.md) explains how to read these
 counters.
 
-<!-- [Screenshot Placeholder: settings/about-tool-diagnostics — the Tools panel inside Plugin diagnostics, with the PAC allocator entry and the Tool diagnostics collapsible open] -->
+<div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="about-tool-diagnostics" alt="Tools panel in Plugin diagnostics, with the PAC allocator and Tool diagnostics open">
+</div>
 
 
 ---

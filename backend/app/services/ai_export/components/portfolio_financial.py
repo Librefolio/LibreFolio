@@ -296,7 +296,7 @@ def _build_portfolio_provenance(context: BuildContext, dependencies: Mapping[str
         broker_scope=list(scope.broker_scope),
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
-        valuation_semantics="wac_per_unit/original_cost/open_cost_basis are Weighted Average Cost; current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > MISSING).",
+        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, converted at the sale date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect.",
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
             ProvenanceNote(subject="period", text=f"Period is inclusive [{scope.period_start.isoformat()}, {scope.period_end.isoformat()}]; snapshot_as_of == period_end."),
@@ -655,7 +655,7 @@ PORTFOLIO_ALLOCATIONS_CASH_COMPONENT = ComponentSpec(
 
 PORTFOLIO_PROVENANCE_COMPONENT = ComponentSpec(
     component_id="portfolio.provenance",
-    version=1,
+    version=2,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioProvenancePayload,
     builder=_build_portfolio_provenance,

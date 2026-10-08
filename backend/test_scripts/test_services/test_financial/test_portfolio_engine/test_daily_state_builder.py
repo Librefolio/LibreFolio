@@ -16,6 +16,7 @@ from backend.app.services.portfolio_engine import (
     ValuationSource,
 )
 from backend.app.services.price_resolver import build_asset_price_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 
 # =============================================================================
 # HELPERS
@@ -85,7 +86,8 @@ def _builder(**overrides) -> DailyStateBuilder:
     """Create a DailyStateBuilder with sensible defaults, overriding any kwarg.
 
     Mirrors PortfolioCalculationEngine by building the per-asset resolver ``mark_series`` from the
-    given ``price_map`` + trades unless the test supplies its own ``mark_series``.
+    given ``price_map`` + trades, and the ``average_costs`` from the transactions with the given
+    ``fx_rate_map``, unless the test supplies its own.
     """
     defaults = {
         "classified_txs": [],
@@ -109,6 +111,15 @@ def _builder(**overrides) -> DailyStateBuilder:
             defaults["asset_currencies"],
             defaults["quote_base_map"],
             defaults.get("split_linked_tx_ids"),
+        )
+    if "average_costs" not in defaults:
+        defaults["average_costs"] = engine_average_costs(
+            defaults["classified_txs"],
+            asset_currencies=defaults["asset_currencies"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
+            split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
         )
     return DailyStateBuilder(**defaults)
 
@@ -633,49 +644,94 @@ class TestPrivateValuationHelpers:
         assert valuation.missing_fx_pair is None
 
 
-class TestPrivateCostHelpers:
-    """Direct unit tests for unit-cost helper branches."""
+class TestCostConversionThroughAverageCosts:
+    """The conversions the removed ``_buy_unit_cost`` made, now through ``average_costs``.
 
-    def test_buy_unit_cost_converts_buy_into_target_currency(self):
-        tx = _tx(
-            id=100,
-            type="BUY",
-            dt="2025-01-02",
-            amount="-100",
-            currency="USD",
-            quantity="5",
-            asset_id=100,
-        )
+    Every acquisition is converted at its own date and the builder replays that historical
+    cost: ``open_cost_basis`` and the position's ``cost_basis`` are never re-converted at a
+    later day's rate. ``wac`` is per unit in the target currency, ``wac_asset`` in the asset's.
+    """
+
+    def test_buy_paid_in_another_currency_costs_its_amount_at_that_days_rate(self):
+        # EUR asset bought with 100 USD on 01-02: cost = 100 USD × 0.9 = 90 EUR (18 EUR/unit),
+        # whatever the USD rate does afterwards (0.5 on 01-03, the date of the end snapshot).
+        buy = _tx(id=100, type="BUY", dt="2025-01-02", amount="-100", currency="USD", quantity="5", asset_id=100)
         builder = _builder(
+            classified_txs=[_ctxn(buy)],
             asset_currencies={100: "EUR"},
-            fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.9")},
-        )
-
-        unit_cost = builder._buy_unit_cost(tx)
-
-        assert unit_cost == Decimal("18")  # 100 USD * 0.9 / 5
-
-    def test_buy_unit_cost_transfer_override_uses_cross_rate(self):
-        tx = _tx(
-            id=101,
-            type="TRANSFER",
-            dt="2025-01-02",
-            quantity="4",
-            asset_id=101,
-            cost_basis_override="50",
-            cost_basis_currency="USD",
-        )
-        builder = _builder(
-            asset_currencies={101: "GBP"},
             fx_rate_map={
-                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.8"),
-                ("GBP", "EUR", date(2025, 1, 2)): Decimal("1.6"),
+                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.9"),
+                ("USD", "EUR", date(2025, 1, 3)): Decimal("0.5"),
             },
         )
 
-        unit_cost = builder._buy_unit_cost(tx)
+        result = builder.build()
 
-        assert unit_cost == Decimal("25")  # 50 USD/unit * (0.8 / 1.6) = 25 GBP/unit
+        assert {s.date: s.open_cost_basis for s in result.daily_states} == {date(2025, 1, 1): Decimal("0"), date(2025, 1, 2): Decimal("90"), date(2025, 1, 3): Decimal("90")}
+        (position,) = result.position_states_end
+        assert position.cost_basis == Decimal("90")
+        assert position.wac == Decimal("18")  # 100 USD × 0.9 / 5
+        assert position.wac_currency == "EUR"
+        assert position.cost_complete is True
+        assert result.missing_fx == {}
+
+    def test_transfer_override_in_a_third_currency_costs_the_same_in_both_legs(self):
+        # GBP asset received with a 50 USD/unit override, 4 units on 01-02:
+        #   report leg: 200 USD × 0.8 = 160 EUR (40 EUR/unit);
+        #   asset leg:  160 EUR × (1 / 1.6) = 100 GBP (25 GBP/unit, the old cross rate 0.8 / 1.6).
+        # 01-03 is re-evaluated (a GBP quote lands): GBP/EUR is 2.0 there, the cost stays 160 EUR.
+        transfer_in = _tx(id=101, type="TRANSFER", dt="2025-01-02", quantity="4", asset_id=101, cost_basis_override="50", cost_basis_currency="USD")
+        builder = _builder(
+            classified_txs=[_ctxn(transfer_in)],
+            asset_currencies={101: "GBP"},
+            price_map={101: [(date(2025, 1, 3), Decimal("30"), "GBP")]},
+            fx_rate_map={
+                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.8"),
+                ("GBP", "EUR", date(2025, 1, 2)): Decimal("1.6"),
+                ("GBP", "EUR", date(2025, 1, 3)): Decimal("2.0"),
+            },
+        )
+
+        result = builder.build()
+
+        assert {s.date: s.open_cost_basis for s in result.daily_states} == {date(2025, 1, 1): Decimal("0"), date(2025, 1, 2): Decimal("160"), date(2025, 1, 3): Decimal("160")}
+        (position,) = result.position_states_end
+        assert position.cost_basis == Decimal("160")
+        assert position.wac == Decimal("40")
+        assert position.wac_currency == "EUR"
+        assert position.asset_currency == "GBP"
+        assert position.wac_asset == Decimal("25")
+        assert position.cost_complete is True
+        assert position.market_value == Decimal("240")  # 4 × 30 GBP × 2.0
+        assert position.unrealized_pnl == Decimal("80")  # against the historical 160, not 100 GBP × 2.0 = 200
+        assert result.missing_fx == {}
+
+    def test_buy_paid_in_the_target_currency_costs_the_amount_exactly_for_a_foreign_asset(self):
+        # Issue #32: USD asset bought with 500 EUR (the target currency) costs exactly 500 EUR.
+        # The report leg needs no rate — the map has no EUR/EUR rate and nothing asks for one;
+        # the USD rates only give the asset leg (500 EUR / 0.8 = 625 USD) and never move the EUR cost.
+        buy = _tx(id=102, type="BUY", dt="2025-01-02", amount="-500", currency="EUR", quantity="4", asset_id=102)
+        builder = _builder(
+            classified_txs=[_ctxn(buy)],
+            asset_currencies={102: "USD"},
+            price_map={102: [(date(2025, 1, 3), Decimal("150"), "USD")]},
+            fx_rate_map={
+                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.8"),
+                ("USD", "EUR", date(2025, 1, 3)): Decimal("0.5"),
+            },
+        )
+
+        result = builder.build()
+
+        assert {s.date: s.open_cost_basis for s in result.daily_states} == {date(2025, 1, 1): Decimal("0"), date(2025, 1, 2): Decimal("500"), date(2025, 1, 3): Decimal("500")}
+        (position,) = result.position_states_end
+        assert position.cost_basis == Decimal("500")
+        assert position.wac == Decimal("125")
+        assert position.wac_currency == "EUR"
+        assert position.asset_currency == "USD"
+        assert position.wac_asset == Decimal("156.25")  # 625 USD / 4
+        assert position.cost_complete is True
+        assert result.missing_fx == {}  # no conversion failed: in particular no EUR/EUR
 
 
 class TestPrivateInTransitHelper:
@@ -711,7 +767,11 @@ class TestPrivateInTransitHelper:
             ],
             price_map={100: [(date(2025, 1, 2), Decimal("50"), "EUR")]},
             quote_base_map={100: None},
-            fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.9")},
+            fx_rate_map={
+                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.9"),
+                # D6: the frozen cost is converted at the arrival leg's date, 2025-01-04
+                ("USD", "EUR", date(2025, 1, 4)): Decimal("0.75"),
+            },
             asset_types={100: "ETF"},
             asset_classifications={100: None},
             date_from=date(2025, 1, 1),
@@ -723,8 +783,86 @@ class TestPrivateInTransitHelper:
 
         assert it_cash == Decimal("67.5")  # 300 USD * 0.9 * 0.25
         assert it_asset_mv == Decimal("100")  # 4 * 50 * 0.5
-        assert it_asset_cb == Decimal("36")  # 80 USD * 0.9 * 0.5
+        # D6: historical cost at the arrival-date rate, 80 USD * 0.75 * 0.5 (was 36 = 80 * 0.9 * 0.5 at the transit day's rate)
+        assert it_asset_cb == Decimal("30")
         assert missing_fx == set()
+        assert builder._missing_fx == {}
+
+    def test_compute_in_transit_cost_is_not_reconverted_on_each_transit_day(self):
+        """D6: CBO × quantity is converted once, at the arrival date, so the in-transit cost is
+        the same on every transit day while the USD rate moves; cash in transit still follows
+        each day's rate."""
+        cash_dep = _tx(id=200, dt="2025-01-01", type="CASH_TRANSFER", amount="-300", currency="USD")
+        cash_arr = _tx(id=201, broker_id=20, dt="2025-01-04", type="CASH_TRANSFER", amount="300", currency="USD")
+        asset_dep = _tx(id=202, dt="2025-01-01", type="TRANSFER", quantity="-4", asset_id=100)
+        asset_arr = _tx(id=203, broker_id=20, dt="2025-01-04", type="TRANSFER", quantity="4", asset_id=100)
+        builder = _builder(
+            in_transit_intervals=[
+                InTransitInterval(start_date=date(2025, 1, 2), end_date=date(2025, 1, 3), tx_type="cash", departure_leg=cash_dep, arrival_leg=cash_arr, share=Decimal("1")),
+                InTransitInterval(
+                    start_date=date(2025, 1, 2),
+                    end_date=date(2025, 1, 3),
+                    tx_type="asset",
+                    departure_leg=asset_dep,
+                    arrival_leg=asset_arr,
+                    share=Decimal("1"),
+                    asset_id=100,
+                    cost_basis_amount=Decimal("20"),
+                    cost_basis_currency="USD",
+                ),
+            ],
+            price_map={100: [(date(2025, 1, 2), Decimal("50"), "EUR")]},
+            fx_rate_map={
+                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.9"),
+                ("USD", "EUR", date(2025, 1, 3)): Decimal("0.6"),
+                ("USD", "EUR", date(2025, 1, 4)): Decimal("0.75"),
+            },
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 4),
+        )
+
+        cash_day2, _, cost_day2 = builder._compute_in_transit(date(2025, 1, 2), set())
+        cash_day3, _, cost_day3 = builder._compute_in_transit(date(2025, 1, 3), set())
+
+        assert (cash_day2, cash_day3) == (Decimal("270"), Decimal("180"))  # 300 USD at each day's rate
+        assert cost_day2 == cost_day3 == Decimal("60")  # 80 USD * 0.75, the arrival-date rate, on both days
+        assert builder._missing_fx == {}
+
+    def test_compute_in_transit_missing_arrival_rate_is_a_movement_failure_dated_at_arrival(self):
+        """No USD rate at the arrival date: the in-transit cost is left out (never re-converted at
+        the transit day's rate), and the failure is recorded as a movement conversion — pair and
+        arrival date in ``builder._missing_fx`` — not as a valuation failure of the day."""
+        asset_dep = _tx(id=202, dt="2025-01-01", type="TRANSFER", quantity="-4", asset_id=100)
+        asset_arr = _tx(id=203, broker_id=20, dt="2025-01-04", type="TRANSFER", quantity="4", asset_id=100)
+        builder = _builder(
+            in_transit_intervals=[
+                InTransitInterval(
+                    start_date=date(2025, 1, 2),
+                    end_date=date(2025, 1, 3),
+                    tx_type="asset",
+                    departure_leg=asset_dep,
+                    arrival_leg=asset_arr,
+                    share=Decimal("1"),
+                    asset_id=100,
+                    cost_basis_amount=Decimal("20"),
+                    cost_basis_currency="USD",
+                )
+            ],
+            price_map={100: [(date(2025, 1, 2), Decimal("50"), "EUR")]},
+            fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.9")},  # the transit day's rate only
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 4),
+        )
+
+        missing_fx: set[str] = set()
+        _, it_asset_mv, it_asset_cb = builder._compute_in_transit(date(2025, 1, 2), missing_fx)
+
+        assert it_asset_cb == Decimal("0")
+        assert it_asset_mv == Decimal("200")  # 4 * 50 EUR: the market value does not need the cost
+        assert builder._missing_fx == {"USD/EUR": {date(2025, 1, 4)}}
+        assert missing_fx == set()
+        # The same failure reaches the result of a full build.
+        assert builder.build().missing_fx == {"USD/EUR": {date(2025, 1, 4)}}
 
     def test_compute_in_transit_uses_frozen_per_unit_cost_when_unpriced(self):
         asset_dep = _tx(id=202, broker_id=10, dt="2025-01-01", type="TRANSFER", quantity="-4", asset_id=100)

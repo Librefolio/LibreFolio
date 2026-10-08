@@ -51,7 +51,7 @@ For each qualifying income transaction $j$:
 | $C^*$ | Selected report currency |
 | $q_j$ | Eligible long quantity at the paying broker at end of day $D_j-1$ |
 | $s_j$ | Product of linked split ratios dated from $D_j$ through $T$, inclusive |
-| $w_{a,b,T}$ | Average purchase price per unit (WAC) of pair $(a,b)$ at $T$ |
+| $w_{a,b,T}$ | Average purchase price per unit (WAC) of pair $(a,b)$ at $T$, kept in $C^*$ at historical rates |
 
 ### 💱 Income conversion
 
@@ -77,15 +77,17 @@ For a 2-for-1 split, $s_j=2$: historical income per old unit is divided by two s
 
 ### 📊 Average-purchase-price denominator
 
-The position's average purchase price per unit (WAC) is converted at the report end date:
+The denominator is the position's average purchase price per unit, **already expressed in the report currency**: when the average was built, each acquisition entered it at the rate of its own date (see the multi-currency section of [Weighted Average Cost](../weighted-average-cost.md)):
 
 $$
 w_{a,b,T}^*
 =
-w_{a,b,T}
-\cdot
-\mathrm{fx}(c_w,C^*,T)
+\frac{C^{*}_{a,b,T}}{Q_{a,b,T}}
 $$
+
+where $Q_{a,b,T}$ is the quantity of the pair's average-cost pool at $T$ and $C^{*}_{a,b,T}$ its historical cost in $C^*$: each acquisition $i$ added $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ for the amount $P_i$ paid on date $d_i$, and each reduction removed its proportional share.
+
+No conversion is applied at the report end date $T$: the denominator is what was paid, and it does not move with today's exchange rate.
 
 LibreFolio then reports:
 
@@ -142,13 +144,13 @@ Subsequent and same-day linked splits rescale earlier per-unit income into the u
 YOC uses the portfolio's current historical FX policy:
 
 - income requests FX for $D_j$;
-- average purchase price (WAC) requests FX for $T$;
+- the average purchase price (WAC) needs no FX at $T$: each of its acquisitions was converted at its own date when the average was built;
 - when the exact date is absent, the latest stored rate on or before that date is used;
 - no forward rate is substituted.
 
-Provenance preserves both the **requested date** and the **actual rate date**, plus the currency pair and days carried backward. The Holdings tooltip can therefore show, for example, that a June 30 income conversion used the most recent June 28 rate.
+Provenance preserves both the **requested date** and the **actual rate date** of each income conversion, plus the currency pair and days carried backward. The Holdings tooltip can therefore show, for example, that a June 30 income conversion used the most recent June 28 rate.
 
-If any required income or average-purchase-price conversion cannot be resolved, the whole pair is unavailable. LibreFolio does not silently omit the affected transaction or reuse an unrelated value.
+If any required income conversion cannot be resolved, the whole pair is unavailable. If an acquisition's cost cannot be converted — or a transfer or adjustment has no cost basis — the average purchase price itself is unavailable, and so is YOC. LibreFolio does not silently omit the affected transaction or reuse an unrelated value.
 
 ---
 
@@ -180,7 +182,7 @@ The calculation fails closed for any of these conditions:
 - transaction or transfer replay is inconsistent;
 - linked split data is invalid or inconsistent;
 - required historical FX is missing;
-- average purchase price (WAC) is missing or non-positive.
+- average purchase price (WAC) is missing or non-positive — missing includes an acquisition whose cost could not be converted or has no cost basis.
 
 One bad required input makes the entire pair unavailable. There is no partial sum, asset-event substitute, provider-income fallback, or current-quantity approximation.
 

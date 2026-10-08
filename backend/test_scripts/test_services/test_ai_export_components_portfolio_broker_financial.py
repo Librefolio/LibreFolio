@@ -1241,6 +1241,37 @@ class TestBrokerScope:
 
 
 # =============================================================================
+# Provenance component version (D12(a), issue #32)
+# =============================================================================
+
+
+class TestProvenanceComponentVersion:
+    """What the Snapshot Data renderer reads off each section: the provenance envelopes say
+    component_version 2 (the WAC semantics moved to the single average cost), schema_version 1
+    (the payload shape is unchanged). No prompt wording is asserted."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("component_id", "scope_overrides", "components"),
+        [
+            pytest.param("portfolio.provenance", {}, portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio"),
+            pytest.param("broker.provenance", {"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker"),
+        ],
+    )
+    async def test_provenance_envelope_is_component_version_2_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(component_id, required=True)
+
+        assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 2, 1)
+        assert envelope.payload["domain"] == component_id.split(".")[0]
+
+
+# =============================================================================
 # Source failure propagation (no broad-success fallback)
 # =============================================================================
 

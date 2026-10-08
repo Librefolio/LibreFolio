@@ -1,12 +1,14 @@
 ---
 title: "3-Pool Cash Model"
 category: concept
+updated: 2026-10-07
 tags: [backend, portfolio, cash, decomposition, dashboard, growthchart, accounting, capital, event-driven, k-r-w-pools]
 related:
   - entities/portfolio-engine
   - entities/portfolio-service
   - concepts/portfolio-report-unified
   - concepts/inline-wac-computation
+  - decisions/financial-math-single-average-cost
   - features/F-054
 ---
 
@@ -62,7 +64,9 @@ W_new = W_old
 This is the critical fix introduced in commit `39106380`. The WAC must be read _before_ the pool is reduced to avoid incorrect K/R split on full exit:
 ```
 P = sell_proceeds (cash received, converted to target_ccy)
-C = sold_cost_basis = qty_sold × wac_before_sell × FX
+C = sold_cost_basis = qty_sold × wac_before_sell × FX     ← until 2026-10-07 (WAC in the asset currency × the sale-date rate)
+C = −cost_report_change of the SELL's average-cost step   ← since 2026-10-07: historical cost in the report currency,
+  = C_T × qty_sold / Q   (the whole C_T if the pool empties)   no exchange rate
 G = P − C  (realized gain/loss)
 
 K_mid = K_old + C          (capital pool recovers cost basis)
@@ -75,6 +79,12 @@ else:
     K_new = K_mid + R_mid  (loss larger than returns — deficit absorbs K)
     R_new = 0
 ```
+
+**Since 2026-10-07** (workstream P — [[decisions/financial-math-single-average-cost]]): the cost a SELL returns to K is
+the historical cost in the report currency that its precomputed average-cost step removed from the pool — each purchase
+converted at its own date, no rate at the sale date. P is still the proceeds converted at the sale date; if they cannot
+be converted, the sale moves neither pool and its pair is reported with the date (`missing_fx`). The read-before-reduce
+rule below now lives in the average-cost fold, which also removes exactly C_T on a full exit.
 
 **Why this matters**: if the pool was reduced FIRST (old bug), then a full exit (`pool_qty → 0`) would compute `wac = pool_cost / 0` — undefined. All proceeds would go to the returns pool instead of correctly splitting into recovered cost (→K) and gain (→R).
 
@@ -129,12 +139,20 @@ The new K/R/W model supersedes the earlier informal 2-pool description ("deposit
 ## Important Caveat
 
 > The 3-pool decomposition is a **visualization convention**, not a fiscal accounting standard. It correctly tracks provenance but does NOT equal the authoritative P&L numbers in the KPI cards. The KPI cards use the WAC-based per-SELL realized gain calculation from `get_summary()`.
+>
+> *Superseded 2026-10-07 (last sentence):* the KPI cards' realized P&L no longer comes from a per-SELL computation in
+> `get_summary()`. It is Σ (proceeds − cost) over the engine's `realized_sales` dated in the period
+> (`_period_realized_sales()` in `portfolio_service.py`), leaving out — and reporting — a sale whose proceeds could not
+> be converted or whose pool cost was incomplete. Each `RealizedSale` carries the same removed cost C as the K/R
+> update above; the pools are still not the KPI figures.
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | Engine implementation | `backend/app/services/portfolio_engine.py` |
+| Sold cost C (average-cost step, since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
+| KPI realized P&L from `realized_sales` (since 2026-10-07) | `backend/app/services/portfolio_service.py` |
 | Math spec §11 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | GrowthChart component | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
 | Dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |

@@ -25,10 +25,17 @@ that removes the preflight is caught immediately.
 The frontend-listing regressions also pin sequence-valued registry metadata:
 only existing ``.spec.ts`` entries are parsed, while frontend unit-test paths
 are ignored without crashing the listing command.
+
+The junit attribution regressions pin how the consolidated backend pass reads its
+report back into per-unit verdicts (``_consolidate_backend._junit_results``):
+a directory unit owns a case only on a ``/`` boundary, the deepest directory
+containing a case wins whatever the order of the units, and a file unit keeps
+its own cases. Pure: a hand-written junit report in ``tmp_path``.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -36,6 +43,7 @@ import pytest
 from scripts.test_runner import _backend_utils as backend_utils
 from scripts.test_runner import _cli as runner_cli
 from scripts.test_runner import _common, _frontend_common
+from scripts.test_runner._consolidate_backend import _junit_results
 from scripts.test_runner._registry import TEST_REGISTRY
 
 PROJECT_ROOT = _common.PROJECT_ROOT
@@ -290,6 +298,97 @@ class TestMissingPathRegression:
         monkeypatch.setattr(_common.subprocess, "run", fail_if_invoked)
         result = _common.run_command(cmd, "missing path regression probe")
         assert result is False, "a nonexistent test path must fail loudly, not silently report success"
+
+
+# Units are paths relative to backend/test_scripts/: a file unit ends in ``.py``, a directory unit in ``/``.
+FINANCIAL_DIR = "test_services/test_financial/"  # roi-fifo-utils
+FINANCIAL_MATH_DIR = "test_services/test_financial_math/"  # financial-math
+SERVICES_DIR = "test_services/"
+OTHER_FILE = "test_services/test_financial/test_other.py"
+
+CASE_IN_FINANCIAL_MATH = "backend.test_scripts.test_services.test_financial_math.test_average_cost.TestX"
+CASE_IN_FINANCIAL = "backend.test_scripts.test_services.test_financial.test_other.TestY"
+CASE_ELSEWHERE_IN_FINANCIAL = "backend.test_scripts.test_services.test_financial.test_sibling.TestW"
+CASE_DIRECTLY_IN_SERVICES = "backend.test_scripts.test_services.test_misc.TestZ"
+
+
+def _unit_orders(*units: str) -> list:
+    """``units`` in the order run_backend_consolidated hands them over (sorted), and reversed."""
+    return [pytest.param(sorted(units), id="runner-order"), pytest.param(sorted(units, reverse=True), id="reversed")]
+
+
+def _junit_report(tmp_path: Path, cases: list[tuple[str, bool]]) -> Path:
+    """A minimal pytest junit report: one ``<testcase>`` per ``(classname, passed)``; a red one carries ``<failure/>``."""
+    rows = []
+    for index, (classname, passed) in enumerate(cases):
+        body = "" if passed else '<failure message="red on purpose">AssertionError</failure>'
+        rows.append(f'<testcase classname="{classname}" name="test_{index}" time="0.001">{body}</testcase>')
+    report = tmp_path / "report.xml"
+    report.write_text(
+        f'<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" tests="{len(cases)}">{"".join(rows)}</testsuite></testsuites>',
+        encoding="utf-8",
+    )
+    return report
+
+
+class TestJunitAttributionToDirectoryUnits:
+    """``_junit_results`` gives every junit case to the unit that owns it.
+
+    The consolidated backend pass reads its single junit report back into one verdict per
+    unit. A directory unit owns the modules below it — below it on a ``/`` boundary, not
+    every path that merely starts with the same characters — and when several directory
+    units contain a case, the deepest one owns it. A file unit found by the exact walk keeps
+    its own cases. None of this may depend on the order the units arrive in: the runner hands
+    them over sorted, and ``/`` sorts before ``_``, so ``test_financial/`` comes before
+    ``test_financial_math/`` — and, matched by bare prefix, swallowed its cases: financial-math
+    got no verdict and was reported as "produced no test case" with its 39 tests green.
+    """
+
+    @pytest.mark.parametrize("known", _unit_orders(FINANCIAL_DIR, FINANCIAL_MATH_DIR))
+    def test_sibling_directory_units_sharing_a_prefix_each_get_their_own_cases(self, tmp_path, known):
+        report = _junit_report(tmp_path, [(CASE_IN_FINANCIAL_MATH, True), (CASE_IN_FINANCIAL, True)])
+
+        assert _junit_results(report, known) == {FINANCIAL_MATH_DIR: True, FINANCIAL_DIR: True}
+
+    @pytest.mark.parametrize("known", _unit_orders(FINANCIAL_DIR, FINANCIAL_MATH_DIR))
+    @pytest.mark.parametrize(
+        ("red_case", "expected"),
+        [
+            pytest.param(CASE_IN_FINANCIAL_MATH, {FINANCIAL_MATH_DIR: False, FINANCIAL_DIR: True}, id="red-in-financial-math"),
+            pytest.param(CASE_IN_FINANCIAL, {FINANCIAL_MATH_DIR: True, FINANCIAL_DIR: False}, id="red-in-financial"),
+        ],
+    )
+    def test_a_red_case_turns_only_its_own_directory_unit_red(self, tmp_path, known, red_case, expected):
+        report = _junit_report(tmp_path, [(case, case != red_case) for case in (CASE_IN_FINANCIAL_MATH, CASE_IN_FINANCIAL)])
+
+        assert _junit_results(report, known) == expected
+
+    @pytest.mark.parametrize("known", _unit_orders(SERVICES_DIR, FINANCIAL_DIR))
+    @pytest.mark.parametrize(
+        ("classname", "owner"),
+        [
+            pytest.param(CASE_IN_FINANCIAL, FINANCIAL_DIR, id="case-in-the-nested-directory"),
+            pytest.param(CASE_DIRECTLY_IN_SERVICES, SERVICES_DIR, id="case-directly-in-the-outer-directory"),
+        ],
+    )
+    def test_the_deepest_directory_unit_containing_a_case_owns_it(self, tmp_path, known, classname, owner):
+        report = _junit_report(tmp_path, [(classname, True)])
+
+        assert _junit_results(report, known) == {owner: True}
+
+    @pytest.mark.parametrize("known", _unit_orders(FINANCIAL_DIR, OTHER_FILE))
+    @pytest.mark.parametrize(
+        ("red_case", "expected"),
+        [
+            pytest.param(CASE_IN_FINANCIAL, {OTHER_FILE: False, FINANCIAL_DIR: True}, id="red-in-the-file-unit"),
+            pytest.param(CASE_ELSEWHERE_IN_FINANCIAL, {OTHER_FILE: True, FINANCIAL_DIR: False}, id="red-elsewhere-in-the-directory"),
+        ],
+    )
+    def test_a_file_unit_keeps_its_own_cases_inside_a_directory_unit(self, tmp_path, known, red_case, expected):
+        """Guard: the exact walk finds the file unit first; the directory gets only what the file does not own."""
+        report = _junit_report(tmp_path, [(case, case != red_case) for case in (CASE_IN_FINANCIAL, CASE_ELSEWHERE_IN_FINANCIAL)])
+
+        assert _junit_results(report, known) == expected
 
 
 if __name__ == "__main__":

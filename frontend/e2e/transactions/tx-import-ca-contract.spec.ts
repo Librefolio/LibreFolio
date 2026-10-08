@@ -9,7 +9,14 @@
  *
  * The spec is self-contained: it creates its own broker and uploads
  * `credit_agricole-conti-contract.csv` through the API, so it neither depends on the
- * mock data nor shifts the broker indices other suites rely on.
+ * mock data nor shifts the broker indices other suites rely on. Every broker a test
+ * creates is deleted in afterEach (force), and its files with it: a file left behind
+ * would be inherited by the next broker that reuses the id.
+ *
+ * The corridor is the shared one (fixtures/import-wizard.ts): the uploaded file is
+ * selected in step 2 by its id; whether the notices' confirmation must be read past is
+ * decided by the parse response; the conditional steps are crossed when the stepper
+ * lands on them.
  *
  * Test IDs: CAC-001..CAC-012
  *
@@ -25,7 +32,8 @@ import {expect, test, type Page} from '../fixtures/playwright';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
+import {waitForSettled} from '../fixtures/app-events';
+import {continueToReview, continueToStep, parseSelectedFile, selectBrokerFile, type ParseResponse} from '../fixtures/import-wizard';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
@@ -38,23 +46,46 @@ const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 // Setup — broker and file created through the API, not through the UI
 // ---------------------------------------------------------------------------
 
+/** A broker this test created and the fixture file uploaded to it. */
+interface CaFixture {
+    brokerId: number;
+    brokerName: string;
+    fileId: string;
+    fileName: string;
+}
+
+/** What afterEach deletes: each broker this test created, and the files it must take with it. */
+interface OwnedBroker {
+    brokerId: number;
+    brokerName: string;
+    fileIds: string[];
+}
+
 /**
  * Create a broker bound to the CA plugin and upload the contract fixture to it.
  *
  * Doing this over the API keeps the spec about the contract rather than about the
  * upload form, which `tx-brim-import.spec.ts` already covers. The name is unique per
  * run so repeated runs against a persistent database do not collide.
+ *
+ * The broker is recorded in `owned` as soon as it exists, the file as soon as the
+ * upload answers: whatever fails afterwards, afterEach still deletes them.
  */
-async function createBrokerWithFixture(page: Page): Promise<{brokerName: string; fileName: string}> {
+async function createBrokerWithFixture(page: Page, owned: OwnedBroker[], options: {label: string; filePrefix: string; openedAt: string}): Promise<CaFixture> {
     const suffix = uniqueSuffix();
-    const brokerName = `CA Contract ${suffix}`;
-    const fileName = `ca-contract-${suffix}.csv`;
+    const brokerName = `${options.label} ${suffix}`;
+    const fileName = `${options.filePrefix}-${suffix}.csv`;
 
     const created = await page.request.post(`${API}/brokers`, {
-        data: [{name: brokerName, opened_at: '2020-01-01', default_import_plugin: 'broker_credit_agricole'}],
+        data: [{name: brokerName, opened_at: options.openedAt, default_import_plugin: 'broker_credit_agricole'}],
     });
     expect(created.ok(), await created.text()).toBeTruthy();
-    const brokerId = (await created.json()).results[0].broker_id;
+    const results = ((await created.json()) as {results: Array<{name: string; success: boolean; broker_id: number | null}>}).results;
+    const result = results.find((item) => item.name === brokerName);
+    if (!result?.success || typeof result.broker_id !== 'number') throw new Error(`Broker "${brokerName}" was not created: ${JSON.stringify(results)}`);
+    const brokerId = result.broker_id;
+    const record: OwnedBroker = {brokerId, brokerName, fileIds: []};
+    owned.push(record);
 
     const upload = await page.request.post(`${API}/brokers/import/upload`, {
         multipart: {
@@ -63,8 +94,36 @@ async function createBrokerWithFixture(page: Page): Promise<{brokerName: string;
         },
     });
     expect(upload.ok(), await upload.text()).toBeTruthy();
+    const fileId = ((await upload.json()) as {file_id: string}).file_id;
+    record.fileIds.push(fileId);
 
-    return {brokerName, fileName};
+    return {brokerId, brokerName, fileId, fileName};
+}
+
+/**
+ * Delete every broker in `owned` with force — the server deletes the broker's BRIM files
+ * with it — and empty the list. Asserts each delete, and that the files went too: a file
+ * that outlives its broker is inherited by the next broker that reuses the id.
+ */
+async function deleteOwnedBrokers(page: Page, owned: OwnedBroker[]): Promise<void> {
+    const failures: string[] = [];
+    for (const broker of owned.splice(0)) {
+        try {
+            const response = await page.request.delete(`${API}/brokers?ids=${broker.brokerId}&force=true`);
+            const body = (await response.json().catch(() => null)) as {results?: Array<{id: number; success: boolean}>} | null;
+            if (!response.ok() || body?.results?.find((item) => item.id === broker.brokerId)?.success !== true) {
+                failures.push(`broker "${broker.brokerName}" (${broker.brokerId}): HTTP ${response.status()} ${JSON.stringify(body)}`);
+                continue;
+            }
+            for (const fileId of broker.fileIds) {
+                const file = await page.request.get(`${API}/brokers/import/files/${fileId}`);
+                if (file.status() !== 404) failures.push(`file ${fileId} outlived broker "${broker.brokerName}" (${broker.brokerId}): HTTP ${file.status()}`);
+            }
+        } catch (error) {
+            failures.push(`broker "${broker.brokerName}" (${broker.brokerId}): ${String(error)}`);
+        }
+    }
+    expect(failures, 'cleanup deletes every broker this test created, and its files with it').toEqual([]);
 }
 
 async function goToTransactions(page: Page) {
@@ -91,90 +150,40 @@ async function openImportWizard(page: Page) {
     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 5_000});
 }
 
-/** Select the uploaded fixture in step 2 and parse it, stopping on the analysis step. */
-async function parseFixture(page: Page, target: {brokerName: string; fileName: string}) {
+/**
+ * Select the uploaded fixture in step 2 — by its file id, in its broker's panel, on whichever
+ * page of the panel it is — and parse it, stopping on the analysis step. Returns the parse
+ * response: it says whether leaving the analysis asks to confirm notices.
+ */
+async function parseFixture(page: Page, target: CaFixture): Promise<ParseResponse> {
     await page.getByTestId('import-wizard-next').click();
-    await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-
-    // Each broker owns a foldable panel; a brand-new one may start folded.
-    const panel = page.getByTestId('import-wizard-step2').locator('div.rounded-lg').filter({hasText: target.brokerName}).first();
-    await expect(panel).toBeVisible({timeout: 6_000});
-
-    let row = panel.locator('tr[data-row-id]').first();
-    if (!(await row.isVisible({timeout: 1_500}).catch(() => false))) {
-        await panel.locator('> button').first().click();
-    }
-
-    const named = panel.locator('tr[data-row-id]').filter({hasText: target.fileName}).first();
-    row = (await named.isVisible({timeout: 2_000}).catch(() => false)) ? named : panel.locator('tr[data-row-id]').first();
-    await expect(row).toBeVisible({timeout: 5_000});
-
-    const checkbox = row.locator('td.td-select button.checkbox-btn');
-    await checkbox.scrollIntoViewIfNeeded();
-    await checkbox.click();
-
-    await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 4_000});
-    await page.getByTestId('import-wizard-parse').click();
-    await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
-    await waitForParseVerdict(page);
+    await selectBrokerFile(page, {brokerId: target.brokerId, fileId: target.fileId});
+    return parseSelectedFile(page, target.fileId);
 }
 
-/**
- * Leaving the analysis step when the parse raised notices opens a confirmation modal
- * that lists them. Read past it.
- */
-async function confirmNotices(page: Page) {
-    const confirm = page.getByTestId('import-wizard-warning-confirm');
-    if (await confirm.isVisible({timeout: 2_500}).catch(() => false)) {
-        await confirm.click();
-        await expect(confirm).toBeHidden({timeout: 5_000});
-    }
-}
-
-/**
- * Walk from the analysis step to the review step, through whichever conditional steps
- * this parse raised. Rows flagged for correction are kept as read: the point here is to
- * arrive, not to correct.
- */
-async function walkToReview(page: Page) {
-    for (const testid of ['import-wizard-assets-continue', 'import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
-        const button = page.getByTestId(testid);
-        if (await button.isVisible({timeout: 2_000}).catch(() => false)) {
-            if (testid === 'import-wizard-fix-continue') {
-                await page.getByTestId('fix-step-accept-all').click();
-                await expect(page.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(0, {timeout: 10_000});
-            }
-            await button.click();
-        }
-    }
-    await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
-}
-
-/** Walk from the analysis step to the corrections step. */
-async function goToFixStep(page: Page, target: {brokerName: string; fileName: string}) {
+/** Walk from the analysis step to the corrections step, past the notices and the unification step if the stepper lands on it. */
+async function goToFixStep(page: Page, target: CaFixture) {
     await openImportWizard(page);
-    await parseFixture(page, target);
-    await page.getByTestId('import-wizard-continue').click();
-    await confirmNotices(page);
-
-    // The unification step comes first when the file names several instruments.
-    const assetsContinue = page.getByTestId('import-wizard-assets-continue');
-    if (await assetsContinue.isVisible({timeout: 2_000}).catch(() => false)) {
-        await assetsContinue.click();
-    }
-    await page.getByTestId('import-wizard-step-fix').waitFor({state: 'visible', timeout: 8_000});
+    const parsed = await parseFixture(page, target);
+    await continueToStep(page, parsed, 'fix');
 }
 
 // ---------------------------------------------------------------------------
 
 test.describe('Import Wizard — plugin contract', () => {
-    let fixture: {brokerName: string; fileName: string};
+    let fixture: CaFixture;
+    /** Every broker the running test created — the one below, CAC-012's late one: afterEach deletes them and empties the list. */
+    const ownedBrokers: OwnedBroker[] = [];
 
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
         // Broker and file first: the wizard reads the broker list when it opens.
-        fixture = await createBrokerWithFixture(page);
+        fixture = await createBrokerWithFixture(page, ownedBrokers, {label: 'CA Contract', filePrefix: 'ca-contract', openedAt: '2020-01-01'});
         await goToTransactions(page);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwnedBrokers(page, ownedBrokers);
     });
 
     // -----------------------------------------------------------------------
@@ -437,10 +446,8 @@ test.describe('Import Wizard — plugin contract', () => {
     // -----------------------------------------------------------------------
     test('CAC-011: a suspected maturity is announced on the asset form', async ({page}) => {
         await openImportWizard(page);
-        await parseFixture(page, fixture);
-        await page.getByTestId('import-wizard-continue').click();
-        await confirmNotices(page);
-        await walkToReview(page);
+        const parsed = await parseFixture(page, fixture);
+        await continueToReview(page, parsed);
 
         const step4 = page.getByTestId('import-wizard-step4');
 
@@ -481,25 +488,13 @@ test.describe('Import Wizard — plugin contract', () => {
     test('CAC-012: transactions predating the broker are reported and can be fixed', async ({page}) => {
         // The fixture's earliest movement is from 2025; a broker opened after it makes
         // every earlier row unimportable until the date is moved back.
-        const lateBroker = `CA Late ${uniqueSuffix()}`;
-        const created = await page.request.post(`${API}/brokers`, {
-            data: [{name: lateBroker, opened_at: '2026-08-01', default_import_plugin: 'broker_credit_agricole'}],
-        });
-        expect(created.ok()).toBeTruthy();
-        const brokerId = (await created.json()).results[0].broker_id;
-        const lateFile = `ca-late-${uniqueSuffix()}.csv`;
-        const upload = await page.request.post(`${API}/brokers/import/upload`, {
-            multipart: {broker_id: String(brokerId), file: {name: lateFile, mimeType: 'text/csv', buffer: readFileSync(FIXTURE)}},
-        });
-        expect(upload.ok()).toBeTruthy();
+        const late = await createBrokerWithFixture(page, ownedBrokers, {label: 'CA Late', filePrefix: 'ca-late', openedAt: '2026-08-01'});
 
         await page.reload();
         await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
         await openImportWizard(page);
-        await parseFixture(page, {brokerName: lateBroker, fileName: lateFile});
-        await page.getByTestId('import-wizard-continue').click();
-        await confirmNotices(page);
-        await walkToReview(page);
+        const parsed = await parseFixture(page, late);
+        await continueToReview(page, parsed);
 
         const step4 = page.getByTestId('import-wizard-step4');
         const issues = page.getByTestId('import-wizard-broker-opening-issues');

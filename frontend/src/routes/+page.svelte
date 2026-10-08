@@ -16,6 +16,7 @@
     import {_} from '$lib/i18n';
     import {Coffee} from 'lucide-svelte';
     import {page} from '$app/stores';
+    import {safeInternalPath} from '$lib/utils/internalPath';
 
     // Auth view state (modals)
     type AuthView = 'login' | 'register' | 'forgot-password';
@@ -27,8 +28,8 @@
     // Loading state while checking auth
     let checkingAuth = true;
 
-    // Get redirect URL from query params (if coming from protected route)
-    $: redirectTo = $page.url.searchParams.get('redirect') || '/dashboard';
+    // Where to go after signing in: the page the user was on (`?redirect=`), when it is an in-app path.
+    $: redirectTo = safeInternalPath($page.url.searchParams.get('redirect'));
 
     async function routeAuthenticated(requestedPath: string): Promise<void> {
         checkingAuth = true;
@@ -44,11 +45,11 @@
         }
     }
 
-    // Check if already authenticated and redirect
+    // Check if already authenticated and redirect. Any other answer shows the login, as before: here the
+    // page asked for is the login itself.
     onMount(async () => {
         if (browser) {
-            const isAuth = await auth.checkAuth();
-            if (isAuth) {
+            if ((await auth.checkAuth()) === 'authenticated') {
                 await routeAuthenticated(redirectTo);
                 return;
             }
