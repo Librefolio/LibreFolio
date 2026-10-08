@@ -10,9 +10,10 @@ one analytic never takes the others down.
 
 This page is for developers who change the engine, add an analytic or build a surface on top of
 it. The mathematics lives in the [Risk Metrics](../../../financial-theory/technical-analysis/risk-metrics/index.md)
-theory section. What users see is described on the [Dashboard](../../../user/dashboard/index.md)
-page (its **Risk** tab), on the [Correlation tab](../../../user/assets/correlation.md) page of the
-Assets list, and on the [asset detail](../../../user/assets/detail/index.md) page.
+theory section. What users see is described on the [Dashboard Risk tab](../../../user/dashboard/risk.md)
+page, on the [Correlation tab](../../../user/assets/correlation.md) page of the
+Assets list, and on the [asset detail](../../../user/assets/detail/index.md) page; the frontend side of
+the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 
 ---
 
@@ -20,7 +21,7 @@ Assets list, and on the [asset detail](../../../user/assets/detail/index.md) pag
 
 | Caller | Scope it sends | Entry point |
 |---|---|---|
-| Dashboard, **Risk** tab | `{kind: "portfolio"}`: every broker the user can access | `levels/RiskLevelsPanel.svelte` |
+| Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1032-1041`) | `levels/RiskLevelsPanel.svelte` |
 | Broker Detail, **Risk** tab | `{kind: "portfolio", broker_ids: [id]}` | `levels/RiskLevelsPanel.svelte` |
 | Assets page, **Correlation** tab (the *Asset Global* lab) | `{kind: "asset_set", asset_ids: [...]}` | `AssetSetRiskPanel.svelte` |
 | Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskScenariosView.svelte` → `RiskAnalysisPanel.svelte` |
@@ -819,4 +820,5 @@ The backend paths are relative to `backend/test_scripts/`.
 - 🧹 [Cache Registry & Admin](../../architecture/settings_cache.md) — the `risk_simulation` and `risk_optimization` caches
 - 🗃️ [Domain State](../../frontend/state/domain-state.md) — `riskStore` among the frontend caches
 - 🛡️ [Data Quality Banner](../../frontend/data-quality-banner.md) — the banner the lab feeds
-- 📘 User manual: [Dashboard](../../../user/dashboard/index.md) · [Correlation tab](../../../user/assets/correlation.md) · [Asset detail](../../../user/assets/detail/index.md)
+- 🖥️ [Risk UI](../../frontend/components/features/risk-lab.md) — the frontend of the Correlation tab and of the Dashboard's Risk tab
+- 📘 User manual: [Dashboard Risk tab](../../../user/dashboard/risk.md) · [Correlation tab](../../../user/assets/correlation.md) · [Asset detail](../../../user/assets/detail/index.md)

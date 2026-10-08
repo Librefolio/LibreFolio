@@ -180,6 +180,24 @@ A manual **Ask provider** is unchanged: `handleAskProvider()` reads with the def
 `'manual'` and opens the comparison with every row. The rule is unit-tested in
 `providerComparisonQueue.test.ts`, the modal flow in `AssetModal.providerLifecycle.test.ts`.
 
+Which fields become rows at all is decided upstream, in `fetchAndCompareMetadata()`, from the
+`patch_data` of the probe's `metadata` operation:
+
+- a field empty in the form, and not edited while the read ran, is filled silently;
+- an equal value agrees, and so does a provider type that only names the family of the stored
+  subtype — `isFamilyOnlyProposal()` in `lib/utils/assetTypes.ts` (`ETF` against `ETF_STOCK`).
+  A refinement (`ETF` → `ETF_STOCK`) is still a row;
+- a case-only difference, or a currency the user never picked (`currencyUserSet`), is auto-filled
+  instead of shown;
+- `identifier_other` is merged additively (`mergeOtherIdentifiers()`), never a row; a description
+  pre-filled by the import wizard is merged too — provider text first, the report's names after;
+- a missing sector or geographic block raises the `noDistributionData` toast, and no row with
+  nothing missing raises `allMatch`.
+
+On **Apply Selected**, a ticked field edited since the differences were computed (while the
+comparison was held or open) sends it back to a fresh `'all'` read instead of overwriting the
+edit.
+
 ---
 
 ## 🧲 Merging assets already in the database
@@ -198,9 +216,11 @@ There are exactly four foreign keys to `assets.id`, all handled:
 | `AssetEvent.asset_id` | no unique (deliberately) | Reassigned, deduplicated by `(date, type, amount)`, and `Transaction.asset_event_id` is remapped onto the survivors |
 | `AssetProviderAssignment.asset_id` | `uq_asset_provider_asset_id` | Moved only if the target has none; otherwise the source's is deleted |
 
-`identifier_other` on the target becomes the **union** of both `other` lists plus every
-structured identifier of the source the target does not already hold as a primary. Then the
-source asset is deleted.
+Identifiers are decided column by column: the value elected in the modal (`identifier_primaries`)
+or, by default, the target's own, with the source's filling a gap. Every losing value is demoted,
+so `identifier_other` on the target becomes the **union** of both `other` lists plus the demoted
+values, deduplicated and never repeating a value that is now primary. Then the source asset is
+deleted.
 
 !!! danger "Two ordering traps, both found by tests"
 
@@ -228,6 +248,12 @@ The election is only worth making if the stored value is actually used next time
 Priorities 1 and 2 run **together** and merge (deduplicated by `asset_id`). That is deliberate:
 an ISIN that is primary on a duplicate asset and alternative on the good one produces **both**
 candidates, side by side — which is exactly the moment offering a merge costs the user least.
+
+The wizard makes that offer through `duplicateCandidates()` in
+`lib/utils/transactions/importResolutionHelpers.ts`: the resolution card shows its duplicate notice
+and **Merge** button only when at least two candidates are `EXACT` or `HIGH`. Ticker (`MEDIUM`)
+and name (`LOW`) matches never raise it — two funds from the same issuer are supposed to look
+alike.
 
 !!! note "Why 2 is not last"
 
