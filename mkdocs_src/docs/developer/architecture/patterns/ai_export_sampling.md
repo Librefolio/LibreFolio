@@ -361,6 +361,11 @@ explicit through `is_partial_history` plus a `partial_history_reason`
 `no_genuine_observations_in_period`); only genuine, non-backfilled observations
 count and no future rate is ever consulted.
 
+The same timing component (`fx.timing_context`) also publishes trailing 30- and
+91-day returns, the period return, and daily-return volatility, all from genuine
+observations inside the AI period. A trailing return is `null` when the observed
+history does not reach back to its anchor date.
+
 ## 🧾 Manifest Examples
 
 The public prompt manifest exposes only information that helps interpret the

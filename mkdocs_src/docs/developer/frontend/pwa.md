@@ -183,12 +183,18 @@ HelpMenu onMount → reads window.__pwaInstallPrompt as fallback
      ↓
 User clicks "Install App" → calls deferredPrompt.prompt()
      ↓
-Chrome shows native install banner
+Chrome shows its native install dialog
 ```
 
 !!! warning "Race Condition"
 
     `beforeinstallprompt` can fire BEFORE Svelte components mount. That's why we capture it early in `app.html` on `window.__pwaInstallPrompt`, then read it in `onMount`.
+
+Both listeners — the early one in `app.html` and the one `HelpMenu.svelte` adds in `onMount` — call
+`e.preventDefault()`, so the browser keeps the event instead of showing its automatic install
+prompt (the mini-infobar of Chrome on Android); the app calls `prompt()` only from **Install App**.
+A captured prompt is used once (`deferredPrompt = null` afterwards), and an accepted one hides the
+button (`isStandalone = true`).
 
 ### 2. iOS (Safari only)
 
@@ -200,6 +206,9 @@ Chrome shows native install banner
 
 - If `deferredPrompt` not captured (e.g. Firefox, or event missed)
 - Shows hint: "Look for ⊕ in address bar"
+- On Android (`/Android/` in the user agent) the same fallback shows `help.installAppAndroid`
+  instead: *HTTPS required for install. Use Chrome menu ⋮ → "Add to Home Screen" as shortcut* —
+  typically on a plain-HTTP LAN address
 
 ### Standalone Detection
 
@@ -280,7 +289,8 @@ fetch(request) fails → serve cached /offline.html
 | Manifest loaded | ✅ | ✅ | ✅ |
 | Service Worker (offline page) | ✅ | ✅ | ❌ |
 | `beforeinstallprompt` | ✅ | ✅ | ❌ |
-| Auto-install banner | ✅ | ✅ | ❌ |
+| Browser's own automatic install banner | ❌ suppressed by `preventDefault()` | ❌ suppressed by `preventDefault()` | ❌ no event |
+| Native install dialog from **Install App** (`prompt()`) | ✅ | ✅ | ❌ a hint instead |
 | Manual "Add to Home" | ✅ | ✅ | ✅ (Android) |
 | iOS Add to Home | ✅ | ✅ | ✅ |
 

@@ -31,7 +31,7 @@ footer button.
 
 Closing the form with unsaved changes asks for confirmation (*Discard Changes?*).
 
-### Form State vs Staging State
+### 🔀 Form State vs Staging State
 
 It is important to keep the single-item form state apart from the workspace's staging state:
 
@@ -52,29 +52,29 @@ Which fields are shown, required or forbidden comes from the type rules that
 `quantityMode`, the quantity and cash sign rules, `eventLinkable`). Changing the type clears the
 values the new type forbids.
 
-### Common Fields
+### 📋 Common Fields
 
 `FormDraft` (declared in `TransactionFormModal.svelte`):
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | `TransactionTypeCode` | Core discriminator (`BUY`, `SELL`, `DIVIDEND`, …) |
-| `broker_id` | `number` | `0` until chosen; pre-filled from `forcedBroker` (locked), `defaultBrokerId`, or the only broker the user can edit |
+| `broker_id` | `number` | `0` until chosen; pre-filled from `forcedBroker` (locked), `defaultBrokerId`, or the only broker the user can edit. **Create new** in the broker select opens a stacked `BrokerModal` (`zIndex + 10`) |
 | `date` | `string` | `YYYY-MM-DD`; today on a blank form |
 | `cash` | `{code, amount} \| null` | ISO 4217 code and decimal string, edited with `CompactCashCell` |
 | `tags` | `string[]` | Free tags, with suggestions from `availableTags` |
 | `description` | `string` | Free-text memo |
-| `asset_event_id` | `number \| null` | Linked asset event, for event-linkable types |
+| `asset_event_id` | `number \| null` | Linked asset event (**Linked Event**, `AssetEventPicker`), for the event-linkable types (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`); the picker shows once an asset and a date are set (`canShowAssetEvent`) |
 | `cost_basis_override` | `{code, amount} \| null` | Manual cost basis (see [WAC State](#wac-state)) |
 | `link_uuid` | `string \| null` | Pairing UUID; shown read-only when set |
 
-### Asset Operations (BUY / SELL / TRANSFER)
+### 📦 Asset Operations (BUY / SELL / TRANSFER)
 
 Shown when the type's rules allow them:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `asset_id` | `number \| null` | Selected asset (`AssetSelect`) |
+| `asset_id` | `number \| null` | Selected asset (`AssetSelect`); **New asset** opens a stacked `AssetModal` |
 | `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 12 integer and 6 fraction digits); `'0'` when the type forbids a quantity |
 
 ---
@@ -84,7 +84,9 @@ Shown when the type's rules allow them:
 When the type requires a link (`requiresPair`, the backend's `requires_link`), the form switches to
 a two-sided layout chosen by the type's `pairFormLayout`: `transfer_asset` for `TRANSFER`,
 `transfer_cash` for `CASH_TRANSFER` and `fx` for `FX_CONVERSION`. Each side, **From** and **To**,
-has its own date. The **To** side lives in `dualTo`:
+has its own date. **Swap sides** (`swapDualSides()`) exchanges the two dates and, for the transfer
+layouts, the two brokers; for FX it exchanges the amounts instead (see below). The **To** side
+lives in `dualTo`:
 
 ```typescript
 interface DualDraftTo {
@@ -173,6 +175,12 @@ The form checks locally only what it can know without the ledger:
 - **Cash sign** — for a type whose cash rule is `negative` the user types a magnitude and the
   payload builder negates it (`applySignRules`). An amount that still breaks the rule
   (`computeSignHint`) disables the footer button.
+- **Hints** — the single-layout cash editor always carries *💡 Total amount (not per share)*
+  (`transactions.form.cashLabelTotal`). The quantity and cash editors also show the hint of the
+  type's sign rule (`signHintText()` → `signHintKey()` in `lib/utils/transactions/txFormFields.ts`:
+  *must be > 0*, *enter positive — auto-negated on save*, *must be 0*, *must be ≠ 0*). Negative
+  quantity rules are auto-flipped like cash (`effectiveQtyRule`), so a `SELL` quantity is typed as
+  a positive number.
 
 Everything deeper — balances, pairing rules, access — belongs to the backend's
 **[Balance Validation](../../../backend/transactions/balance_validation.md)**. While the form is

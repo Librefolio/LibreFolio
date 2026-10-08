@@ -211,3 +211,31 @@ When calling `POST /api/v1/fx/currencies/sync`:
 5. Results are saved to the `fx_rates` table. Chain-derived rates are stored with `source = "CHAIN:provider1+provider2"`.
 
 This ensures resilience to individual provider outages and supports currency pairs that no single provider covers directly.
+
+### 📅 Chain Dates, Writes and Counters
+
+- **Strict date matching.** `compute_chain_rate()` (`backend/app/services/fx.py`) produces a chain
+  rate for a date only when every leg has a rate on that exact date; a missing leg skips the date.
+  A chain through a sparse series therefore has rates only on the dates that series publishes.
+- **Upsert, the provider wins.** Rates are written with
+  `INSERT … ON CONFLICT (date, base, quote) DO UPDATE`, which replaces `rate`, `source` and
+  `fetched_at`. A synced date overwrites whatever was stored, including a rate entered by hand
+  through `POST /api/v1/fx/currencies/rate` (`upsert_rates_bulk()`, the same upsert). Dates outside
+  the requested range are not written.
+- **Counters.** `points_fetched` counts the rates computed for the pair in the range;
+  `points_changed` counts the new dates plus the dates whose value changed, compared at storage
+  precision (`_count_actual_changes()`, `truncate_fx_rate()`).
+- **Empty is not a failure.** The next route is tried only when a leg of the current one fails,
+  its wait for the legs times out (120 s) or its computation raises. A route that answers with no
+  rate in the range ends the pair as `partial`: the next route is not tried.
+
+| Status | When |
+|:-------|:-----|
+| `ok` | The route produced at least one rate in the range |
+| `partial` | The route answered but produced no rate in the range; `message` and `detail` (per leg: `dates_available`, `error`) say why |
+| `skipped` | Every route of the pair is `MANUAL` |
+| `failed` | The pair has no route, or every route failed; `errors` lists the failure of each route |
+
+The scheduler's history-sync job (`run_history_sync()`, `backend/app/services/scheduler/jobs.py`)
+calls the same function for every pair with a route that has no `MANUAL` step, from today minus
+`scheduler_history_sync_horizon_days` (default 14) to today.

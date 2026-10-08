@@ -1,48 +1,68 @@
 # 📁 Files & Uploads
 
-The **Files** page (`/files`) is your central hub for managing all uploaded content in LibreFolio. It has two distinct sections with different visibility rules.
+The **Files** page keeps everything uploaded to LibreFolio, in two tabs:
+
+- **Static Resources** — avatars, broker icons and other images or documents, visible to every user;
+- **Broker Reports** — the statement files you import transactions from, visible only to the people with access to their broker.
 
 ---
 
-## 📂 Two Tabs, Two Purposes
-
-### 📁 Static Resources
+## 🖼️ Static resources
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Static resources are **visible to all users** in the system. This is where you'll find:
+Here you find the users' **avatars**, the brokers' **icons** and any **image or document** shared by users. Everyone with a LibreFolio account can see them.
 
-- 🖼️ User **avatars** and profile pictures
-- 🏷️ Broker **icons** and logos
-- 📄 Any **shared documents** or images uploaded by users
-
-These files live in the `custom-uploads/` directory on the server.
-
-**Context Menu**: Right-click any file row (in list view) to access quick actions (Preview, Copy Link, Download, Delete).
-
-You can switch between **list view** and **grid view** for a visual preview of image files:
+- Switch between **list** and **grid** view: the grid previews images.
+- In the list, right-click a file for **Preview**, **Copy Link**, **Download** or **Delete**. You can delete only the files you uploaded; an administrator can delete any.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### 📊 Broker Reports
+### ⬆️ Upload a file
+
+1. Click **Upload**, then drop files on the area or click it to browse.
+2. Before uploading, you can click ✏️ **Edit** on an image to crop it with the [Image Crop tool](../misc/image-crop.md), then confirm with **Crop**; on any other file, ✏️ **Rename** changes its name. **Restore original** puts a file back as you picked it.
+3. Click **Upload**.
+
+<div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Upload Drop Zone" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+---
+
+## 📊 Broker Reports {: #broker-reports }
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Broker Reports Tab" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Broker reports have **restricted visibility** — you can only see reports for brokers you have access to (as Owner, Editor, or Viewer). These files include:
+These are the statements exported by your brokers, waiting to be imported or already imported. You see the reports of every broker you can access, as Owner, Editor or Viewer.
 
-- 📋 CSV or Excel **transaction exports** from your broker
-- ✅ **Parsed results** from the automatic import system (BRIM)
-- ❌ Files that **failed parsing** (kept for debugging)
+The **Status** column tells you where each file stands:
 
-**Context Menu**: Right-click any report row to access quick actions (Preview, Download, Delete).
+- **Uploaded** — stored, not analysed yet;
+- **Parsed** — the Import Wizard read it successfully;
+- **Failed** — the analysis failed; the file stays here so you can check it or report it.
 
-#### 🧩 Report sets {: #report-sets }
+### 📤 Upload a broker report
+
+1. On **Broker Reports**, click **Upload** and pick CSV or Excel files.
+2. In **Assign Brokers**, choose the broker of each file, or one for all with **Assign all to**. **Create new** adds a broker on the spot; if you can edit only one broker, it is already chosen.
+3. Click **Upload**. The files are stored, but **nothing is imported yet**.
+
+To import them, open the [Import Wizard](../transactions/import/index.md) (**Transactions** → **Import**): its **Select Files** step lists the reports you have uploaded.
+
+The broker you choose only decides which account receives the transactions. The importer recognises the file format by itself, and one import plugin can read the exports of several brokers.
+
+### ⚙️ Manage reports
+
+Right-click a report for **Preview**, **Download** or **Delete**, or tick several to delete them together. Deleting a report never deletes the transactions already imported from it.
+
+### 🧩 Report sets {: #report-sets }
 
 Some banks split one account across several exports: [Danske Bank](../transactions/import/danske-bank.md), for example, needs a securities export and a cash statement. The exports of such a bank that you upload **together** form a **report set**, and LibreFolio imports them as one, through a **combined file** it builds from them. The **Report set** column tells you where each file stands (the same column appears in a broker's **Uploaded Reports**):
 
@@ -52,7 +72,7 @@ Some banks split one account across several exports: [Danske Bank](../transactio
 | **Incomplete** | The set still lacks a required export: hover the badge to see which one. Add it from the set's card in the Import Wizard, with **Upload the missing file**. |
 | **Combined** | The file LibreFolio built from the exports of a set — the one the import actually reads. Hover the badge to see the files it was built from, and which of them have been deleted since. |
 | **Used in a combined file** | This export went into a combined file of its set. |
-| **To re-combine** | The combined file was built by an older version of the importer: analysing the set again rebuilds it. |
+| **To re-combine** | The importer has changed since the combined file was built: analysing the set again rebuilds it. |
 
 You can preview, download and delete these files like any other report. Deleting one export of a set leaves its combined file in place, but to import the set again you first need to upload that export into it again.
 
@@ -60,57 +80,25 @@ You can preview, download and delete these files like any other report. Deleting
     <img class="gallery-img" data-category="files" data-name="brim-report-sets" alt="Broker Reports tab with Danske Bank files, their Report set badges and the Uploaded by filter open" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### 👤 Who uploaded each file {: #uploaded-by }
+---
 
-In both tabs, the table shows who uploaded each file in its **Uploaded by** column, with the user's avatar and name. Click the column header to sort by uploader, or open its filter to keep only the files of one or more people: tick them in the list — each with avatar and name — or search them by name. A file whose uploader was not recorded shows *Uploader not recorded*.
+## 👤 Who uploaded each file {: #uploaded-by }
 
-The filter also applies when you switch the **Static Resources** tab to grid view, and it is still there when you switch back to the list. It is written in the page address too (`?uploader=…`), so a bookmarked or shared link opens with the same filter.
+Both tabs show who uploaded each file in the **Uploaded by** column, with the person's avatar and name:
+
+- click the column header to sort by uploader;
+- open its filter to keep only the files of one or more people: tick them in the list, or search them by name;
+- a file whose uploader was not recorded shows *Uploader not recorded*.
+
+The filter also applies to the grid view of **Static Resources**. It is saved in the page address, so a bookmark or a shared link opens with the same filter.
 
 ---
 
-## ⬆️ Uploading Files
+## 🔒 Access and limits
 
-To upload a file:
+- 🌐 **Static resources** — every signed-in user can see them.
+- 🔐 **Broker reports** — only the users with access to the broker can see them; uploading and deleting need Owner or Editor access.
+- 📏 **Size** — up to the limit the administrator sets in [Global Settings](../../admin/settings.md): 10 MB unless changed.
+- 🚫 **File types** — programs and scripts (such as `.exe`, `.sh` or `.py` files) are refused as static resources; broker reports must be CSV or Excel files.
 
-1. Click the **upload area** or **drag & drop** files directly
-2. For **image files**, the [Image Crop tool](../misc/image-crop.md) opens automatically, letting you resize and crop before uploading
-3. For **non-image files** (CSV, PDF, etc.), you can rename the file before confirming
-
-<div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Upload Drop Zone" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-!!! tip "File Size Limit"
-
-    The maximum upload size is configured by the system administrator in [Global Settings](../../admin/settings.md). The default is typically 10 MB.
-
----
-
-## 📤 Managing Broker Reports
-
-If you want to import transactions or manage existing statements:
-
-1. Go to the **Broker Reports** tab.
-2. Upload the CSV or Excel file exported from your broker (Degiro, Interactive Brokers, eToro, Directa SIM, etc.).
-3. Choose which **broker to associate** the file with — this determines which broker account will receive the imported transactions.
-4. The file is stored and appears in the reports list. **No import runs yet**: to actually parse it and import the transactions, open the **[Import Wizard](../transactions/import/index.md)** (Transactions → **Import**) — its *Select Files* step lists the reports you already uploaded, so you can pick one instead of uploading it again.
-
-### ⚙️ Actions on Existing Reports
-
-Right-click any report in the table to open its context menu:
-- 👁️ **Preview**: Inspect the file content without leaving the page.
-- 📥 **Download**: Download the original raw file.
-- 🗑️ **Delete**: Remove the file and its metadata. Transactions already imported from it **stay in the ledger** — deleting a report never deletes transactions.
-
-!!! info "Association vs. Parsing"
-
-    The broker you choose when uploading is for **association** only — it determines which broker account receives the imported transactions. The format detection and parsing happen in a separate step and are **independent** of the broker: the same BRIM plugin can work for multiple brokers if they export in the same format.
-
----
-
-## 🔒 Security
-
-- 🌐 **Static files** are accessible to anyone with a LibreFolio account
-- 🔐 **Broker reports** respect the broker's access control — only users with access to that broker can view its reports
-- 🚫 **Executable files** (`.exe`, `.sh`, `.py`, etc.) are blocked for security
-- 🔍 File **MIME type** is validated server-side to prevent masquerading (e.g., renaming a `.exe` to `.jpg`)
+Where the files live on the server is described in [Filesystem Structure](../../admin/filesystem.md).
