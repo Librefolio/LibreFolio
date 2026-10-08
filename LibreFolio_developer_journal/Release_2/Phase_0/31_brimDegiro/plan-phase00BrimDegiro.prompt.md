@@ -401,6 +401,7 @@ Nessuna API cambia (niente `api sync`), nessuna migrazione, nessuna chiave i18n.
 > - Ho portato la copia di lavoro in LF e rilanciato tutto ciò che legge il campione su quei byte: verde (tabella sotto).
 > - Il CRLF, cioè il file come lo scarica l'utente, resta coperto dai byte che i test costruiscono (`_statement_bytes`). Il commento del test che diceva «CRLF» per il campione è corretto (test-author, `:616–617`).
 > - Se il coordinatore vuole il campione CRLF byte per byte serve una riga in `.gitattributes`, che è un file condiviso: decide lui.
+> - ✅ **Decisione del coordinatore** (2026-10-07, dopo il checkpoint): niente `.gitattributes`. Il campione resta LF, perché i test costruiscono da sé i byte CRLF, ed è sufficiente.
 >
 > | Gate finali (corsia 6156; log nella sessione, `files/degiro-d3/`) | Esito |
 > |---|---|

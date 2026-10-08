@@ -23,6 +23,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # ==========================================
+      # 0. RELEASE TAG GUARD (before any work)
+      # ==========================================
+      # A prerelease is never promoted: the stable release is always published on a
+      # NEW vX.Y.Z tag (the pipeline listens only to `published`). So a prerelease tag
+      # must say it is a release candidate, vX.Y.Z-rc.N: then neither `latest` nor the
+      # in-app update prompt (stable vX.Y.Z only) can mistake it for a release. And a
+      # stable release must carry a plain vX.Y.Z tag: an -rc.N tag published as stable
+      # would deploy the docs and announce `latest` in its notes while `latest` (and the
+      # update prompt) ignore it. The tag reaches the script through env, never
+      # interpolated into it.
+      - name: Release tag must match the release kind
+        if: github.event_name == 'release'
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          # [[ =~ ]] matches the WHOLE string (grep would match any one line of it).
+          if [ "$PRERELEASE" = "true" ]; then
+            if ! [[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+              echo "::error title=Prerelease tag::'$TAG_NAME' is marked as a prerelease but its tag is not vX.Y.Z-rc.N. Publish a prerelease on an -rc.N tag; publish the stable release on a new vX.Y.Z tag."
+              exit 1
+            fi
+            echo "Prerelease tag OK: $TAG_NAME"
+          else
+            if ! [[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error title=Release tag::'$TAG_NAME' is published as a stable release but its tag is not a plain vX.Y.Z. Mark a release candidate (vX.Y.Z-rc.N) as a pre-release; publish the stable release on a plain vX.Y.Z tag."
+              exit 1
+            fi
+            echo "Release tag OK: $TAG_NAME"
+          fi
+
+      # ==========================================
       # 1. BASE SETUP (Checkout & Environments)
       # ==========================================
       - name: Checkout repository

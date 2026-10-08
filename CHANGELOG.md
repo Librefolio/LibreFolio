@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - AI Export structural validation now raises typed errors for invalid component, dataset, analysis, policy and detail-level definitions even when Python runs with optimization enabled. Public IDs, versions and catalog ordering remain unchanged.
 - Technical-signal results consistently enforce the declared status matrix for precompute/runtime failures, partial undefined metrics, aligned output and paired metadata, preventing impossible API result combinations.
+- **AI Export on the Dashboard waits until your own brokers are known.** An export started right after opening the page could include brokers shared with you as viewer or editor; it now covers only the brokers you own, like the rest of the Dashboard. If you own no broker, the portfolio export is not available.
 
 #### 📥 Imports and transaction editing
 
@@ -136,9 +137,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Reports and the Dashboard no longer stall on long currency histories.** A currency conversion now loads only the exchange rates it can use, instead of the whole history of the pair, with identical results: on a real portfolio with rates going back to 2000, a report in a currency other than the base one went from 10–27 s to under 3 s. Thanks to Martin Sova ([#30](https://github.com/Librefolio/LibreFolio/pull/30)).
 
-#### 📱 Sign-in, app icons and small screens
+#### 📱 Sign-in, language, app icons and small screens
 
 - Browsers offer saved credentials on the sign-in username field too, and registration and password change are recognised by password managers, so changing a password updates the right saved account.
+- **Switching the interface language no longer rebuilds the app.** When the new language took a moment to load, the whole app was reloaded and unsaved changes on the open page were lost; now the page stays as it is while its texts change.
 - The installed app no longer shows black corners on the Android splash screen or around the iPhone home-screen icon, and Android gets a proper maskable icon.
 - On phones, the asset dialog keeps Save and Cancel reachable, **Sync** on an asset page no longer looks crossed out while the page loads, and the asset page tabs show an icon.
 - On phones, the price chart tooltip of an asset with a long name no longer runs off the screen: the name is shortened with an ellipsis, while the value and its currency stay whole.
@@ -151,7 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The published images ship the production interface again.** Since at least v1.1.0 they contained a debug build of the web app (not minified, with source maps), 58 MB instead of 21 MB, about 5 MB more to download on a first visit. The image build now refuses a debug build, local builds included.
 - **The full image includes the documentation screenshots for offline use**, as the installation guide says; until now full and light were identical. The light image, the one `latest` points to, still loads them from the online documentation.
 - The installation guide and the release notes name the image tags that exist: `latest` (light), `X.Y.Z` (full) and `X.Y.Z-light`, without a leading `v`. `latest-light` and `v1.1.0-light` never existed.
-- **`latest` is the light image.** A release publishes `latest` from the light image, and the full image only as `X.Y.Z`; a prerelease publishes only its own tags, and neither moves `latest` nor updates the online documentation.
+- **`latest` is the light image.** A release publishes `latest` from the light image, and the full image only as `X.Y.Z`; a prerelease publishes only its own tags, and neither moves `latest` nor updates the online documentation. A prerelease is always tagged `X.Y.Z-rc.N` and is never promoted: the release gets a new tag of its own.
 - **The update notice waits for the new image.** The light image is now published before the full one, so the in-app notice of a new version appears only once `latest` points to it.
 - **The Tailscale guide's startup script restarts the container when Tailscale fails.** A failed `tailscale up` at boot used to leave the container running but unreachable; the script now exits so Docker restarts it, the compose example adds a health check, and the guide explains how to upgrade an existing container and what to check when it keeps restarting. The Tailscale compose examples of the Italian, French and Spanish guides are valid YAML again.
 

@@ -8,10 +8,18 @@
  * duplicates appear only when the parse produced something for them to do. Walking to
  * the review step therefore means asking at each one, never assuming a fixed order.
  *
+ * The file. A test that parses uploads its own copy of generic_simple.csv through the API
+ * to the seeded "Interactive Brokers" broker — the broker the seeded copies live on, so
+ * the parse is asked for the same broker and compared with the same transactions —
+ * selects it in step 2 by its file id, wherever the panel's pages put it, and deletes it
+ * in afterEach. The walk to the review is the shared one (fixtures/import-wizard.ts):
+ * the parse response decides the notices' confirmation, the stepper the steps crossed.
+ *
  * Prerequisites:
  *   - Backend test mode (port 6041)
- *   - DB populated (./dev.py db populate --test --with-reports)
- *     generic_simple.csv is uploaded for "Interactive Brokers" by populate_mock_data.py
+ *   - DB populated: the "Interactive Brokers" broker, on which the test user is an owner.
+ *     IWR-010 previews whichever file step 2 lists first, so it still relies on the
+ *     samples populate_mock_data.py uploads with --with-reports.
  *
  * Test IDs: IWR-001..IWR-011
  *
@@ -33,10 +41,21 @@
 
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
+import {waitForSettled} from '../fixtures/app-events';
+import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, uploadOwnedReport, type OwnedReport, type ParseResponse} from '../fixtures/import-wizard';
 import {TEST_USER} from '../fixtures/test-users';
 
 test.setTimeout(90_000);
+
+/** The seeded broker the sample belongs to, and the sample a parsing test uploads a copy of. */
+const GENERIC_SIMPLE = {brokerName: 'Interactive Brokers', sample: 'generic_simple.csv'};
+
+/**
+ * The reports the running test uploaded, emptied by afterEach as it deletes them. Module
+ * state on purpose: `parseGenericSimple` fills it from inside the tests' bodies, and a
+ * worker runs one test at a time.
+ */
+const ownedReports: OwnedReport[] = [];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -96,49 +115,23 @@ async function skipStepIfPresent(page: Page, continueTestId: string) {
     }
 }
 
-/** Select generic_simple.csv and parse it, stopping on the analysis step. */
-async function parseGenericSimple(page: Page) {
-    // Step 1: skip (no new uploads)
+/**
+ * Upload this test's own copy of generic_simple.csv, select it in step 2 and parse it,
+ * stopping on the analysis step. Called with the wizard on step 1: the wizard reads the
+ * broker files when it enters step 2, so the upload comes first. Returns the parse
+ * response, which says whether leaving the analysis asks to confirm notices.
+ */
+async function parseGenericSimple(page: Page): Promise<ParseResponse> {
+    const own = await uploadOwnedReport(page, ownedReports, GENERIC_SIMPLE);
+
+    // Step 1: skip (no new uploads in the wizard itself)
     await page.getByTestId('import-wizard-next').click();
-    await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-    await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
 
-    // Dismiss any open dropdown (e.g. column-visibility panel) before interacting
-    await page.keyboard.press('Escape');
-    await optionListClosed(page);
-
-    const step2 = page.getByTestId('import-wizard-step2');
-
-    // Step 2: find a generic_simple.csv row with data-row-id (DataTable row)
-    // Broker panels with files are auto-expanded on load.
-    // There may be multiple uploads; pick the first available row.
-    const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
-
-    // If not visible, the broker panel may need expanding — click its header button
-    if (!(await fileRow.isVisible({timeout: 3_000}).catch(() => false))) {
-        const brokerHeaders = step2.locator('.rounded-lg > button');
-        const count = await brokerHeaders.count();
-        for (let i = 0; i < count; i++) {
-            await brokerHeaders.nth(i).click();
-            if (await fileRow.isVisible({timeout: 1_000}).catch(() => false)) break;
-        }
-    }
-
-    await expect(fileRow).toBeVisible({timeout: 5_000});
-
-    // The DataTable uses <button class="checkbox-btn"> (NOT input[type="checkbox"])
-    // for row selection. Target it inside the td.td-select cell.
-    const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
-    await checkbox.scrollIntoViewIfNeeded();
-    await page.keyboard.press('Escape'); // dismiss any open dropdown
-    await checkbox.click();
-
-    await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 3_000});
+    // Step 2: the copy, by its id, in the Interactive Brokers panel, on whichever page it is
+    await selectBrokerFile(page, own);
 
     // Step 3: parse
-    await page.getByTestId('import-wizard-parse').click();
-    await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 10_000});
-    await waitForParseVerdict(page);
+    return parseSelectedFile(page, own.fileId);
 }
 
 /**
@@ -146,14 +139,8 @@ async function parseGenericSimple(page: Page) {
  * conditional steps this parse happens to raise.
  */
 async function goToStep4WithGenericSimple(page: Page) {
-    await parseGenericSimple(page);
-
-    await page.getByTestId('import-wizard-continue').click();
-    for (const testid of ['import-wizard-assets-continue', 'import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
-        await skipStepIfPresent(page, testid);
-    }
-    await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
-    await waitForSettled(page.getByTestId('import-wizard-step4'), 20_000);
+    const parsed = await parseGenericSimple(page);
+    await continueToReview(page, parsed);
 }
 
 /**
@@ -250,6 +237,10 @@ test.describe('Import Wizard — Asset Resolution', () => {
     test.beforeEach(async ({page}) => {
         await login(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwnedReports(page, ownedReports);
     });
 
     // -----------------------------------------------------------------------

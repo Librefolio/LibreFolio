@@ -355,51 +355,90 @@ async def test_backward_fill():
 
 @pytest.mark.asyncio
 async def test_missing_rate_error():
-    """Test that RateNotFoundError is raised only when no rate exists before requested date."""
+    """Test that RateNotFoundError is raised only when no rate exists before requested date.
+
+    The test creates the gap it measures: two EUR/XTS rates (XTS is the ISO 4217 code
+    reserved for testing; no seed writes the pair) on fixed dates far from any seeded
+    history, flushed in this session and never committed. Deriving the dates from the
+    oldest EUR/USD row of the shared table made the verdict depend on the database
+    contents and on today's date: on a seeded database "oldest + 365 days" is a weekday
+    with a rate of its own, so nothing was backward-filled.
+    """
     print_section("Test 7: Missing Rate Error Handling")
+
+    # Stored as EUR/XTS: base < quote, as fx_rates requires. The later rate is a trap with a
+    # different value: backward-fill for gap_date must use the rate before it, never the one after.
+    oldest_rate_date = date(2001, 1, 8)
+    gap_date = date(2001, 1, 10)  # no rate of its own: only backward-fill can answer
+    later_rate_date = date(2001, 1, 12)
+    oldest_rate = Decimal("1.25")
+    later_rate = Decimal("1.40")
+    amount = Currency(code="EUR", amount=Decimal("100.00"))
 
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        # Find the oldest rate in DB
-        stmt = select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD").order_by(FxRate.date.asc()).limit(1)
-
-        result = await session.execute(stmt)
-        oldest_rate = result.scalars().first()
-
-        assert oldest_rate, "No EUR/USD rates in DB"
-
-        print_info(f"Oldest rate in DB: {oldest_rate.date}")
-
-        # Test 1: Date before oldest rate (should fail)
-        date_before = oldest_rate.date - timedelta(days=1)
-        amount = Currency(code="EUR", amount=Decimal("100.00"))
-
-        print_info(f"\nTest 7.1: Date before any data ({date_before})")
-        print_info("Expected: RateNotFoundError")
-
-        with pytest.raises(RateNotFoundError) as exc_info:
-            await _convert_single(session, amount, "USD", date_before)
-
-        error_msg = str(exc_info.value)
-        print_success("✓ Correctly raised RateNotFoundError")
-        print_info(f"Error message: {error_msg[:100]}...")
-
-        # Test 2: Very old date but after oldest rate (should work with backward-fill)
-        old_but_valid_date = oldest_rate.date + timedelta(days=365)  # 1 year after oldest
-        print_info(f"\nTest 7.2: Old date but after oldest rate ({old_but_valid_date})")
-        print_info("Expected: Success with backward-fill")
+        # Precondition, checked not assumed: no EUR/XTS rate on or before the last date written here
+        leftover_stmt = select(FxRate.date).where(FxRate.base == "EUR", FxRate.quote == "XTS", FxRate.date <= later_rate_date).order_by(FxRate.date)
+        leftover_dates = (await session.execute(leftover_stmt)).scalars().all()
+        if leftover_dates:
+            leftovers = ", ".join(str(d) for d in leftover_dates)
+            print_error(f"EUR/XTS already has rates on or before {later_rate_date}: {leftovers}")
+            pytest.fail(f"Precondition failed: this test needs EUR/XTS without rates on or before {later_rate_date}, found {leftovers}")
 
         try:
-            converted, actual_date, backward_filled = await _convert_single(session, amount, "USD", old_but_valid_date, return_rate_info=True)
+            # Flushed, never committed: only this session sees them, and the rollback removes them
+            session.add_all(
+                [
+                    FxRate(date=oldest_rate_date, base="EUR", quote="XTS", rate=oldest_rate, source="TEST"),
+                    FxRate(date=later_rate_date, base="EUR", quote="XTS", rate=later_rate, source="TEST"),
+                ]
+            )
+            await session.flush()
 
-            assert backward_filled, "Should use backward-fill for old date"
+            print_info(f"Oldest EUR/XTS rate: {oldest_rate_date} = {oldest_rate} (next: {later_rate_date} = {later_rate})")
 
-            days_back = (old_but_valid_date - actual_date).days
+            # Test 1: Date before oldest rate (should fail)
+            date_before = oldest_rate_date - timedelta(days=1)
+
+            print_info(f"\nTest 7.1: Date before any data ({date_before})")
+            print_info("Expected: RateNotFoundError")
+
+            with pytest.raises(RateNotFoundError) as exc_info:
+                await _convert_single(session, amount, "XTS", date_before)
+
+            error_msg = str(exc_info.value)
+            print_success("✓ Correctly raised RateNotFoundError")
+            print_info(f"Error message: {error_msg[:100]}...")
+
+            # Test 2: Date after oldest rate, without a rate of its own (should work with backward-fill)
+            print_info(f"\nTest 7.2: Date after oldest rate, without its own rate ({gap_date})")
+            print_info(f"Expected: Success with backward-fill from {oldest_rate_date}")
+
+            converted, actual_date, backward_filled = await _convert_single(session, amount, "XTS", gap_date, return_rate_info=True)
+            expected = amount.amount * oldest_rate
+
+            assert backward_filled is True, f"Should use backward-fill for {gap_date}, got backward_filled={backward_filled}"
+            assert actual_date == oldest_rate_date, f"Backward-fill should use the latest rate on or before {gap_date} ({oldest_rate_date}), used {actual_date}"
+            assert converted.code == "XTS", f"Expected XTS, got {converted.code}"
+            assert not (abs(converted.amount - expected) > Decimal("0.01")), f"Expected {expected}, got {converted.amount}"
+
+            days_back = (gap_date - actual_date).days
             print_success(f"✓ Backward-fill used: {actual_date} ({days_back} days back)")
 
-        except RateNotFoundError:
-            print_error("Should not raise error for date after oldest rate")
+            # Test 3: Exact date of the oldest rate (control: backward-fill is not always reported)
+            print_info(f"\nTest 7.3: Exact date of oldest rate ({oldest_rate_date})")
+            print_info("Expected: Success without backward-fill")
+
+            converted, actual_date, backward_filled = await _convert_single(session, amount, "XTS", oldest_rate_date, return_rate_info=True)
+
+            assert backward_filled is False, f"Backward-fill should not be applied for exact date match, got backward_filled={backward_filled}"
+            assert actual_date == oldest_rate_date, f"Expected rate date {oldest_rate_date}, got {actual_date}"
+            assert not (abs(converted.amount - expected) > Decimal("0.01")), f"Expected {expected}, got {converted.amount}"
+
+            print_success("✓ Exact match: no backward-fill applied")
+        finally:
+            await session.rollback()
 
         print_success("Missing rate error handling works correctly")
 

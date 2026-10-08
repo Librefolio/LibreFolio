@@ -2255,3 +2255,10 @@ TRANSACTION_IMPLIED descriptions.
 Index: no summary changed. Graph: the graphify `--update` is **deferred** (graphify unavailable in this worktree).
 `check_source_paths.py`: 0 missing paths on three of the four pages; [[features/F-058]] keeps its one pre-P miss
 (`fifo_utils.py`); overall 64 distinct missing paths, 88 occurrences in 52 pages.
+
+## [2026-10-07] file | A slow language switch tore the whole app down
+Triage of the auth 3a coverage red: both layouts unmounted the app on every svelte-i18n `isLoading`, so a
+Welcome language preview whose catalogue took more than 200 ms was rebuilt back to the persisted language.
+Fixed with a first-dictionary latch; regression E2E 3c and a layout unit case.
+Filed: [[problems/i18n-loading-gate-remounts-app]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
