@@ -1364,6 +1364,290 @@ def test_the_historical_var_analytic_publishes_contiguous_bins_cut_exactly_on_th
 
 
 # --------------------------------------------------------------------------- #
+# Block (f), D380 — an interquartile range of exactly zero is binned with Sturges.
+#
+# The Dashboard's «Distribution of daily returns» drew TWO bars for portfolios where
+# more than half the daily returns share one value — usually 0.0: cash, a loan quoted
+# at a flat price. Both quartiles then sit on that value, the interquartile range is
+# exactly zero, and so is the Freedman-Diaconis width ``2 * IQR / n**(1/3)``. NumPy
+# answers a zero width with ONE bin spanning the whole range (``_get_bin_edges``:
+# ``if width: ... else: n_equal_bins = 1``), and translating that grid onto the VaR pin
+# cuts it in two. Nothing raises and nothing warns: two bars are a valid histogram.
+#
+# Decision D380 (08/10/2026): when ``np.percentile(sample, [75, 25])`` — the quartiles
+# exactly as NumPy's Freedman-Diaconis computes them — returns two EQUAL values, the
+# width is ``np.diff(np.histogram_bin_edges(sample, bins="sturges")).max()``. Sturges is
+# named, never reached through ``"auto"``: in NumPy 2 ``auto`` is
+# ``min(fd_corrected, sturges)``, which on this shape lays down 32 bars for a year of
+# days and 142 for 5000 (measured on NumPy 2.5.3), and which would move every healthy
+# histogram as well. Everything else is unchanged: the zero-range fallback, the
+# translation onto the pin, the ``_MAX_HISTOGRAM_BINS - 2`` clamp, and counts taken by
+# ``np.histogram`` over the published edges. ``historical_var`` goes from 3.0.0 to
+# 3.1.0 (pinned in ``test_risk_analytics.py``); VaR and CVaR do not move.
+#
+# The trigger is an IQR of EXACTLY zero. The two controls at the end of this sub-block
+# pin both sides of that line: a flat majority whose middle half is not flat, and an
+# IQR that is tiny but positive, keep Freedman-Diaconis.
+# --------------------------------------------------------------------------- #
+
+
+def _interquartile_range(sample: Sequence[float]) -> float:
+    """Return the interquartile range exactly as NumPy's Freedman-Diaconis estimator takes it.
+
+    ``np.subtract(*np.percentile(x, [75, 25]))`` is the line inside ``_hist_bin_fd``, so a
+    zero here is a zero width there — the premise every D380 case asserts before acting.
+    """
+    upper, lower = np.percentile(np.asarray(sample, dtype=float), [75, 25])
+    return float(upper - lower)
+
+
+def _sturges_width(sample: Sequence[float]) -> float:
+    """Return the bin width ``np.histogram_bin_edges(..., bins='sturges')`` lays down.
+
+    The D380 contract names this very expression, so the oracle computes it the same way:
+    NumPy's realised spacing over ``[min, max]``, not the raw ``ptp / (log2(n) + 1)``.
+    """
+    return float(np.diff(np.histogram_bin_edges(np.asarray(sample, dtype=float), bins="sturges")).max())
+
+
+def _sturges_bin_count(observations: int) -> int:
+    """Return Sturges's bar count ``ceil(log2(n) + 1)``: 6 at n = 30, 9 at n = 252, 14 at n = 5000.
+
+    The published grid is aligned to the pin rather than to the sample minimum, so it can
+    round outward once at each end: with the pin inside the data, ``count`` to
+    ``count + 2`` bars.
+    """
+    return math.ceil(math.log2(observations) + 1)
+
+
+def _mostly_flat_series() -> list[float]:
+    """Return the shape D380 was reported on: 252 days, 200 of them flat at exactly 0.0.
+
+    Six losses down to -8.2% and 46 gains up to +8.1%. Six losses are fewer than the 12.6
+    observations a 5% tail holds, so the VaR floors at zero and the producer pins at
+    ``-0.0``. Before D380 this published edges of about ``[-0.163, 0.0, 0.163]`` with
+    counts ``[6, 246]``: Freedman-Diaconis's one whole-range bar, cut in two by the pin.
+    """
+    generator = np.random.default_rng(7)
+    losses = -generator.uniform(0.002, 0.082, 6)
+    losses[0] = -0.082
+    gains = generator.uniform(0.001, 0.081, 46)
+    gains[0] = 0.081
+    returns = np.concatenate([np.zeros(200), losses, gains])
+    generator.shuffle(returns)
+    return [float(value) for value in returns]
+
+
+def _mostly_flat_series_with_a_real_tail() -> list[float]:
+    """Return 252 days, 200 flat at 0.0, with 20 losses — more than a 5% tail holds.
+
+    The same flat majority as :func:`_mostly_flat_series`, but here the VaR is a real
+    loss (the 13th worst of 20), so the producer's pin sits among the losses, not on zero.
+    """
+    generator = np.random.default_rng(380)
+    returns = np.concatenate([np.zeros(200), -generator.uniform(0.001, 0.03, 20), generator.uniform(0.001, 0.03, 32)])
+    generator.shuffle(returns)
+    return [float(value) for value in returns]
+
+
+def _constant_accrual_series() -> list[float]:
+    """Return 252 days, 152 of them (60%) accruing exactly +0.0001: the flat value need not be zero."""
+    generator = np.random.default_rng(382)
+    returns = np.concatenate([np.full(152, 0.0001), generator.normal(0.0, 0.005, 100)])
+    generator.shuffle(returns)
+    return [float(value) for value in returns]
+
+
+def _flat_majority_of(size: int) -> list[float]:
+    """Return ``size`` days, 80% of them flat at 0.0 and the rest normal around zero."""
+    generator = np.random.default_rng(size)
+    flat = round(0.8 * size)
+    returns = np.concatenate([np.zeros(flat), generator.normal(0.0, 0.01, size - flat)])
+    generator.shuffle(returns)
+    return [float(value) for value in returns]
+
+
+def _flat_majority_with_a_spread_upper_quartile() -> list[float]:
+    """Return 252 days: 25 losses (10%), 151 flat at 0.0 (60%), 76 gains (30%).
+
+    A flat majority, but not a flat middle half: the 75th percentile lands among the
+    gains, so the interquartile range is positive and Freedman-Diaconis has a width to give.
+    """
+    generator = np.random.default_rng(386)
+    returns = np.concatenate([-generator.uniform(0.001, 0.03, 25), np.zeros(151), generator.uniform(0.001, 0.03, 76)])
+    generator.shuffle(returns)
+    return [float(value) for value in returns]
+
+
+# Every series here has a flat middle half. The pins are where the producer cuts
+# (``-VaR``), a small real loss, and break-even — all three inside the data.
+_IQR_ZERO_SERIES = {
+    "mostly-flat": _mostly_flat_series,
+    "mostly-flat-with-a-real-tail": _mostly_flat_series_with_a_real_tail,
+    "constant-accrual": _constant_accrual_series,
+}
+_IQR_ZERO_PINS = {
+    "minus-var": lambda tail: -tail.value_at_risk,
+    "four-basis-point-loss": lambda tail: -0.0004,
+    "break-even": lambda tail: 0.0,
+}
+
+
+@pytest.mark.parametrize("pin", list(_IQR_ZERO_PINS))
+@pytest.mark.parametrize("series", list(_IQR_ZERO_SERIES))
+def test_an_interquartile_range_of_zero_is_binned_at_the_sturges_width_instead_of_one_bar_cut_in_two(series, pin):
+    """D380: a flat middle half gets Sturges's bars, wherever the pin falls inside the data.
+
+    Before the fix every case here published exactly two bars — Freedman-Diaconis's single
+    whole-range bin, cut by the pin. The sample is ``tail.horizon_returns`` because that
+    is what the producer bins; at a one-day horizon those are the returns themselves up to
+    the last ulp, and a flat day stays exactly flat.
+
+    The width is compared at ``rel=1e-12`` for the reason the Freedman-Diaconis width test
+    above gives: ``_observed_bin_width`` re-rounds two lattice points. Any other rule
+    misses in the first digit — ``auto`` lays down 32 bars on these samples, FD one.
+    """
+    tail = historical_var_cvar(_IQR_ZERO_SERIES[series](), confidence_level=_CONFIDENCE_LEVEL)
+    sample = tail.horizon_returns
+    pinned = _IQR_ZERO_PINS[pin](tail)
+    sturges_bins = _sturges_bin_count(len(sample))
+
+    # Premises: both quartiles on the flat value, losses and gains on either side of it,
+    # the pin inside the data, and NumPy's own Sturges count equal to the formula.
+    assert _interquartile_range(sample) == 0.0
+    assert min(sample) < 0.0 < max(sample)
+    assert min(sample) <= pinned <= max(sample)
+    assert len(np.histogram_bin_edges(np.asarray(sample, dtype=float), bins="sturges")) - 1 == sturges_bins
+
+    histogram = return_distribution_histogram(sample, pinned_edge=pinned)
+
+    assert sturges_bins <= len(histogram.counts) <= sturges_bins + 2, f"{len(histogram.counts)} bars, where Sturges lays down {sturges_bins}"
+    assert _observed_bin_width(histogram) == pytest.approx(_sturges_width(sample), rel=1e-12)
+    assert min(abs(edge - pinned) for edge in histogram.edges) == 0.0
+    reference, _ = np.histogram(np.asarray(sample, dtype=float), bins=np.asarray(histogram.edges, dtype=float))
+    assert tuple(int(count) for count in reference) == histogram.counts
+    assert sum(histogram.counts) == len(sample)
+
+
+@pytest.mark.parametrize("size", [30, 5000])
+def test_an_interquartile_range_of_zero_draws_more_than_two_bars_and_at_most_sixteen_from_thirty_to_five_thousand_days(size):
+    """Sturges grows by one bar per doubling of the history, so the picture stays readable at both ends.
+
+    ``ceil(log2(n) + 1)`` is 6 at n = 30 and 14 at n = 5000, so the aligned grid stays within
+    6..8 and 14..16 bars: never the two the old path drew at every length, and never the
+    hundred-odd ``auto`` would draw at the long end. The pins are SWEPT across the data, as
+    in the clamp test above, because how many bars the alignment adds depends on where the
+    pin sits.
+    """
+    tail = historical_var_cvar(_flat_majority_of(size), confidence_level=_CONFIDENCE_LEVEL)
+    sample = tail.horizon_returns
+    sturges_bins = _sturges_bin_count(size)
+    assert _interquartile_range(sample) == 0.0
+
+    pins = [-tail.value_at_risk, 0.0, *(float(value) for value in np.linspace(min(sample), max(sample), 25))]
+    observed: list[int] = []
+    for pinned in pins:
+        histogram = return_distribution_histogram(sample, pinned_edge=pinned)
+        assert sum(histogram.counts) == size
+        assert min(abs(edge - pinned) for edge in histogram.edges) == 0.0
+        observed.append(len(histogram.counts))
+
+    assert min(observed) > 2, f"bar counts over {len(pins)} pins: {sorted(set(observed))}"
+    assert max(observed) <= 16
+    assert sturges_bins <= min(observed)
+    assert max(observed) <= sturges_bins + 2
+
+
+def test_a_flat_majority_whose_upper_quartile_is_a_gain_keeps_the_freedman_diaconis_width():
+    """CONTROL: the trigger is a flat middle HALF, not a flat majority. Green before D380, and must stay so.
+
+    Sixty percent of these days are flat — a majority, like every D380 sample — but ten
+    percent are losses and thirty gains, so the 75th percentile lands on a gain and the
+    interquartile range is positive. Freedman-Diaconis has a width to give and keeps
+    giving it: a fallback keyed on "many identical returns" instead of on the quartiles
+    would switch this sample to Sturges and go red here.
+    """
+    tail = historical_var_cvar(_flat_majority_with_a_spread_upper_quartile(), confidence_level=_CONFIDENCE_LEVEL)
+    sample = tail.horizon_returns
+    upper, lower = np.percentile(np.asarray(sample, dtype=float), [75, 25])
+    width = _freedman_diaconis_width(sample)
+
+    # Premises: a flat majority, a flat lower quartile, an upper quartile that is a gain,
+    # an unclamped Freedman-Diaconis grid, and a width nowhere near Sturges's.
+    assert sum(1 for value in sample if value == 0.0) > len(sample) / 2
+    assert lower == 0.0 < upper
+    assert (max(sample) - min(sample)) / width < _MAX_HISTOGRAM_BINS - 2
+    assert width < 0.5 * _sturges_width(sample)
+
+    for pinned in (-tail.value_at_risk, -0.0004, 0.0):
+        histogram = return_distribution_histogram(sample, pinned_edge=pinned)
+        assert _observed_bin_width(histogram) == pytest.approx(width, rel=1e-12)
+        assert min(abs(edge - pinned) for edge in histogram.edges) == 0.0
+        assert sum(histogram.counts) == len(sample)
+
+
+def test_a_tiny_but_positive_interquartile_range_keeps_the_clamped_freedman_diaconis_grid():
+    """CONTROL: "almost zero" is not zero — only an IQR of EXACTLY zero switches to Sturges. Green before D380, and must stay so.
+
+    :func:`_clamp_stress_series` has a positive IQR of about 1.3e-6, so Freedman-Diaconis
+    asks for some 2.7 million bins and the clamp brings them down to 198 or 199, far above
+    the dozen Sturges would draw. Scaled by 1e-6 the IQR is about 1.3e-12, scaled by 1e-10
+    about 1.3e-16 — below ``ZERO_TOLERANCE``: a fallback guarded by that tolerance, by
+    ``np.isclose`` or by any other epsilon would switch these samples to Sturges and go red
+    here, on the bar count first.
+
+    The whole sample is scaled, outliers included, on purpose: NumPy allocates the full
+    Freedman-Diaconis grid (range / width edges) BEFORE this module clamps it, so the
+    ratio of the range to the IQR is memory, and it is kept at this sample's 2.7 million
+    bins at every scale.
+    """
+    iqrs: list[float] = []
+    for scale in (1.0, 1e-6, 1e-10):
+        sample = [value * scale for value in _clamp_stress_series()]
+        pinned = -0.0002 * scale
+        iqrs.append(_interquartile_range(sample))
+        assert iqrs[-1] > 0.0
+        assert len(np.histogram_bin_edges(np.asarray(sample, dtype=float), bins="fd")) - 1 > _MAX_HISTOGRAM_BINS
+
+        histogram = return_distribution_histogram(sample, pinned_edge=pinned)
+
+        assert len(histogram.counts) > _sturges_bin_count(len(sample)) + 2
+        assert _observed_bin_width(histogram) != pytest.approx(_sturges_width(sample), rel=1e-3)
+        assert _observed_bin_width(histogram) == pytest.approx((max(sample) - min(sample)) / (_MAX_HISTOGRAM_BINS - 2), rel=1e-12)
+        assert min(abs(edge - pinned) for edge in histogram.edges) == 0.0
+
+    # The sweep reaches below the module's own zero tolerance, the epsilon an
+    # "almost zero" guard would most naturally reuse.
+    assert min(iqrs) < ZERO_TOLERANCE
+
+
+@pytest.mark.parametrize("series", list(_IQR_ZERO_SERIES))
+def test_the_historical_var_analytic_publishes_more_than_two_bars_for_a_series_whose_middle_half_is_flat(series):
+    """D380 end to end: the payload the Dashboard draws carries Sturges's bars, cut on the VaR.
+
+    The producer re-packs the primitive's grid (pinned bit for bit by the contiguity test
+    above), so this is the user-visible half of the fix. VaR and CVaR are compared exactly
+    with the estimator's, because D380 moves the bins and nothing else.
+    """
+    returns = _IQR_ZERO_SERIES[series]()
+    output = HistoricalVarAnalytic().compute(HistoricalVarParams(confidence_level=_CONFIDENCE_LEVEL), _var_execution_context(returns)).output
+    bins = output.return_bins
+    boundaries = [item.lower_bound for item in bins] + [bins[-1].upper_bound]
+    sturges_bins = _sturges_bin_count(output.observations)
+
+    assert output.observations == len(returns)
+    assert len(bins) > 2, f"{len(bins)} bars published for a series whose middle half is flat"
+    assert sturges_bins <= len(bins) <= sturges_bins + 2
+    assert min(abs(boundary - output.var_bin_edge) for boundary in boundaries) == 0.0
+    assert sum(item.count for item in bins) == output.observations
+
+    tail = historical_var_cvar(returns, confidence_level=_CONFIDENCE_LEVEL)
+    assert output.value_at_risk == tail.value_at_risk
+    assert output.conditional_value_at_risk == tail.conditional_value_at_risk
+    assert output.var_bin_edge == -tail.value_at_risk
+
+
+# --------------------------------------------------------------------------- #
 # Block (g) — M1: the vectorised rolling signals must reproduce the loop exactly.
 #
 # Step M1 of the mathematics migration replaced four pure-Python rolling loops with
