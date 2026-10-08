@@ -5,10 +5,17 @@ Injects three schema types:
 - WebSite + SearchAction  (homepage only) → Google Sitelinks Searchbox
 - SoftwareApplication     (homepage only) → rich card with category/price
 - BreadcrumbList          (all inner pages) → breadcrumb trail in SERP
+
+It also owns the canonical public address: templates read it as `lf_canonical_site_url`,
+because `mkdocs serve` rewrites `config.site_url` to the local server's address.
 """
 
 import json
+import logging
+from urllib.parse import urlsplit
 
+
+log = logging.getLogger("mkdocs.hooks.jsonld")
 
 _SITE_URL = "https://librefolio.github.io/LibreFolio/"
 _REPO_URL = "https://github.com/Librefolio/LibreFolio"
@@ -118,6 +125,25 @@ def _breadcrumb_schema(page) -> dict | None:
         "@type": "BreadcrumbList",
         "itemListElement": items,
     }
+
+
+def on_config(config):
+    """Warn when `site_url` and `_SITE_URL` drift apart: a strict build then fails.
+
+    Under `mkdocs serve` `site_url` is the local server's address, so the check skips it.
+    """
+    site_url = config.site_url or ""
+    host, port = config.dev_addr
+    served_locally = urlsplit(site_url).netloc in {f"{host}:{port}", f"[{host}]:{port}"}
+    if site_url and not served_locally and site_url.rstrip("/") != _SITE_URL.rstrip("/"):
+        log.warning("site_url %s differs from the canonical address in hooks/jsonld.py (%s)", site_url, _SITE_URL)
+    return config
+
+
+def on_env(env, config, files):
+    """Publish the canonical address to the templates (`overrides/main.html`)."""
+    env.globals["lf_canonical_site_url"] = _SITE_URL
+    return env
 
 
 def on_post_page(output: str, page, config) -> str:

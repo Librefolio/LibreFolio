@@ -1,16 +1,15 @@
 # ✂️ Image Crop Tool
 
-LibreFolio includes a powerful interactive image editing tool that lets you crop, rotate, and resize images before uploading them.
+Frame, rotate and resize a picture before LibreFolio stores it.
 
 ---
 
 ## 🎯 When Does It Appear?
 
-The Image Crop modal opens automatically whenever you upload an image file in LibreFolio:
-
-- 📂 **Files page** → uploading any image (JPEG, PNG, WebP, GIF)
-- 👤 **[Profile settings](../settings/profile.md)** → changing your avatar
-- 🏦 **Broker settings** → changing a broker icon
+- 👤 **Profile picture** — in **[Profile](../settings/profile.md)** or on the Welcome page: in the
+  image picker, choose **Upload** and pick an image.
+- 🏦 **Broker icon** and 📈 **asset icon** — the same picker, from the broker or the asset form.
+- 📂 **Files page** — add images to the upload list, then click the ✏️ **Edit** button of an image.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -18,72 +17,59 @@ The Image Crop modal opens automatically whenever you upload an image file in Li
 
 ---
 
-## 📐 Presets
+## ✂️ Frame the Picture
 
-The tool offers presets for common use cases:
-
-| Preset | Size | Aspect Ratio | Use Case |
-|--------|------|-------------|----------|
-| **Avatar** | 200 × 200 px | 1:1 (square) | User profile pictures |
-| **Broker Icon** | 64 × 64 px | 1:1 (square) | Broker logos |
-| **Asset Icon** | 256 × 256 px | 1:1 (square) | Asset logos |
-| **Custom** | Free | Free | Any size and ratio |
-
-The preset automatically sets the aspect ratio constraint and output size.
-
-Ellipse preview appears only for the avatar and broker-icon presets.
+- 📏 **Drag** a corner or a side of the crop area to resize it, its inside to move it, the outside
+  to move the picture. The crop area always stays inside the picture.
+- 🔍 **Zoom** with the mouse wheel or **+ / −** — the crop area tightens (or widens) first, then the
+  picture zooms — or pinch on a touch screen.
+- 🔄 **Rotate** 15° at a time with **↺ / ↻**, and 🪞 **flip** with ↔ / ↕.
+- 👁️ The eye button on the left toggles a **round preview**: how the picture looks in a circle, like
+  your avatar in the sidebar.
+- 🔁 **Reset All** (top right) undoes the crop, zoom, rotation and flip.
 
 ---
 
-## 🎛️ Controls
+## 📐 Presets
 
-### ✂️ Crop Area
+| Preset | Output size | Shape |
+|--------|------|-------------|
+| **Avatar** | 200 × 200 px | Square, round preview on |
+| **Icon** | 64 × 64 px | Square, round preview on |
+| **Custom** | Same as the crop area | Free, or a ratio of your choice: 1:1, 16:9, 4:3, 3:4 |
 
-- 📏 **Drag the corners** to resize the crop area
-- ↔️ **Drag inside** the area to move it
-- 🔒 The crop area is **clamped to the image bounds** — you can't select outside the image
-
-### 🔍 Zoom
-
-- 🖱️ **Mouse wheel** or **pinch** (on touch devices) to zoom in/out
-- ➕ **Zoom buttons** (+/−) for precise control
-- 🎯 Zooming centers on the crop selection
-
-### 🔄 Rotation
-
-- 🔄 **Rotate buttons** (↺/↻) rotate in 15° steps
-- 📍 Rotation happens relative to the selection center
-
-### 🪞 Flip
-
-- ↔️ **Flip Horizontal** (↔) — mirrors the image left-right
-- ↕️ **Flip Vertical** (↕) — mirrors the image top-bottom
+Profile pictures open with **Avatar**, broker icons with **Icon** and Files-page images with
+**Custom**; asset icons are cut square at 256 × 256 px. You can switch preset at any time.
 
 ---
 
 ## ⚙️ Output Settings
 
-Before confirming, you can adjust:
-
-- 🎨 **Output format**: PNG (lossless, transparency), JPEG (smaller, no transparency), WebP (modern, best compression)
-- 📊 **Quality** (JPEG/WebP only): Slider from 10% to 100% — lower quality = smaller file
-- 📐 **Output size**: Width and height in pixels (linked to the preset, but editable)
-
-!!! tip "Ellipse Preview"
-
-    For avatar and icon presets, a circular **ellipse overlay** is shown on the crop area. This helps you preview how the image will look in a circular frame (e.g., user avatars in the navigation bar).
+- 🎨 **Format** — `.png` (lossless, keeps transparency), `.jpg` (smaller, no transparency) or
+  `.webp` (best compression), next to the file name, which you can also change. A `.jpg` or `.webp`
+  picture keeps its format; anything else starts as `.png`.
+- 📊 **Quality** (`.jpg` and `.webp` only) — **−** / **+** in steps of 10%, from 10% to 100%: lower
+  quality means a smaller file.
+- 📐 **Output** — width × height in pixels, set by the preset but editable. The two stay in
+  proportion with the crop area, and you can't set them larger than it; **Scale** sets both at
+  once.
 
 ---
 
-## 🔄 Workflow
+## ✅ Confirm or Cancel
 
-1. **Upload or drag** an image file
-2. The crop modal opens with the appropriate preset
-3. **Adjust** the crop area, zoom, rotation as needed
-4. **Preview** the result in real-time
-5. Click **Upload** to confirm — the cropped image is saved to the server
-6. Click **Cancel** or close the modal to discard changes
+- **Crop & Upload** saves the picture and uses it. On the Files page, **Crop** puts it in the upload
+  list instead (**Restore original** ↺ brings the original back), and **Upload** sends the list.
+- **Cancel** or **✕** closes the tool — after asking, if you have unsaved changes
+  (**Discard & Close**). From the image picker, you go back to the picker.
 
-!!! info "Non-image files"
+??? info "📄 Non-image files — on the Files page"
 
-    If you upload a non-image file (PDF, CSV, etc.), the crop modal is skipped. Instead, a simple rename dialog appears.
+    A PDF, a CSV or any other non-image file has no crop step: its ✏️ button opens a simple
+    **Rename** dialog instead.
+
+---
+
+## 🔗 Related
+
+- 🛠️ **[File Upload & Media Components](../../developer/frontend/components/core-ui/file-upload.md)** — How the tool is built (for developers)

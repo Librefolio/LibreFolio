@@ -420,7 +420,7 @@
 >
 > **⚠️ Fuori pista**: the group 1 batch was committed by path while the `SettingsLayout.svelte` hook sat in the worktree. Until the SHAs arrived M did not touch the 10 batch paths, and warned the coordinator to stage them explicitly. The hook stayed out of the commits as planned.
 
-### 15. ✅ Group 3: Danske Bank report sets — 2026-10-08
+### 15. ✅ Group 3: Danske Bank report sets — 2026-10-08 (committed: `f1bda660f`, `88b30ac1a`)
 
 > **Note implementazione**:
 > - Base `1ac5d0a0a`.
@@ -488,3 +488,216 @@
 > - **Q's text corrected:** `danske-bank.en.md:152` said only «Deposit», but the code proposes a Deposit or a Withdrawal (`brim_gap_fix.py:145`), and our gap-fix image shows a Withdrawal. Changed to «a **Deposit** or a **Withdrawal**». EN only; the page has no translations.
 > - **Toasts:** they close on a JS timer that `freezeAnimations` does not pause, so a shot taken within 8 s of an action that raises one can catch it. `expectNoToast` is exported but only used in the bulk test. The risk already existed in other scenarios and was not widened.
 > - **Timeouts:** test-author's 240–600 s budgets stay. Runs measured 15–28 s per test, but the 20 s `actionTimeout` already fails a stuck step quickly, and CI is slower.
+
+### 16. ✅ Group 4: risk lab, What if simulation, missing exchange rates — 2026-10-08 (committed: `a1f34905a`, `44ac071d2`)
+
+> **Note implementazione**:
+> - Base `88b30ac1a`.
+> - test-author is writing 9 shots:
+>   - `risk/lab-correlation`, `-asset-picker`, `-hurt-table`, `-risk-return`, `-benchmark-picker`, `-notice`, `-replay`;
+>   - `risk/whatif-simulation`;
+>   - `dashboard/data-quality-sync-rates`.
+> - All of it runs as the admin, read-only: the selection and the benchmark live in localStorage. No live provider is ever called.
+> - Coordinator note for G6: the PAC images in `user/tools/pac-allocator/index.en.md` go in only after Q's checkpoint (which restructures that page) is in M's base. The scenarios can be written before.
+>
+> **Real-data probes on the lane** (read-only; only localStorage is written). Scripts: `release-pipeline/scripts/probe_risk_lab_real_data{,_v2,_v3}.cjs`; output: `runs/G4_probe*`.
+> - The Assets page opens on 3M, so the shots select 1Y with the top preset.
+> - At 1Y, the 7 priced assets (AAPL, MSFT, TSLA, the two loans, BTC, ETH) give:
+>   - «The most alike»: Roma↔Milano 0.94 and ETH↔BTC 0.93;
+>   - «The ones that offset»: empty (no ρ ≤ −0.30 in the mock data).
+> - Ineligible assets (the 7 with a single quote, and KRW) are **parked**: struck-through chips and `risk-parked-note`. They raise no `risk-partial-notice`. So `lab-notice` very likely needs an injection.
+> - A 2Y replay gives the left-out box `starts_after_window_start` and the «Replay from 2025-09-24 to …» button with real data.
+>
+> **Tests** (test-author: `frontend/e2e/gallery.spec.ts` and the new `frontend/e2e/fixtures/galleryRiskLab.ts`):
+> - A `Risk Analysis` describe after `Assets` with 5 tests, plus 1 test in `Dashboard` next to the existing data-quality test, which is unchanged.
+> - **Setup:**
+>   - the admin, read-only;
+>   - selection in localStorage: Apple, RE Loan Milano, RE Loan Roma, Bitcoin, Ethereum;
+>   - benchmark S&P 500, also in localStorage;
+>   - 1Y period from the top preset;
+>   - asset ids resolved through the API.
+> - **Guards:** each test aborts `POST /assets/prices/current` (the page's 30 s poll, which would reach providers and store a price), `/assets/prices/sync`, `/fx/currencies/sync` and `GET /fx/providers`, and asserts at the end that no attempt was made.
+> - **Real data:** correlation, hurt table, risk-return, both pickers, and the simulation (paths 2048, seed 123456).
+> - **Injected:**
+>   - `lab-notice`: RE Loan Roma stale by 12 days in the `/risk/query` answers, plus a `stale_at_end` warning in the eligibility answer (amber chip, still analysed), plus Correlation `unavailable` / `insufficient_history` for the section banner. The real engine has no trigger: the eligibility check filters stale assets out before the query.
+>   - `lab-replay`: Roma left out as «quoted after the period start», with a suggested period. All the seeded prices start on the same day.
+>   - `data-quality-sync-rates`: the dashboard fixture plus a `MISSING_FX_RATES` issue, shaped as the backend builds it (pairs sorted EUR-GBP, EUR-USD).
+>
+> **Lane runs** (6158, 1 worker):
+> - Run 1 (load ~10): 10/12. The correlation test was red on both viewports because it required BTC↔ETH, a pair the selection's joint calendar no longer ranks.
+> - Run 2 (load 7→12): 6/6 for the 3 corrected tests.
+> - Run 3, final with the final code (load 10→15): **12/12 in 7.2 min**.
+> - Logs: `release-pipeline/runs/G4_run{1,2,3}.log`.
+> - Visual check of a sample (4 languages, both themes, desktop and mobile): correct.
+>
+> **Docs** (docs-writer, gallery pages only, by the coordinator's rule during Q's wave 1):
+> - `gallery/{desktop,mobile}.en.md`: «💱 Missing Exchange Rates» in Dashboard, plus the new section `---` / `## 📉 Risk Analysis` with 8 entries and the following `---`.
+> - `gallery/index.en.md`: a «Risk Analysis» bullet; the comment now names only Onboarding.
+> - Placeholders left in place on purpose, for the batch after Q's wave 1: `user/assets/correlation.en.md` (7) and `financial-theory/.../risk-metrics/{benchmark-selection,historical-replay,simulation-modes}.en.md` (1 each).
+>
+> **Gates:**
+> - `mkdocs build` strict: 0 WARNING/ERROR.
+> - `check-links`: identical to the baseline.
+> - Prettier: ok.
+> - `tsc` e2e: only the 2 known errors.
+> - `git diff --check`: clean. Ports 6158 and 6168 free.
+>
+> **⚠️ Fuori pista**:
+> - **Tooling bug** in `dev.py mkdocs gallery --no-populate`. The help says «Skip DB population». But `LF_SETUP_DONE` is set only when dev.py has populated the DB itself (`dev.py:990-999`), so Playwright's `global-setup.ts:48` runs `populate_mock_data --force --with-reports` at **every** run. That is a different dataset from dev.py's own `--force --clean --with-static --with-reports`.
+>   - Effects: `--no-populate` reruns are neither faster nor on the same DB.
+>   - Proposed fix: one line, set `LF_SETUP_DONE=1` with `--no-populate` too. `dev.py` is shared, so it goes to the coordinator.
+>   - This also explains why the lane DB changed between runs (prices regenerated up to today).
+> - **Correction to my earlier facts:** NVIDIA, the ETFs, the BTPs and Gold now have **no** price rows, so the reason «No price has ever been recorded» is correct. The single row each had on 2026-10-07 is not reproduced by today's populate, and its origin is unknown.
+> - **Prices are deterministic but correlations are not portable:** the mock prices are seeded per asset and date (`_stable_seed`), but the correlation of a pair depends on the selection's joint calendar. Gallery assertions use only the Roma↔Milano pair, near-identical by construction.
+> - **Italian hurt table:** the last column («Risalita al massimo») is cut on the right by the longer labels. Product layout, minor.
+> - **Simulation framing:** the shot starts at the top of the step. The cone is partly in frame and «What this simulation assumed» is out of frame. To revisit with the new `dashboard/risk-whatif` shots after Q's wave 1.
+> - **Q's G3 finding:** `brokers/import-report-set-file-menu` used an extended test cash statement, so it showed «Read alone with Generic CSV». Danske is the only plugin with report sets (`report_roles`, `broker_danske_bank.py:1644`). Decision sent to Q: reshoot with the real Danske cash export, whose menu has Preview / Remove from the set / Delete, in the batch after Q's wave 1. Q has added the placeholder in `danske-bank` after `-read-as`.
+
+## Batch 4 — base `57f3d96a8` (merge of `dev_release2`, train 14, into M)
+
+### 17. ✅ Group 5 and two tooling fixes: combined revision, `--no-populate`, gallery fallback under `serve` — 2026-10-08
+
+> **Note implementazione**:
+>
+> **Combined revision validated** (light runs while the coverage run was on 6150):
+> - `mkdocs build` strict: 0 WARNING/ERROR. `check-links`: identical to the baseline.
+> - vitest `SettingsLayout` plus the fixture guard: 39/39. `tsc` e2e: only the 2 known errors. Prettier ok.
+> - Gallery smoke 4/4: `tools hub` and `social share modal`, desktop and mobile.
+> - `support/social-share-modal` was re-shot with K's fix (`53a6b2213`). The pixels confirm the bottom strip is now dimmed.
+> - Train 14 also brings:
+>   - L's fix to the card header and timeline on phones (`038109e91`), so the G3 mobile shots have to be re-shot;
+>   - I's batch (`bc08101d6`, gold dividends and period labels), which unblocks group 2.
+>
+> **`dev.py mkdocs gallery --no-populate`** (granted by the coordinator; a separate `fix(dev)` commit):
+> - New helper `_reuse_gallery_test_db()`. It resolves `get_test_data_dir()/sqlite/app.db`:
+>   - DB missing: a clear error and exit 1, before Playwright starts;
+>   - DB present: `_ensure_test_users()`, then «reusing <path>».
+> - `LF_SETUP_DONE=1` is now set in both branches, as `manifest-integrazione-E.md:301` requires (only once DB and users are really prepared).
+> - Ruff on `dev.py`: 43 errors, the same as `HEAD`. The local imports use the file's `# noqa: PLC0415 — CLI-only import` convention.
+> - **Proof on the lane** (`release-pipeline/runs/DEV_proof_{1_full,2_nopopulate,3_nodb}.log`, `DEV_proof_markers.txt`):
+>   1. A full run: populate and users, then global-setup «skipping to global settings».
+>   2. A `--no-populate` run: «reusing /private/tmp/librefolio-r2-m/sqlite/app.db», global-setup stands down, and the admin's `created_at` is unchanged (12:44:55). No repopulation.
+>   3. `--no-populate` on `/tmp/librefolio-r2-m-nodb`: exit 1 with the message; no Playwright, no directory created.
+> - **Regression tests** (test-author, `backend/test_scripts/test_utilities/test_runtime_isolation.py`): 10 new tests, all pure (`tmp_path`, `subprocess` blocked).
+>   - `TestGalleryReusesTheLaneDb` covers:
+>     - a missing DB: refused, the path is named, no users are created, nothing is written;
+>     - an existing DB: reused untouched, users ensured once, «reusing <lane>» printed;
+>     - users that cannot be ensured: refused;
+>     - a lane the real resolver rejects (inside `LIBREFOLIO_DATA_DIR`, or a folder marked as production): refused, with no exception.
+>   - `TestGalleryHandsTheSetupToPlaywright` goes through the real `dev.main()` parser:
+>     - with and without `--no-populate`, Playwright starts last, with `LF_SETUP_DONE` as `global-setup.ts` expects it and the same lane;
+>     - a refused reuse exits with 1 before Playwright and never falls back to populating.
+>   - Result: `utils runtime-isolation` **153/153** (143 + 10). Ruff and black clean on the test file.
+> - The `--no-populate` help now reads «Reuse the existing test database as it is (faster re-runs; needs one earlier full run)». Rerun 153/153.
+> - Notes from test-author, outside the scope:
+>   - `mkdocs gallery` does not call `configure_test_runtime()`. If the lane is defined only in `.env` and `dev.py` runs outside `pipenv run`, the command and Playwright could resolve different lanes. This already applies to the populate branch.
+>   - The reuse check only tests that the file exists: «as it is».
+>
+> **Gallery fallback under `mkdocs serve`** (Q's finding, assigned to M):
+> - The cause: `serve` rewrites `config.site_url`, and `overrides/main.html` derived `LF_GALLERY_FALLBACK_BASE` from it, so the loader asked the local server again.
+> - The fix, without touching `mkdocs.yml`:
+>   - `hooks/jsonld.py` publishes `_SITE_URL` to the templates (`on_env` → `lf_canonical_site_url`);
+>   - `main.html` reads it, falling back to `config.site_url`;
+>   - a new `on_config` warns when `site_url` and `_SITE_URL` drift apart (so a strict build fails), and skips the check under `serve`;
+>   - the comment in `gallery-img-loader.js` is updated.
+> - Hook check (`runs/G5_jsonld_hook_check.txt`): canonical, no trailing slash and `serve` give 0 warnings; drift gives 1; `on_env` publishes the canonical address.
+> - Strict build: 0 WARNING/ERROR, and the EN and IT pages carry `"https://librefolio.github.io/LibreFolio/"`.
+> - **`serve` on 6168** (`runs/G5_serve_6168.log`, `scripts/serve_fallback_check.cjs`, `runs/G5_serve_fallback_check.json`):
+>   - the injected base is the canonical one, with no drift warning;
+>   - in the browser, `fx/list.png` (absent locally) is requested locally first, then from GitHub Pages, and loads at 1280×720;
+>   - port freed afterwards.
+> - Ruff on `jsonld.py`: 2 errors, the same as `HEAD` (including the pre-existing `I001`).
+>
+> **For Q:**
+> - 102 PNGs (desktop/en, light and dark) copied to `/tmp/librefolio-q-gallery-drop/` for the developer's static preview. The repo is untouched.
+> - `assets/distribution-editor-{sector,geographic}` regenerated with the existing scenario: they show Q's 1.2 **Import CSV**.
+>
+> **⚠️ Fuori pista — live providers in the gallery (pre-existing):**
+> - During the `--no-populate` proof run, the Assets page's 30 s poll (`POST /assets/prices/current`) wrote 6 rows with today's live prices into the lane DB. Sources: `provider:justetf`, `provider:css_scraper` and `provider:scheduled_investment`, for the ETFs, the BTPs and Gold.
+> - This explains the single quote those assets had on 2026-10-07. The gallery disables the scheduler, but this frontend poll bypasses that.
+> - G4 aborts it; the older scenarios do not. To be decided by the coordinator: a gallery-wide abort (deterministic and offline, but the cards of unseeded assets would show no price), or seeding those prices in the populate.
+>
+> **Group 5, onboarding** (test-author: `gallery.spec.ts` and the new `fixtures/galleryOnboarding.ts`):
+> - A new `Onboarding` describe after `Auth Pages`:
+>   - `welcome setup` → `onboarding/welcome-setup`;
+>   - `core tour step` → `onboarding/core-tour-step`, at step `intro.fx_nav`;
+>   - `contextual guide on the FX page` → `onboarding/contextual-guide`, at step `fx.page.filters`, never `fx.page.sync`.
+> - `onboarding replay` → `settings/onboarding-replay` goes at the end of `Settings`. It runs as the admin, read-only, and never presses Replay.
+> - **Accounts:** one disposable `demo_<token>` account per test, not per combination, so the same name appears in every variant. Language and theme go through localStorage, plus a `PUT /settings/user` on the account itself for the Welcome form. The account is deleted in `afterEach`.
+> - **`SettingsLayout.test.ts`:** 40 tests (34 existing + 6 for the hook's test ids and `aria-pressed`, desktop and phone). The docblock is updated.
+> - **`unfoldCard` (G3):** the keyboard fallback for the zero-width toggle is gone, because L fixed the header (`038109e91`). A regression now fails loudly.
+>
+> **Offline gallery guard** (coordinator decision, option (a) plus a fixture; test-author):
+> - `guardGalleryOffline` runs in the top-level `beforeEach`, and `expectGalleryOffline` in `afterEach`.
+> - **Aborted, recorded, and the test fails:** `POST /assets/prices/sync`, `/assets/provider/refresh`, `/assets/provider/probe` and `/fx/currencies/sync`.
+> - **Answered from fixtures** (`fixtures/galleryOfflineData.ts`):
+>   - `POST /assets/prices/current`: the 6 prices observed live today (ETFs, BTPs, Gold), dated today, ids resolved by name;
+>   - `GET /fx/providers`: BOE, ECB, FED and SNB, with metadata from the backend classes and currencies from the docs.
+> - **Answered with «no results»:** `GET /assets/provider/search` and `/search/stream`.
+> - **Aborted:** `api.github.com`, the admin's release check.
+> - **Ownership:** group 4's `guardReadOnly` now only switches the poll to abort and reuses the global record.
+> - **Fixed along the way:** «Add pair - chain» folded the group again and never selected a route. It now opens the group only if closed and checks the count goes up by one.
+> - `expectOfflinePricesDrawn` waits for the fixture prices before the Assets shots.
+>
+> **Lane runs** (6158, 1 worker):
+> - G5 run 1, fresh populate (load 27→17): 7/8. The mobile `onboarding replay` failed in ES: on phones the Core group was below the fold.
+> - Fix: on phones the shot is framed from the Onboarding card header (`frameFromTop`).
+> - Run 2: 2/2.
+> - G3 reshoot with the global guard active: **12/12**. On phones the card header is on two rows and the timeline dates no longer overlap.
+> - Lane DB afterwards: 0 `provider:*` rows, 0 disposable accounts, 0 marked brokers.
+> - Logs: `runs/G5_run{1,2}.log`, `runs/G3_reshoot.log`.
+>
+> **Docs** (docs-writer, gallery pages only):
+> - `gallery/{desktop,mobile}`: a new `## 🧭 Onboarding` section with 3 entries plus `---`, and «🔁 Guide Replay» in Settings.
+> - `gallery/index`: an Onboarding bullet; the last editorial comment is removed.
+> - Held: `user/getting-started` and `user/settings/preferences`. They are part of Q's wave 2.
+>
+> **Gates:**
+> - `mkdocs build` strict: 0 WARNING/ERROR. The injected fallback is the canonical one.
+> - `check-links`: identical to the baseline.
+> - vitest: 45/45 (SettingsLayout 40 plus the fixture guard 5).
+> - `tsc` e2e: the 2 known errors.
+> - Prettier ok.
+> - Ruff and black on `test_runtime_isolation.py`: ok.
+> - `git diff --check`: clean.
+>
+> **Next:** after the coverage run on 6150, the broad verification of the offline guard (Assets, FX, Risk Analysis, Onboarding and the Settings shots), with a fresh populate.
+>
+> **Broad verification of the offline guard** (6158, 1 worker, fresh populate, 17:00–17:51, load 9→17): **95/96** (`runs/G5_guard.log`). The `-f` covered Assets, FX, Risk Analysis, Onboarding, About tab, plugin and tool diagnostics, onboarding replay and data-quality banner.
+> - Lane DB afterwards: 0 `provider:*` price rows. The price rows and the 4,095 `fx_rates` ECB rows all date from the 15:00:27 UTC populate, none written during the run. 0 disposable accounts, 0 marked brokers.
+> - **The only red:** mobile «Add pair - chain».
+>   - Playwright clicks the centre of the route row. On a phone that centre is a provider badge wrapped in `Tooltip` (`FxProviderSelect.svelte:737-747`).
+>   - The tooltip's mouse `onclick` calls `stopPropagation()` (`Tooltip.svelte:149, 389-390`), so `addRoute` never runs. A real tap goes through `touchstart` and works.
+>   - Fix: click the row's «+» (`position`) and `parkPointer` before the shot.
+> - **SNB fixture fidelity:**
+>   - It listed 8 currencies, taken from the docs page. The real coverage is the 25 verified live in the audit `phases/05_cleanAudit/mkdocsAudit/03_fx-market-data.md:157-160`.
+>   - The published 1.1 shot shows a direct SNB NOK→CHF route.
+>   - Now: the 25 audited currencies; the chain test opens the 2-step group by the chevron and frames from «Conversion routes», with the direct route in view.
+> - `-f 'Add pair'` rerun: **4/4**. Visual check (desktop EN, mobile IT dark): the added chain route, the direct SNB route and the open group are all in frame.
+>
+> **⚠️ Fuori pista — a gallery regression introduced by G3 (integrated since train 13):**
+> - In playwright-core 1.61 (`lib/coreBundle.js`, `_isFavicon = url.endsWith("/favicon.ico")`), as soon as ANY route is registered, Playwright aborts that request **before any handler runs**.
+> - Since G3, the global `beforeEach` installs routes for every test. So every broker logo (`portal_url` origin + `/favicon.ico`, `brokerIconChain.svelte.ts:85`) and the FED/SNB icons show their fallback.
+> - The published 1.1 `brokers/list` shows real logos; ours shows the briefcase.
+> - Probes (`scripts/probe_fx_icons{,_v2,_v3}.cjs`): ECB's `.png` loads, the `.ico` icons do not. `route.fetch()` gets a 403. Serving the bytes from Node does not help, because the abort comes first.
+> - **Test-only fix** (`scripts/probe_favicon_shim.cjs`): an `addInitScript` appends `?lf-gallery` to image URLs ending in `/favicon.ico`, through the `src` setter, `setAttribute` and `innerHTML`.
+>   - With it 12/12 images load; without it 0/12.
+>   - Each host serves identical bytes with the query: IBKR, DEGIRO, Directa, eToro, Coinbase, Schwab, FRED, SNB (Recrowd answers 429 either way).
+>   - No product code touched.
+> - Assigned to test-author (task E). Reported to the coordinator.
+>
+> **Favicon fix** (test-author, task E; `fixtures/galleryReportSets.ts` and `gallery.spec.ts`):
+> - `keepFaviconImagesLoading(page)` is an `addInitScript` in the top-level `beforeEach`, before any navigation. It appends `lf-gallery` to image URLs ending in `/favicon.ico`:
+>   - through the `src` property, `setAttribute('src')`, and `src` values written via `innerHTML`;
+>   - the `#fragment` is kept, and an existing query gets `&`.
+> - `expectFaviconImagesLoading(page)` runs in the top-level `afterEach`. It checks, with no network, that the shim was active on the last page.
+> - Cause confirmed in playwright-core 1.61.0 `coreBundle.js:12805` (`_isFavicon`) and `:22393-22396` (abort when any route is registered).
+> - **Lane check** (load 47→71 from the other lanes): **14/14** — broker list, broker detail, import wizard step 2, broker reports tab, both «Add pair» and transaction list, desktop and mobile.
+>   - Visual: the Coinbase, DEGIRO, Directa and IBKR logos are back in `brokers/list` and in the wizard. In «Add pair» the FED and SNB icons are back.
+>   - Schwab and Recrowd keep their fallback: Recrowd answers 429, and Schwab's icon has no logo in this shot either, as in 1.1.
+> - Sanity on pages with heavy DOM (core tour, Asset list, risk lab): **6/6**.
+>
+> **Final evidence:**
+> - Lane DB: 0 `provider:*` price rows; prices and `fx_rates` only from the 15:00 UTC populate; 0 disposable accounts, 0 marked brokers. Ports 6158 and 6168 free.
+> - Prettier ok on the 7 frontend files. `tsc` e2e: only the 2 known errors. `git diff --check`: clean.
+> - Build strict and check-links were verified at 16:42 (0 WARNING/ERROR, baseline links). The later changes touch only e2e files.

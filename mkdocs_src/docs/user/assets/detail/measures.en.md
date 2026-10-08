@@ -1,6 +1,6 @@
 # 📐 Measures
 
-The Measure tool compares two available points on the active primary series. **Prices** and **Rolling Return** have separate in-page measure collections and separate summary tables, so switching modes does not mix their rows.
+The Measure tool answers *how much did it change between these two days?* Pick two points on the chart and read the change of the asset, and of the lines drawn with it, between them.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Measures Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -8,56 +8,37 @@ The Measure tool compares two available points on the active primary series. **P
 
 ---
 
-## 🛠️ How to Use
+## 🛠️ Take a measure
 
-1. Click the **Measure** button (📐) in the toolbar
-2. The measure panel opens below the chart
-3. Click a **start point** on the chart
-4. Click an **end point** on the chart
-5. Expand the new measure to see the table for the current mode
+1. Click **📏 Add measurement** at the top right of the chart: the **Measures** panel opens below it.
+2. Click the **start** point on the chart, then the **end** point.
+3. The new measure opens with its table, and the chart draws it in its own colour.
 
-You can also use **Add Measure** to create a measure from the first and last available points in the current chart data.
+**+ Add measurement** in the panel's header measures the whole chart instead, from its first to its last point: handy on a phone. Each measure's header holds its colour and 🗑️ to remove it; expand the measure to change its dates.
 
----
-
-## 💵 Prices Mode Measures
-
-In **Prices** mode, the table reports each measurable primary or comparison series:
-
-| Column | Meaning |
-|---|---|
-| **Signal** | The price or overlay series being measured |
-| **Start** | Value at the start date |
-| **End** | Value at the end date |
-| **Δ** | Absolute price difference |
-| **Δ%** | Relative percentage change between the endpoints |
-| **Annualized** | The endpoint change annualized over the selected dates |
-
-The compact measure summary also shows the number of calendar days between the endpoints.
-
-## 📈 Rolling Return Measures
-
-Rolling Return uses its own table and percentage-point semantics:
-
-| Column | Meaning |
-|---|---|
-| **Signal** | The asset's Rolling Return or an Asset comparison line |
-| **Start** | Rolling Return at the start date, shown as a percentage |
-| **End** | Rolling Return at the end date, shown as a percentage |
-| **Δ pp** | End minus start, shown in percentage points |
-| **Days** | Calendar days between the two endpoints |
-
-The Return table deliberately does not reinterpret its percentage endpoints as another percentage change or annualized return.
+Measures are not saved: reloading the page empties the panel. **Prices** and **Rolling Return** keep separate measures.
 
 ---
 
-## 🧠 Runtime State
+## 💵 In Prices mode
 
-Measure definitions and results are calculated in the browser from the currently rendered series. They stay available while you switch between **Prices** and **Rolling Return** during the current page runtime, but a page reload starts with empty measure tables.
+The table has a row for the asset (a second one in its own currency when the chart is converted) and one for each line drawn on the price axis, such as a comparison asset or a moving average. Next to the **Start** and **End** values:
 
-The underlying prices and FX rates are backend-persisted source data. Measurement rows, endpoint calculations, and measure-line styles are runtime-only: they are not written to the backend database or to the chart-settings `localStorage` record.
+- **Δ Abs** — the difference $V_{end} - V_{start}$, in the line's unit.
+- **Δ %** — the change $\frac{V_{end} - V_{start}}{V_{start}}$ → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/yr** — the same change as a yearly rate over the $d$ calendar days between the points, $(1 + \Delta\%)^{365/d} - 1$ → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
 
-The visible chart range is separate shared browser state: only its start and end dates are kept in `sessionStorage` for the current tab. Chart settings, the Rolling Return window, and comparison configuration stay in `localStorage`; neither browser store receives measurement rows or computed return/comparison series.
+The measure's summary line adds the number of days.
+
+---
+
+## 📈 In Rolling Return mode
+
+The values are already returns, so the table compares them:
+
+- **Start**, **End** — the rolling return on each of the two dates.
+- **Δ pp** — End minus Start, in percentage points → [Rolling return over calendar days](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar)
+- **Days** — the calendar days between the two points.
 
 ---
 

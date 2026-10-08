@@ -1,8 +1,9 @@
 """Pure contract tests for per-run test port and data-directory isolation.
 
 Covered here: data-directory resolution and its production guards, lane runtime
-configuration, CLI/runner wiring, shared-backend ownership, and the
-``exec_unmasked`` spawn wrapper. Every test is PURE — no server, no database, no
+configuration, CLI/runner wiring, shared-backend ownership, the
+``exec_unmasked`` spawn wrapper, and ``mkdocs gallery --no-populate`` reusing a
+lane's test database. Every test is PURE — no server, no database, no
 network — using ``tmp_path``, in-memory fakes, and (only where a real signal is
 the subject) short-lived subprocesses that just print or wait.
 """
@@ -30,6 +31,7 @@ import dev
 import scripts.cli_base as cli_base
 import scripts.exec_unmasked as exec_unmasked
 import scripts.list_api_endpoints as endpoint_listing
+import scripts.test_runner as test_runner_package
 from backend.test_scripts import test_db_config
 from backend.test_scripts import test_server_helper as test_server_helper_module
 from scripts.test_runner import _backend_db as test_runner_backend_db
@@ -1628,3 +1630,171 @@ class TestTestingServerManagerFailsClosed:
         output = capsys.readouterr().out
         assert diagnostic in output
         assert holder_kind != "foreign" or str(foreign_pid) in output
+
+
+# ── `mkdocs gallery --no-populate` — reuse the lane DB, stand global-setup down ──
+#
+# "Skip DB population" used to skip it without telling Playwright, so its
+# global-setup ran its own `populate_mock_data --force --with-reports` at every
+# run: another dataset, without the static resources, written under a backend
+# that was already serving. Now `--no-populate` verifies the lane's existing
+# database and ensures its E2E users *before* Playwright starts, both branches
+# hand over with LF_SETUP_DONE, and a missing database is an error — never a
+# populate after all.
+
+GLOBAL_SETUP = test_runner_common.PROJECT_ROOT / "frontend" / "e2e" / "global-setup.ts"
+GALLERY_ARGV = ["dev.py", "mkdocs", "gallery", "--desktop-only", "--workers", "2", "--test-port", "6196"]
+
+
+def global_setup_stand_down_value() -> str:
+    """The ``LF_SETUP_DONE`` value Playwright's global-setup stands down on, read from global-setup.ts.
+
+    The command is held to the literal the other side compares against, not to a
+    second copy of ``"1"``: moving either side alone fails the check.
+    """
+    values = set(re.findall(r"process\.env\.LF_SETUP_DONE\s*===\s*['\"]([^'\"]*)['\"]", GLOBAL_SETUP.read_text(encoding="utf-8")))
+    assert len(values) == 1, f"global-setup.ts compares LF_SETUP_DONE against {sorted(values)}, not exactly one value: re-anchor this check"
+    return values.pop()
+
+
+def seed_lane_db(db_path: Path) -> None:
+    """An earlier run's database, as far as an existence check can tell: bytes, never opened as SQLite."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.write_bytes(b"synthetic database left by an earlier gallery run\n")
+
+
+@pytest.fixture
+def gallery_lane(runtime_env, tmp_path):
+    """A synthetic lane under ``tmp_path``, with every way out of the process closed.
+
+    The lane passes ``validate_test_data_dir``'s production-alias checks honestly: no
+    guard is patched. ``_ensure_test_users`` becomes a recorder answering
+    ``lane.ensure_users``, and any ``subprocess.run``/``Popen`` fails the test, so
+    nothing here can populate a database, create a user or start Playwright for real;
+    a test re-opens only the seam it asserts on. LF_SETUP_DONE starts absent, so
+    finding it in Playwright's environment proves the command set it.
+    """
+    root = tmp_path / "synthetic-test-data"
+    lane = SimpleNamespace(root=root, db=root.resolve() / "sqlite" / "app.db", ensure_users=True, events=[])
+    runtime_env.setenv("LIBREFOLIO_TEST_DATA_DIR", str(root))
+    runtime_env.delenv("LF_SETUP_DONE", raising=False)
+    runtime_env.setattr(test_runner_package, "_ensure_test_users", lambda: (lane.events.append("ensure-users"), lane.ensure_users)[1])
+    for name in ("run", "Popen"):
+        forbid(runtime_env, subprocess, name, f"subprocess.{name} reached: a gallery contract test must never populate, create users or start Playwright for real")
+    return lane
+
+
+def run_gallery(runtime_env, lane, *flags: str) -> tuple[int, dict]:
+    """``./dev.py mkdocs gallery <flags>`` through the real parser; the Playwright launch is recorded, not run."""
+    launch: dict = {}
+
+    def fake_popen(command, **kwargs):
+        lane.events.append("playwright")
+        launch.update(command=command, env=dict(kwargs["env"]))
+        return SimpleNamespace(stdout=iter(()), wait=lambda: 0, returncode=0)
+
+    runtime_env.setattr(dev, "HAS_ARGCOMPLETE", False)
+    runtime_env.setattr(dev, "check_port_in_use", lambda _port: [])
+    runtime_env.setattr(subprocess, "Popen", fake_popen)
+    runtime_env.setattr(sys, "argv", [*GALLERY_ARGV, *flags])
+    return dev.main(), launch
+
+
+class TestGalleryReusesTheLaneDb:
+    """``dev._reuse_gallery_test_db()``: global-setup may stand down only once the lane DB and its users exist."""
+
+    @pytest.mark.parametrize("layout", ["no-lane-root", "sqlite-dir-only"])
+    def test_a_missing_lane_db_is_refused_without_creating_it_or_any_user(self, gallery_lane, tmp_path, capsys, layout):
+        # The check must not materialise what it looks for: an empty app.db left
+        # behind would be "reused" by the next --no-populate run.
+        if layout == "sqlite-dir-only":
+            gallery_lane.db.parent.mkdir(parents=True)
+        tree_before = tree_snapshot(tmp_path)
+
+        assert dev._reuse_gallery_test_db() is False
+
+        output = capsys.readouterr().out
+        assert str(gallery_lane.db) in output
+        assert "run once without --no-populate" in output
+        assert gallery_lane.events == []
+        assert tree_snapshot(tmp_path) == tree_before
+
+    def test_an_existing_lane_db_is_reused_untouched_once_its_users_are_ensured(self, gallery_lane, tmp_path, capsys):
+        seed_lane_db(gallery_lane.db)
+        tree_before = tree_snapshot(tmp_path)
+
+        assert dev._reuse_gallery_test_db() is True
+
+        assert gallery_lane.events == ["ensure-users"]
+        # The lane override decides which database is reused, not the default test root.
+        assert f"reusing {gallery_lane.db}" in capsys.readouterr().out
+        # Reused as it is: neither recreated nor rewritten by the check itself.
+        assert tree_snapshot(tmp_path) == tree_before
+
+    def test_users_that_cannot_be_ensured_refuse_the_reuse(self, gallery_lane, capsys):
+        seed_lane_db(gallery_lane.db)
+        gallery_lane.ensure_users = False
+
+        assert dev._reuse_gallery_test_db() is False
+
+        output = capsys.readouterr().out
+        assert gallery_lane.events == ["ensure-users"]
+        assert "Failed to create test users" in output
+        assert "reusing" not in output
+
+    @pytest.mark.parametrize(("production", "reason"), [pytest.param("configured", OVERLAP_ERROR, id="configured-production"), pytest.param("marked", MARKED_ERROR, id="marked-production")])
+    def test_a_lane_the_resolver_rejects_is_refused_before_any_user_is_created(self, gallery_lane, runtime_env, tmp_path, capsys, production, reason):
+        # A database really is there: only the resolver's ValueError stands between
+        # it and _ensure_test_users writing E2E users into production data.
+        production_root = tmp_path / "synthetic-production-data"
+        lane_root = production_root / "test-lane"
+        seed_lane_db(lane_root / "sqlite" / "app.db")
+        if production == "configured":
+            runtime_env.setenv("LIBREFOLIO_DATA_DIR", str(production_root))
+        else:
+            (production_root / backend_config.PRODUCTION_DATA_MARKER).write_text("synthetic production marker\n", encoding="utf-8")
+        runtime_env.setenv("LIBREFOLIO_TEST_DATA_DIR", str(lane_root))
+        with pytest.raises(ValueError, match=reason) as rejected:  # the precondition, verified: this resolver refuses this lane
+            backend_config.get_test_data_dir()
+        tree_before = tree_snapshot(tmp_path)
+
+        assert dev._reuse_gallery_test_db() is False
+
+        assert gallery_lane.events == []
+        assert str(rejected.value) in capsys.readouterr().out
+        assert tree_snapshot(tmp_path) == tree_before
+
+
+class TestGalleryHandsTheSetupToPlaywright:
+    """``mkdocs gallery``: Playwright starts only after the DB and its users are ready, and is told so."""
+
+    @pytest.mark.parametrize("no_populate", [False, True], ids=["populate", "no-populate"])
+    def test_playwright_starts_last_and_is_told_to_skip_its_own_setup(self, gallery_lane, runtime_env, no_populate):
+        # Both branches prepare the DB and its users before Playwright, so both must
+        # hand over. Under --no-populate subprocess.run stays forbidden: the command
+        # populates nothing, and LF_SETUP_DONE stops global-setup doing it instead.
+        if no_populate:
+            seed_lane_db(gallery_lane.db)
+        else:
+            runtime_env.setattr(subprocess, "run", lambda command, **_kwargs: (gallery_lane.events.append("populate"), subprocess.CompletedProcess(command, 0))[1])
+        exit_code, launch = run_gallery(runtime_env, gallery_lane, *(("--no-populate",) if no_populate else ()))
+
+        assert exit_code == 0
+        assert gallery_lane.events == (["ensure-users", "playwright"] if no_populate else ["populate", "ensure-users", "playwright"])
+        assert "gallery.spec.ts" in launch["command"]
+        assert launch["env"]["LF_SETUP_DONE"] == global_setup_stand_down_value()
+        # The database the command verified is the one Playwright's backend will serve.
+        assert launch["env"]["LIBREFOLIO_TEST_DATA_DIR"] == str(gallery_lane.root)
+
+    @pytest.mark.parametrize("cause", ["missing-db", "users-not-ensured"])
+    def test_a_refused_reuse_exits_1_before_playwright_and_never_falls_back_to_populate(self, gallery_lane, runtime_env, cause):
+        if cause == "users-not-ensured":
+            seed_lane_db(gallery_lane.db)
+            gallery_lane.ensure_users = False
+        exit_code, launch = run_gallery(runtime_env, gallery_lane, "--no-populate")
+
+        assert exit_code == 1
+        # No Playwright launch was recorded, and subprocess.run is still forbidden:
+        # a refused reuse never turns into a populate after all.
+        assert launch == {}
+        assert gallery_lane.events == ([] if cause == "missing-db" else ["ensure-users"])

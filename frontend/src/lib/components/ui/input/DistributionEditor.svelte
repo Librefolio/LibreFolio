@@ -544,7 +544,7 @@
 <ConfirmModal
     open={showDeleteConfirm}
     title={$t('assets.distribution.deleteSelected')}
-    message={$t('assets.distribution.deleteConfirmMessage', {values: {count: pendingDeleteIds.length}})}
+    message={$t('assets.distribution.deleteConfirmMessage', {values: {n: pendingDeleteIds.length}})}
     confirmText={$t('common.delete')}
     warning={true}
     onConfirm={confirmBulkDelete}

@@ -780,7 +780,7 @@
       "historyFirst": "First import of this broker: at the end we propose the balance and the positions on {date}; from then on every movement is imported.",
       "historyLater": "LibreFolio already holds this broker's history from {date}: the movements it already has will show up as duplicates, and the earlier ones are not imported again.",
       "selectedCount": "{sets} set(s) and {n} file(s) selected from {b} broker(s)",
-      "incompleteBlocks": "Continue is disabled while a selected set is incomplete: upload its missing file or deselect the set.",
+      "incompleteBlocks": "Parse is disabled while a selected set is incomplete: upload its missing file or deselect the set.",
       "step1Missing": "{plugin} also needs: {role} ({ext}).",
       "step1MissingHint": "Drop it here: it joins the same set. You can also continue: the set will show as incomplete.",
       "analyzeRowLabel": "Set of {date} · combined ({n} files)",
@@ -898,7 +898,8 @@
       "removeFromSet": "Remove from the set",
       "defaultPluginNote": "Read as the {plugin} set, not with the broker's default plugin ({defaultPlugin}). To change it, use “Read as” or a file's ⋮ menu.",
       "alsoRecognisedBy": "{file} is also recognised by: {plugins}",
-      "partlySelectedBlocks": "Continue is disabled while a set is only partly selected: select the whole set or deselect it."
+      "partlySelectedBlocks": "Parse is disabled while a set is only partly selected: select the whole set or deselect it.",
+      "ungroupedBlocks": "Parse is disabled while a selected file can be read only with its set but is not in one: {files}. Upload all the exports of the set again together, in one go, then select the set — or deselect the file."
     },
     "parseDetail": {
       "sourceRow": "File line",
@@ -1466,7 +1467,8 @@
     "uploading": "Uploading...",
     "user": "User",
     "backToDefault": "Back to default",
-    "createForex": "Create forex…"
+    "createForex": "Create forex…",
+    "unknownError": "unknown error"
   },
   "csvImport": {
     "title": "Import CSV Data",
@@ -1486,7 +1488,22 @@
     "discardMessage": "You have edited CSV data. Are you sure you want to close without importing?",
     "sep": "sep",
     "decimal": "decimal",
-    "thousands": "thousands"
+    "thousands": "thousands",
+    "placeholder": "Paste CSV data here or drop a file above...",
+    "headerMismatch": "Header currencies don't match",
+    "errors": {
+      "missingColumns": "Missing required columns: {columns}",
+      "expectedHeader": "Expected header: {header}",
+      "fixHeaderFirst": "Fix header first",
+      "invalidQuotedField": "Invalid quoted CSV field",
+      "invalidIdentity": "Invalid {label}: \"{value}\"",
+      "invalidDateFormat": "Invalid date format: \"{value}\". Use YYYY-MM-DD",
+      "invalidDate": "Invalid date: \"{value}\"",
+      "requiredEmpty": "Required column \"{column}\" is empty",
+      "invalidNumber": "Invalid number in \"{column}\": \"{value}\"",
+      "invalidValue": "Invalid value in \"{column}\": \"{value}\"",
+      "duplicate": "Duplicate {label}: {key}"
+    }
   },
   "dashboard": {
     "netWorth": "Net Worth",
@@ -1698,7 +1715,8 @@
     "importCsv": "Import CSV",
     "emptyMessage": "No data. Use 'Add Row' or 'Import CSV' to add data.",
     "editorTipDesktop": "Double-click on the chart to jump to that date",
-    "editorTipMobile": "Long-press on the chart to jump to that date"
+    "editorTipMobile": "Long-press on the chart to jump to that date",
+    "saveFailed": "Failed to save: {error}"
   },
   "datePicker": {
     "presets": {
@@ -1818,7 +1836,11 @@
       "legBreakdown": "Per-leg breakdown",
       "legNoData": "0 dates — no data",
       "legDates": "dates",
-      "inProgress": "Syncing FX rates…"
+      "inProgress": "Syncing FX rates…",
+      "timeoutAfter": "Timeout after {seconds}s",
+      "requestTimedOut": "Request timed out after {seconds}s. Increase the timeout and retry.",
+      "failed": "Sync failed",
+      "retryFailed": "Retry {n} failed"
     },
     "route": {
       "title": "Conversion Routes",
@@ -1844,7 +1866,13 @@
       "toastFailed": "Failed to delete {pair}",
       "resultDeleted": "deleted ({n} rates)"
     },
-    "rateNotAvailable": "Rate not available"
+    "rateNotAvailable": "Rate not available",
+    "rate": "Rate",
+    "card": {
+      "manualOnly": "Manual-only pair",
+      "syncFromProvider": "Sync rates from provider"
+    },
+    "loadFailed": "Failed to load FX pairs"
   },
   "fxDetail": {
     "editRates": "Edit Rates",
@@ -1857,7 +1885,16 @@
     "noDataManual": "No data available — insert rates manually",
     "insertManually": "Insert Manually",
     "syncDisabledManual": "Sync disabled — no provider configured. Add a provider or insert rates manually.",
-    "aiExport": "AI Export"
+    "aiExport": "AI Export",
+    "syncFailed": "Sync failed: {error}",
+    "loadFailed": "Failed to load rates",
+    "assetFallback": "Asset #{id}",
+    "invalidRates": "{n, plural, one {# row has an invalid rate} other {# rows have an invalid rate}}: a rate must be strictly greater than zero (0 is not allowed).",
+    "savedSummary": "FX rates: {details}",
+    "savedCount": "{n} saved",
+    "deletedCount": "{n} deleted",
+    "skippedCount": "{n} skipped (invalid)",
+    "saveFailed": "FX save failed: {error}"
   },
   "help": {
     "helpAndSupport": "Help & Support",
@@ -2766,9 +2803,9 @@
     "selection": "Dataset or analysis",
     "detailLevel": "Detail level",
     "detailLevelHelp": {
-      "compact": "Same data universe, with temporal buckets up to 30 days.",
-      "standard": "Same data universe, with temporal buckets up to 14 days.",
-      "full": "Same data universe, with temporal buckets up to 7 days."
+      "compact": "Same data universe, with temporal buckets up to 30 days for prices and up to 84 days for the slowest indicators.",
+      "standard": "Same data universe, with temporal buckets up to 14 days for prices and up to 28 days for the slowest indicators.",
+      "full": "Same data universe, with temporal buckets up to 7 days for prices and up to 14 days for the slowest indicators."
     },
     "details": {
       "compact": "Compact",

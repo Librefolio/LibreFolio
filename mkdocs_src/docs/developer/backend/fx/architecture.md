@@ -59,7 +59,24 @@ request's `start` is a `SyncStartDate` (`date | Literal["min"]`, `backend/app/sc
 the sync passes it to the providers as an `FXProviderStartDate` (`backend/app/services/fx.py`). Asking
 for the whole history, rather than the period of the page that opened the dialog, gives older
 transactions a rate too. A full history can outlast the client's default timeout, so this request waits
-up to 120 s (`FX_SYNC_TIMEOUT_MS`).
+up to 120 s (`FX_SYNC_TIMEOUT_MS`) — the same fixed limit `FxSyncModal` and `PageSyncModal` send.
+Their **Timeout** field (`SyncModalBase`, default `max(20, item count)` s) drives only the countdown
+and the timeout message, not the request.
+
+The request carries the new pair and the intermediate pairs saved with
+**Also create intermediate pairs**. A pair saved with no route (the `MANUAL` sentinel only) starts
+no sync and gets a `Created` success toast instead; saving the routes of an existing pair (edit
+mode) starts none either. After the sync, `classifyFxSyncOutcome()` grades the response:
+
+| Outcome | When | Toast |
+|:--------|:-----|:------|
+| `failed` / `transport-error` | The request failed, a requested pair is missing from the response, the response has operation errors, or any pair is `failed` | error |
+| `skipped` | Every pair is `skipped` | info |
+| `partial` | Any pair is not `ok` | warning |
+| `ok` | Every pair is `ok` | success |
+
+A refresh callback that fails turns a success or info toast into a warning. Both toasts link the
+pair name to its detail page (`fxPairHtml(…, {linkToDetail: true})`).
 
 ## 🔄 Conversion Logic
 

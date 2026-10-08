@@ -28,9 +28,11 @@
         valueColor?: string;
         marker?: number;
         markerTooltip?: string;
+        /** Optional test anchor: ``testid`` on the bar, ``{testid}-value`` on its value. */
+        testid?: string;
     }
 
-    let {label, value, numericValue, formatValue, tooltip = '', tooltipHtml = '', barPct, barColor = 'bg-slate-400 dark:bg-slate-500', valueColor = 'text-gray-700 dark:text-gray-300', marker, markerTooltip = ''}: Props = $props();
+    let {label, value, numericValue, formatValue, tooltip = '', tooltipHtml = '', barPct, barColor = 'bg-slate-400 dark:bg-slate-500', valueColor = 'text-gray-700 dark:text-gray-300', marker, markerTooltip = '', testid}: Props = $props();
 
     /**
      * Clamp to 0..100, and send anything non-finite to 0.
@@ -55,7 +57,7 @@
     const clampedMarker = $derived(marker != null && Number.isFinite(marker) ? clampPct(marker) : null);
 </script>
 
-<div class="flex flex-col gap-0.5">
+<div class="flex flex-col gap-0.5" data-testid={testid}>
     <div class="flex items-center justify-between gap-2 text-xs">
         {#if tooltipHtml}
             <Tooltip html={tooltipHtml} position="top" wrapperClass="min-w-0">
@@ -68,7 +70,7 @@
         {:else}
             <span class="block truncate min-w-0 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
         {/if}
-        <span class="shrink-0 whitespace-nowrap font-medium tabular-nums transition-colors duration-300 {valueColor}">
+        <span class="shrink-0 whitespace-nowrap font-medium tabular-nums transition-colors duration-300 {valueColor}" data-testid={testid ? `${testid}-value` : undefined}>
             {#if numericValue !== undefined && formatValue}
                 <TweenedValue value={numericValue} format={formatValue} duration={700} />
             {:else}

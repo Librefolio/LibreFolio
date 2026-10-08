@@ -78,7 +78,22 @@
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
     import {brokerIdForTx, beforeOpeningInfo, isBeforeHistory as isBeforeHistoryPure, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
-    import {buildParseUnits, combinedFileForSet, groupBrokerFiles, isReportSetPlugin, readAlonePlugins, rememberedChoices, setBlocksAnalysis, setPluginFor, setRequest, setSelectionState, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import {
+        buildParseUnits,
+        combinedFileForSet,
+        groupBrokerFiles,
+        isReportSetPlugin,
+        readAlonePlugins,
+        rememberedChoices,
+        setBlocksAnalysis,
+        setPluginFor,
+        setRequest,
+        setSelectionState,
+        ungroupedSetFiles,
+        type ReportSetGroup,
+        type SetPluginInfo,
+        type SetPreviewState,
+    } from '$lib/utils/transactions/importReportSets';
     import {completePairsOnly, freshLinkFor, linkedPairs, setPairSelected} from '$lib/utils/transactions/importPairs';
     import {renderFromToHtml, renderImpliedRateHtml} from '$lib/utils/transactions/pairCellHtml';
     import {buildGapFixRequests, buildGapFixView, defaultGapFixSelection, gapFixHasSomethingToShow, gapFixSelectedCount, resolveTruthAssetId, selectedGapFixCreates, truthSourcesOf, type GapFixOutcome, type GapFixView, type TruthSource} from '$lib/utils/transactions/gapFixModel';
@@ -312,11 +327,15 @@
     /** R6: a set ticked only in part blocks until it is ticked whole or unticked; its hint comes first. */
     let partlySelectedSets = $derived(allReportSets.filter((set) => setSelectionState(set, selectedFileIdSet) === 'some'));
     let parseUnits = $derived(buildParseUnits(selectedFiles, allReportSets));
+    /** #26: selected files read alone with a report-set plugin — in no set (no batch, or failed), so the server would refuse them. */
+    let ungroupedFiles = $derived(ungroupedSetFiles(parseUnits, setPluginInfos));
+    /** Why Continue waits on the sets, in order of precedence: a set ticked in part (R6), a set file in no set (#26), an incomplete set. */
+    let setBlockReason = $derived<'partly-selected' | 'ungrouped' | 'incomplete' | null>(partlySelectedSets.length > 0 ? 'partly-selected' : ungroupedFiles.length > 0 ? 'ungrouped' : blockingSets.length > 0 ? 'incomplete' : null);
     let selectedSetCount = $derived(parseUnits.filter((unit) => unit.kind === 'set').length);
     let setPreviewsLoading = $derived([...setPreviews.values()].some((entry) => entry.status === 'loading'));
 
     // T9: Parse validation — all selected files must have a plugin
-    let step2CanParse = $derived(selectedFiles.length > 0 && selectedFiles.every((f) => f.pluginCode !== '') && blockingSets.length === 0);
+    let step2CanParse = $derived(selectedFiles.length > 0 && selectedFiles.every((f) => f.pluginCode !== '') && blockingSets.length === 0 && ungroupedFiles.length === 0);
 
     // =========================================================================
     // Step 3 State — Parse Engine & Results
@@ -5235,10 +5254,16 @@ ${arrow}<span>${label}</span></span>`,
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
-                {#if blockingSets.length > 0}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks" data-reason={partlySelectedSets.length > 0 ? 'partly-selected' : 'incomplete'}>
+                {#if setBlockReason !== null}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks" data-reason={setBlockReason} data-file-ids={setBlockReason === 'ungrouped' ? ungroupedFiles.map((file) => file.fileId).join(',') : undefined}>
                         <AlertTriangle size={14} />
-                        {partlySelectedSets.length > 0 ? $t('importWizard.reportSet.partlySelectedBlocks') : $t('importWizard.reportSet.incompleteBlocks')}
+                        {#if setBlockReason === 'partly-selected'}
+                            {$t('importWizard.reportSet.partlySelectedBlocks')}
+                        {:else if setBlockReason === 'ungrouped'}
+                            {$t('importWizard.reportSet.ungroupedBlocks', {values: {files: ungroupedFiles.map((file) => file.fileName).join(', ')}})}
+                        {:else}
+                            {$t('importWizard.reportSet.incompleteBlocks')}
+                        {/if}
                     </span>
                 {:else if selectedFiles.length > 0 && !step2CanParse}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">

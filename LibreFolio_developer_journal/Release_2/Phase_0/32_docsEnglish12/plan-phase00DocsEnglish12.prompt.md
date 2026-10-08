@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`) e S12 (`a09220321`) integrati nei treni 9 e 10. S13 (limiti della simulazione) COMPLETATO, FROZEN (2026-10-07), in attesa del commit: entra nel treno 11 con Risk.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`, base `108a2adf5`) è stata approvata dal developer il 2026-10-08 alle 21:22: checkpoint pronto, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -694,6 +694,781 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - scope: `simulation-modes.en.md`, più questo piano; `git diff -- developer/backend/risk/architecture.md` è vuoto;
   > - `git diff --check` pulito;
   > - nessun server.
+
+### Feedback del developer
+
+- **S14** ✅ 2026-10-08 — Primo giro di feedback diretto del developer, su base `ffa72cc2b` (treno 12).
+  > **Feedback** (developer, 08/10 12:22): «riguardo a mkdocs serve, sei l'unica quindi la puoi usare»; «tools: fino a opening tool come capitolo va bene quello che viene dopo è da manuale dev se fosse, qui è la sezione utente, deve essere semplice, e la parte del documentation and language mi pare errata, visto che quando poi avviamo la traduzione ci saranno le guide in tutte le linghe»; «riguardo a pac, non farei una tabella con gli step, ma per ogni step una sezione, così compare anche nella tabella dei contenuti, e per formule e numeri cercherei di usare latex». Il coordinatore ha confermato la precedenza (12:25).
+  >
+  > **Note implementazione** (2 `docs-writer`, verificato da Q):
+  > - **Server**: anteprima statica sulla 6162 spenta; `dev.py mkdocs serve` sulla 6042 (`http://127.0.0.1:6042/LibreFolio/`), con live reload, autorizzato dal developer.
+  > - **`user/tools/index.en.md`**:
+  >   - resta tutto fino a «🖱️ Opening a tool»;
+  >   - via le otto sezioni tecniche, sostituite da «ℹ️ Good to know», 3 punti semplici: un tool non cambia il portafoglio; server occupato o tempo scaduto non dicono nulla sui tuoi numeri; se un tool manca, Plugin diagnostics;
+  >   - tolta «Documentation and language», che era sbagliata.
+  > - **`developer/architecture/patterns/tool_plugins.en.md`**: ha ricevuto solo i fatti che mancavano, ciascuno nella sua sezione esistente:
+  >   - lettura esplicita dei dati prima del calcolo;
+  >   - 401 per un account disabilitato;
+  >   - `version_mismatch` prima della coda;
+  >   - ammissione per batch;
+  >   - codici `retryable`;
+  >   - contatori da zero per processo;
+  >   - semantica di `execution_ms` e `server_processing_ms`;
+  >   - tabella dei motivi di indisponibilità;
+  >   - link alla documentazione nella lingua dell'app.
+  > - **`user/settings/about.en.md`** (~:104): non rimanda più alla spiegazione dei contatori, che non c'è più; ora spiega in una frase che **Completed jobs** comprende già i **Failed jobs**.
+  > - **`user/tools/pac-allocator/index.en.md`**:
+  >   - la tabella degli step diventa **una sezione H3 per step**, che compare nell'indice: 🎬 Scenario, 💰 Liquidity, 🏦 Brokers, 💼 Assets, 🔀 Routing, ⚖️ Targets, 💱 FX, 🧠 Strategy, ✅ Review;
+  >   - LaTeX verificato nel codice: incremento $q = k\,\Delta$; commissione $f + \min(\max(r A, f_{\min}), f_{\max})$ (`numeric.py:265-289`); margine $p(1+m)$; conversione $D\,x(1-s)$ (`numeric.py:292-322`); target e **Balance all**; **Copy current distribution**; distanza $D = \sum_i (V_i - w_i R)^2$, **senza radice**, in denaro al quadrato (`evaluator.py:3484-3487`, `objectives.py:118-140`);
+  >   - i 6 segnaposto degli step, identici byte per byte, stanno nelle sezioni giuste, come M ha chiesto per il G6;
+  >   - l'ancora `#reading-the-result` resta;
+  >   - frase sugli errori di piattaforma resa semplice.
+  > - **`index.en.md`** (home, Planning Tools): «in whole units, fractions, or amounts» → «in whole units or by amount, where an amount can buy a fraction of a unit».
+  >
+  > **⚠️ Fuori pista** (reperto di codice, inoltrato):
+  > - L'aiuto `tools.pacAllocator.planner.brokers.incrementHelp` dice «By number of units: … 0.001 = fractions down to three decimals». Ma il codice rifiuta un incremento non intero in modalità a unità: `request.ts:190` «Whole-unit mode: the step must be a whole number of units», più `schemas/pac_allocator.py:48,233-236,386` ed `evaluator.py:326-331`.
+  > - La doc segue il codice: unità intere; le frazioni solo per importo.
+  > - Anche `CHANGELOG.md:18` («in whole or fractional units, or in amounts») è da riformulare, o va cambiato il codice: decide il developer.
+  >
+  > **Gate** `Q_GATE_ARGS=--fb /tmp/libreFolio_q_gate.sh fb1`:
+  > - build strict: exit 0, 0 WARNING/ERROR;
+  > - `check-links`: solo il link rotto della baseline;
+  > - scope: 5 pagine più questo piano;
+  > - stile ok (il controllo ora riconosce `ℹ️`);
+  > - `git diff --check` pulito.
+  >
+  > Checkpoint e porta 6042 libera rinviati a fine giro di review, perché il developer sta ancora guardando l'anteprima.
+  >
+  > **Seguito** (developer, 08/10 12:58): «tool ok, riguardo pack allocator togli il riferimento alla versione, non serve».
+  > - Via la coppia di versioni, la nota sulla versione della UI e la menzione `Backend/API`.
+  > - Le tre frasi «this version» diventano «yet».
+  > - Elenco delle pagine cambiate dalla 1.1 rimandato in chat, con gli URL della 6042. I treni 11-12 hanno aggiunto `admin/cli_tools`, `admin/docker_advanced` e `user/settings/profile`.
+
+- **S15** ✅ 2026-10-08 — Correlation e Rischio della Dashboard: una pagina per blocchi, con la stessa struttura.
+  > **Feedback** (developer, 08/10 13:04): «in correlation il problema è che fai un unica pagina per tutto, dovrebbe essere invece una pagina che spiega i vari blocchi, mettendoci magari anche uno screen e dice quali strumenti vi sono riportati, e per gli strumenti un link a delle pagine dedicate in teoria matematica, una struttura comune anche in rischio dashboard».
+  >
+  > **Via libera del coordinatore** (13:10):
+  > - Q scrive la pagina nuova `user/dashboard/risk.en.md`.
+  > - Riduce `## 🛡️ Risk Tab {: #risk-tab }` di `user/dashboard/index.en.md` a un sommario, **tenendo l'ancora**: la linkano `:17` e `brokers/index.en.md:38`.
+  > - Aggiunge la voce di nav e l'etichetta «Risk» nei blocchi `nav_translations` it/fr/es.
+  > - Nomi delle schermate confermati: `dashboard/risk-hurt`, `dashboard/risk-diversification`, `dashboard/risk-paid`, `dashboard/risk-whatif`, oltre a `risk/whatif-simulation`.
+  > - N e Risk sono parcheggiati, senza lavoro aperto.
+  >
+  > In corso: un `docs-writer` su `user/assets/correlation.en.md`, che deve conservare `#correlation`, `#what-did-each-pay`, `#what-if` e i 7 segnaposto `risk/lab-*`; un altro su `dashboard/risk.en.md`, `dashboard/index.en.md#risk-tab` e `mkdocs.yml`.
+  >
+  > **Note implementazione, correlation, primo passaggio** (13:30):
+  > - **Struttura.** La pagina è riscritta per blocchi: Selezione, Correlazione, «Hurt», «Pay», «What if», Avvisi. Ogni blocco ha lo stesso schema: cosa risponde, segnaposto, **Tools shown** con i link alla teoria verificati nel codice, **How to read it**.
+  > - **Segnaposto.** I 7 segnaposto sono identici byte per byte e nello stesso ordine.
+  > - **Ancore.** Restano `#correlation`, `#what-did-each-pay` e `#what-if`. Le 11 ancore tolte non sono linkate da nessuna parte: verificato con grep su tutte le lingue, su `frontend/src` e su `backend/app`.
+  > - **Lunghezza.** Da 7303 a 5273 parole: ancora un muro di testo, rispetto alla direttiva delle 13:08 (S16).
+  >
+  > **⚠️ Fuori pista: secondo passaggio.**
+  > - **Correlation.** Obiettivo circa 1500-2000 parole. Le regole e i meccanismi vanno in una pagina dev **nuova**, `developer/frontend/components/features/risk-lab.md`; la voce di nav la aggiunge Q. Non duplica `developer/backend/risk/architecture.md`, che è di Risk e non si tocca: ci rimanda. I due link alla Dashboard puntano ora a `../dashboard/risk.md`.
+  > - **Dashboard Risk.** Al writer ho mandato gli stessi criteri. Non tocca `risk-lab.md`: elenca i fatti spostati, e la sezione «Dashboard Risk tab» si aggiunge dopo.
+  >
+  > **Reperto di codice**, da passare al coordinatore: la docstring di `AssetSetRiskReturnSection.svelte` dice ancora «there is no picker here», ma il picker del benchmark ora è disegnato in quella sezione.
+  >
+  > **Note implementazione, Dashboard Risk** (13:45):
+  > - **`user/dashboard/risk.en.md`**, pagina nuova: 1349 parole visibili (1766 con `wc -w`, dopo un primo passaggio da 2722). Ha lo stesso schema per blocchi di correlation: Hurt, Diversification, Being Paid, What If, Notices, poi Good to Know e Related.
+  >   - Ci sono i 4 segnaposto `dashboard/risk-*` più `risk/whatif-simulation`, e una sola admonition, il beta della simulazione.
+  >   - Ancore: `#how-much-can-it-hurt`, `#diversification`, `#being-paid`, `#what-if`, `#notices`, `#good-to-know`, `#related`.
+  > - **`user/dashboard/index.en.md`**: `## 🛡️ Risk Tab {: #risk-tab }` diventa un sommario di 3 frasi con il link a `risk.md`, e l'ancora resta.
+  > - **`mkdocs.yml`**: la voce `Risk: user/dashboard/risk.md` nel gruppo Dashboard, più `Risk:` nei blocchi `nav_translations`: Rischio, Risque, Riesgo.
+  > - **Fatti spostati.** Il writer ne ha elencati 32, con file:riga, per la sezione «Dashboard Risk tab» di `risk-lab.md`. Si aggiungono dopo che il writer di correlation ha creato il file.
+  >
+  > **Note implementazione, correlation, secondo passaggio** (13:55):
+  > - **`user/assets/correlation.en.md`**: da 5273 a 1999 parole, di cui 1706 di prosa più i 7 segnaposto, identici byte per byte.
+  >   - Una sola admonition: il rendimento medio annuo non è il rendimento vissuto.
+  >   - L'H3 `#what-can-be-analysed` confluisce nel blocco della selezione: nessuno lo linka.
+  >   - I link alla Dashboard puntano a `../dashboard/risk.md`.
+  >   - In Related, una riga «Technical details».
+  > - **`developer/frontend/components/features/risk-lab.md`**, nuova, 2336 parole, con le citazioni file:riga controllate da script. Sezioni: selezione all'apertura; azioni di massa (rimanda a `core-ui/select.md`); idoneità nel lab; richieste e finestra condivisa; correlazione (soglie 0.7, −0.3, 0.9 e −0.7, limiti di 5 o 8 coppie); tabella delle perdite; rischio e rendimento (regola dei sette giorni); replay; avvisi e cornici.
+  >   - Per il backend rimanda ad `architecture.md` di Risk, senza duplicarlo.
+  > - **Fatti da Q:**
+  >   - nav `- Risk UI: …/features/risk-lab.md` dopo «Lots Analysis», e `- Danske Bank Importer: developer/backend/brim/danske_bank.md` dopo «Generic CSV Provider»;
+  >   - una riga «Risk UI» nella tabella delle feature di `developer/frontend/components/index.md`;
+  >   - `core-ui/select.md:424`: `BenchmarkSelect` **usa già** `AssetPickerPanel mode="single"` (`BenchmarkSelect.svelte:197`); resta in programma solo il segnale Asset Comparison.
+  > - **In corso:** il writer della Dashboard Risk aggiunge `## 🛡️ Dashboard Risk Tab {: #dashboard-risk-tab }` a `risk-lab.md`, con rimandi e non duplicati, e cambia l'H1 in «Risk UI: Correlation and Dashboard Risk Tabs».
+
+- **S16** 🟡 2026-10-08 (onda 1 ✅; onde 2-3 da fare) — Semplificazione di tutta la doc utente: il tecnico va nel manuale dev.
+  > **Feedback** (developer, 08/10 13:08): «in danske bank il titolo va a capo, ma vedo che lo fa con anche le altre banche, Poi è un muro di testo, troppi dettagli tecnici, e te lo dico, vale per tutto, non solo per questa pagina, quindi riguarda anche le altre e cerca di semplificare e scorporare, mettere in dev manual le cose tecniche e qui le info utili».
+  >
+  > **Note implementazione**:
+  > - **Titolo a capo.** In `mkdocs_src/docs/static/extra.css`, sotto i 76.1875em, il media query metteva l'H1 flex in `flex-direction: column`, quindi emoji, favicon e nome finivano su tre righe. Ora è `row` con `flex-wrap: wrap`. Verificato nel browser a 1280 px: una riga.
+  >   - Il file è condiviso, ma nessuno lo ha aperto: il coordinatore lo assegna a Q fino al checkpoint (13:14). Va **dichiarato** nel checkpoint.
+  > - **Misura della densità tecnica** delle pagine utente e admin (parole, code span, nomi interni): sessione Q, `files/user_density.txt`.
+  > - **Brief comune** per i writer: sessione Q, `files/simplify_brief.md`.
+  >   - La pagina utente dice cosa vedi, cosa fai, cosa controllare, con le etichette esatte della UI.
+  >   - Il tecnico verificato nel codice va nella pagina dev giusta, aggiungendo solo i fatti mancanti.
+  >   - Restano ancore, schermate, segnaposto e admonition utili.
+  > - **Onda 1**, 4 `docs-writer` su file disgiunti:
+  >   - `import/danske-bank`, più la pagina dev **nuova** `developer/backend/brim/danske_bank.md`, la cui voce di nav la aggiunge Q;
+  >   - `import/how-to`, `import/index` e `import/generic-csv`, verso `import-wizard.md` e `brim/generic_csv.md`;
+  >   - `dashboard/charts`, verso il `charts.md` del frontend;
+  >   - `assets/create-edit`, verso `asset-identity.md` e `backend/assets/architecture.md`.
+  >   - Nel checkpoint dell'onda 1 entrano anche S14, S15, about, home e CSS.
+  > - **Onda 2**: preferences, about, getting-started, asset (index, detail/chart, detail/signals), provider asset e FX, files, transactions, credit_agricole, installation e home. In più le pagine di P (`dashboard/kpi-cards`, `dashboard/positions`, `ai-export/*`) e di L (`import/degiro`), che il coordinatore assegna a Q per questa semplificazione (13:14).
+  >   - Per `ai-export/**` e per le pagine dev `ai_export_*.md` i writer leggono prima `.github/instructions/ai-development.instructions.md`.
+  >   - `brim_plugin_guide` e `providers_list` restano esclusi: O ci ha appena committato, per il treno 14.
+  > - **Onda 3**: le pagine admin. Restano i comandi; gli interni vanno nelle pagine dev.
+  >
+  > **⚠️ Fuori pista: treno 13** (`374381e27`, 13:14, non ancora nella base `ffa72cc2b`). Ha cambiato 5 pagine di Q:
+  > - `danske-bank`: 5 segnaposto diventano immagini; «a **Deposit** or a **Withdrawal**»;
+  > - `how-to`: 3 immagini, tra cui `brokers/import-report-set-file-menu`, che è nuova;
+  > - `files/index` e `transactions/index`: 1 immagine ciascuna (M, G3);
+  > - `dashboard/charts`: il punto «How the periods are labelled» di I.
+  > - Anche il codice dei grafici è cambiato (`GrowthChart.svelte`, `growthLadderAxis.ts`): etichette dell'asse per periodo, e i dividendi nelle barre Income ora sono **oro** (erano ciano). Nessuna pagina EN nomina quel colore.
+  >
+  > Per regola del coordinatore, i writer partono dalla versione del treno 13 (`git show 374381e27:<percorso>`) e la portano nelle riscritture. Il punto di I va nel manuale dev, con i fatti intatti.
+  >
+  > Conflitti attesi quando il target sarà fuso nel ramo di Q, dopo il checkpoint: `danske-bank.en.md`, `how-to.en.md` e `charts.en.md`. Risoluzione semantica: tenere la versione di Q, che contiene già il treno 13, e verificarlo.
+  >
+  > **Checkpoint per onda** (proposta del coordinatore, 13:14): il checkpoint dell'onda 1 si chiude quando il developer la approva; poi il target viene fuso nel ramo di Q e si parte con l'onda 2. Se il developer preferisce un checkpoint unico, va detto al coordinatore.
+  >
+  > **Note implementazione, onda 1**:
+  > - **`user/assets/create-edit.en.md`**: da 3082 a 1822 parole, organizzata per compiti: crea, scegli il tipo, collega un provider, controlla i dati del provider, modifica, identificatori, distribuzioni, unisci duplicati.
+  >   - Le 6 ancore esplicite restano. Le 4 tolte sono automatiche e nessuno le linka.
+  >   - Via i due diagrammi Mermaid; le admonition passano da 9 a 2.
+  >   - **Fatti nuovi**, verificati anche da Q:
+  >     - **Units per single price**, con 100 proposto per i bond (`AssetModal.svelte:909-918`);
+  >     - **Name** unico;
+  >     - togliere la spunta a **No Provider** prima di impostare un provider a mano;
+  >     - cambiare la **Currency** cancella prezzi ed eventi, con il dialogo **Delete & Change Currency** (`en.json:43`).
+  > - **`developer/frontend/components/features/asset-identity.md`**: le regole delle righe di confronto (`isFamilyOnlyProposal()`), la regola dell'avviso di fusione dei duplicati, e una precisazione sulla fusione dei codici.
+  > - **`developer/backend/assets/architecture.md`**:
+  >   - **errore corretto**: la prova della storia scarica **7** giorni, non 30 (`provider_management.py:379`);
+  >   - le operazioni usate da **Test Configuration** e da **Ask Provider**, e i fallimenti morbidi.
+  > - **`developer/architecture/database/assets_pricing.md`** (Q): ospita l'unico fatto rimasto orfano, cioè le distribuzioni salvate come frazioni.
+  >   - La UI lavora in percento, con tolleranza 0.005 punti, e divide per 100 (`DistributionEditor.svelte:132,192`, `DistributionDataImportModal.svelte:35,42`).
+  >   - Il backend rifiuta uno scarto oltre 0.01, poi rinormalizza, quantizza a 4 decimali e mette il residuo sul peso minore (`schemas/assets.py:352-431`).
+  >
+  > **Reperto di codice**, da passare al coordinatore: la docstring di `BaseDistribution` (`schemas/assets.py:341,359`) dice tolleranza 1e-6, ma il codice usa `Decimal("0.01")` (`:398`).
+  >
+  > - **`user/dashboard/charts.en.md`**: da 4850 parole (versione del treno 13) a 2268, a blocchi.
+  >   - Le 8 ancore esplicite restano. Le automatiche tolte non le linka nessuno, e l'app non linka la pagina.
+  >   - Admonition da 8 a 2: «Highs and lows are hypothetical» e «purchase bars ≠ KPI».
+  >   - Carousel e segnaposto sono identici byte per byte.
+  >   - **Correzioni dal codice:** le etichette delle tab sono **By Type**, **By Sector** e **Geographic**; **Now** e **History** sono pulsanti a icona; via «All series start at 0%», perché il ROI non parte forzato da 0; il banner si chiama **MWRR chart unavailable**.
+  >   - Del punto di I resta una frase («Axis labels»).
+  > - **`developer/frontend/components/charts.md`**: da 1414 a 2576 parole, solo fatti nuovi.
+  >   - Il punto di I c'è per intero: etichette dei periodi, rotazione tutto o niente, diradamento contato dall'ultima, chiavi `dashboard.pnlAxisQuarter` e `dashboard.pnlAxisWithYear`. È verificato su `git show 374381e27:` di `growthLadderAxis.ts` e `GrowthChart.svelte`.
+  >   - Anche: le regole delle larghezze e delle candele su più giorni, la legenda e le fonti di Income, i dettagli delle torte, il ridisegno in privacy.
+  >   - Corretta una riga superata: anche l'ultimo periodo può essere sbiadito, non solo il primo.
+  >   - Il colore dei dividendi non è nominato in nessuna delle due pagine.
+  > - **`user/transactions/import/danske-bank.en.md`**: da 3753 parole (versione del treno 13) a 1865, di cui 1471 di prosa.
+  >   - Indice: export, upload, file mancante, come si legge il set, import annuale, cosa si importa, commissioni, scissioni, primo import, controllo di fine periodo, gap, limiti.
+  >   - Le 5 immagini del treno 13 sono identiche byte per byte; «a **Deposit** or a **Withdrawal**».
+  >   - Le ancore linkate da altre pagine (`#how-the-set-is-read`, `#first-import-align-with-the-bank`) restano, insieme a `#gaps`, `#demergers` e `#limits`.
+  > - **`developer/backend/brim/danske_bank.md`**, nuova, 3634 parole: accoppiamento titoli e cassa, file combinato, punti di partenza e gap, correzioni `gap_fix` (`DEPOSIT` o `WITHDRAWAL`), controllo di fine periodo, stima delle commissioni, scissioni. Voce di nav aggiunta da Q.
+  > - **`user/transactions/import/how-to.en.md`**: da 3890 parole leggibili a 1714. Ogni step dice cosa vedi, cosa decidi e cosa fare se qualcosa va storto.
+  >   - Le 3 immagini del treno 13 sono identiche byte per byte, tra cui `brokers/import-report-set-file-menu`, che è nuova.
+  >   - Le admonition sono 0.
+  >   - **Correzioni dal codice:** i nomi dello stepper sono Upload / Select Files / Parse / Review; le colonne della review non includono Price, Net Amount né Fees; i badge reali dicono **⚠ Likely dup**; ci sono **Set opening to ‹date›** e **Recalculate by priority**; la pagina Files non ha un'azione di re-import; il flusso nelle impostazioni si chiama **Import guide**.
+  >   - Ancore: `#guided-first-import` resta; nuove le esplicite `#review`, `#duplicates` e `#opening-date`, per i link dell'index.
+  > - **`user/transactions/import/index.en.md`**: da 1511 parole leggibili a 730.
+  >   - Via la tabella «Importer Capabilities», che aveva celle **sbagliate**: IBKR non legge dividendi né depositi, Coinbase salta send e receive.
+  >   - Le card mostrano stato ed export da fare; Degiro chiede l'Account Statement.
+  >   - Le ancore `#asset-mapping`, `#duplicate-detection` e `#before-opening` restano.
+  > - **`user/transactions/import/generic-csv.en.md`**: da 956 a 753 parole.
+  >   - La tabella `#column-reference` è identica byte per byte.
+  >   - Nuova la nota che le righe ADJUSTMENT chiedono il costo di una unità.
+  > - **Pagine dev, solo fatti nuovi:**
+  >   - `import-wizard.md`: la regola `pickBestPlugin`, cosa fanno Confirm e Confirm all, quali righe vanno nelle Corrections;
+  >   - `brim/generic_csv.md`: rilevamento delle colonne (maiuscole e spazi ignorati, vince la colonna più a sinistra, rifiuto HTTP 400) e un paragrafo sugli errori di riga.
+  >
+  > **Gate `fb2`** (`Q_GATE_ARGS=--fb /tmp/libreFolio_q_gate.sh fb2`):
+  > - scope ok (27 percorsi), segnaposto ok, stile ok, `check-links` con solo il link rotto della baseline, `git diff --check` pulito;
+  > - build strict: exit 1, con 2 WARNING.
+  >   - `risk-lab.md#dashboard-risk-tab`: la sezione la sta ancora scrivendo il writer della Dashboard Risk.
+  >   - **⚠️ Fuori pista:** `danske-bank.en.md` linkava `files/index.md#report-sets`, che manca in IT/FR/ES (la pagina EN-only si costruisce anche lì). Riportato a `#broker-reports`, che esiste in tutte le lingue e che usava il treno 13.
+  >
+  > **Reperti per altri** (inoltrati al coordinatore):
+  > - `providers_list.md:7` (L) dice che IBKR legge «standard IBKR activity reports», ma il parser richiede le colonne Flex Query `Buy/Sell`, `TradeDate`, `ISIN` e `IBCommission` (`broker_ibkr.py:131`).
+  > - La docstring di `broker_coinbase.py:16-19` è superata: staking e rewards sono ADJUSTMENT (`:68-70`), send e receive vengono saltati (`:76-77`).
+  > - La schermata `brokers/import-report-set-file-menu` (M, G3) mostra **Read alone with Generic CSV** su un file di cassa Danske, preparato apposta per il test. Ma la pagina Danske dice che un export reale non lo offre mai.
+  > - Per l'onda 2, pagine di Q: `directa` dice Beta, mentre l'index e `providers_list` dicono Stable; `ibkr` parte dall'Activity Statement; `preferences` dice «Import Wizard», ma l'etichetta è «Import guide».
+  >
+  > **Seguito** (14:10-14:20):
+  > - **Smistamento del coordinatore.** La riga IBKR di `providers_list.md` passa a Q: L è parcheggiato, il file non è cambiato dopo la base, e il resto delle pagine dev BRIM resta di L. Lo stato di Directa lo decide il developer. Le docstring vanno nel backlog del coordinatore.
+  > - **Developer** (ask_user): «Directa = **Stable**».
+  >   - `directa.en.md`: tolta l'admonition «Beta». Le pagine Stable, come Crédit Agricole, non ne hanno.
+  >   - La card dell'index e `providers_list.md:10` dicevano già Stable.
+  >   - Le traduzioni dicono ancora Beta: è debito di traduzione.
+  > - **IBKR**:
+  >   - `providers_list.md:7`: Activity Flex Query in CSV, con le intestazioni quotate `Buy/Sell`, `TradeDate`, `ISIN` e `IBCommission` sulla prima riga (`can_parse`, `broker_ibkr.py:131`). Legge acquisti e vendite con ISIN e commissioni come `FEE`; salta le righe senza ISIN; niente dividendi, tasse né movimenti di cassa.
+  >   - **⚠️ Fuori pista:** corretta anche la pagina utente `ibkr.en.md`, per lo stesso reperto e perché il rischio per l'utente è alto. Diceva di esportare l'Activity Statement, che il parser non legge, e prometteva dividendi, tasse e depositi.
+  >   - Ora la pagina chiede una Flex Query con la sola sezione Trades e le 8 colonne del parser, in CSV con data `yyyyMMdd`. Dice cosa si importa: BUY e SELL; la FEE sullo stesso asset, in `IBCommissionCurrency`; USD se `CurrencyPrimary` è vuota.
+  >   - Tolti il vecchio segnaposto del portale, superato, e l'avvertenza sulla lingua. Nessun link punta alle ancore tolte.
+  > - **M** (14:15) rifà `brokers/import-report-set-file-menu` con l'export di cassa Danske reale: Preview, Remove from the set, Delete, senza «Read alone». Q ha aggiunto il segnaposto con lo stesso nome in `danske-bank.en.md#how-the-set-is-read`, dopo `-read-as`, come M ha proposto.
+  > - **Reperto per Risk:** la tabella «Who Calls It» di `developer/backend/risk/architecture.md` dice che la Dashboard manda tutti i broker accessibili. Il codice manda solo quelli posseduti con quota sopra 0 (`dashboard/+page.svelte:1041`, `getOwnedBrokers()` in `brokerStore.ts:262-267`). Inoltrato al coordinatore.
+  >
+  > **Gate `fb3`**: build strict exit 0 e 0 WARNING; il resto verde (27 percorsi). **Gate `fb4`**, dopo IBKR, Directa e il segnaposto: build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope (30 percorsi), segnaposto, stile e `git diff --check` tutti verdi.
+  >
+  > **Seguito** (coordinatore, 14:25): «Risk, Who Calls It: correggila tu in questo checkpoint». Risk è parcheggiato e il file non è cambiato dopo la base. Le voci CHANGELOG della doc (IBKR, Directa, semplificazione) le scrive il coordinatore all'integrazione.
+  > - **`developer/backend/risk/architecture.md`**:
+  >   - **Riga «Dashboard, Risk tab»** di `#callers`. Prima diceva «every broker the user can access». Ora dice `{kind: "portfolio", broker_ids}` con i broker **posseduti** a quota positiva, dove una quota mai impostata conta 100% per il proprietario (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`). Vale qualunque sia il filtro dei broker. Il pannello si monta solo quando i broker sono noti, perché senza `broker_ids` il backend allargherebbe la richiesta a tutti i broker visibili (`dashboard/+page.svelte:1032-1041`).
+  >   - **Puntatori** (intro e «Related»): ora vanno a `user/dashboard/risk.md` e alla nuova `Risk UI`, legati alle pagine nuove di S15.
+  > - **Gate `fb5`**: build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 31 percorsi, segnaposto, stile e `git diff --check` verdi.
+  >
+  > **Review del developer** (14:20-14:30): «quelle che vedo per ora mi piacciono»; «nella forma e nei contenuti, mi pare corretto fin ora», fino ai Grafici; «le pagine developer sono giustamente ricche… mi fido che siano corrette».
+  > - **⚠️ Fuori pista: anteprima senza schermate.** Con `mkdocs serve`, MkDocs riscrive `config.site_url` in `http://127.0.0.1:6042/LibreFolio/`.
+  >   - `overrides/main.html` ricava da lì `LF_GALLERY_FALLBACK_BASE`, quindi il fallback di `gallery-img-loader.js` verso GitHub Pages interroga di nuovo il server locale. I PNG sono gitignorati e nel worktree non ci sono, perciò nessuna immagine viene caricata.
+  >   - Verificato nel browser: fallback = `http://127.0.0.1:6042/LibreFolio/`, mentre github.io risponde (1280 px).
+  >   - Con la build statica, dove `site_url` resta canonico, il fallback funziona: 8/8 immagini su `charts`.
+  >   - Le schermate della 1.1 sono pubblicate (200). Quelle nuove della 1.2 di M (`tools/hub`, set Danske, `files/brim-report-sets`, `transactions/bulk-todo-banner`, `assets/type-picker-open`) non lo sono ancora (404): arrivano con la gallery di M.
+  >   - È un difetto dell'infrastruttura, non delle pagine. `overrides/main.html` non è di Q: va segnalato.
+  > - **Anteprima** (developer: «meglio cambiare porta»; anche il serve diventava inusabile durante le ricompilazioni):
+  >   - spento `dev.py mkdocs serve` sulla 6042 (PID 19591 e figlio 21346). Era stato riavviato alle 13:44 da un agente di questa sessione, padre l'app Copilot (PID 730), senza shell utente; `stop_bash` non lo tracciava più. Fermato con `kill <PID>` e verificato che la porta 6042 è libera;
+  >   - anteprima statica sulla corsia **6162**: `http://127.0.0.1:6162/LibreFolio/`, `python3 -m http.server` detached (shellId `q-preview-6162`) su `/tmp/librefolio-r2-q/preview`, con il symlink `LibreFolio` che punta a `site`;
+  >   - aggiornamento con `/tmp/libreFolio_q_preview_rebuild.sh`: build con `dev.py`, copia e scambio atomico solo se la build riesce. Con `--no-build` riusa la build del gate.
+  > - **Modifiche chieste** (14:25):
+  >   - **elenco broker** (`import/index.en.md`): badge solo per Alpha e Beta, via «✅ Stable ·» dalle card di Directa, Crédit Agricole e Generic CSV. La legenda ora dice che gli importer senza etichetta sono quelli stabili;
+  >   - **home** (`index.en.md`): «Planning Tools», legata al PAC, diventa la sezione «Tools»: un tool per ogni funzione utile, che legge i dati senza cambiarli, e un catalogo che crescerà. Resta solo «Explore tools →»; via il pulsante del PAC.
+  >   - Nessun'altra pagina utente usa il badge «✅ Stable».
+  > - **Gate `fb6`**: build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 31 percorsi, segnaposto, stile e `git diff --check` verdi. Anteprima aggiornata alle 14:31.
+  >
+  > **Review del developer, seguito** (14:41):
+  > - **Home, frase dei Tools.** Il developer: «non è accattivante; l'inizio va bene […] deve finire con qualcosa del tipo: da ora fare calcoli e prendere decisioni sarà un gioco da ragazzi!». Nuova frase: «LibreFolio comes with a set of tools, one for each useful job! Each one starts from your real portfolio, shows you the numbers before you act, and never changes a thing. From now on, crunching numbers and making decisions is child's play!»
+  > - **Home, «A Modular Ecosystem».** Il developer: «aggiungere un'altra voce proprio per i tools». Quinta voce **Tools**, con l'icona `Wrench` della sidebar dell'app (`Sidebar.svelte:41`) e link a `user/tools/`.
+  >   - **Layout:** la variante nuova `plugin-radial-hub--five` dispone le 5 voci a pentagono. Le posizioni `node-penta-1…5` stanno sul cerchio a 0°, 72°, 144°, 216° e 288°, con le linee SVG in `viewBox 0 0 720 720`.
+  >   - **Geometria in `stylesheets/home-custom.css`**, file condiviso e mai aperto da altri, da **dichiarare**:
+  >     - **da 1240 px in su**: orbita di 760 px (raggio 380), schede da 360 px, hub alto 760 px;
+  >     - **sotto 1240 px**: le 5 schede si impilano come su mobile, solo nella variante five;
+  >     - **la sezione** ha `overflow-x: clip`, con la nuova classe `deep-dive--ecosystem` solo nella home EN.
+  >   - La variante `--four` delle home IT/FR/ES non cambia.
+  >   - **⚠️ Fuori pista: misure** nel browser della 6162, campionando l'orbita ogni 3°:
+  >     - **prima versione** (raggio 360, da 769 px): le schede si toccavano a 40° (−1 px, schede alte 189 px), e la pagina scorreva in orizzontale tra 1100 e 900 px;
+  >     - **senza clip:** durante la rotazione la pagina scorreva di 135-198 px in orizzontale. Nessuna scheda usciva dallo schermo, ma la traccia ruotata calcola l'overflow dai box non trasformati delle schede. `html {overflow-x: hidden}` blocca solo lo scroll manuale. Il clip sull'hub tagliava le schede agli angoli estremi (10 px), per questo è passato alla sezione;
+  >     - **finale:** a 1240 e 1366 px il distacco minimo è +13 px, senza overflow e senza tagli; sotto 1240 px le schede sono impilate, senza overflow;
+  >     - **a 1920 px** c'è una sovrapposizione transitoria di −7 px, perché Material ingrandisce il font radice da 1600 px. L'hub a quattro attuale fa −31 px alla stessa larghezza, quindi la variante nuova è migliore dell'esistente.
+  >   - Durante le misure, aprire `/it/` aveva salvato `gallery-lang` = `it` per l'origine 6162, e la home veniva reindirizzata in italiano. Riportato a `en` dopo ogni misura.
+  > - **Degiro = Stable** (developer: «abbiamo avuto degli export veri, direi che è uscito dalla fase beta»):
+  >   - `degiro.en.md`: tolta l'admonition Beta;
+  >   - card dell'index senza badge;
+  >   - `providers_list.md`: «✅ Stable». Il file era già aperto per IBKR; da comunicare al coordinatore.
+  > - **Immagini mancanti nell'anteprima:** `type-picker-open`, le 5 Danske, read-as e file-menu di how-to. Sono schermate nuove della 1.2, non ancora pubblicate.
+  >   - M ha depositato **102 PNG** in `/tmp/librefolio-q-gallery-drop/desktop/en/{light,dark}`. Lo script dell'anteprima le sovrappone al solo sito servito.
+  >   - Verificato: home 12/12, create-edit 5/5 (3 dalla copia), Danske 5/5 (5), how-to 20/20 (9).
+  >   - Le schermate pubblicate `assets/distribution-editor-*` erano della 1.1, senza **Import CSV**. M le ha rigenerate con lo scenario esistente; alla release la gallery completa le riprodurrà.
+  >   - `brokers/import-report-set-file-menu` nella copia è ancora la versione con «Read alone with Generic CSV»: lo scatto con l'export reale arriva dopo l'onda 1.
+  > - **About:** la frase da guardare è in `#tool-diagnostics`: «Its job counters cover … **Completed jobs** already includes the **Failed jobs**: do not add the two together.» Prima rimandava alla spiegazione dei contatori nella pagina Tools, spostata nel manuale dev.
+  > - **Gate `fb7`-`fb9`**: build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 33 percorsi, segnaposto, stile e `git diff --check` verdi. Anteprima pulita alle 14:58, con la copia di M.
+  >
+  > **Review del developer, seguito** (15:07):
+  > - **«Modular ecosystem non compare» in Chrome.**
+  >   - In Chrome 155 headless (profilo temporaneo, `/tmp/q-chrome-profile`), a 1600, 1280 e 1100 px, l'hub si vedeva: non riprodotto.
+  >   - I tab del developer sono il browser integrato dell'app, cioè WebKit.
+  >   - L'unico costrutto nuovo rispetto all'hub a quattro, che funziona, era `overflow-x: clip` sulla sezione, sopra schede animate con `backdrop-filter`. Rimosso, e con lui la classe `deep-dive--ecosystem`.
+  >   - **⚠️ Fuori pista: causa vera dell'overflow.** Misurando su 360°, l'hub a quattro non va mai oltre il bordo (0 angoli su 60), quello a cinque senza clip sì (fino a 134 px a 1366, 38 angoli su 60). Ruotare la traccia e controruotare ogni scheda annida due rotazioni, e ognuna gonfia il box di overflow; con l'orbita più larga quel box esce dalla pagina.
+  >   - **Correzione**, solo nella variante five: ogni scheda si muove con un transform suo, `@keyframes penta-orbit` = `rotate(a) translateY(-380px) rotate(-a)`, che è una traslazione pura. Ritardi da −12 s a −48 s; traccia ferma, ruota solo lo SVG delle linee (`orbit 60s`); pausa all'hover anche per lo SVG. Tolte le posizioni statiche `node-penta-*`.
+  >   - **Misure WebKit su 360°:** overflow 0 e nessuna scheda fuori vista a 1240, 1366, 1600 e 1920 px. Distacco minimo +13 px fino a 1366; da 1600 px −3 px, per il font radice di Material (l'hub a quattro fa −31).
+  >   - **Chrome headless:** l'hub si vede e gira; a 2 s e a 9 s le posizioni sono diverse.
+  >   - **Anteprima:** il server ora è `/tmp/libreFolio_q_preview_server.py` (shellId `q-preview-6162b`), con `Cache-Control: no-store`, così il browser non tiene copie vecchie fra una build e l'altra.
+  > - **Home:** tolto «and never changes a thing» dalla frase dei Tools e «never change it» dalla scheda: «with tool plugins, one for each job, **starting from your own portfolio**».
+  > - **How-to:** i tre step facoltativi tornano **pannelli espandibili**, come a HEAD: `??? abstract` Unify assets, `??? warning` Corrections, `??? note` Duplicates.
+  >   - Stanno sotto un H3 breve, `### 🧩 Steps that appear only when needed {: #only-when-needed }`.
+  >   - Il link dell'elenco broker passa da `#duplicates` a `#only-when-needed`: era l'unico link a quell'ancora.
+  > - **About:**
+  >   - **popup delle donazioni:** restano la frase «Every now and then … reminds you» e la schermata. Via Esc, soglie e frequenza;
+  >   - **Tool diagnostics:** via anche la frase sui contatori dei job, che il manuale dev copre già (`tool_plugins.en.md:192`).
+  >   - Le regole del popup vanno in `developer/frontend/onboarding.md#deferred-popups`: 60 giorni, oppure 10 accessi più 7 giorni; niente Esc né backdrop; si chiude solo con Buy Me a Coffee o Maybe later (`donation_popup_service.py`, `auth.py:112,146`, `DonationPopupModal.svelte:50`).
+  >   - L'interruttore nascosto della docstring **non** è documentato, come la docstring richiede.
+  > - **Gate `fb10`**: build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 34 percorsi, segnaposto, stile e `git diff --check` verdi. Anteprima alle 15:17.
+  >
+  > **Review del developer, seguito** (15:21): «about ora è perfetto»; «le frasi vanno bene».
+  > - **Home, hub senza orbita:** dove c'è spazio, le schede vanno su due colonne.
+  >   - Da 900 a 1239 px, griglia `repeat(2, minmax(0, 400px))` centrata; la quinta scheda, Tools, occupa entrambe le colonne. Le schede della stessa riga hanno la stessa altezza.
+  >   - Sotto 900 px resta la colonna singola.
+  >   - Misure WebKit: a 1239, 1000 e 900 px, 2 colonne e 3 righe (161/161 e 189/189 px), Tools centrata, overflow 0; a 899 e 700 px una colonna, overflow 0.
+  > - **How-to:** anche «⚖️ Align with the bank» diventa un pannello `??? info`, «after Review, only for a report set such as Danske Bank», in fondo alla Review. Nessun link puntava alla sua ancora automatica.
+  > - **Gate `fb11`**: build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 34 percorsi, segnaposto, stile e `git diff --check` verdi. Anteprima alle 15:23, con 4 pannelli `<details>` in how-to.
+  >
+  > **Onda 1 approvata** (developer, 15:25): «mi piacciono entrambi, direi che questa onda è completata».
+  > - **Verifica del formato** (domanda del developer: «gli script di verifica del formato danno errore nelle pagine inglesi?»):
+  >   - `dev.py mkdocs translate-validate` controlla solo le **traduzioni** contro l'EN: i suoi errori sono debito di traduzione. Sono 1128; il parser per pagina ne attribuisce 237 alle 10 pagine tradotte di questa onda e 606 alle 45 pagine con debito precedente della 1.2. Log: `/tmp/libreFolio_q_tv_fb.log`.
+  >   - **Auto-validazione EN** (`/tmp/libreFolio_q_selfcheck.py`): `validate_file(en, en)` con gli stessi 15 controlli del progetto (admonition, code block, liste, HTML, LaTeX, front matter…). Su 221 pagine EN e dev: **0 errori**, e 3 WARN `artifact-glossary-marker` già presenti a HEAD. Sono falsi positivi su codice (`"broker_ids": [3]`, `groupIsins[0]`) in pagine dev non tradotte.
+  > - **Privacy:** sulle 2589 righe aggiunte, nessun IBAN, email, numero lungo né segreto.
+  > - **Chiusura della corsia:** anteprima spenta, porte 6162 e 6042 libere. Rimossi il profilo Chrome temporaneo, le PNG di M (`/tmp/librefolio-q-gallery-drop`) e il sito copiato. Gli script `/tmp/libreFolio_q_preview_rebuild.sh` e `/tmp/libreFolio_q_preview_server.py` restano per l'onda 2.
+  > - **Checkpoint:** 31 file tracciati modificati e 3 nuovi; nessuna traduzione toccata; `git diff --check` pulito. Messaggio proposto in `/tmp/libreFolio_commit_fb.txt`. Stato FROZEN.
+  > - **Commit del developer:** `eee56b42a` («docs: simplify user pages, move internals to dev»), 34 file, sopra `ffa72cc2b`.
+  >   - Il coordinatore ha verificato l'albero e la risoluzione dei 3 conflitti col treno 13: vale la versione di Q.
+  >   - Poi il developer ha fuso il treno 14 nel ramo di Q: `cbfce2475` (genitori `eee56b42a` e `9eb01c756`). La base ora contiene i treni 13 e 14.
+  >   - L'onda 1 entra in `dev_release2` col treno 15, dopo la coverage.
+
+- **S17** ✅ 2026-10-08 — Onda 2 della semplificazione, su base `cbfce2475`.
+  > **Via libera del coordinatore** (15:48), nella stessa sessione col developer:
+  > - le pagine di P e di L sono comprese; per `user/ai-export/**` vale `ai-development.instructions.md`;
+  > - `mkdocs.yml`, `static/extra.css` e `home-custom.css` restano di Q;
+  > - **riservate a M**, che ci mette le immagini dopo il treno 15: `user/assets/correlation`, `user/dashboard/index`, `user/dashboard/risk`, `user/tools/pac-allocator/index`, `user/transactions/import/danske-bank` e le tre pagine `risk-metrics/` (`benchmark-selection`, `historical-replay`, `simulation-modes`).
+  >
+  > **Brief** (sessione Q, `files/simplify_brief.md`, «wave 2 edition»), aggiornato con le correzioni del developer nell'onda 1:
+  > - pannelli espandibili per ciò che compare solo a volte;
+  > - un H3 per step;
+  > - LaTeX per le formule;
+  > - niente versioni;
+  > - badge solo per Alpha e Beta;
+  > - frequenze e regole interne nel manuale dev;
+  > - blocchi per le superfici di analisi.
+  >
+  > Il brief elenca anche le pagine vietate: quelle riservate a M, le pagine dev di P, `brim_plugin_guide.md` e `providers_list.md`. Niente anteprima live: la build strict la fa Q dopo i writer.
+  >
+  > **Gruppi** (8 `docs-writer`, file disgiunti; parole sulla base `cbfce2475`):
+  > - **A, dashboard di P:** `kpi-cards` (1784) e `positions` (2164).
+  > - **B, AI Export di P:** `ai-export/{index,portfolio,broker,fx,asset}` (3591).
+  > - **C, onboarding e impostazioni:** `getting-started` (1555), `settings/preferences` (1880), `pwa` (694), `misc/image-crop` (498).
+  > - **D, dettaglio asset:** `assets/index` e `assets/detail/{index,chart,signals,data-editor,measures,events}` (6300). Si conserva l'ancora `#rolling-return`.
+  > - **E, FX:** `fx/{index,add-pair,sync,chart-settings}` e `fx/detail/{index,chart,data-editor,signals,measures}` (5151).
+  > - **F, provider:** `assets/providers/{index,borsa-italiana,css-scraper,justetf,yahoo-finance,scheduled-investment}`, `fx/providers/index` e `fx/detail/provider` (4330).
+  > - **G1, broker, transazioni e Files:** `brokers/{index,import,info}`, `transactions/{index,form}` e `files/index` (4165). `brokers/sharing` resta fuori finché il coordinatore non chiarisce l'esclusione del Q1 alla riga `:76`.
+  > - **G2, importer:** `import/{credit_agricole,degiro,intesa,etoro,fineco}` (3229).
+  > - Fuori dall'onda 2: le admin (onda 3), `community/contribute` (pagina per contributori) e la home, già rivista dal developer.
+  >
+  > **Risposte del coordinatore** (15:53):
+  > - **Pagine dev e di teoria di P** (`wac.md`, sezione sul costo di `fifo_lot_engine.md`, `data-quality-banner.md`, teoria): **restano di P**, che sta discutendo col developer la regola `MISSING_COST_BASIS` (#32). I writer elencano nel report i fatti che spetterebbero lì, e il coordinatore li gira a P.
+  > - **`user/brokers/sharing.en.md` è libera.** La riga `:76` era stata concessa a N il 07/10 per la tab Rischio sui broker posseduti, lavoro entrato con `49d4ec8e0`. Aggiunta al gruppo G1, con un messaggio al writer, e allo scope `--w2` del gate.
+  >
+  > **M** (16:00): ha rimesso in `/tmp/librefolio-q-gallery-drop/desktop/en/{light,dark}` le stesse 102 PNG del primo deposito: assets 5, dashboard 17, brokers 12, files 3, settings 1, transactions 1; per fx, onboarding e ai-export nessuno scatto, quindi ricade sulle Pages. Il prossimo deposito arriva dopo le 17 con la verifica del G5: gli scatti `onboarding/*` e la guardia offline della gallery su assets, fx e brokers.
+  >
+  > **Note implementazione, onda 2, gruppo B (AI Export)** (16:15):
+  > - **Lunghezze:** `index` da 1211 a 963 parole, `portfolio` da 872 a 480, `broker` da 604 a 358, `fx` da 459 a 277, `asset` da 445 a 247.
+  > - **Struttura dell'index:** un H3 per step (da Step 1, tipo di export, a Step 6, copia); il prompt lungo sta in un pannello espandibile; sezioni «Paste», «Privacy» e «When Something Goes Wrong».
+  > - **Pagine di scope:** «Export Data» e «Analyses», con i casi particolari in pannelli: domande del PAC, fatti fiscali delle minusvalenze.
+  > - **Ancore:** nessuna esplicita e nessuna linkata. Le pagine non hanno schermate.
+  > - **Errori corretti nel testo utente:**
+  >   - «drawdown always full-history» era falso: il drawdown per asset del PAC usa solo il periodo dell'AI;
+  >   - «unavailable tasks stay disabled» era falso: le analisi sono tutte elencate e rifiutate al momento della copia.
+  > - **Pagine dev, solo aggiunte:**
+  >   - `ai_export_composition.md`: drawdown, binding delle analisi, timing del PAC, riferimenti A#/B#/F#/L#, confine del clipboard con le soglie 20 000 / 60 000 e il draft di 10 minuti in `sessionStorage`;
+  >   - `ai_export_snapshot.md`: `cost_allocation_semantics` e `zero_semantics`;
+  >   - `ai_export_sampling.md`: i rendimenti FX a 30 e 91 giorni.
+  > - **Seguiti:**
+  >   - al writer: correggere in `ai_export_probe_workflow.md` la frase sulle L# fuori dalla directory, e in `ai_export_snapshot.md` la frase sullo schema V1;
+  >   - al writer G1: `brokers/index.en.md:~79` dice «exact sampling», che non vale più.
+  >   - ✅ (16:25) Fatti:
+  >     - `ai_export_probe_workflow.md:134-138`: la directory risolve A#, B# e F#, mentre L# è il `lot_ref` del backend, letto sul posto (`ai_export_runtime.py:342-345`, `payloads/portfolio_broker.py:444-447,721-735`, `asset_core.py:533-551`);
+  >     - `ai_export_snapshot.md:72-76`: il runtime precedente è stato rimosso prima del rilascio, e lo schema V1 è il primo rilasciato (`AI_EXPORT_SCHEMA_VERSION = 1`, `ai_export_runtime.py:25-29`; storia git `2544a3e36` → `7992471b6`).
+  >
+  > **Note implementazione, gruppo F (provider)** (16:30):
+  > - **Lunghezze:** `providers/index` da 649 a 765 parole (le card restano identiche), `borsa-italiana` da 1125 a 771, `css-scraper` da 484 a 564, `justetf` da 344 a 320, `yahoo-finance` da 145 a 247, `scheduled-investment` da 524 a 768 (con il LaTeX e un esempio in pannello), `fx/providers/index` da 655 a 717, `fx/detail/provider` da 404 a 412. Le pagine corte crescono perché mancavano «What It Offers» e «Limits».
+  > - **Errori corretti dal codice:**
+  >   - justETF: USD, CHF e GBP hanno un prezzo corrente, l'ultimo giornaliero;
+  >   - Borsa: nessun fallback sull'ultimo acquisto, e nessuna ricerca da URL;
+  >   - CSS Scraper: il tipo è salvato come OTHER, e il parser ignora solo spazi e `€ $ £ ¥ %`;
+  >   - Scheduled Investment: Interest Type e Day Count valgono per tutto il piano; «Frequency» include Weekly; **Generate Coupon**; interessi nei giorni di grazia;
+  >   - FX: EUR/RON è una coppia diretta ECB, quindi l'esempio di catena diventa RON/USD via EUR; una coppia senza provider diventa manuale da sola; le etichette **Providers** ed **Edit Pair Providers**;
+  >   - card: Yahoo non è «default», e Borsa non ha «smart URL search».
+  >   - Tolti i fatti non verificabili: `SEDX`, «3000+ ETFs», «15-minute delay», i conteggi delle valute.
+  > - **Ancore:** restano `#interest-schedule-editor` e `#how-value-is-calculated`, linkate dall'app; `#late-interest` diventa esplicita (la linka `maturity-settlement` in 4 lingue).
+  > - **Dev:**
+  >   - `provider_borsa_italiana.md`, `provider_cssscraper.md`, `provider_justetf.md`, `provider_scheduled_investment.md`, `system_providers.md`, `asset_plugin_guide.md`;
+  >   - `fx/providers/snb.md`, che era **sbagliato** da cima a fondo: SNB dà medie mensili datate al 1°, via API JSON, per circa 25 valute;
+  >   - la riga SNB di `fx/providers/index.md`.
+  > - **Inoltrati:** a D due fatti per `assets/architecture.md` (il prezzo del sync diventa il punto del giorno; nessun fallback sull'ultimo acquisto, `price_resolver`); a E la regola delle catene per `fx/configuration.md` e l'esempio RON/USD.
+  >
+  > **Note implementazione, gruppo G2 (importer)** (16:30):
+  > - **Lunghezze:** Crédit Agricole da 1219 a 1071 parole (la parte sempre visibile cresce: il saldo iniziale diventa un passo principale); DEGIRO da 717 a 624, Stable e senza badge; Intesa da 586 a 581; eToro da 345 a 410; Fineco da 362 a 331.
+  > - **Errori corretti dal codice:**
+  >   - Fineco: gli avvisi sono in inglese;
+  >   - Intesa: la lista movimenti non crea acquisti né vendite;
+  >   - eToro: niente CSV, si scarica un XLS da cui si salva il foglio **Account Activity**; la valuta viene da **Details**; overnight fee e SDRT vengono scartati senza avviso;
+  >   - Crédit Agricole: il passo del saldo iniziale non è facoltativo.
+  > - **Altro:**
+  >   - Intesa usa le due schermate di `static/` che nessuna pagina referenziava;
+  >   - DEGIRO, eToro e Fineco hanno l'H1 con 📥.
+  > - **Dev:**
+  >   - nuova `developer/backend/brim/credit_agricole.md`, 2037 parole; nav aggiunta da Q dopo «Danske Bank Importer»;
+  >   - `brim/architecture.md`: sezione «🗒️ Plugin notes» con `#plugin-degiro`, `#plugin-intesa`, `#plugin-etoro` e `#plugin-fineco`.
+  >   - Nessuna ancora linkata dalle pagine utente.
+  > - I reperti per altri e sul codice sono raccolti in sessione Q, `files/w2_findings.md`, da mandare al coordinatore a fine onda.
+  >
+  > **Note implementazione, gruppo C (onboarding e impostazioni)** (16:40):
+  > - **Lunghezze:** `getting-started` da 1555 a 1403 parole, `settings/preferences` da 1880 a 1519, `pwa` da 694 a 566, `misc/image-crop` da 498 a 550 (cinque affermazioni sbagliate corrette, aggiunte l'icona dell'asset e la pagina Files).
+  > - **Pannelli espandibili:** account più vecchi, setup che non si carica, step extra dell'import, guide con step, dove si salva un replay.
+  > - **Via:** le temporizzazioni 8 s / 3 s e la versione «1.2.0».
+  > - **Errori corretti dal codice:**
+  >   - qualità −/+, non uno slider; anteprima tonda attivabile; il preset dell'icona dell'asset da 256×256;
+  >   - lingua e tema si applicano al salvataggio;
+  >   - la promozione di un utente si fa solo da CLI;
+  >   - Safari non serve più su iOS;
+  >   - il banner di installazione del browser è soppresso.
+  > - **Ancore:** restano `#welcome-setup`, `#onboarding-and-guides` e `#privacy-mode`; le schermate sono identiche a HEAD.
+  > - **Dev:** `onboarding.md`, `features/settings.md` (con la lettura della Default Currency) e `pwa.md`.
+  > - **Seguito:** correggere la riga «Auto-install banner ✅» di `pwa.md`, la lista «Logic» sotto AboutTab in `settings.md`, e in `state/app-state.md` il salvataggio delle impostazioni e la riga Chart Settings (fatto di E). `app-state.md` è aggiunto allo scope `--w2`.
+  > - ✅ (16:50-17:05) Fatti:
+  >   - `pwa.md:186,292-293`: il banner automatico del browser è soppresso da `preventDefault()`, e il dialog nativo si apre da **Install App**;
+  >   - `settings.md`: la lista «Logic» spostata sotto PreferencesTab;
+  >   - `app-state.md`:
+  >     - riga Chart Settings: per utente in `localStorage`, scope `fx` e `assets`, periodo in `sessionStorage`;
+  >     - riga Date Range: Dashboard, broker, asset e FX, in `sessionStorage`, e l'URL vince;
+  >     - diagramma: le scritture passano dai componenti («write first»); il bootstrap è `appBootstrap.load()` in parallelo; nessun listener su lingua e tema;
+  >     - flusso: punto 5 nuovo, sul reload che legge `librefolio-locale` e `librefolio-theme`.
+  > - **Reperto di codice:** la Dashboard parte dalla valuta di default dell'istanza, non da quella dell'utente; vedi `w2_findings.md`.
+  >
+  > **Note implementazione, gruppo E (FX)** (16:40): 9 pagine, in tutto da 4996 a 4522 parole.
+  > - **Lunghezze:** `index` da 305 a 444 (mancavano le azioni della pagina), `add-pair` da 549 a 566, `sync` da 542 a 502, `chart-settings` da 1042 a 634, `detail/index` da 216 a 288, `detail/chart` da 413 a 425, `detail/data-editor` da 856 a 769, `detail/signals` da 745 a 540, `detail/measures` da 328 a 363.
+  > - **Errori corretti dal codice:**
+  >   - le card non mostrano il provider, e il mini-grafico segue il periodo;
+  >   - niente candlestick FX, e il doppio clic non resetta lo zoom;
+  >   - il tooltip mostra la variazione dall'inizio del periodo;
+  >   - data editor: nessuna colonna Source, modifica inline, Undo invece della conferma, salvataggio con **Save (N)**;
+  >   - le misure si accumulano;
+  >   - il pulsante è **Save Configuration**;
+  >   - l'inversione 1/0.9053 ≈ 1.1046.
+  > - **LaTeX:** il prodotto della catena e il tasso annuo $(P_{end}/P_{start})^{365/d}-1$.
+  > - **Esempio di catena:** RON/USD via EUR, allineato ai provider.
+  > - **Dev:** `fx/architecture.md` (sync di una coppia nuova, colore dell'esito, Timeout ininfluente a 120 s), `fx/configuration.md` (nuova H3 «Chain Dates, Writes and Counters», data stretta, scheduler a 14 giorni), `fx-chain-algorithm.md` (picker, salvataggio delle rotte, priorità 999 del manuale).
+  > - **Inoltrati a D:** i fatti per `charts.md`, `core-ui/data-editor.md` e `signal_plugin_guide.md`.
+  >
+  > **Note implementazione, gruppo A (dashboard di P)** (16:50):
+  > - **`kpi-cards`:** da 1784 a 1540 parole. Un blocco per card: domanda, schermata, **Metrics shown** con link alla teoria, **How to read it**. Le righe di variazione del giorno e l'esempio dell'ETF USA stanno in pannelli; LaTeX solo per Period P&L, Timing effect, Total P&L e la variazione del giorno.
+  > - **`positions`:** da 2164 a 2190 parole.
+  >   - Non scende perché lo schema a blocchi copre ora 3 viste e 5 blocchi FIFO, e prima la vista Performance non aveva una guida alla lettura.
+  >   - Tolti il muro di regole sul YOC, i nomi interni e la storia «v3». Pannelli per celle vuote, YOC non disponibile, Hide amounts e avvisi.
+  >   - Altri tagli possibili, se il developer li vuole: «Choosing a view» e le colonne nascoste.
+  > - **Errori corretti dal codice:**
+  >   - la Dashboard conta solo i broker posseduti con quota sopra 0;
+  >   - il Total P&L include il capitale entrato con titoli a costo;
+  >   - l'etichetta è **Deposited Capital (Period)**;
+  >   - il pannello dei lotti si apre con **Analyze Lots** (⋮ o tasto destro), non con un clic;
+  >   - i toggle si chiamano **Portfolio / Period**;
+  >   - il filtro Status esiste solo come colonna nascosta;
+  >   - la dimensione delle bolle dipende da **Abs / %**;
+  >   - il weight include la cassa;
+  >   - il pannello dei lotti ignora la quota di proprietà.
+  > - **Ancore:** restano `#card-1-period-pl`, `#card-2-returns` e `#card-3-net-worth` (linkate dall'app), `#unrealized-change-by-currency`, `#fifo-lots-analysis` e `#yield-on-cost-yoc`. Nuove `#holdings` e `#performance`, più `#dashboard` sulla pagina dev.
+  > - **Dev:** `pages/index.md` (sezione Dashboard: riga KPI, soglie del Timing effect, tab Posizioni) e `lots_analysis_service.md` (scope dei broker per tutti i ruoli, nessuna quota applicata). Gli interni del YOC sono già nella teoria.
+  > - **Seguiti:**
+  >   - ad A: il punto Broker Detail di `pages/index.md` e 3 fatti in `features/lots-analysis.md`, aggiunta allo scope;
+  >   - a G1: il «click to open» di `brokers/index`.
+  >   - ✅ (16:58) Fatti da A:
+  >     - `pages/index.md:143-145`: **Analyze Lots**, da ⋮ o tasto destro (`ExposureTable.svelte:437-448`, `ContributionTable.svelte:219-232`);
+  >     - `lots-analysis.md:128-131`: la linea Combined richiede 2 o più broker (`LotWacPriceChart.svelte:720-722`); l'etichetta è «Abs» (`en.json:1557`); la dimensione delle bolle dipende dalla quantità o dal valore, su scala a radice da 7 a 22 px (`lotWacPriceChartHelpers.ts:273-292`).
+  >   - I reperti di codice (`KpiSection`, `PositionsPanel`) sono in `w2_findings.md`.
+  >
+  > **Note implementazione, gruppo G1 (broker, transazioni e Files)** (17:00):
+  > - **Testo visibile, prima e dopo:** `brokers/index` da 727 a 656 parole; `brokers/import` da 461 a 365; `brokers/info` da 324 a 344 (con la regola del saldo di fine giornata in LaTeX, in un pannello); `brokers/sharing` da 786 a circa 780 (682 sempre visibili); `transactions/index` da 691 a 675; `transactions/form` da 442 a 580, con la tabella dei 12 tipi e i link alla teoria; `files/index` da 937 a 842.
+  > - **10 affermazioni sbagliate corrette dal codice:**
+  >   - non esiste una **Base currency** del broker;
+  >   - le etichette sono **Allow Leveraged Buying** e **Allow Short Selling**;
+  >   - i broker inattivi sono solo attenuati sulla card;
+  >   - si condivide per username, non per e-mail;
+  >   - **Add Transaction** apre il bulk workspace;
+  >   - il form non ha un campo prezzo e chiede l'importo totale;
+  >   - il cost basis vale solo per Adjustment e Asset Transfer, e non c'è un'anteprima del guadagno;
+  >   - non c'è una barra di ricerca ma i filtri di colonna;
+  >   - il ritaglio si apre solo da ✏️ **Edit**;
+  >   - il controllo del contenuto dei file vale solo con libmagic.
+  > - **Sharing:**
+  >   - è un campo numerico, non uno slider;
+  >   - **Save Configuration**, e **Share Broker** sta nella toolbar;
+  >   - la frase sulla tab Rischio della Dashboard (solo broker posseduti con quota sopra 0) linka `#risk-tab`.
+  > - **Seguiti fatti:**
+  >   - via «exact sampling» da `brokers/index`;
+  >   - il ritaglio con ✏️ in `files/index` e in `core-ui/file-upload.md`, che ha avuto tutti i fatti del ritaglio;
+  >   - **Analyze Lots** in `brokers/index`.
+  > - **Ancore:** restano `#broker-reports` (ora esplicita in EN), `#report-sets`, `#uploaded-by`, `#composite-transactions` e il link a `#risk-tab`. Nuove `#trading-options`, `#bulk-workspace` e `#link-pairs`.
+  > - **Dev:**
+  >   - componenti broker: `forms.md`, `cards.md` e `modals.md`, con i motivi per cui il server rifiuta il salvataggio della condivisione;
+  >   - `transaction-form.md`, `file-upload.md`, `balance_validation.md`, `split_promote.md` e `users_and_brokers.md`.
+  > - **⚠️ Fuori pista: sicurezza.** `GET /brokers/{id}/access` restituisce username **ed e-mail** a qualunque utente autenticato, per qualunque broker. Verificato da Q: `as_user_id="all"` salta il controllo (`broker_service.py:347`) e `list_accesses` non filtra (`:795-825`). Segnalato subito al coordinatore (16:58), senza toccare il codice.
+  > - **Seguito:** correggere `brokers/cards.md` e `brokers/index.md` dev, che documentano componenti inesistenti (`CashBalanceCard`, `CashTransactionModal`).
+  >   - ✅ (17:10) Fatti. `brokers/index.md` dev: card `BrokerCard` e `BrokerDiscoveryCard`; modali `BrokerModal`, `BrokerSharingModal`, `BrokerSharingPanel`, `BrokerImportFilesModal` e `DeleteBrokerDialog`; una riga `lots/`. `cards.md`: le props reali (`broker`, `summary`, `assetCount`, `targetCurrency`) e gli eventi `edit`, `delete` e `share`; via la «base currency» e `CashBalanceCard`; aggiunta `BrokerDiscoveryCard`.
+  >   - Altro seguito: `core-ui/datePickers.md` (L12, L45) citava ancora `CashTransactionModal` fra gli utenti di `SingleDatePicker`. È aggiunto allo scope `--w2`.
+  >
+  > **Coordinatore** (16:48):
+  > - **L'onda 1 è in `dev_release2`:** treno 15 `23b839fb2`, con il merge di Q `ceeb31a2c`. Il worktree di Q non viene avanzato mentre l'onda 2 è in corso; il treno 15 sarà fuso nel ramo di Q al checkpoint dell'onda 2.
+  > - **Elenco degli accessi:** reperto verificato (`brokers.py:422` è l'unico `as_user_id="all"`). Lo porta il coordinatore al developer. Le frasi «share button shows who has access» di `brokers/index` e `brokers/sharing` restano come sono finché il developer non decide.
+  >   - **Decisione del developer** (17:05, via il coordinatore): «mi pare che fosse una cosa voluta, serve per permettere, quando si condivide il broker di vedere a chi condividerlo, e nel caso scrivergli. poi le persone che condividono un istanza tra loro non sono estranee, basta che almeno siano autenticate». Il codice non cambia. La docstring e il commento «For superuser» vanno nel backlog del coordinatore, e Q non li tocca.
+  >   - **Doc aggiornata da Q:** `brokers/index.en.md:43` e `brokers/sharing.en.md:81` dicono che ogni utente autenticato dell'istanza vede chi ha accesso a qualunque broker. Niente «e-mail» nelle pagine utente: la UI mostra username e avatar, non le e-mail (nessun `.email` in `components/brokers`). `users_and_brokers.md:67-74`: scelta voluta, e l'API restituisce anche l'e-mail.
+  > - Le pagine riservate restano a M, che ora ci mette le immagini.
+  >
+  > **Note implementazione, gruppo D (asset)** (17:20):
+  > - **Lunghezze:** `assets/index` da 1214 a 1057 parole; `detail/index` da 590 a 543; `detail/chart` da 1220 a 911 (finestra del rolling return in LaTeX); `detail/signals` da 1703 a 1058 (un H3 per famiglia, una riga per indicatore con link alla teoria); `detail/data-editor` da 656 a 669; `detail/measures` da 475 a 368; `detail/events` da 442 a 558.
+  > - **Errori corretti dal codice:**
+  >   - non c'è un «time delta selector»; le voci sono **Reload** e **Merge with…**;
+  >   - i marker degli eventi si distinguono per forma, non per colore;
+  >   - il menu valuta elenca le valute raggiungibili dalle coppie FX;
+  >   - l'icona della documentazione è **?**, e l'errore è un ⚠ rosso;
+  >   - nel data editor non c'è una colonna Currency; i vecchi esempi CSV non si importavano (serve `date;currency;close`); si cancella con **Undo**;
+  >   - eventi: Scheduled Investment genera Interest e Maturity; Yahoo porta anche gli split; mancava justETF; gli eventi si aggiungono dal data editor, da **Linked Event** e da **Add Event** del piano.
+  >   - Data editor ed eventi crescono per queste correzioni.
+  > - **Ancore:** restano esplicite `chart.md#rolling-return` e `#primary-modes` (la linka `indicators/index`). Nuove `signals.md#data-comparison`, `#drawdown-full-history`, `#technical-indicators` e `data-editor.md#import-from-csv`. Le automatiche tolte non le linka nessuno.
+  > - **Dev:**
+  >   - `charts.md`: modi Prices / Rolling Return; nuove sezioni «Chart Settings and Axis Scales» e «Responsive Date Axis», con i fatti di E;
+  >   - `core-ui/data-editor.md`: parsing CSV, tabella degli errori, regole di salvataggio FX e asset, refresh trattenuto; corretti conferma e separatore tab;
+  >   - `signal_plugin_guide.md`: `catalog_visible`, 23/22/9 plugin, risultati mai salvati, tabella delle icone di `signalProblem.ts`;
+  >   - `events.md`: corretto il dedup (sostituisce solo stessa data, tipo e provider);
+  >   - `assets/architecture.md`: politica di conversione FX, endpoint, i due fatti di F. Il prezzo del sync diventa il punto del giorno. Il fallback sull'ultima operazione esiste dentro il `price_resolver` (`LAST_TRADE_PRICE`), non come regola a parte.
+  > - **Reperti di codice:** 5 sugli eventi (`{n}` contro `count`, cambio di tipo che duplica, FK `RESTRICT`, CSV `value` contro `amount`, commento della gomma), in `w2_findings.md`.
+  >
+  > **Chiusura della scrittura dell'onda 2** (17:00):
+  > - **G1, ultimi seguiti su `core-ui/datePickers.md`:**
+  >   - `SingleDatePicker` ha 6 utenti reali (DataEditor, BrokerForm, TransactionFormModal, EventCreateMiniModal, ScheduledInvestmentEditor e BoundaryDateModal), non `CashTransactionModal`;
+  >   - `DateRangePicker` ha 10 utenti reali (i 6 toolbar di pagina, `MeasurePanel`, `DataTableColumnFilter`, `CellDateRange`, `L4Replay` → `risk-lab.md#replay`).
+  >   - Q ha corretto la riga dei preset: 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX e la finestra personalizzata; 3Y, 5Y, 10Y, MTD, QTD e WTD solo se c'è spazio (`DateRangePicker.svelte:36,216-251`).
+  > - **Gate `w2b`** (`Q_GATE_ARGS=--w2 /tmp/libreFolio_q_gate.sh w2b`): build strict exit 0 e 0 WARNING; `check-links` con solo la baseline (`#rolling-return`); scope 88 percorsi, 48 pagine utente e 39 dev più il piano; segnaposto, stile e `git diff --check` verdi. Nel gate intermedio `w2a` c'era 1 WARNING su `charts.md#where-settings-live`, a scrittura in corso: risolto.
+  > - **Anteprima:** sulla 6162 alle 16:58 (`q-preview-6162c`, no-store), con le 102 PNG di M sovrapposte.
+  >
+  > **Onda 2 approvata** (developer, 17:26): «kpi e posizioni vanno alla grande! anche ai export ora è come me la immaginavo in tutte le pagine. […] le altre dopo mi paiono tutte corrette, le approvo».
+  > - **Immagine `fx/detail-chart` «mancante» nella tab del developer:** non è un errore.
+  >   - Il nome è lo stesso di HEAD, lo scenario esiste (`gallery.spec.ts:3482`), e la copia pubblicata della 1.1 esiste (200, 1280×720, EUR→USD).
+  >   - Nel WebKit dell'app si carica (697×392). Nella tab del developer la richiesta a GitHub Pages era fallita in quel momento.
+  >   - M non ha ancora scatti FX: alla release la gallery completa la rigenera.
+  > - **⚠️ Fuori pista: LaTeX.** L'auto-validazione EN (`/tmp/libreFolio_q_selfcheck.py`) ha trovato in `kpi-cards.en.md` 3 formule con `\text{Total P&L}`. È l'errore `latex-syntax-ampersand` del validatore del progetto: `&` dentro `\text{}`.
+  >   - MathJax lo renderizzava comunque, ma la regola del progetto vale anche per le traduzioni.
+  >   - Corretto in `\text{Total P}\&\text{L}` (6 occorrenze). MathJax: 5 container, 0 errori.
+  > - **Auto-validazione EN dopo la correzione:** 247 pagine, 0 errori, e 2 WARN `artifact-glossary-marker` già presenti a HEAD, falsi positivi su codice.
+  > - **Privacy:** sulle 3750 righe aggiunte, nessun IBAN, email, numero lungo né segreto.
+  > - **Gate `w2d`:** build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 88 percorsi, segnaposto, stile e `git diff --check` verdi.
+  > - **Chiusura della corsia:** anteprima spenta, porte 6162 e 6042 libere. Rimosse le PNG di M (`/tmp/librefolio-q-gallery-drop`), il sito copiato e i file temporanei.
+  > - **Checkpoint:** 87 file tracciati modificati e 1 nuovo (`developer/backend/brim/credit_agricole.md`); nessuna traduzione toccata. Messaggio proposto in `/tmp/libreFolio_commit_w2.txt`. Stato FROZEN.
+  > - **Commit:** `1c2f88d67` sopra `cbfce2475`, verificato dal coordinatore. È entrato col treno 17: `dev_release2` = `108a2adf5`, merge di Q `66628a1f8`. Lo script ha portato il worktree di Q a `108a2adf5`.
+  > - **Reperti dell'onda 2:** verificati dal coordinatore e assegnati dal developer.
+  >   - K: avatar e numero dei messaggi degli eventi;
+  >   - P: Timing effect;
+  >   - N: valuta iniziale dalla preferenza dell'utente;
+  >   - O: stringhe FX, aiuto di Borsa, timeout del sync, testi di justETF, conteggi delle valute e AI Export;
+  >   - I: eventi;
+  >   - il resto (L, etichette, Total Value, codice morto, docstring) in backlog.
+
+- **S18** ✅ 2026-10-08 — Onda 3: le pagine admin, su base `108a2adf5` (treno 17). Chiusa con l'approvazione del developer alle 21:22: «chiudi l'onda 3 e sistemiamo gli effetti del treno 18, ma non avviamo ancora le traduzioni». Checkpoint pronto, FROZEN.
+  > **Via libera** (coordinatore 17:44 e 17:50, con l'approvazione del developer «Sì, Q parte con l'onda 3 dopo il treno 17»). Nessuna pagina riservata a M, né di P o di L. `mkdocs.yml` e i CSS restano di Q.
+  >
+  > **Brief:** al file di sessione `files/simplify_brief.md` si aggiunge la sezione «Wave 3 — admin pages». Comandi, variabili, `.env`, percorsi, porte, tag delle immagini e snippet restano sulla pagina, verificati nel codice. Gli interni di implementazione vanno nel manuale dev. Script lunghi, configurazioni complete e varianti avanzate stanno in pannelli espandibili.
+  >
+  > **Gruppi** (4 `docs-writer`, parole sulla base `108a2adf5`; tutte le pagine hanno traduzioni IT/FR/ES):
+  > - **A:** `admin/service_exposure` (5165): il tutorial Tailscale, livelli 1-4. Si ristruttura soprattutto, con gli script in pannelli.
+  > - **B:** `admin/docker_advanced` (2985) e `user/installation` (1761), con destinazioni `architecture/overview.md` e `dev_workflow.en.md`. Ancore da tenere: `#post-migration-fixes`, `#image-variants-full-and-light`, `#updating`.
+  > - **C:** `admin/settings` (1386), `admin/configuration` (967) e `admin/index` (642), con destinazioni `architecture/settings.md`, `settings_cache.md`, `security.md` e `backend/scheduler.md`. Ancore: `#market-data-scheduler`, `#server-caches`, `#update-notifications`.
+  > - **D:** `admin/cli_tools` (1169), `admin/host_installation` (864) e `admin/filesystem` (831), con destinazioni `architecture/access_control.md` e `database/index.md`. I fatti per `overview.md` passano da Q.
+  >
+  > **Coordinatore** (17:52): il perimetro è libero. M ha finito da tempo su Docker e Tailscale. Reperto di L da verificare: `docker_advanced.en.md:232`, `./dev.py docker exec db upgrade` è forse rifiutato a server acceso; affidato al writer B. Le traduzioni di `profile`, `docker_advanced` e `cli_tools` sono segnalate come urgenti da L, e le decide il developer a fine onde.
+  >
+  > **Note implementazione, gruppo A (Tailscale)**:
+  > - **`admin/service_exposure.en.md`:** da 5165 a 4077 parole. Ogni livello apre con «Best for…» e chiude con «⚠️ Limits». 9 pannelli: scadenza della chiave, ACL JSON completo, socat, aggiornamento dello script, watchdog e health check, compose completo, troubleshooting, i due metodi per il dominio personale.
+  >   - Il saggio sul port forwarding è ridotto a 3 punti.
+  >   - Nuovo avviso «Before you go public»: il primo account registrato diventa admin, e **Enable Registration** è attivo per default (`auth.py`, `schemas/settings.py`).
+  > - **Correzioni:**
+  >   - il compose completo puntava a `:nightly`, ora `${LIBREFOLIO_IMAGE:-ghcr.io/librefolio/librefolio:latest}`;
+  >   - tolte 13 righe vuote spurie dentro lo YAML;
+  >   - «100 devices» era superato: ora c'è un link al pricing;
+  >   - la numerazione della lista sotto la schermata era rotta.
+  > - **⚠️ Fuori pista: comandi Tailscale superati, corretti da Q** con la doc ufficiale (https://tailscale.com/docs/reference/tailscale-cli/funnel; dalla 1.52 la sintassi è `tailscale funnel [flags] <target>`, e Funnel accetta solo le porte 443, 8443 e 10000).
+  >   - **Livello 3:** `tailscale funnel 6040 on` diventa `tailscale funnel --bg 6040`, con `tailscale funnel reset` per fermarlo.
+  >   - **Livello 1:** `tailscale serve tcp:6040 /` è tolto, perché `http://<ip-tailscale>:6040` funziona già. L'HTTPS nel tailnet passa a un pannello con `tailscale serve --bg 6040`.
+  >   - Lo script del repo usava già la forma nuova (`custom_startup.sh:71`).
+  > - **Ancore:** restano `#enabling-funnel-and-acls-on-the-console` e `#3-startup-and-approval`. Le schermate e i blocchi di codice non YAML sono identici.
+  > - **Reperto:** `HEALTHCHECK` del `Dockerfile` (`:153-154`) sonda `${PORT}`, ma il `CMD` fissa `--port 6040` (`:157`). Raccolto in `files/w3_findings.md`.
+  >
+  > **Note implementazione, gruppo D (CLI, host, filesystem)**:
+  > - **Testo visibile, senza codice né pannelli chiusi:** `cli_tools` da 951 a 708 parole, `host_installation` da 697 a 506, `filesystem` da 694 a 535. I totali grezzi crescono per i pannelli chiusi: opzioni del server, script manuale, comandi dev.
+  > - **cli_tools:**
+  >   - aggiunti `user deactivate` / `user activate` e `db current`, e l'uso Docker `docker compose exec librefolio python dev.py <comando>`;
+  >   - le regole della password della CLI, gli effetti di reset, deactivate e demote, e il fatto che un riavvio senza `JWT_SECRET` disconnette tutti;
+  >   - quali comandi richiedono il server fermo: `db upgrade` e `db create-clean` si rifiutano se il server risponde sulla porta. Conferma il reperto di L.
+  >   - Ancore: resta `#post-migration-fixes`, nuova `#start-the-server`.
+  > - **host_installation:** un H3 per step. Corretti:
+  >   - Playwright serve solo per E2E e schermate, non per i PDF;
+  >   - si parte dal login, con **Register here**;
+  >   - Python 3.13;
+  >   - `pipenv install --dev` è lo step 2;
+  >   - l'avviso `> [!WARNING]`, che non si renderizzava, diventa un'admonition;
+  >   - il reset tocca solo il DB.
+  >   - Nuova ancora `#database-reset`.
+  > - **filesystem:** la lista del backup corretta, perché va salvato tutto `broker_reports/`; backup Docker con stop, copia e start; l'ancora `#backup` resta.
+  > - **Dev:**
+  >   - `database/index.md`: nuove sezioni «🩹 Post-migration fixes» e «📂 Data Directory on Disk {: #data-directory }»;
+  >   - `access_control.md`: nuova sezione «👑 Superusers and the User CLI {: #superusers }».
+  > - **Inoltrati:**
+  >   - a B: Python 3.13 e ordine di avvio per `overview.md`; `./LibreFolio-data` in `installation`; il link a `cli_tools.md#post-migration-fixes`;
+  >   - a C: `users_and_brokers.md` descrive sessioni in memoria, ma il codice usa cookie JWT stateless (aggiunto allo scope `--w3`).
+  > - **Reperti di codice** (argomento `path` di `db *` ignorato, `./dev.sh` nella schermata Forgot Password, `demote` senza guardia): in `w3_findings.md`.
+  >
+  > **Note implementazione, gruppo C (impostazioni, configurazione, index)**:
+  > - **Testo visibile** (misura uniforme di Q, vedi la tabella di chiusura): `admin/settings` da 1134 a 860 parole, `admin/configuration` da 854 a 692, `admin/index` da 571 a 421 (dopo le correzioni delle 18:36).
+  > - **settings:** una sola tabella (cosa fa, default o intervallo, quando cambiarla). Corrette le etichette: la tab è **Admin**, i pulsanti **Configure…** e **Scheduler Status → Details…**, gli stati del log OK/Partial/Error. Via la sezione «Technical Notes» e la versione «1.2.0».
+  > - **configuration:**
+  >   - aggiunte le 9 variabili mancanti: le 8 `RISK_*` (in un pannello) e `LIBREFOLIO_TEST_DATA_DIR`;
+  >   - `PORTFOLIO_BASE_CURRENCY` non ha effetto;
+  >   - `LOG_LEVEL` accetta anche `TRACE`;
+  >   - il motore di ricerca `apikey` è uno stub;
+  >   - in Docker `PORT` è solo la porta host;
+  >   - dopo una modifica serve `docker compose up -d`, non `restart`.
+  > - **index:** via la frequenza del controllo aggiornamenti. Nuova sezione per tenere gli utenti collegati dopo un riavvio: un comando genera `JWT_SECRET` come fa il codice. Nuova ancora `#session-persistence`.
+  > - **Ancore:** restano `#market-data-scheduler`, `#server-caches` e `#update-notifications`.
+  > - **Dev:**
+  >   - `architecture/settings.md`: caricamento di `.env`, nessuna cache né validazione sui global settings, tabella delle 13 chiavi;
+  >   - `settings_cache.md`: cache per processo, e due cache assenti dal pannello;
+  >   - `security.md`: `JWT_SECRET` e la trappola della riga vuota; TTL; controllo degli aggiornamenti;
+  >   - `backend/scheduler.md`: **erano sbagliati** il leader (è il PID più basso, non un lock file), la funzione dei prezzi correnti, il log (500 voci) e `LIBREFOLIO_NO_SCHEDULER`;
+  >   - `users_and_brokers.md`: **le sessioni erano descritte in memoria**, invece sono un cookie JWT stateless, mai `Secure` (`SESSION_COOKIE_SECURE = False`); il riavvio senza `JWT_SECRET` disconnette tutti.
+  >
+  > **Note implementazione, gruppo B (Docker e installazione)**:
+  > - **Testo visibile** (misura uniforme di Q): `user/installation` da 1411 a 1029 parole (dopo le correzioni delle 18:36), `admin/docker_advanced` da 2159 a 1626.
+  > - **installation:**
+  >   - step 1-5 come H3; pannelli per compose scritto a mano, stato e log, firewall, variante full e aggiornamento che non riparte;
+  >   - il nome di Watchtower è `nickfedor/watchtower`;
+  >   - il cask di Homebrew è `docker-desktop`;
+  >   - `docker-ce` richiede il repository di Docker;
+  >   - la cartella è `./LibreFolio-data`;
+  >   - WUD ha il repository `getwud/wud`;
+  >   - la versione si fissa con `LIBREFOLIO_IMAGE`.
+  > - **docker_advanced:**
+  >   - il compose attuale, con `LIBREFOLIO_IMAGE` e `DOCS_VARIANT`;
+  >   - UID e GID vengono fissati alla build;
+  >   - `JWT_SECRET`;
+  >   - i fix post-migrazione rimandano a `cli_tools.md#post-migration-fixes`.
+  > - **Verifica obbligatoria (reperto di L):** `./dev.py docker exec db upgrade` non funziona mai, per due motivi.
+  >   - Il primo: `dev.py` non parte nel container. Importa `scripts.test_runner` (`dev.py:2350`), poi `__init__.py:45`, poi `_common.py:21`, e quindi `backend.test_scripts`, escluso da `.dockerignore:30` (f32e460ca, nella 1.1.0). Verificato anche da Q.
+  >   - Il secondo: la guardia «server running» (`cli_base.py:338-375`) rifiuta il comando, perché il server occupa la porta.
+  >   - La procedura giusta è non fare niente: le migrazioni si applicano all'avvio (`main.py:287`), e un fallimento ferma il server (`:216-218`).
+  >   - La doc ha un avviso «Not available with the current image» (`#docker-exec`).
+  >   - **Segnalato al coordinatore come urgente**, prima del cancello delle 18:26.
+  > - **Tag:** `latest` è la light, `X.Y.Z` la full, `X.Y.Z-light` la light (`release.yml:276-313`). Ma la `1.1.0` full pubblicata ha gli stessi layer della light; è un reperto per M.
+  > - **Dev:**
+  >   - `architecture/overview.md`: nuove `## 🐳 Docker Image {: #docker-image }` e `## 🚀 Server Startup {: #server-startup }`, con la sequenza completa di `main.py:250-331`; Python 3.13; corretto il punto sugli upload;
+  >   - `dev_workflow.en.md`: la build Docker passo per passo (`#docker-build-steps`) e il test mode nel container, con i suoi 3 ostacoli (`#docker-test-mode`).
+  > - **Fatti da Q:**
+  >   - `installation.en.md:206` non cita più la valuta base: `PORTFOLIO_BASE_CURRENCY` non è letto da nessuna parte;
+  >   - `developer/index.md:34` punta ad `architecture/settings.md` per Pydantic;
+  >   - `cli_tools.en.md:8` linka l'avviso `docker_advanced.md#docker-exec`.
+  >
+  > **Note implementazione, cancello e anteprima** (anteprima pronta alle 18:26):
+  > - **Comandi:**
+  >   - `Q_GATE_ARGS=--w3 bash /tmp/libreFolio_q_gate.sh w3a`: build strict con exit 0 e zero WARNING/ERROR; check-links con un solo link rotto, quello di base `user/assets/detail/chart/#rolling-return` (debito di traduzione), nessuno nuovo; scope 20 path, placeholder, stile e `git diff --check` verdi.
+  >   - `/tmp/libreFolio_q_selfcheck.py`, cioè `validate_file(en, en)` su 217 pagine EN/dev: 0 problemi nelle 19 cambiate e 0 nelle altre.
+  > - **Anteprima:** build statica servita sulla 6162 (`no-store`), le 9 pagine rispondono 200.
+  > - **Misura uniforme di Q** (`/tmp/libreFolio_q_wordcount.py`): testo visibile senza blocchi di codice, corpi dei pannelli chiusi, commenti e HTML; i titoli dei pannelli contano.
+  >
+  >   | Pagina | `wc -w` | Visibile |
+  >   |---|---|---|
+  >   | `admin/service_exposure` | 5164 → 4172 | 2936 → 1943 |
+  >   | `admin/docker_advanced` | 2983 → 2614 | 2159 → 1626 |
+  >   | `user/installation` | 1759 → 1569 | 1411 → 1029 |
+  >   | `admin/settings` | 1386 → 1234 | 1134 → 860 |
+  >   | `admin/configuration` | 967 → 988 | 854 → 692 |
+  >   | `admin/index` | 641 → 562 | 571 → 421 |
+  >   | `admin/cli_tools` | 1168 → 1264 | 898 → 677 |
+  >   | `admin/host_installation` | 864 → 675 | 635 → 462 |
+  >   | `admin/filesystem` | 828 → 876 | 525 → 489 |
+  >
+  > - **Totale delle 9 pagine:** `wc -w` da 15760 a 13954 (−11%); testo visibile da 11123 a 8199 (−26%). I pannelli chiusi passano da 9 a 34, con dentro da 1286 a 3266 parole: buona parte del calo visibile è testo ripiegato, non tolto.
+  >
+  > **Coordinatore** (18:27): il difetto di `dev.py` nell'immagine Docker è affidato a **L**, con l'approvazione del developer. `dev.py` salterà i comandi le cui directory mancano. Nello stesso lotto c'è il testo della schermata Forgot Password.
+  > - L'avviso «Not available with the current image» resta.
+  > - Il ripiego `scripts/user_cli.py` non si documenta. Verificato: compare solo in `access_control.md:110,125`, come posizione del codice, non come ripiego.
+  > - La chiusura del reperto di L su `db upgrade` (migrazioni all'avvio) va bene.
+  > - `.env.example` UID/GID, `HEALTHCHECK` e layer 1.1.0 sono nel backlog del coordinatore.
+  > - **Seguito, quando la cura di L entra nel target** (lo comunica il coordinatore):
+  >   - togliere l'avviso `docker_advanced.en.md#docker-exec` e la nota `cli_tools.en.md:8`;
+  >   - aggiornare `cli_tools.en.md:78`, che cita il testo attuale della card, `./dev.sh user:reset`;
+  >   - aggiornare `developer/dev_workflow.en.md:143-144`;
+  >   - documentare il comando verificato da L.
+  > - Inviato al coordinatore (circa 18:28) il vincolo per L: un eventuale link dalla card alla doc va senza ancora (`admin/cli_tools/`). Le ancore cambiano con la lingua, e l'onda 3 rinomina `#user-management` in `#manage-users`.
+  >
+  > **Review del developer** (dopo le 18:28): «a prima vista mi sembrano ottime», chiede cosa è stato tolto. Preparando la risposta (analisi per sezione, `/tmp/libreFolio_q_w3_sections.py`), Q ha corretto:
+  > - **`user/installation.en.md:222`**: diceva «some features, such as Risk Analysis, are still in beta», falso per la 1.2. Fonti: CHANGELOG `[1.2.0]:202`, «Risk Analysis leaves beta, except the simulation»; `en.json` `risk.betaBanner.simulation`, «Every other level of Risk Analysis has left beta». Ora dice «the **What if…?** risk simulation», con link a `simulation-modes.md#why-beta`.
+  > - **`<kbd>Esc</kbd>`**: tolti i riferimenti da `admin/index` (finestra di aggiornamento) e `admin/settings` (dialogo del lucchetto), coerenti con la richiesta del developer sulla pagina about.
+  > - **`admin/settings`**, pannello `init-settings`: prefisso `pipenv run` come in `cli_tools`, con link alla pagina dei comandi.
+  > - **`developer/dev_workflow.en.md:119`**: la cache tiene solo il sottoinsieme delle bandiere di Noto Color Emoji, servito dalla face `'LF Flags'` (`frontend/static/lf-flags.css`; `scripts/update_js_cache.py:91-100`).
+  > - **Cancello `w3b`**: build strict exit 0, 0 WARNING/ERROR; check-links con il solo link rotto di base; scope, placeholder, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi. Anteprima aggiornata alle 18:36.
+  > - In attesa della risposta del developer.
+  >
+  > **Cosa resta da migliorare** (domanda del developer, 18:39; dati di Q, script `/tmp/libreFolio_q_remaining.py`, `_placeholders.py`, `_transdebt.py`):
+  > - **Pagine mai semplificate:**
+  >   - corte e pulite: 16 importer da circa 92 parole, i provider FX `ecb`/`fed`/`boe`/`snb`, `profile`, `settings/index`, `classification`, `community/*`, `gallery/*`;
+  >   - nella teoria (99 pagine) solo `fundamentals/day-count` cita codice, quindi non c'è niente da spostare;
+  >   - i badge Beta dei 6 importer corrispondono alla tabella di `import/index`, mentre il codice non ha una nozione di beta.
+  > - **Screenshot:** 71 segnaposto.
+  >   - 12 hanno già lo scenario nella spec: lab del rischio, What if e menu dei file Danske, nelle pagine di M.
+  >   - 59 non hanno ancora uno scenario:
+  >     - PAC (9);
+  >     - Rischio della Dashboard (4);
+  >     - Growth P&L (3), che richiede la cattura del fixture da parte del developer;
+  >     - privacy (1);
+  >     - onboarding (4);
+  >     - confronto dei provider (1);
+  >     - le loro copie nelle pagine della gallery.
+  >   - Altri 8 segnaposto sono i portali dei broker (Trading212, Coinbase, …): la gallery non può generarli.
+  > - **Traduzioni:** circa 93 pagine con l'EN più recente dell'IT (stima dalle date git; il conto preciso lo dà `translate-validate`) e 23 mai tradotte. Le più rischiose sono `docker_advanced` IT/FR/ES, che mostrano ancora `docker exec db upgrade` e `server --test`.
+  > - **FAQ (`community/faq.en.md`):** mai rivista, con errori nella 1.2. **Il developer ha approvato la correzione dentro l'onda 3** (18:42).
+  >
+  > **Note implementazione, FAQ** (18:50):
+  > - **AI:** «Are there AI features planned? … roadmap» diventa «Can I use LibreFolio with an AI assistant?». La risposta presenta AI Export (`user/ai-export/index`; LibreFolio non contatta servizi AI). Resta la frase del developer sulla piattaforma hosted. Via «connect your own AI models», che oggi non è vero.
+  > - **Asset tracciabili:** allineati ai tipi base (`financial-theory/instruments/asset-types/index.en.md:17-31`). Aggiunti fondi, materie prime, immobiliare e beni senza prezzo di mercato. Il contante è il saldo di ogni broker per valuta. Le obbligazioni prendono il prezzo anche da un provider (`borsa-italiana.en.md:19-20`). Link all'elenco completo.
+  > - **Installazione:** prima Docker (consigliata), poi host.
+  > - **Account:**
+  >   - il pulsante è **Register here** (`en.json` `auth.registerHere`, `LoginCard.svelte:102-108`);
+  >   - il primo account diventa amministratore; poi serve **Enable Registration** (`auth.py:186-192`).
+  > - **Password dimenticata:** nessun recupero via e-mail (`auth.emailRecoveryNotAvailable`). Si chiede all'amministratore, con link a `cli_tools.md#reset-a-password-or-lock-an-account`. Via il comando `./dev.py` senza `pipenv run`.
+  > - **Prezzi e tassi fermi:** «Auto-sync» diventa **Scheduler Enabled**, con link a `admin/settings.md#market-data-scheduler`; aggiunto anche alla lista FX.
+  > - **Login negato:** un account disattivato vede lo stesso *Invalid username or password*.
+  > - **⚠️ Fuori pista:** la prima stesura diceva «if the message says the account is disabled». La verifica di `stores/app/auth.ts:123-134` l'ha smentita: ogni 401 diventa la stringa fissa *Invalid username or password*. Corretto. Reperto in `w3_findings.md`: le stringhe d'errore del login non sono tradotte, e **Register here** è sempre visibile.
+  > - **Ancore:** la pagina è linkata solo senza ancora (`HelpMenu.svelte:129`), quindi i titoli cambiati non rompono niente.
+  > - **Cancello `w3c`:** `q_gate.py --w3` ora include `community/faq.en.md`. 21 path; build strict exit 0, 0 WARNING/ERROR; solo il link rotto di base; scope, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi. Anteprima delle 18:50 verificata.
+  >
+  > **Resoconto per il lancio delle traduzioni** (domanda del developer, 21:08: «per ora non avviare nessuna traduzione, fammi solo il resoconto»):
+  > - **Comando:** `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs translate --dry-run` (nessun file scritto, worktree invariato). Risultato: 131 pagine, 393 traduzioni, circa 9,4 milioni di token (log in `/tmp/libreFolio_q_translate_dryrun.log`, sintesi in `_dryrun_summary.log`). La pipeline accetta `--file` con glob e ritraduce solo le pagine cambiate (cache MD5).
+  > - **Divisione:**
+  >   - **stabili ora:** circa 79 pagine, circa 4,7 milioni di token (46 di teoria, la home, e gran parte di asset, transazioni, broker, file e impostazioni);
+  >   - **cambieranno di sicuro:** 30 pagine, circa 3,8 milioni di token:
+  >     - onda 3 non committata (10);
+  >     - immagini di M (13);
+  >     - effetti del treno 18 sulle pagine di Q (3);
+  >     - teoria di P (4);
+  >   - **dipendono da lavori assegnati e non ancora entrati:** 22 pagine, circa 0,9 milioni di token:
+  >     - O: FX (11), AI Export (5), Borsa, justETF;
+  >     - I e K: eventi;
+  >     - L: eToro;
+  >     - P: posizioni;
+  >     - D: indice tools.
+  > - **Treno 18** (`70d02cd8e`, con M, P, K e N; in doc ha cambiato solo la gallery), da riportare in EN:
+  >   - ❌ `assets/correlation.en.md:153`, riservata a M: «instance's default currency» è sbagliato. Il pannello usa `$defaultDisplayCurrency` (`assets/+page.svelte:1618`). Chiesto al coordinatore chi la corregge.
+  >   - 🟡 `kpi-cards`: la card Returns mostra «—» quando TWRR o MWRR mancano, e lo stesso vale per il Timing effect (`KpiSection.svelte`, P).
+  >   - 🟡 `preferences:12`: la Default Currency ora è anche la valuta da cui si aprono Dashboard, broker, Correlation e AI Export FX (N).
+  >   - Le immagini dell'onboarding (4) sono nella spec e nelle pagine della gallery. In `getting-started` (3) e `preferences` (1) restano i segnaposto, che toccano a Q.
+  > - **Sessioni** (`get_sessions_status`, 21:10): lavora solo M, sulle schermate alte di rischio Dashboard, PAC proof e confronto provider. Il coordinatore aspetta la risposta del developer a una domanda di M. Le altre sessioni sono ferme.
+  > - **Coordinatore** (circa 21:15): chiesto chi corregge `correlation:153`, e lo stato dei lavori di O, I, K, L, P e D che toccano la doc.
+  >
+  > **Risposta del coordinatore** (21:19):
+  > - **`correlation:153` e la frase sulla valuta in `preferences`:** le applica **M**, che sta già lavorando su quelle pagine. Q gli manda le frasi esatte.
+  > - **`getting-started` e `preferences` sono di M** (segnaposto dell'onboarding, assegnati alle 19:05): Q non li tocca finché il lotto di M non è integrato.
+  > - **«—» di `kpi-cards`:** lo fa Q nel prossimo checkpoint.
+  > - **Cosa cambierà ancora:**
+  >   - Treno 19, verso le 22:
+  >     - O: 32 chiavi nuove; 6 valori cambiati (`aiExport.detailLevelHelp.*` ×3 e i 3 avvisi dei report set, ora «Parse»); testi dei provider (Borsa, justETF, BOE, ECB) e timeout del sync;
+  >     - I: `user/assets/detail/data-editor.en.md` e 3 pagine dev;
+  >     - L: la card Forgot Password;
+  >     - N: solo test.
+  >   - Dopo il treno 19, al via del coordinatore, Q toglie l'avviso `docker_advanced#docker-exec` e aggiorna `cli_tools.en.md:8,78` e `dev_workflow.en.md:143-144`.
+  >   - Lotto di M, verso le 23: didascalie e testi alternativi più le due frasi di Q.
+  >   - Risk: formato dei percentuali e istogramma, senza pagine né chiavi.
+  >   - K, P, N, D ed eToro di L: solo backlog.
+  > - **Da fare per Q dopo il treno 19:** confrontare le pagine EN con i 6 valori cambiati da O e con i testi dei provider (`ai-export/*`, `danske-bank` e `how-to` per i report set, `providers/*`, `fx/providers/*`, `fx/sync`).
+  >
+  > **Note implementazione, effetti del treno 18** (anteprima delle 21:22):
+  > - **Mandate a M** (sessione `eb4d9281…`) le due frasi esatte, con il testo da cercare e quello nuovo:
+  >   - `correlation.en.md:153`: «Returns are measured in your **Default Currency**, set in [Preferences] (the instance's default if you never chose one)…»;
+  >   - `preferences.en.md:12`: Dashboard, pagina Brokers e pagine dei broker, tab **Correlation** e AI Export di una coppia si aprono nella Default Currency; la valuta scelta sulla Dashboard resta per la sessione.
+  >   - Fonti: `stores/app/settings.ts` (`defaultDisplayCurrency`), `assets/+page.svelte:1618`, `dashboard/+page.svelte:179-206` (`restoredView.targetCurrency`), `AssetSetRiskPanel` senza menu di valuta.
+  > - **`user/dashboard/kpi-cards.en.md`**, card Returns: nuovo punto «`—` means no value». Un rendimento non calcolabile mostra `—`; il Timing effect richiede TWRR e MWRR, e se ne manca uno mostra un `—` grigio senza etichetta (`KpiSection.svelte:236-255,345-346` su `dev_release2`). ROI non cambia. `q_gate.py --w3` ora include `kpi-cards`.
+  > - **Cancello `w3d`:** 22 path; build strict exit 0, 0 WARNING/ERROR; solo il link rotto di base; scope, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi.
+  >
+  > **Note implementazione, checkpoint** (21:25):
+  > - **Approvazione del developer** (21:22): chiudere l'onda 3 con gli effetti del treno 18. Niente traduzioni per ora: non ne è stata avviata nessuna, solo il dry-run, e nessun file IT/FR/ES è cambiato.
+  > - **Server:** l'anteprima (`q-preview-6162d`) è fermata. `lsof -nP -iTCP:6162 -sTCP:LISTEN` e `lsof -nP -iTCP:6042 -sTCP:LISTEN` non trovano processi in ascolto (rc 1).
+  > - **Delta:** 22 file tracciati modificati, nessun file nuovo, con HEAD `108a2adf5` e target `dev_release2` = `70d02cd8e` (treno 18). Nessuna sovrapposizione con i 43 path cambiati dal target dopo la base: merge testuale pulito.
+  > - **Privacy:** 1412 righe aggiunte, nessun percorso personale, e-mail o segreto. `JWT_SECRET=paste-the-generated-value-here` e `tskey-auth-...` sono segnaposto. Gli IP sono privati d'esempio; i due IP Tailscale (`100.110.222.112`, `100.77.72.90`) erano già pubblicati dalla v1.1.0 in tutte e 4 le lingue.
+  > - **`git diff --check`:** pulito.
+  > - **Commit proposto:** `/tmp/libreFolio_commit_w3.txt`, «docs: simplify wave 3 admin pages, fix from code».
+  > - **Seguiti dopo il checkpoint:**
+  >   - **dopo il treno 19, al via del coordinatore:** togliere l'avviso Docker e aggiornare `cli_tools:8,78` e `dev_workflow:143-144`;
+  >   - **sempre dopo il treno 19:** confrontare le pagine EN con i testi cambiati da O;
+  >   - **traduzioni:** quando le decide il developer.
+  > - In attesa della review del developer.
+  > - **Reperti per il coordinatore:**
+  >   - i tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valgono solo per i prezzi; gli indicatori arrivano a 84/28/14;
+  >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
 
 ## 4. Conflitti, rischi, definizione di fatto
 

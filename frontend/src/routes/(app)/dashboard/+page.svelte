@@ -56,7 +56,7 @@
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
@@ -176,7 +176,7 @@
     let urlDateTo = $derived(dateRangeCtl.activePreset === 'MAX' ? 'max' : dateRangeCtl.end);
 
     /** Display currency override — always concrete, defaults to user base currency (or the one the user left). */
-    const initialCurrency = restoredView.targetCurrency ?? ($globalSettings.default_currency || 'EUR');
+    const initialCurrency = restoredView.targetCurrency ?? $defaultDisplayCurrency;
     let targetCurrency = $state(initialCurrency);
     let appliedCurrency = $state(initialCurrency);
     let targetCurrencyManuallySet = $state(restoredView.targetCurrency !== null);
@@ -198,7 +198,7 @@
     // Derived
     // =========================================================================
 
-    const baseCurrency = $derived($globalSettings.default_currency || 'EUR');
+    const baseCurrency = $derived($defaultDisplayCurrency);
 
     $effect(() => {
         if (targetCurrencyManuallySet || targetCurrency === baseCurrency) return;

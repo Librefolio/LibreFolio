@@ -328,6 +328,25 @@ class FAAssetEventPointOut(FAAssetEventPoint):
 # ============================================================================
 
 
+class FAEventUpsertPoint(FAAssetEventPoint):
+    """Event point of a manual upsert, optionally naming the stored event it edits.
+
+    - ``id`` set: the stored manual event with that id is edited in place. Every field
+      may change, date and type included, and the id is kept, so a transaction linked
+      to the event stays linked.
+    - ``id`` unset: the event replaces the stored manual events with the same
+      ``(date, type)``. Those rows are updated in place and keep their ids; only
+      events beyond the stored ones are inserted.
+
+    ``from_attributes`` lets a plain ``FAAssetEventPoint`` instance stand for an
+    upsert point without an id. Unknown fields are still rejected.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: Optional[int] = Field(None, description="Id of the stored manual event to edit in place; omit to match on (date, type)")
+
+
 class FAEventUpsert(StrictModel):
     """Manual event upsert for a single asset (multiple events).
 
@@ -336,7 +355,15 @@ class FAEventUpsert(StrictModel):
     """
 
     asset_id: int = Field(..., description="Asset ID")
-    events: List[FAAssetEventPoint] = Field(..., min_length=1, description="List of event points")
+    events: List[FAEventUpsertPoint] = Field(..., min_length=1, description="List of event points")
+
+    @model_validator(mode="after")
+    def validate_unique_event_ids(self) -> FAEventUpsert:
+        ids = [event.id for event in self.events if event.id is not None]
+        repeated = sorted({event_id for event_id in ids if ids.count(event_id) > 1})
+        if repeated:
+            raise ValueError(f"Duplicate event id in one upsert item: {', '.join(str(event_id) for event_id in repeated)}")
+        return self
 
 
 class FAEventUpsertResult(StrictModel):

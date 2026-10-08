@@ -16,22 +16,24 @@ Yes! LibreFolio is completely free and open-source under the [AGPL-3.0 license](
 
     We're working on an online platform for those who don't have the time, interest, or technical skills to self-host. The hosted version will offer all features with zero setup, automatic updates, and dedicated support — available as a paid subscription.
 
-### 🤖 Are there AI features planned?
+### 🤖 Can I use LibreFolio with an AI assistant?
 
-Yes! Our roadmap includes **AI-powered assistants** to help you analyze your portfolio, spot trends, and make better-informed decisions.
+Yes. **[AI Export](../user/ai-export/index.md)** copies your data as ready-to-paste text, with a focused question if you want one, so you can ask the AI assistant of your choice about your portfolio, a broker, an asset or a currency pair. LibreFolio itself never contacts an AI service.
 
-- **Self-hosted**: you can connect your own AI models and manage everything independently
-- **Hosted platform**: AI assistants will be fully integrated — ready to use with no configuration required, along with premium support
+On the upcoming hosted platform, AI assistants will be fully integrated: ready to use with no configuration, along with premium support.
 
 ### 📊 What assets can I track?
 
 LibreFolio supports:
 
-- **Stocks & ETFs** — Automatically fetched prices via data providers (e.g., yfinance)
-- **Crypto assets** — Tracked as portfolio assets in the UI; not Forex, and not part of the fiat currency picker
-- **Bonds** — Manual entry supported
-- **P2P Lending** — Scheduled-yield assets
-- **Cash & Deposits** — Track your liquidity
+- **Stocks, ETFs and funds** — prices fetched automatically from data providers (e.g., yfinance)
+- **Bonds** — prices from a provider, or entered by hand
+- **Crypto assets** — tracked as portfolio assets, not as currencies
+- **Crowdfunding and P2P lending** — valued with a scheduled yield
+- **Commodities, real estate**, and assets without a market price (art, collectibles, unlisted shares)
+- **Cash** — the balance of each broker, in every currency
+
+The full list is in [Asset Types](../financial-theory/instruments/asset-types/index.md).
 
 !!! tip "Missing something? 💡"
 
@@ -41,22 +43,19 @@ LibreFolio supports:
 
 ### 📦 How do I install LibreFolio?
 
-See our [Host Installation Guide](../admin/host_installation.md) or [Docker Installation Guide](../user/installation.md) for detailed instructions.
+Follow the [Docker Installation Guide](../user/installation.md), the recommended way, or the [Host Installation Guide](../admin/host_installation.md) to run it with Pipenv.
 
 ### 👤 How do I create an account?
 
-1. Navigate to the login page
-2. Click "Register"
-3. Fill in your details
-4. Your account is ready to use!
+1. Open the login page.
+2. Click **Register here**, next to *Don't have an account?*
+3. Fill in your details: your account is ready to use.
+
+On a new instance, the first account created becomes the administrator. After that, signing up works only while the administrator keeps **Enable Registration** on in the [Global Settings](../admin/settings.md); otherwise, ask them for an account.
 
 ### 🔑 I forgot my password, what do I do?
 
-Currently, password reset is done via CLI. Contact your instance administrator or run:
-
-```bash
-./dev.py user reset <username> <new_password>
-```
+Recovery by e-mail is not available yet: ask your instance administrator, who can set a new password from the command line ([Reset a Password](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
 
 ## 🔧 Troubleshooting
 
@@ -64,7 +63,7 @@ Currently, password reset is done via CLI. Contact your instance administrator o
 
 Check that:
 
-1. Auto-sync is enabled in Global Settings
+1. **Scheduler Enabled** is on in the [Global Settings](../admin/settings.md#market-data-scheduler): it runs the automatic updates
 2. Your assets have valid ISINs or symbols recognized by the configured **data provider** (e.g., [yfinance](https://pypi.org/project/yfinance/) for stocks and ETFs)
 3. The provider's service is available (check server logs for errors)
 
@@ -72,15 +71,16 @@ Check that:
 
 Check that:
 
-1. The currency pair has at least one [data provider configured](../user/fx/detail/provider.md)
-2. The provider's API is reachable (ECB, FED, BOE, SNB)
-3. You've run a [sync](../user/fx/sync.md) for the desired date range
-4. Check the [provider supply chain](../user/fx/detail/provider.md) for fallback options
+1. **Scheduler Enabled** is on in the [Global Settings](../admin/settings.md#market-data-scheduler)
+2. The currency pair has at least one [data provider configured](../user/fx/detail/provider.md)
+3. The provider's API is reachable (ECB, FED, BOE, SNB)
+4. You've run a [sync](../user/fx/sync.md) for the desired date range
+5. Check the [provider supply chain](../user/fx/detail/provider.md) for fallback options
 
 ### 🔐 I can't login
 
 - Verify your username and password
-- Check if your account is activated
+- A disabled account gets the same *Invalid username or password* message: if you are sure of your credentials, ask your administrator whether your account was disabled
 - Clear browser cookies and try again
 
 ### 📱 Can I use LibreFolio as a mobile app?

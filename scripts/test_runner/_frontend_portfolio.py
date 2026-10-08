@@ -25,6 +25,15 @@ def front_portfolio_dashboard_cache(verbose: bool = False, ui: bool = False, hea
     return _run_playwright("portfolio/dashboard-cache.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_default_currency(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the starting-currency E2E tests: pages open in the user's Default Currency, not the instance's."""
+    print_section("Frontend Portfolio Default Currency Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("portfolio/default-currency.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_stale_price_banner(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the STALE_PRICE dashboard banner E2E test (D8) on the desktop project, the runner default."""
     print_section("Frontend Portfolio Stale Price Banner Tests")
@@ -339,6 +348,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
     add_test(cat, "dashboard-cache", front_portfolio_dashboard_cache, name="Dashboard Page Cache", desc="Return to the Dashboard reuses cached data, shows it while refreshing, owned-broker scope, restored filters, Refresh", tests="portfolio/dashboard-cache.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
+    add_test(cat, "default-currency", front_portfolio_default_currency, name="Default Currency Tests", desc="Dashboard, broker list and detail, the assets risk panel and the FX AI Export start in the user's Default Currency, the instance's only as a fallback; a remembered dashboard pick still wins", tests="portfolio/default-currency.spec.ts")
     add_test(
         cat,
         "privacy-masking",

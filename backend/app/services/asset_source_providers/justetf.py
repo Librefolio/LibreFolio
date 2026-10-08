@@ -224,7 +224,7 @@ class JustETFProvider(AssetSourceProvider):
                 "required": False,
                 "options": list(self.SUPPORTED_CURRENCIES),
                 "default": "EUR",
-                "description": "Price currency. EUR = real-time + history. USD/CHF/GBP = history only (converted by JustETF).",
+                "description": "Price currency. EUR = real-time quote + history. USD/CHF/GBP = latest daily price + history (converted by JustETF).",
             }
         ]
 

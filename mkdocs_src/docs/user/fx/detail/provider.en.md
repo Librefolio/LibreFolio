@@ -1,6 +1,8 @@
 # 🔌 Provider Configuration
 
-Each currency pair in LibreFolio is backed by one or more **data providers** — central banks that supply the exchange rate data. The Provider Configuration lets you view and modify which providers are used for a specific pair.
+Each currency pair gets its rates from one or more **routes**: a central bank that quotes the pair
+directly, or a chain of conversions. Here you see and change the routes of the pair you are
+viewing.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -10,50 +12,47 @@ Each currency pair in LibreFolio is backed by one or more **data providers** —
 
 ## 🔓 How to Access
 
-Click the **Provider** button (⚙️) in the chart toolbar on the Pair Detail page. This opens the provider configuration modal showing the current route setup.
+On the pair's detail page, click **Providers** (🔧) in the toolbar, next to **Sync**. The
+**Edit Pair Providers** window opens.
 
 ---
 
 ## 📋 What You See
 
-The modal displays:
+Under **Conversion Routes**, each row is a route, in priority order:
 
-- 🛤️ **Current Route(s)** — The active data source(s) for this pair, in priority order
-- 🔀 **Route Type** — Whether it's a **Direct** route (single provider) or a **Chain** route (multi-hop through an intermediate currency)
-- 🏛️ **Provider Details** — Name, icon, and base currency of each provider in the route
+- the currencies, with the provider of each step between them — hover a provider's icon for its
+  name and description;
+- the priority badge: **#1** is used first;
+- ⚠️ when a provider has a data warning, such as the SNB's monthly rates;
+- 🗑️ to remove the route.
 
 ---
 
 ## 🔧 Changing Providers
 
-You can configure **one or more** data providers for each pair. Multiple providers act as a **fallback chain** — if the primary source fails, the system automatically tries the next one.
+1. Click **Add conversion route** and pick a route under **Direct conversion (1 step)** or
+   **Chain conversion**. Type in the search box to filter by provider, currency or country.
+2. Drag the rows to set their priority (on a phone, use the up and down arrows).
+3. Click **Save Configuration**: the next sync uses the new routes.
 
-To change or add providers:
+??? note "🔗 Also create intermediate pairs — when you pick a chain route"
 
-1. Open the Provider Configuration modal
-2. **Remove** the current route if needed
-3. **Add a new route** — the system will discover available routes (same as when [adding a new pair](../add-pair.md))
-4. **Reorder** routes to set priorities (drag & drop or arrow buttons)
-5. Click **Save** — the next sync will fetch data from the highest-priority available provider
+    Tick it to save each step of the chain as a pair of its own, with its provider, so that you can
+    sync and view it on its own.
+
+??? note "✍️ No route left — when you remove them all"
+
+    The pair becomes manual: **Sync** is disabled, and you enter the rates yourself in the
+    [Data Editor](data-editor.md).
 
 ---
 
 ## 🔢 Priority & Fallback
 
-When multiple routes are configured for a pair:
-
-- Routes are tried **in priority order** (top = highest priority)
-- If the primary provider fails (timeout, API error), the system automatically falls back to the next route
-- You can **reorder** routes to change priorities
-
-!!! example "Fallback Example"
-
-    EUR/USD configured with:
-
-    1. **ECB** (primary) — European Central Bank
-    2. **FED** (fallback) — Federal Reserve
-
-    If ECB's API is unreachable during sync, the system automatically uses FED instead.
+A sync tries the routes from the top. If one fails — for example, its central bank does not
+answer — it moves on to the next; the pair fails only when every route does. With EUR/USD set to
+**#1** ECB and **#2** FED, a sync that cannot reach the ECB uses the FED rate instead.
 
 ---
 
@@ -62,7 +61,4 @@ When multiple routes are configured for a pair:
 - ➕ **[Adding a Pair](../add-pair.md)** — Full route discovery (direct + chain routes)
 - 🔄 **[Synchronization](../sync.md)** — How sync uses the configured providers
 - 🔌 **[FX Providers](../providers/index.md)** — User guide and details on each provider (ECB, FED, BOE, SNB)
-
-!!! tip "🔗 How chain routes are calculated"
-
-    For the mathematical algorithm behind multi-hop conversion chains, see [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md).
+- 🧮 **For developers: [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md)** — How chain routes are found and calculated

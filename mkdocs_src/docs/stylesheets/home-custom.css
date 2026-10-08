@@ -793,6 +793,140 @@
     }
 }
 
+/* Five satellites (the English home): a pentagon on a wider orbit, with narrower cards. Two
+   neighbours sit 447px apart (2 × 380 × sin 36°), so 360px cards never touch at any angle of the
+   orbit. The orbit needs about 1 120px plus the page margins: below 1 240px the five cards stack.
+
+   Each card travels on a transform of its own, `rotate(a) translateY(-R) rotate(-a)`: a pure
+   translation. Rotating the whole track and counter-rotating every card, as the four-card hub
+   does, nests two rotations, and each one inflates the cards' overflow box: on this wider orbit
+   that box reached past the page edge and made the page scroll sideways. */
+@media (min-width: 1240px) {
+    .plugin-radial-hub--five {
+        height: 760px;
+    }
+
+    .plugin-radial-hub--five .ellipse-wrapper {
+        width: 760px;
+        height: 760px;
+        margin-top: -380px;
+        margin-left: -380px;
+    }
+
+    .plugin-radial-hub--five .satellite-track {
+        animation: none;
+    }
+
+    .plugin-radial-hub--five .hub-lines {
+        animation: orbit 60s linear infinite;
+    }
+
+    .plugin-radial-hub--five .hub-node {
+        top: 50%;
+        left: 50%;
+        animation: penta-orbit 60s linear infinite;
+    }
+
+    .plugin-radial-hub--five .node-penta-2 {
+        animation-delay: -12s;
+    }
+
+    .plugin-radial-hub--five .node-penta-3 {
+        animation-delay: -24s;
+    }
+
+    .plugin-radial-hub--five .node-penta-4 {
+        animation-delay: -36s;
+    }
+
+    .plugin-radial-hub--five .node-penta-5 {
+        animation-delay: -48s;
+    }
+
+    .plugin-radial-hub--five:has(.hub-node-unscale:hover) .hub-lines {
+        animation-play-state: paused;
+    }
+
+    .plugin-radial-hub--five .hub-node-unscale {
+        width: 360px;
+    }
+}
+
+@keyframes penta-orbit {
+    from { transform: rotate(0deg) translateY(-380px) rotate(0deg); }
+    to { transform: rotate(360deg) translateY(-380px) rotate(-360deg); }
+}
+
+@media (max-width: 1239px) {
+    .plugin-radial-hub--five {
+        height: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: center;
+    }
+
+    .plugin-radial-hub--five .ellipse-wrapper {
+        position: static;
+        width: 100%;
+        height: auto;
+        margin: 0;
+        transform: none;
+    }
+
+    .plugin-radial-hub--five .satellite-track {
+        position: static;
+        width: 100%;
+        height: auto;
+        animation: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: center;
+    }
+
+    .plugin-radial-hub--five .hub-lines,
+    .plugin-radial-hub--five .hub-core {
+        display: none;
+    }
+
+    .plugin-radial-hub--five .hub-node {
+        position: static;
+        width: 100%;
+        height: auto;
+        animation: none;
+    }
+
+    .plugin-radial-hub--five .hub-node-unscale {
+        position: static;
+        width: 100%;
+        max-width: 400px;
+        transform: none;
+        margin: 0 auto;
+    }
+}
+
+/* Without the orbit, the five cards take two columns while two 400px cards fit; the fifth,
+   Tools, spans both and stays centred. Cards of a row share its height. */
+@media (min-width: 900px) and (max-width: 1239px) {
+    .plugin-radial-hub--five .satellite-track {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 400px));
+        justify-content: center;
+        align-items: stretch;
+    }
+
+    .plugin-radial-hub--five .hub-node:last-child {
+        grid-column: 1 / -1;
+    }
+
+    .plugin-radial-hub--five .hub-node-unscale,
+    .plugin-radial-hub--five .hub-node-unscale .provider-row {
+        height: 100%;
+    }
+}
+
+
 .hub-node-unscale .provider-row {
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(8px);

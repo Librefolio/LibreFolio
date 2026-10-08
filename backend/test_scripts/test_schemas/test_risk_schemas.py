@@ -1472,6 +1472,10 @@ def _i18n_catalogue(language: str) -> dict:
 
 #: The controller that emits the frontend-owned on-demand error code (F9).
 _RISK_CONTROLLER_TS = "src/lib/stores/risk/riskPanelController.svelte.ts"
+#: The helper that refines a size limit into the display code of its remedy (D379).
+_ERROR_DISPLAY_CODE_TS = "src/lib/components/risk/levels/errorDisplayCode.ts"
+#: One entry of a ``Map`` of snake_case strings, in the one form Prettier writes (``singleQuote``).
+_STRING_PAIR = re.compile(r"\[\s*'([a-z][a-z0-9_]*)'\s*,\s*'([a-z][a-z0-9_]*)'\s*,?\s*\]")
 
 
 def _frontend_source(relative_path: str) -> str:
@@ -1498,6 +1502,51 @@ def _frontend_string_constant(relative_path: str, name: str) -> str:
     return literal.group(2)
 
 
+def _frontend_string_map(relative_path: str, name: str) -> dict[str, str]:
+    """The entries of ``const <name> = new Map([...]);`` in a frontend source, found by NAME, never by line.
+
+    Fails loudly rather than guessing, like ``_frontend_string_constant``: a constant that is
+    missing, declared twice or not built as one ``new Map([ … ]);`` is an assertion error
+    naming the file and the constant. So is an entry that is not one
+    ``['<snake_case>', '<snake_case>']`` pair — double quotes, a template literal, a spread,
+    a computed value — because skipping it is the failure that stays green: the other
+    entries still read cleanly, and the pin quietly stops following the one it skipped. An
+    empty map and a key listed twice (a ``Map`` keeps only the last) are refused too.
+    """
+    # `//` comments go first: a commented-out entry is not a live one, and a `]);` inside a
+    # comment must not end the body early. Once the pairs are taken out, only commas and
+    # whitespace may be left.
+    source = re.sub(r"//[^\n]*", "", _frontend_source(relative_path))
+    declarations = re.findall(rf"\bconst\s+{re.escape(name)}\b\s*[:=]", source)
+    assert declarations, f"{relative_path}: no `const {name}` — renamed or removed? The risk.errors pin reads the frontend-owned display codes from it by name."
+    assert len(declarations) == 1, f"{relative_path}: `const {name}` is declared {len(declarations)} times — which one the frontend reads cannot be told from here."
+    built = re.search(rf"\bconst\s+{re.escape(name)}\b\s*(?::[^=]*)?=\s*new\s+Map\s*(?:<[^>]*>)?\s*\(\s*\[(.*?)\]\s*\)\s*;", source, re.DOTALL)
+    assert built, f"{relative_path}: `const {name}` is not built as one `new Map([ … ]);`, so its entries cannot be read."
+    body = built.group(1)
+    pairs = _STRING_PAIR.findall(body)
+    unparsed = [re.sub(r"^[\s,]+|[\s,]+$", "", line) for line in _STRING_PAIR.sub("\n", body).splitlines()]
+    unparsed = [entry for entry in unparsed if entry]
+    assert not unparsed, f"{relative_path}: `const {name}` holds entries this reader cannot parse — each must be one ['<snake_case>', '<snake_case>'] pair: {unparsed}"
+    assert pairs, f"{relative_path}: `const {name}` has no entries, so the pin would follow nothing."
+    keys = [key for key, _ in pairs]
+    duplicated = sorted({key for key in keys if keys.count(key) > 1})
+    assert not duplicated, f"{relative_path}: `const {name}` lists {duplicated} more than once — a Map keeps only the last entry, so the earlier ones are dead."
+    return dict(pairs)
+
+
+def _resource_limit_display_codes() -> dict[str, str]:
+    """``details.remedy`` → display code, as ``errorDisplayCode()`` refines ``resource_limit`` (D379).
+
+    Read from ``RESOURCE_LIMIT_DISPLAY_CODES`` by name, and held to the form the frontend
+    promises, ``resource_limit_<remedy>``: a value that drifted from its remedy would word
+    one cure under another cure's key.
+    """
+    display_codes = _frontend_string_map(_ERROR_DISPLAY_CODE_TS, "RESOURCE_LIMIT_DISPLAY_CODES")
+    malformed = {remedy: code for remedy, code in display_codes.items() if code != f"{RiskErrorCode.RESOURCE_LIMIT.value}_{remedy}"}
+    assert not malformed, f"{_ERROR_DISPLAY_CODE_TS}: RESOURCE_LIMIT_DISPLAY_CODES maps a remedy to a code other than {RiskErrorCode.RESOURCE_LIMIT.value}_<remedy>: {malformed}"
+    return display_codes
+
+
 def _frontend_risk_error_codes() -> frozenset[str]:
     """The ``risk.errors`` keys the FRONTEND owns: the catalogues carry them, ``RiskErrorCode`` never emits them.
 
@@ -1512,8 +1561,14 @@ def _frontend_risk_error_codes() -> frozenset[str]:
       answer discarded twice running (F9), emitted by ``discardedErrorCodes`` and worded
       as ``risk.errors.<code>`` like every backend code. Read from that source by name,
       so the pin follows the constant the panel emits instead of a copy of its value.
+    - the values of ``RESOURCE_LIMIT_DISPLAY_CODES`` in ``errorDisplayCode.ts`` —
+      ``errorDisplayCode()`` refines ``resource_limit`` by ``details.remedy`` (D379), and
+      each display code is worded as ``risk.errors.<display code>`` by
+      ``translateErrorCode`` (the levels) and by ``RiskResultFrame.svelte`` (Asset
+      Detail). Read from that source by name, so the pin follows the map the frontend
+      uses instead of a copy of its entries.
     """
-    return frozenset({"unknown", _frontend_string_constant(_RISK_CONTROLLER_TS, "ANSWER_DISCARDED_CODE")})
+    return frozenset({"unknown", _frontend_string_constant(_RISK_CONTROLLER_TS, "ANSWER_DISCARDED_CODE"), *_resource_limit_display_codes().values()})
 
 
 def test_every_risk_error_code_has_a_sentence_in_every_official_language():
@@ -1584,6 +1639,53 @@ def test_risk_error_catalogues_agree_across_languages():
     assert frontend_codes.isdisjoint(backend_codes), f"risk.errors codes owned by both RiskErrorCode and the frontend: {sorted(frontend_codes & backend_codes)}"
     expected = backend_codes | frontend_codes
     assert reference == expected, f"risk.errors is not RiskErrorCode plus the frontend-owned codes: unexpected={sorted(reference - expected)}, missing={sorted(expected - reference)}"
+
+
+def test_resource_limit_remedies_agree_between_backend_and_frontend():
+    """Every remedy the backend can name is one the frontend words, and the reverse.
+
+    D379 splits one contract across the two stacks: the backend names the cure of a size
+    limit in ``details.remedy`` (``_REMEDY_BY_METRIC``), and the frontend words the remedies
+    it knows (``RESOURCE_LIMIT_DISPLAY_CODES``), keeping the generic sentence for any other.
+    Each half is pinned by its own tests, and nothing else compares them. So a remedy the
+    backend starts emitting that the frontend does not know renders "This calculation is
+    too large to run." — no crash, no log, the cure dropped in silence: the failure the
+    tests above catch for ``RiskErrorCode``, one level down. The reverse is a sentence in
+    four catalogues that no refusal reaches, and a remedy renamed on one side only is both.
+    """
+    # Imported here, not at the top: this file's top-level imports stay schema-only, and a
+    # renamed table fails this test alone rather than the collection of the whole file.
+    from backend.app.services.risk_plugins.simulation import _REMEDY_BY_METRIC  # noqa: PLC0415
+
+    emitted = set(_REMEDY_BY_METRIC.values())
+    worded = set(_resource_limit_display_codes())
+    assert emitted == worded, f"details.remedy and RESOURCE_LIMIT_DISPLAY_CODES disagree: emitted-but-unworded={sorted(emitted - worded)} (shown as the generic resource_limit sentence), worded-but-never-emitted={sorted(worded - emitted)} (a sentence no refusal reaches)"
+
+
+@pytest.mark.parametrize(
+    "unreadable",
+    [
+        pytest.param('["positions", "resource_limit_positions"]', id="double-quotes"),
+        pytest.param("[`positions`, `resource_limit_positions`]", id="template-literal"),
+        pytest.param("...MORE_DISPLAY_CODES", id="spread"),
+        pytest.param("['positions', 'resource_limit_' + 'positions']", id="computed-value"),
+    ],
+)
+def test_the_map_reader_names_an_entry_it_cannot_parse(monkeypatch, unreadable):
+    """An entry ``_frontend_string_map`` cannot parse is a RED that names it, never a skip.
+
+    The real ``errorDisplayCode.ts`` only ever takes the happy path, so this is the one place
+    the refusal is proved. A skip would be the quiet failure: the other entries still read
+    cleanly, every test above stays green, and the skipped display code is one the pin no
+    longer follows.
+    """
+    source = f"const RESOURCE_LIMIT_DISPLAY_CODES: ReadonlyMap<string, string> = new Map([\n    ['period', 'resource_limit_period'],\n    {unreadable},\n]);\n"
+    # The readers look `_frontend_source` up in this module's globals at call time.
+    monkeypatch.setitem(globals(), "_frontend_source", lambda relative_path: source)
+
+    with pytest.raises(AssertionError, match="cannot parse") as refused:
+        _frontend_string_map(_ERROR_DISPLAY_CODE_TS, "RESOURCE_LIMIT_DISPLAY_CODES")
+    assert unreadable in str(refused.value)
 
 
 # ---------------------------------------------------------------------------

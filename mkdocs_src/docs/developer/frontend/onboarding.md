@@ -194,6 +194,12 @@ guide: to the next step, to the end on the last step, or completing the current 
 step-managed flow. The coachmark's **X** reads *Skip this tour* in an automatic guide and *Exit
 tour* in a replay; both call `onboardingGuide.exit()`, an alias of `skip()`.
 
+The presentation table of `OnboardingOverlayHost.svelte` follows one convention: a step that
+explains an area spreads `areaPresentation` (`highlight: 'pulse'`, a pulsing green frame), a step
+on a control the user can try sets `pointer: 'cursor'` (a bouncing cursor over its centre), and no
+contextual step uses both. The intro stops spread `corePresentation` (cursor, pulse and backdrop),
+the Import steps spread `importPresentation` (cursor, panel on top, `scrollPolicy: 'none'`).
+
 ### 🧩 Step-managed flows {: #step-managed }
 
 `import_guide` and `transaction_bulk_guide` declare `completionMode: 'steps'`. The server tracks
@@ -203,6 +209,12 @@ wizard moves, and `TransactionBulkModal.svelte` queues each Bulk step when the w
 the matching milestone. The engine's `next()` and `previous()` do nothing for these flows. Bulk is
 also a checkpoint flow (`navigationMode: 'checkpoint'`): no progress counter, no **Back**, and a
 **Got it** button.
+
+Finishing or skipping touches the current step only (`completeStep()` or `skipStep()` on the
+controller), never the steps the component did not reach. A step a clean import never shows —
+`import.assets`, `import.fix`, `import.duplicates`, `import.gapFix` — therefore stays `pending`,
+and its flow with it, until an import reaches it: that is why the Settings list can show the
+Import guide as *Pending* after a first import.
 
 The Import guide's wiring, including its hand-off to the bulk editor for `import.bulk`, is
 documented with the wizard in
@@ -237,11 +249,22 @@ last one registered. It forgets elements that left the DOM, accepts several ids 
   behaves as **Next** or **Finish**. The countdown does not run while a nested dialog suspends the
   step.
 
+Two more rules keep the page readable behind the panel:
+
+- **Moving targets** — while a settled target scrolls, resizes or runs a CSS transition, the
+  geometry is `revalidating`: the step keeps its text and spotlight instead of falling back to the
+  waiting message. Only a target that loses its box returns to `waiting`.
+- **Panel fade** — `PANEL_FADE_MS` (3 s) after a step appears, the panel turns translucent
+  (`bg-white/80` with `backdrop-blur-sm`). It is opaque again while the pointer is over it or focus
+  is inside it, the timer restarts at every step, and a stalled or suspended step does not fade.
+
 With the default `scrollPolicy: 'nearest-if-hidden'`, the coachmark scrolls only when the target
 is outside its scroll container or under the app header; an element marked
 `data-guide-scroll-root` (the Import Wizard body, the transaction form) is used as that container.
 For tests, the coachmark root (`data-testid="onboarding-coachmark"`) exposes `data-step-id` and
-`data-guide-state` (`waiting`, `anchored`, `stalled`, `error`). The complete rules, and the
+`data-guide-state` (`waiting`, `anchored`, `stalled`, `error`). It also carries
+`data-geometry-state` (`waiting`, `revalidating`, `stable`), and the panel
+(`onboarding-coachmark-panel`) carries `data-subdued`. The complete rules, and the
 page-author rule for tabs and collapsed panels, are in
 [Anchor presence and stalls](components/features/import-wizard.md#guide-anchor-stall).
 
@@ -342,6 +365,15 @@ prompt and the update-available modal. It holds them while a guide is active or 
 and shows the next one when both are gone. A prompt the user did ask for — a manual update check,
 shown with `updateAvailable.show(release, {requested: true})` — appears at once, above a guide or
 a modal.
+
+The backend decides the donation prompt at sign-in: `record_login_and_maybe_show_popup()`
+(`backend/app/services/donation_popup_service.py`) counts the login and sets `show_donation_popup`
+in the login response (`backend/app/api/v1/auth.py:112,146`). Counting from the last prompt, or
+from the account's creation if there was none, it fires after `MAX_DAYS_WITHOUT_PROMPT` (60) days,
+or after `MIN_LOGINS_BETWEEN_PROMPTS` (10) sign-ins once `MIN_DAYS_BETWEEN_PROMPTS` (7) days have
+passed. `DonationPopupModal.svelte` has no close button and ignores backdrop clicks and
+<kbd>Esc</kbd> (`closeOnBackdropClick={false}`, `closeOnEscape={false}`): only **Buy Me a Coffee**
+and **Maybe later** dismiss it, and a share button opens the share dialog above it.
 
 ## 🗄️ Backend {: #backend }
 

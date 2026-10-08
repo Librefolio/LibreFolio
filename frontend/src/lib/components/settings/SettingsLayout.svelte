@@ -6,6 +6,7 @@
      * Responsive layout for settings pages
      * - Desktop: 2-column (sidebar + content)
      * - Mobile: custom dropdown + content
+     * - Every category button publishes a `data-testid` and its selected state as `aria-pressed`
      */
     import {onDestroy, onMount} from 'svelte';
     import {_} from '$lib/i18n';
@@ -85,6 +86,7 @@
                    focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all"
             on:click={toggleDropdown}
             type="button"
+            data-testid="settings-mobile-category-trigger"
         >
             <span class="flex items-center gap-2">
                 {#if selectedCategoryIcon}
@@ -104,6 +106,8 @@
                 <button
                     type="button"
                     on:click={() => selectCategory('')}
+                    data-testid="settings-mobile-category-all"
+                    aria-pressed={selectedCategory === '' ? 'true' : 'false'}
                     class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                            {selectedCategory === '' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                 >
@@ -118,6 +122,8 @@
                     <button
                         type="button"
                         on:click={() => selectCategory(category.id)}
+                        data-testid="settings-mobile-category-{category.id}"
+                        aria-pressed={selectedCategory === category.id ? 'true' : 'false'}
                         class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
                                {selectedCategory === category.id ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                     >
@@ -143,6 +149,8 @@
                     {selectedCategory === '' ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 on:click={() => (selectedCategory = '')}
                 type="button"
+                data-testid="settings-category-all"
+                aria-pressed={selectedCategory === '' ? 'true' : 'false'}
             >
                 <span class="flex-1 text-left">{$_('settings.all')}</span>
                 {#if selectedCategory === ''}
@@ -154,6 +162,8 @@
                 <button
                     type="button"
                     on:click={() => (selectedCategory = category.id)}
+                    data-testid="settings-category-{category.id}"
+                    aria-pressed={selectedCategory === category.id ? 'true' : 'false'}
                     class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
                         {selectedCategory === category.id ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 >

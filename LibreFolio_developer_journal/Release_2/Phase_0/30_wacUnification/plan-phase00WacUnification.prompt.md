@@ -1130,3 +1130,82 @@ Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho m
 - **D11:** righe del tooltip con somma esatta = Δ non realizzato, nessuna riga T→T.
 - **PAC:** contratto invariato, differenze D5 approvate. **AI Export** secondo D12.
 - **Chiusura:** doc e CHANGELOG pronti; piano aggiornato a ogni passo; porta 6161 libera; wiki aggiornato; FROZEN.
+
+## 7. Seguito: lo staking del seed (08/10)
+
+> Assegnato dal coordinator dopo la decisione del developer, presa nella chat di P. Scope: la correzione del seed;
+> l'avviso `MISSING_COST_BASIS` resta; negli E2E non si provoca con transazioni; nessun test nuovo.
+
+**Il problema.** Un E2E del treno 14 (`data-quality-banners.spec.ts:387`) contava un link in più. La causa era un
+`MISSING_COST_BASIS` vero su Ethereum: il seed registrava lo staking ETH su Coinbase come `INTEREST` con +0,002 ETH e
++5 USD (`populate_mock_data.py`, «Day -7»).
+- Una riga così l'app non può crearla, perché l'API vuole quantità 0 su INTEREST e DIVIDEND
+  (`schemas/transactions.py:170-182`); il seed scrive direttamente nel DB.
+- La ricompensa entrava due volte, come quote e come contanti.
+- Prima del #32 il motore dava in silenzio a quelle quote il costo medio; dopo il #32 le segnala. Il conteggio di
+  `:387` lo ha corretto N (treno 15).
+
+**Analisi** (08/10):
+- **Il WAC non è 2500 USD/ETH.** Il BUY del seed (0,8 ETH) è prezzato da `_derive_market_amount` sulla serie
+  simulata, che dipende dalla data di generazione (`_stable_seed("price", asset.id, price_date)`), e non ha né
+  commissione né cambio: asset, prezzi e BUY sono in USD. Nella run della corsia: BUY −890,50 USD, WAC 1113,125 USD/ETH.
+  Un 2500 fisso sarebbe stato sbagliato di più del doppio: il costo va calcolato come fa la modalità Auto.
+- **Chi dipende dalla riga.**
+  - Nessun test backend, vitest o E2E cita lo staking, 0,802, il tag `long-term` o la cassa Coinbase.
+  - I due «clone INTEREST» (`tx-clone.spec.ts:269`, `tx-paired-edit.spec.ts:73`) prendono il primo INTEREST in
+    tabella, cioè quello di Recrowd (giorno −3, quantità 0). Il clone resta disponibile anche sui broker in sola
+    lettura, dove lo spec controlla solo che edit e delete siano nascosti (`tx-clone.spec.ts:429-449`; il commento
+    in testa allo spec che dice il contrario è vecchio): quindi non dipendono dallo staking.
+  - Le coppie `delete-safe`/`delete-consume` vogliono 0,802 ETH su Coinbase, che resta.
+  - La cassa USD di Coinbase resta positiva (circa 6000 USD).
+  - `audit_transaction_signs.py` controlla solo i segni della cassa; `test_post_migration.py` usa dati suoi.
+- **Gallery** (per M): la Dashboard usa lo snapshot statico, quindi non cambia. Cambiano un poco gli scatti del
+  broker Coinbase (`gallery.spec.ts:2124-2195`) e della lista `/transactions`: lo staking appare come ADJUSTMENT, la
+  cassa Coinbase ha 5 USD in meno, ed ETH su Coinbase ha WAC e P&L invece di «—». Nessuna asserzione su quei valori.
+
+**Modifica** (`backend/test_scripts/test_db/populate_mock_data.py`):
+- Lo staking diventa ciò che salverebbe l'import Coinbase: un `ADJUSTMENT` di +0,002 ETH, `amount` 0, nessuna cassa,
+  `cost_basis_currency` USD, con `"cost_basis": "auto"`.
+- Il ciclo dei movimenti passa `cost_basis_currency` e raccoglie le righe Auto. Dopo il `flush`, il nuovo
+  `_seed_auto_cost_basis` scrive il costo: il WAC della posizione (broker, asset) alla data della riga, sulle righe
+  fino a quella data esclusa la riga stessa, come fa l'app al commit. Funziona per date e non per ordine della lista,
+  e si ferma con un errore su qualunque riga che non sia un BUY nella stessa valuta, invece di indovinare.
+- Aggiornato il commento delle coppie `delete-safe` (0,802 ETH da BUY e ADJUSTMENT).
+
+**Evidenze** (corsia 6161, `/tmp/librefolio-r2-p`):
+- `db populate --force --clean` OK; il log dice «Auto cost basis for ADJUSTMENT #26: 1113.125 USD per unit».
+- Nel DB, in sola lettura: la riga è un ADJUSTMENT 0,002, amount 0, CBO 1113,125 USD; nessun INTEREST o DIVIDEND con
+  quantità; **nessuna riga** con quantità > 0, non BUY, senza CBO e non legata a uno split, quindi
+  `MISSING_COST_BASIS` non può più scattare sul seed.
+- `api portfolio` 51/51; `api brokers` 29/29; `front-transaction tx-clone` 6/6; `front-transaction tx-paired-edit`
+  4/4. Ruff e black puliti.
+- **Non eseguiti da me**: `front-portfolio dashboard` e `front-broker detail`. Il developer ha deciso di provarli
+  insieme al resto, nella run complessiva del coordinator, invece di aspettare la fine della coverage sulla 6150. Ha
+  anche approvato gli scatti della gallery che cambiano un poco.
+
+## 8. Difetto puro: rendimenti mancanti nella card dei KPI (08/10)
+
+> Assegnato dal coordinator: un difetto puro trovato da Q, approvato dal developer («vai con i difetti puri»).
+
+**Il difetto.** In `KpiSection.svelte` (card 2, «Returns») `twrrCumVal`, `mwrrCumVal` e `mwrrAnnVal` valevano **0**
+quando il backend non dava il valore (campi opzionali e nullable). Quindi:
+- le barre mostravano «0.00%» invece di «—»;
+- il Timing effect (`mwrr − twrr`) mostrava un numero inventato, con colore ed etichetta conseguenti (per esempio
+  «−40.00 pp, Unfavorable» con solo la MWRR cumulata mancante).
+
+**Test rossi prima** (test-author, `KpiSection.test.ts`, nuovo `describe`, 12 test, campo `null` e campo assente):
+- 8 rossi, tutti per «0.00%» o per un Timing effect sbagliato al posto di «—»;
+- 4 verdi di controllo (Timing +5,00 e −5,00; la MWRR annualizzata mancante non tocca il Timing effect).
+
+**Correzione:**
+- **Ancore** (aggiunte prima dei test, nessun cambio di comportamento): prop facoltativa `testid` su `KpiMetricBar`
+  (`testid` sulla barra, `{testid}-value` sul valore); in `KpiSection` le barre `kpi-return-{roi,twrr-cum,mwrr-cum,mwrr-ann}`
+  e `kpi-timing-effect-value`/`-label`.
+- **`returnPct`**: i rendimenti sono `null` se mancano o non sono numerici; la barra riceve `numericValue` undefined e
+  mostra «—».
+- **Timing effect**: solo con entrambi i rendimenti. Altrimenti «—» in grigio ed etichetta vuota (`timingColor`);
+  `retBarMax` ignora i mancanti.
+
+**Evidenze** (corsia 6161):
+- `front-utility component-unit` 2862/2862; `front check` 0 errori, 0 warning; prettier pulito.
+- E2E: `front-portfolio privacy-masking` 18, `dashboard-cache` 6, `dashboard` 27.
