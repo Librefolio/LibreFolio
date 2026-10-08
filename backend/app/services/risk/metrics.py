@@ -839,7 +839,8 @@ def return_distribution_histogram(
     ``returns`` are **signed** returns, so losses sit on the left. The bin width comes
     from :func:`numpy.histogram_bin_edges` with ``bins='fd'`` — the interquartile rule
     is robust to outliers, which matters because the tail is the thing being drawn and
-    a width chosen *from* the tail would beg the question.
+    a width chosen *from* the tail would beg the question. When the interquartile range
+    is zero, which Freedman-Diaconis cannot size from, the width comes from Sturges.
 
     The grid is then translated so that one edge falls exactly on ``pinned_edge``
     (normally the negated VaR). Bin widths stay uniform, so the histogram remains an
@@ -864,7 +865,15 @@ def return_distribution_histogram(
     highest = float(sample.max())
 
     if highest > lowest:
-        width = float(np.diff(np.histogram_bin_edges(sample, bins="fd")).max(initial=0.0))
+        # D380: an interquartile range of zero — over half the window on one value, as cash or a
+        # flat-priced loan leaves it — gives Freedman-Diaconis a width of zero, and NumPy answers
+        # with ONE bar across the whole range, which the pin then cuts in two. Sturges reads the
+        # range instead. It is named rather than reached through `auto`, which here falls back to
+        # range / (2·√n) — 32 mostly empty bars for a year, 142 at 5000 observations — and changed
+        # meaning between NumPy 1 and 2. The quartiles are the ones NumPy's own rule computes.
+        upper_quartile, lower_quartile = np.percentile(sample, [75, 25])
+        rule = "fd" if upper_quartile > lower_quartile else "sturges"
+        width = float(np.diff(np.histogram_bin_edges(sample, bins=rule)).max(initial=0.0))
     else:
         # A zero-range sample has no interquartile range for Freedman-Diaconis to work
         # from, and NumPy pads such a sample by ±0.5 before binning it. Asking NumPy

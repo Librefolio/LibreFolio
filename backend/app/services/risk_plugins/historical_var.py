@@ -53,6 +53,8 @@ class HistoricalVarParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class HistoricalVarAnalytic(RiskAnalytic):
     analytic_code = "historical_var"
+    # 3.1.0 — D380: a window whose interquartile range is zero is binned at the Sturges
+    # width instead of one bar cut in two by the pin. VaR and CVaR do not move.
     # 3.0.0 — the horizon is in calendar days, compounded over the observations the
     # series holds in them (`horizon_observations`), so "a month" is 30 days on any
     # series. 2.x compounded `horizon_days` observations: three weeks of a series
@@ -60,7 +62,7 @@ class HistoricalVarAnalytic(RiskAnalytic):
     # 2.0.0 — M2: coherent Acerbi-Tasche tail estimator (published VaR/CVaR move) plus
     # the return histogram of K1. 1.x published the plug-in estimator, which understated
     # CVaR by a measured 0.27 %.
-    algorithm_version = "3.0.0"
+    algorithm_version = "3.1.0"
     name_i18n_key = "risk.analytics.historicalVar.name"
     description_i18n_key = "risk.analytics.historicalVar.description"
     output_kind = RiskOutputKind.VAR_CVAR

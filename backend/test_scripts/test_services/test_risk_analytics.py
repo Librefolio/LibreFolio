@@ -2499,8 +2499,12 @@ def test_historical_var_missing_both_its_series_and_its_factor_names_the_series_
     assert refused.value.code == RiskErrorCode.DATA_UNAVAILABLE
 
 
-def test_historical_var_calendar_horizon_is_a_new_algorithm_version():
-    assert HistoricalVarAnalytic.algorithm_version == "3.0.0"
+def test_historical_var_sturges_fallback_is_a_new_algorithm_version():
+    # 3.1.0 (D380, 08/10/2026): an interquartile range of exactly zero sizes the return
+    # histogram's bins with Sturges, where Freedman-Diaconis drew one bar the pin cut in two
+    # (pinned in test_risk_metrics_oracle.py, block (f)); VaR and CVaR do not move. 3.0.0 made
+    # the horizon calendar days, compounded over the observations they hold (tested above).
+    assert HistoricalVarAnalytic.algorithm_version == "3.1.0"
 
 
 # ---------------------------------------------------------------------------
