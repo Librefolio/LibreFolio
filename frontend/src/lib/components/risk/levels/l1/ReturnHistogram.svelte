@@ -26,9 +26,8 @@
 <script lang="ts">
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {_ as t} from '$lib/i18n';
-    import {formatPercent} from '$lib/utils/core/formatPercent';
 
-    import type {ReturnHistogram} from './l1Helpers';
+    import {axisPercent, figurePercent, type ReturnHistogram} from './l1Helpers';
 
     interface Props {
         histogram: ReturnHistogram | null;
@@ -36,17 +35,6 @@
     }
 
     let {histogram, height = '120px'}: Props = $props();
-
-    /**
-     * A percent-unit value with the typographic minus this panel uses throughout.
-     *
-     * `formatPercent` emits an ASCII hyphen, so the magnitude is formatted and the
-     * sign prefixed here rather than letting two different minus characters appear
-     * a few pixels apart.
-     */
-    function axisPercent(value: number): string {
-        return `${value < 0 ? '−' : ''}${formatPercent(Math.abs(value), {signed: false, digits: 1})}`;
-    }
 
     function barClass(bin: {holdsCut: boolean; belowCut: boolean}): string {
         if (bin.holdsCut) return 'bg-amber-500 dark:bg-amber-400';
@@ -97,7 +85,8 @@
             {#if histogram.cut === null}
                 <span class="ml-1" data-testid="risk-l1-histogram-nocut">— {$t('risk.levels.l1.histogram.noCut')}</span>
             {:else}
-                <span class="ml-1 font-medium text-amber-600 dark:text-amber-400" data-testid="risk-l1-histogram-cut">— {$t('risk.levels.l1.histogram.cut', {values: {value: axisPercent(histogram.cut)}})}</span>
+                <!-- A figure, not a position: a threshold of −0.04% keeps its sign (D380). -->
+                <span class="ml-1 font-medium text-amber-600 dark:text-amber-400" data-testid="risk-l1-histogram-cut">— {$t('risk.levels.l1.histogram.cut', {values: {value: figurePercent(histogram.cut / 100)}})}</span>
             {/if}
         </p>
     {/if}
