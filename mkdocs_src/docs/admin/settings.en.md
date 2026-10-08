@@ -86,6 +86,15 @@ The Memory category also hosts the **Server Caches** panel — see [Server Cache
 | `default_language` | str | `en` | Default language for newly registered users. Supported: 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr`, 🇪🇸 `es`. |
 | `default_theme` | str | `auto` | Default theme for newly registered users: ☀️ `light`, 🌙 `dark`, 🖥️ `auto`. |
 
+A new user starts from these defaults: the first time the account signs in, its **Language**,
+**Default Currency**, and theme are copied from them, and the
+[Welcome setup](../user/getting-started.md#welcome-setup) shows the language and the currency
+pre-filled, ready to confirm or change. Changing a default later does not touch users whose
+preferences already exist. Accounts that existed before LibreFolio 1.2.0 are not sent through
+onboarding: their Welcome setup counts as **Completed** and the tour and every guide as
+**Skipped**, and each user can still replay them from
+[Settings → Preferences → Onboarding and guides](../user/settings/preferences.md#onboarding-and-guides).
+
 ---
 
 ## 🕐 Market Data Scheduler {: #market-data-scheduler }

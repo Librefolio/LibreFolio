@@ -14,22 +14,26 @@ erDiagram
 
     ASSET {
         int id PK
-        string display_name
+        string display_name UK
         string identifier_isin
         string identifier_ticker
-        enum asset_type "STOCK, ETF, BOND..."
+        string asset_type "VARCHAR(32), AssetType value"
         string currency
+        bool is_benchmark "shared, default false"
         json classification_params
     }
 
     PRICE_HISTORY {
         int asset_id FK
-        date date
-        decimal close_price
-        decimal open_price
-        decimal high_price
-        decimal low_price
-        int volume
+        date date "UNIQUE with asset_id"
+        decimal open "nullable"
+        decimal high "nullable"
+        decimal low "nullable"
+        decimal close "nullable"
+        decimal volume "nullable"
+        decimal adjusted_close "nullable"
+        string currency
+        string source_plugin_key
     }
 
     ASSET_PROVIDER_ASSIGNMENT {
@@ -56,14 +60,35 @@ erDiagram
 
 ### 📦 `ASSET`
 
-Global definition of a financial instrument. Each asset has a unique combination of identifiers (ISIN, ticker) and belongs to an [Asset Type](../../../financial-theory/instruments/asset-types/index.md).
+Global definition of a financial instrument. `display_name` is unique; the identifier columns (`identifier_isin`, `identifier_ticker`, …) are indexed but not unique. Each asset belongs to an [Asset Type](../../../financial-theory/instruments/asset-types/index.md).
 
 - 📋 **`classification_params`** (JSON): Stores flexible metadata like Sector, Geography, and Industry without requiring schema changes.
 - 💰 **`currency`**: The asset's native currency (e.g., USD for Apple, EUR for ASML).
+- 🏷️ **`asset_type`**: One `AssetType` value — see [Asset types and subtypes](#asset-types) below.
+- ⭐ **`is_benchmark`** (`BOOLEAN NOT NULL DEFAULT 0`): The asset is offered as a comparison benchmark. The risk benchmark selector (`BenchmarkSelect.svelte`) and the chart's comparison-asset picker (`SignalAssetParamControl.svelte`) list flagged assets in a section of their own, apart from the other assets; `GET /api/v1/assets/query?is_benchmark=true|false` filters on the flag (omitted = both).
+    - **Shared, not per-user**: `assets` has no owner column, so the flag is the same for every user.
+    - **Independent of `asset_type`**: any asset can be a benchmark, and an `INDEX` asset does not have to be one.
+    - **Seeded once**: migration `004_release_1_2_0_schema` set the flag on the existing `INDEX` assets, only when it created the column — a flag the user cleared later is never restored.
+
+#### 🏷️ Asset types and subtypes {: #asset-types }
+
+`assets.asset_type` stores exactly one `AssetType` value (`backend/app/db/models.py`):
+
+| Level | Values |
+|-------|--------|
+| Base types | `STOCK`, `ETF`, `BOND`, `CRYPTO`, `FUND`, `CROWDFUND`, `HOLD`, `COMMODITY`, `REAL_ESTATE`, `INDEX`, `OTHER` |
+| ETF subtypes (family `ETF`) | `ETF_STOCK`, `ETF_BOND`, `ETF_COMMODITY`, `ETF_REAL_ESTATE`, `ETF_CRYPTO`, `ETF_MONETARY` |
+| Crowdfunding subtype (family `CROWDFUND`) | `CROWDFUND_REAL_ESTATE` |
+
+A subtype says which base type the instrument contains: `ETF_BOND` is an ETF that holds bonds, `CROWDFUND_REAL_ESTATE` a crowdfunding loan backed by property. `ETF_MONETARY` (money-market funds) is the one subtype with no base-type counterpart. The plain `ETF` and `CROWDFUND` values stay valid, as the residual for mixed or unstated content.
+
+- 🗄️ **Stored as is.** The column keeps the exact value and nothing rolls up in the database; the backend aggregates by the stored value too (the allocation by type in `portfolio_engine.py`). Grouping a subtype with its family is a frontend concern: `ASSET_TYPE_FAMILY` / `assetTypeFamily()` in `frontend/src/lib/utils/assetTypes.ts` files every `ETF_*` value under `ETF` and `CROWDFUND_REAL_ESTATE` under `CROWDFUND`, for the asset-type select and for both allocation charts (see the [Allocation Panel](../../../user/dashboard/charts.md#allocation-panel)).
+- 🚫 **`INDEX`** is the one value with backend behaviour: transactions on an `INDEX` asset are refused (`transaction_batch_stages.py`). It does not imply `is_benchmark`.
+- ➕ **Adding a value** needs no migration: the column is a plain `VARCHAR(32)` with no `CHECK` constraint (databases created before 22/09/2026 still declare `VARCHAR(14)`, harmless on SQLite — see [Migrations](index.md#enum-column-length)). The frontend tables keyed on the enum must follow: `frontend/src/lib/utils/__tests__/assetTypeTables.test.ts` reads the enum from `backend/app/db/models.py` and fails when one of them misses the new value.
 
 ### 📈 `PRICE_HISTORY`
 
-Daily OHLCV (Open, High, Low, Close, Volume) price data for each asset. Populated by asset pricing providers.
+Daily OHLCV (Open, High, Low, Close, Volume) price data for each asset, one row per `(asset_id, date)`. Populated by asset pricing providers. `open`, `high`, `low` and `close` are all nullable: the [price resolver](../../backend/transactions/price_resolver.md) values a day from `close`, and uses the day's range only when `open`, `high` and `low` are all present.
 
 ### 🔌 `ASSET_PROVIDER_ASSIGNMENT`
 

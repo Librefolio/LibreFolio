@@ -39,6 +39,11 @@ Registry-level helpers: `clear_cache(name)`, `clear_all_caches()`, `list_caches(
 `get_cache_stats(name)` (stats for the admin views), and `close_all_caches()` — called at
 application shutdown to stop the timer-wheel threads.
 
+The FX service also calls `clear_cache(name)` itself, because its writes make cached portfolio results
+stale: every rate write — a provider sync that changed points, a manual upsert, a deletion that removed
+rows — clears `portfolio_layer2` and `portfolio_blob` (see
+[FX Architecture](../backend/fx/architecture.md#portfolio-cache-invalidation)).
+
 ### 🗂️ Caches registered today
 
 Caches register lazily at import time, so the list below is the full registry as of 2026-09-03

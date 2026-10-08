@@ -71,6 +71,14 @@ from backend.app.services.risk.metrics import (
     pearson_correlation,
     summarize_drawdown,
 )
+from backend.app.services.risk.quant import models as simulation_models
+from backend.app.services.risk.quant.engine import (
+    MAX_HISTORY_CELLS,
+    MAX_PORTFOLIO_CELLS,
+    MAX_STOCHASTIC_CELLS,
+    SimulationResourceLimitError,
+    validate_resource_budget,
+)
 from backend.app.services.risk.quant.estimation import estimate_drift_uncertainty
 from backend.app.services.risk.quant.models import SimulationEngineResult
 from backend.app.services.risk.quant.optimization_engine import (
@@ -2601,6 +2609,126 @@ async def test_the_plugin_compares_a_block_with_the_history_in_observations(engi
     details = refused.value.details
     assert (details["block_length_days"], details["block_length_observations"], details["observations"]) == (50, 35, 30)
     assert len(engine_requests) == 1
+
+
+# ---------------------------------------------------------------------------
+# Size limits (developer's decision D379, 07/10/2026): a simulation too large to run is a
+# RESOURCE_LIMIT -- never INVALID_PARAMETERS nor EXECUTION_FAILED -- and its details name the
+# limit that was hit and the remedy that actually works. `remedy` is a wire contract with the
+# frontend, which turns it into a sentence, so its literal values are asserted here.
+#
+# `MAX_SIMULATION_ASSETS` is read inside the test bodies, never imported at the top: the constant
+# is part of the contract under test, and a missing name must fail only the tests that use it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("metric", "actual", "limit", "remedy"),
+    [
+        pytest.param("portfolio_cells", MAX_PORTFOLIO_CELLS + 1, MAX_PORTFOLIO_CELLS, "paths_or_horizon", id="portfolio-cells"),
+        pytest.param("stochastic_cells", MAX_STOCHASTIC_CELLS + 1, MAX_STOCHASTIC_CELLS, "paths_or_horizon", id="stochastic-cells"),
+        pytest.param("history_cells", MAX_HISTORY_CELLS + 1, MAX_HISTORY_CELLS, "period", id="history-cells"),
+        # A budget the plugin has never heard of is still "too large", only without a remedy
+        # it cannot vouch for: the frontend falls back to its generic sentence.
+        pytest.param("future_metric", 11, 10, None, id="unknown-metric-without-remedy"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_engine_budget_refusal_is_a_resource_limit_with_the_remedy_that_works(monkeypatch, metric, actual, limit, remedy):
+    # Until D379 every budget refusal became INVALID_PARAMETERS: the user read "Invalid calculation
+    # parameters" even at the defaults, about parameters nothing was wrong with.
+    async def over_budget(request, *, algorithm_version):
+        raise SimulationResourceLimitError("over the budget", metric=metric, actual=actual, limit=limit)
+
+    monkeypatch.setattr(simulation_plugin_module, "run_simulation", over_budget)
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        await SimulationAnalytic().execute(bootstrap_params(30), simulation_context(252.0))
+
+    expected = {"metric": metric, "actual": actual, "limit": limit}
+    if remedy is not None:
+        expected["remedy"] = remedy
+    assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
+    assert refused.value.details == expected
+
+
+@pytest.fixture
+def budgeted_engine_requests(engine_requests, monkeypatch) -> list:
+    """`engine_requests` behind the engine's REAL resource budget, still without a worker.
+
+    The production `run_simulation` checks the budget before it reads the cache or spawns
+    anything, so running that same check and then the flat fake gives the verdict a user
+    would get -- refused or answered -- for the price of three multiplications. A refused
+    request is never captured: the list holds only what the engine would have run.
+    """
+    flat_engine = simulation_plugin_module.run_simulation
+
+    async def budgeted_run_simulation(request, *, algorithm_version):
+        validate_resource_budget(request)
+        return await flat_engine(request, algorithm_version=algorithm_version)
+
+    monkeypatch.setattr(simulation_plugin_module, "run_simulation", budgeted_run_simulation)
+    return engine_requests
+
+
+def positions_context(count: int) -> RiskExecutionContext:
+    """A current-composition portfolio of `count` equally weighted positions, fully invested, on the short driver."""
+    asset_ids = tuple(range(1, count + 1))
+    context = make_context(dict.fromkeys(asset_ids, SIMULATION_DRIVER), mode=RiskMode.CURRENT_COMPOSITION, scope_asset_ids=asset_ids)
+    return replace(context, weights=dict.fromkeys(asset_ids, 1.0 / count), cash_weight=0.0)
+
+
+@pytest.mark.asyncio
+async def test_at_the_defaults_the_first_position_over_the_compute_budget_is_a_resource_limit(budgeted_engine_requests):
+    defaults = SimulationParams()
+    largest = MAX_STOCHASTIC_CELLS // (defaults.path_count * defaults.horizon_days)
+    # The user-visible threshold A measured on 07/10/2026 at the defaults (block bootstrap,
+    # 365 days, 8192 paths), and the one the changelog cites: a change here must be
+    # deliberate, never the side effect of moving a default or a budget.
+    assert largest == 66
+
+    # The first position too many, through the real budget. Before D379 this read "Invalid
+    # calculation parameters", at parameters the user had never touched.
+    with pytest.raises(RiskUnavailableError) as refused:
+        await SimulationAnalytic().execute(defaults, positions_context(largest + 1))
+
+    assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
+    assert refused.value.details == {
+        "metric": "stochastic_cells",
+        "actual": defaults.path_count * defaults.horizon_days * (largest + 1),
+        "limit": MAX_STOCHASTIC_CELLS,
+        "remedy": "paths_or_horizon",
+    }
+    assert budgeted_engine_requests == []
+
+    # CONTROL -- one position fewer, the defaults untouched, runs.
+    await SimulationAnalytic().execute(defaults, positions_context(largest))
+    (request,) = budgeted_engine_requests
+    assert len(request.asset_ids) == largest
+
+
+@pytest.mark.parametrize("params", [pytest.param(bootstrap_params, id="block-bootstrap"), pytest.param(gbm_params, id="gbm")])
+@pytest.mark.asyncio
+async def test_more_positions_than_the_engine_carries_are_a_resource_limit_that_never_reaches_it(engine_requests, params):
+    limit = simulation_models.MAX_SIMULATION_ASSETS
+    over = limit + 1
+
+    # Before D379 the request for these positions failed its own validation outside the
+    # plugin's `try`: a pydantic ValidationError escaped `execute`, which is exactly what made
+    # the service log a traceback and answer EXECUTION_FAILED -- "we failed", for a portfolio
+    # that is only too big. A RiskUnavailableError is reported as unavailable, with its code.
+    with pytest.raises(RiskUnavailableError) as refused:
+        await SimulationAnalytic().execute(params(30), positions_context(over))
+
+    assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
+    assert refused.value.details == {"metric": "assets", "actual": over, "limit": limit, "remedy": "positions"}
+    # Refused before any request exists, so the engine never sees it.
+    assert engine_requests == []
+
+    # CONTROL -- one position fewer, same process and parameters, reaches the engine.
+    await SimulationAnalytic().execute(params(30), positions_context(limit))
+    (request,) = engine_requests
+    assert len(request.asset_ids) == limit
 
 
 @pytest.mark.asyncio
