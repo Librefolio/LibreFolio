@@ -176,3 +176,12 @@ Lo scrive il coordinatore. Al checkpoint propongo una riga 🐛 per la voce Dans
 > **⚠️ Fuori pista — ruff e black sul runner**. `_frontend_transaction.py` ha 4 PLC0415 e black lo riformatterebbe. Ma è identico sul file a `HEAD`: è preesistente, non è mio, e non lo tocco.
 >
 > **Voce CHANGELOG proposta** (🐛, voce Danske): «On a phone, a report set's card keeps its title tappable — «Read as» and the status move to a second row — and its timeline no longer runs the start and end dates together.»
+
+### 8.4 ✅ Integrato (2026-10-08)
+
+> **Note implementazione**:
+> - I commit: `038109e91` fix(import): set card header, timeline on phones; `f2f94c295` docs(journal): plan 26 step 8, mobile set card. Tutti e due sopra `ffa72cc2b`.
+> - Merge `975950379` nel treno 14; `dev_release2` = `9eb01c756`.
+> - Il coordinatore ha rifatto i controlli sulla revisione unita: component 2850, compreso l'Esc di K sulla card; `tx-import-report-set` 31 passati e 31 saltati; guida 2; selezione file 2.
+> - CHANGELOG: nessuna riga, perché i report set sono nuovi nella 1.2.0.
+> - Segue: [plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md](plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md).
