@@ -1625,7 +1625,10 @@
     "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
     "pnlAcqNewCapital": "Nuovo capitale",
     "pnlAcqReinvested": "Reinvestito",
-    "allocationGeneric": "{type} generico"
+    "allocationGeneric": "{type} generico",
+    "unrealizedAssetEffect": "Asset in {currency}",
+    "unrealizedFxEffect": "Cambio {from} → {to}",
+    "unrealizedUnsplit": "{currency}, non scomposto"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",
@@ -1663,7 +1666,8 @@
     "missingFxRatesManual": "Mancano tassi FX per {count} coppia/e manuale/i — inserisci i tassi manualmente",
     "assetIncomeNoEligibleLots": "Nessun lotto aperto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — provento non allocato",
     "assetCostNoEligibleLots": "Nessun lotto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — costo non allocato",
-    "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia."
+    "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia.",
+    "missingCostBasis": "{count} asset con un'acquisizione senza costo d'acquisto — conteggiata a zero finché non lo imposti"
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",

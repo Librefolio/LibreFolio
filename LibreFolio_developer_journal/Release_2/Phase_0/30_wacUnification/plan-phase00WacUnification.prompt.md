@@ -4,8 +4,8 @@
 > (project session `12a0954d-0fbe-42da-b687-979e798a50c6`).
 > Analisi consegnata il 07/10 (sola lettura). **Implementazione autorizzata dal developer il 07/10**, inoltrata dal
 > coordinator (testo e decisioni in [Decisioni prese e permessi](#decisioni-prese-e-permessi-0710-inoltrati-dal-coordinator)).
-> Stato: **handoff consegnato, FROZEN** (07/10). P0–P8, P10, P11 e P12 chiusi; P9 ha codice e test verdi, mentre le
-> 4 chiavi i18n aspettano il via del coordinator su O. Avanzamento passo per passo in §6.5.
+> Stato: **chiuso, FROZEN** (08/10). P0–P12 completati; commit `de252a38a`, merge dei treni 9 (`e0c40395c`) e 10
+> (`e655003d3`), chiavi i18n aggiunte dopo O. Avanzamento passo per passo in §6.5, merge in §6.5bis.
 >
 > Percorso: `LibreFolio_developer_journal/Release_2/Phase_0/30_wacUnification/plan-phase00WacUnification.prompt.md`
 > (non committato: i commit li fa il developer). L'analisi è stata scritta in plan mode nella cartella di sessione e
@@ -900,7 +900,7 @@ Ogni passo aggiorna questo piano con ✅ e data, `Note implementazione` e `Fuori
   >     alfabetico.
   >   - Somma esatta.
   > - I test (test-author) arrivano dopo il codice: stesso fuori pista di P6/P7.
-- **P9** 🔄 (07/10, codice ✅, chiavi i18n in attesa di O) — Tooltip in `KpiSection` + chiavi i18n (dopo O) + test di
+- **P9** ✅ (07/10 codice, 08/10 chiavi i18n) — Tooltip in `KpiSection` + chiavi i18n (dopo O) + test di
   componente.
   > **Note implementazione**:
   > - **Rossi visti prima del codice**: il test-author ha scritto 6 test in `KpiSection.test.ts`: 4 rossi (righe e
@@ -921,6 +921,19 @@ Ogni passo aggiorna questo piano con ✅ e data, `Note implementazione` e `Fuori
   >   `npm run check` (svelte-check): 0 errori, 0 warning. Prettier pulito.
   > - Il banner legge `issue.message_i18n_key`: finché `dataQuality.missingCostBasis` non c'è, `MISSING_COST_BASIS`
   >   mostra la chiave grezza. È atteso, e si chiude insieme alle altre chiavi dopo O.
+  > - **Chiavi i18n (08/10)**, dopo il via del coordinator (O integrato nei treni 8 e 9):
+  >   - aggiunte con `dev.py i18n add` (script `/tmp/libreFolio_p_i18n_add.sh`), testi approvati dal coordinator;
+  >     l'IT di `dataQuality.missingCostBasis` usa il suo testo («{count} asset con un'acquisizione senza costo
+  >     d'acquisto — conteggiata a zero finché non lo imposti»);
+  >   - testi diversi in tutte e 4 le lingue, quindi nessun rischio con la cache ICU per testo; segnaposto verificati
+  >     uguali ai parametri del codice (`currency`, `from`/`to`, `count`);
+  >   - diff piccolo, +6/−2 per catalogo: le chiavi in coda ai namespace `dashboard` e `dataQuality`, più la virgola
+  >     sulla chiave che prima era l'ultima.
+  > - **Verifica (08/10)**:
+  >   - `i18n audit` exit 0: 4156 chiavi complete (4152 + 4), 0 chiavi backend mancanti, 0 inutilizzate; le 3
+  >     «not verified» e la famiglia PAC `tools.allocation.constraints.` sono le stesse di prima, preesistenti;
+  >   - `api sync` OK; `front check` 0 errori, 0 warning; prettier pulito sui 4 cataloghi;
+  >   - `utils gate-i18n-usage` 195; `front-utility core-unit` 116/116 file (3405 test); `component-unit` 2835.
 - **P10** ✅ (07/10) — AI Export (D12(a)): testo e versioni.
   > **Note implementazione**:
   > - **Rossi visti prima del codice**: 4 backend (versione 2 su spec reale, segnaposto e registro; envelope v2
@@ -1064,8 +1077,45 @@ Ogni passo aggiorna questo piano con ✅ e data, `Note implementazione` e `Fuori
   > - Derive più vecchie segnalate e lasciate: `domains/calculations.md`, `features/F-048.md`, le sezioni
   >   LAST_BUY_PRICE e TRANSACTION_IMPLIED.
   >
-  > **Stato**: P0–P8, P10, P11 e P12 chiusi. P9 ha codice e test verdi; restano le 4 chiavi i18n, che aspettano il via
-  > del coordinator su O. Poi FROZEN.
+  > **Stato**: P0–P12 chiusi. Commit `de252a38a` (senza il footer BREAKING CHANGE, per decisione del developer: va
+  > nel CHANGELOG sotto ⚠️ Breaking changes). Le chiavi i18n di P9 sono entrate l'08/10, dopo i merge (§6.5bis).
+
+### 6.5bis Merge con `dev_release2` (07–08/10)
+
+Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho messi in stage, senza commit.
+
+- **Treno 9** (MERGE_HEAD `9ea2d519b`, merge commit `e0c40395c`). 165 file in stage, 3 conflitti attesi, tutti risolti
+  in aggiunta (script `/tmp/libreFolio_p_resolve_merge.py`, con controlli sulla forma di ogni blocco):
+  - `developer/architecture/overview.md`: tenute la voce «Financial Math Layer» e le 3 voci del treno 9 (Risk Engine,
+    Tool Plugins, Onboarding Guides);
+  - `LibreFolio_devWiki/index.md`: due righe vicine, ognuna cambiata da una parte sola (verificato sulla base
+    `d07412899`), quindi la riga `ci-release-pipeline` del treno 9 e la riga `inline-wac-computation` di P;
+  - `LibreFolio_devWiki/log.md`: in ordine di commit, prima O seconda passata (`6f728a541`, 14:36), poi le 4 voci
+    di P (`de252a38a`, 16:33);
+  - verificato per ciascun file: rispetto a HEAD restano solo i cambi del treno 9, rispetto a MERGE_HEAD solo
+    quelli di P;
+  - rivisti i file fusi in automatico che toccano P (`test_brim_providers.py`, `fifo_lot_engine.md`,
+    `user/dashboard/index.en.md`): intatti e coerenti. Nessun manifest npm o pip cambiato.
+- **Revisione combinata del treno 9**:
+  - `api sync`, `front build --debug`, `front check` (0/0) OK; `services all` 5822; `utils all` 1169;
+    `brim-providers` 626 + 1 saltato; `brim-degiro` 169; `component-unit` 2835; `front-ai-export unit` 359;
+    `check-orphans` pulito; `mkdocs build` strict OK;
+  - `api all`: 803 passati, 2 saltati, 1 fallito esterno. In `test_assets_provider.py::test_search_assets_basic`
+    Yahoo dal vivo ha restituito 0 risultati per 'Apple' (16:04:18Z, senza errori, e le ricerche successive davano
+    5 risultati); rilanciato da solo, `api assets-provider` è passato 24/24, con 'Apple' a 5 risultati alle 16:11:35Z;
+  - `core-unit`: 1 file rosso, quello noto `optionFilter.test.ts › R13` (plugin DEGIRO di L), corretto nel treno 10;
+  - `check-links`: 1 rotto, il preesistente `#rolling-return`;
+  - `i18n audit`: mancava solo `dataQuality.missingCostBasis`. L'audit non vede le chiavi usate nel codice frontend
+    e assenti dai cataloghi, per questo le 3 `dashboard.*` non comparivano.
+- **Treno 10** (MERGE_HEAD `9d79c2dbe`, merge commit `e655003d3`). 32 file in stage, 1 conflitto, `log.md`, risolto
+  in aggiunta: prima le 4 voci di P (16:33), poi «A slow language switch tore the whole app down» (`1c20b254f`,
+  17:42), con lo script `/tmp/libreFolio_p_resolve_merge_t10.py`.
+  - `index.md` si è fuso da solo con le righe di entrambi.
+  - Il treno 10 non tocca codice di `backend/app`, manifest o i miei file del runner (solo `_backend_db.py`), e la
+    correzione di `_junit_results` è intatta.
+  - Convalida mirata: `front build --debug` e `front check` OK; `core-unit` 116/116; `component-unit` 2835;
+    `front-ai-export unit` 359; `utils all` 1215; `check-orphans` pulito.
+- Porte 6161 e 6171 libere dopo ogni giro.
 
 ### 6.6 Definizione di fatto
 
