@@ -1,142 +1,171 @@
 # 🛠️ Command-Line Tools
 
-LibreFolio provides the `dev.py` script for administration tasks. This page covers the commands most relevant to **system administrators**.
+`dev.py`, at the root of the project, runs the administration tasks: starting the server, managing users and maintaining the database. Each section says when a command needs the server stopped.
 
-!!! tip "Python Virtual Environment Context"
+!!! tip "Where to run the commands"
 
-    If you are running LibreFolio directly on the **host machine**, all command-line operations must be executed within the Python virtual environment. You can either prefix each command with `pipenv run` (e.g., `pipenv run ./dev.py server`) or enter the virtual environment once by running `pipenv shell`.
-
-    If you are inside a **Docker container terminal** (for example, accessed via `docker exec`), you **do not** need to use `pipenv run` or `pipenv shell`, as the dependencies are pre-installed globally inside the container image. You can run `./dev.py` commands directly.
-
-!!! info "👩‍💻 For Developers"
-
-    For development-specific commands (frontend build, test runner, API sync, i18n audit), see the [Developer Workflow Guide](../developer/dev_workflow.md).
+    - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. ⚠️ With the current image these commands do not start yet: see [Running commands inside the container](docker_advanced.md#docker-exec).
 
 ---
-## 🖥️ Server (Production)
 
-### ▶️ Starting the Server
+## 🖥️ Start the Server {: #start-the-server }
 
 ```bash
-# Standard start
+# Standard start, one worker
 pipenv run ./dev.py server
 
-# Auto-size workers to the CPU count — 2 × (cores - 1)
-# Both `auto` and `0` trigger the calculation
+# Size the workers to the CPUs (`auto` and `0` do the same)
 pipenv run ./dev.py server --workers auto
 
-# Or pass an explicit worker count
+# Or set the number of workers
 pipenv run ./dev.py server --workers 4
 
-# Kill existing process on port before starting
+# Listen on another port (default: PORT from .env, else 6040)
+pipenv run ./dev.py server --port 8080
+
+# Kill whatever already holds the port, then start
 pipenv run ./dev.py server --force
 ```
 
-!!! tip "Multi-worker"
+- 🧮 More workers serve more requests at once: use them on any machine with more than one CPU. `auto` starts $\max(1,\ 2\,(n-1))$ workers on $n$ CPUs.
+- ⏳ The server first builds the web interface and this documentation when they are missing or out of date, so the first start takes a few minutes. If the interface does not build, the server does not start.
+- 🔑 A restart signs everybody out, unless `JWT_SECRET` is set in `.env` (see [Configuration](configuration.md)).
 
-    For production, use `--workers` to run multiple Uvicorn workers. This improves throughput and is recommended for any deployment with more than 1 CPU core.
+??? note "⚙️ Other server options — rarely needed"
+
+    | Option | What it does |
+    | --- | --- |
+    | `--host HOST` | Address to listen on (default: `HOST` from the environment or `.env`, else `0.0.0.0`) |
+    | `--data-dir PATH` | Use another data directory for this run, instead of `LIBREFOLIO_DATA_DIR` |
+    | `--no-scheduler` | Start without the scheduled price and FX syncs |
+    | `--rebuild`, `-r` | Rebuild the web interface even when it looks up to date |
+    | `--debug`, `-d` | `DEBUG` logs and a debug build of the web interface |
+
+    Short forms: `-w` for `--workers`, `-p` for `--port`, `-f` for `--force`. `--test`, `--coverage` and `--no-reload` are development options: `pipenv run ./dev.py server --help` lists them all.
 
 ---
 
-## 👤 User Management
+## 👤 Manage Users
 
-User management is done via `./dev.py user` subcommands:
+These commands write straight to the database, so they also work while the server is running.
+
+### ➕ Create and List Users
 
 ```bash
-# Create a user (users created from the CLI are always superusers)
+# Create an administrator account
 pipenv run ./dev.py user create <username> <email> <password>
 
-# List all users
+# List all users: ID, username, email, active, administrator
 pipenv run ./dev.py user list
+```
 
-# Reset a user's password
+- 👑 Accounts created here are always **administrators**. For a regular account, let the person sign up with **Register here** on the login page (when registration is open in the [Global Settings](settings.md)), or `demote` the new account.
+- 🔒 The password needs at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol.
+
+### 🔑 Reset a Password or Lock an Account
+
+```bash
+# Set a new password (same rules as above)
 pipenv run ./dev.py user reset <username> <new_password>
 
-# Promote a user to admin
-pipenv run ./dev.py user promote <username>
+# Lock an account out, then let it back in
+pipenv run ./dev.py user deactivate <username>
+pipenv run ./dev.py user activate <username>
+```
 
-# Demote an admin to regular user
+- ⏱️ A reset does not end the sessions already open: they stay valid until they expire. To lock someone out at once, deactivate the account: it is refused from its next request.
+- 💬 The app's **Forgot Password?** screen shows the older form `./dev.sh user:reset <username> <new_password>`, which runs the same command on a host installation.
+
+### 👑 Grant or Remove Administrator Rights
+
+```bash
+pipenv run ./dev.py user promote <username>
 pipenv run ./dev.py user demote <username>
 ```
 
+`demote` does not check that another administrator remains: if none is left, promote someone again.
+
 ---
 
-## ⚙️ System Management
+## 🗄️ Maintain the Database
 
-### 🔧 Initialize Global Settings
+### ⬆️ Apply Migrations
+
+Every start of the server applies the pending migrations by itself, so you rarely need this. To do it by hand, **stop the server** first: `db upgrade` refuses to run while the server answers on the configured port.
+
+```bash
+# Apply pending migrations
+pipenv run ./dev.py db upgrade
+
+# Show the migration the database is at
+pipenv run ./dev.py db current
+```
+
+### 🩹 Post-Migration Fixes {: #post-migration-fixes }
+
+Right after the migrations, every start also runs the **post-migration fixes**: repairs that a migration cannot make. Usually there is nothing to do. The log (the server output, also saved in `logs/`) may show:
+
+- ✅ `Post-migration fixes applied and verified`: a repair was made. On a large database that start is slower, once.
+- ⚠️ `Post-migration fix failed`: the database was left as it was and the server started normally. The warning gives the error and the copy of the database kept next to it until you delete it, such as `app.db.pre-autoincrement-20261008T101500Z.bak`. The fix is tried again at the next start.
+- 🩺 `Post-migration fixes skipped`: the copy could not be made, or the database fails SQLite's integrity check. Nothing was changed.
+
+The empty file `app.db.post-migration.lock`, next to the database, makes the runs take turns when several workers start together: leave it in place.
+
+The first fix, **`autoincrement`**, makes sure the id of a deleted user, broker, asset, transaction, FX conversion route or asset event is never given to a new one. While converting a database, it deletes the report folders of brokers that no longer exist, so that a new broker cannot inherit them.
+
+??? tip "⌨️ Run the fixes by hand — to preview them or retry a failed one"
+
+    **Stop the server** first (the script does not check it), then run from the project root:
+
+    ```bash
+    # Preview: report what would be fixed, change nothing
+    pipenv run python -m backend.app.db.post_migration --dry-run
+
+    # Apply the fixes
+    pipenv run python -m backend.app.db.post_migration
+    ```
+
+    The script prints each fix as `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`, with the orphan broker folders, a kept copy and any error, and exits with `1` when something failed. `--db PATH` and `--data-dir PATH` point it at another database or data directory.
+
+🔗 How the fixes work inside: [Database Schema — Post-migration fixes](../developer/architecture/database/index.md#post-migration-fixes).
+
+### 🔧 Add Missing Global Settings
 
 ```bash
 pipenv run ./dev.py user init-settings
 ```
 
-Populates the database with default [Global Settings](settings.md) if they don't already exist.
+Every start adds the missing [Global Settings](settings.md) with their default values; this command does the same without starting the server, and never changes a value already set.
 
-### 🗄️ Database Migrations
-
-```bash
-# Apply pending migrations
-pipenv run ./dev.py db upgrade
-```
-
-!!! warning "🗄️ Database reset"
-
-    `pipenv run ./dev.py db create-clean` recreates the database from scratch — **all data is lost**. Use only if you need a fresh start.
-
-### 🩹 Post-Migration Fixes {: #post-migration-fixes }
-
-`db upgrade` applies the migrations only. Every time the server starts, right after applying any pending migration, it also runs the **post-migration fixes**: repairs that a migration cannot make.
-
-1. **Integrity check** — a database that fails SQLite's integrity check is never touched; the log warns about it.
-2. **Detection** — each fix looks for the anomaly it corrects. If there is none, nothing is written and nothing is logged.
-3. **Backup** — a copy of the database is saved next to it, named after the fix and the UTC time: with the default data directory, for example `backend/data/prod/sqlite/app.db.pre-autoincrement-20261008T101500Z.bak`. If the copy cannot be made, no fix runs.
-4. **Fix and verify** — each fix runs in a single transaction and is verified before it is committed: no broken references between tables, the same number of rows in every table, plus the fix's own checks.
-5. **Outcome** — all verified: the copy is deleted and the log says `Post-migration fixes applied and verified`. Anything failed: the fix is rolled back, leaving the database exactly as it was, the copy is **kept**, and the `Post-migration fix failed` warning in the log gives its path and the error. Both lines also say how long the run took, in `seconds`: on a large database, the start that applies a fix takes longer, but only once.
-
-Either way the server starts normally. A fix that did not complete is tried again at the next start, and a kept copy stays until you delete it. The log is the server's console output, also saved in the `logs/` folder of the data directory.
-
-With `--workers`, each worker runs the fixes as it starts, and they take turns: every run holds an exclusive lock on `app.db.post-migration.lock`, an empty file next to the database that you should leave in place, so the others wait and, once the first has applied the fixes, find nothing left to do. The offline script below takes the same lock, even with `--dry-run`: started while the server is starting, it waits for its turn.
-
-The first fix, **`autoincrement`**, stops LibreFolio from reusing ids. Without it, deleting the newest broker would let the next broker created take its id, together with whatever still pointed at that id: a saved link, a benchmark remembered by the browser, the folder of the broker's uploaded reports. With it, the id of a deleted user, broker, asset, transaction, FX conversion route or asset event is never given out again, and every existing id stays the same. New databases are created with this protection; an existing one is converted once, at the first start after the upgrade, and from then on the fix finds nothing to do. During the conversion, the uploaded-report folders whose broker no longer exists (`broker_reports/<uploaded|parsed|failed>/broker_<n>`) are first renamed in place to `.quarantine-autoincrement-<UTC time>-broker_<n>`, which the app does not list, so that a new broker cannot inherit them; they are deleted once the conversion is verified, or get their name back if it fails.
-
-To preview the fixes, or to retry one that failed at startup and read its error, run them by hand from the project root with the server **stopped** — the script does not check it for you. Always preview with `--dry-run` first:
+### 🧹 Reset the Database
 
 ```bash
-# Preview: report what would be fixed, change nothing
-pipenv run python -m backend.app.db.post_migration --dry-run
-
-# Apply the fixes
-pipenv run python -m backend.app.db.post_migration
+pipenv run ./dev.py db create-clean
 ```
 
-The script works on the database and data directory the server is configured with (`LIBREFOLIO_DATA_DIR`); `--db PATH` and `--data-dir PATH` select others, and broker folders are only touched when the database is inside the data directory. It prints the integrity check, each fix's outcome — `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed` — the orphan broker folders found, a kept backup and any error. The exit code is `0` when nothing failed, a dry run included, and `1` when a fix or the integrity check failed.
+!!! warning "All data is lost"
 
----
-
-## 📚 Documentation
-
-```bash
-# Build and deploy MkDocs documentation to GitHub Pages
-pipenv run ./dev.py mkdocs deploy
-
-# Generate gallery screenshots (uses Playwright; starts/controls a test server and populates test data unless --no-populate)
-pipenv run ./dev.py mkdocs gallery
-```
+    `db create-clean` deletes the database and creates an empty one. Like `db upgrade`, it refuses to run while the server is up. Uploaded files and broker reports stay on disk: see [Database Initialization & Reset](host_installation.md#database-reset).
 
 ---
 
 ## 📋 Full Command Tree
 
-For a complete list of all available commands:
-
 ```bash
+# Every command, by category
 pipenv run ./dev.py --help
+
+# The options of one command
+pipenv run ./dev.py server --help
 ```
 
-!!! info "👩‍💻 Developer Commands"
-
-    Additional commands for development workflows:
+??? info "👩‍💻 Developer and documentation commands"
 
     - **Frontend**: `pipenv run ./dev.py front build`, `front dev`, `front check` — see [Frontend Development](../developer/frontend/index.md)
     - **Testing**: `pipenv run ./dev.py test all` — see [Test Walkthrough](../developer/test-walkthrough/index.md)
     - **API Client**: `pipenv run ./dev.py api sync` — see [API Overview](../developer/api/overview.md)
     - **i18n**: `pipenv run ./dev.py i18n audit` — see [Internationalization](../developer/frontend/i18n.md)
+    - **Documentation**: `pipenv run ./dev.py mkdocs deploy` publishes this documentation to GitHub Pages; `pipenv run ./dev.py mkdocs gallery` regenerates its screenshots with Playwright on a test server (`--no-populate` keeps the current test data).
+
+    The full developer toolkit is in the [Developer Workflow Guide](../developer/dev_workflow.md).

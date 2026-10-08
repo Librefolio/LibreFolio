@@ -1,19 +1,19 @@
 # 📦 Host Installation (Pipenv)
 
-This guide covers setting up LibreFolio directly on a host machine using Python, Node.js, and Pipenv. This manual installation method is suitable for users who want to run LibreFolio without Docker (e.g., on low-resource machines) and is also the first step for developers preparing a local development environment.
+This guide installs LibreFolio directly on your machine with Python, Node.js and Pipenv, without Docker: handy on low-resource machines, and the first step towards a development environment.
 
-For containerized deployment, see the [User Manual Installation](../user/installation.md) or [Advanced Docker Guide](docker_advanced.md).
+For Docker, see the [User Manual Installation](../user/installation.md) or the [Advanced Docker Guide](docker_advanced.md).
 
 ---
 
 ## ✅ Prerequisites
 
-Before proceeding, ensure you have the following requirements installed on your system:
+Install these three tools first.
 
-??? info "🐍 Python 3.13+"
+??? info "🐍 Python 3.13"
 
-    Python 3.13 is required for the FastAPI backend.
-    
+    The backend needs Python 3.13, the version set in the project's `Pipfile`.
+
     * **macOS**: Install using Homebrew:
       ```bash
       brew install python@3.13
@@ -27,8 +27,8 @@ Before proceeding, ensure you have the following requirements installed on your 
 
 ??? info "📦 Node.js 24+"
 
-    Node.js is required for building the SvelteKit frontend.
-    
+    Node.js builds the web interface.
+
     * **macOS**: Install via Homebrew:
       ```bash
       brew install node@24
@@ -37,8 +37,8 @@ Before proceeding, ensure you have the following requirements installed on your 
 
 ??? info "📋 Pipenv"
 
-    Pipenv manages virtual environments and dependencies for Python.
-    
+    Pipenv manages the Python virtual environment and its packages.
+
     * **All Platforms**:
       ```bash
       pip install --user pipenv
@@ -49,30 +49,11 @@ Before proceeding, ensure you have the following requirements installed on your 
 
 ## 📋 Setup Instructions
 
-LibreFolio includes an orchestration script, `dev.py`, to automate common management tasks.
+!!! tip "Commands run in the Pipenv environment"
 
-!!! important "Python Environment Pre-requisite"
-
-    Because `dev.py` imports modules from the backend application code, running it directly before installing dependencies will result in `ImportError` exceptions. 
-    
-    Therefore, the very first time you set up the project on your host, you must initialize the virtual environment by running:
-    ```bash
-    pipenv install --dev
-    ```
-    Once this initial environment is set up, you can safely use `dev.py` for all subsequent steps.
-
-!!! tip "Running `dev.py` (Pipenv Context)"
-
-    Since all backend dependencies are installed inside the virtual environment managed by `pipenv`, any command execution on the host must be run in that context:
-    
-    * **One-off commands**: Prefix your command with `pipenv run` (e.g., `pipenv run ./dev.py server`).
-    * **Interactive shell**: Run `pipenv shell` beforehand to enter the virtual environment, after which you can run `./dev.py` directly without prefixes.
-    
-    *Note: If you are running commands inside a running Docker container (e.g., via `docker exec`), you do **not** need to use `pipenv run` or `pipenv shell`. The production Docker image pre-installs all Python dependencies globally in the container's system environment.*
+    The `dev.py` commands start with `pipenv run`, which runs them in the project's virtual environment. You can also enter it once with `pipenv shell`, then type `./dev.py …` without the prefix.
 
 ### 📥 1. Download the Project
-
-Clone the repository:
 
 ```bash
 git clone https://github.com/Librefolio/LibreFolio.git
@@ -81,79 +62,79 @@ cd LibreFolio
 
 Or download the latest release package from [GitHub Releases](https://github.com/Librefolio/LibreFolio/releases) and unzip it.
 
-### 📦 2. Install Dependencies
+### 🐍 2. Create the Python Environment
 
-Once your virtual environment is initialized, install all remaining Python, Node.js, and browser dependencies:
+```bash
+pipenv install --dev
+```
+
+Do this before any `dev.py` command: `dev.py` needs these Python packages, and without them it stops with a `ModuleNotFoundError`.
+
+### 📦 3. Install the Other Dependencies
 
 ```bash
 pipenv run ./dev.py install
 ```
 
-Under the hood, this command will:
+In order, it installs:
 
-1. Initialize the Python virtual environment and install packages via `pipenv`.
-2. Install the root project tools via `npm install`.
-3. Install frontend SvelteKit dependencies via `npm ci`.
-4. Install Playwright browser binaries (used for PDF report generation and E2E tests).
+1. the Python packages again, with `pipenv install --dev`;
+2. the project tools, with `npm install`;
+3. the web interface dependencies, with `npm ci` in `frontend/`;
+4. the Chromium browser of Playwright, used by the end-to-end tests and the documentation screenshots. If only this download fails, the installation still completes.
 
-### ⚙️ 3. Configure Environment
-
-Copy the example environment file to create your active `.env` configuration:
+### ⚙️ 4. Configure the Environment
 
 ```bash
 cp .env.example .env
 ```
 
-The default settings work immediately. Below are the key variables:
+The defaults work as they are. The main variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `6040` | Server bind port. |
-| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Directory path where the database, uploads, and logs are stored. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Directory where the database, uploads and logs are stored (see [Filesystem Structure](filesystem.md)). |
 | `LOG_LEVEL` | `INFO` | Logging verbosity. |
 
-For a complete description of all supported environment variables, see the [Environment Variables Guide](configuration.md).
+The other variables are described in the [Environment Variables Guide](configuration.md).
 
-### 🚀 4. Start the Server
-
-To start the FastAPI server on the host:
+### 🚀 5. Start the Server
 
 ```bash
 pipenv run ./dev.py server
 ```
 
-The server will be available at `http://localhost:6040`.
+The first start builds the web interface and the documentation, so it takes a few minutes. Then open `http://localhost:6040`. For workers, another port and the other options, see [Command-Line Tools](cli_tools.md#start-the-server).
 
-#### Server Command Options
+### 👤 6. Create Your Account
 
-| Flag | Description |
-|------|-------------|
-| `--host HOST` | Bind address (default: `HOST` env var or `0.0.0.0`) |
-| `--port PORT` / `-p PORT` | Bind port (default: `PORT` env var or `6040`) |
-| `--workers N` / `-w N` | Number of uvicorn workers (default: 1, disables reload) |
-| `--no-scheduler` | Disable background sync jobs for market data |
-
-### 👤 5. Accessing the App & Creating Users
-
-The first time you access LibreFolio in your browser, you will see a **registration page** where you can create your first account. The first registered user automatically becomes the system administrator.
-
-To manage users or promote them to administrator via the command line, refer to the [User CLI Tools Guide](cli_tools.md).
+Open LibreFolio in your browser and choose **Register here** below the login form: the first account registered becomes the administrator. To manage users from the terminal, see [Command-Line Tools](cli_tools.md).
 
 ---
 
-## 🗃️ Database Initialization & Reset
+## 🗃️ Database Initialization & Reset {: #database-reset }
 
-When running the application for the first time, the database is automatically initialized. If you need to reset the database to a clean slate, you can do so in two ways:
+There is nothing to initialise by hand: at every start, the server creates the database if it is missing and applies any pending migration.
 
-### 1. Terminal Command
-You can run the clean command from the database CLI:
+To start again from an **empty database**, use one of the two ways below.
+
+!!! warning "All data is lost"
+
+    Both ways delete the database for good: users, brokers, transactions and settings. Back it up first (see [Backup](filesystem.md#backup)).
+
+### 🧹 With `dev.py`
+
+Stop the server (the command refuses to run while it is up), then:
+
 ```bash
 pipenv run ./dev.py db create-clean
 ```
-> [!WARNING]
-> This command will completely drop the existing SQLite database and recreate the schema from scratch. **All data will be permanently lost.**
 
-### 2. Manual Reset
+### 🗑️ By Hand
+
 1. Stop the server if it is running.
-2. Delete the SQLite database file (located by default at `backend/data/prod/sqlite/app.db`).
-3. Restart the server; it will automatically initialize a fresh SQLite database file.
+2. Delete the SQLite database file (by default `backend/data/prod/sqlite/app.db`).
+3. Start the server: it creates a fresh database.
+
+Both ways replace only the database: uploaded files, broker reports and logs stay in the data directory. For a completely fresh start, stop the server and delete the whole data directory instead (by default `backend/data/prod/`): the next start recreates it.

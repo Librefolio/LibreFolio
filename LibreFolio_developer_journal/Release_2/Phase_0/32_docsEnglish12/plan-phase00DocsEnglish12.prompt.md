@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`) e l'onda 1 del feedback (`eee56b42a`, fuso con il treno 14 in `cbfce2475`) sono committati. L'onda 2 (S17, base `cbfce2475`) è stata approvata dal developer il 2026-10-08 alle 17:26: checkpoint pronto e FROZEN. Poi l'onda 3 (admin), dopo la fusione del treno 15.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`, base `108a2adf5`) è stata approvata dal developer il 2026-10-08 alle 21:22: checkpoint pronto, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -1222,6 +1222,250 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Gate `w2d`:** build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 88 percorsi, segnaposto, stile e `git diff --check` verdi.
   > - **Chiusura della corsia:** anteprima spenta, porte 6162 e 6042 libere. Rimosse le PNG di M (`/tmp/librefolio-q-gallery-drop`), il sito copiato e i file temporanei.
   > - **Checkpoint:** 87 file tracciati modificati e 1 nuovo (`developer/backend/brim/credit_agricole.md`); nessuna traduzione toccata. Messaggio proposto in `/tmp/libreFolio_commit_w2.txt`. Stato FROZEN.
+  > - **Commit:** `1c2f88d67` sopra `cbfce2475`, verificato dal coordinatore. È entrato col treno 17: `dev_release2` = `108a2adf5`, merge di Q `66628a1f8`. Lo script ha portato il worktree di Q a `108a2adf5`.
+  > - **Reperti dell'onda 2:** verificati dal coordinatore e assegnati dal developer.
+  >   - K: avatar e numero dei messaggi degli eventi;
+  >   - P: Timing effect;
+  >   - N: valuta iniziale dalla preferenza dell'utente;
+  >   - O: stringhe FX, aiuto di Borsa, timeout del sync, testi di justETF, conteggi delle valute e AI Export;
+  >   - I: eventi;
+  >   - il resto (L, etichette, Total Value, codice morto, docstring) in backlog.
+
+- **S18** ✅ 2026-10-08 — Onda 3: le pagine admin, su base `108a2adf5` (treno 17). Chiusa con l'approvazione del developer alle 21:22: «chiudi l'onda 3 e sistemiamo gli effetti del treno 18, ma non avviamo ancora le traduzioni». Checkpoint pronto, FROZEN.
+  > **Via libera** (coordinatore 17:44 e 17:50, con l'approvazione del developer «Sì, Q parte con l'onda 3 dopo il treno 17»). Nessuna pagina riservata a M, né di P o di L. `mkdocs.yml` e i CSS restano di Q.
+  >
+  > **Brief:** al file di sessione `files/simplify_brief.md` si aggiunge la sezione «Wave 3 — admin pages». Comandi, variabili, `.env`, percorsi, porte, tag delle immagini e snippet restano sulla pagina, verificati nel codice. Gli interni di implementazione vanno nel manuale dev. Script lunghi, configurazioni complete e varianti avanzate stanno in pannelli espandibili.
+  >
+  > **Gruppi** (4 `docs-writer`, parole sulla base `108a2adf5`; tutte le pagine hanno traduzioni IT/FR/ES):
+  > - **A:** `admin/service_exposure` (5165): il tutorial Tailscale, livelli 1-4. Si ristruttura soprattutto, con gli script in pannelli.
+  > - **B:** `admin/docker_advanced` (2985) e `user/installation` (1761), con destinazioni `architecture/overview.md` e `dev_workflow.en.md`. Ancore da tenere: `#post-migration-fixes`, `#image-variants-full-and-light`, `#updating`.
+  > - **C:** `admin/settings` (1386), `admin/configuration` (967) e `admin/index` (642), con destinazioni `architecture/settings.md`, `settings_cache.md`, `security.md` e `backend/scheduler.md`. Ancore: `#market-data-scheduler`, `#server-caches`, `#update-notifications`.
+  > - **D:** `admin/cli_tools` (1169), `admin/host_installation` (864) e `admin/filesystem` (831), con destinazioni `architecture/access_control.md` e `database/index.md`. I fatti per `overview.md` passano da Q.
+  >
+  > **Coordinatore** (17:52): il perimetro è libero. M ha finito da tempo su Docker e Tailscale. Reperto di L da verificare: `docker_advanced.en.md:232`, `./dev.py docker exec db upgrade` è forse rifiutato a server acceso; affidato al writer B. Le traduzioni di `profile`, `docker_advanced` e `cli_tools` sono segnalate come urgenti da L, e le decide il developer a fine onde.
+  >
+  > **Note implementazione, gruppo A (Tailscale)**:
+  > - **`admin/service_exposure.en.md`:** da 5165 a 4077 parole. Ogni livello apre con «Best for…» e chiude con «⚠️ Limits». 9 pannelli: scadenza della chiave, ACL JSON completo, socat, aggiornamento dello script, watchdog e health check, compose completo, troubleshooting, i due metodi per il dominio personale.
+  >   - Il saggio sul port forwarding è ridotto a 3 punti.
+  >   - Nuovo avviso «Before you go public»: il primo account registrato diventa admin, e **Enable Registration** è attivo per default (`auth.py`, `schemas/settings.py`).
+  > - **Correzioni:**
+  >   - il compose completo puntava a `:nightly`, ora `${LIBREFOLIO_IMAGE:-ghcr.io/librefolio/librefolio:latest}`;
+  >   - tolte 13 righe vuote spurie dentro lo YAML;
+  >   - «100 devices» era superato: ora c'è un link al pricing;
+  >   - la numerazione della lista sotto la schermata era rotta.
+  > - **⚠️ Fuori pista: comandi Tailscale superati, corretti da Q** con la doc ufficiale (https://tailscale.com/docs/reference/tailscale-cli/funnel; dalla 1.52 la sintassi è `tailscale funnel [flags] <target>`, e Funnel accetta solo le porte 443, 8443 e 10000).
+  >   - **Livello 3:** `tailscale funnel 6040 on` diventa `tailscale funnel --bg 6040`, con `tailscale funnel reset` per fermarlo.
+  >   - **Livello 1:** `tailscale serve tcp:6040 /` è tolto, perché `http://<ip-tailscale>:6040` funziona già. L'HTTPS nel tailnet passa a un pannello con `tailscale serve --bg 6040`.
+  >   - Lo script del repo usava già la forma nuova (`custom_startup.sh:71`).
+  > - **Ancore:** restano `#enabling-funnel-and-acls-on-the-console` e `#3-startup-and-approval`. Le schermate e i blocchi di codice non YAML sono identici.
+  > - **Reperto:** `HEALTHCHECK` del `Dockerfile` (`:153-154`) sonda `${PORT}`, ma il `CMD` fissa `--port 6040` (`:157`). Raccolto in `files/w3_findings.md`.
+  >
+  > **Note implementazione, gruppo D (CLI, host, filesystem)**:
+  > - **Testo visibile, senza codice né pannelli chiusi:** `cli_tools` da 951 a 708 parole, `host_installation` da 697 a 506, `filesystem` da 694 a 535. I totali grezzi crescono per i pannelli chiusi: opzioni del server, script manuale, comandi dev.
+  > - **cli_tools:**
+  >   - aggiunti `user deactivate` / `user activate` e `db current`, e l'uso Docker `docker compose exec librefolio python dev.py <comando>`;
+  >   - le regole della password della CLI, gli effetti di reset, deactivate e demote, e il fatto che un riavvio senza `JWT_SECRET` disconnette tutti;
+  >   - quali comandi richiedono il server fermo: `db upgrade` e `db create-clean` si rifiutano se il server risponde sulla porta. Conferma il reperto di L.
+  >   - Ancore: resta `#post-migration-fixes`, nuova `#start-the-server`.
+  > - **host_installation:** un H3 per step. Corretti:
+  >   - Playwright serve solo per E2E e schermate, non per i PDF;
+  >   - si parte dal login, con **Register here**;
+  >   - Python 3.13;
+  >   - `pipenv install --dev` è lo step 2;
+  >   - l'avviso `> [!WARNING]`, che non si renderizzava, diventa un'admonition;
+  >   - il reset tocca solo il DB.
+  >   - Nuova ancora `#database-reset`.
+  > - **filesystem:** la lista del backup corretta, perché va salvato tutto `broker_reports/`; backup Docker con stop, copia e start; l'ancora `#backup` resta.
+  > - **Dev:**
+  >   - `database/index.md`: nuove sezioni «🩹 Post-migration fixes» e «📂 Data Directory on Disk {: #data-directory }»;
+  >   - `access_control.md`: nuova sezione «👑 Superusers and the User CLI {: #superusers }».
+  > - **Inoltrati:**
+  >   - a B: Python 3.13 e ordine di avvio per `overview.md`; `./LibreFolio-data` in `installation`; il link a `cli_tools.md#post-migration-fixes`;
+  >   - a C: `users_and_brokers.md` descrive sessioni in memoria, ma il codice usa cookie JWT stateless (aggiunto allo scope `--w3`).
+  > - **Reperti di codice** (argomento `path` di `db *` ignorato, `./dev.sh` nella schermata Forgot Password, `demote` senza guardia): in `w3_findings.md`.
+  >
+  > **Note implementazione, gruppo C (impostazioni, configurazione, index)**:
+  > - **Testo visibile** (misura uniforme di Q, vedi la tabella di chiusura): `admin/settings` da 1134 a 860 parole, `admin/configuration` da 854 a 692, `admin/index` da 571 a 421 (dopo le correzioni delle 18:36).
+  > - **settings:** una sola tabella (cosa fa, default o intervallo, quando cambiarla). Corrette le etichette: la tab è **Admin**, i pulsanti **Configure…** e **Scheduler Status → Details…**, gli stati del log OK/Partial/Error. Via la sezione «Technical Notes» e la versione «1.2.0».
+  > - **configuration:**
+  >   - aggiunte le 9 variabili mancanti: le 8 `RISK_*` (in un pannello) e `LIBREFOLIO_TEST_DATA_DIR`;
+  >   - `PORTFOLIO_BASE_CURRENCY` non ha effetto;
+  >   - `LOG_LEVEL` accetta anche `TRACE`;
+  >   - il motore di ricerca `apikey` è uno stub;
+  >   - in Docker `PORT` è solo la porta host;
+  >   - dopo una modifica serve `docker compose up -d`, non `restart`.
+  > - **index:** via la frequenza del controllo aggiornamenti. Nuova sezione per tenere gli utenti collegati dopo un riavvio: un comando genera `JWT_SECRET` come fa il codice. Nuova ancora `#session-persistence`.
+  > - **Ancore:** restano `#market-data-scheduler`, `#server-caches` e `#update-notifications`.
+  > - **Dev:**
+  >   - `architecture/settings.md`: caricamento di `.env`, nessuna cache né validazione sui global settings, tabella delle 13 chiavi;
+  >   - `settings_cache.md`: cache per processo, e due cache assenti dal pannello;
+  >   - `security.md`: `JWT_SECRET` e la trappola della riga vuota; TTL; controllo degli aggiornamenti;
+  >   - `backend/scheduler.md`: **erano sbagliati** il leader (è il PID più basso, non un lock file), la funzione dei prezzi correnti, il log (500 voci) e `LIBREFOLIO_NO_SCHEDULER`;
+  >   - `users_and_brokers.md`: **le sessioni erano descritte in memoria**, invece sono un cookie JWT stateless, mai `Secure` (`SESSION_COOKIE_SECURE = False`); il riavvio senza `JWT_SECRET` disconnette tutti.
+  >
+  > **Note implementazione, gruppo B (Docker e installazione)**:
+  > - **Testo visibile** (misura uniforme di Q): `user/installation` da 1411 a 1029 parole (dopo le correzioni delle 18:36), `admin/docker_advanced` da 2159 a 1626.
+  > - **installation:**
+  >   - step 1-5 come H3; pannelli per compose scritto a mano, stato e log, firewall, variante full e aggiornamento che non riparte;
+  >   - il nome di Watchtower è `nickfedor/watchtower`;
+  >   - il cask di Homebrew è `docker-desktop`;
+  >   - `docker-ce` richiede il repository di Docker;
+  >   - la cartella è `./LibreFolio-data`;
+  >   - WUD ha il repository `getwud/wud`;
+  >   - la versione si fissa con `LIBREFOLIO_IMAGE`.
+  > - **docker_advanced:**
+  >   - il compose attuale, con `LIBREFOLIO_IMAGE` e `DOCS_VARIANT`;
+  >   - UID e GID vengono fissati alla build;
+  >   - `JWT_SECRET`;
+  >   - i fix post-migrazione rimandano a `cli_tools.md#post-migration-fixes`.
+  > - **Verifica obbligatoria (reperto di L):** `./dev.py docker exec db upgrade` non funziona mai, per due motivi.
+  >   - Il primo: `dev.py` non parte nel container. Importa `scripts.test_runner` (`dev.py:2350`), poi `__init__.py:45`, poi `_common.py:21`, e quindi `backend.test_scripts`, escluso da `.dockerignore:30` (f32e460ca, nella 1.1.0). Verificato anche da Q.
+  >   - Il secondo: la guardia «server running» (`cli_base.py:338-375`) rifiuta il comando, perché il server occupa la porta.
+  >   - La procedura giusta è non fare niente: le migrazioni si applicano all'avvio (`main.py:287`), e un fallimento ferma il server (`:216-218`).
+  >   - La doc ha un avviso «Not available with the current image» (`#docker-exec`).
+  >   - **Segnalato al coordinatore come urgente**, prima del cancello delle 18:26.
+  > - **Tag:** `latest` è la light, `X.Y.Z` la full, `X.Y.Z-light` la light (`release.yml:276-313`). Ma la `1.1.0` full pubblicata ha gli stessi layer della light; è un reperto per M.
+  > - **Dev:**
+  >   - `architecture/overview.md`: nuove `## 🐳 Docker Image {: #docker-image }` e `## 🚀 Server Startup {: #server-startup }`, con la sequenza completa di `main.py:250-331`; Python 3.13; corretto il punto sugli upload;
+  >   - `dev_workflow.en.md`: la build Docker passo per passo (`#docker-build-steps`) e il test mode nel container, con i suoi 3 ostacoli (`#docker-test-mode`).
+  > - **Fatti da Q:**
+  >   - `installation.en.md:206` non cita più la valuta base: `PORTFOLIO_BASE_CURRENCY` non è letto da nessuna parte;
+  >   - `developer/index.md:34` punta ad `architecture/settings.md` per Pydantic;
+  >   - `cli_tools.en.md:8` linka l'avviso `docker_advanced.md#docker-exec`.
+  >
+  > **Note implementazione, cancello e anteprima** (anteprima pronta alle 18:26):
+  > - **Comandi:**
+  >   - `Q_GATE_ARGS=--w3 bash /tmp/libreFolio_q_gate.sh w3a`: build strict con exit 0 e zero WARNING/ERROR; check-links con un solo link rotto, quello di base `user/assets/detail/chart/#rolling-return` (debito di traduzione), nessuno nuovo; scope 20 path, placeholder, stile e `git diff --check` verdi.
+  >   - `/tmp/libreFolio_q_selfcheck.py`, cioè `validate_file(en, en)` su 217 pagine EN/dev: 0 problemi nelle 19 cambiate e 0 nelle altre.
+  > - **Anteprima:** build statica servita sulla 6162 (`no-store`), le 9 pagine rispondono 200.
+  > - **Misura uniforme di Q** (`/tmp/libreFolio_q_wordcount.py`): testo visibile senza blocchi di codice, corpi dei pannelli chiusi, commenti e HTML; i titoli dei pannelli contano.
+  >
+  >   | Pagina | `wc -w` | Visibile |
+  >   |---|---|---|
+  >   | `admin/service_exposure` | 5164 → 4172 | 2936 → 1943 |
+  >   | `admin/docker_advanced` | 2983 → 2614 | 2159 → 1626 |
+  >   | `user/installation` | 1759 → 1569 | 1411 → 1029 |
+  >   | `admin/settings` | 1386 → 1234 | 1134 → 860 |
+  >   | `admin/configuration` | 967 → 988 | 854 → 692 |
+  >   | `admin/index` | 641 → 562 | 571 → 421 |
+  >   | `admin/cli_tools` | 1168 → 1264 | 898 → 677 |
+  >   | `admin/host_installation` | 864 → 675 | 635 → 462 |
+  >   | `admin/filesystem` | 828 → 876 | 525 → 489 |
+  >
+  > - **Totale delle 9 pagine:** `wc -w` da 15760 a 13954 (−11%); testo visibile da 11123 a 8199 (−26%). I pannelli chiusi passano da 9 a 34, con dentro da 1286 a 3266 parole: buona parte del calo visibile è testo ripiegato, non tolto.
+  >
+  > **Coordinatore** (18:27): il difetto di `dev.py` nell'immagine Docker è affidato a **L**, con l'approvazione del developer. `dev.py` salterà i comandi le cui directory mancano. Nello stesso lotto c'è il testo della schermata Forgot Password.
+  > - L'avviso «Not available with the current image» resta.
+  > - Il ripiego `scripts/user_cli.py` non si documenta. Verificato: compare solo in `access_control.md:110,125`, come posizione del codice, non come ripiego.
+  > - La chiusura del reperto di L su `db upgrade` (migrazioni all'avvio) va bene.
+  > - `.env.example` UID/GID, `HEALTHCHECK` e layer 1.1.0 sono nel backlog del coordinatore.
+  > - **Seguito, quando la cura di L entra nel target** (lo comunica il coordinatore):
+  >   - togliere l'avviso `docker_advanced.en.md#docker-exec` e la nota `cli_tools.en.md:8`;
+  >   - aggiornare `cli_tools.en.md:78`, che cita il testo attuale della card, `./dev.sh user:reset`;
+  >   - aggiornare `developer/dev_workflow.en.md:143-144`;
+  >   - documentare il comando verificato da L.
+  > - Inviato al coordinatore (circa 18:28) il vincolo per L: un eventuale link dalla card alla doc va senza ancora (`admin/cli_tools/`). Le ancore cambiano con la lingua, e l'onda 3 rinomina `#user-management` in `#manage-users`.
+  >
+  > **Review del developer** (dopo le 18:28): «a prima vista mi sembrano ottime», chiede cosa è stato tolto. Preparando la risposta (analisi per sezione, `/tmp/libreFolio_q_w3_sections.py`), Q ha corretto:
+  > - **`user/installation.en.md:222`**: diceva «some features, such as Risk Analysis, are still in beta», falso per la 1.2. Fonti: CHANGELOG `[1.2.0]:202`, «Risk Analysis leaves beta, except the simulation»; `en.json` `risk.betaBanner.simulation`, «Every other level of Risk Analysis has left beta». Ora dice «the **What if…?** risk simulation», con link a `simulation-modes.md#why-beta`.
+  > - **`<kbd>Esc</kbd>`**: tolti i riferimenti da `admin/index` (finestra di aggiornamento) e `admin/settings` (dialogo del lucchetto), coerenti con la richiesta del developer sulla pagina about.
+  > - **`admin/settings`**, pannello `init-settings`: prefisso `pipenv run` come in `cli_tools`, con link alla pagina dei comandi.
+  > - **`developer/dev_workflow.en.md:119`**: la cache tiene solo il sottoinsieme delle bandiere di Noto Color Emoji, servito dalla face `'LF Flags'` (`frontend/static/lf-flags.css`; `scripts/update_js_cache.py:91-100`).
+  > - **Cancello `w3b`**: build strict exit 0, 0 WARNING/ERROR; check-links con il solo link rotto di base; scope, placeholder, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi. Anteprima aggiornata alle 18:36.
+  > - In attesa della risposta del developer.
+  >
+  > **Cosa resta da migliorare** (domanda del developer, 18:39; dati di Q, script `/tmp/libreFolio_q_remaining.py`, `_placeholders.py`, `_transdebt.py`):
+  > - **Pagine mai semplificate:**
+  >   - corte e pulite: 16 importer da circa 92 parole, i provider FX `ecb`/`fed`/`boe`/`snb`, `profile`, `settings/index`, `classification`, `community/*`, `gallery/*`;
+  >   - nella teoria (99 pagine) solo `fundamentals/day-count` cita codice, quindi non c'è niente da spostare;
+  >   - i badge Beta dei 6 importer corrispondono alla tabella di `import/index`, mentre il codice non ha una nozione di beta.
+  > - **Screenshot:** 71 segnaposto.
+  >   - 12 hanno già lo scenario nella spec: lab del rischio, What if e menu dei file Danske, nelle pagine di M.
+  >   - 59 non hanno ancora uno scenario:
+  >     - PAC (9);
+  >     - Rischio della Dashboard (4);
+  >     - Growth P&L (3), che richiede la cattura del fixture da parte del developer;
+  >     - privacy (1);
+  >     - onboarding (4);
+  >     - confronto dei provider (1);
+  >     - le loro copie nelle pagine della gallery.
+  >   - Altri 8 segnaposto sono i portali dei broker (Trading212, Coinbase, …): la gallery non può generarli.
+  > - **Traduzioni:** circa 93 pagine con l'EN più recente dell'IT (stima dalle date git; il conto preciso lo dà `translate-validate`) e 23 mai tradotte. Le più rischiose sono `docker_advanced` IT/FR/ES, che mostrano ancora `docker exec db upgrade` e `server --test`.
+  > - **FAQ (`community/faq.en.md`):** mai rivista, con errori nella 1.2. **Il developer ha approvato la correzione dentro l'onda 3** (18:42).
+  >
+  > **Note implementazione, FAQ** (18:50):
+  > - **AI:** «Are there AI features planned? … roadmap» diventa «Can I use LibreFolio with an AI assistant?». La risposta presenta AI Export (`user/ai-export/index`; LibreFolio non contatta servizi AI). Resta la frase del developer sulla piattaforma hosted. Via «connect your own AI models», che oggi non è vero.
+  > - **Asset tracciabili:** allineati ai tipi base (`financial-theory/instruments/asset-types/index.en.md:17-31`). Aggiunti fondi, materie prime, immobiliare e beni senza prezzo di mercato. Il contante è il saldo di ogni broker per valuta. Le obbligazioni prendono il prezzo anche da un provider (`borsa-italiana.en.md:19-20`). Link all'elenco completo.
+  > - **Installazione:** prima Docker (consigliata), poi host.
+  > - **Account:**
+  >   - il pulsante è **Register here** (`en.json` `auth.registerHere`, `LoginCard.svelte:102-108`);
+  >   - il primo account diventa amministratore; poi serve **Enable Registration** (`auth.py:186-192`).
+  > - **Password dimenticata:** nessun recupero via e-mail (`auth.emailRecoveryNotAvailable`). Si chiede all'amministratore, con link a `cli_tools.md#reset-a-password-or-lock-an-account`. Via il comando `./dev.py` senza `pipenv run`.
+  > - **Prezzi e tassi fermi:** «Auto-sync» diventa **Scheduler Enabled**, con link a `admin/settings.md#market-data-scheduler`; aggiunto anche alla lista FX.
+  > - **Login negato:** un account disattivato vede lo stesso *Invalid username or password*.
+  > - **⚠️ Fuori pista:** la prima stesura diceva «if the message says the account is disabled». La verifica di `stores/app/auth.ts:123-134` l'ha smentita: ogni 401 diventa la stringa fissa *Invalid username or password*. Corretto. Reperto in `w3_findings.md`: le stringhe d'errore del login non sono tradotte, e **Register here** è sempre visibile.
+  > - **Ancore:** la pagina è linkata solo senza ancora (`HelpMenu.svelte:129`), quindi i titoli cambiati non rompono niente.
+  > - **Cancello `w3c`:** `q_gate.py --w3` ora include `community/faq.en.md`. 21 path; build strict exit 0, 0 WARNING/ERROR; solo il link rotto di base; scope, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi. Anteprima delle 18:50 verificata.
+  >
+  > **Resoconto per il lancio delle traduzioni** (domanda del developer, 21:08: «per ora non avviare nessuna traduzione, fammi solo il resoconto»):
+  > - **Comando:** `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs translate --dry-run` (nessun file scritto, worktree invariato). Risultato: 131 pagine, 393 traduzioni, circa 9,4 milioni di token (log in `/tmp/libreFolio_q_translate_dryrun.log`, sintesi in `_dryrun_summary.log`). La pipeline accetta `--file` con glob e ritraduce solo le pagine cambiate (cache MD5).
+  > - **Divisione:**
+  >   - **stabili ora:** circa 79 pagine, circa 4,7 milioni di token (46 di teoria, la home, e gran parte di asset, transazioni, broker, file e impostazioni);
+  >   - **cambieranno di sicuro:** 30 pagine, circa 3,8 milioni di token:
+  >     - onda 3 non committata (10);
+  >     - immagini di M (13);
+  >     - effetti del treno 18 sulle pagine di Q (3);
+  >     - teoria di P (4);
+  >   - **dipendono da lavori assegnati e non ancora entrati:** 22 pagine, circa 0,9 milioni di token:
+  >     - O: FX (11), AI Export (5), Borsa, justETF;
+  >     - I e K: eventi;
+  >     - L: eToro;
+  >     - P: posizioni;
+  >     - D: indice tools.
+  > - **Treno 18** (`70d02cd8e`, con M, P, K e N; in doc ha cambiato solo la gallery), da riportare in EN:
+  >   - ❌ `assets/correlation.en.md:153`, riservata a M: «instance's default currency» è sbagliato. Il pannello usa `$defaultDisplayCurrency` (`assets/+page.svelte:1618`). Chiesto al coordinatore chi la corregge.
+  >   - 🟡 `kpi-cards`: la card Returns mostra «—» quando TWRR o MWRR mancano, e lo stesso vale per il Timing effect (`KpiSection.svelte`, P).
+  >   - 🟡 `preferences:12`: la Default Currency ora è anche la valuta da cui si aprono Dashboard, broker, Correlation e AI Export FX (N).
+  >   - Le immagini dell'onboarding (4) sono nella spec e nelle pagine della gallery. In `getting-started` (3) e `preferences` (1) restano i segnaposto, che toccano a Q.
+  > - **Sessioni** (`get_sessions_status`, 21:10): lavora solo M, sulle schermate alte di rischio Dashboard, PAC proof e confronto provider. Il coordinatore aspetta la risposta del developer a una domanda di M. Le altre sessioni sono ferme.
+  > - **Coordinatore** (circa 21:15): chiesto chi corregge `correlation:153`, e lo stato dei lavori di O, I, K, L, P e D che toccano la doc.
+  >
+  > **Risposta del coordinatore** (21:19):
+  > - **`correlation:153` e la frase sulla valuta in `preferences`:** le applica **M**, che sta già lavorando su quelle pagine. Q gli manda le frasi esatte.
+  > - **`getting-started` e `preferences` sono di M** (segnaposto dell'onboarding, assegnati alle 19:05): Q non li tocca finché il lotto di M non è integrato.
+  > - **«—» di `kpi-cards`:** lo fa Q nel prossimo checkpoint.
+  > - **Cosa cambierà ancora:**
+  >   - Treno 19, verso le 22:
+  >     - O: 32 chiavi nuove; 6 valori cambiati (`aiExport.detailLevelHelp.*` ×3 e i 3 avvisi dei report set, ora «Parse»); testi dei provider (Borsa, justETF, BOE, ECB) e timeout del sync;
+  >     - I: `user/assets/detail/data-editor.en.md` e 3 pagine dev;
+  >     - L: la card Forgot Password;
+  >     - N: solo test.
+  >   - Dopo il treno 19, al via del coordinatore, Q toglie l'avviso `docker_advanced#docker-exec` e aggiorna `cli_tools.en.md:8,78` e `dev_workflow.en.md:143-144`.
+  >   - Lotto di M, verso le 23: didascalie e testi alternativi più le due frasi di Q.
+  >   - Risk: formato dei percentuali e istogramma, senza pagine né chiavi.
+  >   - K, P, N, D ed eToro di L: solo backlog.
+  > - **Da fare per Q dopo il treno 19:** confrontare le pagine EN con i 6 valori cambiati da O e con i testi dei provider (`ai-export/*`, `danske-bank` e `how-to` per i report set, `providers/*`, `fx/providers/*`, `fx/sync`).
+  >
+  > **Note implementazione, effetti del treno 18** (anteprima delle 21:22):
+  > - **Mandate a M** (sessione `eb4d9281…`) le due frasi esatte, con il testo da cercare e quello nuovo:
+  >   - `correlation.en.md:153`: «Returns are measured in your **Default Currency**, set in [Preferences] (the instance's default if you never chose one)…»;
+  >   - `preferences.en.md:12`: Dashboard, pagina Brokers e pagine dei broker, tab **Correlation** e AI Export di una coppia si aprono nella Default Currency; la valuta scelta sulla Dashboard resta per la sessione.
+  >   - Fonti: `stores/app/settings.ts` (`defaultDisplayCurrency`), `assets/+page.svelte:1618`, `dashboard/+page.svelte:179-206` (`restoredView.targetCurrency`), `AssetSetRiskPanel` senza menu di valuta.
+  > - **`user/dashboard/kpi-cards.en.md`**, card Returns: nuovo punto «`—` means no value». Un rendimento non calcolabile mostra `—`; il Timing effect richiede TWRR e MWRR, e se ne manca uno mostra un `—` grigio senza etichetta (`KpiSection.svelte:236-255,345-346` su `dev_release2`). ROI non cambia. `q_gate.py --w3` ora include `kpi-cards`.
+  > - **Cancello `w3d`:** 22 path; build strict exit 0, 0 WARNING/ERROR; solo il link rotto di base; scope, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi.
+  >
+  > **Note implementazione, checkpoint** (21:25):
+  > - **Approvazione del developer** (21:22): chiudere l'onda 3 con gli effetti del treno 18. Niente traduzioni per ora: non ne è stata avviata nessuna, solo il dry-run, e nessun file IT/FR/ES è cambiato.
+  > - **Server:** l'anteprima (`q-preview-6162d`) è fermata. `lsof -nP -iTCP:6162 -sTCP:LISTEN` e `lsof -nP -iTCP:6042 -sTCP:LISTEN` non trovano processi in ascolto (rc 1).
+  > - **Delta:** 22 file tracciati modificati, nessun file nuovo, con HEAD `108a2adf5` e target `dev_release2` = `70d02cd8e` (treno 18). Nessuna sovrapposizione con i 43 path cambiati dal target dopo la base: merge testuale pulito.
+  > - **Privacy:** 1412 righe aggiunte, nessun percorso personale, e-mail o segreto. `JWT_SECRET=paste-the-generated-value-here` e `tskey-auth-...` sono segnaposto. Gli IP sono privati d'esempio; i due IP Tailscale (`100.110.222.112`, `100.77.72.90`) erano già pubblicati dalla v1.1.0 in tutte e 4 le lingue.
+  > - **`git diff --check`:** pulito.
+  > - **Commit proposto:** `/tmp/libreFolio_commit_w3.txt`, «docs: simplify wave 3 admin pages, fix from code».
+  > - **Seguiti dopo il checkpoint:**
+  >   - **dopo il treno 19, al via del coordinatore:** togliere l'avviso Docker e aggiornare `cli_tools:8,78` e `dev_workflow:143-144`;
+  >   - **sempre dopo il treno 19:** confrontare le pagine EN con i testi cambiati da O;
+  >   - **traduzioni:** quando le decide il developer.
+  > - In attesa della review del developer.
   > - **Reperti per il coordinatore:**
   >   - i tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valgono solo per i prezzi; gli indicatori arrivano a 84/28/14;
   >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
