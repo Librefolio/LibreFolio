@@ -22,7 +22,8 @@ reproducible.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+import tracemalloc
+from collections.abc import Callable, Sequence
 from datetime import date, timedelta
 
 import numpy as np
@@ -1645,6 +1646,245 @@ def test_the_historical_var_analytic_publishes_more_than_two_bars_for_a_series_w
     assert output.value_at_risk == tail.value_at_risk
     assert output.conditional_value_at_risk == tail.conditional_value_at_risk
     assert output.var_bin_edge == -tail.value_at_risk
+
+
+# --------------------------------------------------------------------------- #
+# Block (f), D381 — the Freedman-Diaconis width is computed, never built.
+#
+# D380 left the Freedman-Diaconis branch on ``np.histogram_bin_edges(sample, bins="fd")``,
+# which MATERIALISES the whole grid — ``range / step`` bins, one float per edge — before this
+# module's clamp ever sees it; ``np.diff`` then copies it once more. The step is
+# ``2 * IQR / n**(1/3)``, so a middle half that is merely NEARLY flat — an accruing price
+# with float jitter — asks for millions of edges: hundreds of MiB, allocated to publish at
+# most 200 bars. Two arithmetic edges of the same rule fail outright: a positive IQR whose
+# step underflows to 0.0 sends NumPy back to one bin, the two bars D380 removed; and a step
+# so small that ``range / step`` is infinite makes NumPy raise ``OverflowError``.
+#
+# Decision D381 (08/10/2026): the branch computes ``step`` with NumPy's own ``_hist_bin_fd``
+# arithmetic on the quartiles already in hand; ``count = data_span / step`` (``+inf`` when
+# the step is not positive); ``bins = ceil(count)`` up to ``_MAX_HISTOGRAM_BINS`` and
+# ``_MAX_HISTOGRAM_BINS + 1`` beyond; ``width = data_span / bins``. Past the ceiling the clamp
+# alone decides the width, as it always did. The Sturges branch, the pin, the clamp and the
+# counts are untouched, and ``historical_var`` stays at 3.1.0: D380 and D381 ship together.
+# --------------------------------------------------------------------------- #
+
+_MIB = 2**20
+
+
+def _traced_peak[T](action: Callable[[], T]) -> tuple[T, int]:
+    """Return ``action()`` and the peak memory, in bytes, that tracemalloc saw it allocate.
+
+    The peak is measured above what was already traced when the action started, so memory
+    the process holds anyway does not count. tracemalloc is started here only when nobody
+    else runs it, and stopped only when started here.
+    """
+    started_here = not tracemalloc.is_tracing()
+    if started_here:
+        tracemalloc.start()
+    try:
+        tracemalloc.reset_peak()
+        baseline, _ = tracemalloc.get_traced_memory()
+        result = action()
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        if started_here:
+            tracemalloc.stop()
+    return result, peak - baseline
+
+
+def _freedman_diaconis_step(sample: Sequence[float]) -> float:
+    """Return ``2 * IQR / n**(1/3)``, the step NumPy's ``_hist_bin_fd`` computes, by arithmetic alone.
+
+    Asking NumPy's Freedman-Diaconis instead would BUILD the very grid these tests keep unbuilt.
+    """
+    return 2.0 * _interquartile_range(sample) * len(sample) ** (-1.0 / 3.0)
+
+
+def _nearly_flat_accrual_series() -> list[float]:
+    """Return 252 days whose middle half is NEARLY flat: an IQR of about 6.3e-9, and positive.
+
+    Forty losses down to -1.5% and forty gains up to +1.5% around 172 days accruing +0.01%,
+    each 5e-11 above the last — the float jitter of an accruing price. Not flat, so Sturges is
+    not involved; so close to flat that Freedman-Diaconis asks for about 15.1 million bins
+    across the 3% range.
+    """
+    generator = np.random.default_rng(381)
+    losses = -generator.uniform(0.001, 0.015, 40)
+    losses[0] = -0.015
+    gains = generator.uniform(0.001, 0.015, 40)
+    gains[0] = 0.015
+    returns = np.concatenate([losses, 0.0001 + 5e-11 * np.arange(172), gains])
+    generator.shuffle(returns)
+    return [float(value) for value in returns]
+
+
+def _quartiles_apart_by(upper_quartile: float, *, seed: int) -> list[float]:
+    """Return 252 days whose lower quartile is 0.0 and whose upper quartile is ``upper_quartile``.
+
+    Forty losses down to -1.5%, 86 days at exactly 0.0, 86 at ``upper_quartile`` and forty
+    gains up to +1.5%. Sorted, the 25th percentile (position 62.75) falls among the zeros and
+    the 75th (position 188.25) in the second block, so the IQR is ``upper_quartile`` exactly.
+    No price series produces a subnormal IQR: these samples pin the arithmetic edges of the
+    rule, where NumPy's Freedman-Diaconis stops working.
+    """
+    generator = np.random.default_rng(seed)
+    losses = -generator.uniform(0.001, 0.015, 40)
+    losses[0] = -0.015
+    gains = generator.uniform(0.001, 0.015, 40)
+    gains[0] = 0.015
+    returns = np.concatenate([losses, np.zeros(86), np.full(86, upper_quartile), gains])
+    generator.shuffle(returns)
+    return [float(value) for value in returns]
+
+
+def _span_set_to_freedman_diaconis_count(count: float) -> list[float]:
+    """Return 252 days whose Freedman-Diaconis bin count ``range / step`` is ``count``.
+
+    The step depends only on the middle half and on n, so a 250-day normal core fixes it; two
+    outliers at ``±count * step / 2`` then set the range, and with it the count.
+    """
+    generator = np.random.default_rng(384)
+    sample = np.concatenate([generator.normal(0.0, 0.01, 250), [-1.0, 1.0]])
+    half_range = count * _freedman_diaconis_step(sample) / 2.0
+    sample[-2:] = [-half_range, half_range]
+    return [float(value) for value in sample]
+
+
+def _assert_the_clamped_grid(histogram: ReturnHistogram, sample: Sequence[float], pinned: float) -> None:
+    """Assert the grid the clamp alone sizes: ``_MAX_HISTOGRAM_BINS - 2`` widths across the pinned span."""
+    span = max(max(sample), pinned) - min(min(sample), pinned)
+    assert 2 < len(histogram.counts) <= _MAX_HISTOGRAM_BINS, f"{len(histogram.counts)} bars, where the clamp lays down {_MAX_HISTOGRAM_BINS - 2} to {_MAX_HISTOGRAM_BINS}"
+    assert _observed_bin_width(histogram) == pytest.approx(span / (_MAX_HISTOGRAM_BINS - 2), rel=1e-12)
+    assert min(abs(edge - pinned) for edge in histogram.edges) == 0.0
+    reference, _ = np.histogram(np.asarray(sample, dtype=float), bins=np.asarray(histogram.edges, dtype=float))
+    assert tuple(int(count) for count in reference) == histogram.counts
+    assert sum(histogram.counts) == len(sample)
+
+
+def test_a_nearly_flat_middle_half_is_binned_without_building_the_freedman_diaconis_grid():
+    """D381: a tiny but positive IQR costs kilobytes, not the hundreds of MiB of NumPy's grid.
+
+    ``range / step`` is about 15.1 million here, so ``np.histogram_bin_edges(..., bins="fd")``
+    lays down a 115 MiB edge array and ``np.diff`` a second one — 230 MiB, measured before
+    D381, to publish the clamp's 198 or 199 bars. The premise is asserted by arithmetic,
+    never by calling NumPy's Freedman-Diaconis, and it is bounded on both sides: large enough
+    that building the grid cannot hide under the 16 MiB bound, small enough that the red run
+    stays near 230 MiB on a shared machine.
+
+    The positive control runs first: tracemalloc must SEE a 50 MiB NumPy buffer in this
+    environment, or the small peak asserted afterwards would prove nothing.
+    """
+    sample = _nearly_flat_accrual_series()
+    grid_bins = math.ceil((max(sample) - min(sample)) / _freedman_diaconis_step(sample))
+    pinned = -historical_var_cvar(sample, confidence_level=_CONFIDENCE_LEVEL).value_at_risk
+
+    # Premises: a positive IQR, so this is Freedman-Diaconis and not Sturges; a grid of 100 to
+    # 150 MiB of edges; and the pin inside the data.
+    assert _interquartile_range(sample) > 0.0
+    assert 100 * _MIB <= 8 * (grid_bins + 1) <= 150 * _MIB
+    assert min(sample) <= pinned <= max(sample)
+
+    _, control_peak = _traced_peak(lambda: np.empty(50 * _MIB // 8))
+    assert control_peak >= 50 * _MIB, f"tracemalloc saw {control_peak / _MIB:.1f} MiB of a 50 MiB NumPy buffer: it cannot measure NumPy here"
+
+    histogram, peak = _traced_peak(lambda: return_distribution_histogram(sample, pinned_edge=pinned))
+    print(f"return_distribution_histogram, traced peak: {peak / _MIB:.3f} MiB")
+
+    assert peak < 16 * _MIB, f"{peak / _MIB:.1f} MiB allocated to bin {len(sample)} returns into {len(histogram.counts)} bars: the {grid_bins:,}-bin Freedman-Diaconis grid was built"
+    _assert_the_clamped_grid(histogram, sample, pinned)
+
+
+def test_a_positive_interquartile_range_whose_step_underflows_still_gets_the_clamped_grid():
+    """D381: an IQR of one subnormal ulp is positive, yet ``2 * IQR / n**(1/3)`` rounds to 0.0.
+
+    NumPy reads a zero step as no width at all and lays down ONE bin over the whole range,
+    which the pin cuts into the two bars D380 removed. The contract reads it as an infinite
+    count instead: past the ceiling, the clamp alone sizes the bars.
+    """
+    sample = _quartiles_apart_by(math.ulp(0.0), seed=382)
+    pinned = -historical_var_cvar(sample, confidence_level=_CONFIDENCE_LEVEL).value_at_risk
+
+    # Premises: the IQR is positive — Freedman-Diaconis, not Sturges — and the step NumPy
+    # computes from it is exactly zero.
+    assert _interquartile_range(sample) == math.ulp(0.0) > 0.0
+    assert _freedman_diaconis_step(sample) == 0.0
+    assert min(sample) <= pinned <= max(sample)
+
+    histogram = return_distribution_histogram(sample, pinned_edge=pinned)
+
+    _assert_the_clamped_grid(histogram, sample, pinned)
+
+
+def test_a_step_so_small_that_the_bin_count_overflows_still_gets_the_clamped_grid():
+    """D381: a positive step of about 3e-311 makes ``range / step`` infinite.
+
+    NumPy takes ``int(np.ceil(range / step))`` of it and raises ``OverflowError``, failing the
+    whole VaR analytic on its histogram. The contract caps an infinite count like any count
+    past the ceiling, and the clamp sizes the bars.
+    """
+    sample = _quartiles_apart_by(1e-310, seed=383)
+    pinned = -historical_var_cvar(sample, confidence_level=_CONFIDENCE_LEVEL).value_at_risk
+    step = _freedman_diaconis_step(sample)
+
+    # Premises: a positive IQR and a positive step, whose bin count is nonetheless infinite.
+    assert _interquartile_range(sample) > 0.0
+    assert step > 0.0
+    assert (max(sample) - min(sample)) / step == math.inf
+    assert min(sample) <= pinned <= max(sample)
+
+    try:
+        histogram = return_distribution_histogram(sample, pinned_edge=pinned)
+    except OverflowError as error:
+        pytest.fail(f"the infinite Freedman-Diaconis bin count reached int() instead of the cap: OverflowError: {error}")
+
+    _assert_the_clamped_grid(histogram, sample, pinned)
+
+
+# Freedman-Diaconis counts ``range / step`` on both sides of every boundary that matters: a
+# cap at 100, the clamp's 198, and the contract's ceiling of 200.
+_FREEDMAN_DIACONIS_COUNTS_AROUND_THE_CAP = (149.5, 195.5, 196.5, 197.5, 198.5, 199.5, 200.5, 201.5)
+
+
+def _clamped_freedman_diaconis_reference(sample: Sequence[float], pinned: float) -> float:
+    """Return the width D380 published: NumPy's REALISED FD width, unless the pinned span needs more than ``_MAX_HISTOGRAM_BINS - 2`` of them."""
+    realised = _freedman_diaconis_width(sample)
+    span = max(max(sample), pinned) - min(min(sample), pinned)
+    return realised if span / realised <= _MAX_HISTOGRAM_BINS - 2 else span / (_MAX_HISTOGRAM_BINS - 2)
+
+
+def test_the_computed_freedman_diaconis_width_publishes_the_grid_the_built_one_did():
+    """D381 is a memory fix, not a new picture: wherever NumPy's grid is cheap to build, the width is unchanged.
+
+    The reference is D380's rule written out: NumPy's REALISED Freedman-Diaconis width — built
+    here only on samples where that costs at most 202 edges — clamped to the pinned span over
+    ``_MAX_HISTOGRAM_BINS - 2`` bars. ``rel=1e-12`` because the contract divides the range by the
+    bin count once, where each NumPy edge is rounded on its own: measured over 2000 seeded
+    samples the two widths differ by up to 1.8e-13 relative, and no count moved in any of them.
+
+    The counts around the cap are what kill a misplaced ceiling, and they are pinned INSIDE
+    their data on purpose: there a cap at 100, or at 197 one bin short of the clamp, publishes
+    a different width, while a pin outside the data hides it — the wider pinned span trips the
+    clamp anyway. Green before D381, and must stay so.
+    """
+    canonical = _daily_returns()
+    cases: list[tuple[str, Sequence[float], float]] = [
+        ("canonical at -VaR", canonical, -historical_var_cvar(canonical, confidence_level=_CONFIDENCE_LEVEL).value_at_risk),
+        ("canonical at break-even", canonical, 0.0),
+        ("canonical pinned far outside", canonical, -0.5),
+        ("a 260-day series", _multi_series(count=1, observations=260)[0], -0.01),
+        ("a correlated asset", _correlated_pair()[0], -0.015),
+        ("gain-only, pinned outside", _gain_only_series(), 0.0),
+        ("flat majority, spread upper quartile", _flat_majority_with_a_spread_upper_quartile(), 0.0),
+    ]
+    for count in _FREEDMAN_DIACONIS_COUNTS_AROUND_THE_CAP:
+        sample = _span_set_to_freedman_diaconis_count(count)
+        # Premise: NumPy's own bin count is the one the case is named after (cheap: at most 202).
+        assert len(np.histogram_bin_edges(np.asarray(sample, dtype=float), bins="fd")) - 1 == math.ceil(count)
+        cases += [(f"FD count {count} at -0.01", sample, -0.01), (f"FD count {count} at break-even", sample, 0.0)]
+
+    for name, sample, pinned in cases:
+        histogram = return_distribution_histogram(sample, pinned_edge=pinned)
+        assert _observed_bin_width(histogram) == pytest.approx(_clamped_freedman_diaconis_reference(sample, pinned), rel=1e-12), name
 
 
 # --------------------------------------------------------------------------- #
