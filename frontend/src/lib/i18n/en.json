@@ -430,6 +430,10 @@
         "hasNumber": "One number",
         "hasSpecial": "One special character"
       }
+    },
+    "serverUnreachable": {
+      "title": "The server is not responding",
+      "body": "This page stays open and you have not been signed out. Try again in a moment."
     }
   },
   "importWizard": {
