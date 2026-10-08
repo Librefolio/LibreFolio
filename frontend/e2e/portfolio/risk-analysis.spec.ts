@@ -1967,6 +1967,17 @@ test.describe('Risk analysis functional integration', () => {
         // threshold a meaning: without it the marker points at nothing.
         await expect(panel.getByTestId('risk-l1-histogram-bars').locator('[data-below-cut="true"]')).toHaveCount(2);
         await expect(panel.getByTestId('risk-l1-histogram-bin-2')).toHaveAttribute('data-below-cut', 'false');
+        // The cut label as text (D380): the stub's −0.021 reads «−2.1%». `cut` is in percent
+        // units while `figurePercent` takes a fraction, so the label divides by 100 on the way
+        // in — the one conversion the unit tests cannot see. Without it the same stub prints
+        // «−210.0%», which does not contain «−2.1%». The figure is not translated.
+        await expect(panel.getByTestId('risk-l1-histogram-cut')).toContainText(loss('2.1%'));
+        // The axis ends, read off the stub's first lower bound (−0.06) and last upper bound
+        // (0.04): positions, one decimal. The two spans carry no testid, so each is found by its
+        // exact text inside the histogram — exact, because «4.0%» is also a substring of «−4.0%».
+        const histogram = panel.getByTestId('risk-l1-histogram');
+        await expect(histogram.getByText(loss('6.0%'), {exact: true})).toBeVisible();
+        await expect(histogram.getByText('4.0%', {exact: true})).toBeVisible();
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a

@@ -3814,3 +3814,151 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >   incomplete, ruff e black puliti.
 >
 > **Il checkpoint**: 2 percorsi in 2 commit (il test, il diario), su HEAD `9eb01c756`.
+
+### L'istogramma a due barre e il «−0.0%» del pannello L1 (D380) · ✅ 08/10/2026 (FROZEN)
+
+> **La segnalazione** (coordinator, 08/10 sera, da M con lo scatto `dashboard/risk-hurt` della gallery): nel blocco
+> «How much can it hurt?» l'istogramma ha solo 2 barre, e sotto c'è «VaR threshold at −0.0%».
+>
+> **L'analisi** (sola lettura su `70d02cd8e`, sonde in `files/hist-probe*`), con NumPy 2.5.3:
+> - **La causa delle 2 barre.** Se lo scarto interquartile è zero, `np.histogram_bin_edges(bins="fd")` dà una barra
+>   sola, larga quanto tutti i dati, e l'aggancio al VaR la divide in due. Succede ogni volta, da 30 a 5000
+>   osservazioni, anche con un default a −100% o con un rateo costante.
+> - **Il «−0.0%»** non viene dal VaR a pavimento, che si stampa «0.0%». Viene da un VaR vero sotto lo 0,05%:
+>   `axisPercent` mette il segno guardando il valore prima di arrotondarlo. `lossPercent` delle card L1 ha lo stesso
+>   difetto.
+>
+> **La decisione** (D380, domande portate dal coordinator):
+> - con scarto interquartile zero si usa la regola di Sturges, scritta per nome;
+> - `historical_var` passa a 3.1.0;
+> - le cifre usano la precisione delle quote («−0.04%»), gli assi un decimale («0.0%»), e il segno meno è sempre U+2212.
+
+| # | Passo | Stato |
+|---|---|---|
+| 1 | Test rossi (test-author): oracolo (f) con il controllo al limite, il pin di versione, `l1Helpers.test.ts` con le card e il cancello dei componenti | ✅ 08/10 — 14 + 1 + 41 rossi, ciascuno per il motivo atteso |
+| 2 | Backend: Sturges con scarto interquartile zero in `return_distribution_histogram`; `historical_var` 3.1.0 | ✅ 08/10 |
+| 3 | Frontend: formattatori puri in `l1Helpers.ts`, usati da `ReturnHistogram.svelte` e `L1HowMuchItHurts.svelte` | ✅ 08/10 |
+| 4 | Mutanti, cancelli nella 6152: `risk-oracle`, `risk-all`, `schemas risk`, `risk-levels-unit`, `front check` | ✅ 08/10 — cancelli verdi; mutanti 19/19, l'ultimo ucciso dall'asserzione E2E |
+| 5 | E2E `risk` dopo le 22:15, con 1 worker | ✅ 08/10 — 38/38, 0 righe di provider |
+| 6 | Diario, privacy, FROZEN, consegna con le righe di CHANGELOG | ✅ 08/10 |
+>
+> **Note implementazione — test** (test-author, rossi prima):
+> - **Oracolo, blocco (f).** Le serie con scarto interquartile zero (circa l'80% di zeri, con o senza un VaR vero; il
+>   60% a +0,01%), ciascuna con tre ancoraggi: la larghezza è quella di Sturges, le barre fra ⌈log2 n + 1⌉ e due in
+>   più, l'ancoraggio è un bordo, i conteggi sono quelli di `np.histogram`. Poi n=30 e n=5000, sempre fra 3 e 16
+>   barre. Due controlli restano a Freedman-Diaconis: una maggioranza di zeri il cui quartile alto è un guadagno, e
+>   uno scarto minuscolo ma positivo. Infine il produttore: più di 2 barre, VaR e CVaR identici al bit.
+> - **Il pin di versione**, rinominato `test_historical_var_sturges_fallback_is_a_new_algorithm_version`.
+> - **`l1Helpers.test.ts`**:
+>   - i quattro formattatori, letti attraverso il namespace del modulo;
+>   - due scansioni che non trovano mai «−0.0%», ognuna con il suo controllo positivo;
+>   - `figurePercent` confrontato con `formatShare`, così le due regole non si separano;
+>   - un cancello sul sorgente, con il parser di Svelte, sui due componenti: niente formattatori locali, gli import
+>     giusti, la soglia costruita da `figurePercent`.
+> - Prima della correzione: 14 rossi nell'oracolo, 1 nel pin, 41 nel frontend, nessun errore di raccolta. Sul primo
+>   caso, la griglia era esattamente quella segnalata da M: `(-0.163, 0.0, 0.163)`, conteggi `(6, 246)`.
+>
+> **Note implementazione — codice**:
+> - **`metrics.py`**: i quartili si calcolano come li calcola la regola FD di NumPy, `np.percentile(sample, [75, 25])`.
+>   Se coincidono, la larghezza viene da `bins="sturges"`; altrimenti resta FD. Tre righe e un commento; la docstring
+>   lo dice.
+> - **`historical_var.py`**: la versione passa a 3.1.0, con la sua riga nel commento delle versioni.
+> - **`l1Helpers.ts`**, nuova sezione «figures»:
+>   - `axisPercent` (F1): il segno solo se le cifre stampate non sono tutte zero;
+>   - `figurePercent` (F2): `formatShare(·, 1)` con U+2212;
+>   - `lossPercent`, che è `figurePercent` del negativo;
+>   - `gainPercent`: «+» solo prima di una cifra, mai prima di uno zero o di un limite.
+> - **Componenti**: `ReturnHistogram.svelte` e `L1HowMuchItHurts.svelte` importano i formattatori e perdono i loro
+>   locali; la soglia si scrive con `figurePercent(histogram.cut / 100)`.
+>
+> **⚠️ Fuori pista**:
+> - **Un mio errore, preso prima dei test.** La prima stesura di `axisPercent` metteva il meno anche a `−Infinity`
+>   («−—»). Ora il segno richiede un valore finito.
+> - **Il client generato era vecchio.** Il `generated.ts` di questo worktree, ignorato da git, era del 07/10: test-author
+>   ha visto 2 errori in `KpiSection.svelte`, che non sono miei. `api sync` ha riscritto solo file ignorati, e dopo
+>   `front check` dà 0/0.
+> - **Il mutante sopravvissuto**: la soglia nell'unità sbagliata (`figurePercent(histogram.cut)` scriverebbe «−210.0%»
+>   per un −2.1%). Né i test unitari né l'E2E leggevano il testo della soglia; test-author aggiunge l'asserzione al
+>   test E2E dell'istogramma che esiste già.
+> - **Fuori portata, da segnalare**:
+>   - la didascalia in denaro di una perdita zero stampa ancora «−0,00 €» (`lossMoney`): con le cifre mascherate un
+>     confronto fra stringhe non basta, quindi serve una decisione a parte;
+>   - con uno scarto interquartile minuscolo ma positivo, NumPy costruisce tutta la griglia FD prima del nostro
+>     tetto. Misurato da test-author: circa 723 MiB a IQR 1e-9 su un intervallo di 0,03, e memoria esaurita a 1e-12.
+>     Era già così prima di D380.
+>
+> **Cancelli** (6152): ruff e black puliti, `risk-oracle` 220, `risk-all` 892, `schemas risk` 69, `risk-levels-unit`
+> 478, `risk-levels-component` 247, `front check` 0/0, orfani puliti.
+>
+> **Il mutante sopravvissuto, chiuso**: test-author ha aggiunto al test E2E dell'istogramma che esiste già
+> (`risk-analysis.spec.ts`, «dashboard renders base analytics, quality, warnings, sync and capability gate») il testo della
+> soglia, cioè `loss('2.1%')` sul `var_bin_edge` −0,021 del finto backend, e le due estremità dell'asse (−6,0% e 4,0%).
+> Con il mutante applicato, solo quel test cade, e il messaggio è quello atteso: «Received string: "— VaR threshold at
+> −210.0%"». Il file è stato ripristinato e verificato con lo sha256.
+>
+> **E2E** (6152, dopo le 22:15, 1 worker): `front-portfolio risk` 38/38; la fetta del log della corsia non ha righe di
+> provider.
+>
+> **Il checkpoint**: 11 percorsi in 3 commit (backend con i suoi test; frontend con i suoi test e l'E2E; diario), su HEAD
+> `70d02cd8e`.
+>
+> **Committato**: `3ceac8f83` · `a360d0dec` · `1aaee792e` su `70d02cd8e`, albero `2a1d42ada`, verificato da me.
+
+#### I due reperti di D380 nella 1.2 (D381) · ✅ 08/10/2026 (FROZEN)
+
+> **La decisione** (D381, testuale: *«Entrambi nella 1.2 (Consigliato)»*):
+> - mai «−0,00 €» sotto una perdita zero, con la regola decisa sul numero perché gli importi possono essere mascherati;
+> - la larghezza Freedman-Diaconis calcolata con l'aritmetica di NumPy, senza costruirne la griglia, con il tetto
+>   invariato;
+> - un test con un IQR minuscolo e positivo, e un limite di memoria che lo renda rosso prima della cura.
+
+| # | Passo | Stato |
+|---|---|---|
+| 1 | Test rossi (test-author): memoria (`tracemalloc`), passo FD che scende a zero, conteggio che trabocca, equivalenza con NumPy; `lossAmount` e il cancello sulla didascalia | ✅ 08/10 — 3 + 12 rossi, ciascuno per il motivo atteso |
+| 2 | Backend: larghezza FD calcolata, conteggio fermato una barra sopra il tetto | ✅ 08/10 — con NumPy interpellato solo entro il tetto |
+| 3 | Frontend: `lossAmount` in `l1Helpers.ts`, usata da `L1HowMuchItHurts.svelte` | ✅ 08/10 |
+| 4 | Mutanti e cancelli nella 6152: `risk-oracle`, `risk-all`, `schemas risk`, `risk-levels-unit`, `front check`; E2E `risk` con 1 worker | ✅ 08/10 — mutanti 8/8, cancelli verdi, E2E 38/38 |
+| 5 | Diario, privacy, FROZEN, consegna con le righe di CHANGELOG | ✅ 08/10 |
+>
+> **Note implementazione — test** (test-author, rossi prima, nel blocco (f) e in `l1Helpers.test.ts`):
+> - **Memoria.** Un campione con 172 giorni di rateo distanti 5e-11, quindi IQR di circa 6,3e-9: la griglia FD di NumPy
+>   avrebbe 15 098 868 barre. La premessa si calcola con l'aritmetica, senza mai chiamare NumPy. Prima un controllo
+>   positivo: `tracemalloc` vede davvero un `np.empty` di 50 MiB. Picco oggi: 230 MiB; dopo la cura: 0,017 MiB.
+> - **Passo che scende a zero** (IQR subnormale): oggi tornano le 2 barre di D380. **Conteggio che trabocca** (IQR
+>   1e-310): oggi `OverflowError`. In entrambi i casi la cura dà la griglia del tetto.
+> - **Equivalenza** con la griglia che NumPy costruiva, anche vicino al tetto: conteggi 149,5 e da 195,5 a 201,5,
+>   ciascuno con due ancoraggi. Era verde prima ed è verde dopo.
+> - **`lossAmount`**: gli esempi del contratto, un formattatore mascherato (il motivo della regola sul numero), una
+>   scansione da −0,02 a +0,02 che vuole il meno esattamente quando la didascalia mostra almeno un centesimo, e il
+>   cancello esteso a `L1HowMuchItHurts.svelte`: l'import di `lossAmount` e nessun letterale con U+2212.
+>
+> **Note implementazione — codice**:
+> - **`metrics.py`**, nuovo `_freedman_diaconis_width()`: calcola prima il numero di barre con l'aritmetica di NumPy.
+>   Entro il tetto chiede a NumPy come prima, con al massimo 201 bordi; oltre il tetto restituisce `intervallo / 201`, e
+>   il tetto decide come prima. I quartili diventano `float` Python, così un conteggio che trabocca è un `inf`
+>   silenzioso e non un `RuntimeWarning`.
+> - **`l1Helpers.ts`**, nuova `lossAmount(amount, format)`: il meno solo se l'importo, arrotondato ai centesimi, non è
+>   zero; un valore non finito resta senza segno.
+> - **`L1HowMuchItHurts.svelte`**: `lossMoney` la usa con `formatCurrencyAmount`.
+>
+> **⚠️ Fuori pista — la variante scelta.** Il contratto dato a test-author calcolava sempre la larghezza con
+> l'aritmetica, `intervallo / barre`. test-author ha misurato che, su 2000 campioni, i bordi pubblicati si spostavano
+> nelle ultime cifre in 1868, senza che cambiasse un solo conteggio. Ho scelto la variante che chiede a NumPy entro il
+> tetto, che passa gli stessi test. La mia prova: la funzione committata con D380 e quella nuova danno griglie identiche
+> al bit in 2000 campioni su 2000, 510 dei quali vicino al tetto.
+>
+> **Mutanti** (8/8, `files/scripts-r2/mutants_d381.py`):
+> - NumPy che costruisce ogni griglia, cioè il difetto;
+> - il tetto a 100;
+> - oltre il tetto una larghezza sotto il tetto;
+> - un passo zero contato come zero barre;
+> - il segno letto dal testo formattato (lo vede solo il test mascherato);
+> - il meno sempre;
+> - i centesimi troncati invece che arrotondati;
+> - la didascalia che si costruisce il meno da sola.
+>
+> **Cancelli** (6152): ruff e black puliti, `risk-oracle` 224, `risk-all` 896, `schemas risk` 69, `risk-levels-unit`
+> 493, `risk-levels-component` 247, `front check` 0/0, orfani puliti; E2E `risk` 38/38 con 1 worker, nessuna riga di
+> provider.
+>
+> **Il checkpoint**: 7 percorsi in 3 commit (backend; frontend; diario), su HEAD `1aaee792e`.
