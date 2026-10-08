@@ -5,7 +5,7 @@
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. ⚠️ With the current image these commands do not start yet: see [Running commands inside the container](docker_advanced.md#docker-exec).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. User and database commands work there; development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -75,7 +75,7 @@ pipenv run ./dev.py user activate <username>
 ```
 
 - ⏱️ A reset does not end the sessions already open: they stay valid until they expire. To lock someone out at once, deactivate the account: it is refused from its next request.
-- 💬 The app's **Forgot Password?** screen shows the older form `./dev.sh user:reset <username> <new_password>`, which runs the same command on a host installation.
+- 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front.
 
 ### 👑 Grant or Remove Administrator Rights
 
