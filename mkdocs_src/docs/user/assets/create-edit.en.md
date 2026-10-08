@@ -100,7 +100,9 @@ lending*) — followed by the specific ones, such as **Equity ETF** or **Real es
 Type a few letters to search across both levels, by name or by code (for example `etf_bond`); if the
 current type belongs to a family, that family is already open.
 
-<!-- [Screenshot Placeholder: assets/type-picker-open — the Type menu open with the ETF family expanded, each specific ETF type showing its composite icon] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="type-picker-open" alt="Type menu with the ETF family expanded, each specific ETF type showing its composite icon">
+</div>
 
 When Smart Search finds the instrument, the type is filled in from the provider — usually a general
 one such as **ETF**. If you know what the fund holds, refine it — for example to **Equity ETF**: the

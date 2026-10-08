@@ -561,6 +561,72 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content.endsWith('  abc\n\n')).toBe(true);
     });
 
+    /**
+     * D12(a), issue #32: `portfolio.provenance` and `broker.provenance` move to component version 2
+     * (their WAC semantics now name the single average cost) with an unchanged payload shape
+     * (schema version 1). The renderer knows that shape, so v2 renders compactly — through the same
+     * generic renderer as v1, hence the very same text — while every other version it does not know
+     * keeps falling back to YAML. No prompt wording is frozen: the texts below are placeholders.
+     */
+    describe('provenance v2 (D12)', () => {
+        type ProvenanceId = 'portfolio.provenance' | 'broker.provenance';
+        const directory = {
+            assets: [],
+            brokers: [
+                {broker_id: 5, display_name: 'First Broker'},
+                {broker_id: 7, display_name: 'Second Broker'},
+            ],
+            fx_pairs: [],
+        };
+
+        function provenanceSection(componentId: ProvenanceId, componentVersion: number, schemaVersion = 1) {
+            const portfolio = componentId === 'portfolio.provenance';
+            return {
+                component_id: componentId,
+                component_version: componentVersion,
+                schema_id: componentId,
+                schema_version: schemaVersion,
+                payload: {
+                    period_start: '2026-01-01',
+                    period_end: '2026-03-31',
+                    domain: portfolio ? 'portfolio' : 'broker',
+                    ...(portfolio ? {scoped_broker_count: 2, broker_scope: [5, 7]} : {broker_id: 5}),
+                    target_currency: 'EUR',
+                    engine_source: 'engine source placeholder',
+                    fifo_methodology: 'fifo methodology placeholder',
+                    valuation_semantics: 'valuation semantics placeholder',
+                    notes: [{subject: 'currency', text: 'currency note placeholder'}],
+                },
+            };
+        }
+
+        const targetOf = (componentId: ProvenanceId) => (componentId === 'portfolio.provenance' ? {kind: 'portfolio'} : {kind: 'broker', broker_id: 5});
+
+        it.each(['portfolio.provenance', 'broker.provenance'] as const)('renders %s v2 (schema 1) compactly, exactly as its v1', (componentId) => {
+            const v1 = renderSnapshotDataText([provenanceSection(componentId, 1)], targetOf(componentId), directory).content;
+            const v2 = renderSnapshotDataText([provenanceSection(componentId, 2)], targetOf(componentId), directory).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: v2 is rendered by the same generic renderer — the same text, line for line.
+            expect(v2).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(v2).toBe(v1);
+        });
+
+        it.each([
+            ['portfolio.provenance v3', provenanceSection('portfolio.provenance', 3)],
+            ['broker.provenance v3', provenanceSection('broker.provenance', 3)],
+            ['portfolio.provenance v2 with schema 2', provenanceSection('portfolio.provenance', 2, 2)],
+            ['portfolio.summary v2 with schema 1', {component_id: 'portfolio.summary', component_version: 2, schema_id: 'portfolio.summary', schema_version: 1, payload: {total: 10, future_field: {must_survive: true}}}],
+        ])('still falls back to YAML for %s', (_label, section) => {
+            const rendered = renderSnapshotDataText([section], {kind: 'portfolio'}, directory).content;
+
+            expect(rendered).toContain(`COMPONENT ${section.component_id}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+    });
+
     it('normalizes decimal presentation without collapsing tiny nonzero values', () => {
         expect(formatPromptNumber('15000.000000000000')).toBe('15000');
         expect(formatPromptNumber('91.30339554862304')).toBe('91.3034');

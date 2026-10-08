@@ -21,7 +21,9 @@
  * `warningSentence(warning, $t)` — its own `message_i18n_key` formatted with its
  * `message_params`, else the backend `message` — and only an empty answer falls
  * back to the generic sentence. Errors keep their code-based wording, pinned
- * unchanged at the bottom. Beyond the named cases, one property runs over the
+ * unchanged near the bottom; the last block pins the one refinement D379 adds to
+ * it — a `resource_limit` refusal worded by the remedy its details name. Beyond
+ * the named cases, one property runs over the
  * whole catalogue: every `risk.warnings` sentence with arguments is worded through
  * its key once its values arrive, and shows the backend sentence when they do not —
  * never a brace, never a key. The list and the values come from
@@ -295,5 +297,90 @@ describe('RiskResultFrame — the error branch is still worded by its code', () 
         const text = normalize(screen.getByTestId(`${TEST_ID}-${status}`).textContent ?? '');
         expect(text).toBe(expected);
         expect(text).not.toContain('risk.errors.');
+    });
+});
+
+/**
+ * D379: a `resource_limit` refusal is worded by the remedy its details name.
+ *
+ * The backend's refusal for size now says which setting brings the run back within reach —
+ * `details = {metric, actual, limit, remedy}` — and the frame words
+ * `errorDisplayCode(singleValue(result.error))`: the remedy's own sentence,
+ * `risk.errors.resource_limit_<remedy>`, when this build knows the remedy; the generic
+ * `risk.errors.resource_limit` when it does not — never a key, and never the state sentence a key
+ * built from an unknown remedy would fall to. Written red first: until the frame reads the
+ * details, a refusal naming its remedy is worded with the generic sentence. The helper's own
+ * rules live in `levels/levelHelpers.test.ts`; this block pins what reaches the reader of Asset
+ * Detail's simulation frame.
+ */
+describe('RiskResultFrame — a resource_limit refusal is worded by the remedy it names', () => {
+    const SIMULATION_TEST_ID = 'risk-simulation-section';
+    const GENERIC_LIMIT_KEY = 'risk.errors.resource_limit';
+    const PERIOD_KEY = 'risk.errors.resource_limit_period';
+    const UNAVAILABLE_KEY = 'risk.states.unavailable';
+    const FUTURE_REMEDY = 'future_remedy';
+    const REFUSAL_MESSAGE = 'A synthetic backend refusal sentence.';
+    /** The details `simulation.py::_resource_limit` sends for a history longer than the engine carries. */
+    const PERIOD_DETAILS = {metric: 'observations', actual: 5001, limit: 5000, remedy: 'period'};
+
+    type Refusal = {code: 'resource_limit'; message: string; details: Record<string, unknown>};
+
+    /** A refusal for size as the backend sends it, carrying `details` as given. */
+    function refusal(details: Record<string, unknown>): Refusal {
+        return {code: 'resource_limit', message: REFUSAL_MESSAGE, details};
+    }
+
+    /** The error line of the simulation frame for an unavailable result carrying `error`, as the reader sees it. */
+    function refusalLine(error: RiskAnalyticResult['error']): string {
+        render(RiskResultFrame, {props: {title: 'Synthetic frame title', testId: SIMULATION_TEST_ID, result: {instance_id: 'single-simulation', analytic_code: 'simulation', status: 'unavailable', error}}});
+        return normalize(screen.getByTestId(`${SIMULATION_TEST_ID}-unavailable`).textContent ?? '');
+    }
+
+    it('resolves the generic sentence and the period remedy’s own: two sentences, neither of them the state fallback', () => {
+        expect(typeof enLeaf(GENERIC_LIMIT_KEY), `${GENERIC_LIMIT_KEY} is missing from en.json`).toBe('string');
+        const generic = resolve(GENERIC_LIMIT_KEY);
+        expect(generic, `${GENERIC_LIMIT_KEY} does not resolve: the catalogue is not loaded`).not.toBe(GENERIC_LIMIT_KEY);
+        expect(generic, `${GENERIC_LIMIT_KEY} reads like ${UNAVAILABLE_KEY}: the two fallbacks could not be told`).not.toBe(resolve(UNAVAILABLE_KEY));
+
+        expect(typeof enLeaf(PERIOD_KEY), `${PERIOD_KEY} is missing from en.json: a refusal naming the period remedy has no sentence to be worded by`).toBe('string');
+        const period = resolve(PERIOD_KEY);
+        expect(period, `${PERIOD_KEY} does not resolve through svelte-i18n`).not.toBe(PERIOD_KEY);
+        expect(period, `${PERIOD_KEY} reads like ${GENERIC_LIMIT_KEY}: which sentence rendered could not be told`).not.toBe(generic);
+        expect(period, `${PERIOD_KEY} reads like ${UNAVAILABLE_KEY}: which sentence rendered could not be told`).not.toBe(resolve(UNAVAILABLE_KEY));
+    });
+
+    // The error is read through `singleValue`, like the code before it: the generated client
+    // types it as a value or a list, and a refusal that arrives wrapped keeps its remedy too.
+    it.each([
+        {form: 'as it arrives', wrap: (error: Refusal): RiskAnalyticResult['error'] => error},
+        {form: 'wrapped in a list', wrap: (error: Refusal): RiskAnalyticResult['error'] => [error]},
+    ])('words a refusal naming the period remedy by that remedy’s sentence, not the generic one — the error $form', ({wrap}) => {
+        const generic = resolve(GENERIC_LIMIT_KEY);
+        expect(generic, `${GENERIC_LIMIT_KEY} does not resolve: the comparison below would prove nothing`).not.toBe(GENERIC_LIMIT_KEY);
+
+        const line = refusalLine(wrap(refusal(PERIOD_DETAILS)));
+
+        expect(line, 'the refusal is worded with the generic resource_limit sentence: the remedy its details name never reached the reader').not.toBe(generic);
+        expect(line, 'a raw catalogue key reached the screen').not.toMatch(/risk\.(errors|states)\./);
+        expect(line, 'the backend sentence reached the screen').not.toContain(REFUSAL_MESSAGE);
+        // What it must read instead, from the shipped catalogue: guarded, so a missing key cannot pass on its own echo.
+        expect(typeof enLeaf(PERIOD_KEY), `${PERIOD_KEY} is missing from en.json`).toBe('string');
+        expect(line).toBe(resolve(PERIOD_KEY));
+    });
+
+    it('keeps the generic resource_limit sentence for a remedy this build does not know — never the state fallback, never a key', () => {
+        const generic = resolve(GENERIC_LIMIT_KEY);
+        const unknownRemedyKey = `risk.errors.resource_limit_${FUTURE_REMEDY}`;
+        expect(generic, `${GENERIC_LIMIT_KEY} does not resolve`).not.toBe(GENERIC_LIMIT_KEY);
+        // The fallback is really exercised: the unknown remedy has no sentence of its own…
+        expect(get(_)(unknownRemedyKey), `${unknownRemedyKey} gained a sentence: the fallback would not be exercised`).toBe(unknownRemedyKey);
+        // …and the generic sentence can be told from the state one, where a key built from that remedy would fall.
+        expect(generic, `${GENERIC_LIMIT_KEY} reads like ${UNAVAILABLE_KEY}: the two fallbacks could not be told`).not.toBe(resolve(UNAVAILABLE_KEY));
+
+        const line = refusalLine(refusal({...PERIOD_DETAILS, remedy: FUTURE_REMEDY}));
+
+        expect(line).toBe(generic);
+        expect(line, 'a raw catalogue key reached the screen').not.toMatch(/risk\.(errors|states)\./);
+        expect(line, 'the backend sentence reached the screen').not.toContain(REFUSAL_MESSAGE);
     });
 });

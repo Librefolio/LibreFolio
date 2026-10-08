@@ -326,9 +326,29 @@ Per-registry plugin load health: what failed to load and why.
     <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="🧩 Plugin Diagnostics">
 </div>
 
-<!-- [Screenshot Placeholder: settings/about-tool-diagnostics — gallery entry "### 🧰 Tool Diagnostics": The Tool diagnostics panel inside Plugin diagnostics, with the PAC allocator among the loaded tools and its version.] -->
-<!-- [Screenshot Placeholder: support/donation-popup — gallery entry "### ☕ Support LibreFolio": The donation popup with the Buy Me a Coffee link and the social share actions.] -->
-<!-- [Screenshot Placeholder: support/social-share-modal — gallery entry "### 📣 Share LibreFolio": The share dialog with the platform's suggested message, the hashtags and Copy and go.] -->
+### 🧰 Tool Diagnostics
+
+The Tool diagnostics panel inside Plugin diagnostics, with the PAC allocator among the loaded tools and its version.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="about-tool-diagnostics" alt="🧰 Tool Diagnostics">
+</div>
+
+### ☕ Support LibreFolio
+
+The donation popup with the Buy Me a Coffee link and the social share actions.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="support" data-name="donation-popup" alt="☕ Support LibreFolio">
+</div>
+
+### 📣 Share LibreFolio
+
+The share dialog with the platform's suggested message, the hashtags and Copy and go.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="support" data-name="social-share-modal" alt="📣 Share LibreFolio">
+</div>
 
 ---
 
@@ -538,7 +558,13 @@ Full-size interactive price chart with date range selector and currency toggle. 
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Candlestick chart" alt="Asset Detail Chart — Candlestick">
 </div>
 
-<!-- [Screenshot Placeholder: assets/detail-chart-rolling-return — gallery entry "### 🗓️ Rolling Return": The asset chart in Rolling Return mode with a 1Y window and one comparison asset.] -->
+### 🗓️ Rolling Return
+
+The asset chart in Rolling Return mode with a 1Y window and one comparison asset.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="🗓️ Rolling Return">
+</div>
 
 ### 📡 Signals Overlay
 
@@ -586,7 +612,14 @@ Create a new asset with name, type, currency, identifiers, provider, and classif
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard (pre-filled)" alt="Create Asset from Import Wizard">
 </div>
 
-<!-- [Screenshot Placeholder: assets/type-picker-open — gallery entry "### 🧬 Asset Type Picker": The searchable two-level type menu open, with the ETF family expanded and composite icons.] -->
+### 🧬 Asset Type Picker
+
+The searchable two-level type menu open, with the ETF family expanded and composite icons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="type-picker-open" alt="🧬 Asset Type Picker">
+</div>
+
 <!-- [Screenshot Placeholder: assets/create-provider-compare — gallery entry "### 🔍 Provider Data Comparison": The comparison between the asset and the provider's data after the ISIN choice.] -->
 
 ### 🌳 Grouped Indicator Search
@@ -778,7 +811,18 @@ Global and per-chart settings for aesthetics and signal overlay configuration.
     <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
 </div>
 
-<!-- [Screenshot Placeholder: tools/hub — new section "## 🧰 Tools", gallery entry "### 🗂️ Tools Hub": The Tools catalogue with the PAC allocator card, its version pair and the Documentation and Reload buttons.] -->
+---
+
+## 🧰 Tools
+
+### 🗂️ Tools Hub
+
+The Tools catalogue with the PAC allocator card, its version pair and the Documentation and Reload buttons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="hub" alt="🗂️ Tools Hub">
+</div>
+
 <!-- [Screenshot Placeholder: tools/pac-step-liquidity — gallery entry "### 💶 PAC — Liquidity": The Liquidity step with a new contribution and an external account.] -->
 <!-- [Screenshot Placeholder: tools/pac-step-brokers — gallery entry "### 🏦 PAC — Brokers": The broker editor with order mode, increment, fees and conversion mode.] -->
 <!-- [Screenshot Placeholder: tools/pac-step-assets — gallery entry "### 💼 PAC — Assets": The Assets step with automatic and manual prices and their origin badges.] -->

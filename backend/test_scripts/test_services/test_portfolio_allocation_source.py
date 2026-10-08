@@ -28,8 +28,8 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services import portfolio_allocation_source as source
 from backend.app.services import portfolio_engine, portfolio_service
+from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs
 from backend.app.services.portfolio_engine import DailyPositionState, ValuationSource
-from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
 AS_OF = date(2026, 9, 15)
 CAPTURED_AT = datetime(2026, 9, 15, 12, 30, tzinfo=UTC)
@@ -1494,61 +1494,50 @@ async def test_no_fx_prefill_rows_or_database_read_when_no_pairs_requested():
 
 
 def test_canonical_runtime_wac_buy_sell_and_fresh_pool_sequence():
-    result = compute_wac_from_txlist(
-        [
-            WACInputTX(
-                tx_id=1,
-                type="BUY",
-                date=date(2026, 1, 1),
-                quantity=Decimal("10"),
-                unit_cost_converted=Decimal("100"),
-                original_currency="EUR",
-            ),
-            WACInputTX(
-                tx_id=2,
-                type="BUY",
-                date=date(2026, 1, 2),
-                quantity=Decimal("10"),
-                unit_cost_converted=Decimal("300"),
-                original_currency="EUR",
-            ),
-            WACInputTX(
-                tx_id=3,
-                type="SELL",
-                date=date(2026, 1, 3),
-                quantity=Decimal("-5"),
-                unit_cost_converted=None,
-                original_currency="EUR",
-            ),
-            WACInputTX(
-                tx_id=4,
-                type="SELL",
-                date=date(2026, 1, 4),
-                quantity=Decimal("-15"),
-                unit_cost_converted=None,
-                original_currency="EUR",
-            ),
-            WACInputTX(
-                tx_id=5,
-                type="BUY",
-                date=date(2026, 1, 5),
-                quantity=Decimal("4"),
-                unit_cost_converted=Decimal("50"),
-                original_currency="EUR",
-            ),
-        ],
-        "EUR",
-    )
-    by_tx = {row.tx_id: row for row in result.qualifying}
+    def acquired(movement_id: int, day: int, quantity: str, paid: str) -> CostMovement:
+        return CostMovement(
+            movement_id=movement_id,
+            transaction_type="BUY",
+            date=date(2026, 1, day),
+            kind=CostMovementKind.ACQUISITION,
+            quantity=Decimal(quantity),
+            cost_amount=Decimal(paid),
+            cost_currency="EUR",
+        )
 
-    assert by_tx[1].running_wac == Decimal("100")
-    assert by_tx[2].running_wac == Decimal("200")
-    assert by_tx[3].effect == "reduce"
-    assert by_tx[3].running_wac == Decimal("200")
-    assert by_tx[4].running_wac == Decimal("0")
-    assert by_tx[5].running_wac == Decimal("50")
-    assert result.pool_qty == Decimal("4")
-    assert result.wac_amount == Decimal("50")
+    def sold(movement_id: int, day: int, quantity: str) -> CostMovement:
+        return CostMovement(
+            movement_id=movement_id,
+            transaction_type="SELL",
+            date=date(2026, 1, day),
+            kind=CostMovementKind.REDUCTION,
+            quantity=Decimal(quantity),
+        )
+
+    # 10 @ 100, 10 @ 300, sell 5, sell the remaining 15, then 4 @ 50 — every amount already in
+    # EUR, the report currency, so the pure fold needs no resolved conversion.
+    position = CostPosition(
+        key="canonical",
+        asset_currency="EUR",
+        movements=(
+            acquired(1, 1, "10", "1000"),
+            acquired(2, 2, "10", "3000"),
+            sold(3, 3, "-5"),
+            sold(4, 4, "-15"),
+            acquired(5, 5, "4", "200"),
+        ),
+    )
+    result = _fold_average_costs([position], report_currency="EUR", asset_leg=False, resolved={})["canonical"]
+    by_tx = {step.movement.movement_id: step for step in result.steps}
+
+    assert by_tx[1].unit_cost_report == Decimal("100")
+    assert by_tx[2].unit_cost_report == Decimal("200")
+    assert by_tx[3].effect == CostEffect.REDUCE
+    assert by_tx[3].unit_cost_report == Decimal("200")
+    assert by_tx[4].unit_cost_report == Decimal("0")
+    assert by_tx[5].unit_cost_report == Decimal("50")
+    assert result.quantity == Decimal("4")
+    assert result.unit_cost_report == Decimal("50")
 
 
 @pytest.mark.asyncio

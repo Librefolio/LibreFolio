@@ -178,6 +178,32 @@ function returnedLiteral(source: string, property: string, file: string): string
 }
 
 /**
+ * The body of the class a plugin file registers — the one under `@register_provider(...)` — so a
+ * support class with a property of the same name is never read in its place: DEGIRO's `_Row` has a
+ * `description` of its own. The body runs from the end of the `class` line to the next top-level
+ * statement, a line at column 0 that is neither blank nor a comment, or to the end of the file. Any
+ * other decorator of the class sits above the `class` line, in the header. A file of any other
+ * shape throws, because a scrape that guessed where the class is would silently read the wrong one.
+ */
+function registeredClassBody(source: string, file: string): string {
+    const decorators = [...source.matchAll(/^[ \t]*@register_provider\(/gm)];
+    if (decorators.length !== 1) throw new Error(`${file}: expected exactly one @register_provider( decorator, found ${decorators.length}`);
+    const [decorator] = decorators;
+    if (!decorator[0].startsWith('@')) throw new Error(`${file}: @register_provider( is indented, so the class it registers is not top-level`);
+    // What it decorates: the next top-level line that is not one more decorator.
+    const statement = /^[^\s#@].*/gm;
+    statement.lastIndex = decorator.index! + decorator[0].length;
+    const header = statement.exec(source);
+    if (!header) throw new Error(`${file}: no class follows @register_provider(, the file ends first`);
+    if (!/^class[ \t]+\w+.*:[ \t]*(?:#.*)?$/.test(header[0])) throw new Error(`${file}: @register_provider( is followed by \`${header[0]}\`, not by a one-line class header`);
+    const bodyStart = header.index + header[0].length;
+    const topLevel = /^[^\s#]/gm;
+    topLevel.lastIndex = bodyStart;
+    const next = topLevel.exec(source);
+    return source.slice(bodyStart, next ? next.index : source.length);
+}
+
+/**
  * The import plugins as ImportPluginSelect turns them into options (`value: code`, `label: name`,
  * `searchText: description`), in the backend's discovery order. `icon_url` is left out: every
  * plugin's is a URL, and the icon rule never matches a URL.
@@ -190,8 +216,8 @@ function readImportPluginOptions(): SelectOption[] {
         .filter((name) => /^broker_\w+\.py$/.test(name))
         .sort();
     return files.map((file) => {
-        const source = readFileSync(path.join(BRIM_PROVIDERS_DIR, file), 'utf-8');
-        return {value: returnedLiteral(source, 'provider_code', file), label: returnedLiteral(source, 'provider_name', file), searchText: returnedLiteral(source, 'description', file)};
+        const body = registeredClassBody(readFileSync(path.join(BRIM_PROVIDERS_DIR, file), 'utf-8'), file);
+        return {value: returnedLiteral(body, 'provider_code', file), label: returnedLiteral(body, 'provider_name', file), searchText: returnedLiteral(body, 'description', file)};
     });
 }
 

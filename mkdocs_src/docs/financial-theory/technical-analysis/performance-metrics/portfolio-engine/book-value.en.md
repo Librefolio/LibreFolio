@@ -15,10 +15,16 @@ $$
 Where Open Cost Basis:
 
 $$
-\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w(a,b,t) \cdot \mathrm{fx}(\mathrm{ccy}_w, C^*, t)
+\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w^{C^*}(a,b,t)
 $$
 
-Here $w(a,b,t)$ is WAC in its cost currency. The acquisition cost itself is pinned to transaction-date FX inside WAC; the open book value is then reported in the requested currency for the valuation date.
+Here $w^{C^*}(a,b,t)$ is the [WAC](../weighted-average-cost.md) kept directly in the requested currency $C^*$: each acquisition entered it at the rate of its own date $d_i$, as $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ for an amount $P_i$ actually paid. OCB therefore uses **no exchange rate at the valuation date** $t$: it is the sum of historical costs — what was paid — and it does not move when exchange rates move.
+
+In the in-transit term, cash in transit is converted at $t$, while assets in transit carry their frozen cost converted at their arrival date.
+
+!!! note "Incomplete cost"
+
+    When part of a position's cost is unknown — no exchange rate on or before an acquisition date, or a transfer or adjustment without cost basis — OCB includes only the known part, and the position itself is flagged: its average cost and unrealized gain/loss are not shown.
 
 🔗 See **[Portfolio Engine — §3 Position State](index.md#3-position-state)** for full derivation.
 
@@ -29,6 +35,8 @@ Here $w(a,b,t)$ is WAC in its cost currency. The acquisition cost itself is pinn
 $$
 \mathrm{Unrealized}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
+
+Because NAV values the assets at the day's market price **and** exchange rate while Book keeps historical costs, the unrealized gain/loss of an asset priced in another currency includes the effect of the exchange rate. For example, 10 units bought for €400 when they were worth 500 USD keep an OCB of €400; if they are worth 550 USD on a day when 1 USD = €0.75, their market value is €412.50 and the unrealized gain is €12.50 — the units' own gain (+€37.50) less the dollar's fall (−€25.00). [Period P&L](period-pnl.md#unrealized-change-by-currency) shows how the Dashboard splits the two.
 
 ---
 

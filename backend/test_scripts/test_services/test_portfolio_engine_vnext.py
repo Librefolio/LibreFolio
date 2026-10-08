@@ -2,7 +2,7 @@
 Portfolio Engine vNext — Integration tests.
 
 Validates the core architectural invariants:
-1. Inline WAC correctness (BUY/SELL/multi-broker)
+1. WAC replayed from the average costs (BUY/SELL/multi-broker)
 2. Valuation hierarchy and transaction-reference propagation
 3. 3-pool event-driven (K, R, W)
 4. Position states emission (start + end snapshots)
@@ -28,6 +28,7 @@ from backend.app.services.portfolio_engine import (
     ValuationSource,
 )
 from backend.app.services.price_resolver import build_asset_price_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 
 
 def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY, dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None, currency="EUR", cbo=None, cbo_ccy=None):
@@ -105,6 +106,7 @@ def _build(
         asset_classifications={},
         asset_types={1: "ETF", 2: "ETF"},
         asset_currencies=resolved_currencies,
+        average_costs=engine_average_costs(txs, asset_currencies=resolved_currencies, target_currency="EUR", fx_rate_map=fx_rate_map or {}, split_linked_tx_ids=split_linked_tx_ids, date_to=date_to),
         target_currency="EUR",
         date_from=date_from,
         date_to=date_to,
@@ -121,7 +123,7 @@ def _build(
 
 
 class TestInlineWAC:
-    """Verify WAC is computed correctly inline during daily loop."""
+    """Verify the WAC the daily loop replays from ``average_costs`` (per unit, target currency)."""
 
     def test_simple_buy(self):
         """Single BUY → WAC = unit cost."""
@@ -235,6 +237,7 @@ class TestResolverValuation:
             asset_classifications={},
             asset_types={1: "ETF"},
             asset_currencies={1: "EUR"},
+            average_costs=engine_average_costs([], asset_currencies={1: "EUR"}, target_currency="EUR", fx_rate_map={}),
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 15),
@@ -264,6 +267,7 @@ class TestResolverValuation:
             asset_classifications={},
             asset_types={1: "BOND"},
             asset_currencies={1: "EUR"},
+            average_costs=engine_average_costs([], asset_currencies={1: "EUR"}, target_currency="EUR", fx_rate_map={}),
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 5),
@@ -787,6 +791,19 @@ class TestPreloadFxRates:
     @pytest.mark.asyncio
     async def test_preload_fx_rates_collects_all_main_sources(self, monkeypatch):
         txs = [
+            # BUY of the JPY asset before the range, paid in the target currency: its cost is
+            # converted by compute_average_costs, so the preload must not ask a JPY rate at its date.
+            _c(
+                _tx(
+                    tx_id=2,
+                    asset_id=1,
+                    tx_type=TransactionType.BUY,
+                    dt=date(2024, 12, 30),
+                    quantity=Decimal("1"),
+                    amount=Decimal("-40"),
+                    currency="EUR",
+                )
+            ),
             _c(
                 _tx(
                     tx_id=1,
@@ -902,8 +919,9 @@ class TestPreloadFxRates:
             ("GBP", "EUR", date(2025, 1, 3)),
             ("CAD", "EUR", date(2025, 1, 2)),
             ("CAD", "EUR", date(2025, 1, 3)),
-            ("AUD", "EUR", date(2025, 1, 1)),
-            ("AUD", "EUR", date(2025, 1, 2)),
+            # D6: the in-transit cost is historical, converted once at the arrival date (2025-01-04),
+            # no longer on every transit day (was 2025-01-01 and 2025-01-02).
+            ("AUD", "EUR", date(2025, 1, 4)),
         }
 
         assert captured["db"] is db
@@ -911,3 +929,5 @@ class TestPreloadFxRates:
         assert {(item[0].code, item[1], item[2]) for item in captured["bulk_items"]} == expected_keys
         assert set(fx_map.keys()) == expected_keys
         assert set(fx_map.values()) == {Decimal("1")}
+        # Asset currencies only over the range: no rate at a BUY date before it (was requested for the inline WAC).
+        assert ("JPY", "EUR", date(2024, 12, 30)) not in fx_map

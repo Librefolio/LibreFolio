@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 from backend.app.db.models import TransactionType
 from backend.app.services.portfolio_engine import DailyStateBuilder, ValuationSource
 from backend.app.services.price_resolver import build_asset_price_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 
 _ASSET = 100
 
@@ -55,6 +56,7 @@ def _builder(*, mark_series=None, quote_base_map=None) -> DailyStateBuilder:
         asset_classifications={},
         asset_types={},
         asset_currencies={_ASSET: "EUR"},
+        average_costs=engine_average_costs([], asset_currencies={_ASSET: "EUR"}, target_currency="EUR", fx_rate_map={}),
         target_currency="EUR",
         date_from=date(2024, 1, 1),
         date_to=date(2024, 12, 31),

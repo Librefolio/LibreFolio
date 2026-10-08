@@ -26,7 +26,7 @@ The **Holdings** view shows the current open-position snapshot. Each row represe
 | **Asset** | Asset name with type icon — click to open the asset detail page. |
 | **Δ1** | Change in unrealized P&L versus yesterday, keeping today's quantity constant. |
 | **Δ1%** | The same daily change as a percentage of yesterday's position market value. |
-| **Unrealized P&L** | Open gain/loss: current value minus residual cost basis. |
+| **Unrealized P&L** | Open gain/loss: current value minus residual cost basis. Shows `—` when the asset has no price at all, or when part of the purchase cost is unknown (see **Avg. Cost**). |
 | **P&L %** | Unrealized P&L as a percentage of the residual cost basis. |
 | **Annualized** | Net annualized return (CAGR) of the still-open lots, from the first transaction to the selected end date — for comparison across positions held for different durations. |
 | **YOC** | Gross recorded dividends and interest over the last year, compared with the average purchase price (WAC). Visible by default beside **Annualized**. |
@@ -35,7 +35,7 @@ The **Holdings** view shows the current open-position snapshot. Each row represe
 | **Qty** | Current shares, units, or coins held. |
 | **Brokers** | Broker account for this asset/broker row. |
 | **Price** *(hidden by default)* | Current asset price from the connected data provider. |
-| **Avg. Cost** *(hidden by default)* | Average cost per unit of the currently open position (Weighted Average Cost). |
+| **Avg. Cost** *(hidden by default)* | Average purchase price per unit of the currently open position (Weighted Average Cost), in your display currency: each purchase counts at the exchange rate of its own date, so it does not move with today's rates. Shows `—` when part of the purchase cost is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment recorded without a cost basis; the data-quality banner then names the currency pair or the asset. |
 | **Oldest open lot** *(hidden by default)* | Opening date of the oldest FIFO lot still open for this position. |
 
 Use the **eye icon** in the table toolbar to show or hide columns — your choices are remembered across sessions.
@@ -50,7 +50,7 @@ YOC answers: **"How much gross dividend and interest income did each current uni
 - `ADJUSTMENT` transactions can affect quantity, average purchase price, or linked splits, but never count as income.
 - Income uses the paying broker's long quantity at end of day before payment. Same-day buys are excluded; same-day sells are included.
 - Transfers respect custody, but historical income does not automatically follow units to another broker. Linked same-day and later splits normalize prior income to current units. If connected cross-broker history contains a split but this broker lacks its own matching linked split row, YOC becomes unavailable rather than inferring a global restatement.
-- Each income uses transaction-date FX; the average purchase price uses end-date FX. If an earlier available rate is used, the tooltip shows the actual rate date.
+- Each income is converted at its own transaction date. The average purchase price is already in your display currency — each purchase at its own date's rate — so it needs no conversion at the end date. If an earlier available rate is used for an income, the tooltip shows the actual rate date.
 - The rule applies to every holding type, including crypto and manual assets.
 
 Available values may be positive or exactly zero and use two decimal places. Positive values have no leading plus sign. An available zero means that at least one qualifying income row was recorded at amount zero and no qualifying amount was positive; it appears as `0.00%`, with `net_zero=true` in its provenance. By contrast, `no_income` means that no qualifying income row was recorded: for a ledger at least 365 days old, the cell shows a plain `-` with no warning icon. The age gate applies only when there is no trailing-365-day income: a younger pair with valid recorded income can show an available YOC. A younger no-income pair, or a replay, quantity, split, FX, or WAC problem, has no numeric value and shows `-` with an info icon explaining why YOC is unavailable. LibreFolio does not show a partial value when any required input fails.

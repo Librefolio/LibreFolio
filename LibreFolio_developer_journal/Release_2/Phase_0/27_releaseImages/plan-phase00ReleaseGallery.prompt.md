@@ -279,3 +279,97 @@
 > - `:3325` event popover stays red until the product fix (reported).
 > - The data-quality shot keeps the 3M preset (as before R12), cosmetic.
 > - The positions tables resolve brokers by id from the gallery DB, so the snapshot's broker names show only in tooltips. That is fine for privacy.
+
+## Batch 2 (after commit `742e381ec`, train 9)
+
+### 11. ✅ Prerelease tag guard — 2026-10-07
+> **Note implementazione**: developer: «sì al suffisso rc per le pre release, però non succede che faccio una pre release e poi promuovo, al più ne creo un'altra da 0 su un tag nuovo».
+> - New first step of the job, «Prerelease tag must be vX.Y.Z-rc.N». It runs only for a release marked as prerelease and reads the tag through `env`. It fails with an `::error` annotation unless `[[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]`.
+> - The promotion event is not handled: the stable release is always published on a new `vX.Y.Z` tag.
+> - Simulation (bash, 14 tags): `v1.2.0-rc.1`, `1.2.0-rc.12` and `v10.20.30-rc.0` pass. Plain, `beta`, bare `rc`, `rc.1.2`, upper-case `V`, leading space, a quote injection, `$(id)`, the empty tag and both embedded-newline forms fail.
+> - `utils release-image-contract` is still 87/87. Contract pins: test-author. `release-pipeline.md`: docs-writer.
+> **⚠️ Fuori pista**: the first draft matched with `grep -Eq`, which matches line by line, so `v1.2.0-rc.1\nv9` passed. Replaced with bash's whole-string `[[ =~ ]]`. Evidence: `release-pipeline/runs/prerelease_guard_sim.txt`.
+> **Gates**: `utils release-image-contract` **115/115** (+28 in `TestPrereleaseTagGuard`). They pin:
+> - the `if:`, which is true only for prereleases;
+> - the tag passed through `env`;
+> - the step comes first;
+> - the 14 tag verdicts, run in bash;
+> - a plain-tag prerelease fails at this guard before any other step;
+> - 7 negative controls: removed, every-release `if`, dropped `if`, any suffix, `grep` restored, tag interpolated into the script, moved after checkout.
+>
+> ruff and black clean. `release-pipeline.md` (docs-writer): new subsection «Prereleases and Publishing» with the guard, why the rc suffix matters, why there is no promotion, and «How to publish»; the diagram check; the §3 row and the `latest` bullet. `mkdocs build` strict: 0 warnings. `check-links`: 89 valid plus the pre-existing `#rolling-return`. `git diff --check` clean.
+> **⚠️ Fuori pista**:
+> - `Archive Generated Screenshots` (`!cancelled()`) still runs after the guard fails, and uploads nothing (`if-no-files-found: ignore`).
+> - Open question for the coordinator: a release tagged `-rc.N` but **not** marked as a prerelease passes the guard and would deploy the docs with a `:latest` line in its notes. A symmetric check would close it (stable ⇒ `^v?X.Y.Z$`).
+
+### 12. ✅ Symmetric release tag check — 2026-10-07
+> **Note implementazione**: developer: «Sì, controllo simmetrico». The first step, renamed «Release tag must match the release kind», now runs for every release (`if: github.event_name == 'release'`) and reads `TAG_NAME` and `PRERELEASE` through `env`.
+> - Prerelease: the tag must be `vX.Y.Z-rc.N`, otherwise `::error title=Prerelease tag`.
+> - Stable: the tag must be a plain `vX.Y.Z`, otherwise `::error title=Release tag`.
+> - This closes the case of an `-rc.N` tag published as stable, which would deploy the docs and announce `:latest` while `latest` and the update prompt ignore it.
+> - Bash simulation, 28 cases (14 per branch, including an injection attempt, `$(id)`, embedded newlines and the empty tag): all as expected, each failure with its own title. Evidence: `release-pipeline/runs/release_tag_guard_sim.txt`.
+> - Contract tests (test-author, including the developer's 2 negatives) and `release-pipeline.md` (docs-writer) are in progress.
+>
+> **Coordinator constraints, inventory order approved:**
+> - group 2 (P&L and privacy) waits for I: the developer decided gold for the dividend and a label on every X-axis bucket for Candles and Income;
+> - `detail-chart-rolling-return` waits for I's fix (train 9);
+> - sequence: train 9 (Q + I) → commit of batch 2 → merge of `dev_release2` into M → replace Q's placeholders.
+> **Gates** (lane 6158, load 50):
+> - `utils release-image-contract` **133/133** (was 115). test-author added:
+>   - 28 bash verdicts, with titles;
+>   - the run «stable release on `v1.2.0-rc.1`», which fails first at the guard;
+>   - the developer's 2 negatives, `stable-branch-dropped` and `stable-regex-loosened`, plus `prerelease-in-script` and `stable-error-titled-as-prerelease`;
+>   - `if-every-release` → `if-prerelease-only`.
+> - Ruff and black: clean.
+> - `release-pipeline.md` (docs-writer): «🔖 Release Tags and Publishing» (anchor `#prereleases` kept) with a two-branch table, the refreshed YAML, both «why» bullets, «How to publish», the diagram box «Tag matches its kind? (rc / plain)», the gate and contract sentences, and the closed gap.
+> - `mkdocs build` strict: 0 warnings. `check-links`: 89 valid plus the pre-existing `#rolling-return`. `git diff --check`: clean.
+
+## Batch 3 — Q's screenshot inventory (base `9d79c2dbe`, train 10, Q's pages included)
+
+### 13. ⏳ Inventory: start, and the event popover after I's fix — 2026-10-07
+> **Note implementazione**:
+> - Clean base `9d79c2dbe`. Q's placeholders: 125 occurrences in EN pages, 40 names.
+>   - 8 are third-party broker-portal screenshots (Coinbase, Degiro, IBKR, …), which are out of scope because the gallery cannot produce them.
+>   - One more is a `gallery-index` editorial note (add Tools / Risk Analysis / Onboarding bullets once those shots exist).
+>   - Reference list: session file `placeholders_9d79c2dbe.txt`.
+> - **`:3383` Asset detail event popover**, re-run after I's fix (train 9): ✅ desktop 43 s, mobile 45 s, 16 shots (es/dark checked: dividend tooltip on the marker). All 7 scenarios red on the 10-06 nightly are now green on the lane.
+> - Order approved by the coordinator: groups 1 (single screens, plus `assets/detail-chart-rolling-return`, unblocked), 3 (Danske), 4 (risk lab, plus `whatif-simulation`, unblocked with N), 5 (onboarding), 6 (PAC), 7 (provider compare).
+>   - Group 2 (P&L, privacy) waits for I's chart batch.
+>   - `dashboard/data-quality-sync-rates` is pending a coordinator confirmation that N's part is complete.
+> - One test-author at a time on `gallery.spec.ts` (shared file within M): group 1 is in progress.
+>
+> **Group 1** (test-author, `gallery.spec.ts` only):
+> - 6 of 7 scenarios written, plus the shared helper `waitForMotionSettled`:
+>   - `settings/about-tool-diagnostics`;
+>   - `tools/hub` (new `Tools` describe);
+>   - `support/donation-popup` (new `Support` describe; the login response is intercepted to set `show_donation_popup` and the language/theme for each combination, no DB writes);
+>   - `support/social-share-modal` (Reddit);
+>   - `assets/detail-chart-rolling-return`;
+>   - `assets/type-picker-open`.
+> - Lane run (6158, 1 worker, desktop + mobile): **12/12 passed**, 96 PNGs, 3.4 min. Evidence: `release-pipeline/runs/G1_run1.log`.
+> - Visual check of a sample (4 languages, both themes, desktop + mobile): `hub`, type picker (on mobile it opens upward, the picker's own behaviour), rolling return, donation popup and diagnostics are correct.
+> - Rolling return: page range **1W** with window **1Y** (Q's placeholder asks for the 1Y window). The seeded prices start 2025-09-23, so a 1Y page would show a mostly partial 1Y window. A wider axis needs ≥ 2 years of mock prices (`populate_mock_data.py`, not M's surface).
+> - `settings/onboarding-replay` is **blocked**: the category buttons in `SettingsLayout.svelte` have neither a testid nor a selected state. Proposal: `settings-category-{id}` + `aria-pressed`, and `settings-mobile-category-trigger` / `settings-mobile-category-{id}`. Owner to be decided by the coordinator.
+>
+> **⚠️ Fuori pista — product bug found by the visual check (not fixed by M):**
+> - `support/social-share-modal` (desktop and mobile) shows a 32 px strip at the bottom of the viewport that the backdrop does not dim. The donation popup does not.
+> - DOM probe on the lane (`release-pipeline/scripts/probe_share_backdrop{,_v2,_v3}.cjs`, outputs `runs/probe_share_backdrop*.json`): the ModalBase `.modal-backdrop` (`position:fixed; inset:0`) computes **`margin-bottom: 32px`**, so its box is 688 px instead of 720. This holds at scroll 0, 100 and at the bottom; no ancestor creates a containing block.
+> - Cause: `AboutTab.svelte:586` mounts `<SocialShareModal>` as a non-last child of `div.space-y-8` (`:247`). Tailwind `space-y-8` puts `margin-block-end: 2rem` on every child but the last, and that includes the in-place backdrop.
+> - Effect for users: the strip is not dimmed and stays **clickable** under an `aria-modal` dialog. `elementFromPoint(100,700)` is `sidebar-version`.
+> - Generic fix proposed: `margin: 0` on `.modal-backdrop`. Unlayered Svelte CSS beats Tailwind's `@layer utilities` `:where()` rules, and the fix also covers `space-x-*`.
+> - Reported to the coordinator. After the fix, only this scenario is re-shot.
+>
+> **Group 1: placeholders in the EN docs** (`docs-writer`, EN only, no stamp: the pages were already stale because of Q's placeholders, and the debt stays real until the alignment):
+> - 19 occurrences replaced:
+>   - `gallery/{desktop,mobile}.en.md`: 3 Settings entries, Rolling Return, Asset Type Picker, and the new section `---` + `## 🧰 Tools` + «Tools Hub». The 9 `tools/pac-*` placeholders remain inside the section; mobile entries use `screenshot-container mobile`.
+>   - `user/settings/about` (3), `user/tools/index`, `user/assets/create-edit`, `user/assets/detail/chart`.
+>   - `index.en.md` DD6 «Planning Tools» back to `deep-dive reverse` with an image column, modelled on DD2.
+>   - `gallery/index` gets the Tools bullet; the comment now names only Risk Analysis and Onboarding.
+> - Text taken byte for byte from the placeholders. Each gallery page has 10 `##` and 10 `---`; no `###` has one.
+>
+> **Gates** (load ~16–20):
+> - `mkdocs build` strict: exit 0, 0 WARNING/ERROR (`runs/G1_mkdocs_build.log`).
+> - `check-links`: 89 valid, 3 known exceptions, plus the pre-existing `#rolling-return`, unchanged from the baseline (`runs/G1_check_links.log`).
+> - Prettier on `gallery.spec.ts`: ok. `git diff --check`: clean.
+> - Built site served statically on 6168 (`scripts/site_visual_check_g1.cjs`): DD6 renders `reverse` with `tools/hub`; the gallery and `user/tools` images resolve (`runs/G1_site_*.png`).
+> - Ports 6158 and 6168 free after the run.

@@ -7,7 +7,7 @@
     import {trackNavigation} from '$lib/stores/app/navigationStore';
     import {seedFromUrl} from '$lib/stores/dateRangeStore.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/app/auth';
+    import {auth, isAuthenticated, isAuthInitialized, isSignOutRequested} from '$lib/stores/app/auth';
     import {appBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
     import {createOnboardingRouteSettlementCoordinator, runOwnedOnboardingRouteSettlement} from '$lib/features/onboarding/onboardingRouteSettlement';
     import {debug, isDebugEnabled} from '$lib/debug';
@@ -25,6 +25,8 @@
     import OnboardingOverlayHost from '$lib/components/onboarding/OnboardingOverlayHost.svelte';
     import DeferredAppPopups from '$lib/components/onboarding/DeferredAppPopups.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {loginUrl} from '$lib/utils/internalPath';
+    import ServerUnreachable from '$lib/components/layout/ServerUnreachable.svelte';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
@@ -43,6 +45,11 @@
 
     // Initialize i18n
     initI18n();
+
+    // As in the root layout: only the first dictionary shows the loading screen. A later
+    // language switch keeps the app mounted, so no page is rebuilt and no draft is lost.
+    let i18nBooted = false;
+    $: if (!$i18nLoading) i18nBooted = true;
 
     // Track SPA navigation depth for smart back-navigation
     afterNavigate((nav) => {
@@ -79,59 +86,81 @@
             debug.log('AppLayout', 'Registered window.librefolioDebug.showDonationPopup()/.showUpdateModal()');
         }
 
-        // Check authentication with timeout
-        if (browser) {
-            debug.log('AppLayout', 'Starting auth check');
-
-            // Create a timeout promise
-            const timeoutPromise = new Promise<boolean>((_, reject) => {
-                setTimeout(() => reject(new Error('Auth check timeout')), 5000);
-            });
-
-            try {
-                // Race between auth check and timeout
-                const isAuth = await Promise.race([auth.checkAuth(), timeoutPromise]);
-
-                debug.log('AppLayout', 'Auth check result:', isAuth);
-
-                if (!isAuth) {
-                    debug.log('AppLayout', 'Not authenticated, redirecting to /');
-                    goto('/');
-                } else {
-                    debug.log('AppLayout', 'Loading authenticated app bootstrap');
-                    await loadAndSettleOnboardingRoute();
-
-                    // Preload JS for common routes in background so navigation
-                    // is instant — only code is prefetched, data is still lazy.
-                    Promise.all(['/dashboard', '/fx', '/assets', '/brokers', '/transactions', '/settings', '/files', '/tools'].map((r) => preloadCode(r).catch(() => {}))).catch(() => {});
-
-                    // F14: admins only — probe GitHub for a newer stable release
-                    // (throttled to once an hour, CHECK_INTERVAL_MS in updateCheck.ts;
-                    // silent on offline installs).
-                    if (get(auth).user?.is_superuser) {
-                        void (async () => {
-                            try {
-                                const info = await zodiosApi.get_system_info_api_v1_system_info_get();
-                                appVersion = info.app_version;
-                                const release = await checkForNewerRelease(info.app_version);
-                                if (release) updateAvailable.show(release);
-                            } catch {
-                                // system info unreachable — no prompt
-                            }
-                        })();
-                    }
-                }
-            } catch (error) {
-                debug.error('AppLayout', 'Auth check failed:', error);
-                goto('/');
-            }
-        }
+        // Who is signed in: only a 401 leads to the login, and it keeps the page asked for.
+        if (browser) await checkAuthAndStart();
     });
 
-    // Reactive redirect when auth state changes after initialization
+    /**
+     * A server that has not answered after this long gets the retry panel. The check itself goes on: a
+     * late answer still starts the app (or leads to the login), and Retry overtakes it.
+     */
+    const AUTH_SLOW_MS = 5000;
+    // The retry panel is on screen: the server was slow, down or answering 5xx.
+    let authUnreachable = false;
+    // A check younger than AUTH_SLOW_MS is in flight: Retry stays disabled, the panel busy.
+    let authCheckBusy = false;
+
+    function currentPath(): string {
+        const {pathname, search} = get(page).url;
+        return pathname + search;
+    }
+
+    async function checkAuthAndStart(): Promise<void> {
+        debug.log('AppLayout', 'Starting auth check');
+        authCheckBusy = true;
+        const slowTimer = setTimeout(() => {
+            authUnreachable = true;
+            authCheckBusy = false;
+        }, AUTH_SLOW_MS);
+        const outcome = await auth.checkAuth();
+        clearTimeout(slowTimer);
+        debug.log('AppLayout', 'Auth check result:', outcome);
+        // A newer check (a Retry) owns the screen; this answer changes nothing.
+        if (outcome === 'superseded') return;
+        authCheckBusy = false;
+        if (outcome === 'unreachable') {
+            authUnreachable = true;
+            return;
+        }
+        authUnreachable = false;
+        if (outcome === 'unauthenticated') {
+            debug.log('AppLayout', 'Not authenticated, redirecting to the login');
+            goto(loginUrl(currentPath()));
+            return;
+        }
+        await startAuthenticatedApp();
+    }
+
+    async function startAuthenticatedApp(): Promise<void> {
+        debug.log('AppLayout', 'Loading authenticated app bootstrap');
+        await loadAndSettleOnboardingRoute();
+
+        // Preload JS for common routes in background so navigation
+        // is instant — only code is prefetched, data is still lazy.
+        Promise.all(['/dashboard', '/fx', '/assets', '/brokers', '/transactions', '/settings', '/files', '/tools'].map((r) => preloadCode(r).catch(() => {}))).catch(() => {});
+
+        // F14: admins only — probe GitHub for a newer stable release
+        // (throttled to once an hour, CHECK_INTERVAL_MS in updateCheck.ts;
+        // silent on offline installs).
+        if (get(auth).user?.is_superuser) {
+            void (async () => {
+                try {
+                    const info = await zodiosApi.get_system_info_api_v1_system_info_get();
+                    appVersion = info.app_version;
+                    const release = await checkForNewerRelease(info.app_version);
+                    if (release) updateAvailable.show(release);
+                } catch {
+                    // system info unreachable — no prompt
+                }
+            })();
+        }
+    }
+
+    // Reactive redirect when the session ends after initialization. A sign-out the user asked for goes to a
+    // plain login; a session that ended on its own (a 401 seen by the store) keeps the page to come back to.
     $: if (browser && $isAuthInitialized && !$isAuthenticated) {
         debug.log('AppLayout', 'Reactive redirect triggered');
-        goto('/');
+        goto(isSignOutRequested() ? '/' : loginUrl($page.url.pathname + $page.url.search));
     }
 
     // This layout is a legacy component: its `$:` statements do not track runes state such as
@@ -194,8 +223,8 @@
     }
 </script>
 
-{#if $i18nLoading}
-    <!-- Loading screen while translations load -->
+{#if !i18nBooted}
+    <!-- Loading screen while the first translations load -->
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
         <div class="text-libre-green dark:text-green-400 text-xl">Loading...</div>
     </div>
@@ -235,9 +264,11 @@
     <ToastContainer />
     <OnboardingOverlayHost currentPath={$page.url.pathname + $page.url.search} onrequestsidebar={setSidebarOpen} />
     <DeferredAppPopups guideActive={onboardingGuide.active !== null} currentVersion={appVersion} />
+{:else if authUnreachable}
+    <ServerUnreachable busy={authCheckBusy} onretry={() => void checkAuthAndStart()} />
 {:else}
     <!-- Loading while checking auth -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
+    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900" data-testid="app-auth-checking">
         <div class="text-libre-green dark:text-green-400 text-xl">Checking authentication...</div>
     </div>
 {/if}

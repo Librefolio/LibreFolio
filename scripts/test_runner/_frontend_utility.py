@@ -28,6 +28,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/ui/select/optionFilter.test.ts",
             "src/lib/utils/__tests__/dateArrowStep.test.ts",
             "src/lib/utils/__tests__/dateOnly.test.ts",
+            "src/lib/utils/__tests__/internalPath.test.ts",
             "src/lib/utils/__tests__/parseDecimalInput.test.ts",
             "src/lib/utils/__tests__/parseTypedDate.test.ts",
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
@@ -192,6 +193,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/media/ImageEditModal.test.ts",
             "src/lib/components/ui/modals/SyncModalBase.test.ts",
             "src/lib/components/ui/modals/ModalBase.test.ts",
+            "src/lib/components/ui/modals/ModalBase.escapeLayers.test.ts",
             "src/lib/components/ui/modals/SyncResultRow.test.ts",
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
@@ -322,6 +324,7 @@ def front_onboarding_component_unit(
             "src/lib/components/onboarding/DeferredAppPopups.test.ts",
             "src/lib/features/onboarding/onboardingRouteSettlement.test.ts",
             "src/routes/(app)/layout.gate.test.ts",
+            "src/routes/(app)/layout.authGate.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
             "src/lib/components/brokers/BrokerModal.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
@@ -424,6 +427,18 @@ def front_toolbar_width_sweep(verbose: bool = False, ui: bool = False, headed: b
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/toolbar-width-sweep.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_app_start_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the app-start auth gate: a slow /auth/me is not a sign-out, and the login keeps the requested page (K step 19)."""
+    print_section("Frontend App Start Auth Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/app-start-auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -586,6 +601,15 @@ def populate_registry(registry: dict) -> None:
         desc="The five PageToolbar bars (assets list and detail, dashboard, broker detail, FX list) swept 1700 → 320 px every 10 px in French, Italian and Spanish: no box past its bar, no sideways page scroll, every violation in one table per bar and language (K step 13, item 5)",
         prereq="Populated DB + test users",
         tests="layout/toolbar-width-sweep.spec.ts",
+    )
+    add_test(
+        cat,
+        "app-start-auth",
+        front_app_start_auth,
+        name="App Start Auth",
+        desc="Only a 401 signs out: a GET /auth/me silent past 5 s shows the server-unreachable panel on the requested page instead of leaving it, and its late answer loads that page; signed out, an app page goes to /?redirect=<path+query> and signing in there lands on it; a 401 mid-session goes to the login carrying the page it happened on (K step 19)",
+        prereq="Populated DB + test users",
+        tests="layout/app-start-auth.spec.ts",
     )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")

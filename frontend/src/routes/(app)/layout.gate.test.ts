@@ -28,6 +28,8 @@
  *     change can only have come from the template gate.
  *   - every child component is a no-op, and every store or API the layout touches is a stub. None
  *     of them is the subject, and each would otherwise start network, storage or observer work.
+ *   - `i18nLoading` is a writable that every case starts at `false` (the dictionary is ready); only
+ *     the workstream O case below flips it, to stand for a later catalogue load.
  *
  * Assertions read `data-testid` only: the stubbed `$_` returns keys, and nothing reads text.
  */
@@ -37,8 +39,10 @@ import type {AppBootstrapState} from '$lib/features/onboarding/appBootstrap.svel
 
 const mocks = await vi.hoisted(async () => {
     const {reactiveBox} = await import('$test/runes.svelte');
+    const {writable} = await import('svelte/store');
     return {
         bootstrap: reactiveBox<{state: AppBootstrapState}>({state: 'loading'}),
+        i18nLoading: writable(false),
         resolveDestination: vi.fn<(path: string) => string>(),
         goto: vi.fn(() => Promise.resolve()),
         // Never settles: were it ever started, it still could not navigate behind the assertions.
@@ -55,7 +59,7 @@ vi.mock('$app/stores', async () => {
 });
 vi.mock('$lib/i18n', async () => {
     const {readable} = await import('svelte/store');
-    return {_: readable((key: string) => key), i18nLoading: readable(false), initI18n: vi.fn()};
+    return {_: readable((key: string) => key), i18nLoading: mocks.i18nLoading, initI18n: vi.fn()};
 });
 vi.mock('$lib/stores/app/auth', async () => {
     const {readable} = await import('svelte/store');
@@ -63,6 +67,8 @@ vi.mock('$lib/stores/app/auth', async () => {
         auth: {checkAuth: vi.fn(() => new Promise<boolean>(() => {})), logout: vi.fn(() => Promise.resolve())},
         isAuthenticated: readable(true),
         isAuthInitialized: readable(true),
+        // The reactive redirect's `$:` reads every identifier it names at mount, so this must exist; `browser: false` keeps it from being called.
+        isSignOutRequested: () => false,
     };
 });
 // ⚠️ Fragile by construction: this fake must keep the real `appBootstrap`'s SHAPE — a plain object
@@ -145,6 +151,7 @@ beforeEach(() => {
     // Negative assertions below would pass vacuously in an environment where effects never run.
     assertEffectsRun();
     mocks.bootstrap.state = 'loading';
+    mocks.i18nLoading.set(false);
     mocks.resolveDestination.mockReset();
     mocks.goto.mockClear();
     mocks.runOwnedSettlement.mockClear();
@@ -181,6 +188,30 @@ describe('(app) layout route gate — the bootstrap settling re-runs the gate (w
         expect(within(shell).getByTestId('app-layout-requested-page')).toBeInTheDocument();
         // The page is let through because the gate asked and got the same path back, not because it never re-ran.
         expect(mocks.resolveDestination).toHaveBeenCalledWith(REQUESTED_PATH);
+        expectNothingNavigated();
+    });
+});
+
+// svelte-i18n 4 reports a language switch whose catalogue is still in flight after its 200 ms
+// `loadingDelay` as loading. The layout swapped its whole content for the placeholder on every such
+// report, so the requested page was torn down and rebuilt, and the rebuild re-read persisted state: a
+// language picked in Welcome was lost (`e2e/auth.spec.ts`, 3c). Only the first dictionary may hold
+// the app back; this mounts after it, with the dictionary ready.
+describe('(app) layout — a later catalogue load keeps the requested page mounted (workstream O)', () => {
+    it('keeps the very same requested-page node through a catalogue load that starts after i18n was ready', async () => {
+        mocks.resolveDestination.mockImplementation((path) => path);
+        mocks.bootstrap.state = 'ready';
+        render(AppLayoutGateHarness);
+        await tick();
+        const requestedPage = within(screen.getByTestId('app-shell')).getByTestId('app-layout-requested-page');
+
+        mocks.i18nLoading.set(true);
+        await tick();
+        expect(requestedPage, 'a later catalogue load tore the requested page down').toBeInTheDocument();
+
+        mocks.i18nLoading.set(false);
+        await tick();
+        expect(screen.getByTestId('app-layout-requested-page'), 'the requested page was rebuilt after the load').toBe(requestedPage);
         expectNothingNavigated();
     });
 });

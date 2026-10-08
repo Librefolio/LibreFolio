@@ -430,6 +430,10 @@
         "hasNumber": "Un numero",
         "hasSpecial": "Un carattere speciale"
       }
+    },
+    "serverUnreachable": {
+      "title": "Il server non risponde",
+      "body": "Questa pagina resta aperta e la tua sessione non è stata chiusa. Riprova tra un momento."
     }
   },
   "importWizard": {
@@ -1627,7 +1631,10 @@
     "pnlAcqReinvested": "Reinvestito",
     "allocationGeneric": "{type} generico",
     "pnlAxisQuarter": "T{quarter}",
-    "pnlAxisWithYear": "{label} {year}"
+    "pnlAxisWithYear": "{label} {year}",
+    "unrealizedAssetEffect": "Asset in {currency}",
+    "unrealizedFxEffect": "Cambio {from} → {to}",
+    "unrealizedUnsplit": "{currency}, non scomposto"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",
@@ -1665,7 +1672,8 @@
     "missingFxRatesManual": "Mancano tassi FX per {count} coppia/e manuale/i — inserisci i tassi manualmente",
     "assetIncomeNoEligibleLots": "Nessun lotto aperto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — provento non allocato",
     "assetCostNoEligibleLots": "Nessun lotto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — costo non allocato",
-    "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia."
+    "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia.",
+    "missingCostBasis": "{count} asset con un'acquisizione senza costo d'acquisto — conteggiata a zero finché non lo imposti"
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",
@@ -1938,9 +1946,9 @@
     "changePassword": "Cambia Password",
     "changePasswordDescription": "Aggiorna la password del tuo account",
     "deleteAccount": "Elimina Account",
-    "deleteAccountDescription": "Elimina permanentemente il tuo account e tutti i dati",
+    "deleteAccountDescription": "Elimina permanentemente il tuo account, le sue impostazioni e i broker di cui sei l'unico owner",
     "deleteAccountConfirm": "Eliminare l'Account?",
-    "deleteAccountWarning": "Questa azione non può essere annullata. Tutti i tuoi dati inclusi broker, transazioni e impostazioni saranno eliminati permanentemente.",
+    "deleteAccountWarning": "Questa azione non può essere annullata. I broker di cui sei l'unico owner vengono eliminati con tutte le loro transazioni e i report importati, anche se li hai condivisi con visualizzatori o editor. Un broker con un altro owner resta a lui: viene rimosso solo il tuo accesso. Le tue impostazioni vengono eliminate.",
     "typeUsernameToConfirm": "Digita \"{username}\" per confermare",
     "deleteAccountPermanently": "Elimina Permanentemente",
     "deleteAccountFailed": "Errore nell'eliminazione dell'account",
@@ -3415,7 +3423,11 @@
       "execution_timeout": "Il calcolo ha richiesto troppo tempo ed è stato interrotto.",
       "optimization_infeasible": "Nessuna allocazione soddisfa i vincoli richiesti.",
       "unknown": "Questa misurazione non ha restituito un risultato.",
-      "answer_discarded": "La risposta è stata scartata perché i dati sono cambiati mentre arrivava. Rilancia l'analisi."
+      "answer_discarded": "La risposta è stata scartata perché i dati sono cambiati mentre arrivava. Rilancia l'analisi.",
+      "resource_limit_paths_or_horizon": "Questa simulazione è troppo grande per essere eseguita. Usa meno percorsi simulati o un orizzonte più breve.",
+      "resource_limit_horizon_or_sampling": "Questa simulazione Quasi-Monte Carlo è troppo grande per essere eseguita. Accorcia l'orizzonte o scegli il campionamento Monte Carlo.",
+      "resource_limit_period": "Questa simulazione è troppo grande per essere eseguita: il periodo contiene troppa storia. Scegli un periodo più breve.",
+      "resource_limit_positions": "Una simulazione può includere al massimo 100 posizioni, e questo portafoglio ne ha di più. Simula invece un broker con meno posizioni."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe non definito perché la volatilità è zero.",

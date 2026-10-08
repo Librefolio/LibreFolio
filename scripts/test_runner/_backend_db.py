@@ -198,6 +198,36 @@ def db_brim_bulk(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM bulk candidate tests", verbose=verbose)
 
 
+def db_populate_reset(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that populate --force leaves no BRIM files of a database it deleted."""
+    print_section("DB Test: Populate Resets Broker Reports")
+    print_info("This test works in temporary directories only: the test database and data dir are not touched")
+    print_info("Testing: reset_broker_reports — the data-dir guard, what is emptied and what is kept")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_populate_reset.py", test_names)
+    return run_command(cmd, "Populate reset tests", verbose=verbose)
+
+
+def db_autoincrement_schema(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a fresh schema gives AUTOINCREMENT exactly to the census tables."""
+    print_section("DB Test: AUTOINCREMENT Schema")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: alembic upgrade head, the models and create_all agree on the AUTOINCREMENT census")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_autoincrement_schema.py", test_names)
+    return run_command(cmd, "AUTOINCREMENT schema tests", verbose=verbose)
+
+
+def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fixes on temporary databases (a 1.1 install upgraded to head)."""
+    print_section("DB Test: Post-Migration Fixes")
+    print_info("This test works on temporary databases and data dirs only: the test database is not touched")
+    print_info("Testing: detection, backup, AUTOINCREMENT conversion, orphan broker folders, rollback, dry run, offline script, concurrent runs, duration in the log")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration.py", test_names)
+    return run_command(cmd, "Post-migration fix tests", verbose=verbose)
+
+
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """Test Numeric column truncation behavior."""
     print_section("DB Test: Numeric Column Truncation")
@@ -240,7 +270,7 @@ def db_all(verbose: bool = False) -> bool:
     from ._registry import TEST_REGISTRY
 
     db_order = [
-        "create", "validate", "numeric-truncation", "populate",
+        "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
         "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
@@ -301,6 +331,15 @@ Note: No backend server required. Tests operate directly on test DB.
     add_test(cat, "brim-bulk", db_brim_bulk, name="BRIM Bulk Candidates",
              desc="Bulk candidate search matches the per-asset one", prereq="Database created",
              tests="4 equivalence tests")
+    add_test(cat, "populate-reset", db_populate_reset, name="Populate Resets Broker Reports",
+             desc="populate --force empties broker_reports under the deleted DB's data dir, nothing else",
+             prereq="None (temporary directories)")
+    add_test(cat, "autoincrement-schema", db_autoincrement_schema, name="AUTOINCREMENT Schema",
+             desc="A fresh schema, the models and create_all give AUTOINCREMENT exactly to the census tables",
+             prereq="None (temporary databases)")
+    add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
+             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback",
+             prereq="None (temporary databases)")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",
              tests="12 merge tests")
