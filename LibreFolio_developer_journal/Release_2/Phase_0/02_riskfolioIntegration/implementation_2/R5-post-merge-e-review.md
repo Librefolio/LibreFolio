@@ -3901,3 +3901,64 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >
 > **Il checkpoint**: 11 percorsi in 3 commit (backend con i suoi test; frontend con i suoi test e l'E2E; diario), su HEAD
 > `70d02cd8e`.
+>
+> **Committato**: `3ceac8f83` · `a360d0dec` · `1aaee792e` su `70d02cd8e`, albero `2a1d42ada`, verificato da me.
+
+#### I due reperti di D380 nella 1.2 (D381) · ✅ 08/10/2026 (FROZEN)
+
+> **La decisione** (D381, testuale: *«Entrambi nella 1.2 (Consigliato)»*):
+> - mai «−0,00 €» sotto una perdita zero, con la regola decisa sul numero perché gli importi possono essere mascherati;
+> - la larghezza Freedman-Diaconis calcolata con l'aritmetica di NumPy, senza costruirne la griglia, con il tetto
+>   invariato;
+> - un test con un IQR minuscolo e positivo, e un limite di memoria che lo renda rosso prima della cura.
+
+| # | Passo | Stato |
+|---|---|---|
+| 1 | Test rossi (test-author): memoria (`tracemalloc`), passo FD che scende a zero, conteggio che trabocca, equivalenza con NumPy; `lossAmount` e il cancello sulla didascalia | ✅ 08/10 — 3 + 12 rossi, ciascuno per il motivo atteso |
+| 2 | Backend: larghezza FD calcolata, conteggio fermato una barra sopra il tetto | ✅ 08/10 — con NumPy interpellato solo entro il tetto |
+| 3 | Frontend: `lossAmount` in `l1Helpers.ts`, usata da `L1HowMuchItHurts.svelte` | ✅ 08/10 |
+| 4 | Mutanti e cancelli nella 6152: `risk-oracle`, `risk-all`, `schemas risk`, `risk-levels-unit`, `front check`; E2E `risk` con 1 worker | ✅ 08/10 — mutanti 8/8, cancelli verdi, E2E 38/38 |
+| 5 | Diario, privacy, FROZEN, consegna con le righe di CHANGELOG | ✅ 08/10 |
+>
+> **Note implementazione — test** (test-author, rossi prima, nel blocco (f) e in `l1Helpers.test.ts`):
+> - **Memoria.** Un campione con 172 giorni di rateo distanti 5e-11, quindi IQR di circa 6,3e-9: la griglia FD di NumPy
+>   avrebbe 15 098 868 barre. La premessa si calcola con l'aritmetica, senza mai chiamare NumPy. Prima un controllo
+>   positivo: `tracemalloc` vede davvero un `np.empty` di 50 MiB. Picco oggi: 230 MiB; dopo la cura: 0,017 MiB.
+> - **Passo che scende a zero** (IQR subnormale): oggi tornano le 2 barre di D380. **Conteggio che trabocca** (IQR
+>   1e-310): oggi `OverflowError`. In entrambi i casi la cura dà la griglia del tetto.
+> - **Equivalenza** con la griglia che NumPy costruiva, anche vicino al tetto: conteggi 149,5 e da 195,5 a 201,5,
+>   ciascuno con due ancoraggi. Era verde prima ed è verde dopo.
+> - **`lossAmount`**: gli esempi del contratto, un formattatore mascherato (il motivo della regola sul numero), una
+>   scansione da −0,02 a +0,02 che vuole il meno esattamente quando la didascalia mostra almeno un centesimo, e il
+>   cancello esteso a `L1HowMuchItHurts.svelte`: l'import di `lossAmount` e nessun letterale con U+2212.
+>
+> **Note implementazione — codice**:
+> - **`metrics.py`**, nuovo `_freedman_diaconis_width()`: calcola prima il numero di barre con l'aritmetica di NumPy.
+>   Entro il tetto chiede a NumPy come prima, con al massimo 201 bordi; oltre il tetto restituisce `intervallo / 201`, e
+>   il tetto decide come prima. I quartili diventano `float` Python, così un conteggio che trabocca è un `inf`
+>   silenzioso e non un `RuntimeWarning`.
+> - **`l1Helpers.ts`**, nuova `lossAmount(amount, format)`: il meno solo se l'importo, arrotondato ai centesimi, non è
+>   zero; un valore non finito resta senza segno.
+> - **`L1HowMuchItHurts.svelte`**: `lossMoney` la usa con `formatCurrencyAmount`.
+>
+> **⚠️ Fuori pista — la variante scelta.** Il contratto dato a test-author calcolava sempre la larghezza con
+> l'aritmetica, `intervallo / barre`. test-author ha misurato che, su 2000 campioni, i bordi pubblicati si spostavano
+> nelle ultime cifre in 1868, senza che cambiasse un solo conteggio. Ho scelto la variante che chiede a NumPy entro il
+> tetto, che passa gli stessi test. La mia prova: la funzione committata con D380 e quella nuova danno griglie identiche
+> al bit in 2000 campioni su 2000, 510 dei quali vicino al tetto.
+>
+> **Mutanti** (8/8, `files/scripts-r2/mutants_d381.py`):
+> - NumPy che costruisce ogni griglia, cioè il difetto;
+> - il tetto a 100;
+> - oltre il tetto una larghezza sotto il tetto;
+> - un passo zero contato come zero barre;
+> - il segno letto dal testo formattato (lo vede solo il test mascherato);
+> - il meno sempre;
+> - i centesimi troncati invece che arrotondati;
+> - la didascalia che si costruisce il meno da sola.
+>
+> **Cancelli** (6152): ruff e black puliti, `risk-oracle` 224, `risk-all` 896, `schemas risk` 69, `risk-levels-unit`
+> 493, `risk-levels-component` 247, `front check` 0/0, orfani puliti; E2E `risk` 38/38 con 1 worker, nessuna riga di
+> provider.
+>
+> **Il checkpoint**: 7 percorsi in 3 commit (backend; frontend; diario), su HEAD `1aaee792e`.
