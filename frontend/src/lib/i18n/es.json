@@ -1625,7 +1625,10 @@
     "pnlCandlesHypotheticalShort": "Sintético — los máximos/mínimos entre activos son hipotéticos y no simultáneos",
     "pnlAcqNewCapital": "Nuevo capital",
     "pnlAcqReinvested": "Reinvertido",
-    "allocationGeneric": "{type} genérico"
+    "allocationGeneric": "{type} genérico",
+    "unrealizedAssetEffect": "Activos en {currency}",
+    "unrealizedFxEffect": "Tipo de cambio {from} → {to}",
+    "unrealizedUnsplit": "{currency}, sin desglosar"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
@@ -1663,7 +1666,8 @@
     "missingFxRatesManual": "Faltan tasas FX para {count} par(es) manual(es) — añade las tasas manualmente",
     "assetIncomeNoEligibleLots": "Ningún lote abierto elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — ingreso sin asignar",
     "assetCostNoEligibleLots": "Ningún lote elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — coste sin asignar",
-    "missingFxRatesAfterSync": "Siguen faltando tasas FX para {pairs} entre {date_from} y {date_to} ({dates_count} fecha(s)): el proveedor no devolvió ninguna para esas fechas. Introdúcelas a mano en la página del par."
+    "missingFxRatesAfterSync": "Siguen faltando tasas FX para {pairs} entre {date_from} y {date_to} ({dates_count} fecha(s)): el proveedor no devolvió ninguna para esas fechas. Introdúcelas a mano en la página del par.",
+    "missingCostBasis": "{count} activo(s) con una adquisición sin coste de compra — cuenta como cero hasta que lo indiques"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",
