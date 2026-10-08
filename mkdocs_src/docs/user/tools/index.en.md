@@ -28,7 +28,9 @@ the calculation engine behind it does.
 
 Open **Tools** from the sidebar to see the catalogue as a grid of cards. For a ready tool, the **entire card** is clickable, not just its title or an icon; an arrow indicator marks it as open-able. A tool whose interface is missing has neither, and states its situation on the card instead.
 
-<!-- [Screenshot Placeholder: tools/hub — the Tools catalogue with the PAC allocator card, its Backend/API · UI version pair, and the Documentation and Reload actions] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="hub" alt="Tools catalogue with the PAC allocator card, its version pair, and the Documentation and Reload actions">
+</div>
 
 Both the catalogue and an open tool show:
 
