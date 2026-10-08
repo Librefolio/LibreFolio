@@ -249,6 +249,22 @@
  *   Boxes are read with `boundingBox()` once the parts are on screen, and polled only for as long as a settled layout may
  *   still move (`LAYOUT_POLL`); every failure names the boxes it measured. One part is only required attached before its
  *   measure, M1's toggle: Playwright calls a box of no width hidden, and that width is what M1 measures.
+ *
+ * Step 9 — #26, the developer's approved cure (plan Step9StaleFrontend), written red first. A report-set plugin reads its
+ * exports only through the set's combined file, and the server refuses an original read alone with one (`ensure_parseable`:
+ * 422 `set_required`, the file not moved to failed). A file uploaded with no batch — by the frontend 1.1 a browser kept in
+ * its cache, or over the API without one — is in no set (`setPluginFor`), yet the wizard reads it with Danske
+ * (`pickBestPlugin`: `compatible_plugins[0]`), so Parse sends it alone and the server refuses it. While such a file is ticked
+ * (`ungroupedSetFiles`, importReportSets.test.ts) Parse is disabled and `import-wizard-set-blocks` says why:
+ * `data-reason="ungrouped"` — after `partly-selected`, before `incomplete` — and `data-file-ids`, the ids of those files
+ * joined by `,` in the order they were ticked. Its text (`importWizard.reportSet.ungroupedBlocks`) is never read.
+ *
+ *   U1 the two samples uploaded over the API with no batch — `file` and `broker_id` only; the server has no upload dedup —
+ *      their premise read from the responses: no batch, Danske among their plugins. Step 2 with nothing pending; both ticked
+ *      as single files, against the order the table shows them, so the order of the hint can only be the selection's. The
+ *      premise there: each a single row of the owned broker, read by Danske, and no set of the broker ticked — a reused broker
+ *      id can bring an earlier run's sets, never ticked, so they are not counted. Then Parse disabled, the hint on
+ *      `ungrouped` naming both; the first unticked, it names the other and Parse still waits; the other unticked, it goes.
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
@@ -1363,6 +1379,41 @@ async function historyTimeline(card: Locator): Promise<Locator> {
         .toEqual(['cash', 'custody', 'history']);
     for (const role of HISTORY_ROWS) await expect(timelineTrack(timeline, role), `the ${role} track is on screen`).toBeVisible();
     return timeline;
+}
+
+// ---------------------------------------------------------------------------
+// Step 9: the exports of a set uploaded without a batch (#26)
+// ---------------------------------------------------------------------------
+
+/**
+ * Upload one sample over the API with no upload batch, as a client older than report sets does: the multipart form holds
+ * `file` and `broker_id`, nothing else. The server has no upload dedup, so the samples go as they are. The premise is read
+ * from the response, not assumed: the file lands on the owned broker with no batch, and Danske is among the plugins that
+ * read it.
+ */
+async function uploadWithoutBatch(page: Page, brokerId: number, filePath: string): Promise<StoredFile> {
+    const name = path.basename(filePath);
+    const mimeType = name.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv';
+    const response = await page.request.post(UPLOAD_PATH, {multipart: {broker_id: String(brokerId), file: {name, mimeType, buffer: readFileSync(filePath)}}});
+    const body = await response.text();
+    expect(response.status(), `upload ${name} with no batch: ${body}`).toBe(200);
+    const uploaded = JSON.parse(body) as StoredFile;
+    expect(uploaded, `${name} lands on the owned broker`).toMatchObject({filename: name, target_broker_id: brokerId});
+    expect(uploaded.batch_id ?? null, `premise: ${name} has no upload batch`).toBeNull();
+    expect(uploaded.compatible_plugins ?? [], `premise: Danske reads ${name}`).toContain(DANSKE);
+    return uploaded;
+}
+
+/**
+ * The set-blocks hint on its step-9 reason, `ungrouped` — exports of a set that the analysis would read alone, which the
+ * server refuses — naming `files` in `data-file-ids`: their ids joined by `,`, in the order they were ticked. Its text
+ * (`importWizard.reportSet.ungroupedBlocks`) is a translation, never read.
+ */
+async function expectUngroupedHint(page: Page, files: StoredFile[]) {
+    const hint = page.getByTestId('import-wizard-set-blocks');
+    await expect(hint, 'the set-blocks hint is shown').toBeVisible();
+    await expect(hint, 'it names its reason: exports of a set the analysis would read alone').toHaveAttribute('data-reason', 'ungrouped');
+    await expect(hint, 'it names those files, in the order they were ticked').toHaveAttribute('data-file-ids', files.map((file) => file.file_id).join(','));
 }
 
 // ---------------------------------------------------------------------------
@@ -2797,5 +2848,82 @@ test.describe('Import Wizard — report sets', () => {
                 {message: 'on desktop the timeline keeps its third column: each row’s period right of its track and centred on it (±6 px)', timeout: LAYOUT_POLL},
             )
             .toEqual([]);
+    });
+
+    // -----------------------------------------------------------------------
+    // Step 9 — #26: the exports of a set uploaded without a batch (plan Step9StaleFrontend)
+    // -----------------------------------------------------------------------
+
+    /**
+     * U1. The custody export and the cash statement uploaded with no batch, as the frontend 1.1 or the API without one leaves
+     * them: no set holds them, so step 2 lists them as single files, and the wizard reads each with Danske. The server would
+     * refuse each read alone, so while one is ticked Parse waits and the set-blocks hint says why — `ungrouped` — and names
+     * it. Ticked against the order the table shows them; unticked one by one, the hint follows them, then goes.
+     */
+    test('U1 (step 9, #26): two exports of a set uploaded without a batch block Continue with the ungrouped hint, per file', async ({page}) => {
+        test.setTimeout(90_000);
+        const names = await pluginNames(page);
+        const brokerId = await startOnOwnedBroker(page, 'U1');
+
+        // Uploaded while the wizard is on step 1, which reads the brokers' files only when it enters step 2.
+        const custody = await uploadWithoutBatch(page, brokerId, CUSTODY_XLSX);
+        const cash = await uploadWithoutBatch(page, brokerId, CASH_CSV);
+
+        // Step 2 with nothing pending: Next goes straight there, and nothing is ticked for the user.
+        await expect(pendingRows(page), 'premise: nothing to upload in this session').toHaveCount(0);
+        const next = page.getByTestId('import-wizard-next');
+        await expect(next, 'nothing pending: Next goes on').toBeEnabled();
+        await next.click();
+        const step2 = page.getByTestId('import-wizard-step2');
+        await expect(step2).toBeVisible({timeout: 30_000});
+        await waitForSettled(step2, 30_000);
+
+        // The owned broker's panel, opened when it is not (rule 14). Each export is a single file there — a row of the
+        // broker's table, with its checkbox, which a card's role tables do not have — unticked, on the page the table shows.
+        const panel = page.getByTestId(`import-wizard-broker-files-${brokerId}`);
+        const toggle = panel.getByTestId(`import-wizard-broker-toggle-${brokerId}`);
+        await expect(toggle, 'the owned broker has its panel in step 2').toBeVisible({timeout: 10_000});
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle, 'the owned broker’s panel is open').toHaveAttribute('aria-expanded', 'true');
+        const checkbox = (file: StoredFile) => panel.getByTestId(`dt-row-checkbox-${file.file_id}`);
+        for (const file of [custody, cash]) {
+            await expect(singleRow(page, brokerId, file.file_id), `premise: ${file.filename}, with no batch, is a single file of its broker`).toHaveCount(1, {timeout: 10_000});
+            await expect(checkbox(file), `premise: ${file.filename} is not ticked`).toHaveAttribute('data-state', 'unchecked');
+        }
+        const parse = page.getByTestId('import-wizard-parse');
+        const setBlocks = page.getByTestId('import-wizard-set-blocks');
+        await expect(parse, 'premise: nothing ticked, nothing to analyse').toBeDisabled();
+        await expect(setBlocks, 'premise: nothing holds the analysis back yet').toHaveCount(0);
+
+        // Ticked against the order the table shows them: the order of the hint can then only be the selection's.
+        const shown = await singleFileRows(page, brokerId).evaluateAll((boxes) => boxes.map((box) => box.getAttribute('data-testid')));
+        const place = (file: StoredFile) => shown.indexOf(`dt-row-checkbox-${file.file_id}`);
+        const [first, second] = place(custody) > place(cash) ? [custody, cash] : [cash, custody];
+        for (const file of [first, second]) {
+            await checkbox(file).click();
+            await expect(checkbox(file), `${file.filename} is ticked`).toHaveAttribute('data-state', 'checked');
+        }
+        // Premise: the wizard holds both — only a ticked file has a plugin select — each read alone by Danske, what it picks
+        // for an export no set holds; and no set of the broker is ticked, so nothing else can hold Parse back.
+        for (const file of [first, second]) await expectPluginShown(singleRow(page, brokerId, file.file_id).getByTestId('import-plugin-select'), names.danske, names);
+        await expect(panel.locator('[data-testid="report-set-card"]:not([data-selected="none"])'), 'premise: no set of the owned broker is ticked').toHaveCount(0);
+
+        // The cure: each export would be read alone by a report-set plugin, which the server refuses. Parse waits, and the
+        // hint says why, naming both in the order they were ticked.
+        await expect(parse, 'an export no set holds, read by a report-set plugin, holds the analysis back').toBeDisabled();
+        await expectUngroupedHint(page, [first, second]);
+
+        // Unticked one by one, the hint follows: the first ticked leaves it, the other is still named, and Parse still waits.
+        await checkbox(first).click();
+        await expectUnselectedSingle(page, brokerId, first.file_id);
+        await expect(checkbox(second), `${second.filename} keeps its tick`).toHaveAttribute('data-state', 'checked');
+        await expectUngroupedHint(page, [second]);
+        await expect(parse, 'the export still ticked holds the analysis back').toBeDisabled();
+
+        // The other unticked: nothing is ticked, nothing is held back — the hint goes.
+        await checkbox(second).click();
+        await expectUnselectedSingle(page, brokerId, second.file_id);
+        await expect(setBlocks, 'nothing ticked: the hint goes').toHaveCount(0);
+        await expect(parse, 'nothing ticked: nothing to analyse').toBeDisabled();
     });
 });

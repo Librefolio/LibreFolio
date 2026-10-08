@@ -243,6 +243,17 @@ export function setBlocksAnalysis(set: ReportSetGroup, selectedIds: ReadonlySet<
     return !(state?.status === 'ready' && state.preview?.complete === true);
 }
 
+/**
+ * The selected files the analysis would read alone with a report-set plugin (#26). A report-set plugin
+ * reads its exports only through the set's combined file, and the server refuses one read alone; such a
+ * file is in no set — uploaded with no batch (before report sets, or by an older client), or failed — yet
+ * a set plugin is still chosen for it. In selection order.
+ */
+export function ungroupedSetFiles(units: ParseUnit[], plugins: SetPluginInfo[]): SelectedFileLike[] {
+    const isSet = (code: string) => isReportSetPlugin(plugins.find((plugin) => plugin.code === code));
+    return units.flatMap((unit) => (unit.kind === 'file' && isSet(unit.file.pluginCode) ? [unit.file] : []));
+}
+
 const ISO_PERIOD = /^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?$/;
 
 /** An ISO 8601 period such as `P1Y`, `P6M`, `P90D` or `P1Y6M` split into its parts; null otherwise. */

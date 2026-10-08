@@ -898,7 +898,8 @@
       "removeFromSet": "Remove from the set",
       "defaultPluginNote": "Read as the {plugin} set, not with the broker's default plugin ({defaultPlugin}). To change it, use “Read as” or a file's ⋮ menu.",
       "alsoRecognisedBy": "{file} is also recognised by: {plugins}",
-      "partlySelectedBlocks": "Continue is disabled while a set is only partly selected: select the whole set or deselect it."
+      "partlySelectedBlocks": "Continue is disabled while a set is only partly selected: select the whole set or deselect it.",
+      "ungroupedBlocks": "Continue is disabled while a selected file can be read only with its set but is not in one: {files}. Upload all the exports of the set again together, in one go, then select the set — or deselect the file."
     },
     "parseDetail": {
       "sourceRow": "File line",
