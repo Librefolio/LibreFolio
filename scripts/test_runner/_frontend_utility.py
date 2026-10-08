@@ -263,6 +263,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/dashboard/AllocationPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
+            "src/lib/components/transactions/import/ReportSetCard.escape.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/components/auth/UpdateAvailableModal.test.ts",
