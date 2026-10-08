@@ -96,15 +96,22 @@ async function expandDataQualityBanner(page: import('@playwright/test').Page) {
  * through the real API response exercises exactly that, deterministically, without touching
  * shared state. Whether the engine emits the issue in the first place is a backend concern
  * and is covered there.
+ *
+ * Real issues sharing a code with an injected one are dropped before the append, as in
+ * `serveMissingFxRates`: the rows a test asserts on must be unique. The banner keys its rows by
+ * `code + group_key` and its test ids carry the code alone, so a real twin would either collide
+ * with the injected row in the keyed list or leave `data-quality-issue-{code}` naming two rows.
  */
-async function injectDashboardIssues(page: import('@playwright/test').Page, issues: unknown[]) {
+async function injectDashboardIssues(page: import('@playwright/test').Page, issues: Array<{code: string; [field: string]: unknown}>) {
+    const injectedCodes = new Set(issues.map((issue) => issue.code));
     await page.route('**/api/v1/portfolio/report', async (route) => {
         const response = await route.fetch();
         const body = await response.json();
         const summary = body?.summary;
         if (summary) {
             summary.data_quality = summary.data_quality ?? {issues: []};
-            summary.data_quality.issues = [...(summary.data_quality.issues ?? []), ...issues];
+            const kept = ((summary.data_quality.issues ?? []) as Array<{code?: string}>).filter((existing) => !injectedCodes.has(existing.code ?? ''));
+            summary.data_quality.issues = [...kept, ...issues];
         }
         await route.fulfill({response, json: body});
     });
@@ -399,16 +406,40 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
                 cta_target: '901234',
                 group_key: 'missing_price',
             },
+            // A sibling navigate_asset issue under another code: its link shares the page and the
+            // test-id prefix with MISSING_PRICE's, so the scoping below is proven against a
+            // neighbour this test owns rather than against whatever the seed happens to report.
+            {
+                domain: 'portfolio',
+                code: 'TRANSACTION_IMPLIED',
+                severity: 'warning',
+                message_i18n_key: 'dataQuality.transactionImplied',
+                message_params: {count: 1, as_of_date: '2024-06-28'},
+                count: 1,
+                affected_asset_ids: [901236],
+                affected_asset_names: ['E2E Priceless Three'],
+                cta_action: 'navigate_asset',
+                cta_target: '901236',
+                group_key: 'transaction_implied',
+            },
         ]);
         await goToDashboard(page);
         await expandDataQualityBannerStrict(page);
 
-        await expect(page.getByTestId('data-quality-issue-MISSING_PRICE')).toBeVisible({timeout: 10_000});
-        // navigate_asset issues render one "go to asset" link per affected asset — the count
-        // is the assertion, because a single link for two assets was the original bug.
-        const navLinks = page.locator('[data-testid^="data-quality-nav-asset-"]');
+        const row = page.getByTestId('data-quality-issue-MISSING_PRICE');
+        await expect(row).toBeVisible({timeout: 10_000});
+        // navigate_asset issues render one "go to asset" link per affected asset — the count is
+        // the assertion, because a single link for two assets was the original bug. It is taken
+        // inside this row: every navigate_asset issue renders its links under the same test-id
+        // prefix, and other issues' links share the page (the seed's MISSING_COST_BASIS is one).
+        const navLinks = row.getByTestId('data-quality-nav-assets-MISSING_PRICE').locator('[data-testid^="data-quality-nav-asset-"]');
         await expect(navLinks).toHaveCount(2);
-        await expect(navLinks.first()).toBeVisible();
+        await expect(row.getByTestId('data-quality-nav-asset-901234')).toBeVisible();
+        await expect(row.getByTestId('data-quality-nav-asset-901235')).toBeVisible();
+
+        // Another issue's link is on the page too, in its own row: the count above left it out
+        // by scope, not because the page had nothing else to count.
+        await expect(page.getByTestId('data-quality-issue-TRANSACTION_IMPLIED').getByTestId('data-quality-nav-asset-901236')).toBeVisible();
     });
 
     // «Sync rates» on MISSING_FX_RATES. The missing dates all precede the first stored rate of
