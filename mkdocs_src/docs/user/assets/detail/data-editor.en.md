@@ -35,6 +35,8 @@ Until you save, new and changed prices show on the chart as a purple line. A pri
 Each row has a **Type** (Dividend, Interest, Split, Price Adjustment or Maturity), an **Amount** in the asset's currency (per share for a dividend, the ratio for a split) and optional **Notes**. See [Asset Events](events.md) for what each type does.
 
 - **Events from a provider are read-only**: an edit would be overwritten at its next sync. You can delete one, but the provider adds it back at its next sync; to remove it for good, change the asset's provider settings.
+- **Editing one of your events changes that event**, its **Type** included: no second event is added. A transaction linked to it stays linked and is read according to the new type: an **Adjustment** linked to a split, for example, no longer counts as a split once the event is a Price Adjustment.
+- **Changing an event's Type to the one another of your events has on that date** is refused when you save; swapping the types of two events in one save works. If you are deleting that other event, save the deletion first. A refused save keeps your changes in the editor for you to fix, while price changes from the same save are already stored.
 - **An event a transaction is linked to** cannot be deleted: the save warns you instead.
 
 ---
@@ -63,10 +65,16 @@ Each row has a **Type** (Dividend, Interest, Split, Price Adjustment or Maturity
 
     `date`, `type` and `amount` are required. `type` is one of `DIVIDEND`, `INTEREST`, `SPLIT`, `PRICE_ADJUSTMENT` and `MATURITY_SETTLEMENT`.
 
+    `value` is accepted in place of `amount`, so an events file exported by LibreFolio (the backup offered when you [change an asset's currency](../create-edit.md#editing-an-asset)) imports back, its other columns ignored. Mind two limits:
+
+    - **One event per date**: rows sharing a date are all left out as duplicates, so import such events from separate files.
+    - **Every row becomes your own event**, a provider's included: leave out the rows whose `source` is `PROVIDER` if the provider will send them again, or they will show twice.
+
 - Dates are `YYYY-MM-DD`, and decimals can use `.` or `,`.
 - Columns are separated by `;` or `,`; with `,`, write decimals with `.`.
 - Other columns are ignored, so a price file exported by LibreFolio imports as it is.
-- A row whose date is already in the table updates it; the others are added. Nothing is stored until you click **Save**.
+- The `currency` column is neither checked nor converted: amounts are stored in the asset's currency as they are, so convert those of a backup taken before a currency change first.
+- A price line updates the price of its date; an event line updates your event with the same date and type. A line that matches only a provider's event is left out, since an import never changes those; the others are added. Nothing is stored until you click **Save**.
 
 ---
 
