@@ -259,3 +259,8 @@
 1. Ogni test nuovo è rosso sulla base, per la ragione attesa, e verde dopo la cura.
 2. I gate sono verdi e `front check` resta a 0/0.
 3. Porte libere, nessun venv del worktree, nel worktree solo i file previsti.
+
+## Seguito
+
+- Lo step 20 estende l'Esc a SimpleSelect:
+  [`plan-phase00TaxonomySelectStep20SimpleSelectEscape.prompt.md`](plan-phase00TaxonomySelectStep20SimpleSelectEscape.prompt.md).
