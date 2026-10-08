@@ -12,47 +12,80 @@ related:
 
 ## Definition
 
-The LibreFolio release pipeline is a GitHub Actions workflow (`.github/workflows/release.yml`) that automates the full build, test, containerize, and publish sequence. It ensures no manual steps are required between a `git push` and a published release with Docker image and updated documentation.
+The LibreFolio release pipeline is one GitHub Actions job (`.github/workflows/release.yml`)
+that validates the docs, generates the gallery screenshots, builds and pushes the two
+Docker image variants, deploys the docs site and annotates the GitHub release. It runs
+**no test suite**: tests live in `manual-test-run.yml` and in the developers' lanes.
+The developer-facing description is `mkdocs_src/docs/developer/docs/release-pipeline.md`;
+`backend/test_scripts/test_utilities/test_release_image_contract.py`
+(`dev.py test utils release-image-contract`) pins the rules below.
 
 ## Trigger Modes
 
-| Trigger | When | Notes |
-|---------|------|-------|
-| `push: dev` | Every push to `dev` branch | Runs full pipeline but no release |
-| `release: [published]` | GitHub release published | Full pipeline + Docker `:latest` + MkDocs deploy |
-| `workflow_dispatch` | Manual via GitHub UI | Optional `force_gallery` flag to bypass cache |
+| Trigger | `run-name` | What it publishes |
+|---------|-----------|-------------------|
+| `push: dev` | `Nightly (dev)` | images `nightly` (full) and `nightly-light`; no deploy |
+| `release: published` | `Release vX.Y.Z` | images `X.Y.Z` (full), `X.Y.Z-light` and `latest` (light); docs deploy; release-notes snippet |
+| `workflow_dispatch` | `Manual run (<branch>)` | from `main`: `latest` (light) + docs deploy, the full variant is skipped; from `dev`: like a nightly; from any other branch: no image is pushed |
 
-## Pipeline Stages
+There is no `push: main` trigger and no `force_gallery` input (both appear in old notes).
+
+## Pipeline Stages (2026-10)
 
 ```
-1. Checkout (fetch-depth: 0 for MkDocs gh-deploy history)
-2. Python 3.13 + Pipenv (cache: Pipenv.lock hash)
-3. Node.js 24 + npm ci (cache: package-lock.json hash)
-4. DB setup (dev.py db create-clean)
-5. Backend tests (pytest)
-6. Frontend build (vite build)
-7. Playwright E2E + gallery screenshots (8 workers, networkidle)
-8. Docker build → tag :test (pre-release) or :latest + :vX.Y.Z (release)
-9. Docker push to GHCR (ghcr.io/librefolio/librefolio)
-10. MkDocs gh-deploy (on release only)
-11. GitHub Release assets upload
+1. Checkout (fetch-depth 0), Python 3.13 + Pipenv, Node 24
+2. Caches: Pipenv venv, npm, Playwright browsers; keys = runner.os + RUNNER_IMAGE_OS
+3. Install (pipenv --dev, dev.py install), VERSION file frozen from git describe
+4. Docs checks: translate-diff --issues-only, translate-validate --hide-localized, check-links
+5. mkdocs build (before the gallery: the test server starts fast with site/ present)
+6. Gallery: dev.py mkdocs gallery --workers 4 (always runs; no screenshot cache)
+7. Production frontend rebuild (the gallery's server --test leaves a debug build)
+8. mkdocs build again, now with the screenshots
+9. Nightly report of soft-failed steps (dev only)
+10. Docker metadata → build+push LIGHT first, then FULL (each only if it has tags)
+11. gh-pages deploy (main or release), artifacts, release-notes append (release)
 ```
 
 ## Key Design Decisions
 
-### Docker Tags
-- Pre-release builds (push to dev): `:test` tag only
-- Published releases: `:latest` + `:vX.Y.Z` (semantic version from release tag)
-- Ensures production images are always tied to a named release
+### Release gates and nightly tolerance
+- Steps 4, 5, 6 (gallery) and 8 are `continue-on-error` **only on `dev`**. A nightly
+  continues and lists them in the job summary; on any other run, a published release
+  included, they fail the pipeline.
+- The gallery became a gate in R12 (2026-10-07): the images bundle the screenshots and a
+  release deploys the docs site, so a release must not ship missing or broken shots.
+  Before, `|| echo ::warning::` swallowed every failure on every branch.
+- Evidence survives a failure: the screenshot artifact runs under `!cancelled()`, and a
+  dedicated artifact keeps `frontend/playwright-report/` + `frontend/test-results/` for 3
+  days whenever the gallery failed (dev included).
+
+### Docker tags (user guide "Image Variants" is the spec)
+- `latest` = **light**; a release publishes the full variant only as `X.Y.Z` and the light
+  one as `X.Y.Z-light`; nightlies are `nightly` / `nightly-light`. Image tags never carry
+  the `v` of the GitHub release tag (metadata-action `{{version}}`).
+- The full metadata step sets `flavor: latest=false`: metadata-action otherwise adds
+  `latest` to every `type=semver` release tag, and both variants used to push `latest`
+  (the light one won only because it was pushed second). `latest-light` no longer exists.
+- Each build runs only if its own metadata produced tags (`if: steps.<meta>.outputs.tags != ''`):
+  a push without a tag fails, which used to break manual runs from `main` and other branches.
+- Local `dev.py docker build` tags differ on purpose: they come from `git describe` and keep
+  the `v` (`librefolio:v1.2.3-light`, aliases `librefolio:latest[-light]`).
+
+### Push order serves the update prompt
+The in-app prompt's image gate probes the plain `X.Y.Z` tag, i.e. the **full** variant
+(`container_registry.py`). The light build therefore runs first and the full one last:
+when admins are prompted, `latest` and `X.Y.Z-light` already exist; if the light build
+fails, `X.Y.Z` is never pushed and nobody is told to update to an image `latest` does not
+have yet.
 
 ### Release Tag Convention (in-app update prompt)
-The F14 "new version" prompt reads GitHub's `releases/latest` and compares `tag_name`
-numerically against the running version:
-- Tag must be SemVer `vX.Y.Z` (leading `v` tolerated); a non-numeric tag compares as `0.0.0` and silently never prompts.
-- Drafts and prereleases are never returned by `releases/latest` — the prompt only fires for **stable** releases.
-- The release *name* is free-form (display only); the comparison is per-segment numeric.
-- GHCR image tags follow the same SemVer tag (plus `latest` and the `-light` variants), keeping the prompt and the published images aligned.
-- Full rules: `mkdocs_src/docs/developer/docs/release-pipeline.md` → "Release Tag Convention"; changelog structure rules in `.github/copilot-instructions.md` → "Changelog Rules".
+The F14 "new version" prompt reads GitHub's `releases/latest` (admins only, probed at most
+once an hour):
+- The tag must be a stable `vX.Y.Z` (leading `v` tolerated); any other tag is rejected and
+  never prompts. Drafts and prereleases are never returned by `releases/latest`.
+- The prompt also requires the image to be pullable (next section).
+- Full rules: `mkdocs_src/docs/developer/docs/release-pipeline.md`; changelog structure
+  rules in `.github/copilot-instructions.md` → "Changelog Rules".
 
 ### Update readiness is a two-probe contract
 
@@ -78,18 +111,17 @@ uses it only for the manifest retry. See
 boundary.
 
 ### Reproducible Frontend Builds
-- `package-lock.json` committed to repo
-- CI uses `npm ci` (not `npm install`) — installs exactly from lockfile
-- Vite 7.3.5 pinned as current production version
+- `frontend/package-lock.json` committed; installs come from the lock (`npm ci` via `dev.py install`).
+- The npm and Playwright caches are keyed per runner image as well: `ubuntu-latest` moves from
+  24.04 to 26.04 (actions/runner-images#14748, 2026-10-19 → 11-19) and `runner.os` is `Linux`
+  on both. The runner itself stays unpinned by the developer's choice.
 
-### Screenshot Cache
-- Gallery screenshots cached in CI by commit hash
-- `force_gallery: true` in `workflow_dispatch` bypasses cache
-- Reduces CI time by 3–5 minutes on typical runs where screenshots haven't changed
-
-### Playwright Stability
-- Workers reduced from 16 to 8 (fewer timeouts on CI runners)
-- `networkidle` wait strategy added (was `domcontentloaded`)
+### Gallery fixture for the dashboard shots
+- The dashboard shots mock `POST /api/v1/portfolio/report` with `frontend/e2e/dashboard-report.json`,
+  a **real** capture normalized to a 50 000 net worth (`scripts/normalize_dashboard_fixture.py`,
+  capture procedure in its docstring). A stale capture made the shots render an empty dashboard
+  from 2026-09-11 (`yield_on_cost` became required) until R12; the Vitest guard
+  `frontend/src/lib/api/dashboardReportFixture.test.ts` now fails in seconds instead.
 
 ## Browser Compatibility
 - `crypto.randomUUID` polyfill added for link_uuid generation on older Android browsers that lack the API
@@ -99,11 +131,16 @@ boundary.
 | Role | Path |
 |------|------|
 | Release workflow | `.github/workflows/release.yml` |
-| Package lock | `package-lock.json` |
-| Docker compose | `docker-compose.yml` |
+| Package lock | `frontend/package-lock.json` |
+| Docker compose (end users) | `docker-compose.prod.yml` |
 | Dockerfile | `Dockerfile` |
 | GHCR image-availability probe | `backend/app/services/container_registry.py` |
 | Same-origin system endpoint | `backend/app/api/v1/system.py` |
 | Image status schema | `backend/app/schemas/system.py` |
 | Release metadata and image gating | `frontend/src/lib/features/update-check/updateCheck.ts` |
 | GHCR probe regressions | `backend/test_scripts/test_services/test_container_registry.py` |
+| Release contract tests | `backend/test_scripts/test_utilities/test_release_image_contract.py` |
+| Frontend production guard (image) | `scripts/docker/check_frontend_build.sh` |
+| Developer page | `mkdocs_src/docs/developer/docs/release-pipeline.md` |
+| Gallery dashboard fixture guard | `frontend/src/lib/api/dashboardReportFixture.test.ts` |
+| Fixture normalization | `scripts/normalize_dashboard_fixture.py` |

@@ -1001,8 +1001,6 @@
       "leaveLastOwnerHint": "Se non è ciò che vuoi, assegna prima un altro utente come owner e poi abbandona."
     },
     "lots": {
-      "buyDate": "Data Acquisto",
-      "dateRange": "Intervallo",
       "detailTitle": "Dettaglio Lotti FIFO",
       "loadFailed": "Impossibile caricare i dati dei lotti",
       "analysisFailed": "L'analisi dei lotti non è stata ricostruita in modo affidabile (quantità o trasferimenti incoerenti) — i valori potrebbero essere incompleti.",
@@ -1047,7 +1045,6 @@
       },
       "viewAsset": "Vedi Asset",
       "analyze": "Analizza Lotti",
-      "allLots": "Tutti",
       "brokersCount": "{count} broker",
       "custody": "Custodia",
       "openQuantity": "Quantità aperta",
@@ -1084,12 +1081,9 @@
         "goToTransaction": "Vai alla transazione",
         "history": "Cronologia",
         "inTransit": "In transito",
-        "openQuantity": "Quantità aperta",
         "openingPrice": "Prezzo unitario di apertura",
-        "currentValue": "Valore corrente",
         "assetIncome": "Proventi dell'asset",
         "marketPnl": "P&L di mercato",
-        "totalPnl": "P&L complessivo",
         "cashYield": "Rendimento da proventi",
         "totalReturn": "Rendimento complessivo",
         "netBreakdown": "Scomposizione netta",
@@ -1099,10 +1093,7 @@
         "netTotalPnl": "P&L totale netto",
         "netTotalReturn": "Rendimento totale netto",
         "estimatedAtCost": "Valore stimato al costo",
-        "fifoPnl": "P&L FIFO",
-        "openReturn": "Rendimento aperto",
         "custodyFragments": "Frammenti di custodia",
-        "originalQuantity": "Quantità originaria",
         "state": {
           "closed": "Chiuso",
           "degraded": "Degradato",
@@ -1164,9 +1155,6 @@
       "netTotalPnl": "P&L netto",
       "netTotalReturn": "Rendimento netto",
       "netMetricsUnavailable": "Metriche nette non disponibili: pool economico degradato",
-      "categoryCost": "Costo",
-      "categoryIncome": "Provento",
-      "categoryOther": "Altro",
       "estimatedAtCost": "Stimato al costo",
       "estimatedAtCostLegend": "Stimato al costo (nessun prezzo di mercato)",
       "incomeMarkerAmount": "Importo",
@@ -1178,13 +1166,9 @@
       "incomeMarkerType": "Tipo",
       "lotIdentifierCopied": "Identificativo lotto copiato",
       "lotIdentifierHelp": "Identificativo tecnico stabile derivato dalla transazione di apertura, usato per audit, supporto e correlazione API.",
-      "otherReconciliationResidual": "Residuo di riconciliazione",
       "performanceBubbleTitle": "Performance dei lotti",
       "totalPnl": "P&L complessivo",
-      "unallocatedCosts": "Costi non allocati",
-      "unallocatedIncome": "Proventi non allocati",
       "tooltip": {
-        "totalPnl": "P&L complessivo",
         "initialValue": "Valore iniziale",
         "shares": "quote",
         "sharesOpenOutOf": "quote aperte su",
@@ -1563,7 +1547,6 @@
     "mwrrCumTooltip": "Rendimento money-weighted del periodo,\nconsiderando importi e timing dei flussi.",
     "mwrrAnn": "MWRR annualizzato",
     "mwrrAnnTooltip": "Tasso annuo equivalente\ndel rendimento money-weighted.",
-    "holdings": "Le tue Posizioni",
     "geoUnclassified": "Dati geografici non disponibili per il {pct}% del valore del portafoglio",
     "roiAllZero": "I rendimenti sono 0% nel periodo selezionato",
     "abs": "Abs",
@@ -1574,17 +1557,11 @@
     "closedPositions": "Chiuse",
     "navWeight": "Peso",
     "unrealizedPnl": "P&L latente",
-    "realized": "Realizzato",
     "costs": "Costi",
-    "unallocated": "Non allocato",
-    "sharedScale": "Scala condivisa: 100% = max(guadagni, perdite)",
     "noPositions": "Nessuna posizione disponibile",
     "noPeriodPnl": "Nessun P&L nel periodo selezionato",
-    "gains": "Guadagni",
-    "losses": "Perdite",
     "seeAllPositions": "Vedi tutte →",
     "aiExport": "Export AI",
-    "costsTooltip": "Commissioni e tasse registrate nel periodo selezionato.",
     "periodPnlTooltip": "Guadagno o perdita totale attribuibile solo al periodo selezionato (variazione non realizzata + realizzato + reddito − costi). Può differire dal guadagno totale della posizione.",
     "unrealizedPnlPercent": "P&L %",
     "pnlChange1d": "Δ1",
@@ -3144,7 +3121,6 @@
       "minCoverage": "Copertura minima",
       "minObservations": "Osservazioni minime",
       "targetAnnualReturn": "Rendimento annuo obiettivo",
-      "process": "Processo stocastico",
       "sampling": "Strategia di campionamento",
       "paths": "Percorsi simulati",
       "randomSeed": "Seed casuale",
@@ -3419,7 +3395,6 @@
           "hypothesis": "Modello classico: assume oscillazioni regolari e sottostima le code."
         }
       },
-      "regimeTruncated": "Questa ipotesi dura {declared} giorni; il tuo orizzonte ne copre solo {applied}.",
       "driftUncertainty": "La deriva viene da {count} osservazioni: solo per questo la mediana sta fra {low} e {high}.",
       "driftUncertaintyWide": "La deriva viene da appena {count} osservazioni: solo per questo la mediana sta fra {low} e {high} — più larga della banda qui sopra."
     },
@@ -3956,13 +3931,6 @@
           "goTo": "Vai a {step}",
           "show": "Mostra"
         },
-        "age": {
-          "after": "Con data successiva al {date}",
-          "daysBefore": "{count, plural, one {# giorno} other {# giorni}} prima del {date}",
-          "manual": "Inserito a mano",
-          "sameDay": "Del giorno",
-          "unknown": "Data sconosciuta"
-        },
         "applyToDraft": "Applica alla bozza",
         "assetEditor": {
           "identity": "Identità",
@@ -4380,10 +4348,7 @@
           "structureInvalid": "Un campo non rispetta il contratto del pianificatore: {path}.",
           "targetInvalid": "L’obiettivo non è un numero da 0.",
           "targetTotalNotHundred": "Il totale degli obiettivi è {total}%, deve essere 100% (controllo).",
-          "valuationCurrencyMissing": "Manca la valuta di valutazione.",
-          "asOfMissing": "Manca la data di riferimento.",
-          "priceDateAfterReference": "La data del prezzo è successiva alla data di riferimento.",
-          "priceDateMissing": "Manca la data del prezzo."
+          "valuationCurrencyMissing": "Manca la valuta di valutazione."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",
@@ -5086,7 +5051,6 @@
       "groups": {
         "setup": "Configurazione",
         "core": "Tour principale",
-        "contextual": "Guide contestuali",
         "transactions": "Transazioni",
         "broker": "Broker",
         "fx": "FX",

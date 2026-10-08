@@ -802,6 +802,216 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
    > - `front-broker detail` **33/33 a 4 worker** (61 s, carico 19);
    > - porta 6159 libera.
 
+10. ✅ (07/10) **Lotto 2**: tab Rischio solo sui broker posseduti, le due righe di `RiskLevelsPanel`, i commenti
+    superati. Via del developer alle 13:10 («avviamoli adesso, sfruttiamo il tempo della coverage»); base
+    `d07412899` (fast-forward delle 13:25).
+
+    > **Decisione del developer** (07/10, testuale): «Solo i broker posseduti, come il resto della Dashboard».
+    >
+    > **Design confermato dal coordinator**:
+    > - scope = tutti i broker posseduti, `{kind: 'portfolio', broker_ids: ownedBrokerIds}`, indipendente dal
+    >   filtro: il sottotitolo `risk.dashboardFullPortfolio` resta vero;
+    > - L1 (`scopeValue`, dal `summary` non filtrato) ora coincide con lo scope;
+    > - il pannello si monta solo con `canAsk`, quindi un caricamento a freddo su `?tab=rischio` non manda
+    >   richieste senza `broker_ids`;
+    > - chi non possiede broker vede il vuoto con `common.noData`, nessuna chiave nuova.
+    >
+    > **Concessioni**:
+    > - `dashboard/+page.svelte` (prop, montaggio, getter del contesto);
+    > - `RiskLevelsPanel.svelte` (`setTweenHydration`, `onrefreshfailed`);
+    > - `brokers/[id]/+page.svelte` (getter e commento);
+    > - commenti di `AssetSetRiskPanel.svelte` (`:180`, `:188`, `:494-503`);
+    > - `risk-analysis.spec.ts` (condizioni della Dashboard);
+    > - `risk-lab.spec.ts` (commenti);
+    > - un caso nuovo in `dashboard-cache.spec.ts`;
+    > - doc EN: `user/dashboard/index`, `user/brokers/sharing`, il paragrafo Rischio di `domain-state.md`.
+    >
+    > Il CHANGELOG lo scrive il coordinator con le mie frasi.
+    >
+    > **Ordine**: il test-author scrive le specifiche senza lanciarle. Io lancio i rossi con la produzione invariata,
+    > poi applico `/tmp/libreFolio_n_batch2_prod.py`, poi i verdi a 1 e a 4 worker. Il docs-writer lavora in
+    > parallelo, fuori dalla corsia.
+    >
+    > **Doc (docs-writer, ✅)**:
+    > - `user/dashboard/index.en.md`:
+    >   - bullet Rischio: «every broker you own»;
+    >   - nota Sharing senza eccezione;
+    >   - «Coming back»: la sfumatura sul cambio di periodo o valuta;
+    >   - bullet del filtro broker.
+    > - `user/brokers/sharing.en.md`: tolta l'eccezione.
+    > - `domain-state.md`: paragrafo Rischio; nel bullet Lotti `brokersReady` diventa `canAsk`. Quest'ultimo
+    >   era falso dal lotto 1 ed è una parola sola, fuori dal paragrafo Rischio: lo dichiaro.
+    > - Build strict pulito (`/tmp/libreFolio_n_b2_mkdocs_build2.log`); `check-links` invariato.
+    >
+    > **Rosso 1** (`dashboard-cache`, caso nuovo, produzione invariata): fallisce a `:532`. Ci sono 2 domande di
+    > rischio `{"kind":"portfolio"}` senza `broker_ids` al caricamento a freddo; posseduti `[1, 5]`
+    > (`/tmp/libreFolio_n_b2_red_dashcache.log`, carico 27).
+    >
+    > **Specifiche (test-author, senza lanciarle)**:
+    > - `risk-analysis.spec.ts`:
+    >   - la Dashboard si riconosce dall'insieme dei broker posseduti (`portfolioOver`, mai su un insieme vuoto),
+    >     letto due volte, prima del caricamento e a pagina ferma: un vicino parallelo
+    >     (`dashboard-broker-filter-label`) crea e cancella un broker di TEST_USER;
+    >   - premessa: l'insieme posseduto non è `[brokerId]`;
+    >   - aggiunto un controllo della base-wave in `openWithStoredBenchmark`, accettato e dichiarato;
+    >   - corretto il commento sul live price (`:1135-1154`).
+    > - `dashboard-cache.spec.ts`: caso nuovo (`:507-565`), con tre letture dell'insieme posseduto.
+    > - `risk-lab.spec.ts`: solo commenti. Il test-author ha corretto anche due falsi vecchi in `holdLivePricePoll`:
+    >   il trigger è l'insieme degli id, e `runGuarded` era già stato corretto il 25/09 in `b02f49727`.
+    >
+    > **Rosso 2** (`front-portfolio risk`, produzione invariata, carico 38): 9 falliti, 29 verdi, ed esattamente
+    > i previsti:
+    > - `:2814` → `:2839`;
+    > - `:2920` → `:2970`;
+    > - `:3701` → `:3720`;
+    > - i 5 D378 → `:3808` («asked: {"kind":"portfolio"}»);
+    > - `:4360` → `:4394`.
+    >
+    > Log: `/tmp/libreFolio_n_b2_red_risk.log`.
+    >
+    > **Produzione applicata** (`/tmp/libreFolio_n_batch2_prod.py`, poi Prettier):
+    > - Dashboard: `{#if canAsk}`, `scope` sui posseduti, vuoto `common.noData` (`dashboard-risk-no-owned`),
+    >   getter `summary !== null`;
+    > - dettaglio broker: getter `portfolioSummary !== null`;
+    > - `RiskLevelsPanel`: 2 import, `onrefreshfailed`, `setTweenHydration`;
+    > - `AssetSetRiskPanel`: i 3 commenti.
+    >
+    > **Cancelli** (corsia 6159, un comando per volta, carico 13–59 per la coverage nella 6150):
+    >
+    > | Cancello | Esito |
+    > |---|---|
+    > | `front check` | 0 errori, 0 avvisi (rifatto dopo la cura) |
+    > | unità risk · risk-controller · store · risk-levels-component · component | 40 · 102 · 52 · 247 · 2829 |
+    > | `dashboard-cache` | 6/6 a 1 worker (anche dopo la cura) · 6/6 a 4 |
+    > | `risk` | 38/38 a 1 · a 4 prima 37/38, poi **38/38** dopo la cura |
+    > | `risk-lab` | 44/44 a 1 · 44/44 a 4 |
+    > | `dashboard` · broker `detail` · `banners` | 26 · 33 · 18 |
+    > | `mkdocs build` strict | 0 avvisi (anche con `#risk-tab`) |
+    > | `check-links` | solo il rotto già alla base (`#rolling-return`) |
+    >
+    > Log: `/tmp/libreFolio_n_b2_*.log`, `/tmp/libreFolio_n_b2r_*.log`. Porta 6159 libera.
+    >
+    > **⚠️ Fuori pista: un difetto trovato dal test a 4 worker.** `risk-analysis.spec.ts:3849` (D378 «blocked»)
+    > falliva a `:1316`: `dashboard-risk-tab` era nascosta. Triage (`test-triage`), verdetto **defect**: al
+    > caricamento a freddo, finché i broker posseduti non arrivano, `{#if canAsk}` non rendeva niente, e la tab
+    > restava **vuota** anche per l'utente. Sotto carico 40 sono serviti più di 8 s.
+    > - Cura nel prodotto (§6 della skill): un ramo `{:else}` con lo spinner della tab Transazioni
+    >   (`dashboard-risk-loading`), senza testo né chiave i18n.
+    > - Rifatti: il test da solo 1/1, `risk` a 4 worker 38/38, `dashboard-cache` 6/6.
+    >
+    > **Ancora per Q**: `user/dashboard/index.en.md#risk-tab`, nuova sezione `## 🛡️ Risk Tab {: #risk-tab }`
+    > (`:41`). Ci sono la spiegazione della voce 3, che ora rimanda alla sezione. È un titolo in più: debito di
+    > traduzione IT/FR/ES.
+
+11. ✅ (07/10) **Due rossi della coverage completa** (`d07412899`, carico 30–50, 2 worker), assegnati dal
+    coordinator alle 16:08. Base `c958f857c`. Metodo: `test-triage`; i test li scrive il test-author; i difetti di
+    prodotto si dicono al coordinator prima di correggerli.
+
+    > Log della coverage letti in `/tmp/libreFolio_triage_20261007/`: il checkout principale non si legge.
+    >
+    > **1. `test_fx_conversion.py::test_missing_rate_error`, verdetto «assumption» (§1/§3).**
+    > - Il test leggeva il **più vecchio** EUR/USD del DB condiviso e pretendeva che `+365` giorni fosse coperto dal
+    >   backward-fill. Il seed FX (`populate_fx_rates()`, `populate_mock_data.py:2886-2961`, solo feriali `:2938`)
+    >   copre ogni feriale da `max(prima tx − 7, oggi − 3 anni)` a oggi, quindi `+365` cade su un feriale con un suo
+    >   cambio.
+    > - Riprodotto sulla 6159 con il DB seminato: più vecchio 2025-09-23, chiesto 2026-09-23, `AssertionError`
+    >   (`/tmp/libreFolio_n_tr_fx_seeded_old.log`). Su un DB fresco lo stesso test passa: verdetto diverso a
+    >   seconda del contenuto del DB condiviso.
+    > - In più `:400-401` ingoiava un `RateNotFoundError` con un `print_error`.
+    > - **Cura** (test-author, solo quel test): la coppia **EUR/XTS** (codice ISO 4217 riservato ai test) con
+    >   cambi il 2001-01-08 (1,25) e il 2001-01-12 (1,40), in `flush` **senza commit** e `rollback` in `finally`.
+    >   La finestra viene verificata vuota prima di scrivere.
+    >   - 7.1: prima del 2001-01-08 c'è `RateNotFoundError`;
+    >   - 7.2: il 2001-01-10 usa il backward-fill dal 2001-01-08, e 100 EUR → 125 XTS (il cambio del 12 fa da
+    >     trappola);
+    >   - 7.3: nel giorno esatto niente backward-fill.
+    >   - Tolto il `try/except` che ingoiava l'errore.
+    > - Prove:
+    >   - DB seminato, test nuovo: verde (`/tmp/libreFolio_n_fx_missing_rate_seeded.log`); nessuna riga EUR/XTS
+    >     rimasta;
+    >   - `services fx-conversion` su DB fresco: 18/18 (`/tmp/libreFolio_n_fx_conv_action.log`);
+    >   - `ruff` e `black` puliti.
+    > - Fuori perimetro, segnalati:
+    >   - `_backend_services.py:929` cita ancora il «missing-rate boundary» fra i motivi dell'esclusiva;
+    >   - la fixture del modulo fa commit di 12 righe MOCK senza ripulire.
+    >
+    > **2. `ai-export-contract.spec.ts:133`, verdetto «defect» (prodotto, già alla base).**
+    > - La Dashboard abilita AI Export appena arriva il catalogo (`:949`), e `handleAiExport` manda
+    >   `brokerIds: activeBrokerIds`, che resta `undefined` finché i broker posseduti non sono noti.
+    > - Un export fatto in quella finestra parte senza `broker_ids`, e il backend lo allarga a tutti i broker
+    >   accessibili (F2).
+    > - Esisteva già dal 07/2026 (`c51e9930c`, `18225592e`); l'asserzione F2 dello spec è del 03/09 (`2572b2403`).
+    >   Il carico l'ha esposto: sulla 6159, a carico 28, 3/3 verdi.
+    > - Cura proposta (`!canAsk` nel `disabled` e nel `handleAiExport`) e test nuovo, rosso prima: **in attesa
+    >   del via** del coordinator.
+    >
+    > **3. Nello stesso log, non assegnato: `ai-export-panel.spec.ts:19`, verdetto «assumption».**
+    > - Fallisce in modo deterministico sulla 6159: Δy = 36, AI Export sopra Refresh.
+    > - `3e5313d3e` (30/09) ha alzato `denseRow` della Dashboard da 810 a 950, e a 1280×720 il prodotto impila
+    >   apposta; lo spec di agosto afferma ancora la stessa riga.
+    > - Proposta inviata; decide il coordinator.
+    >
+    > **Via del developer** (16:29, testuale): «Approva tutte e tre le correzioni». Concessi
+    > `ai-export-contract.spec.ts` (solo il caso nuovo) e `ai-export-panel.spec.ts` (il punto 3 passa da K a me).
+    >
+    > **Punto 2, fatto**:
+    > - Test (test-author): caso nuovo `ai-export-contract.spec.ts:312`. Trattiene `GET /api/v1/brokers` su una
+    >   Dashboard a freddo; dopo il catalogo il trigger deve essere disabilitato; al rilascio si abilita, e l'export
+    >   porta l'insieme posseduto, letto dalla risposta che la pagina stessa ha ricevuto.
+    > - **Rosso** a produzione invariata: `:334` («AI Export is enabled while the owned brokers are still unknown»);
+    >   gli altri 3 casi verdi (`/tmp/libreFolio_n_ae_red-contract.log`).
+    > - Cura nel prodotto (`dashboard/+page.svelte`): `disabled={… || !canAsk}`; `handleAiExport` rifiuta con
+    >   `!canAsk`, e l'errore porta al toast esistente `aiExport.genericFailed`. Nessuna chiave nuova.
+    > - Verdi: contract 4/4 a 1 e a 4 worker.
+    >
+    > **Punto 3, fatto**: lo spec del pannello legge il tier pubblicato su `window.__lfLayouts.dashboard`, a
+    > larghezza stabilizzata come nello sweep. In `stackFilters` i due bottoni sono in colonna, accostati
+    > (gap ≤ 12 px); negli altri tier stanno sulla stessa riga. Nessun controllo tra i due. Verde 6/6 a 1 e a 4
+    > worker, già a produzione invariata.
+    >
+    > **⚠️ Fuori pista: la cura del punto 2 rompe `ai-export-memory.spec.ts:108`** (e `cutover`, che ne è l'alias).
+    > Verdetto: **assumption**.
+    > - Il test usa `e2e_test_user2`, che non possiede broker (VIEWER al 0%); con la regola approvata
+    >   («…e ce n'è almeno uno») il suo export sulla Dashboard resta disabilitato.
+    > - Prima partiva senza `broker_ids`, cioè proprio la falla F2.
+    > - Proposti: secondo utente `TEST_ADMIN` (OWNER di tutti i broker) più l'asserzione «senza broker posseduti
+    >   il bottone è disabilitato»; e una frase nella doc `user/ai-export/portfolio.en.md`. **In attesa della
+    >   concessione.**
+    >
+    > **Altri cancelli verdi** (dopo la cura): `front check` 0/0, `services fx-conversion` 18/18, ai-export unit 353,
+    > catalog, `dashboard-cache` 6/6, `dashboard` 26/26, toolbar-width-sweep 15/15.
+    >
+    > **Concessi** (17:37): `ai-export-memory.spec.ts` (solo `:108`) e `user/ai-export/portfolio.en.md` («Scope and
+    > Data»).
+    > - Test (test-author): il secondo utente diventa `TEST_ADMIN`, OWNER di tutti i broker. Prima del cambio
+    >   utente, con `e2e_test_user2` (nessun broker posseduto, letto da `GET /brokers`), si verifica che
+    >   `ai-export-button` resti **disabilitato** a pagina ferma (catalogo arrivato, `data-busy="false"`).
+    > - In più, accettato e dichiarato: `route.abort()` su `api.github.com` per la pagina. Dopo il login
+    >   dell'admin il browser chiederebbe a GitHub una nuova versione.
+    > - **Rosso provato**: tolto per prova `|| !canAsk` dal `disabled`, il test fallisce a `:160` («AI Export is
+    >   enabled for e2e_test_user2, who owns no broker…», `/tmp/libreFolio_n_aem_red.log`, carico 30). Il file
+    >   è stato ripristinato identico (`81e1c1f99`).
+    > - Doc (docs-writer): «Scope and Data» dice che l'export copre gli stessi broker della Dashboard (solo quelli
+    >   posseduti, oltre lo 0%, ristretti dal filtro; mai quelli condivisi come Editor o Viewer), e che il bottone
+    >   è disponibile solo quando la Dashboard ha caricato i broker; resta disabilitato se non se ne possiede
+    >   nessuno. Build strict pulito.
+    > - Segnalati, non toccati:
+    >   - «follows the date range» è impreciso: l'export usa la fine del periodo come data dello snapshot, e la
+    >     finestra è il periodo AI scelto. Succede anche in `dashboard/index.en.md` e `ai-export/index.en.md:141`;
+    >   - la nota «Sharing» della Dashboard non elenca l'AI Export;
+    >   - nessun segnale pubblicato di «catalogo applicato» (proposto un `data-catalog` sul trigger, come in
+    >     `RiskAnalysisPanel`: decisione di interfaccia).
+    >
+    > **Cancelli finali** (codice definitivo, corsia 6159, carico 20–44):
+    > - Prettier, `ruff`, `black` e `front check` (0/0) puliti;
+    > - `front-ai-export all`: 18 E2E e 353 unità; sei action verdi (unit, catalog, contract, cutover, memory,
+    >   panel);
+    > - `memory` 4/4 a 4 worker; `services fx-conversion` 18/18;
+    > - `mkdocs build` strict pulito; `check-links` solo il rotto già alla base (`#rolling-return`);
+    > - `git diff --check` pulito; porta 6159 libera.
+    >
+    > Log: `/tmp/libreFolio_n_fin_*.log`.
+
 **Definition of done:**
 
 - **Ritorno senza trigger** (es. Dashboard → Transazioni → Dashboard): **0** `/portfolio/report`, **0**

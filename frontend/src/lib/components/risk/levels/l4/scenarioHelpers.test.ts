@@ -92,9 +92,9 @@ describe('tornadoRows', () => {
         const rows = tornadoRows({
             dimension: 'asset_class',
             configured_buckets: [
-                {bucket_id: 'BOND', shock: -0.05, applied_asset_count: 1, asset_exposure_total: 0.3, contribution_return: -0.015},
-                {bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 2, asset_exposure_total: 0.6, contribution_return: -0.12},
-                {bucket_id: 'CRYPTO', shock: 0.1, applied_asset_count: 1, asset_exposure_total: 0.1, contribution_return: 0.01},
+                {bucket_id: 'BOND', shock: -0.05, applied_asset_count: 1, asset_exposure_total: 1, contribution_return: -0.015},
+                {bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 2, asset_exposure_total: 2, contribution_return: -0.12},
+                {bucket_id: 'CRYPTO', shock: 0.1, applied_asset_count: 1, asset_exposure_total: 1, contribution_return: 0.01},
             ],
         });
         expect(rows.map((row) => row.bucketId)).toEqual(['STOCK', 'BOND', 'CRYPTO']);
@@ -107,8 +107,8 @@ describe('tornadoRows', () => {
         const rows = tornadoRows({
             dimension: 'asset_class',
             configured_buckets: [
-                {bucket_id: 'UP', shock: 0.5, applied_asset_count: 1, asset_exposure_total: 0.5, contribution_return: 0.25},
-                {bucket_id: 'DOWN', shock: -0.02, applied_asset_count: 1, asset_exposure_total: 0.5, contribution_return: -0.01},
+                {bucket_id: 'UP', shock: 0.5, applied_asset_count: 2, asset_exposure_total: 2, contribution_return: 0.25},
+                {bucket_id: 'DOWN', shock: -0.02, applied_asset_count: 1, asset_exposure_total: 1, contribution_return: -0.01},
             ],
         });
         expect(rows.map((row) => row.bucketId)).toEqual(['DOWN', 'UP']);
@@ -118,7 +118,7 @@ describe('tornadoRows', () => {
         // The shock is what the reader typed; the contribution is what it did to
         // this portfolio. Showing the first would make a 1%-weight bucket look
         // exactly as damaging as a 60% one.
-        const rows = tornadoRows({dimension: 'sector', configured_buckets: [{bucket_id: 'TECH', shock: -0.9, applied_asset_count: 1, asset_exposure_total: 0.01, contribution_return: -0.009}]});
+        const rows = tornadoRows({dimension: 'sector', configured_buckets: [{bucket_id: 'TECH', shock: -0.9, applied_asset_count: 2, asset_exposure_total: 2, contribution_return: -0.009}]});
         expect(rows[0].value).toBeCloseTo(-0.009, 10);
     });
 
@@ -136,7 +136,9 @@ describe('tornadoRows', () => {
     it('drops a row it cannot place instead of drawing a bar at zero', () => {
         // A bar at zero is a statement ("this did nothing"); a missing number is
         // not. Inventing the first from the second is the whole failure mode.
-        const rows = tornadoRows({dimension: 'asset_class', configured_buckets: [{bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 0, asset_exposure_total: 0, contribution_return: null}]});
+        // As an asset set sends it: two stocks in the bucket, and no contribution,
+        // because the scope has no weights (`stress.py:450`).
+        const rows = tornadoRows({dimension: 'asset_class', configured_buckets: [{bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 2, asset_exposure_total: 2, contribution_return: null}]});
         expect(rows).toEqual([]);
     });
 
@@ -186,6 +188,78 @@ function tableRows(output: unknown): TableRow[] {
 /** The figures of a row the table states, and only those, so a red names exactly what is missing. */
 function figures(row: TableRow) {
     return {key: row.key, value: row.value, ownReturn: row.ownReturn, contribution: row.contribution, amount: row.amount, weight: row.weight};
+}
+
+// Hypothetical-shock payloads, written the way `stress.py::_hypothetical` writes them (`:338-452`).
+//
+// A bucket row takes its figures from `configured_buckets` and its weight from the holdings — each
+// one's `weight` and `bucket_audit` — and the backend derives the first from the second. A fixture
+// that states the buckets alone can therefore say anything about them, and this file's did until
+// 07/10/2026: an `asset_exposure_total` of 0.3/0.6/0.1, written as if it were a weight, kept the
+// column green while the Dashboard printed «400.0%» for four stocks. So a holding is written with its
+// audit, and `shockOutput` derives the buckets from the audits as the backend does, so that no
+// fixture can state a total its holdings do not add up to. Amounts are on a notional scope of
+// 50 000, as a portfolio's payload carries them; no bucket row reads them.
+
+type ShockImpact = NonNullable<RiskStressOutput['impacts']>[number];
+type ShockSlice = NonNullable<ShockImpact['bucket_audit']>[number];
+type ShockDimension = z.infer<typeof schemas.RiskScenarioDimension>;
+
+const SCOPE_VALUE = 50_000;
+
+/** One line of a holding's `bucket_audit`, fields in the wire's order; its contribution is the product `schemas/risk.py:904` validates. */
+function slice(exposure_bucket_id: string, exposure: number, candidate_bucket_ids: string[], applied_bucket_id: string | null, bucket_shock: number, rule: ShockSlice['rule']): ShockSlice {
+    return {exposure_bucket_id, exposure, candidate_bucket_ids, applied_bucket_id, bucket_shock, shock_contribution: exposure * bucket_shock, rule};
+}
+
+/** A holding as `stress.py:431-442` reports it: its shock the sum of its slices' (`:418`), its contribution its weight times that. An `undefined` weight is not sent at all. */
+function holding(asset_id: number, weight: number | null | undefined, dimension: ShockDimension, bucket_audit: ShockSlice[]): ShockImpact {
+    const shock_return = bucket_audit.reduce((sum, line) => sum + line.shock_contribution, 0);
+    const weighted = typeof weight === 'number';
+    return {
+        asset_id,
+        ...(weight === undefined ? {} : {weight}),
+        shock_return,
+        contribution_return: weighted ? weight * shock_return : null,
+        impact_amount: weighted ? (weight * SCOPE_VALUE * shock_return).toFixed(2) : null,
+        dimension,
+        metadata_fallback: false,
+        bucket_audit,
+    };
+}
+
+/** A holding wholly in one asset class (`stress.py:233`): applied directly when the class is a configured bucket, else shocked by zero and applied to none (`unconfigured_zero`, `:260-266`). */
+function classHolding(asset_id: number, weight: number | null | undefined, assetClass: string, shocks: Record<string, number>): ShockImpact {
+    const line = assetClass in shocks ? slice(assetClass, 1, [assetClass], assetClass, shocks[assetClass], 'direct') : slice(assetClass, 1, [], null, 0, 'unconfigured_zero');
+    return holding(asset_id, weight, 'asset_class', [line]);
+}
+
+/**
+ * The output `stress.py:444-452` writes around those holdings: one configured bucket per shock, ordered by
+ * id, with the number of holdings applied to it, the sum of their *unweighted* exposures, and — on a
+ * weighted scope only — Σ wᵢ·eᵢ_b·shock_b (`:412-416`).
+ */
+function shockOutput(dimension: ShockDimension, shocks: Record<string, number>, impacts: ShockImpact[]): RiskStressOutput {
+    const weighted = impacts.every((impact) => typeof impact.weight === 'number');
+    const configured_buckets = Object.keys(shocks)
+        .sort()
+        .map((bucket_id) => {
+            const applied = impacts.flatMap((impact) => (impact.bucket_audit ?? []).filter((line) => line.applied_bucket_id === bucket_id).map((line) => ({impact, line})));
+            return {
+                bucket_id,
+                shock: shocks[bucket_id],
+                applied_asset_count: new Set(applied.map(({impact}) => impact.asset_id)).size,
+                asset_exposure_total: applied.reduce((sum, {line}) => sum + line.exposure, 0),
+                contribution_return: weighted ? applied.reduce((sum, {impact, line}) => sum + Number(impact.weight) * line.shock_contribution, 0) : null,
+            };
+        });
+    const portfolio_return = weighted ? impacts.reduce((sum, impact) => sum + Number(impact.contribution_return), 0) : null;
+    return {kind: 'stress', method: 'hypothetical', dimension, portfolio_return, impact_amount: portfolio_return === null ? null : (SCOPE_VALUE * portfolio_return).toFixed(2), classification_coverage: 1, impacts, configured_buckets};
+}
+
+/** The rows of an output as `L4Shock` hands it over: through the generated contract (`riskOutput`), which a fixture must therefore pass. */
+function shockRows(output: RiskStressOutput) {
+    return tornadoRows(schemas.RiskStressOutput.parse(output));
 }
 
 describe('tornadoRows — the figures the table states (k5b, D376)', () => {
@@ -238,20 +312,232 @@ describe('tornadoRows — the figures the table states (k5b, D376)', () => {
 
     it('carries a configured bucket’s shock as its own return, and its contribution as both the contribution and the value', () => {
         // The shock is what the reader typed; the contribution is what it did to this portfolio.
-        // The bar keeps the second (the test above explains why); the table states both.
-        const rows = tableRows({
-            dimension: 'asset_class',
-            configured_buckets: [
-                {bucket_id: 'BOND', shock: -0.05, applied_asset_count: 1, asset_exposure_total: 0.3, contribution_return: -0.015},
-                {bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 2, asset_exposure_total: 0.6, contribution_return: -0.12},
-                {bucket_id: 'CRYPTO', shock: 0.1, applied_asset_count: 1, asset_exposure_total: 0.1, contribution_return: 0.01},
-            ],
-        });
-        expect(rows.map(figures), 'a configured bucket does not carry its shock as ownReturn and its contribution_return as contribution').toEqual([
-            {key: 'bucket:STOCK', value: -0.12, ownReturn: -0.2, contribution: -0.12, amount: null, weight: 0.6},
-            {key: 'bucket:BOND', value: -0.015, ownReturn: -0.05, contribution: -0.015, amount: null, weight: 0.3},
-            {key: 'bucket:CRYPTO', value: 0.01, ownReturn: 0.1, contribution: 0.01, amount: null, weight: 0.1},
+        // The bar keeps the second (the test above explains why); the table states both. Beside
+        // them the weight: the bucket's share of the scope, 30%, 60% and 10% here — never the
+        // unweighted `asset_exposure_total` the backend sends with it, 1, 2 and 1, since two of
+        // the four holdings are stocks.
+        const shocks = {BOND: -0.05, CRYPTO: 0.1, STOCK: -0.2};
+        const impacts = [classHolding(21, 0.3, 'BOND', shocks), classHolding(22, 0.35, 'STOCK', shocks), classHolding(23, 0.25, 'STOCK', shocks), classHolding(24, 0.1, 'CRYPTO', shocks)];
+        const configured_buckets = [
+            {bucket_id: 'BOND', shock: -0.05, applied_asset_count: 1, asset_exposure_total: 1, contribution_return: -0.015},
+            {bucket_id: 'CRYPTO', shock: 0.1, applied_asset_count: 1, asset_exposure_total: 1, contribution_return: 0.01},
+            {bucket_id: 'STOCK', shock: -0.2, applied_asset_count: 2, asset_exposure_total: 2, contribution_return: -0.12},
+        ];
+        const derived = (shockOutput('asset_class', shocks, impacts).configured_buckets ?? []).map((bucket) => ({...bucket, contribution_return: expect.closeTo(Number(bucket.contribution_return), 12)}));
+        expect(configured_buckets, 'premise: the buckets are not what the backend derives from these holdings').toEqual(derived);
+        const rows = tableRows({dimension: 'asset_class', impacts, configured_buckets});
+        expect(
+            rows.map(({key, value, ownReturn, contribution, amount}) => ({key, value, ownReturn, contribution, amount})),
+            'a configured bucket does not carry its shock as ownReturn and its contribution_return as contribution',
+        ).toEqual([
+            {key: 'bucket:STOCK', value: -0.12, ownReturn: -0.2, contribution: -0.12, amount: null},
+            {key: 'bucket:BOND', value: -0.015, ownReturn: -0.05, contribution: -0.015, amount: null},
+            {key: 'bucket:CRYPTO', value: 0.01, ownReturn: 0.1, contribution: 0.01, amount: null},
         ]);
+        expect(
+            rows.map((row) => [row.key, row.weight]),
+            'a configured bucket’s weight is not its share of the scope, Σ wᵢ·eᵢ_b — asset_exposure_total counts exposures, it does not weigh them',
+        ).toEqual([
+            ['bucket:STOCK', expect.closeTo(0.6, 12)],
+            ['bucket:BOND', expect.closeTo(0.3, 12)],
+            ['bucket:CRYPTO', expect.closeTo(0.1, 12)],
+        ]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The weight of a configured bucket: its share of the scope, Σᵢ wᵢ·eᵢ_b (07/10/2026)
+// ---------------------------------------------------------------------------
+//
+// The Weight column of the shock table read `asset_exposure_total`, which the backend documents as
+// the *unweighted* sum of a bucket's exposures across the scope's assets, one that «may exceed 1 for
+// multi-asset scopes» (`schemas/risk.py:921-925`). A bucket's weight is its share of the scope: each
+// holding's weight times the part of it the bucket's shock applied to, summed — the notation of the
+// hypothetical-shock theory page — so that Weight × Return is the Contribution on every row. Ids and
+// weights are invented unless a comment says they were measured.
+
+/** «Global risk-off» as `scenario_catalog/built_in/hypothetical/global_risk_off.yml` ships it; the Dashboard sends every bucket of a preset. */
+const GLOBAL_RISK_OFF: Record<string, number> = {
+    STOCK: -0.2,
+    ETF: -0.15,
+    BOND: -0.05,
+    CRYPTO: -0.3,
+    FUND: -0.15,
+    CROWDFUND: -0.1,
+    HOLD: -0.05,
+    COMMODITY: -0.12,
+    REAL_ESTATE: -0.15,
+    INDEX: -0.2,
+    OTHER: 0,
+    ETF_STOCK: -0.2,
+    ETF_BOND: -0.05,
+    ETF_COMMODITY: -0.12,
+    ETF_REAL_ESTATE: -0.15,
+    ETF_CRYPTO: -0.3,
+    ETF_MONETARY: 0,
+    CROWDFUND_REAL_ESTATE: -0.1,
+};
+
+/**
+ * The shape measured on the test lane on 07/10/2026: «Global risk-off» over eight holdings — four wholly
+ * in STOCK, two in CROWDFUND, two in CRYPTO — whose `asset_exposure_total` read 4, 2 and 2, and whose
+ * shares, once fixed, read 25.2%, 25.0% and 6.4%: 56.6% invested, the rest cash. The holdings' own
+ * weights are invented; they add up to those shares.
+ */
+const RISK_OFF_LANE = shockOutput('asset_class', GLOBAL_RISK_OFF, [
+    classHolding(101, 0.0912, 'STOCK', GLOBAL_RISK_OFF),
+    classHolding(102, 0.0704, 'STOCK', GLOBAL_RISK_OFF),
+    classHolding(103, 0.0538, 'STOCK', GLOBAL_RISK_OFF),
+    classHolding(104, 0.0362, 'STOCK', GLOBAL_RISK_OFF),
+    classHolding(105, 0.15, 'CROWDFUND', GLOBAL_RISK_OFF),
+    classHolding(106, 0.1, 'CROWDFUND', GLOBAL_RISK_OFF),
+    classHolding(107, 0.041, 'CRYPTO', GLOBAL_RISK_OFF),
+    classHolding(108, 0.023, 'CRYPTO', GLOBAL_RISK_OFF),
+]);
+
+/** Room for two sums of the same terms added in a different order. */
+const SUM_EPSILON = 1e-12;
+
+describe('tornadoRows — a configured bucket’s weight is its share of the scope', () => {
+    it('never states more than 100%: each bucket at most the whole scope, all of them together at most what the holdings weigh', () => {
+        // The premise, without which the case proves nothing: unweighted totals above 1, the
+        // field the column used to print — here the very totals measured on the lane.
+        const sent = RISK_OFF_LANE.configured_buckets ?? [];
+        expect(Object.fromEntries(sent.filter((bucket) => bucket.applied_asset_count > 0).map((bucket) => [bucket.bucket_id, bucket.asset_exposure_total])), 'premise: the lane’s unweighted totals, above 1').toEqual({CROWDFUND: 2, CRYPTO: 2, STOCK: 4});
+        const rows = shockRows(RISK_OFF_LANE);
+        expect(rows, 'premise: every configured bucket is drawn').toHaveLength(sent.length);
+        expect(
+            rows.filter((row) => row.weight === null || row.weight < 0 || row.weight > 1).map((row) => `${row.bucketId}: ${row.weight}`),
+            'a bucket states more than the whole scope, or no share at all',
+        ).toEqual([]);
+        // Together the buckets hold at most what the holdings weigh — exactly that here, where every
+        // exposure met a bucket — and the holdings at most the scope: the rest is cash, and a leveraged
+        // composition never reaches the analytic (`service.py:553-555`, refused at `:232`).
+        const shares = rows.reduce((sum, row) => sum + (row.weight ?? 0), 0);
+        const holdings = (RISK_OFF_LANE.impacts ?? []).reduce((sum, impact) => sum + Number(impact.weight), 0);
+        expect(shares, 'the buckets together state more than the holdings weigh').toBeLessThanOrEqual(holdings + SUM_EPSILON);
+        expect(holdings, 'premise: the holdings weigh no more than the scope').toBeLessThanOrEqual(1);
+        expect(shares, 'the buckets together do not state the invested share measured on the lane, 56.6%').toBeCloseTo(0.5656, 12);
+    });
+
+    it('states the factor that, times the bucket’s shock, is the contribution the backend sent: Weight × Return = Contribution on every row', () => {
+        // On an asset-class shock every exposure is applied directly (the premise), so a bucket's
+        // contribution_return is Σ wᵢ·eᵢ_b·shock_b as the backend sums it (`stress.py:416`): the weight is
+        // the one factor in front of the shock. Checked against the payload's own figures, not restated.
+        const rules = new Set((RISK_OFF_LANE.impacts ?? []).flatMap((impact) => (impact.bucket_audit ?? []).map((line) => line.rule)));
+        expect([...rules], 'premise: every exposure is applied directly').toEqual(['direct']);
+        const sent = new Map((RISK_OFF_LANE.configured_buckets ?? []).map((bucket) => [bucket.bucket_id, bucket]));
+        const rows = shockRows(RISK_OFF_LANE);
+        expect(rows.map((row) => row.bucketId).sort(), 'premise: every configured bucket is drawn').toEqual([...sent.keys()]);
+        for (const row of rows) {
+            const bucket = sent.get(row.bucketId ?? '');
+            expect(row.weight, `${row.bucketId} states no weight`).not.toBeNull();
+            expect(Number(row.weight) * Number(bucket?.shock), `${row.bucketId}: Weight × Return is not the contribution the backend sent`).toBeCloseTo(Number(bucket?.contribution_return), 12);
+        }
+    });
+
+    it('states 0, not null, for a configured bucket nobody holds, and still draws its row — beside the shares measured on the lane', () => {
+        // The Dashboard sends every bucket of a preset, so most of them hold nothing in a given
+        // portfolio. On a weighted scope such a bucket has a share, and it is 0; its row stays, with the
+        // 0 contribution the backend sends for it. A null would blank the cell as if the share were unknown.
+        const sent = RISK_OFF_LANE.configured_buckets ?? [];
+        const nobody = sent.filter((bucket) => bucket.applied_asset_count === 0).map((bucket) => bucket.bucket_id);
+        expect(nobody, 'premise: the preset names fifteen classes this portfolio does not hold').toHaveLength(15);
+        const rows = new Map(shockRows(RISK_OFF_LANE).map((row) => [row.bucketId, row]));
+        expect(
+            nobody.map((id) => [id, rows.get(id)?.contribution, rows.get(id)?.weight]),
+            'a bucket nobody holds lost its row, or states no share instead of 0',
+        ).toEqual(nobody.map((id) => [id, 0, 0]));
+        expect(Object.fromEntries(['STOCK', 'CROWDFUND', 'CRYPTO'].map((id) => [id, rows.get(id)?.weight])), 'the held buckets do not state the shares measured on the lane: 25.2%, 25.0% and 6.4%').toEqual({
+            STOCK: expect.closeTo(0.2516, 12),
+            CROWDFUND: expect.closeTo(0.25, 12),
+            CRYPTO: expect.closeTo(0.064, 12),
+        });
+    });
+
+    it('adds up a holding split across sectors, each part in the bucket that took it', () => {
+        // An ETF 60% Technology and 40% Health Care at half the scope, beside a stock wholly in
+        // Technology at 30%: Technology holds 0.5·0.6 + 0.3 = 60%, Health Care 0.5·0.4 = 20%. A sector
+        // the scenario does not name falls to Other (`stress.py:274-278`): the energy stock, 10%. A
+        // sector shock always carries Other (`:216-224`), and an audit lists its sectors in order (`:388`).
+        const shocks = {'Health Care': -0.1, Other: -0.05, Technology: -0.3};
+        const output = shockOutput('sector', shocks, [
+            holding(31, 0.5, 'sector', [slice('Health Care', 0.4, ['Health Care', 'Other'], 'Health Care', -0.1, 'direct'), slice('Technology', 0.6, ['Technology', 'Other'], 'Technology', -0.3, 'direct')]),
+            holding(32, 0.3, 'sector', [slice('Technology', 1, ['Technology', 'Other'], 'Technology', -0.3, 'direct')]),
+            holding(33, 0.1, 'sector', [slice('Energy', 1, ['Other'], 'Other', -0.05, 'other')]),
+        ]);
+        expect(Object.fromEntries((output.configured_buckets ?? []).map((bucket) => [bucket.bucket_id, bucket.asset_exposure_total])), 'premise: the unweighted totals the column used to print').toEqual({
+            'Health Care': expect.closeTo(0.4, 12),
+            Other: 1,
+            Technology: expect.closeTo(1.6, 12),
+        });
+        expect(Object.fromEntries(shockRows(output).map((row) => [row.bucketId, row.weight])), 'a split holding is not counted part by part in the buckets that took it').toEqual({
+            'Health Care': expect.closeTo(0.2, 12),
+            Other: expect.closeTo(0.1, 12),
+            Technology: expect.closeTo(0.6, 12),
+        });
+    });
+
+    it('counts an exposure no configured bucket took — unconfigured_zero — in no bucket at all', () => {
+        // A request may name only some classes: the API takes any subset, the presets name them all. A
+        // class it leaves out is shocked by zero, silently, and applied to no bucket (`stress.py:260-266`),
+        // so the bond's 15% is nobody's share and the buckets hold 75% of the 90% invested.
+        const shocks = {ETF: -0.25, STOCK: -0.35};
+        const output = shockOutput('asset_class', shocks, [classHolding(41, 0.3, 'STOCK', shocks), classHolding(42, 0.2, 'STOCK', shocks), classHolding(43, 0.25, 'ETF', shocks), classHolding(44, 0.15, 'BOND', shocks)]);
+        expect((output.impacts ?? []).find((impact) => impact.asset_id === 44)?.bucket_audit, 'premise: the bond’s exposure applied to no bucket').toEqual([expect.objectContaining({exposure: 1, applied_bucket_id: null, rule: 'unconfigured_zero'})]);
+        const rows = shockRows(output);
+        expect(Object.fromEntries(rows.map((row) => [row.bucketId, row.weight])), 'an exposure no bucket took was counted in one').toEqual({ETF: expect.closeTo(0.25, 12), STOCK: expect.closeTo(0.5, 12)});
+        expect(
+            rows.reduce((sum, row) => sum + (row.weight ?? 0), 0),
+            'the buckets do not hold what the holdings weigh less the bond',
+        ).toBeCloseTo(0.9 - 0.15, 12);
+    });
+
+    it('adds up two parts of one holding that the same geography group took', () => {
+        // «European Union shock» (`scenario_catalog/built_in/hypothetical/european_union_shock.yml`). An
+        // ETF 30% Germany, 20% Italy and 50% United States at 40% of the scope: Germany and Italy both
+        // fall to the european_union group (`stress.py:279-311`), which takes 0.4·(0.3 + 0.2) of it, and
+        // an Italian stock at 25% — 45% in all, from two assets and three audit lines. The United States
+        // fall to Other, whose zero shock contributes nothing: a 20% share beside a 0 contribution.
+        const shocks = {Other: 0, european_union: -0.2};
+        const output = shockOutput('geography', shocks, [
+            holding(51, 0.4, 'geography', [slice('DEU', 0.3, ['european_union', 'Other'], 'european_union', -0.2, 'geography_group'), slice('ITA', 0.2, ['european_union', 'Other'], 'european_union', -0.2, 'geography_group'), slice('USA', 0.5, ['Other'], 'Other', 0, 'other')]),
+            holding(52, 0.25, 'geography', [slice('ITA', 1, ['european_union', 'Other'], 'european_union', -0.2, 'geography_group')]),
+        ]);
+        expect(
+            (output.configured_buckets ?? []).map((bucket) => [bucket.bucket_id, bucket.applied_asset_count, bucket.asset_exposure_total]),
+            'premise: two assets in the group, through three lines, for an unweighted total of 1.5',
+        ).toEqual([
+            ['Other', 1, 0.5],
+            ['european_union', 2, expect.closeTo(1.5, 12)],
+        ]);
+        expect(Object.fromEntries(shockRows(output).map((row) => [row.bucketId, row.weight])), 'two parts of one holding in one bucket were not added up').toEqual({
+            Other: expect.closeTo(0.2, 12),
+            european_union: expect.closeTo(0.45, 12),
+        });
+    });
+
+    it('states no weight on a scope without weights, so the Weight column is left out', () => {
+        // An asset set: its holdings carry no weight — null, or not sent at all — and the backend
+        // sends no contribution on its buckets either (`stress.py:450`), so today they are dropped
+        // before any weight is read (the drop rule above).
+        const shocks = {CRYPTO: -0.3, STOCK: -0.2};
+        const sent = shockOutput('asset_class', shocks, [classHolding(61, null, 'STOCK', shocks), classHolding(62, undefined, 'STOCK', shocks), classHolding(63, null, 'CRYPTO', shocks)]);
+        expect(shockRows(sent), 'an asset set’s buckets carry no contribution, yet became bars').toEqual([]);
+        // The rule itself needs rows to read, so the same buckets are given a contribution — their own
+        // shock, as an unweighted holding is drawn by its own return — which an asset set never sends.
+        // Without a holding's weight a bucket has no share: neither asset_exposure_total (1 and 2) nor 0.
+        const drawn: RiskStressOutput = {...sent, configured_buckets: (sent.configured_buckets ?? []).map((bucket) => ({...bucket, contribution_return: bucket.shock}))};
+        const rows = shockRows(drawn);
+        expect(
+            rows.map((row) => row.bucketId),
+            'premise: both buckets are drawn',
+        ).toEqual(['CRYPTO', 'STOCK']);
+        // `TornadoChart` shows the column only when some row states a weight (`TornadoChart.svelte:57`).
+        expect(
+            rows.map((row) => row.weight),
+            'a bucket states a weight on a scope that has none',
+        ).toEqual([null, null]);
     });
 });
 

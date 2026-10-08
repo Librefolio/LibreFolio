@@ -138,8 +138,10 @@ Every analytic result carries a status of its own, distinct from the source-data
 |---|---|
 | `ok` | Computed with nothing missing or stale in its source data, nothing excluded from what it reads and no degrading warning |
 | `partial` | Computed, but with source data missing or stale, something excluded from what it reads, or a degrading warning |
-| `unavailable` | Not computed; a stable reason code explains why (insufficient history, data unavailable, undefined metric, incompatible scope or mode, …) |
-| `failed` | The computation itself did not complete |
+| `unavailable` | Not computed; a stable reason code explains why (insufficient history, data unavailable, invalid parameters, a calculation too large to run, incompatible scope or mode, …) |
+| `failed` | The calculation broke off on an error the analytic does not declare — a fault of the calculation, never a verdict on the data. It carries the code `execution_failed` (*The backend calculation failed.*), the server logs it, and the screen reads **Calculation failed** |
+
+A failure is not an undefined value. A metric that genuinely has no value for well-formed data — the correlation of a series that never moved, a Sharpe ratio over zero volatility — does not fail: that value comes back empty, flagged `undefined` in a correlation cell or explained by a warning such as `sharpe_undefined`, and the rest of the result stays usable. Conversely, an error the analytic did not anticipate is never reported as an undefined metric: that would turn a fault of the calculation into a statement about your data.
 
 A result is `partial` when **any** of these holds: a warning that degrades the result is present; an asset of the scope that the result reads was [excluded](#which-results-carry-an-exclusion); the analytic itself excluded something; or the status of the source-data report the result is judged on is anything other than `ok`. In the last case an explicit warning is attached as well, so the degradation is never inferred from the status alone.
 

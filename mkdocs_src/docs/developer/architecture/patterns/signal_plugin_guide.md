@@ -368,6 +368,55 @@ longer than seven cadence points. Smaller gaps remain an informational notice.
     `volume` on one required date. OHLC/volume plugins will report the exact coverage
     problem instead of computing over silently altered input.
 
+### 🚦 Enforced Status Matrix
+
+A plugin never sets the status itself. `compute()` returns a `SignalComputation`, or raises
+`SignalUnavailableError` (`backend/app/services/signal_plugins/base.py`) with an
+*unavailable* `reason_code`, such as `undefined_metric` or `insufficient_history`, when the
+result is mathematically undefined. The service then assigns the status of a computed result —
+`partial` when the warm-up is incomplete, partial coverage was used, or the availability
+reason is `partial_undefined_metric`; `ok` otherwise — and builds a `SignalResult`. Its
+`validate_status_matrix` validator (`backend/app/schemas/signals.py`) rejects every
+combination outside this matrix:
+
+| Status | Required | Forbidden |
+|---|---|---|
+| `ok` | `availability` and `warmup`; non-empty `series`; `can_compute=true` with a complete warm-up; no `reason_code` and no partial coverage; no missing value in any visible point | `error` |
+| `partial` | `availability` and `warmup`; non-empty `series`; `can_compute=true`; at least one warning; an incomplete warm-up, partial coverage, or the `partial_undefined_metric` reason | `error` |
+| `unavailable` | `availability` and `warmup`, with `can_compute=false`: the reason travels in `availability.reason_code` | `series`, `annotations`, `error` |
+| `failed` | a structured `error` | `series`, `annotations` |
+
+A `failed` result is further constrained by its error code:
+
+- **pre-compute failure** (`unknown_signal`, `invalid_params`, `planning_error`): no
+  `availability` and no `warmup`;
+- **runtime failure** (`compute_error`, `invalid_output`, `contract_violation`):
+  `availability` and `warmup` present, with `can_compute=true`.
+
+Three rules apply whatever the status:
+
+- when `availability` and `warmup` are both present, `availability.required_points` must
+  equal the warm-up total (`warmup.requirement.total_points`), and
+  `availability.warmup_complete` must equal `warmup.complete`;
+- `risk_metadata` and `data_quality` are either both present or both absent;
+- all series share identical dates and cardinality, with unique `key` and `semantic_id`
+  values.
+
+What this means for a plugin:
+
+- Individual empty visible points (`None`) are accepted when the result is `partial`
+  (incomplete warm-up or partial coverage) or when the plugin flags the window with an
+  `undefined_metric_window` warning, which makes it `partial`. In a result that would
+  otherwise be `ok`, they fail the instance with `invalid_output`.
+- A visible series with no value at all yields `unavailable` when the warm-up is
+  incomplete or the window is flagged as `undefined_metric_window`; otherwise the instance
+  fails with `invalid_output`.
+- Raise `SignalUnavailableError` with an unavailable reason only. A partial reason such as
+  `incomplete_warmup` does not form a valid unavailable state, and the instance fails with
+  `planning_error`.
+- A result the matrix rejects never reaches the client as `ok` or `partial`: the service
+  replaces it with a runtime `failed` result (`invalid_output`) for that instance only.
+
 ---
 
 ## 💻 Complete Example

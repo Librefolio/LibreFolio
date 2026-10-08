@@ -288,8 +288,8 @@
     /** Bumped by «Aggiorna»: the risk levels and the lots panel ask again too (E4). */
     let refreshVersion = 0;
     // Figures already known when a card mounts appear at their value instead of counting up from 0;
-    // the Risk tab is left out until its panel says so itself.
-    setTweenHydration(() => portfolioSummary !== null && activeTab !== 'rischio');
+    // the Risk panel sets its own context for its cards.
+    setTweenHydration(() => portfolioSummary !== null);
 
     /**
      * Page cache (E1): the overview of the scope on screen comes from the cache at once — stale or

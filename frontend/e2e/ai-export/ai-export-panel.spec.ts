@@ -21,10 +21,70 @@ test.describe('AI Export panel', () => {
         const syncButton = page.getByTestId('sync-button');
 
         if (testInfo.project.name === 'desktop') {
-            const [triggerBox, syncBox] = await Promise.all([trigger.boundingBox(), syncButton.boundingBox()]);
-            if (!triggerBox || !syncBox) throw new Error('Dashboard action buttons require layout boxes');
-            expect(Math.abs(triggerBox.y - syncBox.y)).toBeLessThan(2);
-            expect(Math.min(triggerBox.y + triggerBox.height, syncBox.y + syncBox.height)).toBeGreaterThan(Math.max(triggerBox.y, syncBox.y));
+            // AI Export and Refresh stay grouped in whatever arrangement the toolbar chose — one row is not a constant of
+            // the desktop viewport. PageToolbar picks a tier from its bar's content width and publishes it on
+            // window.__lfLayouts.dashboard; only "stackFilters" stacks the actions in one column (`actionsStacked`,
+            // PageToolbar.svelte), every other tier lays them out as a two-column grid, one row for these two. At 1280 px
+            // the bar is ~942 px wide, under the Dashboard's denseRow threshold since 3e5313d3e: AI Export above Refresh.
+            // The reading is taken once the toolbar's ResizeObserver has reported the bar's current width (the readiness
+            // check of layout/toolbar-width-sweep.spec.ts): until then the published tier is the pre-attach default.
+            await expect(trigger).toBeVisible();
+            await expect(syncButton).toBeVisible();
+            const settled = await page.waitForFunction(
+                () => {
+                    const layout = (window as unknown as {__lfLayouts?: Record<string, {layoutMode?: unknown; width?: unknown; thresholds?: Record<string, unknown>} | undefined>}).__lfLayouts?.dashboard;
+                    const row = document.querySelector<HTMLElement>('[data-testid="dashboard-filter-bar"]');
+                    const ai = document.querySelector<HTMLElement>('[data-testid="ai-export-button"]');
+                    const refresh = document.querySelector<HTMLElement>('[data-testid="sync-button"]');
+                    if (!layout || !row || !ai || !refresh) return null;
+                    const rowStyle = getComputedStyle(row);
+                    const rowContent = row.getBoundingClientRect().width - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight) - parseFloat(rowStyle.borderLeftWidth) - parseFloat(rowStyle.borderRightWidth);
+                    const width = Number(layout.width);
+                    if (!(Math.abs(width - rowContent) <= 0.5)) return null;
+
+                    const edges = (element: Element) => {
+                        const rect = element.getBoundingClientRect();
+                        return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom};
+                    };
+                    const aiBox = edges(ai);
+                    const refreshBox = edges(refresh);
+                    const joint = {left: Math.min(aiBox.left, refreshBox.left), top: Math.min(aiBox.top, refreshBox.top), right: Math.max(aiBox.right, refreshBox.right), bottom: Math.max(aiBox.bottom, refreshBox.bottom)};
+                    // Every visible control entering the two actions' joint box — the two themselves included, as the
+                    // proof that the scan sees controls there — minus their own ancestors and descendants.
+                    const related = (element: Element) => element !== ai && element !== refresh && (element.contains(ai) || element.contains(refresh) || ai.contains(element) || refresh.contains(element));
+                    const inJointBox = Array.from(document.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [role="button"]'))
+                        .filter((element) => {
+                            if (related(element)) return false;
+                            const rect = element.getBoundingClientRect();
+                            return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility === 'visible' && rect.left < joint.right - 0.5 && rect.right > joint.left + 0.5 && rect.top < joint.bottom - 0.5 && rect.bottom > joint.top + 0.5;
+                        })
+                        .map((element) => element.getAttribute('data-testid') ?? `${element.tagName.toLowerCase()} "${element.innerText.trim().slice(0, 24)}"`);
+                    return {mode: String(layout.layoutMode), width, thresholds: {...layout.thresholds}, ai: aiBox, refresh: refreshBox, inJointBox};
+                },
+                undefined,
+                {timeout: 5_000},
+            );
+            const layout = await settled.jsonValue();
+            if (!layout) throw new Error('The Dashboard toolbar reading came back empty');
+            const {ai, refresh} = layout;
+            const at = `tier "${layout.mode}" (bar ${layout.width.toFixed(1)} px, thresholds ${JSON.stringify(layout.thresholds)}) — AI Export ${JSON.stringify(ai)}, Refresh ${JSON.stringify(refresh)}`;
+            expect(['oneRow', 'denseRow', 'stackFilters', 'oneColumn'], `${at}: not a PageToolbar tier`).toContain(layout.mode);
+            if (layout.mode === 'stackFilters') {
+                expect(Math.abs(ai.right - refresh.right), `${at}: the stacked actions share their right edge`).toBeLessThan(2);
+                expect(Math.min(ai.right, refresh.right), `${at}: the stacked actions overlap horizontally`).toBeGreaterThan(Math.max(ai.left, refresh.left));
+                // From the upper one's bottom to the lower one's top, whichever is which.
+                const gap = Math.max(ai.top, refresh.top) - Math.min(ai.bottom, refresh.bottom);
+                expect(gap, `${at}: the stacked actions do not overlap vertically`).toBeGreaterThan(-2);
+                expect(gap, `${at}: the stacked actions sit right under one another`).toBeLessThanOrEqual(12);
+            } else {
+                expect(Math.abs(ai.top - refresh.top), `${at}: the actions share a row`).toBeLessThan(2);
+                expect(Math.min(ai.bottom, refresh.bottom), `${at}: the actions overlap vertically`).toBeGreaterThan(Math.max(ai.top, refresh.top));
+            }
+            expect(layout.inJointBox, `${at}: the scan of the actions' joint box finds both actions`).toEqual(expect.arrayContaining(['ai-export-button', 'sync-button']));
+            expect(
+                layout.inJointBox.filter((label) => label !== 'ai-export-button' && label !== 'sync-button'),
+                `${at}: no other control sits between AI Export and Refresh`,
+            ).toEqual([]);
         }
 
         const firstOpen = await openAiExportPanel(page);

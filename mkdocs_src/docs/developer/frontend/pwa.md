@@ -66,11 +66,12 @@ LibreFolio is installable as a **Progressive Web App (PWA)**. This page document
 
 ## Mobile CSS
 
-Applied globally via `app.css`:
+Applied globally via `app.css` (excerpt):
 
 ```css
 html {
     overscroll-behavior-x: none;          /* Disable swipe-back on Android */
+    scrollbar-gutter: stable;             /* A modal's scroll lock never shifts the layout */
 }
 
 body {
@@ -78,18 +79,27 @@ body {
     -webkit-tap-highlight-color: transparent; /* No blue flash on tap */
 }
 
-/* Prevent iOS auto-zoom on input focus */
+/* Prevent iOS auto-zoom on input focus; dense toolbar inputs opt out with .zoom-guard-exempt */
 @media (max-width: 768px) {
-    input, select, textarea {
+    input:not(.zoom-guard-exempt),
+    select:not(.zoom-guard-exempt),
+    textarea:not(.zoom-guard-exempt) {
         font-size: 16px !important;
     }
 }
 
 /* Disable double-tap zoom on interactive elements */
-a, button, input, select, textarea, [role="button"] {
+a, button, input, select, textarea, [role='button'] {
     touch-action: manipulation;
 }
+
+/* iOS standalone mode: content below the status bar / notch */
+.safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+}
 ```
+
+The other global classes are listed in [Styling → Utility Classes](styling.md#utility-classes).
 
 The viewport meta in `app.html`:
 ```html
@@ -122,6 +132,19 @@ One entry per purpose and size, each naming its own file: no file serves both `a
 
 ---
 
+## Splash and Theme Colours {: #splash-and-theme-colours }
+
+| Surface | Colour | Set by |
+|---------|--------|--------|
+| Android splash screen | Beige `#f5f4ef`, with the app icon | Manifest `background_color` |
+| Title bar of the installed app | `#1a4031`; `#156534` in dark mode | Manifest `theme_color`, and the `<meta name="theme-color">` of `app.html`, which the anti-FOUC script rewrites in dark mode (`offline.html` does the same) |
+| iOS status bar | Translucent, over the page | `apple-mobile-web-app-status-bar-style: black-translucent`; `.safe-top` pads content below it |
+| In-app loading splash (`#app-splash`) | Beige `#f5f4ef`; `#0f172a` in dark mode | Inline in `app.html`: the logo on a white tile and a spinner, faded out and removed by `routes/+layout.svelte` once the translations are loaded |
+
+The iOS home-screen icon is `apple-touch-icon.png` (180×180), linked from `app.html`.
+
+---
+
 ## Icon Generation
 
 `dev.py` → `generate_pwa_icons()` draws five icons with PIL from `frontend/static/logo_square.png` (944×944 RGBA) into `frontend/static/icons/`:
@@ -140,7 +163,7 @@ The generator runs inside `copy_docs_assets()`, right before `stamp_service_work
 
     - **Maskable safe zone**: a launcher crops a `maskable` icon to its own shape (circle, squircle…), and only a centred circle of radius 0.40 × size is sure to survive. The logo reaches 0.37 × size, about 0.38 with its antialiased edge, so the crop never bites into it. An `any` icon is shown whole instead, which is why each purpose has its own files.
     - **Beige**: the maskable icons are beige to the edges because `#f5f4ef` is the colour of the Android splash screen (`background_color`), so the cropped icon meets it without a seam. Change both or neither.
-    - **Opacity**: Android's splash screen and iOS paint transparent pixels black. The old generator pasted the logo with a mask, which blends the alpha channel too: ~12.6 % of `icon-192.png`'s pixels came out semi-transparent, and the Android splash showed black corners.
+    - **Opacity**: Android's splash screen and iOS paint transparent pixels black, so every icon is opaque RGB — no alpha channel and no `tRNS` colour key. That is what keeps black corners off the Android splash and off the iPhone home-screen icon.
     - **Service-worker stamp**: `stamp_service_worker()` writes `// build: <md5(offline.html)[:8]>` as line 2 of `sw.js`. Any byte change in `sw.js` makes browsers update the worker, so every `offline.html` edit must be restamped (see [Updating the Offline Page](#updating-the-offline-page)).
 
     The gate is `backend/test_scripts/test_utilities/test_pwa_assets.py`, a pure pytest module. It reads the committed files and checks the icons are opaque RGB at their exact sizes, the maskable logo stays inside 0.40 × size on the beige, the manifest has the four icon entries, `app.html` links the 180×180 `apple-touch-icon.png`, and the stamp equals `md5(offline.html)[:8]`. Run it with `./dev.py test utils pwa-assets`.
@@ -198,7 +221,7 @@ LibreFolio uses a **minimal Service Worker** for offline fallback only — it do
 ```
 User opens PWA → browser checks sw.js for updates (byte-diff)
      ↓
-SW install event → pre-caches /offline.html (~5KB)
+SW install event → pre-caches /offline.html (~22 KB)
      ↓
 User navigates → SW intercepts (mode === 'navigate')
      ↓
@@ -226,11 +249,14 @@ fetch(request) fails → serve cached /offline.html
 
 ### Offline Page Features
 
-- Inline CSS (no external dependencies — works without network)
-- Dark mode via `prefers-color-scheme` media query
-- i18n: detects `navigator.language` → EN/IT/FR/ES
+- Inline CSS and script; the only external resource it loads is `/lf-flags.css` (the flag font
+  face, see [Fonts](styling.md#fonts)), which the service worker does not pre-cache
+- Dark mode from the app's stored theme (`librefolio-theme`), falling back to
+  `prefers-color-scheme`, with its own theme toggle
+- i18n: detects `navigator.language` → EN/IT/FR/ES, with a language menu
 - Auto-retry: pings server every 10s, reloads on success
-- LibreFolio branding (colors, leaf icon)
+- Same animated background as the login page, and a toolbar with Buy Me a Coffee, theme,
+  language and a link to the online documentation
 
 ### Updating the Offline Page
 
@@ -252,12 +278,15 @@ fetch(request) fails → serve cached /offline.html
 | Feature | HTTPS | HTTP localhost | HTTP LAN |
 |---------|-------|---------------|----------|
 | Manifest loaded | ✅ | ✅ | ✅ |
-| `display: standalone` | ✅ | ✅ | ✅ |
-| Service Worker | ✅ | ✅ | ✅ |
+| Service Worker (offline page) | ✅ | ✅ | ❌ |
 | `beforeinstallprompt` | ✅ | ✅ | ❌ |
 | Auto-install banner | ✅ | ✅ | ❌ |
 | Manual "Add to Home" | ✅ | ✅ | ✅ (Android) |
 | iOS Add to Home | ✅ | ✅ | ✅ |
+
+Service workers and the install prompt need a **secure context**: HTTPS, or `localhost`. On a
+plain-HTTP LAN address the browser exposes no `navigator.serviceWorker`, so `app.html` skips the
+registration and there is no offline page.
 
 ---
 
@@ -274,7 +303,7 @@ Requirements:
 - HTTPS mandatory
 - Works on: Android Chrome ✅, iOS ❌ (Apple doesn't support share_target)
 
-**iOS Alternative**: iOS Shortcuts automation — user creates a Shortcut that accepts files from Share Sheet and POSTs them to the LibreFolio API (`POST /api/v1/files/upload`). See user docs for setup guide.
+**iOS Alternative**: iOS Shortcuts automation — a Shortcut that accepts files from the Share Sheet and posts them to the broker-report upload endpoint, `POST /api/v1/brokers/import/upload` (multipart: `file`, `broker_id`), with an authenticated session.
 
 ---
 

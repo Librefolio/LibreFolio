@@ -20,10 +20,16 @@ session and resets after logout or a new login.
 
 ## 🗂️ Scope and Data
 
-The export follows the active broker filter, date range, and target currency.
+The export covers the same Brokers as the [Dashboard](../dashboard/index.md) —
+only those you own with a share above 0%, narrowed by the broker filter when one
+is on, never those shared with you as an Editor or a Viewer — and follows the
+date range and target currency.
 Depending on the selection, it can include portfolio totals, cash, positions,
 allocations, performance, contributions, income, data-quality context, and
 backend-computed technical results.
+The **AI Export** button is available only once the Dashboard has loaded your
+Brokers, and stays disabled if you own none with a share above 0% (for example,
+when you only have Editor or Viewer access).
 
 The prompt distinguishes:
 

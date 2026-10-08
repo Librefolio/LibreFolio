@@ -442,6 +442,40 @@ decision metric is always the content reread from the final rendered prompt file
 Canonical payload files are not retained by default; use `--keep-canonical` only
 when debugging a specific case.
 
+## 🛑 Validation Errors
+
+AI Export validates its structural definitions with explicit `if … raise` checks that raise
+typed exceptions, never with `assert`. Python strips `assert` statements when it runs with
+optimizations (`python -O`), so an `assert` guard would vanish exactly where a corrupted
+catalog must still be stopped. The typed guards stay active in both modes. The default
+registries are built when `runtime_service.py` is imported, so an invalid definition stops
+the import of the API application before any request is served.
+
+Paths below are relative to `backend/app/services/ai_export/`.
+
+| Definition | Typed error (subclasses) | Source |
+| ---------- | ------------------------ | ------ |
+| Component declarations and registry: duplicate IDs, unknown or cyclic dependencies, declared catalog size | `ComponentSpecError`; `ComponentRegistryError` (`DuplicateComponentIdError`, `UnknownComponentError`, `ComponentDependencyCycleError`) | `components/spec.py`, `components/registry.py`, `components/catalog.py` |
+| Domain component fragments: Portfolio/Broker and Asset/FX sizes, placeholder replacement, unique Asset/FX IDs | `PortfolioBrokerRegistryError`, `AssetFxRegistryError` (each with `DuplicateReplacementComponentIdError`, `MissingPlaceholderComponentError`, `PlaceholderMetadataMismatchError`) | `components/portfolio_broker_registry.py`, `components/asset_fx_registry.py` |
+| Dataset declarations and registry: duplicates, unknown datasets or components, domain mismatches, public and total dataset counts | `DatasetSpecError`; `DatasetRegistryError` (`DuplicateDatasetIdError`, `UnknownDatasetError`, `UnknownDatasetComponentError`, `DatasetComponentDomainMismatchError`) | `datasets/spec.py`, `datasets/catalog.py` |
+| Analysis declarations and registry: duplicates, unknown datasets, domain mismatches, suggestion visibility, public analysis count | `AnalysisSpecError`; `AnalysisRegistryError` (`DuplicateAnalysisIdError`, `UnknownAnalysisError`, `UnknownAnalysisDatasetError`, `AnalysisDatasetDomainMismatchError`, `AnalysisSuggestionVisibilityError`) | `analyses/spec.py`, `analyses/catalog.py` |
+| Indicator temporal policy: one row per bucket detail level, each covering every Signal temporal class | `IndicatorPolicyError` | `temporal/policy.py` |
+| Detail-level mapping: `DetailLevel` to `BucketDetailLevel`, total in both directions | `DetailLevelMappingError` | `dependencies.py` |
+
+Composition applies the same discipline per request. `Composer` (`composer.py`) raises
+`UnsupportedDetailLevelError` for a detail level a dataset does not support, and
+`DatasetVersionMismatchError` or `AnalysisVersionMismatchError` for an explicit version that
+differs from the registry; all three derive from `ComposerError`. The runtime maps the version
+errors to `409 version_mismatch` and the detail-level error to `422 selection_not_applicable`
+with `reason_code` `unsupported_detail_level`. A `BuildContext` whose bucket plan does not match
+its scope raises `BuildContextScopeError` (`dependencies.py`).
+
+The guards add no identity of their own: component, dataset, and analysis IDs, their versions,
+and the canonical catalog ordering stay as declared. `./dev.py test services ai-export` runs
+`test_ai_export_structural_invariants.py`, which breaks the catalog-size, unique Asset/FX ID,
+indicator-policy, and detail-level-mapping guards one at a time in a fresh interpreter, with
+and without `-O`, and expects the typed error each time.
+
 ## 🚨 Failure and Partial-Success Semantics
 
 | Situation                                         | Result                                                                                                             |

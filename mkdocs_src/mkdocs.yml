@@ -1012,6 +1012,7 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
+          - "📉 Risk Engine": developer/backend/risk/architecture.md
       - 🎨 Frontend Development:
           - Overview: developer/frontend/index.md
           - "🧠 Core Architecture & State":
@@ -1046,7 +1047,7 @@ nav:
                   - Asset Identity: developer/frontend/components/features/asset-identity.md
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
-                  - Live Ticker: developer/frontend/components/features/live-ticker.md
+                  - Live Prices: developer/frontend/components/features/live-ticker.md
                   - Lots Analysis: developer/frontend/components/features/lots-analysis.md
                   - Charts & Animations: developer/frontend/components/charts.md
                   - 🏦 Brokers:
@@ -1058,6 +1059,7 @@ nav:
               - Internationalization: developer/frontend/i18n.md
               - PWA & Mobile: developer/frontend/pwa.md
           - "🛡️ Data Quality Banner": developer/frontend/data-quality-banner.md
+          - "🧭 Onboarding Guides": developer/frontend/onboarding.md
       - 🧪 Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
           - Runner Architecture: developer/test-walkthrough/runner_architecture.md

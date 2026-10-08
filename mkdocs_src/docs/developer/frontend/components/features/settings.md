@@ -36,60 +36,69 @@ The `SettingsLayout` component provides the structural shell for all settings ta
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences" style="width: 100%; display: block;">
 </div>
 
-Manages user-specific settings (Language, Currency, Theme).
+Manages user-specific settings (Language, Currency, Theme) and hosts the **Onboarding** category
+described below.
 
 ### 🧭 OnboardingReplaySection
 
-`OnboardingReplaySection.svelte` renders the **Onboarding** category inside `PreferencesTab`
-(`{id: 'onboarding', icon: Compass, labelKey: 'onboarding.settings.category'}`). It reads
-`onboarding.progress?.flows` — the three `OnboardingProgressItem`s (`welcome`, `intro_tour`,
-`import_guide`) fetched from `GET /api/v1/settings/onboarding` — and renders, per flow: its
-`status`, a `Seen v{version} · current v{current_version}` label, an **update available** badge
-when `update_available` is true, and a **Replay** button.
+`OnboardingReplaySection.svelte` (in `frontend/src/lib/components/onboarding/`) is the
+**Onboarding** category of `PreferencesTab`
+(`{id: 'onboarding', icon: Compass, labelKey: 'onboarding.settings.category'}`). The tab renders
+it when that category is selected and in the *All Settings* view (no category selected). It lists
+every onboarding flow with its progress and lets the user replay any of them without changing that
+recorded progress. This section covers the Settings UI only; the mechanics behind it — when a guide
+is due, what a replay does once it runs, where its position is kept — are explained in
+[Onboarding Guides](../../onboarding.md).
 
-Replaying branches on the flow, because only `welcome` and `intro_tour` can start immediately:
+**What it lists.** The section reads `onboarding.progress?.flows`, the per-user progress that the
+app bootstrap loads from `GET /api/v1/settings/onboarding`: one `OnboardingProgressItem` for each
+of the **15** flows of `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`;
+enum `OnboardingFlow` in `backend/app/db/models.py`). The section sorts them into collapsible
+groups; *Setup* and *Core tour* start open:
 
-- `welcome` → `onboarding.startReplay('welcome', ..., 'welcome')` then `goto('/welcome')`.
-- `intro_tour` → `onboardingGuide.startIntroReplay()`, which starts at `intro.scene`. That scene
-  presents three phrases and advances from manual **Start** or one automatic start after 10
-  seconds; the remaining semantic steps drive their own `goto` calls from
-  `OnboardingOverlayHost`.
-- `import_guide` → `onboardingGuide.startImportReplay()` only **arms** the replay
-  at `import.upload` (`onboarding.startReplay('import_guide', ...)`); nothing observes it until
-  the user opens the Import Wizard, whose own `$effect` sees `progress.status !== 'pending'` but
-  `controller.hasReplay(...)` true and starts in `'replay'` mode. The button label and the
-  `replayIsArmed(item)` badge (`nextImport` vs. `replayReady`) reflect this: `import_guide` uses
-  *"Replay on next import"* for its button and, once armed, *"Ready for next import"* for its
-  badge, rather than the other flows' *"Replay"* / *"Replay ready"* labels.
-- **Replay all** uses the flow-specific entry points:
-  `onboarding.startReplay(...)` for Welcome, `onboardingGuide.prepareIntroReplay()` for the intro,
-  and `onboardingGuide.startImportReplay()` for import; it then navigates to `/welcome` once.
-  Completing Welcome applies the selected locale before `maybeStartIntro()` renders the narrative
-  scene. In a Welcome replay, that completion uses the existing user-settings PUT for the
-  explicitly selected language/currency/avatar while preserving the Welcome progress status;
-  **Exit tour** saves nothing. If any replay arm fails (e.g. `localStorage` unavailable), the
-  section unwinds the flows it already armed via `onboarding.clearReplay` before surfacing the
-  error.
+| Group (`onboarding.settings.groups.*`) | Flows |
+|---|---|
+| `setup` | `welcome` |
+| `core` | `intro_tour` |
+| `transactions` | `transactions_page_guide`, `transaction_create_guide`, `transaction_bulk_guide`, `import_guide` |
+| `broker` | `broker_page_guide`, `broker_guide`, `broker_detail_guide` |
+| `fx` | `fx_page_guide`, `fx_guide`, `fx_detail_guide` |
+| `asset` | `asset_page_guide`, `asset_guide`, `asset_detail_guide` |
 
-The coachmark's only top-row control is **X** (`showSkip={false}`), whose accessible label is
-*Skip this tour* in automatic mode and *Exit tour* in replay mode. The intro footer uses
-**Back**, **Next**, and **Finish** on the final Settings stop. **X** calls
-`onboardingGuide.exit()`, which is `skip()`: automatic **Finish**/**X** perform the corresponding
-backend complete/skip transition (one step at a time for the step-managed Import and bulk flows),
-while replay **Finish**/**X** only update the stored replay state (clearing it, or dropping just
-the current step of a step-managed replay) and never call complete/skip. Leaving a guide's host
-does not end it: when the path stops matching the step's `hostRoute` (every flow except the intro
-tour, whose steps declare a `route` the host navigates back to), `OnboardingOverlayHost` calls
-`dismissHost()`, which leaves the stored position untouched, so the flow's next trigger resumes
-it instead of restarting. Closing an Add modal calls `dismissHost({restartAtFirst: true})`, which
-rewinds that modal's linear guide to its first step; step-managed flows ignore `restartAtFirst`,
-so closing the Import Wizard rewinds nothing. There is no Pause action. Replaying does not
-restore wizard draft state or automate wizard clicks, uploads, or **Save All**.
+A group header counts its flows that are completed at the current version
+(*{completed}/{total} guides completed*). Each row shows the flow name (`onboarding.flows.<flow>`),
+its status (*Pending*, *Completed* or *Skipped*) and the *Seen v{seen} · current v{current}*
+label. Statuses are display-only: nothing in the section calls a complete or skip endpoint.
 
-Replay state lives in the browser's `localStorage`, per account, not on the server — see
-**[Onboarding: the contextual import guide](import-wizard.md#import-guide-wiring)**
-for the storage key format and its lifecycle. A replay of a terminal (`completed`/`skipped`) flow
-is strictly non-destructive to that status from start through exit.
+**New version.** When the version the user went through is older than the current one
+(`update_available`), the row adds the **New version to view** badge and its group no longer
+counts it as completed. Such a guide is due again and starts by itself at its next trigger.
+
+**Step-managed flows.** The rows of `transaction_bulk_guide` (4 steps) and `import_guide`
+(9 steps) add a collapsible list of their steps, each with its status, under a
+*{completed}/{total}* counter in which a skipped step counts as done and a step with a newer
+version does not. The row's own status summarizes its steps.
+
+**Replay per flow.** The row button depends on the flow:
+
+- `welcome` → **Replay** arms a Welcome replay (`onboarding.startReplay`) and opens `/welcome`.
+  There, **Continue** saves the chosen language, currency and avatar through the regular
+  `PUT /api/v1/settings/user` without touching the Welcome status, and **Exit tour** saves
+  nothing.
+- `intro_tour` → **Replay** starts the tour at once, in replay mode, from its opening scene
+  (`onboardingGuide.startIntroReplay()`), and opens `/dashboard`.
+- every other flow → **Replay at next trigger** only arms the replay
+  (`onboardingGuide.armReplay(flow)`; for Import and Bulk, with all their steps), and a toast says
+  the guide is ready in this browser. The guide starts the next time its page, modal or wizard
+  asks for it. While armed, the row reads *Ready in this browser: {flow} starts at its next
+  trigger.* and the button becomes **Cancel activation** (`onboarding.clearReplay`).
+
+**Replay all** arms every flow in list order — Welcome with `onboarding.startReplay`, the intro
+with `onboardingGuide.prepareIntroReplay()`, all the others with `armReplay` — then opens
+`/welcome`. If one of them cannot be armed (for example when `localStorage` is unavailable), the
+section clears the replays it already armed, then shows the error. Every button is disabled while
+an action runs. When the progress could not be loaded at all, the list is replaced by the error
+and a **Retry** button (`appBootstrap.load(true)`).
 
 ### 👤 ProfileTab
 
@@ -112,6 +121,10 @@ System-wide configuration with lock toggle:
 - Registration toggle
 - Scheduler configuration and new-user defaults
 - Other app-wide settings
+
+The Settings page shows this tab to every user, but only a superuser can change it: the page
+passes `canEdit={isSuperuser}` (`routes/(app)/settings/+page.svelte`), and without `canEdit` the
+tab shows a read-only indicator instead of the lock toggle and the bulk Save/Undo/Reset actions.
 
 For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
 tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
@@ -172,28 +185,32 @@ the shared wrappers in its own per-setting cards and passes `embedded`.
 
 ## 💻 Usage Example
 
+Both components take callback props (`onsaveAll`, `onundoAll`, `onresetAll` on the layout;
+`onsave`, `onundo`, `onreset` on a field), not component events:
+
 ```svelte
-<script>
+<script lang="ts">
   import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
   import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
-  
-  let value = 'option1';
-  let original = 'option1';
-  
-  $: hasChanges = value !== original;
+
+  let original = $state('option1');
+  let value = $state('option1');
+  let hasChanges = $derived(value !== original);
+
+  function save() {
+    // persist `value`, then:
+    original = value;
+  }
 </script>
 
-<SettingsLayout
-  title="My Settings"
-  {hasChanges}
-  on:saveAll={save}
->
+<SettingsLayout title="My Settings" {hasChanges} onsaveAll={save} onundoAll={() => (value = original)}>
   <SettingSelect
     bind:value
     label="Choose Option"
-    options={[{code: 'option1', label: 'One'}]}
-    isModified={value !== original}
-    on:save={() => saveSingle(value)}
+    options={[{value: 'option1', label: 'One'}]}
+    isModified={hasChanges}
+    onsave={save}
+    onundo={() => (value = original)}
   />
 </SettingsLayout>
 ```

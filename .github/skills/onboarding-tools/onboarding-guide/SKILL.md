@@ -60,16 +60,18 @@ the work with the page's own controls, and the guide follows.
 5. Write every text in four languages through `dev.py i18n`.
 6. Cover it: unit tests for catalog or controller changes, and an E2E that walks every step on
    desktop and mobile with a disposable account. Update the E2E specs that list the flows by hand.
-7. Update the user flow table and, when a rule changes, the developer docs.
+7. Update the user flow table and, when a rule changes, the developer docs
+   (`mkdocs_src/docs/developer/frontend/onboarding.md`, *Adding or changing a guide*).
 
 ## 📚 Where to find the technical details
 
 This skill is intentionally **high-level and durable**. For the current contract, read:
 
-- **Developer docs** — `mkdocs_src/docs/developer/frontend/components/features/import-wizard.md`
-  (import guide wiring, *Anchor presence and stalls*, the browser-stored replay),
-  `…/features/settings.md` (the Settings replay section), `…/features/auth.md` (Welcome and the
-  intro tour).
+- **Developer docs** — start from `mkdocs_src/docs/developer/frontend/onboarding.md` (the
+  fifteen flows, architecture, layout gate, anchors and stalls, browser-stored positions and
+  replays, backend endpoints, accounts older than 1.2.0, and the add-a-guide checklist). For the
+  Import guide specifics: `…/components/features/import-wizard.md#import-guide-wiring` and
+  `#guide-anchor-stall`; for the Settings replay UI: `…/components/features/settings.md`.
 - **User docs** — `mkdocs_src/docs/user/settings/preferences.en.md` (*Onboarding and guides*).
 - **Reference code** — `frontend/src/lib/features/onboarding/` (guide controller, catalog,
   anchors), `frontend/src/lib/stores/app/onboarding.svelte.ts` (progress and stored replays),
