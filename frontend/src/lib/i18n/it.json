@@ -1625,7 +1625,9 @@
     "pnlCandlesHypotheticalShort": "Sintetico — i massimi/minimi cross-asset sono ipotetici e non simultanei",
     "pnlAcqNewCapital": "Nuovo capitale",
     "pnlAcqReinvested": "Reinvestito",
-    "allocationGeneric": "{type} generico"
+    "allocationGeneric": "{type} generico",
+    "pnlAxisQuarter": "T{quarter}",
+    "pnlAxisWithYear": "{label} {year}"
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",
