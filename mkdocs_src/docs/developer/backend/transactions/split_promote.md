@@ -69,6 +69,12 @@ POST /transactions/commit
 reciprocally linked rows. Their input order does not determine source and
 destination; the signed quantity or amount does.
 
+The Transactions page sends this item on its own, outside the bulk workspace:
+**Split pair** in a row's actions asks for confirmation, then calls
+`commitTransactions({splits: [{id_a, id_b}]})`. Inside the workspace a saved
+pair is queued in `pendingSplits` and travels with **Save All** instead (see
+[Transaction Staging State](../../frontend/state/transaction-draft.md)).
+
 ---
 
 ## 🔗 Batch Promote
@@ -134,6 +140,13 @@ The recognized `resolved_fields` keys are `description`, `tags`, `date`, and
 `cost_basis_override`. Description, tags, and date are applied to both rows. For
 an asset transfer, the cost basis is applied to the positive-quantity receiver
 and cleared from the sender.
+
+The Transactions page sends a saved-row promote on its own, outside the
+workspace, when exactly two selected rows are unpaired, sit on brokers the user
+can edit, and match a rule (`findPromoteMatch()` on the `promote_from` metadata
+of `GET /transactions/types`). **🔗 Promote pair** then opens a plain
+confirmation, or `PromoteMergeModal` when the two rows differ in description,
+tags, date or cost basis; only the merge dialog adds `resolved_fields`.
 
 A mixed saved/new request uses a create correlation value:
 

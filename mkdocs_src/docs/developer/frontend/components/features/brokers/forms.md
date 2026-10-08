@@ -42,6 +42,11 @@ Client side, the submit button stays disabled while a save is running or while:
 Balance rows whose amount is zero or negative are dropped on submit. The form has no base-currency
 field: currencies appear only in the initial balance rows.
 
+On the server, `BrokerService.create_bulk()` turns each remaining balance row into a `DEPOSIT`
+dated **today** (`today_date()`, not `opened_at`), written through
+`execute_batch(creates_raw=…)`; a deposit refused by validation adds its issue to the broker's
+create errors.
+
 #### Duplicate names {: #duplicate-broker-names }
 
 Broker names are unique across the instance (`Broker.name` is a unique column), so the server

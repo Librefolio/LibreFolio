@@ -1,10 +1,14 @@
 # 💰 KPI Cards
 
-The three KPI cards at the top of the dashboard give you a quick diagnostic of your portfolio. All values respect the **time range and broker scope** selected at the top of the page.
+The three cards at the top of the Dashboard answer three questions at a glance: **what did I earn in this period**, **how well did my money work**, and **what is my portfolio worth**. They follow the time range and the broker filter at the top of the page, and a broker's page shows the same cards for that broker alone. The **?** icon in a card's corner opens its section below.
 
-!!! note "Sharing affects these numbers"
+- 📉 **[Card 1 — Period P&L](#card-1-period-pl)** — the money your investments made in the period
+- 📈 **[Card 2 — Returns](#card-2-returns)** — your returns in percent, and what your timing did to them
+- 💰 **[Card 3 — Net Worth](#card-3-net-worth)** — what you own, and your gain since the start
 
-    All amounts are aggregated over the brokers you have access to, and each broker you co-own contributes in proportion to your **ownership share** (e.g. a 50% Owner sees half of that broker's value and P&L). Editors and Viewers, whose share is always 0% by rule, see the broker's full amounts. See [Broker Sharing](../brokers/sharing.md).
+!!! note "Shared brokers count for your share"
+
+    The Dashboard adds up the brokers you **own** with a share above 0%, each in proportion to that share: a 50% owner sees half of the broker's value and P&L. Brokers where you are an Editor or a Viewer are not counted here; their own page shows them, with their full amounts. See [Broker Sharing](../brokers/sharing.md).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
     <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="KPI Cards Overview">
@@ -14,65 +18,51 @@ The three KPI cards at the top of the dashboard give you a quick diagnostic of y
 
 ## 📉 Card 1 — Period P&L {: #card-1-period-pl }
 
+How much money did your investments make in the selected period? The **Period P&L** card answers, leaving out the money you moved in or out yourself.
+
 <div class="kpi-card-crop-container card-period-pnl">
     <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Period P&L Card">
 </div>
 
-The **Period P&L** card shows how much money your portfolio actually *earned* in the selected window — after removing the effect of your own deposits and withdrawals.
+**Metrics shown**
 
-The hero number is calculated using the following formula:
+- **Period P&L** — the big number: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, the net flows being the capital you moved in or out → [Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **The line under it** — for example `+91.31 € (+16.36%)`: how much your Total P&L moved since yesterday (panel below)
+- **Unrealized change** — how the unrealized gain or loss of your holdings moved over the period, exchange-rate effect included → [Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Sales** — the realized gain or loss of the period's sales, against the average cost of the units sold → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **Dividends & interest** — dividends, coupons and P2P interest received → [Dividend & Interest](../../financial-theory/instruments/transaction-types/dividend-interest.md)
+- **Fees & taxes** — commissions and taxes recorded as transactions; hover the row for the split → [Fee & Tax](../../financial-theory/instruments/transaction-types/fee.md)
 
-\[\text{Period P&L} = \text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net Flows}_{\text{period}}\]
+**How to read it**
 
-A positive number means you earned money from investment activity. A negative number means you lost money net of capital movements.
+- **Green is a gain, red a loss** — and a deposit or a withdrawal is neither.
+- **The four rows explain the big number.** What they cannot see, such as assets moving between two of your brokers on the first or last day, goes to the **Other / reconciliation residual** of the [Performance view](positions.md#performance).
+- **The longest bar** is the row that moved your result the most.
 
-### The number below the hero
+??? info "📏 The line under the big number — how it is computed"
 
-Right under the Period P&L value, a smaller line shows something like `+91.31 € (+16.36%)`.
+    It is the change of your Total P&L — your gain or loss since the start — from yesterday to today, *today* being the end date of the period. The percentage compares it with yesterday's Total P&L, taken without its sign:
 
-- The amount is the **day-over-day** (today vs. yesterday) change in your **Total P&L** — your all-time accumulated gain/loss, not just the selected period.
-- The percentage compares that change with **yesterday's** Total P&L, taken without its sign — it tells you how much today's move "weighed" relative to your accumulated all-time result.
+    $$
+    \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
+    $$
 
-\[\text{Daily change} = \text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}\]
+    - **Sign and colour follow the change**, even while the Total P&L is a loss: from `-558.10 €` to `-466.79 €`, the line reads `+91.31 € (+16.36%)` — your loss shrank by 16.36%.
+    - **It needs two days of history**; the percentage is left out when yesterday's Total P&L is exactly zero, and a day without change shows `0.00%`.
 
-\[\text{%Daily change} = \frac{\text{Daily change}}{\left|\text{Total P&L}_{\text{yesterday}}\right|} \times 100\]
+### 💱 Unrealized change by currency {: #unrealized-change-by-currency }
 
-The sign and the colour follow the direction of the change: `+` and green when your Total P&L went up, `-` and red when it went down — even while your Total P&L is a loss. For example, if it was `-558.10 €` yesterday and is `-466.79 €` today, the line reads `+91.31 € (+16.36%)`: your accumulated loss shrank by 16.36%.
-
-This line only appears once the history has at least two daily points. The percentage is left out only when yesterday's Total P&L is exactly zero, since there is nothing to compare against; a day without any change shows `0.00%`.
-
-### The breakdown rows
-
-| Row | What it measures |
-|-----|-----------------|
-| **Unrealized change** | How much your open positions' [unrealized gain/loss](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) changed during the period. For assets priced in another currency it includes the effect of the exchange rate — hover the label to see it split by currency (below) |
-| **Sales** | Realized gain or loss of the sales made during the period: what each sale brought in, minus what you paid for the units sold (their average cost) |
-| **Dividends & interest** | Cash income from dividends, bond coupons, and P2P interest |
-| **Fees & taxes** | Commissions and taxes recorded as transactions |
-
-!!! tip "Identity check"
-
-    The four rows explain your Period P&L: realized results (**Sales**), unrealized results with their exchange-rate effect (**Unrealized change**), **Dividends & interest**, and **Fees & taxes**. Whatever they cannot see belongs to the period's *other effects* — for example assets travelling between two of your brokers on the first or last day, or a sale whose amount could not be converted. You find it in the **Other / reconciliation residual** row of the **Other Period Effects** table, in the Performance view of [Positions](positions.md).
-
-#### Unrealized change by currency {: #unrealized-change-by-currency }
-
-Hover **Unrealized change** to see where it comes from. The tooltip splits it by the currency your assets are priced in — here with euro as display currency:
+Hover **Unrealized change** to split it by the currency your assets are priced in — here with euro as display currency:
 
 | Row | What it shows |
 |-----|---------------|
-| 📈 **Assets in USD** | What your dollar assets did *in dollars* — their own price change — counted at the exchange rate of the day |
+| 📈 **Assets in USD** | What your dollar assets did *in dollars* — their own price change — counted at the day's exchange rate |
 | 💱 **USD → EUR rate** | What the exchange rate did to what you paid for them |
-| **USD, not split** | Only when, on the first or last day of the period, some of those assets had no price, no exchange rate, or an incomplete purchase cost: their change is shown in one piece |
+| ❔ **USD, not split** | Only when, on the first or last day, some of those assets had no price, no rate or an incomplete purchase cost: their change, in one piece |
 
-There is a 📈 row for every currency your assets are priced in, euro included, and a 💱 row for every currency other than your display currency: assets already in euro have no exchange-rate effect. For the assets priced in dollars, on a given day:
+There is a 📈 row for every currency, euro included, and a 💱 row for every currency other than your display currency; together the rows add up **exactly** to the Unrealized change.
 
-\[\text{Assets in USD} = (\text{Value in USD} - \text{Paid, in USD}) \times \text{Day's rate}\]
-
-\[\text{USD → EUR rate} = \text{Paid, in USD} \times \text{Day's rate} - \text{Paid, in EUR}\]
-
-Each row shows how its figure changed between the first and the last day of the period, and together the rows add up **exactly** to the Unrealized change. *Paid, in EUR* is what you really paid, each purchase at its own date's rate; *Paid, in USD* is the same amount expressed in dollars at those dates.
-
-!!! example "A US ETF on a euro dashboard"
+??? example "A US ETF on a euro dashboard"
 
     During the period you bought 10 units for €400, when they were worth 500 USD. At the end of the period they are worth 550 USD, and 1 USD = €0.75. The tooltip shows:
 
@@ -80,113 +70,82 @@ Each row shows how its figure changed between the first and the last day of the 
     - 💱 **USD → EUR rate**: 500 × 0.75 − 400 = **−€25.00** — the dollar lost value against the euro;
     - together, the **Unrealized change**: 550 × 0.75 − 400 = **+€12.50**.
 
-🔗 **Theory**: [Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) · [Book Value / WAC](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+🔗 **Theory**: [Unrealized change by currency](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#unrealized-change-by-currency) — the formulas behind each row
 
 ---
 
 ## 📈 Card 2 — Returns {: #card-2-returns }
 
+How well did your money work, whatever the size of your portfolio? The **Returns** card answers in percentages, and its big number tells you whether your timing helped.
+
 <div class="kpi-card-crop-container card-returns">
     <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Returns Card">
 </div>
 
-The **Returns** card shows *rate-of-return* metrics — percentages that let you compare performance independently of portfolio size.
+**Metrics shown**
 
-### Timing Effect
+- **Timing effect** — the big number, in percentage points (pp): $\text{MWRR}_{\text{cumulative}} - \text{TWRR}$ → [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)
+- **The percentage under it** — for example `+0.35%`: today's change in your Total P&L, against yesterday's net worth (panel below)
+- **ROI** — the period's gain against the capital invested → [Simple ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)
+- **TWRR** — how your asset choices performed, whatever the timing of your deposits → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
+- **MWRR cumulative** and **MWRR annualized** — your personal return, deposit timing included, over the period and as a yearly rate → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
 
-The **Timing Effect** at the top of the card measures whether your deposit/withdrawal decisions *added* or *subtracted* value compared to a passive buy-and-hold strategy:
+**How to read it**
 
-\[\text{Timing Effect} = \text{MWRR}_{\text{cumulative}} - \text{TWRR}_{\text{cumulative}}\]
+- **Favorable timing** (green): you tended to deposit before prices rose. **Unfavorable timing** (red): you tended to deposit at the peaks. Close to zero it reads **Neutral timing**, and the stronger the colour, the larger the effect.
+- **TWRR judges the strategy, MWRR your personal result** — as for a fund manager and an investor.
+- **The four rows cover the whole period**; the small percentage covers today only.
 
-- **Favorable (positive)** ✅: you tended to deposit when prices were low, boosting your personal return above what the assets alone earned.
-- **Unfavorable (negative)** ❌: you tended to deposit at peaks or missed dips, dragging your return below pure asset performance.
+??? info "📏 The percentage under the timing effect — how it is computed"
 
-### The number below the Timing Effect
+    The same change of your Total P&L as on [Card 1](#card-1-period-pl), divided by yesterday's net worth taken without its sign:
 
-Below the Timing Effect you'll see a small percentage (e.g. `+0.35%`) — it's the change in your **Total P&L** from **yesterday to today**, compared with yesterday's net worth taken without its sign:
+    $$
+    \text{percentage} = \frac{\text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100
+    $$
 
-\[\text{%Daily change} = \frac{\text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100\]
-
-Its sign and colour follow the same rule as the line under the [Period P&L](#card-1-period-pl): `+` and green when your Total P&L went up, `-` and red when it went down, even in the rare case of a negative net worth. It is hidden only when yesterday's net worth was exactly zero; a day without any change shows `0.00%`.
-
-It's a rough estimate of **today's** return — a quick pulse check. It is not the ROI, TWRR, or MWRR shown in the rows below, which stay anchored to the full selected period.
-
-### The four return metrics
-
-| Metric | Question it answers |
-|--------|---------------------|
-| **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | How much did I gain relative to my net invested capital? |
-| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | How did my asset choices perform, independent of when I deposited? |
-| **[MWRR cumulative](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | What is the cumulative money-weighted return for my actual cash flows? |
-| **[MWRR annualized](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | At what yearly compound rate did my capital actually grow? |
-
-!!! note "TWRR vs. MWRR"
-
-    - **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** measures the **asset strategy** — same as how a fund manager is evaluated.
-    - **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** measures **your personal result** — including the timing of your deposits.
-    - The gap between them is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md).
+    Its sign and colour follow the change, as on Card 1. It needs two days of history and is hidden when yesterday's net worth was exactly zero.
 
 ---
 
 ## 💰 Card 3 — Net Worth {: #card-3-net-worth }
 
+What is your portfolio worth at the end of the period, and what has it gained since you started? The **Net Worth** card answers, cash included.
+
 <div class="kpi-card-crop-container card-net-worth">
     <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Net Worth Card">
 </div>
 
-The **Net Worth** card shows the absolute value of your portfolio at the end of the selected period.
+**Metrics shown**
 
-!!! note "Net Worth includes cash"
+- **Net Worth** — the big number: securities at market value, plus cash, plus anything in transit between your brokers → [NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
+- **The line under it** — for example `+12,450.30 (+24.85%)`: your **Total P&L** since the start and, in brackets, your **ROI since the start** → [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **Market Value** — what the assets you hold are worth at market prices → [NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
+- **Purchase Cost** — what the positions you still hold cost you, each purchase at its own date's exchange rate → [Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Cash** — the cash at your brokers; hover it to split the capital you deposited from the returns you made → [Cash pools](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
+- **Deposited Capital (Period)** — deposits minus withdrawals in the period, green to the right and red to the left; hover it for the totals → [Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
-    The figure is **securities at market value + cash balance** (+ any value in transit between brokers). Because it includes liquidity, it is **not comparable** with the "securities value" (controvalore titoli) shown by a bank statement, which excludes cash — a bank's cash balance is reported separately.
+$$
+\text{Total P}\&\text{L} = \text{Net Worth} - \text{Capital put in since the start}
+$$
 
-### The number below Net Worth
+That capital is every deposit minus every withdrawal, plus the purchase cost of securities you brought in without cash, such as an opening position; the ROI in brackets divides the Total P&L by it.
 
-Below the Net Worth value you'll find your **Total P&L**, with your absolute return in parentheses — e.g. `+12,450.30 (+24.85%)`.
+**How to read it**
 
-- The amount is your **Total P&L** — the gain or loss accumulated since the beginning, across this scope's whole history (not just the current period).
-- The percentage in parentheses is the **absolute (since-inception) ROI**: Total P&L ÷ net capital invested since inception. It is *not* a day-over-day change — for that daily pulse check, see the small lines on [Card 1](#card-1-period-pl) and [Card 2](#card-2-returns).
-
-\[\text{Total P&L} = \text{Net Worth} - \text{Net Capital Invested Since Inception}\]
-
-Note: "Net Capital Invested Since Inception" here is the sum of **all** deposits minus **all** withdrawals since you started using this scope — a different, larger figure than the "Deposited Capital" row below, which only counts movements within the selected period.
-
-🔗 **Theory**: [Deposited Capital, Total PnL and Cash Pools](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
-
-### What the rows mean
-
-| Row | Definition |
-|-----|-----------|
-| **[Market Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Current market price × quantity for all held assets |
-| **[Purchase Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)** | What you paid for your open positions (average cost × qty), in your display currency: each purchase counts at the exchange rate of its own date, so this figure does not move with today's rates |
-| **Cash** | Liquid balance held in broker accounts |
-| **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Net external capital contributed to this scope |
-
-### The Deposited Capital bar
-
-The horizontal bar below the rows visualizes:
-
-- 🟢 **Total deposited** — all deposits in the period
-- 🔴 **Total withdrawn** — all withdrawals in the period
-
-The hero number shows the net balance (deposited − withdrawn).
-
-!!! info "Point-in-time vs. period"
-
-    Market Value, Purchase Cost, and Cash are **snapshots** at the end date — they are independent of the start date.
-    Deposited Capital is **period-scoped** — it counts deposits and withdrawals between the start and end of the selected range.
+- **End date or period?** The big number and the first three rows are values on the end date; Deposited Capital (Period) counts only the movements between start and end.
+- **The small caret** on a bar marks its value at the start of the period (hover it); Market Value turns red when it ends below it.
+- **Net Worth includes cash**, unlike the "securities value" of a bank statement.
+- **The Total P&L is not a daily change**: for today's pulse, see the small lines on Card 1 and Card 2.
 
 ---
 
 ## 🔗 Related
 
-- 💼 **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
-- 📚 **[Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)**
-- 📊 **[Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)**
-- 💸 **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
-- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)**
-- 📈 **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)**
-- ⏱️ **[Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+- 🔍 **[Positions & Analysis](positions.md)** — the same results, position by position
+- 📊 **[Charts](charts.md)** — the Growth chart's **P&L** view follows your Total P&L over time
+- 📐 **[Performance Metrics overview](../../financial-theory/technical-analysis/performance-metrics/index.md)** — every metric on these cards, with its formula
+- 🛠️ **[Technical details](../../developer/frontend/pages/index.md#dashboard)** — for developers: where the cards' figures come from
 
 ---
 
