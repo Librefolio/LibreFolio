@@ -898,7 +898,8 @@
       "removeFromSet": "Quitar del conjunto",
       "defaultPluginNote": "Leído como conjunto {plugin}, no con el plugin predeterminado del bróker ({defaultPlugin}). Para cambiarlo, usa «Leído como» o el menú ⋮ de un archivo.",
       "alsoRecognisedBy": "{file} también es reconocido por: {plugins}",
-      "partlySelectedBlocks": "Continuar está desactivado mientras un conjunto esté seleccionado solo en parte: selecciona todo el conjunto o deselecciónalo."
+      "partlySelectedBlocks": "Continuar está desactivado mientras un conjunto esté seleccionado solo en parte: selecciona todo el conjunto o deselecciónalo.",
+      "ungroupedBlocks": "Continuar está desactivado mientras haya seleccionado un archivo que solo se lee con su conjunto pero no está en ninguno: {files}. Vuelve a subir juntas, de una sola vez, todas las exportaciones del conjunto y selecciona el conjunto, o deselecciona el archivo."
     },
     "parseDetail": {
       "sourceRow": "Línea del archivo",
