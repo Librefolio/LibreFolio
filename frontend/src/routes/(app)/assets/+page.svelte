@@ -61,7 +61,7 @@
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/components/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {buildTransactionsFiltersUrl} from '../transactions/filterState';
@@ -1615,7 +1615,7 @@
                 {assets}
                 {dateStart}
                 {dateEnd}
-                targetCurrency={$globalSettings.default_currency || 'EUR'}
+                targetCurrency={$defaultDisplayCurrency}
                 onsynced={async () => {
                     for (const asset of assets) invalidateAssetPriceStore(asset.id);
                     rearmMaxPendingBeforeReload();

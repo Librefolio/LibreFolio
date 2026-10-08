@@ -8,7 +8,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {currentLanguage} from '$lib/stores/app/language';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
@@ -188,7 +188,7 @@
     let displayDateFrom = isMaxPending ? 'min' : dateFrom;
     let activePreset: any = isMaxPending ? 'MAX' : null;
 
-    let targetCurrency = get(globalSettings).default_currency || 'EUR';
+    let targetCurrency = get(defaultDisplayCurrency);
     let targetCurrencyManuallySet = false;
 
     let canEdit = false;
@@ -212,7 +212,7 @@
         : [];
 
     let baseCurrency = 'EUR';
-    $: baseCurrency = $globalSettings.default_currency || 'EUR';
+    $: baseCurrency = $defaultDisplayCurrency;
     $: if (!targetCurrencyManuallySet && targetCurrency !== baseCurrency) {
         const hadLoadedData = portfolioSummary !== null || portfolioHistory.length > 0;
         targetCurrency = baseCurrency;
@@ -558,6 +558,7 @@
                             <CurrencySearchSelect
                                 bind:value={targetCurrency}
                                 compact={true}
+                                testId="broker-detail-target-currency"
                                 dropdownPosition="bottom"
                                 placeholder={baseCurrency}
                                 onchange={() => {

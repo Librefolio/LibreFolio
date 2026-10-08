@@ -6,11 +6,12 @@
  *
  * Now uses Zodios client for type-safe API calls with Zod validation.
  */
-import {get, writable} from 'svelte/store';
+import {derived, get, writable} from 'svelte/store';
 import {browser} from '$app/environment';
 import {zodiosApi} from '$lib/api';
 import type {UserSettings} from '$lib/types';
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {globalSettings} from '$lib/stores/app/globalSettings';
 
 // Re-export type for backward compatibility
 export type {UserSettings} from '$lib/types';
@@ -127,5 +128,12 @@ function createUserSettingsStore() {
 }
 
 export const userSettings = createUserSettingsStore();
+
+/**
+ * The currency a page starts in: the user's own Default Currency. The instance's
+ * `default_currency` is the one *new* users get, so it is only the fallback for a user
+ * who has none — and 'EUR' the last resort before any settings are known.
+ */
+export const defaultDisplayCurrency = derived([userSettings, globalSettings], ([$user, $global]) => $user?.base_currency || $global.default_currency || 'EUR');
 
 registerClientSessionReset('userSettings', () => userSettings.reset());

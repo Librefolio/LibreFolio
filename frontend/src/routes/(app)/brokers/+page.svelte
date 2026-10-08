@@ -4,7 +4,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {Briefcase, Plus, RefreshCw} from 'lucide-svelte';
     import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
     import BrokerDiscoveryCard from '$lib/components/brokers/BrokerDiscoveryCard.svelte';
@@ -85,14 +85,14 @@
     let sharingBrokerName = '';
     let sharingReadOnly = false;
 
-    $: baseCurrency = $globalSettings.default_currency || 'EUR';
+    $: baseCurrency = $defaultDisplayCurrency;
     $: if (!targetCurrencyInitialized) {
         targetCurrency = baseCurrency;
         targetCurrencyInitialized = true;
     } else if (!targetCurrencyManuallySet && targetCurrency !== baseCurrency) {
         targetCurrency = baseCurrency;
-        // Guard with !loading: globalSettings.load() (root layout) can resolve AFTER
-        // onMount's own loadBrokers() already started with the hardcoded 'EUR' fallback —
+        // Guard with !loading: the default currency can change AFTER onMount's own
+        // loadBrokers() already started (the user's settings saved meanwhile) —
         // without this guard, a second concurrent loadBrokers() could fire and race the
         // first one while reassigning brokers/brokerBreakdownById mid-flight.
         if (brokers.length > 0 && !loading) {
@@ -357,6 +357,7 @@
                     <CurrencySearchSelect
                         bind:value={targetCurrency}
                         compact={true}
+                        testId="broker-page-target-currency"
                         dropdownPosition="bottom"
                         placeholder={baseCurrency}
                         onchange={() => {

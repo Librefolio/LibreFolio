@@ -25,6 +25,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/app/privacyStore.test.ts",
             "src/lib/stores/app/privacyStoreSsr.test.ts",
             "src/lib/stores/app/navigationStore.test.ts",
+            "src/lib/stores/app/settings.test.ts",
             "src/lib/components/ui/select/optionFilter.test.ts",
             "src/lib/utils/__tests__/dateArrowStep.test.ts",
             "src/lib/utils/__tests__/dateOnly.test.ts",
