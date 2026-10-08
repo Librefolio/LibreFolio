@@ -330,7 +330,9 @@
         invested: {light: '#2563eb', dark: '#60a5fa'}, // TWRR (% mode)
         pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
         totalPnl: {light: '#1a4031', dark: '#4ade80'}, // P&L mode — Total line (same prominence as NAV)
-        dividend: {light: '#0891b2', dark: '#22d3ee'}, // P&L income submode — Dividend stacked bar
+        // P&L income submode — Dividend stacked bar. Gold, away from the deposit teal and the reinvested emerald;
+        // the pair of `incomeEventColor` in lotComparisonChartHelpers.ts, so change both together.
+        dividend: {light: '#b08d00', dark: '#facc15'},
         interest: {light: '#7c3aed', dark: '#a78bfa'}, // P&L income submode — Interest stacked bar
         costs: {light: '#ea580c', dark: '#fb923c'}, // P&L income submode — Costs (FEE+TAX) bar (batch 2)
         deposit: {light: '#0d9488', dark: '#2dd4bf'}, // P&L income submode — Deposit-size bar (batch 2)
@@ -419,6 +421,8 @@
          *  categories on the x axis, not points in time. A property of the entry, not of
          *  the mode on screen, so a stale entry can never be read with the wrong geometry. */
         ladder: boolean;
+        /** The rung a ladder entry was built on, which names its axis labels; absent on a density entry. */
+        rung?: LadderRung;
         dates: string[];
         buckets: BucketInfo[];
         eur: Record<EurSeriesKey, AggregatedMetric>;
@@ -1123,6 +1127,7 @@
         const entry: AggregatedResolutionData = {
             resolution: buckets[0]?.resolution ?? 'daily',
             ladder: true,
+            rung: width,
             dates: buckets.map((bucket) => bucket.date),
             buckets,
             eur: {bookAssetLike: empty, cashContributed: empty, cashGenerated: empty, nav: empty, capitalBaseline: empty, totalPnl: empty},
@@ -1228,6 +1233,24 @@
     let lastLadderPlanKey: string | null = null;
 
     /**
+     * Painted width of a ladder axis label: the axis' 14 px, in the chart's font family.
+     *
+     * WHY lazy: the family is read from the chart model at the first measure of a plan (there is
+     * no model before the first option, and then nothing to measure), and `echarts.format` only
+     * inside the call, so a test that mocks ECharts without it still mounts the chart.
+     */
+    function ladderLabelMeasure(): (text: string) => number {
+        let font: string | undefined;
+        return (text) => {
+            if (font === undefined) {
+                const family = (chartInstance as unknown as {getModel?: () => {get?: (path: string[]) => unknown} | undefined} | undefined)?.getModel?.()?.get?.(['textStyle', 'fontFamily']);
+                font = `14px ${typeof family === 'string' && family !== '' ? family : 'sans-serif'}`;
+            }
+            return echarts.format.getTextRect(text, font).width;
+        };
+    }
+
+    /**
      * The ladder axis plan for `entry` seen through `zoom`, on the grid measured last.
      *
      * The window is passed in, not read from the chart: a render plans the window it is
@@ -1246,6 +1269,10 @@
             leftRoomPx: plotLeftPx,
             rightRoomPx: plotRightRoomPx,
             locale: $locale ?? 'en',
+            rung: entry.rung ?? candleWidth,
+            quarterLabel: (quarter) => $_('dashboard.pnlAxisQuarter', {values: {quarter}}),
+            labelWithYear: (label, year) => $_('dashboard.pnlAxisWithYear', {values: {label, year}}),
+            measureLabelPx: ladderLabelMeasure(),
         });
     }
 
@@ -2314,7 +2341,9 @@
                       type: 'category',
                       data: activeChartData?.dates ?? dates,
                       boundaryGap: true,
-                      axisLabel: {color: textColor, fontSize: 14, rotate: 0, ...ladderAxis.axisLabel},
+                      // `rotate` comes from the plan, always: 0, or 45 when one label does not fit. So do `width`
+                      // and `lineHeight`, the box of a rotated label (undefined here: this render replaces the axis).
+                      axisLabel: {color: textColor, fontSize: 14, ...ladderAxis.axisLabel, width: ladderAxis.axisLabel.width ?? undefined, lineHeight: ladderAxis.axisLabel.lineHeight ?? undefined},
                       axisLine: {lineStyle: {color: gridColor}},
                       // Bucket separators. With boundaryGap they fall BETWEEN categories,
                       // on the bucket boundaries, which is what makes a wide body read as

@@ -39,7 +39,9 @@ Duplicating works the same way: **Clone** from the context menu stages a copy in
 
 After an import, banners above the bulk workspace's grid can list what to check before **Save All**: a red one for the rows the importer did not fully understand, and an amber one for the auto-derived fields to verify. Click a banner to unfold its list, then click an entry: the grid turns to the page of that row and highlights it. Balance problems lead to their rows too: each one lists the workspace rows that contribute to it (*Workspace rows: …*), and a click takes you to the first of them in the current sort order. If your column filters hide the row, a message tells you so instead.
 
-<!-- [Screenshot Placeholder: transactions/bulk-todo-banner — the bulk workspace with the banner of fields to verify unfolded, and the row of the clicked entry highlighted in the grid] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="Bulk workspace with the banner of fields to verify unfolded and the clicked entry's row highlighted in the grid">
+</div>
 
 Once the workspace saves — edits, clones, deletions, new or imported rows — the Transactions page clears its selection, since the rows it pointed at may have changed or gone. Linking two rows with **Promote pair**, or unlinking a pair with **Split pair**, clears it too. If you close the workspace or cancel a confirmation without saving, your selection stays as it was.
 

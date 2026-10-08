@@ -299,6 +299,7 @@
 | [[problems/echarts-canvas-mismeasures-emoji-labels]] | ECharts' canvas under-measures emoji, so axis names overflow; plus `outerBoundsMode: 'auto'` shrinks the grid — emoji-free labels (`plainName`) and `'none'` | resolved | frontend, charts, echarts, emoji |
 | [[problems/tooltip-click-pins-over-modal]] | A click on a button wrapped in `Tooltip` (`interactiveChild`) pins the hint for 30 s — over the modal the button opens; stop propagation in the handler | resolved | frontend, tooltip, modal |
 | [[problems/popover-pointerdown-swallows-click]] | Closing a popover on `pointerdown` shrinks the page between press and release, so the pressed button never gets its click — close on the completed click (capture), ignore presses begun inside | resolved | frontend, svelte, popover, events |
+| [[problems/coverage-combine-race-renamed-part]] | The resource tracker renamed its coverage part between the runner's listing and `coverage combine`, so two parallel passes lost all their coverage in a green run. Fix: combine the directory (up to 3 rounds), one parts directory per run, a failed combine turns the pass red. Second finding: a SIGTERM during coverage's own save leaves an empty part — removed and named, not red | resolved | testing, test-runner, coverage, python, multiprocessing, race, silent-failure |
 
 ## Entities
 
