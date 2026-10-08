@@ -57,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Asset, broker and note names that contain markup are shown as plain text in tables, chart tooltips, notifications and validation messages, instead of being interpreted as HTML. This closes a stored cross-site scripting issue present since v1.1.0, where a crafted asset name could run code in another user's browser.
 - **Plugin diagnostics now require signing in.** The endpoint behind the plugin diagnostics of the About page answered anyone who could reach the server, with the import errors of the installed plugins — exception text that can include internal paths. It now requires a session, like the update check next to it. Present since v1.1.0.
+- **Deleting your account removes the brokers you alone own.** Account deletion now applies the last-owner rule to each of your brokers: a broker you are the only owner of goes with its transactions and imported reports, even if you shared it with viewers or editors, and a broker with another owner stays with them, minus your access. Before, those brokers stayed behind with no owner, out of everyone's reach. Present since v1.0.0.
+- **A deleted record's id is never given to a new one.** A new broker, asset, transaction, user, FX route or asset event no longer takes the id of one deleted before, so a report folder, a bookmarked link or an export still pointing at the old id can no longer land on a new record.
 
 #### 🤖 AI Export and signal contracts
 
@@ -143,11 +145,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 🪟 Dialogs and menus
 
-- **Escape inside a dialog closes only the open menu or list.** It used to close the whole dialog as well: closing a row menu discarded the bulk transaction editor.
+- **Escape inside a dialog closes only the open menu or list**, also when the focus is on the list's button. It used to close the whole dialog as well: closing a row menu discarded the bulk transaction editor.
 - **A broker change the server refuses keeps the dialog open, with the reason** — a name already in use, or turning off overdraft or shorting while a balance is negative — instead of looking saved until the next reload.
+- **Dialogs cover the whole screen.** The share dialog in Settings › About left a strip at the bottom where the page underneath could still be clicked.
 
 #### 📱 Sign-in, language, app icons and small screens
 
+- **A slow server no longer signs you out.** If the server is slow or unavailable when you open or reload a page, LibreFolio stays on that page, says the server is not responding and offers **Retry**, instead of signing you out and sending you to the Dashboard. When your session has really ended, signing in again takes you back to the page you were on.
 - Browsers offer saved credentials on the sign-in username field too, and registration and password change are recognised by password managers, so changing a password updates the right saved account.
 - **Switching the interface language no longer rebuilds the app.** When the new language took a moment to load, the whole app was reloaded and unsaved changes on the open page were lost; now the page stays as it is while its texts change.
 - The installed app no longer shows black corners on the Android splash screen or around the iPhone home-screen icon, and Android gets a proper maskable icon.
@@ -173,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- **Existing databases are converted once, at the first start after the upgrade.** So that ids are never reused, the server rebuilds six tables of an existing database: a backup copy is made first and deleted once the conversion is verified — kept, with the database left as it was, if anything fails — leftover report folders of brokers deleted earlier are removed, and the server starts either way. The first start can take a little longer on a large database. `python -m backend.app.db.post_migration` (`--dry-run` to preview) runs the same step with the server stopped.
 - **Pages download less data.** The server compresses its responses (gzip): a first visit downloads about 2.8 MB instead of 7.5 MB, and a typical session about 0.9 MB instead of 5.5 MB, which helps on slow or metered connections.
 - Language and display currency for new users start from administrator defaults; existing users are not forced through onboarding.
 - Import file tables paginate from five rows. After uploading, only the brokers that received those files start expanded.
