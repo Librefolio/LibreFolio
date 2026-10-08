@@ -256,8 +256,126 @@ Plugins are auto-discovered once per process, the first time the registry is use
 
 ---
 
+## 🗒️ Plugin notes {: #plugin-notes }
+
+What the user pages of the import plugins leave out. The two richest plugins have a page of their
+own: [Crédit Agricole](credit_agricole.md) and [Danske Bank](danske_bank.md).
+
+### 🇳🇱 DEGIRO {: #plugin-degiro }
+
+`broker_degiro.py` reads the **Account Statement** CSV in any language. Its message language, its
+linked `FX_CONVERSION` pairs and the orders list it claims without importing are in the
+[BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md#linked-pairs); this is the
+layout behind them.
+
+- **Twelve columns, read by position**, the same in every language: date · time · value date ·
+  product · ISIN · description · FX rate · currency · amount (unnamed) · balance currency ·
+  balance (unnamed, ignored) · Order Id.
+- **Detection** (`_layout`, behind `can_parse` and `cannot_parse_reason`): the first data row has
+  a `DD-MM-YYYY` date and an `HH:MM` time. With the ninth and eleventh header cells unnamed, 12
+  cells (13 when the last is empty) and `ISIN` fifth is the statement; 16 cells or more and `ISIN`
+  fourth is the orders list.
+- **Continuation lines.** A line with no date and no time continues the row above: DEGIRO wraps a
+  long description or Order Id, and its cells are appended verbatim.
+- **Numbers.** A value's decimal mark is read from the value when it is certain. Only one separator
+  followed by exactly three digits (`1.000`, `49,785`) is ambiguous: it takes the mark voted by the
+  file's certain amounts and balances.
+- **Classification**, first match wins: no amount → skipped; a paired FX leg → `FX_CONVERSION`; an
+  unreadable amount or date, or no currency → `degiro_unknown_rows`; an FX rate without a partner →
+  `degiro_unpaired_fx`; a trade (ISIN, Order Id and `<verb> <quantity> …@<price>`, or the old
+  German `zu je`) → `BUY` or `SELL` by sign (`degiro_quantity_unreadable` when its quantity cannot
+  be read), the same after a `PREFIX:` → corporate action (`degiro_not_imported`); FX words without a
+  partner → `degiro_unpaired_fx`; another negative row of an order → `FEE`, or `TAX` for a
+  transaction tax; a zero amount → `degiro_not_imported` with an ISIN, skipped without; then the
+  multilingual word table (`_WORD_RULES`), all languages on every row.
+- **Signs are checked, never flipped**: a dividend, interest or deposit must be positive, a tax,
+  fee or withdrawal negative, else `degiro_unexpected_sign`; negative interest is a `FEE`. Trades,
+  dividends, taxes and fees get one fake asset per ISIN (the product name when there is none).
+- **Notices**: one `warning` per code, with its rows as evidence under the file's own header (an
+  unnamed column takes the previous name plus `#`). Tests: `./dev.py test external brim-degiro`.
+
+### 🇮🇹 Intesa Sanpaolo {: #plugin-intesa }
+
+`broker_intesa.py` reads two exports, CSV or XLSX (`_brim_io.read_rows`), told apart by content:
+
+- **Portfolio snapshot** (*patrimonio*), when the first 40 rows contain
+  `controvalore di carico fiscale`. A row with `Descrizione` and `ISIN` cells opens a section
+  (*Fondi e Sicav*, *Titoli di stato*); a row starting with `Totale`, `Liquidità` or `Saldo` closes
+  it. Each holding with an ISIN and a positive `Numero Quote` or `Quantità` becomes a cashless
+  `ADJUSTMENT` with `cost_basis_mode="manual"` and a per-unit `cost_basis_override` in EUR: the
+  total `Controvalore di carico fiscale €` divided by the quantity (no override, and a warning,
+  when the cost is missing). The first non-zero figure of the `Saldo totale` or
+  `Saldo disponibilità` row becomes one EUR `DEPOSIT`. All are dated the latest
+  `Data Ultima Quota` or `Data-Ora` of the holdings (today, with a warning, when there is none) and
+  tagged `snapshot-seed`.
+- **Movements list**, when a header row holds `Operazione`, `Dettagli` and `Importo`; it reads
+  `Data`, `Operazione`, `Dettagli`, `Valuta` (the currency, EUR when empty) and `Importo`.
+  `Operazione` maps by lower-cased substring: `cedol` → `INTEREST`, `dividend` → `DIVIDEND`,
+  `commission` → `FEE`, `ritenut`, `imposta` or `bollo` → `TAX`. Any other row is skipped with a
+  warning, so no `BUY` or `SELL` is ever produced. Income is linked to an asset named from
+  `Dettagli` (the `Cedole Su <CCY> <nominal>` prefix removed) and keyed by that name, with no ISIN;
+  fees and taxes carry no asset. Only this layout calls `attach_maturity_notices`.
+- Warnings are plain Italian strings (coerced to `warning` notices with code `legacy`), and there
+  are no field todos. Holding back the movements that predate the snapshot is the wizard's
+  opening-date gate (step 7 above), not the plugin's.
+
+### 📊 eToro {: #plugin-etoro }
+
+`broker_etoro.py` reads the **Account Activity** sheet of the eToro account statement, saved as CSV:
+eToro itself downloads the statement as XLS.
+
+- **Detection**: a `.csv` whose first line contains `date`, `type`, `details`, `amount`, `units`
+  and `realized equity`, in any case. Columns are read by name (`csv.DictReader`).
+- **Type**, by lower-cased substring: `open position` → `BUY`, `position closed` → `SELL`,
+  `dividend` → `DIVIDEND`, `interest payment` → `INTEREST`, `withdraw request` → `WITHDRAWAL`,
+  `deposit` → `DEPOSIT`. `withdraw fee`, `withdrawal conversion fee` and `conversion fee` are a
+  `FEE` when the amount is not zero and skipped silently when it is; `overnight fee`,
+  `overnight refund` and `sdrt` are always skipped silently; any other type → warning.
+- **Asset and currency** come from `Details` (`SYMBOL/CCY`, such as `NKE/USD`): the symbol is the
+  fake asset's `extracted_symbol` (no ISIN, no name), and the three letters after the slash are the
+  currency of the row's `Amount`. Without that shape, the whole text is the symbol and the currency
+  is USD. `BUY`, `SELL` and `DIVIDEND` without a symbol are skipped with a warning.
+- **Known gap**: eToro states `Amount` in the account currency. In the sample, the `Amount` of each
+  `KER/EUR` dividend equals its `Realized Equity Change`, yet the row is tagged EUR; the user page
+  asks the user to check such rows.
+- **Quantity** from `Units` (`-` reads as 0, and a `FEE` always has 0); signs are set by type
+  (`SELL` quantity, `BUY` and `FEE` amounts negative). **Numbers**: parentheses mean negative;
+  with both `.` and `,` the last one is the decimal mark; a lone `,` is decimal when at most two
+  digits follow it. **Dates**: `DD/MM/YYYY HH:MM:SS` or `DD/MM/YYYY`, else a warning and the row is
+  skipped. Warnings are plain English strings.
+
+### 🏛️ Fineco {: #plugin-fineco }
+
+`broker_fineco.py` reads the *Movimenti Dossier Titoli* report, CSV only.
+
+- **Detection**: within the first 15 lines, `operazione`, `data valuta`, `isin`, `controvalore`
+  and the `dossier` metadata marker. The header is the first row whose first cell is `Operazione`;
+  the metadata above it (`Dossier:`, `Intestatario:`, `Titoli e operazioni`) is skipped.
+- **Columns by position**: 0 `Operazione` (trade date) · 1 `Data valuta` · 2 `Descrizione` ·
+  3 `Titolo` · 4 `Isin` · 5 `Segno` · 6 `Quantita` · 7 `Divisa` · 8 `Prezzo` · 9 `Cambio`
+  (ignored) · 10 `Controvalore`. A header longer than 11 cells is the layout with commissions:
+  columns 11 to 14 are summed (absolute values) into one `FEE` in EUR (`FEE_CURRENCY`, tag `fee`)
+  when the sum is positive. A data row shorter than 11 cells is skipped with a warning.
+- **Type**, by lower-cased substring of `Descrizione`: `compravendita` with `Segno` `A` or `V` →
+  `BUY` or `SELL` (another `Segno` → warning), `dividendo` → `DIVIDEND`, `cedol` → `INTEREST`,
+  `rimborso` → `SELL`, `aumento capitale` → cashless `ADJUSTMENT`; anything else → warning.
+- **Date**: `Data valuta`, else `Operazione` (`DD/MM/YYYY`). **Currency**: `Divisa`, EUR when
+  empty. **Numbers**: a value containing `,` is Italian (`.` thousands), otherwise a dot decimal.
+- **Above par**: a `rimborso` `SELL` whose `Titolo` passes `_brim_io.looks_like_bond` (`BTP`,
+  `BOT`, `CCT`, `CTZ`, `BUND`, `OAT`, `OBBLIG`, `CCTEU`, `BOND`), with `Prezzo` above 100, goes
+  through `model_bond_maturity(ctv=Controvalore, price=Prezzo, held_qty=|Quantita|)`: a `SELL` of
+  the par principal and an `INTEREST` for the surplus (tag `maturity_premium`).
+- **Assets** are keyed by `Isin`; a row without one gets an asset of its own (`UNKNOWN_ROW_<n>`).
+  Every transaction, `FEE` included, carries the row's asset.
+- Warnings are plain English strings, although the module docstring says Italian; only the
+  descriptions of the generated legs (`Commissioni: …`,
+  `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian.
+
+---
+
 ## 🔗 Related
 
+- **[Crédit Agricole Importer](credit_agricole.md)** — Layouts, causale registry, account trades and maturities
 - **[Generic CSV Provider](generic_csv.md)** — Format reference + sign conventions + LLM tip
 - **[Providers List](providers_list.md)** — All currently supported brokers
 - **[BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md)** — How to write a new broker plugin

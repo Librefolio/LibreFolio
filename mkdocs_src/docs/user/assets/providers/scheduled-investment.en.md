@@ -1,71 +1,94 @@
 # <img src="../../../../static/scheduled_investment.png" alt=""> Scheduled Investment
 
-The Scheduled Investment provider is designed for fixed-income instruments where the value is calculated from an interest rate schedule rather than market prices. Examples include savings accounts, fixed deposits, and government bonds with known coupon rates.
+The Scheduled Investment provider calculates an asset's value from its interest schedule instead
+of reading a market price. Use it for savings accounts, term deposits, P2P or crowdfunding loans,
+and bonds you follow by their accrued interest. In the **Provider** list it is called
+**Scheduled Investment Calculator**.
 
-## 📊 Capabilities
+## 🔍 What It Offers
 
-- ✅ **Current Price**: Calculated deterministically from initial value + interest schedule + asset events
-- ✅ **History**: Full historical value curve based on interest accrual
-- ✅ **Asset Events**: Generates INTEREST and PRICE_ADJUSTMENT events
-- ❌ **Search**: Not applicable
-
-## 🔧 Configuration
-
-- **Identifier**: Auto-generated (no manual identifier needed)
-- **Identifier Type**: `AUTO_GENERATED`
-- **Parameters**: Configured via the **Interest Schedule Editor** (custom UI component)
-
-### Required Fields
-
-| Field | Description |
-|-------|-------------|
-| **Initial Value** | The principal / face value of the investment (e.g., 10000) |
-| **Currency** | ISO 4217 currency code (e.g., EUR, USD) |
+- ✅ **Current price** and **history**, calculated from your schedule: no website is queried, and
+  the same schedule always gives the same values.
+- ✅ **Events**: with **Generate Coupon**, interest payouts and a final maturity settlement, plus
+  the events you add yourself.
+- ❌ **Search** and **details**: not applicable. There is no identifier to type either: LibreFolio
+  creates one for you.
 
 ## 📋 Interest Schedule Editor {: #interest-schedule-editor }
 
-The editor allows you to define multiple interest rate periods:
+Choosing the provider in **Provider Assignment** opens the **Interest Schedule** editor. Start with
+the settings for the whole schedule:
 
-| Field | Description |
-|-------|-------------|
-| **Period** | Start and end date (both inclusive) |
-| **Rate %** | Annual interest rate as percentage (e.g., 5.00 = 5%) |
-| **Compounding** | Simple or Compound interest |
-| **Comp. Freq.** | Compounding frequency (Annual, Semi-annual, Quarterly, Monthly, Daily) |
-| **Day Count** | Day count convention (ACT/365, ACT/360, 30/360, ACT/ACT) |
+- **Initial Value** and **Currency**: the amount invested, or the face value — e.g. 10,000 EUR.
+- **Interest Type**: **Simple** or **Compound** — see
+  [How the value is calculated](#how-value-is-calculated).
+- **Day Count**: how the days of a year are counted — **ACT/365**, **ACT/360**, **ACT/ACT** or
+  **30/360**. See [Day count conventions](../../../financial-theory/fundamentals/day-count.md).
 
-### ⚡ Late Interest
+Then add the periods with **Add First Period**, and **Add Period** for the next ones:
 
-You can enable **Late Interest** to define a penalty rate applied after the last scheduled period ends. A configurable **grace period** (in days) applies first; after that, late interest starts accruing.
+| Column | What to enter |
+|---|---|
+| **Period** | Start and end date, both included |
+| **Rate %** | The annual rate as a percentage: `5.00` means 5% a year |
+| **Frequency** | How often interest matures: Daily, Weekly, Monthly, Quarterly, Semiannual or Annual |
+| **Generate Coupon** | Tick it to pay the accrued interest out at each maturity date |
 
-## 📋 Asset Events
+Periods must follow one another, with no gaps or overlaps. **Split** cuts a period in two; select
+neighbouring periods and click **Merge** to join them.
 
-Asset events describe things that happen to the asset globally (not portfolio-level transactions):
+### ⚡ Late Interest {: #late-interest }
 
-| Event Type | Effect on Price | Description |
-|-----------|----------------|-------------|
-| **INTEREST** | Price drops by event value | Interest payout — the user received cash, so the asset value decreases |
-| **PRICE_ADJUSTMENT** | Algebraic change | Write-down (negative) or write-up (positive) of the asset value |
+For a loan repaid late, turn on **⚡ Late Interest** below the periods: the asset keeps growing
+after the last period ends. A late row appears with its own **Rate %**, **Frequency** and
+**Generate Coupon**. Click its period to set the grace days, and choose **Simple** or
+**Compound** (the default) next to the switch.
 
-Events are configured in the editor and affect the calculated price from their date onwards.
+- During the grace days, interest keeps accruing at the last period's rate.
+- After them, the late rate applies.
 
-## 🧮 How Value is Calculated {: #how-value-is-calculated }
+### 📅 Asset Events
 
-1. Start with `initial_value` as the base principal
-2. For each interest period, calculate accrued interest based on the rate, compounding type, and day count convention
-3. Apply asset events: INTEREST events reduce the price, PRICE_ADJUSTMENT events modify it algebraically
-4. The current value = `initial_value` + accrued interest - Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)
+Add one-off events with **Add Event**: a **Date**, a **Type**, a **Value** and optional **Notes**.
+Each event counts from its date onwards.
 
-If `late_interest` is configured, the provider continues beyond maturity using the grace-period branch first, then the late-interest branch; if `generate_interest` is enabled, it also emits late `INTEREST` events and a final `MATURITY_SETTLEMENT` where applicable.
+| Type | Effect on the value |
+|---|---|
+| **Interest** | An interest payout you received: the value drops by that amount |
+| **Price Adjustment** | A write-down (negative) or a write-up (positive) |
 
-!!! note "Pure Deterministic Engine"
+## 🧮 How the Value Is Calculated {: #how-value-is-calculated }
 
-    The provider is completely deterministic — given the same configuration, it always produces the same prices. It does NOT access the database or read transactions. All inputs come from `provider_params`.
+LibreFolio walks the schedule day by day. On day $d$ the value is
 
-## 🎯 Use Cases
+$$
+V(d) = V_0 + I(d) - \sum \text{Interest events} + \sum \text{Price adjustments}
+$$
 
-- **Savings accounts** with fixed or variable interest rates
-- **Term deposits** (CD/Depositi vincolati)
-- **Government bonds** where you want to track accrued interest rather than market price
-- **Crowdfunding loans** (P2P lending) with known interest schedules
-- **Any instrument** with a known interest rate schedule
+where $V_0$ is the **Initial Value**, $I(d)$ the interest accrued so far, and the sums cover the
+events up to day $d$. Each day adds interest at the period's annual rate $r$ over $\Delta t$, one
+day's share of the year under the **Day Count** (for example $1/365$ with ACT/365):
+
+- **Simple** — interest on the initial value only: $\Delta I = V_0 \, r \, \Delta t$
+- **Compound** — interest on the interest already accrued too: $\Delta I = (V_0 + I) \, r \, \Delta t$
+
+With **Generate Coupon**, at each maturity date the gain $V(d) - V_0$, when positive, is paid out
+as an interest event: the value starts again from $V_0$, and $I$ and the sums restart from zero.
+
+- **Before the first period**, the value is the Initial Value.
+- **After the last period**, it stays at its final amount, unless late interest is on. With
+  **Generate Coupon** on the last period and no late interest, a maturity settlement event closes
+  the asset at that amount.
+- **The chart** gets a point on each **Frequency** date: choose **Daily** for a smooth line.
+
+??? example "🧮 A €10,000 loan at 5%, with a coupon every month"
+
+    Simple interest, ACT/365, one period starting on 1 January, **Frequency** Monthly,
+    **Generate Coupon** ticked. The first maturity date is 1 February, 31 days later: the loan has
+    earned about €42.47 ($10\,000 \times 0.05 \times 31/365$). That amount is paid out as an
+    interest event, and the value goes back to €10,000 to grow again in February.
+
+## 🔗 Related
+
+- 📅 **[Asset Events](../detail/events.md)** — How events show on the asset's chart
+- 🛠️ **For developers: [Scheduled Investment Provider](../../../developer/backend/assets/provider_scheduled_investment.md)** — Engine, events and caching

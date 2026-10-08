@@ -184,6 +184,12 @@ matches the technical `price_only` / `price_only_close` semantics rather than
 blindly using the portfolio target currency. When no native observation exists
 the component returns an explicit `unavailable` payload, never an approximation.
 
+The three `*.drawdown_summary` components ignore the requested period start and run
+over the full available history up to the snapshot date: the Asset scope loads from
+the first stored price (`date.min`), and the Portfolio and Broker scopes from the
+earliest accessible transaction in their Broker scope (or the period start when that
+is earlier). A short AI period therefore still carries the true historical peak.
+
 There is deliberately **no FX-pair drawdown** dataset (an FX rate is not a
 peer-relative wealth path), and a dedicated recovery-focused analysis remains
 **deferred**: the current output already publishes
@@ -200,6 +206,11 @@ Portfolio's already-loaded observed native-price series and the canonical
 current Drawdown, maximum Drawdown, maximum-episode recovery status,
 remaining-to-peak, basis, observation count, available range, coverage, and
 data-quality status. It exports no Drawdown history.
+
+Unlike the `*.drawdown_summary` sections, this snapshot is window-relative: it reads
+only genuine observed prices (backward-filled points excluded) inside the requested
+AI period, reports coverage against the requested days, and is `partial` when the
+observations do not span the whole period.
 
 ## 🧾 Task-specific Evidence Datasets
 
@@ -242,6 +253,16 @@ Forward-looking tasks use a shared Scenario Thesis. Market-driver Analyses requi
 dated per-Asset research and causal confidence labels. Fiscal Analyses separate
 economic FIFO evidence from jurisdiction-dependent legal tax treatment.
 
+The Scenario Thesis gives every material scenario its horizon, supplied evidence,
+assumptions, expected mechanism, trade-offs, trigger and invalidation conditions,
+and missing user decisions, and keeps it conditional. Its response-contract section
+is mandatory for PAC Planning, Rebalancing, and both Capital-Loss Offset Analyses;
+the other Analyses apply the shared rule only when they introduce conditional future
+paths. Market-driver links are labelled exactly `supported`, `plausible`,
+`inferred`, `speculative`, or `unexplained`. When the receiving AI has no web
+access, it must state that the research could not be completed and never fabricate
+sources (`templates/sharedInstructions.ts`, `templates/responseContracts.ts`).
+
 ### 📅 PAC Planning Contract
 
 PAC Planning uses supplied facts first and asks only for missing user inputs that
@@ -254,6 +275,13 @@ It never invents budget, targets, risk tolerance, liquidity needs, exclusions, o
 operating constraints. Portfolio/Asset Drawdown, trend, momentum, volatility, and
 events are historical subordinate evidence, not forecasts or standalone purchase
 signals.
+
+Its timing gate compares immediate and staged deployment. Conditional waiting is
+allowed only when the supplied evidence shows a broad, persistent decline across the
+Portfolio, never isolated Asset weakness or a single indicator, and must state the
+evidence, horizon, trigger, and invalidation conditions. The AI asks for the user's
+timing preference before choosing a concrete path and presents two or three
+conditional scenarios when feasible.
 
 ### 🧾 Capital-Loss Offset Contract
 
@@ -345,6 +373,15 @@ Analysis selections produce `full_prompt` in this exact order:
 Trusted frontend templates provide instructions. Metadata/manifests use safe YAML;
 Snapshot Data uses deterministic compact text/pipe tables with a safe YAML fallback
 for unknown component versions. User notes remain safely serialized untrusted data.
+
+Snapshot Data joins its tables through prompt-local references. Its Entity Directory
+resolves A# (Assets, with display name and identifiers), B# (Brokers), and F# (FX
+pairs); L# lot references are assigned by the backend in public lot order
+(`lot_ref`, pattern `^L[1-9]\d*$`) and exist only as rows of the FIFO tables. The
+shared verification instructions tell the receiving AI that these codes are lookup
+references and that its answer must use display names. Domain Notes are fixed per
+domain (`AI_EXPORT_DOMAIN_NOTES`): for example, FX rates are quote currency per one
+unit of base currency, and direct FX exposure is not look-through exposure.
 
 ## 📋 Manifests
 
@@ -509,6 +546,41 @@ Frontend flow:
 Clipboard transport changes only how the same final prompt is copied. It never
 switches builders, serializers, financial logic, sampling, or contract versions.
 No network request to an AI provider occurs.
+
+The options panel decides what is requested and when the copy happens
+(`AiExportMenu.svelte`, `AiExportOptionsPanel.svelte`, `aiExportOptions.ts`,
+`aiExportMemory.ts`):
+
+- **Request context**: each page sends the end of its own date range as
+  `snapshotAsOf`, and `resolveAiExportPeriod` counts the AI period back from it
+  (`3m`/`6m`/`1y` subtract calendar months, clamped to the month end; Custom takes a
+  positive number of days, weeks, months, or years). The Dashboard always sends its
+  explicit owned-Broker set (`getOwnedBrokers`: `OWNER` role with a share above 0 or
+  unset, narrowed by the Broker filter), so the backend never widens a Portfolio
+  request. The Broker page sends its `broker_id`. Asset and FX pages send no
+  `broker_ids`, so the backend scopes them to every Broker the user can access
+  (`BrokerUserAccess`, any role).
+- **Defaults**: Dashboard `portfolio.pac_planning`, Broker `broker.review`, Asset
+  `asset.market_analysis`, FX `fx.pair_analysis`; detail `standard` when the
+  selection supports it (`resolveDefaultDetailLevel`); period `3m`.
+- **Response language** follows the interface locale
+  (`aiExportResponseLanguageFromLocale`: English, Italian, French, or Spanish); the
+  panel has no language control.
+- **Applicability** is not pre-checked: the panel lists every compatible selection of
+  the domain, and a runtime `422 selection_not_applicable` surfaces as an error toast.
+- **Size gate**: the estimate is `ceil(UTF-16 code units / 4)`. Above 20,000 the
+  severity is `warning`, from 60,000 `large` (`AI_EXPORT_TOKEN_WARNING_THRESHOLD`,
+  `AI_EXPORT_TOKEN_LARGE_THRESHOLD`). A `normal` prompt is copied at once; otherwise
+  the panel shows the final size with **Use Compact** (hidden on Compact) and
+  **Copy Anyway**. Copy Anyway stores the options fingerprint, so the same options
+  copy without asking while the draft lives.
+- **Draft memory**: options, the notes draft, and that fingerprint are kept per
+  memory key (`portfolio`, `broker:<id>`, `asset:<id>`, `fx:<slug>`) in an in-memory
+  cache mirrored to `sessionStorage` (`lf_<userId>_ai_export_session_<key>`) for 10
+  minutes (`AI_EXPORT_MEMORY_TTL_MS`). A client-session transition (logout or a new
+  login) clears them together with any legacy `localStorage` draft; an expired
+  draft, or one the current catalog or domain no longer accepts, falls back to the
+  defaults.
 
 ## 🧭 Localized Additional Data Guidance
 

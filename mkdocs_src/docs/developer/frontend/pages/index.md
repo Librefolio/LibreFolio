@@ -71,7 +71,7 @@ frontend/src/routes/
   page continues to `returnTo`, or to `/dashboard` when the intro tour starts
 - Architecture: [Onboarding Guides](../onboarding.md)
 
-### 📊 Dashboard (`/dashboard`)
+### 📊 Dashboard (`/dashboard`) {: #dashboard }
 
 <div class="screenshot-container" style="margin: 0.5rem 0 1rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 700px;">
     <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard" style="width: 100%; display: block;">
@@ -84,6 +84,40 @@ frontend/src/routes/
   (`CurrencySearchSelect`)
 - [DataQualityBanner](../data-quality-banner.md) above the tabs; its actions can open
   `FxPairAddModal` to add a missing FX pair
+- **KPI row** — `KpiSection`, also mounted on the broker detail Overview:
+    - it reads `PortfolioSummary`: `period_pnl` and its rows `period_unrealized_gain_loss_delta`
+      (tooltip rows `period_unrealized_breakdown`, in backend order), `period_realized_gain_loss`,
+      `period_income` and `period_fees_taxes` (a positive magnitude, shown negated; the tooltip
+      splits `period_fees` / `period_taxes`); `simple_roi_percent`, `twrr_percent`,
+      `mwrr_cumulative_percent`, `mwrr_annualized_percent`; `net_worth`, `total_gain_loss` with
+      `total_gain_loss_percent` (since inception), `market_value`, `open_cost_basis`, `cash_total`
+      and `net_deposited_capital` (`total_deposited` / `total_withdrawn`, period only)
+    - the start-of-period carets come from `period_market_value_start`, `period_book_value_start`
+      and the first history point's `cash_value`; the Cash tooltip from the last history point's
+      `cash_from_contributed_capital` / `cash_from_generated_returns`
+    - the day-change lines are computed in the browser from the last two history points: Δ of
+      `total_pnl`, divided by the previous `|total_pnl|` (Card 1) or `|nav_value|` (Card 2); a zero
+      base drops the percentage, and fewer than two points drops the line
+    - the timing effect is `mwrr_cumulative_percent − twrr_percent` in pp, labelled neutral below
+      0.05 pp; its colour intensity saturates at 3 pp
+    - each card's help icon is a `DocsLink` to `user/dashboard/kpi-cards/#card-1-period-pl`,
+      `#card-2-returns` and `#card-3-net-worth`: keep these explicit anchors in every language
+- **Positions tab** — `PositionsPanel`, also mounted on the broker detail Positions tab:
+    - Holdings / Performance (labelled **Portfolio** / **Period**) × Table / Map: `ExposureTable`,
+      `ExposureTreemap`, `ContributionTable` with `OtherPeriodEffectsTable`, `PerformanceChart`;
+      both toggles persist per user in `localStorage` (`dashboard-positions-semantic`,
+      `dashboard-positions-visual`)
+    - the table layouts (`dashboard-holdings-v5`, `dashboard-performance-v2`) are shared with the
+      broker detail page; the Performance Status filter is a hidden-by-default enum column of
+      `ContributionTable`, not a panel toggle, and `PerformanceChart` shows an Open / Closed badge
+    - `positions_contribution` is fetched apart, on demand: `PositionsPanel` asks for it the first
+      time the Performance view is shown; a cached copy shows at once and is refreshed when stale
+    - the lots panel opens from the **Analyze Lots** row action (⋮) or the right-click menu of
+      every view — there is no plain-click trigger — and is mirrored in `?asset=<id>`;
+      `LotsAnalysisPanel` renders inline below, with a slide transition, and scrolls itself into
+      view. Its `broker_ids` are the broker filter, or every owned broker with a share above 0%
+    - architecture: [Lots Analysis](../components/features/lots-analysis.md) and the
+      [Lots Analysis Service](../../backend/transactions/lots_analysis_service.md)
 
 ### 🏦 Brokers (`/brokers`)
 
@@ -106,8 +140,9 @@ frontend/src/routes/
 
 - Header with back button, icon and name; toolbar actions: edit (**BrokerModal**, owners and
   editors), share (opens the Info tab), refresh, and AI export
-- Tabs: Overview (KPIs, cash balances, growth chart, allocation), Positions (a click opens the
-  FIFO lots panel, mirrored in `?asset=<id>`), Risk, Transactions and Info
+- Tabs: Overview (KPIs, cash balances, growth chart, allocation), Positions (**Analyze Lots**, from
+  the ⋮ menu or the right-click menu, opens the FIFO lots panel, mirrored in `?asset=<id>`), Risk,
+  Transactions and Info
 - Transactions tab: the broker's transactions, its report files (*Uploaded Reports* →
   **BrokerImportFilesModal**), a link to the Transactions page, and — for owners and editors —
   import and new transaction through the bulk workspace, with this broker pre-selected

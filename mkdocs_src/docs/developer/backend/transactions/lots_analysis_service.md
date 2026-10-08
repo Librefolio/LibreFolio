@@ -109,6 +109,8 @@ High-level flow:
 7. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call and add their gaps — missing rates, unknown costs — to `data_quality` (see [WAC Lines](#wac-lines)).
 8. Emit only requested DTO sections.
 
+Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the user can access, in any role, intersected with `broker_ids` when given. No owner share is applied anywhere in the analysis — quantities, values and P&L are each broker's full figures, unlike the portfolio summary, which scales an OWNER's brokers by their `share_percentage`. The lot modal says so next to its quantities (`brokers.lots.modal.absoluteQuantityTooltip`).
+
 ### 💱 FX Conversion
 
 `_FxRateResolver` is thin prefetch + conversion helper:
