@@ -77,11 +77,11 @@
     ]);
 
     // F.5 — OHLC/volume columns are flagged `erasable: true`. DataEditor renders
-    //   ErasableNumberCell which emits the sentinel `-1` on explicit clear (confirm →
-    //   backend interprets it as SET NULL in the MERGE upsert). NULL values render as
-    //   "not set" italic placeholder. `Delete` key on empty input triggers the same
-    //   eraser confirm flow.
-    //   i18n keys: `dataEditor.cell.{notSet,clearField,clearFieldConfirm}` (4 langs).
+    //   ErasableNumberCell, whose eraser emits the sentinel `-1` at once, with no
+    //   confirm: the row's Revert action is the undo. The save path sends `-1` and the
+    //   backend reads it as SET NULL in the MERGE upsert. `Delete` on an empty input
+    //   does the same. NULL values render as an italic "not set" placeholder.
+    //   i18n keys: `dataEditor.cell.{notSet,clearField}` (4 langs).
 
     let eventTypeOptions = $derived(getEventTypeOptions($t, EVENT_TYPES_ALL));
 
@@ -167,6 +167,12 @@
                 notes: typeof ev.notes === 'string' ? ev.notes : Array.isArray(ev.notes) ? (ev.notes[0] ?? '') : '',
             },
         }));
+    }
+
+    /** The DB id of a saved event row; null for a row the server has never seen, whose
+     *  rowId is its date (`2026-03-15`, `2026-03-15#2`) or a `new-<uuid>`. */
+    function dbEventId(row: DataRow): number | null {
+        return row.originalStatus === 'original' && /^\d+$/.test(row.rowId) ? Number(row.rowId) : null;
     }
 
     // Initialize/update rows when data changes.
@@ -362,6 +368,9 @@
                         // matching code is always safe.
                         const eventCurrency = currency || 'USD';
                         const eventItems = validEvents.map((r) => ({
+                            // A saved event travels with its id: the server edits that row
+                            // in place, its type included, instead of matching (date, type).
+                            id: dbEventId(r) ?? undefined,
                             date: r.date,
                             type: String(r.values.type),
                             value: {
@@ -381,13 +390,10 @@
                 }
 
                 if (deleteEvents.length > 0) {
-                    // Delete events that have a real DB id (not UUID-generated for new rows)
-                    const realDeletes = deleteEvents.filter((r) => {
-                        const id = parseInt(r.rowId, 10);
-                        return !isNaN(id) && id > 0;
-                    });
-                    if (realDeletes.length > 0) {
-                        const idsToDelete = realDeletes.map((r) => parseInt(r.rowId, 10));
+                    // Only saved events are deleted on the server. A new row deleted before its
+                    // first save just goes: its rowId is a date, never an id.
+                    const idsToDelete = deleteEvents.map((r) => dbEventId(r)).filter((id): id is number => id !== null);
+                    if (idsToDelete.length > 0) {
                         // Single bulk call; backend returns per-item status (deleted/not_found/in_use).
                         const bulkResp = await zodiosApi.delete_events_bulk_api_v1_assets_events_delete(undefined, {
                             queries: {ids: idsToDelete},
@@ -400,9 +406,8 @@
 
                         // Remove the deleted rows from the in-memory table so they don't linger.
                         eventRows = eventRows.filter((row) => {
-                            const idNum = parseInt(row.rowId, 10);
-                            if (isNaN(idNum)) return true;
-                            return !deletedIds.has(idNum);
+                            const id = dbEventId(row);
+                            return id === null || !deletedIds.has(id);
                         });
 
                         if (deletedIds.size > 0) {
@@ -551,7 +556,7 @@
 
     <!-- Data Editor: Events -->
     {#if activeTab === 'events'}
-        <DataEditor bind:rows={eventRows} bind:this={eventEditor} columns={eventColumns}>
+        <DataEditor bind:rows={eventRows} bind:this={eventEditor} columns={eventColumns} importMatchKeys={['type']}>
             {#snippet importModal({open, setOpen, onimport})}
                 <EventDataImportModal {open} {onimport} onclose={() => setOpen(false)} />
             {/snippet}
