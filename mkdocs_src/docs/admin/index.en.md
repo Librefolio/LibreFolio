@@ -1,16 +1,11 @@
 # 🛡️ Admin Manual
 
-This manual is for system administrators and advanced users who need to perform maintenance, manage users, or interact with the system via the command line.
-
-## 📖 Overview
-
-Most administrative and maintenance tasks are handled through the main command-line interface or configured via environment variables.
+This manual is for the people who install and run LibreFolio. Most administration happens from the
+command line, through environment variables, or in the app's **Admin** settings tab.
 
 ---
 
 ## 📚 Guides
-
-The documentation is organized into three main areas:
 
 ### 🐳 Deployment & Exposure
 - 📦 **[Host Installation](host_installation.md)**: Manual setup using Python, Node.js, and Pipenv directly on the host machine.
@@ -29,32 +24,64 @@ The documentation is organized into three main areas:
 
 ## 🔔 Update Notifications {: #update-notifications }
 
-After each login, the browser of an **administrator** checks the GitHub Releases API for a newer **stable** LibreFolio release (drafts and pre-releases are never considered). To stay unobtrusive:
-
-- The check runs **at most once per hour** — the last result is cached in the browser's local storage. A manual **Check for updates** from the [changelog modal](../user/settings/about.md#changelog-modal) skips this cache.
-- The modal only appears once the release is **actually installable**: the check also verifies that the Docker image for that tag exists on the registry, so a release whose build is still in progress is not announced yet.
-- Self-hosted installs without internet access simply fail the fetch silently: **no error, no banner**. A manual check reports the failure instead.
-- The modal waits until no other window and no guide is open.
-
-When a newer stable release exists, the **New version available** modal appears, showing the current and latest versions side by side, with a **How to update** link to the **[updating guide](../user/installation.md#updating)** and a **Release notes on GitHub** link to the release page. Two ways to dismiss it:
-
-- **Remind me later** — the modal closes and will prompt again at the next login. Closing it with <kbd>Esc</kbd> or a click outside does the same.
-- **Skip this version** — the automatic check never prompts for that specific version again (a future, newer version will still be announced). A manual check from the changelog modal still reports it.
-
-Non-admin users are never probed at login. If a non-admin runs **Check for updates** from the [changelog modal](../user/settings/about.md#changelog-modal) and a newer release exists, they see the **Update available — contact an administrator** dialog instead. It lists the instance administrators (with e-mail addresses when available, each with a mailto link and a copy button), so they know whom to ask for the upgrade.
-
+When an administrator signs in, LibreFolio checks GitHub for a newer **stable** release. If there
+is one, the **New version available** window shows your version and the latest side by side, with
+a **How to update** link to the [updating guide](../user/installation.md#updating) and a
+**Release notes on GitHub** link.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Update available modal with current and latest version">
 </div>
 
+- **Remind me later** closes the window until a later sign-in.
+- **Skip this version** stops the automatic prompt for that version; a newer one is announced
+  again.
+- A release is announced only once its Docker image can be downloaded, and the window waits until
+  no other window or guide is open.
+- Without internet access, the automatic check fails silently: no error, no banner.
+- To check right away, use **Check for updates** in the
+  [changelog](../user/settings/about.md#changelog-modal): it reports errors, and versions you
+  skipped too.
+
+??? note "👥 Other users — when someone who is not an administrator checks"
+
+    For users who are not administrators, no check runs at sign-in. If one of them runs
+    **Check for updates** and a newer release exists, the
+    **Update available — contact an administrator** dialog lists the administrators, with their
+    e-mail addresses when available, so they know whom to ask.
 
 ---
 
-## 🔐 Authentication & Session Persistence
+## 🔐 Keep Users Signed In After a Restart {: #session-persistence }
 
-LibreFolio uses **JWT (JSON Web Tokens)** for user authentication. By default:
-- If the **`JWT_SECRET`** environment variable is left empty in your `.env` file, the server generates a random signing secret at startup. This provides maximum security, but user sessions will be lost if the server is restarted.
-- To persist sessions across server restarts (or when running multiple independent server instances behind a load balancer), define a stable **`JWT_SECRET`** key. Note that multiple uvicorn workers spawned on the same host will automatically share the parent process's generated secret, meaning session persistence is maintained across workers even when `JWT_SECRET` is left empty.
+LibreFolio signs every login session with a secret key, `JWT_SECRET`.
 
-For technical details, see the developer-focused [Security Architecture](../developer/architecture/security.md) page.
+- **Not set** (the default): a new random key is made at every start, so everyone must log in
+  again after a restart or an update.
+- **Set**: sessions survive restarts. Set it also if several separate LibreFolio servers share the
+  same users behind a load balancer.
+
+### 🔑 1. Generate a key
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+No Python on the host? Run it inside the container instead:
+
+```bash
+docker exec librefolio python -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+### 📝 2. Add it to `.env` and restart
+
+```bash
+JWT_SECRET=paste-the-generated-value-here
+```
+
+Restart LibreFolio (with Docker Compose: `docker compose up -d`). Keep the key private: whoever
+knows it can forge a session.
+
+The workers of a single `./dev.py server --workers …` share one key on their own. How long a
+session lasts is the **Session Duration** in [Global Settings](settings.md). For the details, see
+the developer page [Security Architecture](../developer/architecture/security.md).
