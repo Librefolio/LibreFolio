@@ -210,6 +210,25 @@ describe('PageSyncModal — running both sections', () => {
         expect(onsynced).toHaveBeenCalledTimes(1);
     });
 
+    /**
+     * One Timeout field, two sections: both requests may take what the user agreed
+     * to wait. SyncModalBase hands each section the limit (the 120 s floor while the
+     * field sits under it, the field plus 5 s of grace above) and each endpoint gets
+     * it as its axios timeout, where both used to get a hardcoded 120 s.
+     */
+    it('gives both endpoints the request limit the Timeout field sets', async () => {
+        assetsRespond({asset_id: 1, status: 'ok', points_fetched: 1, points_changed: 1});
+        fxResponds({pair: 'EUR-USD', status: 'ok', points_fetched: 1, points_changed: 1});
+        mount({assets: [asset(1)], fxPairs: ['EUR-USD']});
+
+        await fireEvent.input(screen.getByTestId('sync-modal-timeout'), {target: {value: '300'}});
+        await startSync();
+        await settled();
+
+        expect.soft(syncPrices, 'asset endpoint').toHaveBeenCalledWith([{asset_id: 1, date_range: {start: '2024-03-01', end: '2024-03-31'}}], {timeout: 305_000});
+        expect.soft(syncRates, 'FX endpoint').toHaveBeenCalledWith({pairs: ['EUR-USD'], start: '2024-03-01', end: '2024-03-31'}, {timeout: 305_000});
+    });
+
     it('reports acceptance per run without leaking it through reopen or retry', async () => {
         syncPrices
             .mockResolvedValueOnce({results: [{asset_id: 1, status: 'partial', points_fetched: 1, points_changed: 1}]} as never)

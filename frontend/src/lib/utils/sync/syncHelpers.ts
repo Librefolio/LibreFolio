@@ -42,6 +42,26 @@ export interface SyncResult {
 // Sync section — multi-section sync modal support
 // =========================================================================
 
+/** How long one sync request may run: what SyncModalBase hands each section (see syncRequestTimeoutMs). */
+export interface SyncRequestOptions {
+    timeoutMs: number;
+}
+
+/** The historical cap of a sync request: the Timeout field never makes a request shorter than this. */
+export const SYNC_REQUEST_FLOOR_MS = 120_000;
+/** Time left for the response once the user's own Timeout has elapsed. */
+export const SYNC_REQUEST_MARGIN_MS = 5_000;
+
+/**
+ * The request limit for a Timeout field of `timeoutSec` seconds. The field used to drive only the
+ * countdown while every request stopped at 120 s, so raising it above that changed nothing and the
+ * timeout message named a limit that had not been applied. Now a larger field lengthens the request
+ * (plus a margin for the response); a smaller one keeps the 120 s requests have always had.
+ */
+export function syncRequestTimeoutMs(timeoutSec: number): number {
+    return Math.max(SYNC_REQUEST_FLOOR_MS, Math.round(timeoutSec * 1000) + SYNC_REQUEST_MARGIN_MS);
+}
+
 /**
  * A sync section defines one group of items to sync in SyncModalBase.
  * SyncModalBase renders one titled section per SyncSection and runs
@@ -52,8 +72,8 @@ export interface SyncSection {
     id: string;
     /** Section title displayed as header (e.g. '📊 Assets') */
     title: string;
-    /** Callback to perform the actual sync — returns results */
-    doSyncFn: (targetIds: string[]) => Promise<SyncResult[]>;
+    /** Callback to perform the actual sync — returns results. `options.timeoutMs` is the request limit to apply. */
+    doSyncFn: (targetIds: string[], options: SyncRequestOptions) => Promise<SyncResult[]>;
     /** All target IDs to sync in this section */
     targetIds: string[];
     /** Snippet for rendering each result row (specialization-specific) */
