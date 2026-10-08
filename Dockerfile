@@ -149,9 +149,11 @@ ENV HOST=0.0.0.0 \
 
 EXPOSE 6040 6041
 
-# Health check
+# Health check — on the port the CMD binds (6040), like docker-compose.yml. PORT is
+# the host side of the mapping ("${PORT:-6040}:6040"): inside the container
+# uvicorn always listens on 6040, whatever PORT says.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/api/v1/system/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "6040"]
