@@ -638,3 +638,171 @@ describe('D380 wiring gate — the two L1 components', () => {
         expect(labels[0]).toEqual(['figurePercent']);
     });
 });
+
+/* ---------------------------------------------- D381: a loss of money --- */
+
+/**
+ * D381 (08/10/2026) — the L1 money caption never prints «−0,00 €».
+ *
+ * `lossMoney` prefixed «−» to whatever `formatCurrencyAmount` printed, so a loss that rounds to
+ * no cents read as a fall of nothing. `lossAmount(amount, format)` takes the sign away from the
+ * string: it formats the MAGNITUDE, `format(String(Math.abs(amount)))`, and puts U+2212 in front
+ * only when that magnitude is finite and `Math.round(magnitude * 100) !== 0` — the cents the
+ * caption prints. A non-finite amount gets the formatter's own output, unsigned.
+ *
+ * Read through the module namespace like the four above: until the export exists, only the
+ * cases calling it fail, on an assertion naming it.
+ */
+
+type AmountFormatter = (value: string) => string;
+
+/** `lossAmount`, called through the module. Until the export exists every case calling it fails here. */
+function lossAmount(amount: number, format: AmountFormatter): string {
+    const helper = l1Exports.lossAmount;
+    expect(typeof helper, 'l1Helpers exports no lossAmount(): the L1 caption still prefixes its own minus, and prints «−0.00 €» for a loss of nothing').toBe('function');
+    return (helper as (amount: number, format: AmountFormatter) => string)(amount, format);
+}
+
+/** A stand-in for `formatCurrencyAmount`: its placeholder for anything that is not a finite number, two decimals otherwise. */
+const currencyLike: AmountFormatter = (value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? `${amount.toFixed(2)} EUR` : PLACEHOLDER;
+};
+
+/** `PRIVACY_PLACEHOLDER`: with privacy on, `formatCurrencyAmount` prints this for ANY amount, zero included. */
+const MASK = '\u2022\u2022\u2022';
+const masked: AmountFormatter = () => MASK;
+
+/** The D381 contract's cases, through `currencyLike`. */
+const LOSS_AMOUNT_EXAMPLES: readonly Example[] = [
+    {value: 0, expected: '0.00 EUR'},
+    {value: -0, expected: '0.00 EUR'},
+    {value: 0.004, expected: '0.00 EUR'},
+    {value: 0.005, expected: '\u22120.01 EUR'},
+    {value: 12.3, expected: '\u221212.30 EUR'},
+    // A negative amount is worded by its magnitude: the sign of the input is not the sign printed.
+    {value: -12.3, expected: '\u221212.30 EUR'},
+];
+
+describe('lossAmount — a loss of money as a fall (D381)', () => {
+    it.each(rows(LOSS_AMOUNT_EXAMPLES))('words $shown as $expected', ({value, expected}) => {
+        expect(lossAmount(value, currencyLike)).toBe(expected);
+    });
+
+    it('hands the formatter the magnitude, as a string', () => {
+        const received: string[] = [];
+        const recording: AmountFormatter = (value) => {
+            received.push(value);
+            return value;
+        };
+        lossAmount(-12.3, recording);
+        lossAmount(-0, recording);
+        expect(received).toEqual(['12.3', '0']);
+    });
+
+    it('leaves an amount that is not a number to the formatter, unsigned', () => {
+        for (const amount of NON_FINITE) expect(lossAmount(amount, currencyLike), `lossAmount(${amount})`).toBe(PLACEHOLDER);
+    });
+
+    it('decides the sign on the number, because a masked amount has no digits to read', () => {
+        // The reason the rule is numeric. With privacy on, every amount prints «•••»: a rule that
+        // read the formatted text could not tell a loss of 12.30 from a loss of nothing, and would
+        // either sign both or neither. The number still knows.
+        expect(lossAmount(0, masked)).toBe(MASK);
+        expect(lossAmount(0.004, masked)).toBe(MASK);
+        expect(lossAmount(0.005, masked)).toBe(`${MINUS}${MASK}`);
+        expect(lossAmount(12.3, masked)).toBe(`${MINUS}${MASK}`);
+    });
+
+    it('signs exactly the amounts whose caption shows a cent, across −0.02…+0.02 in steps of 0.0001', () => {
+        const worded = sweep(-200, 200, 10_000).map((amount) => ({amount, text: lossAmount(amount, currencyLike), cents: currencyLike(String(Math.abs(amount)))}));
+        // Control first: the sweep does reach amounts that print with the minus.
+        expect(worded.filter(({text}) => text.startsWith(MINUS)).length).toBeGreaterThan(0);
+        expect(worded.filter(({text}) => text === `${MINUS}0.00 EUR`)).toEqual([]);
+        expect(worded.filter(({text, cents}) => text.startsWith(MINUS) !== (cents !== '0.00 EUR'))).toEqual([]);
+    });
+});
+
+/* ------------------------------------ D381: the caption's wiring gate --- */
+
+/**
+ * Every sign in the L1 panel comes from `l1Helpers` — extended to the money caption.
+ *
+ * `L1HowMuchItHurts.svelte` must take `lossAmount` from `./l1/l1Helpers` and call it, and no
+ * string or template literal in the component may carry U+2212 any more: the last one is the
+ * `` `\u2212${…}` `` that `lossMoney` builds today. Literals are read by their COOKED value,
+ * so an escape and a typed glyph are the same thing to the gate, while a comment or the text of
+ * the page is not a literal at all. The scan covers the script and the markup's expressions
+ * alike: a sign written in the markup would bypass `l1Helpers` just as well.
+ */
+
+/** The cooked text of every string literal and template chunk in a component that carries U+2212. */
+function minusLiterals(source: string): string[] {
+    const texts: string[] = [];
+    for (const node of astNodes(parse(source, {modern: true}))) {
+        if (node.type === 'Literal' && typeof node.value === 'string') texts.push(node.value);
+        if (node.type === 'TemplateElement' && node.value !== null && typeof node.value === 'object') {
+            const cooked = (node.value as {cooked?: unknown}).cooked;
+            if (typeof cooked === 'string') texts.push(cooked);
+        }
+    }
+    return texts.filter((text) => text.includes(MINUS));
+}
+
+/** How many calls a component makes to `exported`, through whatever local name it imported it as. */
+function callsTo(source: string, exported: string): number {
+    const ast = parse(source, {modern: true});
+    const locals = new Set(importBindings(ast).flatMap((binding) => (binding.exported === exported ? [binding.local] : [])));
+    let calls = 0;
+    for (const node of astNodes(ast)) {
+        const callee = node.type === 'CallExpression' ? identifierName(node.callee) : null;
+        if (callee !== null && locals.has(callee)) calls += 1;
+    }
+    return calls;
+}
+
+describe('D381 wiring gate — the detector itself', () => {
+    it('finds U+2212 in a template chunk, an escaped string and a typed one, never in a comment, the page text or another dash', () => {
+        const source = [
+            '<script lang="ts">',
+            '    let {amount} = $props();',
+            '    const built = `\\u2212${amount}`;',
+            "    const escaped = '\\u2212';",
+            "    const typed = '\u2212';",
+            '    // a fall prints \u2212 in this comment',
+            "    const dash = '\\u2014';",
+            '</script>',
+            "<p title={'\\u2212'}>\u2212 in the text of the page {built} {escaped} {typed} {dash}</p>",
+        ].join('\n');
+
+        expect(minusLiterals(source)).toEqual([MINUS, MINUS, MINUS, MINUS]);
+    });
+
+    it('counts the calls to an import, followed through its alias', () => {
+        const source = [
+            '<script lang="ts">',
+            "    import {lossAmount as asLoss} from './l1/l1Helpers';",
+            '    let {amount} = $props();',
+            '    function lossMoney(value: number): string {',
+            '        return asLoss(value, String);',
+            '    }',
+            '</script>',
+            '<p>{lossMoney(amount)} {asLoss(amount, String)}</p>',
+        ].join('\n');
+
+        expect(callsTo(source, 'lossAmount')).toBe(2);
+        expect(callsTo(source, 'lossPercent')).toBe(0);
+    });
+});
+
+describe('D381 wiring gate — the L1 components', () => {
+    it('L1HowMuchItHurts.svelte takes lossAmount from ./l1/l1Helpers and calls it', () => {
+        const source = componentSource(PANEL_FILE);
+        expect(importedFrom(source, './l1/l1Helpers')).toEqual(expect.arrayContaining(['lossAmount']));
+        expect(callsTo(source, 'lossAmount')).toBeGreaterThan(0);
+    });
+
+    it.each([PANEL_FILE, HISTOGRAM_FILE])('%s builds no minus sign of its own', (file) => {
+        expect(minusLiterals(componentSource(file)), `${file}: a U+2212 in a literal is a sign that did not come from l1Helpers`).toEqual([]);
+    });
+});
