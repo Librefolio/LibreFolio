@@ -1625,7 +1625,9 @@
     "pnlCandlesHypotheticalShort": "Synthetic — cross-asset high/low are hypothetical and non-simultaneous",
     "pnlAcqNewCapital": "New capital",
     "pnlAcqReinvested": "Reinvested",
-    "allocationGeneric": "Generic {type}"
+    "allocationGeneric": "Generic {type}",
+    "pnlAxisQuarter": "Q{quarter}",
+    "pnlAxisWithYear": "{label} ''{year}"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
