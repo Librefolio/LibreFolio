@@ -1,156 +1,153 @@
 # ⚙️ Global Settings
 
-LibreFolio has a set of **system-wide settings** that affect all users. These are managed by administrators and stored in the database.
+Global settings apply to the whole instance and to every user. They are stored in the database:
+everyone can read them, only administrators can change them.
 
 ---
 
-## 👁️ Viewing & Editing Settings
+## ✏️ Change a Setting
 
-### 🖥️ From the UI
+### 🔓 1. Unlock the tab
 
-1. Navigate to **Settings** (gear icon in the sidebar)
-2. Click the **Global Settings** tab (visible to all users; only admin/superuser can edit)
-3. Click the **lock icon** (🔒) in the header to unlock the tab for editing — this is a single
-   header-level lock, not a per-field one
-4. Modify one or more values. **Nothing is written until you save**: each field has its own
-   **Save** (and **Undo** / **Reset to default**) button, or you can use **Save All** in the
-   header to save every changed field in one call
-
-!!! warning "Locking with unsaved changes asks first"
-
-    If you click the lock icon again while a value is still unsaved, a confirmation dialog
-    asks whether to discard the changes. **Cancel** (or <kbd>Esc</kbd>) leaves the tab
-    unlocked with your edits intact; **Discard** reverts every field to its last saved value
-    and locks the tab — no API call is made in either case.
+Open **Settings** (gear icon in the sidebar), then the **Admin** tab: its **Global Settings**
+panel groups the settings by category. Click the **lock icon** (🔒) in the header to unlock it.
+Only administrators (superusers) have the lock; everyone else gets a read-only view.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! warning "Admin Only"
+### 💾 2. Edit and save
 
-    Only users with **superuser** privileges can modify global settings. Regular users see a read-only view.
+- Nothing is written until you click **Save** next to a setting, or **Save All** in the header.
+  **Undo** and **Undo All** bring back the saved values.
+- **Reset to Default** and **Reset All to Defaults** fill in the default values, ready to save.
+- Saved values apply right away, without a restart.
 
-### 💻 From the CLI
+??? note "🔒 Locking with unsaved changes — when a dialog asks first"
 
-To initialize default settings (creates only missing ones):
+    Clicking the lock with unsaved changes asks whether to discard them. **Cancel** keeps your
+    edits; **Discard** puts back the saved values and locks the tab.
 
-```bash
-./dev.py user init-settings
-```
+??? tip "💻 Missing settings — recreate them from the command line"
+
+    Every server start recreates any missing setting with its default value. To do it without a
+    restart, run the [command-line tool](cli_tools.md):
+
+    ```bash
+    pipenv run ./dev.py user init-settings
+    ```
+
+    The values you changed are kept.
 
 ---
 
-## 🕐 Session
+## 📋 What Each Setting Does
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `session_ttl_hours` | int | `24` | JWT token expiration time in hours. After this period, users must log in again. |
+| Category | Setting | Default | What it does — when to change it |
+|---|---|---|---|
+| ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value applies from each user's next login. |
+| 🛡️ Security | **Enable Registration** | On | Lets new people sign up. Turn it off once everyone has an account, above all if the instance is reachable from the internet. The first account of a new instance can always be created. |
+| 🛡️ Security | **Require Email Verification** | Off | Not active yet: sending emails is a planned feature, so the switch is read-only and marked **Coming soon**. |
+| 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
+| 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
+| 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. |
+| 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. |
+| 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark`, or 🖥️ `auto`, which follows the device. |
 
-## 🛡️ Security
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `enable_registration` | bool | `true` | Whether new user registration is allowed. Set to `false` to prevent new sign-ups. |
-| `require_email_verification` | bool | `false` | **Placeholder — not enforced yet.** Whether new users must verify their email before accessing the system. Email sending (SMTP) is a planned feature, so in the UI this setting is read-only and carries a "coming soon" badge. |
-
-## 🔄 Update Job
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `scheduler_enabled` | bool | `true` | Enable or disable the automatic background synchronization daemon for exchange rates and historical/real-time prices. |
-
-The remaining scheduler parameters are not shown as individual fields: they are edited together from the **Configure** modal of the Scheduler row — see [Market Data Scheduler](#market-data-scheduler) below.
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `scheduler_current_price_frequency_minutes` | int | `10` | Frequency (in minutes) with which the daemon updates current real-time prices (1-1440). |
-| `scheduler_history_sync_times` | str | `06:00,23:00` | Comma-separated HH:MM times for daily history sync, expressed **in the configured `scheduler_timezone`**. Times are stored as entered (local wall-clock); the daemon converts each local slot to a UTC instant only when deciding whether a job is due. |
-| `scheduler_history_sync_days` | str | `mon,tue,wed,thu,fri,sat` | Specific days of the week (comma-separated) to run the historical synchronization. |
-| `scheduler_history_sync_horizon_days` | int | `14` | Rolling retrospective analysis window (in days) used to check for missing historical prices. |
-| `scheduler_timezone` | str | `UTC` | IANA timezone used to **store and evaluate** the scheduler history-sync days and times. The times/days you configure are local to this zone; invalid values fall back to UTC. |
-
-## 🧠 Memory
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `max_file_upload_mb` | int | `10` | Maximum file upload size in megabytes. Applies to all uploads (static resources and broker reports). |
-
-The Memory category also hosts the **Server Caches** panel — see [Server Caches](#server-caches) below.
-
-## 🌍 Defaults
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `default_currency` | str | `EUR` | Default display currency for newly registered users. Users can override this in their personal settings. |
-| `default_language` | str | `en` | Default language for newly registered users. Supported: 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr`, 🇪🇸 `es`. |
-| `default_theme` | str | `auto` | Default theme for newly registered users: ☀️ `light`, 🌙 `dark`, 🖥️ `auto`. |
-
-A new user starts from these defaults: the first time the account signs in, its **Language**,
-**Default Currency**, and theme are copied from them, and the
-[Welcome setup](../user/getting-started.md#welcome-setup) shows the language and the currency
-pre-filled, ready to confirm or change. Changing a default later does not touch users whose
-preferences already exist. Accounts that existed before LibreFolio 1.2.0 are not sent through
-onboarding: their Welcome setup counts as **Completed** and the tour and every guide as
-**Skipped**, and each user can still replay them from
-[Settings → Preferences → Onboarding and guides](../user/settings/preferences.md#onboarding-and-guides).
+New users start from the three defaults: the [Welcome setup](../user/getting-started.md#welcome-setup)
+shows their language and currency pre-filled. Changing a default later leaves the
+[Preferences](../user/settings/preferences.md) of existing users untouched.
 
 ---
 
 ## 🕐 Market Data Scheduler {: #market-data-scheduler }
 
-When the background scheduler is enabled, administrators can configure synchronization parameters and inspect background execution logs directly from the user interface.
+The scheduler keeps prices and exchange rates up to date on its own, even when nobody is signed in:
 
-### ⚙️ Configure Scheduler
+- 💰 **Current price refresh** — every few minutes, the latest price of each active asset that has
+  a price provider.
+- 📊 **History sync** — on the days and times you choose, the daily prices of those assets and the
+  rates of every FX pair with a provider, over the **Lookback horizon**, to fill any gap. Pairs
+  with manual rates only are skipped.
 
-Click the **Configure** button in the Scheduler row to customize execution frequencies and parameters:
+### ⚙️ Configure the schedule
+
+Unlock the tab, open **Update Job** and click **Configure…** in the **Schedule Configuration** row.
+The dialog has its own **Save** button.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Scheduler Configuration Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-* **Current Price Frequency**: The frequency (in minutes) at which the daemon fetches real-time quotes to keep the dashboard cache updated (default: 10m).
-* **History Sync Times**: Specific daily times (comma-separated, e.g., `06:00,23:00`) to run historical daily close updates. Times are wall-clock times **in the configured scheduler timezone**.
-* **History Sync Days**: Specific days of the week when historical synchronization is performed (usually Monday to Saturday), also evaluated in the scheduler timezone.
-* **History Horizon**: The analysis window (in days) to check for missing historical price points (default: 14 days).
-* **Timezone**: The IANA timezone (`scheduler_timezone`) in which the times and days above are stored and evaluated. The modal shows the server's UTC clock alongside, so you can reason about the offset; the backend converts each local slot to a UTC instant only when deciding whether a job is due. Invalid values fall back to UTC.
+| Field | Default | What it sets |
+|---|---|---|
+| **Timezone** | `UTC` | The timezone of the times and days below; the server's UTC clock is shown next to it. |
+| **Refresh every** | 10 minutes | How often current prices are refreshed, from 1 to 1440 minutes. |
+| **Sync times** | `06:00`, `23:00` | When the history sync runs; **Add time** adds a slot. |
+| **Sync days** | Mon to Sat | The days of the history sync. |
+| **Lookback horizon** | 14 days | How many past days each history sync checks, from 1 to 365. |
 
-### 📜 Scheduler Logs
+Keep at least one time and one day. Tip: a history sync after the markets close (for example
+`22:00`) gets the most complete data.
 
-Click **View Logs** to open the log inspector. This modal displays a list of recent scheduler executions:
+??? warning "🌍 Changing the timezone — the jobs move in time"
+
+    Times and days keep their values but count in the new timezone, so the jobs run at another
+    moment. They also follow its daylight saving time: `06:00` in `Europe/Rome` runs at 05:00 UTC
+    in winter and at 04:00 UTC in summer.
+
+### 📜 Read the scheduler log
+
+The **Scheduler Status** row shows the last current price refresh, with a dot for its result.
+Click the row (or **Details…**) to open the **Scheduler Execution Log**. Only administrators can
+read the status and the log.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Scheduler Log Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-The log reports the execution timestamp, job name, status (Success/Error), execution duration, and structured details of processed assets, price feeds, and any error traces.
+- Each entry is one run: job, time, duration and how many items succeeded. 🟢 **OK**: all of
+  them, or nothing to do; 🟡 **Partial**: some failed; 🔴 **Error**: none succeeded.
+- Click an entry to see each asset or FX pair, its provider and the prices changed (**Delta**).
+  Hover an error to read it in full; double-click it (long-press on a phone) to copy it.
+- Filter by job, status or period, from the last hour to the last 30 days. Only the most recent
+  runs are kept.
 
 ---
 
 ## 🗄️ Server Caches {: #server-caches }
 
-LibreFolio keeps several **in-memory caches** on the backend (price fetches, search results, portfolio computations, provider responses, and more) so that repeated requests do not hit the external data providers every time. The **Global Settings** tab ends with a **Cache panel** (Memory category) that lists every registered cache by name, with its **current size / maximum size** and **TTL** (time-to-live) columns — each column header is clickable to sort by name, size, or TTL; a **Refresh** button re-reads the live stats.
-
+To stay fast, LibreFolio keeps recent provider answers and computed results in memory. The
+**Cache Status** panel, at the end of the **Memory** category, lists each cache with its
+**Size / Max** and its **TTL** (how long an entry is kept). Click a column header to sort;
+**Refresh** updates the numbers.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Server caches panel in Global Settings (Memory category)">
 </div>
 
-
-**Who can do what:**
-
-- 👁️ **Reading the status** is available to **any authenticated user** (`GET /api/v1/settings/cache/status`).
-- 🧹 **Clearing** is **admin-only and requires the page to be unlocked** (the buttons appear only for superusers in edit mode): each row has its own **Clear** button (`POST /api/v1/settings/cache/clear/{name}`), and the panel header has a **Clear all** button (`POST /api/v1/settings/cache/clear-all`).
+Everyone can see the panel. An administrator, with the tab unlocked, can empty one cache with
+**Clear** or all of them with **Clear all**, to force fresh data without a restart. A restart
+empties every cache too.
 
 !!! warning "Clearing a cache slows down the next fetch"
 
-    Both clear actions ask for confirmation, for a good reason: after a clear, the next request for that data **hits the external providers again**, so expect a slowdown comparable to a server restart while the caches refill. Caches also empty themselves on every server restart — clearing is only useful to force fresh data without restarting.
+    Both actions ask for confirmation first. After a clear, the next request for that data goes
+    back to the providers, so expect a slowdown similar to a server restart while the caches fill
+    up again.
+
+??? note "🧵 Several workers — when the server runs with `--workers`"
+
+    Each worker process has its own caches. The panel shows, and clears, those of the worker that
+    answered; restart the server to empty them all.
 
 ---
 
-## 🔧 Technical Notes
+## 🔗 Related
 
-- 🗃️ Settings are stored as **key-value pairs** in the `global_settings` table
-- 🔀 Values are stored as strings and converted to the appropriate type (`int`, `bool`, `str`) when read
-- 🔒 On multi-worker startup, settings are initialized with `INSERT ... ON CONFLICT DO NOTHING` to avoid race conditions
-- ⚡ Changes take effect **immediately** — no server restart required
+- 📝 **[Environment Variables](configuration.md)** — The settings that live in `.env` instead
+- 👤 **[User Preferences](../user/settings/preferences.md)** — What each user can change for themselves
+- 🧑‍💻 For developers: **[Settings System](../developer/architecture/settings.md)**,
+  **[Cache Registry](../developer/architecture/settings_cache.md)** and
+  **[Market Data Scheduler](../developer/backend/scheduler.md)**

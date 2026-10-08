@@ -95,6 +95,7 @@ How well did your money work, whatever the size of your portfolio? The **Returns
 - **Favorable timing** (green): you tended to deposit before prices rose. **Unfavorable timing** (red): you tended to deposit at the peaks. Close to zero it reads **Neutral timing**, and the stronger the colour, the larger the effect.
 - **TWRR judges the strategy, MWRR your personal result** — as for a fund manager and an investor.
 - **The four rows cover the whole period**; the small percentage covers today only.
+- **`—` means no value**: a return LibreFolio cannot compute for the period shows `—` instead of a number. The timing effect needs both TWRR and MWRR: when one is missing it shows a grey `—`, with no timing label.
 
 ??? info "📏 The percentage under the timing effect — how it is computed"
 
