@@ -220,29 +220,41 @@ test.describe('Asset Modal', () => {
 test.describe('NR — Currency default from userSettings (Bug G)', () => {
     const API = '/api/v1';
 
-    // This block mutates a *shared* global: `base_currency` belongs to the test user,
-    // and every worker logs in as that same user. It is tolerable only because the
-    // window is a few seconds and no neighbour asserts on the base currency — if one
-    // ever does, this test needs its own user, not a longer timeout.
+    // The user's base currency is GBP in this browser only: `GET /settings/user` is fetched from the backend and its
+    // `base_currency` rewritten before the page sees it; any other method on that URL goes through untouched. Nothing is
+    // written to the server, so nothing needs restoring. The block used to `PUT` GBP on TEST_USER, whom every worker
+    // shares, and restore EUR afterwards — tolerable only while no neighbour read the base currency. Every page now
+    // starts from it (R2 / N), so a neighbour's Dashboard opened in that window would have started in GBP.
 
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
 
-    test.afterEach(async ({page}) => {
-        // Always restore EUR so other tests are not affected
-        await page.request.put(`${API}/settings/user`, {data: {base_currency: 'EUR'}});
-    });
-
     test('create modal defaults currency to user base_currency', async ({page}) => {
-        // Set base_currency to a non-default value
-        const r = await page.request.put(`${API}/settings/user`, {data: {base_currency: 'GBP'}});
-        expect(r.ok()).toBeTruthy();
+        // Registered before the navigation, so the settings load of the page under test is answered here.
+        await page.route(`**${API}/settings/user`, async (route, request) => {
+            if (request.method() !== 'GET') {
+                await route.fallback();
+                return;
+            }
+            // Nobody awaits a route callback, so it must not throw: `route.fetch()` rejects once the context closes, and
+            // the rejection would land on whatever runs next. A read left unanswered fails this test on the wait below.
+            try {
+                const response = await route.fetch();
+                if (!response.ok()) {
+                    await route.fulfill({response});
+                    return;
+                }
+                const body = (await response.json()) as Record<string, unknown>;
+                await route.fulfill({response, json: {...body, base_currency: 'GBP'}});
+            } catch (error) {
+                console.warn(`[asset-modal] left ${request.method()} ${request.url()} unanswered: ${String(error)}`);
+            }
+        });
 
-        // The PUT went through the API context; the browser still holds the value it
-        // cached at login (`auth.ts` → `userSettings.setDirect`). A reload refetches it,
-        // but the modal reads the currency once when it opens, so opening before the
-        // GET lands captures the stale EUR. Arm the wait first, then navigate.
+        // The browser still holds the settings cached at login (`auth.ts` → `userSettings.setDirect`); the full load
+        // reads them again, through the route above, and the modal reads the currency once when it opens. Armed before
+        // the navigation, a GBP answer proves the route above is what answered that read.
         const settingsReloaded = page.waitForResponse(async (res) => res.url().includes('/settings/user') && res.request().method() === 'GET' && res.ok() && (await res.json().catch(() => ({})))?.base_currency === 'GBP', {timeout: 20_000});
         await goToAssetsPage(page);
         await settingsReloaded;
