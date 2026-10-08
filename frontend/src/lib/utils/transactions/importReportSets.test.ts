@@ -39,6 +39,21 @@
  * preview and the combine read the set whole: analysed half ticked, it would import files the user
  * unticked. 'none' still never blocks, and 'all' blocks as before — until its preview is ready and
  * complete. `setRequest` and `buildParseUnits` do not change.
+ *
+ * Step 9 (#26, the developer's approved cure), written red first. A report-set plugin reads its exports
+ * only through the set's combined file, and the server refuses an original read alone with one
+ * (`ensure_parseable`: 422 `set_required`). `setPluginFor` keeps out of every set a file with no batch —
+ * uploaded before report sets, by an older client, or over the API without one — and a failed original
+ * (A2), yet the wizard still picks Danske for it, so Parse sends it alone. `ungroupedSetFiles(units,
+ * plugins)` names those files, so the wizard can hold Parse back: the selection of every `file` unit whose
+ * plugin is a report-set plugin (the catalogue entry of its code declares roles), in the order of the
+ * units — the selection's. Never a member of a set unit, a single read with a single-file plugin, a single
+ * with no plugin (`''`), nor a code the catalogue lacks. Through the pure pipeline (`groupBrokerFiles` →
+ * `buildParseUnits` → `ungroupedSetFiles`): two Danske exports with no batch, chosen with Danske, are both
+ * listed; the same two sharing a batch are one set, and neither is; a failed original chosen with Danske
+ * is listed beside the set its batch still forms. The function is stubbed with its final signature and
+ * returns [], so every "lists" below is red and every "never lists" a guard; at the end of the file,
+ * loaded through `s9()`. The wizard's side is U1 in tx-import-report-set.spec.ts.
  */
 import {describe, expect, it} from 'vitest';
 
@@ -1608,5 +1623,160 @@ describe('G — setsOfFiles applies the memory', () => {
         expect(kinds(fileSetBadges(CUSTODY, badgeCtx)), 'a member of the analysed set (presence barrier)').toEqual(['usedInCombined', 'set']);
         expect(kinds(fileSetBadges(LEFT_OUT, badgeCtx)), 'the statement left out of the analysed set').toEqual([]);
         expect(kinds(fileSetBadges(READ_ALONE, badgeCtx)), 'the statement read alone').toEqual([]);
+    });
+});
+
+// ===========================================================================
+// Step 9 (#26) — the files a report-set plugin would read alone
+// ===========================================================================
+//
+// Pinned by the developer's approved cure: `ungroupedSetFiles(units, plugins)` is the selection of every
+// `file` unit whose `pluginCode` names, in the catalogue, a report-set plugin (`isReportSetPlugin`), in the
+// order of the units. The server refuses each of them (422 `set_required`), so the wizard holds Parse back
+// while the list is not empty and names them in its hint (`data-reason="ungrouped"`, `data-file-ids`).
+
+interface UngroupedSetFilesModule {
+    ungroupedSetFiles(units: ParseUnit[], plugins: SetPluginInfo[]): SelectedFileLike[];
+}
+
+/** The step-9 export of the module, loaded for the test that needs it. */
+async function s9<K extends keyof UngroupedSetFilesModule>(name: K): Promise<UngroupedSetFilesModule[K]> {
+    let mod: Partial<UngroupedSetFilesModule>;
+    try {
+        mod = (await import('./importReportSets')) as unknown as Partial<UngroupedSetFilesModule>;
+    } catch (error) {
+        throw new Error(`importReportSets.ts cannot be loaded: ${String(error)}`);
+    }
+    const fn = mod[name];
+    if (typeof fn !== 'function') throw new Error(`importReportSets.${name} is not implemented yet (report sets, step 9)`);
+    return fn as UngroupedSetFilesModule[K];
+}
+
+/** A file unit: one selected file, read alone. */
+const fileUnit = (selection: SelectedFileLike): ParseUnit => ({kind: 'file', file: selection});
+
+/** Selected files reduced to their ids, in order. */
+const selectedIds = (files: SelectedFileLike[]) => files.map((f) => f.fileId);
+
+/** An uploaded file as the wizard holds it once ticked, read with `pluginCode`. */
+const chosen = (f: SetFileInfo, pluginCode: string): SelectedFileLike => ({fileId: f.file_id, fileName: f.filename, brokerId: BROKER, pluginCode});
+
+// ---------------------------------------------------------------------------
+// ungroupedSetFiles
+// ---------------------------------------------------------------------------
+
+describe('ungroupedSetFiles', () => {
+    /** The two exports of one Danske upload, which only Danske reads: with a batch they are a set, with none two single files. */
+    const danskeExports = (batch_id: string | null): [SetFileInfo, SetFileInfo] => [
+        file({file_id: 'u-custody', filename: 'Transactions.xlsx', uploaded_at: '2026-10-08T09:00:07Z', batch_id, compatible_plugins: [DANSKE]}),
+        file({file_id: 'u-cash', filename: 'statement.csv', uploaded_at: '2026-10-08T09:00:03Z', batch_id, compatible_plugins: [DANSKE]}),
+    ];
+
+    it('lists a single read with a report-set plugin, as it is selected — any report-set plugin, not Danske by name', async () => {
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        const danske = sel('legacy');
+        const other = sel('other-alone', OTHER_SET);
+
+        expect(ungroupedSetFiles([fileUnit(danske)], PLUGINS), 'read alone with Danske').toEqual([danske]);
+        expect(ungroupedSetFiles([fileUnit(other)], PLUGINS), 'read alone with the other bank’s set plugin').toEqual([other]);
+    });
+
+    it('never lists the members of a set unit, complete or not: the set reads them through its combined file (guard: true before step 9 too)', async () => {
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        const units: ParseUnit[] = [
+            {kind: 'set', set: SET_NEW, members: [sel('cash-new'), sel('custody-new')]},
+            {kind: 'set', set: SET_OLD, members: [sel('cash-old')]},
+        ];
+
+        expect(ungroupedSetFiles(units, PLUGINS)).toEqual([]);
+    });
+
+    it('never lists a single read with a single-file plugin: empty, null or absent roles (guard: true before step 9 too)', async () => {
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        const units = [fileUnit(sel('gen-1', GENERIC)), fileUnit(sel('legacy-plugin', 'broker_legacy')), fileUnit(sel('bare-plugin', 'broker_bare'))];
+
+        expect(ungroupedSetFiles(units, PLUGINS)).toEqual([]);
+    });
+
+    it("never lists a single with no plugin chosen (''): Parse already waits on it for a plugin (guard: true before step 9 too)", async () => {
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        expect(ungroupedSetFiles([fileUnit(sel('removed', ''))], PLUGINS)).toEqual([]);
+    });
+
+    it('never lists a single whose plugin the catalogue lacks: nothing says it reads a set (guard: true before step 9 too)', async () => {
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        expect(ungroupedSetFiles([fileUnit(sel('unknown', 'broker_not_in_catalogue'))], PLUGINS), 'a code missing from the catalogue').toEqual([]);
+        // Danske's code alone says nothing: what makes a report-set plugin is its catalogue entry.
+        expect(ungroupedSetFiles([fileUnit(sel('legacy'))], []), 'an empty catalogue').toEqual([]);
+    });
+
+    it('lists in the order of the units — the selection order — whatever the plugin or the name', async () => {
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        const units: ParseUnit[] = [fileUnit(sel('z-custody')), fileUnit(sel('gen-1', GENERIC)), {kind: 'set', set: SET_NEW, members: [sel('custody-new'), sel('cash-new')]}, fileUnit(sel('a-other', OTHER_SET)), fileUnit(sel('removed', '')), fileUnit(sel('m-cash'))];
+
+        // Neither by name (a, m, z) nor by plugin (z, m, a): as the units come.
+        expect(selectedIds(ungroupedSetFiles(units, PLUGINS))).toEqual(['z-custody', 'a-other', 'm-cash']);
+    });
+
+    it('pipeline: two Danske exports uploaded with no batch, chosen with Danske, are both listed, in the selection order', async () => {
+        const groupBrokerFiles = await c2('groupBrokerFiles');
+        const buildParseUnits = await c2('buildParseUnits');
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        // As an older client, or the API without a batch, leaves them: the server lists them with batch_id null.
+        const [custody, cash] = danskeExports(null);
+
+        const {sets, singles} = groupBrokerFiles(BROKER, [custody, cash], PLUGINS);
+        expect(sets, 'premise: with no batch there is no set').toEqual([]);
+        expect(ids(singles), 'premise: both are single files').toEqual(['u-custody', 'u-cash']);
+        // Ticked against the order they are listed in: the statement first.
+        const selection = [chosen(cash, DANSKE), chosen(custody, DANSKE)];
+        const units = buildParseUnits(selection, sets);
+        expect(units.map(unitShape), 'premise: the analysis would read each alone').toEqual([
+            ['file', 'u-cash'],
+            ['file', 'u-custody'],
+        ]);
+
+        expect(ungroupedSetFiles(units, PLUGINS)).toEqual(selection);
+    });
+
+    it('pipeline (guard: true before step 9 too): the same two exports sharing a batch are one set, and neither is listed', async () => {
+        const groupBrokerFiles = await c2('groupBrokerFiles');
+        const buildParseUnits = await c2('buildParseUnits');
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        const [custody, cash] = danskeExports(BATCH_NEW);
+
+        const {sets, singles} = groupBrokerFiles(BROKER, [custody, cash], PLUGINS);
+        expect(
+            sets.map((s) => [s.key, ids(s.files)]),
+            'premise: one upload, one set',
+        ).toEqual([[KEY_NEW, ['u-cash', 'u-custody']]]);
+        expect(singles).toEqual([]);
+        const units = buildParseUnits([chosen(cash, DANSKE), chosen(custody, DANSKE)], sets);
+        expect(units.map(unitShape), 'premise: the analysis reads the set').toEqual([['set', KEY_NEW, ['u-cash', 'u-custody']]]);
+
+        expect(ungroupedSetFiles(units, PLUGINS)).toEqual([]);
+    });
+
+    it('pipeline: a failed original chosen with Danske is listed — no set holds it (A2) — beside the set its batch still forms', async () => {
+        const groupBrokerFiles = await c2('groupBrokerFiles');
+        const buildParseUnits = await c2('buildParseUnits');
+        const ungroupedSetFiles = await s9('ungroupedSetFiles');
+        const [custody, cash] = danskeExports(BATCH_NEW);
+        const failedCash = {...cash, status: 'failed'};
+
+        const {sets, singles} = groupBrokerFiles(BROKER, [custody, failedCash], PLUGINS);
+        expect(
+            sets.map((s) => [s.key, ids(s.files)]),
+            'premise (A2): the set is the custody export alone',
+        ).toEqual([[KEY_NEW, ['u-custody']]]);
+        expect(ids(singles), 'premise (A2): the failed statement is a single file').toEqual(['u-cash']);
+        const failedChosen = chosen(failedCash, DANSKE);
+        const units = buildParseUnits([chosen(custody, DANSKE), failedChosen], sets);
+        expect(units.map(unitShape), 'premise: the set is read through its combined file, the failed statement alone').toEqual([
+            ['set', KEY_NEW, ['u-custody']],
+            ['file', 'u-cash'],
+        ]);
+
+        expect(ungroupedSetFiles(units, PLUGINS)).toEqual([failedChosen]);
     });
 });

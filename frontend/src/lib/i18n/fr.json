@@ -898,7 +898,8 @@
       "removeFromSet": "Retirer du lot",
       "defaultPluginNote": "Lu comme lot {plugin}, et non avec le plugin par défaut du courtier ({defaultPlugin}). Pour le changer, utilisez « Lu comme » ou le menu ⋮ d'un fichier.",
       "alsoRecognisedBy": "{file} est aussi reconnu par : {plugins}",
-      "partlySelectedBlocks": "Continuer est désactivé tant qu'un lot n'est sélectionné qu'en partie : sélectionnez tout le lot ou désélectionnez-le."
+      "partlySelectedBlocks": "Continuer est désactivé tant qu'un lot n'est sélectionné qu'en partie : sélectionnez tout le lot ou désélectionnez-le.",
+      "ungroupedBlocks": "Continuer est désactivé tant qu'un fichier sélectionné ne se lit qu'avec son lot mais n'appartient à aucun lot : {files}. Téléversez de nouveau ensemble, en une seule fois, tous les exports du lot, puis sélectionnez le lot ; ou désélectionnez le fichier."
     },
     "parseDetail": {
       "sourceRow": "Ligne du fichier",
