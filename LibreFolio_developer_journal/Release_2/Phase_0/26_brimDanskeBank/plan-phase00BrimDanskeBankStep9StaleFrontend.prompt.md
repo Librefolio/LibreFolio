@@ -156,3 +156,11 @@ In `backend/test_scripts/test_api/test_http_compression_api.py` (voce `api http-
 > | porte 6156 e 6166 | libere |
 >
 > **La frase per `danske-bank.en.md`**, che inserirà chi tocca la pagina dopo il treno 15: «Exports uploaded with a LibreFolio version before 1.2 are in no set and cannot be read on their own: the wizard keeps Continue disabled while one of them is selected. Upload all the exports of the set again together, in one go, then select that set; the old copies can be deleted.»
+
+### 7.4 ✅ Integrato (2026-10-08)
+
+> **Note implementazione**:
+> - I commit: `333bfc985` fix(server): HTML entry points always revalidate; `38dd5d1b4` fix(import): block set exports read alone; `a683b884b` docs(journal): plan 26 step 9, stale frontend. Il messaggio di C3 è stato reso ASCII: le virgolette «» sono diventate `"`.
+> - Merge `9055293c7` nel treno 16; `dev_release2` = `cf4248bd9`.
+> - I controlli del treno li fa girare il coordinatore: `api http-compression`, `tx-unit`, gli E2E dei report set e `app-start-auth`.
+> - La frase per `danske-bank.en.md` è passata a M, che la inserisce nel suo lotto delle pagine utente.

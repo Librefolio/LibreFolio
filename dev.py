@@ -1729,7 +1729,7 @@ def cmd_docker_exec(args):
 
     Examples:
         ./dev.py docker exec server --test
-        ./dev.py docker exec test db populate --force
+        ./dev.py docker exec user list
         ./dev.py docker exec user create admin admin@test.com Pass123!
         ./dev.py docker exec db upgrade
     """
@@ -1738,7 +1738,7 @@ def cmd_docker_exec(args):
         print_error("No command specified. Usage: ./dev.py docker exec <command> [args...]")
         print(Colors.info("Examples:"))
         print(f"  ./dev.py docker exec server --test")
-        print(f"  ./dev.py docker exec test db populate --force")
+        print(f"  ./dev.py docker exec user list")
         print(f"  ./dev.py docker exec user create admin admin@test.com Pass123!")
         return 1
 
@@ -2238,6 +2238,35 @@ def update_js_cache(strict: bool = False, required_for: str | None = None):
 
 
 # =============================================================================
+# Command groups that need part of the development tree
+# =============================================================================
+# The Docker image ships the application, not the development tree: no
+# backend/test_scripts, no frontend sources, no docs sources. A group is
+# registered (and its modules imported) only when what it needs is there;
+# otherwise it stays listed and says so. Checked before importing, never by
+# catching ImportError: in a full checkout a broken import must stay loud.
+
+
+def _has(*relative_paths: str) -> bool:
+    """True when every path a command group needs is part of this installation."""
+    return all((PROJECT_ROOT / path).exists() for path in relative_paths)
+
+
+def _add_unavailable(subparsers, name: str, help_text: str, missing: str) -> None:
+    """List a command this installation cannot run; running it says what is missing and exits 2."""
+    # No option prefix: every word after the command, --help or --coverage too, lands in `rest`,
+    # so any invocation gets the explanation instead of argparse's "unrecognized arguments".
+    p = subparsers.add_parser(name, help=f"{help_text} — not available in this installation", add_help=False, prefix_chars="\x00")
+    p.add_argument("rest", nargs=argparse.REMAINDER, metavar="...", help=argparse.SUPPRESS)
+
+    def _explain(_args):
+        print_error(f"'{name}' is not available in this installation: {missing} is not part of it (the Docker image ships the application, not the development tree).")
+        return 2
+
+    p.set_defaults(func=_explain)
+
+
+# =============================================================================
 # Main Entry Point
 # =============================================================================
 
@@ -2372,8 +2401,12 @@ Examples:
     # 🧪 Testing Commands - Import from test_runner
     # =========================================================================
 
-    from scripts.test_runner import register_subparser as register_test_parser
-    register_test_parser(subparsers)
+    has_test_runner = _has("backend/test_scripts")
+    if has_test_runner:
+        from scripts.test_runner import register_subparser as register_test_parser
+        register_test_parser(subparsers)
+    else:
+        _add_unavailable(subparsers, "test", "🧪 Run tests", "backend/test_scripts")
 
     # =========================================================================
     # 👤 User Commands - Import from user_cli
@@ -2440,8 +2473,8 @@ Examples:
     mk_p.set_defaults(func=cmd_mkdocs_check_links)
 
     # Translate - Import from mkdocs_src/aphra-pipeline/translate_docs.py
-    # (not available inside Docker — aphra-pipeline is excluded from image)
-    try:
+    # (not part of the Docker image: aphra-pipeline is excluded from it)
+    if _has("mkdocs_src/aphra-pipeline"):
         sys.path.insert(0, str(PROJECT_ROOT / "mkdocs_src" / "aphra-pipeline"))
         from translate_docs import register_subparser as register_translate_parser
         register_translate_parser(mk_sub)
@@ -2449,8 +2482,9 @@ Examples:
         # Translate-validate - structural validation of translated files
         from validate_translations import register_subparser as register_validate_parser
         register_validate_parser(mk_sub)
-    except (ImportError, ModuleNotFoundError):
-        pass  # Not available in Docker runtime
+    else:
+        _add_unavailable(mk_sub, "translate", "Translate the documentation (Aphra pipeline)", "mkdocs_src/aphra-pipeline")
+        _add_unavailable(mk_sub, "translate-validate", "Validate the translated documentation", "mkdocs_src/aphra-pipeline")
 
     # =========================================================================
     # 📦 Tools Commands Group
@@ -2473,14 +2507,14 @@ Examples:
     api_p.set_defaults(func=cmd_api_sync)
 
     # i18n - Import from frontend/scripts/i18n-audit.py
-    # (not available inside Docker — frontend/scripts is excluded from image)
-    try:
+    # (not part of the Docker image: frontend/scripts is excluded from it)
+    if _has("frontend/scripts/i18n-audit.py"):
         sys.path.insert(0, str(PROJECT_ROOT / "frontend" / "scripts"))
         from importlib import import_module
         i18n_module = import_module("i18n-audit")
         i18n_module.register_subparser(subparsers)
-    except (ImportError, ModuleNotFoundError):
-        pass  # Not available in Docker runtime
+    else:
+        _add_unavailable(subparsers, "i18n", "📦 Translation commands", "frontend/scripts")
 
     # Cache - Import from scripts/update_js_cache.py
     from scripts.update_js_cache import register_subparser as register_cache_parser
@@ -2607,9 +2641,12 @@ Examples:
     if HAS_ARGCOMPLETE:
         argcomplete.autocomplete(parser)
 
-    from scripts.test_runner._cli import normalize_coverage_argv
+    argv = sys.argv[1:]
+    if has_test_runner:
+        from scripts.test_runner._cli import normalize_coverage_argv
+        argv = normalize_coverage_argv(argv, only_command="test")
 
-    args = parser.parse_args(normalize_coverage_argv(sys.argv[1:], only_command="test"))
+    args = parser.parse_args(argv)
 
     if args.command is None:
         parser.print_help()
