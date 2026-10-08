@@ -281,15 +281,18 @@ description: Free to understand, free to act. LibreFolio brings all your investm
   </div>
 
   <!-- Deep Dive 6: Tools -->
-  <div class="deep-dive" style="margin-top: 4rem; display: block; text-align: center;">
-    <h2 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-      Planning Tools
-    </h2>
-    <p style="max-width: 680px; margin: 0 auto 3rem auto; color: var(--md-default-fg-color--light); font-size: 1.05rem; line-height: 1.6;">
-      Plan your next contribution before you invest. The <b>PAC allocator</b> proposes the purchases that bring a new investment as close as possible to its target allocation, broker by broker, in whole units, fractions, or amounts. It is a simulation: nothing is bought and no order is sent.
-    </p>
-<!-- [Screenshot Placeholder: tools/hub — home page deep dive "Planning Tools": the Tools catalogue with the PAC allocator card; when it exists, switch this block back to the deep-dive reverse layout with an image column] -->
-    <div class="deep-dive-actions" style="justify-content: center;">
+  <div class="deep-dive reverse">
+    <div class="deep-dive-content">
+      <h2>Planning Tools</h2>
+      <p>Plan your next contribution before you invest. The <b>PAC allocator</b> proposes the purchases that bring a new investment as close as possible to its target allocation, broker by broker, in whole units, fractions, or amounts. It is a simulation: nothing is bought and no order is sent.</p>
+    </div>
+    <div class="deep-dive-image">
+      <div class="screenshot-container">
+          <img class="gallery-img" data-category="tools" data-name="hub" alt="Tools catalogue"
+               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+      </div>
+    </div>
+    <div class="deep-dive-actions">
       <a href="user/tools/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Explore tools &rarr;</a>
       <a href="user/tools/pac-allocator/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">PAC allocator &rarr;</a>
     </div>
