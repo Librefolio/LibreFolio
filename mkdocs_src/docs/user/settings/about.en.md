@@ -52,17 +52,8 @@ yours to review and publish on the social network.
 
 ### ☕ The donation popup {: #donation-popup }
 
-Now and then, right after you sign in, LibreFolio shows a popup titled
-**LibreFolio grows thanks to users like you!**, with the same coffee link and share buttons. It
-waits until no guide and no other window is open. Counting from the last time it appeared (or
-from the creation of your account, if it never has), it appears only when:
-
-- at least 60 days have passed, or
-- you have signed in at least 10 times and at least 7 days have passed.
-
-The popup has no close button, and clicking outside it or pressing <kbd>Esc</kbd> does not
-dismiss it: choose **Buy Me a Coffee**, which also closes it, or **Maybe later**. Sharing from the
-popup opens the share dialog and leaves the popup open behind it.
+Every now and then, right after you sign in, LibreFolio reminds you that you can support the
+project, with the same coffee link and share buttons.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="support" data-name="donation-popup" alt="Donation popup after sign-in, with Buy Me a Coffee, the five share buttons and Maybe later">
@@ -101,8 +92,7 @@ Open **Tool diagnostics** to load a snapshot of the server process that answered
 - the **Effective platform limits**, in a collapsible of their own.
 
 The snapshot describes one server process, not the whole instance, and does not update by itself:
-reload it to read it again. The [Tools overview](../tools/index.md) explains how to read these
-counters.
+reload it to read it again.
 
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="about-tool-diagnostics" alt="Tools panel in Plugin diagnostics, with the PAC allocator and Tool diagnostics open">

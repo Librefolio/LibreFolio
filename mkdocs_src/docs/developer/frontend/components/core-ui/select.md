@@ -421,7 +421,8 @@ No production file of `ui/select/` imports from `components/risk/`: the last blo
 import.
 
 **Used in**: `risk/LabAssetPicker.svelte` (multi mode), on the **Correlation** tab of the Assets
-page. Planned, not done yet: `BenchmarkSelect`, and later the **Asset Comparison** chart signal, are
-to adopt the single mode.
+page, and `risk/BenchmarkSelect.svelte` (single mode, `BenchmarkSelect.svelte:197`), the benchmark
+picker of the Correlation tab and of the Dashboard's Risk tab. Planned, not done yet: the
+**Asset Comparison** chart signal is to adopt the single mode.
 **Data source**: none of its own — the caller passes `assets` and `verdicts`; the currency menu
 takes its flags from `currencyStore`.

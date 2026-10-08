@@ -1,25 +1,18 @@
 # 🧙 How to Import Transactions
 
-<style>
-/* Corrections plugin table: plugin column keeps icon+name on one line */
-.md-typeset details.warning table th:first-child,
-.md-typeset details.warning table td:first-child { min-width: 9rem; white-space: nowrap; }
-.md-typeset details.warning .md-typeset__table table td { vertical-align: middle; }
-</style>
-
-
-Learn how to use the Broker Report Import Module (BRIM) to import your transactions step-by-step.
+The **Import Wizard** turns the reports you download from your broker into transactions. You check
+what it read and settle its doubts; nothing is saved until you press **Save All**.
 
 ---
 
 ## 🚀 Step-by-Step Guide
 
-1. Export a transaction report from your broker (usually a CSV file — check your broker's help center).
-2. In LibreFolio, navigate to the **[Transactions](../index.md)** page.
-3. Click the **Import** button (:material-file-upload:) in the page header.
-4. The **Import Wizard** opens — you can drag-and-drop your statement file into its upload step.
-5. Review the preview — check that dates, amounts, and asset names look correct.
-6. Click **Import N transactions** — the selected rows land in the **bulk editor** as new rows, where you can give them one last look (or keep editing) before **Save All** commits them to your portfolio.
+1. Export a transaction report from your broker: its page in **[Supported Brokers](index.md)** says
+   which file.
+2. On the **[Transactions](../index.md)** page, click **Import** (:material-file-upload:).
+3. Drop the report into the wizard, assign it to its broker and follow the steps below.
+4. Click **Import N transactions**: the rows open in the bulk workspace, not saved yet.
+5. Give them a last look and click **Save All**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-import-wizard" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick Import Modal" alt="Quick Import Modal">
@@ -31,371 +24,252 @@ Learn how to use the Broker Report Import Module (BRIM) to import your transacti
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Step 4: Review &amp; Import" alt="Review and Import">
 </div>
 
-!!! tip "On-the-fly Broker & Asset Creation"
-
-    If the imported report contains a broker account or assets that are not yet created in LibreFolio, you don't need to exit the import flow! The wizard will guide you to create the missing **[Brokers](../../brokers/index.md)** and **[Assets](../../assets/index.md)** on-the-fly, pre-filling details from the statement.
-
-!!! tip "You can also use the Files section"
-
-    The **[Files](../../files/index.md)** section (BRIM tab) lets you manage uploaded broker reports centrally, re-import them, or delete them.
-
 ---
 
 ## 🧙 The Import Wizard Steps
 
-The wizard has **four steps you always see** and **four that appear only when your files
-actually need them**. Those optional steps join the flow only when later analysis first
-encounters the relevant data. The progress bar and guide therefore use the current **N/M** for
-the steps that apply to this import: a clean single-file report stays short, while a messy
-multi-file one gets exactly the extra questions it deserves.
+Four steps are always there; the others appear only when your files need them, and the progress
+bar shows only the steps of the current import.
 
-| Step | Always shown? | Appears when |
-| :--- | :--- | :--- |
-| 1 · Upload Report File | ✅ Always | — |
-| 2 · Select Files & Parser | ✅ Always | — |
-| 3 · Analysis & Parsing | ✅ Always | — |
-| 🧬 Unify Assets | ⚪ Optional | The same security was found under more than one name or code |
-| 🔧 Corrections | ⚪ Optional | The parser booked rows it could not fully understand |
-| 🧹 Duplicates | ⚪ Optional | The same movement appears in two of the files you are importing together |
-| 4 · Review & Import | ✅ Always | — |
-| ⚖️ Align with the bank | ⚪ Optional | After the review of a **report set** (e.g. [Danske Bank](danske-bank.md#first-import-align-with-the-bank)): the bank's balances or positions differ from what LibreFolio will hold, an end-of-period check does not match, or the comparison failed |
+| Step | When you see it |
+| :--- | :--- |
+| 1 · **Upload** | Always |
+| 2 · **Select Files** | Always |
+| 3 · **Parse** | Always |
+| 🧬 **Unify assets** | The same security appears under more than one name or code |
+| 🔧 **Corrections** | The importer recorded rows it could not fully understand |
+| 🧹 **Duplicates** | The same movement is in two of the files you import together |
+| 4 · **Review** | Always |
+| ⚖️ **Align with the bank** | Report sets only, when the bank's figures differ from LibreFolio's |
 
-!!! info "The optional steps run in this order for a reason"
+### 📤 Step 1: Upload
 
-    Each one is built on the answers of the one before it. Securities are unified **first**, so
-    that when you later attach an instrument to a corrected row you pick from a clean list
-    instead of from three copies of the same bond. Corrections come **before** the duplicate
-    check, because a purchase the parser could only read as a cash withdrawal would otherwise be
-    compared against cash withdrawals — missing a real duplicate, or inventing one that does not
-    exist.
+Drag your reports into the wizard, or click to choose them (CSV or XLSX), and assign each one to
+its broker — or all at once with **Assign broker for uploads**. A missing broker can be created
+from the same list (**Create new**).
 
-### 🧙 Step 1: Upload Report File
-
-This step accepts CSV or XLSX reports exported from your broker. You can select files manually or drag-and-drop them directly into the wizard. Assign a broker to each file, either file by file or with the global selector — and if the broker does not exist yet, you can create it on the fly from here.
-
-The step is **optional**: reports uploaded in earlier sessions are already stored, and you can pick them in the next step without re-uploading.
+- Every report you upload is kept: to reuse one, skip this step with **Next: Select Files**.
+- When one account comes in several exports (e.g. [Danske Bank](danske-bank.md)), upload them
+  together: if one is missing, the wizard stays here and names it.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Upload" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### ⚙️ Step 2: Select Files & Parser
+### 🗂️ Step 2: Select Files
 
-This step lists the reports stored for each broker, grouped in collapsible per-broker panels, so you can pick exactly which ones to parse — including files uploaded in an earlier session (the files you just uploaded are pre-selected). After an upload, only the panels of the brokers that received the new files start open; if you skipped the upload, every broker with stored reports starts open. When a broker's table lists more than five files, it shows them five per page — pick a larger page size if you prefer. Reports can be previewed or deleted from this step.
+Each broker's panel lists its stored reports, with the files you have just uploaded already ticked.
+Tick the files to read and click **Parse (N)**.
 
-Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. For a CSV you built yourself, the **[Generic CSV](generic-csv.md)** parser recognises the columns (date, type, quantity, asset, amount…) from their header names, so there is nothing to map by hand. When a bank splits one account across several exports, such as [Danske Bank](danske-bank.md), the files you upload together form a **report set**: it appears as a single card, ticked as a whole, instead of one row per file.
+The importer of each file is detected for you: change it in the **Plugin** column if it is wrong,
+and for a CSV you built yourself choose **[Generic CSV](generic-csv.md)**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Parser Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-You choose how a set is read on its card. **Read as**, in the card's header, lists the plugin that recognised the set, marked *(detected)*, any other report-set plugin able to read every file of the set, and **Read the files one by one**. Each file's **⋮** menu offers **Read alone with ‹plugin›**, when another plugin can read that file on its own, and **Remove from the set**. None of these commands ticks or unticks a file: they change only *how* the files are read. A set ticked only in part — its checkbox shows a dash — keeps **Parse** disabled until you tick the whole set or untick it. The Danske Bank page explains each case in [How the set is read](danske-bank.md#how-the-set-is-read).
+**Report sets** are one card, ticked as a whole. **Read as**, in its header, changes how the set is
+read, and each file's **⋮** menu can take it out of the set (**Read alone with ‹plugin›**,
+**Remove from the set**) — [details](danske-bank.md#how-the-set-is-read).
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-read-as — a report set's card in Select Files with the Read as menu open, and a file's ⋮ menu offering Read alone with… and Remove from the set] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="Report set card in Select Files with the Read as list open: Danske Bank (detected) and Read the files one by one" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
-### 🧠 Step 3: Analysis & Parsing
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="A cash file's ⋮ menu in a report set: Preview, Read alone with Generic CSV, Remove from the set and Delete" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
-The system parses the files, validating dates, numbers and currencies. You will see a progress bar indicating the parsing speed and status. Once analysis completes, any warning or error in parsing will be summarized before continuing.
+**Parse is disabled?** A ticked file has no plugin, or a ticked set is incomplete or only partly
+ticked (a dash in its checkbox): choose the plugin, use **Upload the missing file**, or tick or
+untick the whole set.
 
-The summary tiles at the top are **consolidated**: once parsing completes they describe what will actually be imported — the selected transactions and the distinct securities after unification — not the raw per-file rows; **View All** opens the aggregate detail. If you go back and change a parser choice, use **Re-parse all** to recompute the results.
+### 🧠 Step 3: Parse
+
+LibreFolio reads each file, checks it and sums it up in a table:
+
+| Column | What it counts |
+| :--- | :--- |
+| 📊 | Transactions read |
+| 🏦 | Securities found |
+| ✗ | Securities not matched to your assets yet — you match them in **Review** |
+| 🔴 | Validation issues: rows that could not become transactions |
+| 🔧 | Fields to fill in before saving (red when one blocks the save) |
+| ⚠️ | Importer warnings, such as skipped rows |
+
+The tiles above the table count what will really be imported; **View All** opens the details.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Step 3: Analysis" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-At the end of parsing, the table displays a summary of the processing for each file with the following statistical columns marked by emojis:
+- **Warnings**: **Continue** lists them first; read them, then click **Continue anyway**.
+- **A file failed**: a banner says why. Fix its plugin in **Select Files**, then click
+  **Re-parse all**.
 
-| Emoji / Column | Metric Name | Meaning and Population Rules |
-| :--- | :--- | :--- |
-| `📊` | **Transactions** | The total number of financial transactions read and identified within the file. |
-| `🏦` | **Identified Assets** | The number of financial instruments (stocks, ETFs, etc.) found within the parsed transactions. |
-| `✗` | **Unresolved Assets** | The number of instruments in the file that were not found in LibreFolio's database (marked in red if > 0, requiring mapping in Step 4). |
-| `🔴` | **Validation Issues** | Formal errors detected in the data (e.g., invalid formats, incorrect dates, missing required data). |
-| `🔧` | **Action Required (TODOs)** | Fields or attributes requiring attention (red if blocking, orange for warning/info level actions). These are not necessarily errors: they simply indicate missing data that cannot be extracted automatically from the statement alone, which you can easily fill in manually in the bulk transaction form at the end of the wizard. |
-| `⚠️` | **Warnings** | General notifications or warning messages generated by the parser during processing. |
+### 🧩 Steps that appear only when needed {: #only-when-needed }
 
-??? abstract "🧬 Unify Assets — appears when the same security was found under more than one name or code"
+Depending on what **Parse** finds, up to three steps can come before **Review**, in this order.
+Open the one the wizard shows you:
+
+??? abstract "🧬 Unify assets — when the same security appears under more than one name or code"
+
+    Your files describe the same security more than once — under two names or codes, or in two files.
+    Unify it here, or it becomes two assets with its transactions split between them.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-assets-step" alt="Import wizard — Unify Assets step with a proposed group">
     </div>
 
-    **When you will see it.** Whenever two or more of the instruments read from your files look
-    like the same security — because they share an ISIN, a ticker or a name — or when your files
-    describe one bond under two different codes. A single-file import in which every security is
-    distinct never shows this step.
+    Each card is one security: a **solid green** border means unified, **dashed amber** means to
+    confirm, **grey** means nothing to decide.
 
-    **Why it exists.** Each file is read independently, so the same BTP appearing in a holdings
-    report *and* in a movements report arrives as two unrelated instruments. Left alone, that
-    becomes two duplicate assets in your library — and two identical-looking entries in every
-    list that follows, where half your rows would silently attach to half the instrument.
+    - **Confirm** or **Split** a proposal; merge or separate cards with **⋮** (**Merge with…**,
+      **Remove from group**) or by drag and drop.
+    - **Click a code badge** to make it the leading code (⭐) — pick the one prices are quoted on; the
+      others stay as alternatives.
+    - **Rename** with the pencil; a security already in your library (**in archive**) keeps its name.
+    - **Continue** waits until no proposal is open: **Confirm all (N)** settles them at once, and
+      **Restore automatic grouping** starts over.
 
-    **What you do here.** The wizard proposes a grouping and you confirm, adjust or reject it.
-    Each card is one security, and its border tells you who decided:
+??? warning "🔧 Corrections — when the importer recorded rows it could not fully understand"
 
-    | Border | Meaning |
-    | :--- | :--- |
-    | 🟩 solid green | **Unified** — the engine is certain (same ISIN, ticker or name), or you said so |
-    | 🟨 dashed amber | **To confirm** — a resemblance the engine will not act on by itself |
-    | ⬜ plain grey | **On its own** — nothing to decide |
-
-    - **Merge or separate** with the `⋮` menu on each card, or by dragging one card onto another.
-    - **Elect the leading code** by clicking one of the coloured badges: it takes a ⭐ and becomes
-      the identifier the asset will be known by. The codes that lose are kept as alternative
-      identifiers, so nothing your files knew is thrown away.
-    - **Rename** a group with the pencil. A group already matching something in your library
-      carries an **in archive** badge, and your library's own name wins.
-    - **Confirm all (N)** accepts only the proposals that are still open; it does not rewrite
-      confirmed, automatic, split, or manually adjusted groups. The shortcut appears when at
-      least two proposals are open. Any open proposal blocks **Continue**, so confirm or adjust
-      every remaining proposal before moving on.
-    - **Restore automatic grouping**, at the top, undoes every merge, split and code election in
-      one click if you want to start over.
-
-    !!! tip "This is where dual-code bonds get settled"
-
-        Italian retail bonds (BTP Valore, BTP Più, BTP Italia) are subscribed under one ISIN and
-        traded under another. Elect the **tradeable** code as the leading one — it is the only
-        one a price provider can quote — and leave the subscription ("CUM") code as an
-        alternative. See [Create & Edit Assets](../../assets/create-edit.md) for the full story.
-
-??? warning "🔧 Corrections — appears when the parser booked rows it could not fully understand"
+    The importer recorded rows it could not fully understand — today, rows from
+    [Crédit Agricole](credit_agricole.md) and [Danske Bank](danske-bank.md) reports.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-fix-step" alt="Import wizard — Corrections step with flagged rows">
     </div>
 
-    **When you will see it.** When your report contains lines the plugin recorded but could not
-    read completely: a trade whose instrument or quantity the file simply does not carry, a
-    fee or tax it could not attach to any security, or one amount that bundles a trade with its
-    charges. Reports that parse cleanly skip this step.
+    Rows are grouped by question. Give each one an answer:
 
-    This step exists only if the broker's plugin **flags rows for review** — a plugin that
-    never emits these flags will never open it. The plugins that currently do:
+    - **Correct it**: pick the type and, where it applies, the security and the quantity, then
+      **Apply correction**. A fee or tax may belong to **No instrument (broker charge)**.
+    - **Split it**: separate the price from the commissions, taxes or accrued interest shown on your
+      contract note.
+    - **Keep as recorded**: accept what the importer read.
 
-    | Plugin | Flags it can raise |
-    |--------|--------------------|
-    | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> [Crédit Agricole](credit_agricole.md) | Bundled trade+fees lines (offered for **splitting**), cash rows that could not be linked to an instrument, duplicate-relevant blockers |
-    | <img src="https://danskebank.fi/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> [Danske Bank](danske-bank.md) | Every purchase and sale, because its amount includes the commission (offered for **splitting**; for a security priced in euro, the likely commission is suggested) |
+    **Row N in the file** shows the original line, and **Restore** undoes an answer. **Continue** waits
+    for every answer; **Keep the remaining N rows as read** answers all the open ones.
 
+??? note "🧹 Duplicates — when the same movement is in two of the files you import together"
 
-    As more plugins learn to flag rows, they will be listed here.
-
-    **Why it exists.** A purchase the plugin could only record as a cash withdrawal — because the
-    file gave it neither a quantity nor an instrument — would be compared against cash
-    withdrawals in the duplicate check. A genuine duplicate would be missed, or an imaginary one
-    invented. Fixing these rows *before* the comparison is the only moment it works.
-
-    **What you do here.** Rows are grouped by the nature of the question, so you settle similar
-    cases together. For each one you can:
-
-    - **Correct it** — choose the right transaction type and, where it applies, the instrument
-      and quantity. Only the types that make sense for that row are offered; a fee or tax has no
-      quantity field and may legitimately have **no instrument at all** ("broker charge").
-    - **Split it** — when one line bundles a trade together with its fees or taxes.
-    - **Keep as recorded** — you agree with what the plugin did. The row greys out and stays in
-      the list, so you can always see, and revise, what you decided.
-    - **Restore** a single row, or every row in a group with **Restore all (N)**, and start again.
-
-    A **show-me-the-source** button highlights every original line behind a warning in the file
-    preview, so you can check the statement itself before deciding.
-
-    !!! danger "Blocking rows"
-
-        Rows marked in **red** are blocking: the import cannot be saved until you settle them.
-        Amber rows are advisory: **Keep as recorded** leaves them exactly as they are. Either
-        way, **Continue** waits until every row has an answer — **Keep the remaining N rows as
-        read** answers all the open ones in one click.
-
-??? note "🧹 Duplicates — appears when the same movement is in two of the files you are importing together"
+    The same movement is in two of the files you import together, such as a yearly and a quarterly
+    statement. Matches with transactions already saved do not open this step: **Review** flags them.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicates-step" alt="Import wizard — Duplicates step with a cross-file pair">
     </div>
 
-    **When you will see it.** Only when two or more files in this import overlap in time and
-    contain the same movement. Duplicates against transactions **already in your database** do
-    *not* open this step — they simply arrive at the final review already unchecked.
-
-    **Why it exists.** Overlapping exports are normal: you download a full-year statement, then a
-    quarterly one repeating part of it. Unchecking twins one at a time is tedious and easy to get
-    wrong, so the wizard groups them and lets you decide once.
-
-    **What you do here.**
-
-    - **Order your files by priority.** Drag them into the order you trust: the copy kept for each
-      group is taken from the highest-priority file — unless that copy is already in your
-      database or in the bulk editor. Such a copy is never the one kept automatically, and when
-      every copy already exists none is kept: the review shows one of them, unchecked.
-    - **Recalculate** after re-ordering, to re-derive every choice from the new priority.
-    - **Override individually** in the group table: every row carries a **Keep** checkbox and shows
-      which file it came from and whether it is the copy being kept. **Reset defaults** restores the
-      automatic choices.
-    - **Compare side by side** when two copies differ and you want to see exactly how before
-      choosing — the compare modal highlights the fields that differ.
-    - **Your choices are kept.** What you decide here survives later changes on the review step,
-      such as creating or picking an asset, as long as the duplicates themselves do not change.
-      When you click **Import N transactions**, the wizard brings you back to this step only if
-      its final check finds new or changed duplicates between your files — a new group, or a
-      group where a copy now turns out to be already in your database or in the bulk editor (or
-      no longer is) — and tells you so.
+    - **File priority**: drag the files into the order you trust and click **Recalculate by priority**.
+      Each group keeps the copy from the highest file — never one already saved or waiting in the bulk
+      workspace.
+    - **Keep**: tick the copies to import, row by row; **Reset defaults** restores the automatic choice.
+    - **Compare** shows the copies side by side, differences highlighted.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="N-way compare modal with per-field differences highlighted">
     </div>
 
-    Each group is labelled **Total** (the files agree on every detail — a pure overlap) or
-    **Partial** (something differs, so it deserves a look).
+    Groups are listed under **Total overlap** (identical copies) and **Partial overlap** (something
+    differs).
 
-### 📦 Step 4: Review & Import
+### 📦 Step 4: Review {: #review }
 
-The final review shows every transaction to be imported in a spreadsheet-like grid, and is where
-each instrument is finally matched to your library.
+Every row to import in one grid — status, date, type, security, broker, quantity, cash and tags,
+plus the file when you import several.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Review and Import grid" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-The table displays:
+#### 🗂️ Match each security
 
-- **Date**: The execution date.
-- **Type**: BUY, SELL, DIVIDEND, DEPOSIT, etc.
-- **Asset**: The matched asset from your library.
-- **Quantity**: The number of units/shares.
-- **Price**: The unit price.
-- **Net Amount**: The total cash impact.
-- **Fees/Taxes**: Commissions and taxes included.
+The **Resolve Assets** panel above the grid lists the securities of your files. Match each one:
 
-#### 🗂️ Asset Resolution
-
-A collapsible panel above the grid lists every instrument found in your files and lets you say
-what it is in your library. One search field covers everything, in two sections:
-
-- **In this import** — the instruments read from your files, already unified by the step above.
-  One that is already linked to your library shows an **in archive** badge and appears here only,
-  never twice.
-- **In archive** — everything else in your asset library.
-
-Auto-matched candidates are pinned at the top of the search field with a confidence badge
-(**Exact** / **High** / **Medium** / **Low**), so the most likely match is usually one click away.
-When exactly one asset in your library matches, the wizard selects it for you; when several
-could match, the choice stays yours.
-
-If neither section has what you need, the **Create «…»** button at the bottom of the list is
-always visible and already carries whatever you typed — you never have to go looking for it.
+- Search **In this import** and **In the archive** (your library) from one field. Likely matches
+  come first, with a confidence badge (**Exact** to **Low**); a single match is already selected.
+- **Create “…”** opens the new-asset form, filled in with the name and codes from the report.
+- ✏️ **Inspect / edit** opens the chosen asset; **Merge** appears when two of your assets match.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Asset resolution panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-The ✏️ pencil next to a matched instrument opens the full asset editor without leaving the
-wizard, so you can fix an identifier or a name and come straight back. When an instrument matches
-**two** assets already in your library, the wizard detects the ambiguity and offers a **merge**
-action to fold one into the other.
+If the report's code differs from the asset's or the price provider's, LibreFolio asks which one is
+the main one. The provider's code, the one with prices, is preselected; the others stay as
+alternatives. An amber note on a new asset, such as a possible maturity, is only advice.
 
-!!! question "«Which code is the main one?»"
-
-    When your report carries an identifier and the asset — or the price provider — carries a
-    different one of the same kind, LibreFolio does not overwrite anything. It asks which one
-    should lead, showing where each value came from: **from the provider**, **already saved** or
-    **from the report**. The one you elect becomes the asset's identifier; the others are kept as
-    alternative identifiers, so the next import recognises the security either way.
-
-    The provider's value is preselected, because it is the only one with a price feed behind it.
-
-#### ⛔ Broker Opening Date
-
-If the target broker has an opening date, the wizard flags rows whose date is **strictly before**
-it with the status `Before opening`. Those rows are deselected and cannot be imported; a row on
-the opening day remains valid. If the date is wrong, a per-broker banner lets you **Edit broker
-date** by hand or **auto-fix** it to the earliest transaction date found, then re-check/refresh so
-the wizard re-evaluates every row against the updated date.
-
-#### ⚠️ Asset Notices
-
-Some plugins attach advisory notices to extracted assets. For example, Intesa Sanpaolo and
-Crédit Agricole can warn that a security may be matured or redeemed. These notices appear as
-amber banners when you create or map the asset; they do not block the import.
-
-#### ⚠️ Duplicates Against Your Database
-
-Independently of the optional **Duplicates** step — which compares the imported files *with each
-other* — every row is also compared with the transactions already in your database, on type,
-date, amount, quantity and description. These do not open a step of their own: they are flagged
-right here with a status badge.
+#### 🚦 Read the status badges
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Duplicate detection badges" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-| UI Badge | Confidence Level | Criteria / Matching Rules |
+| Badge | Meaning | Ticked at first? |
 | :--- | :--- | :--- |
-| <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY_WITH_ASSET` | Basic fields and description match, and asset auto-resolved (highly confident duplicate). |
-| <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY` | Basic fields and description match, but asset is not resolved. |
-| <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE_WITH_ASSET` | Basic fields match, and asset is auto-resolved (but description differs or is empty). |
-| <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE` | Basic fields (type, date, quantity, amount) match, but asset is not resolved. |
-| <span style="background-color: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">✅ UNIQUE</span> | — | The transaction has no matching records in the database and is classified as new (no duplicate detected). |
-| <span style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">❌ UNRESOLVED</span> | — | The broker or financial instrument was not matched to an existing entity in the database (requires resolution in Step 4 before importing). |
+| **✓ Unique** | Nothing similar is saved | ✅ |
+| **ℹ Possible dup** | A saved transaction has the same type, date, quantity and amount, but another description | ✅ — check it |
+| **⚠ Likely dup** | A saved transaction matches, description included | ⬜ |
+| **⧉ Duplicate in batch** | Exact copy of another row of this import, or of the bulk workspace | ⬜ |
+| **≈ Possible batch dup** | The same, with another description | ✅ — check it |
+| **✗ Unresolved** | Its security is not matched yet | ✅ — match it or untick it |
+| **⛔ Before opening** | Dated before the broker's opening date | Cannot be imported |
+| **⏮ Already in LibreFolio** | Report sets: older than the history LibreFolio holds; hidden behind a counter | Cannot be imported |
 
-By default, the wizard automatically unchecks "Likely" duplicates to prevent double-entry, but
-you can override this choice. This also applies to a movement found in two of your files: its
-badge opens the comparison with the transaction already stored. A banner above the grid
-summarizes why rows are deselected.
+Click a duplicate badge to compare the row with its twin; a banner says why rows are unticked. A
+currency conversion is one row, imported whole.
 
-Two more badges come from comparisons *inside this import* rather than against the database:
+#### ⛔ Rows before the broker's opening date {: #opening-date }
 
-| UI Badge | Meaning |
-| :--- | :--- |
-| ⧉ **Duplicate in batch** | Exact copy of a row still pending in this import (or already staged in the bulk editor) — deselected by default. |
-| ≈ **Possible batch dup** | Same, but the description differs — stays selected so you can decide. |
+Rows dated before the broker's opening date cannot be imported (the opening day itself is fine). If
+the date is wrong, the banner offers **Set opening to ‹date›** — the earliest row date — and
+**Edit broker date**; the rows are then checked again.
 
-Click **Import N transactions** to hand the selected rows to the **bulk editor** as new rows:
-nothing is written to the ledger yet. Give them one last look — or keep editing — and then
-**Save All** to commit them to your portfolio.
+#### 📥 Import the rows
 
-Before the hand-over, **Import N transactions** may run one final duplicate check. New or changed
-duplicates between your files take you back to the **Duplicates** step, as described above. If the
-check only changes which rows are selected, the wizard never imports a smaller — or empty — batch
-behind your back: it stays on the review and warns you, *The final duplicate check changed the
-selection. Review it before importing.* Look at the selection, then click **Import N transactions**
+**Import N transactions** is enabled once at least one row is ticked and every ticked row has its
+security. A last duplicate check runs first: changed duplicates between files send you back to
+**Duplicates**, and a changed selection keeps you here with a message — check the ticks and click
 again.
 
-With a **report set**, **Import N transactions** may first stop on **Align with the bank**, which
-compares what LibreFolio will hold with what the bank states and proposes the corrections that
-close the difference — see [Danske Bank](danske-bank.md#first-import-align-with-the-bank).
+??? info "⚖️ Align with the bank — after Review, only for a report set such as Danske Bank"
 
-<!-- [Screenshot Placeholder: brokers/import-wizard-gapfix-step — the Align with the bank step: one card per point (starting point, after the gap, end-of-period check) above the table of proposed corrections tagged gap_fix] -->
+    For a report set such as [Danske Bank](danske-bank.md#first-import-align-with-the-bank), LibreFolio
+    compares what it will hold with the bank's balances and positions. Cards show each point —
+    **Starting point**, **After the gap**, **End-of-period check** — above the proposed corrections,
+    all ticked. Untick those you do not want and click **Continue**; if the comparison failed, continue
+    without them.
+
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="Align with the bank: the Starting point, After the gap and End-of-period check cards above the proposed corrections tagged gap_fix" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
+
+### 💾 Save in the bulk workspace
+
+The rows arrive in the bulk workspace unsaved. Check or edit them, then click **Save All**: it waits
+for the rows listed in red, and asks before saving the values listed in amber that you have not
+verified (**Save anyway**).
 
 ---
 
 ## 🧭 Guided First Import {: #guided-first-import }
 
-The first time you open the Import Wizard, a contextual guide bubble follows you through the
-real conditional flow above. Import is one saved onboarding flow with per-step status, not a
-separate flow for every wizard screen.
+The first time you open the wizard, a guide bubble walks you through it:
 
-- **It tracks the wizard you're actually seeing.** Its **Step N of M** label follows the current
-  visible steps. Optional **Unify Assets**, **Corrections**, **Duplicates** and, on a report-set
-  import, **Align with the bank** guidance begins only when the wizard first reaches that step; a
-  step that does not apply remains available for a later import that needs it.
-- **It yields to deeper dialog stacks.** The coachmark remains available through the wizard and
-  one dialog opened above it. If that dialog opens another dialog, the coachmark temporarily
-  hides and returns when the upper dialog closes.
-- **It follows a duplicate recheck bounce.** If **Import N transactions** triggers one last
-  duplicate check and that check reopens the **Duplicates** step, the guide follows you back
-  there instead of getting stuck on the review step.
-- **It observes; it does not operate the wizard.** You still use the wizard's own controls. The
-  guide never restores a previous wizard draft, clicks a control, uploads a file, or changes a
-  row for you. Clicking the highlighted real action performs that normal action and advances the
-  guide.
-- **It ends by highlighting Save All — it never presses it.** Once your transactions reach the
-  bulk editor, the guide's last stop highlights the **Save All** button and waits. It does not
-  write any data for you.
-- **It saves progress one step at a time.** In automatic mode, **X** skips only the current
-  guide step; later steps remain due and start when the wizard reaches them. In replay mode,
-  exiting affects only the replay stored in this browser for your account and never changes the
-  saved onboarding status.
+- its **Step N of M** counts only the steps you see; the tips for optional steps wait for an import
+  that needs them;
+- it only points: it never clicks, uploads or edits for you;
+- it ends by highlighting **Save All**, without pressing it;
+- **X** skips only the current tip.
 
-You can also re-arm the guide on demand from
-**[Settings → Preferences → Onboarding and guides](../../settings/preferences.md#onboarding-and-guides)**,
-which queues it for your **next** import instead of starting it immediately.
+To see it again, choose **Replay at next trigger** for the **Import guide** in
+**[Settings → Preferences → Onboarding and guides](../../settings/preferences.md#onboarding-and-guides)**:
+it starts with your next import.
+
+---
+
+## 🔗 Related
+
+- 🏦 **[Supported Brokers](index.md)** — which file to export
+- 🛠️ **[Import Wizard internals](../../../developer/frontend/components/features/import-wizard.md)** — for developers
