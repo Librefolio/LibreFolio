@@ -177,6 +177,15 @@
                     error = result.message;
                     return;
                 }
+                // HTTP 200 is not "saved": a refused item (duplicate name, balance validation,
+                // access) comes back with success:false after a server-side rollback. Nothing
+                // reaches the cache and the draft stays open, as in the create branch.
+                const updateResult = result.data.results[0];
+                if (!updateResult?.success) {
+                    const updateError = Array.isArray(updateResult?.error) ? updateResult.error[0] : updateResult?.error;
+                    error = updateError ? (localizeDuplicateName(updateError, event.detail.name) ?? updateError) : $_('brokers.updateFailed');
+                    return;
+                }
                 // Sync the patched fields into the cache so other pages
                 // (e.g. icon refresh) reflect the change immediately.
                 mergeBrokers([
