@@ -842,6 +842,32 @@ def cmd_mkdocs_normalize_dashboard_fixture(args):
     return normalize_file(Path(args.path), getattr(args, "dry_run", False))
 
 
+def _reuse_gallery_test_db() -> bool:
+    """`mkdocs gallery --no-populate`: reuse the test database of an earlier run, as it is.
+
+    Playwright's global-setup may only be told to stand down (``LF_SETUP_DONE``) once the database
+    and the E2E users are really there; told nothing, it runs its own ``populate --force`` — a
+    different dataset, without the static resources — under the freshly started backend.
+    """
+    from backend.app.config import get_test_data_dir  # noqa: PLC0415 — CLI-only import
+
+    try:
+        test_db = get_test_data_dir() / "sqlite" / "app.db"
+    except ValueError as exc:
+        print_error(f"Invalid test data directory: {exc}")
+        return False
+    if not test_db.is_file():
+        print_error(f"--no-populate reuses an existing test database, and there is none at {test_db}: run once without --no-populate")
+        return False
+    from scripts.test_runner import _ensure_test_users  # noqa: PLC0415 — CLI-only import
+
+    if not _ensure_test_users():
+        print_error("Failed to create test users")
+        return False
+    print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate): reusing {test_db}{Colors.NC}")
+    return True
+
+
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
 
@@ -904,8 +930,8 @@ def cmd_mkdocs_gallery(args):
             print_error("Failed to create test users")
             return 1
         print_success("Test users ready")
-    else:
-        print(f"{Colors.YELLOW}⏭️  Skipping DB population (--no-populate){Colors.NC}")
+    elif not _reuse_gallery_test_db():
+        return 1
 
     failures = []
     # Determine worker count: --workers flag or CPU count
@@ -987,15 +1013,14 @@ def cmd_mkdocs_gallery(args):
     # Always disable the scheduler during gallery runs — prevents live data updates
     # from changing charts/numbers between screenshots.
     gallery_env["LIBREFOLIO_NO_SCHEDULER"] = "1"
-    if not no_populate:
-        # We already populated (and created users) above — tell Playwright's
-        # global-setup to stand down. Without this flag it re-runs
-        # `populate --force` under the freshly started backend, wiping and
-        # rewriting the DB while the first browser workers are already logging
-        # in (the first ~17 tests raced exactly that on 04/09).
-        # Note: global-setup step 3 (initGlobalSettings via API) still runs —
-        # the flag only stands down the DB populate + user creation.
-        gallery_env["LF_SETUP_DONE"] = "1"
+    # Both branches above leave a prepared DB with its E2E users (populated now, or
+    # reused with --no-populate) — tell Playwright's global-setup to stand down.
+    # Without this flag it re-runs `populate --force` under the freshly started
+    # backend, wiping and rewriting the DB while the first browser workers are
+    # already logging in (the first ~17 tests raced exactly that on 04/09).
+    # Note: global-setup step 3 (initGlobalSettings via API) still runs —
+    # the flag only stands down the DB populate + user creation.
+    gallery_env["LF_SETUP_DONE"] = "1"
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
 
@@ -2386,7 +2411,7 @@ Examples:
     mk_p.add_argument("--mobile-only", action="store_true",
                       help="Only generate mobile screenshots")
     mk_p.add_argument("--no-populate", action="store_true",
-                      help="Skip DB population (faster for re-runs)")
+                      help="Reuse the existing test database as it is (faster re-runs; needs one earlier full run)")
     mk_p.add_argument("--workers", "-w", type=int, default=None,
                       help="Number of Playwright workers (default: CPU count)")
     mk_p.add_argument("--test-port", type=int, default=None,
