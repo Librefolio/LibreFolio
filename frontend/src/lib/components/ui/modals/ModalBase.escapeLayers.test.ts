@@ -13,6 +13,12 @@
  * The approved cure is in the inner layers: each stops the propagation of the Escape it consumes.
  * ModalBase does not change, so the subject is what reaches it, read off its `onRequestClose`.
  *
+ * SimpleSelect (K, step 20) is the same defect in a select that keeps the focus on its trigger while its
+ * list is open — a combobox that names the highlighted option with `aria-activedescendant` — so its
+ * Escape is the keydown of its trigger. It is the select of «Read as» in the import wizard's
+ * ReportSetCard, where the Escape that reaches the wizard asks to discard the import
+ * (`transactions/import/ReportSetCard.escape.test.ts`).
+ *
  * Escape is delivered the way a browser delivers it: to the focused element inside the modal,
  * bubbling. jsdom builds the same event path, window included, so the menu's capturing window
  * listener sees the key first, as it does in a browser. Every case proves that the inner layer
@@ -99,6 +105,29 @@ async function openList(testId: string) {
     const search = within(root).getByTestId(`${testId}-search`);
     await waitFor(() => expect(search, 'premise: the open select focuses its search box').toHaveFocus());
     return {root, trigger, search};
+}
+
+/** The SimpleSelect of the harness: its container, which holds its list as well, and its trigger. */
+function simpleSelect() {
+    const root = screen.getByTestId('esc-simple');
+    return {root, trigger: within(root).getByTestId('esc-simple-button')};
+}
+
+/**
+ * Opens the SimpleSelect with a click on its trigger, and returns once its list is open with the focus still on
+ * the trigger: SimpleSelect drives the list from there, naming the highlighted option with
+ * `aria-activedescendant`, and moves the focus nowhere.
+ */
+async function openSimpleList() {
+    const {root, trigger} = simpleSelect();
+    // A click leaves the focus on the button it pressed, in a browser; jsdom moves no focus on a click.
+    trigger.focus();
+    await fireEvent.click(trigger);
+    expectListOpen(root, trigger, 'premise: a click on the trigger opens the list');
+    expect(within(root).queryByTestId('esc-simple-dropdown'), 'premise: the open select shows its dropdown').not.toBeNull();
+    expect(trigger, 'premise: the open SimpleSelect keeps the focus on its trigger').toHaveFocus();
+    expect(trigger, 'premise: the trigger drives the open list, naming its highlighted option').toHaveAttribute('aria-activedescendant');
+    return {root, trigger};
 }
 
 /**
@@ -188,6 +217,25 @@ describe('ModalBase — one Escape closes the top layer only', () => {
         expect(onRequestClose, 'with the list closed, the next Escape must close the modal').toHaveBeenCalledTimes(1);
     });
 
+    // K, step 20. SimpleSelect keeps the focus on its trigger while its list is open, and handles the keys there. On
+    // Escape the trigger prevents the default and closes the list, but does not stop the propagation: the keydown
+    // bubbles to ModalBase, and the modal closes with the list. In the import wizard that Escape, on «Read as», asks to
+    // discard the import. The approved cure: the Escape the open list consumes stops its propagation.
+    it('SimpleSelect: Escape on the trigger of the open list closes the list, not the modal, and the next Escape closes the modal', async () => {
+        const {modal, onRequestClose} = await mountModal();
+        const {root, trigger} = await openSimpleList();
+
+        await pressEscape(modal, trigger);
+
+        expectListClosed(root, trigger, 'the Escape on the trigger must close the open list');
+        expect(within(root).queryByTestId('esc-simple-dropdown'), 'the Escape on the trigger must close the open list').toBeNull();
+        expect(onRequestClose, 'one Escape on the trigger of an open SimpleSelect must close its list only, not the modal under it').not.toHaveBeenCalled();
+
+        // The focus stays on the trigger, and a closed SimpleSelect consumes no Escape: the next one is the modal's.
+        await pressEscape(modal, trigger);
+        expect(onRequestClose, 'with the list closed, the next Escape must close the modal').toHaveBeenCalledTimes(1);
+    });
+
     it('guard — select, search inline in the trigger: Escape in the inline search box closes the list, not the modal (safe today: the box stops its own keydowns)', async () => {
         const {modal, onRequestClose} = await mountModal();
         const {root, trigger, search} = await openList('esc-inline');
@@ -222,5 +270,16 @@ describe('ModalBase — an Escape that no layer consumed still closes the modal 
         await pressEscape(modal, trigger);
 
         expect(onRequestClose, 'a select with its list closed consumed nothing, so the Escape must close the modal').toHaveBeenCalledTimes(1);
+    });
+
+    it('SimpleSelect with its list closed: Escape on its trigger requests the close, once', async () => {
+        const {modal, onRequestClose} = await mountModal();
+        const {root, trigger} = simpleSelect();
+        trigger.focus();
+        expectListClosed(root, trigger, 'premise: the list is closed');
+
+        await pressEscape(modal, trigger);
+
+        expect(onRequestClose, 'a SimpleSelect with its list closed consumed nothing, so the Escape must close the modal').toHaveBeenCalledTimes(1);
     });
 });
