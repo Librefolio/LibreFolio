@@ -173,6 +173,7 @@ plugins:
             Generic CSV: CSV Generico
             "📊 Dashboard": "📊 Dashboard"
             Positions & Analysis: Posizioni & Analisi
+            Risk: Rischio
             "⚙️ Settings": "⚙️ Impostazioni"
             Profile: Profilo
             User Preferences: Preferenze Utente
@@ -367,6 +368,7 @@ plugins:
             Generic CSV: CSV Générique
             "📊 Dashboard": "📊 Tableau de Bord"
             Positions & Analysis: Positions & Analyse
+            Risk: Risque
             "⚙️ Settings": "⚙️ Paramètres"
             Profile: Profil
             User Preferences: Préférences Utilisateur
@@ -562,6 +564,7 @@ plugins:
             Generic CSV: CSV Genérico
             "📊 Dashboard": "📊 Panel Principal"
             Positions & Analysis: Posiciones y Análisis
+            Risk: Riesgo
             "⚙️ Settings": "⚙️ Configuración"
             Profile: Perfil
             User Preferences: Preferencias de Usuario
@@ -704,6 +707,7 @@ nav:
           - KPI Cards: user/dashboard/kpi-cards.md
           - Charts: user/dashboard/charts.md
           - Positions & Analysis: user/dashboard/positions.md
+          - Risk: user/dashboard/risk.md
       - 🏦 Brokers:
           - Overview: user/brokers/index.md
           - Broker Transactions: user/brokers/import.md
@@ -990,6 +994,7 @@ nav:
               - 📥 Import (BRIM):
                   - Architecture: developer/backend/brim/architecture.md
                   - Generic CSV Provider: developer/backend/brim/generic_csv.md
+                  - Danske Bank Importer: developer/backend/brim/danske_bank.md
                   - Providers List: developer/backend/brim/providers_list.md
           - "📈 Assets (Pricing)":
               - Architecture: developer/backend/assets/architecture.md
@@ -1049,6 +1054,7 @@ nav:
                   - Settings: developer/frontend/components/features/settings.md
                   - Live Prices: developer/frontend/components/features/live-ticker.md
                   - Lots Analysis: developer/frontend/components/features/lots-analysis.md
+                  - Risk UI: developer/frontend/components/features/risk-lab.md
                   - Charts & Animations: developer/frontend/components/charts.md
                   - 🏦 Brokers:
                       - Overview: developer/frontend/components/features/brokers/index.md

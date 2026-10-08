@@ -24,6 +24,7 @@ The library is split into two architectural layers: **Core UI** (generic atoms a
 | **[Authentication](features/auth.md)** | `LoginCard`, `RegisterCard`, `ForgotPasswordCard`, the password-manager contract. |
 | **[Live Prices](features/live-ticker.md)** | How the Assets list and the asset detail page poll `POST /assets/prices/current` every 30 s (60 s for the asset-detail chart head), and how a price change is shown. |
 | **[Lots Analysis](features/lots-analysis.md)** | `LotsAnalysisPanel` and its chart/table/modal group: per-lot WAC vs market price, custody Gantt, unified lots table, value/return comparison, custody drill-down modal. |
+| **[Risk UI](features/risk-lab.md)** | The Correlation tab of the Assets page and the Dashboard's Risk tab: the selection, the requests over one shared window, the section frames and notices, and each block's rules. |
 
 ## 🧭 App Header {: #app-header }
 

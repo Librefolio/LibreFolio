@@ -283,8 +283,8 @@ description: Free to understand, free to act. LibreFolio brings all your investm
   <!-- Deep Dive 6: Tools -->
   <div class="deep-dive reverse">
     <div class="deep-dive-content">
-      <h2>Planning Tools</h2>
-      <p>Plan your next contribution before you invest. The <b>PAC allocator</b> proposes the purchases that bring a new investment as close as possible to its target allocation, broker by broker, in whole units, fractions, or amounts. It is a simulation: nothing is bought and no order is sent.</p>
+      <h2>Tools</h2>
+      <p>LibreFolio comes with a set of tools, one for each useful job! Each one starts from your real portfolio and shows you the numbers before you act. From now on, crunching numbers and making decisions is child's play!</p>
     </div>
     <div class="deep-dive-image">
       <div class="screenshot-container">
@@ -294,7 +294,6 @@ description: Free to understand, free to act. LibreFolio brings all your investm
     </div>
     <div class="deep-dive-actions">
       <a href="user/tools/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Explore tools &rarr;</a>
-      <a href="user/tools/pac-allocator/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">PAC allocator &rarr;</a>
     </div>
   </div>
 
@@ -308,7 +307,7 @@ description: Free to understand, free to act. LibreFolio brings all your investm
       Free yourself from spreadsheets. LibreFolio is engineered to <b>connect seamlessly</b> with the financial tools you already use, extending its capabilities through a growing ecosystem of <b>community-driven plugins</b>.
     </p>
     
-    <div class="plugin-radial-hub plugin-radial-hub--four">
+    <div class="plugin-radial-hub plugin-radial-hub--five">
       <div class="hub-core">
         <img id="hub-core-img" alt="LibreFolio Core" src="/LibreFolio/static/logo.png">
         <script>
@@ -322,14 +321,15 @@ description: Free to understand, free to act. LibreFolio brings all your investm
 
       <div class="ellipse-wrapper">
         <div class="satellite-track">
-          <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
-            <line x1="325" y1="325" x2="95" y2="95" />
-            <line x1="325" y1="325" x2="555" y2="95" />
-            <line x1="325" y1="325" x2="555" y2="555" />
-            <line x1="325" y1="325" x2="95" y2="555" />
+          <svg class="hub-lines" viewBox="0 0 720 720" width="100%" height="100%">
+            <line x1="360" y1="360" x2="360" y2="0" />
+            <line x1="360" y1="360" x2="702.4" y2="248.8" />
+            <line x1="360" y1="360" x2="571.6" y2="651.2" />
+            <line x1="360" y1="360" x2="148.4" y2="651.2" />
+            <line x1="360" y1="360" x2="17.6" y2="248.8" />
           </svg>
           
-          <div class="hub-node node-orbit-top-left">
+          <div class="hub-node node-penta-1">
             <div class="hub-node-unscale">
               <a href="user/transactions/import/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -341,7 +341,7 @@ description: Free to understand, free to act. LibreFolio brings all your investm
             </div>
           </div>
 
-          <div class="hub-node node-orbit-top-right">
+          <div class="hub-node node-penta-2">
             <div class="hub-node-unscale">
               <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
@@ -353,7 +353,7 @@ description: Free to understand, free to act. LibreFolio brings all your investm
             </div>
           </div>
 
-          <div class="hub-node node-orbit-bottom-right">
+          <div class="hub-node node-penta-3">
             <div class="hub-node-unscale">
               <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
@@ -365,13 +365,25 @@ description: Free to understand, free to act. LibreFolio brings all your investm
             </div>
           </div>
 
-          <div class="hub-node node-orbit-bottom-left">
+          <div class="hub-node node-penta-4">
             <div class="hub-node-unscale">
               <a href="developer/architecture/patterns/signal_plugin_guide/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 16 4-5 4 3 4-7"/></svg>
                 <div class="provider-info">
                   <h4>Technical Signal Plugins</h4>
                   <p><b>Add new indicators</b> as isolated Python plugins with schema-driven parameters, outputs, thresholds, and documentation.</p>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div class="hub-node node-penta-5">
+            <div class="hub-node-unscale">
+              <a href="user/tools/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <div class="provider-info">
+                  <h4>Tools</h4>
+                  <p><b>Plan and calculate</b> with tool plugins, one for each job, <b>starting from your own portfolio</b>.</p>
                 </div>
               </a>
             </div>
