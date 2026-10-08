@@ -248,6 +248,10 @@
     .modal-backdrop {
         position: fixed;
         inset: 0;
+        /* A fixed box is shortened by its margins: rendered inside a `space-y-*` container, it would
+           inherit the gap (Tailwind 4 puts it on every child but the last) and stop short of the
+           viewport bottom, leaving the page under an aria-modal dialog clickable. */
+        margin: 0;
         display: flex;
         align-items: center;
         justify-content: center;

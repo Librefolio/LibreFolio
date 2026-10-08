@@ -67,6 +67,8 @@ vi.mock('$lib/stores/app/auth', async () => {
         auth: {checkAuth: vi.fn(() => new Promise<boolean>(() => {})), logout: vi.fn(() => Promise.resolve())},
         isAuthenticated: readable(true),
         isAuthInitialized: readable(true),
+        // The reactive redirect's `$:` reads every identifier it names at mount, so this must exist; `browser: false` keeps it from being called.
+        isSignOutRequested: () => false,
     };
 });
 // ⚠️ Fragile by construction: this fake must keep the real `appBootstrap`'s SHAPE — a plain object

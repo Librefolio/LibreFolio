@@ -215,3 +215,8 @@
 2. Le correzioni dei test sono del test-author; per le cure del prodotto prima il rosso e poi il via del coordinator.
 3. Le regressioni coinvolte sono verdi nella 6155.
 4. Porte libere, nessun venv del worktree, nel worktree solo i file previsti.
+
+## Seguito
+
+- Lo step 19 è l'avvio dell'app (un timeout non è un logout), più il backdrop delle modali e l'Esc del trigger di
+  SearchSelect: [`plan-phase00TaxonomySelectStep19AppStartAuth.prompt.md`](plan-phase00TaxonomySelectStep19AppStartAuth.prompt.md).

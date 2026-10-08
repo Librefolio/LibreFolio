@@ -17,6 +17,7 @@ import {createApiClient} from './generated';
 import {goto} from '$app/navigation';
 import {browser} from '$app/environment';
 import {debug} from '$lib/debug';
+import {loginUrl} from '$lib/utils/internalPath';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 
 // =============================================================================
@@ -124,11 +125,12 @@ axiosInstance.interceptors.response.use(
         return response;
     },
     (error: AxiosError) => {
-        // Handle 401 Unauthorized - redirect to login
+        // A 401 means the session is gone: go to the login, carrying the page to come back to.
+        // On the root the login is already there, and a failed sign-in answers 401 too.
         if (error.response?.status === 401) {
-            if (browser) {
+            if (browser && window.location.pathname !== '/') {
                 debug.log('API', '401 Unauthorized - redirecting to login');
-                goto('/');
+                goto(loginUrl(window.location.pathname + window.location.search));
             }
         }
 
