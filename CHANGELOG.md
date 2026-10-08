@@ -174,7 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### 📚 Documentation
 
 - **Code examples in the Italian, French and Spanish documentation keep their indentation.** The translation step flattened them, so a compose file copied from those pages could be invalid; it no longer does, and the pages already affected are fixed as they are translated again.
-- **The English documentation follows this release.** User, administrator and theory pages were checked against the code: wrong claims are fixed (the Generic CSV has no manual column mapping, correlation bands and thresholds, the PAC allocator's outcomes) and the new features are described. The developer manual gains Risk Engine and Onboarding Guides pages. The Italian, French and Spanish pages follow in a later translation pass.
+- **The English documentation follows this release, and its user pages are simpler.** User, administrator and theory pages were checked against the code: wrong claims are fixed (the Generic CSV has no manual column mapping, correlation bands and thresholds, the PAC allocator's outcomes, and the IBKR importer reads a Trades Flex Query, not the Activity Statement) and the new features are described. User pages keep what you see and do, with a new *Dashboard › Risk* page; technical detail moves to the developer manual, which gains Risk Engine, Risk UI, Onboarding Guides and Danske Bank Importer pages, and the screenshot gallery gains a Risk Analysis section. DEGIRO is now marked stable, tested on real exports. The Italian, French and Spanish pages follow in a later translation pass.
 
 ### 🔄 Changed
 
