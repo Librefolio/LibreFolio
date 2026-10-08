@@ -1,89 +1,49 @@
 # 🧠 Broker AI Export
 
-Broker AI Export prepares a clipboard snapshot or analysis prompt limited to one
-accessible broker. LibreFolio never sends it to an AI service.
+Export one broker, with its holdings, cash, costs and lots, to ask an AI for a review, an
+explanation of its performance, or ideas about your tax losses. The options and how to paste are
+in the [AI Export overview](index.md).
 
-## 📍 Location
+---
 
-Open a Broker detail page and select **AI Export** in the top toolbar. The draft
-remains available for 10 minutes in the current login session and resets after
-logout or a new login.
+## 📍 Where to Find It
 
-## 🎯 Broker Analyses
+On a broker's detail page, select **AI Export** in the toolbar, next to **Refresh**: it works from
+any tab. It first opens on **Broker Review**.
 
-| Task                                    | Focus                                                                                                                                     |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Broker Review**                       | Holdings, cash, activity, performance, and data coverage.                                                                                 |
-| **Broker Performance & Market Drivers** | Performance reconciliation plus dated research for every Asset held through the Broker.                                                   |
-| **Capital-Loss Offset Strategies**      | Conditional ways to use available or expiring tax losses against potentially eligible gains using selected-Broker economic FIFO evidence. |
+The export covers **that broker only**, in the currency the page shows, with the last day of the
+page's date range as the export date. You can export any broker you can open, including one
+shared with you.
 
-## 🗂️ Scope and Data
+---
 
-The export is limited to the selected broker and current date range and target
-currency. Depending on the selection, it can include cash balances, positions,
-transactions, performance, costs, allocation, concentration, income, and FIFO
-lot summaries. Server-side access checks prevent exporting a broker the
-current user cannot read.
+## 📤 Export Data
 
-!!! important "Allocated and unallocated costs stay distinct"
+| Choice | What you get |
+| :--- | :--- |
+| **Broker Overview & History** | Holdings, cash, concentration, performance, flows, costs, an economic FIFO summary, a compact market context per asset, and drawdown |
+| **Broker Asset History** | Detailed prices, returns, indicators, states and events for the assets held at this broker, with coverage |
 
-    FIFO rows contain only fees and taxes deterministically allocated to lots.
-    Broker-level unallocated costs remain in the general financial evidence and
-    are never presented as zero lot costs.
+---
 
-## 📤 Export Data and Request Analysis
+## 🎯 Analyses
 
-- **Export Data** copies one factual Broker dataset only.
-- **Request Analysis** adds task-specific instructions, a response contract, and
-  the datasets declared for the Analysis.
-  The requested response language follows the current LibreFolio interface
-  language.
-- Optional notes are included only when supported by the selected Analysis.
+| Analysis | What the AI does |
+| :--- | :--- |
+| **Broker Review** | Reviews holdings, cash, concentration, performance, costs and the economic FIFO summary, with market context |
+| **Broker Performance & Market Drivers** | Explains the broker's result and researches dated market drivers for every asset it holds: use an AI that can search the web |
+| **Capital-Loss Offset Strategies** | Explores how available or expiring tax losses might offset gains, using this broker's FIFO lots |
 
-Two public data exports are available:
+??? note "🧾 Capital-Loss Offset Strategies — have your tax facts at hand"
 
-- **Broker Overview & History** — selected-Broker holdings, cash, concentration,
-  performance path, flows, costs, ratios, economic FIFO summary, compact per-Asset
-  history, Drawdown, coverage, and provenance;
-- **Broker Asset History** — Broker-scoped observed-close price buckets,
-  indicators, states, events, breadth, and explicit reasons for current Assets
-  excluded from technical eligibility.
+    FIFO lots are LibreFolio's economic calculation, not your legal tax position. Before comparing
+    paths, the AI asks for your tax residence and regime, the account type, your official tax-loss
+    inventory with amounts and expiry dates, and whether balances held at other brokers can be
+    combined. It never suggests a trade just for tax reasons.
 
-## 🧾 Capital-Loss Offset Strategies
+---
 
-The prompt uses selected-Broker economic FIFO lots to identify conditional gain
-and loss candidates, but never treats them as legally eligible automatically. It
-first asks for tax residence, regime, account type, official tax-loss inventory,
-amounts by legal category, origin and expiry dates, already-used balances, offset
-rules, and whether balances across Brokers/accounts may be combined.
+## 🔗 Related
 
-It can then compare no-action, eligible-gain realization before expiry, staged
-realization aligned with rebalancing, and loss harvesting when relevant. Every
-path shows costs, exposure changes, liquidity, concentration, timing, and legal
-uncertainty; no trade is recommended solely for tax reasons.
-
-## 📏 Detail and Sampling
-
-| Detail       | Exact sampling                                                                   |
-| ------------ | -------------------------------------------------------------------------------- |
-| **Compact**  | Same data universe with the sparsest supported temporal buckets (up to 30 days). |
-| **Standard** | Same data universe with temporal buckets up to 14 days.                          |
-| **Full**     | Same data universe with temporal buckets up to 7 days.                           |
-
-The general export uses 8/16/30 Broker path points and up to 6/12/24 compact
-history points per eligible Asset. The detailed export keeps the full technical
-sampling policy and can be large.
-
-A dataset or Analysis can omit unavailable or non-applicable optional sections.
-The **AI period** ends on the snapshot date. Partial history and coverage remain
-explicit.
-
-## 🔒 Applicability, Errors, and Privacy
-
-Analyses can be unavailable when required facts do not exist. Choices also fail
-closed on catalog or contract mismatch. Typed errors report access,
-applicability, source, or contract problems.
-
-The clipboard can contain sensitive account and transaction data. Review it
-before sharing. See the [AI Export overview](index.md) for the
-cross-domain workflow and safety model.
+- 🧠 **[AI Export overview](index.md)** — options, pasting and privacy
+- 🏦 **[Brokers](../brokers/index.md)** — the broker detail page and its tabs

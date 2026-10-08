@@ -1,8 +1,18 @@
 # 🔍 Pair Detail Page
 
-Click on any currency pair from the [FX List](../index.md) to open its detail page. Here you can visualize, analyze, and manage exchange rate data for that specific pair.
+Click a pair in the [FX list](../index.md) to open its page: a large chart of its rates, with tools
+to analyse, edit and configure the pair.
 
-The detail page is organized into several features, each accessible from the toolbar:
+---
+
+## 🗺️ The page at a glance
+
+- **Header** — ⇄ swaps the pair's direction and the list card follows (with unsaved changes in the
+  rate editor, LibreFolio asks first); ← goes back to the list.
+- **Toolbar** — the period, the latest rate with its change, and the **AI Export**, **Providers**,
+  **Sync** and **Reload** buttons. **Reload** reads the stored rates again; **Sync** downloads new
+  ones, see [Synchronization](../sync.md).
+- **Below** — the folded **Signals** panel, the chart, then the folded **Measures** panel.
 
 ---
 
@@ -10,27 +20,34 @@ The detail page is organized into several features, each accessible from the too
 
 ### 📈 [Interactive Chart](chart.md)
 
-The main view — a full ECharts-powered chart with zoom, pan, line/candlestick toggle, and configurable time ranges. This is where you visualize the exchange rate history at a glance.
+The rate history, with zoom, pan, an **Abs** / **%** view and period presets.
 
 ### 📊 [Signals](signals.md)
 
-Overlay technical indicators on the chart — 9 backend-computed plugins are available for FX pairs (see [Signals](signals.md) for the list and the per-signal details). Each signal is computed from the rate data and can be toggled independently.
+Indicators, comparisons and benchmark curves drawn on the chart; nine indicators work on FX rates.
 
 ### 📐 [Measures](measures.md)
 
-Click-to-click measurement tool. Select two points on the chart to see the delta, percentage change, and annualized return between them.
+The change, the change in % and the yearly rate between two points of the chart.
 
 ### ✏️ [Data Editor](data-editor.md)
 
-View, add, edit, or delete individual data points. Also includes **CSV Import** for bulk-loading historical rate data from files.
+Add, edit or delete single rates, or import many at once from a CSV file.
 
 ### ⚙️ [Provider Config](provider.md)
 
-Change the data provider for this pair, add fallback routes, or reconfigure the conversion chain.
+**Providers** changes where the rates come from: the provider, backup routes and chains.
+
+### 🧠 AI Export
+
+**AI Export** prepares a snapshot of the pair, or an **FX Pair Analysis** or **FX Exposure Impact**
+request, to paste into an AI assistant. FX Exposure Impact counts only the cash and the positions
+held directly in the pair's currencies: it does not look inside funds. See
+[FX AI Export](../../ai-export/fx.md).
 
 ---
 
 ## 🔗 Related
 
-- ⚙️ **[Chart Settings](../chart-settings.md)** — Customize chart appearance, colors, and signal overlay configuration
+- ⚙️ **[Chart Settings](../chart-settings.md)** — Chart look and overlay signals
 - 📋 **[FX Overview](../index.md)** — Back to the FX list page

@@ -91,6 +91,10 @@ not change plugin math.
 Chart requests and AI Export components have separate adapters. They converge only at
 `SignalService`.
 
+Results live only as long as their request: `SignalService` keeps no cache and writes no
+table. The chart pages hold them in a page-local `SignalResultState`, which a reload or a new
+page discards, and an AI Export snapshot carries them only in the text it copies.
+
 ### 📈 Chart Asset/FX Lifecycle
 
 ```mermaid
@@ -189,6 +193,16 @@ is 2 (`signal_series_preparation.py`): a year holds about 252 sessions in 365 da
 long holiday windows lower that further. The Asset price query, the FX endpoint, and
 the AI Export FX loader all size their load with it.
 
+A warm-up can also be unbounded. A plugin whose result depends on the whole past returns
+`SignalWarmupRequirement(full_history=True)`, and the plan sets `requires_full_history`:
+the Asset price query (`price_query.py`) then loads from the start of the available
+history instead of the point-derived warm-up, and still slices to the visible range after
+the computation. Underwater drawdown (`RISK_DRAWDOWN`) does so through its `full_history`
+parameter, on by default (the card's **Full history** checkbox); off, only the visible
+range and a minimal warm-up are loaded, so the running peak is the window's own. AI Export
+ignores that setting: its drawdown context (`ai_export/components/drawdown_context.py`)
+always starts from the beginning of the history.
+
 ### 2. 🧮 Execution
 
 The complete batch runs inside one `asyncio.to_thread(...)` call. Plugins execute
@@ -258,6 +272,18 @@ Every concrete plugin must declare:
 The base class converts this declaration into `SignalCatalogDefinition`. Therefore the
 frontend receives names, descriptions, parameter controls, required data, output shapes,
 and documentation links without a signal-specific UI implementation.
+
+`catalog_visible` (inherited `True`) decides whether the plugin appears in that catalog:
+`SignalPluginRegistry.list_definitions()` skips a plugin that sets it to `False`, so no
+selector offers it, while a request naming its code still runs. Of the 23 registered plugins,
+`calendar_rolling_return` (`ASSET_CALENDAR_ROLLING_RETURN`) is the one hidden: the asset chart
+requests it for its **Rolling Return** mode (see
+[Chart internals](../../frontend/components/charts.md#asset-detail-prices-and-rolling-return)).
+The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 visible plugins whose
+`compatible_domains` include `ASSET`, which is all of them; the FX catalog,
+`GET /api/v1/fx/currencies/signals`, lists the 9 close-only ones that also declare `FX`: EMA,
+SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
+`test_signal_plugin_matrix.py` pins both sets.
 
 ### 📅 Sessions or Calendar Days
 
@@ -358,9 +384,19 @@ plugin's minimum history; otherwise it uses the longest sufficient segment. Outp
 partial and never jumps across the gap.
 
 Coverage metadata includes both the total missing-point ratio and
-`max_consecutive_missing_points`. The UI keeps the backend `partial` status visible, but
-promotes it to an amber warning only when coverage is at most 95% or a missing streak is
-longer than seven cadence points. Smaller gaps remain an informational notice.
+`max_consecutive_missing_points`. The UI keeps the backend `partial` status visible, and the
+chart card turns each result into one icon: `getSignalProblemSeverity()`
+(`lib/charts/signals/signalProblem.ts`) grades a problem, and `getSignalIssue()`
+(`ChartSignalsSection.svelte`) adds the card's own checks.
+
+| Icon | When |
+|---|---|
+| Spinner | A request is in flight; no problem from the previous answer is shown meanwhile |
+| Red ⚠ (error) | `unavailable`, `failed`, or no result for the instance; no point loaded; an Asset comparison whose currency conversion failed |
+| Amber ⚠ (warning) | An incomplete warm-up missing at least 5% of the requested points, or of unknown size; partial coverage or a data gap with coverage at most 95%, a missing streak longer than seven cadence points, or either unknown; any other `partial` problem; data that starts after the range start |
+| Grey ℹ (notice) | An incomplete warm-up or a coverage gap below those thresholds |
+
+An error or a warning also tints the card red or amber; a notice leaves it plain.
 
 !!! warning "A long history is not automatically complete"
 

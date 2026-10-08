@@ -62,6 +62,16 @@ graph TD
 - 👑 **Ownership**: A **Broker** is created by a **User** (the Owner).
 - 🤝 **Sharing**: The Owner can grant access to other users (e.g., User B) with specific roles (Viewer, Editor).
 - 💰 **Transactions**: A **Transaction** belongs exclusively to one **Broker**.
+- 🏷️ **Names**: Broker names are unique across the whole instance (`Broker.name` is a unique
+  column), whoever owns them — see [Duplicate names](../frontend/components/features/brokers/forms.md#duplicate-broker-names).
+- 🔍 **Discovery**: The brokers a user cannot access still appear by name on the Brokers page
+  (`BrokerDiscoveryCard`, under *Other Existing Brokers*). Their sharing view is read-only:
+  `GET /brokers/{id}/access` loads the broker with `as_user_id="all"` and answers any signed-in
+  user, so the user can see whom to ask for access. This is by design (developer decision,
+  2026-10-08): the users of one instance are not strangers, and seeing who has access lets them
+  ask an Owner or choose whom to share with. The response carries each user's username, e-mail,
+  role, share and avatar (`BrokerService.list_accesses()`); the frontend shows usernames and
+  avatars, not e-mails.
 
 ### 🛡️ Broker Access Control (RBAC)
 
