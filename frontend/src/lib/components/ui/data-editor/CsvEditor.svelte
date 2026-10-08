@@ -29,6 +29,8 @@
         key: string;
         /** Display label (appears in header row) */
         label: string;
+        /** Other header names read as this column, tried only when `label` itself is absent. */
+        aliases?: string[];
         /** Data type for validation */
         type: 'number' | 'string';
         /** Whether this column must have a non-empty value */
@@ -233,7 +235,7 @@
         if (identityIdx < 0) missingRequired.push(identityLabel);
 
         for (const col of columns) {
-            const idx = normalizedParts.indexOf(col.label.toLowerCase());
+            const idx = [col.label, ...(col.aliases ?? [])].map((name) => normalizedParts.indexOf(name.toLowerCase())).find((i) => i >= 0) ?? -1;
             colIndices[col.key] = idx;
             if (idx < 0 && col.required) missingRequired.push(col.label);
         }
