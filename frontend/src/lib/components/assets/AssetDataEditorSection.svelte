@@ -406,7 +406,7 @@
                         });
 
                         if (deletedIds.size > 0) {
-                            parts.push($t('events.deleteSuccess', {values: {count: deletedIds.size}}));
+                            parts.push($t('events.deleteSuccess', {values: {n: deletedIds.size}}));
                         }
                         if (blocked.length > 0) {
                             const totalVisible = blocked.reduce((sum: number, b: any) => sum + b.accessible_transactions.length, 0);
@@ -414,7 +414,7 @@
                             toasts.warning(
                                 $t('events.deleteBlocked', {
                                     values: {
-                                        count: blocked.length,
+                                        n: blocked.length,
                                         accessible: totalVisible,
                                         hidden: totalHidden,
                                     },

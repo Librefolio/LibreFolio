@@ -143,7 +143,7 @@
         // #R6-6 (Batch 4.d-part3) — success toast for batch uploads (aligned
         // with the evolved app-wide save pattern). Errors remain inline in the
         // banner (persistent, dismissible).
-        toasts.success($_('uploads.uploadBatchSucceeded', {values: {count: uploadFiles.length}}));
+        toasts.success($_('uploads.uploadBatchSucceeded', {values: {n: uploadFiles.length}}));
     }
 
     async function handleDelete(fileId: string) {
@@ -188,10 +188,10 @@
         if (failedCount > 0) {
             // Prefer the summary key when more than one failed; for a single
             // failure in a multi-selection the concrete message is clearer.
-            error = failedCount === 1 ? lastMessage : $_('uploads.deleteFailedSome', {values: {count: failedCount}});
+            error = failedCount === 1 ? lastMessage : $_('uploads.deleteFailedSome', {values: {n: failedCount}});
         } else {
             // #R6-6 (Batch 4.d-part3) — success toast for bulk delete.
-            toasts.success($_('uploads.deleteBatchSucceeded', {values: {count: fileIds.length}}));
+            toasts.success($_('uploads.deleteBatchSucceeded', {values: {n: fileIds.length}}));
         }
     }
 
@@ -423,7 +423,7 @@
 />
 
 <!-- #R6-7 (Batch 4.d-part3) — Bulk delete destructive confirm. -->
-<ConfirmModal confirmText={$_('common.delete')} danger={true} message={$_('uploads.confirmBulkDelete.message', {values: {count: pendingBulkDeleteIds.length}})} onCancel={cancelBulkDelete} onConfirm={confirmBulkDelete} open={confirmBulkDeleteOpen} title={$_('uploads.confirmBulkDelete.title')} />
+<ConfirmModal confirmText={$_('common.delete')} danger={true} message={$_('uploads.confirmBulkDelete.message', {values: {n: pendingBulkDeleteIds.length}})} onCancel={cancelBulkDelete} onConfirm={confirmBulkDelete} open={confirmBulkDeleteOpen} title={$_('uploads.confirmBulkDelete.title')} />
 
 <style>
     /* Backdrop and modal-content styles handled by ModalBase */
