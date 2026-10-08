@@ -174,13 +174,15 @@ separate legacy promote endpoint.
 
 ## ⚖️ Balance Queries
 
-The service exposes three public query methods used by the broker summary:
+The service exposes two public query methods used by the broker summary:
 
 ```python
 await svc.get_cash_balances(broker_id)   # Dict[currency, Decimal]
 await svc.get_asset_holdings(broker_id)  # Dict[asset_id, Decimal]
-await svc.get_cost_basis(broker_id, asset_id)  # Decimal
 ```
+
+The holdings' cost no longer comes from this service: the broker summary computes
+it with the shared average cost (see [WAC & Cost Basis](wac.md#broker-summary)).
 
 ---
 

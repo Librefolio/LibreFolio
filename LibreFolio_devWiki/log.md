@@ -2188,9 +2188,95 @@ proved dead, and it was removed with the batch.
 Updated: [[problems/i18n-audit-false-dead-and-false-used]].
 Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
 
+## [2026-10-07] file | Workstream P — one average-cost function in a financial_math layer (decision)
+Release 2 workstream P answered issue #32 without a patch. The developer chose one generic average-cost function,
+`compute_average_costs()`, in a new service layer `backend/app/services/financial_math/` whose rule is that a
+calculation owns its whole problem and calls the services it needs (the FX service) instead of receiving values its
+caller prepared. Historical cost in the report currency — each acquisition at its own date, the cost in the asset
+currency kept alongside; a missing rate or cost always surfaces (pair + dates, `MISSING_COST_BASIS`), never a silent
+zero; four implementations retired (engine pools, `wac_utils.py`, the lots WAC rows, `get_cost_basis`). The page keeps
+the rejected alternatives (identity-rate patch, pool in the asset currency revalued daily, cross rates), the
+behaviour changes (FX effect now inside the unrealized change, with its per-currency tooltip; oversell; in-transit
+cost at arrival; AI Export provenance v2) and the known limits (FIFO lot conversions still fall back to unconverted
+amounts; `oversold_movement_ids` not surfaced).
+Filed: [[decisions/financial-math-single-average-cost]].
+
+## [2026-10-07] file | Issue #32 — zero purchase cost for a foreign asset paid in the report currency (problem)
+The engine kept its pools in the asset currency; with the purchase paid in the report currency, `_buy_unit_cost`
+needed the identity key `(T, T, d)`, which `_preload_fx_rates` never loads, and its `None` became "add at the current
+average cost" — 0 for an empty pool, with no trace. The page records the same-root twins (a cost basis in the report
+currency, which also inflated total P&L; a cost basis in a third currency), the other silent fallbacks found by the
+same analysis, the fix and the regression tests.
+Filed: [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]].
+
+## [2026-10-07] update | Workstream P — the average-cost pages realigned
+Updated, keeping their history and marking what the change superseded:
+[[concepts/inline-wac-computation]] (superseded in part: the replay now follows a precomputed `compute_average_costs()`
+timeline in the report currency), [[entities/portfolio-engine]] (new "Average Cost" section, required `average_costs`,
+gotcha on the test construction outside the engine selectors, history row, dead source paths remapped),
+[[entities/portfolio-service]] (facade, realized P&L and boundary costs from the engine, breakdown rows; known issue 3
+closed), [[entities/lots-analysis-service]] (WAC lines on the function, gaps → `DEGRADED`; FIFO lot fallback recorded as
+a known limit), [[features/F-097]] (implemented → documented, mkdocs `developer/backend/transactions/wac.md`, stale
+names annotated, three dead source paths remapped) and its row in [[features/registry]] (`in-progress` → `documented`),
+[[decisions/wac-target-currency-last-acquisition]] (scope note: the rule now governs only the facade's callers — preview
+/ automatic cost basis and `POST /portfolio/wac`; the PAC passes the report currency; Dashboard, engine and lots use the
+report currency; the broker summary the asset currency), [[problems/test-transaction-implied-constructor-mismatch]]
+("Recurrence 2026-10-07"; its index row said `open`, the page has said `resolved` since 2026-07-13 — aligned).
+Reviewed and left unchanged: [[decisions/cost-basis-currency-object]] — nothing in it became false.
+Drift flagged in passing, not realigned (valuation was not part of P): the engine page's LAST_BUY_PRICE section and the
+service page's TRANSACTION_IMPLIED item describe valuation designs replaced by the unified price resolver on 2026-07-31
+(`1c5082f81`).
+Still contradicting P's outcome, outside this filing's page list: [[problems/wac-feedback-loop]] (presents `add_at_wac`
+as the backend mechanism — it was unreachable and is deleted), [[concepts/3-pool-cash-model]] and
+[[concepts/pre-frame-frame-separation]] (sold cost / cost basis "× FX" at the valuation or sale date), [[features/F-058]]
+(cites the deleted `wac_utils.py` and `fifo_utils.py`), [[domains/calculations]] (FIFO presented as the core cost-basis
+algorithm), [[features/F-048]] (`compute_weighted_avg_cost`).
+State at filing time: the plan's step P9 was still open — `dashboard.unrealizedAssetEffect`,
+`dashboard.unrealizedFxEffect`, `dashboard.unrealizedUnsplit` and `dataQuality.missingCostBasis` were in none of the
+four i18n catalogues, so until they land the tooltip rows and the new banner issue show key ids; the IT/FR/ES
+translations of the updated docs are translation debt (P11).
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
+worktree. `check_source_paths.py`: 0 missing paths on the ten pages created or edited; elsewhere 64 distinct missing
+paths remain (90 occurrences in 53 pages, down from 99 in 59 before this filing).
+
+## [2026-10-07] update | Workstream P — four more pages realigned with the single average cost
+Follow-up to the entries above: only the statements workstream P made false, annotated or marked superseded, history
+kept. [[problems/wac-feedback-loop]]: historical note on solution item 1 — `add_at_wac` was unreachable in production
+and is deleted with `wac_utils.py`; the auto receiver's cost basis comes from the WAC facade at `/validate` and
+`/commit`; the math-engine path now cites `financial_math/average_cost.py`. [[concepts/3-pool-cash-model]]: the sold
+cost C leaves at its historical cost in the report currency, with no rate (old formula kept, marked "until
+2026-10-07"); the caveat's per-SELL `get_summary()` sentence is marked superseded — the KPI realized P&L comes from the
+engine's `realized_sales`. [[concepts/pre-frame-frame-separation]]: `cost_basis` is historical in T with no rate (old
+line kept, marked), plus a one-line note that the pre-frame's step 3 now advances precomputed steps.
+[[features/F-058]]: the WAC row points to `financial_math/average_cost.py`, with a note on `wac_utils.py`; the
+`fifo_utils.py` row is left as it is — it was deleted on 2026-09-03, before P.
+Older drift deliberately left for the coordinator: [[domains/calculations]], [[features/F-048]], the LAST_BUY_PRICE and
+TRANSACTION_IMPLIED descriptions.
+Index: no summary changed. Graph: the graphify `--update` is **deferred** (graphify unavailable in this worktree).
+`check_source_paths.py`: 0 missing paths on three of the four pages; [[features/F-058]] keeps its one pre-P miss
+(`fifo_utils.py`); overall 64 distinct missing paths, 88 occurrences in 52 pages.
+
 ## [2026-10-07] file | A slow language switch tore the whole app down
 Triage of the auth 3a coverage red: both layouts unmounted the app on every svelte-i18n `isLoading`, so a
 Welcome language preview whose catalogue took more than 200 ms was rebuilt back to the persisted language.
 Fixed with a first-dictionary latch; regression E2E 3c and a layout unit case.
 Filed: [[problems/i18n-loading-gate-remounts-app]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-08] file | Two parallel passes lost all their coverage: a part renamed under `coverage combine`
+Analysis and fix of the 2026-10-07 coverage-combine failure (backend read 36.8 % in a green run). The resource
+tracker's part was renamed between the runner's listing and coverage's start, and coverage aborted the combine.
+The runner now combines the directory, keeps one parts directory per run and turns the pass red on a failed
+combine. The first real pass also found empty parts left by a SIGTERM during coverage's own save; these are
+removed and named. The causes are in the backlog.
+Filed: [[problems/coverage-combine-race-renamed-part]]. Updated: [[concepts/test-isolation-classes]] (the
+`COVERAGE_FILE` row).
+Graph: the graphify `--update` is **deferred** (graphify unavailable in this worktree).
+
+## [2026-10-08] update | Import Todo Signals: todos reach the bulk editor, worded like notices
+The concept page still said todos never leave the wizard and that `message` is an English fallback. Todos travel
+with their rows into the bulk editor (blockers gate Save All, warnings feed the save gate); `message` is the
+plugin's wording in the file's language, and `resolveBrimTodoMessage` now words them on every surface,
+the bulk editor included (workstream O, S19).
+Updated: [[concepts/import-todo-signals]].
 Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.

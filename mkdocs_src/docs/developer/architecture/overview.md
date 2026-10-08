@@ -73,6 +73,7 @@ For detailed architectural documentation of specific subsystems, see:
     - 🔎 See also: **[Asset Search & Link-Finder](../backend/assets/search_link_finder.md)** for the three-layer interactive search (on-site → `ddgs` web link-finder → `resolve_url`); best-effort, last-resort, and **never** used on automated price fetches.
 - 💱 **[FX Architecture](../backend/fx/architecture.md)**: Foreign Exchange system.
     - 🔀 See also: **[FX Configuration & Routing](../backend/fx/configuration.md)** for multi-provider setup.
+- 🧮 **[Financial Math Layer](../backend/transactions/wac.md#financial-math-layer)**: `backend/app/services/financial_math/`, the home of financial calculations — each takes the plain data of its problem and calls the services it needs, such as the FX service. Its first module is the single average-cost implementation.
 - 📉 **[Risk Engine](../backend/risk/architecture.md)**: Bulk risk analytics over a portfolio, a broker, an asset or a selection of assets — plugin catalogue, eligibility verdicts, and simulation and optimization in spawned worker pools.
 - 🧰 **[Tool Plugins](patterns/tool_plugins.md)**: Atomic, typed calculations behind a versioned catalogue (first tool: the PAC allocator), each computed in a spawned process the executor owns.
 - 🧭 **[Onboarding Guides](../frontend/onboarding.md)**: Welcome setup, intro tour and contextual guides, with versioned per-user progress kept by the backend.

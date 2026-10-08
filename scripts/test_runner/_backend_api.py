@@ -554,6 +554,16 @@ def api_broker_access(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Broker Access API tests", verbose=verbose)
 
 
+def api_account_deletion(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run account deletion API tests: the last-owner rule applied to every broker of the account."""
+    print_section("Account Deletion API Tests")
+    print_info("Testing DELETE /auth/users/me: brokers solely owned go with their transactions and files")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_account_deletion_api.py", test_names)
+    return run_command(cmd, "Account deletion API tests", verbose=verbose)
+
+
 def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run broker multi-user role tests."""
     print_section("Broker Multi-User Role Tests")
@@ -746,6 +756,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
+    add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")

@@ -4,6 +4,38 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 🆔 Gli id degli asset (e delle altre tabelle) non si riusano più ✅
+
+**Data completamento:** 8 Ottobre 2026
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/Phase_0/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` (workstream L); commit/SHA in attesa del commit manuale
+
+### Risultato
+
+- `AUTOINCREMENT` sulle tabelle i cui id escono dal backend e restano salvati (censimento del piano, §1.2, approvato dal developer):
+  `users`, `brokers`, `assets`, `transactions`, `fx_conversion_routes`, `asset_events`. Fuori le tabelle interne e le serie
+  (`price_history`, `fx_rates`).
+- I DB nuovi lo hanno dallo schema; i modelli dichiarano `sqlite_autoincrement`, così anche `create_all` lo produce. Un test di
+  schema fissa il censimento, perché SQLAlchemy non rilegge AUTOINCREMENT e una futura migrazione batch lo perderebbe.
+- I DB esistenti li converte un sottosistema nuovo, i **fix post-migrazione** (`backend/app/db/post_migration/`), all'avvio dopo
+  `alembic upgrade head` e con lo script offline `python -m backend.app.db.post_migration [--dry-run]` a server spento. La
+  conversione evita il rischio annotato qui il 01/10, le chiavi esterne accese durante le migrazioni:
+  - connessione SQLite diretta, chiavi esterne spente fuori dalla transazione;
+  - `integrity_check` prima, poi un backup, che si cancella dopo un fix verificato e resta se qualcosa fallisce;
+  - una transazione con verifiche, e l'avvio che non si blocca mai.
+- Gli id restano identici; da lì un id cancellato non torna più. Le cartelle `broker_<id>` già orfane vanno in quarantena e
+  poi si cancellano, così il primo broker nuovo non eredita i file di uno vecchio.
+- Provato su un DB reale della corsia (7459 righe): dati e indici identici, chiavi esterne pulite, seconda esecuzione senza
+  niente da fare.
+
+### Ancora aperto
+
+- Decidere se `BenchmarkSelect` (Risk) può tornare a cancellare gli id spariti: adesso un id non si riusa più.
+- Il rapporto di fattibilità del motore FIFO
+  (`LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v1/high-level-plan_v1-feasibility-report.md:300`) dava la PK per
+  «autoincrementante mai riusata»: adesso per `transactions` è vero.
+
+---
+
 ## 🚨 Feedback import e UX urgenti — Gruppo E ✅
 
 **Data completamento tecnico e applicazione al checkout:** 9 Settembre 2026

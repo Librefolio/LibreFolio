@@ -352,6 +352,12 @@
         // When open with inlineSearch, handle keyboard navigation here too
         if (inlineSearch) {
             handleSearchKeydown(event);
+        } else if (event.key === 'Escape') {
+            // Open list, focus back on the trigger (Shift+Tab from its search box): the Escape closes
+            // the list, and the modal around the select stays open.
+            event.preventDefault();
+            event.stopPropagation();
+            closeDropdown();
         }
     }
 
@@ -378,7 +384,10 @@
                 }
                 break;
             case 'Escape':
+                // Reached only with the list open: the select consumes this Escape, so a modal
+                // around it (ModalBase closes on the same key bubbling up) stays open.
                 event.preventDefault();
+                event.stopPropagation();
                 closeDropdown();
                 break;
         }

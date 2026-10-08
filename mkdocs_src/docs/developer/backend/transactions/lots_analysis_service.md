@@ -70,7 +70,7 @@ Top-level fields always present:
 | `asset_id` | Requested asset |
 | `target_currency` | Final response currency |
 | `quote_base_quantity` | Asset qbq, needed by frontend price/WAC axis |
-| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`) |
+| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` engine run becomes `DEGRADED` when a requested WAC line misses a conversion or a cost basis (see [WAC Lines](#wac-lines)) |
 | `calculation_metadata` | Broker scope, selection, requested/computed date bounds, generation date |
 | `data_quality` | FIFO/data-quality issues mapped to UI-friendly DTOs |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) mapped from the engine, `None` unless `LOT_SUMMARY` requested |
@@ -106,7 +106,8 @@ High-level flow:
 4. Collect needed FX pairs with `_collect_fx_needs()` / `_collect_performance_fx_needs()`, then batch-load rates through `_FxRateResolver`.
 5. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `_extract_income_outputs()` and `_extract_cost_outputs()` (allocation itself happens inside the engine, not here).
 6. Build one qbq-aware resolver series with `build_asset_price_series()`; feed both valuation maps and price-history lines from it.
-7. Emit only requested DTO sections.
+7. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call and add their gaps — missing rates, unknown costs — to `data_quality` (see [WAC Lines](#wac-lines)).
+8. Emit only requested DTO sections.
 
 ### 💱 FX Conversion
 
@@ -122,8 +123,9 @@ Service converts:
 - closure proceeds / realized P&L
 - native resolver marks from `build_asset_price_series()`
 - dividend / interest cash flows
-- WAC inputs
 - performance-history external flows
+
+The WAC lines do not go through `_FxRateResolver`: `compute_average_costs()` converts each acquisition itself, at its own date.
 
 ### ⚠️ qbq Scaling Gotcha
 
@@ -311,6 +313,31 @@ Also note: `PERFORMANCE_HISTORY` ignores lot selection entirely by schema/implem
 
 ---
 
+## 📈 WAC Lines {: #wac-lines }
+
+`BROKER_WAC_HISTORY` and `CUMULATIVE_WAC_HISTORY` come from LibreFolio's single average-cost implementation, `compute_average_costs()` (see [WAC & Cost Basis](wac.md)). The lines are computed only when one of the two analyses is requested.
+
+`_compute_average_cost_lines()` maps the loaded asset transactions (ordered by date, then id) with `cost_movement_from_transaction()` — split-linked adjustments become splits — and makes **one** call for all the lines:
+
+| Line key | Movements | Feeds |
+|----------|-----------|-------|
+| Broker id | That broker's movements | `broker_wac_history` (`BrokerWACHistoryPoint`) |
+| `"__all__"` (`_ALL_BROKERS`) | Every broker in scope, pooled: a transfer between two brokers in scope leaves at the pool's average and comes back in at its cost basis | `cumulative_wac_history` (`CumulativeWACHistoryPoint`) |
+
+The report currency is the analysis `target_currency`, with `asset_leg=False`. Each acquisition is converted at its own date; quantities are the brokers' own, with no owner share applied.
+
+`_average_cost_points(line, history_dates)` emits `(date, wac, pool_qty)` for each history date from the line's first movement on, reading `line.state_at(date)`: `wac` is `unit_cost_report` (per single unit, in the target currency), `pool_qty` the pool's quantity. **A date on which the pool lacks part of its cost has no point** — a missing conversion or an acquisition without cost basis — so the chart shows a gap rather than a wrong average. `_trim_dates()` then cuts the points to the displayed range.
+
+`_report_average_cost_gaps(data_quality, lines, target_currency, asset)` puts in the response what the lines could not compute, through the same `DerivedViewsBuilder.build_data_quality_report()` as the Dashboard banner:
+
+- **Missing conversions** (report leg): `data_quality.missing_fx_pairs` receives one `WACMissingPairInfo(pair, dates)` per pair, and `data_quality.issues` the `MISSING_FX_MARKET` / `MISSING_FX_RATES` issues derived from them, given the configured and real-provider pair sets of `load_configured_fx_pair_sets()`;
+- **Acquisitions of unknown cost** (`unknown_cost_movement_ids` on any line): one `MISSING_COST_BASIS` issue for the analysed asset, built with `missing_cost_basis_assets=[(asset.id, asset.display_name)]` — the same issue as the portfolio banner;
+- `calculation_status` turns from `COMPLETE` to `DEGRADED` when a line misses a rate **or** a cost basis: the gap is isolable.
+
+In the panel, the issues appear in `LotDataQualityBanner`, grouped by code and without call-to-action buttons.
+
+---
+
 ## 🕰️ History Builders
 
 Key builders:
@@ -321,7 +348,7 @@ Key builders:
 - `_build_value_history()` — continues closed lots to `date_to` via `_lot_history_end_date(..., extend_closed=True)`
 - `_build_return_history()` — same continuity rule, plus `relative_return`
 - `_build_price_history()` — truncates at closure date, no post-close points
-- `_build_broker_wac_history()` / `_build_cumulative_wac_history()` — WAC snapshots via `_compute_wac_series()`
+- `_build_broker_wac_history()` / `_build_cumulative_wac_history()` — WAC points read from the average-cost lines via `_average_cost_points()` (see [WAC Lines](#wac-lines))
 - `_build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows
 
 Important nuance: `date_from` trims emitted rows only. Engine still starts from earliest in-scope asset transaction so FIFO state stays correct.
@@ -331,5 +358,6 @@ Important nuance: `date_from` trims emitted rows only. Engine still starts from 
 ## 🔗 Related
 
 - 🧠 **[FIFO Lot Engine](fifo_lot_engine.md)** — Pure event-sourced FIFO core
+- ⚖️ **[WAC & Cost Basis](wac.md)** — The average-cost function behind the WAC lines
 - 📖 **[FIFO Lot Analysis Theory](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Financial interpretation of lot metrics
 - 🖥️ **[Lots Analysis Frontend](../../frontend/components/features/lots-analysis.md)** — `LotsAnalysisPanel` and chart/table consumers

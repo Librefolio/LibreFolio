@@ -108,7 +108,7 @@
                                 <dd class="text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-kind">{modeKindText($t, mode.kind)}</dd>
                                 <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
                                     {$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
-                                    <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})} help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {default: 'Every proposed order is a multiple of this value. By number of units: 1 = whole units only, 0.001 = fractions down to three decimals. By amount: the smallest amount you can enter, for example 0.01.'})} />
+                                    <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})} help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {default: 'Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.'})} />
                                 </dt>
                                 <dd class="tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-step">{modeIncrementText($t, mode)}</dd>
                                 <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">

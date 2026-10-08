@@ -223,6 +223,15 @@ def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Test runner CLI contract tests", verbose=verbose)
 
 
+def utils_coverage_combine(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that coverage parts renamed or landing late are still combined, that run directories never pile up, that an empty finished part is dropped, and that a failed combine is a red pass."""
+    print_section("Utils: Coverage Combine")
+    print_info("Testing: scripts/test_runner/_coverage.py (combine_coverage_dir, _finalize_coverage), _executor.py (combine_coverage), _cli.py (parallel pass verdict), _suites.py (_clean_coverage_dirs)")
+    print_info("Tests: part renamed while coverage starts, part landing after coverage's listing, shared-backend parts in the cwd, failed combine turns the pass red, run directories, --cov-clean-backend on parts/, empty finished parts")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_coverage_combine.py", test_names)
+    return run_command(cmd, "Coverage combine tests", verbose=verbose)
+
+
 def utils_translation_code_blocks(verbose: bool = False, test_names: list = None) -> bool:
     """Test that translated code blocks keep the source indentation (Aphra pipeline + validator)."""
     print_section("Utils: Translation Code Blocks")
@@ -376,6 +385,15 @@ Tests for utility modules and helper functions:
         desc="test_names → pytest -k semantics on the real coverage-js-adapter action, registry dispatch forwarding, coverage_js.py compile check",
         # Monkeypatches run_command/subprocess.run and reads source text only;
         # no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coverage-combine",
+        utils_coverage_combine,
+        name="Coverage Combine",
+        desc="Coverage parts are combined as a directory: a part coverage renames while the combine starts and one landing after coverage's own listing are both folded in with nothing left behind, the shared backend's parts in the cwd too (.coveragerc is never a part), and a failed combine turns the parallel pass red; a run's parts/run-* directory goes once combined and stays, named with the unreadable part, when not; --cov-clean-backend empties parts/ of coverage data and keeps the junit reports; a finished part holding coverage's schema and no rows is removed and named without failing the combine (worker parts and the shared backend's alike), one with a transient name is never judged empty",
+        # Temporary files and coverage subprocesses on them, cwd moved into tmp_path: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(

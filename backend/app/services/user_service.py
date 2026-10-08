@@ -4,6 +4,7 @@ User Service
 Business logic for user management, used by both API and CLI.
 """
 
+from dataclasses import dataclass, field
 from typing import Optional
 
 import structlog
@@ -12,7 +13,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, User, UserSettings
 from backend.app.services.auth_service import hash_password
+from backend.app.services.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
+
+
+@dataclass(frozen=True)
+class AccountDeletion:
+    """What deleting an account took with it (plan 34_accountAndIdReuse §2.1).
+
+    ``deleted_broker_ids``: the brokers the user was the last owner of, deleted with the
+    account (their transactions in the same commit, their BRIM files by the caller after it).
+    """
+
+    deleted_broker_ids: list[int] = field(default_factory=list)
+
+
+class AccountDeletionError(Exception):
+    """A broker of the account could not be released: nothing was deleted."""
+
 
 logger = structlog.get_logger(__name__)
 
@@ -330,33 +348,49 @@ async def count_superusers(session: AsyncSession) -> int:
     return result.scalar() or 0
 
 
-async def delete_user(session: AsyncSession, user_id: int) -> bool:
+async def delete_user(session: AsyncSession, user_id: int) -> Optional[AccountDeletion]:
     """
-    Delete a user and all associated data.
+    Delete a user, applying the last-owner rule to every broker the user can access.
 
-    This is a destructive operation that cascades to:
-    - All brokers owned by the user
-    - All transactions
-    - All user settings
-    - All sessions
+    Broker by broker, the same rule as leaving a broker (``BrokerService.leave_broker``, F4):
+    a broker the user was the last OWNER of is deleted with its transactions; on any other
+    broker only the user's access goes. Then the user, with the rows that cascade from it
+    (settings, onboarding progress), and one commit.
+
+    All or nothing: if a broker cannot be released, or anything fails, the session is rolled
+    back and the error propagates — nothing is deleted. The deleted brokers' BRIM files live
+    on disk: the caller removes them after this commit.
 
     Args:
         session: Database session
         user_id: ID of user to delete
 
     Returns:
-        True if deleted, False if user not found
+        What went with the account, or ``None`` if the user does not exist
     """
     user = await get_user_by_id(session, user_id)
     if not user:
-        return False
+        return None
+    username = user.username
 
-    # Delete user (cascades to related data via DB constraints)
-    await session.delete(user)
-    await session.commit()
+    broker_ids = (await session.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id).order_by(BrokerUserAccess.broker_id))).scalars().all()
+    broker_service = BrokerService(session)
+    deleted_broker_ids: list[int] = []
+    try:
+        for broker_id in broker_ids:
+            success, message, broker_deleted = await broker_service.leave_broker(broker_id, user_id)
+            if not success:
+                raise AccountDeletionError(f"Broker {broker_id} could not be released: {message}")
+            if broker_deleted:
+                deleted_broker_ids.append(broker_id)
+        await session.delete(user)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
 
-    logger.warning("User deleted", user_id=user_id, username=user.username)
-    return True
+    logger.warning("User deleted", user_id=user_id, username=username, brokers_deleted=deleted_broker_ids)
+    return AccountDeletion(deleted_broker_ids=deleted_broker_ids)
 
 
 async def search_users(

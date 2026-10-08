@@ -36,6 +36,9 @@ Precedenti e collegati:
 - Seguito: [plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md)
   — i marcatori degli eventi spariscono con «Tutti» sul hit della cache prezzi (2026-10-07). È una regressione di
   `2d22130bd`.
+- Seguito: [plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md)
+  — il dividendo diventa oro, e le etichette dell'asse di Candele e Proventi seguono uno schema nuovo (2026-10-07).
+  **Sostituisce le regole sul testo di D4 e D4-bis** (§7 e «S7 — passo 0»); i separatori restano.
 
 ## Stato di esecuzione
 

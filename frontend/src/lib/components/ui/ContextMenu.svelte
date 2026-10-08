@@ -106,10 +106,12 @@
                 onClose();
             }
         }
-        // Close on Escape
+        // Close on Escape. The menu is the top layer: it consumes the key, so a modal under it
+        // (ModalBase closes on the same Escape bubbling up) stays open — one Escape, one layer.
         function handleKeyDown(e: KeyboardEvent) {
             if (e.key === 'Escape') {
                 e.preventDefault();
+                e.stopPropagation();
                 onClose();
             }
         }

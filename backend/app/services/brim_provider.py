@@ -1200,6 +1200,29 @@ def delete_file(file_id: str) -> bool:
         return _delete_file_locked(file_id)
 
 
+def delete_files_for_brokers(broker_ids: List[int]) -> int:
+    """Delete every BRIM import file that belongs to the given, already deleted, brokers.
+
+    BRIM files live on the filesystem, not in the database, so the ORM cascade that removes a
+    broker and its transactions never touches them: the callers run this after the commit that
+    deleted the brokers — ``DELETE /brokers``, the last owner leaving a broker, an account
+    deletion. Best-effort: only files whose ``target_broker_id`` matches exactly are removed;
+    legacy files with no broker (``None``) are left untouched.
+
+    Returns the number of files removed. Synchronous filesystem I/O: async callers run it
+    through ``asyncio.to_thread``.
+    """
+    removed = 0
+    for broker_id in broker_ids:
+        try:
+            for file_info in list_files(broker_ids=[broker_id]):
+                if file_info.target_broker_id == broker_id and delete_file(file_info.file_id):
+                    removed += 1
+        except Exception as exc:  # best-effort: the broker is already deleted
+            logger.warning("Failed to clean BRIM files for deleted broker", broker_id=broker_id, error=str(exc))
+    return removed
+
+
 def _delete_file_locked(file_id: str) -> bool:
     file_info = get_file_info(file_id)
     if not file_info:

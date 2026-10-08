@@ -56,28 +56,30 @@ $$
 $$
 
 $$
-\mathrm{CB}(a,b,t) = q(a,b,t) \cdot w(a,b,t) \cdot \mathrm{fx}\bigl(\mathrm{ccy}_w, C^*, t\bigr)
+\mathrm{CB}(a,b,t) = q(a,b,t) \cdot w(a,b,t)
 $$
 
 $$
 \mathrm{UGL}(a,b,t) = \mathrm{MV}(a,b,t) - \mathrm{CB}(a,b,t)
 $$
 
-Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$.
+Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$, kept in $C^*$ at historical rates (§4): the cost basis takes no exchange rate at $t$, so for a foreign asset the exchange-rate effect is part of $\mathrm{UGL}$.
 
 ---
 
 ## 📐 4. WAC Iterative Update
 
-Maintained per-position $(a,b)$ with pool state $(\hat{q}, \hat{c})$:
+Maintained per-position $(a,b)$ with pool state $(\hat{q}, \hat{c})$, the cost $\hat{c}$ kept in $C^*$:
 
-**Acquisition** (qty $> 0$, unit cost $u$):
+**Acquisition** (qty $> 0$, amount $P$ paid in currency $c$ on date $d$):
 
 $$
 \hat{q}_{\text{new}} = \hat{q} + q_{\text{tx}}, \quad
-\hat{c}_{\text{new}} = \hat{c} + u \cdot q_{\text{tx}}, \quad
+\hat{c}_{\text{new}} = \hat{c} + P \cdot \mathrm{fx}(c, C^*, d), \quad
 w = \frac{\hat{c}_{\text{new}}}{\hat{q}_{\text{new}}}
 $$
+
+$P$ is the cash paid for a BUY, or the per-unit cost basis override times $q_{\text{tx}}$ for a TRANSFER or ADJUSTMENT; $\mathrm{fx}(C^*, C^*, d) = 1$. When no rate exists on or before $d$, or the acquisition has no cost basis, the quantity enters and the cost does not: the position's cost is flagged incomplete instead of counting zero.
 
 **Reduction** (qty $< 0$):
 
@@ -86,6 +88,8 @@ w_{\text{pre}} = \frac{\hat{c}}{\hat{q}}, \quad
 \hat{q}_{\text{new}} = \hat{q} - |q_{\text{tx}}|, \quad
 \hat{c}_{\text{new}} = \hat{q}_{\text{new}} \cdot w_{\text{pre}}
 $$
+
+**Split** (linked to a split event): $\hat{q}$ changes, $\hat{c}$ does not.
 
 !!! info "Ordering"
 
@@ -192,17 +196,17 @@ Unallocated fees/income without `asset_id` are grouped per broker as other perio
 
 ## 📐 8. Realized Gain/Loss
 
-On SELL of $|q_s|$ units from position $(a,b)$:
+On SELL of $|q_s|$ units from position $(a,b)$ on date $t$:
 
 $$
-C = |q_s| \cdot w_{\text{pre}}(a,b) \cdot \mathrm{fx}(\mathrm{ccy}_w, C^*, t)
+C = |q_s| \cdot w_{\text{pre}}(a,b)
 $$
 
 $$
-\mathrm{Realized} = P_{\text{sell}} - C
+\mathrm{Realized} = P_{\text{sell}} \cdot \mathrm{fx}(\mathrm{ccy}_{\text{sell}}, C^*, t) - C
 $$
 
-Where $w_{\text{pre}}$ is the WAC **before** the pool reduction (same value used by 3-pool SELL rule above).
+Where $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units sold leave at their historical cost, with no conversion at the sale date. A sale whose proceeds cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
 
 ---
 

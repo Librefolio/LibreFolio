@@ -97,9 +97,14 @@ describe('lotColor', () => {
 });
 
 describe('incomeEventColor', () => {
-    it('uses teal for dividends and violet for interest, per theme', () => {
-        expect(incomeEventColor('DIVIDEND', false)).toBe('#0f766e');
-        expect(incomeEventColor('DIVIDEND', true)).toBe('#2dd4bf');
+    it('uses gold for dividends and violet for interest, per theme', () => {
+        // WHY: the developer's decision «Dividendo oro, anche nel pannello lotti» — the
+        // dividend is gold here as in the dashboard's Income bars, the same pair of hexes
+        // (GrowthChart's COLORS.dividend). Light '#b08d00' is 3.16:1 on white, above the
+        // 3:1 that WCAG 1.4.11 asks of a graphical object, which Tailwind's yellow-600
+        // (#ca8a04, 2.94:1) misses; dark '#facc15'. Interest keeps its violet.
+        expect(incomeEventColor('DIVIDEND', false)).toBe('#b08d00');
+        expect(incomeEventColor('DIVIDEND', true)).toBe('#facc15');
         expect(incomeEventColor('INTEREST', false)).toBe('#6d28d9');
         expect(incomeEventColor('INTEREST', true)).toBe('#a78bfa');
     });

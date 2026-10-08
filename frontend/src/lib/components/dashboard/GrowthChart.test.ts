@@ -47,8 +47,10 @@
  * the locale's glyphs (D23, D23b), persistence of the mode and the P&L submode (S5), the
  * synthetic-candle caption (S9), the grid's left inset (developer review, 2026-09-29), the
  * ladder x axis of the Candles and Income submodes (S7) — calendar buckets (06/10/2026), the
- * partial and in-progress ones, the rung offer at measured plot widths — with the rung the ladder
- * opens on (B12: k4 G2, Income on 1M), the money axis ticks: distinct, in the locale's glyphs, with the edge the
+ * partial and in-progress ones, the rung offer at measured plot widths, the labels named by the
+ * start of their period and turned 45° together when one does not fit (07/10/2026) — with the rung the ladder
+ * opens on (B12: k4 G2, Income on 1M), the ICU syntax of the ladder labels' two catalogue keys in
+ * the four catalogues (S7a), the money axis ticks: distinct, in the locale's glyphs, with the edge the
  * chart fixes left unlabelled and blank, so the grid does not measure it (S7b: D18, D23, D25, k4 G1),
  * and the purchase value of the Income submode: one name for its two halves, their total in
  * the tooltip, each half in its Abs colour (S8: R11, D26).
@@ -69,8 +71,11 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
  * on its normal path: it disposes and re-inits only when the instance's DOM no longer
  * matches the bound container. One mount therefore means exactly one instance, and the
  * tests assert that.
+ *
+ * `format.getTextRect` is the measure the ladder axis sizes its label box with (M‴, 08/10/2026):
+ * `FAKE_TEXT_PX_PER_CHAR` px a character, and every font it is asked in is kept in `measuredFonts`.
  */
-const {chartInstances, echartsModule, fakeGeometry, DEFAULT_PLOT_WIDTH_PX} = vi.hoisted(() => {
+const {chartInstances, echartsModule, fakeGeometry, measuredFonts, DEFAULT_PLOT_WIDTH_PX, FAKE_FONT_FAMILY, FAKE_TEXT_PX_PER_CHAR} = vi.hoisted(() => {
     interface SetOptionCall {
         option: Record<string, unknown>;
         opts: unknown;
@@ -100,11 +105,31 @@ const {chartInstances, echartsModule, fakeGeometry, DEFAULT_PLOT_WIDTH_PX} = vi.
         emit: (event: string) => void;
         /** Puts a window in the chart's own state, where ECharts keeps it after a user zoom (S7). */
         setZoom: (start: number, end: number) => void;
-        /** Present only while `fakeGeometry.measured` is on: the laid-out grid `syncPlotGeometry` reads. */
-        getModel?: () => {getComponent: (type: string) => {coordinateSystem: {getRect: () => GridRect}} | undefined};
+        /**
+         * Present only while `fakeGeometry.measured` is on: the laid-out grid `syncPlotGeometry` reads, and the global
+         * option's `get(path)`, which answers the text family the ladder measures its labels in (M‴).
+         */
+        getModel?: () => {getComponent: (type: string) => {coordinateSystem: {getRect: () => GridRect}} | undefined; get: (path: string | readonly string[]) => unknown};
     }
 
     const chartInstances: FakeChart[] = [];
+
+    /** The global text family the measured chart answers. WHY recognisable: a label measured in any other font shows in the diff. */
+    const FAKE_FONT_FAMILY = 'LF Test Sans';
+    /** The fake measure's width of one character, in px. WHY a round number: the expected box is then 7 × a text's length. */
+    const FAKE_TEXT_PX_PER_CHAR = 7;
+    /** Every font `format.getTextRect` was asked in, in call order. Reset before every case. */
+    const measuredFonts: string[] = [];
+    /** What the measured chart's global option holds: ECharts' `textStyle`, its family only. */
+    const GLOBAL_OPTION: Record<string, unknown> = {textStyle: {fontFamily: FAKE_FONT_FAMILY}};
+
+    /** `get(path)` on the global option, as ECharts' Model reads it: an array of keys, or a string split on dots. */
+    function getGlobal(path: string | readonly string[]): unknown {
+        const keys = typeof path === 'string' ? path.split('.') : path;
+        let node: unknown = GLOBAL_OPTION;
+        for (const key of keys) node = node != null && typeof node === 'object' ? (node as Record<string, unknown>)[key] : undefined;
+        return node;
+    }
 
     /** Plot width reported to the resolution ladder. 40 daily buckets over 1200px is a
      *  density of 0.033 bucket/px, far under the 1.3 high-density threshold, so the
@@ -168,7 +193,10 @@ const {chartInstances, echartsModule, fakeGeometry, DEFAULT_PLOT_WIDTH_PX} = vi.
         };
 
         if (fakeGeometry.measured) {
-            chart.getModel = () => ({getComponent: (type: string) => (type === 'grid' ? {coordinateSystem: {getRect: () => ({...MEASURED_GRID, width: fakeGeometry.plotWidthPx})}} : undefined)});
+            chart.getModel = () => ({
+                getComponent: (type: string) => (type === 'grid' ? {coordinateSystem: {getRect: () => ({...MEASURED_GRID, width: fakeGeometry.plotWidthPx})}} : undefined),
+                get: getGlobal,
+            });
         }
 
         chartInstances.push(chart);
@@ -177,9 +205,21 @@ const {chartInstances, echartsModule, fakeGeometry, DEFAULT_PLOT_WIDTH_PX} = vi.
 
     return {
         chartInstances,
-        echartsModule: {init: (dom: unknown) => createFakeChart(dom)},
+        echartsModule: {
+            init: (dom: unknown) => createFakeChart(dom),
+            // WHY: `vi.mock` throws on any export its factory leaves out, and the ladder reads `echarts.format` to measure a label.
+            format: {
+                getTextRect(text: string, font: string) {
+                    measuredFonts.push(font);
+                    return {x: 0, y: 0, width: text.length * FAKE_TEXT_PX_PER_CHAR, height: 14};
+                },
+            },
+        },
         fakeGeometry,
+        measuredFonts,
         DEFAULT_PLOT_WIDTH_PX,
+        FAKE_FONT_FAMILY,
+        FAKE_TEXT_PX_PER_CHAR,
     };
 });
 
@@ -187,10 +227,14 @@ vi.mock('echarts', () => echartsModule);
 
 import {tick} from 'svelte';
 import {get} from 'svelte/store';
-import {addMessages, dictionary, waitLocale} from 'svelte-i18n';
+import {addMessages, dictionary, getMessageFormatter, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
-import {_, locale} from '$lib/i18n';
+import {_, locale, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import es from '$lib/i18n/es.json';
+import fr from '$lib/i18n/fr.json';
+import itCatalogue from '$lib/i18n/it.json';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
@@ -886,6 +930,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
     chartInstances.length = 0;
+    measuredFonts.length = 0;
     // Every mount starts from the defaults by construction. The memo cases click the toggles
     // too, and every click is now a real write.
     storage.clear();
@@ -1650,9 +1695,17 @@ describe('GrowthChart grid left inset (developer review, 2026-09-29)', () => {
  *
  * Every expected value is derived by hand from the fixtures' per-day formulas and the calendar, and was
  * cross-checked with an independent computation outside this repository; none comes from running the
- * planner or the bucket module. The label strings (`Jan 4`, `Apr 30`) are the planner's Part A contract in
- * the file's locale (en) on this machine's ICU, which `growthLadderAxis.test.ts` checks first (A0): they are
- * dates this file chose, not UI translations.
+ * planner or the bucket module.
+ *
+ * The labels follow the developer's label contract of 07/10/2026, which replaces the texts of D4 and D4-bis
+ * (the separators stay D4's). Each bucket is named by the START of its calendar period, as its tooltip header
+ * is. On a day scale the first label carries its month and the year shows only where it changes; on a month
+ * scale the first label and each new year carry the year. When one label does not fit side by side, all of
+ * them turn 45°, and only when even turned they do not fit are they thinned. The day and month strings
+ * (`Dec 29`, `Apr`) are Intl output in the file's locale (en) on this machine's ICU, which
+ * `growthLadderAxis.test.ts` checks first (A0): dates this file chose, not UI translations. The quarter and
+ * the year form are translations, so every case resolves them through i18n (`quarterLabel`, `withYear`) and
+ * never types them; S7a guards their ICU syntax in the four catalogues.
  *
  * The rung offer (B7, B8) is pinned where the developer's table of 06/10/2026 fixes it: the dashboard's
  * preset windows on that day, at the plot widths measured on the dashboard that day — 484, 573 and 734 px
@@ -1701,6 +1754,35 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
 
     /** 730 days (2024-10-01 .. 2026-09-30) at 1M: 24 calendar months, October 2024 to September 2026. */
     const MONTH_BUCKETS_730 = 24;
+    /** Their closings, each month's last day. WHY a literal: the calendar is the oracle. */
+    const MONTH_CLOSINGS_730 = [
+        '2024-10-31',
+        '2024-11-30',
+        '2024-12-31',
+        '2025-01-31',
+        '2025-02-28',
+        '2025-03-31',
+        '2025-04-30',
+        '2025-05-31',
+        '2025-06-30',
+        '2025-07-31',
+        '2025-08-31',
+        '2025-09-30',
+        '2025-10-31',
+        '2025-11-30',
+        '2025-12-31',
+        '2026-01-31',
+        '2026-02-28',
+        '2026-03-31',
+        '2026-04-30',
+        '2026-05-31',
+        '2026-06-30',
+        '2026-07-31',
+        '2026-08-31',
+        '2026-09-30',
+    ];
+    /** The 730 days at 3M: eight quarters, Q4 2024 to Q3 2026, each closing on its quarter's last day. WHY a literal: the calendar is the oracle. */
+    const QUARTER_CLOSINGS_730 = ['2024-12-31', '2025-03-31', '2025-06-30', '2025-09-30', '2025-12-31', '2026-03-31', '2026-06-30', '2026-09-30'];
     /** The window the B9–B11 cases zoom to: buckets 18..23, April to September 2026, each closing on its month's last day. WHY a literal: the calendar is the oracle. */
     const MONTH_WINDOW_FIRST = 18;
     const MONTH_WINDOW_CLOSINGS = ['2026-04-30', '2026-05-31', '2026-06-30', '2026-07-31', '2026-08-31', '2026-09-30'];
@@ -1838,6 +1920,25 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         return text;
     }
 
+    /**
+     * A ladder label's year form as the axis prints it: `dashboard.pnlAxisWithYear` resolved with the values the
+     * component must pass, never a literal. WHY: the form is a translation (en `Jan 5 '26`, it `5 gen 26`); the
+     * label and the two-digit year inside it are Intl output, chosen by the case. Not through `htmlText`: an axis
+     * label is canvas text, so the user reads `$_()` output as it is.
+     */
+    function withYear(label: string, year: string): string {
+        const text = get(_)('dashboard.pnlAxisWithYear', {values: {label, year}});
+        if (text === 'dashboard.pnlAxisWithYear') throw new Error('dashboard.pnlAxisWithYear does not resolve in the file locale');
+        return text;
+    }
+
+    /** A quarter as the axis prints it: `dashboard.pnlAxisQuarter` resolved, never a literal. WHY: `Q4` is English, `T4` the three other locales. */
+    function quarterLabel(quarter: 1 | 2 | 3 | 4): string {
+        const text = get(_)('dashboard.pnlAxisQuarter', {values: {quarter}});
+        if (text === 'dashboard.pnlAxisQuarter') throw new Error('dashboard.pnlAxisQuarter does not resolve in the file locale');
+        return text;
+    }
+
     /** The two lines a ladder bucket can carry under its header. WHY: a typo in a key is a type error. */
     type BucketLineKey = 'chart.tooltip.partialBucket' | 'chart.tooltip.currentBucket';
     const PARTIAL_LINE: BucketLineKey = 'chart.tooltip.partialBucket';
@@ -1881,8 +1982,25 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
     interface XAxisOption {
         type?: unknown;
         data?: unknown;
-        axisLabel?: {formatter?: unknown; interval?: unknown};
+        axisLabel?: {formatter?: unknown; interval?: unknown; rotate?: unknown; width?: unknown; lineHeight?: unknown};
         splitLine?: {interval?: unknown};
+    }
+
+    /**
+     * The height of one turned label's row across its text, in px: the unit the label contract thins turned labels by
+     * (07/10/2026), 14.3 since M‴ (08/10/2026). WHY not 14: with every label boxed (B6d), ECharts hides an edge label whose
+     * box meets its neighbour's, and in Chromium a 14 px line is 14.28 px tall, so the pitch across must exceed it.
+     */
+    const LABEL_ROW_PX = 14.3;
+
+    /**
+     * The thinning step of a turned axis: the smallest k with k · slot · sin 45° ≥ one label row, so two drawn labels,
+     * k buckets apart, are a full row apart across their slant. WHY computed: it is the contract's formula, not a pin.
+     */
+    function rotatedStep(slotPx: number): number {
+        let step = 1;
+        while (step * slotPx * Math.SQRT1_2 < LABEL_ROW_PX) step += 1;
+        return step;
     }
 
     /** ECharts' category-axis callbacks: `formatter(value, index)`, `interval(index, value)`. WHY: the cases call them the way ECharts does. */
@@ -1905,6 +2023,17 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         }
         return undefined;
     }
+
+    /** The texts an axis draws: the formatter's answer on each bucket its interval shows. WHY: the label box is sized on these, read from the axis itself. */
+    function drawnTexts(axis: XAxisOption | undefined, closings: readonly string[]): string[] {
+        const format = fn<LabelFormatter>(axis?.axisLabel?.formatter);
+        const showLabel = fn<IntervalCallback>(axis?.axisLabel?.interval);
+        if (format === null || showLabel === null) return [];
+        return closings.flatMap((date, index) => (showLabel(index, date) === true ? [String(format(date, index))] : []));
+    }
+
+    /** The box the fake measure makes for `texts`: as wide as the longest. WHY: the fake measures `FAKE_TEXT_PX_PER_CHAR` px a character. */
+    const boxWidthOf = (texts: readonly string[]) => FAKE_TEXT_PX_PER_CHAR * Math.max(0, ...texts.map((text) => text.length));
 
     /** `value` when it is a function, else null. WHY: an axis may carry a number or nothing where the planner puts a callback. */
     function fn<T>(value: unknown): T | null {
@@ -2177,11 +2306,17 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
 
     // --- B6-B8: one category axis, labelled by the planner, and an honest offer ----------------
 
-    it('B6 Income, 40 days, measured, 1W: the category axis carries the seven closings, labels each one and draws each separator', async () => {
-        // WHY: defects 2 and 3, the axis must name the buckets it draws — Sundays, then Feb 9, the last day of the week
-        // in progress. The label strings are the planner's Part A contract on this ICU (A0), dates chosen here, not UI translations.
+    it('B6 Income, 40 days, measured, 1W: the category axis carries the seven closings, names each week by its Monday side by side, labels each one and draws each separator', async () => {
+        // WHY: defects 2 and 3, and the label contract of 07/10/2026: the axis names each bucket by the start of its
+        // calendar period, as the tooltip header does. Weeks start on Monday, so the first week — partial, the data start
+        // on Thu Jan 1 — is named by its Monday, Dec 29; the year appears only where it changes (Jan 5, the first Monday
+        // of 2026), never on the first label of a day scale; Feb 9 is the Monday of the week in progress. Seven labels on
+        // 527 px leave at least 12.3 px between neighbours, over the 8 px minimum, so they stay side by side (rotate 0)
+        // and every one is drawn. Day and month texts are Intl output in the file's locale, dates chosen here; the year
+        // form is a translation, resolved through i18n.
         fakeGeometry.measured = true;
         await openRung(FIXTURE_40, 'income', '1w', WEEK_BUCKETS_40);
+        const expectedLabels = ['Dec 29', withYear('Jan 5', '26'), '12', '19', '26', 'Feb 2', '9'];
         await waitFor(
             () => {
                 const labelled = latestXAxisWith('axisLabel');
@@ -2191,14 +2326,171 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
                 expect({
                     data: latestXAxisWith('data')?.data ?? null,
                     labels: WEEK_CLOSINGS_40.map((date, index) => (format ? attempt(() => format(date, index)) : NOT_A_FUNCTION)),
+                    rotate: labelled?.axisLabel?.rotate,
                     labelShown: WEEK_CLOSINGS_40.map((date, index) => (showLabel ? attempt(() => showLabel(index, date)) : NOT_A_FUNCTION)),
                     separatorShown: WEEK_CLOSINGS_40.map((date, index) => (showSeparator ? attempt(() => showSeparator(index, date)) : NOT_A_FUNCTION)),
                 }).toEqual({
                     data: WEEK_CLOSINGS_40,
-                    labels: ['Jan 4', 'Jan 11', 'Jan 18', 'Jan 25', 'Feb 1', 'Feb 8', 'Feb 9'],
+                    labels: expectedLabels,
+                    rotate: 0,
                     labelShown: WEEK_CLOSINGS_40.map(() => true),
                     separatorShown: WEEK_CLOSINGS_40.map(() => true),
                 });
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it.each(SUBMODES)('B6b $title, 730 days, measured, 3M: eight quarters named by the catalogue, the first and each new year with the year form, side by side', async ({submode}) => {
+        // WHY: the label contract of 07/10/2026 on a month scale. A quarter is the catalogue's own name for it
+        // (`dashboard.pnlAxisQuarter`), and the first label and each new year carry the year form
+        // (`dashboard.pnlAxisWithYear`): Q4 '24 · Q1 '25 · Q2 · Q3 · Q4 · Q1 '26 · Q2 · Q3 in English, so no quarter is
+        // read without its year. Catches a component that does not hand the planner its rung and the two catalogue texts:
+        // the planner has no quarter of its own to print. Eight labels on 527 px leave at least 15.5 px between
+        // neighbours, so they stay side by side (rotate 0) and every one is drawn. Both submodes: 527 px offers 3M to
+        // both (B8).
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '3m', QUARTER_CLOSINGS_730.length);
+        const expectedLabels = [withYear(quarterLabel(4), '24'), withYear(quarterLabel(1), '25'), quarterLabel(2), quarterLabel(3), quarterLabel(4), withYear(quarterLabel(1), '26'), quarterLabel(2), quarterLabel(3)];
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const format = fn<LabelFormatter>(labelled?.axisLabel?.formatter);
+                const showLabel = fn<IntervalCallback>(labelled?.axisLabel?.interval);
+                expect({
+                    data: latestXAxisWith('data')?.data ?? null,
+                    labels: QUARTER_CLOSINGS_730.map((date, index) => (format ? attempt(() => format(date, index)) : NOT_A_FUNCTION)),
+                    rotate: labelled?.axisLabel?.rotate,
+                    labelShown: QUARTER_CLOSINGS_730.map((date, index) => (showLabel ? attempt(() => showLabel(index, date)) : NOT_A_FUNCTION)),
+                }).toEqual({
+                    data: QUARTER_CLOSINGS_730,
+                    labels: expectedLabels,
+                    rotate: 0,
+                    labelShown: QUARTER_CLOSINGS_730.map(() => true),
+                });
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    /** What the formatter answers for the buckets the axis does not draw, when the check passes. WHY a sentinel: one `toEqual` reads the whole axis, and a failing check shows its evidence in place of this. */
+    const WIDEST_DRAWN_TEXT = 'one widest drawn text';
+
+    it('B6c Candles, 730 days, measured 279 px plot (a 390 px phone), 1M: 24 months cannot sit side by side, so every label turns 45° and every second one is drawn, counted back from the last; an undrawn bucket formats as the widest drawn text', async () => {
+        // WHY: the label contract of 07/10/2026 — «riguardo la rotazione, ruotata 1, ruotano tutte, per uniformità». When
+        // one label does not fit side by side, all of them turn 45°; only when even turned they do not fit are they
+        // thinned, to every k-th bucket, k the smallest with k · slot · sin 45° ≥ one 14.3 px row (M‴, 08/10/2026), counted
+        // from the last bucket so a pan does not move them. A slot is 279 / 24 = 11.6 px here, 8.2 px across a turned
+        // label, so k = 2 (16.4 ≥ 14.3), as it was with the 14 px row. The left-edge rule (a label
+        // whose estimated slant would leave the canvas on the left gets no text, and the first label's year form passes
+        // to the next) may drop the first candidate — the plot has 40 px on its left — and no other. An undrawn bucket
+        // answers the formatter with the widest drawn text: ECharts' legacy containLabel measures the labels through the
+        // formatter on a sample of the categories (one every ⌈n/40⌉) without reading `interval`, so a sample made only of
+        // undrawn buckets answered with '' would reserve the height of an empty label, and the turned labels would run off
+        // the bottom of the canvas. The texts are the contract's on the drawn buckets: each compares with the previous
+        // DRAWN one, so the first drawn label carries the year. Candles only: Income is not offered 1M on this plot (bars
+        // of 2.5 px, under 4.5) and never thins (its smallest slot, 20.6 px, holds a turned row: 20.6 · sin 45° = 14.5 ≥ 14.3).
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = MEASURED_PLOT_PX.phone390;
+        await enterLadderView(FIXTURE_730, 'candles');
+        // Precondition: the measured plot is in force (1D and 3D are gone, B8's arithmetic) and it offers 1M.
+        await waitFor(() => expect(rungsOffered()).toEqual(rungIds(['1w', '2w', '1m', '3m', '6m', '1y'])), {timeout: 5_000});
+        await pressRung('1m');
+        await waitForBuckets(MONTH_BUCKETS_730);
+
+        const step = rotatedStep(MEASURED_PLOT_PX.phone390 / MONTH_BUCKETS_730);
+        expect(step, 'precondition: on this plot even turned labels do not fit in every slot').toBe(2);
+        const candidates = indicesTo(MONTH_BUCKETS_730).filter((index) => (MONTH_BUCKETS_730 - 1 - index) % step === 0);
+        // The odd buckets, November 2024 to September 2026, each compared with the previous drawn one.
+        const candidateTexts = [withYear('Nov', '24'), withYear('Jan', '25'), 'Mar', 'May', 'Jul', 'Sep', 'Nov', withYear('Jan', '26'), 'Mar', 'May', 'Jul', 'Sep'];
+        expect(candidates.length, 'precondition: one text per candidate').toBe(candidateTexts.length);
+        const textOf = new Map(candidates.map((index, position) => [index, candidateTexts[position]]));
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const format = fn<LabelFormatter>(labelled?.axisLabel?.formatter);
+                const showLabel = fn<IntervalCallback>(labelled?.axisLabel?.interval);
+                const texts = MONTH_CLOSINGS_730.map((date, index) => (format ? attempt(() => format(date, index)) : NOT_A_FUNCTION));
+                const flags = MONTH_CLOSINGS_730.map((date, index) => (showLabel ? attempt(() => showLabel(index, date)) : NOT_A_FUNCTION));
+                const shown = indicesTo(MONTH_BUCKETS_730).filter((index) => flags[index] === true);
+                const shownTexts = shown.map((index) => texts[index]);
+                const longestShown = Math.max(0, ...shownTexts.map((text) => text.length));
+                const widestShown = shownTexts.filter((text) => text.length === longestShown);
+                const unshownTexts = [
+                    ...new Set(
+                        indicesTo(MONTH_BUCKETS_730)
+                            .filter((index) => !shown.includes(index))
+                            .map((index) => texts[index]),
+                    ),
+                ];
+                const fallbackIsWidest = unshownTexts.length === 1 && unshownTexts[0] !== '' && widestShown.includes(unshownTexts[0]);
+                // Only the first candidate may be dropped, by the left-edge rule; every other one is drawn.
+                const expectedShown = shown[0] === candidates[0] ? candidates : candidates.slice(1);
+                expect({
+                    data: latestXAxisWith('data')?.data ?? null,
+                    rotate: labelled?.axisLabel?.rotate,
+                    shown: showLabel ? shown : NOT_A_FUNCTION,
+                    shownTexts,
+                    unshownFormatAs: fallbackIsWidest ? WIDEST_DRAWN_TEXT : {unshownTexts, widestShown},
+                }).toEqual({
+                    data: MONTH_CLOSINGS_730,
+                    rotate: 45,
+                    shown: expectedShown,
+                    shownTexts: expectedShown.map((index) => textOf.get(index)),
+                    unshownFormatAs: WIDEST_DRAWN_TEXT,
+                });
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it("B6d Candles, 730 days, measured 279 px plot, 1M: the turned axis boxes every label as wide as the widest drawn one, measured in the chart's own 14 px font, one line tall", async () => {
+        // WHY: option M‴ of 08/10/2026. ECharts' legacy containLabel reserves the band under the axis by measuring a
+        // sample of the labels (one every ⌈n/40⌉, `interval` unread), and a turned label is as tall as it is wide: a long
+        // label at an unsampled index ran below the band into the legend. With `axisLabel.width` W and a `lineHeight`,
+        // every label gets an invisible W × line box, every sampled one measures W, and the band holds them all. W is the
+        // widest DRAWN label as the chart paints it: `echarts.format.getTextRect` in the axis' 14 px font, whose family is
+        // the chart's global textStyle (the axis label sets none of its own). The fake measures 7 px a character and
+        // answers the family 'LF Test Sans', so a box sized on undrawn buckets, or measured in another font, shows here.
+        // B6c's geometry: turned, every second month drawn.
+        fakeGeometry.measured = true;
+        fakeGeometry.plotWidthPx = MEASURED_PLOT_PX.phone390;
+        await enterLadderView(FIXTURE_730, 'candles');
+        await waitFor(() => expect(rungsOffered()).toEqual(rungIds(['1w', '2w', '1m', '3m', '6m', '1y'])), {timeout: 5_000});
+        await pressRung('1m');
+        await waitForBuckets(MONTH_BUCKETS_730);
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                const drawn = drawnTexts(labelled, MONTH_CLOSINGS_730);
+                expect({
+                    rotate: labelled?.axisLabel?.rotate,
+                    thinned: drawn.length > 0 && drawn.length < MONTH_BUCKETS_730,
+                    width: labelled?.axisLabel?.width,
+                    lineHeight: labelled?.axisLabel?.lineHeight,
+                    fonts: [...new Set(measuredFonts)],
+                }).toEqual({rotate: 45, thinned: true, width: boxWidthOf(drawn), lineHeight: 14, fonts: [`14px ${FAKE_FONT_FAMILY}`]});
+            },
+            {timeout: 5_000},
+        );
+    });
+
+    it.each(SUBMODES)('B6e $title, 730 days, measured, 3M: side by side, the axis carries no box', async ({submode}) => {
+        // WHY: M‴ boxes turned labels only. Flat labels are one line tall whatever their text, so the sample containLabel
+        // measures already gives the band, and a box would only change the room ECharts sees between neighbours. The full
+        // render replaces the whole x axis, so it may leave the two keys undefined: null and undefined both read as no box
+        // here. The {xAxis}-only update merges, and must say null (B9b). Green before the fix: it guards the fix.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '3m', QUARTER_CLOSINGS_730.length);
+        await waitFor(
+            () => {
+                const labelled = latestXAxisWith('axisLabel');
+                expect({
+                    rotate: labelled?.axisLabel?.rotate,
+                    drawn: drawnTexts(labelled, QUARTER_CLOSINGS_730).length,
+                    width: labelled?.axisLabel?.width ?? null,
+                    lineHeight: labelled?.axisLabel?.lineHeight ?? null,
+                }).toEqual({rotate: 0, drawn: QUARTER_CLOSINGS_730.length, width: null, lineHeight: null});
             },
             {timeout: 5_000},
         );
@@ -2315,14 +2607,20 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
 
     // --- B9-B11: the user's window is kept ------------------------------------------------------
 
-    it.each(SUBMODES)('B9 $title, 730 days, measured, 1M: a zoom re-plans the labels once, as an {xAxis}-only update, and the same zoom again does not', async ({submode}) => {
-        // WHY: defects 2 and 6, the labels must follow the visible window [18..23], April to September 2026; the update
-        // must not carry dataZoom (it would fight the gesture), and an unchanged plan must not redraw.
+    it.each(SUBMODES)('B9 $title, 730 days, measured, 1M: a zoom re-plans the labels once, as an {xAxis}-only update that turns them back side by side, and the same zoom again does not', async ({submode}) => {
+        // WHY: defects 2 and 6, the labels must follow the visible window [18..23], April to September 2026, each month
+        // named by itself and the first visible one with its year (the label contract of 07/10/2026, on a month scale);
+        // the update must not carry dataZoom (it would fight the gesture), and an unchanged plan must not redraw. The 24
+        // months of the whole range were turned 45° (a 22 px slot holds no month side by side); six months have room, and
+        // the partial update must say rotate 0 itself — ECharts merges an {xAxis}-only option into the axis it holds, so
+        // a rotate left out would keep the 45°.
         fakeGeometry.measured = true;
         await openRung(FIXTURE_730, submode, '1m', MONTH_BUCKETS_730);
         expect(chartInstances).toHaveLength(1);
         const chart = chartInstances[0];
+        const expectedLabels = [withYear('Apr', '26'), 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
         await onFakeTimeouts(async () => {
+            const rotateBeforeZoom = latestXAxisWith('axisLabel')?.axisLabel?.rotate;
             const before = chart.setOptionCalls.length;
             await zoomOnFakeClock(MONTH_WINDOW_START, 100);
             expect(vi.getTimerCount(), 'no timer pending 1000 ms after the zoom').toBe(0);
@@ -2330,14 +2628,44 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
             expect(added, 'exactly one new setOption call after the zoom').toHaveLength(1);
             const format = fn<LabelFormatter>(xAxisOf(added[0].option)?.axisLabel?.formatter);
             expect({
+                rotateBeforeZoom,
                 keys: Object.keys(added[0].option),
                 labels: MONTH_WINDOW_CLOSINGS.map((date, offset) => (format ? attempt(() => format(date, MONTH_WINDOW_FIRST + offset)) : NOT_A_FUNCTION)),
-            }).toEqual({keys: ['xAxis'], labels: ['Apr 30', 'May 31', 'Jun 30', 'Jul 31', 'Aug 31', 'Sep 30']});
+                rotate: xAxisOf(added[0].option)?.axisLabel?.rotate,
+            }).toEqual({rotateBeforeZoom: 45, keys: ['xAxis'], labels: expectedLabels, rotate: 0});
 
             const afterFirst = chart.setOptionCalls.length;
             await zoomOnFakeClock(MONTH_WINDOW_START, 100);
             expect(vi.getTimerCount(), 'no timer pending 1000 ms after the repeated zoom').toBe(0);
             expect(chart.setOptionCalls.slice(afterFirst), 'no new setOption call for the same window').toHaveLength(0);
+        });
+    });
+
+    it.each(SUBMODES)('B9b $title, 730 days, measured, 1M: the turned axis carries its box, and the {xAxis}-only update that lays the labels flat clears it with present nulls', async ({submode}) => {
+        // WHY: M‴ of 08/10/2026 on the partial path. The 24 months on 527 px are turned (B9) and boxed (B6d); the zoom onto
+        // [18..23] lays six months flat in ONE {xAxis}-only update, and ECharts merges that option into the axis it holds:
+        // a width left out would keep the turned box around flat labels. So the update must carry both keys, null.
+        fakeGeometry.measured = true;
+        await openRung(FIXTURE_730, submode, '1m', MONTH_BUCKETS_730);
+        expect(chartInstances).toHaveLength(1);
+        const chart = chartInstances[0];
+        await onFakeTimeouts(async () => {
+            const turned = latestXAxisWith('axisLabel');
+            const drawn = drawnTexts(turned, MONTH_CLOSINGS_730);
+            expect({
+                rotate: turned?.axisLabel?.rotate,
+                drawn: drawn.length > 0,
+                width: turned?.axisLabel?.width,
+                lineHeight: turned?.axisLabel?.lineHeight,
+            }).toEqual({rotate: 45, drawn: true, width: boxWidthOf(drawn), lineHeight: 14});
+            const before = chart.setOptionCalls.length;
+            await zoomOnFakeClock(MONTH_WINDOW_START, 100);
+            const added = chart.setOptionCalls.slice(before);
+            expect(added, 'precondition: exactly one new setOption call after the zoom (B9)').toHaveLength(1);
+            const flat = xAxisOf(added[0].option)?.axisLabel;
+            expect({keys: Object.keys(added[0].option), rotate: flat?.rotate}, 'precondition: the update is {xAxis}-only and flat (B9)').toEqual({keys: ['xAxis'], rotate: 0});
+            expect(flat).toHaveProperty('width', null);
+            expect(flat).toHaveProperty('lineHeight', null);
         });
     });
 
@@ -2598,6 +2926,79 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
             'the redraw drew the same buckets',
         ).toEqual(renderedSeries().map(() => buckets));
         expect(shows(), `on ${today}`).toEqual(expected(after));
+    });
+});
+
+// =============================================================================
+// S7a — the ladder axis catalogue keys: every locale takes its values (the ICU apostrophe trap)
+// =============================================================================
+
+/**
+ * The ladder axis prints two catalogue texts (S7, the label contract of 07/10/2026): `dashboard.pnlAxisQuarter`
+ * names a quarter, and `dashboard.pnlAxisWithYear` adds the two-digit year to a label. Both are ICU MessageFormat,
+ * and ICU reads an apostrophe as a quote. The English year form prints one apostrophe (`Oct '25`), so the catalogue
+ * must write it doubled, `{label} ''{year}`. Written once, `{label} '{year}` opens a quoted literal that swallows the
+ * placeholder, and the axis prints `Oct {year}`: a text that resolves, so no missing-key fallback warns anyone.
+ *
+ * The guard formats each locale's two messages through the runtime's own compiler, with sentinel values, and asks
+ * that every value arrived and no brace is left. It asserts nothing about the wording: a translator may reorder the
+ * parts or drop the apostrophe. Its predicate is proved on the trap itself first.
+ *
+ * Green by construction: the four catalogues already hold the right texts, and the guard keeps them so.
+ * `getMessageFormatter` ignores its locale argument (its memo keys on the text alone, see catalogIcuLocale.test.ts),
+ * so a text compiles with the locale current at its first use. Harmless here: neither message holds a plural, a
+ * number, a date or a time, and substitution does not depend on the locale.
+ */
+describe('GrowthChart ladder axis catalogue keys (S7a: the ICU apostrophe trap)', () => {
+    /** Typed on the app's locale list, so a fifth locale without a catalogue here fails `front check` (as in catalogIcuLocale.test.ts). */
+    const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** Values no catalogue text contains, so finding them in the output proves they were substituted. */
+    const YEAR_FORM_VALUES = {label: 'LABELSLOT', year: 'YEARSLOT'};
+    const QUARTER_VALUES = {quarter: 4};
+
+    /** The message at a dotted key of a catalogue, or why there is none. WHY: a missing key must fail as itself, not as a formatting error. */
+    function messageAt(catalogue: unknown, dottedKey: string): string {
+        const node = dottedKey.split('.').reduce<unknown>((current, part) => (current !== null && typeof current === 'object' ? (current as Record<string, unknown>)[part] : undefined), catalogue);
+        return typeof node === 'string' ? node : `missing: ${dottedKey}`;
+    }
+
+    /** A message as the runtime formats it, or why it could not. WHY: the runtime's compiler is the oracle, and a throw must show in the assertion instead of aborting it. */
+    function formatWith(message: string, localeCode: string, values: Record<string, string | number>): string {
+        try {
+            const text = getMessageFormatter(message, localeCode).format(values);
+            return typeof text === 'string' ? text : `not a string: ${JSON.stringify(text)}`;
+        } catch (error) {
+            return `threw: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+
+    /** Every value reached the text and no placeholder is left. WHY: a quoted placeholder prints as itself, braces included. */
+    function tookValues(text: string, values: Record<string, string | number>): boolean {
+        return Object.values(values).every((value) => text.includes(String(value))) && !/[{}]/.test(text);
+    }
+
+    it('S7a control: the predicate rejects a year form whose single apostrophe quotes the placeholder, and accepts the doubled one', () => {
+        // WHY: gives the guard its teeth. ICU reads `'{` as the start of a quoted literal, so `{label} '{year}` prints the
+        // placeholder as text; `''` is one printed apostrophe, so `{label} ''{year}` prints it and substitutes the year.
+        // Both messages are written here, not catalogue texts.
+        const single = formatWith("{label} '{year}", 'en', YEAR_FORM_VALUES);
+        const doubled = formatWith("{label} ''{year}", 'en', YEAR_FORM_VALUES);
+        expect({single, singleAccepted: tookValues(single, YEAR_FORM_VALUES), doubled, doubledAccepted: tookValues(doubled, YEAR_FORM_VALUES)}).toEqual({
+            single: 'LABELSLOT {year}',
+            singleAccepted: false,
+            doubled: "LABELSLOT 'YEARSLOT",
+            doubledAccepted: true,
+        });
+    });
+
+    it.each([...SUPPORTED_LOCALES])('S7a %s: dashboard.pnlAxisWithYear and dashboard.pnlAxisQuarter take their values', (localeCode) => {
+        // WHY: the ICU apostrophe trap, locale by locale. Green by construction today; a red names the locale and shows
+        // what its axis would print.
+        const catalogue = CATALOGUES[localeCode];
+        const yearForm = formatWith(messageAt(catalogue, 'dashboard.pnlAxisWithYear'), localeCode, YEAR_FORM_VALUES);
+        const quarter = formatWith(messageAt(catalogue, 'dashboard.pnlAxisQuarter'), localeCode, QUARTER_VALUES);
+        expect({yearForm: tookValues(yearForm, YEAR_FORM_VALUES), quarter: tookValues(quarter, QUARTER_VALUES)}, `${localeCode} prints the year form as ${JSON.stringify(yearForm)} and the quarter as ${JSON.stringify(quarter)}`).toEqual({yearForm: true, quarter: true});
     });
 });
 

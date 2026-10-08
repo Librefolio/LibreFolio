@@ -2037,3 +2037,147 @@ async def test_planner_source_live_current_distribution_matches_the_allocation_s
     assert not_requested["current_distribution"] is None
     assert "currency_specs" not in not_requested
     print_success("current_distribution equals the summary's allocation_percent per Asset")
+
+
+# ---------------------------------------------------------------------------
+# Issue #32 — purchase cost in the report currency (workstream P, red-first)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestIssue32PurchaseCostInReportCurrency:
+    """POST /portfolio/report on an asset quoted in UZS and bought three times with EUR.
+
+    Issue #32 end to end: 100 + 150 + 150 EUR paid for 20 units. Reported in EUR the purchase
+    cost is exactly 400 (each payment is already in the report currency); reported in UZS it is
+    each payment at its own date's rate, 15000 + 21000 + 24000.
+
+    Everything goes through the API: user, broker, a deposit, the asset, the three BUYs, the
+    EUR/UZS rates (/fx/currencies/rate) and the prices (/assets/prices). Each test owns one
+    calendar year of EUR/UZS rates. Before writing, it proves no EUR/UZS rate exists on or before
+    the end of that year (a 404 from /fx/currencies/convert, which backward-fills without limit);
+    every upsert must answer "inserted"; and exactly those rows are deleted again, after the
+    broker (force: its transactions) and the asset (its prices, by cascade), and before the user.
+
+    UZS rather than the ISK of the service tests: these rows are committed, and test_fx_core.py
+    purges every committed rate quoted in ISK before each of its tests.
+    """
+
+    CURRENCY = "UZS"
+    RATES = {"03-01": "150", "06-03": "140", "09-02": "160", "12-31": "125"}  # 1 EUR = rate UZS
+    BUYS = (("03-01", "10", "-100"), ("06-03", "5", "-150"), ("09-02", "5", "-150"))
+    PRICES = {"09-02": "3000", "12-31": "3125"}
+
+    async def _report(self, *, year: int, target_currency: str) -> httpx.Response:
+        """Seed the #32 history in ``year``, ask for the report in ``target_currency``, delete everything it wrote."""
+        rate_days = sorted(f"{year}-{month_day}" for month_day in self.RATES)
+        inserted_days: list[str] = []
+        cleanup_errors: list[str] = []
+        broker_id: int | None = None
+        asset_id: int | None = None
+        response: httpx.Response | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                probe = await client.post(
+                    f"{API_BASE}/fx/currencies/convert",
+                    json=[{"from_amount": {"code": "EUR", "amount": "1"}, "to": self.CURRENCY, "date_range": {"start": f"{year}-12-31"}}],
+                    timeout=TIMEOUT,
+                )
+                assert probe.status_code == 404, f"precondition broken: an EUR/{self.CURRENCY} rate exists on or before {year}-12-31 ({probe.status_code}: {probe.text})"
+
+                upsert = await client.post(
+                    f"{API_BASE}/fx/currencies/rate",
+                    json=[{"date": f"{year}-{month_day}", "base": "EUR", "quote": self.CURRENCY, "rate": rate, "source": "MANUAL"} for month_day, rate in self.RATES.items()],
+                    timeout=TIMEOUT,
+                )
+                assert upsert.status_code == 200, upsert.text
+                inserted_days = sorted(row["date"] for row in upsert.json()["results"] if row["action"] == "inserted")
+                assert inserted_days == rate_days, f"every EUR/{self.CURRENCY} row must be this test's own: {upsert.text}"
+
+                broker_id = await create_broker(client, f"Issue32 {uuid.uuid4().hex[:12]}")
+                asset_id = await create_asset(client, currency=self.CURRENCY)
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": f"{year}-02-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        *({"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": f"{year}-{month_day}", "quantity": quantity, "cash": {"code": "EUR", "amount": paid}} for month_day, quantity, paid in self.BUYS),
+                    ],
+                )
+                prices = await client.post(
+                    f"{API_BASE}/assets/prices",
+                    json=[{"asset_id": asset_id, "prices": [{"date": f"{year}-{month_day}", "close": close, "currency": self.CURRENCY} for month_day, close in self.PRICES.items()]}],
+                    timeout=TIMEOUT,
+                )
+                assert prices.status_code == 200, prices.text
+
+                response = await post_portfolio_report(
+                    client,
+                    {
+                        "broker_ids": [broker_id],
+                        "target_currency": target_currency,
+                        "date_range": {"start": f"{year}-01-01", "end": f"{year}-12-31"},
+                        "include_history": False,
+                        "include_allocation_history": False,
+                    },
+                )
+            finally:
+                if broker_id is not None:
+                    deleted = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                    if deleted.status_code != 200 or not all(row["success"] for row in deleted.json()["results"]):
+                        cleanup_errors.append(f"broker {broker_id}: {deleted.status_code} {deleted.text}")
+                if asset_id is not None:
+                    deleted = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                    if deleted.status_code != 200 or not all(row["success"] for row in deleted.json()["results"]):
+                        cleanup_errors.append(f"asset {asset_id}: {deleted.status_code} {deleted.text}")
+                if inserted_days:
+                    deleted = await client.request(
+                        "DELETE",
+                        f"{API_BASE}/fx/currencies/rate",
+                        json=[{"from": "EUR", "to": self.CURRENCY, "date_range": {"start": day, "end": day}} for day in inserted_days],
+                        timeout=TIMEOUT,
+                    )
+                    if deleted.status_code != 200 or deleted.json()["total_deleted"] != len(inserted_days):
+                        cleanup_errors.append(f"EUR/{self.CURRENCY} rates {inserted_days}: {deleted.status_code} {deleted.text}")
+                await delete_current_test_user(client, user_id)
+        assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+        assert response is not None
+        return response
+
+    @staticmethod
+    def _mentions(report: dict, currency: str) -> list[str]:
+        """Every FX diagnostic of the report that names ``currency``: missing pairs and data-quality issues."""
+        summary = report["summary"]
+        found = [f"summary.missing_fx_pairs {item['pair']}" for item in summary["missing_fx_pairs"] if currency in item["pair"]]
+        for where, quality in (("summary.data_quality", summary.get("data_quality")), ("data_quality", report.get("data_quality"))):
+            if not quality:
+                continue
+            found += [f"{where}.missing_fx_pairs {item['pair']}" for item in quality["missing_fx_pairs"] if currency in item["pair"]]
+            for issue in quality["issues"]:
+                texts = [*issue["affected_fx_pairs"], *(str(value) for value in issue["message_params"].values())]
+                found += [f"{where} issue {issue['code']}: {text}" for text in texts if currency in text]
+        return found
+
+    async def test_report_in_the_payment_currency_costs_exactly_what_was_paid(self, test_server):
+        """RED before the fix: Dashboard in EUR → purchase cost 400 EUR (not 0), and no FX warning about UZS."""
+        print_section("Portfolio Report: #32 purchase cost in EUR")
+        response = await self._report(year=2019, target_currency="EUR")
+
+        assert response.status_code == 200, response.text
+        report = response.json()
+        observed = {
+            "open_cost_basis": Decimal(report["summary"]["open_cost_basis"]["amount"]),
+            "FX diagnostics naming UZS": self._mentions(report, self.CURRENCY),
+        }
+        assert observed == {"open_cost_basis": Decimal("400"), "FX diagnostics naming UZS": []}
+        print_success("400 EUR, as paid")
+
+    async def test_report_in_the_asset_currency_is_unchanged(self, test_server):
+        """GREEN before and after: the same history in UZS costs each payment at its own date's rate."""
+        print_section("Portfolio Report: #32 purchase cost in UZS")
+        response = await self._report(year=2018, target_currency=self.CURRENCY)
+
+        assert response.status_code == 200, response.text
+        assert Decimal(response.json()["summary"]["open_cost_basis"]["amount"]) == Decimal("60000")
+        print_success("60000 UZS = 100×150 + 150×140 + 150×160")
