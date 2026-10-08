@@ -38,8 +38,12 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 - Optional numeric columns flagged `erasable` render `ErasableNumberCell`: its eraser (or `Delete`
   in an empty input) sets the sentinel `-1` without a confirmation, since the row's **Undo** covers
   a slip; the backend price upsert turns `-1` into `NULL`
-- **Import CSV** merges the parsed rows: a date already in the table updates that row (non-empty
-  values only; read-only rows are skipped), a new date is appended
+- **Import CSV** merges each parsed line into the row with the same date and the same values for
+  the `importMatchKeys` columns (prop, default `[]`: the date alone, as for prices and FX rates; the
+  asset events editor passes `['type']`). Among several matches an editable row wins over a
+  read-only one, and a line whose every match is read-only is skipped; only non-empty values are
+  merged. An unmatched line is appended under a unique `rowId`, the date then `date#2`,
+  `date#3`…, so two new rows can share a date
 - `scrollToDate(date)` scrolls to a row
 
 **Used by**: the FX detail page (`fx/FxDataEditorSection.svelte`) and the asset detail page
@@ -52,8 +56,8 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 | | FX (`FxDataEditorSection`) | Asset (`AssetDataEditorSection`) |
 |---|---|---|
 | Tables and columns | one table: `rate` | **Prices**: `close` (required), `open`, `high`, `low`, `volume` (erasable). **Events**: `type` (one of the five event types) and `amount` (required), `notes` |
-| Written through | `POST /api/v1/fx/currencies/rate`; a pair shown inverted (its base after its quote in alphabetical order) stores `1 / rate` under the alphabetical pair | `POST /api/v1/assets/prices`, `POST /api/v1/assets/events` |
-| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; `DELETE /api/v1/assets/events` by id, whose per-item `in_use` result (an event a transaction uses) is reported, not deleted |
+| Written through | `POST /api/v1/fx/currencies/rate`; a pair shown inverted (its base after its quote in alphabetical order) stores `1 / rate` under the alphabetical pair | `POST /api/v1/assets/prices`; `POST /api/v1/assets/events`, a saved event with its `id` (edited in place, type included), a new one without |
+| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; `DELETE /api/v1/assets/events` by id, whose per-item `in_use` result (an event a transaction uses) is reported, not deleted. An event row never saved sends no DELETE |
 | Rows not sent | A rate that is not a number above 0, counted as *skipped (invalid)*. When every row is invalid and none is deleted, the save stops with *Rate must be strictly greater than zero (0 is not allowed).* | A price whose close is not a number above 0, counted as *skipped (invalid)*; an event without a type or a numeric amount |
 
 Both wrappers:
@@ -76,6 +80,16 @@ Asset only:
   label beside the tabs reads *Prices in USD* / *Events in USD*.
 - **Auto events** (`is_auto`) are `readonly`: a provider rewrites them at its next sync (see
   [Asset Events](../../../backend/assets/events.md#dedup-strategy)).
+- **Saved events travel with their id.** A saved event row's `rowId` is its DB id, read back by
+  `dbEventId(row)` (`null` for a row never saved, whose `rowId` is a date: `2026-03-15`,
+  `2026-03-15#2`). The upsert sends that `id`, so the server edits the row in place, its type
+  included: changing the Type of a saved event no longer adds an event and leaves the old one. A
+  row deleted before its first save sends no DELETE. The events `DataEditor` gets
+  `importMatchKeys={['type']}`: an imported line merges into the row of the same date and type,
+  under the Import CSV rules above, and a line of another type on that date is added.
+- **A refused save** (HTTP 400, such as `EVENT_KEY_CONFLICT`) shows *Save failed: …* and does not
+  call `onsave`: the editor stays open with the pending rows. Prices are sent before events, so
+  the prices of that save may already be stored.
 - **Refresh while editing**: a `chartData` or `events` refresh that lands while a tab has dirty
   rows is held back until it is clean, so pending edits are never discarded. The FX wrapper
   rebuilds its rows on every refresh.
@@ -87,7 +101,10 @@ locale prefix):
 - `PriceDataImportModal` — header `date;currency;close`, optional `open;high;low;volume`.
   `currency` is a required column for the parser but is not sent: the save uses the asset's.
 - `EventDataImportModal` — header `date;currency;type;amount;notes`, with `currency` and `notes`
-  optional.
+  optional. `amount` also reads a `value` column (an alias), the name the events export
+  (`GET /api/v1/backup/asset/{id}/events?format=csv`) gives it, so an exported events file imports
+  back with its other columns ignored. Its `source` column is not read (every row becomes a manual
+  event), and rows sharing a date are still duplicates.
 
 ---
 
@@ -101,8 +118,9 @@ A **CSV preview and editor** with column detection and per-row validation.
   RFC 4180-style. No other separator is recognised
 - Requires a header on the first non-empty line and matches it **by column name**,
   case-insensitively and in any order: extra columns are ignored, missing required ones produce
-  one consolidated error. A token `A<B` reads as `B>A`, so an FX header can name its direction
-  either way
+  one consolidated error. A column may list `aliases` (`CsvColumnDef.aliases`), tried after its
+  label: with both present, the label wins. A token `A<B` reads as `B>A`, so an FX header can name
+  its direction either way
 - The identity column is `date` (`YYYY-MM-DD`) unless the caller passes another, such as a
   distribution's `name`
 - Numbers (`parseNumber`): `_` is dropped as a thousands separator; with both `.` and `,`, the
