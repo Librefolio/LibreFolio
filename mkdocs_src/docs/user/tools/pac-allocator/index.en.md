@@ -1,6 +1,6 @@
 ---
 title: PAC allocator
-description: Plan the purchases that bring a new investment as close as possible to its target allocation, in whole or fractional units or in amounts, without placing orders.
+description: Plan the purchases that bring a new investment as close as possible to its target allocation, in whole units or by amount, without placing orders.
 ---
 
 # 🧮 PAC allocator
@@ -17,46 +17,254 @@ no order is sent to a Broker.
 
 ## 🗺️ Using the planner
 
-The PAC allocator card shows the version pair `Backend/API 1.0.0 · UI 1.0.0`,
-and the open planner repeats it in its header.
-
-!!! note "About the UI version on the card"
-
-    The `UI` number is the interface version this tool *expects*. It is
-    published by the backend and does not prove that a matching interface is
-    present in the frontend build you are running.
-
 The planner guides you through these steps, in order. The **FX** step appears
 only when the scenario needs exchange rates.
 
-| Step | What you set |
-|---|---|
-| **Scenario** | A new investment, a "pure PAC": the calculation starts from an empty portfolio, so what you already hold is not counted, and it splits the cash you choose among the Assets, as close as possible to the target weights. You set the **Valuation currency**, in which amounts are compared and summarized (at first, the **Default Currency** of your preferences; money stays in its own currency, and every exchange needed appears in the plan). The reference date is always today: the planner sets it again before every copy from LibreFolio and before every calculation. |
-| **Liquidity** | Where the money comes from; you can combine sources. **From your Brokers**: cash already on your Brokers in LibreFolio, of which you choose how much to use. **New contribution**: new money you add, such as the PAC instalment. **External account**: a balance on an account not registered in LibreFolio, for example at your bank; you declare how much is there and how much to use. Nothing is bought from an external account: its money is sent to a Broker. The Broker that receives a contribution or an external account's money is chosen in the **Brokers** step. Each amount stays in its own currency. |
-| **Brokers** | Choose an existing Broker or add a **Manual Broker**: these are scenario data, and the Broker itself is never changed. For each currency you buy in, set the order mode, **By number of units** or **By amount**, and its **Increment**: every proposed order is a multiple of it (1 = whole units only, 0.001 = fractions down to three decimals; by amount, the smallest amount you can enter, such as 0.01). You can also set a purchase fee (a fixed part plus a percentage kept between a minimum and a maximum; it is paid from your liquidity and is not invested), narrow the **Usable liquidity** (the Broker's own cash plus the contributions and other accounts you allow: all of them at first, and you can exclude a source or cap how much of it is used there), and choose how currencies are converted: **You convert before buying** or **The Broker converts when you buy**, both at the rate of the **FX** step minus the spread. Fees and order modes are not recorded in LibreFolio, which is why you set them here. |
-| **Assets** | Search the Assets registered in LibreFolio, add **Your Assets** (those with an open position today in your Brokers, added as rows only, without quantities), or add a **Manual Asset**. Each price is either **Auto** (the latest price stored in LibreFolio, read again just before the calculation; no data provider is called) or **Manual** (your own price, used as typed and never read again). A missing price stays in the draft: the calculation asks for it. The composition by country, sector, and type, copied from the Asset or typed, feeds only the exposure maps and bars of the result, not the calculation. |
-| **Routing** | For each Broker, which Assets it may buy: **Allow all**, **Exclude all**, or click each one. Optional limits, measured like that Broker's orders (units or amount): **Minimum purchase** (if the plan buys there, at least this much), **Required purchase** (bought whatever happens; if resources are not enough, the plan becomes impossible), and **Maximum purchase**. **Priority** (0 = preferred) only breaks ties between plans equally close to the target. With a **Price margin**, each purchase is counted at price × (1 + margin), to cover a price that rises before the order; the difference is a reserve, not invested. Empty fields restrict nothing. |
-| **Targets** | How to split the money you invest now among the Assets, in percent (decimals allowed). To calculate, the targets must add up to exactly 100%: **Balance all** rescales them, keeping their ratios. **Copy current distribution** reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not cash, and brings the ratios to 100%. These are weights only, a base to edit and not advice: you see them before using them, and a target you changed is not overwritten without your confirmation. |
-| **FX** (only when needed) | One rate per currency pair in play, **Auto** (the latest rate stored in LibreFolio, read when the step opens and again just before the calculation; no data provider is called) or **Manual**, plus one **Conversion spread**: a percentage surcharge on every converted amount. Valuation uses the official rate without spread; conversions use the rate with the spread. When LibreFolio has no rate for a pair, the step offers **Add the pair** or **Download the rates**: each opens the matching window of the FX page, and nothing is added or downloaded until you confirm there. |
-| **Strategy** | **Proportional**: purchases only, it sells nothing. Among all the purchase plans that respect your settings, it picks the best one with a cascade, each criterion deciding only among the plans still tied on the ones above: closeness to the targets (L2 distance), then uninvested money, then Broker and source priority, then explicit costs (fees, spread, margin), then number of orders. A fixed order of Assets and Brokers settles any final tie, so a search that completes always gives the same plan for the same data; a search stopped by a time or node limit can give a different plan on a slower or busier machine. |
-| **Review** | A last check. It lists the complete copy that will be sent (the backend receives this copy, and only this), flags the fields still to complete, and offers **Calculate plan**. |
+### 🎬 Scenario
+
+You plan a new investment, a "pure PAC": the calculation starts from an empty
+portfolio, so what you already hold is not counted, and it splits the cash you
+choose among the Assets, as close as possible to the target weights.
+
+Here you set the **Valuation currency**, in which amounts are compared and
+summarized. At first it is the **Default Currency** of your preferences. Money
+stays in its own currency: every exchange needed appears in the plan.
+
+The reference date is always today: the planner sets it again before every
+copy from LibreFolio and before every calculation.
+
+### 💰 Liquidity
+
+Where does the money come from? You can combine several sources:
+
+- **From your Brokers**: cash already on your Brokers in LibreFolio. You choose
+  how much of it to use.
+- **New contribution**: new money you add, such as the PAC instalment.
+- **External account**: a balance on an account not registered in LibreFolio,
+  for example at your bank. You declare how much is there and how much to use.
+  Nothing is bought from an external account: its money is sent to a Broker.
+
+The Broker that receives a contribution or an external account's money is
+chosen in the **Brokers** step. Each amount stays in its own currency.
 
 <!-- [Screenshot Placeholder: tools/pac-step-liquidity — the Liquidity step with cash copied From your Brokers, a New contribution and an External account, each amount in its own currency] -->
 
+### 🏦 Brokers
+
+Add the Brokers where the plan may buy: **Choose existing Broker** copies one
+of yours, and **Manual Broker** adds one by hand. Either way they are scenario
+data: the Broker itself is never changed. Fees and order modes are not
+recorded in LibreFolio, which is why you set them here.
+
+For each currency you buy in, set:
+
+- The order mode: **By number of units** or **By amount**.
+- The **Increment** $\Delta$: every proposed order is a whole multiple of it.
+  With $q$ the size of an order, in units or as an amount:
+
+    $$
+    q = k\,\Delta, \qquad k = 0, 1, 2, \dots
+    $$
+
+    By number of units, $\Delta$ is a whole number: $\Delta = 1$ means whole
+    units only. By amount, $\Delta$ is the smallest amount you can enter, such
+    as $\Delta = 0.01$, and the units you get can be fractions of a unit.
+
+- The **Purchase fee**: a **Fixed part** $f$ plus a **Percentage** $r$ of the
+  order amount $A$, price margin included. The **Minimum** $f_{\min}$ and the
+  **Maximum** $f_{\max}$ limit the percentage part only, and an empty
+  **Maximum** sets no upper limit:
+
+    $$
+    \text{fee} = f + \min\big(\max(r\,A,\ f_{\min}),\ f_{\max}\big)
+    $$
+
+    The fee is charged on every order, and no order means no fee. It is paid
+    from your liquidity and is not invested. For example, with $r = 0.19\%$,
+    $f_{\min} = 1.50$, $f_{\max} = 18$ and no fixed part, an order of $500$
+    pays $1.50$, one of $2{,}000$ pays $3.80$, and one of $20{,}000$ pays $18$.
+
+Each Broker also has two settings of its own:
+
+- **Usable liquidity**: the money the plan may use to buy there, that is the
+  Broker's own cash plus the contributions and other accounts you allow. All
+  of them are allowed at first: you can exclude a source, cap how much of it
+  is used there, and give it a **Priority** ($0$ = preferred).
+- **Currency conversion**: **You convert before buying** or
+  **The Broker converts when you buy**. Both convert at the rate of the **FX**
+  step minus the spread, so the calculation is the same either way: only the
+  way the plan shows the conversion changes.
+
 <!-- [Screenshot Placeholder: tools/pac-step-brokers — the Broker editor: order mode By number of units or By amount, Increment, purchase fee, and currency conversion mode] -->
+
+Not supported yet: a tax regime, losses, and sell fees for a Broker.
+
+### 💼 Assets
+
+Add the Assets the plan may buy, in any mix:
+
+- search the Assets registered in LibreFolio;
+- add **Your Assets**: those with an open position today in your Brokers,
+  added as rows only, without quantities;
+- add a **Manual Asset**.
+
+Each price is either:
+
+- **Auto**: the latest price stored in LibreFolio, read again just before the
+  calculation. No data provider is called.
+- **Manual**: your own price, used as typed and never read again.
+
+A missing price stays in the draft: the calculation asks for it.
+
+The composition by country, sector, and type, copied from the Asset or typed,
+feeds only the exposure maps and bars of the result, not the calculation.
 
 <!-- [Screenshot Placeholder: tools/pac-step-assets — the Assets step with an Asset added from LibreFolio and a Manual Asset, each price Auto or Manual] -->
 
+### 🔀 Routing
+
+For each Broker, choose which Assets it may buy: **Allow all**,
+**Exclude all**, or click each one.
+
+Then, only where you need them, set limits on each route. They are measured
+like that Broker's orders, in units or as an amount. With $q$ the purchase of
+the Asset on that Broker:
+
+- **Minimum purchase** $q_{\min}$: if the plan buys there, it buys at least
+  this much, so $q = 0$ or $q \ge q_{\min}$.
+- **Required purchase** $q_{\text{req}}$: bought whatever happens,
+  $q \ge q_{\text{req}}$. If the resources are not enough, the plan becomes
+  impossible.
+- **Maximum purchase** $q_{\max}$: the most the plan may buy there,
+  $q \le q_{\max}$.
+
+Two more settings shape how the plan buys there:
+
+- **Priority** ($0$ = preferred): it only breaks ties between plans equally
+  close to the target.
+- **Price margin** $m$: each purchase is counted at $p\,(1 + m)$ instead of
+  the price $p$ of one unit, to cover a price that rises before the order. A
+  margin of $0.5\%$ on a price of $100$ counts $100.50$. The difference is a
+  reserve, not invested. By amount, an order of $A$ buys
+  $A / \big(p\,(1 + m)\big)$ units.
+
+Empty fields restrict nothing.
+
 <!-- [Screenshot Placeholder: tools/pac-step-routing — the Routing step: the Assets each Broker may buy, with Minimum purchase, Required purchase, Maximum purchase, Priority and Price margin] -->
+
+### ⚖️ Targets
+
+Here you split the money you invest now among the Assets: one target $w_i$
+per Asset, in percent, decimals allowed. To calculate, the targets must add up
+to exactly $100\%$:
+
+$$
+\sum_i w_i = 100\%
+$$
+
+Two actions help you get there:
+
+- **Balance all** rescales every target, keeping their ratios:
+
+    $$
+    w_i' = \frac{w_i}{\sum_j w_j} \cdot 100\%
+    $$
+
+    If they are all $0$, every Asset gets an equal part. Rounding keeps the
+    total at exactly $100\%$. To change only some rows, **Balance to 100%** on
+    a row gives that Asset what is missing, or takes away the excess, and
+    **Balance the selected rows to 100%** rescales only the rows you tick.
+
+- **Copy current distribution** reads how much each of these Assets weighs
+  today in the Brokers you tick, counting only these Assets and not cash.
+  With $H_i$ the market value of Asset $i$ held there today:
+
+    $$
+    w_i = \frac{H_i}{\sum_j H_j} \cdot 100\%
+    $$
+
+    The weights are rounded to $0.01$ percentage points and still add up to
+    exactly $100\%$, and an Asset you entered by hand gets $0$. These are
+    weights only, a base to edit and not advice: you see them before using
+    them, and a target you changed is not overwritten without your
+    confirmation.
 
 <!-- [Screenshot Placeholder: tools/pac-step-targets — the Targets step with target percentages adding up to 100% and the Balance all and Copy current distribution actions] -->
 
-<!-- [Screenshot Placeholder: tools/pac-step-review — the Review step with the calculation data, the fields still to complete and the Calculate plan button] -->
+### 💱 FX (only when needed)
 
-Not supported in this version: a tax regime, losses, and sell fees for a
-Broker; a different exchange rate or spread per Broker; a safety margin on the
-rate; a conversion fee on top of the spread; conversions in more than one step
-(for example EUR → USD → CHF).
+This step appears only when the scenario needs exchange rates. It holds one
+rate $x$ per currency pair in play, each **Auto** or **Manual**:
+
+- **Auto**: the latest rate stored in LibreFolio, read when the step opens and
+  again just before the calculation. No data provider is called.
+- **Manual**: your own rate.
+
+It also holds one **Conversion spread** $s$: a percentage of every converted
+amount, kept as a margin for a change in the official rate or for Broker
+fees. Converting an amount $D$ at the rate $x$ (units received for each unit
+converted) gives
+
+$$
+D \cdot x\,(1 - s)
+$$
+
+instead of $D \cdot x$. Valuation, which compares and sums amounts in the
+valuation currency, uses the official rate $x$ without spread; conversions use
+the rate with the spread, $x\,(1 - s)$.
+
+When LibreFolio has no rate for a pair, the step offers **Add the pair** or
+**Download the rates**: each opens the matching window of the FX page, and
+nothing is added or downloaded until you confirm there.
+
+Not supported yet: a different exchange rate or spread per Broker, a safety
+margin on the rate, a conversion fee on top of the spread, and conversions in
+more than one step (for example EUR → USD → CHF).
+
+### 🧠 Strategy
+
+The strategy is **Proportional**: purchases only, it sells nothing.
+
+Among all the purchase plans that respect your settings, it picks the best one
+with a cascade of criteria, each deciding only among the plans still tied on
+the ones above it:
+
+1.  **Closeness to the targets (L2 distance)**: the smallest distance
+
+    $$
+    D = \sum_i \big(V_i - w_i\,R\big)^2
+    $$
+
+    where $V_i$ is the value of Asset $i$ after the plan, $w_i$ its target,
+    and $R$ the **Base of the targets**: the cash you chose that can reach a
+    Broker where it can buy (in a PAC nothing is already invested). So
+    $w_i\,R$ is the ideal value of Asset $i$. Values are in the valuation
+    currency, at the quote price, without fees or price margin. Squaring makes
+    big gaps weigh more, and $D$ is measured in squared money, for example
+    EUR².
+
+2.  **Uninvested money**: the least money left out of the Assets,
+    $R - \sum_i V_i$.
+
+3.  **Broker and source priority**: the smallest sum of the **Priority**
+    numbers of the orders and cash sources the plan uses.
+
+4.  **Explicit costs (fees, spread, margin)**: the lowest total of fees,
+    conversion spread, and price margin, in the valuation currency.
+
+5.  **Number of orders**: the fewest orders.
+
+A fixed order of Assets and Brokers settles any final tie, so a search that
+completes always gives the same plan for the same data; a search stopped by a
+time or node limit can give a different plan on a slower or busier machine.
+
+### ✅ Review
+
+A last check before the calculation. It lists the complete copy that will be
+sent (the backend receives this copy, and only this), flags the fields still
+to complete, and offers **Calculate plan**.
+
+<!-- [Screenshot Placeholder: tools/pac-step-review — the Review step with the calculation data, the fields still to complete and the Calculate plan button] -->
 
 ### 📋 Copied or typed values
 
@@ -91,13 +299,13 @@ you there too.
 ## 📊 Reading the result {: #reading-the-result }
 
 A calculated plan opens with a header: the scenario date, the valuation
-currency, the draft revision, and the `Backend/API` version, then a row of
-badges. Each badge explains itself when you point at it, tap it, or focus it.
-A plan also shows its **L2 distance** from the targets, how much is
-**Not invested**, and how many notes the calculation left; the notes are listed
-just below, under **Notes on the calculation**. **Edit configuration** takes you
-back to the **Review** step, and **Calculate new plan** runs the calculation
-again.
+currency, and the draft revision, then a row of badges. Each badge explains
+itself when you point at it, tap it, or focus it. A plan also shows its
+**L2 distance** from the targets (the $D$ of the **Strategy** step), how much
+is **Not invested**, and how many notes the calculation left; the notes are
+listed just below, under **Notes on the calculation**. **Edit configuration**
+takes you back to the **Review** step, and **Calculate new plan** runs the
+calculation again.
 
 <!-- [Screenshot Placeholder: tools/pac-result — a calculated plan: the outcome badges, the Key figures and the Allocation per Asset table] -->
 
@@ -111,7 +319,7 @@ A calculation ends with one of these outcomes:
 | **No plan within the limits** | The solver found no plan before reaching its limit. This is not a proof that none exists. A lighter search helps: fewer Assets or routes, a lower **Maximum purchase**, or a larger **Increment**. |
 | **More data needed** | Something is missing. Your draft is intact, and no Asset is removed silently: add the missing fact or remove the Asset yourself. |
 | **Input not valid** | Some of the data are not valid. |
-| **Scenario not supported** | Not an error in your data: this version does not handle the case. |
+| **Scenario not supported** | Not an error in your data: the tool does not handle this case yet. |
 
 Every plan shown has been checked again in exact decimal arithmetic,
 independently of the solver: that is the **Verified in Decimal** badge. A last
@@ -127,9 +335,10 @@ data: nothing is calculated, and the problems found are listed, with a link to
 the step concerned when there is one. **Details** adds the backend code of each
 problem.
 
-Platform errors, such as a timeout, a full queue, or a crashed worker, are
-different from all of the above: they are not financial conclusions. The
-[Tools overview](../index.md) explains them.
+Platform errors, such as a timeout, a full queue, or a crashed worker, are not
+financial conclusions about your scenario: your draft stays intact, so try
+again later. If the tool is unavailable, see
+[Settings → About → Plugin diagnostics](../../settings/about.md).
 
 ### 🗂️ How a plan is laid out
 
@@ -142,8 +351,8 @@ Below the outcome, a plan is laid out in this order:
    optimizer worked, the time it was allowed for each objective, and how many
    objectives it closed.
 2. **Allocation per Asset**: for each Asset, its target share next to its share
-   after the plan, with its ideal value, its value after the plan, the gap from
-   the ideal, and the value bought.
+   after the plan, with its ideal value $w_i\,R$, its value after the plan
+   $V_i$, the gap from the ideal $V_i - w_i\,R$, and the value bought.
 3. **Operational plan**: the steps to follow, in order. First the cash
    (**Available cash**, **Transfer**, **Deposit**), then the currency exchanges
    you make yourself, then one table of orders per Broker, with the
@@ -204,8 +413,8 @@ possible to those targets.
 Three properties are worth knowing, because they shape what the planner can
 promise:
 
-- **It buys in each Broker's increments.** Whole units, fractions of a unit
-  down to the step you set, or amounts: increments, fees, and the currencies
+- **It buys in each Broker's increments.** Whole units or amounts, always in
+  multiples of the increment you set: increments, fees, and the currencies
   involved are part of the problem it solves, not a rounding step applied
   afterwards.
 - **Its published numbers come from exact arithmetic.** Every candidate plan is
