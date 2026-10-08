@@ -1,4 +1,4 @@
-"""HTTP compression on the live backend: what ``GZipMiddleware`` in ``backend/app/main.py`` does to each kind of response (M, R2 P0).
+"""HTTP compression and HTML freshness on the live backend: what ``backend/app/main.py`` does to each kind of response (M, R2 P0; L, #26).
 
 ``app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)`` sits in front
 of everything the backend serves, so its contract is as much about what it must leave
@@ -17,11 +17,26 @@ alone as about what it compresses. For a client that sends ``Accept-Encoding: gz
 * Server-Sent Events (``/api/v1/assets/provider/search/stream``) are never compressed:
   the search box reads each provider's results as they arrive.
 
+Every HTML document the backend serves from the frontend build carries ``Cache-Control``
+with both ``no-cache`` and ``must-revalidate`` (#26, «the plugin does not work on
+Chromium»): ``/``, the exact ``.html`` files of the build root (``/index.html``,
+``/200.html``, ``/offline.html``) and the SPA fallback. The entry documents name the
+hashed chunks of the CURRENT build: one served without the header is reused from the
+browser's heuristic cache (a fraction of its ``Last-Modified`` age), and with it the
+previous build and every one of its year-long ``immutable`` chunks, until a manual
+reload. Each document is requested as a browser requests it, gzip accepted, and must be
+the app's own: ``text/html`` and, for the entry documents, naming at least one
+``/_app/immutable/`` chunk, so a lane without a frontend build fails here instead of
+passing on the JSON that ``/`` answers then. The cure stops at the documents: no chunk
+that ``/`` names may turn ``no-cache`` (their ``immutable`` is pinned above).
+
 Nothing here is hard-coded that the build decides: chunk URLs (content hashes) and PNG
 URLs are read from the ``index.html`` the backend serves, and a candidate is used only
-after its size proves it crosses the compression threshold. httpx decodes gzip
-transparently, so every body is read with ``aiter_raw()``: the bytes that travelled, not
-the header's claim about them.
+after its size proves it crosses the compression threshold; the HTML documents are the
+ones ``main.py`` serves by name plus the ``offline.html`` of ``frontend/static``, and the
+client-side route is a fresh one, so no file of the build can answer it. httpx decodes
+gzip transparently, so every body is read with ``aiter_raw()``: the bytes that
+travelled, not the header's claim about them.
 
 The backend is the lane's shared one, started by the runner after ``./dev.py server
 --test`` built the frontend. Every request is a GET on a public resource, except for the
@@ -62,6 +77,14 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # References in the served index.html, absolute ("/_app/…") or relative ("./_app/…").
 IMMUTABLE_JS_REF = re.compile(r"""["']((?:\.{1,2}/|/)?_app/immutable/[^"'\s]+?\.js)["']""")
 PNG_REF = re.compile(r"""(?:href|src)=["']([^"'\s]+?\.png)["']""")
+
+#: #26: every HTML document of the frontend build is revalidated before a browser reuses it.
+REVALIDATE = frozenset({"no-cache", "must-revalidate"})
+#: The app's HTML entry points: ``/`` (index.html) and the two build-root files main.py names, requested
+#: directly. Each names the hashed chunks of its build.
+ENTRY_DOCUMENTS = ("/", "/index.html", "/200.html")
+#: HTML files of the build root that are not the app: the service worker's offline page names no chunk.
+STANDALONE_DOCUMENTS = ("/offline.html",)
 
 PASSWORD = "HttpGzipPass123!"
 SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
@@ -119,6 +142,18 @@ async def served_index(client: httpx.AsyncClient) -> str:
     response, wire = await fetch(client, f"{SERVER_URL}/", accept_encoding="identity")
     assert_frontend_served(response)
     return wire.decode("utf-8")
+
+
+def received_text(response: httpx.Response, wire: bytes) -> str:
+    """The text a browser reads from the bytes that travelled, gzip-encoded or not."""
+    body = gzip.decompress(wire) if response.headers.get("content-encoding") == "gzip" else wire
+    return body.decode("utf-8")
+
+
+def assert_entry_document(response: httpx.Response, wire: bytes) -> None:
+    """The app's HTML entry point: served from the build, and naming the hashed chunks of that build."""
+    assert_frontend_served(response)
+    assert IMMUTABLE_JS_REF.search(received_text(response, wire)), f"{response.url}: this HTML names no /_app/immutable/ chunk, so it is not the app's entry document"
 
 
 async def largest_immutable_chunk(client: httpx.AsyncClient) -> tuple[str, bytes]:
@@ -309,3 +344,51 @@ class TestSpaFallback:
         assert gunzip_wire(packed, packed_wire) == plain_wire
         assert "no-cache" in cache_directives(packed), f"Cache-Control lost on the gzip response: {packed.headers.get('cache-control')!r}"
         print_success(f"200.html: {len(plain_wire)} bytes identity, {len(packed_wire)} bytes gzip, Cache-Control {packed.headers['cache-control']!r}")
+
+
+class TestHtmlRevalidation:
+    """#26: the documents that name the chunks are revalidated on every load; the chunks they name are not."""
+
+    @pytest.mark.asyncio
+    async def test_every_html_document_revalidates(self, test_server):
+        print_section("CACHE-001: every HTML document of the build carries no-cache, must-revalidate")
+        # A fresh client-side route: no file of the build can answer it, only the SPA fallback.
+        client_route = f"/settings/cache-probe-{uuid4().hex[:12]}"
+        documents: dict[str, httpx.Response] = {}
+        async with httpx.AsyncClient() as client:
+            for path in (*ENTRY_DOCUMENTS, client_route, *STANDALONE_DOCUMENTS):
+                # Requested as a browser requests it, gzip accepted: the response a browser stores.
+                response, wire = await fetch(client, f"{SERVER_URL}{path}", accept_encoding="gzip")
+                if path in STANDALONE_DOCUMENTS:
+                    assert_frontend_served(response)
+                else:
+                    assert_entry_document(response, wire)
+                documents[path] = response
+
+        revalidated = {path: REVALIDATE <= cache_directives(response) for path, response in documents.items()}
+        report = "\n".join(f"  {'✓' if ok else '✘'} GET {path} → Cache-Control: {documents[path].headers.get('cache-control')!r}" for path, ok in revalidated.items())
+        print_info(f"Cache-Control of each HTML document:\n{report}")
+        stale = [path for path, ok in revalidated.items() if not ok]
+        assert not stale, (
+            f"{len(stale)} of {len(documents)} HTML documents of the frontend build can be reused from the browser cache without asking the server. "
+            "Each needs Cache-Control with both no-cache and must-revalidate: a browser that reuses a cached copy keeps the previous build, "
+            f"and every /_app/immutable chunk it names, until a manual reload (#26).\n{report}"
+        )
+        print_success(f"{len(documents)} HTML documents, each revalidated before it is reused")
+
+    @pytest.mark.asyncio
+    async def test_chunks_the_root_names_are_never_no_cache(self, test_server):
+        print_section("CACHE-002: the chunks the root names are never no-cache")
+        chunks: dict[str, httpx.Response] = {}
+        async with httpx.AsyncClient() as client:
+            html = await served_index(client)
+            urls = sorted({urljoin(f"{SERVER_URL}/", ref) for ref in IMMUTABLE_JS_REF.findall(html)})
+            assert urls, "the served index.html references no /_app/immutable/*.js chunk"
+            for url in urls:
+                response, _ = await fetch(client, url, accept_encoding="gzip")
+                assert response.status_code == 200, f"{url}: {response.status_code}"
+                chunks[url] = response
+
+        revalidated = [f"  GET {url} → Cache-Control: {response.headers.get('cache-control')!r}" for url, response in chunks.items() if "no-cache" in cache_directives(response)]
+        assert not revalidated, "A content-hashed chunk never changes under its name: no-cache only costs one more round trip per chunk on every load. The #26 cure belongs to the HTML documents, not to /_app.\n" + "\n".join(revalidated)
+        print_success(f"{len(chunks)} chunk(s) named by /, none no-cache (their immutable is GZIP-003's)")
