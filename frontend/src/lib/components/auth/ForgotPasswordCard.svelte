@@ -38,8 +38,11 @@
                 <span class="font-medium text-sm">{$_('auth.serverTerminalInstructions')}</span>
             </div>
 
-            <div class="bg-gray-800 text-green-400 font-mono text-sm p-3 rounded-lg overflow-x-auto">
-                <code>./dev.sh user:reset &lt;username&gt; &lt;new_password&gt;</code>
+            <div class="bg-gray-800 text-green-400 font-mono text-sm p-3 rounded-lg overflow-x-auto" data-testid="forgot-reset-commands">
+                <code class="block whitespace-pre text-gray-400"># Docker</code>
+                <code class="block whitespace-pre">docker compose exec librefolio python dev.py user reset &lt;username&gt; &lt;new_password&gt;</code>
+                <code class="block whitespace-pre mt-2 text-gray-400"># Manual install</code>
+                <code class="block whitespace-pre">./dev.py user reset &lt;username&gt; &lt;new_password&gt;</code>
             </div>
 
             <p class="text-xs text-gray-500">
