@@ -2,29 +2,30 @@
 
 This section explains the authentication model, user roles, and how data is segregated between users and brokers.
 
-## 🔐 Authentication Model (Session-Based)
+## 🔐 Authentication Model (Stateless JWT Cookie)
 
-LibreFolio uses a secure, **Session-Based Authentication** mechanism using HTTP-only cookies.
+LibreFolio authenticates with a **signed JWT** kept in an HTTP-only cookie. The server stores no
+session state, neither in memory nor in the database.
 
 ### 🔄 How it Works
 
-1. **Login**: The user sends their `username` and `password` to the `/api/v1/auth/login` endpoint.
-2. **Session Creation**:
+1. **Login**: The user sends their `username` (or e-mail) and `password` to the `/api/v1/auth/login` endpoint.
+2. **Token Creation**:
     - The server verifies the credentials (using `bcrypt` hashing).
-    - If valid, the server generates a cryptographically strong, random **Session ID** (64 chars).
-    - The session data (User ID, creation time, expiration time) is stored **In-Memory** on the server.
-3. **Cookie Issuance**: The server responds with a `Set-Cookie` header containing the Session ID.
+    - If valid, it signs a JWT with `JWT_SECRET` (HS256) carrying the user ID (`sub`), the issue time (`iat`) and the expiry (`exp`): `create_jwt_token()` in `backend/app/services/auth_service.py`.
+3. **Cookie Issuance**: The server responds with a `Set-Cookie` header for the `session` cookie, which holds the JWT; its `max_age` matches the token's lifetime.
     - **`HttpOnly`**: The cookie cannot be accessed by JavaScript (prevents XSS token theft).
     - **`SameSite=Lax`**: Provides protection against CSRF attacks.
-    - **`Secure`**: (Production only) Ensures the cookie is only sent over HTTPS.
+    - **`Secure`**: not set (`SESSION_COOKIE_SECURE = False` in `backend/app/api/v1/auth.py`), so the browser also sends the cookie over plain HTTP. HTTPS comes from the reverse proxy: see [HTTPS & Deployment Architecture](security.md#https-deployment-architecture).
 4. **Authenticated Requests**: The browser automatically includes the session cookie in subsequent requests.
-5. **Validation**: On every request, the backend checks if the Session ID exists in memory and hasn't expired.
+5. **Validation**: On every request, `get_current_user()` verifies the token's signature and expiry, then loads the user from the database: a missing or deactivated user gets `401` even with a valid token.
 
-### 💾 Session Storage & TTL
+### 💾 Session State, Restarts & TTL
 
-- 🧠 **Storage**: Sessions are currently stored **In-Memory**.
-    - ⚠️ *Implication*: Restarting the backend server invalidates all active sessions (users must log in again).
-- ⏱️ **TTL (Time To Live)**: The session duration is configurable via the `session_ttl_hours` Global Setting (default: 24 hours).
+- 🧠 **Stateless**: Nothing is stored server-side, so any uvicorn worker can validate any token, provided all workers share the same `JWT_SECRET`.
+- 🔑 **Restarts**: Sessions survive a restart only if `JWT_SECRET` is set to a fixed value. Without it, every start generates a new random key, existing tokens no longer verify, and everyone is signed out. See [JWT Secret](security.md#jwt-secret) for how the key is resolved.
+- ⏱️ **TTL (Time To Live)**: The session duration is configurable via the `session_ttl_hours` Global Setting (default: 24 hours), read at login. There is no refresh: after expiry the user logs in again.
+- 🚪 **Revocation**: Logout only deletes the cookie, and a password change leaves existing tokens valid until they expire. Deactivating or deleting the user cuts access at the next request; changing `JWT_SECRET` signs everyone out.
 
 ## 👤 User Roles
 
