@@ -3632,7 +3632,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > **Committato**: `b72d22ab1` · `906d49854` su `d07412899`, albero `c31eb4cc5`, verificato da me (messaggi, 7 blob,
 > worktree pulito). È entrato col treno 9: il ramo è a `9ea2d519b`.
 
-#### Secondo checkpoint: la frase con la cura, e la pagina per sviluppatori · ✅ 07/10/2026 (FROZEN)
+#### Secondo checkpoint: la frase con la cura, e la pagina per sviluppatori · ✅ 07/10/2026 (`3fd9fed9a` · `9590a3763` · `11baf223a`)
 
 > **Il via** (coordinator, dopo il treno 9): il frontend e le 4 chiavi con `dev.py i18n add`, sulla 6152. In più mi assegna
 > la pagina per sviluppatori `developer/backend/risk/architecture.md` (docs-writer, solo inglese, nessuno stamp): il
@@ -3714,3 +3714,45 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >
 > **Il checkpoint**: 12 percorsi in 3 commit (il frontend con i suoi test e il commento del test backend; la pagina per
 > sviluppatori; il diario), su HEAD `9ea2d519b`.
+>
+> **Committato**: `3fd9fed9a` · `9590a3763` · `11baf223a` su `9ea2d519b`, albero `33722fd63`, verificato da me. Entra col
+> treno 11; la riga di CHANGELOG la sostituisce il coordinator, la tabella «Limits» della pagina utente è passata a Q.
+
+#### Le cinque lacune di Q sulla pagina per sviluppatori · ✅ 08/10/2026 (FROZEN)
+
+> **La segnalazione** (coordinator, 08/10): Q ha confrontato la sua bozza con la mia pagina committata (`9590a3763`).
+> Sul resto la mia versione è equivalente o migliore, ma Q trova 5 lacune, che restano mie. Le ho verificate tutte nel
+> codice a `11baf223a`:
+> 1. **L'ordine dei controlli** non c'era, e le righe dei budget non lo seguivano (Sobol era in cima). Nel bootstrap: le
+>    posizioni (`simulation.py:414`), le osservazioni (`:419`), il blocco (`:443`), poi la richiesta (`:458`). Nel GBM:
+>    le posizioni (`:484`), la stima, Sobol solo in QMC (`:504`), poi la richiesta (`:516`). Poi `run_simulation()`, che
+>    comincia con `validate_resource_budget()` (`engine.py:64`), prima della cache: matrice dei percentili, carico
+>    stocastico, storia (solo bootstrap). Ogni controllo solleva un'eccezione, quindi il primo limite superato ferma la
+>    richiesta: 101 posizioni ai valori di default leggono `positions`, non `paths_or_horizon`.
+> 2. **«Assets in the scope»** era impreciso: si contano solo i titoli con una serie di rendimenti utilizzabile. Lo scope
+>    è `usable_scope_asset_ids` (`service.py:818`, passato a `:894`), e gli esclusi non contano.
+> 3. **Mancava il percorso** dei tre budget del motore: `SimulationResourceLimitError`, catturata dal plugin intorno a
+>    `run_simulation()` (`simulation.py:285`) e rilanciata da `_resource_limit()`.
+> 4. **L'ottimizzazione** risponde `resource_limit` con solo `actual` e `limit` (`portfolio_optimization.py:189-197`),
+>    senza `metric` né `remedy`, quindi con la frase generica. Il controllo sta all'inizio di `run_optimization()`, prima
+>    della cache (`optimization_engine.py:59-64`).
+> 5. **La riga di Sobol** diceva «checked by the plugin»: la controlla il builder GBM, `_build_parametric_request()`, solo
+>    in QMC.
+>
+> **Note implementazione** (docs-writer, lo stesso della pagina, solo inglese, nessuno stamp; tutto nella sezione
+> «📏 Budgets»):
+> - una frase d'apertura sull'ordine e sull'arresto al primo limite, con l'esempio delle 101 posizioni;
+> - le righe nell'ordine dei controlli;
+> - la riga delle posizioni dice «with a usable return series»;
+> - il percorso dei budget del motore nel paragrafo sui `details`;
+> - un paragrafo sull'ottimizzazione;
+> - la riga di Sobol nomina il builder GBM.
+>
+> Su sua segnalazione, la riga `resource_limit` della tabella dei codici (`:218`) dice anch'essa «usable». È la stessa
+> lacuna 2, nell'altro punto della pagina.
+>
+> **Fuori pista, per il backlog** (segnalato da docs-writer, verificato da me): l'ottimizzazione oltre 100 titoli
+> utilizzabili risponde `invalid_parameters`, non `resource_limit`. `OptimizationEngineRequest.asset_ids` ha
+> `max_length=100`, la richiesta si costruisce dentro il `try` del plugin, e il `ValidationError`, che è un
+> `ValueError`, cade nel ramo `except ValueError` (`portfolio_optimization.py:224`). Oggi nessun pannello chiede
+> l'ottimizzazione; la regola di D379 riguardava la simulazione. Passato al coordinator.
