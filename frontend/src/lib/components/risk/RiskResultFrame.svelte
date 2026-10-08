@@ -6,7 +6,7 @@
     import {riskMetadata, singleValue} from '$lib/risk/riskTypes';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
-    import {warningSentence, type RiskResultWarning} from './levels/levelHelpers';
+    import {errorDisplayCode, warningSentence, type RiskResultWarning} from './levels/levelHelpers';
 
     interface Props {
         title: string;
@@ -21,7 +21,8 @@
     let {title, description = '', result = null, loading = false, refreshing = false, testId, children}: Props = $props();
 
     let metadata = $derived(riskMetadata(result));
-    let errorCode = $derived(singleValue(result?.error)?.code ?? null);
+    // A size limit is worded by the remedy it names, like the levels' errors (D379).
+    let errorCode = $derived(errorDisplayCode(singleValue(result?.error)));
     let canRender = $derived(Boolean(result && (result.status === 'ok' || result.status === 'partial') && result.output));
 
     function translatedCode(prefix: 'errors', code: string | null | undefined, fallbackKey: string): string {
