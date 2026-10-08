@@ -156,6 +156,36 @@ def _derive_market_amount(
     return gross - fee_amount
 
 
+def _seed_auto_cost_basis(session: Session, tx: Transaction) -> Decimal:
+    """The cost basis Auto mode writes on ``tx``: the WAC of its (broker, asset) position on its date.
+
+    The app computes it when the row is committed, over the position's rows up to that date
+    except the row itself. The seed needs it only for positions built by BUYs in the cost-basis
+    currency, so any other row fails loudly here instead of being guessed.
+    """
+    rows = session.exec(
+        select(Transaction)
+        .where(
+            Transaction.broker_id == tx.broker_id,
+            Transaction.asset_id == tx.asset_id,
+            Transaction.date <= tx.date,
+            Transaction.id != tx.id,
+            Transaction.quantity != 0,
+        )
+        .order_by(Transaction.date, Transaction.id)  # type: ignore[arg-type]
+    ).all()
+    quantity = Decimal("0")
+    cost = Decimal("0")
+    for row in rows:
+        if row.type != TransactionType.BUY or row.currency != tx.cost_basis_currency:
+            raise RuntimeError(f"Auto cost basis for #{tx.id}: unsupported {row.type.value} #{row.id} in {row.currency}")
+        quantity += row.quantity
+        cost -= row.amount
+    if quantity <= 0:
+        raise RuntimeError(f"Auto cost basis for #{tx.id}: no position to take the WAC from")
+    return cost / quantity
+
+
 def _stable_seed(*parts: object) -> int:
     """Return a deterministic RNG seed independent from Python hash randomization."""
     payload = "|".join(str(part) for part in parts).encode("utf-8")
@@ -1426,19 +1456,25 @@ def populate_transactions(session: Session):
             "days_ago": 24,
             "description": "ETH purchase",
         },
-        # Day -7: Staking reward on Coinbase
+        # Day -7: Staking reward on Coinbase, as the Coinbase import saves it: an ADJUSTMENT
+        # bringing the coins in with no cash, its cost basis written in Auto mode (the WAC of
+        # the Coinbase ETH position that day, resolved after the loop). An INTEREST cannot carry
+        # a quantity: the API rejects it, so the app can never produce one.
         {
             "broker": coinbase,
             "asset": eth,
-            "type": TransactionType.INTEREST,
+            "type": TransactionType.ADJUSTMENT,
             "quantity": Decimal("0.002"),
-            "amount": Decimal("5.00"),  # Small staking reward
+            "amount": Decimal("0"),
             "currency": "USD",
+            "cost_basis": "auto",
+            "cost_basis_currency": "USD",
             "days_ago": 7,
             "description": "ETH staking reward",
         },
     ]
 
+    auto_cost_basis_txs: list[Transaction] = []
     for tx_data in transactions:
         # Auto-tag transactions for visual demo of the multi-tag filter on
         # the /transactions page. Tags are stored as a CSV string per-row
@@ -1491,8 +1527,11 @@ def populate_transactions(session: Session):
             currency=tx_data["currency"],
             description=tx_data["description"],
             tags=tags_csv,
+            cost_basis_currency=tx_data.get("cost_basis_currency"),
         )
         session.add(tx)
+        if tx_data.get("cost_basis") == "auto":
+            auto_cost_basis_txs.append(tx)
 
         tx_emoji = {
             TransactionType.DEPOSIT: "💰",
@@ -1505,6 +1544,12 @@ def populate_transactions(session: Session):
 
         asset_name = tx_data["asset"].display_name if tx_data["asset"] else "Cash"
         print(f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({amount} {tx_data['currency']})")
+
+    # Auto mode is resolved once every row above exists, from the dates — not the list order.
+    session.flush()
+    for tx in auto_cost_basis_txs:
+        tx.cost_basis_override = _seed_auto_cost_basis(session, tx)
+        print(f"  🧮 Auto cost basis for {tx.type.value} #{tx.id}: {tx.cost_basis_override} {tx.cost_basis_currency} per unit")
 
     session.commit()
 
@@ -1784,7 +1829,7 @@ def populate_transactions(session: Session):
     # (d) Asym-d: IB↔Hidden — handled in link_transactions_to_events (hidden broker created later)
 
     # 9b. delete-safe TRANSFER pair: Coinbase (EDITOR) → IB (OWNER) — both editable
-    # Coinbase has 0.802 ETH from BUY+INTEREST, so sending 0.001 out is safe.
+    # Coinbase has 0.802 ETH from the BUY and the staking ADJUSTMENT, so sending 0.001 out is safe.
     tx_del_pair_out = Transaction(
         broker_id=coinbase.id,
         asset_id=eth.id,
