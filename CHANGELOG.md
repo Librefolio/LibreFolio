@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - AI Export structural validation now raises typed errors for invalid component, dataset, analysis, policy and detail-level definitions even when Python runs with optimization enabled. Public IDs, versions and catalog ordering remain unchanged.
 - Technical-signal results consistently enforce the declared status matrix for precompute/runtime failures, partial undefined metrics, aligned output and paired metadata, preventing impossible API result combinations.
+- **AI Export describes purchase costs correctly.** The semantics note of Portfolio and Broker exports now says the average cost is historical, each purchase converted at its own date, that FIFO lot costs are converted at the lot's opening date, and that the unrealized P&L includes the exchange-rate effect.
 - **AI Export on the Dashboard waits until your own brokers are known.** An export started right after opening the page could include brokers shared with you as viewer or editor; it now covers only the brokers you own, like the rest of the Dashboard. If you own no broker, the portfolio export is not available.
 
 #### 📥 Imports and transaction editing
@@ -124,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 💱 Exchange rates and the Dashboard
 
+- **An asset priced in another currency but bought in your display currency no longer shows a zero purchase cost.** With the Dashboard in euro, a US-dollar asset bought with euro counted no cost at all, so its whole value appeared as unrealized gain; the purchase cost is now exactly what you paid. Opening positions and transfers whose cost basis is in the display currency are fixed the same way, and no longer inflate the total P&L ([#32](https://github.com/Librefolio/LibreFolio/issues/32)).
+- **A missing exchange rate is no longer a silent zero or an unconverted amount.** When a rate needed for a purchase cost, a sale or a cash movement is missing, the yellow banner names the pair and the dates, and **Sync rates** downloads them; the lots panel reports them too. Until then the affected average price and P&L show "—" instead of a wrong figure.
+- **The broker summary API counts sales and transfers.** `GET /brokers/{id}/summary` used to add up purchase amounts in mixed currencies; each holding's cost and average price now come from its purchases, sales and transfers, in the asset's currency, and are empty when a rate is missing (listed in the new `missing_fx_pairs`).
 - The Dashboard's **Sync rates** for missing exchange rates now downloads the missing dates. It used to download only the period on screen, so rates missing before a pair's first stored rate stayed missing and the warning never cleared; it now downloads the reported dates plus a week either side (never beyond today), reports each pair, and warns when the provider has no rates for those dates.
 - A new currency pair downloads its whole rate history, whichever page it is added from, instead of only that page's period. Pairs added earlier may have a gap at the start of their history: on the FX page choose **All** and click **Sync All** once.
 - The display-currency menus of the Dashboard and of an asset page list only the currencies you can convert to — both ends of each configured pair; the currency a chain route passes through is no longer offered unless it belongs to a configured pair. Preferences and broker settings still list every currency.
@@ -136,6 +140,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### ⚡ Faster reports
 
 - **Reports and the Dashboard no longer stall on long currency histories.** A currency conversion now loads only the exchange rates it can use, instead of the whole history of the pair, with identical results: on a real portfolio with rates going back to 2000, a report in a currency other than the base one went from 10–27 s to under 3 s. Thanks to Martin Sova ([#30](https://github.com/Librefolio/LibreFolio/pull/30)).
+
+#### 🪟 Dialogs and menus
+
+- **Escape inside a dialog closes only the open menu or list.** It used to close the whole dialog as well: closing a row menu discarded the bulk transaction editor.
+- **A broker change the server refuses keeps the dialog open, with the reason** — a name already in use, or turning off overdraft or shorting while a balance is negative — instead of looking saved until the next reload.
 
 #### 📱 Sign-in, language, app icons and small screens
 
@@ -176,6 +185,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New FX-pair configuration closes immediately while automatic synchronization continues in the background. Creation and sync results use flagged, clickable pair links; linked completion feedback keeps the pair, fetched/changed counters and provider badges on one compact detail row. Asset-library creation success links point to the new asset without changing contextual import or transaction flows.
 - **Asset panels follow what is held now.** The Assets page sorts its assets into *Your assets* (held now in a broker you own), *Other users' assets* (held now only by others) and *Watched* (held by no one now — never bought or already sold); having once traded an asset no longer decides where it goes.
 
+#### 💰 Purchase cost and P&L
+
+- **Purchase cost is what you paid, in the display currency.** Each purchase is converted at its own date's rate, so the purchase cost of an asset priced in another currency no longer moves with today's rate; sales are measured against that cost, and the average price per unit and the yield on cost follow it. Portfolios in a single currency show the same figures as before, except for the case below.
+- **Shares added without a cost basis are flagged.** A transfer or adjustment that adds shares without a cost basis now counts at zero cost in the totals, its position's average price and P&L show "—", and the yellow banner lists the asset so you can set its cost; the Dashboard used to enter it silently at the current average price. The lots panel flags it too.
+- **The unrealized change includes the exchange rate, and its tooltip splits it.** For assets priced in another currency, the Dashboard's *Unrealized change* now includes the effect of the exchange rate, which used to end up in the reconciliation residual; its tooltip shows the assets' own change for each currency and the exchange-rate effect for each pair.
+
 #### 📉 Risk Analysis leaves beta, except the simulation
 
 - **Risk Analysis is no longer marked beta.** The beta notice used to sit above every risk surface, which said the whole subsystem was provisional. It now appears on the **simulation** step alone, where it names the reason: the outcome depends heavily on how much history is requested relative to the horizon, so a short window with a long horizon can produce implausible figures. The permanent reminder that a model is a model stays where it was, below it. Asset Detail keeps its beta notice: its risk view has not been rebuilt yet.
@@ -194,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **What if…? opens on a tool selector.** On the Dashboard and on a broker's page, the section offers the historical replay, the hypothetical shock and the simulation as tools you add one at a time, always in that order. Nothing is open on your first visit; after that, the tools you left open come back, in this browser. Closing a tool with its × also removes its answer.
 - **The risk/return scatter now renders** on the Dashboard and on Broker pages. It had never appeared: the panel neither asked the backend for the figures nor passed them on.
 - **A failure inside a risk calculation is now reported as ours.** Every internal error used to be answered with *«the metric is undefined for these data»* — a verdict about the portfolio — and was never logged. Undeclared failures now say the calculation failed and are recorded; an analytic that genuinely has no defined value still says so.
-- **A simulation too large to run now says so.** Every size limit of the simulation answers *This calculation is too large to run.* At the default settings a 67th holding used to read *Invalid calculation parameters*, and beyond 100 holdings, or with a window of more than 5,000 observations, *The backend calculation failed*. A quasi-random simulation reaches its limit with an ordinary portfolio: at the longest horizon, between five and six assets.
+- **A simulation too large to run says so, and what to change.** At the default settings a 67th holding used to read *Invalid calculation parameters*, and beyond 100 holdings, or with a window of more than 5,000 observations, *The backend calculation failed*. Each size limit now names its remedy: *Use fewer simulation paths or a shorter horizon*, *Choose a shorter period*, or, for a quasi-Monte Carlo simulation, *Shorten the horizon or choose Monte Carlo sampling*; beyond 100 holdings, *Simulate a broker with fewer holdings instead*. A quasi-random simulation reaches its limit with an ordinary portfolio: at the longest horizon, between five and six assets.
 
 #### 🕰️ Historical replay and shock
 
@@ -207,6 +222,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Indicators count trading sessions**, as their standard definitions do: an SMA 200 spans 200 sessions, not 200 calendar days. Bollinger and Donchian bands fill across weekends, and the partial-coverage warning no longer counts weekends and holidays as excluded days.
 - **The risk signals have their guide button**, which opens their theory page.
+
+### ⚠️ Breaking changes
+
+- **`GET /brokers/{id}/summary`: the cost fields can be empty.** Each holding's `total_cost` and `average_cost_per_unit` now come from its purchases, sales and transfers, in the asset's currency, and are `null` when an exchange rate they need is missing; the new `missing_fx_pairs` lists those pairs. A client reading the summary must accept `null` in those two fields.
 
 ---
 
