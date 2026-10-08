@@ -323,3 +323,53 @@
 > - Ruff and black: clean.
 > - `release-pipeline.md` (docs-writer): «🔖 Release Tags and Publishing» (anchor `#prereleases` kept) with a two-branch table, the refreshed YAML, both «why» bullets, «How to publish», the diagram box «Tag matches its kind? (rc / plain)», the gate and contract sentences, and the closed gap.
 > - `mkdocs build` strict: 0 warnings. `check-links`: 89 valid plus the pre-existing `#rolling-return`. `git diff --check`: clean.
+
+## Batch 3 — Q's screenshot inventory (base `9d79c2dbe`, train 10, Q's pages included)
+
+### 13. ⏳ Inventory: start, and the event popover after I's fix — 2026-10-07
+> **Note implementazione**:
+> - Clean base `9d79c2dbe`. Q's placeholders: 125 occurrences in EN pages, 40 names.
+>   - 8 are third-party broker-portal screenshots (Coinbase, Degiro, IBKR, …), which are out of scope because the gallery cannot produce them.
+>   - One more is a `gallery-index` editorial note (add Tools / Risk Analysis / Onboarding bullets once those shots exist).
+>   - Reference list: session file `placeholders_9d79c2dbe.txt`.
+> - **`:3383` Asset detail event popover**, re-run after I's fix (train 9): ✅ desktop 43 s, mobile 45 s, 16 shots (es/dark checked: dividend tooltip on the marker). All 7 scenarios red on the 10-06 nightly are now green on the lane.
+> - Order approved by the coordinator: groups 1 (single screens, plus `assets/detail-chart-rolling-return`, unblocked), 3 (Danske), 4 (risk lab, plus `whatif-simulation`, unblocked with N), 5 (onboarding), 6 (PAC), 7 (provider compare).
+>   - Group 2 (P&L, privacy) waits for I's chart batch.
+>   - `dashboard/data-quality-sync-rates` is pending a coordinator confirmation that N's part is complete.
+> - One test-author at a time on `gallery.spec.ts` (shared file within M): group 1 is in progress.
+>
+> **Group 1** (test-author, `gallery.spec.ts` only):
+> - 6 of 7 scenarios written, plus the shared helper `waitForMotionSettled`:
+>   - `settings/about-tool-diagnostics`;
+>   - `tools/hub` (new `Tools` describe);
+>   - `support/donation-popup` (new `Support` describe; the login response is intercepted to set `show_donation_popup` and the language/theme for each combination, no DB writes);
+>   - `support/social-share-modal` (Reddit);
+>   - `assets/detail-chart-rolling-return`;
+>   - `assets/type-picker-open`.
+> - Lane run (6158, 1 worker, desktop + mobile): **12/12 passed**, 96 PNGs, 3.4 min. Evidence: `release-pipeline/runs/G1_run1.log`.
+> - Visual check of a sample (4 languages, both themes, desktop + mobile): `hub`, type picker (on mobile it opens upward, the picker's own behaviour), rolling return, donation popup and diagnostics are correct.
+> - Rolling return: page range **1W** with window **1Y** (Q's placeholder asks for the 1Y window). The seeded prices start 2025-09-23, so a 1Y page would show a mostly partial 1Y window. A wider axis needs ≥ 2 years of mock prices (`populate_mock_data.py`, not M's surface).
+> - `settings/onboarding-replay` is **blocked**: the category buttons in `SettingsLayout.svelte` have neither a testid nor a selected state. Proposal: `settings-category-{id}` + `aria-pressed`, and `settings-mobile-category-trigger` / `settings-mobile-category-{id}`. Owner to be decided by the coordinator.
+>
+> **⚠️ Fuori pista — product bug found by the visual check (not fixed by M):**
+> - `support/social-share-modal` (desktop and mobile) shows a 32 px strip at the bottom of the viewport that the backdrop does not dim. The donation popup does not.
+> - DOM probe on the lane (`release-pipeline/scripts/probe_share_backdrop{,_v2,_v3}.cjs`, outputs `runs/probe_share_backdrop*.json`): the ModalBase `.modal-backdrop` (`position:fixed; inset:0`) computes **`margin-bottom: 32px`**, so its box is 688 px instead of 720. This holds at scroll 0, 100 and at the bottom; no ancestor creates a containing block.
+> - Cause: `AboutTab.svelte:586` mounts `<SocialShareModal>` as a non-last child of `div.space-y-8` (`:247`). Tailwind `space-y-8` puts `margin-block-end: 2rem` on every child but the last, and that includes the in-place backdrop.
+> - Effect for users: the strip is not dimmed and stays **clickable** under an `aria-modal` dialog. `elementFromPoint(100,700)` is `sidebar-version`.
+> - Generic fix proposed: `margin: 0` on `.modal-backdrop`. Unlayered Svelte CSS beats Tailwind's `@layer utilities` `:where()` rules, and the fix also covers `space-x-*`.
+> - Reported to the coordinator. After the fix, only this scenario is re-shot.
+>
+> **Group 1: placeholders in the EN docs** (`docs-writer`, EN only, no stamp: the pages were already stale because of Q's placeholders, and the debt stays real until the alignment):
+> - 19 occurrences replaced:
+>   - `gallery/{desktop,mobile}.en.md`: 3 Settings entries, Rolling Return, Asset Type Picker, and the new section `---` + `## 🧰 Tools` + «Tools Hub». The 9 `tools/pac-*` placeholders remain inside the section; mobile entries use `screenshot-container mobile`.
+>   - `user/settings/about` (3), `user/tools/index`, `user/assets/create-edit`, `user/assets/detail/chart`.
+>   - `index.en.md` DD6 «Planning Tools» back to `deep-dive reverse` with an image column, modelled on DD2.
+>   - `gallery/index` gets the Tools bullet; the comment now names only Risk Analysis and Onboarding.
+> - Text taken byte for byte from the placeholders. Each gallery page has 10 `##` and 10 `---`; no `###` has one.
+>
+> **Gates** (load ~16–20):
+> - `mkdocs build` strict: exit 0, 0 WARNING/ERROR (`runs/G1_mkdocs_build.log`).
+> - `check-links`: 89 valid, 3 known exceptions, plus the pre-existing `#rolling-return`, unchanged from the baseline (`runs/G1_check_links.log`).
+> - Prettier on `gallery.spec.ts`: ok. `git diff --check`: clean.
+> - Built site served statically on 6168 (`scripts/site_visual_check_g1.cjs`): DD6 renders `reverse` with `tools/hub`; the gallery and `user/tools` images resolve (`runs/G1_site_*.png`).
+> - Ports 6158 and 6168 free after the run.
