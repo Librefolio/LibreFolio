@@ -170,7 +170,9 @@
     }
 
     function syncPersistedPreferences(values = originalValues) {
+        // Merge: setDirect replaces the whole value, and the sidebar reads avatar_url from it.
         userSettings.setDirect({
+            ...userSettings.get(),
             language: values.language,
             base_currency: values.default_currency,
             theme: values.theme,

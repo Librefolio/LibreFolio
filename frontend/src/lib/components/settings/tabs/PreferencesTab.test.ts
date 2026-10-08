@@ -117,7 +117,10 @@ vi.mock('$lib/stores/app/language', () => {
 });
 
 const setDirect = vi.fn();
-vi.mock('$lib/stores/app/settings', () => ({userSettings: {setDirect: (...a: unknown[]) => setDirect(...a), get: () => null}}));
+// What the store already holds when the tab writes to it. Null (the store before its
+// first load) unless a test says otherwise: see `beforeEach`.
+const storedSettings = vi.fn<() => Record<string, unknown> | null>();
+vi.mock('$lib/stores/app/settings', () => ({userSettings: {setDirect: (...a: unknown[]) => setDirect(...a), get: () => storedSettings()}}));
 
 // The currency dropdown fetches its own catalogue; stub it with two entries so
 // the row is drivable without any network, and inert everywhere else.
@@ -233,6 +236,8 @@ beforeEach(() => {
     currentLanguage.set('en');
     locale.set('en');
     vi.clearAllMocks();
+    // clearAllMocks keeps implementations, so a stored record one test programmed would leak.
+    storedSettings.mockReturnValue(null);
     globalGet().mockResolvedValue(globalItems() as never);
     userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'auto'} as never);
     userPut().mockResolvedValue({} as never);
@@ -469,6 +474,51 @@ describe('PreferencesTab — what a single-field save puts on the wire', () => {
 
         // originalValues moves to the saved value, so the row is no longer modified.
         await waitFor(() => expect(rowButton(themeRow(), 'save')).toBeNull());
+    });
+});
+
+// =========================================================================
+describe('PreferencesTab — the settings store keeps what a save does not own', () => {
+    // The store holds the user's whole settings record, and the sidebar reads the avatar
+    // from it. A preference save owns three of its fields: handing `setDirect` those three
+    // alone replaces the record, and the avatar is gone from the sidebar until the next
+    // reload. `future_field` stands for any field this tab has never heard of.
+    const STORED = {language: 'en', base_currency: 'EUR', theme: 'auto', avatar_url: 'https://example.test/me.png', future_field: 'kept'};
+
+    const cases: [string, () => Promise<void>, () => HTMLElement, Record<string, string>][] = [
+        ['theme', () => chooseTheme('dark'), themeRow, {theme: 'dark'}],
+        ['language', () => chooseLanguage('Italiano'), languageRow, {language: 'it'}],
+        ['base currency', () => chooseCurrency('USD'), currencyRow, {base_currency: 'USD'}],
+    ];
+
+    it.each(cases)('saving the %s keeps the avatar and every other stored field', async (_field, choose, row, saved) => {
+        storedSettings.mockReturnValue({...STORED});
+        await mount();
+        await choose();
+
+        await fireEvent.click(rowButton(row(), 'save')!);
+
+        await waitFor(() => expect(setDirect).toHaveBeenCalledTimes(1));
+        const handed = setDirect.mock.calls[0][0];
+        expect(handed, 'the avatar the sidebar reads is still in the store').toHaveProperty('avatar_url', STORED.avatar_url);
+        expect(handed, 'a field the tab knows nothing about is still in the store').toHaveProperty('future_field', 'kept');
+        expect(handed, 'the store carries the value just saved, and the rest as it was').toEqual({...STORED, ...saved});
+    });
+
+    it('keeps them through save all too', async () => {
+        // The bulk path writes the store from its own call site, once, after the loop.
+        storedSettings.mockReturnValue({...STORED});
+        await mount();
+        await chooseTheme('dark');
+        await chooseLanguage('Italiano');
+        await chooseCurrency('USD');
+
+        await fireEvent.click(screen.getByTestId('settings-save-all'));
+
+        await waitFor(() => expect(setDirect).toHaveBeenCalledTimes(1));
+        const handed = setDirect.mock.calls[0][0];
+        expect(handed, 'the avatar the sidebar reads is still in the store').toHaveProperty('avatar_url', STORED.avatar_url);
+        expect(handed, 'the store carries the three values just saved, and the rest as it was').toEqual({...STORED, language: 'it', base_currency: 'USD', theme: 'dark'});
     });
 });
 
