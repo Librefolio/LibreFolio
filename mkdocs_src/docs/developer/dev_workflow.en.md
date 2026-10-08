@@ -140,8 +140,7 @@ Then open `http://localhost:6041` and sign in as a test user, for example `e2e_t
 
     Each of these blocks it on its own:
 
-    - **`dev.py` cannot start in the container.** `main()` imports `scripts.test_runner` to build its parser, `scripts/test_runner/_common.py` imports `backend.test_scripts`, and `.dockerignore` keeps `backend/test_scripts/` out of the image: `ModuleNotFoundError`. Every `./dev.py docker exec …` fails the same way, as the [Advanced Docker Guide](../admin/docker_advanced.md) tells admins.
-    - **`test db populate`** runs `backend.test_scripts.test_db.populate_mock_data`, missing for the same reason.
+    - **`test` is not part of the image.** `dev.py` registers a command group only when the directories it needs exist (`_has()` in `dev.py`): without `backend/test_scripts/`, which `.dockerignore` keeps out, `test` stays listed but answers *'test' is not available in this installation* and exits with `2`, so `test db populate` cannot seed the test database. `i18n` (`frontend/scripts/`) and `mkdocs translate` / `translate-validate` (`mkdocs_src/aphra-pipeline/`) behave the same way; `./dev.py test utils dev-cli-image` pins this behaviour on a copy of the image's file set.
     - **`server --test`** forces a debug frontend build, while the image ships a production one: `auto_build_frontend()` sees the mode mismatch and rebuilds, which runs `npm` (API client generation, then the build itself), and the image has no Node.js.
 
 The test database is `/app/backend/data/test/sqlite/app.db` (from `LIBREFOLIO_TEST_DATA_DIR=./backend/data/test`), in the container's writable layer: it survives `docker compose stop` and `docker compose start` (the container is stopped, not removed) and is lost with `docker compose down`. To keep it, add a bind mount:

@@ -151,6 +151,11 @@ sync function and result-row snippet; sections without targets are hidden, and a
 parallel under one countdown. Closing the modal does not cancel the backend request, but each
 opening is a new session: a late answer from an abandoned run is not shown in the next one.
 
+The **Timeout** field (default `max(20, item count)` s) drives the countdown and the limit of every
+request, retries included: `syncRequestTimeoutMs()` (`utils/sync/syncHelpers.ts`) hands each
+section's sync function `max(120 s, field + 5 s)`, and the timeout message names that limit, which can
+be longer than the field.
+
 | Component | Syncs | Used by |
 |---|---|---|
 | `AssetSyncModal` (`components/assets/`) | Asset prices | Assets list |

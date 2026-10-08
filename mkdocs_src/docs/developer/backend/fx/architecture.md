@@ -59,9 +59,11 @@ request's `start` is a `SyncStartDate` (`date | Literal["min"]`, `backend/app/sc
 the sync passes it to the providers as an `FXProviderStartDate` (`backend/app/services/fx.py`). Asking
 for the whole history, rather than the period of the page that opened the dialog, gives older
 transactions a rate too. A full history can outlast the client's default timeout, so this request waits
-up to 120 s (`FX_SYNC_TIMEOUT_MS`) — the same fixed limit `FxSyncModal` and `PageSyncModal` send.
-Their **Timeout** field (`SyncModalBase`, default `max(20, item count)` s) drives only the countdown
-and the timeout message, not the request.
+up to 120 s (`FX_SYNC_TIMEOUT_MS`), like the Dashboard's rate sync. The sync windows (`FxSyncModal`,
+`AssetSyncModal`, `PageSyncModal`) instead give each request the limit of their **Timeout** field
+(`SyncModalBase`, default `max(20, item count)` s): `syncRequestTimeoutMs()`
+(`frontend/src/lib/utils/sync/syncHelpers.ts`) returns `max(120 s, field + 5 s)`, so a larger field
+lengthens the request and a smaller one keeps the 120 s floor.
 
 The request carries the new pair and the intermediate pairs saved with
 **Also create intermediate pairs**. A pair saved with no route (the `MANUAL` sentinel only) starts

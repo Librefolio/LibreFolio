@@ -202,9 +202,7 @@ Without a checkout, the plain commands do the day-to-day work: `docker compose u
 ./dev.py docker exec user list
 ```
 
-!!! warning "Not available with the current image"
-
-    The image does not ship the test modules that `dev.py` loads at startup, so every `./dev.py docker exec …` command currently stops with `ModuleNotFoundError: No module named 'backend.test_scripts'`. You can still create the first account in the browser, and the two maintenance tasks below need no `dev.py`.
+In the image, `user`, `db` and `info` work. The development commands (`test`, `i18n`, `mkdocs translate` and `mkdocs translate-validate`) are listed too, but they only answer that they are *not available in this installation*: the image ships the application, not the development tree.
 
 **Database migrations need no command.** The server applies pending migrations every time it starts: after `docker compose pull` and `docker compose up -d` there is nothing else to run, and `docker compose restart librefolio` retries them after a failure. Do not use `./dev.py docker exec db upgrade`: `db upgrade` refuses to run while a server listens on the production port, and in the container the server is the main process, always running.
 
