@@ -11,20 +11,33 @@
  *   T7  Error file guard: parse error shown per-file, Continue disabled if ALL files failed
  *   T8  Multi-cycle: import twice from same wizard session adds more rows to BulkModal
  *
- * Prerequisites: backend test mode (port 6041), mock data populated with --with-reports.
- * Mock data contract: populate_mock_data.py uploads sample files for:
- *   - "Interactive Brokers" → ibkr-trades-export.csv (broker_ibkr plugin)
- *   - "Charles Schwab" → schwab-export.csv (broker_schwab plugin)
+ * The file. Every test owns a copy of the IBKR sample (`ibkr-trades-export.csv`): uploaded through
+ * the API to the seeded "Interactive Brokers" broker under a unique name before the wizard reads
+ * the broker files, selected in step 2 by its file id — wherever the panel's pages put it — and
+ * deleted after the test. It is the same broker the seeded copies live on, so the parse is asked
+ * for the same broker and its duplicate verdicts are computed against the same transactions (T5).
+ * Nothing is committed: T1 hands the review to the BulkModal, which is never saved.
+ *
+ * The walk from the analysis to the review is the shared one (fixtures/import-wizard.ts): the
+ * notices' confirmation is read past when the parse response carries notices, and the conditional
+ * steps are crossed when the stepper lands on them — never probed for.
+ *
+ * Prerequisites: the seeded "Interactive Brokers" broker (populate_mock_data.py, populate_brokers),
+ * on which the test user is an owner.
  *
  * Flow: BulkModal "Import" button → ImportWizardModal (4 steps) → onImportBatch → BulkModal
  */
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
+import {waitForSettled} from '../fixtures/app-events';
+import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, uploadOwnedReport, type OwnedReport} from '../fixtures/import-wizard';
 import {appears} from '../fixtures/probe';
 
 test.setTimeout(60_000);
+
+/** The seeded broker the sample belongs to, and the sample each test uploads a copy of. */
+const IBKR_SAMPLE = {brokerName: 'Interactive Brokers', sample: 'ibkr-trades-export.csv'};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,92 +83,40 @@ async function skipToStep2(page: Page) {
     await waitForSettled(page.getByTestId('import-wizard-step2'));
 }
 
-/** Select the first available file from first expanded broker panel. */
-async function selectFirstAvailableFile(page: Page) {
-    // DataTable uses <button class="checkbox-btn"> inside <td class="td-select">,
-    // NOT input[type="checkbox"]. Brokers are auto-expanded when they have files.
-    const step2 = page.getByTestId('import-wizard-step2');
-
-    // Wait for the row to exist instead of sleeping and hoping. The first test of
-    // the file loads the broker file list cold, which took longer than the old
-    // 400 ms nap; the selection was then skipped silently and the failure surfaced
-    // one line later as an inscrutable "Parse (0)".
-    const firstCheckbox = step2.locator('td.td-select button.checkbox-btn').first();
-    await expect(firstCheckbox, 'no importable file listed — check populate --with-reports').toBeVisible({timeout: 15_000});
-    await firstCheckbox.click();
-}
-
-/** Parse selected files and wait for parse to complete. */
-async function parseFiles(page: Page) {
-    const parseBtn = page.getByTestId('import-wizard-parse');
-    await expect(parseBtn).toBeEnabled({timeout: 3_000});
-    await parseBtn.click();
-    // Wait for Step 3 to appear and parsing to complete (all files reach terminal status)
-    await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 10_000});
-    // Wait for Continue button to be enabled (all parsing done)
-    await waitForParseVerdict(page);
-}
-
-/**
- * Navigate from Step 3 to the Review step, handling the optional warnings confirmation
- * modal and the two steps that only appear when they have something to do:
- * "Corrections" (rows the plugin flagged) and "Duplicates" (rows that collide with the
- * database or with another file in the same import). Both auto-skip when empty.
- */
-async function continueToReview(page: Page) {
-    await page.getByTestId('import-wizard-continue').click();
-    // If parse generated warnings, a confirmation modal appears — dismiss it to proceed
-    const warningConfirm = page.getByTestId('import-wizard-warning-confirm');
-    if (await warningConfirm.isVisible({timeout: 2_000}).catch(() => false)) {
-        await warningConfirm.click();
-    }
-    await passOptionalWizardSteps(page);
-    await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
-    await waitForSettled(page.getByTestId('import-wizard-step4'));
-}
-
-/**
- * Clicks through the conditional steps if the wizard decided to show them: "Unify assets"
- * (P3 — two entries that look like the same instrument), "Corrections" and "Duplicates".
- * All three auto-skip when they have nothing to do, so their order is what matters here.
- */
-export async function passOptionalWizardSteps(page: Page) {
-    for (const testid of ['import-wizard-assets-continue', 'import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
-        const button = page.getByTestId(testid);
-        if (await button.isVisible({timeout: 1_500}).catch(() => false)) {
-            await button.click();
-            // The step is passed when its continue button is gone; sleeping 300ms was
-            // a guess that the next iteration would not find the same button again.
-            await expect(button).toBeHidden({timeout: 5_000});
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 test.describe('BRIM Import Wizard', () => {
-    // SERIAL — shared, finite, mutable fixture.
+    // SERIAL — kept only until a --workers 4 run shows it can go.
     //
-    // Every test here parses "the first available file", and there are only the
-    // two sample files populate_mock_data.py uploads. Parsing is documented as a
-    // preview that persists nothing to the *database*, but it does rewrite the
-    // file's metadata JSON (`last_parse_result`, `parsed_plugin_code`) — a
-    // read-modify-write on a file two workers can enter at once. Concurrent runs
-    // produced a file whose parse never reached a terminal status, and the only
-    // visible symptom was Continue staying disabled for 30 s: a red that names
-    // nothing.
+    // The reason it was declared no longer holds. Every test parsed "the first available
+    // file", one of the samples populate_mock_data.py uploads, and a parse rewrites the file's
+    // metadata JSON (`last_parse_result`, `parsed_plugin_code`): a read-modify-write two workers
+    // could enter at once, last writer wins, and these tests read back what they had written.
+    // Each test now uploads, parses and deletes its own copy of the sample, so no two tests share
+    // a file; nothing else here writes — the review is handed to the BulkModal, never saved.
     //
-    // The write itself is now atomic (brim_provider._write_metadata_atomic), so
-    // a loser can no longer corrupt the metadata — but last-writer-wins is still
-    // the semantics, and these tests read back what they just wrote. Promoting
-    // this block needs per-test uploaded files, not a smaller sleep.
+    // Removing a declared exception takes a run as evidence (frontend-testing.instructions.md,
+    // "There is no flag to un-serialise a block"): comment this out, run the spec at --workers 4,
+    // then delete it — and its entry in the exception lists of the instructions and of
+    // playwright.config.ts — or restore it with the reason that run finds.
     test.describe.configure({mode: 'serial'});
+
+    /** This test's copy of the IBKR sample. */
+    let sample: OwnedReport;
+    /** Every report the running test uploaded: afterEach deletes them and empties the list. */
+    const ownedReports: OwnedReport[] = [];
 
     test.beforeEach(async ({page}) => {
         await login(page);
+        // The file first: the wizard reads the broker files when it enters step 2.
+        sample = await uploadOwnedReport(page, ownedReports, IBKR_SAMPLE);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwnedReports(page, ownedReports);
     });
 
     test('T1: happy path — open wizard, parse IBKR file, review, import to BulkModal', async ({page}) => {
@@ -170,19 +131,19 @@ test.describe('BRIM Import Wizard', () => {
 
         // Step 2 — select IBKR file
         await expect(page.getByTestId('import-wizard-step2')).toBeVisible();
-        // Look for a file row from IBKR or any broker
-        await selectFirstAvailableFile(page);
+        // This test's own copy, in the Interactive Brokers panel, on whichever page it is
+        await selectBrokerFile(page, sample);
         await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 3_000});
 
         // Parse
-        await parseFiles(page);
+        const parsed = await parseSelectedFile(page, sample.fileId);
 
         // Step 3 — at least one success row visible, Continue enabled
         await expect(page.getByTestId('import-wizard-step3')).toBeVisible();
         await expect(page.getByTestId('import-wizard-continue')).toBeEnabled();
 
         // Continue to Step 4 — Review
-        await continueToReview(page);
+        await continueToReview(page, parsed);
 
         // Step 4 — TX table visible with rows
         await expect(page.getByTestId('import-wizard-step4')).toBeVisible();
@@ -208,9 +169,9 @@ test.describe('BRIM Import Wizard', () => {
     test('T2: Step 3 → Step 4 skip when no unresolved assets', async ({page}) => {
         await openBulkModalAndImport(page);
         await skipToStep2(page);
-        await selectFirstAvailableFile(page);
-        await parseFiles(page);
-        await continueToReview(page);
+        await selectBrokerFile(page, sample);
+        const parsed = await parseSelectedFile(page, sample.fileId);
+        await continueToReview(page, parsed);
 
         // Check if resolve section is absent (no asset resolutions) OR all auto-resolved
         const resolveHeader = page.locator('[data-testid="import-wizard-step4"]').getByText(/Resolve Assets/i);
@@ -227,9 +188,9 @@ test.describe('BRIM Import Wizard', () => {
     test('T3: asset resolution — unresolved asset shows search zone', async ({page}) => {
         await openBulkModalAndImport(page);
         await skipToStep2(page);
-        await selectFirstAvailableFile(page);
-        await parseFiles(page);
-        await continueToReview(page);
+        await selectBrokerFile(page, sample);
+        const parsed = await parseSelectedFile(page, sample.fileId);
+        await continueToReview(page, parsed);
 
         const step4 = page.getByTestId('import-wizard-step4');
         await expect(step4).toBeVisible();
@@ -260,9 +221,9 @@ test.describe('BRIM Import Wizard', () => {
     test('T4: import disabled when selected TX has unresolved asset', async ({page}) => {
         await openBulkModalAndImport(page);
         await skipToStep2(page);
-        await selectFirstAvailableFile(page);
-        await parseFiles(page);
-        await continueToReview(page);
+        await selectBrokerFile(page, sample);
+        const parsed = await parseSelectedFile(page, sample.fileId);
+        await continueToReview(page, parsed);
 
         const step4 = page.getByTestId('import-wizard-step4');
         const importBtn = page.getByTestId('import-wizard-import');
@@ -284,9 +245,9 @@ test.describe('BRIM Import Wizard', () => {
     test('T5: likely duplicates deselected by default', async ({page}) => {
         await openBulkModalAndImport(page);
         await skipToStep2(page);
-        await selectFirstAvailableFile(page);
-        await parseFiles(page);
-        await continueToReview(page);
+        await selectBrokerFile(page, sample);
+        const parsed = await parseSelectedFile(page, sample.fileId);
+        await continueToReview(page, parsed);
 
         const step4 = page.getByTestId('import-wizard-step4');
 
@@ -302,8 +263,8 @@ test.describe('BRIM Import Wizard', () => {
     test('T6: unsaved work guard — close wizard shows discard confirm', async ({page}) => {
         await openBulkModalAndImport(page);
         await skipToStep2(page);
-        await selectFirstAvailableFile(page);
-        await parseFiles(page);
+        await selectBrokerFile(page, sample);
+        await parseSelectedFile(page, sample.fileId);
 
         // Close button while work exists
         await page.getByTestId('import-wizard-close').click();
@@ -334,9 +295,9 @@ test.describe('BRIM Import Wizard', () => {
     test('T8: stepper back-navigation from Review walks back to the analysis step', async ({page}) => {
         await openBulkModalAndImport(page);
         await skipToStep2(page);
-        await selectFirstAvailableFile(page);
-        await parseFiles(page);
-        await continueToReview(page);
+        await selectBrokerFile(page, sample);
+        const parsed = await parseSelectedFile(page, sample.fileId);
+        await continueToReview(page, parsed);
 
         // Back does not jump straight to the analysis any more: it lands on whichever
         // conditional step was shown on the way in (unify assets / corrections /

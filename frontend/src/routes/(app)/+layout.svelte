@@ -44,6 +44,11 @@
     // Initialize i18n
     initI18n();
 
+    // As in the root layout: only the first dictionary shows the loading screen. A later
+    // language switch keeps the app mounted, so no page is rebuilt and no draft is lost.
+    let i18nBooted = false;
+    $: if (!$i18nLoading) i18nBooted = true;
+
     // Track SPA navigation depth for smart back-navigation
     afterNavigate((nav) => {
         const url = nav.to?.url;
@@ -194,8 +199,8 @@
     }
 </script>
 
-{#if $i18nLoading}
-    <!-- Loading screen while translations load -->
+{#if !i18nBooted}
+    <!-- Loading screen while the first translations load -->
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
         <div class="text-libre-green dark:text-green-400 text-xl">Loading...</div>
     </div>
