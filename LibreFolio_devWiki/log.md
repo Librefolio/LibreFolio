@@ -2262,3 +2262,21 @@ Welcome language preview whose catalogue took more than 200 ms was rebuilt back 
 Fixed with a first-dictionary latch; regression E2E 3c and a layout unit case.
 Filed: [[problems/i18n-loading-gate-remounts-app]].
 Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-08] file | Two parallel passes lost all their coverage: a part renamed under `coverage combine`
+Analysis and fix of the 2026-10-07 coverage-combine failure (backend read 36.8 % in a green run). The resource
+tracker's part was renamed between the runner's listing and coverage's start, and coverage aborted the combine.
+The runner now combines the directory, keeps one parts directory per run and turns the pass red on a failed
+combine. The first real pass also found empty parts left by a SIGTERM during coverage's own save; these are
+removed and named. The causes are in the backlog.
+Filed: [[problems/coverage-combine-race-renamed-part]]. Updated: [[concepts/test-isolation-classes]] (the
+`COVERAGE_FILE` row).
+Graph: the graphify `--update` is **deferred** (graphify unavailable in this worktree).
+
+## [2026-10-08] update | Import Todo Signals: todos reach the bulk editor, worded like notices
+The concept page still said todos never leave the wizard and that `message` is an English fallback. Todos travel
+with their rows into the bulk editor (blockers gate Save All, warnings feed the save gate); `message` is the
+plugin's wording in the file's language, and `resolveBrimTodoMessage` now words them on every surface,
+the bulk editor included (workstream O, S19).
+Updated: [[concepts/import-todo-signals]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.

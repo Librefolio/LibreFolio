@@ -34,6 +34,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/components/transactions/import/BrimEvidenceTable.svelte';
     import {remainingTodos} from '$lib/utils/transactions/bulkTodos';
+    import {resolveBrimTodoMessage} from '$lib/utils/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -2181,7 +2182,7 @@
     let todoBlockersExpanded = $state(false);
     let todoWarningRowCount = $derived(ops.filter((op) => op.todos?.some((t) => t.severity === 'warning')).length);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
-    let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((t) => t.message || t.field)));
+    let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((todo) => todo.severity === 'warning').map((todo) => resolveBrimTodoMessage(todo, $t) || todo.field)));
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('common.saveAll'));
 
@@ -3168,7 +3169,7 @@
                                 <li class="space-y-1.5">
                                     <button type="button" class="block w-full text-left text-red-700 dark:text-red-300 leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
                                         <span class="font-mono opacity-70">#{entry.rowNumber}</span>
-                                        {entry.todo.message}
+                                        {resolveBrimTodoMessage(entry.todo, $t)}
                                     </button>
                                     {#each entry.todo.evidence ?? [] as evidence}
                                         <BrimEvidenceTable {evidence} tone="blocker" collapsible />
@@ -3196,7 +3197,7 @@
                                     <li>
                                         <button type="button" class="block w-full text-left leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
                                             <span class="font-mono opacity-70">#{entry.rowNumber}</span>
-                                            {entry.todo.message || entry.todo.field}
+                                            {resolveBrimTodoMessage(entry.todo, $t) || entry.todo.field}
                                         </button>
                                     </li>
                                 {/each}

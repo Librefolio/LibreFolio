@@ -7,7 +7,8 @@
  * `gapFix` therefore brings `import.gapFix` — between `import.review` and `import.bulk` —
  * anchored on the step's Continue (`import.action.gapFix` on
  * `import-wizard-gapfix-continue`). This spec proves the anchoring on a real walk, on desktop and
- * on mobile: the action runs both projects, while `tx-import-report-set` runs on desktop only.
+ * on mobile: the action runs both projects, while `tx-import-report-set` runs each of its tests on
+ * one project only — those tagged `@mobile` on mobile, the others on desktop.
  *
  * The account. Onboarding progress is per user and a guide walk moves it, so the test registers a
  * disposable account (fixtures/onboarding-accounts.ts), takes it through the welcome, skips every

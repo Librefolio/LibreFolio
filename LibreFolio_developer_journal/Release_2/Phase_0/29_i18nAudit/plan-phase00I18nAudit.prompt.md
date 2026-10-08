@@ -890,6 +890,120 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   la lezione è nella pagina wiki;
   > - `initI18n()` nello script di `(app)/+layout.svelte` resta: ora gira solo quando il gruppo
   >   `(app)` si crea davvero, e legge la lingua salvata. Non l'ho toccato, è fuori dall'approvazione.
+- **S18** ✅ 2026-10-08 — Analisi, senza codice: i todo del bulk non sono tradotti
+  (`TransactionBulkModal.svelte:3171`, trovato da M nella gallery). Base `ffa72cc2b`, pulita.
+  > **Origine**: due fonti arrivano al bulk da `onImportBatch` (`:2303-2306`).
+  > - I `field_todos` del parse (`BRIMFieldTodo`, `schemas/brim.py:695-711`): `reason_code` stabile,
+  >   `message` di ripiego, `context` «per l'i18n». `importMerge.ts:100` li copia in `ImportTodo` con il
+  >   `message` crudo.
+  > - I todo del gap-fix (`brim_gap_fix.py:190`, `gap_fix_cost`) arrivano già tradotti:
+  >   `ImportWizardModal.svelte:1385` → `importWizard.reportSet.gapFix.todo.<code>` →
+  >   `gapFixModel.ts:253`.
+  >
+  > Il bulk stampa `message` in 3 punti: `:3171` (bloccanti), `:3199` (warning, `message || field`) e
+  > `:2184` (`todoWarningItems`, nel dialogo di conferma al salvataggio).
+  >
+  > **Codici** (10 punti di emissione):
+  >
+  > | Codice | Dove | Campo | Gravità | Lingua del `message` |
+  > |---|---|---|---|---|
+  > | `ca_account_trade_sell_quantity_presumed` | `broker_credit_agricole.py:693` | quantity | warning | italiano |
+  > | `ca_account_trade_bundled_amount` | `:737` | cash | warning | italiano |
+  > | `derived_quantity` | `:1138` | quantity | warning | **inglese** |
+  > | `ca_account_trade_unresolved` | `:1566` | asset_id | blocker | italiano |
+  > | `ca_account_charge_unallocated` | `:1598` | asset_id | warning | italiano |
+  > | `danske_trade_charges_included` | `broker_danske_bank.py:1553` | cash | warning | finlandese |
+  > | `demerger` | `:1568` | cost_basis_override | blocker | finlandese |
+  > | `demerger_old_leg` | `:1578` | quantity | warning | finlandese |
+  > | `corporate_action` | `broker_generic_csv.py:451` | cost_basis_override | blocker | inglese, senza `context` |
+  > | `gap_fix_cost` | `brim_gap_fix.py:190` | cost_basis_override | blocker | tradotto all'origine |
+  >
+  > **Il disegno** (`brim_plugin_guide.md:431-458`): il `message` è nella lingua del file, e una chiave
+  > `importWizard.brimNotice.<code>`, se c'è, lo sostituisce con la lingua dell'interfaccia. I codici
+  > `degiro_*` restano senza chiave apposta, e lo garantisce un test.
+  > - Nessuno dei 9 codici di parse ha una chiave: `importWizard.brimNotice` ha solo
+  >   `ca_succession_transfer_in`, che è una notice.
+  > - La ricerca della chiave esiste in `FixFlaggedStep.svelte:133-138`, in `ParseDetailModal.svelte:181-184`
+  >   (senza valori) e in `resolveBrimNotice.ts` (notice, con `context`). Il bulk non la fa.
+  > - Il caso di M è `corporate_action` di generic_csv (`generic_simple.csv`, `gallery.spec.ts:2276`):
+  >   inglese in ogni lingua, perché il CSV generico non ha una lingua del file.
+  >
+  > **Proposta**, in attesa di decisione:
+  > - A: un risolutore unico per i todo, con lo stesso contratto delle notice, nei 3 punti del bulk;
+  > - B: la chiave `importWizard.brimNotice.corporate_action` nelle 4 lingue;
+  > - opzionale: `derived_quantity` in italiano nel plugin, oppure una chiave.
+  >
+  > Decisione del developer (12:30): «A+B, e derived_quantity in italiano nel plugin» → S19.
+- **S19** ✅ 2026-10-08 — Todo tradotti anche nel bulk: risolutore unico, chiave `corporate_action`,
+  `derived_quantity` in italiano, una riga nella guida BRIM. Base `ffa72cc2b`.
+  > **Note implementazione** (verifica prima del codice):
+  > - copertura delle 2 copie locali: `ParseDetailModal.test.ts` copre la regola in entrambe le metà
+  >   (registra `importWizard.brimNotice.probe_localized_blocker`), quindi la sua copia si sostituisce;
+  >   `FixFlaggedStep.test.ts` non verifica il testo dei todo (il `NEEDLE-…` della riga 41 non ha
+  >   asserzioni), quindi quella copia resta e va nel backlog;
+  > - il bulk non ha un test di componente: la prova passa dall'E2E `tx-bulk-import-handoff.spec.ts`,
+  >   che già inietta `field_todos`.
+  >
+  > **Esecuzione** (✅ 2026-10-08):
+  > - **test-author**, rossi prima del codice:
+  >   - 5 casi di `resolveBrimTodoMessage` in `resolveBrimNotice.test.ts` (+77): rossi per la funzione
+  >     assente, con i 7 casi delle notice verdi;
+  >   - l'E2E `S19 (A, B)` in `tx-bulk-import-handoff.spec.ts` (+153): `corporate_action` e
+  >     `s19_probe_unworded`, bloccante e warning; il testo atteso si legge dal JSON del catalogo per
+  >     `<html lang>`. Rossi: il marcatore del plugin presente e la chiave assente; verde: il codice senza
+  >     chiave mantiene il `message`;
+  >   - backend: `test_credit_agricole_derived_quantity_todo_speaks_italian_and_names_the_bond` (+18),
+  >     rosso;
+  >   - la guardia DEGIRO era verde (169).
+  > - **A**:
+  >   - `resolveBrimTodoMessage` in `resolveBrimNotice.ts`: chiave `importWizard.brimNotice.<reasonCode>`,
+  >     valori da `context`, e se manca la chiave il `message` del plugin;
+  >   - usato nei 3 punti del bulk, con `|| field` dove c'era e `todo` al posto di `t` nelle arrow;
+  >   - usato in `ParseDetailModal`; `FixFlaggedStep` resta con la sua copia (backlog).
+  > - **B**: `dev.py i18n add importWizard.brimNotice.corporate_action`, nelle 4 lingue
+  >   (`/tmp/libreFolio_o_s19_i18n.sh`).
+  > - **C**: il `message` di `derived_quantity` in italiano (`broker_credit_agricole.py:1143`).
+  > - **D** (aggiunta del developer, trovata da Q):
+  >   - `dev.py i18n update tools.pacAllocator.planner.brokers.incrementHelp`: per numero di quote un
+  >     intero, per importo l'importo minimo, ed è così che si comprano frazioni;
+  >   - i due `default:` in linea (`BrokerEditor.svelte:226`, `BrokersStep.svelte:111`) allineati;
+  >   - verificato nel codice: `request.ts:190`, `schemas/pac_allocator.py:233-236,386`,
+  >     `evaluator.py:326-331`.
+  > - **Documentazione**:
+  >   - docs-writer: un paragrafo nella guida BRIM (`brim_plugin_guide.md:460-464`); build strict verde,
+  >     `check-links` rosso solo per il D28;
+  >   - wiki: `concepts/import-todo-signals.md` corretta (i todo arrivano al bulk, `message` è nella
+  >     lingua del file, nuova sezione sulla traduzione) e una voce in `log.md`.
+  >
+  > **Gate**, uno per volta sulla 6160:
+  >
+  > | Comando | Esito | Log |
+  > |---|---|---|
+  > | `test … front-utility core-unit "resolveBrim"` | 12 passati | `/tmp/libreFolio_o_s19_resolver.log` |
+  > | `test … front-transaction tx-bulk-import-handoff` | 3 passati (D4, D5, S19) | `/tmp/libreFolio_o_s19_handoff.log` |
+  > | `test … front-transaction tx-unit` | 15 file, 676 passati (compreso `ParseDetailModal`) | `/tmp/libreFolio_o_s19_txunit.log` |
+  > | `test … external brim-providers` | 627 passati, 1 saltato (compreso il test nuovo) | `/tmp/libreFolio_o_s19_brim_providers.log` |
+  > | `test … external brim-degiro` | 169 passati, guardia compresa | `/tmp/libreFolio_o_s19_degiro.log` |
+  > | `test … front-utility core-unit` | 117 file, 3435 passati | `/tmp/libreFolio_o_s19_core.log` |
+  > | `i18n audit` | 4163 chiavi; 0 morte; 3 non verificate, vive; 0 chiavi backend mancanti | `/tmp/libreFolio_o_s19_audit.log` |
+  > | cataloghi contro HEAD | +1 chiave (`corporate_action`), 1 cambiata (`incrementHelp`), stesso insieme, forma canonica | — |
+  > | `front check` | 0 errori, 0 avvisi | `/tmp/libreFolio_o_s19_front_check.log` |
+  > | `lint`; black | verde; pulito prima e dopo su entrambi i file Python | `/tmp/libreFolio_o_s19_lint.log` |
+  > | Prettier | 5 file puliti; `BrokerEditor` e `BrokersStep` hanno debito già alla base, invariato (48 e 35 righe) | — |
+  > | `git diff --check`; `lsof` 6160 e 6170 | pulito; porte libere | — |
+  >
+  > **⚠️ Fuori pista**:
+  > - **Dialogo di conferma non coperto.** Il terzo punto del bulk, la lista del dialogo di conferma al
+  >   salvataggio, non ha un test: `ConfirmModal` non ha `testId` passato dal bulk, e l'interruttore e
+  >   le voci della lista non hanno agganci. Leggerli richiederebbe classi CSS o testo tradotto. Backlog:
+  >   `testId` sul dialogo e agganci nel componente condiviso.
+  > - **Pagina PAC di Q.** `user/tools/pac-allocator/index.en.md:36` promette ancora «0.001 = fractions
+  >   down to three decimals», sia sulla mia base sia sulla punta di `e-alfy-q-doc-inglese-1-2`. Va
+  >   corretta da Q; io non la tocco.
+  > - **Descrizione nello schema.** `schemas/brim.py:705` descrive ancora `message` come «fallback
+  >   (English)», contro la regola della lingua del file. Non l'ho toccata.
+  > - **`svelte-check` dal test-author.** I 2 errori in `KpiSection.svelte` che aveva visto venivano da un
+  >   client generato vecchio; il rebuild li ha tolti, e il mio `front check` è a 0.
 
 ## 12. Definition of done
 
