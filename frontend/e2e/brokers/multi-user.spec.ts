@@ -1,6 +1,10 @@
 import {type Browser, type BrowserContext, expect, type Page, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
+import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER, TEST_USER_2} from '../fixtures/test-users';
+
+// Scoped to the broker list's cards, never page-wide text: the creation toast and the "other existing brokers" discovery card also name the broker.
+const brokerCard = (page: Page, name: string) => page.locator('[data-testid^="broker-card-"]').filter({hasText: name});
 
 /**
  * Multi-User Isolation Tests
@@ -50,12 +54,16 @@ test.describe('Multi-User Isolation', () => {
         await page1.getByTestId('broker-name-input').fill(brokerName);
         await page1.getByTestId('broker-form-submit').click();
         await expect(page1.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
-        await expect(page1.getByText(brokerName)).toBeVisible();
+        await expect(brokerCard(page1, brokerName)).toBeVisible({timeout: 5000});
 
-        // User 2 logs in - should NOT see user1's broker
+        // User 2 logs in - should NOT see user1's broker among their own brokers
         await login(page2, TEST_USER_2);
         await page2.goto('/brokers');
-        await expect(page2.getByText(brokerName)).not.toBeVisible();
+        // Barrier for the zero below: the list has loaded and does show the broker, but only as a
+        // name-only "other existing brokers" discovery card — user 2 has no access to it.
+        await waitForSettled(page2.getByTestId('brokers-page'));
+        await expect(page2.locator('[data-testid^="broker-discovery-card-"]').filter({hasText: brokerName})).toBeVisible();
+        await expect(brokerCard(page2, brokerName)).toHaveCount(0);
     });
 
     test('duplicate broker name is rejected (global uniqueness)', async () => {
@@ -71,7 +79,7 @@ test.describe('Multi-User Isolation', () => {
         await page1.getByTestId('broker-name-input').fill(sharedName);
         await page1.getByTestId('broker-form-submit').click();
         await expect(page1.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
-        await expect(page1.getByText(sharedName)).toBeVisible();
+        await expect(brokerCard(page1, sharedName)).toBeVisible({timeout: 5000});
 
         // User 2 tries to use the same name - should FAIL
         await login(page2, TEST_USER_2);

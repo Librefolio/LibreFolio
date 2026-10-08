@@ -3275,6 +3275,46 @@ def clean_data_dirs():
             print(f"  ✅ Created {d.relative_to(data_dir)} (empty)")
 
 
+def reset_broker_reports(data_dir: Path, db_path: Path) -> int:
+    """Empty the broker report folders that belong to the database being replaced.
+
+    A broker's uploaded reports live on disk under ``broker_reports/<status>/broker_<id>/``,
+    keyed by the broker's id, while the broker row lives in the database. Recreating the
+    database leaves files whose owner no longer exists; broker ids are reused, so the
+    next broker with that id lists them, and ``--with-reports`` piles up another copy of
+    every sample at each run. The runner's ``db create`` clears the same store
+    (``_reset_test_file_store``); ``--force`` deletes the database here, so it clears it here.
+
+    Only ``uploaded``, ``parsed`` and ``failed`` are emptied. ``.locks`` (a running server
+    may hold them), ``custom-uploads`` (``--clean``'s job), the database and anything else
+    are left alone, and nothing happens unless ``db_path`` lies inside ``data_dir`` once
+    both are resolved (``/tmp`` is a link to ``/private/tmp`` on macOS). A symlink is
+    removed as a link, never followed. Returns the number of files removed.
+    """
+    root = data_dir.resolve()
+    if not db_path.resolve().is_relative_to(root):
+        print(f"  ⚠️  Broker reports left untouched: the database {db_path} is not under {data_dir}")
+        return 0
+
+    removed = 0
+    for status in ("uploaded", "parsed", "failed"):
+        folder = root / "broker_reports" / status
+        if not folder.resolve().is_relative_to(root):
+            print(f"  ⚠️  Broker reports left untouched: {folder} leads outside {data_dir}")
+            continue
+        if not folder.is_dir():
+            folder.mkdir(parents=True, exist_ok=True)
+            continue
+        for entry in folder.iterdir():
+            if entry.is_symlink() or not entry.is_dir():
+                entry.unlink()
+                removed += 1
+            else:
+                removed += sum(1 for path in entry.rglob("*") if path.is_symlink() or not path.is_dir())
+                shutil.rmtree(entry)
+    return removed
+
+
 def upload_static_resources(session: Session):  # noqa: C901 — sequential fixture upload steps
     """Upload static resource files (avatars + preview samples) to custom-uploads."""
 
@@ -3715,7 +3755,7 @@ def main():  # noqa: C901 — sequential populate step driver
     """Populate database with mock data for testing."""
     # Parse arguments
     parser = argparse.ArgumentParser(description="Populate database with mock data")
-    parser.add_argument("--force", action="store_true", help="Delete existing database and create fresh one")
+    parser.add_argument("--force", action="store_true", help="Delete existing database (and the broker reports on disk that belong to it) and create fresh one")
     parser.add_argument("--clean", action="store_true", help="Clean all files from custom-uploads and broker_reports before populating")
     parser.add_argument("--with-static", action="store_true", help="Upload static resources (avatars, broker icons)")
     parser.add_argument("--with-reports", action="store_true", help="Upload sample broker report files")
@@ -3766,6 +3806,11 @@ def main():  # noqa: C901 — sequential populate step driver
             print("  2. Delete database manually:")
             print(f"     rm {db_path}")
             return 1
+
+    # The broker reports on disk belong to the database --force replaces, existing or not.
+    if args.force:
+        removed = reset_broker_reports(get_data_dir(), db_path)
+        print(f"🧹 Broker reports reset: {removed} file(s) removed\n")
 
     # Create fresh database
     print("\n🔧 Initializing database...")

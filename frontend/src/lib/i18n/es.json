@@ -430,6 +430,10 @@
         "hasNumber": "Un número",
         "hasSpecial": "Un carácter especial"
       }
+    },
+    "serverUnreachable": {
+      "title": "El servidor no responde",
+      "body": "Esta página sigue abierta y tu sesión no se ha cerrado. Vuelve a intentarlo en un momento."
     }
   },
   "importWizard": {
@@ -1627,7 +1631,10 @@
     "pnlAcqReinvested": "Reinvertido",
     "allocationGeneric": "{type} genérico",
     "pnlAxisQuarter": "T{quarter}",
-    "pnlAxisWithYear": "{label} {year}"
+    "pnlAxisWithYear": "{label} {year}",
+    "unrealizedAssetEffect": "Activos en {currency}",
+    "unrealizedFxEffect": "Tipo de cambio {from} → {to}",
+    "unrealizedUnsplit": "{currency}, sin desglosar"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
@@ -1665,7 +1672,8 @@
     "missingFxRatesManual": "Faltan tasas FX para {count} par(es) manual(es) — añade las tasas manualmente",
     "assetIncomeNoEligibleLots": "Ningún lote abierto elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — ingreso sin asignar",
     "assetCostNoEligibleLots": "Ningún lote elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — coste sin asignar",
-    "missingFxRatesAfterSync": "Siguen faltando tasas FX para {pairs} entre {date_from} y {date_to} ({dates_count} fecha(s)): el proveedor no devolvió ninguna para esas fechas. Introdúcelas a mano en la página del par."
+    "missingFxRatesAfterSync": "Siguen faltando tasas FX para {pairs} entre {date_from} y {date_to} ({dates_count} fecha(s)): el proveedor no devolvió ninguna para esas fechas. Introdúcelas a mano en la página del par.",
+    "missingCostBasis": "{count} activo(s) con una adquisición sin coste de compra — cuenta como cero hasta que lo indiques"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",
@@ -1938,9 +1946,9 @@
     "changePassword": "Cambiar Contraseña",
     "changePasswordDescription": "Actualizar la contraseña de tu cuenta",
     "deleteAccount": "Eliminar Cuenta",
-    "deleteAccountDescription": "Eliminar permanentemente tu cuenta y todos los datos",
+    "deleteAccountDescription": "Eliminar permanentemente tu cuenta, su configuración y los brókers de los que eres el único propietario",
     "deleteAccountConfirm": "¿Eliminar Cuenta?",
-    "deleteAccountWarning": "Esta acción no se puede deshacer. Todos tus datos, incluyendo brokers, transacciones y configuraciones, serán eliminados permanentemente.",
+    "deleteAccountWarning": "Esta acción no se puede deshacer. Los brókers de los que eres el único propietario se eliminan con todas sus transacciones e informes importados, aunque los hayas compartido con lectores o editores. Un bróker que tiene otro propietario sigue siendo suyo: solo se elimina tu acceso. Tu configuración se elimina.",
     "typeUsernameToConfirm": "Escribe \"{username}\" para confirmar",
     "deleteAccountPermanently": "Eliminar Permanentemente",
     "deleteAccountFailed": "Error al eliminar la cuenta",
@@ -3415,7 +3423,11 @@
       "execution_timeout": "El cálculo tardó demasiado y se detuvo.",
       "optimization_infeasible": "Ninguna asignación cumple las restricciones solicitadas.",
       "unknown": "Esta medición no devolvió ningún resultado.",
-      "answer_discarded": "La respuesta se descartó porque los datos cambiaron mientras llegaba. Vuelve a lanzar el análisis."
+      "answer_discarded": "La respuesta se descartó porque los datos cambiaron mientras llegaba. Vuelve a lanzar el análisis.",
+      "resource_limit_paths_or_horizon": "Esta simulación es demasiado grande para ejecutarse. Usa menos trayectorias simuladas o un horizonte más corto.",
+      "resource_limit_horizon_or_sampling": "Esta simulación cuasi-Monte Carlo es demasiado grande para ejecutarse. Acorta el horizonte o elige el muestreo Monte Carlo.",
+      "resource_limit_period": "Esta simulación es demasiado grande para ejecutarse: el periodo contiene demasiado historial. Elige un periodo más corto.",
+      "resource_limit_positions": "Una simulación puede incluir como máximo 100 posiciones, y esta cartera tiene más. Simula en su lugar un broker con menos posiciones."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe no está definido porque la volatilidad es cero.",

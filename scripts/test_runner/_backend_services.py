@@ -567,15 +567,15 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
     return run_command(cmd, "BRIM create-transaction tests", verbose=verbose)
 
 
-def services_financial_utils(verbose: bool = False, test_names: list = None) -> bool:
-    """Test pure-math financial utilities (WAC calculation, target currency)."""
-    print_section("Services: Financial Utils (WAC)")
-    print_info("Testing: backend/app/utils/financial/wac_utils.py")
-    print_info("Tests: compute_wac_from_txlist, determine_target_currency")
-    print_info("Pure math — no server, no DB required")
+def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the financial_math layer: the single average-cost implementation."""
+    print_section("Services: Financial Math (average cost)")
+    print_info("Testing: backend/app/services/financial_math/average_cost.py")
+    print_info("Tests: compute_average_costs, cost_movement_from_transaction, determine_target_currency")
+    print_info("Pure — convert_bulk is stubbed: no server, no DB")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_utils.py", test_names)
-    return run_command(cmd, "Financial utils tests", verbose=verbose)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
+    return run_command(cmd, "Financial math tests", verbose=verbose)
 
 
 def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> bool:
@@ -1062,7 +1062,16 @@ Note: No backend server required.
     add_test(cat, "brim-report-sets", services_brim_report_sets, name="BRIM Report Sets", desc="Report-set schemas, contract defaults, combined-file storage")
     add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
-    add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
+    add_test(
+        cat,
+        "financial-math",
+        services_financial_math,
+        name="Financial Math",
+        desc="Average cost: movements, conversions through the FX service, diagnostics",
+        # PURE: the module's only I/O is convert_bulk, which every test replaces on
+        # the module with a double; the session handed to it is None or a sentinel.
+        isolation="pure",
+    )
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")
     add_test(
         cat,

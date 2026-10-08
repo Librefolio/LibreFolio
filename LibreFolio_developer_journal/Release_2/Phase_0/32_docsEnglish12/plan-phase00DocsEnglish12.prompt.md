@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 COMMITTATO (`dfcbc0003`, 2026-10-07). Q2 COMPLETATO, FROZEN (2026-10-07), in attesa del commit del developer.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`) e S12 (`a09220321`) integrati nei treni 9 e 10. S13 (limiti della simulazione) COMPLETATO, FROZEN (2026-10-07), in attesa del commit: entra nel treno 11 con Risk.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -640,6 +640,60 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `BrokerModal` in modifica prende un PATCH `success:false` per un successo;
   >   - docstring superate in `models.py` (`AssetType`) e in `pac_allocator.py` (budget);
   >   - 34 `assert` nell'AI Export.
+
+### Dopo il treno 9
+
+- **S12** ✅ 2026-10-07 — Ancora `#risk-tab` in `user/brokers/index.en.md` (base `9ea2d519b`, che contiene il treno 9 con N).
+  > **Note implementazione**:
+  > - Il link della voce Risk (`:38`) ora punta a `../dashboard/index.md#risk-tab`, testo «Dashboard Risk Tab». Tolto il commento `<!-- TODO(anchor): #risk-tab, after N -->`.
+  > - L'ancora c'è nella pagina EN di N (`user/dashboard/index.en.md:41`, `## 🛡️ Risk Tab {: #risk-tab }`). Non c'è ancora nelle IT/FR/ES, ma il link sta solo nella pagina EN dei broker, le cui traduzioni non lo contengono: le build tradotte non lo validano.
+  > - **Frase verificata**: «limited to this broker's holdings» resta vera. La pagina broker monta `RiskLevelsPanel` con `scope={{kind: 'portfolio', broker_ids: [broker.id]}}` (`brokers/[id]/+page.svelte:680-681`), mentre la tab della Dashboard copre tutto il portafoglio (testo di N, `:45`).
+  > - **Altre voci che aspettavano il treno 9**: nessuna eseguibile.
+  >   - I 40 segnaposto aspettano gli scenari di M: oggi 0/40 nomi sono in `gallery.spec.ts`.
+  >   - `#coming-back-and-refreshing` c'è ancora (`dashboard/index.en.md:80`).
+  >   - Le pagine solo-EN (`developer/backend/risk/architecture.md`, `user/assets/correlation.en.md`) restano senza `#risk-tab`: lì l'ancora romperebbe le build IT/FR/ES finché le traduzioni della Dashboard non la contengono.
+  > - **Riferimenti alle immagini** ricontrollati dopo `c80508be8` (riparazione degli scenari di M): tutti prodotti. I 6 `dashboard/allocation-*` risultano «mancanti» per il mio script solo perché lo spec li costruisce con un template (`${shot}-now`, `${shot}-history`, `gallery.spec.ts:691-699`).
+  > - **Gate** `/tmp/libreFolio_q_gate.sh q3anchor`:
+  >   - `mkdocs build` strict: exit 0, 0 WARNING/ERROR; l'ancora è validata (`validation.anchors: warn` + `--strict`);
+  >   - `check-links`: solo il link rotto della baseline (`chart/#rolling-return` IT/FR/ES);
+  >   - scope: 1 pagina, più questo piano;
+  >   - `git diff --check` pulito.
+  >   - Nessun server: `build` e `check-links` sono statici, non serve la porta 6162.
+
+- **S13** ✅ 2026-10-07 — Limiti della simulazione allineati a `resource_limit` con rimedio (base `9d79c2dbe`, treno 10; entra nel treno 11 con Risk).
+  > **Fonti**:
+  > - backend nella base: `b72d22ab1` (`_REMEDY_BY_METRIC`, `_resource_limit`, `_refuse_oversized_scope`, `MAX_SIMULATION_ASSETS = 100`);
+  > - frasi EN dal ramo di Risk, lette con `git show 3fd9fed9a:frontend/src/lib/i18n/en.json` (`risk.errors.resource_limit_*`) e `…/errorDisplayCode.ts`, senza aprire il suo worktree.
+  >
+  > **Note implementazione** (`docs-writer`, verificato da Q):
+  > - **`simulation-modes.en.md` `#limits`:**
+  >   - i righi «Sequence too large» e «Size» sono diventati una riga per rimedio: Path budgets → `paths_or_horizon`, Sequence too large (Sobol) → `horizon_or_sampling`, History too long (bootstrap: più di 5 000 osservazioni o osservazioni × titoli oltre 250 000) → `period`, Too many holdings (oltre 100) → `positions`;
+  >   - ogni frase «On screen» è identica byte per byte alla chiave di `3fd9fed9a`;
+  >   - invariati, e riverificati: Too little history, Block longer than the history (`invalid_parameters`, `simulation.py:446-457`) e Path count (`invalid_parameters`);
+  >   - il paragrafo dei codici dice che ogni limite di dimensione risponde `resource_limit`, che il rimedio sceglie la frase, e che la frase generica resta per un rimedio ignoto;
+  >   - il paragrafo delle dimensioni ha conti ricontrollati da Q: 8 192 × 2 442 = 20 004 864; 8 192 × 365 × 67 = 200 335 360 (66 titoli = 197 345 280); 250 000 / 50 = 5 000, / 100 = 2 500; 58 × 365 = 21 170;
+  >   - aggiunto che oltre 100 titoli non serve nessuna impostazione, che i titoli esclusi non contano (`data-quality.md#exclusions`) e che i limiti si incontrano uno alla volta.
+  > - **`developer/backend/risk/architecture.md`: TOLTA DAL CHECKPOINT** (coordinatore, 08/10 10:17). Alle 17:55 del 07/10 la pagina era stata assegnata a Risk, che l'ha già aggiornata sul suo ramo (`9590a3763`, treno 11): due versioni delle stesse righe avrebbero creato un conflitto certo.
+  >   - Ripristino: file riscritto da `git show HEAD:<path>`, senza `git checkout --`; `git diff -- <path>` vuoto.
+  >   - La mia versione resta per confronto in `files/risk_architecture.q4mine.md` della sessione.
+  >   - Rispetto alla mia, alla versione di Risk mancano cinque cose minori, inviate al coordinatore e non corrette:
+  >     - l'ordine dei controlli (rifiuto al primo limite superato; builder prima della richiesta, `validate_resource_budget()` all'inizio di `run_simulation()`);
+  >     - che il tetto dei 100 titoli conta solo quelli con una serie di rendimenti utilizzabile, cioè gli esclusi non contano, come dice la pagina utente;
+  >     - il passaggio `SimulationResourceLimitError` → `_resource_limit()`;
+  >     - che il `resource_limit` dell'ottimizzazione porta solo `actual` e `limit`;
+  >     - che la Sobol la controlla il builder GBM e non genericamente «the plugin».
+  >
+  > **⚠️ Fuori pista**:
+  > - **Conto sbagliato nel brief di Q** (8 192 × 365 × 67 indicato come 200 343 040): il writer ha scritto quello giusto, 200 335 360.
+  > - **Pagina developer non prevista:** il writer ha trovato superata la pagina developer del rischio. Corretta e poi **tolta** dal checkpoint, perché era già stata assegnata a Risk (vedi sopra).
+  > - **Frasi in anticipo:** `simulation-modes.en.md` descrive frasi del ramo di Risk che arrivano col treno 11; fino ad allora il frontend della base mostra solo la frase generica.
+  >
+  > **Gate** `Q_GATE_ARGS=--q4 /tmp/libreFolio_q_gate.sh q4limits2`, rilanciato dopo aver tolto la pagina developer:
+  > - build strict: exit 0, 0 WARNING/ERROR; le ancore `#limits` e `data-quality.md#exclusions` sono validate;
+  > - `check-links`: solo il link rotto della baseline;
+  > - scope: `simulation-modes.en.md`, più questo piano; `git diff -- developer/backend/risk/architecture.md` è vuoto;
+  > - `git diff --check` pulito;
+  > - nessun server.
 
 ## 4. Conflitti, rischi, definizione di fatto
 

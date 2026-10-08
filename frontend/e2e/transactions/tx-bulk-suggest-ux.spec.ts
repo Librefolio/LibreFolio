@@ -13,7 +13,8 @@
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract:
- * - "delete-safe" tag → paired TRANSFER ETH IB↔Coinbase
+ * - "[delete-safe] ETH" → paired TRANSFER ETH IB↔Coinbase (the "delete-safe" tag alone
+ *   also marks a standalone DEPOSIT and FEE, which cannot be split)
  * - "promote-test" tag → standalone W/D/Adj on Coinbase+IB
  */
 import {expect, test, type Page} from '../fixtures/playwright';
@@ -86,6 +87,21 @@ async function clickBulkRowAction(page: Page, rowLocator: ReturnType<Page['locat
     await btn.click();
 }
 
+/**
+ * Close the BulkModal, discarding whatever is pending, and prove it closed.
+ *
+ * With unsaved changes the modal asks first: a ConfirmModal whose `confirm-modal-confirm`
+ * is the discard button. Without, it closes outright. Which one happens depends on the
+ * batch, so the confirm is a legitimately optional branch — and the closing assertion is
+ * what keeps a confirm that was merely slow from passing as one that never came.
+ */
+async function closeBulkModal(page: Page) {
+    await page.getByTestId('tx-bulk-close').click();
+    const discardBtn = page.getByTestId('confirm-modal-confirm');
+    if (await appears(discardBtn, 1_000)) await discardBtn.click();
+    await expect(page.getByTestId('tx-bulk-modal')).toBeHidden();
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -98,9 +114,12 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
     test('FE-SP-C1: Split badge + split-queued header in BulkModal', async ({page}) => {
         await goToTransactions(page);
 
-        // Find two rows to avoid FormModal auto-open (need 2+ selections)
-        const rowId = await findRowId(page, ['delete-safe']);
-        if (!rowId) throw new Error('No delete-safe row found — check populate_mock_data.py');
+        // The row to split is the mock's paired TRANSFER, "[delete-safe] ETH Coinbase ↔ IB":
+        // "delete-safe" alone also matches the standalone DEPOSIT and FEE, and landed on the
+        // pair only because the table is date-descending and the pair is one day younger.
+        const rowId = await findRowId(page, ['delete-safe', 'ETH']);
+        if (!rowId) throw new Error('No "[delete-safe] ETH" pair row found — check populate_mock_data.py');
+        // A second row, standalone: two selections keep the FormModal from auto-opening.
         const rowId2 = await findRowId(page, ['promote-test'], ['↔', 'access-fail']);
 
         // Select rows (2+ to avoid auto FormModal)
@@ -112,7 +131,8 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         await editBtn.click();
 
         // Wait for BulkModal
-        await page.getByTestId('tx-bulk-modal').waitFor({state: 'visible', timeout: 5_000});
+        const bulkModal = page.getByTestId('tx-bulk-modal');
+        await bulkModal.waitFor({state: 'visible', timeout: 5_000});
         // If FormModal auto-opened (single row), close it first
         const formModal = page.getByTestId('tx-form-modal');
         if (await appears(formModal, 1_000)) {
@@ -120,42 +140,52 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
             await expect(formModal).toBeHidden({timeout: 3_000});
         }
 
-        // Find a row in the bulk table and click its split action via the kebab menu
+        // Ask each row's menu for Split. The selected leg arrives with its partner hidden
+        // behind it, so the pair's row offers it; the rows sort by date, so the promote-test
+        // row (days -8 to -15) comes first and is answered "no" before the pair (day -1).
         const bulkRows = page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]');
+        const menu = page.getByTestId('context-menu');
         await expect(bulkRows.first()).toBeVisible({timeout: 5_000});
-        const rowCount = await bulkRows.count();
         let splitDone = false;
-        for (let i = 0; i < rowCount; i++) {
+        let rowsAsked = 0;
+        // The count is re-read on every pass, not trusted from before the loop.
+        for (let i = 0; i < (await bulkRows.count()); i++) {
+            rowsAsked++;
             const row = bulkRows.nth(i);
             await row.hover();
+            // Every BulkModal row has actions (edit, clone): its kebab is always rendered.
             const kebabBtn = row.getByTestId(/^row-actions-/);
-            if (!(await appears(kebabBtn, 1_000))) continue;
+            await expect(kebabBtn).toBeVisible();
             await kebabBtn.click();
-            const splitAction = page.getByTestId('context-menu-action-split');
-            if (await splitAction.isVisible({timeout: 500}).catch(() => false)) {
+            // A click on a visible kebab opens the menu, and the menu renders its items with
+            // itself: once it is visible, "no Split in it" is an answer, not a race.
+            await expect(menu).toBeVisible();
+            const splitAction = menu.getByTestId('context-menu-action-split');
+            if (await splitAction.isVisible()) {
                 await splitAction.click();
                 splitDone = true;
                 break;
             }
+            // One Escape, one layer: it closes the menu, and the BulkModal under it stays open.
             await page.keyboard.press('Escape');
+            await expect(menu).toBeHidden();
+            // Visible alone would pass on the very regression this pins: a closing modal keeps
+            // its DOM through the outro, which Svelte marks inert. Open = visible and not inert.
+            await expect(bulkModal).toBeVisible();
+            await expect(bulkModal, 'one Escape on a row menu must close the menu, not the BulkModal under it').not.toHaveAttribute('inert');
         }
+        // Phrased as the requirement: Playwright shows this message as the step title on a pass too.
+        expect(splitDone, `a BulkModal row must offer Split (${rowsAsked} asked): the "[delete-safe] ETH" pair has to reach the modal still paired — a neighbour that commits a split of it (tx-split-promote C3 does) leaves nothing to split`).toBe(true);
 
-        if (splitDone) {
-            // After split: verify the split-queued badge appears in header
-            const splitBadge = page.getByTestId('split-queued-badge');
-            await expect(splitBadge).toBeVisible({timeout: 3_000});
-        }
+        // After split: the split-queued badge appears in the header
+        await expect(page.getByTestId('split-queued-badge')).toBeVisible({timeout: 3_000});
 
-        // Close modal
+        // The queued split is an unsaved change: closing must ask before discarding it.
         await page.getByTestId('tx-bulk-close').click();
-        // Discard changes if confirm appears
-        const discardBtn = page
-            .locator('[data-testid="confirm-modal"] button')
-            .filter({hasText: /discard|confirm/i})
-            .first();
-        if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-            await discardBtn.click();
-        }
+        const discardBtn = page.getByTestId('confirm-modal-confirm');
+        await expect(discardBtn).toBeVisible();
+        await discardBtn.click();
+        await expect(bulkModal).toBeHidden();
     });
 
     test('FE-SP-C4: Suggest banner delta slider exists in BulkModal', async ({page}) => {
@@ -181,7 +211,7 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         await modal.waitFor({state: 'visible', timeout: 5_000});
         // If FormModal auto-opened, close it
         const formModal = page.getByTestId('tx-form-modal');
-        if (await formModal.isVisible({timeout: 1_000}).catch(() => false)) {
+        if (await appears(formModal, 1_000)) {
             await page.keyboard.press('Escape');
             await expect(formModal).toBeHidden({timeout: 3_000});
         }
@@ -191,14 +221,7 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         await expect(deltaInput).toBeVisible({timeout: 3_000});
 
         // Close
-        await page.getByTestId('tx-bulk-close').click();
-        const discardBtn = page
-            .locator('[data-testid="confirm-modal"] button')
-            .filter({hasText: /discard|confirm/i})
-            .first();
-        if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-            await discardBtn.click();
-        }
+        await closeBulkModal(page);
     });
 
     test('FE-SP-C5: ActionModal split AFTER has date and qty rows', async ({page}) => {
@@ -394,16 +417,6 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
         }
     }
 
-    /** Close the BulkModal, discarding whatever is pending. */
-    async function closeBulkModal(page: Page) {
-        await page.getByTestId('tx-bulk-close').click();
-        const discardBtn = page
-            .locator('[data-testid="confirm-modal"] button')
-            .filter({hasText: /discard|confirm/i})
-            .first();
-        if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
-    }
-
     test('NR-D1: no promote banner when cash amounts differ', async ({page}) => {
         const [depositBrokerId, withdrawalBrokerId] = await findTwoBrokerIds(page);
 
@@ -434,12 +447,7 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
             await expect(banner).not.toBeVisible({timeout: 2_000});
 
             // Close
-            await page.getByTestId('tx-bulk-close').click();
-            const discardBtn = page
-                .locator('[data-testid="confirm-modal"] button')
-                .filter({hasText: /discard|confirm/i})
-                .first();
-            if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
+            await closeBulkModal(page);
         } finally {
             if (created) await cleanup(page, ...created.all);
         }
@@ -487,12 +495,7 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
             }
             await expect(page.getByTestId('promote-toolbar-confirm')).toBeVisible({timeout: 5_000});
 
-            await page.getByTestId('tx-bulk-close').click();
-            const discardBtn = page
-                .locator('[data-testid="confirm-modal"] button')
-                .filter({hasText: /discard|confirm/i})
-                .first();
-            if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
+            await closeBulkModal(page);
         } finally {
             if (created) await cleanup(page, ...created.all);
         }
@@ -610,12 +613,7 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
             await pageSizeBtn.click();
 
             // Close
-            await page.getByTestId('tx-bulk-close').click();
-            const discardBtn = page
-                .locator('[data-testid="confirm-modal"] button')
-                .filter({hasText: /discard|confirm/i})
-                .first();
-            if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
+            await closeBulkModal(page);
         } finally {
             if (created) await cleanup(page, ...created.all);
         }

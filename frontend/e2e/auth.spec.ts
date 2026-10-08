@@ -1,3 +1,4 @@
+import {readdirSync, readFileSync} from 'node:fs';
 import {expect, test, type APIRequestContext, type Page, type Request} from './fixtures/playwright';
 import {login, logout, setLanguage} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
@@ -210,6 +211,52 @@ test.describe('Integrated onboarding', () => {
         await expect(scene).toHaveAttribute('data-state', 'intro-scene', {timeout: 10_000});
         await page.getByTestId('onboarding-intro-close').click();
         await expect(scene).toHaveCount(0, {timeout: 5_000});
+    }
+
+    type HeldChunk = {isHeld: () => boolean; release: () => void; dispose: () => Promise<void>};
+
+    /** The built chunk carrying the Italian catalogue. Build chunks are named by content hash, so it
+     *  is found by content: the one file holding the catalogue's own Welcome description, read from
+     *  `it.json` rather than copied here, so rewording the translation cannot strand the lookup. */
+    function italianCatalogueChunk(): string {
+        const catalogue = JSON.parse(readFileSync(new URL('../src/lib/i18n/it.json', import.meta.url), 'utf8')) as {onboarding?: {welcome?: {description?: unknown}}};
+        const description = catalogue.onboarding?.welcome?.description;
+        if (typeof description !== 'string' || !description) throw new Error('it.json has no onboarding.welcome.description: pick another Italian-only marker for the catalogue chunk');
+        const marker = JSON.stringify(description);
+        const chunksDir = new URL('../build/_app/immutable/chunks/', import.meta.url);
+        const holders = readdirSync(chunksDir).filter((file) => file.endsWith('.js') && readFileSync(new URL(file, chunksDir), 'utf8').includes(marker));
+        if (holders.length !== 1) throw new Error(`Expected exactly one built chunk holding the Italian catalogue under ${chunksDir.pathname}, found ${holders.length} (${holders.join(', ') || 'none'}): is the build current?`);
+        return holders[0];
+    }
+
+    /** Hold the Italian catalogue chunk at the network until released. svelte-i18n 4 reports a
+     *  dictionary as loading only while it is still in flight after `loadingDelay` (200 ms), so a held
+     *  chunk keeps that state on screen for as long as the spec needs to observe it: the slow path,
+     *  without a clock. Resolves to plain functions, never to a pending promise, which the caller's
+     *  `await` would adopt and wait on. */
+    async function holdItalianCatalogue(page: Page): Promise<HeldChunk> {
+        const url = `**/_app/immutable/chunks/${italianCatalogueChunk()}`;
+        let held = false;
+        let release = () => {};
+        const released = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const holdChunk: Parameters<Page['route']>[1] = async (route) => {
+            held = true;
+            await released;
+            // Continued untouched, never re-served through route.fulfill: the backend sends this chunk
+            // gzip-encoded, and a rewritten body blanked the page during the triage.
+            await route.continue();
+        };
+        await page.route(url, holdChunk);
+        return {
+            isHeld: () => held,
+            release: () => release(),
+            dispose: async () => {
+                release();
+                await page.unroute(url, holdChunk);
+            },
+        };
     }
 
     test('public-root bootstrap retry keeps the authenticated loading state until its settings request settles', async ({page}) => {
@@ -433,6 +480,66 @@ test.describe('Integrated onboarding', () => {
             await expect(page.getByTestId('onboarding-intro-scene')).toHaveCount(0);
             await expect(page.getByTestId('onboarding-coachmark')).toHaveCount(0);
         } finally {
+            await deleteDisposableUser(request, user);
+        }
+    });
+
+    // A language picked in Welcome is only previewed: `locale.set`, nothing persisted, so that Skip can
+    // restore the saved one. svelte-i18n 4 reports a catalogue still in flight after its 200 ms
+    // `loadingDelay` as loading, and both layouts swapped the whole app for a placeholder on every such
+    // report: the app was torn down and rebuilt, the rebuild re-read the persisted language and the
+    // Welcome page re-hydrated its draft from the saved settings. The choice was lost, and completing
+    // Welcome sent the old language. On an idle localhost the ~250 KB Italian catalogue lands within
+    // the delay, so 3a met this only under load; here the catalogue is held until the loading state is
+    // on screen, which makes the slow path deterministic instead of a matter of machine speed.
+    test('3c: a Welcome language whose catalogue arrives late survives the load: same form, Italian preview, Italian completion', async ({page, request}) => {
+        const user = await registerDisposableUser(request, 'latecat');
+        let disposeCatalogueHold = async () => {};
+        try {
+            await login(page, user);
+            const form = page.getByTestId('welcome-form');
+            await expect(form).toBeVisible({timeout: 10_000});
+            // Precondition, verified: the session runs in English, so Italian is a catalogue still to fetch.
+            await expectLocaleState(page, 'en');
+
+            // A locator re-resolves on every use and cannot tell a rebuilt form from the original;
+            // a handle pins the very node on screen before the load.
+            const formBeforeLoad = await form.evaluateHandle((node) => node);
+            const italianCatalogue = await holdItalianCatalogue(page);
+            disposeCatalogueHold = italianCatalogue.dispose;
+
+            await selectWelcomeLocale(page, 'it');
+
+            // Barrier, green before and after the fix: the slow path really ran. A catalogue that lands
+            // within the delay is never reported as loading, and the contract below would pass vacuously.
+            await expect.poll(() => italianCatalogue.isHeld(), {message: 'Picking Italian requests its catalogue chunk, and the spec holds it', timeout: 5_000}).toBe(true);
+            const localeState = page.locator('[data-i18n-ready]');
+            await expect(localeState, 'The held catalogue is reported as loading').toHaveAttribute('data-i18n-ready', 'false', {timeout: 5_000});
+
+            italianCatalogue.release();
+            await expect(localeState, 'The catalogue load completes once released').toHaveAttribute('data-i18n-ready', 'true', {timeout: 10_000});
+
+            // Contract. The identity check is soft, so a red reports the teardown and the language it cost together.
+            const sameForm = await formBeforeLoad.evaluate((node) => node.isConnected && node === document.querySelector('[data-testid="welcome-form"]'));
+            expect.soft(sameForm, 'The Welcome form outlives the catalogue load: the same node, never torn down and rebuilt').toBe(true);
+            await expectLocaleState(page, 'it');
+
+            const completeRequests: Array<Record<string, unknown>> = [];
+            const recordRequest = (req: Request) => {
+                if (req.method() === 'POST' && new URL(req.url()).pathname === '/api/v1/settings/onboarding/welcome/complete') completeRequests.push(req.postDataJSON());
+            };
+            page.on('request', recordRequest);
+            try {
+                await page.getByTestId('welcome-continue').click();
+                await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/, {timeout: 15_000});
+            } finally {
+                page.off('request', recordRequest);
+            }
+            expect(completeRequests, 'Exactly one atomic welcome-complete request').toHaveLength(1);
+            expect((completeRequests[0].welcome_settings as Record<string, unknown>).language, 'Welcome completes with the language picked before the load').toBe('it');
+            await expectLocaleState(page, 'it');
+        } finally {
+            await disposeCatalogueHold();
             await deleteDisposableUser(request, user);
         }
     });

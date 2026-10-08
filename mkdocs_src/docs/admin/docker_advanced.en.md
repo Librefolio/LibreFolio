@@ -235,6 +235,44 @@ The `docker exec` subcommand forwards any `dev.py` command into the running cont
 
 This is equivalent to running `docker compose exec librefolio python dev.py <cmd>`.
 
+## 🩹 Post-Migration Fixes {: #post-migration-fixes }
+
+Every time the server starts, right after applying any pending database migration, it runs the **post-migration fixes**: repairs that a migration cannot make.
+
+1. **Integrity check** — a database that fails SQLite's integrity check is never touched; the log warns about it.
+2. **Detection** — each fix looks for the anomaly it corrects. If there is none, nothing is written and nothing is logged.
+3. **Backup** — a copy of the database is saved next to it, in `LibreFolio-data/sqlite/`, named after the fix and the UTC time: for example `app.db.pre-autoincrement-20261008T101500Z.bak`. If the copy cannot be made, no fix runs.
+4. **Fix and verify** — each fix runs in a single transaction and is verified before it is committed: no broken references between tables, the same number of rows in every table, plus the fix's own checks.
+5. **Outcome** — all verified: the copy is deleted and the log says `Post-migration fixes applied and verified`. Anything failed: the fix is rolled back, leaving the database exactly as it was, the copy is **kept**, and the `Post-migration fix failed` warning in the log gives its path and the error. Both lines also say how long the run took, in `seconds`: on a large database, the start that applies a fix takes longer, but only once.
+
+Either way the server starts normally. A fix that did not complete is tried again at the next start, and a kept copy stays until you delete it. The log is the container output (`./dev.py docker logs`), also saved in `LibreFolio-data/logs/`.
+
+If the server runs several Uvicorn workers, each one runs the fixes as it starts, and they take turns: every run holds an exclusive lock on `app.db.post-migration.lock`, next to the database, so the others wait and, once the first has applied the fixes, find nothing left to do. The offline script below takes the same lock, even with `--dry-run`: started while the server is starting, it waits for its turn.
+
+The first fix, **`autoincrement`**, stops LibreFolio from reusing ids. Without it, deleting the newest broker would let the next broker created take its id, together with whatever still pointed at that id: a saved link, a benchmark remembered by the browser, the folder of the broker's uploaded reports. With it, the id of a deleted user, broker, asset, transaction, FX conversion route or asset event is never given out again, and every existing id stays the same. New databases are created with this protection; an existing one is converted once, at the first start after the upgrade, and from then on the fix finds nothing to do. During the conversion, the uploaded-report folders whose broker no longer exists (`broker_reports/<uploaded|parsed|failed>/broker_<n>`) are first renamed in place to `.quarantine-autoincrement-<UTC time>-broker_<n>`, which the app does not list, so that a new broker cannot inherit them; they are deleted once the conversion is verified, or get their name back if it fails.
+
+### ⏹️ Running the Fixes with the Server Stopped
+
+To preview the fixes, or to retry one that failed at startup and read its error, run them by hand with the server stopped. `docker exec` needs the running container, so use `docker compose run` instead: the command you pass replaces the server in a one-off container. Always preview with `--dry-run` first:
+
+```bash
+docker compose stop librefolio
+docker compose run --rm librefolio python -m backend.app.db.post_migration --dry-run   # preview: changes nothing
+docker compose run --rm librefolio python -m backend.app.db.post_migration             # apply the fixes
+docker compose start librefolio
+```
+
+The script works on the same database and data directory as the server and reports what it found, for example:
+
+```text
+Database: /app/backend/data/prod-docker/sqlite/app.db
+Integrity check: ok
+Fix autoincrement: would_apply
+Orphan broker folder: broker_reports/uploaded/broker_7
+```
+
+Each fix is `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`; a kept backup and any error are listed as well. The exit code is `0` when nothing failed, a dry run included, and `1` when a fix or the integrity check failed.
+
 ## 🧪 Test Mode
 
 The Docker Compose configuration exposes **two ports**:
@@ -377,6 +415,10 @@ sqlite3 ./LibreFolio-data/sqlite/app.db ".backup '/path/to/backups/app.db-$(date
 SQLite's `.backup` command uses the online backup API, which is safe against a live WAL database.
 
 For the full list of what is worth backing up (uploaded files, original broker reports), see the [Filesystem Layout](filesystem.md) page.
+
+A file named `app.db.pre-<fix>-<UTC time>.bak` next to the database is a copy kept by a [post-migration fix](#post-migration-fixes) that failed.
+
+The empty file `app.db.post-migration.lock` next to the database is the lock of the [post-migration fixes](#post-migration-fixes), reused at every start: it is harmless, so leave it in place — deleting it while the server is starting could let two runs overlap.
 
 ### 🔑 4. Environment Variables
 

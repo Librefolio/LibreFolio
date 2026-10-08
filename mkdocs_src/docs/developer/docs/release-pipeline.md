@@ -8,7 +8,7 @@ This page describes the design, execution flow and automation logic of the Libre
 - deploys the documentation site to GitHub Pages, on a stable release or a manual run from `main`;
 - appends the Docker pull commands to the release notes, on releases.
 
-The workflow runs no test suite: apart from the builds themselves, its gates are the documentation checks and the gallery. The tests have their own manual workflow, `.github/workflows/manual-test-run.yml`. The job's permissions are `contents: write` (the `gh-pages` push and the release-notes edit) and `packages: write` (the GHCR push).
+The workflow runs no test suite: apart from the builds themselves, its gates are the [release tag guard](#prereleases), the documentation checks and the gallery. The tests have their own manual workflow, `.github/workflows/manual-test-run.yml`. The job's permissions are `contents: write` (the `gh-pages` push and the release-notes edit) and `packages: write` (the GHCR push).
 
 ---
 
@@ -18,9 +18,56 @@ The workflow has three triggers:
 
 1. **`push` to `dev`**: every push to `dev` runs the nightly build, which publishes the `nightly` and `nightly-light` images. The documentation checks and the gallery are tolerant there (see [Release gate and nightly tolerance](#release-gate-and-nightly-tolerance)), and the documentation site is not deployed.
 2. **`workflow_dispatch`**: a manual run from the Actions tab, without inputs. It behaves according to the branch it is started on: on `dev` like a push to `dev`, on any other branch with the hard gates of a release. A run from `main`, which has no push trigger, pushes only the light `latest` image and deploys the documentation site; a run from any other branch pushes no image (see [Docker Images and Tags](#docker-images-and-tags)).
-3. **`release` (`published`)**: publishing a GitHub release, tagged `vX.Y.Z` (see [Release Tag Convention](#release-tag-convention)), runs the official release path: hard gates, the `X.Y.Z-light`, `latest` and `X.Y.Z` images, the documentation deploy and the release-notes update. GitHub fires `published` for prereleases too: a prerelease runs the same path, but publishes only its own version tags, without moving `latest` or deploying the site (see [Docker Images and Tags](#docker-images-and-tags)).
+3. **`release` (`published`)**: publishing a GitHub release, which must be tagged with a plain `vX.Y.Z` (see [Release Tag Convention](#release-tag-convention)), runs the official release path: hard gates, the `X.Y.Z-light`, `latest` and `X.Y.Z` images, the documentation deploy and the release-notes update. GitHub fires `published` for prereleases too: a prerelease, which must be tagged `vX.Y.Z-rc.N`, runs the same path, but publishes only its own version tags, without moving `latest` or deploying the site (see [Docker Images and Tags](#docker-images-and-tags)). The job's first step enforces both tag forms (see [Release Tags and Publishing](#prereleases)).
 
 Runs are named by `run-name`: `Release vX.Y.Z` for a release, `Manual run (<branch>)` for a manual run, and `Nightly (dev)` for a push to `dev`.
+
+### 🔖 Release Tags and Publishing {: #prereleases }
+
+A release's tag must match its kind; the leading `v` is optional in both:
+
+| Release kind | Tag | Example | On any other tag |
+|--------------|-----|---------|------------------|
+| Prerelease («Set as a pre-release» checked) | `vX.Y.Z-rc.N` | `v1.2.0-rc.1` | `::error title=Prerelease tag`, exit 1 |
+| Stable release | Plain `vX.Y.Z`, no suffix | `v1.2.0` | `::error title=Release tag`, exit 1 |
+
+The job's first step, «Release tag must match the release kind», enforces both forms before the checkout. It runs for every release, prerelease or stable (`if: github.event_name == 'release'`), and is skipped on nightlies and manual runs. The release's prerelease flag selects the form the tag must have, and any other form fails the pipeline at once, with the table's `::error` annotation: for example `v1.2.0`, `v1.2.0-beta.1` or `v1.2.0-rc` on a prerelease, `v1.2.0-rc.1` on a stable release. Nothing is built or pushed, the site is not deployed, and the release notes are not updated; the GitHub release itself stays published.
+
+The tag and the flag reach the check only through `env`, so neither is interpolated into the script, and bash matches the tag as a whole string, not line by line as `grep` would:
+
+```yaml
+if: github.event_name == 'release'
+env:
+  TAG_NAME: ${{ github.event.release.tag_name }}
+  PRERELEASE: ${{ github.event.release.prerelease }}
+run: |
+  if [ "$PRERELEASE" = "true" ]; then
+    if ! [[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+      echo "::error title=Prerelease tag::…"   # the tag, and how to publish instead
+      exit 1
+    fi
+    echo "Prerelease tag OK: $TAG_NAME"
+  else
+    if ! [[ "$TAG_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "::error title=Release tag::…"      # the tag, and how to publish instead
+      exit 1
+    fi
+    echo "Release tag OK: $TAG_NAME"
+  fi
+```
+
+Each branch closes one mismatch between the flag and the tag:
+
+- **A prerelease carries `-rc.N`.** The suffix puts the candidate status in the tag itself, not only in the prerelease flag, which can be edited: with it, neither `latest` nor the in-app update prompt can mistake the prerelease for a release. Under `auto`, metadata-action skips semver pre-releases (see [Docker Images and Tags](#docker-images-and-tags)), and the prompt accepts only a stable `vX.Y.Z` tag (see [Release Tag Convention](#release-tag-convention)).
+- **A stable release carries a plain `vX.Y.Z`.** The deploy and the release notes follow the flag; `latest` and the update prompt also read the tag. An `-rc.N` tag published as a stable release would therefore deploy the documentation site and announce `:latest` in its release notes, while `latest` stays in place (metadata-action skips the semver pre-release) and the prompt rejects the tag (it accepts only a plain `vX.Y.Z`).
+
+**A prerelease is never promoted.** The stable release is always published as a new GitHub release, on a new plain `vX.Y.Z` tag. Of the release events, the workflow listens only to `published`, and promoting a prerelease publishes nothing new (GitHub reports the change as `released`), so the pipeline would not run for it: `latest` would not move, the documentation site would not be deployed, and the release notes would get no Docker section for the stable release.
+
+How to publish:
+
+- **Prerelease**: a new GitHub release with «Set as a pre-release» checked, on a new `vX.Y.Z-rc.N` tag.
+- **Stable release**: a new GitHub release with «Set as a pre-release» unchecked, on a new plain `vX.Y.Z` tag, without `-rc.N` or any other suffix.
+- **Never promote** a prerelease: publish the stable release from scratch, on its own tag.
 
 ---
 
@@ -33,7 +80,9 @@ graph TD
     A([GitHub Actions trigger]) --> B{Event}
     B -->|push to dev| C
     B -->|workflow_dispatch| C
-    B -->|release published| C
+    B -->|release published| R1{"Tag matches its kind? (rc / plain)"}
+    R1 -->|"prerelease on -rc.N, or stable on plain vX.Y.Z"| C
+    R1 -->|"any other tag"| R2["Run fails with an ::error annotation"]
 
     C["Checkout, Python 3.13, Pipenv, Node.js 24"] --> D["Expose the runner image: ImageOS to RUNNER_IMAGE_OS"]
     D --> E["Restore caches: Pipenv venv, npm, Playwright browsers"]
@@ -150,7 +199,7 @@ pipenv run ./dev.py mkdocs build                # rebuild, with the screenshots
 - **The frontend is rebuilt for production.** The gallery's webServer rebuilds `frontend/build/` in debug mode (no minification, sourcemaps). The images copy `frontend/build/`, so `dev.py front build` runs again. The `Dockerfile`'s `frontend` stage refuses anything else: `scripts/docker/check_frontend_build.sh` fails the image build on a debug build, a coverage-instrumented build or any sourcemap.
 - **The site is rebuilt with the screenshots.** The first build had none. The full image ships the rebuilt `mkdocs_src/site/` as is; the light image's docs stage deletes the screenshots again.
 
-The ordering is pinned by `./dev.py test utils release-image-contract` (`backend/test_scripts/test_utilities/test_release_image_contract.py`): a production frontend build and a docs build between the gallery and both image builds, a nightly report that reads every soft-gated step, and a `Dockerfile` that takes `frontend/build/` only through the checked stage. The same test also pins the `RUNNER_IMAGE_OS` cache keys, the gallery's release gate and its failure-report upload, the release, nightly and manual-from-`main` tags of [Docker Images and Tags](#docker-images-and-tags), the prerelease rule (no `latest`, no deploy, no `:latest` line), the image-build guards, the light-before-full build order, and the tags the release notes pull, which it checks by running the step's script in bash with a stand-in `gh`.
+The ordering is pinned by `./dev.py test utils release-image-contract` (`backend/test_scripts/test_utilities/test_release_image_contract.py`): a production frontend build and a docs build between the gallery and both image builds, a nightly report that reads every soft-gated step, and a `Dockerfile` that takes `frontend/build/` only through the checked stage. The same test also pins the `RUNNER_IMAGE_OS` cache keys, the gallery's release gate and its failure-report upload, the release, nightly and manual-from-`main` tags of [Docker Images and Tags](#docker-images-and-tags), the prerelease rule (no `latest`, no deploy, no `:latest` line), the [release tag guard](#prereleases) (`-rc.N` for prereleases, plain `vX.Y.Z` for stable releases), the image-build guards, the light-before-full build order, and the tags the release notes pull, which it checks by running the step's script in bash with a stand-in `gh`.
 
 #### Release gate and nightly tolerance {: #release-gate-and-nightly-tolerance }
 
@@ -186,15 +235,15 @@ What the two variants contain, and which tag users should pick, is specified for
 | Run | Light variant (pushed first) | Full variant (pushed last) |
 |-----|------------------------------|----------------------------|
 | Stable release `vX.Y.Z` published | `X.Y.Z-light`, `latest` | `X.Y.Z` |
-| Prerelease published, e.g. `v1.2.0-rc.1` | `1.2.0-rc.1-light` | `1.2.0-rc.1` |
+| Prerelease `vX.Y.Z-rc.N` published, e.g. `v1.2.0-rc.1` | `X.Y.Z-rc.N-light` | `X.Y.Z-rc.N` |
 | Push to `dev`, or manual run from `dev` | `nightly-light` | `nightly` |
 | Manual run from `main` | `latest` | none: build skipped |
 | Manual run from any other branch | none: build skipped | none: build skipped |
 
 - **No `v` in image tags.** The version tags are `docker/metadata-action`'s `{{version}}`: release `v1.2.0` publishes `1.2.0`, not `v1.2.0`. Only the GitHub release tag has the `v`, and the in-app update prompt accepts both forms.
 - **`latest` is the light variant, moved only by a stable release or a manual run from `main`.** `docker/metadata-action` adds `latest` on its own whenever a `type=semver` tag matches a stable version, if the flavor is `latest=auto`. The full-variant step sets `flavor: latest=false`. The light step uses `auto` only for a release that is not a GitHub prerelease, and `false` for every other run; its raw `latest` tag is enabled only on `main`. Hence:
-    - a GitHub prerelease publishes only its own version tags, even with a plain `vX.Y.Z` tag;
-    - a release tagged with a pre-release suffix, such as `v1.3.0-rc.1`, does not move `latest` either: under `auto`, metadata-action skips semver pre-releases;
+    - a GitHub prerelease publishes only its own version tags, `X.Y.Z-rc.N` and `X.Y.Z-rc.N-light`: the [release tag guard](#prereleases) lets no other tag through, and the `false` flavor would keep `latest` in place on any tag;
+    - a stable release reaches these steps only on a plain `vX.Y.Z` tag, which the same guard enforces: on a tag such as `v1.3.0-rc.1`, `latest` would stay in place, since under `auto` metadata-action skips semver pre-releases;
     - the flavor is never `latest=true`, which would add `latest` to every raw tag as well, `nightly-light` included.
 
     `latest-light` is no longer published: `latest` itself is the light variant.
