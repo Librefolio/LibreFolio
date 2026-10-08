@@ -114,7 +114,7 @@ resources**.
 
 | Resource | Before | After | Needed by |
 |---|---|---|---|
-| `COVERAGE_FILE` | one global file, copied in/out of `.coverage` | `.coverage_data/parts/.coverage.wN` | **every** worker |
+| `COVERAGE_FILE` | one global file, copied in/out of `.coverage` | `.coverage_data/parts/run-<stamp>-<pid>/.coverage.p<pass>.wN`, one directory per run (see [[problems/coverage-combine-race-renamed-part]]) | **every** worker |
 | `DATABASE_URL` | one shared `app.db` | `app_wN.db` | `WRITE_GLOBAL` |
 | `TEST_PORT` | fixed `settings.TEST_PORT` | `TEST_PORT + N` | in-process backend workers |
 | E2E user | everyone used `e2e_test_user` | one of the eight, per worker | `WRITE_SCOPED` |

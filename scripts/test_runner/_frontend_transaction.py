@@ -370,7 +370,10 @@ def front_tx_import_upload(verbose: bool = False, ui: bool = False, headed: bool
 
 
 def front_tx_import_report_set(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run Import Wizard report-set E2E tests (Danske Bank sets through steps 1-4; each test owns its broker and uploads)."""
+    """Run Import Wizard report-set E2E tests (Danske Bank sets through steps 1-4; each test owns its broker and uploads).
+
+    Desktop and mobile: a test tagged @mobile runs on the mobile project only, every other test on desktop only.
+    """
     print_section("Frontend TX Import Report Set Tests")
     if not _ensure_frontend_build():
         return False
@@ -378,7 +381,7 @@ def front_tx_import_report_set(verbose: bool = False, ui: bool = False, headed: 
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("transactions/tx-import-report-set.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+    return _run_playwright("transactions/tx-import-report-set.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
 def front_tx_import_degiro(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -592,7 +595,7 @@ def populate_registry(registry: dict) -> None:
         "tx-import-report-set",
         front_tx_import_report_set,
         name="TX Import Report Set Tests",
-        desc="Report sets (C2): step-1 missing-export warning, step-2 set card (complete, incomplete, upload missing, exclude), the set as one analysis row with its pairing detail, review hiding the rows before H0; (C3) the gap-fix step after Import (R5 opening deposit selected by default, a new request on Back + Import, gap_fix rows in the editor; R6 none selected; R7 a single generic CSV never asks it) and the FilesTable set badges in the broker's import files (R8)",
+        desc="Report sets (C2): step-1 missing-export warning, step-2 set card (complete, incomplete, upload missing, exclude), the set as one analysis row with its pairing detail, review hiding the rows before H0; (C3) the gap-fix step after Import (R5 opening deposit selected by default, a new request on Back + Import, gap_fix rows in the editor; R6 none selected; R7 a single generic CSV never asks it) and the FilesTable set badges in the broker's import files (R8); on mobile (tests tagged @mobile), the set card's header and timeline fit a phone",
         tests="transactions/tx-import-report-set.spec.ts",
     )
     add_test(
