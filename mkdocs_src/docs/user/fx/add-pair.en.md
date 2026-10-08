@@ -1,68 +1,83 @@
 # ➕ Adding a Currency Pair
 
-To add a new currency pair to your FX dashboard:
+A pair tells LibreFolio where the rate between two currencies comes from: a central bank provider,
+a chain of providers, or rates you enter yourself.
 
-1. Click **"Add Pair"** on the FX list page
-2. Select the **two currencies** using the search dropdown
-3. The system automatically discovers available **data routes** — both direct and chain routes
-4. Select the route you prefer and click **Confirm**. The pair configuration is saved and the
-   modal closes right away:
-    - If you picked a route with a real provider (direct or chain), LibreFolio then downloads the
-      pair's **whole rate history** — everything the provider publishes, up to today — together
-      with any intermediate pairs you chose to also create. The date range selected on the page
-      you opened the dialog from makes no difference. A toast reports the result once it's done;
-      the pair's name in that toast is clickable and takes you to its detail page.
-    - If you picked no provider (manual rates only), no sync runs; you instead get an immediate
-      toast confirming the pair was created, with the same clickable pair name.
-
-    The sync toast is honest about the outcome — it is only shown in green when the sync
-    actually succeeded; a partial or failed sync is reported as such, not disguised as success.
+Click **Add Pair** on the [FX page](index.md). The same window opens from the Dashboard, from an
+asset page and from the FX step of the PAC allocator.
 
 ---
 
-## 🛤️ Conversion Routes (Direct & Chain)
+## 🧭 Add a pair step by step
 
-When you select a base and quote currency, LibreFolio queries all installed providers to discover the best available exchange rate routes.
+### 💱 Step 1: Pick the two currencies
+
+In **Add New Currency Pair**, choose the **Base Currency** and the **Quote Currency**. Each list
+hides the currencies already paired with the other one, so a pair cannot be added twice.
+
+### 🛤️ Step 2: Choose a route
+
+Click **Add conversion route** to see every way the providers can produce this rate:
+
+- 🔗 **Direct conversion (1 step)** — one provider publishes the pair;
+- 🔀 **Chain conversion** — steps through other currencies, grouped by number of steps;
+- 🚫 **Not usable** — providers that cannot reach this pair.
+
+Filter with the search box (provider, currency or country), then click a route to add it.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fx-routes" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="add-pair-routes" data-title="🔗 Direct Routes" alt="Add Pair — Direct Routes">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="add-pair-chain" data-title="🔀 Chain Routes (Multi-hop)" alt="Add Pair — Chain Routes">
 </div>
 
-### 🔗 Direct Routes
-If a provider directly supports exchange rates between both currencies (e.g. ECB quoting rates for EUR 🇪🇺 / USD 🇺🇸), the system displays it as a direct route option.
+??? tip "🛟 Backup routes — when you add more than one"
 
-### 🔀 Chain Routes
-For exotic pairs (e.g., RON 🇷🇴 / JPY 🇯🇵) where no single central bank publishes rates directly, the system automatically builds **conversion chains** — multi-step paths through intermediate currencies (typically EUR 🇪🇺 or USD 🇺🇸).
+    LibreFolio uses route **#1** first and tries **#2** if it fails during a sync, and so on. Drag
+    the routes to reorder them; 🗑️ removes one, and ⚠️ shows a note from its provider.
 
-!!! example "Chain Example"
+??? note "🔀 Also create intermediate pairs — when you pick a chain route"
 
-    **RON 🇷🇴 → JPY 🇯🇵** via ECB:
+    Tick **Also create intermediate pairs** to save each step as a pair of its own. You can then
+    sync each step separately and convert into the intermediate currency too: a chain stores only
+    the rate of its own pair.
 
-    1. RON 🇷🇴 → EUR 🇪🇺 (ECB provides RON 🇷🇴 / EUR 🇪🇺)
-    2. EUR 🇪🇺 → JPY 🇯🇵 (ECB provides EUR 🇪🇺 / JPY 🇯🇵)
+??? note "✏️ No route — manual rates only"
 
-    The final rate is computed by multiplying the intermediate rates.
+    You can save without a route, then enter the rates yourself in the pair's
+    [Data Editor](detail/data-editor.md).
+
+### 💾 Step 3: Save
+
+Click **Save Configuration**; the window closes right away.
+
+- **With a provider**, LibreFolio downloads the pair's **whole history** up to today, whatever
+  period the page shows, intermediate pairs included. A message reports the result, in green only
+  if everything worked.
+- **Without a provider**, a message confirms that the pair was created.
+
+Click the pair's name in the message to open its page.
 
 ---
 
-## 🧭 How Route Discovery Works
+## 🛤️ Direct and chain routes
 
-When you select two currencies, LibreFolio queries all installed providers to find:
+A **direct route** uses one provider that publishes both currencies, such as the ECB for
+EUR 🇪🇺 / USD 🇺🇸. When no central bank publishes the pair, a **chain route** multiplies the rates of
+its steps. RON 🇷🇴 / USD 🇺🇸, for example, goes RON → EUR → USD, both steps from the ECB, which
+publishes EUR/RON and EUR/USD:
 
-- 🔗 **Direct routes**: a single provider that covers both currencies
-- 🔀 **Chain routes**: two or more providers that together can connect the currencies through an intermediate currency (e.g., EUR 🇪🇺)
+$$
+r_{\text{RON}\to\text{USD}} = r_{\text{RON}\to\text{EUR}} \times r_{\text{EUR}\to\text{USD}}
+$$
 
-Each route shows:
+- A chain has a rate only on the days when **every step** has one.
+- If one step fails during a sync, the whole chain fails: shorter chains are more reliable.
+- A chain rate can differ slightly from a direct market quote.
 
-- 🏛️ The **provider** name and icon
-- ➡️ The **direction** (base → quote)
-- 🔢 For chains: the **intermediate currency** and the **number of hops**
+---
 
-You can choose any available route based on your preference for data source, coverage period, or update frequency.
+## 🔗 Related
 
-!!! info "For the Curious: Behind the Scenes"
-
-    If you are interested in the mathematical details of how multi-hop conversion chains are computed and routed, you can read the developer documentation: [FX Configuration & Routing](../../developer/backend/fx/configuration.md) and [FX Chain Algorithm](../../developer/frontend/fx-chain-algorithm.md). 
-    
-    *Note: This technical documentation is only for developers and is not required to use this feature.*
+- 🔄 **[Synchronization](sync.md)** — Download rates again later
+- 🔌 **[Provider Config](detail/provider.md)** — Change a pair's routes after creating it
+- 🧑‍💻 For developers: **[FX Configuration & Routing](../../developer/backend/fx/configuration.md)** and **[FX Chain Algorithm](../../developer/frontend/fx-chain-algorithm.md)**

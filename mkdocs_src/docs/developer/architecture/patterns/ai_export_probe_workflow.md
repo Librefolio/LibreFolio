@@ -131,8 +131,11 @@ Choose the smallest representative set that tests the changed behavior:
 - FIFO-relevant scope.
 
 Artifact user and scope names are anonymized. Public prompt joins use A#, B#, F#,
-and L# references. The Entity Directory remains the only place that resolves those
-local references to readable names.
+and L# references. The Entity Directory resolves A#, B#, and F# references to
+readable names: Asset display names and identifiers, Broker display names, and the
+FX pair label. L# references have no directory entry: each is the backend-assigned
+`lot_ref` of one FIFO lot row, read in place, and the row links to its opening
+Broker by B# and, in Portfolio and Broker exports, to its Asset by A#.
 
 ## 📏 Metrics
 

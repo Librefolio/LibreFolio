@@ -305,6 +305,13 @@ When multiple paths are found, `FxProviderSelect.svelte` sorts them:
     2. **Unique provider count** (ascending) — fewer providers = simpler
     3. **Key** (alphabetical tiebreaker)
 
+The picker opens from **Add conversion route** and also lists, under **Not usable**, every
+provider other than `MANUAL` that appears in no path for the pair. When there is no direct route,
+the first chain group opens by itself. The search splits the query on spaces and keeps a route only
+when every token matches its search text: provider codes and names, plus the code, name, flag and
+country names of each currency on the path. A provider's `warning_i18n` shows as ⚠️ on a selected
+route.
+
 ## Output Format
 
 Each path is a `ChainStep[]` array, directly usable as `chain_steps` in `POST /fx/providers/routes`:
@@ -327,3 +334,22 @@ interface ChainStep {
 ```
 
 No transformation is needed between the DFS output and the API request body.
+
+### 💾 How the Modal Saves the Routes
+
+`FxPairAddModal.svelte` builds the `POST /fx/providers/routes` body from the selection:
+
+- The selected routes sit in an `OrderableList` (drag and drop); they are posted in list order with
+  `priority` 1…n, so the first one is the primary route.
+- With no route selected, the pair gets one `MANUAL` step
+  (`{from: base, to: quote, provider: "MANUAL"}`) at `priority` 999, the backend's
+  `MANUAL_PRIORITY` (`backend/app/services/fx_providers/manual.py`).
+- **Also create intermediate pairs** (shown when a chain is selected) adds, for every chain step
+  whose pair is neither configured yet nor the main pair, a 1-step route at `priority` 1,
+  deduplicated across chains.
+- A pair that is already configured cannot be created again: the save button is disabled, and
+  before posting the modal reloads the configured routes and drops the save if the pair appeared
+  meanwhile.
+- In edit mode (**Providers** on the pair page) the modal first deletes all the pair's routes,
+  then posts the new list. With an empty list it posts nothing and keeps the `MANUAL` sentinel the
+  backend reinstates on delete.

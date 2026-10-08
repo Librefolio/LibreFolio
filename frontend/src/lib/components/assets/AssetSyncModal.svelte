@@ -10,7 +10,7 @@
     import {_ as t} from '$lib/i18n';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {writeExportToClipboard} from '$lib/utils/clipboard';
-    import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
+    import type {SyncRequestOptions, SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
     import {clearTimer} from '$lib/utils/core/clearTimer';
 
@@ -44,12 +44,12 @@
         if (open) ensureAssetProvidersCached();
     });
 
-    async function doSyncFn(targetIds: string[]): Promise<SyncResult[]> {
+    async function doSyncFn(targetIds: string[], options: SyncRequestOptions): Promise<SyncResult[]> {
         const items = targetIds.map((id) => ({
             asset_id: parseInt(id),
             date_range: {start: dateStart, end: dateEnd},
         }));
-        const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(items, {timeout: 120 * 1000});
+        const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(items, {timeout: options.timeoutMs});
         const r = response as any;
         return (r.results ?? []).map(
             (ar: any) =>

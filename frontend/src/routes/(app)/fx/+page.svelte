@@ -352,7 +352,7 @@
         } catch (e: any) {
             if (!current()) return;
             console.error('Failed to load pair sources:', e);
-            error = e?.message || 'Failed to load FX pairs';
+            error = e?.message || $_('fx.loadFailed');
             if (propagateError) throw e;
         } finally {
             if (current()) loading = false;
@@ -861,13 +861,13 @@
                     perPairResults.push({
                         label: `${pair.base}/${pair.quote}`,
                         success: true,
-                        detail: $_('fx.delete.resultDeleted', {values: {count: rateCount}}),
+                        detail: $_('fx.delete.resultDeleted', {values: {n: rateCount}}),
                     });
                 } catch (pairErr: any) {
                     perPairResults.push({
                         label: `${pair.base}/${pair.quote}`,
                         success: false,
-                        detail: pairErr?.message || 'Error',
+                        detail: pairErr?.message || $_('common.error'),
                     });
                 }
             }

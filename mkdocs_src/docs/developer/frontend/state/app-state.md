@@ -16,12 +16,12 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Privacy** | `app/privacyStore.svelte.ts` | Device-local "hide amounts" flag, read inside the currency formatters. See [Privacy masking](#privacy-masking). |
 | **Navigation** | `app/navigationStore.ts` | Controls the sidebar state (open/closed) and active page tracking. |
 | **Toasts** | `app/toastStore.svelte.ts` | Svelte 5 Rune-based store for displaying global notification messages. |
-| **Chart Settings** | `chartSettingsStore.svelte.ts` | Global preferences for ECharts (e.g., toggle series, chart types). |
-| **Date Range** | `dateRangeStore.svelte.ts` | Global date picker state (start date, end date) shared across Dashboard and Portfolio. |
+| **Chart Settings** | `chartSettingsStore.svelte.ts` | Chart preferences of the FX and Assets pages: line colouring, area fill, grid lines, stale-data gradient, axis scales, the asset Calendar Return window and overlay signals. Kept per user in `localStorage` (`lf_{userId}_chartSettingsStore`), never on the server, in two separate scopes, `fx` and `assets`: each has its own global settings plus per-item overrides (pair slug, `asset-{id}`), and applying a scope's global settings clears that scope's per-item overrides. The chart period is not stored here: it lives in `sessionStorage` (Date Range, below). |
+| **Date Range** | `dateRangeStore.svelte.ts` | The date range (start, end) shared by the Dashboard (through `dateRangeController.svelte.ts`), the broker detail page, and the Assets and FX pages, list and detail. It lives in `sessionStorage` (`librefolio_dateRange`), so it belongs to the browser tab and survives a reload; on a full page load, `start` and `end` in the URL win, and it falls back to the last three months when the account changes. |
 
 ## 📐 Architecture & Flow
 
-The following diagram shows how the `auth` store initializes the application and how `settings` cascades its values down to `theme` and `language`.
+The following diagram shows how the stores are filled and who sets the language and the theme. Once the auth check succeeds, the `(app)` layout's `appBootstrap.load()` loads the stores in parallel (see [Onboarding Guides](../onboarding.md#layout-gate)); nothing listens to the settings store, so language and theme are set explicitly (items 2–3 below). Writes are dotted and go through the components (*write first*, item 4 below): a component sends the change to the API and, once it succeeds, copies the saved values into the store with `setDirect()`. No store writes to the API itself — their `updateSetting()` methods have no callers.
 
 ```mermaid
 ---
@@ -32,7 +32,9 @@ graph TD
     API["🐍 Backend API"]
     
     Auth["🔐 authStore (Manages Login)"]
+    Boot["🚪 (app)/+layout.svelte<br>appBootstrap.load(), in parallel"]
     Settings["⚙️ settingsStore (User Preferences)"]
+    Onboarding["🧭 onboarding (Guide Progress)"]
     Global["🌍 globalSettingsStore (App Config)"]
     
     Lang["🗣️ languageStore"]
@@ -41,14 +43,21 @@ graph TD
     UI["💻 Frontend UI Components"]
 
     API -->|Session / User Data| Auth
-    Auth -->|Triggers load on login| Settings
-    Auth -->|Triggers load on login| Global
+    Auth -->|"checkAuth() succeeded"| Boot
+    Boot -->|"userSettings.load()"| Settings
+    Boot -->|"onboarding.load(onboardingApi)"| Onboarding
+    Boot -->|"globalSettings.load()"| Global
+    Auth -->|"Login: setDirect(user_settings)"| Settings
+    Auth -->|"Login: currentLanguage.set()"| Lang
+    Auth -->|"Login: applyTheme()"| Theme
     
-    Settings -.->|Pushes changes to| API
-    Global -.->|Admin saves| API
+    UI -.->|"PUT /settings/user<br>first Welcome: POST /settings/onboarding/welcome/complete"| API
+    UI -.->|"PATCH /settings/global/bulk (admin)"| API
+    UI -.->|"setDirect() once the write succeeds"| Settings
+    UI -.->|"setDirect() once the write succeeds"| Global
 
-    Settings -->|Syncs locale| Lang
-    Settings -->|Syncs mode| Theme
+    UI -->|"currentLanguage.set(): after the write<br>(Preferences, Welcome) or header button"| Lang
+    UI -->|"applyTheme(): after the write<br>(Preferences) or header button"| Theme
 
     Lang -->|Updates text| UI
     Theme -->|Updates CSS vars| UI
@@ -58,9 +67,10 @@ graph TD
 ### 🔐 Authentication Flow
 
 1. **Mount**: On app load, `auth.checkAuth()` verifies the existing cookie with the backend.
-2. **Success**: If authenticated, `settings` and `globalSettings` are fetched.
-3. **Cascade**: `settings.language` updates the `languageStore`, and `settings.theme` updates the `themeStore`.
-4. **Immediate Update**: When a user changes a setting in the UI, `settings.setDirect()` updates the frontend instantly for a snappy UX, while asynchronously saving to the API.
+2. **Bootstrap**: If authenticated, the `(app)` layout runs `appBootstrap.load()`, which loads the user settings (`userSettings.load()`), the onboarding progress (`onboarding.load(onboardingApi)`) and the global settings (`globalSettings.load()`) in parallel. The auth store loads nothing: at login it copies the login response's `user_settings` into the store with `setDirect()`, and applies their language and theme (item 3).
+3. **Language and theme**: nothing listens to the settings store; they are set explicitly — by the auth store at login, from the same response (`currentLanguage.set()`, `applyTheme()`); by the Preferences tab after its write; by the Welcome page after **Continue** (the language only: Welcome leaves the theme alone); and, for this browser only, by the header buttons (item 4).
+4. **Write first**: no settings screen updates the store before the server answers. The Preferences tab sends `PUT /api/v1/settings/user` (one field per request) and, only once it succeeds, applies the language or theme and calls `userSettings.setDirect()`; a failed write leaves the store as it was and shows an error toast. The Profile tab (avatar) and the Welcome page also write first; Welcome only previews a new language (the svelte-i18n `locale`) until **Continue** saves it. `setDirect()` itself never calls the API: it sets the store and its per-user `localStorage` cache (`lf_{userId}_user_settings`). The header's theme and language buttons change only this browser (`librefolio-theme`, `librefolio-locale`) and save nothing to the account.
+5. **After a reload**: language and theme come from this browser's `librefolio-locale` and `librefolio-theme`, so a change made on another device shows here only at the next login.
 
 ## 🙈 Privacy masking {: #privacy-masking }
 

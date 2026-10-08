@@ -780,7 +780,7 @@
       "historyFirst": "Premier import de ce courtier : à la fin, nous proposons le solde et les positions au {date} ; ensuite, chaque mouvement est importé.",
       "historyLater": "LibreFolio a déjà l'historique de ce courtier depuis le {date} : les mouvements déjà présents apparaîtront comme doublons, et les précédents ne sont pas réimportés.",
       "selectedCount": "{sets} lot(s) et {n} fichier(s) sélectionné(s) de {b} courtier(s)",
-      "incompleteBlocks": "Continuer est désactivé tant qu'un lot sélectionné est incomplet : téléversez le fichier manquant ou désélectionnez le lot.",
+      "incompleteBlocks": "Analyser est désactivé tant qu'un lot sélectionné est incomplet : téléversez le fichier manquant ou désélectionnez le lot.",
       "step1Missing": "{plugin} a aussi besoin de : {role} ({ext}).",
       "step1MissingHint": "Déposez-le ici : il rejoint le même lot. Vous pouvez aussi continuer : le lot apparaîtra incomplet.",
       "analyzeRowLabel": "Lot du {date} · combiné ({n} fichiers)",
@@ -898,7 +898,8 @@
       "removeFromSet": "Retirer du lot",
       "defaultPluginNote": "Lu comme lot {plugin}, et non avec le plugin par défaut du courtier ({defaultPlugin}). Pour le changer, utilisez « Lu comme » ou le menu ⋮ d'un fichier.",
       "alsoRecognisedBy": "{file} est aussi reconnu par : {plugins}",
-      "partlySelectedBlocks": "Continuer est désactivé tant qu'un lot n'est sélectionné qu'en partie : sélectionnez tout le lot ou désélectionnez-le."
+      "partlySelectedBlocks": "Analyser est désactivé tant qu'un lot n'est sélectionné qu'en partie : sélectionnez tout le lot ou désélectionnez-le.",
+      "ungroupedBlocks": "Analyser est désactivé tant qu'un fichier sélectionné ne se lit qu'avec son lot mais n'appartient à aucun lot : {files}. Téléversez de nouveau ensemble, en une seule fois, tous les exports du lot, puis sélectionnez le lot ; ou désélectionnez le fichier."
     },
     "parseDetail": {
       "sourceRow": "Ligne du fichier",
@@ -1466,7 +1467,8 @@
     "uploading": "Envoi en cours...",
     "user": "Utilisateur",
     "backToDefault": "Retour au défaut",
-    "createForex": "Créer un forex…"
+    "createForex": "Créer un forex…",
+    "unknownError": "erreur inconnue"
   },
   "csvImport": {
     "title": "Importer des données CSV",
@@ -1486,7 +1488,22 @@
     "discardMessage": "Vous avez modifié les données CSV. Voulez-vous vraiment fermer sans importer ?",
     "sep": "sep",
     "decimal": "décimal",
-    "thousands": "milliers"
+    "thousands": "milliers",
+    "placeholder": "Collez les données CSV ici ou déposez un fichier ci-dessus...",
+    "headerMismatch": "Les devises de l'en-tête ne correspondent pas",
+    "errors": {
+      "missingColumns": "Colonnes obligatoires manquantes : {columns}",
+      "expectedHeader": "En-tête attendu : {header}",
+      "fixHeaderFirst": "Corrigez d’abord l’en-tête",
+      "invalidQuotedField": "Champ CSV entre guillemets invalide",
+      "invalidIdentity": "Valeur invalide pour {label} : \"{value}\"",
+      "invalidDateFormat": "Format de date invalide : \"{value}\". Utilisez YYYY-MM-DD",
+      "invalidDate": "Date invalide : \"{value}\"",
+      "requiredEmpty": "La colonne obligatoire \"{column}\" est vide",
+      "invalidNumber": "Nombre invalide dans \"{column}\" : \"{value}\"",
+      "invalidValue": "Valeur invalide dans \"{column}\" : \"{value}\"",
+      "duplicate": "Valeur en double pour {label} : {key}"
+    }
   },
   "dashboard": {
     "netWorth": "Valeur Nette",
@@ -1698,7 +1715,8 @@
     "importCsv": "Importer CSV",
     "emptyMessage": "Aucune donnée. Utilisez 'Ajouter une ligne' ou 'Importer CSV' pour en ajouter.",
     "editorTipDesktop": "Double-cliquez sur le graphique pour aller à cette date",
-    "editorTipMobile": "Appui long sur le graphique pour aller à cette date"
+    "editorTipMobile": "Appui long sur le graphique pour aller à cette date",
+    "saveFailed": "Échec de l’enregistrement : {error}"
   },
   "datePicker": {
     "presets": {
@@ -1818,7 +1836,11 @@
       "legBreakdown": "Détail par étape",
       "legNoData": "0 dates — aucune donnée",
       "legDates": "dates",
-      "inProgress": "Synchronisation des taux FX…"
+      "inProgress": "Synchronisation des taux FX…",
+      "timeoutAfter": "Délai dépassé après {seconds} s",
+      "requestTimedOut": "La requête a expiré après {seconds} s. Augmentez le délai et réessayez.",
+      "failed": "Échec de la synchronisation",
+      "retryFailed": "{n, plural, one {Réessayer l’échec} other {Réessayer les # échecs}}"
     },
     "route": {
       "title": "Routes de Conversion",
@@ -1844,7 +1866,13 @@
       "toastFailed": "Échec de suppression de {pair}",
       "resultDeleted": "supprimée ({n} taux)"
     },
-    "rateNotAvailable": "Taux indisponible"
+    "rateNotAvailable": "Taux indisponible",
+    "rate": "Taux",
+    "card": {
+      "manualOnly": "Paire uniquement manuelle",
+      "syncFromProvider": "Synchroniser les taux depuis le fournisseur"
+    },
+    "loadFailed": "Impossible de charger les paires FX"
   },
   "fxDetail": {
     "editRates": "Modifier les taux",
@@ -1857,7 +1885,16 @@
     "noDataManual": "Aucune donnée disponible — insérez les taux manuellement",
     "insertManually": "Insérer manuellement",
     "syncDisabledManual": "Sync désactivé — aucun fournisseur configuré. Ajoutez un fournisseur ou insérez les taux manuellement.",
-    "aiExport": "Export IA"
+    "aiExport": "Export IA",
+    "syncFailed": "Échec de la synchronisation : {error}",
+    "loadFailed": "Impossible de charger les taux",
+    "assetFallback": "Actif n° {id}",
+    "invalidRates": "{n, plural, one {# ligne a un taux invalide} other {# lignes ont un taux invalide}} : un taux doit être strictement supérieur à zéro (0 n’est pas autorisé).",
+    "savedSummary": "Taux FX : {details}",
+    "savedCount": "{n, plural, one {# enregistré} other {# enregistrés}}",
+    "deletedCount": "{n, plural, one {# supprimé} other {# supprimés}}",
+    "skippedCount": "{n, plural, one {# ignoré (invalide)} other {# ignorés (invalides)}}",
+    "saveFailed": "Échec de l’enregistrement des taux FX : {error}"
   },
   "help": {
     "helpAndSupport": "Aide et Support",
@@ -2766,9 +2803,9 @@
     "selection": "Jeu de données ou analyse",
     "detailLevel": "Niveau de détail",
     "detailLevelHelp": {
-      "compact": "Même univers de données, avec des périodes allant jusqu’à 30 jours.",
-      "standard": "Même univers de données, avec des périodes allant jusqu’à 14 jours.",
-      "full": "Même univers de données, avec des périodes allant jusqu’à 7 jours."
+      "compact": "Même univers de données, avec des périodes allant jusqu’à 30 jours pour les prix et jusqu’à 84 jours pour les indicateurs les plus lents.",
+      "standard": "Même univers de données, avec des périodes allant jusqu’à 14 jours pour les prix et jusqu’à 28 jours pour les indicateurs les plus lents.",
+      "full": "Même univers de données, avec des périodes allant jusqu’à 7 jours pour les prix et jusqu’à 14 jours pour les indicateurs les plus lents."
     },
     "details": {
       "compact": "Compact",

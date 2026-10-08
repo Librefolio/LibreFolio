@@ -1,8 +1,8 @@
 # 📈 Interactive Chart
 
-The chart is the centerpiece of the asset detail page. It can show the asset's price history or a backend-computed Rolling Return over that history.
+The chart is the heart of the asset page: the price history, or how much the price moved over a rolling window. Scroll to zoom, drag to pan, and hover a point for its values.
 
-_Last updated: 2026-10-07_
+_Last updated: 2026-10-08_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Price Chart" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -10,14 +10,14 @@ _Last updated: 2026-10-07_
 
 ---
 
-## 🔀 Primary Modes
+## 🔀 Prices or Rolling Return {: #primary-modes }
 
-Use the two buttons above the chart to choose its primary series:
+The two buttons above the chart choose what it draws:
 
-- **Prices** (line-chart icon) shows the resolved price series.
-- **Rolling Return** (percent icon) shows the price-only percentage return for each chart date against the resolved close exactly _N_ calendar days earlier.
+- **Prices** — the price history, with the asset's [events](events.md) as markers.
+- **Rolling Return** — for every date, the price change over a window you choose ([below](#rolling-return)).
 
-Opening or reloading an asset starts in **Prices** mode. LibreFolio remembers the Rolling Return window, but it does not persist the selected primary mode.
+The page always opens on **Prices**.
 
 ### 🗓️ Rolling Return Window {: #rolling-return }
 
@@ -25,101 +25,69 @@ Opening or reloading an asset starts in **Prices** mode. LibreFolio remembers th
     <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="Asset chart in Rolling Return mode with the 1Y window and one comparison asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-In **Rolling Return** mode a **Window** control appears next to the two mode buttons. The **?** at
-its end opens this section of the manual in a new tab.
+This view answers *how much has the price moved over the window, at every date?* Each point compares that day's close with the close exactly $N$ calendar days earlier:
 
-The four presets are exact calendar-day aliases:
+$$
+R(d) = \frac{P(d)}{P(d-N)} - 1
+$$
 
-| Preset | Window sent for calculation |
-|---|---:|
-| **1W** | 7 days |
-| **1M** | 30 days |
-| **3M** | 90 days |
-| **1Y** | 365 days |
+where $P$ is the last close known on that day, in the chart's currency → [Rolling return over calendar days](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar).
 
-Choose the compact **Custom** control to enter a positive whole number and select **W**, **M**, or **Y**. Custom windows use fixed multipliers: 7 days per week, 30 days per month, and 365 days per year. For example, `3M` in the Custom control means 90 calendar days.
+Pick $N$ with the **Window** control next to the two buttons:
 
-Every preset and any supported positive **Custom** window remain available when _N_ is longer than the selected date range. The visible span does not cap the lookback or force a switch back to **Prices**.
+- **1W**, **1M**, **3M**, **1Y** — 7, 30, 90 and 365 days.
+- **Custom** — a whole number with **W**, **M** or **Y**, counted as 7, 30 and 365 days: `3M` is 90 days.
+- **?** opens this section of the manual.
 
-The selected window is part of this asset's browser-local chart settings. It is stored in `localStorage` under the current account and asset, so it survives a reload in the same browser; it is not written to the backend database.
+The window may be longer than the dates on screen: LibreFolio reads the older prices it needs. It is remembered for this asset, in this browser.
 
-### 🧮 Calculation, Currency, and Provenance
+How to read it:
 
-Rolling Return is calculated by the backend from the resolved daily close series. The selected chart currency is applied before the calculation, and Asset comparison lines use that same target currency and the same _N_-day window.
+- **Above zero**, the price is higher than $N$ days before; **below zero**, lower.
+- **Hover a point**: ↩ gives the date it is compared with; 📅 and 💱 give the dates of the price and of the exchange rates actually used, when one of them is older.
+- **[Asset comparisons](signals.md#data-comparison)** turn into rolling returns too, with the same window and currency.
+- **Price only**: dividends, interest and your transactions are not included.
 
-The selected start and end bound output dates only. For the exact _t − N_ reference, the backend loads history from _N_ calendar days before the selected start (or the earliest possible date) and may resolve those dates from still earlier factual price or FX observations. A valid line can therefore begin on the selected start even when _N_ is longer than the visible range.
+??? note "🧩 Gaps and short lines — when the history is incomplete"
 
-Each primary or comparison-asset line starts on its own first selected date where both the current value and exact _t − N_ reference resolve. Late inception or missing leading price/FX coverage shortens only that line; a later missing current or reference value leaves a gap in that line without truncating the others.
-
-For every returned point, the backend also reports the requested reference date and the actual price and FX observations used. The tooltip exposes that provenance, and the stale-gradient setting can visualize stale price or FX inputs on the line. LibreFolio does not interpolate or fabricate a replacement return: normal source resolution may carry forward an earlier factual price or FX rate, with its actual date and staleness preserved. Missing or invalid endpoints remain gaps. Mixed valid and missing points produce a typed **partial** result; only a range with zero valid points is **unavailable**.
-
-Asset prices, asset events, and FX rates are persisted source data. The rolling-return series and its provenance are computed on request and kept only for the current page runtime; they are not saved as new history. Rolling Return is price-only: it does not include events, cash flows, transactions, or portfolio P&L.
-
-### 🗄️ Data Ownership at a Glance
-
-| Layer | What it owns |
-|---|---|
-| **Backend database** | Source Asset price and event history, and source FX-rate history |
-| **Browser `localStorage`** | Chart settings, the selected Rolling Return window, and comparison configuration such as selections, parameters, order, and styles—never source or computed series |
-| **Browser `sessionStorage`** | The shared visible start/end date range for the current tab |
-| **Current page runtime only** | Computed Rolling Return and comparison series, their provenance, and measurements; a reload discards them |
+    A point stays empty, never estimated, when either of its two prices is missing or not positive. Each line starts on the first date it can be computed, so a recent asset or a missing exchange rate shortens only its own line, and a later missing price leaves a gap. When only part of the range can be computed, a note under the chart says so; when nothing can, a message replaces the chart.
 
 ---
 
-## 🎛️ Filter Bar
+## 🎛️ Choose what the chart shows
 
-The filter bar above the chart provides controls for customizing the view:
+### 📅 Date range
 
-### 📅 Date Range
+The date range in the page toolbar sets the dates on screen: **1W**, **1M**, **3M**, **6M**, **1Y**, **2Y**, **YTD**, **MAX**, or **Custom** with a calendar. With spare room on the bar, more presets appear (3Y, 5Y, 10Y, WTD, MTD, QTD). The range you pick follows you to the Dashboard, broker, asset and FX pages of the same browser tab.
 
-Select a time window for the chart data:
+On a long range the chart may group the days into weeks or months to stay readable: a **Weekly** or **Monthly** badge at its top left says so.
 
-- **Presets**: 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX — when the bar has leftover space, extra **fill presets** appear to use it (3Y, 5Y, 10Y and WTD, MTD, QTD)
-- **Custom**: pick a start and end date using the calendar picker
+### 💱 Convert to another currency
 
-This date range controls output dates. In Rolling Return mode it is separate from the _N_-day comparison window above.
+**Convert to**, next to the price, shows the chart in another currency, with a dashed 💱 line for the price in the asset's own currency. The menu lists the currencies your FX pairs can reach; **Create forex…** at its bottom adds a missing pair. Rolling returns are computed in the chosen currency too.
 
-### 💱 Currency Selector
+??? note "💱 When an exchange rate is missing"
 
-View prices in:
+    A banner above the chart names the pair, with a shortcut to create it or to open it. The page's **Sync** downloads the rates of the pairs that exist; it never creates one.
 
-- The asset's **native currency** (e.g., USD for Apple)
-- Your **portfolio base currency** (e.g., EUR) — automatically converted using FX rates
+### 📊 Line or candles, Abs or %
 
-The selected currency also becomes the target currency for the backend Rolling Return calculation.
+In **Prices** mode, the buttons at the top left of the chart switch:
 
-**Page Sync** includes every already-configured FX route required by the primary asset, comparison assets, or their events in either **Prices** or **Rolling Return** mode. A missing pair remains a remediation item: Page Sync does not include or register it automatically.
-
-### 📊 Absolute / Percentage Toggle
-
-In **Prices** mode:
-
-- **Absolute**: shows the actual price values
-- **Percentage** (%): shows percentage change from the first data point in the selected range
-
-Rolling Return is already a percentage series, so this toggle is hidden in that mode.
-
-### 📅 Event Markers
-
-In **Prices** mode, dividends, splits, interest payments, and other [asset events](events.md) appear as colored markers on the chart:
-
-- 💰 **Dividend** — cash distribution
-- 💵 **Interest** — interest payment
-- 📊 **Split** — stock split
-- 📝 **Price Adjustment** — write-down or re-rating
-- 🏁 **Maturity Settlement** — asset reached maturity
-
-Hover over a marker to see the event details (date, type, value).
+- between a **line** and **candlesticks**, which need the open, high and low prices;
+- between **Abs**, the prices, and **%**, the change since the first day of the range.
 
 ---
 
-## 🎨 Aesthetics
+## 🧰 Tools on the chart
 
-Click the **Settings** (⚙️) button to toggle the inline aesthetics panel (area fill, baseline colors, grid lines, stale gradient, Y-axis scale). These controls remain available in Rolling Return mode, which always uses a percentage line chart; area fill and the percentage-axis profile apply there. Candlesticks, event markers, and the data editor are available only in **Prices** mode.
+The three buttons at the top right of the chart:
 
-The **Measure** tool is available in both primary modes. **Prices** and **Rolling Return** keep separate in-page measurements and summary tables; see [Measures](measures.md).
+- **📏 Add measurement** — compare two points: see [Measures](measures.md). **Prices** and **Rolling Return** keep separate measures.
+- **✏️ Edit Prices & Events** — opens the [Data Editor](data-editor.md), in **Prices** mode only.
+- **⚙️ Aesthetics** — **Area Fill**, **Baseline Colors** (green above the starting value, or above zero in %, red below), **Grid Lines**, **Stale Gradient** (fades the points whose price or exchange rate is carried over from an earlier day) and **Y-Axis Scale** (**Auto**, **Include 0** or **Custom** limits). Candlesticks turn off Area Fill, Baseline Colors and Stale Gradient.
 
-The same aesthetics settings — plus overlay signals — can also be edited for all asset charts at once from the **Chart Settings** modal on the [Assets list page](../index.md), which shows a live preview while you edit; see [Chart Settings](../../fx/chart-settings.md) for how the modal and its preview work (the Assets scope is independent from FX).
+These settings and your signals are remembered for this asset, in this browser. To change them for every asset at once, use **Settings** on the [Assets page](../index.md): see [Chart Settings](../../fx/chart-settings.md).
 
 ---
 
@@ -128,4 +96,5 @@ The same aesthetics settings — plus overlay signals — can also be edited for
 - 📊 **[Signals](signals.md)** — Overlay technical indicators
 - 📐 **[Measures](measures.md)** — Measure price differences
 - 📅 **[Events](events.md)** — Understand event markers
-- 📚 **[Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)** — How simple and annualized returns are calculated
+- 📚 **[Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)** — How simple, annualized and rolling returns are calculated
+- 🛠️ **[Chart internals](../../../developer/frontend/components/charts.md)** — For developers: the two modes, where the chart state lives, and how the page syncs

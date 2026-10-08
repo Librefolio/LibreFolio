@@ -5,7 +5,8 @@
   - Row status tracking: original, edited, deleted, appended
   - DataTable: sorting, pagination, column filters, editable cells, row actions
   - Bulk operations: select multiple rows + mark as deleted
-  - Import CSV via DataImportModal
+  - Import CSV via DataImportModal: a line merges into the row of its date (and of its
+    `importMatchKeys` values, when given), otherwise it is appended
   - Add row (today's date)
   - Configurable columns via ColumnDef[]
   - Dirty row emission for save/preview
@@ -50,9 +51,15 @@
          * Keys not present in ColumnDef are ignored.
          */
         defaultRowValues?: Record<string, unknown>;
+        /**
+         * Value keys an imported row must also match, besides its date, to merge into an
+         * existing row. Empty (default): one row per date, as prices and FX rates have.
+         * The events editor passes `['type']`: one date can hold a DIVIDEND and an INTEREST.
+         */
+        importMatchKeys?: string[];
     }
 
-    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange, defaultRowValues = {}}: Props = $props();
+    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange, defaultRowValues = {}, importMatchKeys = []}: Props = $props();
 
     // =========================================================================
     // State
@@ -152,7 +159,7 @@
                                 label: '',
                                 compact: true,
                                 disabledDates: disabled,
-                                onchange: (newDate: string) => handleDateChange(r.date, newDate),
+                                onchange: (newDate: string) => handleDateChange(r.rowId, newDate),
                             },
                         };
                     }
@@ -392,14 +399,22 @@
     // Table Edit Handlers
     // =========================================================================
 
+    /** A rowId for a new row on `date`: the date itself, then `date#2`, `date#3`… */
+    function uniqueRowId(date: string): string {
+        const taken = new Set(rows.map((r) => r.rowId));
+        if (!taken.has(date)) return date;
+        let n = 2;
+        while (taken.has(`${date}#${n}`)) n++;
+        return `${date}#${n}`;
+    }
+
     /** Change the date of an appended row (via SingleDatePicker) */
-    function handleDateChange(oldDate: string, newDate: string) {
-        if (oldDate === newDate) return;
-        if (rows.some((r) => r.date === newDate && r.date !== oldDate)) return;
-        const row = rows.find((r) => r.date === oldDate && r.status === 'appended');
-        if (!row) return;
+    function handleDateChange(rowId: string, newDate: string) {
+        const row = rows.find((r) => r.rowId === rowId && r.status === 'appended');
+        if (!row || row.date === newDate) return;
+        if (rows.some((r) => r.date === newDate)) return;
         row.date = newDate;
-        row.rowId = newDate; // keep rowId synced for price rows
+        row.rowId = uniqueRowId(newDate); // the date itself for price rows
         rows = [...rows];
         emitDirty();
     }
@@ -521,10 +536,12 @@
     function handleImport(importedRows: ParsedRow[]) {
         for (const pr of importedRows) {
             if (pr.kind !== 'dated') continue;
-            const existingIdx = rows.findIndex((r) => r.date === pr.date);
-            if (existingIdx >= 0) {
-                const existing = rows[existingIdx];
-                if (existing.readonly) continue; // skip readonly rows
+            const matches = rows.filter((r) => r.date === pr.date && importMatchKeys.every((k) => String(r.values[k] ?? '') === String(pr.values[k] ?? '')));
+            if (matches.length > 0) {
+                // An editable match wins over a readonly one listed first; a line whose
+                // every match is readonly is skipped.
+                const existing = matches.find((r) => !r.readonly);
+                if (!existing) continue;
                 if (existing.originalStatus === 'original') {
                     if (!existing._originalValues) {
                         existing._originalValues = {...existing.values};
@@ -545,7 +562,7 @@
                 }
             } else {
                 rows.push({
-                    rowId: pr.date,
+                    rowId: uniqueRowId(pr.date),
                     date: pr.date,
                     status: 'appended',
                     originalStatus: 'appended',

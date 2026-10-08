@@ -1,6 +1,10 @@
 # 🔍 Positions & Analysis
 
-The **Positions** tab of the dashboard allows you to inspect open holdings, analyze performance, and drill down into matching tax lots. Broker detail pages reuse the same Positions panel and saved table preferences, with the report scoped to the selected broker.
+The **Positions** tab shows what you hold, what each position earned in the period and, one click away, the FIFO lots behind any position. Each broker's page has the same tab for that broker alone, with the same table settings.
+
+- 📋 **[Holdings](#holdings)** — what you own on the end date
+- 📈 **[Performance](#performance)** — what each position earned in the period
+- 🔬 **[FIFO Lots Analysis](#fifo-lots-analysis)** — the lots behind one position
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Holdings (Table)" alt="Holdings Table View">
@@ -11,76 +15,94 @@ The **Positions** tab of the dashboard allows you to inspect open holdings, anal
 
 ---
 
-## 🔍 Positions Tab
+## 🎛️ Choosing a view
 
-The **Positions** panel has two semantic modes: **Holdings** and **Performance**.
+- **Portfolio / Period** switches between [Holdings](#holdings) and [Performance](#performance); **Table / Map** (the two icons) between a table and a chart.
+- **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. **See all →** opens the Assets page.
+- **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [FIFO Lots Analysis](#fifo-lots-analysis) below, **View Asset** the asset's page.
 
-Use the view toggle to switch between them, and the table/map toggle to change the visual layout.
+LibreFolio remembers your choices.
 
-#### 📋 Holdings View
+---
 
-The **Holdings** view shows the current open-position snapshot. Each row represents one asset/broker position at the selected end date. The table has 14 columns:
+## 📋 Holdings — what you own {: #holdings }
 
-| Column | Description |
+What do you own on the end date, and how is each position doing? **Portfolio** lists one row per asset and broker, the largest value first.
+
+**Columns shown**
+
+| Column | What it shows |
 |:---|:---|
-| **Asset** | Asset name with type icon — click to open the asset detail page. |
-| **Δ1** | Change in unrealized P&L versus yesterday, keeping today's quantity constant. |
-| **Δ1%** | The same daily change as a percentage of yesterday's position market value. |
-| **Unrealized P&L** | Open gain/loss: current value minus residual cost basis. Shows `—` when the asset has no price at all, or when part of the purchase cost is unknown (see **Avg. Cost**). |
-| **P&L %** | Unrealized P&L as a percentage of the residual cost basis. |
-| **Annualized** | Net annualized return (CAGR) of the still-open lots, from the first transaction to the selected end date — for comparison across positions held for different durations. |
-| **YOC** | Gross recorded dividends and interest over the last year, compared with the average purchase price (WAC). Visible by default beside **Annualized**. |
-| **Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
-| **Weight** | Proportional share of this position relative to the total portfolio value. |
-| **Qty** | Current shares, units, or coins held. |
-| **Brokers** | Broker account for this asset/broker row. |
-| **Price** *(hidden by default)* | Current asset price from the connected data provider. |
-| **Avg. Cost** *(hidden by default)* | Average purchase price per unit of the currently open position (Weighted Average Cost), in your display currency: each purchase counts at the exchange rate of its own date, so it does not move with today's rates. Shows `—` when part of the purchase cost is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment recorded without a cost basis; the data-quality banner then names the currency pair or the asset. |
-| **Oldest open lot** *(hidden by default)* | Opening date of the oldest FIFO lot still open for this position. |
+| **Asset** | The asset, with its type icon |
+| **Δ1** / **Δ1%** | Today's move of the unrealized P&L at today's quantity, in money and in % of yesterday's value |
+| **Unrealized P&L** / **P&L %** | Current value minus what the open position cost, in money and in % of that cost → [Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) |
+| **Annualized** | Yearly compound return since the first transaction, income and fees included → [Net Annualized Return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md) |
+| **YOC** | The last year's dividends and interest per unit, against its average price → [Yield on Cost](#yield-on-cost-yoc) |
+| **Value** / **Weight** | What the position is worth, and its share of your Net Worth, cash included |
+| **Qty** | Shares, units or coins held |
+| **Price** *(hidden)* | The unit price used: the market price, or the last trade price when there is no quote → [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
+| **Avg. Cost** *(hidden)* | Average purchase price per unit, each purchase at its own date's exchange rate → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
+| **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open |
+| **Brokers** | The broker holding the position |
 
-Use the **eye icon** in the table toolbar to show or hide columns — your choices are remembered across sessions.
+**How to read it**
 
-#### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
+- **Weight counts cash**, so the rows add up to less than 100% when you hold cash.
+- **Avg. Cost keeps each purchase's exchange rate**, while Value uses the end date's: the Unrealized P&L includes what the rate did since.
+- **In the Map**, tiles are grouped by broker and asset type; size is the value, colour the P&L %. Scroll to zoom, drag to move, and **Reset zoom** (↺) shows everything again.
 
-YOC answers: **"How much gross dividend and interest income did each current unit produce over the last 365 calendar dates relative to its average purchase price (WAC)?"**
+??? info "➖ Empty cells — when a value is missing"
 
-- It is calculated separately for each **asset/broker** row, even when the same asset is held at several brokers.
-- The window ends on the selected report end date and does not move with the report start date.
-- Only asset-linked `DIVIDEND` and `INTEREST` transactions with non-negative cash amounts count, including an exact-zero amount. Negative income amounts are not supported. Separate taxes and fees, provider income events, and income without an asset do not.
-- `ADJUSTMENT` transactions can affect quantity, average purchase price, or linked splits, but never count as income.
-- Income uses the paying broker's long quantity at end of day before payment. Same-day buys are excluded; same-day sells are included.
-- Transfers respect custody, but historical income does not automatically follow units to another broker. Linked same-day and later splits normalize prior income to current units. If connected cross-broker history contains a split but this broker lacks its own matching linked split row, YOC becomes unavailable rather than inferring a global restatement.
-- Each income is converted at its own transaction date. The average purchase price is already in your display currency — each purchase at its own date's rate — so it needs no conversion at the end date. If an earlier available rate is used for an income, the tooltip shows the actual rate date.
-- The rule applies to every holding type, including crypto and manual assets.
+    - **`—` in Unrealized P&L, P&L % or Avg. Cost**: the asset has no price at all, or part of what you paid is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment without a cost basis. The [Data Quality banner](index.md#data-quality-banner) names what to fix.
+    - **Δ1** and **Δ1%** need a market price; **Annualized** needs a position old enough for a yearly rate to mean anything.
 
-Available values may be positive or exactly zero and use two decimal places. Positive values have no leading plus sign. An available zero means that at least one qualifying income row was recorded at amount zero and no qualifying amount was positive; it appears as `0.00%`, with `net_zero=true` in its provenance. By contrast, `no_income` means that no qualifying income row was recorded: for a ledger at least 365 days old, the cell shows a plain `-` with no warning icon. The age gate applies only when there is no trailing-365-day income: a younger pair with valid recorded income can show an available YOC. A younger no-income pair, or a replay, quantity, split, FX, or WAC problem, has no numeric value and shows `-` with an info icon explaining why YOC is unavailable. LibreFolio does not show a partial value when any required input fails.
+### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
 
-The YOC column is visible by default beside **Annualized**. Dashboard and broker Holdings tables share the same persisted show/hide preference.
+How much income does each unit pay you, compared with what it cost? **YOC** compares the dividends and interest each unit received over the **last 365 days** with its average purchase price.
 
-!!! warning "YOC is gross, not tax-net"
+**How to read it**
 
-    LibreFolio includes only non-negative recorded `DIVIDEND` and `INTEREST` cash amounts and does not subtract separate `TAX` or `FEE` transactions from YOC. See the rigorous [Yield on Cost definition](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) and its comparison with dividend yield, cumulative cash yield, CAGR, current yield, and YTM.
+- **One value per asset and broker**, over the year that ends on the end date: moving the start date does not change it.
+- **Gross, not after tax**: separate tax and fee transactions are not subtracted.
+- **Hover a value** for the income per unit, the period and the exchange rates used — each payment at its own date's rate.
+- **`0.00%`** means income recorded at zero; a plain **`-`** means no income in the last year.
 
-#### 📈 Performance View
+🔗 **Theory**: [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — the exact rules, and how YOC differs from dividend yield or CAGR
 
-The **Performance** view loads on demand and shows open and closed positions together. In the table/chart, **Status** is filterable inside the component, not a top-level toggle.
+??? info "🚦 A dash with an ⓘ icon — when YOC is unavailable"
 
-!!! tip "Hiding the amounts"
+    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again.
 
-    In the **Map** style, the Performance bar chart follows the eye button in the top bar (**Hide amounts**) straight away. Each row's net P&L label keeps its sign and currency, while the digits and any thousands or millions suffix turn into `•••`: `+€•••`, or `+••• CHF` for a currency without a symbol of its own. The axis values become `•••` (or `-•••`), zero included, and tooltip amounts keep only their sign and currency. Percentages stay visible, beside the net label (when there is room) and in the tooltip. The bars keep their real length and colors, and the net labels stay green or red, so the bars' relative size and whether each position gained or lost still show.
+---
 
-#### 🗺️ Visual Style: Table vs. Map
+## 📈 Performance — what each position earned {: #performance }
 
-| Visual Mode | Core Features | Optimal Use Case |
-|:---|:---|:---|
-| **📋 Table View** | • Sortable grid layout<br>• Precise numerical values<br>• Quick column sorting | Standard bookkeeping, searching specific asset quantities, or comparing WAC values. |
-| **🗺️ Map View** | • Visual Treemap visualization<br>• Size indicates asset weight<br>• Color intensity indicates performance (green = gain, red = loss) | Quick visual diagnostics, spotting over-allocation, or identifying underperforming assets. |
+Which positions made or lost money in the period, and how? **Period** lists every position of the period, open or closed since, the biggest movers first. LibreFolio computes it the first time you open it, so it can take a moment.
+
+**Metrics shown**
+
+- **Period P&L**, split as on the [Period P&L card](kpi-cards.md#card-1-period-pl) into **Unrealized change**, **Sales**, **Dividends & interest** and **Costs** → [Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **Annualized** — the period result as a yearly rate, over the time the position was held in the period → [Net Annualized Return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
+- **Δ1** / **Δ1%** for open positions and, hidden by default, **Start Value**, **End Value**, **Oldest open lot** and **Status**
+- **Other Period Effects** — what belongs to no position: **Unallocated income** and **Unallocated costs**, recorded without an asset, and the **Other / reconciliation residual**
+
+**How to read it**
+
+- **Closed positions** are in italics, or carry a **Closed** badge in the chart; to list one kind only, show **Status** and filter it.
+- **In the Map**, gains stack right of zero and losses left, the net result closing the row; each percentage compares with the position's start value.
+- **A position's Period P&L** can differ from its lifetime gain: only the period counts.
+
+??? tip "🙈 Hide amounts — what the chart still shows"
+
+    With **Hide amounts** on (the eye button in the top bar), the chart's amounts and axis turn into `•••`, as in `+€•••`. Signs, currencies, percentages, bar lengths and colours stay, so you still see who gained or lost, and how much compared with the others. See [Privacy mode](../settings/preferences.md#privacy-mode).
 
 ---
 
 ## 🔬 FIFO Lots Analysis {: #fifo-lots-analysis }
 
-When you click on a position in either Table or Map view, LibreFolio expands an inline **FIFO Lots Analysis** panel directly **below** the Positions view. It uses a vertical slide transition and scrolls into view automatically — it is **not** a right-side slide-over. If needed, a data-quality banner appears first, then the analysis blocks stay in this order: WAC / Market Price, Lot Life & Custody, unified lots table, Value / Return comparison, and the lot detail modal. By default, no explicit selection means **all currently visible lots** are included across the linked charts.
+Which purchases make up a position, where are they held, and how has each one done? The **FIFO Lots Analysis** answers lot by lot: each purchase opens a *lot*, and each sale closes the **oldest** open lots first — First-In, First-Out.
+
+Choose **Analyze Lots** on a position and the panel opens below, for the brokers of the page: your broker filter on the Dashboard, the broker itself on its own page. **View Asset** (↗) opens the asset, **✕** closes the panel.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fifo-lots-analysis" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔍 Overview" alt="FIFO Lots Analysis Overview">
@@ -92,77 +114,101 @@ When you click on a position in either Table or Map view, LibreFolio expands an 
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-custody-modal" data-title="🧾 Lot Detail Modal" alt="Lot Detail Modal">
 </div>
 
-### 1. WAC / Market Price
+**How the blocks work together**
 
-This first chart compares the asset's **Market Price** with the per-broker **WAC** lines and the combined WAC line for the selected position.
+- **One selection**: click bubbles, bars or table rows to pick lots; with none picked, every visible lot counts. **Open / Closed**, on the timeline, filters every block.
+- **Double-click to jump**: from a chart marker to the lots of that transaction, from a timeline bar to its table row, and back.
+- **Full broker amounts**: on a broker you co-own, your share is not applied here, unlike the KPI cards and Holdings.
 
-- Toggle **ABS / %** to switch between absolute prices and percentage evolution from the range start.
-- In **ABS** mode, toggle **Auto / From 0** to choose whether the Y axis is tightly fitted or forced to start at zero.
-- Event markers and lot-performance bubbles help you connect buys, sells, transfers, splits, and income events to the cost basis history.
-- Clicking lot bubbles updates the shared lot selection used by the other blocks.
-- **Bubble color** matches the lot's **opening broker** — the same colors used by the custody bars in block 2 below.
-- **Bubble size** reflects the lot's **opening value** (its original cost basis): larger bubbles started as larger investments.
-- A **dashed bubble border** marks a lot currently shown **at cost** because no live market price is available for it yet.
+🔗 **Theory**: [FIFO Engine](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md) · [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md) · [FIFO matching](../../financial-theory/instruments/transaction-types/buy-sell.md#fifo-matching) · [Taxation](../../financial-theory/fundamentals/taxation.md)
 
-🔗 **Theory**: Refer to **[Weighted Average Cost (WAC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** for cost-basis rules, and **[Valuation Price Chain](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)** for how market prices are resolved.
+### 💹 1. Avg. Cost / Market Price
 
-### 2. Lot Life & Custody
+How does the price compare with what you paid, and where does each lot stand?
 
-The **Lot life & custody** block is a Gantt-style timeline showing when each lot was open and where it was held over time.
+**Metrics shown**
 
-- Use the **Open / Closed** filter to show only open lots, only closed lots, or both.
-- Each bar represents a lot's life; transfers create extra custody lanes so you can see broker-to-broker moves and in-transit periods.
-- **Bar color** identifies the **custody broker** currently holding that segment of the lot — matching broker badges are listed in the legend below the chart. A dashed violet segment marks a period **in transit** between brokers (transfer initiated but not yet arrived).
-- **Bar thickness** is proportional to the **quantity held** during that exact segment — a lot that was partially sold or split shows thinner bars afterward.
-- Clicking a bar selects that lot across the shared analysis; double-clicking can jump back to the matching row in the table.
+- **Market Price** — dashed where LibreFolio estimates it from your last trade → [Valuation Price Chain](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)
+- **Avg. Cost** — one line per broker, and a dashed **Combined** line when the asset sits at several → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **Bubbles** — one per long lot, at its total return, among the markers of your transactions and payments → [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 
-🔗 **Theory**: See **[FIFO Engine — Lot Lifecycle & Matching Model](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md)** for how lot states, splits, and transfers between brokers are defined.
+**How to read it**
 
-### 3. Unified Lots Table
+- **Abs / %** shows prices or their change from the first point; **Auto / From 0** sets where the axis starts.
+- **Bubble colour** is the opening broker, its **size** the lot's quantity (**Abs**) or its opening value (**%**); a **dashed border** means valued at cost.
+- **A gap in an Avg. Cost line** is a day whose average cost is unknown: no wrong average is drawn.
 
-v3 replaces the old split **Open Lots** and **Closed Lots** tables with one **unified table**.
+### 🕒 2. Lot Life & Custody
 
-- The table shows the current lot set with columns such as opening date, total return, current value, custody, and **Status**.
-- Shared filtering means the table always reflects the same visible lot set as the charts above.
-- Each row's **Actions** menu includes:
-    - **View lot detail**
-    - **Go to lot in Gantt**
-    - **Go to opening transaction**
-    - **Copy lot identifier**
+When was each lot open, and which broker held it?
 
-### 4. Value / Return Comparison
+**Metrics shown**
 
-This comparison chart focuses on the lots currently selected in the panel. If you have not selected specific lots, it uses **all visible lots**.
+- **Bars** — one per lot, coloured by the broker holding it and as thick as the quantity held; dashed violet while in transit, with a lane per broker after a transfer → [FIFO Engine](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md)
 
-- Switch between **Value** and **Return** using the top-right mode toggle.
-- **Value** mode compares the selected lots in absolute money terms and also offers the **Auto / From 0** Y-axis toggle.
-- **Return** mode compares percentage return from each lot's opening date across the same selected lot set.
+**How to read it**
 
-### 5. Lot Detail Modal
+- **Open / Closed** keeps only open lots, only closed ones, or both.
+- **A thinner bar** lost part of its quantity, for example to a partial sale.
+- **Click** a bar to select its lot, **double-click** it to find its row in the table.
 
-Choose **View lot detail** from the table row actions to open the **FIFO Lot Detail** modal for a specific lot.
+### 📋 3. Lots Table
 
-- The summary includes **Total P&L**, **Total return**, **Asset income**, **Cash yield**, FIFO P&L, opening/current value, and other lot-level metrics.
-- **Current Custody** shows how the lot is currently distributed across brokers or in-transit slices.
-- **History** lists the full custody and lifecycle chronology, including transfers and other lot events, with a direct **Go to transaction** action for the relevant transaction.
+Every lot with its figures, following the panel's filter and selection.
 
-!!! info "FIFO matching logic"
+**Metrics shown**
 
-    LibreFolio resolves lot closures strictly with **First-In, First-Out (FIFO)** matching: sell quantities always consume the **oldest eligible open lot first** before newer lots are touched.
+- **Opening Date**, **Total P&L**, **Total return**, **Annualized**, **Current Value**, **Open Quantity** and **Custody**, with a **Totals** row → [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Income** when a lot received some, and **Fees**, **Taxes**, **Net P&L** and **Net return** when a lot bears costs → [Costs & Net Metrics](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
 
-    For deeper theory and formulas, see:
+**How to read it**
 
-    - **[Taxation Theory](../../financial-theory/fundamentals/taxation.md)**
-    - **[Buy/Sell Transaction Model](../../financial-theory/instruments/transaction-types/buy-sell.md#fifo-matching)**
-    - **[FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)**
+- **Click** a row to select it, **double-click** to find it in the timeline; the row colour is the opening broker.
+- **The ⋮ menu** offers **View lot detail**, **Go to lot in Gantt**, **Go to opening transaction** and **Copy lot identifier** — a stable reference, handy for support.
+- **More columns**, such as **Opening Value**, wait behind the eye icon.
+
+### 💰 4. Value / Return Comparison
+
+What are the selected lots worth, and what have they earned since opening? With none selected, the chart covers every visible lot.
+
+**Metrics shown**
+
+- **Value** — **Residual value**, **Sale proceeds** and **Cumulative income** stacked up to the **Comprehensive value**, against the **Opening value** → [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Return** — the result since opening, in money (**Abs**) or percent (**%**): an **Aggregate return**, plus a line per lot when you compare several
+
+**How to read it**
+
+- **Comprehensive value above Opening value**: the lots gained, sales and income included.
+- **A dashed line** in **Value** is a value estimated at cost, without a market price.
+
+### 🧾 5. Lot Detail
+
+The whole story of one lot. Open it with **View lot detail** (⋮) or by clicking its **Custody** cell.
+
+**Metrics shown**
+
+- **Summary** — opening and current value, proceeds, **FIFO P&L**, **Total P&L**, **Total return**, and **Cash yield** when the lot received income → [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Net breakdown** — the total P&L minus the fees and taxes allocated to the lot → [Costs & Net Metrics](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
+- **Current Custody** and **History** — where the lot is now, and every event since its opening
+
+**How to read it**
+
+- **Quantities are the broker's full holdings**, as the ⓘ beside them says.
+- **Go to transaction** opens the transaction of the History row you picked — by default, the opening one.
+
+??? warning "⚠️ When the panel warns you"
+
+    - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner).
+    - **A red message** means quantities or transfers do not add up: the figures may be incomplete, so check the asset's transactions.
+    - **A lot valued at cost** has no market price: dashed bubble border, no market gain or loss.
 
 ---
 
-## 💸 Transactions Tab
+## 🔗 Related
 
-The **Transactions** tab on the Dashboard displays a complete, paginated list of all operations recorded across the active portfolio scope (buy/sell orders, dividend payouts, cash deposits, transfers, etc.).
-
-For a detailed explanation of the transaction list, filters, and how to read the read-only transaction details, please refer to the dedicated **[Transactions Overview](../transactions/index.md)** page.
+- 💰 **[KPI Cards](kpi-cards.md)** — the same results for the whole portfolio
+- 💸 **[Transactions](../transactions/index.md)** — the Dashboard's **Transactions** tab lists the operations of the selected range and brokers
+- 🛠️ **[Technical details](../../developer/frontend/pages/index.md#dashboard)** — for developers: how the Positions tab and the lots panel work inside
 
 ---
 

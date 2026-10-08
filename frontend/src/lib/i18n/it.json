@@ -780,7 +780,7 @@
       "historyFirst": "Primo import di questo broker: alla fine ti proponiamo il saldo e le posizioni al {date}; da lì in poi importiamo ogni movimento.",
       "historyLater": "LibreFolio ha già la storia di questo broker dal {date}: i movimenti già presenti risulteranno duplicati, e quelli precedenti non si reimportano.",
       "selectedCount": "{sets} set e {n} file selezionati da {b} broker",
-      "incompleteBlocks": "Continua è disattivato finché un set selezionato è incompleto: carica il file mancante o togli la spunta al set.",
+      "incompleteBlocks": "Analizza è disattivato finché un set selezionato è incompleto: carica il file mancante o togli la spunta al set.",
       "step1Missing": "Per {plugin} serve anche: {role} ({ext}).",
       "step1MissingHint": "Trascinalo qui sopra: entra nello stesso set. Puoi anche continuare: il set comparirà incompleto.",
       "analyzeRowLabel": "Set del {date} · combinato ({n} file)",
@@ -898,7 +898,8 @@
       "removeFromSet": "Togli dal set",
       "defaultPluginNote": "Letto come set {plugin}, non col plugin predefinito del broker ({defaultPlugin}). Per cambiarlo usa «Letto come» o il menu ⋮ di un file.",
       "alsoRecognisedBy": "{file} è riconosciuto anche da: {plugins}",
-      "partlySelectedBlocks": "Continua è disattivato finché un set è spuntato solo in parte: spunta tutto il set o togli la spunta."
+      "partlySelectedBlocks": "Analizza è disattivato finché un set è spuntato solo in parte: spunta tutto il set o togli la spunta.",
+      "ungroupedBlocks": "Analizza è disattivato finché è spuntato un file che si legge solo con il suo set ma non è in nessun set: {files}. Ricarica insieme, in un solo invio, tutti gli export del set, poi spunta il set; oppure togli la spunta al file."
     },
     "parseDetail": {
       "sourceRow": "Riga del file",
@@ -1466,7 +1467,8 @@
     "uploading": "Caricamento in corso...",
     "user": "Utente",
     "backToDefault": "Torna al default",
-    "createForex": "Crea forex…"
+    "createForex": "Crea forex…",
+    "unknownError": "errore sconosciuto"
   },
   "csvImport": {
     "title": "Importa dati CSV",
@@ -1486,7 +1488,22 @@
     "discardMessage": "Hai modificato i dati CSV. Sei sicuro di voler chiudere senza importare?",
     "sep": "sep",
     "decimal": "decimale",
-    "thousands": "migliaia"
+    "thousands": "migliaia",
+    "placeholder": "Incolla qui i dati CSV o trascina un file qui sopra...",
+    "headerMismatch": "Le valute dell'intestazione non corrispondono",
+    "errors": {
+      "missingColumns": "Colonne obbligatorie mancanti: {columns}",
+      "expectedHeader": "Intestazione attesa: {header}",
+      "fixHeaderFirst": "Correggi prima l’intestazione",
+      "invalidQuotedField": "Campo CSV tra virgolette non valido",
+      "invalidIdentity": "Valore non valido per {label}: \"{value}\"",
+      "invalidDateFormat": "Formato data non valido: \"{value}\". Usa YYYY-MM-DD",
+      "invalidDate": "Data non valida: \"{value}\"",
+      "requiredEmpty": "La colonna obbligatoria \"{column}\" è vuota",
+      "invalidNumber": "Numero non valido in \"{column}\": \"{value}\"",
+      "invalidValue": "Valore non valido in \"{column}\": \"{value}\"",
+      "duplicate": "Valore duplicato per {label}: {key}"
+    }
   },
   "dashboard": {
     "netWorth": "Patrimonio Netto",
@@ -1698,7 +1715,8 @@
     "importCsv": "Importa CSV",
     "emptyMessage": "Nessun dato. Usa 'Aggiungi riga' o 'Importa CSV' per aggiungerne.",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
-    "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data"
+    "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
+    "saveFailed": "Salvataggio non riuscito: {error}"
   },
   "datePicker": {
     "presets": {
@@ -1818,7 +1836,11 @@
       "legBreakdown": "Dettaglio per tratta",
       "legNoData": "0 date — nessun dato",
       "legDates": "date",
-      "inProgress": "Sincronizzazione tassi FX…"
+      "inProgress": "Sincronizzazione tassi FX…",
+      "timeoutAfter": "Timeout dopo {seconds} s",
+      "requestTimedOut": "La richiesta è scaduta dopo {seconds} s. Aumenta il timeout e riprova.",
+      "failed": "Sincronizzazione non riuscita",
+      "retryFailed": "{n, plural, one {Riprova quello non riuscito} other {Riprova i # non riusciti}}"
     },
     "route": {
       "title": "Percorsi di Conversione",
@@ -1844,7 +1866,13 @@
       "toastFailed": "Impossibile eliminare {pair}",
       "resultDeleted": "eliminata ({n} tassi)"
     },
-    "rateNotAvailable": "Tasso non disponibile"
+    "rateNotAvailable": "Tasso non disponibile",
+    "rate": "Tasso",
+    "card": {
+      "manualOnly": "Coppia solo manuale",
+      "syncFromProvider": "Sincronizza i tassi dal provider"
+    },
+    "loadFailed": "Impossibile caricare le coppie FX"
   },
   "fxDetail": {
     "editRates": "Modifica tassi",
@@ -1857,7 +1885,16 @@
     "noDataManual": "Nessun dato disponibile — inserire i tassi manualmente",
     "insertManually": "Inserisci manualmente",
     "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente.",
-    "aiExport": "Export AI"
+    "aiExport": "Export AI",
+    "syncFailed": "Sincronizzazione non riuscita: {error}",
+    "loadFailed": "Impossibile caricare i tassi",
+    "assetFallback": "Asset n. {id}",
+    "invalidRates": "{n, plural, one {# riga ha un tasso non valido} other {# righe hanno un tasso non valido}}: il tasso deve essere strettamente maggiore di zero (0 non è ammesso).",
+    "savedSummary": "Tassi FX: {details}",
+    "savedCount": "{n, plural, one {# salvato} other {# salvati}}",
+    "deletedCount": "{n, plural, one {# eliminato} other {# eliminati}}",
+    "skippedCount": "{n, plural, one {# ignorato (non valido)} other {# ignorati (non validi)}}",
+    "saveFailed": "Salvataggio dei tassi FX non riuscito: {error}"
   },
   "help": {
     "helpAndSupport": "Aiuto e Supporto",
@@ -2766,9 +2803,9 @@
     "selection": "Dataset o analisi",
     "detailLevel": "Livello di dettaglio",
     "detailLevelHelp": {
-      "compact": "Stesso universo dati, con bucket temporali fino a 30 giorni.",
-      "standard": "Stesso universo dati, con bucket temporali fino a 14 giorni.",
-      "full": "Stesso universo dati, con bucket temporali fino a 7 giorni."
+      "compact": "Stesso universo dati, con bucket temporali fino a 30 giorni per i prezzi e fino a 84 giorni per gli indicatori più lenti.",
+      "standard": "Stesso universo dati, con bucket temporali fino a 14 giorni per i prezzi e fino a 28 giorni per gli indicatori più lenti.",
+      "full": "Stesso universo dati, con bucket temporali fino a 7 giorni per i prezzi e fino a 14 giorni per gli indicatori più lenti."
     },
     "details": {
       "compact": "Compatto",

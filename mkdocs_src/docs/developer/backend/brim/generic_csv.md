@@ -206,6 +206,15 @@ HEADER_MAPPINGS = {
 }
 ```
 
+Each header is trimmed and lower-cased before the lookup (`csv_col.lower().strip()`). Headers that
+match no synonym are ignored, and when two headers map to the same field the leftmost wins.
+
+The same map drives detection: `can_parse` — through `cannot_parse_reason` — accepts a `.csv`
+only when both `date` and `type` are mapped, so the wizard offers the plugin only for such files.
+If the user forces it on another file, `parse_file` refuses it with
+`Plugin 'broker_generic_csv' cannot parse file '<name>': required column 'date' not found in the CSV header`
+(HTTP 400), and the file moves to failed.
+
 ### 2️⃣ Row Parsing (`_parse_row`)
 
 1. **Extract Values** via `column_map`
@@ -213,6 +222,16 @@ HEADER_MAPPINGS = {
 3. **Parse Type** — looks up lowercase string in `TYPE_MAPPINGS`
 4. **Parse Numbers** — handles US and European decimal formats
 5. **Handle Assets** — classifies identifier as ticker/ISIN/name; assigns consistent fake asset IDs for batch mapping in BRIM review
+
+**Errors.** An exception raised for a row — an empty or unreadable date, an unknown type, a
+`TRANSFER` (refused: it needs a `link_uuid` pair), a currency code that fails the ISO 4217 check —
+becomes the warning `Row N: <message>` (the header is row 1) and the row is skipped. A row that
+parses but breaks a business rule (signs, missing cash; see `validate_transaction_business_rules`)
+is not created either: `_create_transaction` records it in `validation_issues`. An asset-required
+type with an empty `asset` gets the placeholder identifier `UNKNOWN_ROW_<n>`, to be mapped in the
+review. The `EUR` default applies only when no `currency` column is mapped: with the column
+present, an empty cell on a row with an `amount` fails the ISO 4217 check, so that row is skipped.
+A file that yields no transaction adds the warning `No valid transactions found in file`.
 
 ### 📐 3. The "Gold Standard" Example
 
