@@ -37,9 +37,13 @@ Import the files **as downloaded**: don't open and re-save them in Excel first.
 2. Files uploaded together for the same broker form one **report set**. In **Select Files** the set is one card, already ticked when you have just uploaded it. The card lists the files by kind — *Securities transactions* and *Cash statement* — each kind in a small table, its files ordered by the period they cover, with **Preview** and **Delete** in each row's **⋮** menu (a double click opens the preview too). The card's timeline shows each file as a bar, any days that no export of a kind covers between two of its files as a dashed gap, and — when LibreFolio already holds this broker's history — a grey bar up to the last day it holds: point at a bar, or click it, to read its dates and its number of rows (or, for the grey bar, of transactions already in LibreFolio). A note tells you what this import will do. Any other files you uploaded for the broker are listed below the card, under **Other files of this broker**. To read the files another way, see [How the set is read](#how-the-set-is-read).
 3. **Parse** combines the two files into one **combined file** and analyses it, so the set stays a single row. Its detail (**Matching securities ↔ cash**) shows the outcome as chips — the trades paired with their cash, the rows that exist in one file only, the movements summarised in a starting point or after a gap, the trades left for your next import, the rows left out — then the reasons in a table, with their number of rows, and lets you **preview** or **download the combined file**.
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-card — a Danske Bank report set in Select Files: one card with a table per kind of export, the timeline of the files and the Read as menu in its header] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-card" alt="Danske Bank report set card in Select Files: a table per kind of export, the files' timeline and Read as in its header" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-pairing — the set's analysis detail after Parse: Matching securities ↔ cash, with the outcome chips and the table of reasons with their number of rows] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-pairing" alt="Parse detail of the set: Matching securities ↔ cash, with the outcome chips and the reasons with their number of rows" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 Uploading from the [Files](../../files/index.md#broker-reports) page, or from a broker's **Uploaded Reports**, works the same way: the files you upload in one go form one set, which you then tick in the wizard's **Select Files**.
 
@@ -51,7 +55,9 @@ Dropped only one of the two files? LibreFolio notices it as soon as you click **
 
 You can also continue without it: in **Select Files** the set shows **A file is missing**, and its card offers **Upload the missing file**, which adds the file to that same set. While a ticked set is incomplete the wizard cannot parse; to import your other files first, untick the set: click the checkbox in its card's header.
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-missing — Upload naming the missing export and the period it must cover, and the set's card in Select Files showing A file is missing with Upload the missing file] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-missing" alt="Set card in Select Files showing A file is missing: the missing cash statement, the period it must cover and Upload the missing file" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 !!! warning "Files uploaded at different times do not join"
 
@@ -66,7 +72,9 @@ LibreFolio reads the exports it recognises as one set. You can change that on th
 
 None of these commands ticks or unticks a file, and neither does choosing a plugin: they change only *how* the files are read, and the ticks stay as you set them.
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-read-as — the set's card with the Read as menu open (Danske Bank (detected), Read the files one by one) and a file's ⋮ menu offering Remove from the set] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="Set card with the Read as list open: Danske Bank (detected), selected, and Read the files one by one" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 Today only the Danske Bank plugin reads these exports: **Read alone** is never offered for them, while **Remove from the set** always is. Reading them one by one leaves both files still ticked, with no plugin: **Parse** then waits until you put them back in the set, as described below, or untick them.
 
@@ -141,14 +149,16 @@ On the first import of a Danske Bank broker, LibreFolio does not replay years of
 
 After the **Review**, **Import N transactions** opens a new step, **Align with the bank**. It compares what LibreFolio will hold with what the bank states, and proposes the transactions that close the difference:
 
-- a **Deposit** that brings the cash to the balance of the cash statement;
+- a **Deposit** or a **Withdrawal** that brings the cash to the balance of the cash statement;
 - an **Adjustment** for each position your files prove.
 
 At the top, the step shows one card per point, in date order: the **Starting point**; an **After the gap** point after each period that no securities export covers (see [Gaps](#gaps)); and the **End-of-period check**, which reads **Matches** or **Does not match**. The card of a starting point or of an *After the gap* point shows its cash difference, how many positions differ and how many corrections it proposes. Click it to see its full comparison — what LibreFolio will hold next to what the bank states, and where the difference comes from — and only its corrections; click it again to see them all.
 
 The corrections are listed in one table, **selected by default** and tagged `gap_fix`: untick any you don't want, or use **Select All**, **Select visible** (the rows of the page you are looking at) or **Deselect All**, then **Continue** to the editor.
 
-<!-- [Screenshot Placeholder: brokers/import-wizard-gapfix-step — Align with the bank: the cards of the starting point, of a point after a gap and of the end-of-period check, above the table of proposed corrections tagged gap_fix] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="Align with the bank: the Starting point, After the gap and End-of-period check cards above the proposed corrections tagged gap_fix" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 Each position the step adds needs its **average cost**, marked *cost to enter*. In the editor, enter the cost per share — the bank's website shows the average purchase price of each holding. **Save All** stays disabled until every cost is filled in.
 
