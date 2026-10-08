@@ -25,6 +25,7 @@ proposal.
 
 import asyncio
 import sys
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -43,17 +44,18 @@ setup_test_database()
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, PriceHistory
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, PriceHistory, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets import FAAinfoFiltersRequest
 from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.prices import FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAUpsert
+from backend.app.schemas.prices import FAAssetEventPoint, FAEventUpsert, FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import ProviderInputType
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
-from backend.app.services.asset_source import AssetCRUDService, AssetSourceManager
+from backend.app.services.asset_source import AssetCRUDService, AssetSourceError, AssetSourceManager
 from backend.app.services.asset_sources import core as asset_source_core
 from backend.app.services.asset_sources import price_query as price_query_module
 from backend.app.services.asset_sources import refresh as refresh_module
+from backend.app.services.asset_sources.price_store import PriceStoreOperations
 from backend.test_scripts.test_utils import unique_id
 
 # A date window far from the mock dataset's, so a stray row of this unit can
@@ -631,3 +633,304 @@ async def test_mixed_currency_series_keeps_the_matching_points_and_warns(assigne
         stored = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == assigned_asset))).scalars().all()
     # Only the USD point made it through.
     assert [(row.date, row.close) for row in stored] == [(BASE_DATE, Decimal("10"))]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Editing events in place (workstream I: S5, legacy duplicates, provider rows)
+#
+# Before the fix (108a2adf5) ``_upsert_asset_events`` was DELETE + INSERT on
+# (asset_id, date, type, provider_assignment_id). ``transactions.asset_event_id``
+# is ON DELETE RESTRICT, so the DELETE half failed with IntegrityError as soon as
+# a transaction linked the row:
+#
+# * S5 -- a provider refresh re-delivering an auto event a transaction realises
+#   recorded "Event upsert failed", and the event was never updated again;
+# * legacy duplicates -- two manual rows on one key (no unique index forbids them)
+#   could not be edited once either was linked.
+#
+# Intended contract: a row is updated in place (same id, links kept). Same-key
+# manual duplicates collapse onto the lowest id after their transactions are
+# re-pointed to it. A manual upsert may name an existing row by ``id``, but never a
+# provider row (AssetSourceError EVENT_NOT_EDITABLE). Manual and provider rows never
+# touch each other.
+#
+# Id-bearing payloads go through ``FAEventUpsert.model_validate`` inside the test
+# body: before the fix that raised a ValidationError (``id`` was an unknown field),
+# which failed only the tests needing the new field, not the whole module.
+#
+# Each test writes on its own date offset from ``EDIT_BASE``, far from the windows
+# used above. Besides events it creates a Broker and Transactions, which ``Asset``
+# and ``AssetEvent`` cannot outlive (no cascade, RESTRICT). ``event_rows`` removes
+# them in FK-safe order before ``assigned_asset`` drops the assignment and the
+# module drops the asset.
+# ─────────────────────────────────────────────────────────────────────────────
+
+EDIT_BASE = BASE_DATE + timedelta(days=400)
+EDIT_END = EDIT_BASE + timedelta(days=60)
+
+
+class _EventRows:
+    """Events (manual or provider) and the transactions linking them, written directly via the ORM."""
+
+    def __init__(self, asset_id: int, assignment_id: int, broker_id: int) -> None:
+        self.asset_id = asset_id
+        self.assignment_id = assignment_id
+        self.broker_id = broker_id
+
+    async def add_event(self, day_offset: int, value: str, *, auto: bool, kind: AssetEventType = AssetEventType.DIVIDEND) -> int:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            row = AssetEvent(
+                asset_id=self.asset_id,
+                date=EDIT_BASE + timedelta(days=day_offset),
+                type=kind,
+                value=Decimal(value),
+                currency="USD",
+                provider_assignment_id=self.assignment_id if auto else None,
+            )
+            session.add(row)
+            await session.commit()
+            return row.id
+
+    async def link_tx(self, event_id: int, day_offset: int) -> int:
+        """A DIVIDEND realising ``event_id``: what pins the event under ON DELETE RESTRICT."""
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            tx = Transaction(
+                broker_id=self.broker_id,
+                asset_id=self.asset_id,
+                type=TransactionType.DIVIDEND,
+                date=EDIT_BASE + timedelta(days=day_offset),
+                quantity=Decimal("0"),
+                amount=Decimal("1.00"),
+                currency="USD",
+                asset_event_id=event_id,
+            )
+            session.add(tx)
+            await session.commit()
+            return tx.id
+
+    async def rows(self, day_offset: int, kind: AssetEventType = AssetEventType.DIVIDEND) -> list[AssetEvent]:
+        """Every event of the asset on that day and type, lowest id first."""
+        day = EDIT_BASE + timedelta(days=day_offset)
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            stmt = select(AssetEvent).where(AssetEvent.asset_id == self.asset_id, AssetEvent.date == day, AssetEvent.type == kind).order_by(AssetEvent.id)
+            return list((await session.execute(stmt)).scalars().all())
+
+    async def tx_event_id(self, tx_id: int) -> int | None:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            return (await session.execute(select(Transaction.asset_event_id).where(Transaction.id == tx_id))).scalar_one()
+
+
+@pytest_asyncio.fixture
+async def event_rows(assigned_asset: int):
+    """A broker of this test's own, plus a writer for events and linked transactions.
+
+    Teardown, in FK-safe order: the transactions (they RESTRICT their event and pin the
+    broker), the events this section writes, then the broker.
+    """
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        assignment_id = (await session.execute(select(AssetProviderAssignment.id).where(AssetProviderAssignment.asset_id == assigned_asset))).scalar_one()
+        broker = Broker(name=f"Upsert Guards {uuid.uuid4().hex}", allow_cash_overdraft=True)
+        session.add(broker)
+        await session.commit()
+        broker_id = broker.id
+
+    yield _EventRows(assigned_asset, assignment_id, broker_id)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        await session.execute(delete(Transaction).where(Transaction.broker_id == broker_id))
+        await session.execute(delete(AssetEvent).where(AssetEvent.asset_id == assigned_asset, AssetEvent.date >= EDIT_BASE, AssetEvent.date <= EDIT_END))
+        await session.execute(delete(Broker).where(Broker.id == broker_id))
+        await session.commit()
+
+
+def _dividend(day_offset: int, amount: str) -> FAAssetEventPoint:
+    return FAAssetEventPoint(date=EDIT_BASE + timedelta(days=day_offset), type="DIVIDEND", value=Currency(code="USD", amount=Decimal(amount)))
+
+
+def _manual_upsert(asset_id: int, events: list[dict]) -> FAEventUpsert:
+    """The manual upsert body, validated as the endpoint validates it."""
+    return FAEventUpsert.model_validate({"asset_id": asset_id, "events": events})
+
+
+def _dividend_payload(day_offset: int, amount: str, *, event_id: int | None = None) -> dict:
+    payload: dict = {"date": (EDIT_BASE + timedelta(days=day_offset)).isoformat(), "type": "DIVIDEND", "value": {"code": "USD", "amount": amount}}
+    if event_id is not None:
+        payload["id"] = event_id
+    return payload
+
+
+async def _provider_upsert(rows: _EventRows, events: list[FAAssetEventPoint]) -> int:
+    """What a provider refresh does with the events it fetched."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        count = await PriceStoreOperations._upsert_asset_events(session, rows.asset_id, events, rows.assignment_id, "USD")
+        await session.commit()
+    return count
+
+
+async def _bulk_upsert_events(data: list[FAEventUpsert]) -> dict:
+    """What ``POST /assets/events`` does, minus HTTP."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        result = await PriceStoreOperations.bulk_upsert_events(data, session)
+        await session.commit()
+    return result
+
+
+@pytest.mark.asyncio
+async def test_provider_upsert_updates_a_linked_auto_event_in_place(event_rows):
+    """S5: a provider re-delivering an auto event that a transaction links to updates that row.
+
+    Before the fix: the DELETE half of DELETE + INSERT violates ON DELETE RESTRICT and
+    ``sqlalchemy.exc.IntegrityError`` escapes ``_upsert_asset_events``.
+    Contract: no exception, count 1, same row id, value 2.00, the transaction still linked.
+    """
+    auto_id = await event_rows.add_event(0, "1.00", auto=True)
+    tx_id = await event_rows.link_tx(auto_id, 0)
+
+    count = await _provider_upsert(event_rows, [_dividend(0, "2.00")])
+
+    assert count == 1
+    assert [(r.id, r.value, r.provider_assignment_id) for r in await event_rows.rows(0)] == [(auto_id, Decimal("2.00"), event_rows.assignment_id)]
+    assert await event_rows.tx_event_id(tx_id) == auto_id
+
+
+class _NoHistoryCache:
+    """Stand-in for ``core._asset_history_cache``: never hits, never stores.
+
+    The real cache is keyed by provider and identifier only, not by dates. An entry left by
+    the currency tests above (same fake provider, same identifier) would be merged into
+    this refresh, and this refresh's events would be served to whoever asks next.
+    """
+
+    def get(self, _key):
+        return None, False
+
+    def set(self, _key, _value) -> None:
+        return None
+
+    def delete(self, _key) -> None:
+        return None
+
+
+def _patch_provider_with_events(monkeypatch, prices: list[FAPricePoint], events: list[FAAssetEventPoint]) -> None:
+    """``_patch_provider``, plus events in the history payload and no history cache."""
+    _patch_provider(monkeypatch, prices)
+
+    async def _fake_thread(_fn, timeout=None):
+        return FAHistoricalData(prices=prices, events=events, source="fake_provider_for_tests")
+
+    monkeypatch.setattr(asset_source_core, "_run_provider_in_thread", _fake_thread)
+    monkeypatch.setattr(asset_source_core, "_asset_history_cache", _NoHistoryCache())
+
+
+def _edit_price(day_offset: int, close: str) -> FAPricePoint:
+    return FAPricePoint(date=EDIT_BASE + timedelta(days=day_offset), close=Decimal(close), currency="USD")
+
+
+@pytest.mark.asyncio
+async def test_provider_refresh_updates_a_linked_auto_event_in_place(event_rows, clean_prices, monkeypatch):
+    """S5 through the real refresh path: a linked auto event is refreshed, not reported as failed.
+
+    Two price points, so the refresh is a plain OK one; one DIVIDEND event on a date whose
+    auto row a transaction already links to.
+    Before the fix: ``_persist_refresh_item`` catches the IntegrityError and records
+    "Event upsert failed: ..." in ``errors``; the row keeps its old value.
+    Contract: no such error, one event fetched and one processed, the same row now at
+    2.00, and the transaction still linked.
+    """
+    auto_id = await event_rows.add_event(2, "1.00", auto=True)
+    tx_id = await event_rows.link_tx(auto_id, 2)
+    _patch_provider_with_events(monkeypatch, [_edit_price(0, "10"), _edit_price(1, "11")], [_dividend(2, "2.00")])
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        item = FARefreshItem(asset_id=event_rows.asset_id, date_range=SyncDateRangeModel(start=EDIT_BASE, end=EDIT_BASE + timedelta(days=5)))
+        response = await AssetSourceManager.bulk_refresh_prices([item], session)
+    result = next(r for r in response.results if r.asset_id == event_rows.asset_id)
+
+    assert result.events_fetched == 1, result
+    assert not [e for e in result.errors if "Event upsert failed" in e], result.errors
+    assert result.events_changed == 1, result
+    assert [(r.id, r.value) for r in await event_rows.rows(2)] == [(auto_id, Decimal("2.00"))]
+    assert await event_rows.tx_event_id(tx_id) == auto_id
+
+
+@pytest.mark.asyncio
+async def test_legacy_duplicate_manual_events_collapse_onto_the_lowest_id(event_rows):
+    """Legacy same-key manual duplicates collapse onto the lowest id, links re-pointed first.
+
+    Two manual DIVIDEND rows on one date; a transaction links to the HIGHER id.
+    Before the fix: deleting both rows hits ON DELETE RESTRICT -> IntegrityError.
+    Contract: one row remains, the lower id, with the new amount, and the transaction
+    now points at it.
+    """
+    low_id = await event_rows.add_event(20, "1.00", auto=False)
+    high_id = await event_rows.add_event(20, "1.10", auto=False)
+    assert low_id < high_id
+    tx_id = await event_rows.link_tx(high_id, 20)
+
+    await _bulk_upsert_events([_manual_upsert(event_rows.asset_id, [_dividend_payload(20, "1.50")])])
+
+    assert [(r.id, r.value) for r in await event_rows.rows(20)] == [(low_id, Decimal("1.50"))]
+    assert await event_rows.tx_event_id(tx_id) == low_id
+
+
+@pytest.mark.asyncio
+async def test_manual_upsert_cannot_edit_a_provider_event_by_id(event_rows):
+    """A manual upsert naming a provider row by id is refused, and nothing is written.
+
+    Before the fix: ``FAEventUpsert.model_validate`` rejects the ``id`` key with a pydantic
+    ValidationError (extra_forbidden), raised in the test body.
+    Contract: ``bulk_upsert_events`` raises AssetSourceError with error_code
+    EVENT_NOT_EDITABLE; the provider row keeps its id and value.
+    """
+    auto_id = await event_rows.add_event(30, "1.00", auto=True)
+    upsert = _manual_upsert(event_rows.asset_id, [_dividend_payload(30, "3", event_id=auto_id)])
+
+    with pytest.raises(AssetSourceError) as raised:
+        await _bulk_upsert_events([upsert])
+
+    assert raised.value.error_code == "EVENT_NOT_EDITABLE"
+    assert [(r.id, r.value, r.provider_assignment_id) for r in await event_rows.rows(30)] == [(auto_id, Decimal("1.00"), event_rows.assignment_id)]
+
+
+@pytest.mark.asyncio
+async def test_provider_upsert_leaves_the_manual_twin_untouched(event_rows):
+    """GUARD: on a key held by a manual and an auto row, a provider upsert changes only its own row."""
+    manual_id = await event_rows.add_event(10, "1.00", auto=False)
+    await event_rows.add_event(10, "1.00", auto=True)
+
+    await _provider_upsert(event_rows, [_dividend(10, "2.00")])
+
+    rows = await event_rows.rows(10)
+    assert [(r.id, r.value) for r in rows if r.provider_assignment_id is None] == [(manual_id, Decimal("1.00"))]
+    assert [r.value for r in rows if r.provider_assignment_id == event_rows.assignment_id] == [Decimal("2.00")]
+
+
+@pytest.mark.asyncio
+async def test_manual_upsert_leaves_the_provider_twin_untouched(event_rows):
+    """GUARD: on a key held by a manual and an auto row, a manual upsert changes only the manual row."""
+    auto_id = await event_rows.add_event(12, "1.00", auto=True)
+    await event_rows.add_event(12, "1.00", auto=False)
+
+    await _bulk_upsert_events([_manual_upsert(event_rows.asset_id, [_dividend_payload(12, "3.00")])])
+
+    rows = await event_rows.rows(12)
+    assert [(r.id, r.value) for r in rows if r.provider_assignment_id is not None] == [(auto_id, Decimal("1.00"))]
+    assert [r.value for r in rows if r.provider_assignment_id is None] == [Decimal("3.00")]
+
+
+@pytest.mark.asyncio
+async def test_two_manual_events_sharing_a_key_are_edited_by_id(event_rows):
+    """Rows that keep their key may share it: legacy same-key duplicates stay editable by id.
+
+    Service-level twin of ``test_assets_events.py::test_upsert_with_ids_edits_two_events_sharing_a_key``,
+    with the duplicates built directly in the database instead of through an upsert.
+    Before the fix: ``FAEventUpsert.model_validate`` rejects the ``id`` key (ValidationError).
+    Contract: both ids kept, each with its own new amount.
+    """
+    first_id = await event_rows.add_event(25, "1.00", auto=False)
+    second_id = await event_rows.add_event(25, "1.00", auto=False)
+    upsert = _manual_upsert(event_rows.asset_id, [_dividend_payload(25, "1.11", event_id=first_id), _dividend_payload(25, "2.22", event_id=second_id)])
+
+    await _bulk_upsert_events([upsert])
+
+    assert [(r.id, r.value) for r in await event_rows.rows(25)] == [(first_id, Decimal("1.11")), (second_id, Decimal("2.22"))]

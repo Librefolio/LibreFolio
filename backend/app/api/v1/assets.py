@@ -1035,9 +1035,21 @@ async def upsert_events_bulk(
     Creates or updates manual asset events. Auto-generated events from providers
     are NOT affected — dedup is scoped by provider_assignment_id.
 
+    An event without ``id`` is matched on (date, type) and updated in place, so
+    transactions linked to it stay linked. An event with ``id`` edits that manual
+    event, date and type included; each item is validated as a whole before
+    anything is written.
+
     **R3-3 Policy D**: returns HTTP 400 if any submitted event carries a
     currency code different from its parent asset's currency (symmetric to
     ``bulk_upsert_prices``).
+
+    Also HTTP 400: ``EVENT_NOT_EDITABLE`` (the id is unknown, of another asset,
+    or of a provider event) and ``EVENT_KEY_CONFLICT`` (an edit that changes its
+    date or type would land on a key another edit of the item ends on, or that a
+    manual event the item does not edit holds; or an event without ``id`` would
+    take a key an edit ends on). Two events without ``id`` on one date and type
+    are both stored. The same id twice in one item is a 422.
     """
     try:
         result = await AssetSourceManager.bulk_upsert_events(assets, session)
@@ -1047,8 +1059,8 @@ async def upsert_events_bulk(
             success_count=result["success_count"],
         )
     except AssetSourceError as e:
-        # Hard-400 on currency mismatch (and similar client-side validation errors).
-        status = 400 if e.error_code in ("EVENT_CURRENCY_MISMATCH",) else 500
+        # Hard-400 on client-side validation errors; ``detail`` starts with the code.
+        status = 400 if e.error_code in ("EVENT_CURRENCY_MISMATCH", "EVENT_NOT_EDITABLE", "EVENT_KEY_CONFLICT") else 500
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error in bulk upsert events: {e}")
