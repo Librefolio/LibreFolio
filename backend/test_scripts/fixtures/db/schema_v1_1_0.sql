@@ -1,51 +1,19 @@
-"""initial schema - squashed (v2)
+-- LibreFolio database schema as released in v1.1.0 (Alembic revision 5b1333fa6b07), schema only.
+-- Used by the post-migration tests (plan 34_accountAndIdReuse): an existing 1.1 install upgraded to head.
+-- Generated, never hand-edited:
+--   git archive v1.1.0 backend/alembic backend/alembic.ini | tar -x -C <tmp>
+--   cd <tmp> && PYTHONPATH=<repo> LIBREFOLIO_TEST_MODE=1 alembic -c backend/alembic.ini \
+--       -x sqlalchemy.url=sqlite:///<tmp>/v110.db upgrade head
+--   then every sqlite_master statement in creation order (rowid), trailing spaces stripped, plus the alembic_version row.
 
-Revision ID: 001_initial
-Revises:
-Create Date: 2025-12-22
+CREATE TABLE alembic_version (
+	version_num VARCHAR(32) NOT NULL,
+	CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+);
 
-Squashed baseline schema — the complete database and the sole migration from the start of
-the project up until 2026-07-28, when migration 002 was added on top. Every install still
-starts from this revision; its table structure remains current, and all changes since are
-shipped as incremental migrations (002+), never by editing this file (the only exception
-being a brand-new, never-shipped table).
-
-Creates the full baseline schema (12 tables) with every index and constraint:
-  • users, user_settings, global_settings — auth accounts, per-user preferences, and
-    instance-wide settings (multi-user support).
-  • assets — instruments, incl. per-type identifier columns (isin / ticker / cusip / sedol
-    / figi / uuid / other) and JSON ``classification_params``.
-  • brokers, broker_user_access — brokers with feature flags + per-user sharing / ACL.
-  • fx_rates, fx_conversion_routes — multi-provider FX rates and conversion routing.
-  • asset_provider_assignments — price / metadata provider bindings per asset.
-  • price_history, asset_events — OHLC price points and corporate / cash asset events.
-  • transactions — the UNIFIED transaction model (buy / sell / deposit / withdrawal /
-    adjustment / …), refactored from the earlier per-type transaction tables.
-"""
-
-from typing import Sequence, Union
-
-import sqlalchemy as sa
-from alembic import op
-
-revision: str = "001_initial"
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
-
-
-def upgrade() -> None:
-    """Create all tables."""
-    conn = op.get_bind()
-
-    print("🔧 Starting migration 001_initial (v2 - Unified Transaction)...")
-    print("=" * 60)
-
-    # Users table (NEW)
-    print("📦 Creating table: users...")
-    conn.execute(sa.text("""CREATE TABLE users
+CREATE TABLE users
                (
-                   id                                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id                                 INTEGER PRIMARY KEY,
                    username                           VARCHAR(50) NOT NULL UNIQUE,
                    email                              VARCHAR     NOT NULL UNIQUE,
                    hashed_password                    VARCHAR     NOT NULL,
@@ -56,15 +24,13 @@ def upgrade() -> None:
                    donation_popup_logins_since_shown  INTEGER     NOT NULL DEFAULT 0,
                    created_at                         DATETIME    NOT NULL,
                    updated_at                         DATETIME    NOT NULL
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE UNIQUE INDEX ix_users_username ON users (username)"))
-    conn.execute(sa.text("CREATE UNIQUE INDEX ix_users_email ON users (email)"))
-    print("  ✓ 2 Indexes created")
+               );
 
-    # User Settings table (NEW)
-    print("📦 Creating table: user_settings...")
-    conn.execute(sa.text("""CREATE TABLE user_settings
+CREATE UNIQUE INDEX ix_users_username ON users (username);
+
+CREATE UNIQUE INDEX ix_users_email ON users (email);
+
+CREATE TABLE user_settings
                (
                    id            INTEGER PRIMARY KEY,
                    user_id       INTEGER     NOT NULL UNIQUE,
@@ -76,12 +42,9 @@ def upgrade() -> None:
                    updated_at    DATETIME    NOT NULL,
                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
                    CONSTRAINT uq_user_settings_user_id UNIQUE (user_id)
-               )"""))
-    print("  ✓ Table created")
+               );
 
-    # Global Settings table (NEW)
-    print("📦 Creating table: global_settings...")
-    conn.execute(sa.text("""CREATE TABLE global_settings
+CREATE TABLE global_settings
                (
                    key                VARCHAR(100) PRIMARY KEY,
                    value              TEXT        NOT NULL,
@@ -90,19 +53,16 @@ def upgrade() -> None:
                    updated_at         DATETIME    NOT NULL,
                    updated_by_user_id INTEGER,
                    FOREIGN KEY (updated_by_user_id) REFERENCES users (id) ON DELETE SET NULL
-               )"""))
-    print("  ✓ Table created")
+               );
 
-    # Assets table
-    print("📦 Creating table: assets...")
-    conn.execute(sa.text("""CREATE TABLE assets
+CREATE TABLE assets
                (
-                   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id                    INTEGER PRIMARY KEY,
                    display_name          VARCHAR     NOT NULL UNIQUE,
                    currency              VARCHAR     NOT NULL,
                    icon_url              VARCHAR,
                    classification_params TEXT,
-                   asset_type            VARCHAR(32) NOT NULL,
+                   asset_type            VARCHAR(14) NOT NULL,
                    quote_base_quantity   INTEGER     DEFAULT 1,
                    active                BOOLEAN     NOT NULL,
                    user_url              VARCHAR     DEFAULT NULL,
@@ -115,18 +75,17 @@ def upgrade() -> None:
                    identifier_other      VARCHAR(100),
                    created_at            DATETIME    NOT NULL,
                    updated_at            DATETIME    NOT NULL
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE UNIQUE INDEX uq_assets_display_name ON assets (display_name)"))
-    conn.execute(sa.text("CREATE INDEX ix_assets_identifier_isin ON assets (identifier_isin)"))
-    conn.execute(sa.text("CREATE INDEX ix_assets_identifier_ticker ON assets (identifier_ticker)"))
-    print("  ✓ 3 Indexes created")
+               );
 
-    # Brokers table (UPDATED with new flags)
-    print("📦 Creating table: brokers...")
-    conn.execute(sa.text("""CREATE TABLE brokers
+CREATE UNIQUE INDEX uq_assets_display_name ON assets (display_name);
+
+CREATE INDEX ix_assets_identifier_isin ON assets (identifier_isin);
+
+CREATE INDEX ix_assets_identifier_ticker ON assets (identifier_ticker);
+
+CREATE TABLE brokers
                (
-                   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id                    INTEGER PRIMARY KEY,
                    name                  VARCHAR  NOT NULL UNIQUE,
                    description           TEXT,
                    portal_url            VARCHAR,
@@ -138,14 +97,11 @@ def upgrade() -> None:
                    opened_at             DATE,
                    created_at            DATETIME NOT NULL,
                    updated_at            DATETIME NOT NULL
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE UNIQUE INDEX ix_brokers_name ON brokers (name)"))
-    print("  ✓ Index created")
+               );
 
-    # Broker User Access table (NEW)
-    print("📦 Creating table: broker_user_access...")
-    conn.execute(sa.text("""CREATE TABLE broker_user_access
+CREATE UNIQUE INDEX ix_brokers_name ON brokers (name);
+
+CREATE TABLE broker_user_access
                (
                    id               INTEGER PRIMARY KEY,
                    user_id          INTEGER       NOT NULL,
@@ -159,15 +115,13 @@ def upgrade() -> None:
                    CONSTRAINT uq_broker_user_access UNIQUE (user_id, broker_id),
                    CONSTRAINT chk_broker_user_access_role CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER')),
                    CONSTRAINT ck_broker_user_access_share_percentage CHECK (share_percentage >= 0 AND share_percentage <= 1)
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX ix_broker_user_access_user_id ON broker_user_access (user_id)"))
-    conn.execute(sa.text("CREATE INDEX ix_broker_user_access_broker_id ON broker_user_access (broker_id)"))
-    print("  ✓ 2 Indexes created")
+               );
 
-    # FX rates table
-    print("📦 Creating table: fx_rates...")
-    conn.execute(sa.text("""CREATE TABLE fx_rates
+CREATE INDEX ix_broker_user_access_user_id ON broker_user_access (user_id);
+
+CREATE INDEX ix_broker_user_access_broker_id ON broker_user_access (broker_id);
+
+CREATE TABLE fx_rates
                (
                    id         INTEGER PRIMARY KEY,
                    date       DATE            NOT NULL,
@@ -178,16 +132,13 @@ def upgrade() -> None:
                    fetched_at DATETIME        NOT NULL,
                    CONSTRAINT ck_fx_rates_base_less_than_quote CHECK (base < quote),
                    CONSTRAINT uq_fx_rates_date_base_quote UNIQUE (date, base, quote)
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_fx_rates_base_quote_date ON fx_rates (base, quote, date)"))
-    print("  ✓ Index created")
+               );
 
-    # FX conversion routes table
-    print("📦 Creating table: fx_conversion_routes...")
-    conn.execute(sa.text("""CREATE TABLE fx_conversion_routes
+CREATE INDEX idx_fx_rates_base_quote_date ON fx_rates (base, quote, date);
+
+CREATE TABLE fx_conversion_routes
                (
-                   id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id             INTEGER PRIMARY KEY,
                    base           VARCHAR  NOT NULL,
                    quote          VARCHAR  NOT NULL,
                    priority       INTEGER  NOT NULL DEFAULT 1,
@@ -196,16 +147,15 @@ def upgrade() -> None:
                    updated_at     DATETIME NOT NULL,
                    CONSTRAINT uq_route_base_quote_priority UNIQUE (base, quote, priority),
                    CONSTRAINT ck_route_base_less_than_quote CHECK (base < quote)
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_route_base_quote ON fx_conversion_routes (base, quote)"))
-    conn.execute(sa.text("CREATE INDEX ix_fx_conversion_routes_base ON fx_conversion_routes (base)"))
-    conn.execute(sa.text("CREATE INDEX ix_fx_conversion_routes_quote ON fx_conversion_routes (quote)"))
-    print("  ✓ 3 Indexes created")
+               );
 
-    # Asset provider assignments table
-    print("📦 Creating table: asset_provider_assignments...")
-    conn.execute(sa.text("""CREATE TABLE asset_provider_assignments
+CREATE INDEX idx_route_base_quote ON fx_conversion_routes (base, quote);
+
+CREATE INDEX ix_fx_conversion_routes_base ON fx_conversion_routes (base);
+
+CREATE INDEX ix_fx_conversion_routes_quote ON fx_conversion_routes (quote);
+
+CREATE TABLE asset_provider_assignments
                (
                    id              INTEGER PRIMARY KEY,
                    asset_id        INTEGER     NOT NULL UNIQUE,
@@ -218,14 +168,11 @@ def upgrade() -> None:
                    updated_at      DATETIME    NOT NULL,
                    FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
                    CONSTRAINT uq_asset_provider_asset_id UNIQUE (asset_id)
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments (asset_id)"))
-    print("  ✓ Index created")
+               );
 
-    # Price history table
-    print("📦 Creating table: price_history...")
-    conn.execute(sa.text("""CREATE TABLE price_history
+CREATE INDEX idx_asset_provider_asset_id ON asset_provider_assignments (asset_id);
+
+CREATE TABLE price_history
                (
                    id                INTEGER PRIMARY KEY,
                    asset_id          INTEGER  NOT NULL,
@@ -241,16 +188,13 @@ def upgrade() -> None:
                    fetched_at        DATETIME NOT NULL,
                    FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
                    CONSTRAINT uq_price_history_asset_date UNIQUE (asset_id, date)
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_price_history_asset_date ON price_history (asset_id, date)"))
-    print("  ✓ Index created")
+               );
 
-    # Asset events table
-    print("📦 Creating table: asset_events...")
-    conn.execute(sa.text("""CREATE TABLE asset_events
+CREATE INDEX idx_price_history_asset_date ON price_history (asset_id, date);
+
+CREATE TABLE asset_events
                (
-                   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id                     INTEGER PRIMARY KEY,
                    asset_id               INTEGER        NOT NULL,
                    date                   DATE           NOT NULL,
                    type                   VARCHAR        NOT NULL,
@@ -262,24 +206,20 @@ def upgrade() -> None:
                    updated_at             DATETIME       NOT NULL,
                    FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
                    FOREIGN KEY (provider_assignment_id) REFERENCES asset_provider_assignments (id) ON DELETE CASCADE
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_asset_event_asset_date ON asset_events (asset_id, date)"))
-    conn.execute(sa.text("CREATE INDEX idx_asset_event_asset_type_date ON asset_events (asset_id, type, date)"))
-    conn.execute(sa.text("CREATE INDEX idx_asset_event_provider_assignment ON asset_events (provider_assignment_id)"))
-    print("  ✓ 3 Indexes created")
+               );
 
-    # Unified Transactions table (REFACTORED)
-    # NOTE: related_transaction_id uses DEFERRABLE INITIALLY DEFERRED FK
-    # This allows bidirectional linking (A->B and B->A) within the same transaction.
-    # The FK constraint is only checked at COMMIT, not at INSERT/UPDATE time.
-    print("📦 Creating table: transactions (UNIFIED)...")
-    conn.execute(sa.text("""CREATE TABLE transactions
+CREATE INDEX idx_asset_event_asset_date ON asset_events (asset_id, date);
+
+CREATE INDEX idx_asset_event_asset_type_date ON asset_events (asset_id, type, date);
+
+CREATE INDEX idx_asset_event_provider_assignment ON asset_events (provider_assignment_id);
+
+CREATE TABLE transactions
                (
-                   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id                     INTEGER PRIMARY KEY,
                    broker_id              INTEGER        NOT NULL,
                    asset_id               INTEGER,
-                   type                   VARCHAR(32)    NOT NULL,
+                   type                   VARCHAR(14)    NOT NULL,
                    date                   DATE           NOT NULL,
                    quantity               NUMERIC(18, 6) NOT NULL DEFAULT 0,
                    amount                 NUMERIC(18, 6) NOT NULL DEFAULT 0,
@@ -297,39 +237,20 @@ def upgrade() -> None:
                    FOREIGN KEY (related_transaction_id) REFERENCES transactions (id)
                        DEFERRABLE INITIALLY DEFERRED,
                    FOREIGN KEY (asset_event_id) REFERENCES asset_events (id) ON DELETE RESTRICT
-               )"""))
-    print("  ✓ Table created")
-    conn.execute(sa.text("CREATE INDEX idx_transactions_broker_date ON transactions (broker_id, date, id)"))
-    conn.execute(sa.text("CREATE INDEX idx_transactions_asset_date ON transactions (asset_id, date)"))
-    conn.execute(sa.text("CREATE INDEX idx_transactions_related ON transactions (related_transaction_id)"))
-    conn.execute(sa.text("CREATE INDEX idx_transactions_asset_event ON transactions (asset_event_id)"))
-    conn.execute(sa.text("CREATE INDEX ix_transactions_broker_id ON transactions (broker_id)"))
-    conn.execute(sa.text("CREATE INDEX ix_transactions_asset_id ON transactions (asset_id)"))
-    conn.execute(sa.text("CREATE INDEX ix_transactions_date ON transactions (date)"))
-    print("  ✓ 7 Indexes created")
+               );
 
-    print("=" * 60)
-    print("✅ Migration 001_initial completed successfully!")
-    print("📊 Created 12 tables with all indexes and constraints")
-    print("🆕 New: users, user_settings, global_settings, broker_user_access, asset_events")
-    print("🔄 Updated: brokers (flags), transactions (unified)")
+CREATE INDEX idx_transactions_broker_date ON transactions (broker_id, date, id);
 
+CREATE INDEX idx_transactions_asset_date ON transactions (asset_id, date);
 
-def downgrade() -> None:
-    """Drop all tables."""
-    conn = op.get_bind()
-    for table in [
-        "transactions",
-        "asset_events",
-        "price_history",
-        "asset_provider_assignments",
-        "fx_conversion_routes",
-        "fx_rates",
-        "broker_user_access",
-        "brokers",
-        "assets",
-        "global_settings",
-        "user_settings",
-        "users",
-    ]:
-        conn.execute(sa.text(f"DROP TABLE IF EXISTS {table}"))
+CREATE INDEX idx_transactions_related ON transactions (related_transaction_id);
+
+CREATE INDEX idx_transactions_asset_event ON transactions (asset_event_id);
+
+CREATE INDEX ix_transactions_broker_id ON transactions (broker_id);
+
+CREATE INDEX ix_transactions_asset_id ON transactions (asset_id);
+
+CREATE INDEX ix_transactions_date ON transactions (date);
+
+INSERT INTO alembic_version (version_num) VALUES ('5b1333fa6b07');
