@@ -430,6 +430,10 @@
         "hasNumber": "Un número",
         "hasSpecial": "Un carácter especial"
       }
+    },
+    "serverUnreachable": {
+      "title": "El servidor no responde",
+      "body": "Esta página sigue abierta y tu sesión no se ha cerrado. Vuelve a intentarlo en un momento."
     }
   },
   "importWizard": {

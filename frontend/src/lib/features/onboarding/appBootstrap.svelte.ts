@@ -3,6 +3,7 @@ import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurre
 import {onboarding} from '$lib/stores/app/onboarding.svelte';
 import {userSettings} from '$lib/stores/app/settings';
 import {isOnboardingProgressDue} from '$lib/types/onboarding';
+import {safeInternalPath} from '$lib/utils/internalPath';
 import {onboardingApi} from './onboardingApi';
 
 export type AppBootstrapState = 'idle' | 'loading' | 'ready' | 'degraded' | 'blocked';
@@ -20,11 +21,6 @@ interface AppBootstrapDependencies {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'Application bootstrap failed';
-}
-
-function safeInternalPath(value: string | null | undefined): string {
-    if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/dashboard';
-    return value;
 }
 
 function isWelcomePath(path: string): boolean {
