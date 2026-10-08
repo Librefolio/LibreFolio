@@ -190,7 +190,7 @@
             },
             {
                 id: 'rate',
-                header: 'Rate',
+                header: $t('fx.rate'),
                 cell: (row) => {
                     const r = getRate(row);
                     return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${r.toFixed(4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-gray-400 dark:text-gray-500">${$t('fx.rateNotAvailable')}</span>`};

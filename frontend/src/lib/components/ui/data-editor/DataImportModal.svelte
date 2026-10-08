@@ -262,7 +262,7 @@
         {/if}
 
         <!-- CSV Editor -->
-        <CsvEditor {columns} {identity} bind:value={csvValue} minHeight="250px" onvalidchange={handleValidChange} oninput={oncsvtextchange} placeholder="Paste CSV data here or drop a file above..." />
+        <CsvEditor {columns} {identity} bind:value={csvValue} minHeight="250px" onvalidchange={handleValidChange} oninput={oncsvtextchange} placeholder={$t('csvImport.placeholder')} />
         {#if domainError}
             <p class="text-sm text-red-600 dark:text-red-400" data-testid="csv-domain-error">{domainError}</p>
         {/if}
