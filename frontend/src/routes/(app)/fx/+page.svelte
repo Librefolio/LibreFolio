@@ -861,7 +861,7 @@
                     perPairResults.push({
                         label: `${pair.base}/${pair.quote}`,
                         success: true,
-                        detail: $_('fx.delete.resultDeleted', {values: {count: rateCount}}),
+                        detail: $_('fx.delete.resultDeleted', {values: {n: rateCount}}),
                     });
                 } catch (pairErr: any) {
                     perPairResults.push({
