@@ -1625,7 +1625,10 @@
     "pnlCandlesHypotheticalShort": "Synthétique — les plus hauts/bas cross-actifs sont hypothétiques et non simultanés",
     "pnlAcqNewCapital": "Nouveau capital",
     "pnlAcqReinvested": "Réinvesti",
-    "allocationGeneric": "{type} générique"
+    "allocationGeneric": "{type} générique",
+    "unrealizedAssetEffect": "Actifs en {currency}",
+    "unrealizedFxEffect": "Taux {from} → {to}",
+    "unrealizedUnsplit": "{currency}, non décomposé"
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",
@@ -1663,7 +1666,8 @@
     "missingFxRatesManual": "Taux FX manquants pour {count} paire(s) manuelle(s) — ajoutez les taux manuellement",
     "assetIncomeNoEligibleLots": "Aucun lot ouvert éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — revenu non alloué",
     "assetCostNoEligibleLots": "Aucun lot éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — coût non alloué",
-    "missingFxRatesAfterSync": "Il manque encore des taux FX pour {pairs} entre {date_from} et {date_to} ({dates_count} date(s)) : le fournisseur n’en a renvoyé aucun pour ces dates. Saisissez-les à la main sur la page de la paire."
+    "missingFxRatesAfterSync": "Il manque encore des taux FX pour {pairs} entre {date_from} et {date_to} ({dates_count} date(s)) : le fournisseur n’en a renvoyé aucun pour ces dates. Saisissez-les à la main sur la page de la paire.",
+    "missingCostBasis": "{count} actif(s) avec une acquisition sans coût d'achat — comptée à zéro tant que vous ne le saisissez pas"
   },
   "dataEditor": {
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",
