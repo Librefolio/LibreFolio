@@ -283,7 +283,7 @@
                     stop(e);
                     if (!manualOnly) onsync?.({slug, base, quote});
                 }}
-                title={manualOnly ? 'Manual-only pair' : 'Sync rates from provider'}
+                title={manualOnly ? $t('fx.card.manualOnly') : $t('fx.card.syncFromProvider')}
             >
                 <RotateCw class={loading ? 'animate-spin' : ''} size={15} />
             </button>
