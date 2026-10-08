@@ -21,12 +21,26 @@ import {transitionClientSession} from '$lib/stores/app/clientSession';
 // Re-export types for backward compatibility
 export type {AuthUser, AuthState} from '$lib/types';
 
+/** The answer of `auth.checkAuth()`: only `unauthenticated` (a 401) means signed out. */
+export type AuthCheckResult = 'authenticated' | 'unauthenticated' | 'unreachable' | 'superseded';
+
 const initialState: AuthState = {
     user: null,
     isLoading: false,
     error: null,
     isInitialized: false,
 };
+
+/**
+ * A sign-out the user asked for (`auth.logout()`) returns to a plain login, while a session that ended
+ * on its own (a 401) carries the page to come back to. Set before the store flips, so whatever reacts to
+ * the flip can tell the two apart; cleared by the next sign-in or authenticated check.
+ */
+let signOutRequested = false;
+
+export function isSignOutRequested(): boolean {
+    return signOutRequested;
+}
 
 /**
  * Create the authentication store
@@ -61,6 +75,7 @@ function createAuthStore() {
                 debug.log('AuthStore', 'Login response:', response);
                 if (!isCurrentAuthOperation(operationGeneration)) return false;
                 transitionClientSession(response.user.id);
+                signOutRequested = false;
 
                 update((state) => ({
                     ...state,
@@ -135,6 +150,7 @@ function createAuthStore() {
          * Logout current user
          */
         logout: async (): Promise<void> => {
+            signOutRequested = true;
             const operationGeneration = beginAuthOperation();
             update((state) => ({...state, isLoading: true, error: null}));
 
@@ -161,9 +177,14 @@ function createAuthStore() {
         },
 
         /**
-         * Check if user is authenticated (verify session with server)
+         * Verify the session with the server.
+         *
+         * Only a 401 means "signed out". A timeout, a network error or a 5xx says nothing about the
+         * session, so it leaves the user, the client session and `isInitialized` as they were: the
+         * caller shows a retry, and nothing that watches the store reads it as a sign-out.
+         * `superseded`: a newer auth operation (a login, a logout, another check) owns the answer.
          */
-        checkAuth: async (): Promise<boolean> => {
+        checkAuth: async (): Promise<AuthCheckResult> => {
             const operationGeneration = beginAuthOperation();
             debug.log('AuthStore', 'checkAuth started');
             update((state) => ({...state, isLoading: true}));
@@ -172,8 +193,9 @@ function createAuthStore() {
                 const response = await zodiosApi.get_me_api_v1_auth_me_get();
 
                 debug.log('AuthStore', 'checkAuth success', response.user?.username);
-                if (!isCurrentAuthOperation(operationGeneration)) return false;
+                if (!isCurrentAuthOperation(operationGeneration)) return 'superseded';
                 transitionClientSession(response.user.id);
+                signOutRequested = false;
                 update((state) => ({
                     ...state,
                     user: response.user,
@@ -182,20 +204,23 @@ function createAuthStore() {
                     isInitialized: true,
                 }));
 
-                return true;
+                return 'authenticated';
             } catch (error) {
-                if (!isCurrentAuthOperation(operationGeneration)) return false;
-                transitionClientSession(null);
+                if (!isCurrentAuthOperation(operationGeneration)) return 'superseded';
                 debug.log('AuthStore', 'checkAuth failed', error);
-                update((state) => ({
-                    ...state,
-                    user: null,
-                    isLoading: false,
-                    error: null,
-                    isInitialized: true,
-                }));
-
-                return false;
+                if (isAxiosError(error) && error.response?.status === 401) {
+                    transitionClientSession(null);
+                    update((state) => ({
+                        ...state,
+                        user: null,
+                        isLoading: false,
+                        error: null,
+                        isInitialized: true,
+                    }));
+                    return 'unauthenticated';
+                }
+                update((state) => ({...state, isLoading: false}));
+                return 'unreachable';
             }
         },
 
@@ -211,6 +236,7 @@ function createAuthStore() {
          */
         reset: () => {
             beginAuthOperation();
+            signOutRequested = false;
             transitionClientSession(null);
             set(initialState);
         },
