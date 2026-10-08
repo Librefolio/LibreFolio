@@ -137,6 +137,23 @@ describe('AssetSyncModal — target selection', () => {
             {timeout: 120_000},
         );
     });
+
+    /**
+     * The request may take what the user agreed to wait: SyncModalBase hands the
+     * section a limit — the 120 s floor while the field sits under it, the field
+     * plus 5 s of grace above — and this modal gives it to axios, where it used to
+     * send a hardcoded 120 s whatever the field said.
+     */
+    it('sends the request limit the Timeout field sets', async () => {
+        respondWith({asset_id: 1, status: 'ok'});
+        mount({assets: [asset(1)]});
+
+        await fireEvent.input(screen.getByTestId('sync-modal-timeout'), {target: {value: '300'}});
+        await startSync();
+        await settled();
+
+        expect(syncPrices).toHaveBeenCalledWith([{asset_id: 1, date_range: {start: '2024-03-01', end: '2024-03-31'}}], {timeout: 305_000});
+    });
 });
 
 // =========================================================================

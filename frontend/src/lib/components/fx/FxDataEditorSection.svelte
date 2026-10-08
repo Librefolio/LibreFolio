@@ -19,6 +19,7 @@
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {t} from '$lib/i18n';
     import FxDataImportModal from './FxDataImportModal.svelte';
 
     // =========================================================================
@@ -50,10 +51,11 @@
     // Column definition for FX (single 'rate' column)
     // =========================================================================
 
-    const fxColumns: ColumnDef[] = [
+    // Derived, so the column label follows a language switch (the app no longer remounts on one).
+    let fxColumns: ColumnDef[] = $derived([
         {
             key: 'rate',
-            label: 'Rate',
+            label: $t('fx.rate'),
             type: 'number',
             editable: true,
             required: true,
@@ -61,7 +63,7 @@
             min: 0,
             placeholder: '1.0823',
         },
-    ];
+    ]);
 
     // =========================================================================
     // State
@@ -122,7 +124,7 @@
         // Build a RenderedSignal overlay (purple preview line)
         const previewSignal: RenderedSignal = {
             id: '__preview__',
-            label: 'Preview',
+            label: $t('common.preview'),
             data: pendingPoints.sort((a, b) => a.date.localeCompare(b.date)),
             color: '#a855f7',
             lineWidth: 3,
@@ -163,7 +165,7 @@
 
             // If all upserts invalid and no deletes, show error
             if (invalidCount > 0 && validUpserts.length === 0 && deleteRows.length === 0) {
-                error = `${invalidCount} row(s) have invalid rate values. Rate must be strictly greater than zero (0 is not allowed).`;
+                error = $t('fxDetail.invalidRates', {values: {n: invalidCount}});
                 saving = false;
                 return;
             }
@@ -220,10 +222,10 @@
 
             // Toast success
             const parts: string[] = [];
-            if (upsertedCount > 0) parts.push(`${upsertedCount} saved`);
-            if (deletedCount > 0) parts.push(`${deletedCount} deleted`);
-            if (invalidCount > 0) parts.push(`${invalidCount} skipped (invalid)`);
-            toasts.success(`FX rates: ${parts.join(', ')}`);
+            if (upsertedCount > 0) parts.push($t('fxDetail.savedCount', {values: {n: upsertedCount}}));
+            if (deletedCount > 0) parts.push($t('fxDetail.deletedCount', {values: {n: deletedCount}}));
+            if (invalidCount > 0) parts.push($t('fxDetail.skippedCount', {values: {n: invalidCount}}));
+            toasts.success($t('fxDetail.savedSummary', {values: {details: parts.join(', ')}}));
 
             // Compute expanded date range if appended rows fall outside current chart range
             const appendedRows = dirty.filter((r) => r.status === 'appended');
@@ -243,9 +245,9 @@
             onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save rates:', e);
-            const msg = e?.message || 'unknown error';
-            error = 'Failed to save: ' + msg;
-            toasts.error(`FX save failed: ${msg}`);
+            const msg = e?.message || $t('common.unknownError');
+            error = $t('dataEditor.saveFailed', {values: {error: msg}});
+            toasts.error($t('fxDetail.saveFailed', {values: {error: msg}}));
         } finally {
             saving = false;
         }
@@ -315,11 +317,11 @@
     <div class="flex items-center justify-end gap-2 px-1">
         <button data-testid="fx-editor-save-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave}>
             <Save size={15} />
-            {saving ? 'Saving...' : `Save (${_dirtyCount})`}
+            {saving ? $t('dataEditor.saving') : $t('dataEditor.save', {values: {n: _dirtyCount}})}
         </button>
         <button data-testid="fx-editor-cancel-btn" class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors" onclick={handleCancel}>
             <X size={15} />
-            Cancel
+            {$t('common.cancel')}
         </button>
     </div>
 </div>

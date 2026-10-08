@@ -27,7 +27,9 @@ class ECBProvider(FXRateProvider):
     Provides daily exchange rates with EUR as base currency.
     Data source: ECB Data Portal (Statistical Data Warehouse).
 
-    Coverage: 45+ currencies including major currencies (USD, GBP, JPY, CHF, etc.)
+    Coverage: discovered from the ECB API at runtime. About 30 currencies are published daily as euro
+    reference rates (USD, GBP, JPY, CHF, etc.); the discovery also lists the discontinued ones still in the
+    history (44 currencies plus EUR on 2026-10-08, 29 of them published daily).
     Update frequency: Daily (weekdays only, ECB business days)
     """
 
@@ -63,10 +65,10 @@ class ECBProvider(FXRateProvider):
     @property
     def description_i18n(self) -> dict[str, str]:
         return {
-            "en": "European Central Bank — publishes daily reference exchange rates for 30+ currencies against EUR. Updated every business day around 16:00 CET. One data point per day.",
-            "it": "Banca Centrale Europea — pubblica tassi di cambio di riferimento giornalieri per 30+ valute contro EUR. Aggiornamento ogni giorno lavorativo verso le 16:00 CET. Un dato al giorno.",
-            "fr": "Banque Centrale Européenne — publie des taux de change de référence quotidiens pour 30+ devises contre EUR. Mise à jour chaque jour ouvrable vers 16h00 CET. Un point par jour.",
-            "es": "Banco Central Europeo — publica tipos de cambio de referencia diarios para 30+ monedas contra EUR. Actualizado cada día hábil alrededor de las 16:00 CET. Un dato por día.",
+            "en": "European Central Bank — publishes daily reference exchange rates for about 30 currencies against EUR. Updated every business day around 16:00 CET. One data point per day.",
+            "it": "Banca Centrale Europea — pubblica tassi di cambio di riferimento giornalieri per una trentina di valute contro EUR. Aggiornamento ogni giorno lavorativo verso le 16:00 CET. Un dato al giorno.",
+            "fr": "Banque Centrale Européenne — publie des taux de change de référence quotidiens pour une trentaine de devises contre EUR. Mise à jour chaque jour ouvrable vers 16h00 CET. Un point par jour.",
+            "es": "Banco Central Europeo — publica tipos de cambio de referencia diarios para unas 30 monedas contra EUR. Actualizado cada día hábil alrededor de las 16:00 CET. Un dato por día.",
         }
 
     @property

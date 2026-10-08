@@ -9,7 +9,7 @@
     import SyncResultRow from '$lib/components/ui/modals/SyncResultRow.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
-    import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
+    import type {SyncRequestOptions, SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -81,13 +81,13 @@
     // Asset sync function
     // =========================================================================
 
-    async function doAssetSync(targetIds: string[]): Promise<SyncResult[]> {
+    async function doAssetSync(targetIds: string[], options: SyncRequestOptions): Promise<SyncResult[]> {
         const generation = openGeneration;
         const items = targetIds.map((id) => ({
             asset_id: parseInt(id),
             date_range: {start: dateStart, end: dateEnd},
         }));
-        const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(items, {timeout: 120_000});
+        const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(items, {timeout: options.timeoutMs});
         const r = response as any;
         return recordAccepted(
             (r.results ?? []).map(
@@ -115,9 +115,9 @@
     // FX sync function
     // =========================================================================
 
-    async function doFxSync(targetIds: string[]): Promise<SyncResult[]> {
+    async function doFxSync(targetIds: string[], options: SyncRequestOptions): Promise<SyncResult[]> {
         const generation = openGeneration;
-        const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: targetIds, start: dateStart, end: dateEnd}, {timeout: 120_000});
+        const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: targetIds, start: dateStart, end: dateEnd}, {timeout: options.timeoutMs});
         const r = response as any;
         return recordAccepted(
             (r.results ?? []).map(
