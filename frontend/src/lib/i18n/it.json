@@ -898,7 +898,8 @@
       "removeFromSet": "Togli dal set",
       "defaultPluginNote": "Letto come set {plugin}, non col plugin predefinito del broker ({defaultPlugin}). Per cambiarlo usa «Letto come» o il menu ⋮ di un file.",
       "alsoRecognisedBy": "{file} è riconosciuto anche da: {plugins}",
-      "partlySelectedBlocks": "Continua è disattivato finché un set è spuntato solo in parte: spunta tutto il set o togli la spunta."
+      "partlySelectedBlocks": "Continua è disattivato finché un set è spuntato solo in parte: spunta tutto il set o togli la spunta.",
+      "ungroupedBlocks": "Continua è disattivato finché è spuntato un file che si legge solo con il suo set ma non è in nessun set: {files}. Ricarica insieme, in un solo invio, tutti gli export del set, poi spunta il set; oppure togli la spunta al file."
     },
     "parseDetail": {
       "sourceRow": "Riga del file",
