@@ -11,10 +11,12 @@
   personal account to the organisation and pointed at a site that no longer exists, so
   every fallback answered 404: the safety net was there, and empty, for months.
 
-  Deriving it from `config.site_url` removes the possibility of divergence — there is
-  now exactly one place where the public address is written down.
+  It comes from `lf_canonical_site_url`, published by `hooks/jsonld.py`, and not from
+  `config.site_url`: `mkdocs serve` rewrites that to the local server's address, and the
+  fallback then asked the same local server again, so no missing screenshot ever loaded.
+  The hook warns when the two addresses drift apart, which fails a strict build.
 #}
 {% block extrahead %}
   {{ super() }}
-  <script>window.LF_GALLERY_FALLBACK_BASE = {{ (config.site_url or "") | tojson }};</script>
+  <script>window.LF_GALLERY_FALLBACK_BASE = {{ (lf_canonical_site_url | default(config.site_url, true) or "") | tojson }};</script>
 {% endblock %}
