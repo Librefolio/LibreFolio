@@ -374,7 +374,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
 
     @property
     def provider_help_url(self) -> str:
-        return "/mkdocs/developer/backend/assets/provider_borsa_italiana/"
+        return "/mkdocs/user/assets/providers/borsa-italiana/"
 
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
         """Generate URL to Borsa Italiana instrument page."""
