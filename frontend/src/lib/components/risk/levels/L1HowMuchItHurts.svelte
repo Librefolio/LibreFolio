@@ -7,7 +7,7 @@
 
     import {formatCurrencyAmount} from '../riskAnalysisHelpers';
     import {buildCurrentDrawdown, buildHurtRows} from './levelHelpers';
-    import {buildReturnHistogram, buildTailMeasures, buildUnderwater} from './l1/l1Helpers';
+    import {buildReturnHistogram, buildTailMeasures, buildUnderwater, gainPercent, lossAmount, lossPercent} from './l1/l1Helpers';
     import ReturnHistogram from './l1/ReturnHistogram.svelte';
     import UnderwaterChart from './l1/UnderwaterChart.svelte';
 
@@ -64,28 +64,14 @@
     let histogram = $derived(buildReturnHistogram(historicalResults));
     let showMoney = $derived(typeof scopeValue === 'number' && Number.isFinite(scopeValue) && scopeValue > 0);
 
-    /**
-     * A loss magnitude rendered as a fall.
-     *
-     * The minus is prefixed here, as U+2212 MINUS SIGN, rather than left to the
-     * formatter: `formatPercent` emits an ASCII hyphen, and this panel's E2E net
-     * asserts the typographic minus. Both characters draw as a short horizontal
-     * stroke, so a mismatch is invisible on screen and surfaces only as a failing
-     * string comparison.
-     */
-    function lossPercent(fraction: number): string {
-        return `\u2212${formatPercent(fraction, {scale: 100, signed: false, digits: 1})}`;
-    }
+    // `lossPercent` and `gainPercent` live in `l1Helpers` (D380): a figure keeps the precision
+    // of the shares, writes U+2212 — the minus this panel's E2E net asserts — and never prints
+    // a sign before a zero.
 
-    /** A gain magnitude rendered as a rise, with the matching plus. */
-    function gainPercent(fraction: number): string {
-        return `+${formatPercent(fraction, {scale: 100, signed: false, digits: 1})}`;
-    }
-
-    /** The money a loss fraction costs at the current scope value. */
+    /** The money a loss fraction costs at the current scope value; a zero loss carries no minus. */
     function lossMoney(fraction: number): string {
         if (!showMoney || scopeValue == null) return '';
-        return `\u2212${formatCurrencyAmount(String(scopeValue * fraction), currency)}`;
+        return lossAmount(scopeValue * fraction, (value) => formatCurrencyAmount(value, currency));
     }
 
     /**
