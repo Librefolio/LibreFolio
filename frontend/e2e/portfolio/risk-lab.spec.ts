@@ -1150,30 +1150,37 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
  * Hold the page's live-price poll, unanswered, for the whole test.
  *
  * When the window ends today, `+page.svelte` polls `POST /assets/prices/current`:
- * on load, again whenever its asset list is reassigned, and every 30 s after. Each
- * answered call is a portfolio mutation twice over. The backend writes today's
- * prices into the shared database, and `zodios-client`'s response interceptor
- * calls `notifyPortfolioMutation`, which drops the report and risk caches and
- * discards every answer still in flight. It is a background actor these tests do
- * not control, racing the very requests they measure.
+ * on load, again whenever the set of assets it asks about changes or a refresh is
+ * asked for, and every 30 s after. Each answered call is a portfolio mutation twice
+ * over. The backend writes today's prices into the shared database, and
+ * `zodios-client`'s response interceptor calls `notifyPortfolioMutation`, which
+ * marks every cached report and risk answer stale. Since the page cache (decision
+ * E1) a mark keeps what it marks and discards nothing in flight, but each answer it
+ * marks is asked again on its next read: refreshes these tests do not control,
+ * racing the very requests they measure.
  *
  * Held, never answered, because nothing else is inert: a stubbed answer, even an
- * empty one, still passes through that interceptor and still invalidates. An
- * unanswered call does nothing at all. `fetchLivePrices` awaits it; after axios's
- * 30 s timeout it catches the error and logs one non-critical warning, with no
- * toast and no busy flag. The handler calls no route method, so nothing can
+ * empty one, still passes through that interceptor and still marks the caches
+ * stale. An unanswered call does nothing at all. `fetchLivePrices` awaits it; after
+ * axios's 30 s timeout it catches the error and logs one non-critical warning, with
+ * no toast and no busy flag. The handler calls no route method, so nothing can
  * throw when the context closes, and Playwright waits for a running handler only
  * when explicitly told to (`unrouteAll({behavior: 'wait'})`, which nothing here
  * calls). Nothing here unroutes at teardown either: removing a route releases
  * what it holds, and in a run that did, the held poll reached the backend and
  * wrote today's prices.
  *
- * 🔴 This isolates the tests; it fixes nothing. The race exposed two product
- * defects, and this hold repairs neither: a discarded report read as "no
- * holdings" by the broker preset (repaired separately, in the panel), and a
- * discarded replay read as "no answer" by `runGuarded` (still open). Outside this
- * file the poll still writes on every visit. All this does is stop these tests
- * from depending on a race nobody controls.
+ * 🔴 This isolates the tests; it fixes nothing. The race once exposed two product
+ * defects, both about answers it discarded: a discarded report read as "no
+ * holdings" by the broker preset, and a discarded replay read as "no answer" by
+ * `runGuarded`. A mark discards nothing now (E1), so the poll can cause neither,
+ * and both were repaired besides: the preset asks a `null` once more and reports a
+ * second one as a failure — and since E1, inside a case, it meets a `null` only
+ * when its report fails — while `runGuarded` re-asks a discarded answer
+ * (`RISK_DISCARD_ATTEMPTS`), which only a session change or a hard reset
+ * (`invalidateRisk()`) still produces. Outside this file the poll still writes on
+ * every visit and marks every cached answer stale. All this does is stop these
+ * tests from depending on refreshes nobody controls.
  */
 async function holdLivePricePoll(page: Page): Promise<void> {
     await page.route(/\/api\/v1\/assets\/prices\/current(?:\?|$)/, () => {
@@ -3197,11 +3204,11 @@ function withNothingHeld(answer: Record<string, unknown>): Record<string, unknow
  * Absorbed, not hidden. A failed callback hands the page nothing, so what the case
  * waits for behind that request never comes, and the case fails on its own barrier
  * — the capture it polls for, the state the answer would have produced. Unanswered
- * rather than aborted: the preset reads a failed report as it reads a discarded
- * one and asks again (`gateReports`), so a re-ask forwarded fine would let the
- * case pass over the failure; an unanswered one is given up only at axios's 30 s
- * timeout, later than any barrier here waits for a report. Nothing unroutes at
- * teardown either: see `holdLivePricePoll`.
+ * rather than aborted: the preset reads a failed report as `null` — `fetchReport`
+ * resolves `null` when its request fails — and asks again, so a re-ask forwarded
+ * fine would let the case pass over the failure; an unanswered one is given up only
+ * at axios's 30 s timeout, later than any barrier here waits for a report. Nothing
+ * unroutes at teardown either: see `holdLivePricePoll`.
  */
 async function routeQuietly(page: Page, url: string, handler: Parameters<Page['route']>[1]): Promise<void> {
     await page.route(url, async (route, request) => {
@@ -3274,18 +3281,24 @@ interface HeldReport {
 /**
  * Hold every `/portfolio/report` the page sends until the test lets it through.
  *
- * A discard is a comparison across time: `fetchReport` reads the report cache's
- * generation when it *sends*, and compares it when the answer *lands*. Holding
- * the answer is what lets a test put a portfolio mutation, and the page's proof
- * that it processed it, strictly in between. The handler returns without
- * handling the route, so the request stays paused until `release`, and each
- * entry is one request in the order the page sent them — the opening seed's
- * among them (see `openAssetGlobalRiskReleasingSeed`).
+ * Holding orders time. `fetchReport` stamps a request with the mark it is sent
+ * under, and `requestReport` stores the answer under that mark when it lands —
+ * stale if a portfolio mutation marked the cache in between — discarding it only
+ * after a session change (`resetPortfolioCache`). Holding the answer is what lets
+ * a test put a portfolio mutation, and the page's proof that it processed it,
+ * strictly between the request and its answer: since E1 a mark there no longer
+ * discards anything, which the case «a portfolio mutation in flight no longer
+ * discards the report» asserts. The handler returns without handling the route, so
+ * the request stays paused until `release`, and each entry is one request in the
+ * order the page sent them — the opening seed's among them (see
+ * `openAssetGlobalRiskReleasingSeed`).
  *
- * `release` insists on a 2xx. `fetchReport` turns a *throw* into `null` too
- * (`promise.catch(() => null)`), so a re-ask after a failed answer would look
- * exactly like a re-ask after a discarded one. Only a successful answer makes the
- * `null` attributable to the discard.
+ * `release` insists on a 2xx. `fetchReport` turns a failure into `null`
+ * (`requestReport` catches it), and the preset asks a `null` once more, so a
+ * re-ask after a failed answer would look exactly like the re-ask a discarding
+ * mark used to cost — the one that case asserts is gone. Only a successful answer
+ * keeps a re-ask attributable to the mark; the failures the other cases need are
+ * made on purpose, by `failBrokerReports`, before a request reaches the gate.
  *
  * Only the callback is quiet (`routeQuietly`). `release` stays loud on purpose:
  * the case that calls it awaits it, so what it throws — a failed forward, a
@@ -3323,16 +3336,19 @@ async function chooseBrokerPreset(page: Page, optionTestId: string): Promise<voi
 }
 
 /**
- * Run the page-sync modal to completion and close it: a portfolio mutation whose
- * end the page publishes.
+ * Run the page-sync modal to completion and close it: a sync whose end the page
+ * publishes, and a portfolio mutation when its answer says it wrote.
  *
- * Both sync POSTs are portfolio mutations (`isPortfolioAffectingMutation`), so
- * `zodios-client`'s interceptor drops the report cache the moment each answer
- * lands. That happens before `doSyncFn` returns, and so before the modal can merge
- * a single row. The modal's end state is therefore proof, not a guess about time,
- * that the invalidation has run: results on screen and a body that is no longer
- * busy mean every section's answer has passed through the interceptor. This is
- * the barrier the live-price poll cannot offer, since nothing on this tab renders
+ * A sync POST is a portfolio mutation only when its answer says it wrote
+ * (`isPortfolioAffectingMutation`, E2): a price with `points_changed` or
+ * `events_changed` above zero, rates with a `total_points_changed` above zero. One
+ * that wrote has `zodios-client`'s interceptor mark the report and risk caches
+ * stale the moment its answer lands; one that wrote nothing marks nothing. Either
+ * way the interceptor runs before `doSyncFn` returns, and so before the modal can
+ * merge a single row. The modal's end state is therefore proof, not a guess about
+ * time, that the interceptor has run: results on screen and a body that is no
+ * longer busy mean every section's answer has passed through it. This is the
+ * barrier the live-price poll cannot offer, since nothing on this tab renders
  * what the poll returns.
  *
  * Opened from the page toolbar, where the lab's sync lives since F-3b: one sync per
@@ -6495,7 +6511,7 @@ test.describe('Asset Global risk laboratory', () => {
         // The preset used to be a select, and its empty option reset the selection
         // to the first hundred assets. It is a command now, with no null state to
         // choose — but a silent wipe of the same kind can still come in through an
-        // answer: a discarded one (the next two tests), or one that holds nothing.
+        // answer: a failed one (the tests below), or one that holds nothing.
         // Nothing held is an answer, not an instruction: the command says so and
         // leaves the selection as it was.
         //

@@ -29,7 +29,7 @@ All tests are executed through `dev.py`:
 
 | Flag | Description |
 |------|-------------|
-| `--verbose` / `-v` | Show full pytest output |
+| `-q` / `--quiet` | Suppress the detailed test output. Without it, the output is verbose |
 | `--coverage [py\|js\|all]` | Run with code coverage tracking. The language is optional and defaults to `all` |
 | `--cov-clean-backend` | Clean Python coverage from backend tests (`htmlcov-backend/` + `.coverage_data/backend`) |
 | `--cov-clean-backend-e2e` | Clean Python coverage collected during E2E runs (`htmlcov-backend-e2e/` + `.coverage_data/frontend`) |
@@ -37,7 +37,9 @@ All tests are executed through `dev.py`:
 | `--workers N\|auto` | Run isolation-safe backend units in parallel. Default `1` — the serial path, unchanged. `auto` is half the cores |
 | `--fail-fast` | Stop handing out work after the first red. The default runs everything and reports every failure |
 | `--log-dir PATH` | One log file per test unit. Defaults to `.testLog`; `--log-dir ""` turns it off |
-| `--no-consolidate` | Keep the one-invocation-per-action shape on the frontend instead of grouping a category into a single Playwright and vitest run |
+| `--no-consolidate` | Keep one invocation per action instead of grouping a whole category into a single run — one pytest invocation on the backend, one Playwright and one vitest run on the frontend |
+| `--test-port PORT` / `--port PORT` | Port of this run's test backend. Defaults to `TEST_PORT`, then `6041` — see [Isolated Runtime Lanes](#isolated-runtime-lanes) |
+| `--data-dir PATH` | Test data root of this run. Defaults to `LIBREFOLIO_TEST_DATA_DIR`, then `backend/data/test` — see [Isolated Runtime Lanes](#isolated-runtime-lanes) |
 
 !!! note "Where the flags go"
 
@@ -61,6 +63,46 @@ All tests are executed through `dev.py`:
     **which tests drive it**. See [Coverage Model](coverage-model.md) for the full
     picture — including why the report formerly called `htmlcov-frontend/` actually
     measured Python.
+
+### 🛣️ Isolated Runtime Lanes
+
+A test run owns one **runtime lane**: the port of the backend it starts and talks to, and
+the data directory that backend uses (`sqlite/app.db`, uploads, broker reports, logs). Runs
+that are active at the same time — one per worktree — must each have their own lane: never
+point two active runs at the same port or the same data directory.
+
+| Flag | Environment variable | Default | Lane resource |
+|------|----------------------|---------|---------------|
+| `--test-port PORT` / `--port PORT` | `TEST_PORT` | `6041` | Port of the test backend |
+| `--data-dir PATH` | `LIBREFOLIO_TEST_DATA_DIR` | `backend/data/test` | Root of the test data |
+
+A flag wins over the shell environment, which wins over the checkout's `.env`. A relative
+data path resolves against the root of the checkout that runs the command, so each worktree's
+default data directory is already its own. The port is machine-wide, so every worktree that
+runs tests at the same time needs a different one — on the command line, or as `TEST_PORT` in
+that worktree's `.env`. If you set `LIBREFOLIO_TEST_DATA_DIR` to an absolute path, give each
+worktree a different one as well.
+
+```bash
+# A second worktree, testing while another one uses the default lane (6041)
+./dev.py test --test-port 6141 api all
+```
+
+The runner applies the lane before any setup, server start, or child process
+(`configure_test_runtime` in `scripts/cli_base.py`), and stops with an error when:
+
+- the port is outside 1–65535 or equals the production port (`PORT`, default `6040`);
+- the data directory overlaps the production data directory (`backend/data/prod`, or
+  `LIBREFOLIO_DATA_DIR`) in either direction, sits inside — or holds in its managed
+  subdirectories — a directory marked as production data, or has a managed path that
+  escapes it or aliases production data.
+
+The resolved `TEST_PORT` and `LIBREFOLIO_TEST_DATA_DIR` are exported to every child process,
+together with a random lane identity (`LIBREFOLIO_TEST_LANE_ID`). A backend counts as ready
+only when `/api/v1/system/test-lane-health` echoes that identity in the
+`X-LibreFolio-Test-Lane` header, and the shared test server refuses to start on a port that
+another process already holds: it never reuses or terminates another lane's server. The
+contract is covered by `./dev.py test utils runtime-isolation`.
 
 ### 🔍 Provider Filter Flags (external, all, all-backend)
 

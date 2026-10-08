@@ -295,11 +295,11 @@
                         <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{directionLabel(lot.direction)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.originalQuantity')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.originalQuantity')}</dt>
                         <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatQuantity(lot.original_quantity)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openQuantity')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.openQuantity')}</dt>
                         <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatQuantity(lot.open_quantity)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
@@ -311,7 +311,7 @@
                         <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotOpeningValue)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.currentValue')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.currentValue')}</dt>
                         <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCurrentValue)}</dd>
                         {#if lotIsEstimated}
                             <p class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400" data-testid="lot-custody-modal-value-source">
@@ -337,17 +337,17 @@
                         </div>
                     {/if}
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.fifoPnl')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.fifoPnl')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotPnl)}`}>{formatSignedCurrency(lotPnl)}</dd>
                     </div>
                     {#if lotTotalPnl != null}
                         <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.totalPnl')}</dt>
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.totalPnl')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalPnl)}`} data-testid="lot-custody-modal-total-pnl">{formatSignedCurrency(lotTotalPnl)}</dd>
                         </div>
                     {/if}
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openReturn')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.openReturn')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotRelativeReturn)}`}>{formatPercent(lotRelativeReturn)}</dd>
                     </div>
                     {#if lotTotalReturn != null}

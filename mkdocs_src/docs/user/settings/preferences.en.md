@@ -9,7 +9,7 @@ The **Preferences** tab controls **how the app looks and behaves for you** — c
 | Setting | Category | Description |
 |---------|----------|-------------|
 | **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies immediately |
-| **Base Currency** | 💰 Currency | Default display currency for portfolio values |
+| **Default Currency** | 💰 Currency | Your base currency: the default display currency for portfolio values. This menu lists every currency |
 | **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system) |
 
 <style>
@@ -22,6 +22,10 @@ article table:first-of-type td:nth-child(-n + 2) {
 </style>
 
 Use the **category sidebar** on the left to filter the visible settings.
+
+!!! tip "Currency menus on the Dashboard and asset pages"
+
+    The currency menus that change the currency of what you see on the **Dashboard** and on an asset page are narrower than **Default Currency**: they list only the currencies you can convert to with your configured FX pairs, both ends of each pair. A currency that a chain route only passes through (for example EUR in RON → EUR → JPY) appears there only if it is itself one end of a configured pair. The currency already selected always stays listed; on the Dashboard, **Back to default** returns to your Default Currency, and **Create forex…** at the bottom of these menus adds a missing pair.
 
 ## 💾 Saving, Undo, Reset
 
@@ -64,6 +68,8 @@ step when you return; closing an Add form mid-guide restarts that form's guide f
 step. You can cancel an armed replay before its trigger. **Replay all** arms every flow and opens
 Welcome first.
 
+<!-- [Screenshot Placeholder: settings/onboarding-replay — the Onboarding category of Preferences: flows grouped by area with their status badges, version lines, and Replay actions] -->
+
 !!! info "Step-managed guides"
 
     In an automatic Import or bulk guide, **X** skips only the current step or checkpoint. It
@@ -105,6 +111,8 @@ page header, at the top right next to the theme and language buttons.
 The change applies at once to the page you are on, in both directions, without a reload. Privacy
 mode then stays on as you move between pages and after a reload, until you switch it off.
 
+<!-- [Screenshot Placeholder: dashboard/privacy-masked — the Dashboard with privacy mode on: amounts shown as ••• with their currency and sign, percentages still visible] -->
+
 !!! tip "Two different eye icons"
 
     The eye icon in a **table toolbar** is a different control: it shows or hides table columns.
@@ -140,6 +148,8 @@ applies:
   there.
 - **Risk panels** — the amounts.
 - **Transactions** — the cash amount of every transaction.
+- **[PAC allocator](../tools/pac-allocator/index.md#reading-the-result)** — in the result, every
+  amount and quantity, and the purchase limits of a route.
 
 ### 👀 What stays visible
 

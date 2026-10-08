@@ -25,9 +25,10 @@ Here is a summary of the operations and tools available directly within the tran
 
 | Feature | Description | Reference |
 |---------|-------------|-----------|
-| **Add & Edit** | Click **Add Transaction** to open the form, or click any existing row to edit its details. | [Transaction Form](form.md) |
+| **Add & Edit** | Click **Add Transaction** to open the form. Double-click any existing row to view its details, or choose **Edit** in its context menu. | [Transaction Form](form.md) |
 | **Broker Import** | Click **Import** to upload a broker statement and import your history automatically. | [Import from Broker](import/index.md) |
 | **Sorting & Filtering** | Click any column header to sort the list. Use the search bar to filter by asset name, type, or notes. | |
+| **Composite & Promotion** | Link single operations (like two cash legs) into a **Composite Transaction** via **Promotion** to enable advanced tracking and portfolio analytics, or split a composite transaction back into single operations. | [Transaction Form](form.md#composite-transactions) |
 | **Deleting & Bulk Actions** | Right-click any row to open the Context Menu for quick actions. Deleting a single row and checking multiple rows for bulk deletion both open the same **bulk workspace**, where rows are staged for deletion before you confirm; a linked partner (FX trade or transfer leg) is automatically staged together with the row you picked. | |
 
 Duplicating works the same way: **Clone** from the context menu stages a copy in the bulk workspace — keeping the **original date** (cloning is how a misclassified historical row gets corrected, so the date must survive) — where you adjust and save it.
@@ -36,7 +37,11 @@ Duplicating works the same way: **Clone** from the context menu stages a copy in
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
 </div>
 
-| **Composite & Promotion** | Link single operations (like two cash legs) into a **Composite Transaction** via **Promotion** to enable advanced tracking and portfolio analytics, or split a composite transaction back into single operations. | [Transaction Form](form.md#composite-transactions) |
+After an import, banners above the bulk workspace's grid can list what to check before **Save All**: a red one for the rows the importer did not fully understand, and an amber one for the auto-derived fields to verify. Click a banner to unfold its list, then click an entry: the grid turns to the page of that row and highlights it. Balance problems lead to their rows too: each one lists the workspace rows that contribute to it (*Workspace rows: …*), and a click takes you to the first of them in the current sort order. If your column filters hide the row, a message tells you so instead.
+
+<!-- [Screenshot Placeholder: transactions/bulk-todo-banner — the bulk workspace with the banner of fields to verify unfolded, and the row of the clicked entry highlighted in the grid] -->
+
+Once the workspace saves — edits, clones, deletions, new or imported rows — the Transactions page clears its selection, since the rows it pointed at may have changed or gone. Linking two rows with **Promote pair**, or unlinking a pair with **Split pair**, clears it too. If you close the workspace or cancel a confirmation without saving, your selection stays as it was.
 
 ## 🧭 Contextual guides
 

@@ -38,6 +38,7 @@ Paths below are relative to the repository root.
 | `backend/app/services/tools/executor.py` | Per-process admission, item tickets, lane scheduling, absolute deadlines, handshake, cancellation, and cleanup ownership. |
 | `backend/app/services/tools/worker.py` | Child handshake, version-pin checks, validation, computation, and result frames. |
 | `backend/app/services/tools/process_tree.py` | Owned process identities, descendant tracking, and termination checks. |
+| `backend/app/services/tools/resources.py` | Memory-enforcement capability detection and per-job cgroup-v2 memory containment. |
 | `backend/app/services/tool_plugins/pac_allocator.py` | Current packaged plugin with one complete public service and code-based compute dispatch. |
 | `backend/app/api/v1/tools.py` | Bounded transport handlers, authentication dependencies, and disconnect handling. |
 | `backend/app/api/v1/router.py` | Inclusion of the Tool router in the API v1 router. |
@@ -95,7 +96,7 @@ Pydantic types are the canonical source for both validation and published schema
 - The complete set of input operation values must exactly match the declared policies. Neither an undocumented operation nor an unreachable policy is accepted.
 - Input and output validation use the real adapters. Do not substitute handwritten JSON Schema or handwritten TypeScript transport types.
 
-`ToolOperationPolicy` requires `pure=True`, carries a `deterministic` flag, and fixes `deduplication` to `"none"`. It also declares input/output byte limits and queue, soft, and hard deadlines. Determinism metadata does not enable caching or shared execution.
+`ToolOperationPolicy` requires `pure=True`, carries a `deterministic` flag, and fixes `deduplication` to `"none"`. It also declares input/output byte limits; queue, engine, soft, hard, cleanup, request, and client budgets; and a per-job memory limit. The platform clamps every one of them (see [Supervisor and budgets](#supervisor-and-budgets)). Determinism metadata does not enable caching or shared execution.
 
 ### ⏱️ Synchronous computation
 
@@ -103,7 +104,9 @@ Implement synchronous `compute(tool_code, parameters, context)` and return a com
 
 The class must be constructible with no arguments. Discovery checks this with signature binding without constructing the plugin. Worker construction is a single attempt; the Tool registry's instance helper likewise does not retry a constructor after `TypeError`.
 
-`ToolExecutionContext` contains an execution identifier, monotonic soft and hard deadlines, and a cancellation callback. Call **`context.checkpoint()` without arguments** at bounded intervals. It raises `ToolExecutionError("execution_limit", retryable=True)` when cancellation is observed or the soft deadline has elapsed. It is cooperative: it does not itself terminate a process at the hard deadline.
+`ToolExecutionContext` contains an execution identifier, monotonic soft and hard deadlines, a cancellation callback, and the effective `engine_timeout_ms`. Call **`context.checkpoint()` without arguments** at bounded intervals. It raises `ToolExecutionError("execution_limit", retryable=True)` when cancellation is observed or the soft deadline has elapsed. It is cooperative: it does not itself terminate a process at the hard deadline.
+
+A calculation that hands its work to a long-running engine, such as a solver, claims one engine window first: `context.claim_engine_window(post_engine_reserve_ms=...)`. The claim runs a checkpoint, then raises the same `execution_limit` error unless the remaining soft window still holds the engine budget plus the reserve the caller needs for its own post-processing. It returns a `ToolEngineWindow` whose `deadline` and `timeout_ms` the engine must honour. `PacAllocatorTool` passes `window.timeout_ms` to its solver as the time budget.
 
 A reusable calculation library can accept a no-argument checkpoint callback without depending on Tool types. Constructors, imports, and calculation code must respect the same authority and job-lifetime boundaries.
 
@@ -164,11 +167,11 @@ Results discriminate on `status`: `"success"` carries `result`, while `"error"` 
 | Lookup and availability | `unknown_tool`, `tool_unavailable`, `version_mismatch`, `service_unavailable` |
 | Parameters | `invalid_parameters`, `input_limit_exceeded` |
 | Admission and waiting | `queue_full`, `queue_timeout` |
-| Execution | `execution_limit`, `execution_timeout`, `worker_crashed`, `execution_failed` |
+| Execution | `execution_limit`, `execution_timeout`, `memory_limit`, `worker_crashed`, `execution_failed` |
 | Output | `invalid_output`, `output_limit_exceeded` |
 | Termination | `cleanup_failed` |
 
-A crash, hard timeout, invalid output, or failed cleanup is a platform failure. Do not turn it into a domain answer such as “infeasible” or “needs more input.”
+A crash, hard timeout, memory-limit breach, invalid output, or failed cleanup is a platform failure. Do not turn it into a domain answer such as “infeasible” or “needs more input.”
 
 Transport failures are distinct from per-item results. The route rejects malformed JSON, duplicate object keys, and nonfinite numbers as invalid requests. It bounds received bytes, sanitizes envelope validation failures, and applies request deadlines. Whole-request errors include HTTP `400` for invalid JSON, `413` for oversized input, and `422` for an invalid envelope. A top-level `queue_full` execution error is mapped to `429`; other raised execution errors and request deadline failures use `503`.
 
@@ -178,9 +181,9 @@ The handler watches for client disconnection and cancels the awaited computation
 
 ### 🔬 Process-local diagnostics
 
-`ToolDiagnosticsResponse` has `scope="api_process"`, an opaque runtime identifier, the effective policy, loaded descriptors, sanitized registration failures, and a pool snapshot.
+`ToolDiagnosticsResponse` has `scope="api_process"`, an opaque runtime identifier, the effective policy, loaded descriptors, sanitized registration failures, the memory-enforcement capability (`capabilities.memory`), and a pool snapshot.
 
-Pool fields report availability, active, queued, pending, degraded lanes, completed, and failed counts. They describe one API process, **not global deployment capacity**. The catalogue exposes only coarse unavailable summaries; diagnostics adds safe filenames and bounded failure reasons.
+Pool fields report availability, active, queued, pending, degraded lanes, completed, and failed counts, plus `resources`: the memory capacity (`workers × memory_limit_bytes`) and the memory limits reserved by the jobs the executor still tracks. They describe one API process, **not global deployment capacity**. The catalogue exposes only coarse unavailable summaries; diagnostics adds safe filenames and bounded failure reasons.
 
 `_item_finished` increments `completed` for every tracked item task that reaches a terminal state, including cancellation or an exception. `failed` is the subset without a platform-success result, not an additional disjoint total. These counters can advance while physical cleanup remains outstanding; `completed` does not certify process termination or released capacity.
 
@@ -240,7 +243,7 @@ Plugin-created processes and threads are allowed only within the job's lifetime.
 
 !!! warning "Ownership is not a security sandbox"
 
-    These POSIX primitives manage the lifetime of packaged plugin work. They do not establish an OS memory sandbox, filesystem isolation, or permission to run arbitrary untrusted plugins. Descendant tracking does not make detaching work a supported escape from job ownership.
+    These POSIX primitives manage the lifetime of packaged plugin work. They do not establish an OS sandbox, filesystem isolation, or permission to run arbitrary untrusted plugins; the per-job memory limit described below caps consumption, it does not isolate memory. Descendant tracking does not make detaching work a supported escape from job ownership.
 
 ### 📏 Supervisor and budgets
 
@@ -252,27 +255,38 @@ Each item task has an `_ItemTicket` and a registered done callback. If cancellat
 
 Shutdown closes admission, cancels tracked item tasks, signals owned jobs, and waits within the cleanup budget. Jobs with unconfirmed termination remain quarantined. The process-local executor reference is cleared only when its pending count reaches zero. These source paths do not replace runtime verification of cancellation races or descendant cleanup.
 
-The following are initial `ToolPlatformPolicy` defaults, not measured throughput or latency guarantees:
+The following are the `ToolPlatformPolicy` defaults declared in `backend/app/schemas/tools.py`. The process-local executor runs with them: `get_tool_executor()` builds `ToolExecutor()` without a policy override. They are limits, not measured throughput or latency guarantees:
 
-| Limit or budget | Default |
-|-----------------|---------|
+| Limit or budget | Platform default |
+|-----------------|------------------|
 | Items per batch | 1–4 |
 | Worker lanes per API process | 2 |
 | Pending items per API process | 8 |
 | Concurrent batches / pending items per principal | 1 / 4 |
+| Request body / response body | 1 MiB / 1,088 KiB (four 256 KiB results plus a 64 KiB envelope reserve) |
 | Parameters per item / result per item | 128 KiB / 256 KiB |
 | JSON nesting depth | 32 |
 | Ingress / shared queue budget | 2 s / 5 s |
-| Hard job budget, including startup | 5 s |
-| Cooperative soft budget / output reserve | 4 s / 1 s |
-| Cleanup / response reserve | 2 s / 2 s |
-| Server request / Tool-specific client budget | 20 s / 25 s |
+| Engine budget (one claimed engine window) | 30 s |
+| Hard job budget, including startup | 45 s |
+| Cooperative soft budget / output reserve | 44 s / 1 s |
+| Cleanup / response reserve | 5 s / 2 s |
+| Server request / client budget | 59 s / 65 s |
+| Memory limit per job | 1 GiB |
 
-The policy validates budget and envelope coherence. Catalogue operation limits can be stricter than platform limits. The frontend Tool client applies `client_timeout_ms` to the compute request; it remains a client transport budget, not a throughput or completion guarantee.
+`ToolPlatformPolicy` validates its own coherence: the engine budget must fit within the soft deadline, the soft deadline plus the output reserve within the hard deadline, and ingress + queue + hard job + cleanup + response reserve within the request deadline; the client timeout must exceed the request deadline, and a full batch of maximum-size items plus the envelope reserve must fit both the request and the response caps. At the defaults the server bound equals the request deadline exactly (2 + 5 + 45 + 5 + 2 = 59 s).
+
+A `ToolOperationPolicy` declares its own values. A field the plugin omits takes the model's default — 4 s engine and soft, 5 s hard, 5 s queue, 2 s cleanup, 20 s request, 25 s client, 128 KiB / 256 KiB, and 1 GiB — so an operation that needs longer budgets must declare them. `effective_operation` (`backend/app/services/tools/catalog.py`) then clamps each operation to the platform. Every limit becomes the smaller of the two values, the soft deadline is also capped at the hard deadline minus the output reserve, and the engine budget at the soft deadline. A clamped soft deadline that is not positive, or a server bound that no longer fits the clamped request deadline, rejects the definition with `invalid_operation_policy`, and the whole service leaves the catalogue. The catalogue publishes, and the executor enforces, only the clamped values.
+
+For example, the `plan` operation of `PacAllocatorTool` (`backend/app/services/tool_plugins/pac_allocator.py`) declares 256 KiB of parameters and 512 KiB of results. The clamp caps them at the platform's 128 KiB and 256 KiB (`max_parameter_bytes` and `max_result_bytes` in `effective_operation`). Its time budgets equal the platform defaults (30 s engine, 44 s soft, 45 s hard, 5 s queue and cleanup, 59 s request, 65 s client), so its server bound has no slack: a request budget one millisecond lower would make the service unavailable.
+
+The catalogue and diagnostics routes run under a 20 s request budget. A compute request runs under the largest effective `request_timeout_ms` among its resolvable items (`ToolExecutor.batch_request_timeout_ms`), or 20 s when none resolves. The frontend Tool client applies the catalogue policy's `client_timeout_ms` to the compute request (`prepareToolRun` in `frontend/src/lib/features/tools/contracts.ts`); it remains a client transport budget, not a throughput or completion guarantee.
+
+Each job also runs under its `memory_limit_bytes`. On Linux, when the API process's own cgroup-v2 directory is writable and enables the memory controller for its children, every job gets a private child cgroup holding that hard limit (`cgroup_v2_hard`). Otherwise the supervisor sums the resident memory of the owned process tree while it waits for the worker, at most 50 ms apart (`process_tree_observed`); a non-POSIX host reports `unavailable`. A breach ends the item with `memory_limit`. The mode in use appears in diagnostics under `capabilities.memory` (`backend/app/services/tools/resources.py`).
 
 ### 📊 Timing metrics
 
-Per-item metrics are `queue_wait_ms`, `startup_ms`, `input_validation_ms`, `compute_ms`, `output_validation_ms`, `serialization_ms`, `execution_ms`, `cleanup_ms`, and `total_ms`. They are measured monotonic durations in milliseconds, not estimates derived from the requested budgets. An unobserved phase is `null`, not an invented zero.
+Per-item metrics are `queue_wait_ms`, `startup_ms`, `input_validation_ms`, `compute_ms`, `output_validation_ms`, `serialization_ms`, `execution_ms`, `cleanup_ms`, and `total_ms`. They are measured monotonic durations in milliseconds, not estimates derived from the requested budgets. An unobserved phase is `null`, not an invented zero. Once a started job has gone through cleanup, `resources.memory` adds its enforcement mode, its limit, and the peak observed bytes (`null` when nothing was observed).
 
 The child measures its validation, computation, and serialization phases. The executor records queue wait from admission, startup through the accepted `ready` frame, execution from lane allocation until cleanup begins, and cleanup duration. `total_ms` measures elapsed time from item admission to its recorded outcome, not from HTTP request arrival. For API calls, batch `server_processing_ms` uses the request start supplied by the route. Neither these timings nor result counts are a benchmark or SLA.
 
@@ -288,10 +302,13 @@ The compiled registry currently holds one registration: the `pac_allocator` serv
 
 A renderer that shows money, holdings, or rates must follow the privacy masking contract: money only through the D8 currency formatters with an explicit `sensitivity`, held quantities through `maskableQuantity`, rates and percentages explicitly `public`, and `—` for a missing value. See [Contract for Tool renderers](../../frontend/state/app-state.md#tool-renderer-privacy-contract).
 
-Tool catalogue cards and the opened Tool host expose only the compatibility pair
-`Backend/API <contract_version> · UI <ui.version>`. Keep `implementation_version` in
-**Plugin diagnostics** rather than the public compatibility label: it identifies the deployed
-implementation but is not the frontend contract users need to match.
+The Tools hub card (`ToolsHub.svelte`) and the opened Tool header (`ToolHost.svelte`) show the compatibility pair
+`Backend/API <contract_version> · UI <ui.version>`. The Tool panel under **Settings → About → Plugin
+diagnostics** (`ToolAboutPanel.svelte`, with its nested `ToolDiagnosticsPanel.svelte`) lists each service as
+`Version: <contract_version>`. No screen renders `implementation_version`: it exists only in API payloads —
+the catalogue and diagnostics descriptors, the pin of every compute item, and the identity of every result —
+where the client pins it per request and checks it on each result (`client.ts`). It identifies the deployed
+implementation, not the frontend contract users need to match.
 
 Use `DocsLink` for documentation destinations. It builds `/mkdocs/` URLs from the current language and a relative path rather than forcing English. For an EN-only destination, a caller can supply an existing localized destination through `localizedFallbackPath`; the helper selects that fallback for non-English languages. It does not discover missing pages automatically.
 

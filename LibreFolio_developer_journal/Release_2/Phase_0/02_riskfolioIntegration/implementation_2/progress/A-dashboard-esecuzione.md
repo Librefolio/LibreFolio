@@ -3266,3 +3266,203 @@ commit del checkpoint 1.
 > picker shows…», dove la parentesi «as their pages adopt it» con il passo 24 non è più vera.
 >
 > **Stato: FROZEN.**
+
+### Checkpoint 13 committato; la revisione validata · ✅ 07/10
+
+> **Coordinator (09:45)**: il developer ha committato il checkpoint 13 su `bae2515bd`: `28f201737` · `c38411dc9` ·
+> **`57cd39cc4`**, albero `32b0283be`, uguale alla sua prova.
+>
+> **Verificato io**:
+> - la catena dei genitori;
+> - l'albero;
+> - worktree pulito;
+> - i 6 blob uguali a `files/ckpt13-blobs.txt`.
+>
+> Tra `ff1ee3bbc` e HEAD non cambiano né i manifest delle dipendenze né `backend/app/api` o `schemas`: `api sync` non
+> serve.
+>
+> **Rivalidazione** (6153, un comando per volta, 09:46–09:54; carico 8,7 su 10 core):
+>
+> | Comando | Esito |
+> |---|---|
+> | `front build --debug` | OK (83 s) |
+> | `front check` | 0 errori, 0 avvisi |
+> | `front-portfolio risk-levels-component` | 8 file, 247 test |
+> | `front-utility component-unit` | 109 file, 2825 test (+1 file e +95 test dai treni 5–7) |
+> | E2E `front-portfolio risk` | 38/38 (1,4 min) |
+> | E2E `front-portfolio risk-lab` | 43/43 (1,7 min) |
+>
+> La 6153 è libera.
+>
+> **Esito: verde**, mandato al coordinator.
+>
+> **Dopo**:
+> - il ramo di N viene portato sulla mia punta, N fonde O e rivalida tutto insieme, poi un solo ff;
+> - dopo l'ingresso, N fa il tab Rischio solo coi broker posseduti (F2), che tocca i 5 punti di `risk-analysis.spec.ts`
+>   che ho segnalato;
+> - O fa S7c (le chiavi `risk.*`, compresa `risk.params.process`).
+>
+> **Stato: FROZEN.** Questa voce resta da committare, nel mio prossimo checkpoint.
+
+### Verifica dei bug trovati da Q, in sola lettura · ✅ 07/10
+
+> **Coordinator (15:08)**: Q, l'agente della doc inglese, legge il codice sulla punta `d07412899` e segnala due
+> possibili bug: il peso nella tabella dello shock e i limiti della simulazione. Verifica in sola lettura, senza
+> codice; per ogni punto: bug, voluto o non riproducibile, con file e riga.
+>
+> **Metodo**:
+> - i file citati sono identici tra il mio HEAD di allora (`57cd39cc4`) e `d07412899`;
+> - le prove a runtime sono chiamate dirette alle funzioni pure, con `/tmp/libreFolio_a_q_sim_probe.py`: niente DB,
+>   server o porta.
+>
+> **1. Peso nella tabella dello shock: BUG nel frontend.** Il campo del backend fa quello che dichiara.
+> - `schemas/risk.py:921-924`: `asset_exposure_total` è «Unweighted sum … may exceed 1». `stress.py:414` somma
+>   l'esposizione grezza, mentre `:416` pesa solo il contributo;
+> - `l4/scenarioHelpers.ts:147` lo usava come `weight` del bucket, e `TornadoChart.svelte:113-115` lo stampa in
+>   percentuale sotto «Weight». Con 3 azioni nella stessa classe la riga diceva «300,0%»;
+> - perché non se n'era accorto nessuno: le fixture di `scenarioHelpers.test.ts` (0,3/0,6/0,1) sembravano pesi, e
+>   gli stub E2E hanno un asset per bucket;
+> - origine: `1ef328670` (D376).
+>
+> **2a. Budget del motore → `invalid_parameters`: BUG**, incoerente con la regola del progetto.
+> - `simulation.py:245-254` manda ogni `SimulationResourceLimitError` su `INVALID_PARAMETERS`;
+> - nello stesso file, `:439-466` (`b42c15240`, 21/09) dichiara `RESOURCE_LIMIT` per il budget Sobol: «nothing is
+>   wrong with the parameters or with the data»;
+> - la mappatura è del 28/07 (`16ff0eb57`), quando `RESOURCE_LIMIT` esisteva già, e nessun test la fissa.
+>
+> **2b. 67 posizioni: CONFERMATO, misurato.**
+> - Ai default della UI (365 giorni, 8192 percorsi, `L4Simulation.svelte:48-49`) sono 2.990.080 celle per asset,
+>   contro un budget di 200.000.000 (`engine.py:22`, `:133-134`): 66 asset passano, 67 no.
+> - **In più**: sopra le 100 posizioni `models.py:67` fa fallire la costruzione della richiesta, che sta fuori dal
+>   `try`, e l'utente legge `EXECUTION_FAILED`.
+> - Solo Dashboard e Broker.
+> - Utenti colpiti: è una stima, non c'è telemetria. Una piccola minoranza, concentrata tra gli utenti più attivi
+>   (molti broker, crowdfunding con un asset per progetto, titoli da dividendo).
+>
+> **2c. Oltre 5000 osservazioni → `EXECUTION_FAILED`: CONFERMATO, misurato.**
+> - `models.py:70`; la costruzione a `simulation.py:409` è fuori dal `try`, e `service.py:291-339` porta il
+>   `ValidationError` a `EXECUTION_FAILED`;
+> - 5000 righe passano, 5001 no;
+> - è raro: servono circa 20 anni di sedute;
+> - sotto le 5000, `history_cells` (`engine.py:23`) rifiuta 51 asset × 5000 come `INVALID_PARAMETERS`: di nuovo 2a.
+>
+> **Esito**: il developer approva il pacchetto. A me va il punto 1, nel frontend; i punti 2a–2c vanno a Risk, che li
+> porta su `RESOURCE_LIMIT` con codici raffinati.
+>
+> **Coordinator, per informazione**: dopo il treno 9, il `data-code` di L4 potrà valere
+> `resource_limit_paths_or_horizon` e codici simili, tramite `errorDisplayCode`. Verificato: nei miei test nessuno
+> fissa il `data-code` di L4. L'unica asserzione è `risk-analysis.spec.ts:2618`, negativa (`insufficient_history`
+> assente), nel blocco L4 di Risk, e non è toccata.
+
+### Passo 30 — il peso dei bucket nella tabella dello shock · ✅ 07/10
+
+> **Mandato** (coordinator, 15:22):
+> - correggere `tornadoRows` solo nel frontend, senza campi nuovi nel backend, dove Risk lavora sulla simulazione;
+> - test con il test-author, rossi prima del fix, con fixture realistiche e un caso «il peso non supera il 100%»;
+> - `risk-analysis.spec.ts` da evitare, perché N lo ha appena cambiato;
+> - nel journal, le note della verifica;
+> - per il CHANGELOG, verificare se D376 è mai uscito.
+>
+> **Base**: il fast-forward a `d07412899` è fatto alle 15:25; journal intatto (blob `b936da79a5d6`, verificato dal
+> coordinator).
+>
+> **Codice** (`l4/scenarioHelpers.ts`):
+> - un helper privato `bucketShares(impacts)` calcola Σᵢ wᵢ·eᵢ_b: per ogni impatto con un peso numerico, somma
+>   `peso × exposure` di ogni `bucket_audit` al suo `applied_bucket_id`. Salta le esposizioni che nessun bucket
+>   configurato ha preso (`unconfigured_zero`). Rende `null` se nessun impatto ha un peso, cioè su uno scope senza
+>   pesi;
+> - il ramo dei bucket di `tornadoRows` usa `shares.get(bucketId) ?? 0`, oppure `null` su uno scope senza pesi, al
+>   posto di `asset_exposure_total`;
+> - la notazione è quella della pagina di teoria `hypothetical-shock.en.md:19-21`. La doc non cambia.
+>
+> **Verifiche**:
+> - prettier invariato; `front check` 0/0;
+> - `risk-levels-unit`: 1 rosso su 376, atteso. È il caso k5b di `scenarioHelpers.test.ts:240-255`, che fissava i
+>   pesi vecchi letti da `asset_exposure_total`, senza impatti. Lo riscrive il test-author.
+>
+> **Gli stub E2E non cambiano**, misurato su `d07412899`:
+> - `risk-analysis.spec.ts:1018` e `risk-mocks.ts:433` danno un impatto con `weight: 1` e un audit con
+>   `exposure: 1` sul bucket applicato: col fix fanno ancora 100% e 0%;
+> - `risk-mocks.ts` lo usano solo `risk-asset-detail` e `risk-benchmark-shared`, che non passano da `tornadoRows`.
+>
+> **Controllo visivo mio** (6153, dati di prova, shock «Global risk-off» per classe, 8 posizioni):
+>
+> | Bucket | Prima (`asset_exposure_total`) | Dopo | Σ w·e calcolato a mano |
+> |---|---|---|---|
+> | STOCK | 4, cioè 400% | 25,2% | 0,2516 |
+> | CROWDFUND | 2, cioè 200% | 25,0% | 0,2503 |
+> | CRYPTO | 2, cioè 200% | 6,4% | 0,0640 |
+>
+> - La somma è 56,6%, la quota investita (il resto è liquidità);
+> - in ogni riga Peso × Rendimento = Contributo (25,2% × −20% = −5,03%), e il totale è −9,46%;
+> - immagine in `files/s30-shock-light.png`.
+>
+> **Il developer**: «No, va bene così: via con i test». Niente copia dei dati veri.
+>
+> **CHANGELOG**:
+> - D376 (`1ef328670`) non è in nessun tag; l'ultima release è `v1.1.0` (07/09). La voce della tabella è in
+>   `[Unreleased]` (`CHANGELOG.md:194`): il bug non è mai uscito, quindi **nessuna riga nuova**;
+> - quella voce dice «Each holding gets a row with its weight»: nello shock le righe sono le categorie, non le
+>   posizioni. Propongo una precisazione al coordinator.
+>
+> **test-author** (in background, corsia 6153, solo `scenarioHelpers.test.ts`):
+> - fixture realistiche, con `asset_exposure_total` uguale alla somma delle esposizioni e più asset per bucket;
+> - il caso k5b riscritto;
+> - i casi nuovi: il peso non supera il 100%; peso × shock = contributo; esposizioni divise; due esposizioni sullo
+>   stesso bucket; un bucket vuoto vale 0; uno scope senza pesi dà `null`;
+> - rossi provati su `scenarioHelpers.ts` di HEAD, con lo sha ripristinato.
+>
+> **test-author, resoconto** (verificato da me: sha, stato, e righe tolte solo nelle fixture e nel caso k5b).
+>
+> `scenarioHelpers.test.ts`, +305/−19:
+> - nei 4 test vecchi cambiano solo i valori delle fixture (`asset_exposure_total` da 0,3/0,6/0,1 a 1/2/1, con più
+>   asset per bucket); le asserzioni sono invariate;
+> - helper nuovi: ogni posizione si scrive col suo `bucket_audit`, e `shockOutput` costruisce `configured_buckets`
+>   da quegli audit come fa `stress.py`, quindi una fixture non può dichiarare un totale che le posizioni non danno.
+>   I casi nuovi passano il payload da `schemas.RiskStressOutput.parse`, come `L4Shock`;
+> - il caso k5b è riscritto: totali 1/2/1, quote 0,3/0,6/0,1;
+> - 7 casi nuovi:
+>   - il peso non supera il 100%, con la premessa di un totale > 1;
+>   - Peso × Rendimento = Contributo;
+>   - un bucket vuoto vale 0;
+>   - esposizioni divise per settore;
+>   - `unconfigured_zero`;
+>   - un gruppo geografico;
+>   - uno scope senza pesi.
+>
+> **Rosso** su `scenarioHelpers.ts` di HEAD: 8 falliti, 375 passati. Ognuno cade sulla sua asserzione del peso; per
+> esempio «a bucket states more than the whole scope…: expected [ 'STOCK: 4', 'CROWDFUND: 2', … ] to deeply equal []».
+>
+> **Verde**:
+> - `risk-levels-unit`: 11 file, 383 test (376 + 7);
+> - `risk-levels-component` 247/247;
+> - prettier e `front check` 0/0.
+>
+> sha di `scenarioHelpers.ts` ripristinato identico (`9496b191…`); 6153 libera.
+>
+> **Note del test-author, che ho valutato e accetto**:
+> - uno scope senza pesi non arriva dal backend come righe, perché lì `contribution_return` è `null` e le righe
+>   cadono prima. Il caso lo dichiara e controlla comunque la regola. `L4Shock` vive solo su Dashboard e Broker;
+> - `unconfigured_zero` succede solo negli shock per classe, perché settore e geografia ricadono su `Other`;
+> - un portafoglio senza posizioni nasconderebbe la colonna invece di mostrare 0%. Tutte le barre sono a zero,
+>   quindi niente di fuorviante.
+>
+> **Cancelli miei** (6153, un comando per volta, mentre la coverage girava nella 6150):
+>
+> | Comando | Esito |
+> |---|---|
+> | `front-utility component-unit` | 109 file, 2829 test |
+> | E2E `front-portfolio risk` | 38/38 (1,8 min; la build contiene il fix, ricostruita all'avvio del server alle 15:3x) |
+> | `front check` | 0 errori, 0 avvisi |
+>
+> Poi prettier e `git diff --check` puliti; 6153 e 6163 libere.
+>
+> `risk-lab` non l'ho lanciato: il lab non manda shock ipotetici (`AssetSetReplaySection` fa solo il replay), e il
+> ramo per asset di `tornadoRows` non cambia.
+>
+> **Checkpoint 14 consegnato al coordinator**, due commit:
+> 1. `fix(risk): shock bucket weight is its scope share`: `scenarioHelpers.ts` e `scenarioHelpers.test.ts`;
+> 2. `docs(journal): A, Q check and shock weight`: questo file, con la rivalidazione del checkpoint 13, la verifica
+>    di Q e il passo 30.
+>
+> **Stato: FROZEN.**

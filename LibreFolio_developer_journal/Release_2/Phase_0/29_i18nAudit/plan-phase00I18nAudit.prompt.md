@@ -1,6 +1,9 @@
 # Phase 0 — 29 · Audit i18n: chiavi inutilizzate, doppioni, plurali, strumento
 
-> **Stato: IN ESECUZIONE (workstream O), dal 2026-10-07.** L'analisi (§1-§10, Appendici) è stata
+> **Stato: secondo turno PRONTO AL CHECKPOINT (workstream O), 2026-10-07.** Il primo turno (S0-S10) è
+> committato: `8730ca823` · `08b885d43` · `2b86cc175` · `6f10f33c5` · `a8bac445d` su `bae2515bd`. Il
+> secondo (S7b, S7c, S7a-bis, S7-ter, S8b, S11, S7-bis, S12) è su `d07412899`, che contiene A13 e N.
+> L'analisi (§1-§10, Appendici) è stata
 > scritta il 2026-10-06 su `9f06df702` in plan mode. Questa copia è entrata nel journal al passo S0,
 > non committata. Script, log e tabelle dell'analisi sono in `files/` della sessione O
 > (`analyze_keys.py`, `resolve_prefix.py`, `classify.py`, `dups.py`, `icu_collisions.js`,
@@ -26,6 +29,16 @@
 >
 > **Permessi:** `npm ci` una volta, dal lock; in `scripts/test_runner/_frontend_utility.py` solo righe
 > aggiunte, per registrare i test nuovi.
+>
+> **Decisioni del secondo turno** (dal coordinatore, 2026-10-07, approvate dal developer):
+> - via a S7b e S7c dopo il fast-forward a `d07412899`, con C5 e il miglioramento dello strumento ancora
+>   aperto; O è l'unico a scrivere nei cataloghi fino alla chiusura;
+> - `AgeLabel.svelte` si toglie adesso con le sue 5 chiavi, come `WeightBars.svelte`;
+> - si tolgono le 3 `planner.problems.*` trovate dal prototipo (S7a-bis);
+> - R8-R12 entrano con i test rossi del test-author prima del codice;
+> - `onboardingTourSurfaces.svelte.ts` ed `EditBuffer.ts` non si toccano: backlog knip del coordinatore;
+> - `onboarding.settings.groups.contextual` si toglie (14:20, «Sì, toglierla»);
+> - nessuna riga di CHANGELOG: le funzioni toccate non sono ancora uscite.
 >
 > **Regole:** corsia 6160 con `/tmp/librefolio-r2-o`, un comando per volta; cataloghi solo con
 > `dev.py i18n`; nessun file di N, A o L; test nuovi scritti dal test-author e rossi prima del codice.
@@ -540,9 +553,43 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   > - cambiano solo i 3 testi FR di S6.
   >
   > `git diff --stat`: 39 righe aggiunte e 831 tolte, sui 4 file.
-- **S7b** ⏳ (bloccato: dopo N) — 9 `brokers.lots.*` e 7 `dashboard.*`, ricontrollate sulla base dopo N;
+- **S7b** ✅ 2026-10-07 (dopo N) — 9 `brokers.lots.*` e 7 `dashboard.*`, ricontrollate sulla base dopo N;
   insieme a C5 e alla voce `dashboard.holdings`/`dashboard.positions` della skill.
-- **S7c** ⏳ (bloccato: dopo A) — `risk.simulation.regimeTruncated` e `risk.params.process`.
+  > **Note implementazione**: base `d07412899` (A13 e N integrati), fast-forward fatto dal developer
+  > alle 13:25. Prima di scrivere, l'audit sulla punta (copia in `/tmp/libreFolio_o_tip`) ha dato le
+  > stesse 18 morte e le stesse 78 non verificate di `a8bac445d`: A13 e N non hanno cambiato chiavi né
+  > riferimenti. Le 16 chiavi sono tolte nel lotto unico qui sotto (S7-bis).
+- **S7c** ✅ 2026-10-07 (dopo A) — `risk.simulation.regimeTruncated` e `risk.params.process`.
+  > **Note implementazione**: sono 2 e non 3, come il kickoff contava. Le 19 `risk.*` non verificate
+  > sono tutte vive: i loro membri sono scritti nei moduli importati (`correlationHelpers.ts:59`,
+  > `levelHelpers.ts:337`, `simulationModes.ts:37-54`, `simulationProvenance.ts:40`). R8 le prova
+  > (S12).
+- **S7a-bis** ✅ 2026-10-07 — `tools.pacAllocator.planner.problems.{asOfMissing,priceDateAfterReference,priceDateMissing}`.
+  > **Note implementazione**: le ha trovate il prototipo di R8. Non ci sono produttori nel frontend né
+  > nel backend, e sono uscite dal codice con `6f29ec1cf`. Approvate dal developer (13:25).
+- **S8b** ✅ 2026-10-07 (dopo N) — Condensazione C5.
+  > **Note implementazione**: 6 gruppi identici nelle 4 lingue. Chiamanti:
+  > - `LotCustodyModal.svelte:298,302,314,340,345,350`: da `brokers.lots.modal.X` a `brokers.lots.X`;
+  > - `LotGanttChart.svelte:721` e `LotComparisonChart.svelte:447`: da `brokers.lots.tooltip.totalPnl` a
+  >   `brokers.lots.totalPnl`.
+  >
+  > Nessuno di questi è un file di N, che ha toccato solo `LotsAnalysisPanel.svelte`.
+- **S11** ✅ 2026-10-07 — `planner/shared/AgeLabel.svelte` tolto, con le sue 5 chiavi
+  `tools.pacAllocator.planner.age.{manual,sameDay,daysBefore,after,unknown}`.
+  > **Note implementazione**: lo ha trovato il prototipo di R9, perché nessuna route né hook lo
+  > raggiunge. Nessun riferimento nei sorgenti, nei test, negli E2E, nelle docs, negli script o nella
+  > wiki. È lo stesso trattamento di `WeightBars.svelte`. Decisione del developer: «Toglierlo adesso,
+  > con le sue 5 chiavi». Restano morti, senza chiavi, `onboardingTourSurfaces.svelte.ts` ed
+  > `EditBuffer.ts`, che importa solo il suo test: il coordinator li mette nel backlog per knip, e io
+  > non li tocco.
+- **S7-bis** ✅ 2026-10-07 — rimozione unica delle 33 chiavi: S7b 16, C5 7, S7c 2, S7a-bis 3, S11 5.
+  > **Note implementazione**: grep di conferma su tutto il repo. Restano 2 riferimenti documentali:
+  > - `dashboard.holdings` nella skill, aggiornata in S13;
+  > - `risk.simulation.regimeTruncated` in un caso sintetico del gate, che non legge il catalogo.
+  >
+  > `/tmp/libreFolio_o_remove_keys.sh` ha tolto **33 chiavi su 33**, ognuna dalle 4 lingue, in 43 s
+  > (`/tmp/libreFolio_o_r2_remove.log`). Verifica: **4153** chiavi per lingua, stesso insieme nelle 4,
+  > forma canonica. Mancano esattamente le 33, niente aggiunto né cambiato; `git diff --stat`: +4/−144.
 - **S8** ✅ 2026-10-07 — Condensazioni C1-C4.
   > **Note implementazione**:
   > - chiamanti: `FilePreviewModal.svelte:677,683` usano `uploads.zoomOut` e `uploads.zoomIn`;
@@ -598,6 +645,251 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   Gli altri file frontend toccati e i 3 test nuovi passano Prettier.
   > - **black** non è imposto dal progetto (`dev.py lint` usa solo ruff); i file Python toccati andavano
   >   già riformattati alla base.
+- **S12** ✅ 2026-10-07 — Strumento: R8-R12, il miglioramento contro i falsi positivi chiesto dal
+  developer, con i test rossi prima del codice.
+  > **Note implementazione**:
+  > - **test-author**: 94 casi nuovi in 5 classi in coda a `test_i18n_usage_gate.py`, solo aggiunte
+  >   (+894/−0):
+  >   - `TestOneImportHop` 40, `TestUnreferencedSources` 24, `TestGeneratedClients` 11,
+  >     `TestCodesInOtherSpellings` 9, `TestSeveralRuntimeSegments` 10;
+  >   - prima del codice: 94 rossi e 101 verdi. Le cause: 49 nomi mancanti, 1 `TypeError` su `skip=`,
+  >     44 asserzioni sui verdetti di oggi; nessuna dal codice di test (`/tmp/libreFolio_o_r8_gate.log`).
+  > - **Contratti fissati in più dal test-author**:
+  >   - un client generato non fa da testimone R8;
+  >   - un test non raggiunge niente;
+  >   - `resolve_import` rende i percorsi come li dà la passata sui file;
+  >   - in R12 la coda letterale del segmento fa parte della forma, e una posizione risolta accetta solo i
+  >     suoi valori.
+  > - **Motore** (`scripts/i18n_usage.py`):
+  >   - R8: `resolve_import()`; `_read_sources()` legge ogni file una volta e collega gli import diretti
+  >     (cache per specifier e cartella; confronto su percorsi normalizzati); `narrow_rests()` aggiunge
+  >     le parole dei moduli importati, a un solo passo;
+  >   - R9: `_is_entry()`, `unreferenced_sources()`, `collect_from_source(…, skip=…)`; un file saltato
+  >     non viene letto, quindi non fa da testimone nemmeno a un import di distanza;
+  >   - R10: `is_generated_source()` in `iter_source_files()`;
+  >   - R11: `_IDENT_LITERAL` accetta la cifra iniziale ma vuole almeno una lettera; `_is_vocabulary()`
+  >     confronta anche maiuscole e minuscole;
+  >   - R12: `Usage.shapes` (deduplicato per pattern e testimoni), `_record_shape()`, `_shape_verdict()`
+  >     in `classify()`.
+  > - **CLI** (`frontend/scripts/i18n-audit.py`):
+  >   - `find_used_keys_in_sources(skip=…)`;
+  >   - helper `_BackendEvidence`, `_classify_keys()`, `_kept_alive_by_unreferenced()`,
+  >     `_kept_alive_section()`;
+  >   - nuova sezione informativa «📦 Kept Alive Only by Unreferenced Sources»;
+  >   - `_keys_by_section()` sostituisce i due cicli copiati, con output identico (verificato);
+  >   - nota sulle prove aggiornata.
+  > - **Esiti**:
+  >   - gate **195/195** (`/tmp/libreFolio_o_r2_gate_final.log`);
+  >   - audit sulla punta attuale: **0 morte, 4 non verificate** (erano 78), 1 fantasma, 📦 vuota;
+  >   - sulla copia di `d07412899` la sezione 📦 elenca le 5 `planner.age.*` (→ dead) e i 3 orfani
+  >     (`/tmp/libreFolio_o_r9_tip_probe.log`);
+  >   - sull'albero reale R9 trova 2 orfani in 0,37 s, e R10 salta 3 client generati;
+  >   - l'audit completo con i doppioni dura 12,8 s;
+  >   - ruff: motore 0, CLI da 35 a 34 (C901 di `generate_unused_keys_report` era 15, ora sotto 10);
+  >     black: stessi hunk della base (11 e 3), nessuno su righe nuove.
+  >
+  > **⚠️ Fuori pista**:
+  > - **Differenze dal prototipo**:
+  >   - gli hook valgono solo alla radice e con il nome esatto: `lib/stores/hooks.svelte.ts` non è un
+  >     entry point, come vuole il contratto;
+  >   - le route valgono solo sotto `routes/`, layout reset (`+page@.svelte`) compresi;
+  >   - `_record_middle_members` è tolto: le forme R12 lo coprono, con lo slot di un solo segmento;
+  >   - un numero senza lettere non è un codice.
+  >
+  >   Il risultato sulla punta coincide con la misura del prototipo, meno le 33 chiavi tolte.
+  > - **Le 4 non verificate, verificate a mano**:
+  >   - `chartSettings.params.{amplitude,histogramScale}`: vive, il membro sta a 2 passi d'import;
+  >   - `transactions.fields.cash_code`: viva, dal percorso di validazione `cash.code`
+  >     (`resolveValidationMessage.ts:123`); `Currency.code` è un campo Pydantic, non un letterale;
+  >   - `onboarding.settings.groups.contextual`: **morta in fatto**. Il gruppo `contextual` di
+  >     `OnboardingReplaySection.svelte` è stato sostituito in `580bd504f` (14/09). Decisione del
+  >     developer (14:20): «Sì, toglierla» → S7-ter.
+- **S7-ter** ✅ 2026-10-07 — `onboarding.settings.groups.contextual` tolta.
+  > **Note implementazione**:
+  > - l'unico lettore è `OnboardingReplaySection.svelte:208`, i cui gruppi sono `setup`, `core`,
+  >   `transactions`, `broker`, `fx` e `asset`;
+  > - non c'è nessun altro costruttore, test, E2E o pagina di documentazione che la usi (le «Contextual
+  >   guides» delle pagine utente sono il concetto, non questa etichetta);
+  > - rimossa con `/tmp/libreFolio_o_remove_keys.sh`: 4 «✓ removed» (`/tmp/libreFolio_o_r2b_remove.log`).
+  >
+  > Verifica rispetto a HEAD (`/tmp/libreFolio_o_verify_catalogs.py`): **4152** chiavi per lingua, mancano
+  > esattamente le 34 attese, nessuna aggiunta né cambiata, forma canonica, stesso insieme nelle 4;
+  > `git diff --stat`: +4/−148. Audit: **0 morte, 3 non verificate** (tutte vive), 1 fantasma, 📦 vuota
+  > (`/tmp/libreFolio_o_r2b_audit.log`).
+- **S13** ✅ 2026-10-07 — Documentazione del secondo turno.
+  > **Note implementazione**:
+  > - skill `devpy-i18n`:
+  >   - conteggio 4 356 → 4 152, con 192 morte tolte;
+  >   - tolta la voce `dashboard.holdings` dagli Accepted Duplicates, e aggiunta C5 alle condensazioni;
+  >   - nelle prove: client generati esclusi, un passo d'import, forme, codici in ogni grafia o con la
+  >     cifra iniziale, sezione 📦;
+  >   - nel limite noto, il membro a due passi d'import.
+  > - docs-writer, solo EN, su `developer/frontend/i18n.md`, +34/−3:
+  >   - stesse prove della skill, e la sezione 📦 con il modo in cui si decide «unreferenced»;
+  >   - corretta una frase vecchia: le parole quotate valgono solo per le famiglie strette
+  >     (`_family_rests()`);
+  >   - `mkdocs build` strict: rc 0, nessun avviso (`/tmp/libreFolio_o_docs_build.log`);
+  >   - `check-links` rosso solo per il D28 accettato (`#rolling-return` in it/fr/es) e i 3 anchor 🟡 noti
+  >     (`/tmp/libreFolio_o_docs_checklinks.log`);
+  >   - la pagina non ha gemelli tradotti.
+  > - wiki:
+  >   - `problems/i18n-audit-false-dead-and-false-used.md`: nuovo «Second pass», con la lezione sulle
+  >     non verificate da controllare una per una;
+  >   - riga in `index.md`, voce in `log.md`;
+  >   - `check_source_paths.py`: 0 percorsi mancanti nelle mie pagine (63 già mancanti altrove);
+  >   - graphify `--update` ancora rinviato, perché `graph.json` manca nel worktree.
+- **S14** ✅ 2026-10-07 — Gate e checkpoint del secondo turno.
+  > **Note implementazione**: un comando per volta sulla 6160 con `/tmp/librefolio-r2-o`, base `d07412899`.
+  >
+  > | Comando | Esito | Log |
+  > |---|---|---|
+  > | `test … utils gate-i18n-usage` | 195 passati | `/tmp/libreFolio_o_r2b_gate.log` |
+  > | `i18n audit --duplicates` | 4152 chiavi; **0 morte**; 3 non verificate, vive; 1 fantasma; 📦 vuota; 381 gruppi di doppioni; 0 chiavi backend mancanti | `/tmp/libreFolio_o_r2b_audit.log` |
+  > | `test … front-utility core-unit` | 115 file, 3400 passati | `/tmp/libreFolio_o_r2b_core_unit.log` |
+  > | `test … front-utility component-unit` | 109 file, 2829 passati | `/tmp/libreFolio_o_r2_comp_unit.log` |
+  > | `test … front-utility onboarding-component-unit` | 14 file, 408 passati | `/tmp/libreFolio_o_r2b_onb_unit.log` |
+  > | `test … check-orphans` | verde: 328 unitari frontend, 99 E2E, 237 backend | `/tmp/libreFolio_o_r2_orphans.log` |
+  > | `front check` | svelte-check 0 errori, 0 avvisi | `/tmp/libreFolio_o_r2_front_check.log` |
+  > | `lint` | «All checks passed!» | `/tmp/libreFolio_o_r2_lint.log` |
+  > | Prettier `--check` sui 3 file dei lotti | pulito | — |
+  > | `mkdocs build` / `check-links` | rc 0 / rosso solo D28 | vedi S13 |
+  > | `git diff --check`; `lsof` 6160 e 6170 | pulito; porte libere | — |
+  >
+  > **⚠️ Fuori pista**:
+  > - `component-unit`, `front check` e `lint` sono girati prima di S7-ter. S7-ter tocca solo i 4 JSON,
+  >   su una chiave senza lettori; dopo S7-ter sono stati ripetuti audit, gate, `core-unit` (che contiene
+  >   il gate dei testi delle guide) e `onboarding-component-unit`.
+  > - Non sono girati gli E2E: C5 cambia solo chiavi con valori identici nelle 4 lingue, e la resa
+  >   non cambia.
+- **S15** ✅ 2026-10-07 — Lotto a parte, non i18n: `GET /api/v1/system/plugin-diagnostics` richiede il
+  login. Trovato da Q, verificato dal coordinatore. Decisione del developer: «Sì, correggilo con O nella
+  1.2». Base `1e2b08804`.
+  > **Note implementazione** (verifica prima del codice):
+  > - `system.py:192-202`: `get_plugin_diagnostics()` non ha `Depends(get_current_user)`, che invece c'è
+  >   su `container-image-status` (`:205-211`). Restituisce il testo delle eccezioni d'import dei plugin,
+  >   quindi può esporre percorsi interni. C'è dalla 1.1.0 (`81853ae81`).
+  > - L'unico chiamante è `AboutTab.svelte:133`, nelle impostazioni, da utente loggato, con
+  >   `.catch(() => [])`; anche l'E2E `settings.spec.ts:556` è loggato.
+  > - `developer/architecture/security.md:84-95` già non elenca l'endpoint fra i pubblici: è il codice a
+  >   non rispettare la doc, che non va toccata.
+  > - `get_current_user` legge il cookie da `Request`, quindi l'OpenAPI non cambia.
+  > - Niente frontend né i18n; il CHANGELOG lo scrive il coordinatore.
+  >
+  > **Esecuzione** (✅ 2026-10-07):
+  > - **test-author**: classe `TestPluginDiagnosticsRequiresSession` in `test_system_api.py` (+140/−1),
+  >   HTTP vero sul backend della corsia:
+  >   - senza cookie → 401 «Not authenticated»;
+  >   - cookie falso (`SESSION_COOKIE_NAME`) → 401 «Session expired or invalid»;
+  >   - utente proprio loggato → 200, `PluginDiagnosticsResponse` valida, chiavi esatte
+  >     `system`/`filename`/`error`, senza vincoli di lunghezza;
+  >   - barriera strutturale: `get_current_user` fra le dipendenze della route, con il controllo positivo
+  >     su `container-image-status`.
+  >
+  >   Prima del fix: 3 rossi (200 invece di 401, due volte; nessuna dipendenza), 25 verdi compresa la
+  >   barriera del login (`/tmp/libreFolio_o_sec_red.log`).
+  > - **fix**: `_current_user: Annotated[User, Depends(get_current_user)]` su `get_plugin_diagnostics`,
+  >   più una riga di docstring.
+  > - **gate**:
+  >   - `test … api system`: 28 passati, ripetuto sull'albero finale (`/tmp/libreFolio_o_sec_green2.log`);
+  >   - `lint` verde; black pulito su entrambi i file, prima e dopo; `diff --check` pulito;
+  >   - porte 6160 e 6170 libere;
+  >   - OpenAPI: cambia solo `description`, cioè la docstring; `operationId`, parametri e risposte sono
+  >     identici, quindi il client è compatibile (`/tmp/libreFolio_o_sec_openapi.log`).
+  >
+  > **⚠️ Fuori pista** (segnalati, non corretti):
+  > - l'azione singola `api system` non popola il DB della corsia, quindi il primo account registrato è
+  >   diventato l'admin d'avvio ed è rimasto nel DB di `/tmp/librefolio-r2-o`;
+  > - `_TestingServerManager.ensure_started()`, documentato in `backend-testing.instructions.md:109`,
+  >   nella skill `testing-backend` e in `knowledge_base/06_testing_backend.md:138`, non esiste: c'è
+  >   `start_server()`;
+  > - la descrizione di `api system` nel runner («parse_pipfile, deps») è vecchia;
+  > - il runner ha creato `frontend/build/`, che è ignorato.
+- **S16** ⏳ 2026-10-07 — Triage del rosso di coverage `auth.spec.ts:312` («3a: completing welcome…»),
+  chiesto dal coordinatore dopo il fix di sicurezza.
+  > **Prove**:
+  > - run completa 13:05-15:58 su `d07412899`, 2 worker, carico 30-50: a `:338` per 3 s
+  >   `<html lang="en" data-i18n-ready="true">` ×10 (`/tmp/libreFolio_triage_20261007/logs/front-utility__e2e-desktop.log:198-226`).
+  > - Ipotesi della skill `test-triage`, nell'ordine:
+  >   - forma: no, non c'è niente di posizionale e `it` non c'è da nessuna parte (la POST porta `en`);
+  >   - orologio: no, l'attesa è sullo stato giusto e lo stato finale è `en`, quindi alzare il timeout non
+  >     servirebbe;
+  >   - stato condiviso: no, l'utente è usa e getta;
+  >   - cascata: no, è l'unico rosso di `auth`.
+  >
+  > **Meccanismo**:
+  > 1. svelte-i18n 4.0.1, con un loader in coda, rende vero `isLoading` dopo `loadingDelay` = 200 ms e
+  >    cambia `locale` solo a caricamento finito (`runtime.js:319-338`);
+  > 2. `routes/+layout.svelte:43-48`, e allo stesso modo `(app)/+layout.svelte`, smontano l'intera app
+  >    finché `$i18nLoading` è vero;
+  > 3. al rimontaggio `(app)/+layout.svelte:45` (`initI18n()`) e `:61` (`currentLanguage.init()`)
+  >    rileggono `localStorage['librefolio-locale']`, che l'anteprima del Welcome
+  >    (`welcome/+page.svelte:104-110`, solo `locale.set`) non scrive mai, quindi la lingua torna `en`;
+  > 4. la pagina Welcome si rimonta e riidrata la bozza da `$userSettings` (`:55-75`), cioè `en`, e il
+  >    completamento invia `en`.
+  >
+  > Il commento di `+layout.svelte:32-35` («`locale` flips the moment the user picks») è falso con
+  > svelte-i18n 4.
+  >
+  > **Riproduzione**, in corsia 6160, con uno spec temporaneo non tracciato e poi tolto (copia in
+  > `/tmp/libreFolio_o_triage_probe.spec.ts`):
+  > - con il chunk italiano instradato, a 0 ms e a 1500 ms, la traccia è `en/true > en/false > it/false >
+  >   en/true`; il form del Welcome è un nodo nuovo, `lang` è `en`, la POST porta `language: en`
+  >   (`/tmp/libreFolio_o_triage_run3.log`);
+  > - controllo: il vero 3a senza route passa in 3,0 s (`/tmp/libreFolio_o_triage_3a.log`);
+  > - il chunk italiano pesa 254 KB nel build di debug.
+  >
+  > **Verdetto: difetto.** Il test è giusto.
+  > - Impatto per l'utente: su un'istanza remota, chi sceglie la lingua nel Welcome vede l'app sparire e
+  >   tornare in inglese, e la scelta si perde.
+  > - Ogni cambio di lingua successivo che superi i 200 ms (header, Preferenze) rimonta l'app e perde lo
+  >   stato della pagina, anche se la lingua resta, perché `currentLanguage.set` la salva prima.
+  > - Correzione proposta, in attesa dell'autorizzazione: i layout mostrano il segnaposto solo fino al
+  >   primo dizionario pronto, poi l'app resta montata; `data-i18n-ready` continua a segnalare il caricamento.
+  >   Il test-author scrive un E2E di regressione, rosso prima del fix.
+  >
+  > Decisione del developer (16:29): «Approva tutte e tre le correzioni», cioè segnaposto solo per il
+  > primo dizionario, commento corretto ed E2E rosso prima; 3a non si tocca → S17.
+- **S17** ✅ 2026-10-07 — Correzione: un cambio lingua non rimonta più l'app. Base `1cad0d628`, sopra il
+  checkpoint di sicurezza (`95293ab51` · `1cad0d628`, verificato con i blob). Checkpoint a parte.
+  > **Note implementazione**:
+  > - **test-author**, rosso prima del fix:
+  >   - nuovo E2E `3c: a Welcome language whose catalogue arrives late survives the load…` in
+  >     `auth.spec.ts` (+107), con 3a intatto. Il chunk italiano viene trovato per contenuto nel build,
+  >     leggendo il marcatore da `it.json`. La route lo trattiene finché `data-i18n-ready="false"` non è
+  >     a schermo: niente orologio.
+  >   - Barriera verde: chunk trattenuto e `ready=false` osservato.
+  >   - Contratto rosso: form diverso (soft) e `lang` `en` invece di `it`, 10 letture
+  >     (`/tmp/libreFolio_o_remount_e2e_red2.log`).
+  >   - Caso unitario in `layout.gate.test.ts` (+31/−1, il mock di `i18nLoading` diventa writable): rosso,
+  >     1 su 409 (`/tmp/libreFolio_o_remount_unit_red.log`).
+  > - **fix**:
+  >   - `routes/+layout.svelte` e `(app)/+layout.svelte`: `let i18nBooted = false; $: if (!$i18nLoading)
+  >     i18nBooted = true;`, e `{#if $i18nLoading}` → `{#if !i18nBooted}`;
+  >   - corretto il commento su `data-i18n-ready`;
+  >   - nessun export nuovo da `$lib/i18n`, quindi il mock del gate non va toccato.
+  > - **gate**, uno per volta sulla 6160 (il rebuild del frontend l'ha fatto l'avvio del backend: build
+  >   delle 16:56, dopo le modifiche, con `i18nBooted` nei nodi 0 e 2):
+  >
+  > | Comando | Esito | Log |
+  > |---|---|---|
+  > | `test … front-utility auth "catalogue arrives late"` | 3c passato | `/tmp/libreFolio_o_remount_green1.log` |
+  > | `test … front-utility onboarding-component-unit` | 14 file, 409 passati | `/tmp/libreFolio_o_remount_onb.log` |
+  > | `test … front-utility auth` | 25 passati (3a, 3b, 3c compresi) | `/tmp/libreFolio_o_remount_auth_all.log` |
+  > | `test … front-utility settings` | 45 passati (Preferenze e About, cioè anche la diagnostica plugin col login) | `/tmp/libreFolio_o_remount_settings.log` |
+  > | `test … front-utility component-unit` | 109 file, 2829 passati | `/tmp/libreFolio_o_remount_comp.log` |
+  > | `front check` | 0 errori, 0 avvisi | `/tmp/libreFolio_o_remount_front_check.log` |
+  > | Prettier `--check` sui 4 file frontend | pulito | — |
+  > | `git diff --check`; `lsof` 6160 e 6170 | pulito; porte libere | — |
+  >
+  > - **wiki**: nuova pagina `problems/i18n-loading-gate-remounts-app.md`, una riga in `index.md`, una
+  >   voce in `log.md`; `check_source_paths.py`: 0 percorsi mancanti nella pagina.
+  >
+  > **⚠️ Fuori pista**:
+  > - la sonda di triage era sbagliata due volte: corpi riscritti di chunk serviti in gzip davano una
+  >   pagina bianca, e una Promise restituita da un helper `async` veniva adottata, bloccando il test;
+  >   la lezione è nella pagina wiki;
+  > - `initI18n()` nello script di `(app)/+layout.svelte` resta: ora gira solo quando il gruppo
+  >   `(app)` si crea davvero, e legge la lingua salvata. Non l'ho toccato, è fuori dall'approvazione.
 
 ## 12. Definition of done
 

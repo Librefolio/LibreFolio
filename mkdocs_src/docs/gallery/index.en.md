@@ -31,6 +31,8 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
     - **FX Rates**: Currency pairs, charts, sync, data editor, CSV import
     - **Assets**: Track stocks, ETFs, bonds, crypto with charts, signals, measures & classification
 
+<!-- [Screenshot Placeholder: gallery-index — when the Tools, Risk Analysis and Onboarding screenshots exist, add "Tools", "Risk Analysis" and "Onboarding" bullets to "What You'll See"] -->
+
 ## 🌍 Language Support
 
 LibreFolio is available in:
