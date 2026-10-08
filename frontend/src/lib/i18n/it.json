@@ -628,7 +628,8 @@
     "todoBlockerVerifyHint": "{n, plural, one {# riga non è stata compresa del tutto dall'importazione e va rivista prima di salvare.} other {# righe non sono state comprese del tutto dall'importazione e vanno riviste prima di salvare.}}",
     "parseErrorsTitle": "Non è stato possibile analizzare {n} file",
     "brimNotice": {
-      "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:"
+      "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:",
+      "corporate_action": "Manca il costo unitario ereditato (PMC): inserisci il costo di una singola unità, non il totale, per importare questa riga."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -4039,7 +4040,7 @@
           "feeMin": "min {amount}",
           "fundingHelp": "Il denaro che il piano può usare per comprare su questo Broker: la sua liquidità, più i versamenti e la liquidità di altri conti che consenti in Modifica. All’inizio è tutto consentito; in Modifica, clicca una fonte per escluderla.",
           "fundingLabel": "Liquidità utilizzabile",
-          "incrementHelp": "Ogni ordine proposto è un multiplo di questo valore. Per numero di quote: 1 = solo quote intere, 0,001 = frazioni fino a tre decimali. Per importo: l’importo più piccolo che puoi inserire, per esempio 0,01.",
+          "incrementHelp": "Ogni ordine proposto è un multiplo di questo valore. Per numero di quote: un numero intero, per esempio 1. Per importo: l’importo più piccolo che puoi inserire, per esempio 0,01; è così che si comprano frazioni di quota.",
           "orderKindHelp": "Come inserisci un ordine su questo Broker: per numero di quote (compri 3 quote) o per importo (investi 150). Stabilisce l’unità dell’incremento e dei limiti di ogni ordine.",
           "fundingChipHelp": "{kind, select, local {La liquidità in {currency} già su {name}: il piano la usa qui, senza trasferimenti.} account {La liquidità in {currency} di {name}: hai consentito di usarla per gli acquisti su questo Broker.} other {Il versamento {name}: hai consentito di usarlo per gli acquisti su questo Broker.}}",
           "conversionValueAuto": "Converte il Broker quando compri, al tasso del passo FX meno lo spread."

@@ -628,7 +628,8 @@
     "todoBlockerVerifyHint": "{n, plural, one {# fila no ha sido comprendida del todo por la importación y debe revisarse antes de guardar.} other {# filas no han sido comprendidas del todo por la importación y deben revisarse antes de guardar.}}",
     "parseErrorsTitle": "No se pudieron analizar {n} archivo(s)",
     "brimNotice": {
-      "ca_succession_transfer_in": "Se han identificado valores transferidos desde otra cuenta de custodia ({n} filas).\nSe han registrado como transacciones de tipo «Ajuste» porque no tienen un movimiento de efectivo asociado: se supone por tanto que ya eran tuyos en otro bróker.\nEn ese caso, y si ese bróker está registrado en LibreFolio, al importar la otra mitad de la transacción el sistema propondrá vincular ambas y convertirlas en una «Transferencia de valores».\nA continuación, las filas en detalle:"
+      "ca_succession_transfer_in": "Se han identificado valores transferidos desde otra cuenta de custodia ({n} filas).\nSe han registrado como transacciones de tipo «Ajuste» porque no tienen un movimiento de efectivo asociado: se supone por tanto que ya eran tuyos en otro bróker.\nEn ese caso, y si ese bróker está registrado en LibreFolio, al importar la otra mitad de la transacción el sistema propondrá vincular ambas y convertirlas en una «Transferencia de valores».\nA continuación, las filas en detalle:",
+      "corporate_action": "Falta el coste unitario heredado (PMC): introduce el coste de una sola unidad, no el total, para importar esta fila."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -4039,7 +4040,7 @@
           "feeMin": "mín. {amount}",
           "fundingHelp": "El dinero que el plan puede usar para comprar en este bróker: su propia liquidez, más las aportaciones y la liquidez de otras cuentas que permites en Editar. Al principio todo está permitido; en Editar, haz clic en una fuente para excluirla.",
           "fundingLabel": "Liquidez utilizable",
-          "incrementHelp": "Cada orden propuesta es un múltiplo de este valor. Por número de títulos: 1 = solo títulos enteros, 0,001 = fracciones de hasta tres decimales. Por importe: el importe más pequeño que puedes introducir, por ejemplo 0,01.",
+          "incrementHelp": "Cada orden propuesta es un múltiplo de este valor. Por número de títulos: un número entero, por ejemplo 1. Por importe: el importe más pequeño que puedes introducir, por ejemplo 0,01; así es como se compran fracciones de título.",
           "orderKindHelp": "Cómo introduces una orden en este bróker: por número de títulos (compras 3 títulos) o por importe (inviertes 150). Fija la unidad del incremento y de los límites de cada orden.",
           "fundingChipHelp": "{kind, select, local {La liquidez en {currency} que ya está en {name}: el plan la usa aquí, sin transferencias.} account {La liquidez en {currency} de {name}: has permitido usarla para las compras en este bróker.} other {La aportación {name}: has permitido usarla para las compras en este bróker.}}",
           "conversionValueAuto": "El bróker convierte al comprar, a la tasa del paso Cambio menos el spread."
