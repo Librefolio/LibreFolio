@@ -320,9 +320,11 @@
     data-analysed={analysed ? 'true' : 'false'}
     data-busy={status === 'loading' || uploadingRole !== null ? 'true' : 'false'}
 >
-    <div class="flex items-center gap-2 px-3 py-2">
-        <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-libre-green focus:ring-libre-green dark:border-gray-600" use:selectionState={selection} onchange={onToggleSelected} aria-label={$t('importWizard.reportSet.selectSet')} data-testid="report-set-select" />
-        <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" onclick={onToggleExpanded} aria-expanded={expanded} data-testid="report-set-toggle">
+    <!-- On a phone the header takes two rows: the checkbox and the whole toggle on the first, so the title stays
+         tappable; «Read as» and the chips wrap onto the second, on the right. From sm up it is one row. -->
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2">
+        <input type="checkbox" class="h-4 w-4 shrink-0 rounded border-gray-300 text-libre-green focus:ring-libre-green dark:border-gray-600" use:selectionState={selection} onchange={onToggleSelected} aria-label={$t('importWizard.reportSet.selectSet')} data-testid="report-set-select" />
+        <button type="button" class="flex min-w-0 grow basis-[calc(100%_-_2rem)] items-center gap-2 text-left sm:basis-0" onclick={onToggleExpanded} aria-expanded={expanded} data-testid="report-set-toggle">
             {#if expanded}
                 <ChevronDown size={14} class="shrink-0 text-gray-400" />
             {:else}
@@ -332,7 +334,7 @@
             <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{$t('importWizard.reportSet.setLabel', {values: {date: formatDay(set.uploadedAt), plugin: plugin?.name ?? set.pluginCode}})}</span>
             <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.reportSet.fileCount', {values: {n: set.files.length}})}</span>
         </button>
-        <div class="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+        <div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
             <span class="hidden sm:inline">{$t('importWizard.reportSet.readAs')}</span>
             <SimpleSelect
                 class="max-w-52"
@@ -348,7 +350,7 @@
         {#if analysed}
             <span class="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{$t('importWizard.reportSet.status.analysed')}</span>
         {/if}
-        <span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium {statusClass[status]}">
+        <span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium {statusClass[status]}" data-testid="report-set-status">
             {#if status === 'loading'}
                 <LoadingSpinner size="sm" />
                 {$t('importWizard.reportSet.status.loading')}
@@ -463,13 +465,14 @@
 
             {#if timeline}
                 <!-- One grid for every row: the label column is as wide as the longest name (it wraps only past
-                     40% of the card), so every row's bars start and end at the same point. -->
-                <div class="grid grid-cols-[fit-content(40%)_minmax(0,1fr)_max-content] items-center gap-x-2 gap-y-1.5" data-testid="report-set-timeline">
-                    <div class="col-start-2 flex justify-between text-[10px] tabular-nums text-gray-400">
-                        <span>{formatDay(timeline.start)}</span>
-                        <span>{formatDay(timeline.end)}</span>
+                     40% of the card), so every row's bars start and end at the same point. On a phone the third
+                     column, each row's period, gives way to the bars: the axis and each bar's infobox still date them. -->
+                <div class="grid grid-cols-[fit-content(40%)_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5 sm:grid-cols-[fit-content(40%)_minmax(0,1fr)_max-content]" data-testid="report-set-timeline">
+                    <div class="col-start-2 flex flex-wrap justify-between gap-x-2 text-[10px] tabular-nums text-gray-400">
+                        <span data-testid="report-set-timeline-start">{formatDay(timeline.start)}</span>
+                        <span class="ml-auto" data-testid="report-set-timeline-end">{formatDay(timeline.end)}</span>
                     </div>
-                    <span aria-hidden="true"></span>
+                    <span class="hidden sm:block" aria-hidden="true"></span>
                     {#each timeline.rows as row (row.role)}
                         <span class="text-xs text-gray-500" data-testid="report-set-timeline-label" data-role={row.role}
                             >{roleName(
@@ -477,7 +480,7 @@
                                 row.role,
                             )}</span
                         >
-                        <div class="relative h-3 rounded bg-gray-100 dark:bg-slate-800">
+                        <div class="relative h-3 rounded bg-gray-100 dark:bg-slate-800" data-testid="report-set-timeline-track" data-role={row.role}>
                             {#each row.gaps as gap, index (index)}
                                 <div class="absolute inset-y-0" style="left: {gap.leftPct}%; width: {Math.max(gap.widthPct, 1)}%">
                                     <Tooltip text={gapInfo(gap)} wrapperClass="h-full w-full" showDelayMs={200}>
@@ -493,21 +496,21 @@
                                 </div>
                             {/each}
                         </div>
-                        <span class="text-right text-[10px] tabular-nums text-gray-500">{rowSpan(row.bars)}</span>
+                        <span class="hidden text-right text-[10px] tabular-nums text-gray-500 sm:block" data-testid="report-set-timeline-span" data-role={row.role}>{rowSpan(row.bars)}</span>
                     {/each}
                     {#if timeline.history}
                         {@const history = timeline.history}
                         <span class="text-xs text-gray-500" data-testid="report-set-timeline-label" data-role="history">LibreFolio</span>
-                        <div class="relative h-3 rounded bg-gray-100 dark:bg-slate-800">
+                        <div class="relative h-3 rounded bg-gray-100 dark:bg-slate-800" data-testid="report-set-timeline-track" data-role="history">
                             <div class="absolute inset-y-0" style="left: {history.leftPct}%; width: {Math.max(history.widthPct, 1)}%">
                                 <Tooltip text={historyInfo(history)} wrapperClass="h-full w-full" showDelayMs={200}>
                                     <div class="h-full w-full rounded bg-gray-400/80 hover:bg-gray-500 dark:bg-gray-500/80" data-testid="report-set-timeline-history" data-start={history.start} data-end={history.end} data-count={history.count}></div>
                                 </Tooltip>
                             </div>
                         </div>
-                        <span class="text-right text-[10px] tabular-nums text-gray-500">{period(history.start, history.end)}</span>
+                        <span class="hidden text-right text-[10px] tabular-nums text-gray-500 sm:block" data-testid="report-set-timeline-span" data-role="history">{period(history.start, history.end)}</span>
                     {/if}
-                    <div class="col-span-2 col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-gray-500" data-testid="report-set-timeline-legend">
+                    <div class="col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-gray-500 sm:col-span-2" data-testid="report-set-timeline-legend">
                         <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="file"><span class="inline-block h-2 w-4 rounded bg-libre-green/70"></span>{$t('importWizard.reportSet.timeline.legendFile')}</span>
                         {#if timeline.history}
                             <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="history"><span class="inline-block h-2 w-4 rounded bg-gray-400/80 dark:bg-gray-500/80"></span>{$t('importWizard.reportSet.timeline.legendHistory')}</span>
