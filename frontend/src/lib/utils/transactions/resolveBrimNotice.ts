@@ -30,3 +30,24 @@ export function resolveBrimNoticeMessage(notice: BrimNotice, t: TranslateFn): st
     const translated = t(key, {values});
     return translated === key ? notice.message : translated;
 }
+
+/** What the wording of a BRIM field todo depends on: `ImportTodo` fits, and so does the raw schema once mapped. */
+export interface BrimTodoText {
+    reasonCode: string;
+    message: string;
+    context?: Record<string, unknown> | null;
+}
+
+/**
+ * Localisation of BRIM field todos, on the notices' contract: a todo carries a stable
+ * `reason_code`, so `importWizard.brimNotice.<reasonCode>` (with `context` as values)
+ * replaces the plugin's wording in the UI language when that key exists. Without a key
+ * the plugin's own message is shown as written — the language of the parsed file —
+ * never the raw code. Every surface that lists todos goes through here.
+ */
+export function resolveBrimTodoMessage(todo: BrimTodoText, t: TranslateFn): string {
+    if (!todo.reasonCode) return todo.message;
+    const key = `importWizard.brimNotice.${todo.reasonCode}`;
+    const translated = t(key, {values: {...(todo.context ?? {})}});
+    return translated === key ? todo.message : translated;
+}

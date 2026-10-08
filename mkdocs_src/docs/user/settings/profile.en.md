@@ -48,11 +48,18 @@ After confirmation, your session remains active — you do not need to log in ag
 
 ### 🗑️ Delete Account
 
-The **Delete Account** button permanently removes your user and everything it owns. To confirm, you must type your **username** in the dialog. The deletion is immediate: you are logged out and returned to the login page.
+The **Delete Account** button permanently removes your account and its settings. To confirm, you must type your **username** in the dialog. The deletion is immediate: you are logged out and returned to the login page.
+
+Your brokers follow the same rule as [leaving a shared broker](../brokers/sharing.md):
+
+- a broker you are the **only Owner** of is deleted, with all its transactions and imported report files — also for the users you shared it with;
+- any other broker stays for its other users: only your access is removed.
+
+If the deletion fails for a technical reason, nothing is deleted.
 
 !!! warning "Irreversible"
 
-    Deleting your account cannot be undone: your brokers, transactions, and settings are removed with it. If you are the **only administrator** of the instance, deletion is refused — promote another user first.
+    Deleting your account cannot be undone. If you are the **only administrator** of the instance, deletion is refused — promote another user first.
 
 ---
 

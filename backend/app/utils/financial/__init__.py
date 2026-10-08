@@ -1,7 +1,8 @@
 """
 Financial utilities — pure math, no I/O.
 
-Exports the core WAC and ROI functions.
+Exports the core ROI functions. The average cost lives in
+``backend.app.services.financial_math.average_cost``.
 """
 
 from importlib import import_module as _import_module
@@ -22,12 +23,6 @@ if TYPE_CHECKING:
         calculate_twrr,
         calculate_twrr_series,
     )
-    from backend.app.utils.financial.wac_utils import (
-        WACCalcResult,
-        WACInputTX,
-        compute_wac_from_txlist,
-        determine_target_currency,
-    )
 
 _EXPORT_GROUPS = {
     "roi_utils": (
@@ -44,16 +39,10 @@ _EXPORT_GROUPS = {
         "calculate_twrr",
         "calculate_twrr_series",
     ),
-    "wac_utils": ("WACCalcResult", "WACInputTX", "compute_wac_from_txlist", "determine_target_currency"),
 }
 _EXPORTS = {name: f"{__name__}.{module}" for module, names in _EXPORT_GROUPS.items() for name in names}
 
 __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
-    # WAC
-    "WACInputTX",
-    "WACCalcResult",
-    "compute_wac_from_txlist",
-    "determine_target_currency",
     # ROI types
     "CashFlowInput",
     "NAVSnapshot",

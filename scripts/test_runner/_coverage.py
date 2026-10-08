@@ -3,7 +3,9 @@ Coverage finalization, reporting, and management commands.
 """
 
 import os
+import re
 import shutil
+import sqlite3
 import subprocess
 import time
 from pathlib import Path
@@ -22,10 +24,125 @@ from ._common import (
 )
 
 JS_COVERAGE_DIR = "coverage-js"
+# coverage.py's final name for a parallel data file: the last step of its write() appends `.H<hash>h`.
+_FINISHED_PART = re.compile(r"\.H\w{10}h$")
 
 
 def _js_dir() -> Path:
     return PROJECT_ROOT / "frontend" / JS_COVERAGE_DIR
+
+
+def _coverage_parts(directory: Path) -> list:
+    """The parallel coverage data files in ``directory``: ``.coverage.*``, as coverage.py collects them."""
+    if not directory.is_dir():
+        return []
+    return sorted(p for p in directory.glob(".coverage.*") if p.is_file() and not p.name.endswith("-journal"))
+
+
+def _holds_no_data(part: Path) -> bool:
+    """True for a finished coverage database that measured no file: there is nothing in it to combine.
+
+    coverage.py's SIGTERM handler is not re-entrant: a SIGTERM that lands while a process is
+    already saving starts a nested save, which closes the first one's connection mid-transaction,
+    renames the file to its final ``.H<hash>h`` name and kills the process. What is left is the
+    schema without a row — the writer's data was lost inside the writer, where no combine can
+    reach it. Only a finished name is judged: a transient one may still be filling up. The file
+    is opened read-only, so a part that vanishes meanwhile is never re-created.
+    """
+    if not _FINISHED_PART.search(part.name):
+        return False
+    try:
+        con = sqlite3.connect(f"{part.absolute().as_uri()}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return False
+    try:
+        return con.execute("select count(*) from file").fetchone()[0] == 0
+    except sqlite3.Error:
+        return False
+    finally:
+        con.close()
+
+
+def _drop_empty_parts(parts: list) -> list:
+    """Remove the finished parts that hold no data, name them, and return the others."""
+    empty = [p for p in parts if _holds_no_data(p)]
+    if not empty:
+        return parts
+    for part in empty:
+        part.unlink(missing_ok=True)
+    print_warning(f"   {len(empty)} empty coverage part(s) removed — their writer was stopped while saving, its data never reached the file: {', '.join(p.name for p in empty)}")
+    return [p for p in parts if p not in empty]
+
+
+def clean_coverage_parts(parts_dir: Path) -> int:
+    """Remove the worker coverage left in ``parts_dir`` by earlier runs: loose ``.coverage*`` files and ``run-*`` directories.
+
+    A clean backend measure must not inherit the parts of a run whose combine failed.
+    The junit reports beside them are not coverage data, and the parallel pass rewrites them.
+    """
+    if not parts_dir.is_dir():
+        return 0
+    removed = 0
+    for entry in sorted(parts_dir.iterdir()):
+        if entry.is_dir() and entry.name.startswith("run-"):
+            shutil.rmtree(entry, ignore_errors=True)
+            removed += 1
+        elif entry.is_file() and entry.name.startswith(".coverage"):
+            entry.unlink(missing_ok=True)
+            removed += 1
+    if removed:
+        print(f"{Colors.GREEN}🗑️  Removed {removed} leftover worker coverage item(s) — loose parts and run-* directories — from .coverage_data/parts/{Colors.NC}")
+    return removed
+
+
+def combine_coverage_dir(directory: Path, *, cwd: Path, append: bool, keep: bool = False, max_rounds: int = 3) -> tuple:
+    """Fold every parallel data file in ``directory`` into ``cwd/.coverage``.
+
+    coverage.py is given the *directory*, never a list of names. A list is a
+    snapshot, and a process still saving when it is taken — the multiprocessing
+    resource tracker outlives its pytest worker by a few milliseconds — renames
+    its file to ``….X<rand>x.H<hash>h`` before ``coverage combine`` starts. One
+    vanished name makes coverage.py refuse the whole combine: that is how the
+    07/10 run lost two parallel passes. Given the directory, coverage lists it in
+    its own process and skips an entry that vanishes.
+
+    A file can also land after coverage's own listing. What a round leaves is new,
+    so it gets another round, up to ``max_rounds``; with ``keep`` nothing is
+    consumed and one round is all there is.
+
+    A finished part that holds no data (see ``_holds_no_data``) is removed and
+    named before each round and once more at the end: it has nothing to fold in,
+    so it never fails the combine. With ``keep`` nothing is removed.
+
+    Returns ``(ok, leftovers, detail)``: the parts no round could fold in, and
+    coverage.py's own words when its last round failed.
+    """
+    env = os.environ.copy()
+    env.pop("COVERAGE_FILE", None)
+    detail = ""
+    seen: set = set()
+    for _ in range(1 if keep else max_rounds):
+        before = _coverage_parts(directory) if keep else _drop_empty_parts(_coverage_parts(directory))
+        if not before:
+            break
+        late = [p.name for p in before if p.name not in seen]
+        if seen and late:
+            print_info(f"   {len(late)} part(s) landed after the previous round, combining them too: {', '.join(late)}")
+        seen.update(p.name for p in before)
+        cmd = [*pipenv_prefix(), "coverage", "combine", *(["--append"] if append else []), *(["--keep"] if keep else []), str(directory)]
+        result = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, env=env)
+        output = f"{result.stdout}\n{result.stderr}"
+        # coverage.py prints its refusals on stdout, not stderr.
+        failed = result.returncode != 0 and "No data to combine" not in output
+        detail = " ".join(line.strip() for line in output.splitlines() if line.strip() and "Loading .env" not in line) if failed else ""
+        # What this round folded in is in `.coverage` now: the next round adds to it.
+        append = True
+        if _coverage_parts(directory) == before:
+            break  # nothing folded in, nothing new: another round would only repeat this one
+    if keep:
+        return not detail, [], detail
+    leftovers = _drop_empty_parts(_coverage_parts(directory))
+    return not leftovers and not detail, leftovers, detail
 
 
 def _clean_js_coverage_dirs() -> None:
@@ -171,23 +288,19 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
                 shutil.copy2(str(main_cov), str(backend_db))
             main_cov.unlink()
 
-        SAVED_NAMES = frozenset({".coveragerc"})
-        pid_files = [f for f in cwd.glob(".coverage.*") if f.name not in SAVED_NAMES]
+        pid_files = _coverage_parts(cwd)
 
         print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
         if pid_files:
             print(f"   Found {len(pid_files)} coverage data file(s): "
                   f"{', '.join(f.name for f in pid_files[:5])}"
                   f"{'...' if len(pid_files) > 5 else ''}")
-            r_combine = subprocess.run(
-                [*pipenv_prefix(), "coverage", "combine"] + [str(f) for f in pid_files],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
-            if r_combine.returncode != 0:
-                err_lines = [l for l in (r_combine.stdout + "\n" + r_combine.stderr).strip().splitlines()
-                             if "Loading .env" not in l and l.strip()]
-                if err_lines:
-                    print_warning(f"   coverage combine: {' '.join(err_lines)}")
+            combined, leftovers, detail = combine_coverage_dir(cwd, cwd=cwd, append=False)
+            if not combined:
+                if detail:
+                    print_warning(f"   coverage combine: {detail}")
+                if leftovers:
+                    print_warning(f"   {len(leftovers)} data file(s) not combined: {', '.join(f.name for f in leftovers)}")
 
             if main_cov.exists():
                 _archive_db(frontend_db, "frontend")
@@ -355,6 +468,22 @@ def _coverage_combine() -> int:
     )
 
 
+def _combine_keeping(cwd: Path, snapshots: list) -> None:
+    """``coverage combine --keep`` into ``cwd/.coverage``: the saved snapshots by name, otherwise the parallel parts as a directory.
+
+    The snapshots are two stable files that nothing rewrites. Parallel parts may still be renamed by
+    their writer, so they go through ``combine_coverage_dir`` like every other combine of parallel data.
+    """
+    if snapshots:
+        result = subprocess.run([*pipenv_prefix(), "coverage", "combine", "--keep", *snapshots], cwd=str(cwd), capture_output=True, text=True)
+        if result.returncode != 0 and "No data to combine" not in result.stderr:
+            print_warning(f"coverage combine: {result.stderr.strip()}")
+        return
+    combined, _, detail = combine_coverage_dir(cwd, cwd=cwd, append=False, keep=True)
+    if not combined and detail:
+        print_warning(f"coverage combine: {detail}")
+
+
 def _coverage_combine_internal(html_dir: str = "htmlcov", title: str = "LibreFolio Coverage") -> int:
     """Internal: combine coverage data and generate HTML report."""
     cwd = Path(os.getcwd())
@@ -362,14 +491,15 @@ def _coverage_combine_internal(html_dir: str = "htmlcov", title: str = "LibreFol
     frontend_cov = cwd / ".coverage.frontend"
 
     combine_files = []
-    if backend_cov.exists() or frontend_cov.exists():
+    snapshots = backend_cov.exists() or frontend_cov.exists()
+    if snapshots:
         if backend_cov.exists():
             combine_files.append(str(backend_cov))
         if frontend_cov.exists():
             combine_files.append(str(frontend_cov))
         print(f"   Using saved snapshots: {', '.join(f.name for f in [backend_cov, frontend_cov] if f.exists())}")
     else:
-        combine_files = [str(f) for f in cwd.glob(".coverage.*") if f.name != ".coveragerc"]
+        combine_files = [str(f) for f in _coverage_parts(cwd)]
         if combine_files:
             print(f"   Using {len(combine_files)} parallel data file(s)")
 
@@ -383,12 +513,7 @@ def _coverage_combine_internal(html_dir: str = "htmlcov", title: str = "LibreFol
         if main_cov.exists():
             main_cov.unlink()
 
-        result = subprocess.run(
-            [*pipenv_prefix(), "coverage", "combine", "--keep"] + combine_files,
-            cwd=os.getcwd(), capture_output=True, text=True
-        )
-        if result.returncode != 0 and "No data to combine" not in result.stderr:
-            print_warning(f"coverage combine: {result.stderr.strip()}")
+        _combine_keeping(cwd, combine_files if snapshots else [])
 
     result = subprocess.run(
         [*pipenv_prefix(), "coverage", "html", "-d", html_dir, "--title", title],

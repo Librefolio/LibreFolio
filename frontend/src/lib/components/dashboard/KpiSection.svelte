@@ -43,11 +43,12 @@
         return formatCurrencyAmountPlain(rendered, code ?? displayCurrency, {showSign});
     }
 
-    function tooltipRows(description: string, rows: {emoji: string; label: string; value: string}[]): string {
+    function tooltipRows(description: string, rows: {emoji: string; label: string; value: string; testid?: string}[]): string {
         let html = `<div style="font-size:12px;max-width:300px">${escapeHtml(description)}`;
         html += `<table style="width:100%;margin-top:6px;border-collapse:collapse">`;
         for (const r of rows) {
-            html += `<tr><td style="white-space:nowrap">${r.emoji} ${r.label}</td><td style="text-align:right;padding-left:12px;white-space:nowrap;font-weight:500">${r.value}</td></tr>`;
+            const testid = r.testid ? ` data-testid="${escapeHtml(r.testid)}"` : '';
+            html += `<tr${testid}><td style="white-space:nowrap">${r.emoji} ${r.label}</td><td style="text-align:right;padding-left:12px;white-space:nowrap;font-weight:500">${r.value}</td></tr>`;
         }
         html += `</table></div>`;
         return html;
@@ -190,6 +191,28 @@
             ]);
         })(),
     );
+    // Rows and their order come from the backend and add up to the bar's figure: never add, drop or sort one.
+    const unrealizedDeltaTooltipHtml = $derived.by(() => {
+        const rows = summary?.period_unrealized_breakdown ?? [];
+        if (rows.length === 0) return undefined;
+        return tooltipRows(
+            $_('dashboard.unrealizedDeltaTooltip'),
+            rows.map((row) => {
+                const delta = safeCurrency(row.period_delta);
+                const currency = row.asset_currency;
+                let emoji = '📈';
+                let label = $_('dashboard.unrealizedAssetEffect', {values: {currency}});
+                if (row.kind === 'fx') {
+                    emoji = '💱';
+                    label = $_('dashboard.unrealizedFxEffect', {values: {from: currency, to: delta?.code ?? displayCurrency}});
+                } else if (row.kind === 'unsplit') {
+                    emoji = '❔';
+                    label = $_('dashboard.unrealizedUnsplit', {values: {currency}});
+                }
+                return {emoji, label: escapeHtml(label), value: formatMoney(delta?.code, delta?.amount, {signed: true}), testid: `kpi-unrealized-breakdown-${row.kind}-${currency}`};
+            }),
+        );
+    });
 
     const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), Math.abs(feesAmt)) || 1);
     function pnlBarPct(val: number) {
@@ -275,7 +298,8 @@
                 <div class="flex flex-col gap-2 mt-1">
                     <KpiMetricBar
                         label={$_('dashboard.unrealizedDelta')}
-                        tooltip={$_('dashboard.unrealizedDeltaTooltip')}
+                        tooltipHtml={unrealizedDeltaTooltipHtml}
+                        tooltip={unrealizedDeltaTooltipHtml ? undefined : $_('dashboard.unrealizedDeltaTooltip')}
                         value={uglDeltaStr}
                         numericValue={uglDeltaAmt}
                         formatValue={fmtMoney}
