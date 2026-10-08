@@ -22,6 +22,7 @@ import CsvEditor from './CsvEditor.svelte';
 import type {CsvColumnDef, ParsedRow} from './CsvEditor.svelte';
 import DistributionDataImportModal from '$lib/components/assets/DistributionDataImportModal.svelte';
 import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
+import EventDataImportModal from '$lib/components/assets/EventDataImportModal.svelte';
 import DataEditorImportHarness from '$test/harness/DataEditorImportHarness.svelte';
 
 const referenceData = vi.hoisted(() => ({
@@ -532,6 +533,186 @@ describe('DataEditor — dated import compatibility', () => {
             {rowId: '2024-06-10', status: 'edited', rate: 2},
             {rowId: '2024-06-11', status: 'appended', rate: 3},
         ]);
+    });
+});
+
+describe('DataEditor — an event import matches on date and type (importMatchKeys)', () => {
+    // A price has one row per date; an asset event does not: one date can carry a DIVIDEND and an
+    // INTEREST, two rows with two DB ids. The events editor therefore asks DataEditor to match an
+    // imported row on its date *and* its type (`importMatchKeys={['type']}`). Before that prop
+    // existed, an import merged into the first row of the date, whatever its type: it rewrote an
+    // event of another type, collapsed two imported events into one, and gave up on the whole date
+    // whenever that first row was a readonly provider event. With no keys the match stays date-only:
+    // the price and FX editors rely on it (guarded here and by the compatibility test above).
+    // The rows mirror what `eventsToEventRows` loads: the rowId is the DB id, never the date.
+    const D = '2026-03-02';
+    const D2 = '2026-03-09';
+    const EVENT_COLS: ColumnDef[] = [
+        {
+            key: 'type',
+            label: 'Type',
+            type: 'enum',
+            editable: true,
+            required: true,
+            enumOptions: [
+                {value: 'DIVIDEND', label: 'Dividend'},
+                {value: 'INTEREST', label: 'Interest'},
+                {value: 'SPLIT', label: 'Split'},
+            ],
+        },
+        {key: 'amount', label: 'Amount', type: 'number', editable: true, required: true, step: 0.01},
+        {key: 'notes', label: 'Notes', type: 'string', editable: true, required: false},
+    ];
+
+    function eventRow(rowId: string, date: string, type: string, amount: number, extra: Partial<DataRow> = {}): DataRow {
+        return {rowId, date, status: 'original', originalStatus: 'original', values: {type, amount, notes: null}, selected: false, ...extra};
+    }
+
+    function importedEvent(date: string, type: string, amount: number, lineNumber = 2): ParsedRow {
+        return {kind: 'dated', date, values: {type, amount}, lineNumber};
+    }
+
+    /** Render the editor over `rows`, open its import modal and run each batch as one import, in
+     *  order. Returns the last dirty set the parent received and the row ids the table renders. */
+    async function runImports(rows: DataRow[], batches: ParsedRow[][], importMatchKeys?: string[]) {
+        const onchange = vi.fn();
+        const {container} = render(DataEditorImportHarness, {columns: EVENT_COLS, rows, importBatches: batches, importMatchKeys, onchange});
+        await fireEvent.click(screen.getByTestId('fx-data-import-btn'));
+        for (let n = 1; n <= batches.length; n++) {
+            await fireEvent.click(await screen.findByTestId(`data-editor-test-import-batch-${n}`));
+        }
+        const renderedIds = [...container.querySelectorAll('tr[data-row-id]')].map((tr) => tr.getAttribute('data-row-id'));
+        return {dirty: lastDirty(onchange) ?? [], renderedIds};
+    }
+
+    /** What the save path reads from a dirty row. */
+    const saved = (r: DataRow) => ({rowId: r.rowId, status: r.status, date: r.date, type: r.values.type, amount: r.values.amount});
+    /** Same, without the rowId — for appended rows, whose id is checked on its own. */
+    const savedNew = (r: DataRow) => ({status: r.status, date: r.date, type: r.values.type, amount: r.values.amount});
+    const byType = (a: DataRow, b: DataRow) => String(a.values.type).localeCompare(String(b.values.type));
+
+    it('an import of another type on an existing date appends a new event and leaves the existing one untouched', async () => {
+        // Before the fix: matched on the date alone, so event 101 became an INTEREST of 2 — its
+        // DIVIDEND gone from the editor, and on save a second event created beside the old one.
+        const {dirty, renderedIds} = await runImports([eventRow('101', D, 'DIVIDEND', 1)], [[importedEvent(D, 'INTEREST', 2)]], ['type']);
+
+        expect(dirty.map(savedNew)).toEqual([{status: 'appended', date: D, type: 'INTEREST', amount: 2}]);
+        expect(dirty[0].rowId).not.toBe('101');
+        expect(renderedIds).toContain('101');
+        expect(renderedIds).toContain(dirty[0].rowId);
+    });
+
+    it('an import of the same type on an existing date edits that event in place', async () => {
+        const {dirty} = await runImports([eventRow('101', D, 'DIVIDEND', 1)], [[importedEvent(D, 'DIVIDEND', 3)]], ['type']);
+
+        expect(dirty.map(saved)).toEqual([{rowId: '101', status: 'edited', date: D, type: 'DIVIDEND', amount: 3}]);
+    });
+
+    it('a readonly event listed first does not hide an editable event of the same date and type', async () => {
+        // Before the fix: the first row of the date was the readonly one, so the import was dropped.
+        const rows = [eventRow('201', D, 'DIVIDEND', 1, {readonly: true}), eventRow('202', D, 'DIVIDEND', 2)];
+        const {dirty} = await runImports(rows, [[importedEvent(D, 'DIVIDEND', 5)]], ['type']);
+
+        expect(dirty.map(saved)).toEqual([{rowId: '202', status: 'edited', date: D, type: 'DIVIDEND', amount: 5}]);
+    });
+
+    it('a readonly event of another type does not swallow the imported event', async () => {
+        // Before the fix: the date matched the readonly row and the imported DIVIDEND was dropped.
+        const {dirty} = await runImports([eventRow('301', D, 'INTEREST', 1, {readonly: true})], [[importedEvent(D, 'DIVIDEND', 4)]], ['type']);
+
+        expect(dirty.map(savedNew)).toEqual([{status: 'appended', date: D, type: 'DIVIDEND', amount: 4}]);
+        expect(dirty[0].rowId).not.toBe('301');
+    });
+
+    it('a readonly event of the same type still refuses the import (readonly stays readonly)', async () => {
+        const {dirty} = await runImports([eventRow('301', D, 'DIVIDEND', 1, {readonly: true})], [[importedEvent(D, 'DIVIDEND', 4)]], ['type']);
+
+        expect(dirty).toEqual([]);
+    });
+
+    it('two events imported together on one new date stay two rows with distinct ids', async () => {
+        // Before the fix: the first became an appended row whose rowId was the date, and the second
+        // matched it by date and merged into it — one INTEREST row, the DIVIDEND lost.
+        const {dirty, renderedIds} = await runImports([eventRow('101', D, 'DIVIDEND', 1)], [[importedEvent(D2, 'DIVIDEND', 4, 2), importedEvent(D2, 'INTEREST', 6, 3)]], ['type']);
+
+        expect([...dirty].sort(byType).map(savedNew)).toEqual([
+            {status: 'appended', date: D2, type: 'DIVIDEND', amount: 4},
+            {status: 'appended', date: D2, type: 'INTEREST', amount: 6},
+        ]);
+        const ids = dirty.map((r) => r.rowId);
+        // The contract names the scheme: the date itself, then `date#2`, `date#3`…
+        expect([...ids].sort()).toEqual([D2, `${D2}#2`]);
+        for (const id of ids) expect(renderedIds).toContain(id);
+    });
+
+    it('successive imports on one new date: a new type appends a second row, a known type merges into its own row', async () => {
+        // Before the fix: every batch merged into the single appended row of the date.
+        const batches = [[importedEvent(D2, 'DIVIDEND', 4)], [importedEvent(D2, 'INTEREST', 6)], [importedEvent(D2, 'DIVIDEND', 7)]];
+        const {dirty, renderedIds} = await runImports([eventRow('101', D, 'DIVIDEND', 1)], batches, ['type']);
+
+        expect([...dirty].sort(byType).map(savedNew)).toEqual([
+            {status: 'appended', date: D2, type: 'DIVIDEND', amount: 7},
+            {status: 'appended', date: D2, type: 'INTEREST', amount: 6},
+        ]);
+        const ids = dirty.map((r) => r.rowId);
+        expect([...ids].sort()).toEqual([D2, `${D2}#2`]);
+        for (const id of ids) expect(renderedIds).toContain(id);
+    });
+
+    it('without importMatchKeys the match stays date-only', async () => {
+        const {dirty} = await runImports([eventRow('101', D, 'DIVIDEND', 1)], [[importedEvent(D, 'INTEREST', 2)]]);
+
+        expect(dirty.map(saved)).toEqual([{rowId: '101', status: 'edited', date: D, type: 'INTEREST', amount: 2}]);
+    });
+});
+
+describe('EventDataImportModal — a file written by the events export imports back', () => {
+    // `GET /api/v1/backup/asset/{id}/events?format=csv` (backend/app/api/v1/backup.py) writes this
+    // header — `;`-separated, CRLF line ends, the amount in a column named `value`, among columns the
+    // modal does not know. The modal requires `amount`; the column definition carries `value` as an
+    // alias, looked up only when the `amount` label itself is absent.
+    const EXPORT_HEADER = 'date;type;value;currency;source;provider_assignment_id;notes;created_at;updated_at';
+
+    function eventImportModal() {
+        const onimport = vi.fn();
+        render(EventDataImportModal, {open: true, onimport});
+        return {onimport};
+    }
+
+    /** The rows handed to `onimport` by its single call. */
+    function importedRows(onimport: ReturnType<typeof vi.fn>): ParsedRow[] {
+        expect(onimport).toHaveBeenCalledTimes(1);
+        return onimport.mock.calls[0][0] as ParsedRow[];
+    }
+
+    it('accepts the export header verbatim and reads the amount from `value`', async () => {
+        // Before the fix: "Missing required columns: amount", so every data row waits on the header.
+        const {onimport} = eventImportModal();
+        // `enterDistributionCsv` is modal-agnostic: it fills `csv-editor-input`, returns `data-import-confirm`.
+        const confirm = await enterDistributionCsv(`${EXPORT_HEADER}\r\n2026-03-15;DIVIDEND;0.37;USD;MANUAL;;e2e-note;2026-03-15T10:00:00;2026-03-15T10:00:00`);
+
+        await expectImportValidation(confirm, {validRows: 1, errors: 0});
+        expect(confirm).toBeEnabled();
+        await fireEvent.click(confirm);
+
+        const rows = importedRows(onimport);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({kind: 'dated', date: '2026-03-15', values: {type: 'DIVIDEND', amount: 0.37, currency: 'USD', notes: 'e2e-note'}});
+    });
+
+    it.each([
+        ['after', 'date;type;amount;value;notes', '2026-03-16;DIVIDEND;1.5;9.99;n'],
+        ['before', 'date;type;value;amount;notes', '2026-03-16;DIVIDEND;9.99;1.5;n'],
+    ])('with both columns present the `amount` label wins over its alias (`value` %s `amount`)', async (_where, header, line) => {
+        const {onimport} = eventImportModal();
+        const confirm = await enterDistributionCsv(`${header}\n${line}`);
+
+        await expectImportValidation(confirm, {validRows: 1, errors: 0});
+        await fireEvent.click(confirm);
+
+        const rows = importedRows(onimport);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({kind: 'dated', date: '2026-03-16', values: {type: 'DIVIDEND', amount: 1.5}});
     });
 });
 
