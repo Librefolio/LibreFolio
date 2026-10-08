@@ -91,7 +91,13 @@ Each file gets its own parser: the system detects the broker format automaticall
 
 You choose how a set is read on its card. **Read as**, in the card's header, lists the plugin that recognised the set, marked *(detected)*, any other report-set plugin able to read every file of the set, and **Read the files one by one**. Each file's **⋮** menu offers **Read alone with ‹plugin›**, when another plugin can read that file on its own, and **Remove from the set**. None of these commands ticks or unticks a file: they change only *how* the files are read. A set ticked only in part — its checkbox shows a dash — keeps **Parse** disabled until you tick the whole set or untick it. The Danske Bank page explains each case in [How the set is read](danske-bank.md#how-the-set-is-read).
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-read-as — a report set's card in Select Files with the Read as menu open, and a file's ⋮ menu offering Read alone with… and Remove from the set] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="Report set card in Select Files with the Read as list open: Danske Bank (detected) and Read the files one by one" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="A cash file's ⋮ menu in a report set: Preview, Read alone with Generic CSV, Remove from the set and Delete" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ### 🧠 Step 3: Analysis & Parsing
 
@@ -364,7 +370,9 @@ With a **report set**, **Import N transactions** may first stop on **Align with 
 compares what LibreFolio will hold with what the bank states and proposes the corrections that
 close the difference — see [Danske Bank](danske-bank.md#first-import-align-with-the-bank).
 
-<!-- [Screenshot Placeholder: brokers/import-wizard-gapfix-step — the Align with the bank step: one card per point (starting point, after the gap, end-of-period check) above the table of proposed corrections tagged gap_fix] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="Align with the bank: the Starting point, After the gap and End-of-period check cards above the proposed corrections tagged gap_fix" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ---
 
