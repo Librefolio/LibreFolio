@@ -1,6 +1,6 @@
 # 🤝 Broker Sharing
 
-LibreFolio allows you to share access to your brokerage accounts with other users. This is useful for families, financial advisors, or accountants who need visibility into your portfolio.
+Share a broker with the people who need it — a partner, a family member, an advisor or an accountant. Each person gets a **role**, which decides what they can do, and each Owner an **ownership share**, which decides how much of the account counts as theirs.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -8,93 +8,74 @@ LibreFolio allows you to share access to your brokerage accounts with other user
 
 ---
 
-## 📋 How to Share
+## ➕ Share a broker
 
-Only an **Owner** of the broker can manage access. You can open the sharing panel in two ways:
+Open the sharing panel with the share button on the broker's card, or with **Share Broker** in the broker's toolbar (it opens the **Info** tab). Only an Owner can change it; everyone else sees it read-only.
 
-- **From the broker list**: click the **Share** icon (:material-share-variant:) on the broker's card — the **Sharing Modal** opens.
-- **From the broker detail page**: click the **Share** button in the header — you land on the **Info** tab, which hosts the sharing panel.
+1. Click **+** (**Add User**) and find the person **by username**.
+2. Choose the **Role** and, for an Owner, the **Ownership %**. Then click **Add User**.
+3. Click **Save Configuration**. Nothing changes before you do: until then, **↺ Reset** puts the list back as it was.
 
-Then:
+??? note "✏️ Change or remove someone — and when a save is refused"
 
-1. **Search** for the user by username
-2. **Select a role** (Viewer, Editor, or Owner)
-3. **Set the ownership percentage** — only for the *Owner* role (drag the slider or type a value; Viewers and Editors always carry 0%)
-4. Click **Save** to apply changes
+    Click a person's chip to change their **Role** or **Ownership %**, or to **Remove Access**; click **Confirm**, then **Save Configuration**.
 
-!!! warning "Only Owners can manage access"
+    A save is refused if it would leave the broker **without an Owner** — so the last Owner can be neither removed nor demoted — or if the shares add up to **more than 100%** (the panel warns *Total ownership exceeds 100%*).
 
-    You must be an **Owner** of the broker to add, remove, or modify other users' access. Non-owners see the same panel in read-only mode.
+    Unsaved changes: the dialog opened from the broker list asks before closing, but on the **Info** tab, switching to another tab drops them.
 
 ---
 
-## 🛡️ Access Roles
+## 🛡️ What each role can do
 
-When you share a broker, you assign a **role** that determines what the other user can do:
+| What you can do | Viewer | Editor | Owner |
+|:--|:--:|:--:|:--:|
+| See the broker, its transactions, reports and charts | ✅ | ✅ | ✅ |
+| Add, edit and import transactions; upload and delete report files | ❌ | ✅ | ✅ |
+| Edit the broker's settings | ❌ | ✅ | ✅ |
+| Manage who has access | ❌ | ❌ | ✅ |
+| Delete the broker | ❌ | ❌ | ✅ |
 
-| Feature                              | Viewer | Editor | Owner |
-|:-------------------------------------|:------:|:------:|:-----:|
-| **View Broker Details**              |   ✅    |   ✅    |   ✅   |
-| **View Transactions**                |   ✅    |   ✅    |   ✅   |
-| **View Reports & Charts**           |   ✅    |   ✅    |   ✅   |
-| **Add/Edit Transactions**            |   ❌    |   ✅    |   ✅   |
-| **Import Files (BRIM)**              |   ❌    |   ✅    |   ✅   |
-| **Edit Broker Settings**             |   ❌    |   ✅    |   ✅   |
-| **Manage Access (Add/Remove Users)** |   ❌    |   ❌    |   ✅   |
-| **Delete Broker**                    |   ❌    |   ❌    |   ✅   |
-
-- 👁️ **Viewer**: Read-only access. Ideal for accountants or family members who just need to see data.
-- ✏️ **Editor**: Can manage day-to-day operations (transactions, imports) but cannot delete the broker or change access.
-- 👑 **Owner**: Full control. Can do everything, including adding/removing other users. A broker can have **more than one Owner** — see the share percentage below.
+- 👁️ **Viewer** — read-only, for an accountant or relatives who only need to look.
+- ✏️ **Editor** — does the day-to-day work, but cannot share or delete the broker.
+- 👑 **Owner** — full control; a broker can have several Owners.
 
 ---
 
-## 📊 Share Percentage
+## 📊 Ownership share
 
-Each **Owner** of a broker has a **share percentage** (0% to 100%). This represents how much of the broker's portfolio value belongs to that owner. Viewers and Editors always carry 0% — the schema rejects any non-zero share for them.
+Each Owner has a **share** from 0% to 100%: the part of the account that is theirs. Viewers and Editors always have 0%. The shares can add up to less than 100% — for example when a co-owner does not use LibreFolio — but never more; the panel shows the **Allocated** and **Available** totals as you edit.
 
-!!! example "Joint Account"
+The share decides what counts in your figures:
 
-    You and your spouse co-own a brokerage account 50/50. Both of you are Owners:
-
-    - You (Owner): **50%**
-    - Spouse (Owner): **50%**
-
-    Each of you sees 50% of this broker's value counted in your own dashboard.
-
-!!! example "Financial Advisor"
-
-    Your financial advisor needs to see your portfolio but doesn't own any of it:
-
-    - You (Owner): **100%**
-    - Advisor (Viewer): **0%**
-
-The sum of all share percentages for a broker **must not exceed 100%**, but it can be less (e.g., a co-owned account where the co-owner is not in the system). The panel shows the **Allocated** and **Available** totals while you edit.
-
-!!! note "Portfolio Aggregation"
-
-    The share percentage is **already applied** to your portfolio aggregation: the Dashboard counts only the brokers you **own** with a share above 0%, and scales every amount from them by your ownership share. An Owner with 50% sees half of that broker's value, income, and P&L counted in their totals. Brokers where you are a Viewer or an Editor — whose share is always 0% by rule — are not counted on the Dashboard, and neither are those you own with a 0% share. You see them on their own broker page, where Viewers and Editors get the broker's **full** amounts — the share only scales what you *own*.
+- The **Dashboard** counts only the brokers you **own** with a share above 0%, and scales their amounts by your share: with 50%, you see half of the broker's value, income and P&L.
+- The Dashboard's **Risk** tab covers the same brokers: the ones you own with a share above 0% (see [Risk Tab](../dashboard/index.md#risk-tab)).
+- Brokers where you are a Viewer or an Editor, or that you own with 0%, are not on your Dashboard. Their own page shows them: Viewers and Editors see the **full** amounts, Owners their share.
 
 ---
 
-## 🚪 Leaving a Shared Broker (Self-Service)
+## 💡 Common setups
 
-You never need an Owner's intervention to get out of a broker you have access to. In the sharing panel, the **Your access** section lets you:
+| Who | Setup | What they see |
+|:--|:--|:--|
+| Spouse or partner | Two Owners, 50% each | Each of you sees half of the account on your own Dashboard |
+| Co-owner without a LibreFolio account | You as Owner, 50% | Your half; the other 50% stays unallocated |
+| Financial advisor or accountant | Viewer | The whole broker on its page, nothing on their Dashboard |
+| Family member who records operations | Editor | Adds and imports transactions, but cannot share or delete the broker |
 
-- **Leave broker** — removes your own access immediately. The broker disappears from your lists.
-- **Switch to viewer** — an Editor can demote themselves to Viewer; an Owner can promote them again later.
+---
+
+## 🚪 Leave a broker or step down
+
+You never need an Owner to leave. Under **Your access** in the sharing panel, after a confirmation:
+
+- **Leave broker** removes your access at once, and the broker disappears from your lists;
+- **Switch to viewer** (Editors only) gives up editing; an Owner can make you an Editor again.
 
 !!! danger "Last Owner: leaving deletes the broker"
 
-    If you are the **only Owner** left, the leave action becomes **Leave and delete broker**: leaving *permanently deletes the broker together with all its transactions and imported report files*. This cannot be undone. If that is not what you want, assign another user as Owner first, then leave.
+    If you are the **only Owner** left, the button becomes **Leave and delete broker**: leaving *permanently deletes the broker together with all its transactions and imported report files*. This cannot be undone. To keep the broker, make another user an Owner first, then leave.
 
----
+Deleting your account follows the same rule — see [Profile](../settings/profile.md).
 
-## 💡 Common Scenarios
-
-| Scenario | Suggested Setup |
-|----------|----------------|
-| **Spouse / Partner** | Two Owners, 50% share each |
-| **Financial Advisor** | Viewer, 0% share |
-| **Accountant** | Viewer, 0% share |
-| **Family member** | Viewer or Editor, 0% share |
+To get access to someone else's broker, ask one of its Owners. The brokers you cannot open are listed under **Other Existing Brokers** on the [Brokers](index.md) page, and their share button shows who has access. Every signed-in user of this LibreFolio can see who has access to any broker, so the people who share an instance can find each other.

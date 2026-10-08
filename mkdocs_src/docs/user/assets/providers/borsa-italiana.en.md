@@ -1,127 +1,93 @@
 # 🇮🇹 Borsa Italiana
 
-**Borsa Italiana** is the Italian stock exchange, operated by Euronext. LibreFolio includes a dedicated **asset data provider** that fetches prices, historical series, and instrument metadata directly from the Borsa Italiana website.
+**Borsa Italiana** is the Milan stock exchange, run by Euronext. This provider reads prices, price
+history and instrument details from its public website — no account or API key needed.
 
----
+## 🔍 What It Offers
 
-## 🔍 What It Provides
+- **Current price**: the last market price. For a mutual fund, its NAV — only when it is dated
+  today.
+- **History**: daily open, high, low, close and volume. Mutual funds have no past series: each NAV
+  is saved at its own date, so the history grows from the day you add the fund.
+- **Search**: by name or ISIN. Each instrument appears twice, 🇮🇹 and 🇬🇧: the flag sets the
+  language of its name and description. Indices are left out, as you cannot buy them. No result?
+  LibreFolio also looks for a matching Borsa Italiana page on the web, unless your administrator
+  has turned this off.
+- **Details**: name, type, currency, a sector and a description (market, issuer, maturity, coupon);
+  the ticker for stocks; for funds, the ISIN, the fund's features and its costs.
 
-| Data | Description |
-|------|-------------|
-| **Current price** | Last official market price for listed instruments; fund NAV only when dated today |
-| **Historical prices** | Daily OHLCV for listed instruments; one NAV point at the real NAV date for funds |
-| **Instrument metadata** | ISIN, market segment, currency, and alternative identifiers when available |
+It covers what Borsa Italiana lists — Italian stocks, ETFs and ETCs (ETFplus), bonds (MOT,
+ExtraMOT, EuroTLX) and closed-end funds (MIV) — plus mutual funds and SICAVs.
 
-Assets traded on Borsa Italiana include Italian stocks (MTA/MIL segment), ETFs (ETFplus), bonds (MOT, ExtraMOT, and EuroTLX), certificates (SeDeX), closed-end funds (MIV), and mutual funds/SICAVs.
+## 💱 Currency and Type
 
-!!! note "Bond classification"
+- **Currency** is the one Borsa Italiana quotes the prices in: EUR for ETFs and ETCs on ETFplus,
+  even when the fund itself is denominated in USD; USD for a bond traded in dollars on EuroTLX. If
+  LibreFolio cannot read it, it leaves your currency as it is — check it before saving.
+- **Type**: ETFs, ETCs and ETNs all arrive as plain **ETF**. If you know what the fund holds,
+  refine it (for example **Equity ETF** or **Commodity ETF**): a later
+  [check against the provider's data](../create-edit.md#provider-data-comparison) keeps your choice.
+- **Bonds** get the sector **Government Bonds** or **Corporate Bonds** (supranational issuers:
+  **Financials**) and, when the issuer is recognised, its country — *United States of America*
+  becomes **USA**.
 
-    Borsa Italiana metadata uses the canonical sectors **Government Bonds** for sovereign
-    bonds and **Corporate Bonds** for corporate bonds. Supranational bonds use
-    **Financials**. When the issuer can be identified, its country is also stored as the
-    geographic area (for example, *United States of America* becomes **USA**).
+## ✏️ Set It Up
 
-    This mapping is applied when provider metadata is inferred; it does not retroactively
-    migrate sector values already stored for existing assets.
+**Search Online** fills in everything. To set the provider up by hand, open the asset with
+**Edit** (✏️) — or **+ Add Asset** for a new one — and expand **Provider Assignment**:
 
-### 💶 ETFs and ETCs: Currency and Type
+1. Choose **Borsa Italiana** as **Provider**.
+2. Type the instrument's **ISIN**, for example `IT0003128367` (ENEL). Every instrument page on
+   [borsaitaliana.it](https://www.borsaitaliana.it) shows it.
+3. Pick the **Language**: 🇬🇧 English or 🇮🇹 Italiano.
+4. Click **Test Configuration**, then save.
 
-**Currency.** A listed instrument takes the currency of Borsa Italiana's own price feed — the
-currency its prices are quoted in. For ETFs and ETCs on ETFplus that is **EUR**, even when the
-instrument's page shows a different denomination currency for the fund (for example USD). This
-holds whether you find the instrument with Smart Search or add it from its page address. A price
-feed reply that carries no currency counts as EUR; if the feed cannot be reached, the asset's
-currency is left as it is rather than guessed, so check it before saving.
+**Search Online** also fills in the other three settings; set them by hand only in these cases.
 
-**Type.** Borsa Italiana reports ETFs, ETCs and ETNs alike with the generic type **ETF**. If you
-know what the fund holds, refine the type — for example to **Equity ETF** or **Commodity ETF**: a
-later [comparison with the provider's data](../create-edit.md#provider-data-comparison) keeps your
-choice instead of offering to turn it back into plain **ETF**.
+??? note "🧾 Fund internal code — for a mutual fund or SICAV"
 
----
+    Mutual funds are priced by Borsa Italiana's own fund code, not by the ISIN. Find the fund on
+    [borsaitaliana.it](https://www.borsaitaliana.it/borsa/fondi/ricerca.html) and copy the code
+    from its page address: in `…/borsa/fondi/dettaglio/2FADB602822.html` the code is
+    `2FADB602822`. Leave the field empty for anything else.
 
-## ⚙️ Configuration
+??? note "🧭 Market MIC and Platform — when the instrument page does not open"
 
-No API key or registration is required — the provider scrapes public data from the Borsa Italiana website. Configuration is per asset, in the **Provider Assignment** section of the asset form.
+    Some markets must be named explicitly. Open the instrument on borsaitaliana.it: the code after
+    the ISIN in the page address is the **Market MIC** — in `…/scheda/US912810TU25-ETLX.html` it is
+    `ETLX`. **Platform** is needed only on EuroTLX, where it is `TLX`.
 
-1. Open the asset's detail page and click **Edit** (✏️) — or start a new asset with **Add Asset**.
-2. Expand **Provider Assignment**.
-3. Select **Borsa Italiana** from the provider list.
-4. Enter the **ISIN** for listed instruments. For funds, use Smart Search so LibreFolio can capture the Borsa internal fund code automatically.
-5. Save — LibreFolio will fetch the first historical series on the next sync.
+    | Market | Market MIC | Platform |
+    |--------|:---:|:---:|
+    | MTA (Italian stocks) | `MTAA` | — |
+    | MOT (bonds) | `MOTX` | — |
+    | ExtraMOT (bonds) | `XMOT` | — |
+    | ETFplus (ETFs, ETCs) | `ETFP` | — |
+    | MIV (closed-end funds) | `MIVX` | — |
+    | EuroTLX (bonds) | `ETLX` | `TLX` |
 
-!!! tip "Finding the ISIN"
+    For example, the US Treasury bond `US912810TU25` on EuroTLX works once **Market MIC** is
+    `ETLX` and **Platform** is `TLX`; its prices are in USD.
 
-    You can look up the ISIN on [borsaitaliana.it](https://www.borsaitaliana.it) by searching for the instrument name. The ISIN is shown on every instrument detail page.
+## 🧾 Mutual Funds and NAV
 
-!!! tip "Smart Search can use Borsa links"
+A fund's NAV is published once a day, with a delay. LibreFolio saves each NAV at the date it
+refers to, never as today's price: until the next one arrives, the fund is valued at the latest
+known price — that NAV, or your own trade if it is more recent.
 
-    If normal search cannot find a fund, paste or search with the Borsa Italiana fund/detail page
-    URL. LibreFolio's smart search can resolve supported Borsa pages, attach the right
-    `provider_params`, and make the fund priceable by its internal code.
+The fund code is kept under **Other identifiers**; the real ISIN stays the main identifier when
+the fund's page shows it.
 
-### 🎛️ Provider Parameters
+## ⚠️ Limits
 
-These parameters are set for you when you add the asset through **Smart Search**. To view or change them by hand, open the asset with **Edit** (✏️) and expand **Provider Assignment** — useful when an instrument's market page does not resolve, or for an asset saved before these parameters existed.
-
-| Field | Key | How to set it |
-|-------|-----|---------------|
-| **Language** | `language` | Pick `en` (English) or `it` (Italian) from the dropdown — it selects the language of the asset name and metadata fetched from Borsa Italiana. |
-| **Fund internal code** | `codice_fondo` | **Mutual funds only.** Open the fund's page on [borsaitaliana.it](https://www.borsaitaliana.it/borsa/fondi/ricerca.html), find the fund, and read the code from its detail-page URL: `/borsa/fondi/dettaglio/<code>.html` → the code is the part before `.html` (e.g. `2FADB602822`). Leave empty for stocks, bonds and ETFs. |
-| **Market MIC** | `mic` | The code of the market the instrument trades on. Find it by opening the instrument's page on borsaitaliana.it and looking at the URL: `…/scheda/<ISIN>-<MIC>.html` → the suffix after the ISIN is the MIC (e.g. `US912810TU25-ETLX` → `ETLX`). See the table below for the common values. |
-| **Platform** | `platform` | The trading platform. Only some markets need it — EuroTLX requires `TLX`; leave it empty for the others. |
-
-**Common market codes** — the values to type when configuring an instrument by hand:
-
-| Market | `mic` | `platform` |
-|--------|-------|------------|
-| MTA (Italian stocks) | `MTAA` | — |
-| MOT (bonds) | `MOTX` | — |
-| ExtraMOT | `XMOT` | — |
-| ETFplus | `ETFP` | — |
-| EuroTLX | `ETLX` | `TLX` |
-| SeDeX (certificates) | `SEDX` | — |
-| MIV (closed-end funds) | `MIVX` | — |
-
-!!! example "Setting up a EuroTLX bond by hand"
-
-    A US Treasury bond listed on EuroTLX (e.g. ISIN `US912810TU25`) does not resolve from the bare ISIN URL. On borsaitaliana.it its page URL ends in `…/obbligazioni/eurotlx/scheda/US912810TU25-ETLX.html`, so its MIC is `ETLX`. In **Provider Assignment** set **Market MIC** to `ETLX` and **Platform** to `TLX`: the instrument page link, current price, and history then work normally. History for FX-denominated bonds may be reported in the foreign currency (e.g. USD).
-
----
-
-## 🔄 Synchronisation
-
-The Borsa Italiana provider participates in the standard **asset sync** cycle. Trigger manually from the asset detail page with the **🔄 Sync** button, or let the scheduled background job run overnight.
-
-!!! note "Rate limiting"
-
-    The provider applies automatic throttling to avoid being blocked by Borsa Italiana. If you have many assets from this exchange, full sync may take a few minutes.
-
-!!! note "Mutual funds (NAV)"
-
-    Mutual funds and SICAVs are priced by their daily **NAV**, published once per day with a delay.
-    LibreFolio prices each fund by its Borsa internal fund code, not by ISIN. Price history shows one
-    NAV point at its real date, and current value is refreshed only when the published NAV is dated
-    today (otherwise your most recent purchase price is used as the estimate).
-
-!!! note "Alternative identifiers"
-
-    Some imported or provider-discovered identifiers are stored as an editable list of alternative
-    identifiers. For Borsa Italiana funds, this list can include the internal fund code while the
-    real ISIN remains the main identifier when available.
-
----
-
-## 🔗 Developer Documentation
-
-For implementation details (request format, HTML parsing strategy, field mapping), see:
-
-→ [Developer Manual — Borsa Italiana Provider](../../../developer/backend/assets/provider_borsa_italiana.md)
-
----
+- LibreFolio spaces out its requests to the website, so syncing many Borsa Italiana assets can
+  take a few minutes.
+- A market LibreFolio cannot read yet gives an error asking you to report the ISIN on
+  [GitHub](https://github.com/Librefolio/LibreFolio/issues).
 
 ## 🔗 Related
 
 - 📋 **[Assets Overview](../index.md)** — Manage your asset library
 - 🏦 **[Asset Providers](./index.md)** — Other data sources
 - 📡 **[justETF](./justetf.md)** — Alternative source for ETF data
+- 🛠️ **For developers: [Borsa Italiana Provider](../../../developer/backend/assets/provider_borsa_italiana.md)** — Requests, page parsing and field mapping

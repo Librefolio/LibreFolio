@@ -95,7 +95,8 @@ unsaved-changes prompt.
 - **Owners, Editors, Viewers** — three columns, one chip per user with role and share.
 - **Add user** (the **+** under the chart) — the candidates come from `GET /users/search`
   (excluding users who already have access) and are picked with `UserSearchSelect`, built on
-  [SearchSelect](../../core-ui/select.md#searchselect). The role defaults to Viewer; only an Owner
+  [SearchSelect](../../core-ui/select.md#searchselect). The endpoint matches the username only
+  (`ILIKE`) and never returns e-mail addresses. The role defaults to Viewer; only an Owner
   gets a share, capped at what is still unallocated.
 - **Edit and remove** — a chip opens the role and share editor, which also removes the user after
   a confirmation. The last Owner can be neither removed nor demoted.
@@ -114,6 +115,11 @@ Adding, editing and removing users only change the panel's local list; nothing i
   On success the saved list becomes the new baseline, `onChanged` runs, a toast reads
   *Access configuration saved*, and `onCancel` is called. A refused save is shown inline in the
   panel and keeps the draft.
+- **Why a save is refused.** `BrokerService.bulk_update_access()` rejects a list when the caller
+  is not an Owner (`403`; superusers are exempt), and with `400` when no Owner would remain, when
+  the shares add up to more than 1, when a user appears twice, or when a user does not exist. The
+  schema (`BRAccessBulkItem`) also rejects a share above 0 on an Editor or a Viewer, and an empty
+  list is a `422`.
 - **Reset** (the ↺ button, shown only with unsaved changes) puts back the list as loaded.
 - **After a save, the two hosts differ.** The panel awaits a `tick()` before calling `onCancel`,
   so the bound `hasChanges` is already `false`: in the list-page modal a successful save closes
@@ -154,6 +160,9 @@ Reports* in its Transactions tab). It stores and manages files; parsing them is 
   [report set](../import-wizard.md#report-sets). The upload stops at the first failing file and
   names it in the error banner.
 - Closing with files picked but not uploaded asks for confirmation (*Pending Uploads*).
+- The modal does not check the user's role: a Viewer also sees the upload area and the delete
+  actions, and the server refuses them with `403` (EDITOR or OWNER access required on the
+  broker).
 - A link opens the Files page filtered on this broker (`/files?tab=brim&broker=<id>`).
 
 ### 🌐 API Calls

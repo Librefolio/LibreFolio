@@ -8,8 +8,8 @@ The **Preferences** tab controls **how the app looks and behaves for you** — c
 
 | Setting | Category | Description |
 |---------|----------|-------------|
-| **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies immediately |
-| **Default Currency** | 💰 Currency | Your base currency: the default display currency for portfolio values. This menu lists every currency |
+| **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies as soon as you save it |
+| **Default Currency** | 💰 Currency | Your own base currency, proposed when you create something new — an asset, a new broker's first cash balance, a PAC plan. This menu lists every currency |
 | **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system) |
 
 <style>
@@ -21,81 +21,73 @@ article table:first-of-type td:nth-child(-n + 2) {
 }
 </style>
 
-Use the **category sidebar** on the left to filter the visible settings.
+Pick a category in the sidebar — on a phone, in the **Category** menu — to show only its settings;
+**All Settings** shows everything.
 
 !!! tip "Currency menus on the Dashboard and asset pages"
 
-    The currency menus that change the currency of what you see on the **Dashboard** and on an asset page are narrower than **Default Currency**: they list only the currencies you can convert to with your configured FX pairs, both ends of each pair. A currency that a chain route only passes through (for example EUR in RON → EUR → JPY) appears there only if it is itself one end of a configured pair. The currency already selected always stays listed; on the Dashboard, **Back to default** returns to your Default Currency, and **Create forex…** at the bottom of these menus adds a missing pair.
+    The currency menus of the **Dashboard** and of an asset page are shorter than **Default Currency**: they offer only the currencies of your FX pairs, and **Create forex…** at the bottom of the list adds a missing pair. See **[Dashboard](../dashboard/index.md)**.
 
 ## 💾 Saving, Undo, Reset
 
-Each field tracks its own state:
+Each field keeps its own state:
 
-- A modified field shows **save** and **undo** buttons; the header offers **save all** / **undo all** for bulk actions.
-- Fields whose value differs from the **instance default** (set by the administrator in [Global Settings](../../admin/settings.md)) are highlighted as non-default; the **reset** button restores the instance default for that field, and **reset all** restores every field at once.
+- Change a field and it shows **Save** and **Undo**; the header offers **Save All** and **Undo All**
+  for every changed field.
+- When a saved value differs from the **instance default** (set by your administrator in
+  [Global Settings](../../admin/settings.md)), an orange **Reset to Default** button appears: it
+  puts the default back in the field, ready to save. **Reset All to Defaults** does it for every
+  field.
 
 ---
 
 ## 🧭 Onboarding and guides {: #onboarding-and-guides }
 
-The **Onboarding** category shows all **15 independently versioned flows**. They are grouped by
-where they appear:
+The **Onboarding** category lists every guide, grouped by where it appears. Each one shows its
+status — **Pending**, **Completed** or **Skipped** — and the version you have seen.
+**New version to view** means updated content is waiting: the guide starts again the next time you
+reach it.
 
-| Group | Flows |
+| Group | Guides |
 |---|---|
 | **Setup** | Welcome setup |
-| **Core tour** | Quick navigation tour |
-| **Transactions** | Transactions overview, Add Transaction, bulk workspace, Import Wizard |
-| **Brokers** | Brokers overview, Add Broker, broker details |
-| **FX** | FX overview, Add Pair, pair details |
-| **Assets** | Assets overview, Add Asset, asset details |
+| **Core tour** | Quick tour |
+| **Transactions** | Transactions overview, Add transaction guide, Bulk workspace overview, Import guide |
+| **Brokers** | Brokers overview, Broker guide, Broker details guide |
+| **FX** | FX overview, FX guide, FX pair details guide |
+| **Assets** | Assets overview, Asset guide, Asset details guide |
 
-Each flow has a **Pending**, **Completed**, or **Skipped** badge and a
-**Seen vX · current vY** line. **New version to view** means newer content is due even when the
-earlier version was completed or skipped; the flow reopens at the newer version when its trigger
-is reached.
+### 🔁 Replay a guide
 
-**Import Wizard** and **bulk workspace** are each one step-managed flow with individually saved
-steps. Expand either row to see its **N/M** progress and the status of each step. Optional Import
-steps (**Unify Assets**, **Corrections**, **Duplicates** and **Align with the bank**) stay pending until a real import
-first encounters them; they are not silently completed when an earlier import does not need
-them.
+- **Welcome setup** and **Quick tour** — **Replay** starts them at once.
+- Any other guide — **Replay at next trigger** gets it ready: it starts the next time you open its
+  page, form, wizard or workspace. **Cancel activation** takes it back.
+- **Replay all** gets every guide ready and opens the Welcome page first.
 
-For **Welcome setup** and **Quick tour**, **Replay** starts immediately. Contextual flows use
-**Replay at next trigger**: open the matching page, Add form, detail page, Import Wizard, or bulk
-workspace to begin. If you leave a page or detail page mid-guide, its guide resumes at the same
-step when you return; closing an Add form mid-guide restarts that form's guide from its first
-step. You can cancel an armed replay before its trigger. **Replay all** arms every flow and opens
-Welcome first.
+A replay never changes the saved status, and guides never click or save for you. One exception: in
+a Welcome replay, **Continue** saves the language, currency and picture you chose (**Exit tour**
+leaves without saving).
 
 <!-- [Screenshot Placeholder: settings/onboarding-replay — the Onboarding category of Preferences: flows grouped by area with their status badges, version lines, and Replay actions] -->
 
-!!! info "Step-managed guides"
+??? info "🧩 Import guide and Bulk workspace overview — guides with steps"
 
-    In an automatic Import or bulk guide, **X** skips only the current step or checkpoint. It
-    does not mark the remaining steps skipped. The next due step starts when its real screen or
-    milestone is encountered.
+    Expand the row of either guide to see each step with its own status. An optional Import step
+    (**Unify assets**, **Corrections**, **Duplicates**, **Align with the bank**) stays **Pending**
+    until an import first needs it.
 
-    In replay mode, exiting a step removes it only from the replay stored in this browser for
-    your account. It does not change the saved **Completed** or **Skipped** status.
+    In these two guides, **✕** skips only the current step: the next one starts when the wizard or
+    the workspace reaches it. In a replay, **✕** removes the step from the replay without changing
+    its saved status.
 
-!!! note "Replay is non-destructive"
+??? note "💾 Where a replay is kept — this browser only"
 
-    Replays are saved in this browser for your account: an armed or unfinished replay carries over
-    to other tabs and survives closing the tab, restarting the browser, or logging out and back in,
-    but it is not shared with other accounts, browsers, or devices. It ends when you finish or exit
-    it, when you cancel it here, or when an update brings a newer version of that guide; when it
-    ends in one tab, it also closes in your other open tabs. Guides point at real controls
-    but do not click or write for you. A Welcome replay has one explicit exception:
-    **Continue** saves the language, base currency, and avatar you selected while preserving the
-    Welcome flow's onboarding status.
+    A replay is kept in this browser, for your account: a half-finished one survives a reload,
+    closing the browser, or logging out and back in. It is not shared with other accounts,
+    browsers or devices. It ends when you finish or exit it, cancel it here, or an update brings a
+    newer version of the guide — and then it closes in your other open tabs too.
 
-An onboarding refresh or bootstrap failure keeps the Dashboard available with an inline
-**Retry** banner only when LibreFolio already has a cached terminal Welcome state
-(**Completed** or **Skipped**) for your signed-in account. Without that cache — including on the
-first load or while Welcome is **Pending** — startup stays blocked and offers **Retry** and
-**Log out**. A user-settings failure also blocks startup. If this section has no flow list to
-retain, it shows its own **Retry** button.
+If the guide list cannot be loaded, this section shows its own **Retry** button.
 
 ---
 
@@ -108,14 +100,11 @@ page header, at the top right next to the theme and language buttons.
 - :material-eye-outline: **Hide amounts** — amounts are visible; click to hide them.
 - :material-eye-off-outline: **Show amounts** — privacy mode is on; click to show the amounts again.
 
-The change applies at once to the page you are on, in both directions, without a reload. Privacy
-mode then stays on as you move between pages and after a reload, until you switch it off.
+The change applies at once to the page you are on, without a reload, and privacy mode stays on as
+you move between pages and after a reload, until you switch it off. Not to be confused with the eye
+icon of a **table toolbar**, which shows or hides table columns.
 
 <!-- [Screenshot Placeholder: dashboard/privacy-masked — the Dashboard with privacy mode on: amounts shown as ••• with their currency and sign, percentages still visible] -->
-
-!!! tip "Two different eye icons"
-
-    The eye icon in a **table toolbar** is a different control: it shows or hides table columns.
 
 ### 🔒 What is hidden
 
@@ -129,59 +118,45 @@ does the sign, so a gain still reads as a gain and a loss as a loss:
 | `€1,234.56` or `1.234,56 €` | `€•••` or `••• €` |
 | `—` (no value) | `—` |
 
-`•••` is always the same three dots, whatever the size of the amount — even the **K** or **M** of
-a shortened figure disappears — so it does not give away the order of magnitude. Where it
-applies:
+`•••` is always the same three dots — even the **K** or **M** of a shortened figure goes — so it
+never gives away the order of magnitude. It covers:
 
-- **Dashboard** — every amount in the KPI cards and in Cash Balances, and the amounts in the
-  Allocation panel's tooltips.
-- **[Positions](../dashboard/positions.md)** — in the Holdings table and map and in the
-  Performance table, every amount except the prices per unit (**Value**, **Unrealized P&L**,
-  **Δ1** and the others), and the **Qty** column of the Holdings table.
-- **[FIFO Lots Analysis](../dashboard/positions.md#fifo-lots-analysis)** — in the lots table and
-  the Lot Detail modal: values, P&L, income, proceeds, fees and taxes, and the open and original
-  quantity of each lot. A partially closed lot shows its open share instead, for example
-  `••• (60%)`. In the charts: the axis of the Value / Return comparison whenever it shows money,
-  the quantity on the Lot Life & Custody bars, and the amounts and quantities in the tooltips.
-- **Brokers** — the value, gain or loss, and every cash balance on the broker cards and on the
-  broker detail page; the panels the detail page shares with the dashboard behave as they do
-  there.
-- **Risk panels** — the amounts.
+- **Dashboard**, **Brokers** and the **risk panels** — their amounts: the KPI cards, Cash Balances,
+  the Allocation tooltips, the broker cards and the broker detail page.
+- **[Positions](../dashboard/positions.md)** and
+  **[FIFO Lots Analysis](../dashboard/positions.md#fifo-lots-analysis)** — every amount except the
+  prices per unit, in the tables, the Lot Detail modal and the charts, and the quantities you hold
+  (the Holdings **Qty** column, the lot quantities). A partly closed lot shows its open share, for
+  example `••• (60%)`.
 - **Transactions** — the cash amount of every transaction.
-- **[PAC allocator](../tools/pac-allocator/index.md#reading-the-result)** — in the result, every
-  amount and quantity, and the purchase limits of a route.
+- **[PAC allocator](../tools/pac-allocator/index.md#reading-the-result)** — every amount and
+  quantity of the result, and the purchase limits of a route.
 
 ### 👀 What stays visible
 
-Privacy mode hides what would tell someone **how much you own**. Numbers that do not reveal it
-stay readable, so you can keep working:
+Numbers that do not tell **how much you own** stay readable, so you can keep working:
 
-- the **currency** next to every hidden amount;
-- **percentages** — returns, P&L %, weights, allocation shares, yield on cost;
-- **prices per unit** — market prices, the **Price** and **Avg. Cost** (WAC) columns of Positions,
-  the opening and closing prices of lots, and the price lines of the WAC / Market Price chart;
-- **FX rates**;
-- **counts, dates and names** — for example the number of transactions of an asset;
-- **asset events**, such as a dividend or a split, on the asset pages: they describe the asset
-  itself, not your portfolio;
-- the **quantities in the Transactions list** — a deliberate choice: there, a quantity multiplied
-  by the asset's public price still gives an idea of a trade's size;
-- the numbers inside **edit fields**, for example while you add or edit a transaction: a field
-  you cannot read is a field you cannot edit.
+- the **currency** of every hidden amount, **percentages** (returns, weights, allocation shares,
+  yield on cost) and **FX rates**;
+- **prices per unit** — market prices, the **Price** and **Avg. Cost** columns of Positions, the
+  prices of lots and the price lines of the WAC / Market Price chart;
+- **counts, dates and names**, and **asset events** such as a dividend or a split, which describe
+  the asset rather than your portfolio;
+- the **quantities in the Transactions list** — a deliberate choice, even though a quantity times
+  the public price hints at the size of a trade;
+- the numbers inside **edit fields**, for example while you add or edit a transaction: a field you
+  cannot read is a field you cannot edit.
 
 ### 🌐 Where the setting is kept
 
-Privacy mode belongs to **this browser**, not to your account: it describes the screen someone may
-be looking at, not who is signed in.
+Privacy mode belongs to **this browser**, not to your account: it is about the screen someone may
+be looking at.
 
-- It is off until you first turn it on, and it stays as you left it when you come back in this
-  browser.
-- Logging out or signing in with another account does not change it: whoever uses this browser
-  finds it as you left it.
-- It does not follow you to another browser or device, and it is not saved on the server.
+- It is off until you turn it on. Logging out or switching account leaves it as it is, and it does
+  not follow you to another browser or device.
 - Other LibreFolio tabs already open in this browser pick up the change when you reload them.
-- If the browser refuses to store the setting (for example when site storage is blocked), privacy
-  mode still works in this tab, but may be off again after a reload.
+- If the browser blocks site storage, privacy mode still works in this tab, but may be off again
+  after a reload.
 
 !!! warning "What privacy mode does not cover"
 
@@ -201,3 +176,4 @@ be looking at, not who is signed in.
 - ⚙️ **[Settings Overview](index.md)** — General settings summary
 - ℹ️ **[About](about.md)** — Version info, plugins, and changelog
 - 🛡️ **[Global Settings](../../admin/settings.md)** — Administrator options and scheduler
+- 🛠️ **[Settings components](../../developer/frontend/components/features/settings.md)** — How this tab and its Onboarding list are built (for developers)

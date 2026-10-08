@@ -179,6 +179,150 @@ These use **instant rendering** (`animation: false`) because:
 For these charts, the UX pattern is: **keep old data visible until new data arrives**
 (stale-while-revalidate at the store level), then swap instantly.
 
+#### Asset detail: Prices and Rolling Return
+
+`routes/(app)/assets/[id]/+page.svelte` keeps the primary series in `primaryMode`, `'price'` or
+`'calendar-return'` (the **Prices** and **Rolling Return** buttons). It starts on `'price'` on every
+mount and is never persisted; `setPrimaryMode()` stops the measure mode of the panel it leaves.
+
+| | `'price'` | `'calendar-return'` |
+|---|---|---|
+| Main series | the resolved closes (`chartData`) | the `ASSET_CALENDAR_ROLLING_RETURN` points (`calendarReturnView`) |
+| Signals panel | every definition | `allowedSignalTypes = ['asset-comparison']`: the other configs stay saved, only hidden; no backend indicator is requested |
+| `PriceChartFull` | line or candlestick, Abs/% toggle, event markers, `editMode` | `valueUnit="percentage"`, `disableCandlestick`, `hideViewModeToggle`, no event markers |
+| Measures | `MeasurePanel` | a second `MeasurePanel`, `measurementUnit="percentage-points"`: **Δ pp** and **Days** replace **Δ %** and **Δ%/yr** |
+| Data editor | its button and panel | button hidden, panel hidden and `inert` |
+
+The rolling return is a backend signal. `loadChartData()` sends one
+`POST /api/v1/assets/prices/query`: the main asset's item carries
+`{signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days}}`, with `target_currency` when
+the chart is converted, and each Asset comparison gets an item of its own — `include_price: false`,
+`include_events: true`, `target_currency` set to the chart currency — with the same signal request,
+so every line uses one window and one currency. A page-local wrapper,
+`queryAssetPricesBulkWithSignalIsolation()`, validates each signal result on its own, so one
+malformed result does not discard the response. The plugin is `catalog_visible = False`
+(see [Plugin Contract](../../architecture/patterns/signal_plugin_guide.md#plugin-contract)), so no
+selector offers it.
+
+`calendarReturnWindow.ts` turns the **Window** control into days: presets `1w`, `1m`, `3m`, `1y`
+are 7, 30, 90 and 365 days, and a custom amount is multiplied by 7, 30 or 365 (weeks, months,
+years); the default is `1m`. The selection is saved in the asset's chart settings
+(`calendarReturnWindow`, below).
+
+Each point of the answer carries a `provenance`: its status, `reference_target_date`, and the price
+and FX dates actually used, each with its `days_back`. `PriceChartFull` reads it through
+`mainPointContext` and adds up to three tooltip rows to the main line: `↩` the reference target
+date (followed by `chart.tooltip.valueAt` when the reference price is older), `📅` the current price
+date when it is older than the point, and `💱` the current and reference FX dates. The plugin leaves
+a point empty (`missing_reference`, `invalid_current_price`, `invalid_reference_price`) rather than
+estimating it and trims the leading empty points, so each line starts on its own first computable
+date. With some empty points the result is `partial` (`undefined_metric_window` warning); with no
+computable point it is `unavailable` (`undefined_metric`).
+
+#### Asset detail: where the chart state lives
+
+| Layer | Holds |
+|---|---|
+| Backend database | Asset prices and events, FX rates: the only persisted sources |
+| Chart settings in `localStorage` ([Where settings live](#where-settings-live)) | The asset's override `asset-<id>`, including its `calendarReturnWindow` and its `signals` (indicator and comparison configs with their params, order and styles) |
+| The period in `sessionStorage` | The start and end shared by the pages of the tab |
+| Page runtime | Signal results, the rolling-return series and their provenance, comparison series, synthetic benchmarks, measures: a reload discards them |
+
+Measure rows and their endpoint results are runtime-only. Each measure's summary `DataTable` keeps
+only its own layout (page size, column widths, order and visibility) under its `storageKey`
+(`measure-summary-<id>`, `asset-calendar-measure-summary-<id>`).
+
+#### Asset detail: page sync and comparison sync
+
+`requiredFxPairs` lists the FX pairs the page needs to convert into the chart currency: the
+asset's, each Asset comparison's, and those of their events' currencies. Each pair has a status
+(`ok`, `missing`, `no-data`, `partial-gap`) that drives the data-quality banners. The toolbar
+**Sync** (`handleSync()`) opens the page sync modal with the main asset (when it has a provider),
+the comparison assets, and every listed pair except the `missing` ones: a pair is never registered
+implicitly. The button is disabled for an asset without a provider and for an archived one.
+
+A comparison card's **Sync** (`handleSyncAsset()` → `runSyncAsset()`) sends, in parallel,
+`POST /api/v1/assets/prices/sync` for the peer and `POST /api/v1/fx/currencies/sync` for
+`collectConfiguredComparisonFxSlugs()` — the configured pairs between the chart currency and the
+peer's currency or its events' currencies. Both use `buildComparisonSyncRange()`
+(`charts/loadComparisonData.ts`): the chart range, extended back by the window in
+`'calendar-return'` mode, then widened by `padSyncRange()` (7 days either side, the end capped at
+today). In `'price'` mode, comparison points the backend could not convert stay in their native
+currency (see [Price Query](../../backend/assets/architecture.md#data-flow-price-query));
+`loadComparisonAssetsData()` (same file) drops them and flags the card with `_conversionFailed`, so
+a comparison line never mixes currencies.
+
+## Chart Settings and Axis Scales
+
+The FX and Asset charts (list cards, detail pages, and the **Chart Settings** modal's preview)
+share one settings store and one set of axis controls.
+
+### Where settings live
+
+`lib/stores/chartSettingsStore.svelte.ts` keeps the settings in `localStorage`, per user
+(`lf_<userId>_chartSettingsStore`, written 250 ms after the last change). Each chart reads, in
+order:
+
+1. its own override, keyed by the pair slug for FX and `asset-<id>` for an asset: a card's ⚙️ and
+   the detail page's aesthetics and Signals panels all write this one;
+2. its scope's default, `__global_fx__` or `__global_assets__`, written by **Settings** in the
+   list toolbar;
+3. the base defaults (`DEFAULT_CHART_SETTINGS`): area fill, baseline colours, grid lines and stale
+   gradient on, the price axis on Auto and the percentage axis on Include 0, no signals.
+
+Saving a scope default (`setGlobalSettings(settings, scope)`) deletes every override of that
+scope, detail pages included, and leaves the other scope alone. The period is not a chart
+setting: `dateRangeStore.svelte.ts` keeps it in `sessionStorage` (`librefolio_dateRange`), shared
+by the Dashboard, broker, asset and FX pages of the tab.
+
+### Axis rows and ranges
+
+`axisScales` holds one setting per axis: `absolute` and `percentage` for the primary axis,
+`secondary[key]` for the others. The detail pages and the modal build their axis rows from the
+primary row of the active view plus `collectConfigurableSecondaryAxes()` (`chartCoreHelpers.ts`),
+which lists one row per secondary axis that the overlays on screen use, keyed
+`independent:<axisKey>`, `volume:<axisKey>` or `legacy:<index>`.
+
+Each row has three modes, resolved by `buildPriceYAxis()` for the primary axis and
+`resolveSecondaryAxisScale()` for the others:
+
+- **Auto**: the range of the data shown;
+- **Include 0**: the same range, stretched to zero;
+- **Custom**: the **Min** and **Max** typed in, swapped if inverted; an empty field leaves that
+  end to the data.
+
+No plugin bound is applied. The `minimum` and `maximum` a backend signal declares on its axis
+(RSI's 0–100, for example) reach the row descriptor as `defaultMin` / `defaultMax`, but no range
+reads them: Auto fits the data.
+
+**Min** and **Max** are `type="number"` inputs with `use:numericArrows`
+(`lib/actions/numericArrows.ts`: ↑/↓ step by 1, a held key speeds up by powers of ten at round
+values, within the field's `min`/`max` when set) and the `.lf-compact-number-input` class
+(`app.css`: 0.75rem tabular figures). Below 768 px the iOS zoom guard
+([Mobile CSS](../pwa.md#mobile-css)) sets every input without `.zoom-guard-exempt` to 16 px; the
+class then only resets the line height.
+
+## Responsive Date Axis
+
+`lib/components/charts/responsiveXAxis.ts` (`buildResponsiveXAxisPolicy()`) decides how many date
+labels fit:
+
+- The usable width is the chart width minus `horizontalPadding`, 64 px by default.
+- The axis turns **compact** when that width is under 480 px, or when it leaves fewer than 24 px
+  per point.
+- A compact axis keeps between 2 and 12 labels, one per 48 px on a time axis or per 56 px on a
+  category axis: a time axis gets that count as `splitNumber`, a category axis an `interval` that
+  spreads them.
+- Compact labels are shorter, by span (`formatCompactXAxisDate()`, in the interface locale): month
+  and two-digit year from a year up, the month alone beyond 90 days, day and month below. They
+  never rotate, overlapping ones hide, and the first and last stay.
+
+It serves `PriceChartFull` (the asset and FX detail charts, with its `CandlestickChart`),
+`LineChart` (the asset and FX cards through `PriceChartCompact`, the **Chart Settings** preview,
+and the risk charts), `GrowthChart` in its time-axis views (the Candles and Income ladders plan
+their own labels, above), `AllocationHistoryChart`, and the broker lots charts
+(`LotWacPriceChart`, `LotComparisonChart` and `LotGanttChart`, which pass their own padding).
+
 ## Pie Charts (AllocationPieChart)
 
 `lib/components/charts/AllocationPieChart.svelte` draws the allocation pies of the Dashboard and

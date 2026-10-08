@@ -125,8 +125,10 @@ The parent is intentionally thin in business logic and heavy in orchestration:
 This chart is the **price / cost-basis** view of the selected asset.
 
 - draws broker WAC lines, cumulative WAC, market price, transaction markers, income markers, and lot performance bubbles;
+- draws the cumulative line (**Combined**, dashed) only when `broker_wac_history` spans two or more brokers and `cumulative_wac_history` is not empty;
 - applies `quoteBaseQuantity` scaling so WAC and opening-unit-price values align with market quotes on bond-like assets;
-- supports **ABS / %** mode and **Auto / From 0** Y-axis behavior in absolute mode;
+- supports **Abs / %** mode and **Auto / From 0** Y-axis behavior in absolute mode; the toggle labels come from `dashboard.abs` (`Abs`) and `dashboard.pct` (`%`), and the uppercase `ABS` in the source is only the fallback for a missing key;
+- sizes each bubble by a mode-dependent metric: in **Abs** the lot's `open_quantity`, or its `original_quantity` once closed; in **%** its opening value (`original_cost`). `lotBubbleRadius()` maps the square root of that metric, between the smallest and the largest rendered bubble, onto `LOT_BUBBLE_MIN_RADIUS`–`LOT_BUBBLE_MAX_RADIUS` (7–22 px), and uses the midpoint when every bubble has the same metric;
 - uses bubble click for lot selection and marker double-click for cross-component selection jumps.
 
 ### `LotGanttChart`

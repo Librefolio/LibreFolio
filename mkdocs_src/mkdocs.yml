@@ -995,6 +995,7 @@ nav:
                   - Architecture: developer/backend/brim/architecture.md
                   - Generic CSV Provider: developer/backend/brim/generic_csv.md
                   - Danske Bank Importer: developer/backend/brim/danske_bank.md
+                  - Crédit Agricole Importer: developer/backend/brim/credit_agricole.md
                   - Providers List: developer/backend/brim/providers_list.md
           - "📈 Assets (Pricing)":
               - Architecture: developer/backend/assets/architecture.md

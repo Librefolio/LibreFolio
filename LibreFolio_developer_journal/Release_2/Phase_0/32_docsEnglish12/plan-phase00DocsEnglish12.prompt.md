@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`) e S13 (`dc9209b3e`) integrati nei treni 9-11. Giro di feedback diretto del developer (S14-S16) su base `ffa72cc2b` (treno 12): onda 1 approvata il 2026-10-08, checkpoint pronto e FROZEN; seguono l'onda 2 dopo la fusione del target e poi l'onda 3 (admin).** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`) e l'onda 1 del feedback (`eee56b42a`, fuso con il treno 14 in `cbfce2475`) sono committati. L'onda 2 (S17, base `cbfce2475`) è stata approvata dal developer il 2026-10-08 alle 17:26: checkpoint pronto e FROZEN. Poi l'onda 3 (admin), dopo la fusione del treno 15.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -990,6 +990,241 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Privacy:** sulle 2589 righe aggiunte, nessun IBAN, email, numero lungo né segreto.
   > - **Chiusura della corsia:** anteprima spenta, porte 6162 e 6042 libere. Rimossi il profilo Chrome temporaneo, le PNG di M (`/tmp/librefolio-q-gallery-drop`) e il sito copiato. Gli script `/tmp/libreFolio_q_preview_rebuild.sh` e `/tmp/libreFolio_q_preview_server.py` restano per l'onda 2.
   > - **Checkpoint:** 31 file tracciati modificati e 3 nuovi; nessuna traduzione toccata; `git diff --check` pulito. Messaggio proposto in `/tmp/libreFolio_commit_fb.txt`. Stato FROZEN.
+  > - **Commit del developer:** `eee56b42a` («docs: simplify user pages, move internals to dev»), 34 file, sopra `ffa72cc2b`.
+  >   - Il coordinatore ha verificato l'albero e la risoluzione dei 3 conflitti col treno 13: vale la versione di Q.
+  >   - Poi il developer ha fuso il treno 14 nel ramo di Q: `cbfce2475` (genitori `eee56b42a` e `9eb01c756`). La base ora contiene i treni 13 e 14.
+  >   - L'onda 1 entra in `dev_release2` col treno 15, dopo la coverage.
+
+- **S17** ✅ 2026-10-08 — Onda 2 della semplificazione, su base `cbfce2475`.
+  > **Via libera del coordinatore** (15:48), nella stessa sessione col developer:
+  > - le pagine di P e di L sono comprese; per `user/ai-export/**` vale `ai-development.instructions.md`;
+  > - `mkdocs.yml`, `static/extra.css` e `home-custom.css` restano di Q;
+  > - **riservate a M**, che ci mette le immagini dopo il treno 15: `user/assets/correlation`, `user/dashboard/index`, `user/dashboard/risk`, `user/tools/pac-allocator/index`, `user/transactions/import/danske-bank` e le tre pagine `risk-metrics/` (`benchmark-selection`, `historical-replay`, `simulation-modes`).
+  >
+  > **Brief** (sessione Q, `files/simplify_brief.md`, «wave 2 edition»), aggiornato con le correzioni del developer nell'onda 1:
+  > - pannelli espandibili per ciò che compare solo a volte;
+  > - un H3 per step;
+  > - LaTeX per le formule;
+  > - niente versioni;
+  > - badge solo per Alpha e Beta;
+  > - frequenze e regole interne nel manuale dev;
+  > - blocchi per le superfici di analisi.
+  >
+  > Il brief elenca anche le pagine vietate: quelle riservate a M, le pagine dev di P, `brim_plugin_guide.md` e `providers_list.md`. Niente anteprima live: la build strict la fa Q dopo i writer.
+  >
+  > **Gruppi** (8 `docs-writer`, file disgiunti; parole sulla base `cbfce2475`):
+  > - **A, dashboard di P:** `kpi-cards` (1784) e `positions` (2164).
+  > - **B, AI Export di P:** `ai-export/{index,portfolio,broker,fx,asset}` (3591).
+  > - **C, onboarding e impostazioni:** `getting-started` (1555), `settings/preferences` (1880), `pwa` (694), `misc/image-crop` (498).
+  > - **D, dettaglio asset:** `assets/index` e `assets/detail/{index,chart,signals,data-editor,measures,events}` (6300). Si conserva l'ancora `#rolling-return`.
+  > - **E, FX:** `fx/{index,add-pair,sync,chart-settings}` e `fx/detail/{index,chart,data-editor,signals,measures}` (5151).
+  > - **F, provider:** `assets/providers/{index,borsa-italiana,css-scraper,justetf,yahoo-finance,scheduled-investment}`, `fx/providers/index` e `fx/detail/provider` (4330).
+  > - **G1, broker, transazioni e Files:** `brokers/{index,import,info}`, `transactions/{index,form}` e `files/index` (4165). `brokers/sharing` resta fuori finché il coordinatore non chiarisce l'esclusione del Q1 alla riga `:76`.
+  > - **G2, importer:** `import/{credit_agricole,degiro,intesa,etoro,fineco}` (3229).
+  > - Fuori dall'onda 2: le admin (onda 3), `community/contribute` (pagina per contributori) e la home, già rivista dal developer.
+  >
+  > **Risposte del coordinatore** (15:53):
+  > - **Pagine dev e di teoria di P** (`wac.md`, sezione sul costo di `fifo_lot_engine.md`, `data-quality-banner.md`, teoria): **restano di P**, che sta discutendo col developer la regola `MISSING_COST_BASIS` (#32). I writer elencano nel report i fatti che spetterebbero lì, e il coordinatore li gira a P.
+  > - **`user/brokers/sharing.en.md` è libera.** La riga `:76` era stata concessa a N il 07/10 per la tab Rischio sui broker posseduti, lavoro entrato con `49d4ec8e0`. Aggiunta al gruppo G1, con un messaggio al writer, e allo scope `--w2` del gate.
+  >
+  > **M** (16:00): ha rimesso in `/tmp/librefolio-q-gallery-drop/desktop/en/{light,dark}` le stesse 102 PNG del primo deposito: assets 5, dashboard 17, brokers 12, files 3, settings 1, transactions 1; per fx, onboarding e ai-export nessuno scatto, quindi ricade sulle Pages. Il prossimo deposito arriva dopo le 17 con la verifica del G5: gli scatti `onboarding/*` e la guardia offline della gallery su assets, fx e brokers.
+  >
+  > **Note implementazione, onda 2, gruppo B (AI Export)** (16:15):
+  > - **Lunghezze:** `index` da 1211 a 963 parole, `portfolio` da 872 a 480, `broker` da 604 a 358, `fx` da 459 a 277, `asset` da 445 a 247.
+  > - **Struttura dell'index:** un H3 per step (da Step 1, tipo di export, a Step 6, copia); il prompt lungo sta in un pannello espandibile; sezioni «Paste», «Privacy» e «When Something Goes Wrong».
+  > - **Pagine di scope:** «Export Data» e «Analyses», con i casi particolari in pannelli: domande del PAC, fatti fiscali delle minusvalenze.
+  > - **Ancore:** nessuna esplicita e nessuna linkata. Le pagine non hanno schermate.
+  > - **Errori corretti nel testo utente:**
+  >   - «drawdown always full-history» era falso: il drawdown per asset del PAC usa solo il periodo dell'AI;
+  >   - «unavailable tasks stay disabled» era falso: le analisi sono tutte elencate e rifiutate al momento della copia.
+  > - **Pagine dev, solo aggiunte:**
+  >   - `ai_export_composition.md`: drawdown, binding delle analisi, timing del PAC, riferimenti A#/B#/F#/L#, confine del clipboard con le soglie 20 000 / 60 000 e il draft di 10 minuti in `sessionStorage`;
+  >   - `ai_export_snapshot.md`: `cost_allocation_semantics` e `zero_semantics`;
+  >   - `ai_export_sampling.md`: i rendimenti FX a 30 e 91 giorni.
+  > - **Seguiti:**
+  >   - al writer: correggere in `ai_export_probe_workflow.md` la frase sulle L# fuori dalla directory, e in `ai_export_snapshot.md` la frase sullo schema V1;
+  >   - al writer G1: `brokers/index.en.md:~79` dice «exact sampling», che non vale più.
+  >   - ✅ (16:25) Fatti:
+  >     - `ai_export_probe_workflow.md:134-138`: la directory risolve A#, B# e F#, mentre L# è il `lot_ref` del backend, letto sul posto (`ai_export_runtime.py:342-345`, `payloads/portfolio_broker.py:444-447,721-735`, `asset_core.py:533-551`);
+  >     - `ai_export_snapshot.md:72-76`: il runtime precedente è stato rimosso prima del rilascio, e lo schema V1 è il primo rilasciato (`AI_EXPORT_SCHEMA_VERSION = 1`, `ai_export_runtime.py:25-29`; storia git `2544a3e36` → `7992471b6`).
+  >
+  > **Note implementazione, gruppo F (provider)** (16:30):
+  > - **Lunghezze:** `providers/index` da 649 a 765 parole (le card restano identiche), `borsa-italiana` da 1125 a 771, `css-scraper` da 484 a 564, `justetf` da 344 a 320, `yahoo-finance` da 145 a 247, `scheduled-investment` da 524 a 768 (con il LaTeX e un esempio in pannello), `fx/providers/index` da 655 a 717, `fx/detail/provider` da 404 a 412. Le pagine corte crescono perché mancavano «What It Offers» e «Limits».
+  > - **Errori corretti dal codice:**
+  >   - justETF: USD, CHF e GBP hanno un prezzo corrente, l'ultimo giornaliero;
+  >   - Borsa: nessun fallback sull'ultimo acquisto, e nessuna ricerca da URL;
+  >   - CSS Scraper: il tipo è salvato come OTHER, e il parser ignora solo spazi e `€ $ £ ¥ %`;
+  >   - Scheduled Investment: Interest Type e Day Count valgono per tutto il piano; «Frequency» include Weekly; **Generate Coupon**; interessi nei giorni di grazia;
+  >   - FX: EUR/RON è una coppia diretta ECB, quindi l'esempio di catena diventa RON/USD via EUR; una coppia senza provider diventa manuale da sola; le etichette **Providers** ed **Edit Pair Providers**;
+  >   - card: Yahoo non è «default», e Borsa non ha «smart URL search».
+  >   - Tolti i fatti non verificabili: `SEDX`, «3000+ ETFs», «15-minute delay», i conteggi delle valute.
+  > - **Ancore:** restano `#interest-schedule-editor` e `#how-value-is-calculated`, linkate dall'app; `#late-interest` diventa esplicita (la linka `maturity-settlement` in 4 lingue).
+  > - **Dev:**
+  >   - `provider_borsa_italiana.md`, `provider_cssscraper.md`, `provider_justetf.md`, `provider_scheduled_investment.md`, `system_providers.md`, `asset_plugin_guide.md`;
+  >   - `fx/providers/snb.md`, che era **sbagliato** da cima a fondo: SNB dà medie mensili datate al 1°, via API JSON, per circa 25 valute;
+  >   - la riga SNB di `fx/providers/index.md`.
+  > - **Inoltrati:** a D due fatti per `assets/architecture.md` (il prezzo del sync diventa il punto del giorno; nessun fallback sull'ultimo acquisto, `price_resolver`); a E la regola delle catene per `fx/configuration.md` e l'esempio RON/USD.
+  >
+  > **Note implementazione, gruppo G2 (importer)** (16:30):
+  > - **Lunghezze:** Crédit Agricole da 1219 a 1071 parole (la parte sempre visibile cresce: il saldo iniziale diventa un passo principale); DEGIRO da 717 a 624, Stable e senza badge; Intesa da 586 a 581; eToro da 345 a 410; Fineco da 362 a 331.
+  > - **Errori corretti dal codice:**
+  >   - Fineco: gli avvisi sono in inglese;
+  >   - Intesa: la lista movimenti non crea acquisti né vendite;
+  >   - eToro: niente CSV, si scarica un XLS da cui si salva il foglio **Account Activity**; la valuta viene da **Details**; overnight fee e SDRT vengono scartati senza avviso;
+  >   - Crédit Agricole: il passo del saldo iniziale non è facoltativo.
+  > - **Altro:**
+  >   - Intesa usa le due schermate di `static/` che nessuna pagina referenziava;
+  >   - DEGIRO, eToro e Fineco hanno l'H1 con 📥.
+  > - **Dev:**
+  >   - nuova `developer/backend/brim/credit_agricole.md`, 2037 parole; nav aggiunta da Q dopo «Danske Bank Importer»;
+  >   - `brim/architecture.md`: sezione «🗒️ Plugin notes» con `#plugin-degiro`, `#plugin-intesa`, `#plugin-etoro` e `#plugin-fineco`.
+  >   - Nessuna ancora linkata dalle pagine utente.
+  > - I reperti per altri e sul codice sono raccolti in sessione Q, `files/w2_findings.md`, da mandare al coordinatore a fine onda.
+  >
+  > **Note implementazione, gruppo C (onboarding e impostazioni)** (16:40):
+  > - **Lunghezze:** `getting-started` da 1555 a 1403 parole, `settings/preferences` da 1880 a 1519, `pwa` da 694 a 566, `misc/image-crop` da 498 a 550 (cinque affermazioni sbagliate corrette, aggiunte l'icona dell'asset e la pagina Files).
+  > - **Pannelli espandibili:** account più vecchi, setup che non si carica, step extra dell'import, guide con step, dove si salva un replay.
+  > - **Via:** le temporizzazioni 8 s / 3 s e la versione «1.2.0».
+  > - **Errori corretti dal codice:**
+  >   - qualità −/+, non uno slider; anteprima tonda attivabile; il preset dell'icona dell'asset da 256×256;
+  >   - lingua e tema si applicano al salvataggio;
+  >   - la promozione di un utente si fa solo da CLI;
+  >   - Safari non serve più su iOS;
+  >   - il banner di installazione del browser è soppresso.
+  > - **Ancore:** restano `#welcome-setup`, `#onboarding-and-guides` e `#privacy-mode`; le schermate sono identiche a HEAD.
+  > - **Dev:** `onboarding.md`, `features/settings.md` (con la lettura della Default Currency) e `pwa.md`.
+  > - **Seguito:** correggere la riga «Auto-install banner ✅» di `pwa.md`, la lista «Logic» sotto AboutTab in `settings.md`, e in `state/app-state.md` il salvataggio delle impostazioni e la riga Chart Settings (fatto di E). `app-state.md` è aggiunto allo scope `--w2`.
+  > - ✅ (16:50-17:05) Fatti:
+  >   - `pwa.md:186,292-293`: il banner automatico del browser è soppresso da `preventDefault()`, e il dialog nativo si apre da **Install App**;
+  >   - `settings.md`: la lista «Logic» spostata sotto PreferencesTab;
+  >   - `app-state.md`:
+  >     - riga Chart Settings: per utente in `localStorage`, scope `fx` e `assets`, periodo in `sessionStorage`;
+  >     - riga Date Range: Dashboard, broker, asset e FX, in `sessionStorage`, e l'URL vince;
+  >     - diagramma: le scritture passano dai componenti («write first»); il bootstrap è `appBootstrap.load()` in parallelo; nessun listener su lingua e tema;
+  >     - flusso: punto 5 nuovo, sul reload che legge `librefolio-locale` e `librefolio-theme`.
+  > - **Reperto di codice:** la Dashboard parte dalla valuta di default dell'istanza, non da quella dell'utente; vedi `w2_findings.md`.
+  >
+  > **Note implementazione, gruppo E (FX)** (16:40): 9 pagine, in tutto da 4996 a 4522 parole.
+  > - **Lunghezze:** `index` da 305 a 444 (mancavano le azioni della pagina), `add-pair` da 549 a 566, `sync` da 542 a 502, `chart-settings` da 1042 a 634, `detail/index` da 216 a 288, `detail/chart` da 413 a 425, `detail/data-editor` da 856 a 769, `detail/signals` da 745 a 540, `detail/measures` da 328 a 363.
+  > - **Errori corretti dal codice:**
+  >   - le card non mostrano il provider, e il mini-grafico segue il periodo;
+  >   - niente candlestick FX, e il doppio clic non resetta lo zoom;
+  >   - il tooltip mostra la variazione dall'inizio del periodo;
+  >   - data editor: nessuna colonna Source, modifica inline, Undo invece della conferma, salvataggio con **Save (N)**;
+  >   - le misure si accumulano;
+  >   - il pulsante è **Save Configuration**;
+  >   - l'inversione 1/0.9053 ≈ 1.1046.
+  > - **LaTeX:** il prodotto della catena e il tasso annuo $(P_{end}/P_{start})^{365/d}-1$.
+  > - **Esempio di catena:** RON/USD via EUR, allineato ai provider.
+  > - **Dev:** `fx/architecture.md` (sync di una coppia nuova, colore dell'esito, Timeout ininfluente a 120 s), `fx/configuration.md` (nuova H3 «Chain Dates, Writes and Counters», data stretta, scheduler a 14 giorni), `fx-chain-algorithm.md` (picker, salvataggio delle rotte, priorità 999 del manuale).
+  > - **Inoltrati a D:** i fatti per `charts.md`, `core-ui/data-editor.md` e `signal_plugin_guide.md`.
+  >
+  > **Note implementazione, gruppo A (dashboard di P)** (16:50):
+  > - **`kpi-cards`:** da 1784 a 1540 parole. Un blocco per card: domanda, schermata, **Metrics shown** con link alla teoria, **How to read it**. Le righe di variazione del giorno e l'esempio dell'ETF USA stanno in pannelli; LaTeX solo per Period P&L, Timing effect, Total P&L e la variazione del giorno.
+  > - **`positions`:** da 2164 a 2190 parole.
+  >   - Non scende perché lo schema a blocchi copre ora 3 viste e 5 blocchi FIFO, e prima la vista Performance non aveva una guida alla lettura.
+  >   - Tolti il muro di regole sul YOC, i nomi interni e la storia «v3». Pannelli per celle vuote, YOC non disponibile, Hide amounts e avvisi.
+  >   - Altri tagli possibili, se il developer li vuole: «Choosing a view» e le colonne nascoste.
+  > - **Errori corretti dal codice:**
+  >   - la Dashboard conta solo i broker posseduti con quota sopra 0;
+  >   - il Total P&L include il capitale entrato con titoli a costo;
+  >   - l'etichetta è **Deposited Capital (Period)**;
+  >   - il pannello dei lotti si apre con **Analyze Lots** (⋮ o tasto destro), non con un clic;
+  >   - i toggle si chiamano **Portfolio / Period**;
+  >   - il filtro Status esiste solo come colonna nascosta;
+  >   - la dimensione delle bolle dipende da **Abs / %**;
+  >   - il weight include la cassa;
+  >   - il pannello dei lotti ignora la quota di proprietà.
+  > - **Ancore:** restano `#card-1-period-pl`, `#card-2-returns` e `#card-3-net-worth` (linkate dall'app), `#unrealized-change-by-currency`, `#fifo-lots-analysis` e `#yield-on-cost-yoc`. Nuove `#holdings` e `#performance`, più `#dashboard` sulla pagina dev.
+  > - **Dev:** `pages/index.md` (sezione Dashboard: riga KPI, soglie del Timing effect, tab Posizioni) e `lots_analysis_service.md` (scope dei broker per tutti i ruoli, nessuna quota applicata). Gli interni del YOC sono già nella teoria.
+  > - **Seguiti:**
+  >   - ad A: il punto Broker Detail di `pages/index.md` e 3 fatti in `features/lots-analysis.md`, aggiunta allo scope;
+  >   - a G1: il «click to open» di `brokers/index`.
+  >   - ✅ (16:58) Fatti da A:
+  >     - `pages/index.md:143-145`: **Analyze Lots**, da ⋮ o tasto destro (`ExposureTable.svelte:437-448`, `ContributionTable.svelte:219-232`);
+  >     - `lots-analysis.md:128-131`: la linea Combined richiede 2 o più broker (`LotWacPriceChart.svelte:720-722`); l'etichetta è «Abs» (`en.json:1557`); la dimensione delle bolle dipende dalla quantità o dal valore, su scala a radice da 7 a 22 px (`lotWacPriceChartHelpers.ts:273-292`).
+  >   - I reperti di codice (`KpiSection`, `PositionsPanel`) sono in `w2_findings.md`.
+  >
+  > **Note implementazione, gruppo G1 (broker, transazioni e Files)** (17:00):
+  > - **Testo visibile, prima e dopo:** `brokers/index` da 727 a 656 parole; `brokers/import` da 461 a 365; `brokers/info` da 324 a 344 (con la regola del saldo di fine giornata in LaTeX, in un pannello); `brokers/sharing` da 786 a circa 780 (682 sempre visibili); `transactions/index` da 691 a 675; `transactions/form` da 442 a 580, con la tabella dei 12 tipi e i link alla teoria; `files/index` da 937 a 842.
+  > - **10 affermazioni sbagliate corrette dal codice:**
+  >   - non esiste una **Base currency** del broker;
+  >   - le etichette sono **Allow Leveraged Buying** e **Allow Short Selling**;
+  >   - i broker inattivi sono solo attenuati sulla card;
+  >   - si condivide per username, non per e-mail;
+  >   - **Add Transaction** apre il bulk workspace;
+  >   - il form non ha un campo prezzo e chiede l'importo totale;
+  >   - il cost basis vale solo per Adjustment e Asset Transfer, e non c'è un'anteprima del guadagno;
+  >   - non c'è una barra di ricerca ma i filtri di colonna;
+  >   - il ritaglio si apre solo da ✏️ **Edit**;
+  >   - il controllo del contenuto dei file vale solo con libmagic.
+  > - **Sharing:**
+  >   - è un campo numerico, non uno slider;
+  >   - **Save Configuration**, e **Share Broker** sta nella toolbar;
+  >   - la frase sulla tab Rischio della Dashboard (solo broker posseduti con quota sopra 0) linka `#risk-tab`.
+  > - **Seguiti fatti:**
+  >   - via «exact sampling» da `brokers/index`;
+  >   - il ritaglio con ✏️ in `files/index` e in `core-ui/file-upload.md`, che ha avuto tutti i fatti del ritaglio;
+  >   - **Analyze Lots** in `brokers/index`.
+  > - **Ancore:** restano `#broker-reports` (ora esplicita in EN), `#report-sets`, `#uploaded-by`, `#composite-transactions` e il link a `#risk-tab`. Nuove `#trading-options`, `#bulk-workspace` e `#link-pairs`.
+  > - **Dev:**
+  >   - componenti broker: `forms.md`, `cards.md` e `modals.md`, con i motivi per cui il server rifiuta il salvataggio della condivisione;
+  >   - `transaction-form.md`, `file-upload.md`, `balance_validation.md`, `split_promote.md` e `users_and_brokers.md`.
+  > - **⚠️ Fuori pista: sicurezza.** `GET /brokers/{id}/access` restituisce username **ed e-mail** a qualunque utente autenticato, per qualunque broker. Verificato da Q: `as_user_id="all"` salta il controllo (`broker_service.py:347`) e `list_accesses` non filtra (`:795-825`). Segnalato subito al coordinatore (16:58), senza toccare il codice.
+  > - **Seguito:** correggere `brokers/cards.md` e `brokers/index.md` dev, che documentano componenti inesistenti (`CashBalanceCard`, `CashTransactionModal`).
+  >   - ✅ (17:10) Fatti. `brokers/index.md` dev: card `BrokerCard` e `BrokerDiscoveryCard`; modali `BrokerModal`, `BrokerSharingModal`, `BrokerSharingPanel`, `BrokerImportFilesModal` e `DeleteBrokerDialog`; una riga `lots/`. `cards.md`: le props reali (`broker`, `summary`, `assetCount`, `targetCurrency`) e gli eventi `edit`, `delete` e `share`; via la «base currency» e `CashBalanceCard`; aggiunta `BrokerDiscoveryCard`.
+  >   - Altro seguito: `core-ui/datePickers.md` (L12, L45) citava ancora `CashTransactionModal` fra gli utenti di `SingleDatePicker`. È aggiunto allo scope `--w2`.
+  >
+  > **Coordinatore** (16:48):
+  > - **L'onda 1 è in `dev_release2`:** treno 15 `23b839fb2`, con il merge di Q `ceeb31a2c`. Il worktree di Q non viene avanzato mentre l'onda 2 è in corso; il treno 15 sarà fuso nel ramo di Q al checkpoint dell'onda 2.
+  > - **Elenco degli accessi:** reperto verificato (`brokers.py:422` è l'unico `as_user_id="all"`). Lo porta il coordinatore al developer. Le frasi «share button shows who has access» di `brokers/index` e `brokers/sharing` restano come sono finché il developer non decide.
+  >   - **Decisione del developer** (17:05, via il coordinatore): «mi pare che fosse una cosa voluta, serve per permettere, quando si condivide il broker di vedere a chi condividerlo, e nel caso scrivergli. poi le persone che condividono un istanza tra loro non sono estranee, basta che almeno siano autenticate». Il codice non cambia. La docstring e il commento «For superuser» vanno nel backlog del coordinatore, e Q non li tocca.
+  >   - **Doc aggiornata da Q:** `brokers/index.en.md:43` e `brokers/sharing.en.md:81` dicono che ogni utente autenticato dell'istanza vede chi ha accesso a qualunque broker. Niente «e-mail» nelle pagine utente: la UI mostra username e avatar, non le e-mail (nessun `.email` in `components/brokers`). `users_and_brokers.md:67-74`: scelta voluta, e l'API restituisce anche l'e-mail.
+  > - Le pagine riservate restano a M, che ora ci mette le immagini.
+  >
+  > **Note implementazione, gruppo D (asset)** (17:20):
+  > - **Lunghezze:** `assets/index` da 1214 a 1057 parole; `detail/index` da 590 a 543; `detail/chart` da 1220 a 911 (finestra del rolling return in LaTeX); `detail/signals` da 1703 a 1058 (un H3 per famiglia, una riga per indicatore con link alla teoria); `detail/data-editor` da 656 a 669; `detail/measures` da 475 a 368; `detail/events` da 442 a 558.
+  > - **Errori corretti dal codice:**
+  >   - non c'è un «time delta selector»; le voci sono **Reload** e **Merge with…**;
+  >   - i marker degli eventi si distinguono per forma, non per colore;
+  >   - il menu valuta elenca le valute raggiungibili dalle coppie FX;
+  >   - l'icona della documentazione è **?**, e l'errore è un ⚠ rosso;
+  >   - nel data editor non c'è una colonna Currency; i vecchi esempi CSV non si importavano (serve `date;currency;close`); si cancella con **Undo**;
+  >   - eventi: Scheduled Investment genera Interest e Maturity; Yahoo porta anche gli split; mancava justETF; gli eventi si aggiungono dal data editor, da **Linked Event** e da **Add Event** del piano.
+  >   - Data editor ed eventi crescono per queste correzioni.
+  > - **Ancore:** restano esplicite `chart.md#rolling-return` e `#primary-modes` (la linka `indicators/index`). Nuove `signals.md#data-comparison`, `#drawdown-full-history`, `#technical-indicators` e `data-editor.md#import-from-csv`. Le automatiche tolte non le linka nessuno.
+  > - **Dev:**
+  >   - `charts.md`: modi Prices / Rolling Return; nuove sezioni «Chart Settings and Axis Scales» e «Responsive Date Axis», con i fatti di E;
+  >   - `core-ui/data-editor.md`: parsing CSV, tabella degli errori, regole di salvataggio FX e asset, refresh trattenuto; corretti conferma e separatore tab;
+  >   - `signal_plugin_guide.md`: `catalog_visible`, 23/22/9 plugin, risultati mai salvati, tabella delle icone di `signalProblem.ts`;
+  >   - `events.md`: corretto il dedup (sostituisce solo stessa data, tipo e provider);
+  >   - `assets/architecture.md`: politica di conversione FX, endpoint, i due fatti di F. Il prezzo del sync diventa il punto del giorno. Il fallback sull'ultima operazione esiste dentro il `price_resolver` (`LAST_TRADE_PRICE`), non come regola a parte.
+  > - **Reperti di codice:** 5 sugli eventi (`{n}` contro `count`, cambio di tipo che duplica, FK `RESTRICT`, CSV `value` contro `amount`, commento della gomma), in `w2_findings.md`.
+  >
+  > **Chiusura della scrittura dell'onda 2** (17:00):
+  > - **G1, ultimi seguiti su `core-ui/datePickers.md`:**
+  >   - `SingleDatePicker` ha 6 utenti reali (DataEditor, BrokerForm, TransactionFormModal, EventCreateMiniModal, ScheduledInvestmentEditor e BoundaryDateModal), non `CashTransactionModal`;
+  >   - `DateRangePicker` ha 10 utenti reali (i 6 toolbar di pagina, `MeasurePanel`, `DataTableColumnFilter`, `CellDateRange`, `L4Replay` → `risk-lab.md#replay`).
+  >   - Q ha corretto la riga dei preset: 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX e la finestra personalizzata; 3Y, 5Y, 10Y, MTD, QTD e WTD solo se c'è spazio (`DateRangePicker.svelte:36,216-251`).
+  > - **Gate `w2b`** (`Q_GATE_ARGS=--w2 /tmp/libreFolio_q_gate.sh w2b`): build strict exit 0 e 0 WARNING; `check-links` con solo la baseline (`#rolling-return`); scope 88 percorsi, 48 pagine utente e 39 dev più il piano; segnaposto, stile e `git diff --check` verdi. Nel gate intermedio `w2a` c'era 1 WARNING su `charts.md#where-settings-live`, a scrittura in corso: risolto.
+  > - **Anteprima:** sulla 6162 alle 16:58 (`q-preview-6162c`, no-store), con le 102 PNG di M sovrapposte.
+  >
+  > **Onda 2 approvata** (developer, 17:26): «kpi e posizioni vanno alla grande! anche ai export ora è come me la immaginavo in tutte le pagine. […] le altre dopo mi paiono tutte corrette, le approvo».
+  > - **Immagine `fx/detail-chart` «mancante» nella tab del developer:** non è un errore.
+  >   - Il nome è lo stesso di HEAD, lo scenario esiste (`gallery.spec.ts:3482`), e la copia pubblicata della 1.1 esiste (200, 1280×720, EUR→USD).
+  >   - Nel WebKit dell'app si carica (697×392). Nella tab del developer la richiesta a GitHub Pages era fallita in quel momento.
+  >   - M non ha ancora scatti FX: alla release la gallery completa la rigenera.
+  > - **⚠️ Fuori pista: LaTeX.** L'auto-validazione EN (`/tmp/libreFolio_q_selfcheck.py`) ha trovato in `kpi-cards.en.md` 3 formule con `\text{Total P&L}`. È l'errore `latex-syntax-ampersand` del validatore del progetto: `&` dentro `\text{}`.
+  >   - MathJax lo renderizzava comunque, ma la regola del progetto vale anche per le traduzioni.
+  >   - Corretto in `\text{Total P}\&\text{L}` (6 occorrenze). MathJax: 5 container, 0 errori.
+  > - **Auto-validazione EN dopo la correzione:** 247 pagine, 0 errori, e 2 WARN `artifact-glossary-marker` già presenti a HEAD, falsi positivi su codice.
+  > - **Privacy:** sulle 3750 righe aggiunte, nessun IBAN, email, numero lungo né segreto.
+  > - **Gate `w2d`:** build exit 0 e 0 WARNING, `check-links` con solo la baseline, scope 88 percorsi, segnaposto, stile e `git diff --check` verdi.
+  > - **Chiusura della corsia:** anteprima spenta, porte 6162 e 6042 libere. Rimosse le PNG di M (`/tmp/librefolio-q-gallery-drop`), il sito copiato e i file temporanei.
+  > - **Checkpoint:** 87 file tracciati modificati e 1 nuovo (`developer/backend/brim/credit_agricole.md`); nessuna traduzione toccata. Messaggio proposto in `/tmp/libreFolio_commit_w2.txt`. Stato FROZEN.
+  > - **Reperti per il coordinatore:**
+  >   - i tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valgono solo per i prezzi; gli indicatori arrivano a 84/28/14;
+  >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
 
 ## 4. Conflitti, rischi, definizione di fatto
 

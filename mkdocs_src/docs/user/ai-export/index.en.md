@@ -1,164 +1,136 @@
 # 🧠 AI Export
 
-AI Export turns the current LibreFolio context into structured text that you can
-paste into an AI assistant or keep as a portable snapshot.
+AI Export copies your LibreFolio data as ready-to-paste text, with a focused question if you want
+one, so you can ask the AI assistant of your choice about your portfolio, a broker, an asset or a
+currency pair. LibreFolio itself never contacts an AI service.
 
-!!! important "Clipboard export only"
+---
 
-    LibreFolio does **not** contact an AI service. It builds the financial and
-    technical snapshot on your server, renders it in your browser, and copies it
-    to the clipboard. You choose whether and where to paste it.
+## 🎯 What It Is For
 
-## 📋 What It Does
+- **Review with real figures**: a broker, a position, a currency pair and your exposure to it.
+- **Plan**: recurring investments, a rebalancing, or how expiring tax losses might offset gains.
+- **Explain**: what drove your performance, asset by asset, with dated sources.
+- **Keep a snapshot**: just the facts, ready for your own question.
 
-AI Export is available from:
+What you copy is factual context, not investment advice.
 
-- the Dashboard toolbar for Portfolio tasks;
-- the Broker toolbar for Broker tasks;
-- the page toolbar on Asset and FX detail pages.
+---
 
-The backend supplies valuations, performance, allocations, economic FIFO facts,
-FX exposure, and technical indicators. The public catalog intentionally exposes
-only **eight autonomous Export Data choices** and **eleven task-oriented
-Analyses**. Smaller backend datasets remain internal composition blocks.
+## 🚀 Open It
 
-**Export Data** copies one selected factual snapshot without analysis
-instructions. **Request Analysis** adds an objective and response contract to an
-autonomous snapshot, plus a complementary public export suggestion when useful.
-Optional notes and the requested response language apply only to analyses.
+Select **AI Export** (:material-brain:) in the toolbar of one of these pages:
 
-## 🚀 How to Use It
+| Page | What the export covers | Guide |
+| :--- | :--- | :--- |
+| **Dashboard** | Your portfolio, as the Dashboard shows it | [Portfolio](portfolio.md) |
+| A **Broker** detail page | That broker only | [Broker](broker.md) |
+| An **Asset** detail page | That asset and, if you hold it, your position | [Asset](asset.md) |
+| An **FX** detail page | That currency pair and your direct exposure to it | [FX](fx.md) |
 
-1. Open the relevant Portfolio, Broker, Asset, or FX page.
-2. Select **AI Export** (:material-brain:).
-3. Choose **Export Data** or **Request Analysis**, then select a dataset or
-   Analysis.
-4. Choose the AI period and detail level.
-5. For an analysis, add optional notes when the Analysis supports them.
-6. Select **Copy AI Export**, then paste the result into the tool of your choice.
+The export is dated on the **last day of the page's date range**: move that date to export an
+earlier moment.
 
-## 🎛️ Export Options
+---
 
-| Option                  | Meaning                                                                                                                                                                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Export type**         | **Export Data** creates a factual dataset prompt. **Request Analysis** adds the Analysis objective, verification instructions, response contract, and relevant datasets.                                                                                     |
-| **Dataset or analysis** | The available choices come from the current LibreFolio runtime catalog for the page/domain.                                                                                                                                                                  |
-| **AI period**           | **3M**, **6M**, **1Y**, or Custom when offered. The period ends on the snapshot date. Partial source history remains explicit.                                                                                                                               |
-| **Detail level**        | **Compact**, **Standard**, and **Full** keep the same entity universe. General snapshots use progressively denser uniform mini-histories; detailed market exports use the complete technical sampling policy. Full can be large and is not always necessary. |
-| **Notes for the AI**    | Available for supported analyses. Adds optional user context as a safely serialized data block.                                                                                                                                                              |
+## 🧭 Choose What to Export
 
-Draft export type, selection, detail, AI period, and notes remain in browser
-memory for 10 minutes per page context. Closing the panel or navigating away
-preserves them within that window. Expiry, logout, or any new login resets every
-AI Export panel to its defaults; drafts are not persisted in `localStorage`.
+The panel opens on a ready-to-use choice: change only what you need.
 
-## 📤 Available Export Data
+### 📤 Step 1: Choose the export type
 
-| Page      | General snapshot                     | Detailed market history               |
-| --------- | ------------------------------------ | ------------------------------------- |
-| Dashboard | **Portfolio Overview & History**     | **Portfolio Asset History**           |
-| Broker    | **Broker Overview & History**        | **Broker Asset History**              |
-| Asset     | **Position & Market History (full)** | **Market History Only (no holdings)** |
-| FX        | **FX Market & Exposure**             | **FX Market History**                 |
+Under **Export type**:
 
-General snapshots combine current economic facts with a compact historical path
-and focused market context. Detailed market histories contain denser observed
-prices or rates, indicators, states, events, and coverage.
+- **Export Data** copies only the facts: keep a snapshot, or ask your own question.
+- **Request Analysis** adds a focused question, rules for checking the figures, and the
+  structure of the expected answer.
 
-## 🗂️ Available Analyses
+### 🗂️ Step 2: Pick a dataset or an analysis
 
-### 📊 Portfolio
+Open **Dataset or analysis**: each entry has a one-line description. Every page offers a general
+data export, a detailed market history, and two to four analyses, listed in the guides above.
 
-| Task                                   | Purpose                                                                                                                                            |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Recurring Investment Plan              | Review portfolio structure, cash flows, and constraints for recurring investments.                                                                 |
-| Portfolio Rebalancing                  | Compare current allocation with diversification and target-allocation context.                                                                     |
-| Portfolio Performance & Market Drivers | Reconcile performance, then research dated short- and long-horizon drivers for every held Asset without overstating causality.                     |
-| Capital-Loss Offset Strategies         | Explore how available or expiring tax losses might offset eligible gains using economic FIFO evidence and an explicit official tax-loss inventory. |
+### 🔍 Step 3: Set the detail level
 
-### 🏦 Broker
+Choose **Compact**, **Standard** (the default) or **Full**. All three cover the same assets,
+indicators and period; they only keep more or less history. **Full** can be very long.
 
-| Task                                | Purpose                                                                                                                |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Broker Review                       | Summarize holdings, cash, activity, performance, and data coverage for one broker.                                     |
-| Broker Performance & Market Drivers | Reconcile selected-Broker performance and research dated drivers for every held Asset.                                 |
-| Capital-Loss Offset Strategies      | Explore tax-loss offset paths using selected-Broker economic FIFO evidence and the user's official tax-loss inventory. |
+### 📅 Step 4: Set the AI period
 
-### 📈 Asset
+Choose **3M** (the default), **6M**, **1Y** or **Custom** (days, weeks, months or years), ending
+on the export date. If LibreFolio holds less history, the export flags it as partial: it never
+invents prices or uses future ones.
 
-| Task                  | Purpose                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Position Review       | Review size, cost basis, performance, income, and concentration context.                                     |
-| Asset Market Analysis | Review observed-close history, returns, trend, momentum, volatility, Drawdown, states, events, and coverage. |
+### 📝 Step 5: Add notes (analyses only)
 
-### 💱 FX
+With **Request Analysis**, add context or questions in **Notes for the AI**: a monthly budget, a
+target allocation, what worries you. The AI reads them as information, not as new rules.
 
-| Task               | Purpose                                                                                            |
-| ------------------ | -------------------------------------------------------------------------------------------------- |
-| FX Pair Analysis   | Review pair direction, returns, volatility, technical evidence, coverage, and dated macro context. |
-| FX Exposure Impact | Review direct cash, trading-currency, and valuation-currency links to the pair.                    |
+### 📋 Step 6: Copy
 
-Analyses that compare future paths use a **Scenario Thesis**: supplied evidence,
-assumptions, horizon, trade-offs, trigger conditions, invalidation conditions, and
-missing user decisions. It is mandatory for PAC, rebalancing, and capital-loss
-offset scenarios.
+Select **Copy AI Export**. After **Preparing export…**, a message confirms the copy with its
+estimated size.
 
-## 🧩 Partial History and Additional Data
+??? warning "📏 Large prompt — when the text is long"
 
-LibreFolio can export the history that is actually available when it is shorter
-than the requested AI period. The prompt shows requested/available dates, coverage,
-warnings, and any Signal that is partial or omitted. It never uses future prices
-or rates.
+    The panel first shows the **Final prompt size** with a warning. Choose **Use Compact** for a
+    shorter text (not shown on Compact), or **Copy Anyway**: the same settings then copy without
+    asking for a while.
 
-An Analysis can recommend **Additional LibreFolio Data** when another export would
-materially improve the answer. The prompt gives the public export name, UI path,
-recommended period/detail, reason, and whether it is required or optional.
+LibreFolio remembers your last choices on each page for a few minutes; logging out resets them.
 
-!!! info "Drawdown is always full-history"
+---
 
-    Wherever a Drawdown section appears in an export, it is computed over the
-    **full available history** — from the first stored price for an Asset, or
-    from the first transaction for a Portfolio or Broker — never relative to
-    the selected AI period. A short export window still carries the true
-    historical peak-to-trough.
+## 🤖 Paste It Into Your AI Assistant
 
-## 🔗 Local References
+You copy plain text: a short header (what was exported, the date, period, currency and detail
+level) and your data in compact tables. **Request Analysis** adds the question and the expected
+answer structure around them.
 
-The prompt uses local references to join compact tables:
+1. Open a new chat in an AI assistant you trust with financial data.
+2. Paste the text and send it. With **Request Analysis**, the question is already in it.
+3. Answer the AI's questions: it is told to ask only for what changes the result (a budget, a
+   goal, your tax situation) and never to guess it.
 
-- A# for Assets;
-- B# for Brokers;
-- F# for FX pairs;
-- L# for FIFO lots.
+Good to know:
 
-The Entity Directory resolves the A#, B#, and F# references. L# lots are
-different: they are **embedded rows** inside the FIFO tables of the export
-itself, not directory entries — the model reads them in place. The receiving
-model should use readable names in its answer; database IDs are not needed.
+- With **Request Analysis**, the AI is asked to answer in your LibreFolio interface language and
+  to keep your figures apart from its interpretation.
+- The **Performance & Market Drivers** analyses need an assistant that can search the web;
+  without it, the answer says so instead of inventing sources.
+- Assets, brokers, currency pairs and lots appear as short codes (A1, B1, F1, L1) explained in
+  the text; the AI is asked to answer with the real names.
+- An analysis may suggest one more export under **Additional LibreFolio Data**, with where to
+  find it. If the AI asks for it, copy that export too and paste it into the same chat.
 
-## 🔒 Scope and Privacy
+---
 
-- Portfolio exports follow the active broker filter, date range, and target
-  currency.
-- Broker exports contain only the selected broker and require access to it.
-- Asset and FX exports use the current entity, selected range, target currency,
-  and the user's accessible broker scope where portfolio context is needed.
-- The clipboard text can contain sensitive financial data. Review it before
-  sharing or pasting it into a third-party service.
+## 🔒 Privacy
 
-## ⚠️ Availability and Safety
+- LibreFolio sends the export nowhere: it only writes it to your clipboard.
+- The text holds your **real figures** and the names of your brokers and assets, even while
+  privacy mode is on.
+- Each page exports only its own scope:
+    - **Dashboard**: the brokers you own with a share above 0%, narrowed by the broker filter;
+    - **Broker**: that broker only;
+    - **Asset** and **FX**: every broker you can open, including brokers shared with you.
+- Review the text before pasting it anywhere; a reminder appears after every copy.
 
-AI Export fails closed if the browser and server catalogs or response contracts
-do not match. An option can also be unavailable when its facts do not apply—for
-example, Position Review without an open position or FX Exposure Impact without
-direct linked exposure.
+---
 
-The export provides factual context, not investment advice or automated trading
-instructions.
+## 🛠️ When Something Goes Wrong
 
-## 🔗 Related Pages
+- **AI Export is greyed out**: the page is still loading or, on the Dashboard, you own no broker
+  with a share above 0%.
+- *This selection is not applicable to the current data.*: pick another analysis.
+  **Position Review** needs a position in the asset; **FX Exposure Impact** needs cash or a
+  position linked to the pair.
+- A message ending in *Refresh and try again.*: reload the page.
+- *Clipboard access is unavailable. Check browser permissions.*: allow clipboard access for
+  LibreFolio in your browser.
 
-- [Portfolio AI Export](portfolio.md)
-- [Broker AI Export](broker.md)
-- [Asset AI Export](asset.md)
-- [FX AI Export](fx.md)
+---
+
+## 🔗 Related
+
+- 🛠️ **[How AI Export works](../../developer/architecture/patterns/ai_export_snapshot.md)** — for developers

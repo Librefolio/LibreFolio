@@ -143,6 +143,13 @@ graph TD
 3. **PERSIST** creates a distinct `AsyncSession` for each asset. It compares fetched points with
    stored rows, then delegates price/event writes to `price_store.py`.
 
+When the range reaches today, FETCH asks a provider's history only up to yesterday, then calls
+`get_current_value()` and adds its value as the close of its `as_of_date` (today when the provider
+gives none), replacing any history point of that date; PERSIST stores it with the rest. A provider
+without history (`supports_history = False`, such as the CSS Scraper) therefore builds its series
+one sync at a time, one point per day; outside syncs, the
+[current-quote write-back](#current-quotes-and-todays-ohlc) stores the same day's point.
+
 Persistence intentionally does **not** claim one atomic transaction for the whole refresh.
 `bulk_upsert_prices()` commits bounded chunks of
 `PRICE_UPSERT_CHUNK_SIZE = 1000`; event upserts commit their own bounded chunks; and
@@ -176,6 +183,15 @@ Each query item can request:
 `get_prices_bulk()` never invokes a provider. Provider acquisition belongs to
 `refresh.py` through `POST /assets/prices/sync`; the query path remains DB-only while retaining
 its warm-up, event, FX-conversion, signal-computation, and final response-slicing passes.
+
+With `target_currency`, the conversion pass converts every close not already in that currency
+through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
+the native values in the `original_*` fields, and records the rate's date in
+`backward_fill_info.fx_rate_date` / `fx_days_back`. A point whose rate cannot be resolved keeps its
+native price and currency, and the result's `errors` lists the failures, deduplicated and capped at
+ten plus one "… and N more" line. The query never registers an FX pair: the asset page reports
+the pair through its `requiredFxPairs` banners, and its comparison loader drops those points (see
+[Chart internals](../../frontend/components/charts.md#asset-detail-page-sync-and-comparison-sync)).
 
 ### 💹 Current Quotes and Today's OHLC
 
@@ -246,6 +262,13 @@ Financial markets are closed on weekends and holidays. To provide a continuous p
 
 If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`).
 
+Backward fill reuses stored market prices only, and valuation adds no separate
+last-purchase-price fallback: the portfolio engine values each holding through the
+[Price Resolver](../transactions/price_resolver.md#the-daily-model) alone. On a day without a
+market price, the resolver falls back on the asset's own trades (BUY, SELL, priced ADJUSTMENT)
+when one is the latest observation, as for a fund with no published NAV, and the holding then
+reports `valuation_source = LAST_TRADE_PRICE`.
+
 ---
 
 ## ⚡ Cache & Performance
@@ -289,6 +312,11 @@ If a price is requested for a date where no data exists (e.g., Sunday), the syst
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
+| `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
+| `POST /api/v1/assets/events` | POST | Bulk upsert manual events (the asset's currency only) |
+| `DELETE /api/v1/assets/events` | DELETE | Bulk delete events by id; an event a transaction uses comes back `in_use` |
+| `POST /api/v1/assets/events/query` | POST | Bulk event query, each event with its `id` and `is_auto` flag |
+| `GET /api/v1/assets/events` | GET | Events by id |
 
 !!! tip "Interactive search internals"
 
