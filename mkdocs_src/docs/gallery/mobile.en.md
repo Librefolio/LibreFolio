@@ -142,7 +142,14 @@ When prices or FX rates are missing, the dashboard explains what is stale and li
     <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="🚩 Data-Quality Banner">
 </div>
 
-<!-- [Screenshot Placeholder: dashboard/data-quality-sync-rates — gallery entry "### 💱 Missing Exchange Rates": The data-quality banner listing missing exchange rates with its Sync rates button.] -->
+### 💱 Missing Exchange Rates
+
+The data-quality banner listing missing exchange rates with its Sync rates button.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-sync-rates" alt="💱 Missing Exchange Rates">
+</div>
+
 <!-- [Screenshot Placeholder: dashboard/privacy-masked — gallery entry "### 🙈 Privacy Mode": The dashboard with privacy mode on — the eye button in the header and every amount shown as •••.] -->
 
 ---
@@ -714,14 +721,73 @@ Corporate events appear as colored markers on the chart; hovering reveals the de
 
 ---
 
-<!-- [Screenshot Placeholder: risk/lab-correlation — new section "## 📉 Risk Analysis", gallery entry "### 🔗 Correlation Matrix": The Correlation tab of the Assets page — the correlation matrix and the lists of the most alike and offsetting pairs.] -->
-<!-- [Screenshot Placeholder: risk/lab-asset-picker — gallery entry "### ➕ Lab Asset Picker": The + panel with type and currency filters and the assets that cannot be analysed listed apart.] -->
-<!-- [Screenshot Placeholder: risk/lab-hurt-table — gallery entry "### 📉 How Much Did Each of These Hurt?": The loss comparison table of the selected assets.] -->
-<!-- [Screenshot Placeholder: risk/lab-risk-return — gallery entry "### 🎯 Paid for Its Risk?": The risk/return table with the benchmark row and the chart with the benchmark diamond and the dashed line.] -->
-<!-- [Screenshot Placeholder: risk/lab-benchmark-picker — gallery entry "### 🧭 Benchmark Picker": The Compared with picker listing apart the assets that cannot be measured over the period.] -->
-<!-- [Screenshot Placeholder: risk/lab-notice — gallery entry "### 🚩 Partial Results Notice": The notice above the sections and a level banner explaining what could not be measured.] -->
-<!-- [Screenshot Placeholder: risk/lab-replay — gallery entry "### 🕰️ Historical Replay": The replay table with the left-out assets as badges and the common-period button.] -->
-<!-- [Screenshot Placeholder: risk/whatif-simulation — gallery entry "### 🎲 Simulation": The What if…? simulation step with its beta notice.] -->
+## 📉 Risk Analysis
+
+### 🔗 Correlation Matrix
+
+The Correlation tab of the Assets page — the correlation matrix and the lists of the most alike and offsetting pairs.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="lab-correlation" alt="🔗 Correlation Matrix">
+</div>
+
+### ➕ Lab Asset Picker
+
+The + panel with type and currency filters and the assets that cannot be analysed listed apart.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="lab-asset-picker" alt="➕ Lab Asset Picker">
+</div>
+
+### 📉 How Much Did Each of These Hurt?
+
+The loss comparison table of the selected assets.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="lab-hurt-table" alt="📉 How Much Did Each of These Hurt?">
+</div>
+
+### 🎯 Paid for Its Risk?
+
+The risk/return table with the benchmark row and the chart with the benchmark diamond and the dashed line.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="lab-risk-return" alt="🎯 Paid for Its Risk?">
+</div>
+
+### 🧭 Benchmark Picker
+
+The Compared with picker listing apart the assets that cannot be measured over the period.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="lab-benchmark-picker" alt="🧭 Benchmark Picker">
+</div>
+
+### 🚩 Partial Results Notice
+
+The notice above the sections and a level banner explaining what could not be measured.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="lab-notice" alt="🚩 Partial Results Notice">
+</div>
+
+### 🕰️ Historical Replay
+
+The replay table with the left-out assets as badges and the common-period button.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="lab-replay" alt="🕰️ Historical Replay">
+</div>
+
+### 🎲 Simulation
+
+The What if…? simulation step with its beta notice.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulation">
+</div>
+
+---
 
 ## 💱 FX Rates
 
