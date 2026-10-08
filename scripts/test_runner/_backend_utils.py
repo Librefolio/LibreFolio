@@ -187,6 +187,15 @@ def utils_release_image_contract(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Release image contract tests", verbose=verbose)
 
 
+def utils_dev_cli_image(verbose: bool = False, test_names: list = None) -> bool:
+    """Test dev.py inside the image's file set (no backend/test_scripts) and the image's HEALTHCHECK port."""
+    print_section("Utils: dev.py in the Docker image")
+    print_info("Testing: dev.py on a copy of the image's /app tree (tmp_path), Dockerfile HEALTHCHECK vs CMD vs compose")
+    print_info("Tests: help and user commands run, unavailable groups say so and exit 2, password reset on a temporary DB")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_image.py", test_names)
+    return run_command(cmd, "dev.py image tests", verbose=verbose)
+
+
 def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
     """Test the i18n three-verdict classifier (used / not verified / dead)."""
     print_section("Utils: i18n Usage Gate")
@@ -322,6 +331,16 @@ Tests for utility modules and helper functions:
         desc="release.yml rebuilds the frontend (production) and the docs between the gallery and both image builds, the nightly report reads every soft-gated step, the gallery fails a release (soft on dev only), cache keys carry the runner image, tags follow the user guide (latest = light, X.Y.Z full, X.Y.Z-light, no v; a variant without tags is not pushed) and the release notes say so; the Dockerfile takes frontend/build only through the guarded frontend stage",
         # Reads .github/workflows/release.yml and Dockerfile, mutates copies in
         # memory: no DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-cli-image",
+        utils_dev_cli_image,
+        name="dev.py in the Docker image",
+        desc="dev.py on a copy of the image's /app file set (no backend/test_scripts): help, user and db run; test, i18n and mkdocs translate answer «not available in this installation» and exit 2; user create/reset/list on a temporary DB; the Dockerfile HEALTHCHECK probes the port the CMD binds, like compose",
+        # A copy of the image tree and a temporary DB under tmp_path, dev.py in
+        # subprocesses: no lane DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(
