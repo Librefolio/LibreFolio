@@ -6,7 +6,9 @@ WITHOUT making any HTTP calls. These tests validate:
 - Required properties return correct types and non-empty values
 - Static URL generation follows expected patterns
 - Test cases / test data are well-formed
-- Provider metadata is consistent
+- Provider metadata is consistent — including with what it points at: an asset
+  provider's help URL names an existing page of the user guide, and an FX
+  provider's description counts the currencies its own table serves
 
 Unlike test_external/test_*_providers.py (which test live HTTP), these run
 offline and cover base-class methods that are typically at 0% coverage
@@ -16,6 +18,7 @@ When a new provider is added with @register_provider, these tests
 automatically cover it — no manual test authoring needed.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -25,6 +28,13 @@ from backend.app.services.provider_registry import (
     BRIMProviderRegistry,
     FXProviderRegistry,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+# The user guide's provider pages: one `<slug>.<lang>.md` per asset provider,
+# served at `/mkdocs/user/assets/providers/<slug>/`.
+USER_PROVIDER_DOCS = REPO_ROOT / "mkdocs_src" / "docs" / "user" / "assets" / "providers"
+USER_PROVIDER_HELP_URL = re.compile(r"/mkdocs/user/assets/providers/(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)/")
 
 # ============================================================================
 # DISCOVERY (run once at module import)
@@ -142,6 +152,41 @@ class TestFXProviderContract:
             assert "en" in w
 
 
+# FX providers whose quote currencies are a fixed table in the class
+# (`CURRENCY_SERIES`), so the count their description promises can be checked
+# offline. ECB learns its list at runtime and is out of reach here.
+FX_FIXED_TABLE_CODES = ("BOE", "FED")
+DESCRIPTION_LANGUAGES = ("en", "it", "fr", "es")
+# A count as a reader takes it: "15", "20+". Digits glued to a letter, a dot or a
+# colon belong to a name or a time, not to a count: FED cites the "H.10" release.
+STATED_COUNT = re.compile(r"(?<![\w.:])(\d+)\+?(?![\w.:])")
+
+
+class TestFXProviderStatedCoverage:
+    """A description that counts currencies counts the ones the provider serves.
+
+    The description is what the provider picker shows a user deciding which source
+    to route a pair through. "20+ currencies" read there is a promise about which
+    pairs can be priced, and it is checked against the table the fetch actually
+    walks, in every language it is written in. "N" and "N+" are both honest when N
+    is the size of the table.
+    """
+
+    @pytest.mark.parametrize("lang", DESCRIPTION_LANGUAGES)
+    @pytest.mark.parametrize("code", FX_FIXED_TABLE_CODES)
+    def test_description_counts_the_currencies_in_its_table(self, code, lang):
+        provider = FXProviderRegistry.get_provider_instance(code)
+        table = provider.CURRENCY_SERIES
+        # Precondition, verified rather than assumed: the table holds quote
+        # currencies only, so its size is the number served against the base.
+        assert provider.base_currency not in table, f"{code}: CURRENCY_SERIES lists its own base {provider.base_currency}"
+
+        text = provider.description_i18n[lang]
+        stated = [int(n) for n in STATED_COUNT.findall(text)]
+        assert stated, f"{code} [{lang}] no longer says how many currencies it serves: {text!r}"
+        assert set(stated) == {len(table)}, f"{code} [{lang}] promises {stated} currencies against {provider.base_currency}, CURRENCY_SERIES serves {len(table)}: {text!r}"
+
+
 # ============================================================================
 # ASSET SOURCE PROVIDER CONTRACT
 # ============================================================================
@@ -208,6 +253,34 @@ class TestAssetProviderContract:
         """provider_help_url must be None or a valid path string."""
         url = provider.provider_help_url
         assert url is None or (isinstance(url, str) and len(url) > 0)
+
+    def test_help_url_opens_its_page_in_the_user_guide(self, provider):
+        """A help URL is the provider's page in the *user* guide, and that page exists.
+
+        The link sits beside the provider where a user picks a price source, so it
+        must land on the page written for that reader — one per provider under
+        ``user/assets/providers/`` — not on developer internals, and not on a page
+        nobody wrote.
+        """
+        url = provider.provider_help_url
+        if url is None:
+            pytest.skip(f"{provider.provider_code} publishes no help URL")
+        match = USER_PROVIDER_HELP_URL.fullmatch(url)
+        assert match, f"{provider.provider_code}: provider_help_url {url!r} is not /mkdocs/user/assets/providers/<slug>/"
+        page = USER_PROVIDER_DOCS / f"{match['slug']}.en.md"
+        assert page.is_file(), f"{provider.provider_code}: {url!r} names no page — {page.relative_to(REPO_ROOT)} does not exist"
+
+    def test_help_url_guard_has_something_to_check(self):
+        """Positive control for the guard above: its green is not the green of an empty check.
+
+        The docs tree it resolves against holds provider pages, and registered
+        providers do publish help URLs — so a red there is a wrong URL, never a
+        guard reading an empty directory or a property nobody sets any more.
+        """
+        pages = sorted(p.name for p in USER_PROVIDER_DOCS.glob("*.en.md") if p.name != "index.en.md")
+        assert pages, f"no provider page under {USER_PROVIDER_DOCS.relative_to(REPO_ROOT)}: the guard reads the wrong place"
+        with_url = [code for code in _asset_codes() if AssetProviderRegistry.get_provider_instance(code).provider_help_url]
+        assert with_url, "no registered asset provider publishes a help URL: the guard checks nothing"
 
     def test_params_schema_valid(self, provider):
         """params_schema must be a list of dicts with at least 'key' and 'type'."""
