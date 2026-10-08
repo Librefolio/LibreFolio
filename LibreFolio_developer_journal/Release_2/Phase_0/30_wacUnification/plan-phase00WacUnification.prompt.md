@@ -1182,3 +1182,30 @@ Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho m
 - **Non eseguiti da me**: `front-portfolio dashboard` e `front-broker detail`. Il developer ha deciso di provarli
   insieme al resto, nella run complessiva del coordinator, invece di aspettare la fine della coverage sulla 6150. Ha
   anche approvato gli scatti della gallery che cambiano un poco.
+
+## 8. Difetto puro: rendimenti mancanti nella card dei KPI (08/10)
+
+> Assegnato dal coordinator: un difetto puro trovato da Q, approvato dal developer («vai con i difetti puri»).
+
+**Il difetto.** In `KpiSection.svelte` (card 2, «Returns») `twrrCumVal`, `mwrrCumVal` e `mwrrAnnVal` valevano **0**
+quando il backend non dava il valore (campi opzionali e nullable). Quindi:
+- le barre mostravano «0.00%» invece di «—»;
+- il Timing effect (`mwrr − twrr`) mostrava un numero inventato, con colore ed etichetta conseguenti (per esempio
+  «−40.00 pp, Unfavorable» con solo la MWRR cumulata mancante).
+
+**Test rossi prima** (test-author, `KpiSection.test.ts`, nuovo `describe`, 12 test, campo `null` e campo assente):
+- 8 rossi, tutti per «0.00%» o per un Timing effect sbagliato al posto di «—»;
+- 4 verdi di controllo (Timing +5,00 e −5,00; la MWRR annualizzata mancante non tocca il Timing effect).
+
+**Correzione:**
+- **Ancore** (aggiunte prima dei test, nessun cambio di comportamento): prop facoltativa `testid` su `KpiMetricBar`
+  (`testid` sulla barra, `{testid}-value` sul valore); in `KpiSection` le barre `kpi-return-{roi,twrr-cum,mwrr-cum,mwrr-ann}`
+  e `kpi-timing-effect-value`/`-label`.
+- **`returnPct`**: i rendimenti sono `null` se mancano o non sono numerici; la barra riceve `numericValue` undefined e
+  mostra «—».
+- **Timing effect**: solo con entrambi i rendimenti. Altrimenti «—» in grigio ed etichetta vuota (`timingColor`);
+  `retBarMax` ignora i mancanti.
+
+**Evidenze** (corsia 6161):
+- `front-utility component-unit` 2862/2862; `front check` 0 errori, 0 warning; prettier pulito.
+- E2E: `front-portfolio privacy-masking` 18, `dashboard-cache` 6, `dashboard` 27.
