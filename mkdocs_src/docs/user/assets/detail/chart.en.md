@@ -21,7 +21,9 @@ Opening or reloading an asset starts in **Prices** mode. LibreFolio remembers th
 
 ### 🗓️ Rolling Return Window {: #rolling-return }
 
-<!-- [Screenshot Placeholder: assets/detail-chart-rolling-return — the chart in Rolling Return mode with the 1Y window selected and one comparison asset] -->
+<div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="Asset chart in Rolling Return mode with the 1Y window and one comparison asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 In **Rolling Return** mode a **Window** control appears next to the two mode buttons. The **?** at
 its end opens this section of the manual in a new tab.
