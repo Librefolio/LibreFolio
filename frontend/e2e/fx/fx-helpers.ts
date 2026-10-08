@@ -12,9 +12,11 @@ import {optionsClosed} from '../fixtures/probe';
 
 /**
  * Navigate to FX page and wait for content to load.
+ * `search` is the URL query, the page's own state — e.g. its period `{start, end}`; empty, the URL is plain `/fx`.
  */
-export async function goToFxPage(page: import('@playwright/test').Page) {
-    await navigateTo(page, '/fx');
+export async function goToFxPage(page: import('@playwright/test').Page, search: Record<string, string> = {}) {
+    const query = new URLSearchParams(search).toString();
+    await navigateTo(page, query ? `/fx?${query}` : '/fx');
     await page.waitForSelector('[data-testid="fx-page"]', {timeout: 15_000});
     // The page loads in two waves — pair list, then rates per pair — and says so via `data-busy`.
     await page.waitForSelector('[data-testid="fx-page"][data-busy="false"]', {timeout: 20_000});
