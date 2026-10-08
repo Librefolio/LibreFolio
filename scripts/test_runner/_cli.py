@@ -967,8 +967,8 @@ def _parallel_for_scope(args, scope: str, workers: int, verbose: bool) -> tuple:
     print_header(f"Parallel pass — {len(p['parallel_paths'])} isolation-safe unit(s) across {len(p['groups'])} worker(s)")
     outcome = run_groups(p["groups"], verbose=verbose, coverage=_common._COVERAGE_PY)
 
-    if _common._COVERAGE_PY:
-        combine_coverage(_common._COVERAGE_SOURCE or "backend")
+    # A pass whose coverage was not combined is not green: the 07/10 run lost two passes and reported success.
+    combined = combine_coverage(_common._COVERAGE_SOURCE or "backend") if _common._COVERAGE_PY else True
 
     # Record what each unit cost so the next plan balances on measurement rather
     # than on a guess. The junit reports give exact per-unit times; a group's
@@ -993,7 +993,7 @@ def _parallel_for_scope(args, scope: str, workers: int, verbose: bool) -> tuple:
             # blamed individually. Fail every action it covered rather than none.
             _common._FAILED_ACTIONS |= set(p["covered_actions"])
 
-    return outcome["ok"], p["covered_actions"]
+    return outcome["ok"] and combined, p["covered_actions"]
 
 
 def _backend_consolidation_scope(args) -> tuple:

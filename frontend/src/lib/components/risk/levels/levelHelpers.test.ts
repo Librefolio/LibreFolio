@@ -3,11 +3,15 @@ import {get} from 'svelte/store';
 
 import {setupI18n} from '$test/component';
 import {CODE_EQUAL_ICU_WARNING_KEYS, icuWarningKeys, plausibleParams, type WarningParams} from '$test/riskWarningCatalogue';
-import {_} from '$lib/i18n';
+import {_, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
+import es from '$lib/i18n/es.json';
+import fr from '$lib/i18n/fr.json';
+import itCatalogue from '$lib/i18n/it.json';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
+import * as levelHelpers from './levelHelpers';
 import {
     BACKTEST_RETURN_BASIS,
     backtestDeclared,
@@ -1231,5 +1235,260 @@ describe('translateErrorCode', () => {
     it('re-words through whichever translator it is handed', () => {
         const italian = (key: string): string => (key === 'risk.errors.incompatible_scope' ? 'Questa analitica non supporta lo scope selezionato.' : key);
         expect(translateErrorCode('incompatible_scope', italian, 'risk.errors.unknown')).toBe('Questa analitica non supporta lo scope selezionato.');
+    });
+});
+
+/**
+ * ─── D379: a refusal for size, worded by the setting that cures it ───────────────────────────────
+ *
+ * The simulation refuses a run too large to carry with `resource_limit`, and its `details` now
+ * say which limit was hit and which setting brings the run back within reach: `{metric, actual,
+ * limit, remedy}`, the remedy one of four (`simulation.py::_REMEDY_BY_METRIC`). The four are not
+ * interchangeable — fewer paths or a shorter horizon cure only the path budgets, a history too
+ * long needs a shorter period, the Sobol dimension ignores the paths, and no setting shrinks the
+ * number of positions — so one generic «too large to run» leaves the reader guessing which
+ * setting to change, and over the 100-position ceiling no setting helps at all. A metric the
+ * backend has no remedy for still answers `resource_limit`, without one.
+ *
+ * The contract pinned below, written red first against a module that exports neither new name:
+ *
+ *   - `RESOURCE_LIMIT_REMEDIES`: the four remedies, in the order of `REMEDIES`;
+ *   - `errorDisplayCode(error)`: the code an error is worded by — `resource_limit_<remedy>` for a
+ *     remedy this build knows, the code itself (trimmed) for anything else, `null` for no code;
+ *   - `resultErrorCodes` hands the levels those display codes, deduplicated in arrival order;
+ *   - `translateErrorCode` is unchanged: each display code is a key of its own, which every
+ *     catalogue ships.
+ *
+ * The two new names are read through the module namespace, as `syncTargets.test.ts` reads
+ * `labQualityAction`: until they exist, the cases calling them fail on an assertion naming what
+ * is missing — those cases only, never the collection of this file.
+ */
+
+/** The four remedies a refusal can name, in the contract's order: this file's own copy, which the export is pinned to. */
+const REMEDIES = ['paths_or_horizon', 'horizon_or_sampling', 'period', 'positions'] as const;
+type Remedy = (typeof REMEDIES)[number];
+
+/** `MAX_SIMULATION_ASSETS`, the ceiling the `positions` sentence cites: pinned on the backend by `test_the_ceilings_cited_to_the_user_are_pinned`. */
+const POSITIONS_CEILING = 100;
+
+const GENERIC_LIMIT_KEY = 'risk.errors.resource_limit';
+const UNKNOWN_ERROR_KEY = 'risk.errors.unknown';
+
+/** The display code of a refusal naming `remedy`, and the catalogue key that words it. */
+const remedyCode = (remedy: Remedy): string => `resource_limit_${remedy}`;
+const remedyKey = (remedy: Remedy): string => `risk.errors.${remedyCode(remedy)}`;
+
+/** One refusal per remedy, its details as `simulation.py::_resource_limit` sends them for a metric that maps to it. */
+const REFUSAL_DETAILS: Record<Remedy, Record<string, unknown>> = {
+    paths_or_horizon: {metric: 'portfolio_cells', actual: 20_000_001, limit: 20_000_000, remedy: 'paths_or_horizon'},
+    horizon_or_sampling: {metric: 'sobol_dimension', actual: 21_202, limit: 21_201, remedy: 'horizon_or_sampling'},
+    period: {metric: 'observations', actual: 5001, limit: 5000, remedy: 'period'},
+    positions: {metric: 'assets', actual: 101, limit: POSITIONS_CEILING, remedy: 'positions'},
+};
+
+/** What `errorDisplayCode` reads, as the contract types it: declared here, so the cases compile before the export exists. */
+type DisplayedError = {code?: unknown; details?: unknown} | null | undefined;
+
+/** The module's exports by name: a name it does not export reads `undefined` here, instead of failing the whole file. */
+const levelHelperExports = levelHelpers as unknown as Record<string, unknown>;
+
+/**
+ * `errorDisplayCode`, called through the module. Until the export exists every case calling it
+ * fails here, on the assertion that names what is missing, rather than on a `TypeError` thrown
+ * before any assertion ran.
+ */
+function errorDisplayCode(error: DisplayedError): string | null {
+    const helper = levelHelperExports.errorDisplayCode;
+    expect(typeof helper, 'levelHelpers exports no errorDisplayCode(): a resource_limit refusal cannot be worded by the remedy it names').toBe('function');
+    return (helper as (error: DisplayedError) => string | null)(error);
+}
+
+/** `RESOURCE_LIMIT_REMEDIES`, read the same way. */
+function resourceLimitRemedies(): unknown {
+    const remedies = levelHelperExports.RESOURCE_LIMIT_REMEDIES;
+    expect(Array.isArray(remedies), 'levelHelpers exports no RESOURCE_LIMIT_REMEDIES list: nothing says which remedies this build words').toBe(true);
+    return remedies;
+}
+
+/** A `resource_limit` refusal carrying `details` as given. */
+const limitRefusal = (details: unknown): DisplayedError => ({code: 'resource_limit', details});
+
+describe('RESOURCE_LIMIT_REMEDIES', () => {
+    it('lists exactly the four remedies a refusal can name, in order', () => {
+        expect(resourceLimitRemedies()).toStrictEqual([...REMEDIES]);
+    });
+});
+
+describe('errorDisplayCode — the code an error is worded by', () => {
+    it.each([...REMEDIES])('words a resource_limit refusal naming %s by that remedy', (remedy) => {
+        expect(errorDisplayCode(limitRefusal(REFUSAL_DETAILS[remedy]))).toBe(remedyCode(remedy));
+    });
+
+    // The remedy alone decides: the rest of the details describes the limit, not the cure.
+    it('needs nothing from the details but the remedy', () => {
+        expect(errorDisplayCode(limitRefusal({remedy: 'period'}))).toBe('resource_limit_period');
+    });
+
+    it('reads the code trimmed, and refines it once trimmed', () => {
+        expect(errorDisplayCode({code: '  incompatible_scope\t'})).toBe('incompatible_scope');
+        expect(errorDisplayCode({code: ' resource_limit\n', details: REFUSAL_DETAILS.positions})).toBe('resource_limit_positions');
+    });
+
+    it.each<[string, DisplayedError]>([
+        ['no error', null],
+        ['an undefined error', undefined],
+        ['an error without a code', {}],
+        ['an undefined code', {code: undefined}],
+        ['a null code', {code: null}],
+        ['an empty code', {code: ''}],
+        ['a blank code', {code: '   '}],
+        ['a numeric code', {code: 7}],
+        ['a code wrapped in a list', {code: ['resource_limit']}],
+        ['a known remedy without a code', {details: REFUSAL_DETAILS.period}],
+        ['a blank code beside a known remedy', {code: '  ', details: REFUSAL_DETAILS.period}],
+    ])('has no code for %s', (_label, error) => {
+        expect(errorDisplayCode(error)).toBeNull();
+    });
+
+    // Strict on purpose. A display code is a catalogue key: one built from a remedy this build has
+    // no sentence for falls through `translateErrorCode` to `risk.errors.unknown`, which no longer
+    // says the run was too large at all — the generic sentence is the honest answer there. The
+    // prototype names catch a lookup through a plain object, where `constructor` is always found.
+    it.each<[string, DisplayedError]>([
+        ['no details', {code: 'resource_limit'}],
+        ['null details', limitRefusal(null)],
+        ['details naming no remedy, as for a metric the backend has none for', limitRefusal({metric: 'synthetic_cells', actual: 11, limit: 10})],
+        ['a remedy added after this build', limitRefusal({...REFUSAL_DETAILS.period, remedy: 'future_remedy'})],
+        ['an empty remedy', limitRefusal({remedy: ''})],
+        ['a fragment of two real remedies', limitRefusal({remedy: 'horizon'})],
+        ['a numeric remedy', limitRefusal({remedy: 7})],
+        ['a null remedy', limitRefusal({remedy: null})],
+        ['a remedy wrapped in a list', limitRefusal({remedy: ['period']})],
+        ['details that are a list', limitRefusal([{remedy: 'period'}])],
+        ['a list carrying a remedy of its own', limitRefusal(Object.assign(['period'], {remedy: 'period'}))],
+        ['the remedy "constructor"', limitRefusal({remedy: 'constructor'})],
+        ['the remedy "toString"', limitRefusal({remedy: 'toString'})],
+        ['the remedy "__proto__"', limitRefusal({remedy: '__proto__'})],
+    ])('keeps resource_limit generic for %s', (_label, error) => {
+        expect(errorDisplayCode(error)).toBe('resource_limit');
+    });
+
+    // Only `resource_limit` is refined. The near misses catch a prefix, a suffix or a
+    // case-insensitive match; an already refined code is not refined a second time.
+    it.each(['invalid_parameters', 'insufficient_history', 'resource_limit_period', 'not_a_resource_limit', 'RESOURCE_LIMIT'])('returns %s unchanged, whatever remedy its details name', (code) => {
+        for (const remedy of REMEDIES) {
+            expect(errorDisplayCode({code, details: REFUSAL_DETAILS[remedy]}), `${code} beside the remedy ${remedy}`).toBe(code);
+        }
+    });
+});
+
+describe('resultErrorCodes — a refusal for size keeps the remedy it names', () => {
+    const REFUSAL_MESSAGE = 'A synthetic backend refusal sentence.';
+
+    /** A simulation the backend refused, as a level receives it. */
+    function refusedResult(instanceId: string, error: unknown): RiskAnalyticResult {
+        return {analytic_code: 'simulation', instance_id: instanceId, status: 'unavailable', error} as unknown as RiskAnalyticResult;
+    }
+
+    function refusal(remedy: Remedy): Record<string, unknown> {
+        return {code: 'resource_limit', message: REFUSAL_MESSAGE, details: REFUSAL_DETAILS[remedy]};
+    }
+
+    it('gives back one code per remedy when two refusals name different ones', () => {
+        expect(resultErrorCodes([refusedResult('a', refusal('period')), refusedResult('b', refusal('positions'))])).toEqual(['resource_limit_period', 'resource_limit_positions']);
+    });
+
+    it('says one remedy once, however many refusals name it', () => {
+        expect(resultErrorCodes([refusedResult('a', refusal('paths_or_horizon')), refusedResult('b', refusal('paths_or_horizon'))])).toEqual(['resource_limit_paths_or_horizon']);
+    });
+
+    // A refusal naming no remedy and one naming a remedy this build does not know are the
+    // same generic cause: said once, beside the refined one and never in its place.
+    it('keeps a plain resource_limit beside a refined one, and says the generic cause once', () => {
+        const plain = {code: 'resource_limit', message: REFUSAL_MESSAGE};
+        const unknownRemedy = {code: 'resource_limit', message: REFUSAL_MESSAGE, details: {...REFUSAL_DETAILS.period, remedy: 'future_remedy'}};
+        expect(resultErrorCodes([refusedResult('a', plain), refusedResult('b', refusal('horizon_or_sampling')), refusedResult('c', unknownRemedy)])).toEqual(['resource_limit', 'resource_limit_horizon_or_sampling']);
+    });
+
+    // Through `singleValue`, as the cases above pin it for the code alone: an error that
+    // arrives wrapped must keep its remedy, not lose it to the generic sentence.
+    it('reads the remedy of a refusal that arrives wrapped in a list', () => {
+        expect(resultErrorCodes([refusedResult('a', [refusal('positions')])])).toEqual(['resource_limit_positions']);
+    });
+
+    it('keeps first-seen order across refined and other codes, and skips what carries no code', () => {
+        const results = [
+            null,
+            refusedResult('a', refusal('positions')),
+            refusedResult('b', {code: 'incompatible_scope', message: REFUSAL_MESSAGE, details: {remedy: 'period'}}),
+            refusedResult('c', {code: '   '}),
+            undefined,
+            refusedResult('d', refusal('period')),
+            refusedResult('e', refusal('positions')),
+        ];
+        expect(resultErrorCodes(results)).toEqual(['resource_limit_positions', 'incompatible_scope', 'resource_limit_period']);
+    });
+});
+
+describe('translateErrorCode — each remedy has a sentence of its own in the shipped catalogue', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    it.each([...REMEDIES])('words resource_limit_%s with its own en.json sentence — not its key, not the generic one, not risk.errors.unknown', (remedy) => {
+        const code = remedyCode(remedy);
+        const key = remedyKey(remedy);
+        const generic = get(_)(GENERIC_LIMIT_KEY);
+        const unknown = get(_)(UNKNOWN_ERROR_KEY);
+        // The harness first: the two sentences this one must differ from are real, and differ from each other.
+        expect(generic, `${GENERIC_LIMIT_KEY} does not resolve: the catalogue is not loaded`).not.toBe(GENERIC_LIMIT_KEY);
+        expect(unknown, `${UNKNOWN_ERROR_KEY} does not resolve: the catalogue is not loaded`).not.toBe(UNKNOWN_ERROR_KEY);
+        expect(generic, `${GENERIC_LIMIT_KEY} reads like ${UNKNOWN_ERROR_KEY}: which of the two answered could not be told`).not.toBe(unknown);
+
+        const worded = translateErrorCode(code, get(_), UNKNOWN_ERROR_KEY);
+        expect(worded, `${code} printed its own key`).not.toBe(key);
+        expect(worded, `${code} fell back to ${UNKNOWN_ERROR_KEY}: the catalogue has no ${key}`).not.toBe(unknown);
+        expect(worded, `${code} reads like ${GENERIC_LIMIT_KEY}: the refusal still does not say which setting to change`).not.toBe(generic);
+        expect(worded, `${code} is not worded with its own en.json sentence`).toBe(enLeaf(key));
+    });
+});
+
+describe('the catalogues word every remedy a refusal can name', () => {
+    /** Typed on the app's locale list, so a fifth locale without a catalogue here fails `front check`. */
+    const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** The leaf behind a dotted key in one catalogue, read from the file on disk. */
+    function leaf(catalogue: unknown, key: string): unknown {
+        return key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    }
+
+    /** Whitespace is not wording: two sentences differing only by it read alike. */
+    function normalize(text: string): string {
+        return text.replace(/\s+/g, ' ').trim();
+    }
+
+    it.each([...SUPPORTED_LOCALES])('%s.json words each remedy with a sentence of its own, none of them the generic one, and the positions one cites the ceiling', (locale) => {
+        const catalogue = CATALOGUES[locale];
+        const generic = leaf(catalogue, GENERIC_LIMIT_KEY);
+        // Positive control: the generic sentence lives beside the four, so a red below is a
+        // missing sentence, not a guard reading the wrong place.
+        expect(typeof generic, `${GENERIC_LIMIT_KEY} is not a sentence in ${locale}.json: this guard reads the wrong place`).toBe('string');
+
+        const keys = REMEDIES.map(remedyKey);
+        const missing = keys.filter((key) => {
+            const sentence = leaf(catalogue, key);
+            return typeof sentence !== 'string' || sentence.trim() === '';
+        });
+        expect(missing, `${locale}.json does not word these remedies`).toEqual([]);
+
+        const sentences = keys.map((key) => normalize(String(leaf(catalogue, key))));
+        sentences.forEach((sentence, index) => {
+            expect(sentence, `${keys[index]} reads like ${GENERIC_LIMIT_KEY} in ${locale}.json: the reader is still not told which setting to change`).not.toBe(normalize(String(generic)));
+            // A code is worded without values (`translateErrorCode`, the frame's own lookup): an ICU argument would reach the screen as its braces.
+            expect(sentence, `${keys[index]} takes ICU arguments in ${locale}.json, but an error code is worded without values`).not.toMatch(/[{}]/);
+        });
+        expect(new Set(sentences).size, `two remedies read alike in ${locale}.json: ${JSON.stringify(sentences)}`).toBe(REMEDIES.length);
+        // The ceiling as a number of its own: «1000» contains the digits and cites another one.
+        expect(sentences[REMEDIES.indexOf('positions')], `${remedyKey('positions')} does not cite the ceiling of ${POSITIONS_CEILING} positions in ${locale}.json`).toMatch(new RegExp(`(?<!\\d)${POSITIONS_CEILING}(?!\\d)`));
     });
 });

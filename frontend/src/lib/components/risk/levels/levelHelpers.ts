@@ -10,6 +10,7 @@ import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import {singleValue} from '$lib/risk/riskTypes';
 
 import {DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE, resultByCode, resultByInstance} from '../riskAnalysisHelpers';
+import {errorDisplayCode} from './errorDisplayCode';
 import {warningAssetIds, warningReason, warningSentence, type WarningTranslator} from './warningSentence';
 
 // Provenance lives in its own module — this file is at its size ceiling and the
@@ -19,6 +20,7 @@ export type {LevelMetadataRow} from './levelMetadata';
 export {levelMetadata, translateOrRaw} from './levelMetadata';
 export type {RiskResultWarning, WarningTranslator} from './warningSentence';
 export {warningSentence} from './warningSentence';
+export {errorDisplayCode, RESOURCE_LIMIT_REMEDIES} from './errorDisplayCode';
 
 /**
  * View a value as a plain record without discarding anything.
@@ -196,9 +198,10 @@ function sameAssets(left: readonly number[], right: readonly number[] | undefine
  * and mixing identifiers into that list would make its contract unreadable: a
  * caller could no longer tell which entries it may show as they are. So the two
  * travel separately, and this one carries the *identifier* while the rendering
- * layer owns the wording.
+ * layer owns the wording. A size limit's identifier carries its remedy
+ * (`errorDisplayCode`), because the remedy is what its sentence says.
  *
- * ⚠️ Read through `singleValue`, exactly as `RiskResultFrame:23` does. The field
+ * ⚠️ Read through `singleValue`, exactly as `RiskResultFrame` does. The field
  * is typed as a value *or a list* by the generated client, so `result.error.code`
  * happens to work on today's payload and returns `undefined` the day one arrives
  * wrapped — disclosing nothing, silently.
@@ -213,11 +216,9 @@ export function resultErrorCodes(results: ReadonlyArray<RiskAnalyticResult | nul
     const codes: string[] = [];
     for (const result of results) {
         if (!result) continue;
-        const code = singleValue(result.error)?.code;
-        if (typeof code !== 'string') continue;
-        const trimmed = code.trim();
-        if (trimmed === '' || codes.includes(trimmed)) continue;
-        codes.push(trimmed);
+        const code = errorDisplayCode(singleValue(result.error));
+        if (code === null || codes.includes(code)) continue;
+        codes.push(code);
     }
     return codes;
 }

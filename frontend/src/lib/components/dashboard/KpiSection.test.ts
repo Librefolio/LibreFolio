@@ -17,7 +17,7 @@
  * No translated text is asserted; `kpi-total-pnl-delta` and `kpi-returns` are
  * the structural anchors.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
 vi.mock('$lib/api', () => ({
     zodiosApi: new Proxy(
@@ -30,10 +30,11 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {render, screen, setupI18n, waitFor, within} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 // Namespace import on purpose: the hydration context (page cache, phase 1) is read by name below, so
 // the F5 and V2 cases keep running while `TweenedValue.svelte` does not export it yet.
 import * as Tweened from '$lib/components/ui/TweenedValue.svelte';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import KpiSection from './KpiSection.svelte';
 
@@ -295,5 +296,128 @@ describe('KpiSection — hydration from the cache (page cache, phase 1)', () => 
         await rerender(props('800'));
 
         await waitFor(() => expect(hero().textContent?.trim(), 'the refreshed figure never replaced the cached one').toBe(heroText(800)), {timeout: 3000});
+    });
+});
+
+/**
+ * P9 — Card 1's «Unrealized change» bar explains itself (issue #32, D11).
+ *
+ * The backend splits `period_unrealized_gain_loss_delta` by asset currency into
+ * `summary.period_unrealized_breakdown`: `asset` rows (what the assets did in their own currency),
+ * `fx` rows (what the exchange rate did to their cost), `unsplit` rows (positions that could not be
+ * split). The rows add up to the bar's figure exactly, in an order the backend owns. Contract:
+ *
+ *   - rows present → the bar's tooltip is HTML, with one
+ *     `<tr data-testid="kpi-unrealized-breakdown-{kind}-{asset_currency}">` per row, in the order
+ *     received: the frontend never adds a row (no `fx` row for the report currency) nor drops one;
+ *   - each row's value cell — its last cell, as in every tooltip table of this card — is the row's
+ *     `period_delta` formatted like the cash tooltip: signed money through `formatCurrencyAmountPlain`,
+ *     so masked by the privacy toggle exactly as every personal amount is;
+ *   - no rows (empty or absent) → today's plain text tooltip, and no breakdown row.
+ *
+ * The bar is found by structure, not by its label: Card 1's metric bars follow its hero figure
+ * (`kpi-value`), and each one's tooltip trigger is the `[role="button"]` wrapper Tooltip renders
+ * (the header's DocsLink comes before the hero and is a native `<button>`), so the first trigger
+ * after the hero is the «Unrealized change» bar. It is opened with Enter — the keyboard path opens
+ * the same tooltip as a hover, without the hover delay. Labels are never asserted: their i18n keys
+ * have not landed yet.
+ */
+describe('KpiSection — unrealized change breakdown tooltip (P9)', () => {
+    type BreakdownKind = 'asset' | 'fx' | 'unsplit';
+    const row = (kind: BreakdownKind, assetCurrency: string, amount: string) => ({kind, asset_currency: assetCurrency, period_delta: EUR(amount)});
+
+    /** Four rows adding up to the fixture's `period_unrealized_gain_loss_delta` (400), in the backend's order. */
+    const ROWS = [row('asset', 'EUR', '250.50'), row('asset', 'USD', '120'), row('fx', 'USD', '-30.25'), row('unsplit', 'ISK', '59.75')];
+
+    const norm = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+    const testIdOf = (r: {kind: string; asset_currency: string}) => `kpi-unrealized-breakdown-${r.kind}-${r.asset_currency}`;
+    /** What the value cell must read: the cash tooltip's formatter, signed, in the amount's own currency. */
+    const signedMoney = (r: {period_delta: {code: string; amount: string}}) => norm(formatCurrencyAmountPlain(parseFloat(r.period_delta.amount), r.period_delta.code, {showSign: true}));
+
+    function renderWith(extra: Record<string, unknown>) {
+        return render(KpiSection, {summary: {...summary(), ...extra}, history: [], loading: false, displayCurrency: 'EUR'});
+    }
+
+    /** Card 1's first metric bar trigger: the first Tooltip wrapper after the hero figure. */
+    function unrealizedBarTrigger(): HTMLElement {
+        const card = screen.getByTestId('kpi-period-pnl');
+        const hero = within(card).getByTestId('kpi-value');
+        const trigger = Array.from(card.querySelectorAll<HTMLElement>('[role="button"]')).find((element) => element.tagName !== 'BUTTON' && Boolean(hero.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING));
+        if (!trigger) throw new Error('Card 1 renders no tooltip trigger after its hero figure: the metric bars are gone');
+        return trigger;
+    }
+
+    async function openUnrealizedTooltip(): Promise<HTMLElement> {
+        await fireEvent.keyDown(unrealizedBarTrigger(), {key: 'Enter'});
+        return screen.findByTestId('tooltip-content');
+    }
+
+    function breakdownRowIds(tooltip: HTMLElement): string[] {
+        return Array.from(tooltip.querySelectorAll<HTMLElement>('[data-testid^="kpi-unrealized-breakdown-"]')).map((element) => element.getAttribute('data-testid') ?? '');
+    }
+
+    function valueCell(tooltip: HTMLElement, r: {kind: string; asset_currency: string}): string {
+        const tableRow = within(tooltip).getByTestId(testIdOf(r));
+        expect(tableRow.tagName, `${testIdOf(r)} is a table row`).toBe('TR');
+        const cells = tableRow.querySelectorAll('td');
+        return norm(cells[cells.length - 1]?.textContent);
+    }
+
+    afterEach(() => {
+        // Module-level flag shared by every test of the file: a leftover `true` would mount the next card masked.
+        setPrivacyEnabled(false);
+    });
+
+    it('lists one row per breakdown row, in the order received, each with its signed amount', async () => {
+        renderWith({period_unrealized_breakdown: ROWS});
+
+        const tooltip = await openUnrealizedTooltip();
+
+        expect(breakdownRowIds(tooltip)).toEqual(ROWS.map(testIdOf));
+        for (const r of ROWS) expect(valueCell(tooltip, r), testIdOf(r)).toBe(signedMoney(r));
+    });
+
+    it('keeps the order it receives even when it is not the one it would choose: the backend owns it', async () => {
+        const scrambled = [ROWS[2], ROWS[3], ROWS[1], ROWS[0]];
+        renderWith({period_unrealized_breakdown: scrambled});
+
+        const tooltip = await openUnrealizedTooltip();
+
+        expect(breakdownRowIds(tooltip)).toEqual(scrambled.map(testIdOf));
+    });
+
+    it('shows exactly the rows it receives: a single-currency portfolio has one asset row, no fx row of its own making', async () => {
+        const single = [row('asset', 'EUR', '400')];
+        renderWith({period_unrealized_breakdown: single});
+
+        const tooltip = await openUnrealizedTooltip();
+
+        expect(breakdownRowIds(tooltip)).toEqual(['kpi-unrealized-breakdown-asset-EUR']);
+        expect(valueCell(tooltip, single[0])).toBe(signedMoney(single[0]));
+    });
+
+    it('masks every amount with privacy on, as the formatter masks any personal amount', async () => {
+        setPrivacyEnabled(true);
+        // Control: the expected values really are masked — equality below is not digits against digits.
+        for (const r of ROWS) expect(signedMoney(r), `control: ${testIdOf(r)} masked by the formatter`).not.toMatch(/\d/);
+        renderWith({period_unrealized_breakdown: ROWS});
+
+        const tooltip = await openUnrealizedTooltip();
+
+        expect(breakdownRowIds(tooltip)).toEqual(ROWS.map(testIdOf));
+        for (const r of ROWS) expect(valueCell(tooltip, r), testIdOf(r)).toBe(signedMoney(r));
+    });
+
+    it.each([
+        ['empty', {period_unrealized_breakdown: []}],
+        ['absent', {}],
+    ])('keeps today’s plain text tooltip when the breakdown is %s', async (_label, extra) => {
+        renderWith(extra);
+
+        const tooltip = await openUnrealizedTooltip();
+
+        expect(breakdownRowIds(tooltip)).toEqual([]);
+        expect(tooltip.querySelector('table'), 'a plain text tooltip has no table').toBeNull();
+        expect(norm(tooltip.textContent).length).toBeGreaterThan(0);
     });
 });

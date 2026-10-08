@@ -295,7 +295,7 @@ the port and the E2E user join the lot as the write classes are activated.
 
 | Resource | Serial | Per worker | Needed by |
 |---|---|---|---|
-| `COVERAGE_FILE` | global `.coverage`, copied in and out | `.coverage_data/parts/.coverage.wN` | every worker |
+| `COVERAGE_FILE` | global `.coverage`, copied in and out | `.coverage_data/parts/run-<YYYYMMDD-HHMMSS>-<pid>/.coverage.p<pass>.wN` | every worker |
 | `DATABASE_URL` | one shared `app.db` | `app_wN.db` | WRITE-GLOBAL |
 | `TEST_PORT` | fixed | `TEST_PORT + N` | backend workers with an in-process server |
 | E2E user | always `e2e_test_user` | one of the eight | WRITE-SCOPED |
@@ -712,7 +712,7 @@ sequenceDiagram
 * `.coverage`: Active working copy. Stored in the root folder, updated during pytest runs, and combined dynamically.
 * `.coverage_data/backend`: Accumulated backend test coverage. Persisted here between backend test runs.
 * `.coverage_data/frontend`: Subprocess coverage captured from the backend server while running Playwright E2E tests.
-* `.coverage_data/parts/`: Per-worker data files (`.coverage.wN`) and JUnit reports (`junit.wN.xml`) from a parallel pass. The parts are removed only once they have been folded into the accumulated database, so a failure to combine loses nothing.
+* `.coverage_data/parts/`: Parallel-pass output. The JUnit reports (`junit.wN.xml`) stay at its top level; worker coverage data files live in a directory per runner process, `run-<YYYYMMDD-HHMMSS>-<pid>/`, named `.coverage.p<pass>.wN`, where the pass number counts that run's parallel passes. Spawn children and multiprocessing's resource tracker write `.coverage.p<pass>.wN.<host>.pid<N>.X<random>x` beside them (coverage.py renames each to `….X<random>x.H<hash>h` when it finishes writing), and can finish after the workers return. That is why `coverage combine` is given the directory, never a list of names: a name listed before such a rename made the whole combine fail. A part that lands after coverage's own listing is folded in by a later round (three rounds at most). A part holding data is removed only once it has been folded into the accumulated database. After a successful combine the run directory is removed; when a combine fails, the directory stays, the error names it together with the parts left in it, and the parallel pass is reported red. A finished part (coverage's final `….H<hash>h` name) that holds no data is removed and named in a warning, and does not fail the combine: it is the schema without a row, left when a SIGTERM stopped its writer while coverage.py was already saving, so its data never reached the file; a part with a transient name is never judged empty, since it may still be filling up. `--cov-clean-backend` empties `parts/` of coverage data — loose `.coverage*` files left by older runs and `run-*` directories — and keeps the JUnit reports.
 * `.coverage_data/unit_durations.json`: Measured seconds per test unit, read by the scheduler to balance the next run.
 
 !!! info "Why per-worker files rather than one shared database"
