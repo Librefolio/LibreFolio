@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 COMMITTATO (`dfcbc0003`, 2026-10-07). Q2 COMPLETATO, FROZEN (2026-10-07), in attesa del commit del developer.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 COMMITTATO (`dfcbc0003`), Q2 COMMITTATO (`7b06e9f9f`), entrambi nel treno 9 (base `9ea2d519b`). S12 (ancora `#risk-tab`) COMPLETATO, FROZEN (2026-10-07), in attesa del commit.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -640,6 +640,25 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `BrokerModal` in modifica prende un PATCH `success:false` per un successo;
   >   - docstring superate in `models.py` (`AssetType`) e in `pac_allocator.py` (budget);
   >   - 34 `assert` nell'AI Export.
+
+### Dopo il treno 9
+
+- **S12** ✅ 2026-10-07 — Ancora `#risk-tab` in `user/brokers/index.en.md` (base `9ea2d519b`, che contiene il treno 9 con N).
+  > **Note implementazione**:
+  > - Il link della voce Risk (`:38`) ora punta a `../dashboard/index.md#risk-tab`, testo «Dashboard Risk Tab». Tolto il commento `<!-- TODO(anchor): #risk-tab, after N -->`.
+  > - L'ancora c'è nella pagina EN di N (`user/dashboard/index.en.md:41`, `## 🛡️ Risk Tab {: #risk-tab }`). Non c'è ancora nelle IT/FR/ES, ma il link sta solo nella pagina EN dei broker, le cui traduzioni non lo contengono: le build tradotte non lo validano.
+  > - **Frase verificata**: «limited to this broker's holdings» resta vera. La pagina broker monta `RiskLevelsPanel` con `scope={{kind: 'portfolio', broker_ids: [broker.id]}}` (`brokers/[id]/+page.svelte:680-681`), mentre la tab della Dashboard copre tutto il portafoglio (testo di N, `:45`).
+  > - **Altre voci che aspettavano il treno 9**: nessuna eseguibile.
+  >   - I 40 segnaposto aspettano gli scenari di M: oggi 0/40 nomi sono in `gallery.spec.ts`.
+  >   - `#coming-back-and-refreshing` c'è ancora (`dashboard/index.en.md:80`).
+  >   - Le pagine solo-EN (`developer/backend/risk/architecture.md`, `user/assets/correlation.en.md`) restano senza `#risk-tab`: lì l'ancora romperebbe le build IT/FR/ES finché le traduzioni della Dashboard non la contengono.
+  > - **Riferimenti alle immagini** ricontrollati dopo `c80508be8` (riparazione degli scenari di M): tutti prodotti. I 6 `dashboard/allocation-*` risultano «mancanti» per il mio script solo perché lo spec li costruisce con un template (`${shot}-now`, `${shot}-history`, `gallery.spec.ts:691-699`).
+  > - **Gate** `/tmp/libreFolio_q_gate.sh q3anchor`:
+  >   - `mkdocs build` strict: exit 0, 0 WARNING/ERROR; l'ancora è validata (`validation.anchors: warn` + `--strict`);
+  >   - `check-links`: solo il link rotto della baseline (`chart/#rolling-return` IT/FR/ES);
+  >   - scope: 1 pagina, più questo piano;
+  >   - `git diff --check` pulito.
+  >   - Nessun server: `build` e `check-links` sono statici, non serve la porta 6162.
 
 ## 4. Conflitti, rischi, definizione di fatto
 
