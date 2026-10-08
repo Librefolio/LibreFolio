@@ -94,3 +94,8 @@
   > - E2E `select` 17/17, `tx-import-report-set` 28/28 (spec di L, solo come regressione), `transactions-modals` 19/19.
 - [x] 20.5 Handoff: CHECKPOINT READY e la frase di CHANGELOG, che probabilmente estende quella dell'Esc. ✅ 2026-10-08.
   > Due commit proposti, con i messaggi in `/tmp/libreFolio_commits/` e il manifesto `k-20-manifest.txt`.
+
+## Seguito
+
+- Lo step 21 cura due difetti puri: l'avatar dopo una preferenza e il numero nei messaggi degli eventi.
+  [`plan-phase00TaxonomySelectStep21PureDefects.prompt.md`](plan-phase00TaxonomySelectStep21PureDefects.prompt.md).
