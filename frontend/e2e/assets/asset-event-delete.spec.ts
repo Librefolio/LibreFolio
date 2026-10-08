@@ -17,6 +17,7 @@
  *   → row action: kebab button (data-testid="row-actions-{rowId}") → context menu item
  *     (data-testid="context-menu-action-delete")
  *   → click Save (data-testid="asset-editor-save-btn")
+ *   → the outcome is reported in a toast (data-testid="toast-success" | "toast-warning")
  */
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -64,6 +65,25 @@ async function clickDeleteRowAction(page: Page, row: import('@playwright/test').
     const kebabBtn = row.getByTestId(/^row-actions-/);
     await kebabBtn.click();
     await page.getByTestId('context-menu-action-delete').click();
+}
+
+/**
+ * Close every toast of one variant through its own ✕ and wait until they have slid out.
+ * Toasts belong to this page alone, so once none is up, the next one of that variant can
+ * only come from what the test does next. The ✕ is pressed by its DOM handler, not the
+ * pointer: if a toast leaves on its own timer first, no click lands on the editor beneath.
+ */
+async function closeToasts(page: Page, variant: 'success' | 'warning') {
+    const shown = page.getByTestId(`toast-${variant}`);
+    await shown.evaluateAll((toasts) => {
+        for (const toast of toasts) toast.querySelector<HTMLElement>('[data-testid="toast-dismiss"]')?.click();
+    });
+    await expect(shown, `no ${variant} toast is left from before the save`).toHaveCount(0, {timeout: 5_000});
+}
+
+/** `n` as a number of its own, not a digit inside a longer number. */
+function standaloneNumber(n: number): RegExp {
+    return new RegExp(`(?<!\\d)${n}(?!\\d)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +169,9 @@ test.describe('Asset Event Delete', () => {
             const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
             await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
+            // The editor reports the outcome in a toast: none left over, so the next is this save's.
+            await closeToasts(page, 'success');
+
             // Intercept the delete API call to verify it succeeds
             const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
 
@@ -166,6 +189,16 @@ test.describe('Asset Event Delete', () => {
                 deletedResults.some((r: any) => r.event_id === eventId),
                 `event ${eventId} should be reported deleted, got ${JSON.stringify(body.results)}`,
             ).toBeTruthy();
+
+            // The toast is where the user learns how many events went: the one row this test
+            // marked. Every catalogue spells the count `{n}`; a value passed under any other
+            // name leaves svelte-i18n nothing to format, and it shows the raw message instead.
+            // The placeholder and the number are asserted, never the words around them.
+            const toast = page.getByTestId('toast-success');
+            await expect(toast, 'the save reports the deletion in a success toast').toBeVisible({timeout: 5_000});
+            await expect(toast, 'the count is interpolated, not left as the raw {n}').not.toContainText('{n}');
+            await expect(toast, 'no ICU placeholder is left unresolved').not.toContainText('{');
+            await expect(toast, 'the toast says how many events were deleted: the one this test marked').toContainText(standaloneNumber(1));
         } finally {
             // If anything above failed before the UI deleted it, do not leave it behind.
             await page.request.delete(`${API}/assets/events?ids=${eventId}`).catch(() => {});
@@ -212,6 +245,9 @@ test.describe('Asset Event Delete', () => {
         const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
         await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
+        // The editor reports the outcome in a toast: none left over, so the next is this save's.
+        await closeToasts(page, 'warning');
+
         // Intercept the delete API response
         const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
 
@@ -229,6 +265,15 @@ test.describe('Asset Event Delete', () => {
         const withAccessible = blockedResults.find((r: any) => r.accessible_transactions?.length > 0);
         expect(withAccessible, 'At least one in_use result should have accessible_transactions for this user').toBeTruthy();
         expect(withAccessible.accessible_transactions.length).toBeGreaterThan(0);
+
+        // The warning is how the user learns that nothing was deleted, and why. It says how
+        // many events are still in use (the count the API just reported), with every
+        // placeholder filled in. The number is asserted, never the words around it.
+        const warning = page.getByTestId('toast-warning');
+        await expect(warning, 'a blocked delete is reported in a warning toast').toBeVisible({timeout: 5_000});
+        await expect(warning, 'the count is interpolated, not left as the raw {n}').not.toContainText('{n}');
+        await expect(warning, 'no ICU placeholder is left unresolved').not.toContainText('{');
+        await expect(warning, `the warning says how many events are still in use: ${blockedResults.length}`).toContainText(standaloneNumber(blockedResults.length));
     });
 
     // ===================================================================
