@@ -1,6 +1,7 @@
 # Piano — fase 00, Danske Bank, passo 6: la robustezza dell'upload (F2; F3 e F4 al backlog)
 
-> **Stato**: ✅ pronta per il checkpoint (2026-10-06, §8.3). Il checkpoint è **solo F2** più il piano: F2 approvato con l'estensione di xlrd (§0), rossi verificati, cura, gate verdi. F3/F4 escono (D1 respinta dal developer: nessuna restrizione sui formati); il `.json` sovrascritto, l'estensione lunghissima e F3-bis vanno nel backlog del coordinatore.
+> **Stato**: ✅ chiuso e integrato: `c3e6fa0a8` (fix(files): damaged workbook preview answers 400), con il journal in `2a90c1395` (verifica del 2026-10-09 su `3cceb4f90`). Rinviati: F3, F4 e F3-bis in `Phase_0/38_postReleaseBacklog/README.md`, voce L4.
+> - Al checkpoint: ✅ pronta per il checkpoint (2026-10-06, §8.3). Il checkpoint è **solo F2** più il piano: F2 approvato con l'estensione di xlrd (§0), rossi verificati, cura, gate verdi. F3/F4 escono (D1 respinta dal developer: nessuna restrizione sui formati); il `.json` sovrascritto, l'estensione lunghissima e F3-bis vanno nel backlog del coordinatore.
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md), §19.10 (i difetti F1–F4 trovati nel secondo giro di review) e §20 (la scelta del developer su F3/F4); [plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md](plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md), §8.5 (la voce 8 e F1, committate).
 > - Workstream L, issue #26. Ramo `e-alfy-l-danske-bank`, base `b6ac553fc` (L8 sopra la punta di K `7dd5e47e7`); al checkpoint lo script porta L su `dev_release2` = `66506b67c` (`b6ac553fc` più il commit del CHANGELOG), poi committa.

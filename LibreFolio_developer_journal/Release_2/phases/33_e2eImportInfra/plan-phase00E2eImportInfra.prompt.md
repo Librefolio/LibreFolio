@@ -1,6 +1,7 @@
 # Piano — fase 00, 33: l'infrastruttura dei test E2E dell'import
 
-> **Stato**: ✅ approvato (2026-10-07), in esecuzione.
+> **Stato**: ✅ chiuso e integrato nel treno 10: `860c934ac`, `abfcdf2be`, `ffdcacc2f`, `cc15441e6` (verifica del 2026-10-09 su `3cceb4f90`, §8). I difetti A e B di §1.1 li ha chiusi il piano 34; il backlog di §7 è rinviato in `Phase_0/38_postReleaseBacklog/README.md`, voce L11.
+> - Al checkpoint: ✅ approvato (2026-10-07), in esecuzione.
 >
 > - Mandato: coordinatore («Release 2 backlog analysis», `c8328a01-…`). D3 l'ha deciso lui: prima l'infrastruttura; i difetti A e B in un checkpoint a parte, dopo la decisione del developer.
 > - Workstream L. Ramo `e-alfy-l-danske-bank`, base `dfd6ed963` (DEGIRO committato, entra nel treno 9 per SHA).
@@ -30,7 +31,7 @@
 
 ## 1. Stato verificato (codice a `dfd6ed963`)
 
-### 1.1 La verifica in produzione — ⛔ STOP, al developer
+### 1.1 La verifica in produzione — ⛔ STOP, al developer — ✅ risolta dal piano 34 (§8)
 
 - **Cancellare un broker dall'app ne cancella i file**, in entrambi i percorsi:
   - `DELETE /brokers` (`brokers.py:372-418`);
@@ -151,7 +152,7 @@ T1 e CAC-011/012 sono rossi identici anche col wizard di HEAD, sulla corsia puli
 > - IWR-001 viola la regola 1, perché non scorre le pagine;
 > - R1/A18 hanno la radice negli orfani, che ricevono un test deterministico a livello di populate (§6.3).
 
-### 6.3 ⏳ Stub, registrazione, test-author (2026-10-07)
+### 6.3 ✅ Stub, registrazione, test-author (2026-10-07)
 
 > **Note implementazione**:
 > - `reset_broker_reports(data_dir, db_path) -> int` è nel repo come **stub**, con la firma definitiva.
@@ -272,3 +273,20 @@ Elenco del test-author, file:riga sulla versione nuova:
   - `resolveFirstAssetManually` non è usata;
   - l'intestazione è disallineata.
 - `tx-brim-import` resta in `mode: 'serial'`, perché toglierlo tocca le liste d'eccezione in `playwright.config.ts` e nelle istruzioni: decide il coordinatore.
+
+## 8. ✅ Integrazione e verifica finale (2026-10-09)
+
+> **Note implementazione**:
+> - **I commit**, integrati nel treno 10 (2026-10-07):
+>   - `860c934ac` test(db): populate --force resets broker reports;
+>   - `abfcdf2be` test(e2e): import specs own their files;
+>   - `ffdcacc2f` test(select): scope R13 scrape to provider class;
+>   - `cc15441e6` docs(journal): plan 33, e2e import infra.
+> - **La verifica in produzione di §1.1** (difetti A e B) è diventata il piano 34 (`34_accountAndIdReuse/`): A con `6b66ee306`, B con gli id mai riusati e il fix all'avvio, `298ed96f3` (treno 12).
+> - **Verifica** su `3cceb4f90`: `populate --force` svuota `broker_reports` della propria data-dir (`reset_broker_reports`, `populate_mock_data.py:3323`); gli spec d'import cancellano i broker che creano (`afterEach`).
+> - **Il backlog di §7 è ancora aperto** sul codice. Per esempio:
+>   - le sonde su `formClose` in `tx-brim-import.spec.ts:67-69` e `tx-import-ca-contract.spec.ts:144-146`;
+>   - `waitForTimeout` in `tx-import-ca-contract.spec.ts:419` e `:439`;
+>   - `mode: 'serial'` in `tx-brim-import.spec.ts:104`.
+>   - Rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce L11.
+> - **Classificazione: FINITA.** L'unico residuo è la voce L11. Archiviata in `Release_2/phases/33_e2eImportInfra/`.

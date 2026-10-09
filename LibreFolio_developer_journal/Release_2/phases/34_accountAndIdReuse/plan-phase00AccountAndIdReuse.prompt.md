@@ -1,6 +1,7 @@
 # Piano — fase 00, 34: la cancellazione dell'account e gli id che si riusano
 
-> **Stato**: ✅ approvato dal developer (2026-10-08), in esecuzione. Le varianti sono in §0.1.
+> **Stato**: ✅ chiuso e integrato nel treno 12 (merge `637c5d105`): `6b66ee306`, `298ed96f3`, `b0740c901` (verifica del 2026-10-09 su `3cceb4f90`, §10.7). Il passo 2, l'ultimo admin, è nel piano accanto, integrato nel treno 22.
+> - Al checkpoint: ✅ approvato dal developer (2026-10-08), in esecuzione. Le varianti sono in §0.1.
 >
 > - Mandato: coordinatore («Release 2 backlog analysis», `c8328a01-…`), con le decisioni del developer (§0).
 > - Workstream L. Ramo `e-alfy-l-danske-bank`, base `9d79c2dbe` (`dev_release2`, treno 10), worktree pulito.
@@ -328,7 +329,7 @@ Lo scrive il coordinatore; io propongo le righe al checkpoint.
 ### 10.0 ✅ Analisi (2026-10-07)
 
 - Letti: account, accessi, helper dei file, schema reale (sola lettura), migrazioni dalla 1.1, avvio, Docker, doc admin, censimento degli id.
-- Il piano è in attesa della review.
+- Il piano è in attesa della review. ✅ Superato: approvato dal developer il 2026-10-08 (§0.1).
 
 ### 10.1 ✅ Approvazione, fixture, stub, runner (2026-10-08)
 
@@ -434,6 +435,8 @@ Lo scrive il coordinatore; io propongo le righe al checkpoint.
 > 1. Il testo del dialogo di cancellazione (i18n) non diceva più la verità. Va in §10.6, decisione (a).
 > 2. La gara fra i worker che partono insieme. Va in §10.6, il lock.
 > 3. L'esempio `./dev.py docker exec db upgrade` della doc admin (`docker_advanced.en.md:232`) è probabilmente rifiutato a server acceso, per `check_server_running` (`scripts/cli_base.py:338`). È preesistente e non verificato: lo segnalo al coordinatore per il backlog.
+>
+> ✅ **Il punto 3, superato** (verifica del 2026-10-09): rifiutare `db upgrade` a server acceso è voluto, e la doc ora lo dice (`docker_advanced.en.md:207`, «Do not use `./dev.py docker exec db upgrade`»).
 
 ### 10.6 ✅ Review: i18n, il lock, la durata nel log (2026-10-08)
 
@@ -487,3 +490,18 @@ Lo scrive il coordinatore; io propongo le righe al checkpoint.
 > **⚠️ Fuori pista — una docstring falsa**. Mentre scrivevo i corpi dei commit, ho trovato che la docstring di `delete_user` elencava fra le righe che cascano dall'utente anche le «sessions». Ma non esiste una tabella di sessioni: il JWT è stateless. La frase veniva dalla docstring vecchia.
 > - Le tabelle che cascano davvero da `users` sono `user_settings`, `broker_user_access` e le due di onboarding. `global_settings.updated_by_user_id` invece va a NULL.
 > - Corretta in «(settings, onboarding progress)». Cambia solo la docstring: ruff e black puliti.
+
+### 10.7 ✅ Integrazione e verifica finale (2026-10-09)
+
+> **Note implementazione**:
+> - **I commit**, integrati nel treno 12 (merge `637c5d105`, 2026-10-08):
+>   - `6b66ee306` fix(account): deletion applies last-owner rule;
+>   - `298ed96f3` feat(db): ids never reused, post-migration fixes;
+>   - `b0740c901` docs(journal): plan 34, account and id reuse.
+> - **Verifica** su `3cceb4f90`:
+>   - il pacchetto `backend/app/db/post_migration/` (registro, `autoincrement.py`, `__main__.py` per lo script offline) lo chiama l'avvio in `main.py`;
+>   - AUTOINCREMENT in `001_initial.py`;
+>   - la cancellazione dell'account applica la regola dell'ultimo owner.
+> - **`TODO_Completati.md:10`** dice ancora «commit/SHA in attesa del commit manuale». Il file è condiviso: gli SHA (`298ed96f3`, `6b66ee306`) li ho proposti al coordinatore.
+> - **Il passo 2** (ultimo admin attivo, uscite della CLI, `JWT_SECRET`, cookie `Secure`): `plan-phase00AccountAndIdReuseStep2LastAdmin.prompt.md`.
+> - **Classificazione: FINITA.** Nessun residuo di questo passo. Archiviata in `Release_2/phases/34_accountAndIdReuse/`.

@@ -1,6 +1,7 @@
 # Piano — fase 00, 35: `dev.py` dentro l'immagine Docker
 
-> **Stato**: ✅ pronto per il checkpoint (2026-10-08, §7.3). L'approccio l'ha deciso il developer; il coordinatore ha preso le quattro decisioni di §4 (§0.1).
+> **Stato**: ✅ chiuso e integrato nel treno 19 (merge `cdde3bc4d`): `5dca6e2cf`, `793aab393`, `5fe027f8f` (verifica del 2026-10-09 su `3cceb4f90`, §7.4).
+> - Al checkpoint: ✅ pronto per il checkpoint (2026-10-08, §7.3). L'approccio l'ha deciso il developer; il coordinatore ha preso le quattro decisioni di §4 (§0.1).
 >
 > - Workstream L. Base `108a2adf5` (`dev_release2`, treno 17).
 > - Corsia 6156/6166, `/tmp/librefolio-r2-l`.
@@ -178,3 +179,17 @@
 > | svelte-check (nel build all'avvio del server); prettier sulla card | 0/0; pulito |
 > | ruff e black sul test e sul runner; ruff su `dev.py` (gli stessi rilievi di `HEAD`); `check-orphans`; `git diff --check` | puliti |
 > | porte 6156 e 6166 | libere |
+
+### 7.4 ✅ Integrazione e verifica finale (2026-10-09)
+
+> **Note implementazione**:
+> - **I commit**, integrati nel treno 19 (merge `cdde3bc4d`, 2026-10-08):
+>   - `5dca6e2cf` fix(docker): dev.py and HEALTHCHECK in the image;
+>   - `793aab393` fix(auth): reset command that works in Docker;
+>   - `5fe027f8f` docs(journal): plan 35, dev.py in the image.
+> - **Verifica** su `3cceb4f90`:
+>   - `_add_unavailable` in `dev.py:2306`, con «not available in this installation»;
+>   - l'`HEALTHCHECK` su `localhost:6040` (`Dockerfile:154-155`);
+>   - la voce `utils dev-cli-image` (`_backend_utils.py:347`).
+> - **`db upgrade` a server acceso** (tabella di §1): è voluto, e la doc lo dice (`docker_advanced.en.md:207`). Non è un residuo.
+> - **Classificazione: FINITA.** Nessun residuo. Archiviata in `Release_2/phases/35_devCliImage/`.
