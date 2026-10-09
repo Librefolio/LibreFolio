@@ -1,0 +1,1 @@
+../../../../../../../mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/weighted-average-cost.en.md
