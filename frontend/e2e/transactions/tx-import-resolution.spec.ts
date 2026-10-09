@@ -21,12 +21,18 @@
  *     IWR-010 previews whichever file step 2 lists first, so it still relies on the
  *     samples populate_mock_data.py uploads with --with-reports.
  *
- * Test IDs: IWR-001..IWR-011
+ * IWR-013 does not parse generic_simple.csv: whether its UNETF reaches the review
+ * unresolved depends on the database (IWR-005's confirmed prompt attaches UNETF to an
+ * existing asset), and that test needs to know how many assets are unresolved. It uploads
+ * a CSV of its own instead, one purchase of each of n invented tickers.
+ *
+ * Test IDs: IWR-001..IWR-014
  *
  * Key data-testids used:
  *   import-wizard-step4             — Step 4 container
  *   import-wizard-resolve-section   — Resolve assets section wrapper
  *   import-wizard-resolve-toggle    — Collapsible header button
+ *   import-wizard-unresolved-count  — The header's amber badge: how many assets are unresolved
  *   import-wizard-import            — Import button (disabled when unresolved)
  *   search-select-create-new        — "Create new asset" footer in AssetSelect dropdown
  *   search-select-option-{id}       — Individual asset option in dropdown
@@ -39,16 +45,22 @@
  *   tx-form-modal-root              — Compare modal (TransactionFormModal in view mode)
  */
 
+import {IntlMessageFormat} from 'intl-messageformat';
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
+import {SUPPORTED_LANGUAGES, t as catalogueText} from '../fixtures/i18n-data';
 import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, uploadOwnedReport, type OwnedReport, type ParseResponse} from '../fixtures/import-wizard';
 import {TEST_USER} from '../fixtures/test-users';
+import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 
 test.setTimeout(90_000);
 
 /** The seeded broker the sample belongs to, and the sample a parsing test uploads a copy of. */
 const GENERIC_SIMPLE = {brokerName: 'Interactive Brokers', sample: 'generic_simple.csv'};
+
+/** The message of the resolve header's badge: how many assets are still unresolved, `{n}`. */
+const UNRESOLVED_COUNT_KEY = 'importWizard.unresolvedCount';
 
 /**
  * The reports the running test uploaded, emptied by afterEach as it deletes them. Module
@@ -141,6 +153,63 @@ async function parseGenericSimple(page: Page): Promise<ParseResponse> {
 async function goToStep4WithGenericSimple(page: Page) {
     const parsed = await parseGenericSimple(page);
     await continueToReview(page, parsed);
+}
+
+/** The parse response with its asset mappings (`BRIMParseResponse.asset_mappings`), which the shared `ParseResponse` leaves out. */
+type ParsedAssets = ParseResponse & {asset_mappings?: Array<{extracted_symbol?: string | null; candidates?: unknown[]; selected_asset_id?: number | null}>};
+
+/** A generic CSV with one purchase of each ticker, shaped like generic_simple.csv's UNETF row: the generic plugin reads a code of 1–6 letters and digits as a ticker. */
+function purchasesOf(tickers: string[]): string {
+    const rows = tickers.map((ticker) => `2024-12-10,BUY,10,-250.00,USD,${ticker},E2E unresolved badge ${ticker}`);
+    return ['date,type,quantity,amount,currency,asset,description', ...rows].join('\n') + '\n';
+}
+
+/**
+ * Upload `csv`, a file of this test's own making, to the seeded broker under a unique name, and push it
+ * onto `ownedReports` as soon as the server has accepted it, for afterEach to delete. The route and the
+ * checks of `uploadOwnedReport`, replicated: the fixture uploads only the samples on disk.
+ */
+async function uploadOwnedCsv(page: Page, csv: string): Promise<OwnedReport> {
+    const brokersResponse = await page.request.get('/api/v1/brokers');
+    expect(brokersResponse.ok(), `list the brokers: HTTP ${brokersResponse.status()}`).toBe(true);
+    const {items} = (await brokersResponse.json()) as {items: Array<{id: number; name: string}>};
+    const brokers = items.filter((broker) => broker.name === GENERIC_SIMPLE.brokerName);
+    if (brokers.length !== 1) {
+        throw new Error(`Expected exactly one broker named "${GENERIC_SIMPLE.brokerName}" visible to this user, found ${brokers.length}: it is seeded by backend/test_scripts/test_db/populate_mock_data.py (populate_brokers)`);
+    }
+    const brokerId = brokers[0].id;
+    const fileName = `unresolved-badge-${uniqueSuffix()}.csv`;
+    const response = await page.request.post('/api/v1/brokers/import/upload', {
+        multipart: {broker_id: String(brokerId), file: {name: fileName, mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8')}},
+    });
+    expect(response.ok(), `upload ${fileName}: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    const uploaded = (await response.json()) as {file_id: string; filename: string; target_broker_id: number | null};
+    const own: OwnedReport = {brokerId, fileId: uploaded.file_id, fileName};
+    ownedReports.push(own);
+    expect(uploaded, `${fileName} lands on "${GENERIC_SIMPLE.brokerName}" under its own name`).toMatchObject({filename: fileName, target_broker_id: brokerId});
+    return own;
+}
+
+/**
+ * The language the page is drawn in: `<html lang>`, which the root layout keeps on the language shown,
+ * read once `data-i18n-ready` says its dictionary is in — the reading of `tx-bulk-import-handoff.spec.ts`,
+ * replicated rather than imported (a spec does not reach into another spec's helpers).
+ */
+async function pageLanguage(page: Page): Promise<string> {
+    const html = page.locator('html');
+    await expect(html, 'the page has its dictionary').toHaveAttribute('data-i18n-ready', 'true');
+    return ((await html.getAttribute('lang')) ?? '').split('-')[0];
+}
+
+/**
+ * `importWizard.unresolvedCount` for `n`, as the `lang` catalogue words it: the message read from the
+ * catalogue file and formatted by `intl-messageformat`, the formatter svelte-i18n compiles messages with.
+ * A catalogue without the message fails here, by name.
+ */
+function unresolvedCountText(lang: string, n: number): string {
+    const message = catalogueText(lang, UNRESOLVED_COUNT_KEY);
+    expect(message, `the "${lang}" catalogue has a message for ${UNRESOLVED_COUNT_KEY}`).not.toBe(UNRESOLVED_COUNT_KEY);
+    return String(new IntlMessageFormat(message, lang).format({n}));
 }
 
 /**
@@ -715,5 +784,52 @@ test.describe('Import Wizard — Asset Resolution', () => {
             }
         }
         expect(found).toBe(true);
+    });
+
+    // -----------------------------------------------------------------------
+    // IWR-013: the unresolved badge counts the assets once, in the catalogue's plural
+    // -----------------------------------------------------------------------
+    for (const unresolved of [1, 2]) {
+        test(`IWR-013 (n=${unresolved}): the resolve header counts the unresolved assets once, in the catalogue's plural`, async ({page}) => {
+            // The badge drew `{step4UnresolvedCount}` and then `importWizard.unresolvedCount`, whose
+            // message already holds `{n}` and had no plural: "1 1 assets unresolved". Its text must be
+            // exactly the catalogue's message for the page's language, formatted for n.
+            const tickers = Array.from({length: unresolved}, () => uniqueToken(6));
+            await openImportWizard(page);
+            const own = await uploadOwnedCsv(page, purchasesOf(tickers));
+
+            // Step 1: skip; step 2: this test's file; step 3: parse
+            await page.getByTestId('import-wizard-next').click();
+            await selectBrokerFile(page, own);
+            const parsed = await parseSelectedFile(page, own.fileId);
+
+            // n is known by construction, and verified rather than assumed: the parse extracts the
+            // invented tickers and nothing else, and no asset matches any of them.
+            const mappings = (parsed as ParsedAssets).asset_mappings ?? [];
+            expect(mappings.map((mapping) => mapping.extracted_symbol).sort(), 'premise: the parse extracts this file’s invented tickers, one asset each, and nothing else').toEqual([...tickers].sort());
+            expect(
+                mappings.filter((mapping) => (mapping.candidates ?? []).length > 0 || mapping.selected_asset_id != null),
+                `premise: no asset matches the invented tickers, so all ${unresolved} reach the review unresolved`,
+            ).toEqual([]);
+
+            const step4 = await continueToReview(page, parsed);
+            const lang = await pageLanguage(page);
+
+            await expect(step4.getByTestId('import-wizard-unresolved-count'), `the badge is the "${lang}" catalogue's ${UNRESOLVED_COUNT_KEY} for n = ${unresolved}: the number once, inside the message's own plural`).toHaveText(unresolvedCountText(lang, unresolved), {timeout: 10_000});
+        });
+    }
+});
+
+test.describe('Import Wizard — the unresolved-assets message', () => {
+    // -----------------------------------------------------------------------
+    // IWR-014: the badge's message is a plural in every catalogue
+    // -----------------------------------------------------------------------
+    test('IWR-014: importWizard.unresolvedCount is a plural in every catalogue — one asset does not read as two with the digit swapped', () => {
+        // The catalogue files alone: no page, no login. A message with no plural
+        // (`{n} assets unresolved`) words 1 exactly as it words 2 with the "2" made a "1".
+        const worded = SUPPORTED_LANGUAGES.map((lang) => ({lang, one: unresolvedCountText(lang, 1), twoAsOne: unresolvedCountText(lang, 2).replace('2', '1')}));
+        const notPlural = worded.filter((entry) => entry.one === entry.twoAsOne);
+
+        expect(notPlural, `${UNRESOLVED_COUNT_KEY} is an ICU plural in every catalogue: for one asset it does not read as the text for two with the digit swapped`).toEqual([]);
     });
 });

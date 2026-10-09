@@ -434,7 +434,10 @@
     "serverUnreachable": {
       "title": "El servidor no responde",
       "body": "Esta página sigue abierta y tu sesión no se ha cerrado. Vuelve a intentarlo en un momento."
-    }
+    },
+    "invalidCredentials": "Nombre de usuario o contraseña no válidos",
+    "invalidInput": "Datos no válidos",
+    "loginFailed": "No se pudo iniciar sesión"
   },
   "importWizard": {
     "title": "Importar Transacciones",
@@ -467,7 +470,7 @@
     "allConfigured": "Todos los archivos configurados",
     "selectPlugin": "Seleccionar plugin…",
     "extensionError": "Tipo de archivo no soportado: {ext}. Aceptados: .csv, .xlsx, .xls",
-    "unresolvedCount": "{n} activos no resueltos",
+    "unresolvedCount": "{n, plural, one {# activo no resuelto} other {# activos no resueltos}}",
     "warningsCount": "{n} advertencias",
     "importedCount": "{n} transacciones importadas al editor",
     "resolveAssets": "Resolver Activos",
@@ -2053,7 +2056,8 @@
       "scheduler_current_price_frequency_minutes": "Frecuencia de Actualización de Precios",
       "scheduler_history_sync_times": "Horarios de Sincronización Histórica",
       "scheduler_history_sync_days": "Días de Sincronización Histórica",
-      "scheduler_history_sync_horizon_days": "Horizonte de Recuperación"
+      "scheduler_history_sync_horizon_days": "Horizonte de Recuperación",
+      "scheduler_enabled": "Planificador Activado"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Tiempo de validez de una sesión de usuario antes de requerir nuevo login",
@@ -2065,7 +2069,7 @@
       "default_theme": "Tema predeterminado para los nuevos usuarios",
       "scheduler_enabled": "Activar o desactivar el planificador automático de datos de mercado",
       "scheduler_current_price_frequency_minutes": "Frecuencia de actualización de precios actuales (en minutos)",
-      "scheduler_history_sync_times": "Horas del día en que se sincronizan los datos históricos (hora del servidor)",
+      "scheduler_history_sync_times": "Horas del día en que se sincronizan los datos históricos (en la zona horaria del planificador)",
       "scheduler_history_sync_days": "Días de la semana en que se sincronizan los datos históricos",
       "scheduler_history_sync_horizon_days": "Cuántos días atrás buscar datos históricos faltantes"
     },
@@ -2094,7 +2098,7 @@
         "currentPriceFreqHint": "Frecuencia de actualización de precios (1–1440 minutos)",
         "currentPriceFreqSuffix": "minutos",
         "historyTimesLabel": "Horarios de sincronización",
-        "historyTimesHint": "Horarios en que se ejecuta la sincronización diaria (hora del servidor)",
+        "historyTimesHint": "Horarios en que se ejecuta la sincronización diaria (en la zona horaria del planificador)",
         "historyTimesAdd": "Agregar horario",
         "historyDaysLabel": "Días de sincronización",
         "historyDaysHint": "Días de la semana en que se ejecuta la sincronización",

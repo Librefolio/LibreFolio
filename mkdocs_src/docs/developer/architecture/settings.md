@@ -92,7 +92,7 @@ The global keys declared today, and where the **Admin** tab shows them
 | `enable_registration` | bool | `true` | Security → **Enable Registration** |
 | `require_email_verification` | bool | `false` | Security → **Require Email Verification** — read-only placeholder (`PLACEHOLDER_KEYS`) |
 | `max_file_upload_mb` | int | `10` | Memory → **Max File Upload Size** |
-| `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label derived from the key: no `globalSettingNames` entry) |
+| `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label from `settings.globalSettingNames.scheduler_enabled`) |
 | `scheduler_current_price_frequency_minutes` | int | `10` | Schedule Configuration dialog → **Refresh every** |
 | `scheduler_history_sync_times` | str | `06:00,23:00` | Schedule Configuration dialog → **Sync times** |
 | `scheduler_history_sync_days` | str | `mon,tue,wed,thu,fri,sat` | Schedule Configuration dialog → **Sync days** |
