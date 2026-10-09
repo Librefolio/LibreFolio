@@ -731,15 +731,62 @@ export async function framePacReview(page: Page): Promise<Locator> {
     return step;
 }
 
-/** `tools/pac-step-targets`: the field completed again — 30 / 30 / 40, the total at 100% — with «Balance all» and «Copy current distribution». */
+/**
+ * What the Targets shot shows of its rest, read from the page: the element of `step` that holds the focus, if any (a field keeps
+ * its focus ring), and how far `field`'s table is scrolled sideways — `scroller`, the field's nearest ancestor that scrolls
+ * horizontally (DataTable.svelte: the box around the `<table>`, `overflow-x: auto`), `null` when there is none; `scrolledBoxes`,
+ * any other box from the field out to the page that is scrolled sideways (a cell clips its content, and a focus scrolls it too).
+ */
+async function pacTargetsRest(step: Locator, field: Locator): Promise<{focused: string | null; scroller: number | null; scrolledBoxes: string[]}> {
+    const focused = await step.evaluate((root) => {
+        const active = document.activeElement;
+        return active instanceof HTMLElement && root.contains(active) ? `${active.tagName.toLowerCase()}[data-testid="${active.dataset.testid ?? ''}"]` : null;
+    });
+    const sideways = await field.evaluate((element) => {
+        let scroller: number | null = null;
+        const scrolledBoxes: string[] = [];
+        for (let box = element.parentElement; box; box = box.parentElement) {
+            const overflowX = getComputedStyle(box).overflowX;
+            if (scroller === null && (overflowX === 'auto' || overflowX === 'scroll')) scroller = box.scrollLeft;
+            else if (box.scrollLeft !== 0) scrolledBoxes.push(`${box.tagName.toLowerCase()} (overflow-x: ${overflowX}) at ${box.scrollLeft}px`);
+        }
+        return {scroller, scrolledBoxes};
+    });
+    return {focused, ...sideways};
+}
+
+/** The Targets shot at rest: nothing in the step holds the focus, and the table shows from its first column — its scroller found, at 0. */
+async function expectPacTargetsAtRest(step: Locator, field: Locator): Promise<void> {
+    await expect.poll(() => pacTargetsRest(step, field), {message: 'the Targets shot is not at rest: a field of the step keeps the focus (its focus ring in the shot), or the table is scrolled sideways (its first columns out of the shot)'}).toEqual({focused: null, scroller: 0, scrolledBoxes: []});
+}
+
+/** Every box from `field` out to the page back to its first column — the table's own scroller first — at once, no smooth scroll. */
+async function scrollBackToFirstColumn(field: Locator): Promise<void> {
+    await field.evaluate((element) => {
+        for (let box = element.parentElement; box; box = box.parentElement) if (box.scrollLeft !== 0) box.scrollTo({left: 0, behavior: 'instant'});
+    });
+}
+
+/**
+ * `tools/pac-step-targets`: the field completed again — 30 / 30 / 40, the total at 100% — with «Balance all» and «Copy current
+ * distribution», the table at rest from its first column and no field focused.
+ */
 export async function framePacTargets(page: Page, draft: PacDraft): Promise<Locator> {
     const step = await goToPacStep(page, 'targets');
-    await typeValue(targetInput(page, draft.keys.bond), PAC_SCENARIO.targets.bond);
+    const bond = targetInput(page, draft.keys.bond);
+    await typeValue(bond, PAC_SCENARIO.targets.bond);
+    // `fill` focuses the field and scrolls it into view, sideways too inside the table's own scroller (on a phone the table is
+    // wider than the screen); the shot wants the table at rest from its first column, with no focus ring. So the focus goes,
+    // the table goes back to its start, and the spec's settle (settlePacShot: motion, stillness) runs after both.
+    await bond.blur();
+    await scrollBackToFirstColumn(bond);
+    await expect(bond, 'the bond target changed when its field let the focus go').toHaveValue(PAC_SCENARIO.targets.bond);
     const control = page.getByTestId('pac-planner-targets-control');
     await expect(control).toHaveAttribute('data-state', 'balanced');
     await expect(step.getByTestId('pac-planner-targets-balance-all')).toBeVisible();
     await expect(step.getByTestId('pac-planner-distribution-open')).toBeEnabled();
     await framePacBlock(page, {first: step, last: control, fallback: step});
+    await expectPacTargetsAtRest(step, bond);
     return step;
 }
 
