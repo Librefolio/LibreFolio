@@ -1177,6 +1177,114 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >     forma canonica.
   > - **Backlog per il test-author.** Il titolo di U1 (`tx-import-report-set.spec.ts:2863`) dice «block
   >   Continue», mentre il test controlla `import-wizard-parse`. Non l'ho toccato.
+  >
+  > **Integrazione**: `0cc4a5077` · `d7767f2ea` · `5c9635d73` · `dd87e1669`, merge `bc700c8e8`, nel treno
+  > 19.
+- **S21** ✅ 2026-10-09 — Tre reperti, dalla lista approvata dal developer («anche 5 se si può è meglio,
+  idem per 6 e 7»; «13 è un typo che correggerei volentieri»; il 7 va a K). Base `9b2acdd5d` (treno 21).
+  > **Analisi**, punto per punto, tutto confermato:
+  > - **5 · Errori di login in inglese.** `stores/app/auth.ts:123-134` mette nello stato una frase inglese
+  >   già composta, e `LoginCard.svelte:58` la mostra così com'è.
+  >   - Le frasi sono tre: «Login failed», per un errore che non è di axios; «Invalid username or
+  >     password» per ogni 401; «Invalid input» per il 422.
+  >   - Gli altri errori di axios mostrano `error.message`, il testo tecnico del trasporto.
+  >   - Nessuno store dell'app traduce da sé, e `authError` lo legge solo `LoginCard`.
+  >   - **Cura**: lo stato tiene `{key}` (una chiave del catalogo) oppure `{message}` (il testo del
+  >     trasporto), e `LoginCard` traduce la chiave quando disegna. Così l'errore segue anche un cambio di
+  >     lingua. Chiavi nuove: `auth.invalidCredentials`, `auth.invalidInput`, `auth.loginFailed`, con i
+  >     testi inglesi invariati. Resta un solo messaggio per tutti i 401: non rivela se l'account esiste.
+  > - **6 · Impostazioni admin.**
+  >   - **L'etichetta.** «Scheduler Enabled» è il ripiego `key → Title Case` di
+  >     `GlobalSettingsTab.svelte:296-298`, perché manca `settings.globalSettingNames.scheduler_enabled`.
+  >     La aggiungo, con il testo inglese invariato, così `admin/settings.en.md:52` e
+  >     `community/faq.en.md:66,74` restano giusti.
+  >   - **Gli aiuti «(server time)» sono sbagliati.** Orari e giorni sono salvati e valutati nel fuso
+  >     dello scheduler, `scheduler_timezone`, con UTC come default e come ripiego
+  >     (`scheduler/settings.py:23,26,66-78`; `scheduler.py:58-78`; `schemas/settings.py:325-329`). Il
+  >     fuso del server non conta.
+  >   - Sono due testi: `settings.global.scheduler.historyTimesHint`, che si vede nel modale sotto il
+  >     campo del fuso (`SchedulerConfigModal.svelte:296`), e
+  >     `settings.globalSettingDescriptions.scheduler_history_sync_times`, che oggi non si vede, perché la
+  >     chiave è fra le `SCHEDULER_HIDDEN_KEYS` (`GlobalSettingsTab.svelte:68`). Li correggo entrambi.
+  >   - La doc admin inglese è già giusta (`admin/settings.en.md:85`). È invece falsa, dopo la cura,
+  >     `developer/architecture/settings.md:95`, che dice «no `globalSettingNames` entry».
+  > - **13 · «1 1 assets unresolved».** `ImportWizardModal.svelte:4972-4973` scrive
+  >   `{step4UnresolvedCount}` e poi `importWizard.unresolvedCount`, che contiene già `{n}`; e il
+  >   catalogo dice «{n} assets unresolved», senza plurale. Cura: tolgo il numero in più e rendo la chiave
+  >   un plurale ICU nelle 4 lingue, con testi diversi fra le lingue (cache di svelte-i18n, §4).
+  > - **Già nella `v1.1.0`, verificato sul tag**: tutti e tre. Le 3 stringhe fisse in `auth.ts`; il nome
+  >   mancante e i due «(server time)», quando gli orari seguivano già `scheduler_timezone`; il numero
+  >   doppio, allora a `:4119-4120`.
+  > - **Visto e non toccato**: `importWizard.assetsCount` («{n} unique assets, {m} need resolution»), lo
+  >   stesso difetto di plurale nella scheda delle statistiche (`:4678`).
+  >
+  > **Rossi, dal test-author, solo in file già registrati:**
+  > - `stores/app/auth.test.ts` (`front-user user-unit`): il contratto di `authError`;
+  > - `components/auth/LoginCard.test.ts` (`component-unit`): la chiave si traduce, il messaggio no;
+  > - `settings/tabs/GlobalSettingsTab.test.ts` (`component-unit`): ogni riga ha il nome nel catalogo;
+  > - `e2e/transactions/tx-import-resolution.spec.ts` (`front-transaction tx-import-resolution`): il badge
+  >   del passo asset. Al badge serve un aggancio, `data-testid="import-wizard-unresolved-count"`, che
+  >   aggiungo prima della corsa rossa: non cambia il comportamento.
+  >
+  > **Note implementazione** (2026-10-09):
+  > - **Rossi, dal test-author**, ognuno sul difetto e non sulla preparazione:
+  >   - `auth.test.ts`: 17 rossi; verdi la premessa e le metà che non scattano;
+  >   - `LoginCard.test.ts`: 6 rossi, che disegnavano «[object Object]». Il test usa un traduttore che
+  >     marca ciò che traduce (`⟦key⟧`): così un messaggio passato per `$_`, o una chiave stampata cruda,
+  >     non passano;
+  >   - `GlobalSettingsTab.test.ts`: 2 rossi. L'invariante: nessuna riga ripiega sul nome ricavato dalla
+  >     chiave, perché ogni riga ha il suo nome nei 4 cataloghi veri; `scheduler_enabled` mancava in tutti
+  >     e 4;
+  >   - `tx-import-resolution.spec.ts`: 3 rossi. IWR-013, con n=1 e n=2, legge «1 1 assets unresolved»;
+  >     IWR-014 vuole che il messaggio sia un plurale. IWR-013 carica un CSV suo, con ticker inventati, così
+  >     il conteggio non dipende dagli altri test.
+  > - **5.** Nuovi `AuthErrorKey` e `AuthError = {key} | {message}` in `types/user.ts`, con
+  >   `AuthState.error: AuthError | null`. Lo store sceglie la chiave, e `LoginCard` la traduce con `$_`
+  >   quando disegna; un `{message}` lo mostra com'è. Chiavi `auth.{invalidCredentials,invalidInput,loginFailed}`,
+  >   con i testi inglesi invariati.
+  > - **6.** `settings.globalSettingNames.scheduler_enabled`: «Scheduler Enabled», «Scheduler Abilitato»,
+  >   «Planificateur Activé», «Planificador Activado». I due aiuti ora dicono «(in the scheduler timezone)»
+  >   nelle 4 lingue, con i termini già in uso: IT scheduler e fuso orario, FR planificateur e fuseau
+  >   horaire, ES planificador e zona horaria.
+  > - **13.** Tolto `{step4UnresolvedCount}` prima del messaggio. `importWizard.unresolvedCount` ora è un
+  >   plurale ICU, con testi diversi nelle 4 lingue.
+  > - **Cataloghi contro `9b2acdd5d`**: +4 chiavi, 3 valori cambiati, stesso insieme nelle 4 lingue, forma
+  >   canonica; tutto con `dev.py i18n` (`/tmp/libreFolio_o_s21_i18n.sh`).
+  > - **Doc**, dal docs-writer, solo in inglese:
+  >   - `developer/architecture/settings.md:95` ora cita la chiave del nome;
+  >   - `developer/frontend/components/features/auth.md:23` descrive il contratto di `authError`.
+  >
+  > **⚠️ Fuori pista**:
+  > - **Prettier sullo spec del test-author**: una riga lunga nelle righe nuove, corretta con il Prettier
+  >   del lockfile. IWR-013 e 014 rilanciati dopo: 3 ✅.
+  > - **Il test-author ha notato** che l'API dice ancora «Account is disabled» prima di controllare la
+  >   password (`backend/app/api/v1/auth.py:102-104`). Così rivela che un account esiste ed è disattivato.
+  >   L'interfaccia ora mostra lo stesso messaggio per tutti i 401, ma l'API no: da backlog, come
+  >   problema di sicurezza.
+  > - **Gli errori di rete restano in inglese**: il testo di axios, «Network Error» o il timeout, si vede
+  >   com'è, secondo il contratto approvato. Se si vuole, c'è `auth.serverUnreachable`: da backlog.
+  > - **`check-links`, visto dal docs-writer**, esce con 1 per un problema preesistente: l'àncora
+  >   `#rolling-return` di `user/assets/detail/chart` c'è solo in inglese (`1c2f88d67`), mentre
+  >   `assets/[id]/+page.svelte:3012` la cerca in tutte le lingue. Non è mio.
+  > - **Non toccati**:
+  >   - `importWizard.assetsCount`, lo stesso difetto di plurale;
+  >   - IWR-001, che trova il badge con `[class*="amber"]` e potrebbe usare l'aggancio nuovo;
+  >   - la riga booleana `scheduler_enabled`, che non ha `data-testid` mentre le righe numeriche sì.
+  >
+  > **Gate** (corsia 6160, `/tmp/librefolio-r2-o`, uno per volta):
+  > - unità:
+  >   - `front-user user-unit`: 47 ✅;
+  >   - `front-utility component-unit`: 111 file, 2909 ✅;
+  >   - `front-utility core-unit`: 118 file, 3452 ✅, con `catalogIcuLocale` e la guardia di K;
+  > - E2E:
+  >   - `front-transaction tx-import-resolution`: 15 ✅, e 15 ✅ anche con `--workers 4`;
+  >   - `front-utility auth` 28 ✅, `settings` 45 ✅, `scheduler` 17 ✅;
+  > - `utils gate-i18n-usage`: 195 ✅;
+  > - `i18n audit`: 4203 chiavi, 0 morte, le stesse 3 non verificate;
+  > - controlli statici: `front check` con 0 errori e 0 avvisi; Prettier pulito sugli 8 file e sui
+  >   cataloghi; `git diff --check` pulito;
+  > - doc: `mkdocs build` strict ✅;
+  > - porte 6160 e 6170 libere.
 
 ## 12. Definition of done
 
