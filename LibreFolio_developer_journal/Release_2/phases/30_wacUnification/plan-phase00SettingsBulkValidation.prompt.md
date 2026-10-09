@@ -3,6 +3,10 @@
 > Workstream P, lavoro per la 1.2. Coordinator: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`. Approvato dal
 > developer: «Mi pare una mancanza che andrebbe risolta, non mi sembra difficiel, facciamola in 1.2». Reperto di Q
 > (onda 3). Base: treno 21, `9b2acdd5d`. Corsia `--test-port 6161 --data-dir /tmp/librefolio-r2-p`.
+>
+> Stato: **chiuso e archiviato** (09/10). Commit `84d9e3360` (`fix(settings): validate bulk global settings`), in
+> `dev_release2` col treno 23 (merge `30b18b0e2`); riga del CHANGELOG `[1.2.0]` sotto 🐛 Fixed (`CHANGELOG.md:206`).
+> Un residuo rinviato, in §7.
 
 ## 1. Stato verificato (09/10)
 
@@ -25,8 +29,8 @@
 
 | Chiave | Tipo | Vincolo proposto | Danno oggi |
 |---|---|---|---|
-| `session_ttl_hours` | int | 1-8760 (un'ora, un anno) **da confermare** | negativo: sessioni già scadute, tutti fuori, admin compreso; enorme: overflow al login (`auth.py:118-135`) |
-| `max_file_upload_mb` | int | 1-1024 **da confermare** (il file è letto tutto in memoria) | negativo: ogni upload rifiutato (`brokers.py:591`, `uploads.py:180`) |
+| `session_ttl_hours` | int | 1-8760 (un'ora, un anno) **da confermare** → confermato in S1 | negativo: sessioni già scadute, tutti fuori, admin compreso; enorme: overflow al login (`auth.py:118-135`) |
+| `max_file_upload_mb` | int | 1-1024 **da confermare** (il file è letto tutto in memoria) → confermato in S1 | negativo: ogni upload rifiutato (`brokers.py:591`, `uploads.py:180`) |
 | `enable_registration`, `require_email_verification`, `scheduler_enabled` | bool | `true/false/1/0/yes/no/on/off`, senza distinzione di maiuscole; salvato come `true`/`false` | un refuso diventa False in silenzio: registrazione o scheduler spenti |
 | `scheduler_current_price_frequency_minutes` | int | 1-1440 (descrizione e UI) | 0 → fallback; negativo → ciclo sbagliato |
 | `scheduler_history_sync_times` | str | lista di `HH:MM` (00:00-23:59), almeno uno; elementi vuoti ignorati come fa il lettore | `25:00` o `6` → eccezione a ogni tick dello scheduler |
@@ -143,3 +147,24 @@ che manda sempre il fuso, diventerebbe insalvabile su quelle installazioni.
 
   `api sync` OK, con modifiche solo nei file generati e ignorati. Il frontend non cambia.
 - **S5** ✅ (09/10) — Checkpoint al coordinator con la riga per il CHANGELOG (§5, sotto 🐛 Fixed), poi FROZEN.
+  > **Integrazione**: commit `84d9e3360`, entrato col treno 23 (merge `30b18b0e2`, punta `1ead733f2`).
+
+## 7. Verifica d'archivio (09/10)
+
+> Chiesta dal coordinator, sul codice di `dev_release2` @ `3cceb4f90` (treno 24b), in sola lettura.
+
+- Codice come in S3:
+  - `SettingConstraint` (`schemas/settings.py:361`), `GLOBAL_SETTINGS_CONSTRAINTS` (`:372`) e
+    `validate_global_setting_value` (`:451`);
+  - `update_global_settings` (`services/settings_service.py:213`);
+  - l'endpoint `PATCH /global/bulk` (`api/v1/settings.py:321`).
+- La riga del CHANGELOG è entrata: `CHANGELOG.md:206`, sotto 🐛 Fixed.
+- I 7 percorsi citati esistono tutti.
+- **Residuo**: rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Fuso orario: verificare il database IANA
+  nell'immagine Docker».
+  - Il fuso è controllato solo se il server ha il database IANA (`_check_timezone`, `schemas/settings.py:426-432`).
+  - L'immagine (`Dockerfile:72`, `python:3.13-slim`) installa solo `gosu` e `sqlite3` (`:86-88`), e `tzdata` non è
+    nel `Pipfile`.
+  - Se lì `zoneinfo.available_timezones()` è vuoto, in Docker un fuso qualunque passa ancora, come prima della
+    correzione. È la regola approvata in S1, ma nessuno ha verificato l'immagine.
+- **Esito**: FINITA, archiviata intera con la cartella `30_wacUnification` in `Release_2/phases/`.
