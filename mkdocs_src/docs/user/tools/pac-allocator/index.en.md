@@ -360,7 +360,7 @@ takes you back to the **Review** step, and **Calculate new plan** runs the
 calculation again.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="tools" data-name="pac-result" alt="A calculated plan: the header with its outcome badges, the L2 distance, Not invested and the notes, Edit configuration and Calculate new plan; the Key figures, each with its parts, beside the Calculation box; and the title of Allocation per Asset">
+    <img class="gallery-img" data-category="tools" data-name="pac-result" alt="A calculated plan: the header with its outcome badges, the L2 distance, Not invested and the notes, Edit configuration and Calculate new plan; the Key figures, each with its parts, beside the Calculation box; and the Allocation per Asset table, with each Asset's target share beside its share after the plan, its value after the plan and its ideal value, and the totals">
 </div>
 
 A calculation ends with one of these outcomes:
@@ -431,7 +431,7 @@ them together. Without a plan (**Infeasible with these constraints** or
 the key figures show only the **Calculation** box.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="The Operational plan: numbered steps, first the transfers and the deposit that bring the cash to a Broker, then a currency exchange, each with its amount; then that Broker's orders, with Instruction, Price, Order amount and Fee; and the title of the next Broker's orders">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="The Operational plan: numbered steps, first the transfers and the deposit that bring the cash to a Broker, then a currency exchange with its rate, each with its amount; then that Broker's orders, with Instruction, Price, Order amount and Fee; and the next Broker's orders">
 </div>
 
 Click an order, or its **Detail** button, to open its detail: the instruction,
