@@ -147,7 +147,8 @@ assegnata; il parallelismo dei file non autorizza runtime concorrenti.
 `dev_release2` con le righe 7–13, 15 e 16; l'ultima è entrata col treno 26 (`083ed26dc`). Fuori
 dalla 1.2 restano la riga 14, l'analisi del Rebalancer, e con essa gli E2E dedicati del PAC, che si
 fanno insieme a quelli del Rebalancer. L'opzione (e) della riga 16, una sola conversione per broker e
-coppia, resta nel backlog di questa cartella. Il Rebalancer non è ancora implementato: gli Step 1–6
+coppia, resta nel [backlog](#backlog) di questa cartella, insieme ai difetti di prodotto trovati da M
+negli scatti del lotto 9. Il Rebalancer non è ancora implementato: gli Step 1–6
 restano il riferimento per il suo disegno, con le note di mappatura del 05/10.
 
 **Stato alla nascita del bundle** (testo originale):
@@ -159,3 +160,37 @@ checkpoint planning-only servono:
 2. autorizzazione developer esplicita all'implementazione;
 3. assegnazione workstream/lane;
 4. handshake con il gruppo C.
+
+## Backlog
+
+**Al 2026-10-09.** Rinvii aperti di questa cartella, fuori dalla 1.2. Le ancore valgono a `9f060ef6e`;
+`planner/` sta per `frontend/src/lib/features/tools/pac-allocator/planner/`. Le cause marcate
+«ipotesi» vengono dalla sola lettura del codice: vanno confermate nel browser prima della cura.
+
+### Difetti di prodotto dagli scatti del lotto 9
+
+Trovati da M nella gallery del PAC, nel [piano della gallery](../../27_releaseImages/plan-phase00ReleaseGallery.prompt.md)
+§22.3–22.4 (`:1706-1737`). Le revisioni immagine per immagine sono in
+`release-pipeline/runs/b9_review_desktop_steps.{tsv,md}` e `release-pipeline/runs/b9_review_mobile_steps.{tsv,md}`.
+Il manifest `release-pipeline/runs/b9_pac_manifest.md` dà percorso, sha256 e verdetto di ognuna delle 144 immagini.
+Le immagini sono fuori dal repository. Una combinazione è una lingua (en, it, fr, es) per un tema (chiaro, scuro).
+
+| # | Reperto di M | Difetto | Scatti | Ancora nel codice | Note |
+|---:|---|---|---|---|---|
+| 1 | C | La colonna Asset taglia «MSFT Microsoft Corporation» a metà lettera, senza «…»: «…Corp», «…Cor» in es. | `pac-step-targets` desktop, 8 combinazioni su 8; piano della gallery `:1710` | Il nome passa da `planner/shared/AssetNameCell.svelte:16` a `planner/shared/MarqueeName.svelte:16` (R11.6: il nome scorre invece di essere tagliato, il testo intero sta nel tooltip). `overflowScrollTextClass` (`frontend/src/lib/utils/overflowScroll.ts:16`) taglia senza `text-overflow: ellipsis`. A riposo il testo resta tagliato: per 2 s prima di ogni scorrimento (`frontend/src/lib/actions/scrollOnOverflow.ts:22`), e sempre con `prefers-reduced-motion` (`:49`, `:121`). La colonna ha `minWidth: 160` (`planner/steps/TargetsStep.svelte:109`). | Da decidere: «…» a riposo nel solo `MarqueeName`, oppure una colonna più larga. Il marquee è condiviso da 24 file `.svelte`; `MarqueeName` serve anche `ReviewCell` e `ResultCell`. |
+| 2 | F | L'intestazione «Actions» c'è, ma nelle righe non c'è il ⋮. | `pac-step-review` mobile, 8 su 8; piano della gallery `:1723` | Le azioni non hanno `visible` (`planner/steps/ReviewStep.svelte:117-119`, `:201-203`), quindi il ⋮ viene disegnato (`frontend/src/lib/components/table/DataTable.svelte:1431-1452`). Ipotesi: sotto i 768 px la media query rende statiche le celle azioni (`DataTable.svelte:2295-2301`). Però `thead.sticky-header th` (`:1614-1619`; `stickyHeader` vale `true`, `:161`) è più specifica di `.th-actions`, quindi l'intestazione resta `sticky` con `right: 0` (`:1658-1660`). Resta incollata al bordo destro, mentre le celle col ⋮ restano fuori, a destra. | `DataTable` è condiviso e non è del PAC: la cura va concordata con chi lo possiede. Lo stesso effetto è possibile in ogni tabella con azioni più larga del telefono. Causa probabile in comune con la riga 5. |
+| 3 | — | Nel titolo del passo Routing manca lo spazio prima del trattino: «ROUTING–». | `pac-step-routing` desktop; piano della gallery `:1711` | `planner/PacPlannerTool.svelte:354`: lo spazio prima del trattino è il primo carattere di `<span data-testid="pac-planner-routing-intro"> – …</span>`, e Svelte 5 toglie gli spazi all'inizio e alla fine di un tag. Il maiuscolo viene da `SECTION_TITLE` (`planner/ui.ts:36`). Riga introdotta in `6f29ec1cf`. | Correzione di una riga: uno spazio esplicito prima del trattino, per esempio `{' '}`. Vale per tutte e 4 le lingue. |
+| 4 | — | In it e fr una sola parola indica due cose: il passo «Review» e il toggle «Summary» sotto i passi, nella stessa card. È «Riepilogo» in it e «Récapitulatif» in fr. | Passi desktop; piano della gallery `:1711` | `tools.pacAllocator.planner.steps.review` (`it.json:4857`, `fr.json:4857`); `…summary.toggle` (`:4904`) e `…summary.title` (`:4903`). In it anche la colonna `…review.colSummary` dello stesso passo (`it.json:4788`). Il toggle sta sotto `StepNav` (`planner/PacPlannerTool.svelte:338-340`). In en ed es le parole sono già distinte: Review/Summary, Revisión/Resumen. | Si toccano solo i cataloghi, con `dev.py i18n` e un solo writer. La parola la sceglie il developer. |
+| 5 | D | Su mobile la tabella dei target non sta nella larghezza del telefono. I nomi sono tagliati a sinistra («APL Apple Inc.»), gli input Target % a destra e senza «%», e «Actions» sta sopra gli input. | `pac-step-targets` mobile, 8 su 8; piano della gallery `:1720-1721` | Larghezze dichiarate in `planner/steps/TargetsStep.svelte:102-135` e `:203-213`: selezione 48 px (`DataTable.svelte:131`), Asset min 160, Distribuzione 200 (min 100), Target % 140 (min 128), azioni 64. Il minimo supera i 500 px. Ipotesi: la colonna di selezione è `sticky` a sinistra (`DataTable.svelte:1648-1651`, `:1974-1978`) e copre i nomi quando la tabella scorre; «Actions» si comporta come nella riga 2. | Difetto di prodotto più fixture. M corregge solo la fixture (blur e reset orizzontale) nel lotto 10. Da decidere: un layout per il telefono, oppure la cura della riga 2 nel `DataTable`. |
+
+Fuori da questo backlog:
+
+- G, lo spazio prima di «%» in `es.json`, è assegnato a S;
+- A, B ed E sono di inquadratura o di fixture e restano nel piano della gallery.
+
+### Rinvii di design
+
+- **(e) della riga 16**: una sola conversione per broker e coppia di valute. Con la regola (a) spezzare una
+  conversione non conviene, ma il solver può lasciarne più d'una, ciascuna arrotondata contro il piano.
+  Fonderle sempre resta da fare; i test non fissano lo spezzamento. Vedi il
+  [piano della riga 16](plan-phase00PacRoundingDirectionFix.prompt.md), `:62`, `:143-148` e `:233`.
