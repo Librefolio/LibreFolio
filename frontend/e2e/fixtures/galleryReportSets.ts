@@ -299,6 +299,35 @@ async function fulfillWith(route: Route, response: APIResponse, json: unknown): 
     await route.fulfill({response, headers, json});
 }
 
+/**
+ * Keep {@link hideGalleryTempData} working for a page served under another name of the lane: a name Chromium maps onto the
+ * loopback (`--host-resolver-rules`), where the lane's backend answers — the connection-security shot's LAN name.
+ *
+ * The gallery's routes match a path or a third-party host, never the baseURL's origin, so such a page is guarded and
+ * filtered as on the baseURL. But the two listings hideGalleryTempData filters are fetched in Node (`route.fetch()`), and
+ * Node resolves names without Chromium's rules: under the other name the fetch fails (`getaddrinfo ENOTFOUND`), and the
+ * page's request with it. So a GET of either listing under `alias` goes on to hideGalleryTempData with the same path and
+ * query under `lane`, the baseURL's origin, which Node reaches; the page receives the filtered listing under its own name.
+ * Node sends the cookies of `lane`, and the gallery's own reads (`page.request`) go to the baseURL too: the same user must
+ * be signed in there first — read back here. Nothing else under `alias` is touched.
+ *
+ * Registered by the test, after the outer beforeEach: it runs before hideGalleryTempData.
+ */
+export async function keepTempDataHiddenUnder(page: Page, alias: string, lane: string): Promise<void> {
+    const aliasOrigin = new URL(alias).origin;
+    const laneOrigin = new URL(lane).origin;
+    const me = await page.request.get(`${laneOrigin}${API}/auth/me`);
+    expect(me.ok(), `precondition: the reads made in Node go to ${laneOrigin}, where this page's user must be signed in (GET ${API}/auth/me answered HTTP ${me.status()})`).toBe(true);
+    await page.route(
+        (url) => url.origin === aliasOrigin && (url.pathname === BROKERS_PATH || url.pathname === FILES_PATH),
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            const {pathname, search} = new URL(route.request().url());
+            await route.fallback({url: `${laneOrigin}${pathname}${search}`});
+        },
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Offline: no scenario reaches a real provider
 // ---------------------------------------------------------------------------
