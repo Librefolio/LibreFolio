@@ -36,31 +36,38 @@ test('create a new broker', async ({ page }) => {
 
 ## 🤖 Automated Setup
 
-When you run a frontend test category, `dev.py` handles everything automatically:
+When you run a frontend test category, everything the Playwright specs need is prepared for you (the
+category's Vitest files need none of it):
 
-1. **Builds the frontend** — Runs `front build` to produce a production build
-2. **Starts the backend** — Launches the FastAPI server in `--test` mode (isolated test database at `backend/data/test/`)
-3. **Serves the frontend** — The backend serves the built frontend at `http://localhost:6041`
-4. **Runs Playwright** — Executes the test specs against the live application
-5. **Tears down** — Stops the server after tests complete
+- **Builds the frontend, when needed** — `front build`, which syncs the API client before building, runs only when there is no build yet, when the frontend sources, its configuration or the Tool codegen inputs changed since the last build, or when the existing build is not of the kind needed: instrumented for JS coverage or plain, and a debug build for `dev.py server --test`. The runner checks before the specs, the test backend when it starts.
+- **Uses a test backend** — `dev.py server --test`, serving the API and the built frontend on the run's test port. By default it is the shared backend the runner starts once for the whole invocation; with `--no-shared-server`, Playwright's `webServer` starts its own for each Playwright run.
+- **Prepares the test data** — repopulates the test database with mock data and creates the E2E users, in the runner or in Playwright's `globalSetup`.
+- **Runs Playwright** — executes the specs against the live application at `http://localhost:<test port>`: `6041` unless `--test-port` or `TEST_PORT` says otherwise.
+- **Tears down** — stops the backend it started: the shared one at the end of the invocation, Playwright's own at the end of its run.
 
 !!! info "Test isolation"
 
-    Test mode uses a completely separate database (`backend/data/test/sqlite/app.db`). Your production data is never touched.
+    The test backend works on the run's test data root: `backend/data/test/` in the checkout unless
+    `--data-dir` or `LIBREFOLIO_TEST_DATA_DIR` says otherwise, with the database in `sqlite/app.db`
+    under it. The runner refuses a test data root that overlaps the production data, so your
+    production data is never touched. See [Isolated Runtime Lanes](index.md#isolated-runtime-lanes).
 
 ---
 
 ## 🏁 Flags
 
-Frontend test categories (`front-utility`, `front-user`, `front-fx`) support these flags:
+Every frontend test category — `front-utility`, `front-broker`, `front-user`, `front-fx`,
+`front-asset`, `front-transaction`, `front-portfolio`, `front-ai-export` — supports these flags.
+`--headed`, `--debug`, `--ui` and `--list` follow the category (`./dev.py test front-fx all --headed`);
+`--coverage` belongs to `./dev.py test` and comes before it (`./dev.py test --coverage js front-fx all`).
 
 | Flag | Effect | When to Use |
 |------|--------|-------------|
 | `--headed` | Opens a visible browser window instead of headless | Watch the test flow visually, debug layout issues |
-| `--debug` | Enables **Playwright Inspector** — pauses before each action | Step through actions one by one, inspect selectors, set breakpoints |
+| `--debug` | Runs headed with the **Playwright Inspector** (`PWDEBUG=1`), which pauses the test so you can step through its actions | Step through actions one by one, inspect selectors, set breakpoints |
 | `--ui` | Opens **Playwright UI Mode** — a full interactive test runner | Explore tests interactively, view timeline/trace, re-run selectively |
-| `--list` | Lists available test files without running them | Discover tests, verify naming, plan what to run |
-| `--coverage [py\|js\|all]` | Tracks Python and/or JS coverage during E2E tests | `py` → `htmlcov-backend-e2e/`, `js` → `frontend/coverage-js/e2e/`, `all` (default) → both |
+| `--list` | Lists the category's Playwright spec files and the test titles they declare, without running anything (`all` for the whole category, an action name for its specs only) | Discover tests, verify naming, plan what to run |
+| `--coverage [py\|js\|all]` | Tracks Python and/or JS coverage: the backend's Python while the E2E tests drive it, the frontend's JS in the browser and in the category's Vitest files | `py` → `htmlcov-backend-e2e/`, `js` → `frontend/coverage-js/` (`e2e/`, `unit-combined/`, and `combined/` when both ran), `all` (default) → both |
 
 !!! tip "E2E runs are the only ones that measure both languages"
 
@@ -89,7 +96,14 @@ The UI mode provides a rich interactive experience:
 
 | Category | Command | What's Tested |
 |----------|---------|---------------|
-| **[Front-Utility](front-utility.md)** | `./dev.py test front-utility all` | Auth, settings, files, select, image-crop |
-| **[Front-User](front-user.md)** | `./dev.py test front-user all` | Brokers, multi-user, sharing |
-| **[Front-FX](front-fx.md)** | `./dev.py test front-fx all` | FX list, detail, add-pair, editor, sync |
+| **[Front-Utility](front-utility.md)** | `./dev.py test front-utility all` | Auth, settings, files, select, image crop, onboarding, layout, scheduler (Playwright) + core and component units (Vitest) |
+| **Front-Broker** | `./dev.py test front-broker all` | Broker list, CRUD, detail page, deletion recovery (Playwright) + broker helpers (Vitest) |
+| **[Front-User](front-user.md)** | `./dev.py test front-user all` | Multi-user isolation, broker sharing (Playwright) + auth and client-session stores (Vitest) |
+| **[Front-FX](front-fx.md)** | `./dev.py test front-fx all` | FX list, detail, add-pair, editor, CSV import, sync, bulk actions (Playwright) + EditBuffer, TimeSeriesStore, fxStoreRegistry (Vitest) |
+| **Front-Asset** | `./dev.py test front-asset all` | Asset list, detail, modal, data editor, merge, classification (Playwright) + price store, chart aggregation (Vitest) |
+| **Front-Transaction** | `./dev.py test front-transaction all` | Transaction modals, table, bulk operations, WAC, import wizard (Playwright) + payload and commit helpers (Vitest) |
+| **Front-Portfolio** | `./dev.py test front-portfolio all` | Dashboard charts, banners, page cache, privacy masking, risk analysis (Playwright) + portfolio and risk stores (Vitest) |
+| **Front-AI-Export** | `./dev.py test front-ai-export all` | AI Export panel, catalog, session memory, contracts (Playwright) + AI Export and signal units (Vitest) |
+
+The categories without a walkthrough page list their actions with `./dev.py test <category> -h`.
 
