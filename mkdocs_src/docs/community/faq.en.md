@@ -80,7 +80,7 @@ Check that:
 ### 🔐 I can't login
 
 - Verify your username and password
-- A disabled account gets the same *Invalid username or password* message: if you are sure of your credentials, ask your administrator whether your account was disabled
+- With a wrong password you always get the same *Invalid username or password* message, whether the account exists or not; with the right password, a disabled account is told so: ask your administrator to enable it again
 - Clear browser cookies and try again
 
 ### 📱 Can I use LibreFolio as a mobile app?

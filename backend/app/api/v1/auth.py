@@ -33,6 +33,7 @@ from backend.app.services.auth_service import (
     decode_jwt_token,
     hash_password,
     verify_password,
+    verify_password_or_dummy,
 )
 from backend.app.services.donation_popup_service import record_login_and_maybe_show_popup
 from backend.app.services.global_settings_service import get_session_ttl_hours, is_registration_enabled
@@ -116,17 +117,20 @@ async def login(
     # Try to find user by username or email
     user = await user_service.get_user_by_username_or_email(session, request.username)
 
-    if not user:
-        logger.warning("Login failed: user not found", username=request.username)
+    # The password comes first, whatever the account: a wrong one gets the same 401 for an unknown,
+    # an active or a disabled account, and an unknown one still costs a bcrypt check (dummy hash),
+    # so neither the answer nor its timing tells which accounts exist.
+    if not verify_password_or_dummy(request.password, user.hashed_password if user else None) or user is None:
+        if user is None:
+            logger.warning("Login failed: user not found", username=request.username)
+        else:
+            logger.warning("Login failed: wrong password", username=request.username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # Only the right password learns that the account is disabled.
     if not user.is_active:
         logger.warning("Login failed: user inactive", username=request.username)
-        raise HTTPException(status_code=401, detail="Account is disabled")
-
-    if not verify_password(request.password, user.hashed_password):
-        logger.warning("Login failed: wrong password", username=request.username)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=403, detail={"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"})
 
     # Update login/donation-popup counters and decide whether to show the support popup
     # for this login (see donation_popup_service for the trigger rules).

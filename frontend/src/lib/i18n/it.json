@@ -437,7 +437,8 @@
     },
     "invalidCredentials": "Nome utente o password non validi",
     "invalidInput": "Dati non validi",
-    "loginFailed": "Accesso non riuscito"
+    "loginFailed": "Accesso non riuscito",
+    "accountDisabled": "Questo account è disattivato: chiedi a un amministratore di riattivarlo."
   },
   "importWizard": {
     "title": "Importa Transazioni",
@@ -5421,5 +5422,22 @@
     "deselectVisible": "Deseleziona visibili",
     "confirm": "Aggiungi {count}",
     "allSelected": "Tutti gli asset sono già nella selezione."
+  },
+  "connectionSecurity": {
+    "level": {
+      "secure": "Connessione: sicura",
+      "local": "Connessione: rete locale",
+      "insecure": "Connessione: non sicura"
+    },
+    "reason": {
+      "https": "Cifrata con HTTPS: il browser considera sicura questa connessione.",
+      "localhost": "Sei sul server stesso: il traffico non esce da questo computer.",
+      "vpn": "Cifrata dalla VPN (Tailscale) tra il tuo dispositivo e il server.",
+      "lan": "Rete locale senza cifratura: chiunque sia sulla stessa rete, per esempio il Wi-Fi, può leggere il traffico. Per la massima sicurezza usa l'indirizzo HTTPS anche in casa.",
+      "uncertain": "Incerta: l'indirizzo che hai aperto e la sorgente che vede il server non coincidono, per esempio un nome pubblico raggiunto con lo split DNS o un proxy locale. Il traffico non è cifrato: usa l'indirizzo HTTPS.",
+      "internet": "Non cifrata su Internet: password e dati viaggiano in chiaro."
+    },
+    "cookieWarning": "Il browser usa HTTPS, ma il cookie di sessione non è marcato Secure. Fai mandare X-Forwarded-Proto al reverse proxy (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), oppure riporta SESSION_COOKIE_SECURE ad auto se è never.",
+    "learnMore": "Come connettersi in sicurezza"
   }
 }

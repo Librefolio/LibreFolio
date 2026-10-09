@@ -11,6 +11,7 @@
     import {APP_VERSION} from '$lib/version';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import ChangelogModal from './ChangelogModal.svelte';
+    import ConnectionSecurityIndicator from './ConnectionSecurityIndicator.svelte';
 
     // Mobile sidebar state (exported so parent can control it)
     export let isOpen = false;
@@ -71,6 +72,11 @@
         if (browser) {
             setUserStorage('sidebar-collapsed', String(collapsed));
         }
+    }
+
+    /** The connection-security details need the full width (plan 36). */
+    function expandSidebar() {
+        if (collapsed) toggleCollapsed();
     }
 
     function closeSidebar() {
@@ -262,6 +268,9 @@
                 <span class="whitespace-nowrap">{$_('auth.logout')}</span>
             {/if}
         </button>
+
+        <!-- How safely this browser talks to LibreFolio (plan 36) -->
+        <ConnectionSecurityIndicator {collapsed} onExpand={expandSidebar} />
 
         <!-- Version — click opens the bundled changelog (F12) -->
         {#if !collapsed}
