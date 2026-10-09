@@ -1778,19 +1778,23 @@ def cmd_docker_status(args):
 def cmd_docker_exec(args):
     """Execute a dev.py command inside the running Docker container.
 
+    The image ships the application, not the development tree: `user`, `db` and
+    `info` work; `test` answers "not available", and `server --test` cannot
+    rebuild the frontend there. `db upgrade` refuses while the server runs, and
+    the server applies the migrations itself at every start.
+
     Examples:
-        ./dev.py docker exec server --test
         ./dev.py docker exec user list
         ./dev.py docker exec user create admin admin@test.com Pass123!
-        ./dev.py docker exec db upgrade
+        ./dev.py docker exec db current
     """
     extra = getattr(args, 'cmd_args', [])
     if not extra:
         print_error("No command specified. Usage: ./dev.py docker exec <command> [args...]")
         print(Colors.info("Examples:"))
-        print(f"  ./dev.py docker exec server --test")
         print(f"  ./dev.py docker exec user list")
         print(f"  ./dev.py docker exec user create admin admin@test.com Pass123!")
+        print(f"  ./dev.py docker exec db current")
         return 1
 
     cmd = ["docker", "compose", "exec", "librefolio", "python", "dev.py"] + extra
@@ -2615,7 +2619,7 @@ Examples:
     docker_p.set_defaults(func=cmd_docker_status)
 
     docker_p = docker_sub.add_parser("exec", help="Run a dev.py command inside the container")
-    docker_p.add_argument("cmd_args", nargs=argparse.REMAINDER, help="Command and arguments (e.g. server --test)")
+    docker_p.add_argument("cmd_args", nargs=argparse.REMAINDER, help="Command and arguments (e.g. user list)")
     docker_p.set_defaults(func=cmd_docker_exec)
 
     # Format & Lint
