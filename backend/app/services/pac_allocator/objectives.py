@@ -32,9 +32,9 @@ from backend.app.services.pac_allocator.constraints import (
     ScenarioFacts,
     as_float,
     buy_pool_currencies,
-    fx_rate,
     order_notional,
     order_prices,
+    planning_fx_rate,
     valuation_rate,
 )
 from backend.app.services.pac_allocator.evaluator import exact_decision_id
@@ -194,15 +194,11 @@ def build_explicit_cost_stage(model: Model, scenario: ExactPlannerScenario, fact
             # f"{route_id}:{currency}" mirrors evaluator._fx_debit_key exactly (private helper, re-derived not imported).
             fx_decision = variables.quanta[exact_decision_id("fx_debit", f"{route.route_id}:{pool_currency}")]
             debit_expr = facts.currency_quantum[pool_currency] * fx_decision
-            effective_rate = _fx_effective_rate(facts, pool_currency, quote_currency)
+            effective_rate = planning_fx_rate(facts, pool_currency, quote_currency)
             credit_expr = debit_expr * effective_rate
             spread_loss = debit_expr * valuation_rate(facts, pool_currency) - credit_expr * quote_valuation_rate
             total = total + spread_loss
     return ObjectiveStage(code="explicit_cost", expression=total)
-
-
-def _fx_effective_rate(facts: ScenarioFacts, source_currency: str, destination_currency: str) -> float:
-    return fx_rate(facts, source_currency, destination_currency) * (1.0 - facts.fx_spread_rate)
 
 
 def _buy_pool_currencies_for_route(scenario: ExactPlannerScenario, facts: ScenarioFacts, route: ExactOrderRoute, quote_currency: str) -> tuple[str, ...]:
