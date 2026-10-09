@@ -1,7 +1,7 @@
 # Analisi — K / Tassonomia e select (R13–R18)
 
 > **Origine.** Workstream **K** del round di Release 2, nato il 22/09 dal terzo passaggio della review
-> d'uso ([`09_feedbackJobs/08_review_visiva_20260922.md` §9](../09_feedbackJobs/08_review_visiva_20260922.md)).
+> d'uso ([`09_feedbackJobs/08_review_visiva_20260922.md` §9](../../Phase_0/09_feedbackJobs/08_review_visiva_20260922.md)).
 > Copre R13, R14, R15, R16, R17 e R18 dello stesso foglio. Il piano eseguibile è
 > [`plan-phase00TaxonomySelect.prompt.md`](./plan-phase00TaxonomySelect.prompt.md).
 >
@@ -73,7 +73,7 @@ elenco nell'ordine del disco. «Generic CSV» è 16ª, la tendina ne mostra circ
 
 > ⚠️ **Nota di metodo.** La misura del 22/09 girava sulla **sola** opzione «Generic CSV»: con una
 > sola opzione il risultato è `[Generic CSV]` per costruzione — il campione scelto dal fenomeno
-> ([09 §3.6](../09_feedbackJobs/09_reperti_analisi_statica_20260922.md)). Il filtro non era rotto: mancava l'ordinamento.
+> ([09 §3.6](../../Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md)). Il filtro non era rotto: mancava l'ordinamento.
 
 È la **stessa famiglia** già curata due volte: le icone-URL (`optionFilter.ts:19-28`, «una query corta
 trovava tutto») e D74 (valuta e tipo esclusi da `AssetSelect`). Qui il testo condiviso è la descrizione.
