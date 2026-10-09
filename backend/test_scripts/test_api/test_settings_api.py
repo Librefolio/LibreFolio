@@ -8,6 +8,9 @@ Test IDs:
 - GSET-001 to GSET-010: Global Settings
 """
 
+import uuid
+import zoneinfo
+from collections.abc import Callable
 from typing import Optional
 
 import httpx
@@ -1471,3 +1474,363 @@ class TestSchedulerSettingsKeys:
                     )
 
         print_success("GSET-SCH-006: All 5 scheduler keys bulk update OK ✓")
+
+
+# ============================================================================
+# Global Settings Tests - Bulk Validation and Atomicity
+# ============================================================================
+#
+# These rows are instance-wide: every unit on the lane's backend reads them.
+# Each test reads the original value of every key it touches first, and writes
+# it back in `finally` through the bulk endpoint, then reads it back again.
+# While the endpoint does not validate, it DOES store the invalid values below,
+# so that restore is what keeps the lane healthy. The invalid values are chosen
+# to be harmless for the few milliseconds they can sit in the row: "abc" or "0"
+# for session_ttl_hours read back as the 24 h fallback, where a negative TTL
+# would issue already-expired sessions to every later login.
+
+
+def _as_is(value: str) -> str:
+    """Identity parser: the stored spelling itself is the contract."""
+    return value
+
+
+def _csv_items(value: str) -> list[str]:
+    """Non-empty, lower-cased elements of a comma-separated setting.
+
+    For the list-valued scheduler keys the contract is the content, not the
+    spelling it is stored under: "06:00," and "06:00" both mean one slot.
+    """
+    return [part.lower() for part in value.split(",") if part]
+
+
+async def _bulk_patch(client: httpx.AsyncClient, items: list[tuple[str, str]]) -> httpx.Response:
+    """PATCH /settings/global/bulk with the given (key, value) items, in this order."""
+    return await client.patch(
+        f"{API_BASE}/settings/global/bulk",
+        json={"items": [{"key": key, "value": value} for key, value in items]},
+        timeout=TIMEOUT,
+    )
+
+
+async def _read_global_values(client: httpx.AsyncClient, keys: list[str]) -> dict[str, str]:
+    """Stored value of each key, looked up by key in GET /settings/global (never by position)."""
+    resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"GET /settings/global failed: {resp.status_code} {resp.text}"
+    stored = {item["key"]: item["value"] for item in resp.json()["items"]}
+    missing = [key for key in keys if key not in stored]
+    assert not missing, f"Global settings {missing} not found: cannot read the originals this test must restore"
+    return {key: stored[key] for key in keys}
+
+
+async def _restore_global_values(client: httpx.AsyncClient, originals: dict[str, str]) -> None:
+    """Write the original values back in one bulk request, then prove they are stored again."""
+    resp = await _bulk_patch(client, list(originals.items()))
+    assert resp.status_code == 200, f"RESTORE FAILED, the lane may be left modified: {resp.status_code} {resp.text} (originals {originals})"
+    restored = await _read_global_values(client, list(originals))
+    assert restored == originals, f"RESTORE FAILED, the lane is left modified: stored {restored}, originals {originals}"
+    print_info(f"  restored {restored}")
+
+
+def _other_value(choices: tuple[str, ...], current: str) -> str:
+    """First choice that differs from the current value, so that saving it is observable."""
+    return next(choice for choice in choices if choice != current)
+
+
+async def _assert_refused_and_nothing_saved(client: httpx.AsyncClient, items: list[tuple[str, str]], originals: dict[str, str], *, status: int, named: list[str]) -> None:
+    """Send `items`: expect `status`, a string `detail` naming every key in `named`, and every key in `originals` unchanged."""
+    resp = await _bulk_patch(client, items)
+    stored = await _read_global_values(client, list(originals))
+    assert resp.status_code == status, f"Expected {status}, got {resp.status_code}: {resp.text} — stored now {stored}, originals {originals}"
+    detail = resp.json().get("detail")
+    assert isinstance(detail, str), f"'detail' must be a string, got {type(detail).__name__}: {detail!r}"
+    unnamed = [key for key in named if key not in detail]
+    assert not unnamed, f"'detail' does not name {unnamed}: {detail!r}"
+    assert stored == originals, f"A refused request must save nothing: stored now {stored}, originals {originals}"
+
+
+async def _assert_saved(client: httpx.AsyncClient, items: list[tuple[str, str]], expected: dict[str, object], parse: Callable[[str], object] = _as_is) -> None:
+    """Send `items`: expect 200, `parse(stored) == expected` per key, and the response listing exactly those settings."""
+    resp = await _bulk_patch(client, items)
+    stored = await _read_global_values(client, list(expected))
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text} — stored now {stored}"
+    assert {key: parse(value) for key, value in stored.items()} == expected, f"Sent {items}: stored {stored}, expected {expected}"
+    returned = sorted((item["key"], parse(item["value"])) for item in resp.json())
+    assert returned == sorted(expected.items()), f"Sent {items}: the response must list exactly the saved settings {expected}, got {resp.json()}"
+
+
+async def _assert_key_absent(client: httpx.AsyncClient, key: str) -> None:
+    """An unknown key in a refused request must not have been created."""
+    resp = await client.get(f"{API_BASE}/settings/global/{key}", timeout=TIMEOUT)
+    assert resp.status_code == 404, f"Unknown key {key!r} must not be created: GET returned {resp.status_code} {resp.text}"
+
+
+def _unknown_key() -> str:
+    """A key no instance has, unique to this call."""
+    return f"gset_val_unknown_{uuid.uuid4().hex}"
+
+
+_INVALID_GLOBAL_VALUES = [
+    # int 1..8760. Never a negative TTL here (see the section note).
+    pytest.param("session_ttl_hours", "abc", id="session_ttl_hours-not_an_int"),
+    pytest.param("session_ttl_hours", "0", id="session_ttl_hours-below_min"),
+    pytest.param("session_ttl_hours", "8761", id="session_ttl_hours-above_max"),
+    # int 1..1024. "0" reads back as the 10 MB fallback; a negative size would refuse every upload.
+    pytest.param("max_file_upload_mb", "0", id="max_file_upload_mb-below_min"),
+    pytest.param("max_file_upload_mb", "1025", id="max_file_upload_mb-above_max"),
+    # int 1..1440
+    pytest.param("scheduler_current_price_frequency_minutes", "1.5", id="price_frequency_minutes-not_an_int"),
+    pytest.param("scheduler_current_price_frequency_minutes", "0", id="price_frequency_minutes-below_min"),
+    pytest.param("scheduler_current_price_frequency_minutes", "1441", id="price_frequency_minutes-above_max"),
+    # int 1..365
+    pytest.param("scheduler_history_sync_horizon_days", "0", id="sync_horizon_days-below_min"),
+    pytest.param("scheduler_history_sync_horizon_days", "366", id="sync_horizon_days-above_max"),
+    # bool: true/false/1/0/yes/no/on/off in any case, nothing else. Every invalid
+    # spelling reads back as False, so enable_registration (which every user
+    # registration depends on) gets a single typo; the variants go on
+    # require_email_verification, which nothing reads yet.
+    pytest.param("enable_registration", "ture", id="enable_registration-typo"),
+    pytest.param("require_email_verification", "", id="require_email_verification-empty"),
+    pytest.param("require_email_verification", "2", id="require_email_verification-not_0_or_1"),
+    pytest.param("require_email_verification", "y", id="require_email_verification-y_is_not_yes"),
+    pytest.param("scheduler_enabled", "enabled", id="scheduler_enabled-word"),
+    # HH:MM list, 00:00..23:59; empty elements are ignored, at least one time
+    pytest.param("scheduler_history_sync_times", "", id="sync_times-empty"),
+    pytest.param("scheduler_history_sync_times", ",", id="sync_times-no_time"),
+    pytest.param("scheduler_history_sync_times", "6", id="sync_times-hour_only"),
+    pytest.param("scheduler_history_sync_times", "25:00", id="sync_times-hour_out_of_range"),
+    pytest.param("scheduler_history_sync_times", "12:60", id="sync_times-minute_out_of_range"),
+    pytest.param("scheduler_history_sync_times", "aa:bb", id="sync_times-not_digits"),
+    pytest.param("scheduler_history_sync_times", "06:00,24:00", id="sync_times-second_element_invalid"),
+    # mon..sun list in any case, at least one day
+    pytest.param("scheduler_history_sync_days", "", id="sync_days-empty"),
+    pytest.param("scheduler_history_sync_days", ",", id="sync_days-no_day"),
+    pytest.param("scheduler_history_sync_days", "monday", id="sync_days-full_name"),
+    pytest.param("scheduler_history_sync_days", "mon,xyz", id="sync_days-second_element_invalid"),
+    # ISO 4217. "EURO" is the NAME of EUR: pycountry's fuzzy lookup() resolves it, so
+    # Currency.validate_code alone lets it through. "XXX" is avoided: it is a real code.
+    pytest.param("default_currency", "EURO", id="default_currency-name_not_code"),
+    pytest.param("default_currency", "ABC", id="default_currency-not_iso4217"),
+    pytest.param("default_language", "de", id="default_language-unsupported"),
+    pytest.param("default_theme", "blue", id="default_theme-unknown"),
+]
+
+# Every accepted bool spelling, in mixed case, and the canonical value it must be stored as.
+_BOOL_SPELLINGS = [
+    pytest.param("1", "true", id="1-true"),
+    pytest.param("0", "false", id="0-false"),
+    pytest.param("TRUE", "true", id="TRUE-true"),
+    pytest.param("False", "false", id="False-false"),
+    pytest.param("Yes", "true", id="Yes-true"),
+    pytest.param("no", "false", id="no-false"),
+    pytest.param("on", "true", id="on-true"),
+    pytest.param("OFF", "false", id="OFF-false"),
+]
+
+# The accepted side of each constraint (bounds are inclusive): (key, start, sent,
+# parse, expected). The start value is valid and different, so the save is
+# observable whatever the lane holds. All harmless to the lane while stored,
+# which is why max_file_upload_mb has no lower bound here: a 1 MB cap would
+# refuse a concurrent unit's upload.
+_ACCEPTED_GLOBAL_VALUES = [
+    pytest.param("session_ttl_hours", "24", "1", _as_is, "1", id="session_ttl_hours-min"),
+    pytest.param("session_ttl_hours", "24", "8760", _as_is, "8760", id="session_ttl_hours-max"),
+    pytest.param("max_file_upload_mb", "10", "1024", _as_is, "1024", id="max_file_upload_mb-max"),
+    pytest.param("scheduler_current_price_frequency_minutes", "10", "1", _as_is, "1", id="price_frequency_minutes-min"),
+    pytest.param("scheduler_current_price_frequency_minutes", "10", "1440", _as_is, "1440", id="price_frequency_minutes-max"),
+    pytest.param("scheduler_history_sync_horizon_days", "14", "1", _as_is, "1", id="sync_horizon_days-min"),
+    pytest.param("scheduler_history_sync_horizon_days", "14", "365", _as_is, "365", id="sync_horizon_days-max"),
+    pytest.param("scheduler_history_sync_times", "06:00,23:00", "00:00,23:59", _csv_items, ["00:00", "23:59"], id="sync_times-bounds"),
+    pytest.param("scheduler_history_sync_times", "06:00,23:00", "06:00,", _csv_items, ["06:00"], id="sync_times-empty_element_ignored"),
+    pytest.param("scheduler_history_sync_days", "mon,tue,wed,thu,fri,sat", "MON,Tue", _csv_items, ["mon", "tue"], id="sync_days-any_case"),
+    pytest.param("scheduler_timezone", "UTC", "Europe/Rome", _as_is, "Europe/Rome", id="scheduler_timezone-iana_name"),
+]
+
+_THEMES = ("dark", "light", "auto")
+
+
+class TestGlobalSettingsBulkValidation:
+    """PATCH /settings/global/bulk checks every value and applies a request all-or-nothing.
+
+    Unknown keys are checked first (any → 404), then every value (any invalid →
+    422, `detail` a string naming each rejected key). A refused request saves
+    nothing, valid items included; an accepted one is saved whole and listed.
+
+    Test IDs: GSET-VAL-001..GSET-VAL-010
+    """
+
+    @pytest.mark.parametrize(("key", "value"), _INVALID_GLOBAL_VALUES)
+    @pytest.mark.asyncio
+    async def test_invalid_value_is_refused_and_not_saved(self, test_server, key: str, value: str):
+        """GSET-VAL-001: An invalid value → 422 whose detail names the key; the stored value is unchanged."""
+        print_section(f"GSET-VAL-001: {key}={value!r} → 422, nothing saved")
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [key])
+            try:
+                await _assert_refused_and_nothing_saved(client, [(key, value)], originals, status=422, named=[key])
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success(f"✓ {key}={value!r} refused, {key} still {originals[key]!r}")
+
+    @pytest.mark.asyncio
+    async def test_timezone_outside_iana_database_is_refused(self, test_server):
+        """GSET-VAL-002: A scheduler_timezone missing from the server's IANA database → 422; stored value unchanged."""
+        print_section("GSET-VAL-002: scheduler_timezone='Mars/Olympus' → 422, nothing saved")
+        if not zoneinfo.available_timezones():
+            pytest.skip("No IANA timezone database on this machine: the server then accepts any name, by design")
+
+        key = "scheduler_timezone"
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [key])
+            try:
+                await _assert_refused_and_nothing_saved(client, [(key, "Mars/Olympus")], originals, status=422, named=[key])
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success("✓ Unknown timezone refused, nothing saved")
+
+    @pytest.mark.asyncio
+    async def test_every_invalid_key_is_named(self, test_server):
+        """GSET-VAL-003: Two invalid values in one request → one 422 whose detail names both keys; nothing saved."""
+        print_section("GSET-VAL-003: two invalid values → 422 naming both, nothing saved")
+        items = [("scheduler_history_sync_days", "mon,xyz"), ("scheduler_current_price_frequency_minutes", "0")]
+        keys = [key for key, _ in items]
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, keys)
+            try:
+                await _assert_refused_and_nothing_saved(client, items, originals, status=422, named=keys)
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success("✓ Both rejected keys named, nothing saved")
+
+    @pytest.mark.asyncio
+    async def test_valid_item_not_saved_when_another_is_invalid(self, test_server):
+        """GSET-VAL-004: A valid change followed by an invalid value → 422; the valid change is NOT saved."""
+        print_section("GSET-VAL-004: valid + invalid → 422, the valid item is not saved")
+        valid_key, invalid_key = "default_theme", "scheduler_history_sync_horizon_days"
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [valid_key, invalid_key])
+            items = [(valid_key, _other_value(_THEMES, originals[valid_key])), (invalid_key, "0")]
+            try:
+                await _assert_refused_and_nothing_saved(client, items, originals, status=422, named=[invalid_key])
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success("✓ Request refused as a whole, valid item not saved")
+
+    @pytest.mark.asyncio
+    async def test_valid_item_not_saved_when_a_key_is_unknown(self, test_server):
+        """GSET-VAL-005: A valid change followed by an unknown key → 404; the valid change is NOT saved."""
+        print_section("GSET-VAL-005: valid + unknown key → 404, the valid item is not saved")
+        valid_key, unknown_key = "default_theme", _unknown_key()
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [valid_key])
+            items = [(valid_key, _other_value(_THEMES, originals[valid_key])), (unknown_key, "1")]
+            try:
+                await _assert_refused_and_nothing_saved(client, items, originals, status=404, named=[unknown_key])
+                await _assert_key_absent(client, unknown_key)
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success("✓ Unknown key → 404, valid item not saved")
+
+    @pytest.mark.asyncio
+    async def test_unknown_key_is_checked_before_values(self, test_server):
+        """GSET-VAL-006: An invalid value followed by an unknown key → 404, not 422 (keys come first); nothing saved."""
+        print_section("GSET-VAL-006: invalid value + unknown key → 404, nothing saved")
+        invalid_key, unknown_key = "scheduler_history_sync_horizon_days", _unknown_key()
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [invalid_key])
+            try:
+                await _assert_refused_and_nothing_saved(client, [(invalid_key, "0"), (unknown_key, "1")], originals, status=404, named=[unknown_key])
+                await _assert_key_absent(client, unknown_key)
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success("✓ Unknown key reported first, nothing saved")
+
+    @pytest.mark.parametrize(("sent", "canonical"), _BOOL_SPELLINGS)
+    @pytest.mark.asyncio
+    async def test_bool_spelling_is_stored_canonical(self, test_server, sent: str, canonical: str):
+        """GSET-VAL-007: Every accepted bool spelling → 200, stored and returned as canonical "true"/"false"."""
+        print_section(f"GSET-VAL-007: {sent!r} → stored {canonical!r}")
+        key = "require_email_verification"  # read nowhere yet: flipping it is harmless to the lane
+        start = "false" if canonical == "true" else "true"
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [key])
+            try:
+                await _assert_saved(client, [(key, start)], {key: start})
+                await _assert_saved(client, [(key, sent)], {key: canonical})
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success(f"✓ {sent!r} stored as {canonical!r}")
+
+    @pytest.mark.asyncio
+    async def test_currency_is_stored_uppercase(self, test_server):
+        """GSET-VAL-008: default_currency "usd" → 200, stored and returned as "USD"."""
+        print_section("GSET-VAL-008: default_currency 'usd' → stored 'USD'")
+        key = "default_currency"
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [key])
+            try:
+                await _assert_saved(client, [(key, "EUR")], {key: "EUR"})
+                await _assert_saved(client, [(key, "usd")], {key: "USD"})
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success("✓ 'usd' stored as 'USD'")
+
+    @pytest.mark.asyncio
+    async def test_valid_multi_key_save(self, test_server):
+        """GSET-VAL-009 (control): Valid values for two keys in one request → 200, both stored and listed."""
+        print_section("GSET-VAL-009: two valid values → 200, both saved")
+        theme_key, horizon_key = "default_theme", "scheduler_history_sync_horizon_days"
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [theme_key, horizon_key])
+            new_values = {
+                theme_key: _other_value(_THEMES, originals[theme_key]),
+                horizon_key: _other_value(("21", "30"), originals[horizon_key]),
+            }
+            try:
+                await _assert_saved(client, list(new_values.items()), new_values)
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success("✓ Both values saved")
+
+    @pytest.mark.parametrize(("key", "start", "sent", "parse", "expected"), _ACCEPTED_GLOBAL_VALUES)
+    @pytest.mark.asyncio
+    async def test_value_inside_constraint_is_saved(self, test_server, key: str, start: str, sent: str, parse: Callable[[str], object], expected: object):
+        """GSET-VAL-010 (control): A value on the accepted side of its constraint → 200 and stored."""
+        print_section(f"GSET-VAL-010: {key}={sent!r} → 200, saved")
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [key])
+            try:
+                await _assert_saved(client, [(key, start)], {key: parse(start)}, parse)
+                await _assert_saved(client, [(key, sent)], {key: expected}, parse)
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success(f"✓ {key}={sent!r} saved")
