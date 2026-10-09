@@ -349,6 +349,7 @@ const LEDGER_ANCHORS: ReadonlySet<LedgerField> = new Set(['initial_selected', 'f
 /** A column says something when it is not 0 on some row; the physical balance, when it differs from the spendable one. */
 function ledgerFieldSpeaks(rows: readonly PacLedgerRow[], field: LedgerField): boolean {
     if (field === 'final_physical') return rows.some((row) => compareDecimal(row.final_physical, row.final_spendable) !== 0);
+    if (field === 'rounding_delta') return rows.some((row) => exactSign(row.rounding_delta) !== 0);
     return rows.some((row) => decimalSign(row[field]) !== 0);
 }
 

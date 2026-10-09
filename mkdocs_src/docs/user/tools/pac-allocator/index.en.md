@@ -223,6 +223,31 @@ instead of $D \cdot x$. Valuation, which compares and sums amounts in the
 valuation currency, uses the official rate $x$ without spread; conversions use
 the rate with the spread, $x\,(1 - s)$.
 
+The rates must also agree with each other, so that no conversion creates
+value: with cash in CHF, an Asset in USD and valuation in EUR, for example,
+one CHF converted into USD after the spread may not be worth more in EUR than
+one CHF,
+
+$$
+x_{\text{CHF} \to \text{USD}}\,(1 - s)\,x_{\text{USD} \to \text{EUR}}
+\le x_{\text{CHF} \to \text{EUR}}
+$$
+
+and the same holds for every conversion the plan may need between two
+currencies other than the valuation currency. Otherwise the calculation does
+not start and the outcome is **Input not valid** (see
+[Reading the result](#reading-the-result)): the cause can be a **Manual** rate
+or **Auto** rates from different days or sources, so align the rates or set a
+**Conversion spread** that covers the difference.
+
+Like order amounts and fees, the amount received from a conversion is
+rounded half up to the smallest unit of its currency, and the **Rounding**
+column of **Balances per Broker and currency** shows how much of each row
+comes from rounding: ≈ marks a figure shown rounded, as when the exact
+difference has no finite decimal form (for example after converting USD → EUR
+at $1/1.085$), and a difference below the smallest unit keeps the digits it
+needs, such as ≈ −0.0022 rather than ≈ −0.00.
+
 When LibreFolio has no rate for a pair, the step offers **Add the pair** or
 **Download the rates**: each opens the matching window of the FX page, and
 nothing is added or downloaded until you confirm there.
