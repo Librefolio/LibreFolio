@@ -1,6 +1,8 @@
 # Piano Phase 00 — SP08 Asset pricing e confini del servizio
 
 **Creato:** 2026-09-11
+**Stato:** ✅ completato 2026-09-11 · integrato in `dev_release2` (codice `3c85866dd`, chiusura del journal
+`73d207b90`) · archiviato il 2026-10-09 dopo la verifica sul codice (vedi «Verifica d'archivio», in fondo)
 **Workstream:** K — SP08
 **Coordinator:** sessione `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Worktree:** `/Users/ea_enel/Documents/00_My/LibreFolio-worktrees/e-alfy-fuzzy-fishstick`
@@ -414,3 +416,26 @@ non si esegue senza richiesta developer separata.
 - documentazione inglese coerente;
 - gate mirati e integrati verdi;
 - porta 6159 libera e workstream FROZEN al handoff.
+
+## Verifica d'archivio (2026-10-09)
+
+> Fatta dal workstream P su richiesta del coordinator (la sessione K non esiste più), in sola lettura sul codice di
+> `dev_release2` @ `3cceb4f90` (treno 24b).
+
+- **Integrazione**: `3c85866dd` (`refactor(assets): split pricing service`), merge di allineamento `b72475f0e`,
+  chiusura del journal `73d207b90`; tutti antenati di `dev_release2`. Nel backlog risultano chiusi P4-1, P4-4 e
+  S6 6.4 (`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md:46,49,59`).
+- **Codice di oggi, coerente con la DoD**:
+  - `backend/app/services/asset_source.py` è una facciata di 21 righe senza definizioni; i 10 moduli di
+    `backend/app/services/asset_sources/` esistono;
+  - il core usa il logger di progetto (`asset_sources/core.py:40,56`), cioè la correzione del fuori pista;
+  - nessun modulo foglia importa il manager o la facciata;
+  - `asset_sources/refresh.py` ha le fasi tipizzate (`_PreparedRefreshItem` :47, `_FetchedRefreshData` :60);
+    l'unica `def` indentata è la `@staticmethod bulk_refresh_prices` (:648) della classe, non una closure.
+- **Residuo voluto, già tracciato**: `get_prices_bulk` (`asset_sources/price_query.py:150`) tiene
+  `# noqa: C901 — TODO(P2-refactor)`, fuori scope per questo piano («chiusura implicita del marker C901»).
+  Sta nella famiglia dei marker `TODO(P2-refactor)` contata in
+  `Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md:9-10` (oggi 21 in `backend/` e `scripts/`) e nel reperto
+  C5 dell'audit 08 (`Release_2/phases/08_newCleanAndDocumentation_audit/03_services_pricing_fx.md:38`).
+- I 15 percorsi citati nel piano esistono tutti.
+- **Esito**: FINITA, archiviata intera in `Release_2/phases/22_assetPricingRefactor/`.
