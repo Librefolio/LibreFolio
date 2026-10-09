@@ -1,6 +1,7 @@
 # Piano — fase 00, 31: il plugin DEGIRO (issue #35)
 
-> **Stato**: ✅ implementato (2026-10-07); checkpoint al coordinatore, FROZEN (§11.6). Via del developer portato dal coordinatore: D1–D10 come raccomandate (§0.1).
+> **Stato**: ✅ chiuso e integrato nel treno 9 (merge `2cecf5a00`): `05ff499c5`, `3d61fd63f`, `dfd6ed963` (verifica del 2026-10-09 su `3cceb4f90`, §11.7).
+> - Al checkpoint: ✅ implementato (2026-10-07); checkpoint al coordinatore, FROZEN (§11.6). Via del developer portato dal coordinatore: D1–D10 come raccomandate (§0.1).
 >
 > - Mandato: coordinatore («Release 2 backlog analysis», `c8328a01-…`), con le decisioni del developer (§0). La sua analisi: `…/c8328a01-…/files/analisi-degiro-35.md` §1–§9.
 > - Workstream L. Ramo `e-alfy-l-danske-bank`, base `d07412899` (fast-forward del developer alle 12:57). Corsia 6156/6166, `--data-dir /tmp/librefolio-r2-l`, un comando alla volta. La coverage completa gira nella 6150: un E2E in timeout si rilancia da solo prima di concludere.
@@ -415,3 +416,18 @@ Nessuna API cambia (niente `api sync`), nessuna migrazione, nessuna chiave i18n.
 > | ruff e black sui file Python di DEGIRO | puliti. Nei file del runner, 4 PLC0415 e il formato black c'erano già a HEAD: non li tocco |
 > | `mkdocs build` strict; `check-links` | verde; solo il rotto D28, preesistente |
 > | `git diff --check`; porta 6156 | pulito; libera |
+
+### 11.7 ✅ Integrazione e verifica finale (2026-10-09)
+
+> **Note implementazione**:
+> - **I commit**, integrati nel treno 9 (merge `2cecf5a00`, 2026-10-07):
+>   - `05ff499c5` fix(brim): read DEGIRO statements in any language;
+>   - `3d61fd63f` feat(import): one review row per linked FX pair;
+>   - `dfd6ed963` docs(brim): DEGIRO statement and linked pairs.
+>   - La nota di §11.6 sul `.gitattributes` è entrata col piano 33 (`cc15441e6`).
+> - **Verifica** su `3cceb4f90` (treno 24b):
+>   - `broker_degiro.py` legge l'estratto per posizione e sceglie la lingua dall'intestazione (`_detect_language`, `:304`); `plugin_version` è a `:651`;
+>   - le coppie del passo ④ (`importPairs.ts`) e lo spec `tx-import-degiro` ci sono.
+> - **I rossi del triage di §11.6** (`tx-import-file-selection`, `tx-brim-import` T1, CAC-011/012) li ha chiusi il piano 33 (`33_e2eImportInfra/`), con `860c934ac` e `abfcdf2be`.
+> - **Fuori dal piano**: la conferma dell'utente della #35 su un export reale. Se smentisse l'ipotesi che l'estratto basti (decisione 7), si apre un lotto nuovo.
+> - **Classificazione: FINITA.** Nessun residuo. Archiviata in `Release_2/phases/31_brimDegiro/`.

@@ -330,3 +330,8 @@ storiche presenti nel worktree E non vanno sovrascritte sul master corrente.
 **Riconciliazione completata nel checkout target il 2026-09-09**; nessun task
 estraneo a E e' stato chiuso per trascinamento. Archivio e SHA restano sospesi
 fino al commit manuale del pacchetto integrato.
+
+> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`):
+> - ✅ L'integrazione è committata in `ef722b552` (feat: ship urgent import and UX fixes): proxy GHCR (`container_registry.py`), condivisione social (`frontend/src/lib/components/support/`), errore del broker duplicato (`brokers.py:172`), CHANGELOG `:16`, `:109`, `:113`.
+> - ✅ Archivio: `Release_2/phases/14_feedbackImportUrgent/`.
+> - Il «secondo sync della pagina globale» di §7 è segnato come preesistente e fuori da E. Senza un riferimento a file e riga non è verificabile, e non è un buco di questo piano.

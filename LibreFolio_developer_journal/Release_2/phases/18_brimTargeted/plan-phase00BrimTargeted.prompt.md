@@ -1,6 +1,7 @@
 # Piano Phase 00 — BRIM mirato
 
 **Creato**: 2026-09-10
+**Stato**: ✅ chiuso (verifica del 2026-10-09 su `3cceb4f90`): consegnato in `ebba209c5` (feat(brim): refine CA and eToro imports), merge `5c2a711f3` (2026-09-10).
 **Baseline/target**: `8b99e0020c92a945daf0821ee0654a0a2a21efd0` (`dev_release2`)
 **Workstream**: G — `e-alfy-brim-targeted-analysis`
 **Coordinator**: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`
@@ -95,6 +96,7 @@ Consegnare due slice separate:
 > repository (titoli/conto CSV+XLSX): output `model_dump(mode="json")` identico in
 > tutti i casi. Rimossa fisicamente la closure trade legacy; nel parser conto non
 > restano closure locali.
+> **Note implementazione** (verifica di L del 2026-10-09): resta un commento obsoleto, `noqa: C901 — TODO(P2-refactor) … nested trade-resolution closures`, in `broker_credit_agricole.py:1313`; le closure non ci sono più. Rinviato in `Phase_0/38_postReleaseBacklog/README.md`, voce L10.
 
 ### 4. ✅ Condividere attachment maturity CA + Intesa — 2026-09-10
 
@@ -208,3 +210,12 @@ Gate statici finali:
 - eToro plugin version incrementata.
 - Documentazione EN esplicita l'assunzione.
 - Test/lint mirati verdi; server fermo e porta libera.
+
+## Chiusura (verifica del 2026-10-09 su `3cceb4f90`)
+
+> **Note implementazione** (L, per la sessione G, che non esiste più):
+> - Gli 8 passi sono tutti ✅ (2026-09-10) e confermati sul codice:
+>   - CA divisa in fasi (`_CAAccountParseContext`, `broker_credit_agricole.py:424`), `plugin_version` 1.4.3;
+>   - l'helper delle scadenze con due soli consumatori (`_brim_output.py:11`);
+>   - la FEE separata di eToro (`broker_etoro.py:291-293`), con `plugin_version` 1.1.0.
+> - **Classificazione: FINITA.** L'unico residuo è il commento della voce L10. Archiviata in `Release_2/phases/18_brimTargeted/`.

@@ -1,6 +1,7 @@
 # Piano — fase 00, Danske Bank, passo 8: la card del set su mobile (intestazione e timeline)
 
-> **Stato**: ✅ pronta per il checkpoint (2026-10-08, §8.3). Via del coordinatore, con la decisione del developer (§0).
+> **Stato**: ✅ chiuso e integrato nel treno 14 (merge `975950379`): `038109e91`, `f2f94c295` (verifica del 2026-10-09 su `3cceb4f90`).
+> - Al checkpoint: ✅ pronta per il checkpoint (2026-10-08, §8.3). Via del coordinatore, con la decisione del developer (§0).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md](plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md), l'ultimo passo che ha toccato la card; la card nasce in [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md).
 > - Workstream L, issue #26. Base `ffa72cc2b` (`dev_release2` dopo il treno 12, col lotto 34 integrato).

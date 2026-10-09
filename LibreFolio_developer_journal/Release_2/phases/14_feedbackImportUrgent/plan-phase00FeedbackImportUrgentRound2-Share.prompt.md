@@ -6,6 +6,7 @@
 **Authorization:** direct developer feedback while reviewing About. This is the
 approved U7 refinement; other R1 fixes remain unchanged.
 **State:** completed 2026-09-09; original TEST data restored, R2 build serving on port 6041.
+> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`): ✅ tutti i passi sono completati il 2026-09-09 e integrati in `ef722b552`.
 
 ## Approved layout
 

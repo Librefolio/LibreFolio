@@ -5,6 +5,7 @@
 **Precedente:** [Round 2 - Copy and go](plan-phase00FeedbackImportUrgentRound2-Share.prompt.md).
 **Seguito:** [Round 4 - badge e limiti social](plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md).
 **Stato:** ✅ completato 2026-09-09; originali ripristinati e build R3 disponibile per la review.
+> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`): integrato in `ef722b552`.
 
 ## Accettazioni operative del dev
 
