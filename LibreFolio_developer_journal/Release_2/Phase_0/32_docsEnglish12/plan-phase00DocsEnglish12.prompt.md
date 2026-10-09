@@ -1,10 +1,15 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, base `9b2acdd5d`) hanno il checkpoint pronto, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, `5980ab86f`) sono entrati col treno 24 (merge di Q `e994979f9`). **Il piano resta attivo** fino al giro di traduzioni, rinviato per decisione del developer: vedi «Cosa resta aperto» qui sotto.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
 > `translation_debt_baseline.txt`, `app_doc_links.tsv`, i report dei 9 audit).
+>
+> **Cosa resta aperto** (aggiornato il 2026-10-09, base `3cceb4f90`, treno 24b):
+> - **Traduzioni IT/FR/ES** delle pagine cambiate nella 1.2, e delle pagine nuove mai tradotte. Il dry-run del 08/10 contava 131 pagine, circa 9,4 milioni di token (S18, «Resoconto per il lancio delle traduzioni»). Il giro lo decide il developer; finché non parte, questo piano resta in `Phase_0/`.
+> - **Screenshot:** resta il segnaposto `security/connection-indicator` in `user/connection-security.en.md`, per M dopo l'indicatore di L. Gli 8 segnaposto dei portali dei broker (Trading212, Coinbase, …) restano TODO nascosti, per decisione del developer (S18).
+> - Nessun altro seguito aperto. L'avviso Docker è stato tolto in S19; l'ancora `#session-cookie-secure` non serve (coordinatore, S20).
 >
 > **Autorizzazione del developer**, inoltrata dal coordinatore (07/10): «Piano approvato dal developer,
 > in modalità interattiva». Il piano è stato approvato anche in questa sessione (exit plan mode,
@@ -790,7 +795,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `core-ui/select.md:424`: `BenchmarkSelect` **usa già** `AssetPickerPanel mode="single"` (`BenchmarkSelect.svelte:197`); resta in programma solo il segnale Asset Comparison.
   > - **In corso:** il writer della Dashboard Risk aggiunge `## 🛡️ Dashboard Risk Tab {: #dashboard-risk-tab }` a `risk-lab.md`, con rimandi e non duplicati, e cambia l'H1 in «Risk UI: Correlation and Dashboard Risk Tabs».
 
-- **S16** 🟡 2026-10-08 (onda 1 ✅; onde 2-3 da fare) — Semplificazione di tutta la doc utente: il tecnico va nel manuale dev.
+- **S16** ✅ 2026-10-08 (onda 1 qui; le onde 2 e 3 sono chiuse in S17 e S18) — Semplificazione di tutta la doc utente: il tecnico va nel manuale dev.
   > **Feedback** (developer, 08/10 13:08): «in danske bank il titolo va a capo, ma vedo che lo fa con anche le altre banche, Poi è un muro di testo, troppi dettagli tecnici, e te lo dico, vale per tutto, non solo per questa pagina, quindi riguarda anche le altre e cerca di semplificare e scorporare, mettere in dev manual le cose tecniche e qui le info utili».
   >
   > **Note implementazione**:
@@ -1375,7 +1380,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **`admin/settings`**, pannello `init-settings`: prefisso `pipenv run` come in `cli_tools`, con link alla pagina dei comandi.
   > - **`developer/dev_workflow.en.md:119`**: la cache tiene solo il sottoinsieme delle bandiere di Noto Color Emoji, servito dalla face `'LF Flags'` (`frontend/static/lf-flags.css`; `scripts/update_js_cache.py:91-100`).
   > - **Cancello `w3b`**: build strict exit 0, 0 WARNING/ERROR; check-links con il solo link rotto di base; scope, placeholder, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi. Anteprima aggiornata alle 18:36.
-  > - In attesa della risposta del developer.
+  > - Risposta del developer (18:39): «ok, grazie», con la domanda qui sotto.
   >
   > **Cosa resta da migliorare** (domanda del developer, 18:39; dati di Q, script `/tmp/libreFolio_q_remaining.py`, `_placeholders.py`, `_transdebt.py`):
   > - **Pagine mai semplificate:**
@@ -1514,7 +1519,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Il server** comunica lo schema e la classe della sorgente, mai l'IP, e se il proxy non è fidato (`FORWARDED_ALLOW_IPS`). `SESSION_COOKIE_SECURE=auto|always|never` lo documenta L in `admin/configuration`.
   > - Pagina solo EN. `admin/configuration` e `service_exposure` sono di L in questo momento: si possono solo linkare. Gate: build strict e `check-links`, poi checkpoint.
   >
-  > **Note implementazione** (in corso):
+  > **Note implementazione** (2026-10-09, mattina):
   > - **Percorso:** `user/connection-security.en.md`, nel User Manual dopo «Install as App (PWA)», perché l'indicatore riguarda l'accesso, non un'impostazione. Mandato subito a L (circa 10:45): il link va alla radice, `user/connection-security/`. Chiesti a L i testi esatti della UI, le classi di sorgente, il default di `FORWARDED_ALLOW_IPS` e le eventuali ancore in `configuration`.
   > - **`mkdocs.yml`:** voce di nav e `nav_translations` IT/FR/ES (Sicurezza della connessione, Sécurité de la connexion, Seguridad de la conexión), come per le altre pagine solo EN.
   > - **Fatti verificati da Q:**
@@ -1610,6 +1615,122 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - Nessun «tooltip» resta nella pagina.
   > - **Cancello `cs4`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con il solo link rotto di base; scope 7 path, segnaposto, stile e `diff --check` verdi. Self-check su 212 pagine, 0 problemi. Nessuna sovrapposizione col target `1ead733f2`. 6162 e 6042 libere.
   > - **Integrazione:** S20 entra col treno 24, insieme al piano 36 di L (indicatore). Il coordinatore ha verificato che il merge simulato sul treno 23 è pulito.
+  > - **Esito:** commit `5980ab86f` («docs: connection security page, Tailscale examples»), entrato col treno 24 (merge di Q `e994979f9`) insieme al piano 36 di L.
+
+- **S21** ✅ 2026-10-09 — Verifica e archiviazione dei piani completati, su base `3cceb4f90` (treno 24b). HEAD = `dev_release2`, worktree pulito, verificati.
+  > **Incarico** (coordinatore, 13:55). Le parole del developer: «verificare, degli stati completati, che i piani siano allineati, in caso contrario allinearli e poi usando la skill plan-archive spostarli ordinatamente in LibreFolio_developer_journal/Release_2/phases … verificare come le cose stanno nel codice e se ci sono incongruenze, cose mancanti per davvero (non piani cambiati e quindi punti diventati obsoleti) di segnarcelo per affrontarlo poi», e «archivia solo le cose davvero finite, non quelle parziali, ed evita di fare mezza cartella sopra e mezza cartella sotto».
+  > - **Cartelle assegnate:**
+  >   - `32_docsEnglish12`: la mia, resta attiva fino alle traduzioni, si allinea soltanto;
+  >   - `21_onboarding` (J), `16_toolPlatform` (C, con `handoff-pac-D.md` che la cartella attiva `13_pacAllocator` usa ancora) e `17_assetDataOperations` (F): di sessioni che non esistono più;
+  >   - `09_feedbackJobs`: backlog del coordinatore, da verificare voce per voce.
+  > - **Regole del coordinatore:**
+  >   - archiviare in `Release_2/phases/<stesso nome>/`, con `mv` e non `git mv`, perché lo stage resta vuoto fino al commit del developer; questo prevale sulla skill, che indica `git mv`;
+  >   - una cartella si sposta intera o resta intera;
+  >   - i link interni si correggono, quelli in ingresso si elencano senza toccarli;
+  >   - non si toccano `00-index.md` né `TODO_FUTURI.md`;
+  >   - codice in sola lettura.
+  >
+  > **Note implementazione** (pomeriggio del 2026-10-09):
+  > - **`32_docsEnglish12` allineata:**
+  >   - S16 portato a ✅, perché le onde 2 e 3 sono S17 e S18;
+  >   - in S18, «In attesa della risposta» sostituito con la risposta del developer;
+  >   - le note di S20 non sono più «in corso», e c'è l'esito (`5980ab86f`, treno 24, merge `e994979f9`);
+  >   - in cima, il blocco «Cosa resta aperto»: traduzioni, segnaposto `security/connection-indicator`, 8 portali dei broker come TODO nascosti.
+  >   - Segnaposto EN rimasti alla punta: 9 (1 più 8 portali). M ha consegnato tutti gli altri scenari.
+  > - **Verifica sul codice:** affidata a 5 sottoagenti `explore` in sola lettura, uno per `21_onboarding`, uno per `16_toolPlatform` con `17_assetDataOperations`, e tre per `09_feedbackJobs` (00-05, 06, 07-09).
+  > - **Link in ingresso** (`grep` su journal, devWiki, `.github`, `mkdocs_src`, `scripts`, `TODO_FUTURI.md`, `CHANGELOG.md`): 42 righe in `/tmp/libreFolio_q_inbound.log`. `16_toolPlatform/handoff-pac-D.md` è citato più di 20 volte dalla cartella attiva `13_pacAllocator`.
+  > - **Link interni:** script `/tmp/libreFolio_q_archive_links.py` (dry-run, poi `--apply`). Riscrive solo i link che escono dalla cartella spostata: 2 in `21_onboarding`, 2 in `16_toolPlatform`, 1 in `17_assetDataOperations`.
+  > - **Verifica dei sottoagenti, controllata da Q:**
+  >   - SHA e righe citate controllati uno per uno;
+  >   - due report si contraddicevano sul Rebalancer. Ha deciso il codice: non esiste (`backend/app/services/tool_plugins/pac_allocator.py:10-14`, «has no service here yet»; CHANGELOG: «it does not sell or rebalance»);
+  >   - il conteggio dei marker `TODO(P2-refactor)` è 21.
+  > - **Regole aggiunte dal coordinatore:**
+  >   - i rinvii vivono in `Phase_0/38_postReleaseBacklog/README.md` (la crea lui), citati per titolo;
+  >   - il developer, sulla 21: «no non l'ho fatta … ma non archiviamo». Le 6 voci della 21 restano nella 21, non nel 38;
+  >   - nella 09 aggiornati due link per gli archivi di N.
+  > - **Classificazione e azioni:**
+  >   - **`17_assetDataOperations`: FINITA.** Allineate le 4 caselle non spuntate e lo stato. Spostata con `mv` in `Release_2/phases/17_assetDataOperations/`, con 1 link riscritto e 0 rotti. Aggiornati i 3 link in ingresso dalla 09.
+  >   - **`16_toolPlatform`: resta.** Tutto il lavoro di C è chiuso o superato: lo step 6 è chiuso da D (renderer `registry.ts:241-245`), il §3 è superato dal round di capacità di D. Ma la §0 di `handoff-pac-D.md` è il contratto vivo di D (`13_pacAllocator` attiva, più di 20 link), quindi si archivia insieme alla 13. Allineati stato, caselle e manifest.
+  >   - **`21_onboarding`: resta**, per decisione del developer. In cima al piano principale ci sono gli aperti: la review C7 e le 6 voci del dossier §6 più `tools.hub`. In Round 8, note sulle chiavi morte (`08b885d43`), un Fuori pista sul titolo (`0aac5ef1e`) e l'aperto dello step 7; nel dossier, i punti superati.
+  >   - **`09_feedbackJobs`: resta attiva.** README con «Cosa resta aperto» in cima e la sezione «Stato verificato sul codice — 2026-10-09»; 43 modifiche di stato (celle, note e titoli) in README, 00, 01, 02, 05, 06, 07, 08 e 09, conservando lo storico, più 23 link: 3 da 03 e 04 verso `phases/17_…`, e 20 verso gli archivi di N, L e O, cioè `15_parallelRuntimeIsolation` (1), `14_feedbackImportUrgent` (7), `18_brimTargeted` (2) e `11_feedbackContractsRunes` (10). Trovati per nome di cartella, perché le righe del coordinatore si riferivano a `3cceb4f90`. Quei 20 qui risultano rotti finché il treno non porta gli spostamenti. Il link `06_piano_sprint.md:41` va a `phases/15_…`: risulta rotto finché il treno non porta lo spostamento di N.
+  >   - **`32_docsEnglish12`: resta attiva** fino alle traduzioni.
+  > - **Buchi veri, tutti tracciati nelle cartelle attive:**
+  >   - 21: catalogo TS e registry Python, re-trigger di versione, fascia 641–1023 px, reset CLI, telemetria, `tools.hub`;
+  >   - 09: P4-7, R2 `VERSION`, §1.4 AI Export, P4-9, P4-10, §2.4.
+  > - **Link in ingresso da sistemare fuori dalle mie cartelle:** solo `Phase_0/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md:41`, che va a `../../phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md`.
+  > - **Checkpoint:** manifest con i blob e commit «docs(journal): archive 17, align active plans». Stato FROZEN.
+- **S21b** ✅ 2026-10-09 — Riapertura del checkpoint S21, già verificato dal coordinator (19 percorsi, albero `3fd22c6e34a6`), per i link di P nella 09 e per le due note di I su P4-9 e P4-11. In pausa su richiesta del coordinator fino alle 15:22; alla ripresa base invariata (`3cceb4f90`, 19 percorsi).
+  > **Note implementazione:**
+  > - **Link di P.** Ho riscritto 5 link della 09 verso `../../phases/<cartella>/`, trovati per nome di cartella e con il conteggio atteso:
+  >   - `22_assetPricingRefactor`: 3 (`00:49`, `00:52`, `06:177`);
+  >   - `23_transactionBatchRefactor`: 2 (`00:50`, `06:193`).
+  >
+  >   Nelle altre mie cartelle non ce n'erano. Qui risultano rotti finché il treno non porta lo spostamento di P.
+  > - **P4-9, riscritto come conversione** (DBT-D di I), senza «12 failed».
+  >   - In 00: la voce della tabella, la nota «Stato al 2026-10-09» e la sezione §P4-9. La sezione ora dice cosa resta, tiene le due trappole (valgono anche per la conversione) e sposta i fatti del 22/09 in «Storico».
+  >   - Nel blocco del comando, `npx vitest` è diventato `node_modules/.bin/vitest`, come vuole la regola del progetto.
+  >   - Nel README: la voce di «Cosa resta aperto» e la cella dell'indice.
+  >   - I fatti: `2e4c8589f` (28/09) ha chiuso i rossi, da 11 su 159 test a 144 verdi. Restano i 7 specchi ri-pinnati, e il file ha 35 `readFileSync`. I 145/145 di oggi sono la misura di I, citata come sua.
+  > - **P4-11, chiuso, con le righe di oggi.**
+  >   - `fmtCurrency` è a `GrowthChart.svelte:2156`, mascherata alla definizione da `804bc9903`.
+  >   - La custodiscono il gate (`moneyRenderSites.test.ts:193-196`, lista `residual` vuota a `:281`) e il pin `GrowthChart.test.ts:1080`.
+  >   - In testa a §P4-11, una riga avverte che i numeri dell'analisi sono del 22/09.
+  > - **08, tre celle:**
+  >   - `:831` «privacy e valuta, secondo sito»: chiuso da `176f19707` (24/09). L'asse di `LotComparisonChart.svelte:258` delega a `formatAxisCurrency` (`lotComparisonChartHelpers.ts:120`), che maschera solo le cifre e lascia valuta e segno.
+  >   - `:833` «P4-11, secondo grafico»: fatto da `804bc9903`. Oggi `shortMoney` `:166` e `axisTickAmount` `:183` mascherano le cifre.
+  >   - `:852`: accanto a «12 falliti su 162 (P4-9)», la chiusura del 28/09.
+  >
+  > **⚠️ Fuori pista:**
+  > - Le celle `08:831` e `08:833` erano sfuggite al giro S21: le ho trovate verificando P4-11.
+  > - In `08:852` la parte E2E (misura di I del 24/09: `dashboard.spec.ts` e `brokers-detail.spec.ts`) non l'ho riverificata. È di I: la segnalo al coordinator.
+  >
+  > **Evidenze:**
+  > - Validatore normpath: 27 file e 195 link, 25 rotti. Sono tutti e soli i link verso `phases/{11,14,15,18,22,23}_…`, cioè 10, 7, 1, 2, 3 e 2, che si risolvono quando il treno porta gli spostamenti.
+  > - `git diff --check` pulito.
+  > - Controllo privacy delle righe aggiunte: pulito.
+  > - Codice in sola lettura: nessun test, nessun server, 6162 libera.
+- **S21c** ✅ 2026-10-09 — Ultimo giro dei link, su richiesta del coordinator: I ha classificato FINITE `19_yieldOnCost`, `20_performanceCharts` e `24_privacyGlobal` e le sta spostando in `Release_2/phases/`.
+  > **Note implementazione:**
+  > - **12 link riscritti** in `../../phases/<cartella>/`, cercati per nome di cartella in 09, 16, 21 e 32, con il conteggio atteso per file:
+  >   - verso `19_yieldOnCost`, 6: `01` ×2, `README` ×1, `06` ×3;
+  >   - verso `20_performanceCharts`, 4: `02`, `README`, `06`, e il link di S21b in `00`;
+  >   - verso `24_privacyGlobal`, 2: `00` e `21/plan-phase00OnboardingRound8-PostReview.prompt.md:7`.
+  > - **Nota su `SensitiveValue`** in «Cosa resta aperto» del README: da testo semplice a link verso il Round 1 archiviato della 24, passo 5, sospeso dal 21/09 (`plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md:402`).
+  > - **Le menzioni dei nomi di cartella in testo semplice** (`piano 24_privacyGlobal` e simili) restano: il nome non cambia con l'archivio.
+  > - **Verso le mie cartelle**, le cartelle di I hanno 20 link: 17 verso la 09, 2 verso la 21, 1 verso la 17. Li riscrive I spostando le sue cartelle, ma li ho segnalati al coordinator.
+  >
+  > **Evidenze:**
+  > - Validatore normpath: 27 file e 196 link, 38 rotti. Sono tutti e soli quelli verso `phases/{11,14,15,18,19,20,22,23,24}_…`, e i 13 file di destinazione esistono oggi in `Phase_0/` con lo stesso nome.
+  > - `git diff --check` pulito.
+  > - Codice in sola lettura: nessun test, nessun server, 6162 libera.
+- **S22** ✅ 2026-10-09 — Su richiesta del coordinator: C2 (B5 di Risk) e due decisioni del developer da registrare nel journal, in C1.
+  > **C2, `docs(theory)`: il tasso senza rischio secondo la frequenza della serie.**
+  > - **Il difetto:** `sharpe-ratio.en.md:24` e `sortino-ratio.en.md:24` convertivano il tasso annuo con $1/365$. Il codice usa il fattore di annualizzazione $f$ della serie, lo stesso della volatilità:
+  >   - `backend/app/services/risk/metrics.py:208-222`, `daily_risk_free_rate`, che calcola `expm1(log1p(r)/f)`;
+  >   - lo usano `annualized_sharpe` (`:225-238`) e `annualized_sortino` (`:241-256`).
+  > - **La correzione**, del docs-writer, nei due riquadri, 3 righe per pagina:
+  >   - la formula diventa $r_{period} = (1 + r_{annual})^{1/f} - 1$;
+  >   - $f$ rimanda a §Annualization nella Sharpe e a `observed-annualization.md` nella Sortino;
+  >   - «ogni rendimento di periodo» al posto di «ogni rendimento giornaliero»;
+  >   - nella Sharpe, una frase sul perché lo stesso $f$, con «when the rate is positive»: è giusto, perché con un tasso negativo $1/365$ sottostima un credito.
+  > - **Traduzioni:** IT, FR ed ES non hanno la formula. Sono precedenti alla riscrittura EN: niente riquadro, e ancora $\sqrt{252}$. Quindi nessuna modifica a mano e nessuno stamp: il debito resta per il giro delle traduzioni.
+  > - **Verificati corretti, fuori perimetro:** `synthetic-benchmarks/compound:46` ($1/365$ per giorno di calendario, come `CompoundSignal.ts:68`), `returns:85`, `scheduled-investment` (ACT/365).
+  > - **Gate:**
+  >   - `mkdocs build`: rc 0, zero WARNING o ERROR (`/tmp/libreFolio_q_build_c2.log`);
+  >   - `check-links`: rotto solo `#rolling-return`, come nella baseline (`/tmp/libreFolio_q_checklinks_c2.log`).
+  >
+  > **Decisioni del developer, in C1:**
+  > - **09 §1.4, la parte AI Export: non è un difetto** («ma l'ai export non ha anteprima»).
+  >   - Verificato: l'unica `textarea` di `features/ai-export/` sono le note (`AiExportOptionsPanel.svelte:285`), e il prompt si copia negli appunti (`aiExportClipboard.ts:156-158`).
+  >   - La §1.4 è chiusa: FX per la decisione (c), Tools con `planner/format.ts:21,184`.
+  >   - Aggiornati il titolo e la nota di stato del §1, e nel README della 09 «Cosa resta aperto» e l'indice.
+  > - **21, dossier §6 #9: chiuso** («il tour iniziale va bene già ora, toglilo»). L'ho scritto nella riga del dossier, nella sua nota iniziale e nella frase del piano principale; non l'ho aggiunto a «Cosa resta aperto».
+  >
+  > **⚠️ Fuori pista:** cercando le menzioni di AI Export ho trovato due celle vecchie in 06, contraddette da `00:60` e `00:65`:
+  > - `06:283`, S6 6.2 «Parziale»: i due campi sono in sola lettura (`schemas/fx.py:430-451`);
+  > - `06:288`, S6 6.11 «Aperto»: nei 7 file della 6.11 non resta nessun `assert`.
+  >
+  > Le ho allineate, con l'integrazione `514582a47`.
 
 ## 4. Conflitti, rischi, definizione di fatto
 

@@ -123,4 +123,4 @@ run stayed green. The full coverage is to be re-measured once every branch has b
 | Spawn context that starts the resource tracker; `stop()` | `backend/app/services/risk/quant/spawn_worker.py` |
 | Double SIGTERM | `backend/app/services/tools/process_tree.py` |
 | Runner documentation | `mkdocs_src/docs/developer/test-walkthrough/runner_architecture.md` |
-| Plan, analysis and evidence | `LibreFolio_developer_journal/Release_2/Phase_0/28_fxDashboardSync/plan-phase00CoverageCombineRace.prompt.md` |
+| Plan, analysis and evidence | `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00CoverageCombineRace.prompt.md` |

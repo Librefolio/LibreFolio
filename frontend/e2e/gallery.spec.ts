@@ -41,6 +41,7 @@ import {
     injectTodosIntoParses,
     keepFaviconImagesLoading,
     keepOnlyCashRows,
+    keepTempDataHiddenUnder,
     onboardGalleryAccount,
     openBrokerPanel,
     openWizardOnSelectFiles,
@@ -289,6 +290,23 @@ async function forEachLanguageAndTheme(page: Page, callback: (lang: Language, th
 function getViewport(testInfo: any): 'desktop' | 'mobile' {
     return testInfo.project.name === 'mobile' ? 'mobile' : 'desktop';
 }
+
+/**
+ * The name the Security shot opens the app under: one the browser classifies as a local network (plan 36). Chromium maps it
+ * onto the loopback, where the lane's backend listens, with the baseURL's protocol and port — as
+ * layout/connection-security.spec.ts does.
+ */
+const GALLERY_LAN_NAME = 'lf-e2e.lan';
+
+// `launchOptions` is worker-scoped: Playwright refuses it inside a describe ("forces a new worker"), so the Security shot's
+// resolver rule is set here, for the whole file, as layout/connection-security.spec.ts sets its own. It maps that one name
+// and nothing else, so every other shot — the baseURL, the sites the favicons come from — resolves as before; the config's
+// own launch options are kept.
+test.use({
+    launchOptions: async ({launchOptions}, use) => {
+        await use({...launchOptions, args: [...(launchOptions.args ?? []), `--host-resolver-rules=MAP ${GALLERY_LAN_NAME} 127.0.0.1`]});
+    },
+});
 
 test.describe('Gallery Screenshots', () => {
     // Gallery tests iterate over 4 languages × 2 themes = 8 screenshots per test
@@ -1533,6 +1551,142 @@ test.describe('Gallery Screenshots', () => {
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'data-quality-sync-rates');
             });
             expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
+        });
+    });
+
+    /**
+     * The sidebar's connection-security line (plan 36), open on «Connection: local network» with its reason and the How to
+     * connect securely link: security/connection-indicator, on user/connection-security.md.
+     *
+     * A local-network verdict needs a host the browser classifies as one, so the page is opened under GALLERY_LAN_NAME,
+     * which this file's launch options map onto the loopback. Cookies are per host, so the gallery's admin signs in twice:
+     * on the baseURL first, with the gallery's own login() — where the reads the gallery's routes make in Node go — then
+     * through the login form served under the LAN name: the session the page runs on. The Dashboard behind is the
+     * gallery's: the snapshot report on its 1Y range, settled as the Dashboard shots settle it.
+     *
+     * Offline as every shot: the outer beforeEach's routes match paths and third-party hosts, never the baseURL's origin,
+     * so they hold under the LAN name; the two listings hideGalleryTempData filters in Node are read through the baseURL
+     * (keepTempDataHiddenUnder), and the outer afterEach gives the verdict (expectGalleryOffline).
+     */
+    test.describe('Security', () => {
+        /** The runner's baseURL origin: the lane serves plain HTTP, and the shot is that of an http: page. */
+        function laneOrigin(baseURL: string | undefined): string {
+            if (!baseURL) throw new Error('the Security shot needs the runner-provided baseURL');
+            const url = new URL(baseURL);
+            expect(url.protocol, 'precondition: the lane serves plain HTTP — over HTTPS the line would read secure').toBe('http:');
+            return url.origin;
+        }
+
+        /** The lane's origin under another name: the baseURL's protocol and port. */
+        function originUnder(origin: string, hostname: string): string {
+            const url = new URL(origin);
+            url.hostname = hostname;
+            return url.origin;
+        }
+
+        /** The user page the details link, at its root, in the language of the UI (connectionSecurityDocsUrl). */
+        function connectionDocsHref(lang: Language): string {
+            return `/mkdocs/${lang === 'en' ? '' : `${lang}/`}user/connection-security/`;
+        }
+
+        /**
+         * Sign `user` in through the login form served under `origin`, which has no session of its own yet: login() would
+         * start over on the baseURL, whose cookie belongs to another host. Ends on the app shell, still under `origin`.
+         */
+        async function signInThroughFormUnder(page: Page, origin: string, user: {username: string; password: string}): Promise<void> {
+            await page.goto(`${origin}/`);
+            await expect(page.getByTestId('login-page'), `${origin} has no session of its own yet: its login form shows`).toBeVisible({timeout: 30_000});
+            await expect(page.getByTestId('login-form')).toBeVisible();
+            await page.getByTestId('login-username').fill(user.username);
+            await page.getByTestId('login-password').fill(user.password);
+            await page.getByTestId('login-submit').click();
+            await expect(page.getByTestId('login-page'), 'the sign-in went through').toBeHidden({timeout: 30_000});
+            await expect(page.getByTestId('app-shell'), 'the app shell is up after the post-login routing').toBeVisible({timeout: 30_000});
+            expect(new URL(page.url()).origin, `precondition: the app stayed under ${origin}`).toBe(origin);
+        }
+
+        /**
+         * Positive control: the outer beforeEach's offline guard matches paths, not the baseURL's origin, so it holds under the
+         * page's own name — a provider catalogue read made from the page is answered from the guard's fixture, never by the
+         * backend, which would ask ECB and SNB.
+         */
+        async function expectGuardHoldsOnPage(page: Page): Promise<void> {
+            const guard = galleryOfflineGuard(page);
+            const reads = guard.catalogueReads;
+            const status = await page.evaluate(async () => (await fetch('/api/v1/fx/providers')).status);
+            expect(status, 'the provider catalogue read was answered').toBe(200);
+            expect(guard.catalogueReads, `the offline guard did not answer a provider catalogue read made under ${new URL(page.url()).origin}`).toBeGreaterThan(reads);
+        }
+
+        test('connection indicator on a local network - all languages and themes', async ({page, baseURL}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            const lane = laneOrigin(baseURL);
+            const lan = originUnder(lane, GALLERY_LAN_NAME);
+            const header = page.getByTestId('app-header');
+            const line = page.getByTestId('connection-security');
+            const toggle = line.getByTestId('connection-security-toggle');
+            const details = line.getByTestId('connection-security-details');
+            const link = details.getByTestId('connection-security-docs-link');
+
+            await setupDashboardMockReport(page);
+            await login(page, TEST_ADMIN);
+            await keepTempDataHiddenUnder(page, lan, lane);
+            await signInThroughFormUnder(page, lan, TEST_ADMIN);
+            await expectGuardHoldsOnPage(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // One full load per combination, in its language and theme: the line asks the server once per load, and
+                // every chart behind draws once.
+                await page.goto(`${lan}/dashboard`);
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
+                await expect(page.locator('html')).toHaveAttribute('data-i18n-ready', 'true');
+                await expect(page.locator('html'), 'the theme survived the load').toHaveClass(new RegExp(`\\b${theme}\\b`));
+
+                // The verdict, once the server has answered: a LAN name, and a client the server does not see as public.
+                await expect(line, 'the server answered the line (GET /api/v1/system/connection)').toHaveAttribute('data-server-checked', 'true', {timeout: 15_000});
+                await expect(line).toHaveAttribute('data-level', 'local');
+                await expect(line).toHaveAttribute('data-reason', 'lan');
+
+                // On a phone the sidebar is the drawer: the burger opens it.
+                if (viewport === 'mobile') {
+                    await expect(header, 'the drawer is closed after the load').toHaveAttribute('data-sidebar-open', 'false');
+                    await page.getByTestId('mobile-menu-toggle').click();
+                    await expect(header, 'the burger opened the drawer').toHaveAttribute('data-sidebar-open', 'true');
+                }
+                await expect(page.getByTestId('sidebar-user-avatar'), "the page runs on the gallery's admin").toContainText(TEST_ADMIN.username);
+                // Only an expanded sidebar draws the label: a collapsed one shows the shield alone.
+                await expect(line.getByTestId('connection-security-label'), 'the sidebar is expanded').toBeVisible();
+
+                // The details: closed on every load, opened by a click.
+                await expect(toggle, 'the details start closed').toHaveAttribute('aria-expanded', 'false');
+                await toggle.click();
+                await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+                await expect(details.getByTestId('connection-security-reason')).toBeVisible();
+                await expect(link, 'the link opens the user page in the language of the UI').toHaveAttribute('href', connectionDocsHref(lang));
+                await expect(details.getByTestId('connection-security-admin-warning'), 'no cookie line: the page is plain HTTP').toHaveCount(0);
+
+                // Settled, then in frame: the KPI cards' count-up and the growth chart behind, every image, nothing moving.
+                await textStill(page.getByTestId('kpi-row'), 'the KPI cards');
+                await waitForChart(page.getByTestId('growth-chart'));
+                await canvasStill(page.getByTestId('growth-chart'), 'the growth chart');
+                await imagesSettled(page.getByTestId('app-shell'));
+                await waitForMotionSettled(page.getByTestId('app-shell'), 'the page');
+                await parkPointer(page);
+                await expectNoToast(page);
+                await expect(line, 'the whole line is on screen: the level, the reason and the link').toBeInViewport({ratio: 1});
+                await expectUncovered(link, 'the How to connect securely link');
+                await screenshot(page, viewport, lang, theme, 'security', 'connection-indicator');
+
+                // The next combination's language and theme are set from the header, which the open drawer covers: it closes
+                // as a user closes it, by picking the page it shows.
+                if (viewport === 'mobile') {
+                    await page.getByTestId('nav-dashboard').click();
+                    await expect(header, 'the drawer closed').toHaveAttribute('data-sidebar-open', 'false');
+                }
+            });
         });
     });
 

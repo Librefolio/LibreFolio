@@ -39,7 +39,7 @@ synthetic files is invented. No server, no database: this module is pure. How th
 through the batch (validate, commit, reciprocal links) is in ``test_api/test_brim_api.py``,
 category 16.
 
-Plan: LibreFolio_developer_journal/Release_2/Phase_0/31_brimDegiro/plan-phase00BrimDegiro.prompt.md
+Plan: LibreFolio_developer_journal/Release_2/phases/31_brimDegiro/plan-phase00BrimDegiro.prompt.md
 """
 
 from __future__ import annotations
