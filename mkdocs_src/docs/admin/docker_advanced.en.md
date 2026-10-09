@@ -64,17 +64,19 @@ A **bind mount** directory next to the Compose file, holding the SQLite database
 
 ### 👤 User & Permissions
 
-The container starts as root only to hand the data directory over to the LibreFolio user, then runs the server as that **non-root** user: files it creates in `LibreFolio-data/` belong to that UID/GID on the host.
+The container starts as root only to hand the data directory over to the LibreFolio user, then runs the server as that **non-root** user: files it creates in `LibreFolio-data/` belong to that UID/GID on the host. The hand-over runs at every start and covers everything in the directory.
 
-The UID/GID is fixed when the image is built: `1000:1000` for the official GHCR image, your own for `./dev.py docker build`. `docker compose build` reads `UID` and `GID` from `.env` (default `1000`): set them to match the host user, or dedicated user, that should own the data files:
+That UID/GID comes from the `UID` and `GID` **build arguments**: the image keeps them as `LIBREFOLIO_UID` and `LIBREFOLIO_GID`, which the entrypoint reads at every start. The official GHCR image is built with `1000:1000`. `./dev.py docker build` uses the ids of the user who runs it, whatever `.env` says, while `docker compose build` reads `UID` and `GID` from `.env` (default `1000`): set them to match the host user, or dedicated user, that should own the data files:
 
 ```bash
 UID=1000
 GID=1000
 ```
 
-- On the **host**, `ls -l LibreFolio-data/` shows the user and group that own that UID/GID on the host (resolved via `/etc/passwd`).
-- **Inside the container**, the same files usually show as `librefolio:librefolio`: the same numeric UID/GID, resolved against the container's own `/etc/passwd`.
+Changing them in `.env` takes effect only when `docker compose build` rebuilds the image: `.env` also reaches the container through `env_file`, but a restart does not change the ids. With the official image, which you do not build, these two lines have no effect.
+
+- On the **host**, `ls -l LibreFolio-data/` shows the user and group that own that UID/GID on the host (resolved via `/etc/passwd` and `/etc/group`).
+- **Inside the container**, the same files usually show as `librefolio:librefolio`: the same numeric UID/GID, resolved against the container's own `/etc/passwd` and `/etc/group`.
 
 ??? tip "Linux cheatsheet: users, groups, and IDs"
 
@@ -136,7 +138,7 @@ GID=1000
     sudo chown -R librefolio:librefolio ./LibreFolio-data
     ```
 
-    Then set the matching UID/GID in `.env`.
+    Then set the matching UID/GID in `.env` and rebuild the image with `docker compose build`: at every start the container hands the directory back to the image's UID/GID.
 
 ## 🛠️ CLI Commands
 
@@ -204,7 +206,12 @@ Without a checkout, the plain commands do the day-to-day work: `docker compose u
 
 In the image, `user`, `db` and `info` work. The development commands (`test`, `i18n`, `mkdocs translate` and `mkdocs translate-validate`) are listed too, but they only answer that they are *not available in this installation*: the image ships the application, not the development tree.
 
-**Database migrations need no command.** The server applies pending migrations every time it starts: after `docker compose pull` and `docker compose up -d` there is nothing else to run, and `docker compose restart librefolio` retries them after a failure. Do not use `./dev.py docker exec db upgrade`: `db upgrade` refuses to run while a server listens on the production port, and in the container the server is the main process, always running.
+The test-mode commands do not run in the container either; like `./dev.py mkdocs gallery`, they belong to a development checkout:
+
+- `./dev.py docker exec test db populate` gets the same *not available* answer as every `test` command;
+- `./dev.py docker exec server --test` stops with `Frontend build failed. Server not started.`: test mode first tries to rebuild the web app in debug mode, which needs Node.js and the web app's sources, while the image ships only the production build, without Node.js.
+
+**Database migrations need no command.** The server applies pending migrations every time it starts: after `docker compose pull` and `docker compose up -d` there is nothing else to run, and `docker compose restart librefolio` retries them after a failure. Do not use `./dev.py docker exec db upgrade`: `db upgrade` needs the server stopped, and in the container the server is the main process, always running.
 
 ## 🩹 Post-Migration Fixes {: #post-migration-fixes }
 
@@ -242,7 +249,7 @@ The repository's `docker-compose.yml` exposes **two ports**:
 | Port | Purpose | Database |
 |------|---------|----------|
 | `6040` | Production server, started with the container | `LibreFolio-data/sqlite/app.db` (persistent bind mount) |
-| `6041` | Test server, a developer tool | Test database inside the container, lost with `docker compose down` |
+| `6041` | Test server, a developer tool | None: the test server does not start in the container. In a development checkout it uses `backend/data/test/sqlite/app.db` by default, which `./dev.py test db populate --force` deletes and recreates with mock data |
 
 The test server is meant for developers: how to start it, and why it does not start with the current image, is in the [Developer Workflow](../developer/dev_workflow.md#docker-test-mode). `docker-compose.prod.yml` has no test port; in the repository's file, remove the `TEST_PORT` line from `ports:` to close it.
 
@@ -254,7 +261,7 @@ The most common changes:
 
 | # | What | How |
 |---|------|-----|
-| (1) | Match host UID/GID | Run `./dev.py docker build` as the user who should own the files, or set `UID=1001` and `GID=1001` in `.env` and run `docker compose build` |
+| (1) | Match host UID/GID | Rebuild the image with them: run `./dev.py docker build` as the user who should own the files, or set `UID=1001` and `GID=1001` in `.env` and run `docker compose build` |
 | (2) | Change production port | Set `PORT=3000` in `.env` |
 | (3) | Disable test port | Remove the `TEST_PORT` line from `ports:` |
 | (4) | Custom data path | Change bind mount: `./my-data:/app/backend/data/prod-docker` |
@@ -272,8 +279,8 @@ The first account created in the browser automatically becomes the administrator
         build:
           context: .
           args:
-            UID: ${UID:-1000}              # (1) Match host user UID
-            GID: ${GID:-1000}              # (1) Match host user GID
+            UID: ${UID:-1000}              # (1) UID owning the data files (build time only)
+            GID: ${GID:-1000}              # (1) GID owning the data files (build time only)
             DOCS_VARIANT: ${DOCS_VARIANT:-full}  # light = no documentation screenshots
         container_name: librefolio
         # No 'user:' directive — entrypoint starts as root, fixes permissions,
