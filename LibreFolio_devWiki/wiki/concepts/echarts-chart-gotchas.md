@@ -2,7 +2,7 @@
 title: "ECharts gotchas met by the Dashboard charts"
 category: concept
 tags: [frontend, charts, echarts, privacy, i18n, axis, legend, gotcha]
-related: [problems/echarts-canvas-mismeasures-emoji-labels, concepts/chart-resolution-semantic-zoom, entities/time-series-aggregation, decisions/portfolio-pnl-series-contracts, decisions/privacy-mask-at-the-formatter, sources/phase00-performance-charts-2026-09]
+related: [problems/echarts-canvas-mismeasures-emoji-labels, concepts/chart-resolution-semantic-zoom, entities/time-series-aggregation, decisions/portfolio-pnl-series-contracts, decisions/privacy-mask-at-the-formatter, sources/phase00-performance-charts-2026-09, decisions/html-escape-at-the-source]
 ---
 
 # Concept: ECharts behaviours that look like bugs in our code
@@ -20,8 +20,9 @@ September–October 2026) mistook for defects of its own, with the rule each one
 | Axis/tooltip **formatters are not reactive** and ECharts caches axis labels | the privacy toggle did not redraw money axes; amounts leaked on the axis (R5–R7, P4-11) | the privacy state is part of the chart's rebuild key; on a masked money axis even 0 is masked (D12) |
 | The **edge tick** prints the raw computed bound | an axis ending in "−888" | show round ticks only, `showMinLabel: false` (D25) |
 | **Legend selection is kept by series name**, across option updates | hiding "Broker A" in one view hid it in every view | accepted (D27): a legend entry with the same name toggles in all views |
-| Tooltip HTML is **HTML** — translations are interpolated raw | a `<` or `&` in a translation would break a tooltip (latent) | the catalogues themselves are checked: every value must render as itself (`translationMarkup` / `catalogMarkupFindings` in `htmlInterpolation.gate.test.ts`); escaping ~109 call sites was rejected |
+| Tooltip HTML is **HTML** — translations are interpolated raw | a `<` or `&` in a translation would break a tooltip (latent) | the catalogues themselves are checked: every value must render as itself (`translationMarkup` / `catalogMarkupFindings` in `htmlInterpolation.gate.test.ts`); escaping ~109 call sites was rejected; function formatters are outside both XSS gates (residual K-15, [[decisions/html-escape-at-the-source]]) |
 | The canvas under-measures emoji | axis names overflow | [[problems/echarts-canvas-mismeasures-emoji-labels]] |
+| A tooltip **does not scroll** and is not bounded by the chart | on a 360–390 px phone the price tooltip (362–386 px) pushed the value off-screen (K step 16) | cap it at `getWidth() − 32` (`fitTooltipToWidth`) and build rows with `buildFittedTooltipRow` — the label shrinks with an ellipsis, the value never does (`echartsTooltipHelpers.ts`; both helpers are on the XSS gate's HTML-first-argument list) |
 
 Two non-ECharts rules from the same rounds:
 

@@ -45,8 +45,10 @@ landed; this page indexes it and adds what was not filed then.
 
 ## Residuals (backlog 38)
 
-P-1 an Auto cost with no position saves 0 without a warning (decided 2026-10-09: entering and leaving at 0 is
-accepted; a later lot reuses the missing-cost flow) · P-2 WAC preview mislabels split rows, dead `add_at_wac` branch ·
+P-1 an Auto cost with no position saves 0 without a warning — **closed without code on 2026-10-09**: 0 is the correct
+fallback for Auto when the data is missing, and the user corrects that transaction
+([[decisions/auto-cost-basis-zero-without-position]], plan `phases/39_autoCostNoPosition/`; the first direction,
+"entering and leaving the field accepts the 0", was superseded) · P-2 WAC preview mislabels split rows, dead `add_at_wac` branch ·
 P-3 per-position contribution drops unconverted dividends/costs without a signal · P-4 IANA timezone database in the
 Docker image · P-5 migrate `roi_utils`/`valuation_utils` into `financial_math` (decision D1: "later we factor the
 others") · **P-6 the graph update for the 2026-10-07 pages — still pending: the graph has not been rebuilt since
