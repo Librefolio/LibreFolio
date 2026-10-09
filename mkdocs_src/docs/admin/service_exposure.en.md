@@ -279,6 +279,10 @@ tailscale funnel --bg 6040
 Funnel serves it at `https://<server-name>.your-tailnet.ts.net` on port 443; `--bg` keeps it running
 after you close the terminal, and `tailscale funnel reset` stops it. No auth key is needed here: the
 server already joined your tailnet in Step 0.
+Nothing to configure in LibreFolio either: Funnel sends `X-Forwarded-Proto: https`, so with the
+default `SESSION_COOKIE_SECURE=auto` LibreFolio marks its
+[session cookie](configuration.md) `Secure`. `never` is only for a proxy that
+claims HTTPS to a browser on plain HTTP.
 
 ### ✅ Step 2: Approve and wait for propagation
 
@@ -313,20 +317,20 @@ Add one sidecar for every service you want to publish, on one host or several; t
 
 ```mermaid
 graph LR
-    User["👤 External User"] -->|HTTPS| Funnel1["☁️ Funnel 1<br>(service2.yourtailnet.ts.net)"]
-    User -->|HTTPS| Funnel2["☁️ Funnel 2<br>(service3.yourtailnet.ts.net)"]
-    User -->|HTTPS| Funnel3["☁️ Funnel 3<br>(librefolio.yourtailnet.ts.net)"]
-    User -->|HTTPS| Funnel4["☁️ Funnel 4<br>(service1.yourtailnet.ts.net)"]
+    User["👤 External User"] -->|HTTPS| Funnel1["☁️ Funnel 1<br>(librefolio.yourtailnet.ts.net)"]
+    User -->|HTTPS| Funnel2["☁️ Funnel 2<br>(service1.yourtailnet.ts.net)"]
+    User -->|HTTPS| Funnel3["☁️ Funnel 3<br>(service3.yourtailnet.ts.net)"]
+    User -->|HTTPS| Funnel4["☁️ Funnel 4<br>(service4.yourtailnet.ts.net)"]
     
-    Funnel1 -->|WireGuard| TSC1["🐳 Tailscale Container 1<br>(100.1.1.1)"]
-    Funnel2 -->|WireGuard| TSC2["🐳 Tailscale Container 2<br>(100.4.4.4)"]
-    Funnel3 -->|WireGuard| TSC3["🐳 Tailscale Container 3<br>(100.3.3.3)"]
-    Funnel4 -->|WireGuard| TSC4["🐳 Tailscale Container 4<br>(100.2.2.2)"]
+    Funnel1 -->|WireGuard| TSC1["🐳 Tailscale Container 1<br>(100.101.x.x)"]
+    Funnel2 -->|WireGuard| TSC2["🐳 Tailscale Container 2<br>(100.102.x.x)"]
+    Funnel3 -->|WireGuard| TSC3["🐳 Tailscale Container 3<br>(100.103.x.x)"]
+    Funnel4 -->|WireGuard| TSC4["🐳 Tailscale Container 4<br>(100.104.x.x)"]
     
     subgraph LAN ["Local LAN Network (192.168.1.0/24)"]
         subgraph Host2 ["Server 2 (e.g. Mini PC - 192.168.1.10)"]
-            TSC3 -->|socat: TCP/8080| Service3["🔌 Service 3<br>(192.168.1.10:80)"]
-            TSC4 -->|socat: TCP/9000| Service4["🔌 Service 4<br>(192.168.1.10:80)"]
+            TSC3 -->|socat: TCP/8080| Service3["🔌 Service 3<br>(192.168.1.10:8080)"]
+            TSC4 -->|socat: TCP/9000| Service4["🔌 Service 4<br>(192.168.1.10:9000)"]
         end
         subgraph Host1 ["Server 1 (e.g. NAS - 192.168.1.20)"]
             TSC1 -->|socat: TCP/6040| LibreFolio["📊 LibreFolio<br>(192.168.1.20:6040)"]
@@ -394,7 +398,7 @@ services:
     command:
       - /custom_startup.sh
     environment:
-      - HOST_IP=192.168.1.10                # Local IP of the service to expose (e.g. Server 1)
+      - HOST_IP=192.168.1.20                # Local IP of the service to expose (e.g. Server 1)
       - HOST_PORT=6040                      # Real port of the service to expose
       - TAILSCALE_FUNNEL_PORT=6040          # Internal Funnel port
       - TS_HOSTNAME=librefolio              # Custom public hostname (e.g. librefolio)
@@ -500,7 +504,7 @@ Once the container has started, the one-time key is used up: it disappears from 
         command:
           - /custom_startup.sh
         environment:
-          - HOST_IP=192.168.1.10                # Local IP of the service to expose (e.g. Server 1)
+          - HOST_IP=192.168.1.20                # Local IP of the service to expose (e.g. Server 1)
           - HOST_PORT=6040                      # Real port of the service to expose
           - TAILSCALE_FUNNEL_PORT=6040          # Internal Funnel port
           - TS_HOSTNAME=librefolio              # Custom public hostname (e.g. librefolio)
@@ -561,6 +565,10 @@ Press Ctrl+C to exit.
 ```
 
 The service is now online: wait a few minutes for the MagicDNS records to propagate, then open the URL.
+Nothing to configure in LibreFolio: Funnel sends `X-Forwarded-Proto: https` and socat passes it on,
+so with the default `SESSION_COOKIE_SECURE=auto` LibreFolio marks its
+[session cookie](configuration.md) `Secure`. `never` is only for a proxy that
+claims HTTPS to a browser on plain HTTP.
 
 ??? question "🛠️ The container restarts in a loop or is marked unhealthy"
 
@@ -583,7 +591,7 @@ Because its auth key carries a tag, Tailscale disables key expiry for the contai
 
 ## 🔮 MagicDNS and custom domains
 
-**MagicDNS** gives each device of your tailnet a name: instead of an IP like `100.110.222.112`, you can type `http://your-server` in the browser. Public Funnel addresses end in `.ts.net` (for example, `https://librefolio.your-tailnet.ts.net`, where `librefolio` is the `TS_HOSTNAME` of Level 4).
+**MagicDNS** gives each device of your tailnet a name: instead of an IP like `100.110.x.x`, you can type `http://your-server` in the browser. Public Funnel addresses end in `.ts.net` (for example, `https://librefolio.your-tailnet.ts.net`, where `librefolio` is the `TS_HOSTNAME` of Level 4).
 
 Prefer your own domain, such as `librefolio.mydomain.com`? Two methods work for **private** access, through the VPN:
 
@@ -591,7 +599,7 @@ Prefer your own domain, such as `librefolio.mydomain.com`? Two methods work for 
 
     1. Log into your domain registrar's console (e.g., Cloudflare, GoDaddy, Namecheap).
     2. Create a type **A** (or **AAAA** for IPv6) DNS record for the chosen subdomain (e.g., `librefolio.mydomain.com`).
-    3. Point the record directly to the **private Tailscale IP** of your server (e.g., `100.77.72.90`).
+    3. Point the record directly to the **private Tailscale IP** of your server (e.g., `100.77.x.x`).
 
     Addresses in the `100.64.0.0/10` network are not routable on the internet, so the name works **only** while you are connected to your tailnet: no outsider can reach or scan the service. For details, see the [Official documentation on DNS settings](https://tailscale.com/kb/1054/dns#public-dns).
 
