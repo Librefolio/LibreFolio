@@ -94,15 +94,23 @@ In grouped mode, `navigate_asset` renders one link per affected asset; every oth
 
 | Code | Severity | Condition | CTA Action |
 |------|----------|-----------|------------|
-| `MISSING_PRICE` | 🔴 Error | Asset held with no PriceHistory and no WAC/cost basis fallback | `navigate_asset` |
-| `TRANSACTION_IMPLIED` | 🟡 Warning | Asset held with no PriceHistory but WAC/cost basis available — valued at cost temporarily | `navigate_asset` |
+| `MISSING_PRICE` | 🔴 Error | Open position with no price on the end date: no market quote and no priced trade on or before it (`ValuationSource.MISSING`, see the `TRANSACTION_IMPLIED` rule below). The NAV leaves the asset out | `navigate_asset` |
+| `TRANSACTION_IMPLIED` | 🟡 Warning | Open position valued on the end date at a trade price (`ValuationSource.LAST_TRADE_PRICE`) instead of a market quote, for an asset with a provider, outside the 14-day grace period after its first `BUY` or `SELL` (full rule below). `message_params`: `count`, `as_of_date`; group `transaction_implied` | `navigate_asset` |
 | `STALE_PRICE` | 🟡 Warning | Open position valued at a market price carried forward more than 7 days, on an asset with a provider (full rule below) | `sync_asset_prices` |
 | `MISSING_COST_BASIS` | 🟡 Warning | An acquisition of the asset has no known cost: a `TRANSFER` or `ADJUSTMENT` adding quantity without `cost_basis_override` (full rule below). Also emitted by the FIFO lots analysis for the analysed asset. `message_params`: `count`; group `missing_cost_basis` | `navigate_asset` |
 | `MISSING_FX_MARKET` | 🟡 Warning | A conversion the report needed ([sources below](#where-missing-fx-pairs-come-from)) has no configured FX pair | `add_fx_pair` |
 | `MISSING_FX_RATES` | 🟡 Warning | A configured pair with a real (non-`MANUAL`) provider in at least one route step cannot convert an amount on some dates: no rate exists on or before them (`convert_bulk` backfills without limit), so they precede the pair's first stored rate. Movement dates come from the whole history up to the end date, valuation dates only from the period ([sources below](#where-missing-fx-pairs-come-from)). `message_params`: `count`, `date_from`/`date_to` (span over all affected pairs), `dates_count`; group `missing_fx_rates` | `sync_fx_pair` |
 | `MISSING_FX_RATES` | 🟡 Warning | Same, for configured pairs whose routes are all `MANUAL`. `message_params`: `count` only; group `missing_fx_rates_manual` | `navigate_fx` |
-| `NAV_INCOMPLETE` | 🔵 Info | One or more days had incomplete NAV (caused by MISSING_PRICE) | none |
-| `MWRR_NOT_CALCULABLE` | 🔵 Info | MWRR did not converge or period is too short | none |
+| `NAV_INCOMPLETE` | 🔵 Info | One or more days of the period had an incomplete NAV: an asset held that day had no price (the `MISSING_PRICE` condition, day by day) | none |
+| `MWRR_NOT_CALCULABLE` | 🔵 Info | The summary has no MWRR (`mwrr_available=False`): no net invested capital in the period, a NAV of zero or less on the end date, a period of zero days, or a solver that does not converge. A `get_report()` without a summary always reports it | none |
+| `MWRR_SERIES_UNRELIABLE` | 🟡 Warning | After a cold-start retry, the history's last cumulative MWRR is still missing or further from the summary's than the tolerance, so the history's MWRR is set to `null`. Added by `PortfolioService.get_report()`, not by `build_data_quality_report` (full rule below). `message_params`: `summary_cum`, `series_cum`, `divergence_pp`, `first_bad_date` | none |
+
+**`TRANSACTION_IMPLIED` rule.** The engine values every holding through the unified price resolver: `DailyStateBuilder._market_value_for()` reads a per-asset `AssetPriceSeries` (`backend/app/services/price_resolver.py`). The series holds market quotes (`PriceHistory`) and trade prices: the unit price of each `BUY` or `SELL` of the asset at the brokers in scope, and the `cost_basis_override` of each `ADJUSTMENT` not linked to a split whose override is set and not zero. Trades of the same day are averaged, and a quote of that day wins over them. For each day the resolver takes the latest observation on or before it: a quote values the holding at `MARKET_PRICE`, a trade at `LAST_TRADE_PRICE`; with no observation at all the holding is `MISSING` (`MISSING_PRICE`). Each daily state collects its `LAST_TRADE_PRICE` assets in `transaction_implied_asset_ids`. `PortfolioService.get_summary()` reads that set on the end-date state only — an asset quoted since its latest trade is not listed, whatever its past — and drops:
+
+* the assets whose first `BUY` or `SELL` (`first_position_dates`, the earliest over their brokers) is at most `TRANSACTION_IMPLIED_GRACE_DAYS` (14, `backend/app/services/data_quality_thresholds.py`) days before the end date: a normal placement lag, e.g. a bond bought at issue before its first quote. An asset with no `BUY` or `SELL` gets no grace period;
+* the assets without a provider (no `AssetProviderAssignment`): valuing them at their last trade price is their intended behaviour.
+
+The list holds one entry per open position, so an asset held at two brokers counts twice in `count`. `as_of_date` is the date of the last daily state. The English message of `dataQuality.transactionImplied` reads "still valued at cost"; the engine values these assets at their latest trade price.
 
 **`STALE_PRICE` rule.** `PortfolioService.get_summary` builds the list and passes it to `build_data_quality_report` as `stale_prices_dto`. An asset is listed when, at the end date, all of these hold:
 
@@ -111,7 +119,7 @@ In grouped mode, `navigate_asset` renders one link per affected asset; every oth
 * that price is carried forward **more than** `STALE_PRICE_THRESHOLD_DAYS` (7) days, so a quote exactly 7 days old is still current;
 * the asset has a provider assignment.
 
-Each asset appears once, whatever the number of brokers holding it, as `StalePriceAsset{asset_id, name, last_price_date, stale_days}`, with `stale_days` counted from `last_price_date` to the end date. Left out on purpose: manual assets, which have nothing to sync (those valued at their last trade price, such as crowdfunding or `HOLD` assets, are stale by design); provider assets with no quote at all, already reported as `TRANSACTION_IMPLIED`; closed positions. With stale prices and nothing that makes it `partial`, the report's derived `data_quality_status` is `carried_forward` ([source-data status](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#source-data-status)), so portfolio risk results that read it can turn `PARTIAL`.
+Each asset appears once, whatever the number of brokers holding it, as `StalePriceAsset{asset_id, name, last_price_date, stale_days}`, with `stale_days` counted from `last_price_date` to the end date. Left out on purpose: manual assets, which have nothing to sync (those valued at their last trade price, such as crowdfunding or `HOLD` assets, are stale by design); provider assets valued at a trade price, which are `TRANSACTION_IMPLIED`'s case, or with no price at all, which are `MISSING_PRICE`'s; closed positions. With stale prices and nothing that makes it `partial`, the report's derived `data_quality_status` is `carried_forward` ([source-data status](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#source-data-status)), so portfolio risk results that read it can turn `PARTIAL`.
 
 **`MISSING_COST_BASIS` rule.** `PortfolioService._missing_cost_basis_assets()` lists the assets whose average cost, in the engine run behind the report, has an acquisition of unknown cost (`AverageCost.unknown_cost_movement_ids`): a `TRANSFER` or `ADJUSTMENT` adding quantity, not split-linked, without `cost_basis_override` (see [WAC & Cost Basis](../backend/transactions/wac.md#diagnostics)). The engine replays the whole history up to the end date, so the position does not have to be open any more. Each asset appears once, as `(asset_id, name)`, whatever the number of brokers. The average cost adds the quantity without any cost: the units count at zero in the purchase cost (`open_cost_basis`), and the position's `wac_per_unit`, `gain_loss` and `annualized_return` are `null` until the pool empties. In grouped mode the issue renders one link per affected asset, labelled with the asset's name.
 
@@ -121,6 +129,8 @@ Two producers build this issue, both through `build_data_quality_report(missing_
 |----------|---------------|----------------|
 | `PortfolioService._missing_cost_basis_assets()` | Every asset with an acquisition of unknown cost in the engine run behind the report | Dashboard banner (`summary.data_quality`, or the report's own `data_quality` without a summary) |
 | `LotsAnalysisService._report_average_cost_gaps()` | The analysed asset, when one of its WAC lines has an acquisition of unknown cost; the analysis also turns `DEGRADED` | FIFO lots analysis `data_quality`, rendered by `LotDataQualityBanner` without call-to-action buttons |
+
+**`MWRR_SERIES_UNRELIABLE` rule.** `build_data_quality_report` never produces this code. `PortfolioService.get_report()` runs the check only when the request includes both the summary and the history and the history has at least two points, and adds the issue after the report's data quality is built. It compares the summary's `mwrr_cumulative_percent` with the `mwrr_cumulative` of the last history point. When both exist and differ by more than `max(0.005, 0.05 × |summary|)` — half a percentage point, or 5% of the summary value when that is larger — it rebuilds the history with a cold-start solver (`get_history(..., _mwrr_use_warm_start=False)`). If the last point of the rebuilt series still differs by more than that, or has no MWRR, it sets `mwrr_annualized` and `mwrr_cumulative` to `null` on every history point, so the growth chart has no MWRR line, and appends a WARNING issue to `summary.data_quality`, which is also the report's `data_quality`. The issue carries `message_i18n_key` `dataQuality.mwrrSeriesUnreliable` and, in `message_params`, `summary_cum`, `series_cum` and `divergence_pp` (percentages rounded to two decimals) and `first_bad_date`: the first point whose cumulative MWRR strays beyond the tolerance from the summary's annualized MWRR compounded to that point, or `unknown`. It has no CTA, no affected assets and no group. No test covers it.
 
 ### 💱 Where missing FX pairs come from {: #where-missing-fx-pairs-come-from }
 
@@ -160,13 +170,14 @@ The FIFO lots analysis reports what its WAC lines could not compute — missing 
 
 | Issue | How to Trigger |
 |-------|----------------|
-| `MISSING_PRICE` | Add a BUY transaction for an asset that has no PriceHistory entries AND no WAC/cost basis is available. The NAV will exclude it. |
-| `TRANSACTION_IMPLIED` | Buy an asset (e.g. BTP in collocamento) before its first PriceHistory is available. WAC must exist. The engine uses WAC as a temporary proxy; the issue disappears once the first price becomes available. |
-| `STALE_PRICE` | Hold an open position in an asset **with a provider** whose newest market price is more than 7 days before the dashboard end date, e.g. prices seeded with `POST /api/v1/assets/prices` and ending 10 days ago. Any fresh quote clears it, including the live-price polling of the asset pages (`POST /api/v1/assets/prices/current` stores today's quote). `e2e/portfolio/stale-price-banner.spec.ts` seeds a holding that stays stale: `mockprov` with `INVALID_TICKER_12345`, the one identifier the mock refuses a current price for, and it intercepts the sync the CTA sends. |
-| `MISSING_COST_BASIS` | Hold an asset with a `TRANSFER` or `ADJUSTMENT` adding quantity and no `cost_basis_override`. The transaction flows refuse to save such a row (`costBasisRequired`), so write it directly in the database: `test_portfolio_cost_currency.py` (S5) inserts one through the session. |
-| `MISSING_FX_MARKET` | Add an asset in a foreign currency (e.g. USD) when the dashboard target currency is EUR and the EUR/USD pair is not configured. |
-| `NAV_INCOMPLETE` | Same scenario as `MISSING_PRICE` — appears automatically when NAV is incomplete for ≥1 day. |
-| `MWRR_NOT_CALCULABLE` | Portfolio with only 1 transaction on 1 day. MWRR needs ≥2 nav snapshots with a non-zero cash flow. |
+| `MISSING_PRICE` | Hold an asset that has no `PriceHistory` row and no priced trade, e.g. one brought in by an `ADJUSTMENT` with a cost basis of 0 (typed in Manual, or computed by Auto at a broker with no other transaction in the asset). A `BUY` is not enough: its own price values the holding. The NAV leaves the asset out. |
+| `TRANSACTION_IMPLIED` | Buy an asset **with a provider** that has no quote yet (e.g. a BTP in collocamento), then look at a dashboard end date more than 14 days after that first `BUY`, still before its first quote. Within those 14 days the asset is valued at its trade price without an issue; the issue goes away once the asset has a quote at least as recent as its latest trade, on or before the end date. A manual asset is never listed. |
+| `STALE_PRICE` | Hold an open position in an asset **with a provider** whose newest market price, with no trade of the asset after it, is more than 7 days before the dashboard end date, e.g. prices seeded with `POST /api/v1/assets/prices` and ending 10 days ago. Any fresh quote clears it, including the live-price polling of the asset pages (`POST /api/v1/assets/prices/current` stores today's quote). `e2e/portfolio/stale-price-banner.spec.ts` seeds a holding that stays stale: `mockprov` with `INVALID_TICKER_12345`, the one identifier the mock refuses a current price for, and it intercepts the sync the CTA sends. |
+| `MISSING_COST_BASIS` | Hold an asset with a `TRANSFER` or `ADJUSTMENT` adding quantity and no `cost_basis_override`. The transaction flows refuse to save such a row (`costBasisRequired`) — only a create that a promote consumes in the same batch skips that check — so write it directly in the database: `test_portfolio_cost_currency.py` (S5) inserts one through the session. |
+| `MISSING_FX_MARKET` | Hold an asset in a foreign currency (e.g. buy a USD asset) when the dashboard target currency is EUR and the EUR/USD pair is not configured. |
+| `NAV_INCOMPLETE` | Same scenario as `MISSING_PRICE` — appears automatically when NAV is incomplete for ≥1 day of the period shown. |
+| `MWRR_NOT_CALCULABLE` | A portfolio whose only transaction is one deposit made after the start of the selected range: the period opens on that deposit's day at a NAV of 0 and counts no flow after it, so it has no net invested capital and `get_summary()` does not solve MWRR. |
+| `MWRR_SERIES_UNRELIABLE` | No test or fixture produces it. It needs a report whose history, even rebuilt with the cold-start solver, ends on a cumulative MWRR that is missing or further from the summary's than the tolerance. |
 
 ### 📈 Asset Detail
 
@@ -229,10 +240,11 @@ In the response JSON, look for:
 ## 🧪 Test Coverage
 
 ### 🐍 Backend Unit Tests (`test_data_quality_report.py`)
-* Covers all 5 portfolio codes: severity, affected fields, CTA, count, date_range.
+* 38 tests over 7 of the 9 portfolio codes — `MISSING_PRICE`, `TRANSACTION_IMPLIED`, `STALE_PRICE`, `MISSING_FX_MARKET`, `MISSING_FX_RATES` (both groups), `NAV_INCOMPLETE` and `MWRR_NOT_CALCULABLE`: severity, affected fields, CTA, count, date_range.
 * Empty inputs produce no issues.
-* All 5 codes can appear together.
+* Codes together in one report: `test_all_five_codes_can_appear_together` (`MISSING_PRICE`, `STALE_PRICE`, `MISSING_FX_MARKET`, `NAV_INCOMPLETE`, `MWRR_NOT_CALCULABLE`) and `test_all_six_codes_can_appear_together` (the same plus `TRANSACTION_IMPLIED`).
 * `TestStalePriceIssue`: the `sync_asset_prices` CTA, the unchanged `dataQuality.stalePrice` message contract (count, aligned affected ids and names) and the `carried_forward` status of a stale-only report.
+* Not in this file: `MISSING_COST_BASIS`, covered by `test_portfolio_cost_currency.py` (below); no test covers `MWRR_SERIES_UNRELIABLE`.
 
 ### 🗄️ Backend Service Tests (`test_portfolio_service.py`)
 `TestStalePriceDataQuality` checks the `STALE_PRICE` rule through `get_summary`, on a DB-backed portfolio:

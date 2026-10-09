@@ -102,14 +102,16 @@ settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 
+@pytest.fixture(scope="module")
+def test_server():
+    with _TestingServerManager() as server_manager:
+        if not server_manager.start_server():
+            pytest.fail("Failed to start test server")
+        yield server_manager
+
 @pytest.mark.asyncio
 class TestFeatureX:
-    @pytest.fixture(autouse=True)
-    def server(self):
-        _TestingServerManager().ensure_started()
-        yield
-
-    async def test_something(self):
+    async def test_something(self, test_server):
         async with httpx.AsyncClient() as client:
             # create_user_and_login(client) → then test
             ...
