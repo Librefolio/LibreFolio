@@ -2030,14 +2030,7 @@ def test_input_schema_defaults_exactly_the_compaction_fields(adapter: TypeAdapte
         objects[schema["title"]] = schema
 
     # Pydantic omits `required` altogether when every field of a model has a default.
-    observed = {
-        name: {
-            field: node["properties"][field].get("default", _NO_SCHEMA_DEFAULT)
-            for field in node["properties"]
-            if field not in node.get("required", [])
-        }
-        for name, node in objects.items()
-    }
+    observed = {name: {field: node["properties"][field].get("default", _NO_SCHEMA_DEFAULT) for field in node["properties"] if field not in node.get("required", [])} for name, node in objects.items()}
     assert {name: fields for name, fields in observed.items() if fields} == expected
 
 
@@ -3927,13 +3920,7 @@ def _open_map_property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
 
 def _property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
     """Node identities of every property schema: the only place a `default` may be published."""
-    return frozenset(
-        id(value)
-        for node in walk_schema(schema)
-        if isinstance(node.get("properties"), dict)
-        for value in node["properties"].values()
-        if isinstance(value, dict)
-    )
+    return frozenset(id(value) for node in walk_schema(schema) if isinstance(node.get("properties"), dict) for value in node["properties"].values() if isinstance(value, dict))
 
 
 @pytest.mark.parametrize("_label,adapter,mode,expected_roots,_root_discriminator", PLANNER_SCHEMA_CASES)
