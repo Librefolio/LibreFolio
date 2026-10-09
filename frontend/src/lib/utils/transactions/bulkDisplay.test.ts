@@ -1,6 +1,6 @@
 // @vitest-environment node
 import {describe, expect, it} from 'vitest';
-import {buildBulkOperationIndex, buildBulkRowLabels, createBulkDateComparator, resolveBulkIssueRows, settleBulkIssueSnapshot, type BulkBatchResult, type BulkDisplayRow, type BulkIssue, type BulkIssueRow, type BulkIssueSnapshotEntry, type IdentifiedBulkOp} from './bulkDisplay';
+import {buildBulkOperationIndex, buildBulkRowLabels, createBulkDateComparator, resolveBulkIssueRows, serializeOps, settleBulkIssueSnapshot, type BulkBatchResult, type BulkDisplayRow, type BulkIssue, type BulkIssueRow, type BulkIssueSnapshotEntry, type IdentifiedBulkOp} from './bulkDisplay';
 
 const displayRow = (tempId: string, date: string, extra: Partial<BulkDisplayRow> = {}): BulkDisplayRow => ({
     tempId,
@@ -298,5 +298,214 @@ describe('resolveBulkIssueRows', () => {
 
         expect(resolveBulkIssueRows(issue, rows, opMap).map((row) => row.tempId)).toEqual(['mapped-main', 'mapped-partner']);
         expect(resolveBulkIssueRows({...issue, index: 4}, rows, new Map()).map((row) => row.tempId)).toEqual(['by-ref']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// serializeOps — the key the close guard compares
+// ---------------------------------------------------------------------------
+
+/** An editor row's fields (`DraftFields`, local to TransactionBulkModal). */
+type GuardFields = {
+    broker_id: number;
+    asset_id: number | null;
+    type: string;
+    date: string;
+    quantity: string;
+    cash: {code: string; amount: string} | null;
+    tags: string[];
+    description: string;
+    asset_event_id: number | null;
+    cost_basis_override: {code: string; amount: string} | null;
+    cost_basis_mode: 'auto' | 'manual' | null;
+};
+
+/** An editor row as the close guard receives it: the shape of `PendingOp`, also local to the component. */
+type GuardRow = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {
+    tempId: string;
+    createdSeq: number;
+    fields: GuardFields;
+    pairedWith?: string;
+    link_uuid?: string | null;
+};
+
+const fxLeg = (code: string, amount: string): GuardFields => ({
+    broker_id: 7,
+    asset_id: null,
+    type: 'FX_CONVERSION',
+    date: '2024-01-03',
+    quantity: '0',
+    cash: {code, amount},
+    tags: ['fx', 'q1'],
+    description: 'EUR to USD',
+    asset_event_id: null,
+    cost_basis_override: null,
+    cost_basis_mode: null,
+});
+
+const cashIn = (amount: string, description: string): GuardFields => ({...fxLeg('EUR', amount), type: 'DEPOSIT', tags: [], description});
+
+/** A saved row as `editOpFromTx` builds it: `addedViaPicker` is always there, set or not. */
+const savedRow = (txId: number, tempId: string, createdSeq: number, fields: GuardFields): GuardRow => ({op: 'edit', tempId, createdSeq, txId, fields, markedDelete: false, addedViaPicker: undefined});
+
+/** A new row as `createOpEmpty` builds it. */
+const newRow = (tempId: string, createdSeq: number, fields: GuardFields): GuardRow => ({op: 'create', tempId, createdSeq, fields, link_uuid: null});
+
+/** A saved FX pair as `collapsePairedOps` leaves it: the paying leg visible, the receiving leg hidden and pointing at it, one link_uuid on both. */
+function savedPair(txIds: [number, number], tempIds: [string, string], createdSeq: number, link: string): GuardRow[] {
+    return [
+        {...savedRow(txIds[0], tempIds[0], createdSeq, fxLeg('EUR', '-400')), link_uuid: link},
+        {...savedRow(txIds[1], tempIds[1], createdSeq + 1, fxLeg('USD', '440')), pairedWith: tempIds[0], link_uuid: link},
+    ];
+}
+
+const MAIN = 0;
+const PARTNER = 1;
+const NEW = 2;
+
+/**
+ * One opening of the editor: the saved pair 101 (visible) + 102 (its hidden partner), then a row the user added.
+ * The parameters are what a reset regenerates on the saved rows; the new row it never touches.
+ */
+function workspace({main = 'main-1', partner = 'partner-1', createdSeq = 0, link = 'link-1'} = {}): GuardRow[] {
+    return [...savedPair([101, 102], [main, partner], createdSeq, link), newRow('new-1', 2, cashIn('50', 'top-up'))];
+}
+
+/** `rows` with the row at `index` swapped for `change(row)`; the input is never mutated. */
+const replaceRow = (rows: readonly GuardRow[], index: number, change: (row: GuardRow) => GuardRow): GuardRow[] => rows.map((row, i) => (i === index ? change(row) : row));
+
+/**
+ * The hidden partner as Pass 2 of `collapsePairedOps` writes it — `{op, txId, markedDelete, tempId, createdSeq,
+ * fields, pairedWith, link_uuid}` — plus the `addedViaPicker` key `editOpFromTx` gives it: the same keys and
+ * values, in another order.
+ */
+function inPass2Order(row: GuardRow): GuardRow {
+    if (row.op !== 'edit') throw new Error('Pass 2 rebuilds saved partners only');
+    return {op: 'edit', txId: row.txId, markedDelete: row.markedDelete, tempId: row.tempId, createdSeq: row.createdSeq, fields: row.fields, pairedWith: row.pairedWith, link_uuid: row.link_uuid, addedViaPicker: row.addedViaPicker};
+}
+
+/** The same value with every object's keys inserted in reverse order, at every depth; arrays keep their order. */
+function reverseKeyOrder<T>(value: T): T {
+    if (Array.isArray(value)) return value.map((item: unknown) => reverseKeyOrder(item)) as T;
+    if (value === null || typeof value !== 'object') return value;
+    return Object.fromEntries(
+        Object.entries(value)
+            .reverse()
+            .map(([name, item]) => [name, reverseKeyOrder(item)]),
+    ) as T;
+}
+
+const guardKey = (rows: readonly GuardRow[]): string => serializeOps(rows);
+
+describe("serializeOps — the close guard's key", () => {
+    // The editor asks «Discard changes?» when serializeOps(ops) differs from the key taken when its rows were
+    // seeded. A reset rebuilds the saved rows from the ledger under new identities: nothing the user can see
+    // changes, so the key must not change either — and every real change must still change it.
+    // The contract: per row, tempId and createdSeq dropped; pairedWith read as the row it points at (`tx:<txId>`
+    // for a saved row, `new:<tempId>` for a new one, which no reset regenerates); link_uuid read as the sorted
+    // references of the rows sharing it, null when absent; object keys sorted at every depth, array order kept.
+
+    describe('rows a reset regenerates: the same content, so the same key', () => {
+        it('1: both halves of a saved pair under new tempIds and createdSeq, the partner re-pointed at the new visible row', () => {
+            const reset = workspace({main: 'main-2', partner: 'partner-2', createdSeq: 10});
+            expect(reset[PARTNER].pairedWith, 'premise: the partner follows its regenerated row').toBe('main-2');
+
+            expect(guardKey(reset)).toBe(guardKey(workspace()));
+        });
+
+        it('2: both halves of a saved pair under a fresh link_uuid', () => {
+            expect(guardKey(workspace({link: 'link-2'}))).toBe(guardKey(workspace()));
+        });
+
+        it('3: the hidden partner rebuilt with its keys in another order (Pass 2 of collapsePairedOps)', () => {
+            const opened = workspace();
+            const rebuilt = replaceRow(opened, PARTNER, inPass2Order);
+            expect(rebuilt[PARTNER], 'premise: the same keys and values').toStrictEqual(opened[PARTNER]);
+            expect(Object.keys(rebuilt[PARTNER]), 'premise: in another order').not.toEqual(Object.keys(opened[PARTNER]));
+
+            expect(guardKey(rebuilt)).toBe(guardKey(opened));
+        });
+
+        it('3b: keys in another order at every depth, fields and cash included', () => {
+            const opened = workspace();
+            const reordered = opened.map((row) => reverseKeyOrder(row));
+            expect(reordered, 'premise: the same keys and values').toStrictEqual(opened);
+            expect(JSON.stringify(reordered), 'premise: in another order').not.toBe(JSON.stringify(opened));
+
+            expect(guardKey(reordered)).toBe(guardKey(opened));
+        });
+
+        it('1+2+3: the saved pair as Reset all hands it back, all three at once', () => {
+            const reset = replaceRow(workspace({main: 'main-2', partner: 'partner-2', createdSeq: 10, link: 'link-2'}), PARTNER, inPass2Order);
+
+            expect(guardKey(reset)).toBe(guardKey(workspace()));
+        });
+
+        it('4 (control): a saved row that is no pair, under a new tempId and createdSeq', () => {
+            const single = (tempId: string, createdSeq: number) => savedRow(103, tempId, createdSeq, cashIn('100', 'salary'));
+
+            expect(guardKey([...workspace(), single('single-2', 12)])).toBe(guardKey([...workspace(), single('single-1', 3)]));
+        });
+    });
+
+    describe('real changes: the key changes', () => {
+        const changes: Array<[string, (rows: readonly GuardRow[]) => GuardRow[]]> = [
+            ["5: the visible row's description", (rows) => replaceRow(rows, MAIN, (row) => ({...row, fields: {...row.fields, description: 'EUR to USD, corrected'}}))],
+            ["5: the hidden partner's cash amount", (rows) => replaceRow(rows, PARTNER, (row) => ({...row, fields: {...row.fields, cash: {code: 'USD', amount: '441'}}}))],
+            ["5: the order of the visible row's tags", (rows) => replaceRow(rows, MAIN, (row) => ({...row, fields: {...row.fields, tags: [...row.fields.tags].reverse()}}))],
+            ['6: the visible row marked for deletion', (rows) => replaceRow(rows, MAIN, (row) => (row.op === 'edit' ? {...row, markedDelete: true} : row))],
+            ['7: a row added', (rows) => [...rows, newRow('new-2', 3, cashIn('75', 'second top-up'))]],
+            ['7: a row removed', (rows) => rows.filter((_, index) => index !== NEW)],
+            [
+                '8: the pair split: no pairedWith, no link_uuid on either half',
+                (rows) =>
+                    replaceRow(
+                        replaceRow(rows, MAIN, (row) => ({...row, link_uuid: null})),
+                        PARTNER,
+                        (row) => ({...row, pairedWith: undefined, link_uuid: null}),
+                    ),
+            ],
+        ];
+
+        it.each(changes)('%s', (_label, change) => {
+            const opened = workspace();
+
+            expect(guardKey(change(opened))).not.toBe(guardKey(opened));
+        });
+
+        it('9: the hidden partner paired to a different saved row', () => {
+            const opened = [...workspace(), savedRow(103, 'single-1', 3, cashIn('100', 'salary'))];
+            const repaired = replaceRow(opened, PARTNER, (row) => ({...row, pairedWith: 'single-1'}));
+
+            expect(guardKey(repaired)).not.toBe(guardKey(opened));
+        });
+
+        it("9b: the same link_uuid values on the same rows, in other groups: two saved pairs swap their partners' links", () => {
+            const opened = [...savedPair([101, 102], ['main-1', 'partner-1'], 0, 'link-1'), ...savedPair([103, 104], ['main-3', 'partner-3'], 2, 'link-3')];
+            const swapped = replaceRow(
+                replaceRow(opened, 1, (row) => ({...row, link_uuid: 'link-3'})),
+                3,
+                (row) => ({...row, link_uuid: 'link-1'}),
+            );
+
+            expect(guardKey(swapped)).not.toBe(guardKey(opened));
+        });
+
+        it('9c: a new hidden partner paired to a different new row', () => {
+            const newPair = (target: string): GuardRow[] => [{...newRow('new-main', 3, fxLeg('EUR', '-50')), link_uuid: 'link-n'}, {...newRow('new-partner', 4, fxLeg('USD', '55')), pairedWith: target, link_uuid: 'link-n'}, newRow('new-other', 5, cashIn('20', 'other'))];
+
+            expect(guardKey([...workspace(), ...newPair('new-other')])).not.toBe(guardKey([...workspace(), ...newPair('new-main')]));
+        });
+    });
+
+    it('reads the rows without touching them: the same values, in the same key order', () => {
+        const rows = replaceRow(workspace(), PARTNER, inPass2Order);
+        const values = structuredClone(rows);
+        const order = JSON.stringify(rows);
+
+        serializeOps(rows);
+
+        expect(rows).toStrictEqual(values);
+        expect(JSON.stringify(rows)).toBe(order);
     });
 });
