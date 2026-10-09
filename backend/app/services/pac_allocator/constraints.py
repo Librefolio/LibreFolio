@@ -18,7 +18,7 @@ falls into exactly one of three buckets here:
    build — never a live SCIP row (``FUNDING_SOURCE_CONSERVATION``,
    ``NO_SELF_TRANSFER``, ``NO_DOUBLE_COUNT``, ``ORDER_QUANTIZED``,
    ``ORDER_SIDE_ALLOWED``, ``NO_IMPLICIT_ROUTE``, ``FX_RATE_ORDER_SAFE``,
-   ``FX_CREDIT_POSITIVE``, ``FX_NATIVE_QUANTUM``, ``ROUTE_DECLARED``,
+   ``FX_NATIVE_QUANTUM``, ``ROUTE_DECLARED``,
    ``COST_NOT_INVESTMENT``, ``SELL_POSTED_ONCE``, ``ROUNDING_BOUND``,
    ``ACCOUNTING_IDENTITY``, ``REBALANCER_NONEMPTY`` — this last one is also
    simply inapplicable, ``scenario.product == "pac"`` here).
@@ -26,7 +26,9 @@ falls into exactly one of three buckets here:
    cannot express — one ``model.addCons(...)`` call per instance:
    ``FUNDING_WITHIN_SELECTED`` (funding-source pooling),
    ``NO_SHORT_OR_LEVERAGE`` (Broker×currency ledger balance, folding in
-   ``FX_SOURCE_CASH``'s spendable-cash floor), ``ORDER_REQUIRED_MIN``
+   ``FX_SOURCE_CASH``'s spendable-cash floor), ``FX_CREDIT_POSITIVE`` (an
+   active conversion posts a nonzero credit: the ``:active`` row of its
+   posted credit, ``_posted_units_term``), ``ORDER_REQUIRED_MIN``
    (unconditional per-route floor), ``ORDER_MIN_IF_ACTIVE`` (semi-continuous:
    measure is either exactly zero or at least the active floor), and the
    fee epigraph (linearizes ``numeric.calculate_fee``'s ``fixed +
@@ -74,11 +76,11 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from backend.app.services.pac_allocator.evaluator import exact_decision_id
 from backend.app.services.pac_allocator.ledger import (
-    _ROUNDED_FAMILIES as LEDGER_ROUNDED_FAMILIES,  # single source of truth for which families post HALF_UP
+    _ROUNDED_FAMILIES as LEDGER_ROUNDED_FAMILIES,  # single source of truth for which families are rounded
 )
 from backend.app.services.pac_allocator.models import (
     ExactFeeSchedule,
@@ -109,6 +111,7 @@ __all__ = [
     "fx_rate",
     "order_notional",
     "order_prices",
+    "planning_fx_rate",
     "valuation_rate",
 ]
 
@@ -164,6 +167,14 @@ def fx_rate(facts: ScenarioFacts, source_currency: str, destination_currency: st
 def valuation_rate(facts: ScenarioFacts, currency: str) -> float:
     """Units of the scenario's valuation currency per unit of ``currency``."""
     return fx_rate(facts, currency, facts.valuation_currency)
+
+
+def planning_fx_rate(facts: ScenarioFacts, source_currency: str, destination_currency: str) -> float:
+    """Mirror ``numeric.calculate_planning_fx_rate``: the spread rate, capped
+    at the triangle through the valuation currency.
+    """
+    effective_rate = fx_rate(facts, source_currency, destination_currency) * (1.0 - facts.fx_spread_rate)
+    return min(effective_rate, valuation_rate(facts, source_currency) / valuation_rate(facts, destination_currency))
 
 
 def order_prices(facts: ScenarioFacts, route: ExactOrderRoute) -> tuple[float, float]:
@@ -289,7 +300,7 @@ def _source_cash_cell(scenario: ExactPlannerScenario, source_kind: str, source_i
 
 
 # --------------------------------------------------------------------------
-# HALF_UP ledger postings (Step3 §16.11)
+# Ledger postings, rounded against the plan (Step3 §16.11)
 # --------------------------------------------------------------------------
 
 
@@ -390,45 +401,66 @@ def _fee_variable_upper(facts: ScenarioFacts, route: ExactOrderRoute, capability
     return as_float(fee_schedule.fixed_fee.amount) + _fee_clamp_upper(fee_schedule, notional_upper)
 
 
-def _posted_units_term(model: Model, *, name: str, exact_expr: LinearTerm, quantum: float, exact_upper: float) -> LinearTerm:
-    """Return the **posted** (HALF_UP-rounded) amount of one rounded ledger
-    family, as ``quantum * units`` for a fresh integer ``units`` variable.
+def _posted_units_term(
+    model: Model,
+    *,
+    name: str,
+    exact_expr: LinearTerm,
+    quantum: float,
+    exact_upper: float,
+    side: Literal["credit", "debit"],
+    active_decision: Variable | None = None,
+) -> LinearTerm:
+    """Return the **posted** amount of one rounded ledger family, rounded
+    against the plan, as ``quantum * units`` for a fresh integer ``units``.
 
-    ``units = floor(exact/quantum + 1/2)`` is encoded by the non-strict pair
+    A credit (``fx_credit``) posts ``floor(exact/quantum)`` units and a debit
+    (``buy_debit``, ``buy_fee``) ``ceil(exact/quantum)``, as
+    ``ledger._PLAN_ROUNDING`` does, encoded by the non-strict pairs
 
-        quantum*units - quantum/2 <= exact <= quantum*units + quantum/2
+        credit:  quantum*units <= exact <= quantum*units + quantum
+        debit:   quantum*units - quantum <= exact <= quantum*units
 
-    Deliberately **non-strict on the right**. The textbook encoding closes
-    that edge with a small epsilon so exact ties round up, but calibrating
-    such an epsilon is itself a correctness risk: below SCIP's
-    ``numerics/feastol`` it is absorbed and ties round the wrong way anyway,
-    and above the smallest achievable-value-to-tie separation it excludes
-    reachable points — over-pruning, which is the failure class this whole
-    change exists to remove. The non-strict pair has no epsilon to calibrate
+    Deliberately **non-strict**. The textbook encoding closes the open edge
+    with a small epsilon, but calibrating such an epsilon is itself a
+    correctness risk: below SCIP's ``numerics/feastol`` it is absorbed
+    anyway, and above the smallest achievable-value-to-multiple separation it
+    excludes reachable points — over-pruning, the failure class these posted
+    terms exist to remove. The non-strict pair has no epsilon to calibrate
     and is satisfiable for *every* real ``exact``, so it can never prune. Its
-    only looseness is at exact ties, where ``units`` may take either
-    neighbour. That is safe in both directions. A debit (``buy_debit``,
-    ``buy_fee``) can only be understated, so the model admits points the
-    exact replay then rejects or tops up (X3 rejected: permissive by design),
-    never prunes one. A credit (``fx_credit``) enters every ledger row with a
-    ``+`` sign and appears in no objective, so a decision is feasible with
-    some ``units`` exactly when it is feasible with the larger neighbour —
-    the true HALF_UP value. The choice of neighbour at a credit tie never
-    changes the feasible set (the round-up itself may well decide it).
+    only looseness is at an exact multiple of the quantum, where ``units``
+    may also sit one quantum against the plan: one less for a credit, one
+    more for a debit. A credit enters every ledger row with a ``+`` sign, a
+    debit with a ``-`` sign, and neither appears in an objective, so a
+    decision is feasible with some ``units`` exactly when it is feasible with
+    the true posting: up to SCIP's feasibility tolerance, the model's feasible
+    set is the exact one. The Decimal-exact replay referees that tolerance; a
+    point it moves surfaces as a rejection or a top-up, never as a plan.
 
-    ``floor(x + 1/2)`` is ties-toward-+infinity while ``numeric.post_half_up``
-    is ties-away-from-zero; the two coincide only for non-negative amounts.
+    ``active_decision`` (FX credits only) adds the ``:active`` row
+    ``decision <= upper * units``, ``FX_CREDIT_POSITIVE``: an active
+    conversion must post a nonzero credit. The rounding rows alone admit
+    ``units = 0`` for any credit below one quantum; with this row such a
+    conversion is infeasible, while a credit of at least one quantum keeps its
+    true floor ``>= 1`` and is never pruned.
+
     Every family routed here is a non-negative magnitude by construction (a
     notional over a non-negative measure, a fee variable with ``lb=0``, an FX
-    credit over a non-negative debit), and the ``:nonneg`` row below *enforces*
+    credit over a non-negative debit). The ``:nonneg`` row below *enforces*
     that rather than assuming it, so a future negative-capable flow fails
-    loudly instead of rounding the wrong way.
+    loudly instead of being posted by a rule nobody checked.
     """
-    units_upper = math.floor(exact_upper / quantum + 0.5) + 1
+    units_upper = math.ceil(exact_upper / quantum) + 1
     units = model.addVar(vtype="I", lb=0, ub=units_upper, name=name)
     model.addCons(exact_expr >= 0.0, name=f"{name}:nonneg")
-    model.addCons(quantum * units - quantum / 2.0 <= exact_expr, name=f"{name}:lo")
-    model.addCons(exact_expr <= quantum * units + quantum / 2.0, name=f"{name}:hi")
+    if side == "credit":
+        model.addCons(quantum * units <= exact_expr, name=f"{name}:lo")
+        model.addCons(exact_expr <= quantum * units + quantum, name=f"{name}:hi")
+    else:
+        model.addCons(quantum * units - quantum <= exact_expr, name=f"{name}:lo")
+        model.addCons(exact_expr <= quantum * units, name=f"{name}:hi")
+    if active_decision is not None:
+        model.addCons(active_decision <= active_decision.getUbOriginal() * units, name=f"{name}:active")
     return quantum * units
 
 
@@ -445,13 +477,16 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
     self_reserved_tax = 0``.
 
     **The cell sums POSTED amounts, not exact ones.** ``ledger.py``'s
-    ``_ROUNDED_FAMILIES`` are posted HALF_UP to the currency quantum
-    (``ledger.rounded_money_posting`` -> ``numeric.post_half_up``), so
+    ``_ROUNDED_FAMILIES`` are posted to the currency quantum against the plan
+    (``ledger.rounded_money_posting``: ``numeric.post_floor`` for a credit,
+    ``numeric.post_ceiling`` for a debit), so
     ``fx_credit``/``buy_debit``/``buy_fee`` enter through
     ``_posted_units_term`` rather than as their exact expressions. Summing
-    exact amounts here was a real defect (Step3 §16.11): a 9.504 USD exact FX
-    credit posts as 10 USD, and treating it as 9.504 wrongly pruned the true
-    optimum. ``initial_selected``/``funding_in``/``funding_out``/``fx_debit``
+    exact amounts here was a real defect (Step3 §16.11): under the HALF_UP
+    rule of the time a 9.504 USD exact FX credit posted as 10 USD, and
+    treating it as 9.504 wrongly pruned the true optimum; under the floor it
+    posts 9, and 9.504 would admit plans the replay rejects.
+    ``initial_selected``/``funding_in``/``funding_out``/``fx_debit``
     are exact-flow families (``ledger.py``'s ``_EXACT_FLOW_FAMILIES``) and are
     summed unrounded, which is correct.
     """
@@ -487,6 +522,7 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
                 exact_expr=notional_expr,
                 quantum=quote_quantum,
                 exact_upper=notional_upper,
+                side="debit",
             )
         )
         fee_upper = _fee_variable_upper(facts, route, capability, notional_upper)
@@ -497,6 +533,7 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
                 exact_expr=variables.buy_fee[route.route_id],
                 quantum=quote_quantum,
                 exact_upper=fee_upper,
+                side="debit",
             )
         )
 
@@ -505,7 +542,7 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
             fx_decision = variables.quanta[exact_decision_id("fx_debit", f"{route.route_id}:{pool_currency}")]
             debit_expr = facts.currency_quantum[pool_currency] * fx_decision
             cells[(route.broker_id, pool_currency)].append(-debit_expr)
-            effective_rate = fx_rate(facts, pool_currency, quote_currency) * (1.0 - facts.fx_spread_rate)
+            effective_rate = planning_fx_rate(facts, pool_currency, quote_currency)
             credit_upper = facts.currency_quantum[pool_currency] * fx_decision.getUbOriginal() * effective_rate
             cells[(route.broker_id, quote_currency)].append(
                 _posted_units_term(
@@ -514,6 +551,8 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
                     exact_expr=debit_expr * effective_rate,
                     quantum=quote_quantum,
                     exact_upper=credit_upper,
+                    side="credit",
+                    active_decision=fx_decision,
                 )
             )
 

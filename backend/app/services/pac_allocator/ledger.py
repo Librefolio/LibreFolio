@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from typing import Literal
 
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
@@ -14,7 +15,7 @@ from backend.app.services.pac_allocator.models import (
     LedgerPostingFamily,
     check_budget,
 )
-from backend.app.services.pac_allocator.numeric import ExactRatio, post_half_up
+from backend.app.services.pac_allocator.numeric import ExactRatio, PostedAmount, post_ceiling, post_floor
 
 _ZERO = ExactRatio(0)
 
@@ -41,17 +42,27 @@ _EXACT_FLOW_FAMILIES: frozenset[LedgerPostingFamily] = frozenset(
     }
 )
 
-_ROUNDED_FAMILIES: frozenset[LedgerPostingFamily] = frozenset(
-    {
-        "fx_credit",
-        "buy_debit",
-        "gross_sell_credit",
-        "buy_fee",
-        "sell_fee",
-        "broker_withheld_tax",
-        "self_reserved_tax",
-    }
-)
+# Every rounded posting rounds once, on its final exact amount, against the
+# plan: a credit posts its floor and a debit its ceiling on the currency
+# quantum. Each accounting adjustment then lies in [0, q), so rounding never
+# creates value, and splitting a movement never pays: a sum of floors is at
+# most the floor of the sum, a sum of ceilings at least its ceiling.
+_PLAN_ROUNDING: dict[LedgerPostingFamily, Literal["floor", "ceiling"]] = {
+    "fx_credit": "floor",
+    "gross_sell_credit": "floor",
+    "buy_debit": "ceiling",
+    "buy_fee": "ceiling",
+    "sell_fee": "ceiling",
+    "broker_withheld_tax": "ceiling",
+    "self_reserved_tax": "ceiling",
+}
+
+_POSTING_RULES: dict[Literal["floor", "ceiling"], Callable[[ExactRatio, ExactRatio], PostedAmount]] = {
+    "floor": post_floor,
+    "ceiling": post_ceiling,
+}
+
+_ROUNDED_FAMILIES: frozenset[LedgerPostingFamily] = frozenset(_PLAN_ROUNDING)
 
 
 class ExactLedgerError(ValueError):
@@ -80,9 +91,10 @@ def _validate_posting(posting: ExactLedgerPosting) -> None:
         return
     if posting.quantum is None:
         raise PostingFamilyError(f"{posting.family} requires a rounding quantum")
-    expected = post_half_up(posting.exact_amount, posting.quantum)
+    rule = _PLAN_ROUNDING[posting.family]
+    expected = _POSTING_RULES[rule](posting.exact_amount, posting.quantum)
     if posting.posted_amount != expected.posted or posting.rounding_delta != expected.rounding_delta:
-        raise PostingFamilyError(f"{posting.family} must use one signed HALF_UP posting")
+        raise PostingFamilyError(f"{posting.family} must post its {rule} against the plan")
 
 
 def exact_flow_posting(
@@ -121,10 +133,14 @@ def rounded_money_posting(
     quantum: ExactRatio,
     entity_refs: Iterable[EntityRef] = (),
 ) -> ExactLedgerPosting:
-    """Post one of the closed monetary families exactly once with HALF_UP."""
+    """Post one of the closed monetary families exactly once, against the plan.
+
+    A credit posts the floor of ``exact_amount`` on ``quantum``, a debit its
+    ceiling (``_PLAN_ROUNDING``).
+    """
     if family not in _ROUNDED_FAMILIES:
         raise PostingFamilyError(f"{family} is already an exact-quantum flow")
-    posted = post_half_up(exact_amount, quantum)
+    posted = _POSTING_RULES[_PLAN_ROUNDING[family]](exact_amount, quantum)
     return ExactLedgerPosting(
         posting_id=posting_id,
         family=family,

@@ -662,7 +662,7 @@ _ALPHA_BROKER_ID = "broker:alpha"
 _BETA_BROKER_ID = "broker:beta"
 _SECOND_ALPHA_USD_PROVENANCE_ID = "provenance:route:c:alpha"
 # EUR debited per BUY route, in whole EUR (the scenario's EUR quantum is one).
-_MULTI_CONVERSION_FX_DEBITS = {"route:a:beta": 4, "route:b:alpha": 2, "route:c:alpha": 2, "route:d:alpha": 5}
+_MULTI_CONVERSION_FX_DEBITS = {"route:a:beta": 4, "route:b:alpha": 4, "route:c:alpha": 4, "route:d:alpha": 5}
 
 
 def _multi_conversion_scenario(*, alpha_mode: str = "manual", beta_mode: str = "manual"):
@@ -755,11 +755,12 @@ def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
 
     A conversion's debit and spread are the exact sums of its actions; its
     credit sums the *posted* credits the ledger reconciles against. Alpha's
-    two USD actions each credit an exact 2.25 USD that posts as 2, so the
-    conversion credits 4 USD — not the 4.5 exact sum, nor its HALF_UP
-    rounding 5 — while beta's single 4.5 USD credit posts as 5. Rates are the
-    pair's (global per pair), member IDs keep the action order, and the
-    provenance is the canonical union of the members'.
+    two USD actions each credit an exact 4.5 USD that posts its floor, 4 (a
+    credit is rounded against the plan), so the conversion credits 8 USD —
+    not the 9 exact sum, a whole quantum that posting it as one sum would
+    keep — while beta's single 4.5 USD credit posts 4 and alpha's 3.6 GBP
+    posts 3. Rates are the pair's (global per pair), member IDs keep the
+    action order, and the provenance is the canonical union of the members'.
     """
     scenario = _multi_conversion_scenario()
     evaluation = _evaluate_multi_conversion(scenario)
@@ -776,9 +777,9 @@ def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
     by_id = {row.conversion_id: row for row in conversions}
     expected = {
         # conversion_id: (fx_action_ids, debit EUR, posted credit, spread EUR)
-        "conversion:broker:alpha:EUR:GBP": (["fx:route:d:alpha:EUR"], R(5), R(4), R(1, 2)),
-        "conversion:broker:alpha:EUR:USD": (["fx:route:b:alpha:EUR", "fx:route:c:alpha:EUR"], R(4), R(4), R(2, 5)),
-        "conversion:broker:beta:EUR:USD": (["fx:route:a:beta:EUR"], R(4), R(5), R(2, 5)),
+        "conversion:broker:alpha:EUR:GBP": (["fx:route:d:alpha:EUR"], R(5), R(3), R(1, 2)),
+        "conversion:broker:alpha:EUR:USD": (["fx:route:b:alpha:EUR", "fx:route:c:alpha:EUR"], R(8), R(8), R(4, 5)),
+        "conversion:broker:beta:EUR:USD": (["fx:route:a:beta:EUR"], R(4), R(4), R(2, 5)),
     }
     for conversion_id, (action_ids, debit, credit, spread) in expected.items():
         row = by_id[conversion_id]
@@ -804,7 +805,7 @@ def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
         assert row.provenance_ids == sorted({provenance_id for _, action in members for provenance_id in action.provenance_ids})
 
     alpha_usd = members_by_id["conversion:broker:alpha:EUR:USD"]
-    assert sum((exact.exact_destination_credit for exact, _ in alpha_usd), R(0)) == R(9, 2), "precondition: the exact credits do not sum to the posted ones"
+    assert sum((exact.exact_destination_credit for exact, _ in alpha_usd), R(0)) == R(9), "precondition: the exact credits do not sum to the posted ones"
     assert by_id["conversion:broker:alpha:EUR:USD"].provenance_ids == sorted({PROVENANCE_ID, _SECOND_ALPHA_USD_PROVENANCE_ID})
 
 
