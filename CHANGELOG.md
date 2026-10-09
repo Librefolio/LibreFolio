@@ -175,6 +175,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Switching the interface language no longer rebuilds the app.** When the new language took a moment to load, the whole app was reloaded and unsaved changes on the open page were lost; now the page stays as it is while its texts change.
 - Sign-in errors (wrong username or password, invalid input, a failed sign-in) appear in the interface language, and follow it when you switch.
 - In **Admin › Global Settings**, the scheduler switch is named in every language, and the history sync times are described as running in the scheduler's timezone, not the server's.
+- The sign-in page no longer offers *Register here* once an administrator has closed registration; the refusal used to come only after the form was filled in.
+- The account creation date in **Settings › Profile** follows the app's language instead of the browser's, also after a language change.
+- In the Files grid, file sizes follow a language change (for example *128 o* in French) instead of keeping the units of the language the grid was first drawn in.
 - The installed app no longer shows black corners on the Android splash screen or around the iPhone home-screen icon, and Android gets a proper maskable icon.
 - On phones, the asset dialog keeps Save and Cancel reachable, **Sync** on an asset page no longer looks crossed out while the page loads, and the asset page tabs show an icon.
 - On phones, the price chart tooltip of an asset with a long name no longer runs off the screen: the name is shortened with an ellipsis, while the value and its currency stay whole.
@@ -196,6 +199,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The *Forgot password?* card shows reset commands that work: `docker compose exec librefolio python dev.py user reset <username> <new_password>` for Docker and `./dev.py user reset` for a manual install, instead of a `./dev.sh` script the image does not contain.
 - The image's health check probes port 6040, where the server listens, instead of `PORT`: a container started with `docker run -e PORT=…` is no longer reported as unhealthy while the app answers.
 - **Users are no longer signed out at random when the server runs several workers.** An empty `JWT_SECRET=` line in `.env` gave each `dev.py server` worker its own key; it now counts as unset, so the workers share one.
+- **Global settings reject invalid values.** The instance settings page and the settings API accepted any value — a negative session duration, an unknown timezone, a scheduler time such as 25:00 — which could lock every user out or stop the scheduler. Each value is now checked against its type and allowed range, and a save containing an invalid value is refused as a whole, with nothing applied.
+- **`dev.py db upgrade`, `current`, `downgrade` and `check` work on the database file you name.** The path was ignored, so every command, `downgrade` included, worked on the configured database; `db check` now verifies the CHECK constraints instead of calling a missing script.
 
 #### 📚 Documentation
 
