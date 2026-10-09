@@ -1,9 +1,5 @@
 # <img src="https://www.directa.it/favicon.ico" alt=""> Directa SIM
 
-!!! info "Beta"
-
-    Ce plugin est en **Beta** — testé avec des fichiers d'exemple, mais des cas particuliers peuvent exister.
-
 ## 📥 Comment exporter
 
 LibreFolio prend en charge les formats **CSV** et **XLSX** (Excel) exportés depuis Directa SIM. Les captures d'écran ci-dessous proviennent de la version bureau, mais les étapes sont similaires sur mobile.

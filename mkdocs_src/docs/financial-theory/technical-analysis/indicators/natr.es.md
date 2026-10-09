@@ -26,7 +26,7 @@ Debido a que $ATR_t$ siempre es no negativo, $NATR_t \ge 0$, sin límite superio
 
 | Parámetro | Clave | Por defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana de suavizado aplicada al Rango Verdadero subyacente (igual que ATR). |
+| Período ($N$) | `period` | 14 | Ventana de suavizado aplicada al Rango Verdadero subyacente (igual que ATR), en sesiones. |
 
 ---
 

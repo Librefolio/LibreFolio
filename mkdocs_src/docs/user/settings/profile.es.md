@@ -41,11 +41,18 @@ Después de la confirmación, tu sesión permanece activa — no necesitas volve
 
 ### 🗑️ Eliminar cuenta
 
-El botón **Eliminar cuenta** elimina permanentemente tu usuario y todo lo que le pertenece. Para confirmar, debes escribir tu **nombre de usuario** en el diálogo. La eliminación es inmediata: se cierra tu sesión y vuelves a la página de inicio de sesión.
+El botón **Eliminar cuenta** elimina permanentemente tu cuenta y su configuración. Para confirmar, debes escribir tu **nombre de usuario** en el diálogo. La eliminación es inmediata: se cierra tu sesión y vuelves a la página de inicio de sesión.
+
+Tus brókeres siguen la misma regla que [salir de un bróker compartido](../brokers/sharing.md):
+
+- un bróker del que eres el **único Propietario** se elimina, con todas sus transacciones y los archivos de informes importados — también para los usuarios con los que lo compartiste;
+- cualquier otro bróker se mantiene para sus demás usuarios: solo se elimina tu acceso.
+
+Si la eliminación falla por un motivo técnico, no se elimina nada.
 
 !!! warning "Irreversible"
 
-    Eliminar tu cuenta no se puede deshacer: tus brókeres, transacciones y configuración se eliminan con ella. Si eres el **único administrador** de la instancia, se rechaza la eliminación — promueve primero a otro usuario.
+    Eliminar tu cuenta no se puede deshacer. Si eres el **único administrador** de la instancia, se rechaza la eliminación — promueve primero a otro usuario.
 
 ---
 

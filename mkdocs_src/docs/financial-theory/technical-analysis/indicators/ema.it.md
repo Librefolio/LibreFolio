@@ -1,6 +1,6 @@
 # 📉 EMA — Exponential Moving Average
 
-L'EMA traccia il **trend** attenuando il rumore dei prezzi giornalieri, assegnando un peso maggiore alle osservazioni recenti rispetto a quelle più vecchie.
+L'EMA traccia il **trend** attenuando il rumore dei prezzi da una seduta all'altra, assegnando un peso maggiore alle osservazioni recenti rispetto a quelle più vecchie.
 
 ---
 
@@ -21,7 +21,7 @@ $$
 dove $P_t$ è il prezzo di chiusura al tempo $t$ e $\alpha$ è il **coefficiente di livellamento**.
 
 **Mappatura $N$ → $\alpha$.**
-I trader specificano un "periodo" $N$ (in giorni). Il coefficiente è derivato eguagliando l' *età media* dei dati tra un'EMA e una Simple Moving Average (SMA) della stessa finestra:
+I trader specificano un "periodo" $N$ (in sedute). Il coefficiente è derivato eguagliando l' *età media* dei dati tra un'EMA e una Simple Moving Average (SMA) della stessa finestra:
 
 $$
 \text{Age}_{SMA} = \frac{N-1}{2}, \qquad
@@ -42,7 +42,7 @@ Per esempio, $N = 14 \implies \alpha = 2/15 \approx 0.133$.
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di lookback in giorni. Più alto → più liscia, più lenta. |
+| Periodo ($N$) | `period` | 14 | Finestra di lookback in sedute. Più alto → più liscia, più lenta. |
 | Offset | `offset` | 0 | Spostamento verticale come % del valore base. |
 
 ---

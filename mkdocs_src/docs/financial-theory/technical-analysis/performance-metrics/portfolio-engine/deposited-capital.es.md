@@ -94,9 +94,8 @@ El capital regresa correctamente a $K$; solo la ganancia de €5 va a $R$. **No*
 
 El modelo de 3 pools se ejecuta en un **único ciclo por transacción** (basado en eventos, no en delta diario):
 
-1. Leer PMP antes de la mutación del pool
-2. Actualizar K/R/W según las reglas del tipo de transacción
-3. Luego reducir el pool PMP (para las VENTAS)
+1. Leer la variación que la transacción produce en el pool de coste medio de su posición, calculada antes de la reproducción — para una VENTA, el coste que retira ($C$ = PMC antes de la venta × cantidad vendida, a tipos históricos)
+2. Actualizar K/R/W según las reglas del tipo de transacción, con ese $C$ para una VENTA
 
 
 La serie de entradas ROI/TWRR/MWRR se deriva de los cambios día a día en `cumulative_external_cash_flow`, la línea base de capital. No se deriva del campo `external_cash_flow` (solo efectivo).

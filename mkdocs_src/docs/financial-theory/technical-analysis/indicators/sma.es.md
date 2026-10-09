@@ -6,7 +6,7 @@ La SMA es la forma más literal de definir una "tendencia": el promedio no ponde
 
 ## 💡 Significado Financiero
 
-Debido a que cada observación en la ventana cuenta por igual, la SMA reacciona a nuevos datos más lentamente que una EMA de la misma longitud, pero también tiene **distorsión de fase cero** con respecto a su ventana — no está "sesgada" hacia precios recientes o antiguos. Los operadores utilizan los cruces de SMA (por ejemplo, el "cruce dorado" de 50/200 días) como la señal de tendencia de largo plazo por excelencia.
+Debido a que cada observación en la ventana cuenta por igual, la SMA reacciona a nuevos datos más lentamente que una EMA de la misma longitud, pero también tiene **distorsión de fase cero** con respecto a su ventana — no está "sesgada" hacia precios recientes o antiguos. Los operadores utilizan los cruces de SMA (por ejemplo, el "cruce dorado" de 50/200 días, donde un "día" es una sesión bursátil) como la señal de tendencia de largo plazo por excelencia.
 
 ---
 
@@ -30,7 +30,7 @@ lo que muestra que la SMA es un filtro de **memoria finita**: la muestra más an
 
 | Parámetro | Clave | Valor por defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 20 | Ventana retrospectiva en días. Cuanto mayor → más suave, más lento. |
+| Período ($N$) | `period` | 20 | Ventana retrospectiva en sesiones. Cuanto mayor → más suave, más lento. |
 
 ---
 

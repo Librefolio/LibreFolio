@@ -39,7 +39,7 @@ Une hausse de prix sur un volume élevé produit un flux monétaire positif bien
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre de rétrospection pour accumuler le flux monétaire positif/négatif. |
+| Période ($N$) | `period` | 14 | Fenêtre de rétrospection pour accumuler le flux monétaire positif/négatif, en séances. |
 | Surachat | `overbought` | 80 | Seuil pour la zone de surachat. |
 | Survente | `oversold` | 20 | Seuil pour la zone de survente. |
 

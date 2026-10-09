@@ -36,9 +36,9 @@ Une lecture MACD de 2 € signifie quelque chose de très différent pour une ac
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période Rapide | `fastPeriod` | 12 | Fenêtre EMA à court terme (jours). |
-| Période Lente | `slowPeriod` | 26 | Fenêtre EMA à long terme (jours), également le dénominateur de normalisation du PPO. |
-| Période de Signal | `signalPeriod` | 9 | Lissage EMA appliqué à la ligne PPO. |
+| Période Rapide | `fastPeriod` | 12 | Fenêtre EMA à court terme (séances). |
+| Période Lente | `slowPeriod` | 26 | Fenêtre EMA à long terme (séances), également le dénominateur de normalisation du PPO. |
+| Période de Signal | `signalPeriod` | 9 | Lissage EMA appliqué à la ligne PPO (séances). |
 
 ---
 

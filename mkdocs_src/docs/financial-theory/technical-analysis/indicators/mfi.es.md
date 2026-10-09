@@ -39,7 +39,7 @@ Un aumento de precio con un volumen alto produce un flujo de dinero positivo muc
 
 | Parámetro | Clave | Valor por Defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana de retroceso para acumular flujo de dinero positivo/negativo. |
+| Período ($N$) | `period` | 14 | Ventana de retroceso para acumular flujo de dinero positivo/negativo, en sesiones. |
 | Sobrecompra | `overbought` | 80 | Umbral para la zona de sobrecompra. |
 | Sobreventa | `oversold` | 20 | Umbral para la zona de sobreventa. |
 

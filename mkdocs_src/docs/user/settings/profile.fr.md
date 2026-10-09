@@ -41,11 +41,18 @@ Après confirmation, votre session reste active — vous n'avez pas besoin de vo
 
 ### 🗑️ Supprimer le compte
 
-Le bouton **Supprimer le compte** supprime définitivement votre utilisateur et tout ce qu'il possède. Pour confirmer, vous devez saisir votre **nom d'utilisateur** dans la boîte de dialogue. La suppression est immédiate : vous êtes déconnecté et redirigé vers la page de connexion.
+Le bouton **Supprimer le compte** supprime définitivement votre compte et ses paramètres. Pour confirmer, vous devez saisir votre **nom d'utilisateur** dans la boîte de dialogue. La suppression est immédiate : vous êtes déconnecté et redirigé vers la page de connexion.
+
+Vos courtiers suivent la même règle que [quitter un courtier partagé](../brokers/sharing.md) :
+
+- un courtier dont vous êtes le **seul Propriétaire** est supprimé, avec toutes ses transactions et ses fichiers de rapport importés — y compris pour les utilisateurs avec qui vous l'avez partagé ;
+- tout autre courtier reste disponible pour ses autres utilisateurs : seul votre accès est supprimé.
+
+Si la suppression échoue pour une raison technique, rien n'est supprimé.
 
 !!! warning "Irréversible"
 
-    La suppression de votre compte est irréversible : vos courtiers, transactions et paramètres sont supprimés avec lui. Si vous êtes le **seul administrateur** de l'instance, la suppression est refusée — promouvez d'abord un autre utilisateur.
+    La suppression de votre compte est irréversible. Si vous êtes le **seul administrateur** de l'instance, la suppression est refusée — promouvez d'abord un autre utilisateur.
 
 ---
 

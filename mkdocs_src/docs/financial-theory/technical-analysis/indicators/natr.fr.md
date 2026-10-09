@@ -26,7 +26,7 @@ Comme $ATR_t$ est toujours non négatif, $NATR_t \ge 0$, sans limite théorique 
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre de lissage appliquée au True Range sous-jacent (identique à l'ATR). |
+| Période ($N$) | `period` | 14 | Fenêtre de lissage appliquée au True Range sous-jacent (identique à l'ATR), en séances. |
 
 ---
 

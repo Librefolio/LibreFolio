@@ -1,6 +1,6 @@
 # 📊 OBV — Volume di Bilancio
 
-L'OBV costruisce un singolo totale cumulativo che aggiunge l'intero volume giornaliero quando il prezzo di chiusura sale, e lo sottrae quando scende. È il metodo più antico e semplice per trasformare l'attività di scambio in un segnale direzionale.
+L'OBV costruisce un singolo totale cumulativo che aggiunge l'intero volume di una seduta quando il prezzo di chiusura sale, e lo sottrae quando scende. È il metodo più antico e semplice per trasformare l'attività di scambio in un segnale direzionale.
 
 ---
 
@@ -33,7 +33,7 @@ L'OBV **non richiede parametri**. Non ha alcun `period`, soglia o impostazione d
 
     L'OBV è matematicamente una somma cumulativa che parte dall'inizio della
     storia di un asset, quindi il suo livello assoluto non ha significato intrinseco.
-    LibreFolio ribasa la serie OBV visualizzata a zero all'**inizio dell'intervallo
+    LibreFolio ribasa la serie OBV visualizzata a zero alla **prima seduta dell'intervallo
     del grafico attualmente richiesto**, quindi ciò che leggi a schermo è sempre
     "volume netto con segno accumulato dal bordo sinistro del grafico" —
     confrontabile indipendentemente da quanto indietro arrivino i dati sottostanti.

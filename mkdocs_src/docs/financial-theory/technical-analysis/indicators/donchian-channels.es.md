@@ -36,7 +36,11 @@ Este es el indicador detrás del legendario sistema de ruptura "Turtle Trading":
 
 | Parámetro | Clave | Valor por defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 20 | Ventana de retroceso para el máximo/mínimo móvil. |
+| Período ($N$) | `period` | 20 | Ventana de retroceso para el máximo/mínimo móvil, en sesiones. |
+
+!!! note "Trazados también en los días de cierre"
+
+    Los canales solo tienen valor en las sesiones, mientras que el eje de fechas del gráfico recorre todos los días del calendario. En un fin de semana o un festivo, el canal sombreado se traza en línea recta desde la última sesión anterior hasta la primera posterior, igual que la línea media, de modo que no se interrumpe: el tramo de unión solo da forma al relleno y no tiene ningún valor propio.
 
 ---
 

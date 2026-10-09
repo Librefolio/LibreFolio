@@ -1,6 +1,6 @@
 # 🧭 Indicateurs de tendance
 
-Les indicateurs de tendance répondent à la question la plus fondamentale de l'analyse technique : *« dans quelle direction évolue réellement le prix, une fois que le bruit quotidien est filtré ? »* Tous agissent comme des **filtres passe-bas** sur la série des prix, lissant les fluctuations à court terme pour révéler la direction sous-jacente.
+Les indicateurs de tendance répondent à la question la plus fondamentale de l'analyse technique : *« dans quelle direction évolue réellement le prix, une fois que le bruit d'une séance à l'autre est filtré ? »* Tous agissent comme des **filtres passe-bas** sur la série des prix, lissant les fluctuations à court terme pour révéler la direction sous-jacente.
 
 ---
 

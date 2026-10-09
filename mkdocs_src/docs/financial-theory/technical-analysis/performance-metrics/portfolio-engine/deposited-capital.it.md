@@ -94,9 +94,8 @@ Il capitale ritorna correttamente in $K$; solo il guadagno di €5 va in $R$. **
 
 Il modello a 3 pool gira in un **unico loop per transazione** (event-driven, non delta giornaliero):
 
-1. Lettura del PMC prima della modifica della pool
-2. Aggiornamento di K/R/W secondo le regole del tipo di transazione
-3. Riduzione del pool PMC (per le VENDITE)
+1. Lettura della variazione che la transazione produce nel pool a costo medio della sua posizione, calcolata prima della riesecuzione — per una VENDITA, il costo che rimuove ($C$ = PMC prima della vendita × quantità venduta, ai tassi storici)
+2. Aggiornamento di K/R/W secondo le regole del tipo di transazione, con quel $C$ per una VENDITA
 
 
 La serie di input ROI/TWRR/MWRR è derivata dalle variazioni giorno per giorno del `cumulative_external_cash_flow`, il capital baseline. Non è derivata dal campo `external_cash_flow` (solo liquidità).

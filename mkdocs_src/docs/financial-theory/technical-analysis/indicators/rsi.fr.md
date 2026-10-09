@@ -1,6 +1,6 @@
 # 💪 RSI — Relative Strength Index
 
-Le RSI mesure si les acheteurs ou les vendeurs ont dominé *récemment*. Il répond à la question : *"Au cours des $N$ derniers jours, quelle part du mouvement total du prix a été haussière par rapport à la part baissière ?"*
+Le RSI mesure si les acheteurs ou les vendeurs ont dominé *récemment*. Il répond à la question : *"Au cours des $N$ dernières séances, quelle part du mouvement total du prix a été haussière par rapport à la part baissière ?"*
 
 ---
 
@@ -15,7 +15,7 @@ Le résultat est compressé dans une plage de 0 à 100 :
 
 ## 🔢 Formules Mathématiques
 
-1. **Décomposer** les variations quotidiennes en gains et pertes :
+1. **Décomposer** la variation d'une séance à la suivante en gains et pertes :
 
     $$
     U_t = \max(P_t - P_{t-1},\; 0), \qquad
@@ -44,7 +44,7 @@ La normalisation $100 - 100/(1+RS)$ est une sigmoïde monotone croissante qui pr
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre d'observation pour la SMMA. |
+| Période ($N$) | `period` | 14 | Fenêtre d'observation pour la SMMA, en séances. |
 | Surachat | `overbought` | 70 | Seuil pour la zone de surachat. |
 | Survente | `oversold` | 30 | Seuil pour la zone de survente. |
 

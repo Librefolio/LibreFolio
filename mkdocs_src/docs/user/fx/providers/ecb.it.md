@@ -1,6 +1,6 @@
 # <img src="https://www.ecb.europa.eu/favicon-32.png" alt=""> Banca Centrale Europea (BCE)
 
-La **Banca Centrale Europea (BCE)** è il principale provider di tassi di riferimento per i portafogli europei. Pubblica quotidianamente i tassi di cambio dell'Euro rispetto a circa 45 valute principali ed emergenti.
+La **Banca Centrale Europea (BCE)** è il principale provider di tassi di riferimento per i portafogli europei. Pubblica ogni giorno i tassi di riferimento dell'euro rispetto a circa 30 valute.
 
 ## 📊 Funzionalità
 
@@ -16,11 +16,13 @@ La **Banca Centrale Europea (BCE)** è il principale provider di tassi di riferi
 
 ## 💰 Valute Supportate
 
-La BCE supporta un'ampia gamma di valute, tra cui:
+La BCE pubblica un tasso ogni giorno lavorativo per circa 30 valute, tra cui:
 
 - **Principali**: USD 🇺🇸, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿
-- **Europee/Regionali**: SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, BGN 🇧🇬, TRY 🇹🇷
+- **Europee/Regionali**: SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, ISK 🇮🇸, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, TRY 🇹🇷
 - **Globali / Emergenti**: CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, BRL 🇧🇷, MXN 🇲🇽, ZAR 🇿🇦
+
+Le valute che la BCE non pubblica più, come il lev bulgaro (BGN, sostituito dall'euro nel 2026), la kuna croata (HRK) o il rublo russo (RUB), conservano i tassi passati: una sincronizzazione ne scarica ancora lo storico, e non arrivano nuovi tassi.
 
 ## 📝 Note Importanti
 

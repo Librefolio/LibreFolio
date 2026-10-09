@@ -39,8 +39,12 @@ Avec $k = 2$, si les rendements étaient distribués normalement, le prix rester
 
 | Paramètre | Clé | Valeur par défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 20 | Fenêtre SMA pour la valeur attendue. |
+| Période ($N$) | `period` | 20 | Fenêtre SMA pour la valeur attendue, en séances. |
 | Multiplicateur ($k$) | `multiplier` | 2 | Nombre d'écarts-types. |
+
+!!! note "Tracées aussi sur les jours de fermeture"
+
+    Les bandes n'ont de valeur que les jours de séance, alors que l'axe des dates du graphique parcourt chaque jour du calendrier. Un week-end ou un jour férié, la bande ombrée est tracée en ligne droite de la dernière séance précédente à la première suivante, comme la bande centrale, de sorte qu'elle ne s'interrompt pas : le tronçon de raccord ne fait que donner forme au remplissage et ne porte aucune valeur propre.
 
 ---
 

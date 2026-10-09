@@ -26,7 +26,7 @@ Poiché $ATR_t$ è sempre non negativo, $NATR_t \ge 0$, senza un limite superior
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di smoothing applicata al True Range sottostante (uguale all'ATR). |
+| Periodo ($N$) | `period` | 14 | Finestra di smoothing applicata al True Range sottostante (uguale all'ATR), in sedute. |
 
 ---
 

@@ -36,8 +36,8 @@ El RSI simple puede permanecer en la zona de 40–60 durante largos períodos si
 
 | Parámetro | Clave | Por defecto | Descripción |
 |---|---|---|---|
-| Retrospectiva ($N$) | `period` | 14 | Retrospectiva compartida para el RSI subyacente y su rango estocástico %K. |
-| Ventana D ($d$) | `dPeriod` | 3 | Ventana SMA aplicada a %K para producir %D. |
+| Retrospectiva ($N$) | `period` | 14 | Retrospectiva compartida para el RSI subyacente y su rango estocástico %K, en sesiones. |
+| Ventana D ($d$) | `dPeriod` | 3 | Ventana SMA aplicada a %K para producir %D, en sesiones. |
 | Sobrecompra | `overbought` | 80 | Umbral para la zona de sobrecompra. |
 | Sobreventa | `oversold` | 20 | Umbral para la zona de sobreventa. |
 

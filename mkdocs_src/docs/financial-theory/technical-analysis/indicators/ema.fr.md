@@ -1,6 +1,6 @@
 # 📉 EMA — Moyenne Mobile Exponentielle
 
-L'EMA suit la **tendance** en lissant le bruit des prix quotidiens, en accordant plus de poids aux observations récentes qu'aux plus anciennes.
+L'EMA suit la **tendance** en lissant le bruit des prix d'une séance à l'autre, en accordant plus de poids aux observations récentes qu'aux plus anciennes.
 
 ---
 
@@ -21,7 +21,7 @@ $$
 où $P_t$ est le prix de clôture au temps $t$ et $\alpha$ est le **coefficient de lissage**.
 
 **Correspondance $N$ → $\alpha$.**
-Les traders spécifient une « période » $N$ (en jours). Le coefficient est calculé en faisant correspondre l' *âge moyen* des données entre une EMA et une Moyenne Mobile Simple (SMA) de la même fenêtre :
+Les traders spécifient une « période » $N$ (en séances). Le coefficient est calculé en faisant correspondre l' *âge moyen* des données entre une EMA et une Moyenne Mobile Simple (SMA) de la même fenêtre :
 
 $$
 \text{Age}_{SMA} = \frac{N-1}{2}, \qquad
@@ -42,7 +42,7 @@ Par exemple, $N = 14 \implies \alpha = 2/15 \approx 0,133$.
 
 | Paramètre | Clé | Valeur par défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre d'observation en jours. Plus élevée → lissage accru, réactivité moindre. |
+| Période ($N$) | `period` | 14 | Fenêtre d'observation en séances. Plus élevée → lissage accru, réactivité moindre. |
 | Décalage | `offset` | 0 | Décalage vertical en % de la valeur de base. |
 
 ---

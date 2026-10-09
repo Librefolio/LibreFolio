@@ -41,11 +41,18 @@ Dopo la conferma, la tua sessione rimane attiva: non devi accedere di nuovo.
 
 ### 🗑️ Elimina account
 
-Il pulsante **Elimina account** rimuove definitivamente il tuo utente e tutto ciò che possiede. Per confermare, devi digitare il tuo **nome utente** nella finestra di dialogo. L'eliminazione è immediata: vieni disconnesso e riportato alla pagina di accesso.
+Il pulsante **Elimina account** rimuove definitivamente il tuo account e le sue impostazioni. Per confermare, devi digitare il tuo **nome utente** nella finestra di dialogo. L'eliminazione è immediata: vieni disconnesso e riportato alla pagina di accesso.
+
+I tuoi broker seguono la stessa regola dell'[abbandono di un broker condiviso](../brokers/sharing.md):
+
+- un broker di cui sei l'**unico Proprietario** viene eliminato, con tutte le sue transazioni e i file dei report importati — anche per gli utenti con cui lo hai condiviso;
+- ogni altro broker resta ai suoi altri utenti: viene rimosso solo il tuo accesso.
+
+Se l'eliminazione non riesce per un motivo tecnico, non viene eliminato nulla.
 
 !!! warning "Irreversibile"
 
-    L'eliminazione dell'account non può essere annullata: i tuoi broker, le transazioni e le impostazioni vengono rimossi insieme all'account. Se sei l'**unico amministratore** dell'istanza, l'eliminazione viene rifiutata: promuovi prima un altro utente.
+    L'eliminazione dell'account non può essere annullata. Se sei l'**unico amministratore** dell'istanza, l'eliminazione viene rifiutata: promuovi prima un altro utente.
 
 ---
 
