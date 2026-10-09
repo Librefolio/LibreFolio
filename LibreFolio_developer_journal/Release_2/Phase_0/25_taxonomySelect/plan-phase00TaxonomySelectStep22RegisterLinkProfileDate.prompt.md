@@ -258,3 +258,9 @@
 1. Ogni test nuovo è rosso sulla base, per la ragione attesa, e verde dopo la cura.
 2. I gate sono verdi e `front check` resta a 0/0.
 3. Nessun catalogo, nessun file del runner; porte libere, nessun venv del worktree, nel worktree solo i file previsti.
+
+## Seguito
+
+- Lo step 23 corregge il Bulk: il clone di righe singole dello stesso tipo, che diventavano una coppia, e il falso
+  «Scartare le modifiche?» dopo Reset su una coppia salvata o con la cache dei tipi ancora vuota.
+  [`plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md`](plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md).
