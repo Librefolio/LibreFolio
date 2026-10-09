@@ -35,9 +35,13 @@ lexicographic best with its own, differently-written comparison — it does
 not import or reuse `_pac_exhaustive_oracle.py`'s private `_lexicographic_key`.
 
 Item 3b fixes an expected optimum by hand, independently of both SCIP and the
-oracle's own search: on `_credit_tie_fx_scenario` the best candidate exists
-only because an exact HALF_UP FX-credit tie posts up. The solver suite reuses
-that fixture in its oracle-agreement gate.
+oracle's own search: on `_credit_tie_fx_scenario` the cap-limited best needs
+the 7.5 USD of an exact FX-credit tie, and a credit -- rounded against the
+plan -- posts its floor, 7 USD, so the optimum is the next-best point, which
+converts an exact 6 USD. The solver suite reuses that fixture in its
+oracle-agreement gate. Item 3c sweeps whole small domains and re-derives
+every rounded posting with its own `Fraction` arithmetic: credits at their
+floor, debits at their ceiling, one currency quantum at most.
 
 Several monetary/FX fixtures in the sibling suite (e.g. `_funding_fx_scenario`)
 use a `CENT` currency quantum and blow up combinatorially fast once funding
@@ -53,6 +57,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import replace
+from fractions import Fraction
+from functools import partial
+from itertools import product
 from types import SimpleNamespace
 from typing import Callable
 
@@ -64,7 +71,7 @@ from backend.app.services.pac_allocator.evaluator import (
     evaluate_exact_candidate,
     exact_decision_id,
 )
-from backend.app.services.pac_allocator.models import DecisionAccess, ExactPlannerScenario
+from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.test_scripts.test_services._pac_exhaustive_oracle import (
     MAX_EXHAUSTIVE_ORACLE_CANDIDATES,
@@ -199,24 +206,30 @@ def _coarse_funding_fx_scenario() -> ExactPlannerScenario:
     )
 
 
-def _credit_tie_fx_scenario(*, price: ExactRatio, cap: ExactRatio) -> ExactPlannerScenario:
-    """A funding+FX+buy scenario in which an exact HALF_UP **credit** tie is
-    reachable and no debit tie is.
+def _credit_tie_fx_scenario(*, price: ExactRatio, cap: ExactRatio, fee_rate: ExactRatio = ZERO) -> ExactPlannerScenario:
+    """A funding+FX+buy scenario in which an exact **credit** tie is
+    reachable and, by default, every debit sits on a quantum multiple.
 
     A 3/2 EUR/USD rate with a zero spread and whole-unit quanta converts every
-    odd EUR amount into an exact `.5` USD -- a HALF_UP tie of the USD quantum
-    (5 EUR -> exactly 7.5 USD, posted 8). The buy fee is zero and `price` is
-    meant to be a whole USD amount, so no buy debit or fee ever lands on a
-    tie. At a tie the compiled model may post either neighbour quantum, but
-    for a credit that latitude cannot change which points are feasible: the
-    posted credit enters every ledger `>= 0` row with a `+` sign and no
-    objective, so whatever the lower neighbour admits the true round-up
-    admits too. On this fixture the compiled model's feasible set must
-    therefore equal the exact one. 5 EUR of existing cash at the source
-    broker is the only money; the destination broker holds the USD route.
+    odd EUR amount into an exact `.5` USD -- a tie of the USD quantum (5 EUR
+    -> exactly 7.5 USD). A credit is rounded against the plan, so even at a
+    tie it posts its floor (7 USD), never the round-half-up neighbour. With a
+    whole USD `price` and the default zero `fee_rate`, every buy debit is a
+    whole USD and no fee is posted, so no debit moves when rounded; a
+    fractional `price` or a nonzero `fee_rate` (Item 3c) makes the debits
+    fractional too.
+
+    The compiled model encodes a posted credit `q*u` under the rows
+    `q*u <= exact` and `exact <= q*u + q`. Off a quantum multiple they pin
+    `u` to the floor itself; only at an exact multiple do they also admit one
+    quantum less -- a smaller credit, which nothing can prefer: the posted
+    credit enters every ledger `>= 0` row with a `+` sign and no objective at
+    all. On this fixture the compiled model's feasible set must therefore
+    equal the exact one. 5 EUR of existing cash at the source broker is the
+    only money; the destination broker holds the USD route.
     """
     capability = _capability("capability:usd")
-    buy_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")  # zero fee: no debit tie
+    buy_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD", rate=fee_rate)  # zero by default: no fee posted
     destination = _broker("broker:destination", (capability,), (buy_fee,))
     source = _broker("broker:source")
     return _scenario(
@@ -319,6 +332,62 @@ def _unsafe_frozen_exact_access_missing_frozen_quanta() -> DecisionAccess:
     object.__setattr__(access, "baseline_quanta", 0)
     object.__setattr__(access, "frozen_quanta", None)
     return access
+
+
+# Item 3c: posting families by the side of the plan they round against --
+# credits at their floor, debits at their ceiling, exact flows never rounded.
+_CREDIT_FAMILIES = frozenset({"fx_credit", "gross_sell_credit"})
+_DEBIT_FAMILIES = frozenset({"buy_debit", "buy_fee", "sell_fee", "broker_withheld_tax", "self_reserved_tax"})
+_EXACT_FAMILIES = frozenset({"initial_selected", "funding_in", "funding_out", "fx_debit"})
+_WHOLE_UNIT_QUANTA = {"EUR": Fraction(1), "USD": Fraction(1)}  # every Item 3c fixture's `currency_quantums`
+
+
+def _fraction(value: ExactRatio) -> Fraction:
+    return Fraction(value.numerator, value.denominator)
+
+
+def _rounded_against_the_plan(family: str, exact: Fraction, quantum: Fraction) -> Fraction:
+    """`exact` rounded against the plan at `quantum`, with plain `Fraction`
+    floor division -- never the production rounding helpers: a credit at its
+    floor, a debit at its ceiling.
+    """
+    if family in _CREDIT_FAMILIES:
+        return quantum * (exact // quantum)
+    return quantum * -((-exact) // quantum)
+
+
+def _assert_postings_round_against_the_plan(evaluation: ExactEvaluation, point: tuple[int, ...]) -> set[str]:
+    """Check every posting of one evaluation; return the rounded families
+    seen off a quantum multiple (the evidence that the check had teeth).
+    """
+    off_quantum: set[str] = set()
+    for posting in evaluation.postings:
+        exact, posted = _fraction(posting.exact_amount), _fraction(posting.posted_amount)
+        if posting.family in _EXACT_FAMILIES:
+            assert (posting.quantum, posted) == (None, exact), (point, posting.posting_id)
+            continue
+        assert posting.family in _CREDIT_FAMILIES | _DEBIT_FAMILIES, (point, posting.posting_id)
+        quantum = _WHOLE_UNIT_QUANTA[posting.currency]
+        assert _fraction(posting.quantum) == quantum, (point, posting.posting_id)
+        assert posted == _rounded_against_the_plan(posting.family, exact, quantum), (point, posting.posting_id, exact, posted)
+        assert 0 <= _fraction(posting.accounting_rounding_adjustment) < quantum, (point, posting.posting_id)  # debit-positive: a cost to the plan, under one quantum
+        if exact % quantum:
+            off_quantum.add(posting.family)
+    return off_quantum
+
+
+def _assert_conversions_never_gain_value(evaluation: ExactEvaluation, point: tuple[int, ...], valuation_currency: str) -> None:
+    """Per conversion, the posted credit is at most the exact one, and --
+    valued back into the source currency at the approved rate -- at most the
+    source debit: a conversion never hands the plan more than it gave up.
+    The source currency is the valuation currency, so the debit is its own
+    value.
+    """
+    for conversion in evaluation.fx:
+        assert conversion.source_currency == valuation_currency, (point, conversion.decision_id)
+        posted = _fraction(conversion.posted_destination_credit)
+        assert posted <= _fraction(conversion.exact_destination_credit), (point, conversion.decision_id)
+        assert posted / _fraction(conversion.approved_rate) <= _fraction(conversion.source_debit), (point, conversion.decision_id)
 
 
 # --------------------------------------------------------------------------
@@ -632,8 +701,9 @@ def test_multi_decision_composition_ties_are_full_length_and_best_is_never_reder
 
 
 # --------------------------------------------------------------------------
-# Item 3b: an exact FX-credit tie decides the optimum -- the expected answer
-# is derived by hand, independently of SCIP and of the oracle's own search.
+# Item 3b: an exact FX-credit tie, posted at its floor, decides the optimum --
+# the expected answer is derived by hand, independently of SCIP and of the
+# oracle's own search.
 # --------------------------------------------------------------------------
 
 
@@ -643,19 +713,25 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
     * Optimum. The proportional cascade opens with `fixed_l2`. The only
       asset's target is all 5 EUR of reachable funding, and `b` units at 2 USD
       are worth `4b/3` EUR at the 3/2 rate, so the residual `4b/3 - 5` squares
-      to 25, 121/9, 49/9, 1 and 1/9 for b = 0..4: 4 units (the route cap) is
-      the unique minimum, *if* it is feasible. 4 units cost 8 USD, and the
-      only USD is the conversion of at most 5 EUR (the funding cap): exactly
-      7.5 USD, a HALF_UP tie that posts 8. Were the tie posted down to 7 USD,
-      or the exact 7.5 used, only 3 units would fit -- the optimum exists only
-      because the tie posts up. That pins fx = 5, hence funding = 5 (the
-      destination's EUR cell cannot go below zero): the best candidate is
-      `{buy: 4, funding: 5, fx: 5}`, with `fixed_l2 == 1/9`.
+      to 25, 121/9, 49/9, 1 and 1/9 for b = 0..4: 4 units (the route cap)
+      would be the unique minimum. They cost 8 USD, and the only USD is the
+      conversion of at most 5 EUR (the funding cap): exactly 7.5 USD, a tie
+      of the USD quantum, which a credit -- rounded against the plan -- posts
+      at its floor, 7 USD. 4 units never fit, so 3 units (6 USD, with
+      `fixed_l2 == 1`) are the best. They need a posted credit of at least
+      6 USD: fx = 4 (an exact 6, posted 6) or fx = 5 (7.5, posted 7), with
+      funding >= fx (the destination's EUR cell cannot go below zero) -- the
+      points (funding, fx) = (4, 4), (5, 4) and (5, 5). All three buy the
+      same 3 units through the same two routes at a zero fee and spread, so
+      they tie on every later cascade stage too, and the canonical tie-break
+      (ascending funding, fx, buy quanta) picks the least EUR moved:
+      `{buy: 3, funding: 4, fx: 4}` -- an exact 6 USD credit, no rounding at
+      all.
     * Feasible count. A point is feasible iff fx <= funding (destination EUR
       cell) and 2 * buy <= posted(3/2 * fx) (destination USD cell). The
-      posted credits for fx = 0..5 are 0, 2, 3, 5, 6 and 8 USD, admitting 1,
-      2, 2, 3, 4 and 5 buy values; summed over fx <= funding for funding =
-      0..5 that is 1 + 3 + 5 + 8 + 12 + 17 = 46.
+      posted credits for fx = 0..5 are the floors 0, 1, 3, 4, 6 and 7 USD,
+      admitting 1, 1, 2, 3, 4 and 4 buy values; summed over fx <= funding for
+      funding = 0..5 that is 1 + 2 + 4 + 7 + 11 + 15 = 40.
     """
     scenario = _credit_tie_fx_scenario(price=R(2), cap=R(4))
     view = build_exact_policy_view(scenario)
@@ -673,25 +749,93 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
 
     result = run_exhaustive_oracle(scenario, view)
     assert result.enumerated_candidates == estimate_oracle_domain_size(view)
-    assert result.feasible_candidates == 46
+    assert result.feasible_candidates == 40
     assert result.best_candidate is not None
     assert result.best_evaluation is not None
 
     best = result.best_evaluation
-    assert {decision.decision_id: decision.quanta for decision in result.best_candidate.decisions} == {buy: 4, funding: 5, fx: 5}
-    assert _objective_map(view, best)["fixed_l2"] == R(1, 9)
+    assert {decision.decision_id: decision.quanta for decision in result.best_candidate.decisions} == {buy: 3, funding: 4, fx: 4}
+    assert _objective_map(view, best)["fixed_l2"] == R(1)
 
-    # The optimum stands on the round-up: an exact 7.5 USD credit, posted 8.
+    # The optimum stands on no rounding at all: an exact 6 USD credit, posted 6.
     fx_evaluation = next(item for item in best.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
-    assert fx_evaluation.exact_destination_credit == R(15, 2)
-    assert fx_evaluation.posted_destination_credit == R(8)
+    assert fx_evaluation.exact_destination_credit == R(6)
+    assert fx_evaluation.posted_destination_credit == R(6)
     order_evaluation = next(item for item in best.orders if item.route_id == "route:buy:usd")
-    assert order_evaluation.posted_cash_amount == R(8)
-    assert fx_evaluation.exact_destination_credit < order_evaluation.posted_cash_amount  # the exact credit alone would not cover it
+    assert order_evaluation.posted_cash_amount == R(6)
 
     usd_cell = next(ledger for ledger in best.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
-    assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(8), R(8))
+    assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(6), R(6))
     assert usd_cell.final_spendable == ZERO
+
+    # ... and the cap-limited point the derivation rules out really is out:
+    # the whole 5 EUR convert into the 7.5 USD tie, posted at its floor, 7,
+    # one dollar short of the 8 USD that 4 units cost.
+    tie_point = evaluate_exact_candidate(scenario, view, _candidate(view, {buy: 4, funding: 5, fx: 5}, candidate_id="credit-tie:cap"))
+    tie_fx = next(item for item in tie_point.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    assert (tie_fx.exact_destination_credit, tie_fx.posted_destination_credit) == (R(15, 2), R(7))
+    tie_usd_cell = next(ledger for ledger in tie_point.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
+    assert (tie_usd_cell.fx_credit, tie_usd_cell.buy_debit, tie_usd_cell.final_spendable) == (R(7), R(8), R(-1))
+    assert tie_point.feasible is False
+
+
+# --------------------------------------------------------------------------
+# Item 3c: every rounded posting of every candidate in a whole small domain is
+# rounded against the plan -- re-derived independently, point by point.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("build_scenario", "off_quantum_families"),
+    [
+        pytest.param(partial(_credit_tie_fx_scenario, price=R(2), cap=R(4)), {"fx_credit"}, id="credit-ties"),
+        pytest.param(_coarse_funding_fx_scenario, {"fx_credit"}, id="fractional-credits"),
+        pytest.param(partial(_credit_tie_fx_scenario, price=R(7, 5), cap=R(4), fee_rate=R(1, 10)), {"fx_credit", "buy_debit", "buy_fee"}, id="fractional-debits-and-fees"),
+    ],
+)
+def test_every_rounded_posting_rounds_against_the_plan_over_the_whole_domain(build_scenario: Callable[[], ExactPlannerScenario], off_quantum_families: set[str]) -> None:
+    """Over the oracle's whole domain of a small FX fixture, every evaluated
+    candidate -- feasible or not -- posts each rounded amount against the
+    plan at its currency quantum: an `fx_credit` at `floor(exact)`, a
+    `buy_debit` or `buy_fee` at `ceil(exact)`, and the exact flows
+    (`initial_selected`, `funding_*`, `fx_debit`) unrounded. The accounting
+    adjustment -- debit-positive, a cost to the plan -- therefore lies in
+    `[0, q)` for every posting, and no conversion ever credits more value than
+    it debits. Floor and ceiling are re-derived here with `Fraction`
+    arithmetic, never through the production rounding helpers.
+
+    Each fixture puts one side of the rule to the test, which the
+    `off_quantum_families` barrier proves really happened:
+
+    * `credit-ties`: every odd EUR amount converts into an exact `.5` USD tie,
+      which a round-half-up credit posted one quantum higher;
+    * `fractional-credits`: the coarse fixture's 1.188 effective rate lands
+      credits on all kinds of fractions, and round-half-up posted every one
+      of at least a half one quantum higher;
+    * `fractional-debits-and-fees`: a 1.40 USD price and a 10% fee land the
+      odd buy debits (1.4, 4.2 USD) and the fees of one to three units (0.14,
+      0.28, 0.42 USD) below a half, where a round-half-up debit posted less
+      than the order costs.
+    """
+    scenario = build_scenario()
+    view = build_exact_policy_view(scenario)
+    # Every decision is free, so its box is exactly the oracle's value range.
+    assert all(access.mode == "mutable" for access in view.decisions)
+    decision_ids = tuple(access.decision_id for access in view.decisions)
+    boxes = tuple(range(access.lower_quanta, access.upper_quanta + 1) for access in view.decisions)
+
+    evaluated = 0
+    seen_off_quantum: set[str] = set()
+    for point in product(*boxes):
+        candidate = _candidate(view, dict(zip(decision_ids, point, strict=True)), candidate_id=f"grid:{evaluated}")
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        assert evaluation.candidate_valid is True, point
+        evaluated += 1
+        seen_off_quantum |= _assert_postings_round_against_the_plan(evaluation, point)
+        _assert_conversions_never_gain_value(evaluation, point, scenario.valuation_currency)
+
+    assert evaluated == estimate_oracle_domain_size(view)
+    assert off_quantum_families <= seen_off_quantum  # non-vacuity: the rule really met fractional amounts
 
 
 # --------------------------------------------------------------------------
