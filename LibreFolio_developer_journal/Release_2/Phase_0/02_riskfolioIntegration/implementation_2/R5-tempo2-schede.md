@@ -329,3 +329,28 @@ Reperto 🟡 di **I** (24/09), file della famiglia Risk (`420b90ebd`, 18/09).
   `new URL('…svelte', import.meta.url)`, estrarre `const PALETTE_*` e confrontarlo con la copia; citare
   le costanti per nome, non per riga. La palette storica sta nel file di I: il test la legge soltanto.
 - **Da decidere col developer**: è un test **fuori** dalla lista approvata per R12 → serve il suo sì.
+
+---
+
+## Esito delle schede — allineamento 09/10/2026
+
+Le schede erano **candidati da provare insieme** al developer, non verdetti. Esito, verificato sul codice di
+`3cceb4f90`:
+
+| # | candidato | esito |
+|---|---|---|
+| F2 | crowdfunding come liquidità nei perimetri pesati | ✅ la scheda «scoperto» separa liquidità e senza prezzo (`levels/L2Diversification.svelte`); l'avviso ha il tono della causa |
+| F5.1 | la baseline contava fra i punti riportati | ✅ la guardia c'è (`backend/app/services/series_preparation.py`); un riporto degrada solo oltre i 7 giorni (CHANGELOG 1.2.0) |
+| F5 | la partenza tardiva non si vede (`baseline_inside_requested_range`, `short_history`) | ⏳ **aperto**: nessun lettore nel frontend → README della cartella, aperti |
+| C2 | orizzonte del bootstrap in osservazioni | ✅ calendario (`backend/app/services/risk/quant/resampling.py`) |
+| C3 | «mese storto» di tre settimane, giornata diluita dai weekend | ✅ il calendario di borsa (CHANGELOG 1.2.0, «Risk figures follow the markets' calendar») |
+| C4 | tasso privo di rischio fisso a 0 su Dashboard e Broker | ⏳ **mai deciso**: `levels/RiskLevelsPanel.svelte` lo tiene a 0 → README, aperti |
+| C5 | soglia del Sortino; esponente `1/365` nelle pagine di teoria | ⏳ la soglia è ancora 0 (domanda aperta); **la formula delle pagine è sbagliata** (il codice usa `1/f`) → README, buchi |
+| C6 | il selettore del benchmark ignora `is_benchmark` | ✅ `components/risk/BenchmarkSelect.svelte` |
+| C8 | gli euro del max drawdown («la stessa caduta, oggi») | ⏳ **mai deciso** → README, aperti |
+| C9 | asset effettivi raddoppiati dalla liquidità | ✅ la didascalia dice che l'eccesso è liquidità (`risk.levels.l2.effectiveAssets.*`) |
+| §0 | il periodo non scritto nell'intestazione | ⏳ **mai deciso** → README, aperti |
+| doc | quote negative «solo dalle posizioni corte» (`risk-contribution.en.md`); «portfolio value» nel max drawdown (`max-drawdown.en.md`) | ⏳ **ancora così** → README, buchi |
+| doc | soglie 0,9 / 0,7 / 0,3 non documentate | ✅ `correlation.en.md` |
+| shock | la copertura sotto 1 non segnala i tipi non configurati | ⏳ **mai deciso** → README, aperti |
+| test | le palette verificate su una copia | ✅ F5 del tempo ② (`R5-post-merge-e-review.md`) |

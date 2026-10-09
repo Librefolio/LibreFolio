@@ -566,9 +566,9 @@ della cartella che appartiene al coordinatore, non a un mandato.
 | **W6** Laboratorio | **F** | ✅ `FROZEN`, 4 gate su 4 | 🔴 **un rosso attribuito a E era causato da F** (D73 spegne `-trigger`) |
 | **W7** Gerarchia cromatica | **G** | ✅ `FROZEN` | il cancello prescritto dal coordinatore **non era esprimibile** — ritirato |
 | **W8** Monte Carlo | **H** | ✅ `FROZEN` | GJR-GARCH rinviato per **due muri indipendenti**, non per un'assenza |
-| **W9** Documentazione | **I** | 🔨 attivo, **19/22 pagine** | 🔴 **quattro punti ciechi dei gate**, tutti trovati scrivendo, nessuno da un cancello |
+| **W9** Documentazione | **I** | 🔨 attivo, **19/22 pagine** → ✅ 22/22 piene (allineamento 09/10) | 🔴 **quattro punti ciechi dei gate**, tutti trovati scrivendo, nessuno da un cancello |
 | **W10** Acquisizioni | **N** | ✅ `FROZEN` | non era nel piano originale |
-| **W11** Chiusura | **J** | ⏳ **non creato** | eredita **quattro cancelli** che nessun altro può fare (brief §8) |
+| **W11** Chiusura | **J** | ↪ **mai creato**: lo ha sostituito il secondo giro, `implementation_2/` (allineamento 09/10; resta aperta la voce di CHANGELOG di M2 e A9, vedi il README) | eredita **quattro cancelli** che nessun altro può fare (brief §8) |
 
 ## 🔑 La lezione che questo documento non poteva contenere quando è stato scritto
 

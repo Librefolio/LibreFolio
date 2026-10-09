@@ -302,18 +302,30 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc \
 
 ## 10. Definizione di finito
 
-- [ ] **Nessun euro in nessun pannello**, verificato con una ricerca;
-- [ ] filtro broker rinominato come filtro d'**insieme**;
-- [ ] **i due selettori mostrano i nomi, non gli id** (D73): asset su `AssetSelect`,
+- [x] **Nessun euro in nessun pannello**, verificato con una ricerca;
+  ↳ *allineamento 09/10*: ✅ nessun `€` né `formatCurrency` nei componenti `AssetSet*`, `CorrelationHeatmap`, `LabAssetPicker`
+- [x] filtro broker rinominato come filtro d'**insieme**;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] **i due selettori mostrano i nomi, non gli id** (D73): asset su `AssetSelect`,
       broker su `BrokerSearchSelect`;
-- [ ] selezione iniziale da `localStorage` con fallback agli asset posseduti — **mai
+  ↳ *allineamento 09/10*: ✅ D369
+- [x] selezione iniziale da `localStorage` con fallback agli asset posseduti — **mai
       cento**;
-- [ ] azioni di massa: tutti / nessuno / inverti / i miei;
-- [ ] heatmap: tooltip con i nomi e la banda qualitativa, etichette non troncate due
+  ↳ *allineamento 09/10*: ✅ `frontend/src/lib/components/risk/assetSetSelection.ts`
+- [x] azioni di massa: tutti / nessuno / inverti / i miei;
+  ↳ *allineamento 09/10*: ✅ `assetSetSelection.ts`, `AssetSetRiskPanel.svelte`
+- [x] heatmap: tooltip con i nomi e la banda qualitativa, etichette non troncate due
       volte, diagonale spenta, solo triangolo inferiore, primitive del progetto adottate;
-- [ ] riordino per similarità;
-- [ ] lista delle coppie oltre ~20 asset;
+  ↳ *allineamento 09/10*: ✅ `CorrelationHeatmap.svelte`
+- [x] riordino per similarità;
+  ↳ *allineamento 09/10*: ✅ `correlationHelpers.ts` (`clusterOrder`)
+- [x] lista delle coppie oltre ~20 asset;
+  ↳ *allineamento 09/10*: ✅ `CorrelationPairsList.svelte`
 - [ ] colonne di rischio nascoste per default, max drawdown visibile;
-- [ ] titolo coerente col contenuto;
-- [ ] lint, `svelte-check`, Vitest ed E2E verdi;
-- [ ] nessun processo in ascolto su `6245`.
+  ↳ *allineamento 09/10*: ⏳ **mai costruite** (D54): il rinvio a `TODO_FUTURI.md` annunciato in `progress/F-esecuzione.md` non è mai stato scritto → README della cartella, buchi
+- [x] titolo coerente col contenuto;
+  ↳ *allineamento 09/10*: ✅ `progress/F-esecuzione.md`, passo 10
+- [x] lint, `svelte-check`, Vitest ed E2E verdi;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] nessun processo in ascolto su `6245`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato

@@ -326,7 +326,7 @@ la tocca: lo verifichi lì).
 | ⑤ · deriva dei commenti | ✅ 23/09/2026 |
 | ⑥ · test del filtro broker fuori da `risk-analysis` | ✅ 24/09/2026 · 13 passed nella `6152` |
 | handoff `FROZEN` del tempo ① | ✅ 23/09/2026 · checkpoint `393a3d118` + `7d6c9a60c` (⑥) |
-| tempo ② · review col developer | 🔵 aperta il 24/09/2026 · R12 in discussione |
+| tempo ② · review col developer | ✅ chiusa il 25/09/2026 · R12 deciso il 24/09 (proposta B) e committato (`0a22b2ab3`…`3a90c6dcc`); B, C, F1, F2, F5, F6, F8, F9 committati il 24–25/09; F3 e F4 passati al «Giro UI rischio» (F3 `26338dc8a`…`c42bbad9e` il 05/10, F4 con D378 il 06/10) — allineamento del 09/10 |
 
 ### Passo 0 — il piano nel journal · ✅ 23/09/2026
 
@@ -390,7 +390,7 @@ la tocca: lo verifichi lì).
 > «contenuto misto». Se sono ETF azionari o obbligazionari, riclassificarli li porterebbe nelle
 > famiglie giuste. È una scelta sui dati del developer, non sul codice.
 
-### Passo ② — R12, ciambella a due anelli · 🔵 codice ✅ 23/09/2026
+### Passo ② — R12, ciambella a due anelli · ✅ 23/09/2026 (test in «Passo ② — R12, i test»; bocciata in review il 24/09 e rifatta con la proposta B: «R12 — la ciambella a due anelli» del tempo ②)
 
 > **Note implementazione**: costruttore puro nuovo `charts/allocationRings.ts` (additivo:
 > `allocationHierarchy.ts`, condiviso con I, **non è stato toccato**). `AllocationPieChart.svelte`
@@ -453,7 +453,7 @@ la tocca: lo verifichi lì).
 > prima del ④, ma la riga e questa sezione sono state scritte solo al ⑤. È esattamente la regola
 > «dopo ogni passo» non rispettata: recuperato qui, senza cambiare le date.
 
-### Passo ④ — cancello i18n sul prefisso condizionale · 🔵 codice ✅ · misura ✅ 23/09/2026
+### Passo ④ — cancello i18n sul prefisso condizionale · ✅ 23/09/2026 (codice e misura qui, i test in «Passo ④ — i test del cancello»)
 
 > **Note implementazione**: `scripts/i18n_usage.py` — `_CONDITIONAL_DECL` riconosce
 > `const|let NOME = [$derived(] cond ? 'a' : 'b'` con **entrambi** i rami letterali;
@@ -478,7 +478,7 @@ la tocca: lo verifichi lì).
 > **mie** righe allo stile del file (espressione su una riga), e misurato: HEAD 30 righe · mio 30
 > righe → nessun debito aggiunto.
 >
-> 🔵 test-author aggiunge a `test_i18n_usage_gate.py` i casi del condizionale (entrambi i rami ·
+> ✅ (23/09, «Passo ④ — i test del cancello») test-author aggiunge a `test_i18n_usage_gate.py` i casi del condizionale (entrambi i rami ·
 > negativo sullo stesso namespace · `const` oltre a `let $derived` · ramo non letterale non
 > indovinato · regressione del `const` singolo), con due mutanti.
 
@@ -690,12 +690,12 @@ Il journal era dentro il checkpoint e quindi `FROZEN`: questi li porto qui all'a
 
 ---
 
-## Tempo ② — review col developer · 🔵 aperta il 24/09/2026
+## Tempo ② — review col developer · ✅ 24–25/09/2026 (chiusura: tabella di avanzamento in cima)
 
 Schede: [`R5-tempo2-schede.md`](R5-tempo2-schede.md). Server di review sulla copia di prod, `6162`,
 copia byte-identica alla snapshot al momento dell'avvio.
 
-### R12 — la ciambella a due anelli · ❌ bocciata così com'è, decisione aperta
+### R12 — la ciambella a due anelli · ❌ bocciata così com'è → ✅ decisa il 24/09 (proposta B, per veicolo) e committata (`0a22b2ab3` · `8afe5b31c` · `3a90c6dcc`)
 
 > **Esito della review (24/09, due screenshot del developer)**: *«è ancora una torta unica e c'è solo
 > un'icona per quell'asset e anzi, in base a dove tocco nel tooltip mi si apre o azione o etf, direi
@@ -779,7 +779,7 @@ copia byte-identica alla snapshot al momento dell'avvio.
 > `'Liquidity'` → `'LIQUIDITY'` prima e dopo; l'unico `===` su chiavi di famiglia confronta due uscite del
 > resolver. Caso `'Liquidity'` esplicito nei test, come chiesto dal coordinator.
 >
-> 🔵 **test-author** scrive i test della lista approvata (+ icone del tooltip, + `'Liquidity'`).
+> ✅ (24/09, qui sotto) **test-author** scrive i test della lista approvata (+ icone del tooltip, + `'Liquidity'`).
 >
 > **Test (24/09)** — test-author sulla lista approvata (+ `'Liquidity'` esplicito, + icone del tooltip):
 >
@@ -1078,12 +1078,12 @@ mostra, non decide.
 | C4 | test (test-author), runner, `api sync`, journal | 6 file di test (nessuno nuovo, runner invariato) | ✅ 24/09 |
 | F1 | avvisi tradotti: chiave e parametri del backend; se manca la traduzione, il testo originale — mai una chiave grezza | `levels/warningSentence.ts` (nuovo), `levels/levelHelpers.ts`, `RiskResultFrame.svelte`, `levels/RiskLevelsPanel.svelte` | ✅ 24/09 |
 | F2 | un solo avviso di parzialità in cima al pannello, ogni causa una volta; sotto i livelli solo gli errori | `levels/RiskLevelsPanel.svelte` (non `RiskLevelSection`, che è di F) | ✅ 25/09 (con la parte non-replay di F7) |
-| F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ⏳ **dopo F → Risk** (decisione del developer, 25/09) |
-| F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo — **dopo la fusione F → Risk**, con le chiavi `risk.eligibility.*` di F (proposta al coordinator) | `levels/L3Benchmark.svelte` | ⏳ |
+| F3 | replay: via il blocco «escludi e riprova»; esclusi per motivo con nomi e peso; avviso forte (C3); «niente da simulare»; `DateRangePicker` senza pulsanti rapidi; pulsante del periodo comune (C2), con la nota «solo una parte della crisi» nelle crisi del catalogo | `levels/l4/L4Replay.svelte`, `levels/l4/scenarioHelpers.ts` | ✅ 05/10 — committato `26338dc8a`…`c42bbad9e` («F3 — il blocco del replay»); i pulsanti rapidi sono tornati con D376 |
+| F4 | benchmark: non ammissibili grigi con il motivo, con avviso selezionabili e segnalati; cambia col periodo — **dopo la fusione F → Risk**, con le chiavi `risk.eligibility.*` di F (proposta al coordinator) | `levels/L3Benchmark.svelte` | ✅ 06/10 — con D378 («Fase 2: `BenchmarkSelect` sul pannello degli asset di F») |
 | F5 | test delle palette che leggono i colori dai grafici veri; puntatori per contenuto, non per riga | test di `AllocationPieChart` / `AllocationHistoryChart` (solo lettura dei `.svelte`) | ✅ 25/09 |
 | F6 | `dashboard.allocationGeneric` chiamata con `$t(`, così l'audit la vede | `AllocationPieChart.svelte` | ✅ 24/09 · anticipato nel checkpoint B |
-| F7 | E2E: riscritto quello del replay bloccato; aggiornati quelli che si aspettavano «Parziale» sotto i livelli | `frontend/e2e/portfolio/risk-analysis.spec.ts` | ⏳ prima di F → Risk solo la parte non-replay; il replay dopo |
-| F8 | screenshot per il developer: icona composita (D-K2), avviso unico, replay, benchmark | — | ⏳ per le parti pronte; il replay dopo F → Risk |
+| F7 | E2E: riscritto quello del replay bloccato; aggiornati quelli che si aspettavano «Parziale» sotto i livelli | `frontend/e2e/portfolio/risk-analysis.spec.ts` | ✅ — la parte non-replay il 25/09 con F2, il replay il 05/10 con F3 |
+| F8 | screenshot per il developer: icona composita (D-K2), avviso unico, replay, benchmark | — | ✅ 25/09 per le parti pronte («F8 — screenshot…»); il replay rivisto dal developer nella revisione combinata del 05/10, da cui D375 e D376 |
 | F9 | `runGuarded`: una risposta arrivata e scartata (il `null` di `queryRisk`) non diventa più «nessun risultato» muto — richiesta una volta sotto la nuova generazione, poi uno stato «scartata» per analisi, mostrato dalla sezione; test deterministici sul controller, **scritti da test-author e rossi prima della cura**, sui tre casi (`null` poi risposta → risposta; `null` due volte → scartata; generazione superata → nessuna nuova richiesta); la frase nel mio namespace `risk.*`, non in `risk.eligibility.*` (**obbligatorio**: il polling della Correlazione resta, decisione D11 del developer; confermato dal coordinator) | `stores/risk/riskPanelController.svelte.ts`, sezioni L4 | ✅ 25/09 |
 
 Pulsante del periodo comune in alto (zona asset di Asset Global): la zona è di F; chi lo mette (F con il
@@ -1091,7 +1091,7 @@ mio endpoint, oppure io dopo l'integrazione di F) lo decide il coordinator. All'
 collegare `docsPath`/`docsLabel` di F nella Dashboard, togliere `height` da `L2Diversification`,
 sostituire `allocationFamily` con `assetTypeFamily` di K.
 
-### Incarico nuovo — l'icona della documentazione su tutti i pannelli · ⏳ (deciso dal developer il 24/09, 13:1x)
+### Incarico nuovo — l'icona della documentazione su tutti i pannelli · 🟠 fatto sulle pagine del rischio, **aperto** sulle altre (deciso dal developer il 24/09, 13:1x; allineamento del 09/10 in fondo)
 
 Parole del developer, riportate dal coordinator: *«l'icona, solo lei, allineata a destra … in tutti i
 pannelli di tutte le pagine, con annessa pagina di documentazione (specifica o in comune) che la
@@ -1113,10 +1113,10 @@ documenta»*. Non si comincia adesso.
 
 | # | passo | stato |
 |---|---|---|
-| Doc0 | fusione di F nel mio ramo (la fa il developer): verifica dei genitori, conflitti risolti in modo additivo, cancelli di entrambe le parti sul combinato | ⏳ |
-| Doc1 | **analisi prima del codice**: inventario dei pannelli pagina per pagina e, per ciascuno, la sua pagina di doc — esistente o da scrivere con `docs-writer`, solo EN; le pagine di altri owner del round (Dashboard di I e J, Broker di J, Asset di K, PAC di D) le mette in sequenza il coordinator | ⏳ |
-| Doc2 | l'icona su tutti i pannelli, dopo l'approvazione dell'analisi | ⏳ |
-| Doc3 | pagine di doc mancanti (`docs-writer`), `mkdocs build` e `check-links` | ⏳ |
+| Doc0 | fusione di F nel mio ramo (la fa il developer): verifica dei genitori, conflitti risolti in modo additivo, cancelli di entrambe le parti sul combinato | ✅ 28/09 — G3, `d471e0b5b` |
+| Doc1 | **analisi prima del codice**: inventario dei pannelli pagina per pagina e, per ciascuno, la sua pagina di doc — esistente o da scrivere con `docs-writer`, solo EN; le pagine di altri owner del round (Dashboard di I e J, Broker di J, Asset di K, PAC di D) le mette in sequenza il coordinator | ⏳ **mai fatta**: l'icona c'è sulle pagine del rischio, non sulle altre → README della cartella, buchi (B1) |
+| Doc2 | l'icona su tutti i pannelli, dopo l'approvazione dell'analisi | 🟠 sul rischio sì (livelli con `docsPath` di `RiskLevelSection`, laboratorio `ba9bb5501`, card L1, tabella L3); sulle altre pagine no — **aperto** |
+| Doc3 | pagine di doc mancanti (`docs-writer`), `mkdocs build` e `check-links` | 🟠 sul rischio sì (`check-links` verde); il resto dipende da Doc1 — **aperto** |
 
 ### F6 — la chiave che l'audit credeva morta · ✅ 24/09/2026 (anticipato nel checkpoint B)
 
@@ -1161,7 +1161,7 @@ impronta del contenuto): lista asset (3) → backend del rischio (21) → i18n (
 > `b20f926fb` → `a766a9d5d` → `708187d8f` → `81499e0a8` → `c4135c1d1` → `a983808ad` → `14c334d85`, su
 > `03c1f52e7`: 3 + 21 + 4 + 7 + 2 + 1 + 1 = 39 file, albero pulito, letti e verificati da me.
 
-### C1–C3 — periodo comune e avviso forte · 🔵 codice ✅ 24/09/2026
+### C1–C3 — periodo comune e avviso forte · ✅ 24/09/2026 (test e commit: «C — i test del checkpoint», «Checkpoint C — committato»)
 
 > **Note implementazione**:
 > - `PriceWindowFacts` guadagna la prima quotazione nella finestra e la prima e l'ultima di sempre; il
@@ -1330,7 +1330,7 @@ impronta del contenuto): backend (8) → i18n (4) → test (6) → journal (1).
 > `3ba802b42` → `fbb4773d2` → `d7d6fb293` → `96931b7f4`, su `14c334d85`: 8 + 4 + 6 + 1 = 19 file, albero
 > pulito, letti e verificati da me. Da qui anche questi sono storia condivisa: mai riscriverli.
 
-## Tempo ② — giro frontend · 🔵 aperto il 24/09/2026
+## Tempo ② — giro frontend · ✅ chiuso il 25/09/2026 (F1, F2, F5, F6, F8, F9 committati; F3 e F4 passati al «Giro UI rischio»)
 
 Ordine concordato col coordinator: **F1 per primo**, in un commit suo, con i test **rossi prima della cura**;
 poi F9, F2, F3, F5, F7, F8; F4 dopo F → Risk.
@@ -1579,7 +1579,7 @@ server della copia di prod è stato spento):
 > K1–K9) → `dev_release2` → Risk (J) → Risk → A e Risk → F; poi la divisione, con un proprietario unico per ogni
 > superficie condivisa.
 
-## Giro UI rischio — coordinamento di A + F + Risk · 🔵 aperto il 25/09/2026
+## Giro UI rischio — coordinamento di A + F + Risk · ✅ G0–G7 chiusi il 29/09/2026 (il giro è proseguito nelle sezioni seguenti, fino all'08/10)
 
 > **Ordine rivisto dal developer** (25/09, 12:0x): prima di riprendere lo sviluppo Risk, F e A tirano dentro il
 > `dev_release2` corrente, così nessuno si allontana troppo; quindi `dev_release2` → Risk viene **prima** di F → Risk.
@@ -1599,10 +1599,10 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 | G1 | **`dev_release2` → Risk** (simulazione e script del coordinator; conflitti additivi, solo risoluzioni) e validazione del combinato nella 6152, **con la privacy accesa e spenta** sulle quattro superfici con importi (schede di L1, importi del replay, tornado di L4, cifre di Asset Global): ciò che passa per le primitive di J segue la modalità da sé, ciò che formatta il denaro a mano no, e il cancello `moneyRenderSites.test.ts` vede solo le righe con un simbolo di valuta | ✅ 28/09 — fusione `81f762d11`; validazione verde dopo la riparazione del pin di `risk.errors`; privacy accesa e spenta ✅ |
 | G2 | **F**: checkpoint dei 31 file, poi `dev_release2` → F allo stesso modo | ✅ 28/09 — `dev_release2` → F fatto da F (`5010fe815`), checkpoint di F committato |
 | G3 | **F → Risk**, con tutti e due sulla stessa base: restano solo i conflitti fra me e F | ✅ 28/09 — `d471e0b5b` (genitori `b9ee8d7be` + `533a18787`), 5 conflitti additivi risolti da me |
-| G4 | commit mio con gli adattamenti K1–K9 al codice di F | 🔵 codice ✅, test ✅ 28/09 — in consegna al coordinator come checkpoint |
+| G4 | commit mio con gli adattamenti K1–K9 al codice di F | ✅ 28/09 — committato («G4 — committato; `dev_release2` con K → Risk») |
 | G5 | validazione del ramo combinato | ✅ 28/09 — validazione del combinato (vedi sotto) |
-| G6 | A e F avanzano in fast-forward alla punta di Risk | ⏳ |
-| G7 | tabella dei proprietari, confermata col developer, al coordinator; poi il via del developer | ⏳ |
+| G6 | A e F avanzano in fast-forward alla punta di Risk | ✅ 29/09 — base comune `ffe41c5ba` («Giro UI rischio — il passaggio visivo del developer») |
+| G7 | tabella dei proprietari, confermata col developer, al coordinator; poi il via del developer | ✅ 29/09 — tabella approvata dal developer (stessa sezione) |
 
 > **Reperti di A per dopo la baseline** (sovrapposizioni semantiche, che Git non vede): con la regola nuova del
 > «parziale» (7 giorni) la regola 3 della sua pagina utente e una riga della guida D3 non valgono più; con
@@ -1643,7 +1643,7 @@ CHANGELOG, client generato). Commit e fusioni li fa solo il developer.
 > **Regola da ora**: ogni script ha `# NN ·` prima di ogni blocco di commit, anche se è uno solo, e una guardia
 > `GUARDS_ONLY=1` che si ferma dopo i controlli; il coordinator taglia al primo `git … add` e rifiuta se ne resta uno.
 
-### G1 — `dev_release2` → Risk · 🔵 25/09/2026
+### G1 — `dev_release2` → Risk · ✅ 28/09/2026 (fusione `81f762d11` del 25/09, validata nella sezione seguente)
 
 > **Fusione** `81f762d11` fatta dal developer con lo script del coordinator: pulita, albero identico alla simulazione
 > (`385b9ed7`), dentro J (privacy) e A (i suoi 4 commit). `api sync` rifatto (solo file ignorati).
@@ -2070,7 +2070,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `docs_path` non fa comparire nessun pulsante, perché la pagina dell'asset disegna quella serie senza `DocsLink` →
 > decisione dell'interfaccia, di I (segnalata al coordinator).
 
-### Il calendario di borsa nel motore — giro 1: riporti, festivi e TWRR · 🔵 30/09/2026
+### Il calendario di borsa nel motore — giro 1: riporti, festivi e TWRR · ✅ 30/09/2026 (`6b6cc72ca`, poi il giro 2)
 
 > **Numeri prima del codice** (copia di prod, sola lettura, script e cifre solo in `/tmp`): sull'anno, il VaR
 > giornaliero della Dashboard sale di circa un terzo e quello mensile di circa un quarto; nel laboratorio il VaR
@@ -2405,8 +2405,8 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >
 > | chi | cosa | stato |
 > |---|---|---|
-> | A | `RiskLevelsPanel`: niente esclusione degli asset posseduti; l'id morto | ⏳ test rossi prima |
-> | F | il selettore nel laboratorio, sopra L1° e L3° (decide il developer); la scelta corrente sempre visibile | ⏳ giro 4 |
+> | A | `RiskLevelsPanel`: niente esclusione degli asset posseduti; l'id morto | ✅ — `L3Benchmark` monta `BenchmarkSelect` con `measuredAssetIds={[]}` (`L3Benchmark.svelte:158`) |
+> | F | il selettore nel laboratorio, sopra L1° e L3° (decide il developer); la scelta corrente sempre visibile | ✅ — `AssetSetRiskPanel.svelte:842`, poi D371 e D378 |
 > | io | la primitiva, e la scheda Rischio della pagina dell'asset che legge e scrive il benchmark condiviso | ✅ 01/10 |
 >
 > **Una primitiva, non tre filtri.** La regola vive in `components/risk/BenchmarkSelect.svelte` con
@@ -2618,7 +2618,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > copia privata nei file della sessione (`drwx------`), per la revisione combinata. L'ultimo è la password di quelle
 > revisioni (`/tmp/libreFolio_review_pw`). Le copie di A e di F spettano a loro: ho passato a ciascuno la sua parte.
 
-### F3 — il blocco del replay · ⏳ 02/10/2026
+### F3 — il blocco del replay · ✅ 05/10/2026 (committato `26338dc8a` … `c42bbad9e`)
 
 > **Decisioni (D372)**, chieste al developer una alla volta:
 > 1. esclusione manuale: *«Toglierla»*;
@@ -2641,11 +2641,11 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > - nel backend, i motivi e i pesi degli esclusi anche quando non resta niente da rigiocare.
 >
 > **Passi**:
-> 1. ⏳ rossi (test-author): backend, `scenarioHelpers`, `L4Replay`, i due montaggi, gli E2E del replay;
-> 2. ⏳ codice e i18n;
-> 3. ⏳ revisione visiva col developer;
-> 4. ⏳ guida;
-> 5. ⏳ checkpoint.
+> 1. ✅ (05/10) rossi (test-author): backend, `scenarioHelpers`, `L4Replay`, i due montaggi, gli E2E del replay;
+> 2. ✅ (05/10) codice e i18n;
+> 3. ↪ revisione visiva col developer: rinviata alla revisione combinata del 05/10, da cui D375 e D376;
+> 4. ✅ (05/10) guida;
+> 5. ✅ (05/10) checkpoint.
 >
 > **⚠️ Fuori pista — due cose che il piano descriveva male, trovate prima di scrivere codice**:
 > - **I motivi di esclusione si vedevano già**, con i nomi, nell'elenco ambra in cima alla sezione L4: vengono dagli
@@ -3757,7 +3757,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `ValueError`, cade nel ramo `except ValueError` (`portfolio_optimization.py:224`). Oggi nessun pannello chiede
 > l'ottimizzazione; la regola di D379 riguardava la simulazione. Passato al coordinator.
 
-#### Il pin di `risk.errors` non conosceva i codici di visualizzazione · ✅ 08/10/2026 (FROZEN)
+#### Il pin di `risk.errors` non conosceva i codici di visualizzazione · ✅ 08/10/2026 (`47a9ab05e` · `289069038`, nel treno 15)
 
 > **La segnalazione** (coordinator, 08/10): un rosso nella mia area dalla run completa con coverage sul treno 14
 > (`9eb01c756`, corsia 6150). `test_risk_schemas.py::test_risk_error_catalogues_agree_across_languages` richiede che
@@ -3815,7 +3815,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >
 > **Il checkpoint**: 2 percorsi in 2 commit (il test, il diario), su HEAD `9eb01c756`.
 
-### L'istogramma a due barre e il «−0.0%» del pannello L1 (D380) · ✅ 08/10/2026 (FROZEN)
+### L'istogramma a due barre e il «−0.0%» del pannello L1 (D380) · ✅ 08/10/2026 (`3ceac8f83` · `a360d0dec` · `1aaee792e`)
 
 > **La segnalazione** (coordinator, 08/10 sera, da M con lo scatto `dashboard/risk-hurt` della gallery): nel blocco
 > «How much can it hurt?» l'istogramma ha solo 2 barre, e sotto c'è «VaR threshold at −0.0%».
@@ -3904,7 +3904,7 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 >
 > **Committato**: `3ceac8f83` · `a360d0dec` · `1aaee792e` su `70d02cd8e`, albero `2a1d42ada`, verificato da me.
 
-#### I due reperti di D380 nella 1.2 (D381) · ✅ 08/10/2026 (FROZEN)
+#### I due reperti di D380 nella 1.2 (D381) · ✅ 08/10/2026 (`f22141e63` · `a3535e82a` · `cf8e6be02`, nel treno 20)
 
 > **La decisione** (D381, testuale: *«Entrambi nella 1.2 (Consigliato)»*):
 > - mai «−0,00 €» sotto una perdita zero, con la regola decisa sul numero perché gli importi possono essere mascherati;
@@ -3962,3 +3962,48 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > provider.
 >
 > **Il checkpoint**: 7 percorsi in 3 commit (backend; frontend; diario), su HEAD `1aaee792e`.
+
+## Allineamento del 09/10/2026 — la cartella resta in `Phase_0/`, in pausa (D382)
+
+> **La richiesta** (coordinator, 09/10): verificare i piani completati, allinearli al codice e archiviare ciò che è
+> davvero finito. Per questa cartella il developer ha deciso che **non si archivia**: il rischio è in pausa fino a dopo
+> la 1.2 (D382). Le voci aperte di tutta la famiglia stanno in cima al [`README`](../README.md) della cartella.
+>
+> **Il metodo**: quattro letture in sola lettura, in parallelo (`explore`): il primo giro (mandati e `STATO.md`), i suoi
+> log, il secondo giro di A e di F, i documenti di testa e l'archivio G6. Ogni verdetto con un file e una riga; ogni
+> candidato «buco» verificato da me sul codice di `3cceb4f90` prima di scriverlo.
+>
+> **Note implementazione**:
+> - in questo file: i ⏳ e i 🔵 rimasti dal 23/09 al 02/10 sono chiusi con l'evidenza; Doc1–Doc3 restano aperti (B1);
+>   aggiunti gli SHA di D380, D381 e del pin di `risk.errors`;
+> - nel primo giro: 121 caselle dei mandati chiuse con l'evidenza, 5 lasciate aperte (C:171, F:316, I:181–182,
+>   J:359); in `STATO.md`, l'esito finale in cima, J «mai creato», i debiti 5, 8 e 13 chiusi, il 6 aperto; K8
+>   implementato, K9 superato;
+> - nel secondo giro: le chiusure con gli SHA dei piani di A e di F che non le avevano; l'esito delle schede del
+>   24/09; gli indici di S1, S5 e F-laboratorio;
+> - in testa: il README (pausa, cosa resta aperto, buchi), D382, D266 chiusa, la §14 di `07`, l'`08`, l'archivio G6.
+> - ultima passata: gli indici dei passi di F-L3 (L3-7, L4-5…7, L5-4…5, L6-1…4, L8-3) e i cinque punti della review di
+>   F-laboratorio, chiusi con l'evidenza; nel README, i vincoli del 16/09 superati nei fatti (D46 e il backend).
+>
+> **⚠️ Fuori pista**:
+> - **Uno script fermato a metà**: nel blocco del secondo giro, la riga F-3 compare in due tabelle di
+>   `F-laboratorio-postmerge.md`, e l'asserzione di unicità ha fermato lo script dopo le prime modifiche. Le restanti le
+>   ho applicate per numero di riga, senza ripetere quelle già fatte.
+> - **Una colonna sbagliata, presa prima di scrivere**: nelle tabelle di S5 e di F-laboratorio l'ultima colonna è la
+>   data, non lo stato; la funzione scrive nella colonna dello stato.
+> - **Un link rotto da prima**, l'unico della cartella: l'archivio G6 puntava a `Phase_0/01_signalMigration/`, che
+>   oggi sta in `Release_2/phases/`. Corretto. Lo script della skill, che risolve con normpath ogni link relativo,
+>   dà 0 link rotti nella cartella.
+> - **Una nota che spezzava una tabella**: in `REGISTRO.md` la nota dell'allineamento era finita fra le righe T1 e T2
+>   del secondo giro. L'ho spostata dopo l'ultima riga, con l'esito di T2, T3 e delle worktree di B, C e G.
+> - **Le cifre di J per il CHANGELOG valgono in un caso particolare.** Prima di proporre le righe di B4 ho confrontato
+>   lo stimatore di `v1.1.0` con quello di oggi, su campioni sintetici: il CVaR non scende mai, e il VaR si sposta solo
+>   quando `(1−c)·T` è intero, sempre verso l'alto, come in D209. Ma lo 0,27% vale a T = 750: fra 250 e 1500
+>   osservazioni la mediana al 95% è 0,385%. E il «0,03–0,13» di A9 vale al 16% di volatilità: al 5%, con tasso al
+>   5%, lo Sharpe era gonfiato di 0,30 e il Sortino di 0,44. È la trappola di D287, quindi le righe proposte danno
+>   l'ordine di grandezza e da cosa dipende, non una cifra.
+>
+> **Checkpoint (09/10, dopo la pausa del developer)**: 38 percorsi, tutti nella cartella, in un commit,
+> `docs(journal): align risk plans with the code`. `diff --check` pulito, 0 link rotti, privacy pulita, corsia 6152
+> libera. Le due righe di CHANGELOG di B4 e le evidenze dei buchi sono nell'handoff al coordinatore. FROZEN fino al
+> commit del developer.

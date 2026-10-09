@@ -4,6 +4,10 @@
 
 **P-map**: scope/scenario foundation + UI P4/P6-P13
 **Stato gate**: ▶️ autorizzato
+
+> ↪ *Allineamento 09/10/2026*: catena **superata** dalla ripianificazione del 16/09 (README della cartella: «La catena G6
+> non viene ripresa»). I ⏳ qui sotto non sono lavoro aperto: Dashboard, Broker e laboratorio sono stati rifatti nei giri
+> `implementation/` e `implementation_2/`; la scheda di Asset Detail resta parcheggiata (D47).
 **Modello dipendenze**: catena unica; ogni item dipende soltanto dal precedente
 
 > **Approvazione — 29 Luglio 2026.** IA e contratti G6 sono approvati. Il lavoro

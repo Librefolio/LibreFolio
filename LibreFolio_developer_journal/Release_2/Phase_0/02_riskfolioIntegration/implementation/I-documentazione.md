@@ -163,20 +163,30 @@ se uno slug deve cambiare, lo si comunica, non lo si cambia e basta.
 
 **Primo tempo** (subito, prima che E scriva un solo `DocsLink`):
 
-- [ ] mock di due righe **in inglese** per ogni pagina prevista;
-- [ ] tutte registrate in `mkdocs_src/mkdocs.yml`;
-- [ ] `mkdocs build` (strict) e `check-links` **verdi**;
-- [ ] **K7 consegnato** a E, F, H.
+- [x] mock di due righe **in inglese** per ogni pagina prevista;
+  ↳ *allineamento 09/10*: ✅ le pagine in `mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/`
+- [x] tutte registrate in `mkdocs_src/mkdocs.yml`;
+  ↳ *allineamento 09/10*: ✅ `mkdocs_src/mkdocs.yml`
+- [x] `mkdocs build` (strict) e `check-links` **verdi**;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] **K7 consegnato** a E, F, H.
+  ↳ *allineamento 09/10*: ✅ `contracts/K7.md`
 
 **Secondo tempo** (durante):
 
-- [ ] ogni pagina riempita in inglese, derivata da
+- [x] ogni pagina riempita in inglese, derivata da
       [`../02-verdetti-per-strumento.md`](../02-verdetti-per-strumento.md);
-- [ ] la pagina CVaR spiega il cambiamento di stimatore, coordinata con J;
-- [ ] la lezione sulla gaussiana nella pagina VaR;
-- [ ] `build` e `check-links` ancora verdi.
+  ↳ *allineamento 09/10*: ✅ 22 pagine `.en.md` piene
+- [x] la pagina CVaR spiega il cambiamento di stimatore, coordinata con J;
+  ↳ *allineamento 09/10*: ✅ `conditional-value-at-risk.en.md`
+- [x] la lezione sulla gaussiana nella pagina VaR;
+  ↳ *allineamento 09/10*: ✅ `value-at-risk.en.md`
+- [x] `build` e `check-links` ancora verdi.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
 
 **Terzo tempo** (solo su richiesta esplicita del developer, a documentazione finita):
 
 - [ ] traduzioni in blocco unico tramite la pipeline;
+  ↳ *allineamento 09/10*: ⏳ solo su richiesta esplicita del developer (regola del progetto); oggi 5 pagine su 22 hanno le traduzioni → README della cartella, aperti
 - [ ] `translate-validate` verde.
+  ↳ *allineamento 09/10*: ⏳ come sopra

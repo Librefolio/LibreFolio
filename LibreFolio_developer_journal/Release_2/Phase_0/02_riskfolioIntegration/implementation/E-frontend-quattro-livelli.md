@@ -351,18 +351,32 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc \
 
 ## 11. Definizione di finito
 
-- [ ] `RiskAnalysisPanel.svelte` **non esiste più** nella sua forma monolitica;
-- [ ] **nessun file del mandato supera le 600 righe**;
-- [ ] ogni pannello appartiene a un livello e a uno solo;
-- [ ] Dashboard e Broker Detail montano **lo stesso componente** con scope diverso;
-- [ ] L1 ha la scala temporale, il CVaR primario, gli euro accanto alle percentuali e
+- [x] `RiskAnalysisPanel.svelte` **non esiste più** nella sua forma monolitica;
+  ↳ *allineamento 09/10*: ✅ Dashboard e Broker montano `levels/RiskLevelsPanel.svelte`; `RiskAnalysisPanel.svelte` resta solo nella scheda Rischio di Asset Detail, parcheggiata (D47)
+- [x] **nessun file del mandato supera le 600 righe**;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] ogni pannello appartiene a un livello e a uno solo;
+  ↳ *allineamento 09/10*: ✅ `frontend/src/lib/components/risk/levels/`
+- [x] Dashboard e Broker Detail montano **lo stesso componente** con scope diverso;
+  ↳ *allineamento 09/10*: ✅ `routes/(app)/dashboard/+page.svelte` e `routes/(app)/brokers/[id]/+page.svelte`
+- [x] L1 ha la scala temporale, il CVaR primario, gli euro accanto alle percentuali e
       un `DocsLink` **per riga**;
-- [ ] L2 mostra lo scarto peso/contributo con barre divergenti, titolo generato dai dati;
-- [ ] L3 mostra Sortino, non Sharpe, e il benchmark persistente;
-- [ ] L4 è **chiuso di default**, con i tre gradini in ordine di distanza dai dati;
-- [ ] TE, IR e `sobol_start_index` **spariti dalla UI**;
-- [ ] zero barre divergenti a mano;
-- [ ] `formatCurrencyAmount` **conservato** — non è un doppione, e i suoi sei test restano verdi;
-- [ ] i cinque innesti ricevuti e collegati, o dichiarati mancanti;
-- [ ] lint, `svelte-check`, Vitest ed E2E verdi;
-- [ ] nessun processo in ascolto su `6244`.
+  ↳ *allineamento 09/10*: ✅ `levels/L1HowMuchItHurts.svelte`
+- [x] L2 mostra lo scarto peso/contributo con barre divergenti, titolo generato dai dati;
+  ↳ *allineamento 09/10*: ✅ `levels/L2Diversification.svelte`
+- [x] L3 mostra Sortino, non Sharpe, e il benchmark persistente;
+  ↳ *allineamento 09/10*: ↪ superato: la tabella L3 del secondo giro mostra Sortino **e** Sharpe (CHANGELOG 1.2.0)
+- [x] L4 è **chiuso di default**, con i tre gradini in ordine di distanza dai dati;
+  ↳ *allineamento 09/10*: ✅ chiuso di default, poi il selettore degli strumenti (D376, D377)
+- [x] TE, IR e `sobol_start_index` **spariti dalla UI**;
+  ↳ *allineamento 09/10*: ✅ nei livelli (`levels/l4/L4Simulation.svelte`); restano nella scheda di Asset Detail, parcheggiata (D47)
+- [x] zero barre divergenti a mano;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] `formatCurrencyAmount` **conservato** — non è un doppione, e i suoi sei test restano verdi;
+  ↳ *allineamento 09/10*: ✅ `frontend/src/lib/components/risk/riskAnalysisHelpers.ts`
+- [x] i cinque innesti ricevuti e collegati, o dichiarati mancanti;
+  ↳ *allineamento 09/10*: ✅ `progress/E-esecuzione.md`, passo 10
+- [x] lint, `svelte-check`, Vitest ed E2E verdi;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] nessun processo in ascolto su `6244`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato

@@ -16,14 +16,14 @@ quando c'è — un «Fuori pista».
 |---|---|---|
 | 0 | Piano vivo | ✅ 2026-09-02 |
 | 1 | `l1Helpers.ts` + spec | ✅ 2026-09-02 |
-| 2 | Card al posto della `<ul>` | ⏳ |
-| 3 | Le quattro misure di W0 come seconde righe | ⏳ |
-| 4 | Underwater chart | ⏳ |
-| 5 | Istogramma dei rendimenti | ⏳ |
-| 6 | `DocsLink` sulle metriche | ⏳ |
-| 7 | Tabella di migrazione dei testid → T3 | ⏳ |
-| 8 | Cancelli | ⏳ |
-| 9 | Revisione del coordinatore nel browser | ⏳ |
+| 2 | Card al posto della `<ul>` | ✅ `ui/display/RiskMetricCard.svelte` in `L1HowMuchItHurts.svelte` (allineamento 09/10) |
+| 3 | Le quattro misure di W0 come seconde righe | ✅ seconde righe in `L1HowMuchItHurts.svelte` (allineamento 09/10) |
+| 4 | Underwater chart | ✅ `levels/l1/UnderwaterChart.svelte` (allineamento 09/10) |
+| 5 | Istogramma dei rendimenti | ✅ `levels/l1/ReturnHistogram.svelte` (allineamento 09/10) |
+| 6 | `DocsLink` sulle metriche | ✅ `ReturnHistogram.svelte`, `UnderwaterChart.svelte`, card L1 (allineamento 09/10) |
+| 7 | Tabella di migrazione dei testid → T3 | ✅ chiuso più sotto, con la fusione (allineamento 09/10) |
+| 8 | Cancelli | ✅ più sotto, fino al «Referto di chiusura» del 21/09 (`FROZEN`) (allineamento 09/10) |
+| 9 | Revisione del coordinatore nel browser | ✅ assorbita nel passo 11, «Il risveglio sulla revisione fusa» (allineamento 09/10) |
 
 ---
 

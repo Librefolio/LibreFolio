@@ -344,16 +344,26 @@ consentiti. Prima di dichiarare flaky un rosso: **`test-triage`**.
 
 Oltre a quella comune ([`README.md`](./README.md) §6):
 
-- [ ] `risk-oracle` verde, e **copre ogni funzione toccata da W1**;
-- [ ] le quattro trappole nome/grandezza sono test che falliscono allo scambio;
-- [ ] M2 fatto, con **entrambi** i difetti corretti, e l'effetto utente comunicato a J;
-- [ ] M1 fatto, con **prova esplicita** che `undefined_windows` non è cambiato;
-- [ ] M3 fatto, con `coverage` e `observations` identici a prima;
-- [ ] M6 fatto, a firme e semantica invariate;
-- [ ] M5 fatto **o** dichiarato rinviato con la ragione;
-- [ ] i due campi di schema consegnati, `api sync` eseguito, **K1 comunicato a E**;
-- [ ] `services risk-all` verde;
-- [ ] nessun processo in ascolto su `6240`.
+- [x] `risk-oracle` verde, e **copre ogni funzione toccata da W1**;
+  ↳ *allineamento 09/10*: ✅ `backend/test_scripts/test_services/test_risk_metrics_oracle.py`, servizio `risk-oracle` (STATO.md §7)
+- [x] le quattro trappole nome/grandezza sono test che falliscono allo scambio;
+  ↳ *allineamento 09/10*: ✅ blocco (c) dell'oracolo (`progress/A-esecuzione.md`)
+- [x] M2 fatto, con **entrambi** i difetti corretti, e l'effetto utente comunicato a J;
+  ↳ *allineamento 09/10*: ✅ M2 in `backend/app/services/risk/metrics.py` (stimatore frazionario della coda), spiegato in `conditional-value-at-risk.en.md`; **la voce di CHANGELOG non è mai stata scritta** → README della cartella, buchi
+- [x] M1 fatto, con **prova esplicita** che `undefined_windows` non è cambiato;
+  ↳ *allineamento 09/10*: ✅ `progress/A-esecuzione.md` (M1, `undefined_windows` invariato)
+- [x] M3 fatto, con `coverage` e `observations` identici a prima;
+  ↳ *allineamento 09/10*: ✅ `progress/A-esecuzione.md` (M3)
+- [x] M6 fatto, a firme e semantica invariate;
+  ↳ *allineamento 09/10*: ↪ superato da D149: M6 ridotta, e nessuna delle nove funzioni migrata, ognuna esclusa da una misura (`progress/A-esecuzione.md`)
+- [x] M5 fatto **o** dichiarato rinviato con la ragione;
+  ↳ *allineamento 09/10*: ✅ M5 dichiarata non fatta, con la ragione: la premessa era falsa, `risk_contribution.py` costruiva già la matrice
+- [x] i due campi di schema consegnati, `api sync` eseguito, **K1 comunicato a E**;
+  ↳ *allineamento 09/10*: ✅ campi consegnati, K1 a E (`progress/A-esecuzione.md`)
+- [x] `services risk-all` verde;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] nessun processo in ascolto su `6240`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
 
 ---
 
