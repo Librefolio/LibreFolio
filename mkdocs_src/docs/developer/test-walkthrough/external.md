@@ -10,10 +10,17 @@ To ensure that external providers (like Yahoo Finance, ECB, etc.) are reachable 
 
 | Sub-command | What It Tests |
 |-------------|---------------|
-| `fx-providers` | FX rate providers: ECB, FED, BOE, SNB, MANUAL |
+| `fx-providers` | Every registered FX provider: ECB, FED, BOE, SNB, MANUAL, and the MOCKFX test providers |
 | `asset-providers` | Asset pricing providers: yfinance, JustETF, CSS Scraper, etc. |
+| `justetf-multicurrency` | The JustETF provider in its four currencies (EUR, USD, CHF, GBP): current price, history, search, parameter validation |
 | `brim-providers` | Broker Report Import Manager parsers (local sample files, no network) |
+| `brim-danske-bank` | The Danske Bank report-set plugin: file roles, combining a set into one file, parsing it (local sample files, no network) |
+| `brim-degiro` | The DEGIRO plugin: recognition, reading by position, types, FX pairs, numbers, messages, orders list (local sample files, no network) |
 | `all` | All of the above |
+
+`--providers` and `--exclude-providers` (see [Provider Filtering](#provider-filtering)) filter
+`fx-providers`, `asset-providers` and `brim-providers`. `justetf-multicurrency`, `brim-danske-bank`
+and `brim-degiro` take no provider filter: `all` runs them in full whatever the filter says.
 
 ## 🚀 Running
 
@@ -26,8 +33,8 @@ To ensure that external providers (like Yahoo Finance, ECB, etc.) are reachable 
 ./dev.py test external asset-providers
 ./dev.py test external brim-providers
 
-# Verbose output
-./dev.py test -v external asset-providers
+# Quiet output (verbose is the default)
+./dev.py test -q external asset-providers
 
 # With coverage tracking
 ./dev.py test --coverage external all
