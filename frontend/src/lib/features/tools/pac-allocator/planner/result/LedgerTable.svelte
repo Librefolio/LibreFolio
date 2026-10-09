@@ -88,7 +88,8 @@
                 filterable: false,
                 align: 'right',
                 minWidth: 110,
-                cell: (row) => cell({type: 'money', amount: row[field], currency: row.currency, digits, testid: `pac-planner-ledger-${field}`}),
+                cell: (row) =>
+                    cell(field === 'rounding_delta' ? {type: 'exactMoney', money: {value: row.rounding_delta, currency: row.currency}, digits, testid: `pac-planner-ledger-${field}`} : {type: 'money', amount: row[field], currency: row.currency, digits, testid: `pac-planner-ledger-${field}`}),
             }),
         ),
     ]));
