@@ -437,7 +437,8 @@
     },
     "invalidCredentials": "Nom d'utilisateur ou mot de passe incorrect",
     "invalidInput": "Données non valides",
-    "loginFailed": "La connexion a échoué"
+    "loginFailed": "La connexion a échoué",
+    "accountDisabled": "Ce compte est désactivé : demandez à un administrateur de le réactiver."
   },
   "importWizard": {
     "title": "Importer des Transactions",
@@ -5421,5 +5422,22 @@
     "deselectVisible": "Désélectionner les visibles",
     "confirm": "Ajouter {count}",
     "allSelected": "Tous les actifs sont déjà dans la sélection."
+  },
+  "connectionSecurity": {
+    "level": {
+      "secure": "Connexion : sécurisée",
+      "local": "Connexion : réseau local",
+      "insecure": "Connexion : non sécurisée"
+    },
+    "reason": {
+      "https": "Chiffrée en HTTPS : votre navigateur considère cette connexion comme sécurisée.",
+      "localhost": "Vous êtes sur le serveur lui-même : le trafic ne quitte pas cet ordinateur.",
+      "vpn": "Chiffrée par le VPN (Tailscale) entre votre appareil et le serveur.",
+      "lan": "Réseau local sans chiffrement : toute personne sur le même réseau, par exemple le Wi-Fi, peut lire le trafic. Pour une sécurité maximale, utilisez l'adresse HTTPS aussi à la maison.",
+      "uncertain": "Incertaine : l'adresse que vous avez ouverte et la source que voit le serveur ne concordent pas, par exemple un nom public atteint par un DNS split ou un proxy local. Le trafic n'est pas chiffré : utilisez l'adresse HTTPS.",
+      "internet": "Non chiffrée sur Internet : les mots de passe et les données circulent en clair."
+    },
+    "cookieWarning": "Votre navigateur utilise HTTPS, mais le cookie de session n'est pas marqué Secure. Faites envoyer X-Forwarded-Proto par le reverse proxy (Nginx : proxy_set_header X-Forwarded-Proto $scheme;), ou remettez SESSION_COOKIE_SECURE sur auto s'il vaut never.",
+    "learnMore": "Comment se connecter en toute sécurité"
   }
 }

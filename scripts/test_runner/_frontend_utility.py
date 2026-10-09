@@ -36,6 +36,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/urlFilters.test.ts",
             "src/lib/utils/__tests__/trySave.test.ts",
             "src/lib/utils/layout/headerScroll.test.ts",
+            "src/lib/utils/security/connectionSecurity.test.ts",
             "src/lib/charts/__tests__/loadComparisonData.test.ts",
             "src/lib/charts/__tests__/signalLabel.test.ts",
             "src/lib/services/fxCreationSync.test.ts",
@@ -268,6 +269,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/transactions/import/ReportSetCard.escape.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
+            "src/lib/components/layout/ConnectionSecurityIndicator.test.ts",
             "src/lib/components/auth/UpdateAvailableModal.test.ts",
             "src/lib/components/settings/SettingControls.test.ts",
             "src/lib/components/settings/SettingsLayout.test.ts",
@@ -444,6 +446,18 @@ def front_app_start_auth(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("layout/app-start-auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_connection_security(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the connection-security indicator: localhost, a mapped .lan name and a public name, with and without a public source (plan 36)."""
+    print_section("Frontend Connection Security Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/connection-security.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run files destructive-route E2E tests (single/bulk delete, failure, BRIM)."""
     print_section("Frontend Files Destructive Tests")
@@ -613,6 +627,15 @@ def populate_registry(registry: dict) -> None:
         desc="Only a 401 signs out: a GET /auth/me silent past 5 s shows the server-unreachable panel on the requested page instead of leaving it, and its late answer loads that page; signed out, an app page goes to /?redirect=<path+query> and signing in there lands on it; a 401 mid-session goes to the login carrying the page it happened on (K step 19)",
         prereq="Populated DB + test users",
         tests="layout/app-start-auth.spec.ts",
+    )
+    add_test(
+        cat,
+        "connection-security",
+        front_connection_security,
+        name="Connection Security Indicator",
+        desc="The sidebar's connection indicator from the browser's view and the server's (GET /system/connection): secure on localhost, local network on a mapped .lan name, uncertain on a public name the server sees as local, not secure with the menu dot when the server sees a public source; details, docs link (plan 36)",
+        prereq="Populated DB + test users",
+        tests="layout/connection-security.spec.ts",
     )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
