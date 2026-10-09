@@ -110,8 +110,9 @@ def _log_engine_failure(exc: Exception, execution_id: str) -> None:
     discloses nothing more; without this line the failure left no trace at all.
     Only the exception class and the code location are logged — never the
     message, the arguments or the local variables, which can carry the user's
-    amounts. ``where`` is the innermost frame of LibreFolio code, ``raised_in``
-    the library frame below it, if any.
+    amounts. ``where`` is the innermost frame of LibreFolio code, ``callers``
+    the at most two LibreFolio frames that called it, nearest first, and
+    ``raised_in`` the library frame below it, if any.
 
     The worker is a spawn child that never calls ``configure_logging``: the
     line reaches the server's stderr (console, ``docker logs``), not
@@ -119,9 +120,12 @@ def _log_engine_failure(exc: Exception, execution_id: str) -> None:
     """
     frames = traceback.extract_tb(exc.__traceback__)
     own = [frame for frame in frames if Path(frame.filename).resolve().is_relative_to(_BACKEND_ROOT)]
-    site: dict[str, str] = {}
+    site: dict[str, str | list[str]] = {}
     if own:
         site["where"] = _frame_text(own[-1])
+        callers = [_frame_text(frame) for frame in reversed(own[-3:-1])]
+        if callers:
+            site["callers"] = callers
     if frames and (not own or own[-1] is not frames[-1]):
         site["raised_in"] = _frame_text(frames[-1])
     logger.error("PAC planner engine failure", error_type=type(exc).__qualname__, execution_id=execution_id, **site)
