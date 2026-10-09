@@ -153,6 +153,7 @@ PlannerIssueCode = Literal[
     "allocation.fee_schedule_missing",
     "allocation.fiscal_currency_missing",
     "allocation.funding_cap_negative",
+    "allocation.fx_rate_inconsistent",
     "allocation.fx_rate_missing",
     "allocation.fx_spread_rate_out_of_range",
     "allocation.identity_fx_rate_not_allowed",
@@ -1433,7 +1434,7 @@ class PlannerLedgerRow(AllocationStrictModel):
     sell_fees: PlannerFixedDecimal
     broker_withheld_tax: PlannerFixedDecimal
     self_reserved_tax: PlannerFixedDecimal
-    rounding_delta: PlannerFixedDecimal = Field(description="Raw posted-exact rounding delta; credits are negated in the accounting identity.")
+    rounding_delta: ExactNumber = Field(description="Raw posted-exact rounding delta; credits are negated in the accounting identity.")
     final_spendable: PlannerFixedDecimal
     final_physical: PlannerFixedDecimal
 
@@ -1774,10 +1775,9 @@ def _validate_no_op_common(solution: PacPlanSolution | RebalancerPlanSolution) -
         "sell_fees",
         "broker_withheld_tax",
         "self_reserved_tax",
-        "rounding_delta",
     )
     for row in solution.ledger_rows:
-        if any(_fixed_fraction(getattr(row, name)) != 0 for name in flow_fields):
+        if any(_fixed_fraction(getattr(row, name)) != 0 for name in flow_fields) or _exact_fraction(row.rounding_delta) != 0:
             raise ValueError("No-op ledger rows cannot contain action-derived postings")
         if _fixed_fraction(row.final_spendable) != _fixed_fraction(row.initial_selected) or _fixed_fraction(row.final_physical) != _fixed_fraction(row.initial_selected):
             raise ValueError("No-op ledger balances must preserve selected initial cash")

@@ -46,8 +46,8 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-if len(CANONICAL_ISSUE_CODES) != 76 or len(set(CANONICAL_ISSUE_CODES)) != 76:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 76-value G3 universe")
+if len(CANONICAL_ISSUE_CODES) != 77 or len(set(CANONICAL_ISSUE_CODES)) != 77:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 77-value G3 universe")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
@@ -69,6 +69,7 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.fee_schedule_missing": _normalizer_definition("allocation.fee_schedule_missing", "missing"),
     "allocation.fiscal_currency_missing": _normalizer_definition("allocation.fiscal_currency_missing", "missing"),
     "allocation.funding_cap_negative": _normalizer_definition("allocation.funding_cap_negative", "invalid"),
+    "allocation.fx_rate_inconsistent": _normalizer_definition("allocation.fx_rate_inconsistent", "invalid"),
     "allocation.fx_rate_missing": _normalizer_definition("allocation.fx_rate_missing", "missing"),
     "allocation.fx_spread_rate_out_of_range": _normalizer_definition("allocation.fx_spread_rate_out_of_range", "invalid"),
     "allocation.identity_fx_rate_not_allowed": _normalizer_definition("allocation.identity_fx_rate_not_allowed", "invalid"),

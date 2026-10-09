@@ -4270,7 +4270,8 @@
             "valuation_currency_missing": "La devise de valorisation est manquante.",
             "wac_fx_missing": "Le taux de change nécessaire au coût moyen est manquant.",
             "wac_missing": "Le coût moyen est manquant.",
-            "zero_selected_funding": "Les liquidités sélectionnées sont nulles."
+            "zero_selected_funding": "Les liquidités sélectionnées sont nulles.",
+            "fx_rate_inconsistent": "Ce taux de change ne concorde pas avec les taux de {source_currency} et {destination_currency} par rapport à {valuation_currency} : convertir {source_currency} en {destination_currency} créerait de la valeur. Alignez les taux ou définissez un spread de conversion."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Cet outil n’accepte pas de positions existantes.",

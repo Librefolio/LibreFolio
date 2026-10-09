@@ -131,11 +131,14 @@ def terminating_decimal_text(value: ExactRatio) -> str | None:
 def ratio_to_fixed_decimal(value: ExactRatio) -> str:
     """Return canonical fixed-decimal text for a value that must terminate.
 
-    Used for ``PlannerFixedDecimal`` fields — the ledger rows — where the wire
-    has no exact-ratio escape hatch. Every ledger figure is a posted amount,
-    i.e. an integer multiple of a currency quantum, so termination is
-    guaranteed in practice; if it ever is not, that is a real defect and this
-    raises instead of inventing a rounding.
+    Used for ``PlannerFixedDecimal`` fields — the posted ledger amounts among
+    them — where the wire has no exact-ratio escape hatch. A posted amount is
+    an integer multiple of a currency quantum, so it terminates; if it ever
+    does not, that is a real defect and this raises instead of inventing a
+    rounding. A value that is not posted, such as the ledger's raw
+    posted-minus-exact ``rounding_delta``, goes through
+    ``ratio_to_exact_number`` instead: the exact credit of a conversion at the
+    reciprocal of a stored rate need not terminate.
     """
     text = terminating_decimal_text(value)
     if text is None:

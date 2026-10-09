@@ -4270,7 +4270,8 @@
             "valuation_currency_missing": "The valuation currency is missing.",
             "wac_fx_missing": "The exchange rate needed for the average cost is missing.",
             "wac_missing": "The average cost is missing.",
-            "zero_selected_funding": "The selected liquidity is zero."
+            "zero_selected_funding": "The selected liquidity is zero.",
+            "fx_rate_inconsistent": "This exchange rate does not match the {source_currency} and {destination_currency} rates against {valuation_currency}: converting {source_currency} into {destination_currency} would create value. Align the rates or set a conversion spread."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "This Tool does not accept existing holdings.",
