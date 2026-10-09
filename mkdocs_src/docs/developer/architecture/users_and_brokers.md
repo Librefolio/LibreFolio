@@ -16,7 +16,7 @@ session state, neither in memory nor in the database.
 3. **Cookie Issuance**: The server responds with a `Set-Cookie` header for the `session` cookie, which holds the JWT; its `max_age` matches the token's lifetime.
     - **`HttpOnly`**: The cookie cannot be accessed by JavaScript (prevents XSS token theft).
     - **`SameSite=Lax`**: Provides protection against CSRF attacks.
-    - **`Secure`**: not set (`SESSION_COOKIE_SECURE = False` in `backend/app/api/v1/auth.py`), so the browser also sends the cookie over plain HTTP. HTTPS comes from the reverse proxy: see [HTTPS & Deployment Architecture](security.md#https-deployment-architecture).
+    - **`Secure`**: decided by `session_cookie_secure()` in `backend/app/api/v1/auth.py` from `SESSION_COOKIE_SECURE`. `auto`, the default, sets it on HTTPS, seen directly or as the first `X-Forwarded-Proto` value of a reverse proxy; `always` and `never` force it. Login, logout and account deletion use the same rule. See [Configuration](../../admin/configuration.md).
 4. **Authenticated Requests**: The browser automatically includes the session cookie in subsequent requests.
 5. **Validation**: On every request, `get_current_user()` verifies the token's signature and expiry, then loads the user from the database: a missing or deactivated user gets `401` even with a valid token.
 

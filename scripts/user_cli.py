@@ -131,7 +131,7 @@ async def cmd_list_users():
 
         if not users:
             print("No users found")
-            return
+            return True
 
         print(f"\n{'ID':<5} {'Username':<20} {'Email':<30} {'Active':<8} {'Super':<8}")
         print("-" * 75)
@@ -142,6 +142,7 @@ async def cmd_list_users():
             print(f"{user.id:<5} {user.username:<20} {user.email:<30} {active:<8} {superuser:<8}")
 
         print(f"\nTotal: {len(users)} user(s)")
+        return True
 
 
 async def cmd_set_user_active(username: str, active: bool):
@@ -258,9 +259,9 @@ Examples:
 
     if not args.command:
         parser.print_help()
-        return
+        return 0
 
-    _dispatch_user_command(args)
+    return 0 if _dispatch_user_command(args) else 1
 
 
 def _dispatch_user_command(args):
@@ -272,21 +273,22 @@ def _dispatch_user_command(args):
         print("ℹ️  Operating on TEST database")
 
     if args.command == "reset-password":
-        asyncio.run(cmd_reset_password(args.username, args.new_password))
+        return asyncio.run(cmd_reset_password(args.username, args.new_password))
     elif args.command == "create-superuser":
-        asyncio.run(cmd_create_superuser(args.username, args.email, args.password))
+        return asyncio.run(cmd_create_superuser(args.username, args.email, args.password))
     elif args.command == "list-users":
-        asyncio.run(cmd_list_users())
+        return asyncio.run(cmd_list_users())
     elif args.command == "deactivate":
-        asyncio.run(cmd_set_user_active(args.username, False))
+        return asyncio.run(cmd_set_user_active(args.username, False))
     elif args.command == "activate":
-        asyncio.run(cmd_set_user_active(args.username, True))
+        return asyncio.run(cmd_set_user_active(args.username, True))
     elif args.command == "promote":
-        asyncio.run(cmd_set_admin(args.username, True))
+        return asyncio.run(cmd_set_admin(args.username, True))
     elif args.command == "demote":
-        asyncio.run(cmd_set_admin(args.username, False))
+        return asyncio.run(cmd_set_admin(args.username, False))
     elif args.command == "init-settings":
-        asyncio.run(cmd_init_settings())
+        return asyncio.run(cmd_init_settings())
+    return False
 
 
 def register_subparser(parent_subparsers):
@@ -374,9 +376,9 @@ def _dispatch_user_from_devpy(args):
         }
     args.command = command_map.get(args.command, args.command)
 
-    _dispatch_user_command(args)
-    return 0
+    # A command that fails (it printed ❌) exits 1, for scripts that check the status.
+    return 0 if _dispatch_user_command(args) else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

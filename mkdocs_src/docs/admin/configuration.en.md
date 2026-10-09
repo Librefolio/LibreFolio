@@ -1,6 +1,6 @@
 # 📝 Configuration
 
-Startup options live in a `.env` file: ports, the data folder, logging, the session key and a few
+Startup options live in a `.env` file: ports, the data folder, logging, login sessions and a few
 optional features. It sits at the root of the project, or next to `docker-compose.yml` with
 Docker. The options you change from inside the app are [Global Settings](settings.md) instead.
 
@@ -33,8 +33,44 @@ the same sample as `.env`.
 | `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Folder of the database, uploads, broker reports and logs; a relative path starts from the project folder. Docker fixes it to `/app/backend/data/prod-docker`: to move the data on the host, change the left side of the `./LibreFolio-data` volume in `docker-compose.yml`. |
 | `LOG_LEVEL` | `INFO` | How much the server logs: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. |
 | `JWT_SECRET` | _not set_ | Key that signs login sessions. Not set: a new key at every start, so everyone logs in again after a restart. See [Keep users signed in](index.md#session-persistence). |
+| `SESSION_COOKIE_SECURE` | `auto` | When the login session cookie is sent over HTTPS only: `auto` (if the browser uses HTTPS), `always` or `never`. See [HTTPS and reverse proxies](#session-cookie-secure). |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memory, in MB, of the image-preview cache in each server process. |
-| `PORTFOLIO_BASE_CURRENCY` | `EUR` | Currently has no effect: new users start from the **Default Currency** in [Global Settings](settings.md). |
+
+Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
+users start from the **Default Currency** in [Global Settings](settings.md).
+
+??? info "🔒 HTTPS and reverse proxies — the session cookie"
+
+    `SESSION_COOKIE_SECURE` decides when the cookie that keeps users signed in is `Secure`: the
+    browser then sends it over HTTPS only, so the session never travels on an unencrypted
+    connection. Case and spaces around the value do not matter; any other value stops the server at
+    startup with an error.
+    {: #session-cookie-secure }
+
+    - **`auto`** (default): `Secure` when the browser reached LibreFolio over HTTPS. LibreFolio
+      itself serves plain HTTP, so HTTPS comes from a reverse proxy in front of it, which says so
+      with the `X-Forwarded-Proto: https` header; only its first value counts. There is no list of
+      trusted proxies to set up: the header can only turn `Secure` on, never off. Over plain HTTP,
+      such as `http://localhost:6040`, a LAN IP or the Tailscale IP of Levels 1 and 2 in
+      [Exposing Securely](service_exposure.md), the cookie is not `Secure`, so signing in keeps
+      working.
+    - **`always`**: always `Secure`, for an install reached over HTTPS only. Over plain HTTP the
+      browser drops the cookie, so the sign-in does not stick: the next page sends the user back
+      to the login page.
+    - **`never`**: never `Secure`. It is the way out when a proxy sends `X-Forwarded-Proto: https`
+      to a browser that actually uses plain HTTP, such as Nginx with a hard-coded
+      `proxy_set_header X-Forwarded-Proto https;` in a plain-HTTP `server` block: in `auto`, that
+      browser would be sent back to the login page after every sign-in. Fixing the proxy is better
+      (`$scheme` instead of `https`); `never` is the fallback.
+
+    Behind an HTTPS reverse proxy, `auto` relies on its `X-Forwarded-Proto` header:
+
+    - **Tailscale Serve and Funnel** (Levels 3 and 4 in [Exposing Securely](service_exposure.md)),
+      **Caddy** and **Traefik** send it on their own: nothing to configure.
+    - **Nginx** does not: add `proxy_set_header X-Forwarded-Proto $scheme;` to the `location` that
+      proxies LibreFolio.
+    - **Any other proxy**: make it send the header or, if LibreFolio is reachable only through it,
+      set `SESSION_COOKIE_SECURE=always`.
 
 ??? info "🧮 Risk engine workers — advanced tuning"
 

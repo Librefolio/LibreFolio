@@ -11,6 +11,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config import get_settings
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import (
@@ -42,10 +43,29 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 # Session cookie configuration
 SESSION_COOKIE_NAME = "session"
-SESSION_COOKIE_MAX_AGE = 60 * 60 * 24  # 24 hours in seconds
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
-SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+# SESSION_COOKIE_SECURE (config): auto | always | never — read once, so a wrong value stops the start.
+SESSION_COOKIE_SECURE_MODE = get_settings().SESSION_COOKIE_SECURE
+
+
+def session_cookie_secure(request: Request) -> bool:
+    """Whether the session cookie this response sets or clears carries the Secure attribute.
+
+    ``always`` and ``never`` decide alone. ``auto`` follows the browser: Secure on HTTPS, seen
+    directly or reported by a reverse proxy as the first ``X-Forwarded-Proto`` value. The header
+    counts whoever sent it, because it can only turn Secure on: a forged ``https`` breaks only the
+    sender's own login, and ``never`` is the way out for a proxy that claims https to a browser
+    on plain HTTP.
+    """
+    if SESSION_COOKIE_SECURE_MODE == "always":
+        return True
+    if SESSION_COOKIE_SECURE_MODE == "never":
+        return False
+    if request.url.scheme == "https":
+        return True
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    return forwarded_proto.split(",", 1)[0].strip().lower() == "https"
 
 
 def get_session_cookie(request: Request) -> str | None:
@@ -84,6 +104,7 @@ async def get_current_user(request: Request, session: AsyncSession = Depends(get
 async def login(
     request: AuthLoginRequest,
     response: Response,
+    http_request: Request,
     session: AsyncSession = Depends(get_session_generator),
 ):
     """
@@ -131,7 +152,7 @@ async def login(
         max_age=cookie_max_age,
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
-        secure=SESSION_COOKIE_SECURE,
+        secure=session_cookie_secure(http_request),
     )
 
     logger.info("User logged in", user_id=user.id, username=user.username)
@@ -150,6 +171,7 @@ async def login(
 @router.post("/logout", response_model=AuthLogoutResponse)
 async def logout(
     response: Response,
+    http_request: Request,
 ):
     """
     Logout current user and clear session cookie.
@@ -161,7 +183,7 @@ async def logout(
         key=SESSION_COOKIE_NAME,
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
-        secure=SESSION_COOKIE_SECURE,
+        secure=session_cookie_secure(http_request),
     )
 
     return AuthLogoutResponse(message="Logged out successfully")
@@ -277,6 +299,7 @@ async def update_profile(
 @router.delete("/users/me", response_model=dict)
 async def delete_own_account(
     response: Response,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ):
@@ -290,13 +313,13 @@ async def delete_own_account(
     Cannot be undone.
 
     Constraints:
-    - Cannot delete if you are the only superuser
+    - Cannot delete if you are the last active administrator (an inactive one cannot log in)
     - Session is invalidated after deletion
     """
-    # Check if this is the only superuser
+    # The last active administrator stays: inactive admins cannot log in to administer the instance
     if current_user.is_superuser:
-        superuser_count = await user_service.count_superusers(session)
-        if superuser_count <= 1:
+        other_active_admins = await user_service.count_active_superusers(session, excluding_user_id=current_user.id)
+        if other_active_admins == 0:
             raise HTTPException(status_code=400, detail="Cannot delete account: you are the only administrator")
 
     try:
@@ -316,7 +339,7 @@ async def delete_own_account(
         key=SESSION_COOKIE_NAME,
         httponly=SESSION_COOKIE_HTTPONLY,
         samesite=SESSION_COOKIE_SAMESITE,
-        secure=SESSION_COOKIE_SECURE,
+        secure=session_cookie_secure(http_request),
     )
 
     return {"message": "Account deleted successfully"}

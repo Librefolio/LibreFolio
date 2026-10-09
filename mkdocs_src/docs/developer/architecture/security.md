@@ -228,7 +228,7 @@ graph LR
 To ensure the application behaves correctly behind a proxy (e.g., generating correct redirect URLs), you must ensure the proxy sets the standard headers:
 
 - `X-Forwarded-For`
-- `X-Forwarded-Proto` (should be `https`)
+- `X-Forwarded-Proto` (the scheme the browser used: `$scheme` in Nginx). LibreFolio reads it to mark the session cookie `Secure`.
 
 ## 🐛 Reporting a Vulnerability
 
