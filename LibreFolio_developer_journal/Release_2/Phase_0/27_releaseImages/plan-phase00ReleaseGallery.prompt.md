@@ -1736,3 +1736,76 @@
 >   - accept B and E;
 >   - backlog **C** (truncation without an ellipsis), **F** (Actions without ⋮ on mobile), **G** (NBSP in `es.json`), «ROUTING–» without a space, «Riepilogo/Récapitulatif» used twice.
 > - **Step 22 closed.** CHECKPOINT READY sent; M FROZEN.
+>
+> **Batch 9 committed and integrated:** `29103f95b` (docs pac), merge `83cb002a2`, train 27 (`dev_release2` = `9f060ef6e`).
+>
+> **Coordinator's decisions on batch 9** (20:01):
+> - A (desktop IT Routing): accepted under rule (c);
+> - B (Review desktop, 8 px) and E (Assets mobile, the fallback): accepted;
+> - **D** (Targets mobile): batch 10 approved, fixture only;
+> - product defects:
+>   - to D (backlog of row 13): C (truncation without an ellipsis), F («Actions» without ⋮ on mobile), «ROUTING–», «Riepilogo/Récapitulatif», the Targets table layout on mobile;
+>   - to S (catalogues): G (NBSP before «%» in `es.json`).
+
+## Batch 10 — Targets shots: the fixture leaves no focus and no horizontal scroll (base `9f060ef6e`, train 27)
+
+### 23. ✅ `framePacTargets`: blur and horizontal scroll reset before the shot — 2026-10-09
+
+> **Coordinator's brief** (20:03):
+> - only the fixture of the Targets shots on mobile: remove the focus from the input and reset the scroll before the shot;
+> - re-shoot only the shots touched;
+> - lane 6158/6168;
+> - review the images as usual;
+> - checkpoint, then FROZEN.
+>
+> **23.1 ✅ Baseline and analysis (M, 20:10)**
+> - HEAD `9f060ef6e` = `dev_release2` (fast-forward; M's B9 commit `29103f95b` inside); worktree clean; 6158 and 6168 free.
+> - Train 27 touched no file under `frontend/e2e`, `components/ui` or `features/tools`: the fixture is the same as in batch 9.
+> - **Cause**, `galleryPac.ts`:
+>   - `framePacTargets` types the bond's target (`typeValue` → `input.fill`). `fill` focuses the input and scrolls it into view, inside the DataTable's horizontal scroller too: `.table-wrapper`, `overflow-x: auto` (`DataTable.svelte:1559-1561`).
+>   - On a phone the table is wider than the screen, so the wrapper stays scrolled. The selection column is sticky on the left (`.td-select`) and the Actions column sticky on the right (`.td-fixed`), so the names end up cut under the checkboxes and «Actions» over the inputs.
+>   - Header and body share the same scroller, so they are not really misaligned: it is the stickies that overlap.
+> - **On desktop too** the bond input keeps the **focus ring** in all 8 `pac-step-targets` (seen by M in en/light: a dark, thicker border), but the table fits, so there is no scroll.
+>   - The blur goes in the shared fixture: the desktop Targets shot changes too, only in its focus ring. A viewport-only blur would be artificial; to report in the checkpoint.
+> - **What changes on disk in a re-run:**
+>   - desktop: every shot, because of the version label in the sidebar (`v1.1.0-1089-g9f060ef6e-dirty` instead of `…1078-g083ed26dc…`);
+>   - mobile: the sidebar is not visible, so the other step shots should come out **byte-identical**.
+>   - Pixel diffs with PIL and numpy (present in the venv) delimit each change.
+> - Before-hashes `runs/b10_pac_before.tsv`, the same as batch 9's after.
+> - Test-author: red first (assertions in the fixture: input not focused, scroller at `scrollLeft` 0), then the fix, then green, diffs and review.
+>
+> **23.2 ✅ RED → fix → GREEN, diffs, review (test-author, 20:15–20:28)**
+> - **RED** (`runs/b10_targets_red.{log,meta}`, 20:15:05–20:17:54, load 10.8 → 36.0): the new guard `expectPacTargetsAtRest` fails at the first combination on both viewports, «the Targets shot is not at rest…»:
+>   - desktop `focused: input[data-testid="pac-planner-target-input"]`, `scroller: 0`;
+>   - mobile the same focus plus `scroller: 53`.
+> - **Fix** (`galleryPac.ts`, +51/−2, the only file):
+>   - in `framePacTargets`, after `typeValue`: `bond.blur()`, then `scrollBackToFirstColumn(bond)` (every box from the field up to the page back to `scrollLeft` 0, `behavior: 'instant'`), then a check that the value stays 40 and the control `balanced`;
+>   - after the framing, the guard `expectPacTargetsAtRest`, an `expect.poll` on `{focused: null, scroller: 0, scrolledBoxes: []}`. The scroller is found structurally (the nearest ancestor with `overflow-x` auto/scroll); not found → `null` → red.
+>   - The guard also covers boxes scrolled sideways other than the wrapper (cells with `overflow: hidden`): in practice `scrolledBoxes: []`. `settlePacShot` still runs after the reset.
+> - **GREEN:**
+>   - `b10_targets_green` (20:19:03–20:20:21, 78 s, 2/2: mobile 40.8 s, desktop 42.6 s);
+>   - control `b10_targets_green2_desktop` (`--desktop-only --no-populate`, 65 s, 1/1).
+>   - No webServer timeout (rebuild within 300 s). Port free before and after every run.
+> - **Pixel diffs** (`runs/b10_pixel_diff.tsv`, `_summary.txt`; scripts `b10_pixel_diff.py`, `b10_regions.py`; the before copies in `/tmp/libreFolio_b10_before_png`, 0 mismatches against `b10_pac_before.tsv`):
+>
+> | viewport | shots | byte-identical | change |
+> |---|---|---|---|
+> | mobile | 5 non-Targets × 8 | **40/40** | none |
+> | mobile | Targets × 8 | 0/8 | table header and 3 rows only (box (294,1126)–(1188,1734)); selection column and Total untouched |
+> | desktop | all 48 | 0/48 | the sidebar's version label (box (41,688)–(215,701); 1,342–1,376 px) |
+> | desktop | Targets × 8 | — | plus the bond field's box (1044,531)–(1158,571): the focus ring is gone |
+>
+> - **⚠️ Off track:**
+>   - Desktop has anti-aliasing noise on rounded edges (asset icons, field corners), at most 9/255 on one channel. It changes between two desktop runs with the same code, build and DB (12/48 shots; `b10_green1_vs_green2_desktop.txt`). Verdict: **environment** (the renderer), not the fix; mobile shows none. The desktop shots on disk come from the second run (`b10_pac_after.tsv`); the first one's are kept in `*_green1*`.
+> - **Review of the 16 Targets** (`runs/b10_review_targets.tsv`; M saw mobile en/light and desktop it/dark):
+>   - **desktop 8/8 OK:** the table whole, 30/30/40 with «%», no focus ring, Total 100.00%, Balance all disabled, ⋮ in every row;
+>   - **mobile 8/8 OK, with the layout caveat:** the table from its first column, names whole («AAPL Apple Inc.», «Global Bond ETF»), no focus. But the **Target % inputs are off the right edge** (their values are not visible) and «Distributio» is cut by the sticky Actions column. This is the mobile layout issue already routed to D: before the batch the values could be seen and the names were cut; now the reverse.
+>   - «MSFT Microsoft C…» is cut on both viewports, as before (C, routed to D).
+> - **Gates:**
+>   - Prettier clean;
+>   - `tsc -p tsconfig.e2e.json`: only the 2 known errors;
+>   - `git diff --check` clean;
+>   - 6158 and 6168 free;
+>   - `dev_release2` still `9f060ef6e`.
+> - Triage: the original defect is an **assumption** (the fixture took for granted that `fill` leaves the table at rest), fixed in the fixture.
+> - **Step 23 closed.** CHECKPOINT READY sent; M FROZEN.
