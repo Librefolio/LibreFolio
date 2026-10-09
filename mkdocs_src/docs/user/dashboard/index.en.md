@@ -90,7 +90,7 @@ If any prices or FX rates are missing on the end date, a banner appears at the t
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="Dashboard data-quality banner with per-asset links">
 </div>
- Assets without a price provider (entered manually, such as real-estate crowdfunding projects) are permanently valued at purchase cost — this is intentional and does not generate a warning.
+ Assets without a price provider (entered manually, such as real-estate crowdfunding projects) are valued at the price of their latest transaction, unless you enter a more recent price yourself — this is intentional and does not generate a warning. An asset that does have a price provider but still has no market price on the end date, more than two weeks after you first bought it, is valued meanwhile at the price of its latest transaction too, and the banner lists it: a bond bought at issue, before its first quote, for example.
 
 The banner also warns you when an asset you hold has a price provider but its latest price is **more than a week old** on the end date: click **Sync prices** to fetch the missing prices, and the warning goes away once they are up to date. Manual assets are never flagged this way, since there is nothing to sync.
 
