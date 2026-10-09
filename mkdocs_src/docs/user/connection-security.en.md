@@ -11,7 +11,9 @@ sidebar with the details.
 For maximum security, give LibreFolio an HTTPS address and use it everywhere, even on your home
 network.
 
-<!-- [Screenshot Placeholder: security/connection-indicator — the sidebar's connection security indicator open on Connection: local network, with its reason and the How to connect securely link] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="security" data-name="connection-indicator" alt="The connection security indicator at the bottom of the sidebar, open on Connection: local network: its reason, that anyone on the same network can read the traffic, and the How to connect securely link" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ---
 

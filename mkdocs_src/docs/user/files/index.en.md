@@ -17,6 +17,7 @@ Here you find the users' **avatars**, the brokers' **icons** and any **image or 
 
 - Switch between **list** and **grid** view: the grid previews images.
 - In the list, right-click a file for **Preview**, **Copy Link**, **Download** or **Delete**. You can delete only the files you uploaded; an administrator can delete any.
+- **Preview** shows a PDF in a read-only viewer: you can read it, search it and copy its text, but not edit, annotate or print it; to keep the file, use **Download**. A password-protected PDF asks for its password, which stays in your browser: it is never sent to the server or saved, and it is gone once the preview closes.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
