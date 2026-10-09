@@ -1,6 +1,6 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono pronti per il checkpoint, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, base `9b2acdd5d`) hanno il checkpoint pronto, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
@@ -1461,7 +1461,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Approvazione del developer** (21:22): chiudere l'onda 3 con gli effetti del treno 18. Niente traduzioni per ora: non ne è stata avviata nessuna, solo il dry-run, e nessun file IT/FR/ES è cambiato.
   > - **Server:** l'anteprima (`q-preview-6162d`) è fermata. `lsof -nP -iTCP:6162 -sTCP:LISTEN` e `lsof -nP -iTCP:6042 -sTCP:LISTEN` non trovano processi in ascolto (rc 1).
   > - **Delta:** 22 file tracciati modificati, nessun file nuovo, con HEAD `108a2adf5` e target `dev_release2` = `70d02cd8e` (treno 18). Nessuna sovrapposizione con i 43 path cambiati dal target dopo la base: merge testuale pulito.
-  > - **Privacy:** 1412 righe aggiunte, nessun percorso personale, e-mail o segreto. `JWT_SECRET=paste-the-generated-value-here` e `tskey-auth-...` sono segnaposto. Gli IP sono privati d'esempio; i due IP Tailscale (`100.110.222.112`, `100.77.72.90`) erano già pubblicati dalla v1.1.0 in tutte e 4 le lingue.
+  > - **Privacy:** 1412 righe aggiunte, nessun percorso personale, e-mail o segreto. `JWT_SECRET=paste-the-generated-value-here` e `tskey-auth-...` sono segnaposto. Gli IP sono privati d'esempio; i due IP Tailscale della sezione MagicDNS erano già pubblicati dalla v1.1.0 in tutte e 4 le lingue (in S20 si sostituiscono con indirizzi d'esempio).
   > - **`git diff --check`:** pulito.
   > - **Commit proposto:** `/tmp/libreFolio_commit_w3.txt`, «docs: simplify wave 3 admin pages, fix from code».
   > - **Seguiti dopo il checkpoint:**
@@ -1506,6 +1506,110 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Commit proposto:** `/tmp/libreFolio_commit_t19.txt`, «docs: align EN docs with train 19».
   > - **Fuori pista:** in coda a S18 erano rimaste 4 righe di S17 (un «In attesa della review» superato e due reperti AI Export). Le ho riportate in S17, annotando che il primo reperto l'ha corretto O nel treno 19.
   > - **Nota per L, non bloccante:** la card mostra la forma host `./dev.py user reset …` senza `pipenv run`. Fuori da `pipenv shell` fallisce con `ModuleNotFoundError` (`host_installation.en.md:71`). La doc lo spiega.
+  > - **Esito:** commit `ef1397227`, entrato col treno 20 (merge di Q `3af9aac63`).
+
+- **S20** ✅ 2026-10-09 — Pagina per l'indicatore di sicurezza della connessione (L), più gli IP Tailscale, su base `9b2acdd5d` (treno 21). HEAD = `dev_release2`, worktree pulito. Checkpoint pronto, FROZEN.
+  > **Incarico** (coordinatore, 10:40, approvato dal developer). Le parole del developer: «una notifica … che se cliccato rimanda a una pagina di doc che spiega i vari problemi e suggerisce, per avere la sicurezza massima, di seguire la guida per esporre il servizio in modo sicuro e di accedere passando per l'url anche in rete locale».
+  > - **I quattro livelli:** verde pieno (HTTPS o localhost); verde «VPN» (HTTP verso Tailscale: 100.64/10, `*.ts.net`, `fd7a:115c:a1e0::/48`); verde non pieno (HTTP in LAN, oppure segnali discordi come lo split DNS); rosso (HTTP da internet).
+  > - **Il server** comunica lo schema e la classe della sorgente, mai l'IP, e se il proxy non è fidato (`FORWARDED_ALLOW_IPS`). `SESSION_COOKIE_SECURE=auto|always|never` lo documenta L in `admin/configuration`.
+  > - Pagina solo EN. `admin/configuration` e `service_exposure` sono di L in questo momento: si possono solo linkare. Gate: build strict e `check-links`, poi checkpoint.
+  >
+  > **Note implementazione** (in corso):
+  > - **Percorso:** `user/connection-security.en.md`, nel User Manual dopo «Install as App (PWA)», perché l'indicatore riguarda l'accesso, non un'impostazione. Mandato subito a L (circa 10:45): il link va alla radice, `user/connection-security/`. Chiesti a L i testi esatti della UI, le classi di sorgente, il default di `FORWARDED_ALLOW_IPS` e le eventuali ancore in `configuration`.
+  > - **`mkdocs.yml`:** voce di nav e `nav_translations` IT/FR/ES (Sicurezza della connessione, Sécurité de la connexion, Seguridad de la conexión), come per le altre pagine solo EN.
+  > - **Fatti verificati da Q:**
+  >   - uvicorn 0.52.4: `proxy_headers=True`, e `forwarded_allow_ips` vale `os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1")`;
+  >   - il `CMD` del `Dockerfile` non ha opzioni di proxy;
+  >   - Compose passa `.env` al container (`env_file: .env`);
+  >   - `service_exposure:112-115` ha già `tailscale serve --bg 6040` per l'HTTPS nel tailnet;
+  >   - `docker_advanced` ha la sezione su reverse proxy e Tailscale.
+  > - **Stesura:** affidata a un `docs-writer`, con le ancore vietate verso pagine tradotte, perché la pagina solo EN viene costruita anche per IT/FR/ES. Le etichette della UI restano marcate finché L non risponde.
+  >
+  > **Risposta di L** (dopo le 10:48; testi proposti, che diventano definitivi quando entrano nel catalogo tramite O):
+  > - **I livelli visibili sono 3:**
+  >   - **Connection: secure**, con i motivi https, localhost e vpn;
+  >   - **Connection: local network**, con i motivi lan e uncertain;
+  >   - **Connection: not secure**, con il motivo internet.
+  > - **Classificazione:** il client classifica l'host dell'URL in loopback, vpn, lan o public; il server classifica la sorgente con la stessa tabella (più `unknown`) e comunica solo la classe, mai l'IP. Il server può confermare o rendere incerto, mai alzare il livello.
+  > - **Link dell'indicatore:** **How to connect securely**, verso `/mkdocs/<lang>/user/connection-security/`.
+  > - **`SESSION_COOKIE_SECURE=auto|always|never`:** default `auto`; un valore non valido ferma l'avvio. In `auto` il cookie è `Secure` se la richiesta è HTTPS oppure se `X-Forwarded-Proto` è `https`, chiunque lo mandi. Tailscale Serve/Funnel, Caddy e Traefik lo mandano già; Nginx ha bisogno di `proxy_set_header X-Forwarded-Proto $scheme;`.
+  > - **`FORWARDED_ALLOW_IPS` non serve:** LibreFolio non usa l'IP del client.
+  > - **Avviso solo per gli admin:** il browser è in HTTPS ma il cookie non è `Secure`.
+  > - **Ancora `admin/configuration/#session-cookie-secure`:** non la uso, perché esiste solo in EN e la pagina viene costruita anche per IT/FR/ES.
+  > - **Coordinatore** (due messaggi successivi): approvata la revisione di L. Al posto di `FORWARDED_ALLOW_IPS` va il consiglio per Nginx. Il brief del writer è aggiornato con `write_agent`.
+  >
+  > **Note implementazione, IP Tailscale** (incarico del coordinatore delle 10:48, poi via libera: «non lo so, ma nel dubbio cambiali»):
+  > - **Dove erano:** solo in `admin/service_exposure.{en,it,fr,es}.md`, che da adesso è di Q in tutte e 4 le lingue.
+  > - **Script:** `/tmp/libreFolio_q_tailscale_fix.py`, con dry run e conteggi verificati per lingua, poi `--apply`. 14 righe per lingua, stesso numero di righe totali.
+  > - **Modifiche:**
+  >   - MagicDNS: prima i due IP del server sono diventati `100.64.0.1`. Poi, con la nuova indicazione del developer (coordinatore, 11:06: «top se li trasformiamo, negli ultimi numeri, in "x" così si capisce la struttura ma non l'ip»), sono diventati **`100.110.x.x`** e **`100.77.x.x`**;
+  >   - `HOST_IP=192.168.1.10` diventa `.20` (2 righe per lingua), come Server 1 nel diagramma, che ospita LibreFolio;
+  >   - nel diagramma del livello 4, stesso criterio degli ultimi due ottetti in `x`: i container sono **`100.101.x.x`–`100.104.x.x`**, nell'ordine e distinti, dentro `100.64.0.0/10`. Prima erano `100.1.1.1`–`100.4.4.4`, fuori range e scambiati tra i container. Script: `/tmp/libreFolio_q_tailscale_mask.py`, con dry run e poi `--apply`, 6 righe per lingua.
+  >   - Verifica nelle 4 lingue: solo indirizzi mascherati più il range `100.64.0.0/10`.
+  > - **⚠️ Fuori pista**, nello stesso diagramma, correzioni di coerenza:
+  >   - i Funnel puntavano a nomi sbagliati: `librefolio.…ts.net` portava a Service 3 sul Server 2, e `service2` non esisteva. Ora Funnel 1 è `librefolio`, Funnel 2 `service1`, Funnel 3 `service3` e Funnel 4 `service4`, come i servizi e il `TS_HOSTNAME=librefolio` del compose;
+  >   - Service 3 e 4 stavano entrambi su `192.168.1.10:80`. Ora sono `:8080` e `:9000`, come le loro porte `socat`.
+  > - **Niente stamp**, confermato dal coordinatore. La cache di `service_exposure` è già vecchia (MD5 `f8c9f742`, contro `06c36e4e` dell'EN): uno stamp nasconderebbe il debito dell'onda 3.
+  > - **Fuori dal repo:** storia git e tag `v1.1.0` non si riscrivono, lo dice il coordinatore al developer. Dal journal ho tolto gli IP della nota privacy dell'onda 3. In `mkdocs_src` e nel journal non resta nessuna occorrenza.
+  >
+  > **Note implementazione, pagina e righe di L** (circa 11:25):
+  > - **`user/connection-security.en.md`**, nuova: circa 750 parole visibili, 1105 in tutto.
+  >   - Struttura: introduzione; i tre livelli con le etichette di L e le ancore `#connection-secure`, `#connection-local-network`, `#connection-not-secure`; un pannello «How the level is chosen»; «How to Connect Securely» (indirizzo HTTPS, poi usarlo ovunque); «Behind a Reverse Proxy» (`#reverse-proxy`); «What the Indicator Does Not Do»; Related.
+  >   - Link a pagine tradotte sempre senza ancora. Esempio Tailscale mascherato (`100.110.x.x`).
+  >   - Segnaposto proposto per M: `security/connection-indicator`.
+  >   - Scritta da un `docs-writer`, che ha verificato `addProxyForwardedHeaders` in `ipn/ipnlocal/serve.go` di Tailscale, il default di Caddy e Traefik e `proxy_set_header` di Nginx (documentazione ufficiale), e `.env` letto da `dev.py server` (`scripts/cli_base.py:146-149`).
+  > - **Righe di L in `admin/service_exposure.en.md`**, solo EN (contenuto nuovo):
+  >   - livello 3, Step 1, e livello 4, Step 3: Funnel manda `X-Forwarded-Proto: https`, quindi con `SESSION_COOKIE_SECURE=auto` il cookie è `Secure`;
+  >   - verificati da Q `addProxyForwardedHeaders` di Tailscale e il socat TCP di `custom_startup.sh:47`;
+  >   - link `configuration.md` **senza** l'ancora `#session-cookie-secure`, perché nella base non c'è ancora (`grep` = 0 su HEAD e sul target). Seguito poi annullato dal coordinatore: l'ancora non serve (vedi sotto).
+  > - **`q_gate.py`:** nuova modalità `--cs`, con `TRANSLATION_EXCEPTIONS` per i 3 file `service_exposure` IT/FR/ES approvati dal coordinatore.
+  > - **Cancello `cs1`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con 89 validi e il solo link rotto di base; scope 7 path (con l'eccezione approvata), segnaposto (1 nome proposto), stile e `git diff --check` verdi. Self-check su 212 pagine, 0 problemi.
+  > - **Diff delle traduzioni:** 14 righe per lingua, solo quelle attese (IP mascherati, `HOST_IP`, diagramma). **Nessuno stamp.**
+  > - **Privacy:** 271 righe aggiunte, solo indirizzi d'esempio e range.
+  > - **Porte:** 6162 e 6042 libere; nessun server avviato.
+  > - **Note mandate a L** (dubbi del writer):
+  >   - «mai alzare il livello» contro il passaggio da rosso a «uncertain»;
+  >   - Docker Desktop e i proxy locali nascondono l'IP del client;
+  >   - uvicorn applica `X-Forwarded-Proto` solo da `127.0.0.1`, quindi il cookie deve leggere l'intestazione grezza;
+  >   - dove compare l'avviso solo per gli admin.
+  > - **Dipendenza:** la pagina e le righe descrivono codice di L non ancora nel target (`SESSION_COOKIE_SECURE` e indicatore). Vanno integrate insieme o dopo i suoi lotti.
+  > - **Commit proposto:** `/tmp/libreFolio_commit_cs.txt`, «docs: connection security page, Tailscale examples».
+  >
+  > **Note implementazione, risposte di L e aggiunte** (circa 11:30, ok del coordinatore a farle dentro S20):
+  > - **Risposte di L:**
+  >   - la frase della pagina («può confermare o rendere incerto, mai rendere sicuro») è quella giusta, e il passaggio da rosso a incerto è voluto;
+  >   - Docker Desktop e i proxy senza `X-Forwarded-For` sono un limite noto, da scrivere. Il server legge l'ultimo `X-Forwarded-For`; Caddy e Traefik lo mandano già; Docker Engine su Linux conserva l'IP con il DNAT;
+  >   - il test COOKIE-011 copre l'intestazione grezza;
+  >   - l'avviso per gli admin è una riga in più nei dettagli dell'indicatore, e il livello resta verde.
+  > - **`user/connection-security.en.md`:**
+  >   - la sezione Nginx ha 2 righe (`X-Forwarded-Proto` e `X-Forwarded-For $proxy_add_x_forwarded_for`), e Caddy e Traefik passano già l'indirizzo;
+  >   - l'avviso è nei dettagli dell'indicatore, solo per gli admin, con il livello che resta **Connection: secure**;
+  >   - nuovo punto in «What the Indicator Does Not Do»: Docker Desktop o un proxy senza `X-Forwarded-For` mostrano **Connection: local network** (incerto) invece di **not secure**;
+  >   - lo step 1 dice «Nginx needs two lines».
+  > - **Coordinatore:** l'ancora `#session-cookie-secure` non serve, perché `SESSION_COOKIE_SECURE` è una riga di tabella e un riquadro, non un titolo. Il seguito «aggiungere l'ancora» è **annullato**: il link resta `configuration.md`. Il lotto 34s2 di L (`configuration.en.md`) entra col treno 22; **S20 entra solo col lotto dell'indicatore di L (treno 23)**.
+  > - **Cancello `cs2`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con 89 validi e il solo link rotto di base; scope 7 path, segnaposto (1 nome proposto), stile e `git diff --check` verdi. Self-check su 212 pagine, 0 problemi. 6162 e 6042 libere.
+  >
+  > **Note implementazione, testi aggiornati da L** (coordinatore, 11:59):
+  > - **`uncertain`:** il testo nuovo copre i due versi del disaccordo. Il paragrafo della pagina ora li descrive entrambi: un indirizzo pubblico visto dalla LAN (split DNS, proxy locale), e un indirizzo locale o Tailscale visto da internet.
+  > - **Avviso per gli admin:**
+  >   - testo nuovo citato alla lettera, con la direttiva Nginx in code span, per evitare un `$` fuori codice (arithmatex: 0 nella pagina costruita);
+  >   - la frase che lo introduce ora dice che compare se il cookie non è `Secure` perché il proxy non manda `X-Forwarded-Proto` **oppure** perché `SESSION_COOKIE_SECURE` è `never`;
+  >   - il pannello `always` resta valido come alternativa.
+  > - **Cancello `cs3`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con il solo link rotto di base; scope, segnaposto, stile e `diff --check` verdi. Self-check su 212 pagine, 0 problemi. Testi presenti nel sito costruito. 6162 libera.
+  >
+  > **Note implementazione, come si vede il motivo** (coordinatore, 13:06):
+  > - **Confronto col catalogo definitivo di L** (`connectionSecurity.*`, piano 36): etichette, avviso e link coincidono. L'indicatore però **non ha tooltip**:
+  >   - con la Sidebar aperta, un clic sulla riga apre o chiude i dettagli in linea;
+  >   - con la Sidebar chiusa, lo scudo mostra il livello al passaggio del mouse, e un clic apre la Sidebar con i dettagli;
+  >   - su telefono, con «not secure», compare un pallino rosso sul pulsante del menu.
+  > - **Correzioni:**
+  >   - introduzione: come aprire i dettagli, anche con la Sidebar chiusa;
+  >   - «The tooltip gives the reason» diventa «The details give the reason»;
+  >   - il caso incerto ha ora un motivo che inizia con *Unclear* nei dettagli;
+  >   - in «not secure», il pallino rosso su telefono.
+  >   - Nessun «tooltip» resta nella pagina.
+  > - **Cancello `cs4`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con il solo link rotto di base; scope 7 path, segnaposto, stile e `diff --check` verdi. Self-check su 212 pagine, 0 problemi. Nessuna sovrapposizione col target `1ead733f2`. 6162 e 6042 libere.
+  > - **Integrazione:** S20 entra col treno 24, insieme al piano 36 di L (indicatore). Il coordinatore ha verificato che il merge simulato sul treno 23 è pulito.
 
 ## 4. Conflitti, rischi, definizione di fatto
 

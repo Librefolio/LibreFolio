@@ -100,6 +100,7 @@ plugins:
             Getting Started: Per Iniziare
             Installation (Docker): Installazione (Docker)
             Install as App (PWA): Installa come App (PWA)
+            Connection Security: Sicurezza della connessione
             "🧠 AI Export": "🧠 Esportazione AI"
             "🧰 Tools": "🧰 Strumenti"
             PAC allocator: Allocatore PAC
@@ -296,6 +297,7 @@ plugins:
             Getting Started: Premiers Pas
             Installation (Docker): Installation (Docker)
             Install as App (PWA): Installer comme App (PWA)
+            Connection Security: Sécurité de la connexion
             "🧠 AI Export": "🧠 Export IA"
             "🧰 Tools": "🧰 Outils"
             PAC allocator: Allocateur PAC
@@ -492,6 +494,7 @@ plugins:
             Getting Started: Primeros Pasos
             Installation (Docker): Instalación (Docker)
             Install as App (PWA): Instalar como App (PWA)
+            Connection Security: Seguridad de la conexión
             "🧠 AI Export": "🧠 Exportación de IA"
             "🧰 Tools": "🧰 Herramientas"
             PAC allocator: Asignador PAC
@@ -702,6 +705,7 @@ nav:
       - Getting Started: user/getting-started.md
       - Installation (Docker): user/installation.md
       - Install as App (PWA): user/pwa.md
+      - Connection Security: user/connection-security.md
       - 📊 Dashboard:
           - Overview: user/dashboard/index.md
           - KPI Cards: user/dashboard/kpi-cards.md
