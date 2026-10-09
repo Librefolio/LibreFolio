@@ -5,7 +5,7 @@
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. User and database commands work there; development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current` and `db check` work there; `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -90,7 +90,7 @@ pipenv run ./dev.py user demote <username>
 
 ## 🗄️ Maintain the Database
 
-### ⬆️ Apply Migrations
+### ⬆️ Apply Migrations {: #apply-migrations }
 
 Every start of the server applies the pending migrations by itself, so you rarely need this. To do it by hand, **stop the server** first: `db upgrade` refuses to run while the server answers on the configured port.
 
