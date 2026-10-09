@@ -46,8 +46,18 @@
  * sign-in error cases at the bottom swap it for a translator that marks what
  * it translated: the identity cannot tell a key that went through `$_` from one
  * printed as it is.
+ *
+ * The second describe ties «Register here» to the instance setting (K, step
+ * 22). Once an admin closes registration (`enable_registration` = 'false') the
+ * backend refuses `POST /auth/register` with a 403, yet the card kept offering
+ * the link, so the refusal came only after a filled-in form. The contract: on
+ * mount the card asks `globalSettings.load()` once (a public read), and draws
+ * the register block, the `auth.noAccount` text and `goto-register`, unless the
+ * store says closed; open, or the key missing as in an older cache, leaves it.
+ * The store is a writable the test holds, reset to open before every test, and
+ * `load` is a spy, so every other test mounts the card as on an open instance.
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
 import {readable, writable} from 'svelte/store';
 import type {AuthError, AuthErrorKey} from '$lib/types';
@@ -68,6 +78,20 @@ vi.mock('$lib/stores/app/auth', () => ({
     isAuthLoading: readable(false),
 }));
 vi.mock('$app/navigation', () => ({goto: vi.fn()}));
+// `$globalSettings` held by the test: the two parts of the store the card is
+// meant to use, a subscription and `load()`. Open by default, like the store's
+// own default; `load` resolves at once and changes nothing, so what the card
+// shows is whatever the test put in the store.
+const settingsMock = await vi.hoisted(async () => {
+    const {writable} = await import('svelte/store');
+    return {
+        store: writable<Record<string, unknown>>({enable_registration: true}),
+        load: vi.fn<() => Promise<void>>().mockResolvedValue(undefined).mockName('globalSettings.load'),
+    };
+});
+vi.mock('$lib/stores/app/globalSettings', () => ({
+    globalSettings: {subscribe: settingsMock.store.subscribe, load: settingsMock.load},
+}));
 
 import LoginCard from './LoginCard.svelte';
 
@@ -111,6 +135,35 @@ function duplicateIds(root: Element): string[] {
     const ids = Array.from(root.querySelectorAll('[id]'), (el) => el.id).filter((id) => id !== '');
     return [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 }
+
+/** `$globalSettings` on an instance open to registration: the backend's default, and the store's. */
+const REGISTRATION_OPEN = {enable_registration: true};
+/** ...once an admin closed it: `load()` reads the server's `'false'` as `false`. */
+const REGISTRATION_CLOSED = {enable_registration: false};
+/** An object cached before the store knew the field: other settings, no `enable_registration` at all. */
+const CACHED_WITHOUT_THE_KEY = {default_language: 'en', default_currency: 'EUR', default_theme: 'auto'};
+
+type RegisterOffer = Record<'goto-register' | 'auth.noAccount', boolean>;
+const OFFERED: RegisterOffer = {'goto-register': true, 'auth.noAccount': true};
+const WITHDRAWN: RegisterOffer = {'goto-register': false, 'auth.noAccount': false};
+
+/**
+ * What the card offers a visitor without an account: the `goto-register` link
+ * and the `auth.noAccount` text in front of it. Read together, so that a red
+ * names each of the two.
+ */
+function registerOffer(): RegisterOffer {
+    return {
+        'goto-register': screen.queryByTestId('goto-register') !== null,
+        'auth.noAccount': screen.queryByText('auth.noAccount') !== null,
+    };
+}
+
+beforeEach(() => {
+    // Every test starts on an open instance, with no read of the settings asked yet.
+    settingsMock.store.set({...REGISTRATION_OPEN});
+    settingsMock.load.mockClear();
+});
 
 afterEach(cleanup);
 // Back to the card at rest, for whichever case comes next.
@@ -182,6 +235,59 @@ describe("LoginCard — the markup Chrome's password manager reads", () => {
 
         expect(field('login-username').form).toBe(form);
         expect(field('login-password').form).toBe(form);
+    });
+});
+
+describe('LoginCard — «Register here» follows the instance setting', () => {
+    it('offers no registration once an admin closed it', async () => {
+        settingsMock.store.set(REGISTRATION_CLOSED);
+        mount();
+        await tick();
+
+        // The card is there: only the way to an account the backend would refuse goes.
+        expect(screen.getByTestId('login-form')).toBeInTheDocument();
+        expect(screen.getByTestId('goto-forgot')).toBeInTheDocument();
+        expect(registerOffer()).toEqual(WITHDRAWN);
+    });
+
+    it('offers registration while it is open', async () => {
+        settingsMock.store.set(REGISTRATION_OPEN);
+        mount();
+        await tick();
+
+        expect(registerOffer()).toEqual(OFFERED);
+    });
+
+    it('still offers registration when the setting is missing, as in a cache written before the field existed', async () => {
+        // Open in case of doubt: the link goes only when the server said «closed».
+        // The backend still refuses a registration it does not allow.
+        settingsMock.store.set(CACHED_WITHOUT_THE_KEY);
+        mount();
+        await tick();
+
+        expect(registerOffer()).toEqual(OFFERED);
+    });
+
+    it('withdraws the offer as soon as the store says closed, without a remount', async () => {
+        mount();
+        await tick();
+        expect(registerOffer(), 'open at mount: the default, or a cache from an open instance').toEqual(OFFERED);
+
+        // What a fresh `load()` brings when an admin closed registration since the cache was written.
+        settingsMock.store.set(REGISTRATION_CLOSED);
+        await tick();
+
+        expect(screen.getByTestId('goto-forgot')).toBeInTheDocument();
+        expect(registerOffer()).toEqual(WITHDRAWN);
+    });
+
+    it('asks the server for fresh settings once, on mount', async () => {
+        // The cache may predate the admin's decision, and `GET /settings/global`
+        // is public: a signed-out visitor can ask.
+        mount();
+        await tick();
+
+        expect(settingsMock.load).toHaveBeenCalledTimes(1);
     });
 });
 

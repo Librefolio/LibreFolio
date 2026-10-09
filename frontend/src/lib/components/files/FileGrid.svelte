@@ -174,7 +174,7 @@
 
                 <!-- Meta -->
                 <div class="card-meta" class:compact={cardSize === 'compact'}>
-                    {formatBytes(file.size_bytes)}
+                    <span data-testid={`file-grid-size-${file.id}`}>{formatBytes(file.size_bytes, $t)}</span>
                     {#if mode === 'browse'}
                         • {formatDate(file.uploaded_at)}{/if}
                 </div>

@@ -39,11 +39,15 @@ export async function uploadFile(file: File, description?: string): Promise<stri
  * Uses svelte-i18n translation keys: common.bytes, common.kilobytes, common.megabytes, common.gigabytes.
  * Works both inside and outside Svelte components via get() from svelte/store.
  *
+ * `get()` is a one-off read that no effect tracks: a template that must follow a language change passes its own
+ * `$t`, which the template does track.
+ *
  * @param bytes - Size in bytes
+ * @param translate - The translator to read the units with; defaults to the current one
  * @returns Formatted string (e.g. "1.5 MB" in EN, "1.5 Mo" in FR)
  */
-export function formatBytes(bytes: number): string {
-    const t = get(_);
+export function formatBytes(bytes: number, translate: (key: string) => string = get(_)): string {
+    const t = translate;
     const b = t('common.bytes') || 'B';
     const kb = t('common.kilobytes') || 'KB';
     const mb = t('common.megabytes') || 'MB';
