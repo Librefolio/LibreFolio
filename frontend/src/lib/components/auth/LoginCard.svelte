@@ -1,7 +1,8 @@
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
+    import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {auth, authError, isAuthLoading} from '$lib/stores/app/auth';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
     import {goto} from '$app/navigation';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
 
@@ -17,6 +18,11 @@
 
     let username = '';
     let password = '';
+
+    // Public settings: whether registration is open decides the register link below.
+    onMount(() => {
+        void globalSettings.load();
+    });
 
     async function handleSubmit() {
         username = username.trim();
@@ -99,13 +105,15 @@
                 {/if}
             </button>
 
-            <!-- Register Link -->
-            <div class="text-center pt-2 text-xs text-gray-600">
-                <span>{$_('auth.noAccount')} </span>
-                <button class="font-bold text-libre-dark hover:underline" data-testid="goto-register" on:click={() => dispatch('gotoRegister')} type="button">
-                    {$_('auth.registerHere')}
-                </button>
-            </div>
+            <!-- Register Link: hidden only once the instance says registration is closed; unknown keeps it -->
+            {#if $globalSettings.enable_registration !== false}
+                <div class="text-center pt-2 text-xs text-gray-600">
+                    <span>{$_('auth.noAccount')} </span>
+                    <button class="font-bold text-libre-dark hover:underline" data-testid="goto-register" on:click={() => dispatch('gotoRegister')} type="button">
+                        {$_('auth.registerHere')}
+                    </button>
+                </div>
+            {/if}
         </form>
     </div>
 </div>
