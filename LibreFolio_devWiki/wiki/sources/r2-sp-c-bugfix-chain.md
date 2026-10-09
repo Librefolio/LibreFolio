@@ -169,10 +169,10 @@ Components that display computed data should be **controlled** (props-in, callba
 | TX types (PendingOp, DraftFields) | `frontend/src/lib/components/transactions/types.ts` |
 | TX schemas (WACPreviewItem, etc.) | `backend/app/schemas/transactions.py` |
 | TX service (compute_wac_iterative) | `backend/app/services/transaction_service.py` |
-| Financial utils (WAC math) | `backend/app/utils/financial_utils.py` |
+| Financial utils (WAC math; financial_utils.py → wac_utils.py → the average-cost function, 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Asset source (get_prices_bulk) | `backend/app/services/asset_source.py` |
-| WAC API tests | `backend/test_scripts/test_api/test_transactions_wac.py` |
-| Financial utils tests | `backend/test_scripts/test_services/test_financial_utils.py` |
+| WAC API tests (test_transactions_wac.py replaced on 2026-05-29) | `backend/test_scripts/test_api/test_wac_inline.py` |
+| Average-cost tests (test_financial_utils.py replaced on 2026-10-07) | `backend/test_scripts/test_services/test_financial_math/test_average_cost.py` |
 | E2E WAC bulk tests | `frontend/e2e/transactions/tx-wac-bulk.spec.ts` |
 | E2E WAC FormModal tests | `frontend/e2e/transactions/tx-wac-formmodal.spec.ts` |
 | E2E commit all types | `frontend/e2e/transactions/tx-commit-all-types.spec.ts` |
