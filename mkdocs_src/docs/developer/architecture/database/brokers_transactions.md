@@ -151,10 +151,14 @@ See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-ana
 - `compute_wac_and_fx_issues()` runs after create, promote, and create-link resolution.
 - `_compute_wac_for_auto_items()` selects only parsed create/update rows whose
   `cost_basis_mode` is `auto` or `auto-detail`.
-- A linked create resolves its source broker from the partner in the transient
-  `link_uuid_map`; an unlinked row uses its own broker and excludes itself.
-- `compute_wac_iterative()` reads session-visible transaction history and writes
-  the resulting per-unit amount to `cost_basis_override`.
+- `_auto_cost_source()` picks the pool: the receiving side of a `TRANSFER` (a
+  `TRANSFER` row with `related_transaction_id`, set by create-link resolution or a
+  promote, or loaded with a saved pair) averages its partner's broker as of the
+  partner's date, without the partner's outgoing leg or itself; any other row
+  averages its own broker as of its own date, without itself.
+- `compute_wac_iterative()` reads the session-visible transaction history and
+  returns the WAC; `_compute_wac_for_auto_items()` writes its per-unit amount and
+  currency to `cost_basis_override` and `cost_basis_currency`.
 - Missing FX data becomes a `wacFxUnavailable` batch issue instead of silently
   persisting an unresolved cost.
 - A split-linked `ADJUSTMENT` skips stored auto-WAC because the portfolio engine
