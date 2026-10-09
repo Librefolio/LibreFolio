@@ -617,11 +617,20 @@ difference, as before.
 
 ### Projects are grouped too
 
-`front-ai-export` runs its specs on desktop **and** mobile; every other category runs desktop only.
-So the inventory records the project selector alongside each Playwright unit, and consolidation
-groups by `(category, project)`. Without it, folding those four specs into the desktop group would
-have halved what runs — and, since everything left would still have passed, nothing would have said
-so.
+`frontend/playwright.config.ts` declares two projects: `desktop` (Desktop Chrome, 1280×720) and
+`mobile` (the iPhone 14 Pro Max descriptor, run in Chromium). Outside `--ui` mode, `_run_playwright`
+passes `--project desktop` unless an action says otherwise, so most actions run on desktop only. An
+action that passes `project=""` gets no `--project` and runs on both: seven `front-utility` actions
+(`files-uploader`, `support-copy-and-go`, `header-scroll`, `document-title`, `connection-security`,
+`onboarding-tour`, `onboarding-guides`), `front-broker broker-create-feedback`,
+`front-portfolio privacy-masking`, and `front-transaction tx-import-report-set` and
+`tx-import-report-set-guide`. `front-ai-export` passes `project="desktop"` explicitly.
+
+So the inventory records the project selector alongside each Playwright unit (`ALL_PROJECTS` for an
+action that passes `project=""`), and consolidation runs one Playwright invocation per
+`(category, project)` group (in batches of 8 specs under JS coverage), without `--project` for the
+both-project group. Without it, folding those specs into the desktop group would have dropped their
+mobile run — and, since everything left would still have passed, nothing would have said so.
 
 ### Resuming a consolidated pass
 
@@ -729,18 +738,24 @@ sequenceDiagram
 
 | File | Purpose |
 |------|---------|
-| `scripts/test_runner/__init__.py` | Package entry point. Exports the CLI dispatchers and registers system-wide path overrides. |
+| `scripts/test_runner/__init__.py` | Package initialiser: puts the project root first on `sys.path`, makes it the working directory, and re-exports `main`, `register_subparser` (which `dev.py` uses to add `./dev.py test`), `_ensure_test_users` and `TEST_REGISTRY`. |
+| `scripts/test_runner/__main__.py` | Lets the package run as `python -m scripts.test_runner [category] [action]`: calls `main()` and exits with code 130 on Ctrl-C. |
 | `scripts/test_runner/_cli.py` | Defines the argparse command hierarchy (e.g., `./dev.py test [category] [action]`), listings (`--list`), and executes the matched callback. |
-| `scripts/test_runner/_registry.py` | Imports and invokes the registry population hook for all modules to assemble `TEST_REGISTRY`. |
+| `scripts/test_runner/_registry.py` | Imports and invokes the registry population hook of every category module to assemble `TEST_REGISTRY`. |
 | `scripts/test_runner/_suites.py` | Contains logic to run entire groups of tests (`all`, `all-backend`, `all-frontend`) and clean up coverage folders. |
-| `scripts/test_runner/_coverage.py` | Implements database merging, report generation (`htmlcov-backend/`, `htmlcov-backend-e2e/`, `htmlcov/`), the JS/Svelte pipeline (`frontend/coverage-js/`), and HTML viewer serving. |
+| `scripts/test_runner/_run_cache.py` | The run cache behind `--resume`, `--fresh-run` and `--run-status` (`.run_cache.json`: per suite, the tests passed and the last failure), and the campaign timing printed at the end of a run (`.campaign.json`). Both files sit next to the module and are gitignored. |
+| `scripts/test_runner/_coverage.py` | Implements database merging, report generation (`htmlcov-backend/`, `htmlcov-backend-e2e/`, `htmlcov/`), the JS/Svelte pipeline (`frontend/coverage-js/`), and `coverage show`, which opens a report's `index.html` in the browser. |
 | `scripts/test_runner/_inventory.py` | Derives the test units from the registry without executing them, classifies each one by isolation class, and answers the reachability questions used by `check-orphans`. |
 | `scripts/test_runner/_scheduler.py` | Turns inventory plus `--workers N` into an execution plan, balancing groups longest-processing-time first from persisted per-unit durations. |
 | `scripts/test_runner/_executor.py` | Runs the plan's groups as concurrent processes, hands each worker its exclusive resource lot, and combines the per-worker coverage databases afterwards. |
-| `scripts/test_runner/_consolidate.py` | Groups a frontend category's units into one Playwright and one vitest invocation, then reads the JSON reporters back into a per-spec verdict. |
-| `scripts/test_runner/_common.py` | Shared testing helpers: spawning backend servers, waiting for ports, checking database states, and executing test subprocess commands. |
-| `scripts/test_runner/_backend_*.py` | Specific modules for launching pytest categories on the backend. |
-| `scripts/test_runner/_frontend_*.py` | Specific modules for running Playwright E2E testing files on the frontend SPA. |
+| `scripts/test_runner/_server.py` | One test backend for the whole run (`SharedTestServer`), opened by `_cli.py` when the invocation needs a server (`api`, `e2e`, the `all*` suites, frontend runs with Playwright specs): `dev.py server --test --no-reload --no-scheduler`, plus `--coverage` under Python coverage, in its own process group, with its uvicorn workers sized to the client workers. It refuses a port that another process holds, sets `LIBREFOLIO_TEST_SHARED_SERVER=1` so that pytest modules and Playwright attach to it instead of starting their own, stops with SIGTERM and a grace period (30 s under coverage, 5 s otherwise), and steps aside while `db create` rebuilds the database file (`database_file_owned_exclusively()`). `--no-shared-server` turns it off. |
+| `scripts/test_runner/_consolidate.py` | Groups a frontend category's units into one vitest invocation and one Playwright invocation per project selection (desktop only, or desktop and mobile; in batches of 8 specs under JS coverage), then reads the JSON reporters back into a per-spec verdict. |
+| `scripts/test_runner/_consolidate_backend.py` | The backend counterpart: when a whole category or suite runs, one pytest invocation per category instead of one per unit — `services`, `utils`, `schemas`, `api`, `e2e`, in that order, while `db` and `external` keep one per action — with the JUnit report read back into a per-file verdict, so the summary and `--resume` stay per unit. |
+| `scripts/test_runner/_common.py` | Shared helpers and run-wide state: `run_command` (launches one unit; for pytest it adds the coverage flags, swaps the accumulated coverage database in and out, and points the child at the test database), `_run_test_suite` (the serial loop of a suite, with the run-cache bookkeeping), `tee_output` (behind `--log-file` and the per-unit logs), and the registry helpers `make_category` and `add_test`. |
+| `scripts/test_runner/_archive.py` | Archives test artefacts — the previous `--log-dir` logs, coverage databases before they are replaced or cleaned, the test-DB snapshot taken at the end of a run with a log directory — as `<target>/00_archive/<label>_<YYYYMMDD_HHMMSS>.tar.xz`, compressed with the standard library only (falling back to `.tar.bz2`, `.tar.gz`, then plain `.tar` when the interpreter lacks `lzma`). It also names the per-unit logs, `<category>__<unit>.log`. |
+| `scripts/test_runner/_backend_*.py` | One module per backend category; `_backend_api.py` registers both `api` and `e2e`. The actions launch pytest, except `db create` and `db populate`, which build and fill the test database. |
+| `scripts/test_runner/_frontend_*.py` | One module per frontend category (`utility`, `broker`, `user`, `fx`, `asset`, `transaction`, `portfolio`, `ai_export`): its Playwright specs and Vitest files. `_frontend_common.py` matches the pattern but is not a category — see the next row. |
+| `scripts/test_runner/_frontend_common.py` | Shared frontend helpers: the frontend build check, the test-DB population and E2E user creation (each done once per setup scope), the Playwright launcher, and the `--list` output of every category. |
 
 ---
 
@@ -749,15 +764,18 @@ sequenceDiagram
 To add a new test action to an existing category:
 
 1. Open the category module (e.g., `_backend_utils.py` for utility tests).
-2. Write a function that executes your test suite using the shared runner helpers:
+2. Write a function that executes your test suite using the shared runner helpers. Accept
+   `test_names`: an action registered with the default `test_names=True` receives the test names
+   the user passes. `run_command` requires a description, the label it prints, also used to name the
+   unit's log file:
    ```python
-   def utils_my_new_utility(verbose: bool = False) -> bool:
+   def utils_my_new_utility(verbose: bool = False, test_names: list = None) -> bool:
        """Run tests for the new utility helper."""
-       # Run command returns True on success
-       return run_command(
-           cmd=["pytest", "backend/test_scripts/test_utilities/test_my_new_utility.py"],
-           verbose=verbose
-       )
+       print_section("Utils: My New Utility")
+       # pipenv run python -m pytest <path> -v (no "pipenv run" in Docker), plus -k "<a> or <b>" for the names given
+       cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_my_new_utility.py", test_names)
+       # True when the command exits with code 0
+       return run_command(cmd, "My new utility tests", verbose=verbose)
    ```
 3. Locate the `populate_registry` function at the bottom of the file and register your action:
    ```python
