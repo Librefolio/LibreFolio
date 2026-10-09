@@ -178,7 +178,18 @@ A promote item has no `cost_basis_mode`, and `apply_promotes()` does not calcula
 WAC. The later `_compute_wac_for_auto_items()` worklist is built only from parsed
 create and update items. Promote-specific cost-basis resolution therefore comes
 from `resolved_fields.cost_basis_override`, supplied by the frontend merge flow
-or another API client.
+or another API client; without that key, the receiver keeps the cost basis it
+already has.
+
+Because `apply_promotes()` writes `related_transaction_id` before the WAC step, a
+create or update in Auto that the promote makes the receiving side averages its
+partner's broker, as of the partner's date and without the partner's outgoing leg.
+
+`validate_cost_basis()` then checks the receiving side like any other row: a new
+row as a create and a saved row also in `updates[]` as that update, both unless in
+Auto; any other saved row without a cost basis gets `costBasisRequired` on
+operation `promote`, with the promote's index and `ref_id` set to that row. See
+[WAC & Cost Basis](wac.md#promote-boundary).
 
 ---
 
