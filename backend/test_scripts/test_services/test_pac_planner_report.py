@@ -28,6 +28,12 @@ could plausibly "simplify" away without a failing test to stop them:
   pairs in, with exact debit and spread sums and the *posted* credit sum. A
   manual conversion takes the next shared sequence, between funding and
   orders; an automatic one carries none and consumes none.
+* **A ledger's rounding residual is an exact number, never fixed-decimal
+  text.** USD→EUR at the reciprocal of a stored EUR/USD leaves a residual that
+  repeats (−47/21700), which fixed-decimal text cannot spell: the projection
+  used to raise ``WireNumberTooLargeError`` and turn a sound plan into a
+  failure. A repeating residual is an ``exact_ratio``; a terminating one, zero
+  included, a ``finite_decimal``.
 
 The headline gate is a genuine end-to-end assembly: a real
 ``build_exact_policy_view -> compile -> solve -> replay -> conclude -> project``
@@ -54,6 +60,7 @@ from pydantic import ValidationError
 
 from backend.app.schemas.pac_allocator import (
     DeploymentUnavailable,
+    FiniteDecimal,
     OptimalProvenProof,
     PacIncumbentSolution,
     PacPlannerReadyIncumbentResult,
@@ -61,6 +68,9 @@ from backend.app.schemas.pac_allocator import (
     SolverStatusWitness,
     _exact_fraction,
     _validate_weight_availability,
+)
+from backend.app.schemas.pac_allocator import (
+    ExactRatio as WireExactRatio,
 )
 from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
@@ -868,6 +878,57 @@ def test_rounding_top_ups_are_projected_not_recomputed() -> None:
     assert _exact_fraction(eur.valuation_amount.value) == Fraction(1, 100)
     assert (usd.valuation_amount.currency, usd.valuation_amount.value.kind) == ("EUR", "exact_ratio")
     assert _exact_fraction(usd.valuation_amount.value) == Fraction(1, 120)
+
+
+# --------------------------------------------------------------------------
+# Ledger rounding residual — an exact number, whatever its expansion
+# (FX conversion fix)
+# --------------------------------------------------------------------------
+
+
+def _published_rounding_delta(value: R):
+    """Publish a real evaluation whose one ledger carries the raw residual ``value``.
+
+    The evaluation is genuine (a single ``broker:a``/EUR ledger) and only its
+    residual is replaced, so the projection is the one variable. The published
+    row is found by its (Broker, currency) key, never by position.
+    """
+    _, evaluation = _evaluate(_two_asset_pac_scenario())
+    target = evaluation.ledgers[0]
+    patched = replace(evaluation, ledgers=(replace(target, raw_rounding_delta=value), *evaluation.ledgers[1:]))
+    (row,) = [row for row in PR.build_ledger_rows(patched) if (row.broker_id, row.currency) == (target.broker_id, target.currency)]
+    return row.rounding_delta
+
+
+def test_ledger_rounding_delta_that_does_not_terminate_is_published_as_an_exact_ratio() -> None:
+    """A repeating residual is an ``exact_ratio``, not ``WireNumberTooLargeError``.
+
+    −47/21700 is the residual of 97.75 USD credited as 90.09 EUR at the
+    reciprocal of 1.085, and no decimal of any length spells it. The ratio
+    keeps the exact value. Its display digits are a non-authoritative
+    projection and deliberately not pinned here.
+    """
+    published = _published_rounding_delta(R(-47, 21700))
+
+    assert isinstance(published, WireExactRatio), type(published).__name__
+    assert published.display_authority == "non_authoritative"
+    assert _exact_fraction(published) == Fraction(-47, 21700)
+
+
+@pytest.mark.parametrize(
+    ("residual", "text"),
+    (
+        pytest.param(R(-21, 10000), "-0.0021", id="terminating"),
+        pytest.param(R(0), "0", id="zero"),
+    ),
+)
+def test_ledger_rounding_delta_that_terminates_is_a_finite_decimal_not_bare_text(residual: R, text: str) -> None:
+    """A terminating residual, zero included, is the ``finite_decimal`` branch of the same exact number.
+
+    The field has one type: a reader dispatches on ``kind`` and never has to
+    guess whether it received text or an object.
+    """
+    assert _published_rounding_delta(residual) == FiniteDecimal(kind="finite_decimal", value=text)
 
 
 # --------------------------------------------------------------------------

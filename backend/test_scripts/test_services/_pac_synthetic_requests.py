@@ -1,13 +1,19 @@
-"""Synthetic PAC planner requests for the solver-robustness tests and probe.
+"""Synthetic PAC planner requests for the solver-robustness tests and probe, and for the FX-conversion cases.
 
 ``make``/``V``: a multi-broker grid (EUR ETFs at 20.00, 27.50, 35.00, …; every asset buyable on
 every broker, or on exactly one with ``disjoint``). ``realistic_make``: cent prices, uneven
 weights, three real-like fee schedules, uneven cash. ``scaled``: every money amount ×10**k.
+``fx_conversion_request``: one Broker with no cash, funded by one external contribution in a
+single currency, buying one or two Assets quoted in (possibly) other currencies, so the plan
+must convert; with ``FX_TRIANGLE`` it spells the cross-rate cases (coherent, incoherent, or
+incoherent but covered by the spread).
 Every builder returns a fresh wire dict; ``scenario_of`` normalizes it into ``(scenario, view)``.
 
-Everything is rebuilt from the repository's min fixture, so a change to that fixture's shape
-reaches these requests too. Not a test module (leading underscore): pytest never collects it,
-and the runner catalogue does not list it.
+``make`` and ``realistic_make`` (hence ``scaled``) are rebuilt from the repository's min fixture,
+``fx_conversion_request`` from its compact twin, which declares no fee schedule: a conversion is
+then the only cost, and every figure of those plans is FX arithmetic alone. A change to either
+fixture's shape reaches these requests too. Not a test module (leading underscore): pytest never
+collects it, and the runner catalogue does not list it.
 """
 
 from __future__ import annotations
@@ -24,6 +30,8 @@ from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 
 # Resolved from this file, not from the working directory: parents = [test_services, test_scripts].
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.v2.json"
+# The min fixture's compact twin (every default omitted, no fee schedule): the base of ``fx_conversion_request``.
+COMPACT_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.compact.v2.json"
 
 
 def _equal_weights(n_assets: int) -> list[Decimal]:
@@ -186,6 +194,78 @@ def scaled(payload: dict, k: int) -> dict:
             fee["variable_floor"]["amount"] = mul(fee["variable_floor"]["amount"])
             fee["variable_cap"]["amount"]["amount"] = mul(fee["variable_cap"]["amount"]["amount"])
     return result
+
+
+# A coherent FX triangle around the EUR valuation currency: the implied CHF/USD is 1.06 × 1.085 = 1.1501.
+# A declared ``CHF/USD`` above it, by more than the spread absorbs, makes CHF→USD→EUR worth more EUR
+# than CHF→EUR directly: an FX arbitrage, which the normalizer refuses (``allocation.fx_rate_inconsistent``).
+FX_TRIANGLE = {"CHF/EUR": "1.06", "EUR/USD": "1.085"}
+
+
+def fx_conversion_request(
+    name: str,
+    *,
+    funding_currency: str,
+    assets: list[tuple[str, str]],
+    fx_rates: dict[str, str],
+    fx_spread_rate: str = "0",
+    amount: str = "100.00",
+    conversion_mode: str | None = None,
+) -> dict:
+    """One Broker with no cash, funded only by an external contribution of ``amount`` in ``funding_currency``.
+
+    Rebuilt from the compact fixture. ``assets`` lists ``(quote currency, price)`` for one or two
+    Assets (``asset-1``, ``asset-2``; equal target weights), each bought whole on its own BUY
+    route at ``broker-one`` (``route-asset-{i}-buy``, capped at 100 units, no fee schedule). The
+    contribution reaches ``broker-one`` through one funding route capped at ``amount``, so an
+    Asset quoted in another currency can only be bought through a conversion, at ``fx_rates``
+    with ``fx_spread_rate``. ``conversion_mode`` overrides the Broker's (the fixture's is
+    ``"manual"``). ``name`` keeps the snapshot id of each case distinct.
+    """
+    payload = copy.deepcopy(json.loads(COMPACT_FIXTURE.read_text()))
+    payload["snapshot"]["snapshot_id"] = f"snapshot-{name}"
+    asset0, route0 = payload["assets"][0], payload["order_routes"][0]
+    weights_by_count = {1: ["1"], 2: ["0.5", "0.5"]}
+    if len(assets) not in weights_by_count:
+        raise ValueError(f"fx_conversion_request builds one or two Assets, got {len(assets)}")
+    built_assets, routes, target_weights = [], [], []
+    for i, ((currency, price), weight) in enumerate(zip(assets, weights_by_count[len(assets)], strict=True), start=1):
+        asset = copy.deepcopy(asset0)
+        asset["asset_id"] = f"asset-{i}"
+        asset["identity"]["name"] = f"Synthetic Asset {i}"
+        asset["identity"]["ticker"] = f"SYN{i}"
+        asset["quote"]["amount"] = price
+        asset["quote"]["currency"] = currency
+        built_assets.append(asset)
+        route = copy.deepcopy(route0)
+        route["route_id"] = f"route-asset-{i}-buy"
+        route["asset_id"] = asset["asset_id"]
+        route["cap"]["quantity"] = "100"
+        routes.append(route)
+        target_weights.append({"asset_id": asset["asset_id"], "weight": weight})
+    payload["assets"] = built_assets
+    payload["order_routes"] = routes
+    payload["target_weights"] = target_weights
+    payload["existing_cash"] = []
+    payload["contributions"] = [
+        {"contribution_id": "contribution-ext", "label": "External account", "amount": {"amount": amount, "currency": funding_currency}, "provenance_id": "prov-manual"},
+    ]
+    payload["funding_routes"] = [
+        {
+            "funding_route_id": "funding-ext-broker-one",
+            "source": {"kind": "contribution", "contribution_id": "contribution-ext"},
+            "broker_id": "broker-one",
+            "currency": funding_currency,
+            "priority": 1,
+            "transfer_cap": {"amount": amount, "currency": funding_currency},
+            "provenance_id": "prov-manual",
+        },
+    ]
+    payload["fx_rates"] = dict(fx_rates)
+    payload["fx_spread_rate"] = fx_spread_rate
+    if conversion_mode is not None:
+        payload["brokers"][0]["conversion_mode"] = conversion_mode
+    return payload
 
 
 def scenario_of(payload: dict) -> tuple[ExactPlannerScenario, ExactPolicyView]:

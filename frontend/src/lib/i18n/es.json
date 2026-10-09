@@ -4270,7 +4270,8 @@
             "valuation_currency_missing": "Falta la divisa de valoración.",
             "wac_fx_missing": "Falta la tasa de cambio necesaria para el coste medio.",
             "wac_missing": "Falta el coste medio.",
-            "zero_selected_funding": "La liquidez seleccionada es cero."
+            "zero_selected_funding": "La liquidez seleccionada es cero.",
+            "fx_rate_inconsistent": "Esta tasa de cambio no es coherente con las tasas de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea las tasas o define un spread de conversión."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Esta herramienta no acepta posiciones existentes.",
