@@ -15,7 +15,7 @@ trade with its cash movement, states where every row goes and why (the ``lf_*`` 
 and carries the truth points the bank's files prove: the balance on the eve of each
 custody period, the positions some rows reveal, and a final balance to compare.
 
-Design: ``LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md``
+Design: ``LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md``
 (sections 3.4 and 7.1); implementation choices in
 ``plan-phase00BrimDanskeBankStep4Implementation.prompt.md`` (section 4, B0).
 """

@@ -22,7 +22,7 @@
  * not exist, every test fails on its own with "not implemented yet", instead of the whole file
  * failing at collection and hiding which pieces are missing.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, C3.0.
+ * Plan: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, C3.0.
  */
 import {describe, expect, it, vi} from 'vitest';
 import {FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';

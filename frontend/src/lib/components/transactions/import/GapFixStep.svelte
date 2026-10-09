@@ -14,7 +14,7 @@
   sits next to the bank's figures and is masked (D5′); a correction's quantity is a transaction's,
   and stays visible.
 
-  Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md, §4.6;
+  Design: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md, §4.6;
   layout U4-B of the developer's review (plan, F2.0).
 -->
 <script lang="ts">

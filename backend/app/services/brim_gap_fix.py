@@ -8,7 +8,7 @@ about to hand over and the corrections of the earlier checkpoints - and proposes
 only the difference, as ordinary transactions tagged ``gap_fix``. It writes
 nothing: the user chooses what to import, and the editor saves it.
 
-Design: ``LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md`` (section 3.6).
+Design: ``LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md`` (section 3.6).
 """
 
 from __future__ import annotations
