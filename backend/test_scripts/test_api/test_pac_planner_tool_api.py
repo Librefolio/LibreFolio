@@ -16,28 +16,34 @@ codec.
   two lanes, and a third item would measure queue time instead of the contract.
 
 Each test registers its own user and deletes it before returning; nothing else
-is written.
+is written. The engine failure log tests at the end are pure: no user, no
+server, no database.
 """
 
 from __future__ import annotations
 
 import copy
 import json
-from collections.abc import AsyncIterator
+import traceback
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import httpx
 import pytest
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog.testing import capture_logs
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.pac_allocator import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER
 from backend.app.services import user_service
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
+from backend.app.services.tool_plugins.pac_allocator import _log_engine_failure
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
@@ -434,3 +440,232 @@ async def test_pac_compute_plans_the_compact_twin_like_the_explicit_request(test
         assert plan["primary_solution"]["order_rows"], f"positive control: the {name} request must buy something"
         plans[name] = plan
     assert _economic_projection(plans["compact"]) == _economic_projection(plans["explicit"])
+
+
+# ---------------------------------------------------------------------------
+# Engine failure log: the calling frames, never the values
+# ---------------------------------------------------------------------------
+#
+# The worker writes this line, and the worker is a spawned child that no seam
+# can reach, so these tests call _log_engine_failure directly: pure, no user,
+# no server. Each one raises through module-level functions and catches the
+# exception in its own body, so the traceback starts at the test function. This
+# file lives under backend/, so its functions are LibreFolio's own frames; the
+# "library" is compiled under a file name outside the repository, and no file
+# has to exist there.
+#
+# capture_logs swaps structlog's processors for a LogCapture inside the
+# configured list, so the module's logger reaches it whether or not
+# configure_logging ran first in this process (test_post_migration.py, section
+# 13, explains why). The barrier in _logged_engine_failure says so if that ever
+# changes.
+
+ENGINE_FAILURE_EVENT = "PAC planner engine failure"
+ENGINE_FAILURE_LOGGER = "backend.app.services.tool_plugins.pac_allocator"
+# Not keyword arguments of the log call: the event name, and what the capture adds.
+CAPTURE_KEYS = frozenset({"event", "log_level", "logger"})
+OWN_FILE = "backend/test_scripts/test_api/test_pac_planner_tool_api.py"
+FAKE_LIBRARY_PATH = "/tmp/libreFolio_fake_library.py"
+FAKE_LIBRARY_SOURCE = "def boom():\n    raise ValueError('library failure')\n"
+# Line 2 of FAKE_LIBRARY_SOURCE raises; a library frame is shown by its file name only.
+LIBRARY_FRAME = "libreFolio_fake_library.py:2:boom"
+# Out of every source line a frame points at: a figure found in the log can only be a value.
+MESSAGE_FIGURE = "4242.42"
+LOCAL_FIGURE = "98765.43"
+
+
+def _compile_library_boom() -> Callable[[], None]:
+    """``boom``, compiled under ``FAKE_LIBRARY_PATH``: its frame lies outside the repository, as a library's does."""
+    namespace: dict[str, Any] = {}
+    exec(compile(FAKE_LIBRARY_SOURCE, FAKE_LIBRARY_PATH, "exec"), namespace)
+    return namespace["boom"]
+
+
+_library_boom = _compile_library_boom()
+
+
+def _frame_a() -> None:
+    _frame_b()
+
+
+def _frame_b() -> None:
+    _frame_c()
+
+
+def _frame_c() -> None:
+    _frame_d()
+
+
+def _frame_d() -> None:
+    raise ValueError("raised in own code")
+
+
+def _frame_x() -> None:
+    _frame_y()
+
+
+def _frame_y() -> None:
+    _library_boom()
+
+
+def _frame_holding_an_amount() -> None:
+    amount = Decimal(LOCAL_FIGURE)
+    _frame_refusing_the_amount(amount)
+
+
+def _frame_refusing_the_amount(amount: Decimal) -> None:
+    if amount > 0:
+        raise ValueError(f"PRIVATE-{MESSAGE_FIGURE}: a positive amount is refused")
+
+
+def _logged_engine_failure(exc: Exception, execution_id: str) -> dict[str, Any]:
+    """The one event ``_log_engine_failure`` writes for ``exc``, from the module's logger at level ``error``; barrier first."""
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as logs:
+        _log_engine_failure(exc, execution_id=execution_id)
+    events = [entry for entry in logs if entry.get("event") == ENGINE_FAILURE_EVENT]
+    assert events, f"barrier: capture_logs saw no {ENGINE_FAILURE_EVENT!r} among {[entry.get('event') for entry in logs]}: the module's logger does not reach the capture"
+    assert [(entry.get("logger"), entry.get("log_level")) for entry in events] == [(ENGINE_FAILURE_LOGGER, "error")], events
+    return events[0]
+
+
+def _frame_parts(text: object) -> tuple[str, str, str]:
+    """``(path, line, function)`` of a logged frame ``<path>:<line>:<function>``, whose line is a number."""
+    assert isinstance(text, str), f"a logged frame is a str '<path>:<line>:<function>'; got {text!r}"
+    parts = text.rsplit(":", 2)
+    assert len(parts) == 3 and parts[1].isdigit(), f"a logged frame reads '<path>:<line>:<function>'; got {text!r}"
+    path, line, function = parts
+    return path, line, function
+
+
+def _own_function(text: object) -> str:
+    """The function an own frame names, once its path is shown from the repository root."""
+    path, _line, function = _frame_parts(text)
+    assert path == OWN_FILE, f"an own frame shows its repository-relative path {OWN_FILE!r}; got {text!r}"
+    return function
+
+
+def _callers(event: dict[str, Any]) -> list[str]:
+    """``event['callers']``: the own frames that called ``where``, at most two, nearest first, each a str like ``where``."""
+    callers = event.get("callers", "<missing>")
+    assert isinstance(callers, list), f"the event must carry 'callers', a list[str] of the own frames above 'where' (at most two, nearest first); got {callers!r} in {event}"
+    assert all(isinstance(text, str) for text in callers), f"'callers' holds frames as str '<path>:<line>:<function>'; got {callers!r}"
+    return callers
+
+
+def test_pac_engine_failure_log_names_at_most_two_callers_nearest_first():
+    """``callers`` names the two own frames nearest above ``where``, nearest first, and no more.
+
+    This test -> ``_frame_a`` -> ``_frame_b`` -> ``_frame_c`` -> ``_frame_d``,
+    which raises in own code: ``where`` is ``_frame_d``, there is no
+    ``raised_in``, and the cap of two leaves ``_frame_a`` and this test out.
+    """
+    try:
+        _frame_a()
+    except ValueError as exc:
+        caught = exc
+    else:
+        pytest.fail("setup: _frame_a() must raise from _frame_d()")
+
+    event = _logged_engine_failure(caught, execution_id="pac-log-own-chain")
+
+    assert (event.get("error_type"), event.get("execution_id")) == (ValueError.__qualname__, "pac-log-own-chain")
+    assert _own_function(event.get("where")) == _frame_d.__name__
+    assert "raised_in" not in event, f"raised in own code, so no library frame: {event}"
+    assert set(event) - CAPTURE_KEYS == {"error_type", "execution_id", "where", "callers"}, f"the keys of the log call: {sorted(set(event) - CAPTURE_KEYS)}"
+    callers = _callers(event)
+    assert [_own_function(text) for text in callers] == [_frame_c.__name__, _frame_b.__name__], callers
+
+
+def test_pac_engine_failure_log_names_a_lone_caller_alone():
+    """One own frame above ``where`` makes ``callers`` a list of that frame alone.
+
+    This test -> ``_frame_d``, which raises in own code: "at most two" also
+    means one, with no error for the missing second.
+    """
+    try:
+        _frame_d()
+    except ValueError as exc:
+        caught = exc
+    else:
+        pytest.fail("setup: _frame_d() must raise")
+
+    event = _logged_engine_failure(caught, execution_id="pac-log-lone-caller")
+
+    assert (event.get("error_type"), event.get("execution_id")) == (ValueError.__qualname__, "pac-log-lone-caller")
+    assert _own_function(event.get("where")) == _frame_d.__name__
+    assert "raised_in" not in event, f"raised in own code, so no library frame: {event}"
+    callers = _callers(event)
+    assert [_own_function(text) for text in callers] == [test_pac_engine_failure_log_names_a_lone_caller_alone.__name__], callers
+
+
+def test_pac_engine_failure_log_has_no_callers_key_without_an_own_caller():
+    """No own frame above ``where``: the event has no ``callers`` key, not an empty list.
+
+    This test calls the fake library directly: ``where`` is this test and
+    ``raised_in`` the library frame, shown by its file name only.
+    """
+    try:
+        _library_boom()
+    except ValueError as exc:
+        caught = exc
+    else:
+        pytest.fail("setup: the fake library must raise")
+
+    event = _logged_engine_failure(caught, execution_id="pac-log-no-caller")
+
+    assert (event.get("error_type"), event.get("execution_id")) == (ValueError.__qualname__, "pac-log-no-caller")
+    assert _own_function(event.get("where")) == test_pac_engine_failure_log_has_no_callers_key_without_an_own_caller.__name__
+    assert event.get("raised_in") == LIBRARY_FRAME, event
+    assert "callers" not in event, f"no own frame above 'where': 'callers' must be absent, not {event.get('callers')!r}"
+    assert set(event) - CAPTURE_KEYS == {"error_type", "execution_id", "where", "raised_in"}
+
+
+def test_pac_engine_failure_log_names_the_callers_of_a_library_failure():
+    """A library failure: ``raised_in`` is the library frame, ``where`` the own frame that called it, ``callers`` the two above.
+
+    This test -> ``_frame_x`` -> ``_frame_y`` -> the fake library, which
+    raises: the library frame shows its file name only, and the callers are
+    ``_frame_x`` and this test, nearest first.
+    """
+    try:
+        _frame_x()
+    except ValueError as exc:
+        caught = exc
+    else:
+        pytest.fail("setup: _frame_x() must raise through the fake library")
+
+    event = _logged_engine_failure(caught, execution_id="pac-log-library-chain")
+
+    assert (event.get("error_type"), event.get("execution_id")) == (ValueError.__qualname__, "pac-log-library-chain")
+    assert event.get("raised_in") == LIBRARY_FRAME, event
+    assert _own_function(event.get("where")) == _frame_y.__name__
+    callers = _callers(event)
+    assert [_own_function(text) for text in callers] == [_frame_x.__name__, test_pac_engine_failure_log_names_the_callers_of_a_library_failure.__name__], callers
+    assert set(event) - CAPTURE_KEYS == {"error_type", "execution_id", "where", "raised_in", "callers"}
+
+
+def test_pac_engine_failure_log_never_shows_the_message_or_the_amounts():
+    """The event carries neither the exception message nor an argument or a local: they can hold the user's amounts.
+
+    This test -> ``_frame_holding_an_amount`` -> ``_frame_refusing_the_amount``,
+    which raises with a figure in its message while a Decimal amount is a local
+    of one frame and an argument of the other. Barriers first: both figures are
+    really there to leak, and the event describes those frames.
+    """
+    try:
+        _frame_holding_an_amount()
+    except ValueError as exc:
+        caught = exc
+    else:
+        pytest.fail("setup: _frame_holding_an_amount() must raise")
+
+    assert MESSAGE_FIGURE in str(caught), f"setup: the exception message must carry the figure; got {str(caught)!r}"
+    amounts = [frame.f_locals["amount"] for frame, _lineno in traceback.walk_tb(caught.__traceback__) if "amount" in frame.f_locals]
+    assert Decimal(LOCAL_FIGURE) in amounts, f"setup: the traceback's frames must hold the amount; got {amounts!r}"
+
+    event = _logged_engine_failure(caught, execution_id="pac-log-private")
+
+    assert _own_function(event.get("where")) == _frame_refusing_the_amount.__name__, event
+    logged = repr(event)
+    assert MESSAGE_FIGURE not in logged, f"the exception message reached the log: {logged}"
+    assert LOCAL_FIGURE not in logged, f"a local variable or an argument reached the log: {logged}"
