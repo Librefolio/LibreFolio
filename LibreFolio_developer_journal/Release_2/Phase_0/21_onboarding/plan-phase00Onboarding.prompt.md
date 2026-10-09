@@ -1,5 +1,16 @@
 # Phase 0 - Onboarding foundation
 
+> **Cosa resta aperto** (verifica Q del 2026-10-09, base `3cceb4f90`). Il developer ha deciso di non archiviare la cartella, il 09/10: «no non l'ho fatta, e il fatto che ci siano anche delle cose non ancora implementate rafforza il punto che deve restare».
+> 1. **Review manuale del developer delle correzioni C7.** Riguarda il Round 8, step 8, completato il 25/09, con il runbook nella sezione «Runbook review manuale — copia prod `6168`» del [Round 8](plan-phase00OnboardingRound8-PostReview.prompt.md). Il mandato la rende obbligatoria prima di archivio e chiusura, e non è stata fatta. Nel frattempo la cura del punto 4 (titolo della finestra) è stata sostituita da `0aac5ef1e` (29/09): quella riga del runbook non vale più.
+> 2. **Contratto fra il catalogo TS e il registry Python dei flussi.** I due lati fissano ciascuno i propri 15 flussi (`frontend/src/lib/stores/app/onboarding.test.ts:1904`; `backend/app/services/onboarding_service.py:27-58`), ma nessun test li confronta. Peso medio. Dossier §6 #4.
+> 3. **Il re-trigger al cambio di versione di un flusso non è mai stato provato end-to-end.** I 15 flussi sono alla versione 1 (`onboarding_service.py:27-43`), e i test verificano solo `update_available is False` (`backend/test_scripts/test_services/test_settings_service.py:976,1146`). Peso medio. Dossier §6 #5.
+> 4. **La fascia 641–1023 px non è provata.** Playwright ha solo desktop 1280 e mobile 430 (`frontend/playwright.config.ts:123-138`). Peso basso. Dossier §6 #6.
+> 5. **Manca un reset admin o CLI dell'onboarding di un utente.** Serve SQL, e `scripts/user_cli.py` non lo prevede. Peso basso. Dossier §6 #7.
+> 6. **Nessuna telemetria su completamento e salto.** Non è mai stata richiesta. Peso basso, facoltativa. Dossier §6 #8.
+> 7. **L'ancora `tools.hub` non è usata da nessuna guida** (`frontend/src/lib/features/tools/ToolsHub.svelte`); è candidata per una guida Tools. Peso basso. [Round 8](plan-phase00OnboardingRound8-PostReview.prompt.md), tabella dei conflitti.
+>
+> Il §6 #9 del dossier, «tour iniziale troppo lungo», è chiuso per decisione del developer del 2026-10-09: *«il tour iniziale va bene già ora, toglilo»* (oggi il tour ha 8 passi, `onboarding.tour.steps` in `en.json`). **Tutto il resto è fatto e verificato sul codice.** I Round 1–8 sono ✅, e i punti superati sono marcati nei rispettivi piani.
+
 ## Stato e autorizzazione
 
 **Baseline approvata:** `dev_release2` a

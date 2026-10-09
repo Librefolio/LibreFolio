@@ -51,6 +51,12 @@ Severità: 🔴 blocca o falsa un dato · 🟠 rompe un flusso · 🟡 attrito �
 
 **Non difetti** (§3): PAC senza UI · privacy che "nasconde la valuta" · benchmark MSCI World.
 
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`). Le voci sono 21, non 20.
+> - R1, R3 e R5–R21 sono chiusi; i piani e i commit sono citati nelle sezioni.
+> - R4 non si riproduce (`21_onboarding`, Round 8).
+> - **R2 resta aperto come difetto di design**: `backend/app/utils/version.py:36-39` legge `VERSION` prima di `git describe`, e la build Docker lo lascia nella radice (`dev.py:1628-1637`).
+> - Fra i non-difetti: il PAC ora ha una UI (`0210f9848`); la valuta sotto privacy è diventata un difetto ed è chiusa (`176f19707`); il benchmark resta un non-difetto.
+
 ---
 
 ## 2 · Dettaglio con evidenza
@@ -282,6 +288,8 @@ la torta a due livelli concordata con Risk.
 > sull'anello esterno (*«la proposta B è quello che mi aspettavo»*). ~~per contenuto: `ETF_STOCK`
 > sotto «Azione»~~. Nel modello il principio non cambia: il sottotipo dice che cosa contiene.
 > Cambia il raggruppamento della torta, con un modulo nuovo di Risk (`charts/allocationFamily.ts`).
+>
+> **Alias** (verifica Q del 2026-10-09, base `3cceb4f90`): il modulo `allocationFamily.ts` non esiste. Il raggruppamento usa `assetTypeFamily` (`frontend/src/lib/components/charts/allocationHierarchy.ts:45`, `allocationRings.ts`).
 > Registrato da Risk in `04` (D72) e `REGISTRO` (R2-158). Conseguenze: Allocazione storica (I)
 > raggruppa ancora per contenuto; per `CROWDFUND_REAL_ESTATE` il veicolo verrà dalla famiglia
 > esposta da K.
@@ -541,7 +549,9 @@ un lavoro di **rendering e modello del grafico**, non di calcolo mancante. Il de
 autorizza esplicitamente un adeguamento backend se serve a esporlo nella forma giusta:
 *«potrebbe servire aggiornare il backend, non sarebbe un problema.»* → decisione a **I**.
 
-### 8.6 🔴 Aperto: R20 — la privacy dei broker non si riscopre
+### 8.6 ✅ Chiuso il 24/09 (`64d78e244`): R20 — la privacy dei broker non si riscopre
+
+> **Al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): chiuso in `64d78e244` («follow privacy toggle»; `BrokerCard.svelte`, `24_privacyGlobal` Round 2). Il titolo diceva «🔴 Aperto».
 
 **Osservato.** In **Broker Global** i valori si nascondono, ma poi **non si riscoprono**. In
 **Broker Detail** e in **Transazioni** il toggle funziona in entrambe le direzioni.
@@ -818,9 +828,9 @@ possedeva, o che due piani possedevano insieme. Decisioni del coordinator:
 
 | voce | cosa | owner | nota |
 |---|---|---|---|
-| 🔴 privacy e valuta, secondo sito | `LotComparisonChart.svelte:261` | **J** | stesso difetto di `riskAnalysisHelpers:160` |
+| 🔴 privacy e valuta, secondo sito | `LotComparisonChart.svelte:261` | **J** | stesso difetto di `riskAnalysisHelpers:160` · **✅ al 2026-10-09** (verifica Q, base `3cceb4f90`): chiuso da `176f19707` (24/09); l'asse (`:258`) delega a `formatAxisCurrency` (`lotComparisonChartHelpers.ts:120`), che maschera solo le cifre e lascia valuta e segno |
 | `riskAnalysisHelpers.ts` + test | file interi, per tutto il round | **J**, unico scrittore | nessuna finestra: Risk non li tocca |
-| 🔴 P4-11, secondo grafico | `PerformanceChart.svelte:161` (`shortMoney`, P&L per posizione), `:170` (`axisTickAmount`, asse dei valori) — nessun riferimento alla privacy nel file | **I** | piano di I rimandato per aggiungerlo |
+| 🔴 P4-11, secondo grafico | `PerformanceChart.svelte:161` (`shortMoney`, P&L per posizione), `:170` (`axisTickAmount`, asse dei valori) — nessun riferimento alla privacy nel file | **I** | piano di I rimandato per aggiungerlo · **✅ al 2026-10-09** (verifica Q, base `3cceb4f90`): fatto da `804bc9903` (24/09); oggi `shortMoney` (`:166`) e `axisTickAmount` (`:183`) mascherano le cifre |
 | ~~D1 di I, precisato~~ → **D1 rifatto** *(J, 16:00)* | «al merge si sommano» era sbagliato: `moneyRenderSites.test.ts:276` usa PerformanceChart come esemplare del controllo positivo, e mascherarlo lo manda rosso; le 4 voci di I vanno cancellate; le liste `:272-273` le toccano sia I sia J | **J** gate-prep (checkpoint separato, solo il file del gate) → merge **J → I** → **S2 di I** | dipendenza tra workstream, gestita con un merge figlio → figlio; `compact` dentro la maschera; nessuna primitiva nuova per I |
 | ancore della guida import | `ImportWizardModal` `import.action.*` `:4586–4770`, 5 del Bulk, step-sync `:164–178`, `:1279` | **K** le preserva | per l'analisi di K R18 non tocca quel file |
 | §1.3, §1.5 di 09 | ritirate | — | barrate, non cancellate |
@@ -839,7 +849,7 @@ possedeva, o che due piani possedevano insieme. Decisioni del coordinator:
 | citazioni derivate, precisazione | `{#if scope.kind === 'asset'}` compare due volte in `RiskAnalysisPanel` (`:742`, `:879`) | **F** | «cita il simbolo» non basta: va citato per contenimento; F rende simboliche tutte e 8 le citazioni dei suoi componenti, più una terza nata sbagliata (`AssetSetReplaySection:44` → `L4Replay:238`) |
 | 🟠 **griglia di calendario sui dati del developer** *(17:45)* | justETF scrive sabato e domenica con la chiusura del venerdì. Nella snapshot ci sono **14 448** righe di weekend sui 10 asset justETF, e **il 100 %** è uguale al venerdì. Il provider le passa come arrivano, con `backward_fill_info=None` (`justetf.py:373-387`): contano come fresche (`series_preparation.py:123-125`). Il BTP (id 8, `borsa_italiana`) ha 399 righe, **nessuna** nel weekend | **Risk** con il developer, nel tempo ② | Conseguenze verificate: **(1)** con un justETF nel perimetro f = 365, e *Mese storto* (21 osservazioni, `asset_set_var.py:83`, `historical_var.py:71`) dura **3 settimane**, come sul portafoglio. Sul portafoglio lo è per costruzione: la serie TWRR del report ha un punto per ogni giorno di calendario (`service.py:932-941` la legge da `report.history`; `portfolio_engine.py:870-871` emette uno stato per giorno di calendario, e i giorni fermi riusano quello precedente; `portfolio_service.py:1305-1425` ne ricava la storia senza campionarla), quindi togliere le righe del weekend di justETF non basta a farne di nuovo un mese. Resta da decidere l'unità dell'orizzonte. Fa eccezione il BTP da solo, su giorni di borsa, dove 21 osservazioni sono circa un mese. L'insieme preparato include anche gli asset di confronto (`service.py:170-171`), quindi un benchmark justETF cambia griglia anche al BTP. **(2)** Ogni asset justETF ha un rendimento **esattamente zero** nei weekend, in ogni VaR e in ogni correlazione. *Misura di Risk del 24/09, fatta sulla copia su 3 asset justETF per 730 giorni, non riverificata dal coordinator*: la volatilità annualizzata **non** è distorta, perché il fattore osservato compensa la diluizione (rapporto 1,00). Sono sottostimati i quantili per osservazione: *Giornata storta* dell'8-13 %, *Mese storto* del 9-19 %. Vale per ogni ambito sulla griglia di calendario. **(3)** Se nel perimetro c'è un justETF, il BTP viene riportato in avanti ogni weekend, e il risultato è `partial`. È la causa del `partial` di A su `[1,3,8]`: 574 osservazioni sono 574 giorni di calendario (baseline 2025-02-25, prima quotazione del BTP) e i punti riportati sono 176. `[1,2,3,4]`, tutti justETF, danno `ok` |
 | doc · la griglia descritta come intersezione | `observed-annualization.en.md:95` («intersected across the assets in scope») e `historical-replay.en.md:95` («over the intersection of the calendars») contraddicono il codice e `data-quality.en.md:60`, che l'unione la descrive giusta. La stessa premessa, di A, è nella sua pagina utente `user/assets/correlation.en.md` (:99 «about a month», :138, :150, :182) e nel suo piano (:138-143, :197, :211, :454-455) | **Risk** per le due pagine di teoria, come unico scrittore, dopo il suo checkpoint · **A** per la sua pagina e il suo piano, in un commit **dopo** il checkpoint | Le pagine di teoria vengono da `b35a8581e`, e oggi nessun ramo le tocca. `data-quality.en.md` e la `correlation.en.md` di teoria restano di **F**. Deciso *dopo* e non *prima* (17:58): il piano va corretto comunque dopo, e scongelare adesso invaliderebbe un checkpoint già verificato. A ha già corretto il messaggio del suo commit 2, e l'ho riverificato |
-| 🟠 **E2E già rossi sul target** *(misurati da I, 24/09)* | su `f1047f766`: `front-portfolio dashboard` 5 falliti su 15 (`:577` ×3, il selettore zoom-window tolto; `:607`, legge un badge non più montato; `:534`) e `front-broker detail` 1 fallito su 28 (`:710`). Per `:534` e `:710` la causa è misurata: da `e7773a143` lo zero non ha segno, e i test cercano «≥3 importi con segno». È un'assunzione del test, non un difetto del prodotto. In più, da unit: `chartCoreHelpers.test.ts` 12 falliti su 162 (P4-9) | **I**, in S10, perché li ha rotti una sua slice | l'inventario del 22/09 misurava solo gli unit, quindi il «12» valeva per quel perimetro, non per il ramo. In questo round `dashboard.spec.ts` e `brokers-detail.spec.ts` li scrive solo I. J avvisato: confronta i risultati per nome del test |
+| 🟠 **E2E già rossi sul target** *(misurati da I, 24/09)* | su `f1047f766`: `front-portfolio dashboard` 5 falliti su 15 (`:577` ×3, il selettore zoom-window tolto; `:607`, legge un badge non più montato; `:534`) e `front-broker detail` 1 fallito su 28 (`:710`). Per `:534` e `:710` la causa è misurata: da `e7773a143` lo zero non ha segno, e i test cercano «≥3 importi con segno». È un'assunzione del test, non un difetto del prodotto. In più, da unit: `chartCoreHelpers.test.ts` 12 falliti su 162 (P4-9; chiusi da `2e4c8589f` il 28/09, verifica Q del 2026-10-09) | **I**, in S10, perché li ha rotti una sua slice | l'inventario del 22/09 misurava solo gli unit, quindi il «12» valeva per quel perimetro, non per il ramo. In questo round `dashboard.spec.ts` e `brokers-detail.spec.ts` li scrive solo I. J avvisato: confronta i risultati per nome del test |
 
 **Aggiunte del 24/09, pomeriggio**:
 
