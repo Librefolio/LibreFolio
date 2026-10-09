@@ -623,3 +623,13 @@ Altre superfici:
 > - le voci del banner non espongono le due righe né il tipo di destinazione (si potrebbero aggiungere attributi `data-*`);
 > - il select del broker per file al passo 1 non ha un `data-testid`;
 > - in `PromoteMergeModal`, che non è mio, un Annulla subito dopo la seconda apertura può chiedere «scartare le modifiche?» senza modifiche, perché `initialSnapshot` si aggiorna in un `setTimeout(0)`.
+
+### Passo 13 — Tre voci assegnate dal coordinatore ✅ (2026-10-09)
+
+> **Baseline**: `94271713b` (checkpoint 2, batch 21).
+>
+> **Note implementazione**:
+> - `TransactionFormModal.svelte:1949`: il ripiego inglese inline di `warningAdjustment` ora coincide col testo nuovo del catalogo.
+> - `broker_etoro.py`, `description` (da owner BRIM): ora dice cosa legge davvero, cioè il CSV dell'attività del conto, con posizioni aperte e chiuse (un CFD letto come le altre), dividendi, interessi, depositi, prelievi, commissioni di prelievo e di cambio. Prima diceva «Supports stocks, CFDs». R13 (`front-utility core-unit`) **3654 passed**; `external brim-providers` **694 passed, 1 skipped**.
+> - `user/transactions/index.en.md`, «The bulk workspace»: il banner unisce due righe nuove, due salvate o una di ciascun tipo; il 💡, nella barra e nel menu della riga, aggiunge la metà già salvata. È l'unica pagina utente generale che parla del banner.
+> - `dev.py mkdocs build` strict verde; ruff, black e Prettier puliti; `git diff --check` pulito.
