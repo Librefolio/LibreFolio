@@ -157,4 +157,4 @@ a release before its container image is pullable.
 | Typed status/reason contract | `backend/app/schemas/system.py` |
 | Release metadata probe, image gate, and fail-closed mapping | `frontend/src/lib/features/update-check/updateCheck.ts` |
 | Registry protocol and endpoint regressions | `backend/test_scripts/test_services/test_container_registry.py` |
-| Integrated Round 5 plan and rationale | `LibreFolio_developer_journal/Release_2/Phase_0/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md` |
+| Integrated Round 5 plan and rationale | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md` |

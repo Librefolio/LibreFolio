@@ -245,14 +245,25 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc \
 
 ## 9. Definizione di finito
 
-- [ ] Colore **per dato** in entrambi i grafici — quattro punti nello storico, non uno;
-- [ ] `hexToHsl` in `utils/colors.ts`, con test;
-- [ ] **ordinamento gerarchico**: figli adiacenti al genitore;
-- [ ] primario derivato da `primaryAssetType` (K2), **mai** da `split('_')`;
-- [ ] asset non specializzato = colore primario puro;
-- [ ] tooltip con i numeri dei sottotipi distinti;
-- [ ] **sfumature distinguibili in entrambi i temi**, verificato;
-- [ ] legenda non affollata, o primari in legenda e dettaglio nel tooltip;
-- [ ] **`git diff` sul backend vuoto**;
-- [ ] lint, `svelte-check`, Vitest ed E2E verdi;
-- [ ] nessun processo in ascolto su `6246`.
+- [x] Colore **per dato** in entrambi i grafici — quattro punti nello storico, non uno;
+  ↳ *allineamento 09/10*: ✅ `frontend/src/lib/components/charts/allocationHierarchy.ts`; lo storico è stato poi rifatto con un'area per famiglia (D375)
+- [x] `hexToHsl` in `utils/colors.ts`, con test;
+  ↳ *allineamento 09/10*: ✅ `frontend/src/lib/utils/colors.ts`, test in `utils/__tests__/colors.test.ts`
+- [x] **ordinamento gerarchico**: figli adiacenti al genitore;
+  ↳ *allineamento 09/10*: ✅ `allocationHierarchy.ts`
+- [x] primario derivato da `primaryAssetType` (K2), **mai** da `split('_')`;
+  ↳ *allineamento 09/10*: ✅ `allocationHierarchy.ts`; poi le famiglie di K (`assetTypeFamily`)
+- [x] asset non specializzato = colore primario puro;
+  ↳ *allineamento 09/10*: ✅ `allocationHierarchy.ts`
+- [x] tooltip con i numeri dei sottotipi distinti;
+  ↳ *allineamento 09/10*: ✅ `allocationHierarchy.ts`; nello storico i sottotipi stanno solo nel tooltip (D375)
+- [x] **sfumature distinguibili in entrambi i temi**, verificato;
+  ↳ *allineamento 09/10*: ✅ misurato su 28 colori (STATO.md, `FROZEN` di G)
+- [x] legenda non affollata, o primari in legenda e dettaglio nel tooltip;
+  ↳ *allineamento 09/10*: ✅ `allocationHierarchy.ts`
+- [x] **`git diff` sul backend vuoto**;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] lint, `svelte-check`, Vitest ed E2E verdi;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] nessun processo in ascolto su `6246`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato

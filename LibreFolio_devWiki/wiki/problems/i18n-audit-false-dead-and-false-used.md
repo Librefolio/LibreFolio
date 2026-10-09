@@ -95,4 +95,4 @@ hides.
 | CLI and report | `frontend/scripts/i18n-audit.py` |
 | Gate (PURE) | `backend/test_scripts/test_utilities/test_i18n_usage_gate.py` |
 | Skill (rules for contributors) | `.github/skills/devpy-tools/devpy-i18n/SKILL.md` |
-| Plan (§5, Appendix A) | `LibreFolio_developer_journal/Release_2/Phase_0/29_i18nAudit/plan-phase00I18nAudit.prompt.md` |
+| Plan (§5, Appendix A) | `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md` |

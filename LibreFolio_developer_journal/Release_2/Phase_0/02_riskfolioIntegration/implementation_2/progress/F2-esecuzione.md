@@ -522,4 +522,4 @@ presa prima di quel momento descrive un albero **diverso** da questo. Dichiarato
 
 | # | Verso | Stato |
 |---|---|---|
-| `PRIMITIVE.md` | S1 · S2 · S3 · S4 · S5 | ⏳ in lavorazione |
+| `PRIMITIVE.md` | S1 · S2 · S3 · S4 · S5 | ✅ [`../PRIMITIVE.md`](../PRIMITIVE.md) (allineamento 09/10) |

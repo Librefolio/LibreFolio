@@ -6,9 +6,11 @@ Stato corrente e dettagli in [06_piano_sprint.md](06_piano_sprint.md). Il bug re
 
 > **Chiusura Gruppo E — 2026-09-09:** U1, U4, U5, U7 e U9 sono stati
 > implementati, verificati e applicati al checkout `dev_release2`; piano ed
-> evidenze in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
+> evidenze in [14_feedbackImportUrgent](../../phases/14_feedbackImportUrgent/manifest-integrazione-E.md).
 > U3 YOC è ora integrato; U2 privacy resta aperto. U8 onboarding ha un checkpoint
 > Round 2 manualmente revisionato e un Round 3 pianificato ma non implementato.
+>
+> **Al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): U2 è integrato (`b66e93003`, piano `24_privacyGlobal`). U8 è nel target fino al Round 8 (`21_onboarding`), dove resta aperta la review manuale delle correzioni C7. Vedi la tabella in fondo.
 
 ---
 
@@ -79,7 +81,7 @@ Regola comune G-UX-DESIGN/G-UX-REVIEW nel [piano](06_piano_sprint.md).
 **Stato 2026-09-11:** ✅ **IMPLEMENTATO, VERIFICATO E ACCETTATO DAL DEVELOPER**
 nel checkpoint H `74afcebce`. Contratto finale, storyboard desktop/mobile,
 correzioni review ed evidenze nel
-[piano H dedicato](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
+[piano H dedicato](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md).
 
 ### Richiesta
 Una colonna che mostri il **rendimento corrente dell'asset rispetto al costo di acquisto**
@@ -328,13 +330,13 @@ Baseline `a9138140`; superfici, dipendenze, rischi e DoD completi in
 | ID | Esito | Sprint |
 |---|---|---|
 | U1 | ✅ Completato da E: stato/generazioni del probe e metadata concorrente. | SP01 |
-| U2 | Scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
-| U3 | ✅ [IMPLEMENTATO, VERIFICATO, DEVELOPER-ACCEPTED E INTEGRATO](../19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `74afcebce`, follow-up finale `f092a194b`. | SP06 |
+| U2 | ✅ Al 09/10 integrato (`b66e93003`, `176f19707`, `64d78e244`; piano `24_privacyGlobal`), per dispositivo e non per account, come deciso il 21/09; `SensitiveValue` sospeso. Storico: scope globale concordato, non solo dashboard; primitive condivise. XL. | SP15 |
+| U3 | ✅ [IMPLEMENTATO, VERIFICATO, DEVELOPER-ACCEPTED E INTEGRATO](../../phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md), checkpoint H `74afcebce`, follow-up finale `f092a194b`. | SP06 |
 | U4 | ✅ Completato da E: colonna uploader ordinabile e filtro multi-selezione. | SP02 |
 | U5 | ✅ Completato da E: tooltip breve localizzato. | SP01 |
 | U6 | ✅ Rimozione duplicate-mode e fast-open bulk confermati; form vivo da preservare. | Nessun codice |
 | U7 | ✅ Completato da E: supporto condiviso in DonationPopup/About e cinque social. | SP02 |
-| U8 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md), checkpoint J `580bd504f` integrato nel target `dev_release2` via `e38a521f0` (verificato 2026-09-21: ramo J a 0 avanti). Round 7 aperto per il timeout di stallo sull'anchor. | SP11 |
+| U8 | ✅ [IMPLEMENTATO, VERIFICATO E DEVELOPER-ACCEPTED](../21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md), checkpoint J `580bd504f` integrato nel target `dev_release2` via `e38a521f0` (verificato 2026-09-21: ramo J a 0 avanti). Round 7 integrato (`1982c254b`, stallo dell'ancora segnalato dopo 3 s). Al 09/10 resta aperta in `21_onboarding` la review manuale delle correzioni C7 (Round 8). | SP11 |
 | U9 | ✅ Completato da E: header auto-hide desktop/mobile con guardie lifecycle. | SP02 |
 
 La [mappa nel piano](06_piano_sprint.md) separa corsie indipendenti da file condivisi:

@@ -279,7 +279,7 @@ class TestConditionalPrefix:
 
 # ---------------------------------------------------------------------------
 # Second round: the defects the i18n audit measured on the real sources
-# (Release_2/Phase_0/29_i18nAudit, §5.1). One class per rule, each proven again in
+# (Release_2/phases/29_i18nAudit, §5.1). One class per rule, each proven again in
 # both halves. Names the module does not export yet are reached through `U.` inside
 # the tests, so that a missing name fails the tests that need it and leaves every
 # other test where it was.

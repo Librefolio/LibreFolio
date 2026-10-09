@@ -70,7 +70,7 @@ che questa struttura esiste per intercettare.
 | **[K6](./K6.md)** | H | E | `process` × `regime` e cono. Didascalia shock **«applicato alla tua storia»**; chiavi i18n = **stringhe enum esatte**; ⚠️ `regime != none` **richiede** `block_bootstrap` → altrimenti **422** | ✅ **H FROZEN** |
 | **[K7](./K7.md)** | I | E, F, H | I **22** slug (21 metriche + hub), come stringa `path`, **generati a macchina**. ⚠️ Baseline del gate: **12** con il `dev.py` di baseline, **24** con la riparazione di I | ✅ |
 | **[K8](./K8.md)** | N | E, **I** | Campi nuovi su `RiskKpiOutput` e `RiskContributionOutput`. 🔴 **`effective_number_of_assets` può superare il numero di titoli** (11,44 su 2): non etichettarlo come conteggio | ✅ **N FROZEN** |
-| **[K9](./K9.md)** | E | F | `allowedStressMethods` + replay allargato ad `asset_set` con **audit mostrato**. 🔴 **Esteso**: guardia `scope.kind === 'portfolio'` sui due `formatAmount` — oggi **nulla protegge la regola degli importi** | ✅ **esteso** |
+| **[K9](./K9.md)** | E | F | `allowedStressMethods` + replay allargato ad `asset_set` con **audit mostrato**. 🔴 **Esteso**: guardia `scope.kind === 'portfolio'` sui due `formatAmount` — oggi **nulla protegge la regola degli importi** | ✅ **esteso** ↪ **superato**: vedi [`K9.md`](./K9.md) (allineamento 09/10) |
 
 Legenda: ⏳ atteso · 📝 concordato, non ancora implementato · ✅ consegnato e verificato
 · ⚠️ cambiato dopo la consegna

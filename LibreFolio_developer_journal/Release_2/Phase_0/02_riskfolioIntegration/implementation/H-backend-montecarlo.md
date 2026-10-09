@@ -232,14 +232,25 @@ Se serve un selettore nuovo nel catalogo, si **chiede al mandato A**, che possie
 
 ## 11. Definizione di finito
 
-- [ ] Block bootstrap implementato e **default**;
-- [ ] GJR-GARCH disponibile, calibrato dalla sola serie prezzi;
-- [ ] preset di regime prescritti, con **l'ipotesi scritta inline**;
-- [ ] GBM ancora disponibile, etichettato «avanzato» e con il suo limite dichiarato;
-- [ ] `sobol_start_index` **fuori dalla UI**;
-- [ ] riproducibilità a seme fissato verificata **anche per il bootstrap**;
-- [ ] calcolo ancora in processi `spawn`;
-- [ ] livelli 4-5 **non** implementati e ancora registrati in `TODO_FUTURI.md`;
-- [ ] `services risk-simulation`, `risk-workers` e `risk-all` verdi;
-- [ ] **K6 consegnato e comunicato a E**;
-- [ ] nessun processo in ascolto su `6247`.
+- [x] Block bootstrap implementato e **default**;
+  ↳ *allineamento 09/10*: ✅ `backend/app/services/risk_plugins/simulation.py` (processo predefinito `block_bootstrap`)
+- [x] GJR-GARCH disponibile, calibrato dalla sola serie prezzi;
+  ↳ *allineamento 09/10*: ↪ rinviato con D88: `TODO_FUTURI.md` § «Livello 2 — GJR-GARCH: perché è uscito dalla v1»
+- [x] preset di regime prescritti, con **l'ipotesi scritta inline**;
+  ↳ *allineamento 09/10*: ✅ `RiskSimulationRegime` in `backend/app/schemas/risk.py`; l'ipotesi accanto alla scelta in `levels/l4/L4Simulation.svelte`
+- [x] GBM ancora disponibile, etichettato «avanzato» e con il suo limite dichiarato;
+  ↳ *allineamento 09/10*: ✅ `levels/l4/simulationModes.ts` (etichetta `advanced`)
+- [x] `sobol_start_index` **fuori dalla UI**;
+  ↳ *allineamento 09/10*: ✅ nei livelli (`L4Simulation.svelte`, una costante); resta nella scheda di Asset Detail, parcheggiata (D47)
+- [x] riproducibilità a seme fissato verificata **anche per il bootstrap**;
+  ↳ *allineamento 09/10*: ✅ `backend/test_scripts/test_services/test_risk_simulation.py`
+- [x] calcolo ancora in processi `spawn`;
+  ↳ *allineamento 09/10*: ✅ `backend/app/services/risk/quant/spawn_worker.py`
+- [x] livelli 4-5 **non** implementati e ancora registrati in `TODO_FUTURI.md`;
+  ↳ *allineamento 09/10*: ✅ `TODO_FUTURI.md` § «Monte Carlo avanzato: regimi calibrati e volatilità stocastica»
+- [x] `services risk-simulation`, `risk-workers` e `risk-all` verdi;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] **K6 consegnato e comunicato a E**;
+  ↳ *allineamento 09/10*: ✅ `progress/H-esecuzione.md`
+- [x] nessun processo in ascolto su `6247`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato

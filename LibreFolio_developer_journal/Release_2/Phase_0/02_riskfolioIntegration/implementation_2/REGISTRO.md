@@ -15,10 +15,10 @@ e `03-mappa-livelli-pagine.md` invece che contro il ricordo.
 
 | | mandato | sessione | corsia | stato | dal |
 |---|---|---|---|---|---|
-| **A** | **Asset Global completo** — `L1°` e `L3°` come livelli, via il monolite da `:314` | `shiny-sniffle` `risk-asset-global-levels` | `6170` · `/tmp/librefolio-r3-a` | 🟡 **fase 1 FROZEN** — scatter rianimato · `:314` smontato · cancello euro ri-puntato · contratto consegnato · **`risk-lab` da non eseguibile a 6/6**. Fase 2 (`L1°`/`L3°`) attende la piattaforma backend | 21 Set 17:55 |
+| **A** | **Asset Global completo** — `L1°` e `L3°` come livelli, via il monolite da `:314` | `shiny-sniffle` `risk-asset-global-levels` | `6170` · `/tmp/librefolio-r3-a` | ✅ (allineamento 09/10: anche la fase 2, `AssetSetComparisonLevels.svelte`) · 🟡 **fase 1 FROZEN** — scatter rianimato · `:314` smontato · cancello euro ri-puntato · contratto consegnato · **`risk-lab` da non eseguibile a 6/6**. Fase 2 (`L1°`/`L3°`) attende la piattaforma backend | 21 Set 17:55 |
 | **C** | **I tre cancelli che mentono** — `check-links` · `i18n audit` · `update_js_cache` | `redesigned-system` `gate-repair-checklinks-i18n-audit` | `6171` · `/tmp/librefolio-r3-c` | 🟢 **FROZEN, completo** — link 30→**81** · `risk.*` condannabili 0→**5** · **5 condanne false rimosse** · 8 mutazioni catturate · 10 file | 21 Set 17:55 |
-| **B** | **T1** — 137 `ValueError` in prosa inglese → codici | *(da aprire)* | `6172` | ⏸️ **dopo A**: A crea due livelli nuovi che sarebbero ancora in inglese | — |
-| **E** | **Uscita dalla beta** (D46) — via da L1/L2/L3, **resta sul solo gradino «simulazione» di L4** | *(da aprire)* | `6173` | ⏸️ **ultimo per costruzione**: è la dichiarazione che il resto è finito | — |
+| **B** | **T1** — 137 `ValueError` in prosa inglese → codici | *(da aprire)* | `6172` | ✅ (allineamento 09/10: la parte che arriva all'utente è chiusa — avvisi con chiave e parametri, giro R5 del 24/09, e il ramo generico `execution_failed` che non manda prosa; il resto in `TODO_FUTURI.md` § «I 110 `raise ValueError` del motore di rischio») · ⏸️ **dopo A**: A crea due livelli nuovi che sarebbero ancora in inglese | — |
+| **E** | **Uscita dalla beta** (D46) — via da L1/L2/L3, **resta sul solo gradino «simulazione» di L4** | *(da aprire)* | `6173` | ✅ (allineamento 09/10: CHANGELOG 1.2.0 — il banner resta sulla simulazione e sulla scheda di Asset Detail) · ⏸️ **ultimo per costruzione**: è la dichiarazione che il resto è finito | — |
 | — | **T4** separatore decimale | — | — | 📋 **fuori dal round per intero** — decisione dello sviluppatore 21 Set: *«mettiamo in TODO e facciamo tutto in futuro»*. 165 siti, di cui 26 nel rischio | — |
 
 **Coordinatore**: porta **6150**, cartella dati predefinita. ⚠️ Nessun mandato la usi.
@@ -84,6 +84,8 @@ tutte e tre le azioni.
 | **T3** | Ricombinazione spec | `test-author` | `6160` | ⏸️ ⚠️ **`risk-analysis.spec.ts` è di S1 in fase 2** (R2-33) · `risk-mocks.ts` è di S3 (R2-18) | — |
 | — | consulente matematica | A `improved-meme` | *nessuna* | 💬 **non serve**: la convenzione era già nell'albero (R2-28) | — |
 | — | da archiviare | B, C, G | — | 📦 in attesa | — |
+
+> *Allineamento 09/10*: N2 e S1–S5 sono stati tutti fusi (i loro `progress/*-esecuzione.md`), e poi rifiniti nel giro UI di A, F e Risk ([`R5-post-merge-e-review.md`](R5-post-merge-e-review.md)); T1 è chiuso come nella tabella del terzo giro, in cima. T2 si è ridotta al solo cancello (reperto 4, in cima), consegnato dal mandato C del terzo giro; T3 non esiste più (21/09, R2-117); le worktree di B, C e G non ci sono più (`git worktree list`, 09/10).
 
 **Coordinatore**: porta **6150**, cartella dati **predefinita**.
 ⚠️ **Nessun mandato deve usare la cartella dati predefinita**: la riscriverebbe.
@@ -203,7 +205,7 @@ nome di quello esistente o autorizza.
 | barra etichettata | `ui/display/KpiMetricBar` | — |
 | barra divergente | `ui/display/KpiDivergingFlowBar` | — |
 | grafico su **serie storiche** (linea, area, barre, banda) | `charts/LineChart` — asse **categoriale sulle date** | un wrapper ECharts nuovo |
-| scatter a **X numerica** (vol/rendimento) | ⏳ **F2 lo COSTRUISCE** — `LineChart` non può farlo | un grafico nuovo dopo F2 |
+| scatter a **X numerica** (vol/rendimento) | ✅ costruito da F2 (`charts/scatterChartHelpers.ts`; allineamento 09/10) — `LineChart` non può farlo | un grafico nuovo dopo F2 |
 | heatmap | `risk/CorrelationHeatmap` | — |
 | popover riposizionabile | `ui/feedback/Tooltip` | un popover nuovo |
 | selettore di data | `ui/date/SingleDatePicker` | un input nativo |

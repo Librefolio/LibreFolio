@@ -30,7 +30,7 @@
  * Phase F2 (U3) adds, at the end of the file, the pairing section of a report set's detail: the
  * outcome chips, the reasons table and the preview / download of the combined file.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D2).
+ * Plan: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D2).
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import type {Component} from 'svelte';

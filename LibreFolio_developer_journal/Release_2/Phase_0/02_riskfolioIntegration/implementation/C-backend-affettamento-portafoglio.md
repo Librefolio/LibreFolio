@@ -165,11 +165,19 @@ si assume.
 
 ## 8. Definizione di finito
 
-- [ ] Filtro per asset su `PortfolioRiskScope`, scope ancora `portfolio`;
-- [ ] **`git diff` su `risk_plugins/` vuoto** — nessun plugin toccato;
-- [ ] pesi rinormalizzati, con test che lo prova;
+- [x] Filtro per asset su `PortfolioRiskScope`, scope ancora `portfolio`;
+  ↳ *allineamento 09/10*: ✅ `backend/app/schemas/risk.py` (`PortfolioRiskScope`, filtro per asset)
+- [x] **`git diff` su `risk_plugins/` vuoto** — nessun plugin toccato;
+  ↳ *allineamento 09/10*: ✅ D298
+- [x] pesi rinormalizzati, con test che lo prova;
+  ↳ *allineamento 09/10*: ✅ `backend/test_scripts/test_services/test_risk_service.py`
 - [ ] la rinormalizzazione è **dichiarata nella UI**, non implicita;
-- [ ] `api sync` eseguito;
-- [ ] `services risk-all` e `api risk` verdi;
-- [ ] **K4 consegnato e comunicato a E**;
-- [ ] nessun processo in ascolto su `6242`.
+  ↳ *allineamento 09/10*: ⏳ **nessuna superficie**: nessuna pagina costruisce una fetta per asset, quindi non c'è niente da dichiarare → README della cartella, buchi (la fetta di D58 e D59 senza interfaccia)
+- [x] `api sync` eseguito;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] `services risk-all` e `api risk` verdi;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] **K4 consegnato e comunicato a E**;
+  ↳ *allineamento 09/10*: ✅ `progress/C-esecuzione.md`
+- [x] nessun processo in ascolto su `6242`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato

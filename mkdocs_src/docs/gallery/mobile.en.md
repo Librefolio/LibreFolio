@@ -42,6 +42,18 @@ The post-login modal announcing a newer release, with current vs latest version 
 
 ---
 
+## 🔒 Security
+
+### 🚦 Connection Indicator
+
+The connection security indicator at the bottom of the sidebar, open on Connection: local network, with the reason for that level and the How to connect securely link.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="security" data-name="connection-indicator" alt="🚦 Connection Indicator">
+</div>
+
+---
+
 ## 🧭 Onboarding
 
 ### 👋 Welcome Setup

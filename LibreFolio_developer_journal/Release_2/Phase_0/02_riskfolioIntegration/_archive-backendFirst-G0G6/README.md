@@ -189,5 +189,5 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
 
 - Roadmap Fase 0/0.1: [`../../Ai_ideas/phase_0_detailed_roadmap.md`](../../../Ai_ideas/phase_0_detailed_roadmap.md)
 - Roadmap strategica: [`../../Ai_ideas/roadmap_and_signals_brainstorm.md`](../../../Ai_ideas/roadmap_and_signals_brainstorm.md)
-- Migrazione segnali (Fase 0): [`../01_signalMigration/`](../../01_signalMigration/)
+- Migrazione segnali (Fase 0): [`../../phases/01_signalMigration/`](../../../phases/01_signalMigration/) *(archiviata; link corretto, allineamento 09/10)*
 - Gallery UI di riferimento: `mkdocs_src/docs/gallery/desktop/en/light/`

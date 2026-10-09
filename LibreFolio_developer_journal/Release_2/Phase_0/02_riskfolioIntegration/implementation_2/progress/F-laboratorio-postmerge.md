@@ -22,11 +22,11 @@
 | F-2c | citazioni per riga → simboliche | ✅ 8 su 8 | 2026-09-23 |
 | F-2d | polling dei prezzi live di `/assets` legato agli id (voce assegnata il 23/09) | ✅ codice + E2E 16/16 + **prova per uso** (1 al montaggio, +1 per «Ricarica Tutto») | 2026-09-23 |
 | F-2e | `data-quality.en.md` contro il codice: late start, «intersection», baseline (voce del coordinatore, 24/09) | ✅ 13 punti su 16 righe · build rigoroso 0 WARNING · check-links 80 = 80 · 7 residui riportati | 2026-09-24 |
-| F-3 | review del laboratorio sulla copia, col developer | 🟡 server rialzato su `6164` alle 09:30:42 del 24/09 su copia **rinfrescata**; review col developer in corso | 2026-09-24 |
-| F-4 | colonna ρ̄ (dopo F-3) | ⏳ | — |
+| F-3 | review del laboratorio sulla copia, col developer | ✅ esito e riprogettazione nelle sezioni «F-3b» qui sotto (allineamento 09/10) | 2026-09-24 |
+| F-4 | colonna ρ̄ (dopo F-3) | ⏳ **mai costruita** (D54) → README della cartella, buchi (allineamento 09/10) | — |
 | F-5 | devWiki R2-101 | ✅ 3 pagine nuove + 3 aggiornate | 2026-09-23 |
-| F-6 | chiusura `risk-lab` | 🔒 dopo le review di Risk e A **e** dopo J | — |
-| F-7 | handoff e `FROZEN` | ⏳ | — |
+| F-6 | chiusura `risk-lab` | ↪ superato: `risk-lab.spec.ts` è proseguito nei piani successivi di F (F-L1, F-L3); J non è mai esistito (allineamento 09/10) | — |
+| F-7 | handoff e `FROZEN` | ✅ guida committata, `73ba9f08e` · `b26ca6e29` (allineamento 09/10) | — |
 
 ---
 
@@ -1459,16 +1459,16 @@ riceve un «+» con ricerca e scelta multipla.
    interni di V1 sono tolti (`git diff -w`: solo la condizione esterna). Verificato che non resta un filtro nascosto:
    `loadAssets` chiama `/assets/query` con `queries: {}`, quindi attivi/inattivi agisce solo su `filteredAssets`, che il
    laboratorio non legge.
-2. **Icona del broker nel comando per broker.** ⏳ Dopo il merge: `BrokerIcon` con `size="sm"`, come in
+2. **Icona del broker nel comando per broker.** ✅ *(`BrokerIcon` nel comando per broker di `AssetSetRiskPanel.svelte`; allineamento 09/10)* ~~⏳~~ Dopo il merge: `BrokerIcon` con `size="sm"`, come in
    `BrokerSearchSelect`.
-3. **«Seleziona tutti» e «Deseleziona tutti» non funzionavano subito.** ⏳ Ipotesi da riverificare col developer: agiscono
+3. **«Seleziona tutti» e «Deseleziona tutti» non funzionavano subito.** ✅ *(confermato dal developer più sotto: «Seleziona tutti» e «Deseleziona tutti» rispondono; allineamento 09/10)* ~~⏳~~ Ipotesi da riverificare col developer: agiscono
    sui candidati filtrati da Tipo e Valuta, quindi con un filtro attivo sembrano non fare niente. Con i filtri dentro il
    «+» agiranno su tutto il catalogo analizzabile.
-4. **«N selezionati su N» non dice su cosa.** ⏳ Diventa «N in analisi su M analizzabili», con un tooltip: M è il
+4. **«N selezionati su N» non dice su cosa.** ✅ *(«N in analisi su M analizzabili» in `AssetSetRiskPanel.svelte`; allineamento 09/10)* ~~⏳~~ Diventa «N in analisi su M analizzabili», con un tooltip: M è il
    catalogo intero, non solo gli asset del developer.
 5. **All'apertura, «Tutti i miei».** Decisione (`ask_user`): **si riparte dall'ultima selezione; se non c'è, da «Tutti
-   i miei»** (le holdings al `dateEnd`, non più `tx_count_own`), poi il piccolo insieme di ripiego. ⏳ Dopo il merge.
-6. **Filtri Tipo e Valuta dentro il «+».** ⏳ Dopo il merge; `LabCheckMenu` allora sparisce.
+   i miei»** (le holdings al `dateEnd`, non più `tx_count_own`), poi il piccolo insieme di ripiego. ✅ *(`assetSetSelection.ts` legge le holdings (`held`); allineamento 09/10)* ~~⏳~~ Dopo il merge.
+6. **Filtri Tipo e Valuta dentro il «+».** ✅ *(filtri in `LabAssetPicker.svelte`, `LabCheckMenu` sparito; allineamento 09/10)* ~~⏳~~ Dopo il merge; `LabCheckMenu` allora sparisce.
 7. **Gli asset senza prezzi proposti come selezionabili.** Il developer: «il punto non è il tipo [di asset], ma che quei asset
    hanno 0 prezzi registrati», e la cosa «si dovrebbe ricollegare all'engine di ammissibilità». Verificato in sola
    lettura sulla copia (`sqlite/app.db` con `immutable=1`, solo id, tipo e conteggi): alcuni asset [id tolti] non hanno

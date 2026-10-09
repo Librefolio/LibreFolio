@@ -639,3 +639,9 @@ T1/T2, la doc utente dei livelli e la guida alla review dei numeri sulla copia d
 > `ab290f6b6756` citata sopra **non esiste più** — le revisioni post-002 sono state consolidate
 > in `004_release_1_2_0_schema` (`22fa0aed7`). E `risk-lab.spec.ts`, il guscio del laboratorio e
 > `panelTitle` sono passati a **F** con la tabella dei workstream del 23/09.
+
+---
+
+> **Chiusura — allineamento 09/10/2026 (Risk)**: il lavoro di questo piano è committato (`daa03c0f2`, `032b86959`, 21/09) ed è in
+> `dev_release2`; il seguito è in [`A-postmerge-esecuzione.md`](A-postmerge-esecuzione.md) e
+> [`A-dashboard-esecuzione.md`](A-dashboard-esecuzione.md).

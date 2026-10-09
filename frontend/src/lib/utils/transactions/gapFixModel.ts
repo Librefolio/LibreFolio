@@ -13,7 +13,7 @@
  * The inputs are read structurally: the generated API types widen the nullable fields, and the
  * decimals arrive as strings.
  *
- * Design: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md`, §3.6 and §4.6–§4.7.
+ * Design: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md`, §3.6 and §4.6–§4.7.
  */
 import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
 import type {BrimEvidence} from '$lib/types/files';
