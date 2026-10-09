@@ -1192,3 +1192,335 @@
 > - ruff on the runner file: ok;
 > - `git diff --check` ok;
 > - ports free.
+>
+> **Committed** (2026-10-09): `32d62640f` (feat files, PDF state), `2e8d6a551` (test gallery Files + PAC USD).
+> - **Coordinator decisions on the checkpoint** (09:40):
+>   - the line in `_frontend_utility.py` is confirmed, with M as its writer;
+>   - PAC rounding dust: option (a), images kept, the defect passed to D, and the CI regenerates after the fix;
+>   - PDF assets from third parties, FileGrid units and the global shot: to the developer.
+
+## Batch 7 — PDF preview without third-party requests (base `2e8d6a551`)
+
+### 20. ✅ PDF engine and assets served locally, the remote as fallback; viewer only; protected PDFs — 2026-10-09
+
+> **Note implementazione**:
+>
+> **Developer** (via the coordinator, 09:53), verbatim: «si facciamolo subito, ma come fallback lasciamo lo scaricamento remoto, per resilienza».
+>
+> **Coordinator brief:**
+> - local first: the WASM engine of `@embedpdf/pdfium` (2.14.3, locked) served by us (`?url`, then `wasmUrl`); the same for fonts and stamps if the library accepts a configurable origin;
+> - the remote only as a fallback;
+> - font licences written into the plan;
+> - tests red first: an E2E with no request to `cdn.jsdelivr.net` / `fonts.googleapis.com` / `fonts.gstatic.com`, watched with `page.on('request')`; a test of the fallback; the gallery Files suite stays green and works offline;
+> - the Docker weight written into the plan;
+> - CHANGELOG by the coordinator (Fixed? check v1.1.0);
+> - M is the only writer of `FilePreviewModal.svelte`;
+> - proof: only the tests touched plus the preview E2E.
+>
+> **Facts (read-only analysis, 09:55–10:20):**
+> - **v1.1.0** (`837a8f2c7`, 2026-09-07) already had the EmbedPDF PDF preview (`@embedpdf/snippet` ^2.14.3; preview since `5b887dd3a` of 2026-06-04), so the CHANGELOG entry goes under **Fixed**.
+> - Options of the snippet (`snippet/dist/components/app.d.ts`):
+>   - `wasmUrl`;
+>   - `fonts.ui` / `fonts.signature` (`null` = no request; documented «for GDPR-sensitive, airgapped, or self-hosted deployments»);
+>   - `fontFallback` (PDF content fonts, jsDelivr by default);
+>   - `stamp` (`manifests`, `defaultLibrary`).
+> - Third-party requests today, from the bundle and `node_modules/@embedpdf/*`:
+>   1. **WASM engine** `cdn.jsdelivr.net/npm/@embedpdf/pdfium@2.14.3/dist/pdfium.wasm`, on every viewer start. A local copy is in `node_modules/@embedpdf/pdfium/dist/pdfium.wasm` (**4.42 MB**, exported as `./pdfium.wasm`). Licences MIT (EmbedPDF) + BSD-3 (PDFium, `LICENSE.pdfium`).
+>   2. **UI font** Open Sans from `fonts.googleapis.com` (+ `fonts.gstatic.com`), on every start. Not in `node_modules`.
+>   3. **Default stamps manifest** `cdn.jsdelivr.net/npm/@embedpdf/default-stamps/{locale}/manifest.json`, fetched by `StampPlugin.initialize()` on **every start**, even though our preview can't place stamps (the tool has category `annotation`, disabled). The package isn't installed.
+>   4. **Signature fonts** (Caveat, Dancing Script, Great Vibes, Pacifico), Google Fonts, on the first open of «Create signature».
+>   5. **PDF content fallback fonts**, jsDelivr, only for PDFs with non-embedded fonts of that script. Local Noto (OFL-1.1) in `node_modules/@embedpdf/fonts-*`: latin 11.0 MB (18 variants; Regular/Italic/Bold/BoldItalic ≈ 2.4 MB), arabic 0.3, hebrew 0.1, jp 30, kr 31, sc 40, tc 38 MB.
+> - **UX finding:** the «Insert» mode (`mode:insert`, `insert:add-signature`, `insert:add-rubber-stamp`, categories `insert*`) isn't in `PDF_PREVIEW_DISABLED` (`annotation`, `annotation-comment`, `panel-comment`), so it can be reached in a preview that can't save. That's the same reason comments were disabled.
+> - Serving: no CSP; `sw.js` handles navigations only (no asset caching); `/_app` via `ImmutableStaticFiles`, `.wasm` → `application/wasm` (Python mimetypes), with `Cache-Control: immutable`.
+> - Licences: `THIRD_PARTY_LICENSES.md` exists for the attribution clause and goes into the image (`Dockerfile:127`); today it doesn't name EmbedPDF or PDFium.
+>
+> **Coordinator decisions** (10:07), consistent with the developer's:
+> 1. WASM engine local (`?url`), CDN fallback after a failed `HEAD`. **M writes `THIRD_PARTY_LICENSES.md`** (EmbedPDF MIT, PDFium BSD-3).
+> 2. `fonts.ui = {family: <app font>, stylesheetUrl: null}`.
+> 3. `stamp: {manifests: []}`.
+> 4. `fonts.signature: null`. The «Insert» mode goes to the developer: **don't touch it**.
+> 5. Content fallback fonts **(b)**: latin with 4 variants, plus Arabic and Hebrew local; CJK remote.
+> - Tests as proposed. CHANGELOG «Fixed» by the coordinator.
+>
+> **Docker weight** (full and light images, both copy `frontend/build`): engine 4.42 MB + latin 2.43 MB (4 × ~0.61 MB) + Arabic and Hebrew ≈ 0.39 MB (sizes in `node_modules`), so **≈ +7.2 MB**, uncompressed.
+>
+> **20.1 ✅ Licences (10:30):** new section `## 📄 PDF preview` in `THIRD_PARTY_LICENSES.md`, in the image via `Dockerfile:127`.
+> - Table: EmbedPDF 2.14.3 MIT, PDFium BSD-3, Noto Sans OFL-1.1, Noto Naskh Arabic and Noto Sans Hebrew Apache-2.0.
+> - PDFium's BSD notice in short form, as for the file's other BSD notices; the full OFL-1.1 text in `<details>`.
+> - **⚠️ Fuori pista:** the **real** copyrights come from the `name` table of the shipped files (nameID 0/13/14, read with a Python parser):
+>   - NotoSans-Regular: «Copyright 2022 The Noto Project Authors», OFL-1.1;
+>   - NotoNaskhArabic-Regular: «Copyright 2014 Google Inc.», **Apache-2.0**;
+>   - NotoSansHebrew-Regular: «Copyright 2012 Google Inc.», **Apache-2.0**.
+>   - The `@embedpdf/fonts-*` packages declare OFL-1.1 and reuse the Noto Sans LICENSE: the attribution follows the files, and says so. Both licences are AGPL-3.0 compatible.
+> - **Code prepared outside the repo:** `/tmp/librefolio-r2-m-b7/pdfViewerAssets.ts`, to apply after the red evidence.
+>   - Engine via `@embedpdf/pdfium/pdfium.wasm?url`; fonts via relative `?url` paths into `node_modules` (the packages export only `.`).
+>   - `FontCharset` from `@embedpdf/models`; the same charset map as the library's default (`engines/dist/lib/pdfium/index.js:32-45`).
+>   - CJK on the CDN pinned to `@1.0.0`, guarded by a test (the library asks for `@latest`).
+>   - One `HEAD` decides local vs CDN for engine and fonts together, with absolute URLs because the viewer's worker starts from a `Blob`.
+>   - The packages imported (`@embedpdf/pdfium`, `models`, `fonts-*`) are transitive dependencies of the snippet, pinned by the lock. Declaring them in `package.json` would need an `npm install` (maintenance step, to propose).
+>
+> **Developer on «Insert»** (via the coordinator, 10:33), verbatim: «Sì, disattiva Insert (Consigliato)».
+> - Add `'insert'` to `PDF_PREVIEW_DISABLED`, with a test that the preview stays read-only.
+> - The viewer hides an item when **any** of its categories is disabled (`computeHiddenItems`, `plugin-ui/dist/index.js:375-383`: `categories.some(cat => disabledSet.has(cat))`). So `'insert'` alone covers `mode:insert` (`mode`, `mode-insert`, `insert`), `insert:add-signature`, `insert:add-rubber-stamp` and the Rubber Stamp / Signature tools.
+> - Order: the Insert test is written and run **red** on the build with the assets already local, then `'insert'` goes in and it turns green.
+>
+> **20.2 ✅ RED evidence (test-author, phase 1, 10:45):**
+> - `files.spec.ts` gains `pdf preview requests nothing from third-party hosts`: requests at context level, observation only, with a positive control (a `.wasm` request was seen, so the worker is being listened to). It deletes its own upload.
+> - `guardGalleryOffline` aborts and records (`thirdParty` list) the exact hosts `cdn.jsdelivr.net`, `fonts.googleapis.com` and `fonts.gstatic.com`.
+> - Worker requests: a module worker from a blob URL shows up in `context.on('request')`, and `page.route`/`context.route` intercept it (Playwright 1.61, checked in isolation).
+> - **Red**, `b7_red_3` (front-utility files): the new test red with 5 URLs, the other 22 green.
+>   1. `pdfium.wasm` (from the **engine worker**, attributed by Resource Timing);
+>   2. Open Sans css (`fonts.googleapis.com`);
+>   3. its woff2 (`fonts.gstatic.com`);
+>   4. `default-stamps/en/manifest.json`;
+>   5. `default-stamps/en/stamps.pdf`.
+> - **Red**, `b7_red_4` (gallery `file preview modal (pdf)`, fresh populate): red on both viewports; the guard aborted the worker's `pdfium.wasm`, so the stage stayed at `loading`.
+> - **Finding:** jsDelivr already made the PDF E2E unstable. `b7_diag_5`: `pdfium.wasm` was still pending after 20 s while the small files took 1–6 s; the viewer doesn't retry, so it sat at `loading`. The PDF tests ranged from 4.4 s to over 27 s. Locally `ERR_NETWORK_CHANGED` also appeared (environmental).
+> - Grep: the hosts appear only in the two EmbedPDF chunks. Other icons use different hosts (brokers' sites, `www.google.com/s2/favicons` → `t*.gstatic.com`, not `fonts.gstatic.com`), so the guard matches exact host names.
+>
+> **20.3 ✅ Product: local assets (M, 10:55)**
+> - `frontend/src/lib/utils/files/pdfViewerAssets.ts` (new, from `/tmp/librefolio-r2-m-b7`).
+> - `FilePreviewModal.svelte`:
+>   - snippet and assets module in parallel (`Promise.all` of the two lazy imports);
+>   - `pdfViewerAssets(document.baseURI)` (one `HEAD`), then `if (disposed) return`;
+>   - `init({...assets, ...pdfViewerOfflineOptions(getComputedStyle(host).fontFamily)})`.
+> - `'insert'` **not yet**: the Insert test runs red first.
+> - Checks: Prettier ok; `svelte-check` **0 errors and 0 warnings** (the `?url` imports and the FontCharset keys type-check); vitest `pdfPreviewState` + `FilePreviewModal` **45/45** (in jsdom the `HEAD` fails, so the defaults apply).
+>
+> **20.4 ✅ Phase 2 tests, before «Insert» (test-author, 11:30)**
+> - `front-utility files` (`b7_files_1`): **24 passed, 1 failed, as intended.**
+>   - `pdf preview requests nothing from third-party hosts` **green** (6.6 s): only `HEAD` and `GET` of `/_app/immutable/assets/pdfium.C65hdIN1.wasm`.
+>   - `pdf preview falls back to the CDN when the local engine is unreachable` **green** (5.8 s): the local engine aborted, the CDN URL (version read from the installed package) answered with the local file plus a CORS header; asserted the `HEAD`, the CDN route hit, and no unanswered request to the three hosts.
+>   - `pdf preview offers no Insert mode` **RED**: «the modes menu offers Insert». Today the menu offers Insert, Form and Redact; Annotate and Shapes are already hidden.
+> - Unit tests:
+>   - new `pdfViewerAssets.test.ts`, 24 tests; the expected map comes from the library's `createCdnFontConfig(CDN_FONTS_VERSION)`, with version pins and files checked on disk;
+>   - `FilePreviewModal.test.ts`, +2 (assets mocked, offline options real).
+>   - core-unit 3495, component-unit 2908; svelte-check 0.
+> - Runner: one more line, `scripts/test_runner/_frontend_utility.py:101` (`pdfViewerAssets.test.ts`), authorised by M as writer of the file.
+>
+> **20.5 ✅ «Insert» disabled (M, 11:32):** `PDF_PREVIEW_DISABLED = ['annotation', 'annotation-comment', 'panel-comment', 'insert']` (`FilePreviewModal.svelte:57`), with an updated comment. «INSERT IN» sent to the test-author for the green runs.
+> - **Question to the developer** (via the coordinator): disable **Form** and **Redact** too, which can't be saved from the preview either? Untouched until a yes; the viewer's «•••» menu might offer an export, to check if asked.
+>
+> **Developer on Form, Redact and «•••»** (via the coordinator, 11:32), verbatim: «disattivale, deve essere solo un visualizzatore, se nei 3 puntini ci fosse l'export, disattivalo o nascondilo».
+> - Coordinator brief: Form and Redact off, test red first; in the menu, export, print, download or save hidden, with a test; anything else that modifies the document reported before touching it.
+>
+> **20.6 Analysis of the viewer's menus** (bundle `@embedpdf/snippet`, 11:40):
+> - «•••» next to «View» is `tabs:overflow-menu` (the modes): `mode:insert` (already off), `mode:form` (`mode`, `mode-form`, `form`), `mode:redact` (`mode`, `mode-redact`, `redaction`).
+>   - The `form` category also covers `form:add-*`, `form:toggle-fill-mode` and `form:overflow-tools`.
+>   - `redaction` covers `redaction:*`, `panel:toggle-redaction` and `annotation:apply-redaction`.
+> - «≡» is `document-menu-button` → `document-menu`: `document:open`, `document:close`, `document:print`, `document:protect`, `document:capture`, `document:export`, `document:fullscreen`. Each has its own `document-*` category.
+> - **Decided:** `form`, `redaction`, `document-export` and `document-print` off, red first.
+> - **To the developer:** Protect (modifies the document: password), Capture (exports an area as an image), Open and Close (load another PDF from disk, or empty the viewer). M recommends switching them off, keeping Fullscreen; Undo/Redo and copying text stay.
+>
+> **Developer on the document menu** (via the coordinator, 11:38), verbatim: «togli tutto eccetto fullscreen e copia testo, che senso ha tenere una cosa che non funziona? tienila solo se non riesci a toglierla».
+>
+> **20.7 Viewer-only: what goes, what stays, what is outside the menus (M, 11:50)**
+> - **Off:**
+>   - the modes Insert, Form and Redact;
+>   - the document menu's Open, Close, Print, Protect, Capture and Export;
+>   - Undo/Redo;
+>   - `capture:screenshot` (keyboard-only, Ctrl/Meta+Shift+S);
+>   - `redaction:redact-text` in the text-selection menu (`add-link` and the markup tools there are already `annotation`).
+>   - Categories to add: `form`, `redaction`, `document-open`, `document-close`, `document-print`, `document-protect`, `document-capture`, `document-export`, `capture`, `history`.
+> - **Stay:**
+>   - `document:fullscreen` (in ≡ and in page settings) and the ≡ button `document:menu`;
+>   - `selection:copy` and `selection:copy-to-clipboard`;
+>   - zoom, search, thumbnails, outline, spread, scroll, rotate and pages: the viewer itself.
+>   - There is no attachments tab in the sidebar: only thumbnails and outline.
+> - **Every entry can be removed with categories, shortcuts included:**
+>   - the viewer's keyboard handler sits on `document` and runs a shortcut only if `!resolve(id).disabled`;
+>   - `resolve()` ORs the category block with the dynamic `disabled`;
+>   - `computeHiddenItems` hides the UI items, and the menu dividers have `visibilityDependsOn`, so they disappear with their items.
+> - Undo/Redo appear only in the annotate, shapes, form and insert toolbars, already hidden. Before this change they were reachable only through Ctrl/Meta+Z and Ctrl+Y.
+> - **No other way to open another document:**
+>   - no drag-and-drop on the viewer (only the signature upload, which is under Insert);
+>   - the empty state's «Open» button appears only after Close, which is now off;
+>   - the tab bar with «+» appears only with 2+ documents.
+> - **For the RED test, `resolve().disabled` is dynamic** (undo/redo when there is no history; print/copy from the PDF's permissions). The test reads the category block from the registry instead: `resolve(id).categories ∩ getDisabledCategories()`.
+> - **Outside the menus (reported to the coordinator before touching; decision pending):**
+>   1. In View mode the viewer applies `annotations.locked` from the configuration, default `{type: none}`. So annotations already in the PDF (and form widgets) remain selectable, movable and resizable, in memory; the `annotation` category does not block this interaction (`isAnnotationInteractive` looks only at the lock).
+>      - Fix: one line, `annotations: {locked: {type: 'all'}}`. But according to the library's types, «locked annotations let clicks pass through to the layer below (e.g. form-filling)»: to observe on a fixture.
+>   2. `unlock-owner-overlay`: shows on encrypted PDFs with owner restrictions. It offers «View permissions» plus the owner password field (`unlockOwnerPermissions`, in memory). It has no category; it can be removed with `disableOverlay` when the document opens.
+>   - Both need new PDF fixtures: annotation plus form, and encrypted. The venv has no PDF library (`pypdf`, `pikepdf`, `reportlab`, `fitz` and `pdfplumber` all absent).
+>
+> **20.8 ✅ RED: viewer only (test-author, 11:58)**, `runs/b7_viewer_red_2.log`, `front-utility files`: 24 green, the 3 new ones red for the expected reasons.
+> - **(a) `pdf preview offers no editing mode`**, 12.9 s.
+>   - What it checks: `data-epdf-hid` on the viewer's root must contain the Insert, Form and Redact tabs and menu entries, plus signature and rubber stamp. The tabs, the mode dropdown and «•••» must be hidden.
+>   - Red: «the viewer still offers `form-mode`, `mode:form`, `redact-mode`, `mode:redact`».
+> - **(b) `pdf preview document menu offers only fullscreen`**, 11.4 s.
+>   - What it checks: after opening ≡, the visible entries must be exactly `['document:fullscreen']`, so a new entry from a future viewer version would also turn it red.
+>   - Red: the visible entries are open, close, print, protect, capture, export and fullscreen.
+> - **(c) `pdf preview blocks every editing and export command`**, 7.0 s.
+>   - What it checks: `embedpdf-container.registry`, then `resolve(id).categories ∩ getDisabledCategories()`.
+>   - Red: 12 commands «available» instead of «blocked»; `mode:insert` already blocked. The 4 kept ones are available.
+>   - This test also pins the shortcuts: Ctrl/⌘+O, W, P, Shift+S, Z, Ctrl+Y and ⌘+Shift+Z.
+>
+> **20.9 ✅ Product: viewer only (M, 12:02)**
+> - `PDF_PREVIEW_DISABLED` += `form`, `redaction`, `history`, `document-open|close|print|protect|capture|export`, `capture` (`FilePreviewModal.svelte:60`), with a docblock rewritten as «viewer only».
+> - Never `document`: it would block `document:menu` and `document:fullscreen`. Never `tools`: pan and pointer carry it.
+> - The schema hides on its own the View tab (`visibilityDependsOn` on the other modes), the mode dropdown (on `mode:*`) and «•••» (on its menu).
+> - Prettier: `printWidth` 300, so the array stays on one line.
+> - Checked: the keyboard listener on `document` goes away when the preview closes. `disconnectedCallback` of `embedpdf-container` runs `render(null, root)`, and the modal empties the host.
+> - **Finding (not fixed, backlog):** while the PDF preview is open, Ctrl/⌘+C on text selected *outside* the PDF (for example the modal's title) is caught by the viewer. It calls `preventDefault` and copies its own empty selection.
+> - «VIEWER IN» sent to the test-author for the green runs.
+>
+> **Developer on annotations and protected PDFs** (via the coordinator, 11:54), verbatim: «riguardo le annotazioni siamo al limite del caso limite, basta, tanto non si può salvare. riguardo i documenti protetti permettiamo, giusto nella sessione, di mettere la pw per visualizzarlo, se serve, dopo averlo "sbloccato" diventa un normale pdf».
+> - Annotations: untouched (no `locked`, no fixture).
+> - The «Document protected» overlay stays. The password applies only to the open preview: not saved, not kept after closing. After unlocking, the same reduced entries.
+> - If the prompt does not appear, or the overlay does not work with the batch 7 local files, report before changing anything.
+>
+> **20.10 Protected PDFs: verification on the 2.14.3 bundle (M, 12:05)**
+> - **Opening password:** the prompt exists.
+>   - It is the viewer's own document error view (`zC`): error `PdfErrorCode.Password` → password field → `retryDocument(id, {password})`.
+>   - It has no category, so our categories do not hide it.
+>   - Our stage replaces the viewer (iframe fallback) only on `pdfError`, i.e. an exception in import/init; a load error leaves the viewer on screen.
+>   - Same engine, local or CDN (pdfium 2.14.3).
+> - **`unlock-owner-overlay`:** works in the same way. «View permissions» → `view-permissions-modal` (no category) → `unlockOwnerPermissions` (a capability, not a command). The categories are global, so after unlocking the entries stay reduced.
+> - **The password never leaves and never stays:**
+>   - `openDocumentUrl` re-fetches the URL with `fetcher(url, requestOptions)`; the password goes only to `FPDF_LoadMemDocument` in the worker.
+>   - The bundle has no `localStorage`, `sessionStorage` or IndexedDB.
+>   - The password sits in the document manager's `loadOptions` (memory).
+>   - On unmount the engine hook runs `closeAllDocuments()`, then `destroy()`, then `worker.terminate()`.
+>   - Our code never sees the password.
+> - **A. Defect (batch 6, M):** `pdfPreviewState` treats `failed` as final («error … whatever came before»). After a successful unlock `onDocumentOpened` arrives, but `data-state` stays `error` (and `aria-busy` false) while the document is shown. Proposed fix: `onDocumentOpened` resets `failed`, with a red-first unit test and no fixture. **Asked the coordinator before changing anything.**
+> - **B. Residual «Open» path:**
+>   - after a non-password load error, the viewer's error card offers «Close» (`closeDocument()`, a capability rather than the command, so not blocked by `document-close`);
+>   - the empty state then offers «Open file» (`openFileDialog()`), which views a PDF from the user's own disk, locally only.
+>   - Categories cannot remove it. Proposal: leave it, record it in the checkpoint and in the backlog (removing it would mean our own error UI on non-password errors). **Asked the coordinator.**
+> - **Runtime probe:** two encrypted PDFs, made by hand outside the repo (`release-pipeline/scripts/b7_make_encrypted_pdfs.py`, V2/R3 RC4-128, standard library only, self-checked): `pw_open.pdf` (opening password) and `pw_owner.pdf` (owner restrictions, P=-3904). They go to the test-author for a temporary probe (TEMP test, removed afterwards) once the lane is free.
+>
+> **Coordinator on A and B** (12:10):
+> - A: **yes, in batch 7**, unit test red first.
+> - B: goes to the developer, untouched until then. If the answer is «remove it», our error message needs a new i18n key, and the catalogues are L's: the coordinator and L coordinate it.
+>
+> **20.11 ✅ RED: defect A and the runtime probe (test-author, 12:30)**
+> - **RED unit test**, `FilePreviewModal.test.ts`, `is ready once a protected PDF opens after its password was asked` (`runs/b8_unit_red_1.log`, 1 failed / 30 passed). The fake viewer sends error(Password), then opened, then ready tiles. Today:
+>   - at opened: `data-state=error` (expected `loading`) and `aria-busy=false` (expected `true`);
+>   - after the tiles: still `error`.
+>   - Guards, green: «error alone stays error» and «error → error (a wrong password) stays error».
+> - **TEMP probe** (`files.spec.ts`, a marked block of +319 lines; `runs/b8_temp_1|2.log`, `b8_temp_p1|p2|p3.json`, `b8_p*.png`; uploads deleted in `finally`):
+>   - **P1 `pw_open.pdf`:**
+>     - prompt visible, viewer in error with code 4 (Password);
+>     - wrong password: the «incorrect» warning;
+>     - right password: page drawn, registry `loaded`, but `data-state` **`error`**. Defect A confirmed at runtime.
+>     - Across 216 requests no password, in the URL, body or headers. 3 plain GETs of the file. Zero third parties.
+>     - Nothing in `localStorage`, `sessionStorage`, cookies or IndexedDB. Cache Storage holds only `offline-fallback`, from the app's own `sw.js`.
+>     - `page.workers()` 0 → 3 → 0 on close.
+>   - **P2 `pw_owner.pdf`:**
+>     - opens without a prompt and reaches `ready`;
+>     - overlay `[data-overlay-id="unlock-owner-overlay"]` visible (lock, ×, «View permissions»);
+>     - before the unlock, `selection:copy` is disabled by the PDF's permissions;
+>     - after the unlock: owner unlocked, all permissions, copy enabled, **13 commands still blocked by category**, `ready`.
+>     - The owner password appears in none of the 205 requests.
+>   - **P3 (test-author's addition):** «Cancel» on the prompt closes the document. The viewer shows its empty state «No Documents Open» with «Open Document», which opens the **native file chooser** (`openFileDialog()` called directly; `resolve('document:open')` throws without a document). **Same mechanism as B, but reachable with one click on any protected PDF.** Reported to the coordinator as an extension of B; no test until the decision.
+>   - Minor notes (backlog):
+>     1. the overlay's text points to «Security in the document menu», now off;
+>     2. after the unlock, the permissions dialog says «full access» and ticks Print, Modify and Annotate, which stay off;
+>     3. the dialog covers the whole page;
+>     4. while the prompt is up `data-state=error`: telling «waiting for a password» from «broken PDF» would need a fourth state (an interface decision).
+>
+> **20.12 ✅ Fix A (M, 12:35):**
+> - `FilePreviewModal.svelte`: `documents.onDocumentOpened(() => report({opened: true, failed: false}))`, plus one line of comment.
+> - `pdfPreviewState.ts`: docs only (the `failed` field and the `error` bullet: «while the latest attempt to open has failed»).
+> - Prettier OK.
+> - «STATE IN» sent: the unit test GREEN, TEMP P1 again, TEMP removed (empty diff against the saved copy), final runs.
+> - Coordinator: B updated with P3 and a question with 3 options for the developer (our message / close the preview / leave it).
+>
+> **20.13 ✅ Final green runs and gates (test-author + M, 12:31)**
+> - Unit, after fix A: `FilePreviewModal.test.ts` 31/31; with `pdfPreviewState.test.ts`, 50/50 (`b8_unit_green_1|2.log`).
+> - TEMP P1 after the fix (`b8_temp_3.log`, `b8_temp_p1.json`): `data-state=ready` and `aria-busy=false` after the right password. Privacy checks unchanged:
+>   - 287 requests, no password, no request body;
+>   - 3 plain GETs of the file;
+>   - zero third parties;
+>   - no storage;
+>   - workers 0 → 3 → 0.
+> - **TEMP removed:** `files.spec.ts` is byte-identical to the saved copy (sha256 `78ae7335…2501942`, 848 lines, no `TEMP`). No test for P3 (B pending).
+> - Probe uploads deleted: checked in `finally` and on disk (`/tmp/librefolio-r2-m/custom-uploads`: no `temp-pw-*`, no 924/927-byte file; the only PDF is the seeded `ebook.pdf`).
+> - **Final runs:**
+>   - `front-utility files` 27/27 (`b8_final_files.log`);
+>   - core-unit 120 files / 3495;
+>   - component-unit 111 / 2911;
+>   - svelte-check 0/0;
+>   - Prettier clean;
+>   - `tsc -p tsconfig.e2e.json`: only the 2 known errors.
+> - The Files gallery is **not re-run after fix A**: on a PDF that opens, `failed` is already false, so `report({opened: true, failed: false})` is identical; last gallery 16/16 after «VIEWER IN» (`b7_viewer_gallery.log`).
+> - **M's gates:** `git diff --check` clean; 6158 and 6168 free; load at 12:31 = 26.2 / 20.8 / 16.8 (train gates and other lanes at the same time).
+> - **Docs:** no page describes the viewer's internal functions (the gallery captions are generic; `user/files/index.md` says only «Preview»), so no text became false. A line on «read-only viewer, protected PDFs with the password kept in the browser» is proposed to the coordinator, not written.
+> - **Transitive dependencies imported directly** (declared: only `@embedpdf/snippet`):
+>   - product: `@embedpdf/models` (FontCharset), `@embedpdf/pdfium` (wasm `?url`), `@embedpdf/fonts-{latin,arabic,hebrew}` (relative `?url`);
+>   - tests: `@embedpdf/engines/pdfium`, `@embedpdf/models`.
+>   - Versions pinned by the lock; `pdfViewerAssets.test.ts` checks pins and files on disk. Proposal: declare them in `package.json`, a maintenance step for the developer.
+> - **Open after the checkpoint:** B + P3 (the viewer's empty state after a load error or «Cancel» on the password → «Open Document»), a developer decision with 3 options. If «our message», the i18n key is coordinated by the coordinator with L.
+>
+> **Developer on B and P3** (via the coordinator, 12:53), verbatim:
+> - on B, before knowing about P3: «lasciamolo ora e per sempre, mi pare un caso troppo limite, apuntiamocelo per evitare di tornarci in futuro, direttametne nel codice»;
+> - on P3: «Chiudi l'anteprima quando il visore resta vuoto».
+>
+> Coordinator's brief:
+> - the cure closes the preview when the viewer is left without a document (after «Cancel» on the password and «Close» on the error card), closing both P3 and B;
+> - red first; no new texts, and if a key is needed, stop (the catalogues are L's);
+> - never close when the preview itself replaces the document (fallback, file change);
+> - a note in the code, as the developer asked;
+> - gates: `front-utility files`, core-unit, component-unit, the Files gallery, svelte-check, Prettier.
+>
+> **20.14 Analysis of the cure (M, 13:00)**
+> - Both «Cancel» on the password prompt (`passwordPrompt.cancel`) and «Close» on the error card (`documentError.close`) call `closeDocument(id)`:
+>   - on a non-loaded document it is `dispatchCoreAction(CLOSE_DOCUMENT)` directly;
+>   - then the hook `onDocumentClosed`, then `documentClosed$.emit(id)` (`EventHook<string>`, replayed to late listeners).
+> - `dispatchToCore` runs the reducer **before** the listeners (`onAction`), so on `documentClosed$` `getDocumentCount()` is already 0 for the single document.
+> - How the preview closes: `onRequestClose()` (prop; the parent owns `open`).
+> - When the preview drops the viewer itself:
+>   - teardown (modal closed, file changed): `disposed = true` and listeners unsubscribed **before** `host.innerHTML = ''`;
+>   - iframe fallback (`pdfError` in the catch): we will also set `disposed = true` there.
+> - No new text.
+> - RED brief sent to the test-author:
+>   - unit, the cure plus 3 guards (count 1; teardown with a file change and with `open=false`; the fallback);
+>   - E2E path B with a broken PDF built in the test (the viewer's «Close» → the modal closes);
+>   - TEMP P3 with `pw_open.pdf`, not committed.
+>
+> **20.15 ✅ RED: an empty viewer (test-author, 13:40)**
+> - **Unit** (`runs/b7_empty_unit_red_2.log`, 36 tests: 2 RED, 34 green).
+>   - **The fake:** one viewer per `init`, with its own `onDocumentClosed` (replay, dedup, real stop) and `getDocumentCount`. The stage element closes its documents a microtask after it leaves the DOM, as the real unmount does. A breaker stops `init` after 10 starts.
+>   - **RED, planned:** `closes the preview when the viewer is left without a document`: `onRequestClose` was called 0 times, expected 1.
+>   - **Guards, green:** count 1; file change; `open=false`. The «stops listening» tests now require at least 3 subscriptions.
+>   - **RED, unplanned:** the fallback guard (`init` throws) found the viewer **started 11 times**. In the first run the jsdom worker ran out of memory (`b7_empty_unit_red_1.log`).
+> - **E2E `pdf preview closes when its viewer is left empty`** (path B; `runs/b7_empty_files_red_1.log`): **RED in 8.2 s**.
+>   - Test data: a broken PDF built in the test, `%PDF-1.4` followed by text, 201 bytes, deleted in `finally`. The backend accepts it: blocklist, and libmagic recognises the signature.
+>   - Steps: `data-state=error`, then the error card's Close (`div:has(> h3):has(> p) > button`), then `toBeHidden()`. The modal stays open on «No Documents Open / Open Document» (`b7_empty_e2e_red_failed.png`).
+> - **TEMP P3** (`files.spec.ts:861–893`, a pure insertion; copy saved at `/tmp/lf_b7_empty_files.spec.ts.before_temp`): «Cancel» on `pw_open.pdf` → the modal stays open with «Open Document» (`b7_empty_temp_p3_before_fix.json`).
+> - **Test-author's note on `open=false`:** Svelte 5.48 removes the stage before the effect's cleanup runs. What protects that path is the viewer's asynchronous unmount (`registry.destroy()` awaits `initPromise`). A close made by the user is synchronous. Suggestion: a check on the element's connection.
+>
+> **20.16 ✅ The cure, and the fallback loop (M, 13:50)**
+> - **The cure** (`FilePreviewModal.svelte`): `documents.onDocumentClosed(() => { if (!disposed && host.isConnected && documents.getDocumentCount() === 0) onRequestClose(); })`.
+>   - The developer's note sits beside it in the code: «Open Document» opens local PDFs, no category turns it off, so the preview closes; not to be revisited.
+>   - `host.isConnected` replaces the planned `disposed = true` in the `catch`: it covers every removal of the stage done by us (closing, the fallback) whatever the viewer's timing.
+>   - Changing file is covered by `disposed` plus the unsubscribe that comes before `innerHTML = ''`.
+>   - No new text.
+> - **⚠️ Off track: the fallback loop.** The `!host` branch cleared `pdfError` whenever it ran. So:
+>   - the iframe takes the stage's place (`pdfHost` becomes null), the effect reruns, and `pdfError` is cleared;
+>   - the stage comes back and `init` fails again, round after round, with a HEAD and a new iframe every time.
+>   - It dates from `5b887dd3a` (2026-06-04, `feat(files): add inline file preview system`), so it was already in v1.1.0. It triggers only if the import or the viewer's start throws.
+>   - **Fix:** `if (!sourceUrl) pdfError = null;` (the `!open` effect still clears it when the modal closes). Reported to the coordinator: it is tightly coupled to the fallback guard they asked for.
+> - Prettier OK. «EMPTY IN» sent: the GREEN runs plus the gates.
+>
+> **20.17 ✅ GREEN: empty viewer and fallback, final gates (test-author + M, 13:36)**
+> - **Unit** `FilePreviewModal.test.ts` 36/36:
+>   - the close test is green;
+>   - the fallback guard is green (one start, the iframe stays, 18 ms): the loop fix holds.
+>   - **Check of `host.isConnected`:** with the fake set to report its unmount close *synchronously*, inside the DOM removal, all 17 PDF tests still passed (`b7_empty_unit_sync_unmount_experiment.log`). The fake was then restored byte for byte.
+> - **E2E** `pdf preview closes when its viewer is left empty`: green, 5.4 s.
+> - **TEMP P3:** after «Cancel» the modal and the stage are gone (`b7_empty_temp_p3.json`). TEMP removed: empty diff, sha256 `3c6ae414…593a`, 876 lines, no `TEMP` left.
+> - **Gates:**
+>   - `front-utility files` 28/28 (`b7_empty_final_files.log`);
+>   - core-unit 120 files / 3495;
+>   - component-unit 111 / 2916;
+>   - the Files gallery: fresh populate, offline guard on, 16/16; the PDF shot takes 51.4 s desktop and 51.2 s mobile, against a 180 s budget (`b7_empty_final_gallery.log`);
+>   - svelte-check 0/0, after a type-only cast in the test (`b7_empty_final_check_2.log`);
+>   - Prettier clean;
+>   - `tsc -p tsconfig.e2e.json`: only the 2 known errors.
+> - **M's checks:**
+>   - `git diff --check` clean;
+>   - 6158 and 6168 free;
+>   - `dev_release2` = `1ead733f2` (train 23): from `2e8d6a551` no overlap with the batch 7 paths, only `CHANGELOG.md`, which M does not touch;
+>   - load at 13:36: 14.2 / 14.2 / 14.9.
+> - **Step 20 closed.** Updated CHECKPOINT READY sent to the coordinator; M FROZEN.
