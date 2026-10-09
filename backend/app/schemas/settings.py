@@ -5,9 +5,15 @@ Schemas for user settings and global settings management, plus
 SETTINGS_REGISTRY: the declarative catalogue of every known setting key.
 """
 
+import json
+import re
+import zoneinfo
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Annotated, Literal, Optional
 
+import pycountry
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.db.models import OnboardingFlow, OnboardingStatus
@@ -344,6 +350,129 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "description": "Default theme for new users (light, dark, auto)",
     },
 }
+
+
+# ============================================================================
+# GLOBAL SETTINGS CONSTRAINTS
+# ============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class SettingConstraint:
+    """What a global setting value may be beyond its storage type. Unset fields mean "no constraint"."""
+
+    min: int | None = None
+    max: int | None = None
+    choices: tuple[str, ...] = ()
+    format: Literal["hhmm_list", "weekday_list", "timezone", "currency"] | None = None
+
+
+# The single source of the values a save accepts, one entry per key of GLOBAL_SETTINGS_DEFAULTS that
+# has more than a type. Booleans need no entry: their type is their constraint.
+GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
+    "session_ttl_hours": SettingConstraint(min=1, max=8760),
+    "max_file_upload_mb": SettingConstraint(min=1, max=1024),
+    "scheduler_current_price_frequency_minutes": SettingConstraint(min=1, max=1440),
+    "scheduler_history_sync_times": SettingConstraint(format="hhmm_list"),
+    "scheduler_history_sync_days": SettingConstraint(format="weekday_list"),
+    "scheduler_history_sync_horizon_days": SettingConstraint(min=1, max=365),
+    "scheduler_timezone": SettingConstraint(format="timezone"),
+    "default_currency": SettingConstraint(format="currency"),
+    "default_language": SettingConstraint(choices=("en", "it", "fr", "es")),
+    "default_theme": SettingConstraint(choices=("light", "dark", "auto")),
+}
+
+_BOOL_WORDS = {"true": "true", "1": "true", "yes": "true", "on": "true", "false": "false", "0": "false", "no": "false", "off": "false"}
+_WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+_INT_RE = re.compile(r"[+-]?\d+")
+_HHMM_RE = re.compile(r"(\d{1,2}):(\d{2})")
+_CURRENCY_RE = re.compile(r"[A-Z]{3}")
+
+
+@lru_cache(maxsize=1)
+def _server_timezones() -> frozenset[str]:
+    """The IANA names this server can resolve; empty when it has no timezone database."""
+    return frozenset(zoneinfo.available_timezones())
+
+
+def _check_int(text: str, constraint: SettingConstraint) -> str:
+    if not _INT_RE.fullmatch(text):
+        raise ValueError("must be an integer")
+    number = int(text)
+    if (constraint.min is not None and number < constraint.min) or (constraint.max is not None and number > constraint.max):
+        raise ValueError(f"must be an integer from {constraint.min} to {constraint.max}")
+    return str(number)
+
+
+def _check_hhmm_list(text: str) -> str:
+    times = [part.strip() for part in text.split(",") if part.strip()]
+    if not times:
+        raise ValueError("must list at least one HH:MM time")
+    for part in times:
+        match = _HHMM_RE.fullmatch(part)
+        if match is None or int(match[1]) > 23 or int(match[2]) > 59:
+            raise ValueError(f"'{part}' is not an HH:MM time")
+    return text
+
+
+def _check_weekday_list(text: str) -> str:
+    days = [part.strip().lower() for part in text.split(",") if part.strip()]
+    if not days:
+        raise ValueError("must list at least one day")
+    for day in days:
+        if day not in _WEEKDAYS:
+            raise ValueError(f"'{day}' is not one of {','.join(_WEEKDAYS)}")
+    return text
+
+
+def _check_timezone(text: str) -> str:
+    # Without a timezone database the server cannot tell; the scheduler then treats times as UTC, as before.
+    known = _server_timezones()
+    if not text or (known and text not in known):
+        raise ValueError(f"'{text}' is not an IANA timezone known to the server")
+    return text
+
+
+def _check_currency(text: str) -> str:
+    code = text.upper()
+    if not _CURRENCY_RE.fullmatch(code) or pycountry.currencies.get(alpha_3=code) is None:
+        raise ValueError(f"'{text}' is not an ISO 4217 currency code")
+    return code
+
+
+_FORMAT_CHECKS: dict[str, Callable[[str], str]] = {
+    "hhmm_list": _check_hhmm_list,
+    "weekday_list": _check_weekday_list,
+    "timezone": _check_timezone,
+    "currency": _check_currency,
+}
+
+
+def validate_global_setting_value(key: str, value: str, value_type: str) -> str:
+    """The value to store for a global setting, or ValueError saying why it is refused.
+
+    The storage type is checked first, then the key's entry in GLOBAL_SETTINGS_CONSTRAINTS. Stored values are
+    normalised where the meaning cannot change: booleans as ``true``/``false``, integers as plain digits,
+    currencies upper-case, surrounding whitespace removed.
+    """
+    constraint = GLOBAL_SETTINGS_CONSTRAINTS.get(key, SettingConstraint())
+    text = value.strip()
+    if value_type == "int":
+        return _check_int(text, constraint)
+    if value_type == "bool":
+        canonical = _BOOL_WORDS.get(text.lower())
+        if canonical is None:
+            raise ValueError("must be true or false")
+        return canonical
+    if value_type == "json":
+        try:
+            json.loads(value)
+        except json.JSONDecodeError:
+            raise ValueError("must be valid JSON") from None
+        return value
+    if constraint.choices and text not in constraint.choices:
+        raise ValueError(f"must be one of {', '.join(constraint.choices)}")
+    return _FORMAT_CHECKS[constraint.format](text) if constraint.format else text
 
 
 # ============================================================================
