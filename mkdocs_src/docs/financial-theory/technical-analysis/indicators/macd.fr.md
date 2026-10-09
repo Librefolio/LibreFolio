@@ -38,9 +38,9 @@ Le système MACD produit trois séries :
 
 | Paramètre | Clé | Par défaut | Description |
 |---|---|---|---|
-| Période courte | `fastPeriod` | 12 | Fenêtre EMA à court terme (jours). |
-| Période longue | `slowPeriod` | 26 | Fenêtre EMA à long terme (jours). |
-| Période de signal | `signalPeriod` | 9 | Lissage EMA appliqué à la ligne MACD. |
+| Période courte | `fastPeriod` | 12 | Fenêtre EMA à court terme (séances). |
+| Période longue | `slowPeriod` | 26 | Fenêtre EMA à long terme (séances). |
+| Période de signal | `signalPeriod` | 9 | Lissage EMA appliqué à la ligne MACD (séances). |
 
 ---
 

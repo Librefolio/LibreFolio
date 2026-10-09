@@ -38,7 +38,7 @@ Une EMA à période fixe est un compromis : suffisamment rapide pour suivre les 
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 10 | Fenêtre de rétrospection pour le Ratio d'Efficacité. |
+| Période ($N$) | `period` | 10 | Fenêtre de rétrospection pour le Ratio d'Efficacité, en séances. |
 
 !!! note "Les constantes rapide/lente ne sont pas exposées"
 

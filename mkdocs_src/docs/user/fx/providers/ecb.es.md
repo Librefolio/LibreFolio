@@ -1,6 +1,6 @@
 # <img src="https://www.ecb.europa.eu/favicon-32.png" alt=""> Banco Central Europeo (BCE)
 
-El **Banco Central Europeo (BCE)** es el principal proveedor de tipos de referencia para las carteras europeas. Publica diariamente los tipos de cambio del euro frente a aproximadamente 45 monedas principales y emergentes.
+El **Banco Central Europeo (BCE)** es el principal proveedor de tipos de referencia para las carteras europeas. Publica cada día tipos de referencia del euro frente a unas 30 monedas.
 
 ## 📊 Capacidades
 
@@ -16,11 +16,13 @@ El **Banco Central Europeo (BCE)** es el principal proveedor de tipos de referen
 
 ## 💰 Monedas Soportadas
 
-El BCE admite una amplia gama de monedas, incluyendo:
+El BCE publica un tipo cada día hábil para unas 30 monedas, entre ellas:
 
 - **Principales**: USD 🇺🇸, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿
-- **Europeas/Regionales**: SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, BGN 🇧🇬, TRY 🇹🇷
+- **Europeas/Regionales**: SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, ISK 🇮🇸, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, TRY 🇹🇷
 - **Globales / Emergentes**: CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, BRL 🇧🇷, MXN 🇲🇽, ZAR 🇿🇦
+
+Las monedas que el BCE ya no publica, como el lev búlgaro (BGN, sustituido por el euro en 2026), la kuna croata (HRK) o el rublo ruso (RUB), conservan sus tipos pasados: una sincronización sigue descargando su historial, y no llegan tipos nuevos.
 
 ## 📝 Notas Importantes
 

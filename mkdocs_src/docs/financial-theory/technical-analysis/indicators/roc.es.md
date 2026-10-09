@@ -24,7 +24,7 @@ Esto es simplemente un rendimiento porcentual de $N$ períodos, reexpresado como
 
 | Parámetro | Clave | Predeterminado | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 12 | Número de días hacia atrás utilizado como precio de referencia. |
+| Período ($N$) | `period` | 12 | Número de sesiones hacia atrás utilizado como precio de referencia. |
 
 ---
 

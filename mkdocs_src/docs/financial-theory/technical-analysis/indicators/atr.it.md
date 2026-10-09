@@ -30,7 +30,7 @@ Un semplice intervallo massimo-meno-minimo ignora i movimenti overnight o i gap;
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di smoothing applicata all'Intervallo Vero. |
+| Periodo ($N$) | `period` | 14 | Finestra di smoothing applicata all'Intervallo Vero, in sedute. |
 
 ---
 

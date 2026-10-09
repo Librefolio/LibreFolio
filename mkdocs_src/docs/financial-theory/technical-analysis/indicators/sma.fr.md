@@ -6,7 +6,7 @@ La SMA est la manière la plus littérale de définir une « tendance » : l
 
 ## 💡 Signification financière
 
-Comme chaque observation dans la fenêtre compte de manière égale, la SMA réagit aux nouvelles données plus lentement qu'une EMA de même longueur, mais elle présente également un **déphasage nul** par rapport à sa fenêtre — elle n'est « biaisée » ni vers les cours récents ni vers les cours anciens. Les traders utilisent les croisements de SMA (ex. le « croisement doré » 50/200 jours) comme le signal de tendance long terme de référence.
+Comme chaque observation dans la fenêtre compte de manière égale, la SMA réagit aux nouvelles données plus lentement qu'une EMA de même longueur, mais elle présente également un **déphasage nul** par rapport à sa fenêtre — elle n'est « biaisée » ni vers les cours récents ni vers les cours anciens. Les traders utilisent les croisements de SMA (ex. le « croisement doré » 50/200 jours, où un « jour » est une séance de bourse) comme le signal de tendance long terme de référence.
 
 ---
 
@@ -30,7 +30,7 @@ ce qui montre que la SMA est un filtre à **mémoire finie** : l'échantillon le
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 20 | Fenêtre de rétrospection en jours. Plus élevé → plus lisse, plus lent. |
+| Période ($N$) | `period` | 20 | Fenêtre de rétrospection en séances. Plus élevé → plus lisse, plus lent. |
 
 ---
 

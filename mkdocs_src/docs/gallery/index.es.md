@@ -22,6 +22,8 @@
 !!! tip "Lo que verás"
 
     - **Autenticación**: Inicio de sesión seguro con medidor de fuerza de contraseña
+    - **Seguridad**: Indicador de seguridad de la conexión en la barra lateral, abierto en su nivel y su motivo
+    - **Introducción**: Configuración de bienvenida en el primer inicio, recorrido principal guiado y guías contextuales, repetibles desde Configuración
     - **Panel de Control**: Descripción general de tu cartera
     - **Brókers**: Gestión de múltiples cuentas de bróker
     - **Archivos**: Carga y gestión de informes de brókers con vistas de cuadrícula y tabla
@@ -30,6 +32,8 @@
     - **Multimedia y Carga**: Recorte/edición de imágenes, selector de activos, renombrado de archivos
     - **Tipos de cambio FX**: Pares de divisas, gráficos, sincronización, editor de datos, importación CSV
     - **Activos**: Seguimiento de acciones, ETF, bonos, criptomonedas con gráficos, señales, medidas y clasificación
+    - **Análisis de riesgo**: Matriz de correlación, comparación de pérdidas, riesgo/rentabilidad frente a un índice de referencia, reproducción histórica y simulación
+    - **Herramientas**: Catálogo de cálculos independientes, con el asignador PAC
 
 ## 🌍 Soporte de Idiomas
 
