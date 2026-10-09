@@ -4968,8 +4968,7 @@ ${arrow}<span>${label}</span></span>`,
                                 {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
                                 <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
                                 {#if step4UnresolvedCount > 0}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                                        {step4UnresolvedCount}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" data-testid="import-wizard-unresolved-count">
                                         {$t('importWizard.unresolvedCount', {values: {n: step4UnresolvedCount}})}
                                     </span>
                                 {:else}

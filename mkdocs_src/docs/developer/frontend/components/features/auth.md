@@ -21,6 +21,10 @@ The `LoginCard` handles user authentication via username/email and password.
 - **Input**: Username or Email field; the value is trimmed before the login call.
 - **Password**: Password field with visibility toggle (via `PasswordInput`).
 - **State**: Uses `$lib/stores/app/auth` (`auth.login()`, `authError`, `isAuthLoading`) to manage loading state and errors.
+    - `authError` holds `{key}`: `auth.invalidCredentials` for every 401 (one message, so the form never reveals
+      whether an account exists), `auth.invalidInput` for a 422, `auth.loginFailed` for a non-axios failure;
+      `LoginCard` translates the key with `$_()` when drawn, so it follows a language change on screen.
+    - Any other axios error (another status, network error, timeout) gives `{message}`, its own text, verbatim.
 - **Props**: `redirectTo` (default `/dashboard`), `successMessage` (shown after a registration),
   `onAuthenticated(requestedPath)` — when given, it replaces the plain `goto(redirectTo)` after a
   successful login (the login page uses it for the [onboarding gate](#post-login-onboarding-gate)).
