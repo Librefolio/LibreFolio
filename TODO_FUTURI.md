@@ -2264,3 +2264,47 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   Prima di scriverla va deciso se i flussi si reinvestono nell'asset o si sommano come cassa.
 - Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
 - Quando arriva: togliere la riga «solo prezzi» dall'interfaccia, l'avviso dal manuale e il TODO dal codice.
+
+## 🔑 Sessioni — il cambio della password non chiude le sessioni già aperte
+
+**Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — da ragionarci in seguito · **Priorità**: Bassa
+
+### Contesto
+- Reperto dell'onda 3 della doc inglese (Q, 08/10/2026), verificato sul codice. Il login emette un JWT senza stato nel
+  cookie `session`, con la durata presa dalle impostazioni globali; a ogni richiesta `get_current_user`
+  (`backend/app/api/v1/auth.py`) controlla la firma, la scadenza e `is_active`, ma non sa nulla dei cambi di password.
+- Quindi, dopo un cambio della password (dall'utente o con `user reset` dell'admin), una sessione già aperta, anche
+  rubata, resta valida fino alla sua scadenza.
+- Mitigazioni di oggi: la scadenza della sessione; un riavvio senza `JWT_SECRET` fisso invalida tutte le sessioni.
+- Decisione del developer (09/10/2026), testuale: «ora non è prioritario e a suo tempo avevamo già accettato che questa
+  cosa succedesse, non sono certo di volerla risolvere, ci devo pensare». **Prima di qualsiasi lavoro va ragionato se
+  risolverlo.**
+
+### Azione Futura
+- Decidere se il comportamento va cambiato.
+- Se sì, le strade già individuate:
+  - un numero di versione del token per utente (colonna e migrazione), copiato nel JWT e incrementato a ogni cambio
+    password; il controllo costa poco, perché `get_current_user` ricarica già l'utente a ogni richiesta;
+  - in alternativa, un `password_changed_at` confrontato con l'emissione del token;
+  - una lista di revoca (più costosa, e non serve per questo caso).
+- Da coordinare con l'accesso OIDC (#27), che tocca lo stesso punto.
+
+## 🔀 PAC/Rebalancer — un solo passo di cambio per broker e coppia
+
+**Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — **da fare con urgenza insieme al Rebalancer** ·
+**Priorità**: Alta, quando si apre il Rebalancer
+
+### Contesto
+- Reperto della gallery (M, 09/10/2026) e analisi di D (opzione «e»): le decisioni di cambio sono una per rotta d'ordine
+  × valuta del pool (`backend/app/services/pac_allocator/evaluator.py`, `constraints.py`), quindi il piano può contenere
+  più conversioni separate della stessa coppia sullo stesso broker, che il report poi somma (`planner_report.py`).
+- Con la regola «arrotondamento sempre contro il piano» (crediti per difetto, debiti per eccesso, 1.2) queste
+  conversioni spezzate non creano più valore, ma allungano il piano e lo rendono meno leggibile.
+- Decisione del developer (09/10/2026), testuale: «da fare con urgenza quando si fa anche il ribilanciamento, che
+  probabilmente sarà più soggetto al bug rispetto il pac».
+
+### Azione Futura
+- Una sola decisione di cambio per broker × coppia: variabili, vincoli, ledger e report del motore. È un rifacimento
+  ampio.
+- Test di equivalenza sui piani esistenti e oracolo sui casi con vendite (Rebalancer), dove le conversioni in entrambi i
+  versi sono più frequenti.

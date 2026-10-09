@@ -124,6 +124,7 @@ import {
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
+import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
@@ -2203,118 +2204,172 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
         });
 
-        test('static resources tab - all languages and themes', async ({page}, testInfo) => {
-            const viewport = getViewport(testInfo);
+        // One page load per test, every combination switched in place, every shot waiting for its own subject: what the
+        // page publishes (galleryFiles.ts), never the network going idle or a fixed wait. CI triage b5: the preview test
+        // loaded the page 32 times with 2.4 s of fixed waits each and ran out of its 240 s on every attempt.
 
-            await forEachLanguageAndTheme(page, async (lang, theme) => {
-                await page.goto('/files?tab=static');
-                await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await freezeAnimations(page);
+        /** Load the Files page at `url` — the only load of the test — with the gallery's CSS animations frozen. */
+        async function openFilesPage(page: Page, url: string): Promise<void> {
+            await navigateTo(page, url);
+            await expect.poll(() => page.evaluate(() => document.getElementById('app-splash') === null), {message: 'the splash screen never went away'}).toBe(true);
+            await freezeAnimations(page);
+        }
+
+        /**
+         * The eight combinations, switched through the header on the page as it stands: forEachLanguageAndTheme, with the
+         * language menu closed again and the theme read back (chooseTheme) instead of waited for.
+         */
+        async function eachLanguageAndTheme(page: Page, callback: (lang: Language, theme: Theme) => Promise<void>): Promise<void> {
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setLanguage(page, lang);
+                await languageMenuClosed(page);
+                for (const theme of THEMES) {
+                    await chooseTheme(page, theme);
+                    await callback(lang, theme);
+                }
+            }
+        }
+
+        /**
+         * The shot, once `subject` has settled: the pointer parked where nothing reacts to it and no tooltip, the fonts in,
+         * nothing animating, the subject still, no toast. The spec's screenshot() without its wait for the network to go
+         * idle and its 200 ms: each test here has already waited for its own subject.
+         */
+        async function shootFiles(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, name: string, subject: Locator): Promise<void> {
+            const shot = `${viewport}/${lang}/${theme}/files/${name}`;
+            await parkPointer(page);
+            await fontsLoaded(page);
+            await waitForMotionSettled(page.locator('body'), shot);
+            await waitForStillness(subject, shot);
+            await expectNoToast(page);
+            const dir = getGalleryPath(viewport, lang, theme, 'files');
+            ensureDir(dir);
+            await page.screenshot({path: path.join(dir, `${name}.png`), fullPage: false});
+            console.log(`  📸 ${shot}.png`);
+        }
+
+        /**
+         * The preview of one seeded static resource in every combination: the page loaded once, filtered to the file by its
+         * name, and the file opened from its own row; `ready` waits for what that kind of preview draws.
+         */
+        async function shootStaticPreview(page: Page, viewport: 'desktop' | 'mobile', kind: 'image' | 'pdf' | 'markdown' | 'text', ready: (modal: Locator, shot: string) => Promise<Locator>): Promise<void> {
+            const name = FILES_SAMPLES[kind];
+            const fileId = await staticFileId(page, name);
+            await openFilesPage(page, `/files?tab=static&filename=${encodeURIComponent(name)}`);
+            const table = page.getByTestId('files-table-static');
+
+            await eachLanguageAndTheme(page, async (lang, theme) => {
+                const shot = `${viewport}/${lang}/${theme}/files/preview-modal-${kind}`;
+                await filesTableReady(page, table, shot);
+                const modal = await openPreview(page, table, fileId, shot);
+                const stage = await ready(modal, shot);
+                await shootFiles(page, viewport, lang, theme, `preview-modal-${kind}`, stage);
+                await closePreview(modal, shot);
+            });
+        }
+
+        test('static resources tab - all languages and themes', async ({page}, testInfo) => {
+            // One load, then eight combinations, the desktop's on a screen grown to the table: 10–11 s (desktop), 4 s (mobile) on
+            // a quiet lane (b6); the rest is room for a loaded CI runner.
+            test.setTimeout(90_000);
+            const viewport = getViewport(testInfo);
+            await openFilesPage(page, '/files?tab=static');
+            const table = page.getByTestId('files-table-static');
+
+            await eachLanguageAndTheme(page, async (lang, theme) => {
+                await filesTableReady(page, table, `${viewport}/${lang}/${theme}/files/static-tab`);
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
-                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('files-table-static'), `desktop/${lang}/${theme}/files/static-tab`);
-                await screenshot(page, viewport, lang, theme, 'files', 'static-tab');
+                if (viewport === 'desktop') await extendScreenToBlock(page, table, `desktop/${lang}/${theme}/files/static-tab`);
+                await shootFiles(page, viewport, lang, theme, 'static-tab', table);
                 await restoreTallScreen(page);
             });
         });
 
         test('broker reports tab - all languages and themes', async ({page}, testInfo) => {
+            // One load, then eight combinations: 7–12 s (desktop), 5 s (mobile) on a quiet lane (b6), the brokers' logos included.
+            test.setTimeout(90_000);
             const viewport = getViewport(testInfo);
+            await openFilesPage(page, '/files?tab=brim');
+            const table = page.getByTestId('files-table-brim');
 
-            await forEachLanguageAndTheme(page, async (lang, theme) => {
-                await page.goto('/files?tab=brim');
-                await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await freezeAnimations(page);
-                await screenshot(page, viewport, lang, theme, 'files', 'brim-tab');
+            await eachLanguageAndTheme(page, async (lang, theme) => {
+                await filesTableReady(page, table, `${viewport}/${lang}/${theme}/files/brim-tab`);
+                await shootFiles(page, viewport, lang, theme, 'brim-tab', table);
             });
         });
 
         test('static resources grid view - all languages and themes', async ({page}, testInfo) => {
+            // One load, then eight combinations, each entering the grid again (its thumbnails cached after the first): 4–6 s on a
+            // quiet lane (b6), both projects.
+            test.setTimeout(90_000);
             const viewport = getViewport(testInfo);
+            await openFilesPage(page, '/files?tab=static');
+            const files = page.getByTestId('files-page');
+            // The grid lists every file: the card of a seeded one tells it is drawn.
+            const card = page.getByTestId(`file-grid-preview-${await staticFileId(page, FILES_SAMPLES.image)}`);
+            const gridView = page.getByTestId('view-mode-grid');
 
-            await forEachLanguageAndTheme(page, async (lang, theme) => {
-                await page.goto('/files?tab=static');
-                await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await freezeAnimations(page);
-                // Switch to grid view if toggle exists
-                const gridBtn = page.getByTestId('view-mode-grid');
-                if (await gridBtn.isVisible().catch(() => false)) {
-                    await gridBtn.click();
-                    await page.waitForTimeout(2000); // Wait for image previews to load
-                    await screenshot(page, viewport, lang, theme, 'files', 'static-grid');
-                }
+            await eachLanguageAndTheme(page, async (lang, theme) => {
+                const shot = `${viewport}/${lang}/${theme}/files/static-grid`;
+                await expect(files, `${shot}: the files never finished loading`).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+                // A fresh grid for each combination: a card prints its size once, when it mounts (galleryFiles.ts).
+                await expect(gridView, `${shot}: the page offers no grid view`).toBeVisible();
+                await gridView.click();
+                await expect(card, `${shot}: the grid is not drawn`).toBeVisible();
+                await expect(page.getByTestId('files-table-static'), `${shot}: the list is still shown`).toHaveCount(0);
+                await imagesInViewLoaded(files, shot);
+                await shootFiles(page, viewport, lang, theme, 'static-grid', files);
+                // Back to the list: the next combination gets a grid of its own.
+                await page.getByTestId('view-mode-list').click();
+                await expect(card, `${shot}: the grid stayed on the page`).toHaveCount(0);
             });
         });
 
         test('file preview modal (BRIM) - all languages and themes', async ({page}, testInfo) => {
+            // One load, then eight combinations — open the report from its row, wait for the grid's canvas, shoot, close: 7 s
+            // (desktop), 6 s (mobile) on a quiet lane (b6).
+            test.setTimeout(90_000);
             const viewport = getViewport(testInfo);
+            const fileId = await brimFileId(page, FILES_SAMPLES.csv);
+            await openFilesPage(page, `/files?tab=brim&filename=${encodeURIComponent(FILES_SAMPLES.csv)}`);
+            const table = page.getByTestId('files-table-brim');
 
-            for (const lang of SUPPORTED_LANGUAGES) {
-                for (const theme of THEMES) {
-                    await page.goto('/files?tab=brim');
-                    await setLanguage(page, lang);
-                    await setTheme(page, theme);
-                    await page.waitForLoadState('networkidle', {timeout: 20_000});
-                    await freezeAnimations(page);
-                    await page.waitForTimeout(500);
-
-                    // Click the preview action on the first BRIM file row
-                    const previewActionsBtn = page
-                        .locator('[data-testid="files-table-brim"]')
-                        .getByTestId(/^row-actions-/)
-                        .first();
-                    if (await previewActionsBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-                        await previewActionsBtn.click();
-                        await page.getByTestId('context-menu-action-preview').click();
-                        const previewModal = page.getByTestId('file-preview-modal');
-                        await expect(previewModal).toBeVisible({timeout: 8_000});
-                        await page.waitForTimeout(1000); // Wait for file content to load
-                        await screenshot(page, viewport, lang, theme, 'files', 'preview-modal-csv');
-                        await page.keyboard.press('Escape');
-                        await page.waitForTimeout(200);
-                    }
-                }
-            }
+            await eachLanguageAndTheme(page, async (lang, theme) => {
+                const shot = `${viewport}/${lang}/${theme}/files/preview-modal-csv`;
+                await filesTableReady(page, table, shot);
+                const modal = await openPreview(page, table, fileId, shot);
+                const grid = await gridPreviewReady(modal, shot);
+                await shootFiles(page, viewport, lang, theme, 'preview-modal-csv', grid);
+                await closePreview(modal, shot);
+            });
         });
 
         test('file preview modal (image) - all languages and themes', async ({page}, testInfo) => {
-            const viewport = getViewport(testInfo);
-            // File types to preview, with URL filter to find the specific file
-            const previewTypes: Array<{filename: string; name: string}> = [
-                {filename: '.png', name: 'preview-modal-image'},
-                {filename: 'ebook.pdf', name: 'preview-modal-pdf'},
-                {filename: 'preview_markdown_sample.md', name: 'preview-modal-markdown'},
-                {filename: 'preview_notes_sample.txt', name: 'preview-modal-text'},
-            ];
+            // One load, then eight combinations — open the avatar from its row, wait for the picture, shoot, close: 5 s (desktop),
+            // 6 s (mobile) on a quiet lane (b6).
+            test.setTimeout(90_000);
+            await shootStaticPreview(page, getViewport(testInfo), 'image', (modal, shot) => imagePreviewReady(modal, shot));
+        });
 
-            for (const lang of SUPPORTED_LANGUAGES) {
-                for (const theme of THEMES) {
-                    for (const {filename, name} of previewTypes) {
-                        // Navigate with URL filter to directly show the target file
-                        await page.goto(`/files?tab=static&filename=${encodeURIComponent(filename)}`);
-                        await setLanguage(page, lang);
-                        await setTheme(page, theme);
-                        await page.waitForLoadState('networkidle', {timeout: 20_000});
-                        await freezeAnimations(page);
-                        await page.waitForTimeout(500);
+        test('file preview modal (pdf) - all languages and themes', async ({page}, testInfo) => {
+            // One load, then eight combinations, each starting the viewer again (its engine, the tiles of two pages) and waiting
+            // out its page controls (4 s, EmbedPDF's timer, no machine shortens it): 52 s (desktop), 49 s (mobile) on a quiet lane (b6).
+            test.setTimeout(180_000);
+            await shootStaticPreview(page, getViewport(testInfo), 'pdf', (modal, shot) => pdfPreviewReady(modal, shot));
+        });
 
-                        // Find first row with a preview action
-                        const table = page.locator('[data-testid="files-table-static"]');
-                        const firstPreviewActionsBtn = table.getByTestId(/^row-actions-/).first();
-                        if (await firstPreviewActionsBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-                            await firstPreviewActionsBtn.click();
-                            await page.getByTestId('context-menu-action-preview').click();
-                            const previewModal = page.getByTestId('file-preview-modal');
-                            if (await previewModal.isVisible({timeout: 8_000}).catch(() => false)) {
-                                await waitForNetworkSettled(page);
-                                await page.waitForTimeout(1500); // Wait for content to load (PDF may take longer)
-                                await screenshot(page, viewport, lang, theme, 'files', name);
-                                await page.keyboard.press('Escape');
-                                await page.waitForTimeout(200);
-                            }
-                        }
-                    }
-                }
-            }
+        test('file preview modal (markdown) - all languages and themes', async ({page}, testInfo) => {
+            // One load, then eight combinations — open the sample from its row, wait for the rendered markdown and its fonts: 4–5 s
+            // on a quiet lane (b6), both projects.
+            test.setTimeout(90_000);
+            await shootStaticPreview(page, getViewport(testInfo), 'markdown', (modal, shot) => markdownPreviewReady(page, modal, shot));
+        });
+
+        test('file preview modal (text) - all languages and themes', async ({page}, testInfo) => {
+            // One load, then eight combinations — open the sample from its row, wait for its lines, shoot, close: 4 s on a quiet
+            // lane (b6), both projects.
+            test.setTimeout(90_000);
+            await shootStaticPreview(page, getViewport(testInfo), 'text', (modal, shot) => textPreviewReady(modal, shot));
         });
     });
 

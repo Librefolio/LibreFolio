@@ -97,6 +97,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/table/dataTableLogic.test.ts",
             "src/lib/components/transactions/shared/resolveFormItems.test.ts",
             "src/lib/utils/files/imageCrop.test.ts",
+            "src/lib/utils/files/pdfPreviewState.test.ts",
             "src/lib/utils/currency/fxConversionHelper.test.ts",
             "src/lib/utils/currency/currencyFormat.test.ts",
             "src/lib/utils/privacy/maskable.test.ts",
