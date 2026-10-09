@@ -1,7 +1,8 @@
 # Piano SP16 — scomposizione del batch transazioni
 
 **Creato**: 2026-09-11
-**Stato**: ✅ completato 2026-09-11
+**Stato**: ✅ completato 2026-09-11 · integrato in `dev_release2` (codice `846aefb24`, chiusura del journal
+`27b6f2aec`) · archiviato il 2026-10-09 dopo la verifica sul codice (vedi «Verifica d'archivio», in fondo)
 **Workstream**: L
 **Coordinatore**: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`
 **Baseline approvata**: `dev_release2` @ `4949b2f4c04050e46f643de848894b6706349f34`
@@ -454,3 +455,24 @@ Nessun `--force`, populate/reset DB, porta `6040/6041`, install o suite concorre
 - docs inglesi coerenti col codice;
 - `git diff --check` verde, porta 6160 libera;
 - nessuna staging/commit/history mutation.
+
+## Verifica d'archivio (2026-10-09)
+
+> Fatta dal workstream P su richiesta del coordinator (la sessione L non esiste più), in sola lettura sul codice di
+> `dev_release2` @ `3cceb4f90` (treno 24b).
+
+- **Integrazione**: `846aefb24` (`refactor(transactions): split batch pipeline stages`), merge di allineamento
+  `ed0f4ff30`, chiusura del journal `27b6f2aec`; tutti antenati di `dev_release2`. Nel backlog risultano chiusi
+  P4-2 e l'alias S6 6.8 (`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md:47,61`).
+- **Codice di oggi, coerente con la DoD**:
+  - `execute_batch` (`backend/app/services/transaction_service.py:863-912`) è ancora un orchestratore di 50 righe,
+    senza `noqa` né TODO;
+  - `transaction_batch_context.py` e `transaction_batch_stages.py` esistono, senza `noqa: C901` e senza
+    `.commit()`, `.rollback()`, `.begin()` o `begin_nested()`;
+  - gli stage sono descritti nelle pagine tecniche (`developer/backend/transactions/service.md`,
+    `balance_validation.md`, `developer/lint_gates.md` e altre).
+- **Superato, non un buco**: `developer/backend/transactions/wac.md`, riallineata allo Step 8, è stata poi
+  riscritta dal #32 (`Release_2/phases/30_wacUnification/`, P11, `de252a38a`) con la regola del layer
+  `financial_math`.
+- I 14 percorsi citati nel piano esistono tutti.
+- **Esito**: FINITA, archiviata intera in `Release_2/phases/23_transactionBatchRefactor/`.

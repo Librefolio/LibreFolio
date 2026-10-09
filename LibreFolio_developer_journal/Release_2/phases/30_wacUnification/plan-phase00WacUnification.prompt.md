@@ -4,12 +4,15 @@
 > (project session `12a0954d-0fbe-42da-b687-979e798a50c6`).
 > Analisi consegnata il 07/10 (sola lettura). **Implementazione autorizzata dal developer il 07/10**, inoltrata dal
 > coordinator (testo e decisioni in [Decisioni prese e permessi](#decisioni-prese-e-permessi-0710-inoltrati-dal-coordinator)).
-> Stato: **chiuso, FROZEN** (08/10). P0–P12 completati; commit `de252a38a`, merge dei treni 9 (`e0c40395c`) e 10
-> (`e655003d3`), chiavi i18n aggiunte dopo O. Avanzamento passo per passo in §6.5, merge in §6.5bis.
+> Stato: **chiuso e archiviato** (verifica d'archivio del 09/10, §9). P0–P12 completati; commit `de252a38a`, merge
+> dei treni 9 (`e0c40395c`) e 10 (`e655003d3`), chiavi i18n `2d8914be4`: in `dev_release2` col treno 11
+> (`58fc35174`). Seguiti: seed in §7 (`270a86312`, treno 15), card dei KPI in §8 (`65839b369`, treno 18),
+> validazione delle impostazioni nel [piano gemello](./plan-phase00SettingsBulkValidation.prompt.md) (`84d9e3360`,
+> treno 23). Avanzamento passo per passo in §6.5, merge in §6.5bis, residui rinviati in §9.
 >
-> Percorso: `LibreFolio_developer_journal/Release_2/Phase_0/30_wacUnification/plan-phase00WacUnification.prompt.md`
-> (non committato: i commit li fa il developer). L'analisi è stata scritta in plan mode nella cartella di sessione e
-> copiata qui al passo 0.
+> Percorso: `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00WacUnification.prompt.md`
+> (archiviato il 09/10 da `Release_2/Phase_0/30_wacUnification/`; entrato nel repo con `de252a38a`). L'analisi è
+> stata scritta in plan mode nella cartella di sessione e copiata qui al passo 0.
 
 | | |
 |---|---|
@@ -72,7 +75,8 @@ Wiki letto: `decisions/wac-target-currency-last-acquisition`, `decisions/cost-ba
 
 ### Proposta in breve
 
-Un modulo nuovo, `backend/app/services/average_cost.py`, con **una** funzione pubblica, `compute_average_costs(...)`:
+Un modulo nuovo, `backend/app/services/average_cost.py` (*superato* dalla decisione D1: è
+`backend/app/services/financial_math/average_cost.py`, §2bis), con **una** funzione pubblica, `compute_average_costs(...)`:
 riceve i movimenti in ordine e le valute (T del report, A dell'asset), converte da sé con `fx.convert_bulk` (una sola
 chiamata a lotti per tutte le posizioni della richiesta, stessa valuta = 1 senza I/O) e restituisce per posizione
 Q, C_T, C_A, costi unitari, la timeline per movimento e le conversioni mancanti con le date.
@@ -135,7 +139,8 @@ Q, C_T, C_A, costi unitari, la timeline per movimento e le conversioni mancanti 
   Nessuna modifica a `portfolio_allocation_source.py`.
 - `backend/test_scripts/test_external/test_brim_providers.py` (area BRIM): una costruzione di `DailyStateBuilder`
   (`:1563`) da aggiornare.
-- `scripts/test_runner/_backend_services.py` (condiviso): riallineare `financial-utils` al file di test nuovo.
+- `scripts/test_runner/_backend_services.py` (condiviso): riallineare `financial-utils` al file di test nuovo
+  (*superato* in P1: selettore nuovo `services financial-math`; `financial-utils` eliminato in P6).
 - `backend/app/schemas/portfolio.py` (condiviso): campi nuovi, tutti opzionali.
 - `frontend/src/lib/api/zodios-client.ts` via `api sync` (generato, condiviso).
 - `KpiSection.svelte` / `KpiSection.test.ts` (area Dashboard; N lavora su `+page.svelte`, che non tocco).
@@ -295,6 +300,8 @@ Dettagli decisi rileggendo il codice prima di dare il lavoro al test-author. Dov
 ## 2. La funzione unica
 
 ### 2.1 Modulo e firma (identificatori in inglese)
+
+> *Superato in parte* da §2bis: per la decisione D1 il modulo è `backend/app/services/financial_math/average_cost.py`.
 
 ```python
 # backend/app/services/average_cost.py
@@ -569,7 +576,7 @@ Regole del prompt al test-author:
 
 | # | File (selettore) | Caso | Perché è rosso oggi |
 |---|---|---|---|
-| U | `test_services/test_average_cost.py` nuovo (`services financial-utils`, riallineato) | U1 stessa valuta: acquisti, vendite, split, costo zero; nessuna `convert_bulk` (sonda); U2 #32: C_T = `Decimal("400")`, una chiamata, nessuna voce T→T; U3 P = A ≠ T; U4 P ∉ {A, T} via T, effetto cambio 0 al giorno d'acquisto; U5 tasso T mancante → coppia e date ordinate, quantità sì, costo no; U6 solo ramo A mancante; U7 conservazione esatta, uscita totale, oversold; U8 split avanti/indietro; U9 ordine nello stesso giorno; U10 costo sconosciuto; U11 più posizioni = una chiamata; U12 `state_at`; U13 adattatore (segno BUY, valuta None, CBO, share, split) | il modulo non esiste |
+| U | `test_services/test_average_cost.py` nuovo (`services financial-utils`, riallineato); *superato* in P1: `test_services/test_financial_math/test_average_cost.py`, `services financial-math` | U1 stessa valuta: acquisti, vendite, split, costo zero; nessuna `convert_bulk` (sonda); U2 #32: C_T = `Decimal("400")`, una chiamata, nessuna voce T→T; U3 P = A ≠ T; U4 P ∉ {A, T} via T, effetto cambio 0 al giorno d'acquisto; U5 tasso T mancante → coppia e date ordinate, quantità sì, costo no; U6 solo ramo A mancante; U7 conservazione esatta, uscita totale, oversold; U8 split avanti/indietro; U9 ordine nello stesso giorno; U10 costo sconosciuto; U11 più posizioni = una chiamata; U12 `state_at`; U13 adattatore (segno BUY, valuta None, CBO, share, split) | il modulo non esiste |
 | S | `test_financial/test_portfolio_service.py` (`services roi-fifo-utils`, DB di test reale con `FxRate` inseriti) | S1 #32 EUR: `open_cost_basis == 400`, WAC riga 400/Q, non realizzato MV − 400; S2 USD invariato; S3 ADJ-in con CBO in EUR su asset USD: capitale versato corretto, P&L totale non gonfiato; S4 tasso anteriore alla storia: `missing_fx_pairs` con coppia e date, issue `MISSING_FX_RATES`, costo non a zero muto | oggi 0, nessun issue |
 | A | `test_api/test_portfolio_api.py` (`api portfolio`, server della corsia) | `POST /portfolio/report` EUR → 400,00 e banner assente; USD → invariato; variante con tasso mancante → issue nel `data_quality` | oggi 0 |
 
@@ -598,7 +605,7 @@ Scritte in P1 sul codice di oggi; devono restare verdi, uguaglianza `Decimal` es
 
 ```bash
 P="PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6161 --data-dir /tmp/librefolio-r2-p"
-$P services financial-utils            # unità della funzione
+$P services financial-utils            # unità della funzione (superato in P1: services financial-math)
 $P services portfolio-engine           # test_portfolio_engine_vnext.py
 $P services roi-fifo-utils             # test_financial/: motore, service, lotti, YOC
 $P services lots-analysis-pure
@@ -1116,6 +1123,8 @@ Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho m
   - Convalida mirata: `front build --debug` e `front check` OK; `core-unit` 116/116; `component-unit` 2835;
     `front-ai-export unit` 359; `utils all` 1215; `check-orphans` pulito.
 - Porte 6161 e 6171 libere dopo ogni giro.
+- **Chiavi i18n e integrazione** (08/10): le 4 chiavi di P9 sono il commit `2d8914be4`. Il treno 11 ha portato il
+  ramo in `dev_release2` in fast-forward, seguito da `58fc35174` (CHANGELOG del coordinator).
 
 ### 6.6 Definizione di fatto
 
@@ -1183,6 +1192,11 @@ Il developer ha aperto i merge nel worktree; io ho risolto i conflitti e li ho m
   insieme al resto, nella run complessiva del coordinator, invece di aspettare la fine della coverage sulla 6150. Ha
   anche approvato gli scatti della gallery che cambiano un poco.
 
+**Integrazione** (08/10): commit `270a86312` (`test(seed): stake ETH as an auto-cost adjustment`), entrato col treno
+15 (merge `0f5092a0b`, punta `23b839fb2`). Controlli del treno, dal coordinator, sul seed nuovo: populate OK,
+`api all` 806, E2E `dashboard` 27, `broker detail` 33, `tx-clone` 6, `tx-paired-edit` 4. Niente CHANGELOG: sono
+solo dati di test.
+
 ## 8. Difetto puro: rendimenti mancanti nella card dei KPI (08/10)
 
 > Assegnato dal coordinator: un difetto puro trovato da Q, approvato dal developer («vai con i difetti puri»).
@@ -1209,3 +1223,64 @@ quando il backend non dava il valore (campi opzionali e nullable). Quindi:
 **Evidenze** (corsia 6161):
 - `front-utility component-unit` 2862/2862; `front check` 0 errori, 0 warning; prettier pulito.
 - E2E: `front-portfolio privacy-masking` 18, `dashboard-cache` 6, `dashboard` 27.
+
+**Integrazione** (08/10): commit `65839b369` (`fix(dashboard): show missing returns as a dash`), entrato col treno 18
+(merge `c3fcf644f`). La riga del CHANGELOG l'ha scritta il coordinator (`CHANGELOG.md:155`).
+
+## 9. Verifica d'archivio e residui (09/10)
+
+> Chiesta dal coordinator: confrontare il piano con il codice di oggi e archiviare solo ciò che è finito. Base
+> `dev_release2` @ `3cceb4f90` (treno 24b), codice in sola lettura. Vale anche per il
+> [piano gemello](./plan-phase00SettingsBulkValidation.prompt.md), che ha la sua sezione.
+
+**Verificato sul codice di oggi**:
+- la grep della DoD (§6.6) su `backend/app` non trova nulla: né `_buy_unit_cost`, `compute_wac_from_txlist`,
+  `get_cost_basis`, `wac_utils`, `_build_wac_row`, `_compute_wac_series`, né i ripieghi «importo non convertito»;
+- la linea WAC dei lotti riporta le conversioni mancanti invece di usare il costo non convertito
+  (`lots_analysis_service.py:836`); `LotDataQualityBanner` raggruppa qualunque codice, quindi mostra anche
+  `MISSING_FX_RATES` e `MISSING_COST_BASIS`: la verifica lasciata aperta in §2.5 è chiusa;
+- `MISSING_COST_BASIS` resta una guardia per i dati scritti fuori dalle regole, come deciso in §7:
+  - un TRANSFER o un ADJUSTMENT con quantità > 0 vuole il costo (`transaction_service.py:157-165`,
+    `transaction_batch_stages.py:836-925`);
+  - in modalità Auto il costo si scrive sempre, salvo le coppie FX mancanti, che bloccano il salvataggio
+    (`transaction_batch_stages.py:810-832`). Con la pool vuota però si scrive 0: è il residuo «Costo Auto senza
+    posizione» qui sotto;
+- CHANGELOG `[1.2.0]`: righe del coordinator a `:72` (AI Export), `:148` (#32), `:155` (§8) e `:235-236`
+  (⚠️ Breaking changes);
+- dei 45 percorsi citati prima di questa sezione esistono tutti, salvo tre attesi: `graphify-out/graph.json`
+  (ignorato), il modulo di §2.1 e il file di test di §5.1, superati da D1 e da P1 e segnati sopra.
+
+**Rinvii già tracciati altrove** (non vanno nel backlog):
+- traduzioni IT/FR/ES delle pagine di P11: nessuno stamp, per decisione del developer, quindi la cache Aphra le
+  segna (`mkdocs_src/aphra-pipeline/.translate-hashes.json`: 9 pagine superate, `yield-on-cost` assente);
+- derive più vecchie del wiki, segnalate in P12: `check_source_paths.py` esce ancora 1, con gli stessi 64 percorsi
+  e 88 occorrenze.
+
+**Residui rinviati**, un rimando per voce:
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Anteprima WAC: etichetta sbagliata per le righe di
+  split e ramo `add_at_wac` morto». `WacPreviewSection.svelte:571-585` riconosce solo `add`, `reduce` e
+  `add_at_wac`, quindi una riga `split_rescale` (`portfolio_service.py:230-236`) mostra «Diluizione», mentre
+  `add_at_wac` non esiste più dal #32 (§1, punto 6);
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Costo Auto senza posizione: costo 0 salvato senza
+  avviso». Senza movimenti precedenti il WAC vale 0 (`portfolio_service.py:185-190`; pool svuotata:
+  `average_cost.py:155`), Auto lo scrive (`transaction_service.py:1012-1014`) e la verifica del costo salta le
+  righe Auto (`transaction_batch_stages.py:889`, `:914`, `:935`). Uno 0 esplicito non è segnalato
+  (`average_cost.py:431-432`). C'era già nella v1.1.0;
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Contributo per posizione: dividendi e costi senza
+  cambio esclusi senza segnale». `portfolio_service.py:1794-1805` salta il movimento senza registrare la coppia, e
+  `PositionsContribution` (`schemas/portfolio.py:443-450`) non ha un canale. C'era già prima del #32;
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Layer `financial_math`: migrare `roi_utils` e
+  `valuation_utils`». È la decisione D1 del developer («poi in futuro fattorizziamo le altre»), scritta in
+  `financial_math/__init__.py:8-10`;
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «`tx-clone.spec.ts`: commento di testa superato». La
+  riga `:10` dice che sui broker in sola lettura il clone è nascosto; il test (`:429-448`) controlla solo edit e
+  delete (§7);
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Black: riformattare due file di test API».
+  `black --check` fallisce ancora su `test_api/test_portfolio_api.py` e `test_api/test_portfolio_wac.py`; a P12
+  le righe da riformattare non erano di P;
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Grafo del wiki: aggiornamento rinviato dal #32». Le
+  pagine nuove di P12 vanno nel grafo; dal worktree non si verifica, perché il grafo è ignorato;
+- rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «Chiudere la issue #32 al rilascio». Su GitHub è ancora
+  aperta, perché il commit cita `(#32)` senza parola di chiusura.
+
+**Esito**: FINITA, archiviata intera in `Release_2/phases/30_wacUnification/`.
