@@ -16,6 +16,7 @@ Provides RESTful endpoints for broker report file management and parsing:
 - GET /import/files: List uploaded/parsed/failed files
 - GET /import/files/{file_id}: Get file details
 - DELETE /import/files/{file_id}: Delete a file
+- GET /import/files/{file_id}/plugin-check: Ask one plugin whether it reads a file, and why not
 - POST /import/files/{file_id}/parse: Parse file (auto-moves to parsed/failed)
 - GET /import/plugins: List available import plugins
 
@@ -55,6 +56,7 @@ from backend.app.schemas.brim import (
     BRIMParseOutput,
     BRIMParseRequest,
     BRIMParseResponse,
+    BRIMPluginCheck,
     BRIMPluginInfo,
     BRIMSetCombineResponse,
     BRIMSetPreview,
@@ -790,6 +792,34 @@ async def get_last_parse_result(
     """
     file_info = await _get_brim_file_with_access(file_id, current_user, session)
     return file_info.last_parse_result
+
+
+@brim_router.get("/files/{file_id}/plugin-check", response_model=BRIMPluginCheck)
+async def check_file_plugin(
+    file_id: str,
+    plugin_code: str = Query(..., min_length=1, description="Plugin to ask, e.g. the broker's default import plugin"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMPluginCheck:
+    """
+    Ask one plugin whether it reads an uploaded file and, if not, why.
+
+    The import wizard calls it right after an upload, for the broker's default plugin: a
+    refusal comes with the plugin's English reason and, when the plugin gives one, a stable
+    code the frontend translates. Nothing is parsed and the file does not change status.
+
+    Any user with access to the file's broker can ask (VIEWER+). 404 for an unknown file
+    or plugin.
+    """
+    await _get_brim_file_with_access(file_id, current_user, session)
+    plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+    if plugin is None:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_code}' not found")
+    # Off the event loop: the plugin reads the file.
+    check = await asyncio.to_thread(brim_provider.check_file_with_plugin, file_id, plugin)
+    if check is None:
+        raise HTTPException(status_code=404, detail="File content not found")
+    return check
 
 
 # =============================================================================

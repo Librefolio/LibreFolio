@@ -48,6 +48,7 @@ from backend.app.schemas.brim import (
     BRIMNotice,
     BRIMParseOutput,
     BRIMPluginInfo,
+    BRIMRefusal,
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
@@ -1086,6 +1087,112 @@ class TestGenericCSVSaysWhyItRefuses:
                     broken.append(f"{code} on {path.name}: {reason!r}")
 
         assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_reason, the first ones: {broken[:3]}"
+
+
+# =============================================================================
+# CATEGORY 4d: A PLUGIN SAYS WHY WITH A CODE THE FRONTEND TRANSLATES (37_brimScalable, plan §7.1)
+# =============================================================================
+
+# A refusal's code: the stable snake_case key the frontend translates as ``importWizard.parseRefusal.<code>``.
+_REFUSAL_CODE = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def _refusal_problems(detail: object, reason: object) -> List[str]:
+    """Where one answer of ``cannot_parse_detail`` breaks its contract, next to the answer of ``cannot_parse_reason`` on the same path."""
+    if detail is None:
+        return [] if reason is None else [f"no refusal, and yet the reason {reason!r}"]
+    if not isinstance(detail, BRIMRefusal):
+        return [f"{type(detail).__name__} {detail!r}, not a BRIMRefusal"]
+    problems = [] if detail.message == reason else [f"message {detail.message!r}, while cannot_parse_reason says {reason!r}"]
+    if not _is_one_sentence(detail.message):
+        problems.append(f"message {detail.message!r} is not one sentence (one line, lowercase start, no final period)")
+    if detail.code is not None and not _REFUSAL_CODE.fullmatch(detail.code):
+        problems.append(f"code {detail.code!r} is not a stable snake_case key")
+    try:
+        detail.model_dump_json()
+    except Exception as exc:  # it travels to the import wizard as JSON (GET /import/files/{file_id}/plugin-check)
+        problems.append(f"does not serialise to JSON: {type(exc).__name__}: {exc}")
+    return problems
+
+
+def _detail_answer(code: str, plugin: BRIMProvider, path: Path, label: str) -> tuple:
+    """One plugin's ``cannot_parse_detail`` on one path, and where it breaks the contract: an exception is a problem of the answer, never a crash of the test."""
+    try:
+        detail, reason = plugin.cannot_parse_detail(path), plugin.cannot_parse_reason(path)
+    except Exception as exc:  # the contract: neither method ever raises
+        return None, [f"{code} on {label}: raised {type(exc).__name__}: {exc}"]
+    return detail, [f"{code} on {label}: {problem}" for problem in _refusal_problems(detail, reason)]
+
+
+class TestPluginSaysWhyWithACode:
+    """37_brimScalable, plan §7.1: a plugin can say why it refuses a file with a stable code the frontend translates, and the context of the code.
+
+    The import wizard asks the broker's default plugin about every uploaded file (``GET /import/files/{file_id}/plugin-check``, category 17 of
+    ``test_api/test_brim_api.py``) and shows its reason. ``BRIMProvider`` gains a concrete, optional method, ``cannot_parse_detail(file_path) ->
+    Optional[BRIMRefusal]``: by default the ``cannot_parse_reason`` sentence, wrapped without a code and with an empty context; None when there is
+    no reason. A plugin that overrides it (the two Scalable plugins, refusing each other's files: ``test_brim_scalable.py``) gives a snake_case
+    ``code`` and a ``context``; its ``message`` stays what ``cannot_parse_reason`` says. Same rules as ``cannot_parse_reason``: never raises, one
+    English sentence.
+
+    Every input is a sample or is written in ``tmp_path``; the sentences are those of category 4c.
+    """
+
+    def test_the_base_method_is_concrete(self):
+        """A concrete method of ``BRIMProvider``, not an abstract one: every plugin written before it stays valid without it."""
+        assert callable(getattr(BRIMProvider, "cannot_parse_detail", None)), "BRIMProvider has no cannot_parse_detail method"
+        assert "cannot_parse_detail" not in BRIMProvider.__abstractmethods__
+
+    @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
+    def test_the_default_wraps_the_reason_without_a_code(self, content: bytes, missing: tuple, tmp_path: Path):
+        """The generic CSV overrides ``cannot_parse_reason`` only: its refusal is that sentence, without a code, with an empty context."""
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert type(plugin).cannot_parse_detail is BRIMProvider.cannot_parse_detail, "premise: the generic CSV does not override cannot_parse_detail"
+        assert plugin.cannot_parse_reason(path) == _REASON_MISSING[missing], f"premise: the generic CSV names the columns {content.splitlines()[0]!r} misses"
+
+        detail = plugin.cannot_parse_detail(path)
+
+        assert isinstance(detail, BRIMRefusal), f"the default answers {detail!r}, not a BRIMRefusal"
+        assert (detail.code, detail.message, detail.context) == (None, _REASON_MISSING[missing], {})
+
+    @pytest.mark.parametrize(("name", "content"), [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER])
+    def test_the_default_has_nothing_to_add_without_a_reason(self, name: str, content: bytes, tmp_path: Path):
+        """A file the generic CSV reads: no reason, so no refusal."""
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.cannot_parse_reason(path) is None, f"premise: the generic CSV has nothing to say about {name}"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    @pytest.mark.parametrize("code", ["broker_trading212", "broker_danske_bank"])
+    def test_a_plugin_that_overrides_neither_method_has_nothing_to_add(self, code: str, tmp_path: Path):
+        """The base defaults all the way down, about a file the plugin refuses: no reason, so no refusal."""
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+        assert plugin is not None, f"{code} is not registered"
+        path = tmp_path / "export.csv"
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+        assert plugin.can_parse(path) is False, f"premise: {code} refuses a generic CSV"
+        assert (type(plugin).cannot_parse_reason, type(plugin).cannot_parse_detail) == (BRIMProvider.cannot_parse_reason, BRIMProvider.cannot_parse_detail), f"premise: {code} overrides neither method"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    def test_every_plugin_answers_nothing_or_a_refusal_that_agrees_with_its_reason(self, tmp_path: Path):
+        """The contract for every registered plugin, on every file of ``sample_reports/`` (recursive, every extension) and on paths with nothing to read:
+        ``cannot_parse_detail`` never raises; it is None exactly when ``cannot_parse_reason`` is None; otherwise a ``BRIMRefusal`` whose message is that
+        reason and one sentence, whose code is None or snake_case, and which serialises to JSON."""
+        paths = [*sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file()), *(_unreadable_path(tmp_path / kind, kind) for kind in _UNREADABLE_PATHS)]
+        labels = {path: str(path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)) for path in paths}
+        answers = [_detail_answer(code, plugin, path, labels[path]) for code, plugin in _PLUGIN_PARAMS for path in paths]
+        details = [detail for detail, _ in answers]
+        # Positive controls: refusals and silences both occur, and one refusal at least carries a code, so no branch of the contract is vacuous.
+        assert any(detail is None for detail in details) and any(detail is not None for detail in details), "premise: the plugins refuse some of these files with a reason and others without"
+        assert any(getattr(detail, "code", None) for detail in details), "premise: one plugin at least refuses a sample with a code (broker_scalable on the overnight account's export)"
+
+        broken = [problem for _, problems in answers for problem in problems]
+
+        assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_detail, the first ones: {broken[:3]}"
 
 
 class TestBrokerParserCoverageHelpers:
@@ -2495,6 +2602,10 @@ class TestPluginFrontendContract:
         ("broker_credit_agricole", CA_SAMPLE),
         ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 0, "danske_bank-main-set")),
         ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 1, "danske_bank-gap-set")),
+        # Scalable Capital (37_brimScalable): notices only, each with the rows of the file as evidence.
+        ("broker_scalable", SAMPLE_DIR / "scalable-prime-export.csv"),
+        ("broker_scalable", SAMPLE_DIR / "scalable-broker-export.csv"),
+        ("broker_scalable_deposit", SAMPLE_DIR / "scalable-deposit-export.csv"),
     ]
 
     KNOWN_ASSET_NOTICE_KINDS = {MATURITY_NOTICE_KIND}

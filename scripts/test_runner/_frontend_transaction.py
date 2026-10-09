@@ -20,6 +20,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/transactions/bulkDisplay.test.ts",
            "src/lib/utils/transactions/importReportSets.test.ts",
            "src/lib/utils/transactions/importPairs.test.ts",
+           "src/lib/utils/brim/defaultPluginCheck.test.ts",
            "src/lib/utils/transactions/gapFixModel.test.ts",
            "src/lib/components/transactions/import/GapFixStep.test.ts",
            "src/lib/components/transactions/import/ReportSetCard.test.ts",
@@ -396,6 +397,18 @@ def front_tx_import_degiro(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-import-degiro.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_import_broker_mismatch(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Import Wizard broker-mismatch E2E tests (a file its broker's default import plugin cannot read: Move, no question, Remove)."""
+    print_section("Frontend TX Import Broker Mismatch Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-broker-mismatch.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_report_set_guide(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the import guide's gap-fix step on desktop and mobile (report sets C3, R9; a disposable account per test)."""
     print_section("Frontend TX Import Report Set Guide Tests")
@@ -613,6 +626,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Import DEGIRO Tests",
         desc="DEGIRO Account Statement in English: currency conversions as one row per linked pair in review (From/To, implied rate, one tick for both legs), handed to the editor as pairs that validate",
         tests="transactions/tx-import-degiro.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-import-broker-mismatch",
+        front_tx_import_broker_mismatch,
+        name="TX Import Broker Mismatch Tests",
+        desc="Step 1 upload vs the broker's default import plugin (Scalable Capital): M1 on a disposable account, the overnight account's file on the broker account (broker_scalable) raises the mismatch modal with the plugin-check reason and one target, the overnight account (its generic-CSV broker dropped by the fallback rule), Continue disabled while it is open; Move re-uploads the file there in the same batch, deletes the old copy and step 2 lists it under the target; M2 on its own default broker no question and no plugin check; M3 Remove deletes the file, Continue is released and the wizard stays on step 1",
+        tests="transactions/tx-import-broker-mismatch.spec.ts",
     )
     add_test(
         cat,
