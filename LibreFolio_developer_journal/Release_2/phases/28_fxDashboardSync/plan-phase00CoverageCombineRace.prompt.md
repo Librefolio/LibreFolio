@@ -121,7 +121,8 @@ Nessun altro comportamento cambia: stessi file finali (`.coverage_data/backend`,
 successo.
 
 **Fuori perimetro, per il backlog**: `_cli.py:971` ignora l'esito del combine. Una run con coverage persa dovrebbe
-dirlo nel verdetto finale.
+dirlo nel verdetto finale. → **Superato** (09/10): concesso dal coordinator nello stesso lotto e fatto
+(`_cli.py:971`, `:996`, commit `751f496b3`).
 
 ## 4. Test, rosso prima (test-author)
 
@@ -234,7 +235,8 @@ Niente `_common.py`: il suo `coverage combine --keep` (`:324-333`) è già a car
    >
    > **Decisione del coordinator** (12:12): **opzione A**. Una parte finita (nome `.H…h`) la cui tabella `file` è
    > vuota si toglie, si nomina con un avviso e la passata resta verde. Ogni altra parte illeggibile resta rossa,
-   > tenuta e nominata. Vale anche per `_finalize_coverage`. Le cause vanno nel backlog (C).
+   > tenuta e nominata. Vale anche per `_finalize_coverage`. Le cause vanno nel backlog (C): rinviate,
+   > `Phase_0/38_postReleaseBacklog/README.md`, voce N-4.
 4b. ✅ (08/10) Regola delle parti vuote.
    > **Note implementazione**:
    > - test-author ha scritto il caso (g): (g1) le parti dei worker, (g2) la guardia sul nome transitorio, (g3) il
@@ -265,11 +267,17 @@ Niente `_common.py`: il suo `coverage combine --keep` (`:324-333`) è già a car
      - La cartella della run fallita è rimasta **intatta**: nessuna run raccoglie i resti di un'altra.
      - Coverage al 76,19%, identica alla prima passata (52169 / 10530 / 15726 / 2164).
    - `clean_coverage_parts` sul resto vero: toglie la cartella della run fallita e tiene i junit.
-6. Consegna e FROZEN; le frasi del caso per la nota del runner, nessun CHANGELOG. Il devWiki è archiviato
+6. ✅ (08/10) Consegna e FROZEN; le frasi del caso per la nota del runner, nessun CHANGELOG. Il devWiki è archiviato
    (`problems/coverage-combine-race-renamed-part`, la riga di `concepts/test-isolation-classes`, `index.md` e
    `log.md`, solo in aggiunta). `check_source_paths.py` dà 0 path mancanti sulla pagina nuova. graphify è rinviato:
-   non è disponibile nel worktree.
+   non è disponibile nel worktree (annotato in `LibreFolio_devWiki/log.md`).
    > **Checkpoint** (08/10): 4 commit proposti, scritti in `/tmp/libreFolio_commits/libreFolio_commit_n_combine_C1..C4.txt`
    > (runner e test; la doc del runner; il devWiki; questo piano). Le liste dei path sono in
    > `n_combine_paths_C1..C4.txt`, i blob in `n_combine_blobs.txt` e l'albero finale in `n_combine_final_tree.txt`.
    > Stato: FROZEN.
+   >
+   > **Integrato** (allineamento del 09/10): `751f496b3` (runner e test), `230b2695d` (doc del runner), `029e00906`
+   > (devWiki), `fc76cefa1` (questo piano), treno 13 (`f5a132924`). Le due dichiarazioni del checkpoint sono ancora
+   > vere sul codice del 09/10 e sono rinviate in `Phase_0/38_postReleaseBacklog/README.md`:
+   > - il riepilogo generico quando fallisce solo il combine (`scripts/test_runner/_cli.py:1200`, `:1317`): voce N-2;
+   > - una parte illeggibile per sempre rende rosse anche le passate successive della stessa run: voce N-3.

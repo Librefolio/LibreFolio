@@ -30,7 +30,8 @@
   - `fx-flag-font.spec.ts:213` apre una pagina statica, intercettata.
 - **Fuori schema, non toccati**: in questo file, le attese predefinite che seguono una navigazione **interna**
   (`fx-card` → dettaglio `:219`, sidebar → impostazioni `:236`, ritorno `:284`, link del toast `:322`).
-  L'app è già avviata, quindi niente bootstrap.
+  L'app è già avviata, quindi niente bootstrap. Non è un difetto: nessun rosso osservato, quindi nessun rinvio
+  (allineamento del 09/10).
 
 ## 3. Correzione (test-author)
 
@@ -58,3 +59,5 @@
    > completa, e la cura sostituisce l'orologio con la condizione vera (`test-triage` §2).
 4. ✅ (08/10) Checkpoint: 2 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_fxnav_C1..C2.txt`. Liste
    in `n_fxnav_paths_C1..C2.txt`, blob in `n_fxnav_blobs.txt`, albero in `n_fxnav_final_tree.txt`. Stato: FROZEN.
+   > **Integrato** (allineamento del 09/10): `49d6f5324` (helper e spec), `55019a641` (questo piano), treno 19
+   > (`f2409810b`). Nessun residuo.
