@@ -123,6 +123,7 @@ import {
     settlePacShot,
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
+import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
@@ -265,6 +266,8 @@ async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Lang
     ensureDir(dir);
     await page.screenshot({
         path: path.join(dir, `${name}.png`),
+        // Never Playwright's full page: it keeps the screen and paints the rest of the page under it, so the sidebar — fixed,
+        // one screen tall — stops at the screen's edge. A whole page is a screen as tall as the page (galleryTallShots.ts).
         fullPage: false,
     });
     console.log(`  📸 ${viewport}/${lang}/${theme}/${category}/${name}.png`);
@@ -956,15 +959,24 @@ test.describe('Gallery Screenshots', () => {
         await page.waitForTimeout(400); // settle for chart redraw (treemap/performance-chart use ECharts)
     }
 
-    async function screenshotPositionsVariants(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string) {
+    async function screenshotPositionsVariants(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string, tall: readonly string[] = []) {
         const positionsPanel = page.getByTestId('positions-panel');
         await expect(positionsPanel).toBeVisible({timeout: 5_000});
         await positionsPanel.scrollIntoViewIfNeeded();
         await page.waitForTimeout(300);
+        // DESKTOP, tall shots: the frame from the top of the page, every combination. The scroll above races the panel's load
+        // (still a short skeleton, it is already in view and nothing scrolls; loaded, it is not and the page scrolls), so the
+        // same shot came from two frames (b5_c4_2); the tall screen holds the whole panel from the top.
+        if (viewport === 'desktop' && tall.length > 0) await scrollBackToHeader(page);
 
         for (const variant of POSITIONS_SCREENSHOT_VARIANTS) {
             await setPositionsView(page, variant.semantic, variant.visual);
+            // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the variants in `tall` get a screen as tall
+            // as the panel — the holdings map and the performance chart grow with the screen, so it is measured again after
+            // each resize — and the project's screen again right after the shot.
+            if (viewport === 'desktop' && tall.includes(variant.name)) await extendScreenToBlock(page, positionsPanel, `desktop/${lang}/${theme}/${category}/${variant.name}`);
             await screenshot(page, viewport, lang, theme, category, variant.name);
+            await restoreTallScreen(page);
         }
     }
 
@@ -1249,6 +1261,9 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('dashboard positions tab - all languages and themes', async ({page}, testInfo) => {
+            // Four variants a combination; on the desktop each on a screen as tall as the panel (the map and the chart need a
+            // few resizes, they grow with the screen) and back: above the 4-minute default.
+            test.setTimeout(420_000);
             const viewport = getViewport(testInfo);
             await setupDashboardMockReport(page);
 
@@ -1264,7 +1279,7 @@ test.describe('Gallery Screenshots', () => {
                 await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
                 // Each variant is shot once setPositionsView() has its content root on screen: the
                 // holdings table or treemap, the contribution table or the performance chart.
-                await screenshotPositionsVariants(page, viewport, lang, theme, 'dashboard');
+                await screenshotPositionsVariants(page, viewport, lang, theme, 'dashboard', ['positions-holdings-table', 'positions-holdings-map', 'positions-performance-table', 'positions-performance-map']);
             });
         });
 
@@ -1562,7 +1577,10 @@ test.describe('Gallery Screenshots', () => {
                     .catch(() => {});
                 await waitForNetworkSettled(page);
                 await page.waitForTimeout(500);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole page, on a screen as tall as it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.locator(PAGE_BLOCK), `desktop/${lang}/${theme}/settings/global-settings`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'global-settings');
+                await restoreTallScreen(page);
             });
         });
 
@@ -1616,12 +1634,29 @@ test.describe('Gallery Screenshots', () => {
                 await navigateTo(page, '/settings');
                 await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
-                const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
-                if (await profileTab.isVisible().catch(() => false)) {
-                    await profileTab.click();
-                    await page.waitForTimeout(300);
-                    await screenshot(page, viewport, lang, theme, 'settings', 'profile');
-                }
+                // By its test id, on both viewports. The tab's label is translated, and on a phone the TabBar shows its icon only
+                // (hideLabelOnMobile): the old filter on the English word found the tab on the English desktop alone, and every
+                // other combination skipped the shot in silence — no phone and no it/fr/es desktop image was ever made.
+                const profileTab = page.getByTestId('settings-tab-profile');
+                await expect(profileTab).toBeVisible({timeout: 10_000});
+                await profileTab.click();
+                await expect(profileTab).toHaveAttribute('aria-selected', 'true');
+                const profile = page.getByTestId('profile-tab');
+                await expect(profile).toBeVisible();
+                await expect(profile).toHaveAttribute('data-busy', 'false');
+                // The avatar comes with the user's settings, after the tab is drawn (ProfileTab's onMount): the gallery's admin
+                // has one — the sidebar shows it — so its picture, loaded, is what says the tab is complete.
+                const avatar = profile.getByTestId('profile-avatar').locator('img');
+                await expect(avatar, "the admin's avatar is not on the Profile tab").toBeVisible({timeout: 10_000});
+                await expect.poll(() => avatar.evaluate((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0), {message: "the admin's avatar never loaded", timeout: 10_000}).toBe(true);
+                await parkPointer(page);
+                await waitForMotionSettled(profile, 'the Profile tab');
+                await expectNoToast(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, its tab bar and the
+                // profile down to its rounded bottom edge — `profile-tab` alone stops inside the card's padding.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/profile`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'profile');
+                await restoreTallScreen(page);
             });
         });
 
@@ -1837,7 +1872,16 @@ test.describe('Gallery Screenshots', () => {
                     await diagnostics.scrollIntoViewIfNeeded();
                     await freezeAnimations(page);
                     await page.waitForTimeout(300);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts). The scroll above races the Tools panel,
+                    // which grows the block once its catalogue is in (b5_c4_5: 7 frames scrolled to the whole block, 1 not):
+                    // on the desktop the frame is taken again once the panel is in, so every combination frames the whole block.
+                    if (viewport === 'desktop') {
+                        await expect(diagnostics.getByTestId('tool-about-panel')).toHaveAttribute('data-state', /^(ready|degraded)$/, {timeout: 15_000});
+                        await diagnostics.scrollIntoViewIfNeeded();
+                        await extendScreenToBlock(page, diagnostics, `desktop/${lang}/${theme}/settings/about-plugin-diagnostics`);
+                    }
                     await screenshot(page, viewport, lang, theme, 'settings', 'about-plugin-diagnostics');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -1883,7 +1927,10 @@ test.describe('Gallery Screenshots', () => {
                     // every viewport, with as much of the panel above them as fits.
                     await loaded.evaluate((el) => el.scrollIntoView({block: 'end'}));
                     await freezeAnimations(page);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole Tools panel.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, tools, `desktop/${lang}/${theme}/settings/about-tool-diagnostics`);
                     await screenshot(page, viewport, lang, theme, 'settings', 'about-tool-diagnostics');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -1906,12 +1953,15 @@ test.describe('Gallery Screenshots', () => {
                 const section = await expectOnboardingCategory(page);
                 // On a phone the card's own header is brought to the top of the screen, so the Core tour's area is on show too.
                 await frameOnboardingCategory(page, viewport);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                if (viewport === 'desktop') await extendScreenToBlock(page, section, `desktop/${lang}/${theme}/settings/onboarding-replay`);
                 await parkPointer(page);
                 await freezeAnimations(page);
                 await waitForMotionSettled(section, 'the Onboarding category');
                 await expect(page.getByTestId('deferred-app-popups'), 'a popup lies over the shot').toHaveAttribute('data-active-popup', 'none');
                 await expectNoToast(page);
                 await screenshot(page, viewport, lang, theme, 'settings', 'onboarding-replay');
+                await restoreTallScreen(page);
                 // The next combination starts in the header: on a phone it slid away with the scroll down.
                 if (viewport === 'mobile') await scrollBackToHeader(page);
             });
@@ -1950,9 +2000,14 @@ test.describe('Gallery Screenshots', () => {
             // One draft (about forty interactions, a few database reads) and 48 shots: about 4 minutes on a quiet lane.
             test.setTimeout(600_000);
             const viewport = getViewport(testInfo);
-            const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string) => {
+            const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string, tall?: Locator) => {
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): `tall`, the part of the step the screen
+                // cuts, gets a screen as tall as it, with room under it for the wizard's sticky footer; the project's screen
+                // again right after the shot.
+                if (viewport === 'desktop' && tall) await extendScreenToBlock(page, tall, `desktop/${lang}/${theme}/tools/${name}`, {footer: page.getByTestId('pac-planner-footer')});
                 await settlePacShot(page, region, what, waitForMotionSettled);
                 await screenshot(page, viewport, lang, theme, 'tools', name);
+                await restoreTallScreen(page);
             };
             await login(page, TEST_ADMIN);
             const ids = await resolvePacIds(page);
@@ -1962,7 +2017,7 @@ test.describe('Gallery Screenshots', () => {
             await scrollBackToHeader(page);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
-                await shoot(await framePacLiquidity(page, draft), 'the Liquidity step', lang, theme, 'pac-step-liquidity');
+                await shoot(await framePacLiquidity(page, draft), 'the Liquidity step', lang, theme, 'pac-step-liquidity', page.locator('[data-testid="pac-planner-cash"][data-origin="manual"]'));
                 // The editor works on a copy of the Broker: cancelled after the shot, the draft keeps what buildPacDraft applied.
                 await shoot(await framePacBrokerEditor(page, draft, waitForMotionSettled), 'the Broker editor', lang, theme, 'pac-step-brokers');
                 await closePacBrokerEditor(page);
@@ -1982,9 +2037,13 @@ test.describe('Gallery Screenshots', () => {
             // quiet lane; on the desktop the proof shot also resizes the screen and back, every combination.
             test.setTimeout(360_000);
             const viewport = getViewport(testInfo);
-            const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string) => {
+            const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string, tall?: Locator) => {
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): `tall`, the section the screen cuts, gets
+                // a screen as tall as it; the project's screen again right after the shot. The proof shot has its own fit below.
+                if (viewport === 'desktop' && tall) await extendScreenToBlock(page, tall, `desktop/${lang}/${theme}/tools/${name}`);
                 await settlePacShot(page, region, what, waitForMotionSettled);
                 await screenshot(page, viewport, lang, theme, 'tools', name);
+                await restoreTallScreen(page);
             };
             await login(page, TEST_ADMIN);
             const ids = await resolvePacIds(page);
@@ -1995,8 +2054,8 @@ test.describe('Gallery Screenshots', () => {
             await scrollBackToHeader(page);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
-                await shoot(await framePacResult(page), 'the PAC result', lang, theme, 'pac-result');
-                await shoot(await framePacPlan(page, draft), 'the Operational plan', lang, theme, 'pac-result-plan');
+                await shoot(await framePacResult(page), 'the PAC result', lang, theme, 'pac-result', page.locator('[data-testid="pac-planner-result-section"][data-section="allocation"]'));
+                await shoot(await framePacPlan(page, draft), 'the Operational plan', lang, theme, 'pac-result-plan', page.locator('[data-testid="pac-planner-result-section"][data-section="plan"]'));
                 // «Proof and timings» opens the section on the first combination; it stays open for the next ones.
                 const proof = await framePacProof(page);
                 // DESKTOP — coordinator's decision, provisional: the simulation shot's rule (see 'risk what-if simulation on the
@@ -2151,7 +2210,10 @@ test.describe('Gallery Screenshots', () => {
                 await page.goto('/files?tab=static');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('files-table-static'), `desktop/${lang}/${theme}/files/static-tab`);
                 await screenshot(page, viewport, lang, theme, 'files', 'static-tab');
+                await restoreTallScreen(page);
             });
         });
 
@@ -2396,7 +2458,11 @@ test.describe('Gallery Screenshots', () => {
                     for (const {type, name} of TX_FORM_VARIANT_TYPES) {
                         await selectTransactionType(page, type);
                         await freezeAnimations(page);
+                        // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the Transfer form scrolls at
+                        // 720 px; the project's screen again before the next type.
+                        if (viewport === 'desktop' && name === 'form-modal-transfer') await fitScreenToDialog(page, formModal, `desktop/${lang}/${theme}/transactions/${name}`, {body: page.getByTestId('tx-form-body')});
                         await screenshot(page, viewport, lang, theme, 'transactions', name);
+                        await restoreTallScreen(page);
                     }
 
                     await closeTxFormAndBulkModal(page, formModal);
@@ -2480,7 +2546,10 @@ test.describe('Gallery Screenshots', () => {
                             const actionModal = page.getByTestId('tx-action-modal');
                             await expect(actionModal).toBeVisible({timeout: 5_000});
                             await page.waitForTimeout(300);
+                            // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                            if (viewport === 'desktop') await fitScreenToDialog(page, actionModal, `desktop/${lang}/${theme}/transactions/action-modal`);
                             await screenshot(page, viewport, lang, theme, 'transactions', 'action-modal');
+                            await restoreTallScreen(page);
                             await page.getByTestId('tx-action-modal-cancel').click();
                             await page.waitForTimeout(200);
                             found = true;
@@ -2682,7 +2751,10 @@ test.describe('Gallery Screenshots', () => {
                 await page.locator('[data-testid^="broker-card-"]').first().waitFor({state: 'visible', timeout: 10_000});
                 // Extra time for broker icons to load (favicon fetching)
                 await page.waitForTimeout(2000);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole page, on a screen as tall as it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.locator(PAGE_BLOCK), `desktop/${lang}/${theme}/brokers/list`);
                 await screenshot(page, viewport, lang, theme, 'brokers', 'list');
+                await restoreTallScreen(page);
             });
         });
 
@@ -2706,7 +2778,10 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     // Wait for broker icon to load
                     await page.waitForTimeout(1000);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('broker-overview-tab'), `desktop/${lang}/${theme}/brokers/detail`);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'detail');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -2735,7 +2810,10 @@ test.describe('Gallery Screenshots', () => {
                     await expect(editBtn).toBeVisible({timeout: 5000});
                     await editBtn.click();
                     await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 5000});
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await fitScreenToDialog(page, page.getByTestId('broker-modal'), `desktop/${lang}/${theme}/brokers/edit-modal`);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'edit-modal');
+                    await restoreTallScreen(page);
 
                     // Close modal
                     await page.keyboard.press('Escape');
@@ -2790,12 +2868,18 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('broker-metadata')).toBeVisible({timeout: 5_000});
                     await expect(page.getByTestId('broker-sharing-section')).toBeVisible({timeout: 5_000});
                     await page.waitForTimeout(500);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('broker-info-tab'), `desktop/${lang}/${theme}/brokers/info-tab`);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'info-tab');
+                    await restoreTallScreen(page);
                 }
             }
         });
 
         test('broker positions tab - all languages and themes', async ({page}, testInfo) => {
+            // Four variants a combination, two of them on the desktop on a screen as tall as the panel (the map needs a few
+            // resizes, it grows with the screen) and back: more than the 4-minute default leaves.
+            test.setTimeout(360_000);
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
@@ -2811,7 +2895,7 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.getByTestId('broker-tab-posizioni').click();
                     await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
-                    await screenshotPositionsVariants(page, viewport, lang, theme, 'brokers');
+                    await screenshotPositionsVariants(page, viewport, lang, theme, 'brokers', ['positions-holdings-map', 'positions-performance-table']);
                 }
             }
         });
@@ -4099,7 +4183,10 @@ test.describe('Gallery Screenshots', () => {
                     await parkPointer(page);
                     await page.waitForTimeout(500); // Extra settle time for provider icons
 
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole dialog, its body unscrolled.
+                    if (viewport === 'desktop') await fitScreenToDialog(page, modal, `desktop/${lang}/${theme}/fx/add-pair-chain`);
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-chain');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(300);
                 }
@@ -4174,7 +4261,10 @@ test.describe('Gallery Screenshots', () => {
                             await page.waitForTimeout(300);
                         }
                     }
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart under the signals.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('fx-detail-chart'), `desktop/${lang}/${theme}/fx/detail-signals`);
                     await screenshot(page, viewport, lang, theme, 'fx', 'detail-signals');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -4297,7 +4387,10 @@ test.describe('Gallery Screenshots', () => {
                     const settingsModal = page.getByTestId('chart-settings-modal');
                     await expect(settingsModal).toBeVisible({timeout: 3000});
                     await page.waitForTimeout(300);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await fitScreenToDialog(page, settingsModal, `desktop/${lang}/${theme}/fx/chart-settings`);
                     await screenshot(page, viewport, lang, theme, 'fx', 'chart-settings');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }
@@ -4374,7 +4467,10 @@ test.describe('Gallery Screenshots', () => {
                         await tableBtn.click();
                         await page.waitForTimeout(1000); // Wait for table to render
                     }
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('assets-table-panel-own'), `desktop/${lang}/${theme}/assets/list-table`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'list-table');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -4419,7 +4515,11 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(500);
                     // Screenshot 1: line chart (default)
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts), for this shot and the candlestick's.
+                    const detailChart = page.getByTestId('asset-detail-chart');
+                    if (viewport === 'desktop') await extendScreenToBlock(page, detailChart, `desktop/${lang}/${theme}/assets/detail-chart`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart');
+                    await restoreTallScreen(page);
 
                     // Screenshot 2: candlestick chart
                     const candlestickBtn = page.getByTestId('chart-type-candlestick');
@@ -4427,7 +4527,9 @@ test.describe('Gallery Screenshots', () => {
                         await candlestickBtn.click();
                         await page.waitForTimeout(800); // Wait for candlestick to render
                         await freezeAnimations(page);
+                        if (viewport === 'desktop') await extendScreenToBlock(page, detailChart, `desktop/${lang}/${theme}/assets/detail-chart-candlestick`);
                         await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart-candlestick');
+                        await restoreTallScreen(page);
                         // Reset to line for next iteration
                         const lineBtn = page.getByTestId('chart-type-line');
                         if (await lineBtn.isVisible({timeout: 1000}).catch(() => false)) {
@@ -4575,7 +4677,10 @@ test.describe('Gallery Screenshots', () => {
                         await signalsToggle.click();
                         await page.waitForTimeout(500);
                     }
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart under the signals.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('asset-detail-chart'), `desktop/${lang}/${theme}/assets/detail-signals`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -4785,7 +4890,10 @@ test.describe('Gallery Screenshots', () => {
                     await fullHistoryParam.scrollIntoViewIfNeeded();
                     await page.waitForTimeout(300);
                     await freezeAnimations(page);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart under the card.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('asset-detail-chart'), `desktop/${lang}/${theme}/assets/detail-signals-drawdown`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-drawdown');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -4816,7 +4924,10 @@ test.describe('Gallery Screenshots', () => {
                         .catch(() => {});
                     await page.waitForTimeout(500);
                     await freezeAnimations(page);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await fitScreenToDialog(page, settingsModal, `desktop/${lang}/${theme}/assets/chart-settings`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'chart-settings');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }
@@ -5017,7 +5128,10 @@ test.describe('Gallery Screenshots', () => {
                         await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
                         await page.waitForTimeout(300);
                         await freezeAnimations(page);
+                        // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                        if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('asset-detail-measures-section'), `desktop/${lang}/${theme}/assets/detail-measures-active`);
                         await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures-active');
+                        await restoreTallScreen(page);
                     }
                 }
             }
@@ -5096,7 +5210,10 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('assets-add-button').click();
                     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
                     await page.waitForTimeout(500);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the body is the form's box.
+                    if (viewport === 'desktop') await fitScreenToDialog(page, page.getByTestId('asset-modal'), `desktop/${lang}/${theme}/assets/create-modal`, {body: page.getByTestId('asset-modal-form').locator('..')});
                     await screenshot(page, viewport, lang, theme, 'assets', 'create-modal');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }
@@ -5469,8 +5586,11 @@ test.describe('Gallery Screenshots', () => {
 
                 // The section from its title when it fits on the screen, otherwise from the table's benchmark row.
                 await frameBlock(page, {first: paid, last: scatter, fallback: paidTable});
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart and its notes.
+                if (viewport === 'desktop') await extendScreenToBlock(page, paid.getByTestId('risk-asset-set-l3-risk-return'), `desktop/${lang}/${theme}/risk/lab-risk-return`);
                 await settleShot(page, paid, 'the risk/return section');
                 await screenshot(page, viewport, lang, theme, 'risk', 'lab-risk-return');
+                await restoreTallScreen(page);
 
                 await scrollBackToHeader(page);
             });
