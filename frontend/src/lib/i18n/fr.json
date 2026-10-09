@@ -434,7 +434,10 @@
     "serverUnreachable": {
       "title": "Le serveur ne répond pas",
       "body": "Cette page reste ouverte et votre session n'a pas été fermée. Réessayez dans un instant."
-    }
+    },
+    "invalidCredentials": "Nom d'utilisateur ou mot de passe incorrect",
+    "invalidInput": "Données non valides",
+    "loginFailed": "La connexion a échoué"
   },
   "importWizard": {
     "title": "Importer des Transactions",
@@ -467,7 +470,7 @@
     "allConfigured": "Tous les fichiers configurés",
     "selectPlugin": "Choisir un plugin…",
     "extensionError": "Type de fichier non supporté : {ext}. Acceptés : .csv, .xlsx, .xls",
-    "unresolvedCount": "{n} actifs non résolus",
+    "unresolvedCount": "{n, plural, one {# actif non résolu} other {# actifs non résolus}}",
     "warningsCount": "{n} avertissements",
     "importedCount": "{n} transactions importées dans l'éditeur",
     "resolveAssets": "Résoudre les actifs",
@@ -2053,7 +2056,8 @@
       "scheduler_current_price_frequency_minutes": "Fréquence de Mise à Jour des Prix",
       "scheduler_history_sync_times": "Horaires de Synchronisation Historique",
       "scheduler_history_sync_days": "Jours de Synchronisation Historique",
-      "scheduler_history_sync_horizon_days": "Horizon de Récupération"
+      "scheduler_history_sync_horizon_days": "Horizon de Récupération",
+      "scheduler_enabled": "Planificateur Activé"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Durée de validité d'une session utilisateur avant reconnexion",
@@ -2065,7 +2069,7 @@
       "default_theme": "Thème par défaut pour les nouveaux utilisateurs",
       "scheduler_enabled": "Activer ou désactiver le planificateur automatique de données de marché",
       "scheduler_current_price_frequency_minutes": "Fréquence de mise à jour des prix actuels (en minutes)",
-      "scheduler_history_sync_times": "Heures auxquelles les données historiques sont synchronisées (heure du serveur)",
+      "scheduler_history_sync_times": "Heures auxquelles les données historiques sont synchronisées (dans le fuseau horaire du planificateur)",
       "scheduler_history_sync_days": "Jours de la semaine pendant lesquels les données historiques sont synchronisées",
       "scheduler_history_sync_horizon_days": "Nombre de jours en arrière pour chercher les données historiques manquantes"
     },
@@ -2094,7 +2098,7 @@
         "currentPriceFreqHint": "Fréquence de mise à jour des prix (1–1440 minutes)",
         "currentPriceFreqSuffix": "minutes",
         "historyTimesLabel": "Heures de synchronisation",
-        "historyTimesHint": "Heures auxquelles la synchronisation quotidienne s'exécute (heure du serveur)",
+        "historyTimesHint": "Heures auxquelles la synchronisation quotidienne s'exécute (dans le fuseau horaire du planificateur)",
         "historyTimesAdd": "Ajouter un horaire",
         "historyDaysLabel": "Jours de synchronisation",
         "historyDaysHint": "Jours de la semaine pendant lesquels la synchronisation s'exécute",
