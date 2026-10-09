@@ -59,4 +59,4 @@ network and wait on the state it causes; never rewrite a gzip-served chunk body 
 | Language store (`init` reads localStorage) | `frontend/src/lib/stores/app/language.ts` |
 | Regression E2E («3c») | `frontend/e2e/auth.spec.ts` |
 | Layout unit gate | `frontend/src/routes/(app)/layout.gate.test.ts` |
-| Plan (S16 triage, S17 fix) | `LibreFolio_developer_journal/Release_2/Phase_0/29_i18nAudit/plan-phase00I18nAudit.prompt.md` |
+| Plan (S16 triage, S17 fix) | `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md` |

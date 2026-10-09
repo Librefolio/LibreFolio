@@ -18,13 +18,13 @@ where:
 
 !!! info "How the rate enters the calculation"
 
-    The risk-free rate is supplied as an **effective annual** rate and converted to an **effective daily** rate before use:
+    The risk-free rate is supplied as an **effective annual** rate and converted to an **effective per-period** rate before use:
 
     $$
-    r_{daily} = (1 + r_{annual})^{1/365} - 1
+    r_{period} = (1 + r_{annual})^{1/f} - 1
     $$
 
-    That daily rate is subtracted from each daily return, and the resulting excess returns are what the ratio is built on. The conversion is compounding-aware: a plain $r_{annual}/365$ would treat the rate as if it did not compound over the year.
+    where $f$ is the same annualization factor that scales the volatility, measured from the observed data — see [Annualization](#annualization). That per-period rate is subtracted from each period return, and the resulting excess returns are what the ratio is built on. Sharing $f$ with the volatility keeps the numerator and the denominator on the same period: charging a calendar-day rate against trading-day returns would understate the charge and, when the rate is positive, flatter the ratio. The conversion is compounding-aware: a plain $r_{annual}/f$ would treat the rate as if it did not compound over the year.
 
 ---
 
