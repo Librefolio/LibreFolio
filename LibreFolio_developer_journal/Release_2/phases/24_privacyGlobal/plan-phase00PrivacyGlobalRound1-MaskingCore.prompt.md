@@ -13,6 +13,7 @@
 | **Baseline** | `d2355d341` (`docs(privacy): add U2 global privacy analysis`) |
 | **Autorizzato** | passi 1-5; passo 3 a **3 siti su 4**; **passo 6 = toggle nell'header** (sostituisce i grafici) |
 | **Creato** | 2026-09-21 |
+| **Stato** | ✅ **COMPLETATO il 2026-09-22** — passi 1-4 e 6-8 fatti, passo 5 sospeso per decisione misurata (non un buco). Commit `b66e93003` (passi 1-4 e 6, 22/09 09:38), `9a6dd2015` (passo 7, 10:55), merge `d59051977` + `0a1d98eaf` (passo 8, 12:02-12:11); in `dev_release2` dal 22/09 (la punta `a97f573d8` delle 12:16 li contiene). Verificato e archiviato il 2026-10-09 |
 
 ---
 
@@ -217,6 +218,13 @@ passo 2 è falsa in modo non visibile.
 | 4 | `frontend/src/lib/components/brokers/lots/LotComparisonChart.svelte:245` | `formatAxisCurrency`, asse compatto (`€12K`) |
 | ~~3~~ | ~~`.../dashboard/GrowthChart.svelte:692`~~ | **residuo nominato** — I ci sta scrivendo |
 
+> **Superato (verifica d'archivio 2026-10-09).** Il residuo #3 l'ha chiuso I con `804bc9903`
+> (2026-09-24 14:18, `fix(privacy): mask growth and performance amounts`), entrato in `dev_release2`
+> con l'integrazione del Round 4 di I (2026-10-02, punta `975a115ae`): `fmtCurrency` è mascherato
+> alla sua definizione. Oggi il gate registra quella riga come `masked`
+> (`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts:193-197`) e l'elenco `residual` è vuoto
+> (`:281-283`).
+
 `#1` e `#2` sono una **coppia chiusa**: un helper, un solo consumatore, nessun altro riferimento in
 `frontend/src`. Si fanno insieme.
 
@@ -401,6 +409,11 @@ copertura** — «61 su 61» conterebbe come coperto qualcosa che non esegue.
 
 ### Passo 5 — `SensitiveValue` — **Stato: ⏸ sospeso** — 2026-09-21 — *nessun consumatore misurato*
 
+> **Verifica d'archivio (2026-10-09): superato, non un buco.** Il passo resta non costruito per la
+> decisione misurata qui sotto (consumatori zero). Il Round 2 non l'ha riaperto, e oggi `SensitiveValue`
+> non esiste in `frontend/src`. Dei due residui citati, `GrowthChart.svelte:692` è stato chiuso al
+> formattatore da `804bc9903` (vedi passo 3); `MeasurePanel` resta fuori dal gate per scelta dichiarata.
+
 Primitiva di componente per il denaro che **non** passa dai formattatori (§3.3). Firma da §3.3;
 default `personal`; segnaposto a forma stabile.
 
@@ -462,6 +475,9 @@ il giorno in cui un sito la chiederà davvero.
 ---
 
 ### Passo 6 — Toggle nell'header — **Stato: ✅ fatto** — 2026-09-21 — *sostituisce i grafici*
+
+> **Commit (verifica d'archivio 2026-10-09):** `b66e93003` (2026-09-22 09:38,
+> `feat(privacy): mask amounts behind a global toggle`), insieme ai passi 1-4.
 
 **File**: `frontend/src/lib/components/layout/Header.svelte` (+ eventuale componente dedicato).
 
@@ -535,6 +551,9 @@ invocati **da ECharts**, fuori da ogni contesto reattivo: producono la stringa g
 
 ### Passo 7 — Gate anti-regressione §1.8 — **Stato: ✅ fatto** — 2026-09-21 — *autorizzato dal developer*
 
+> **Commit (verifica d'archivio 2026-10-09):** `9a6dd2015` (2026-09-22 10:55,
+> `test(privacy): gate unregistered money render sites`).
+
 Approvato nella forma delle tre righe: **enumera** i siti del sorgente che rendono denaro,
 fallisce quando ne compare uno fuori dall'insieme registrato, **non giudica**.
 File: `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` — 5 test, verdi.
@@ -568,6 +587,9 @@ File: `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` — 5 test, verd
 > **Note implementazione**: `GrowthChart.svelte:692` è registrato come **residuo noto** con la sua
 > ragione, come richiesto: il gate non fallisce su di esso e non tace su di esso. Il file **non è
 > stato aperto in scrittura** — I ci sta lavorando. Registrato per path e riga, leggendolo soltanto.
+>
+> *Verifica d'archivio 2026-10-09:* residuo chiuso da `804bc9903` (vedi passo 3); oggi l'elenco
+> `residual` del gate è vuoto.
 
 > **Note implementazione**: fuori dal gate **per scelta dichiarata** — `MeasurePanel:257` e
 > `AssetEventPicker:179`, denaro senza marcatore di valuta. Intercettarli significa inseguire
@@ -631,6 +653,10 @@ File: `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` — 5 test, verd
 > Il costo era l'argomento giusto; la dichiarazione era la metà comoda di esso.
 
 ### Passo 8 — Merge del target e coda post-merge — **Stato: ✅ fatto** — 2026-09-21
+
+> **Commit (verifica d'archivio 2026-10-09):** merge `d59051977` (2026-09-22 12:02), poi `0a1d98eaf`
+> (12:11, `test(privacy): realign money-render gate after target merge`). Le date «2026-09-21» dei
+> titoli sono quelle del lavoro; i commit sono del giorno dopo.
 
 Merge `d59051977` (`9a6dd2015` + `7fd660846`: D allocatore PAC, I grafici performance, Risk asset
 global). Un solo conflitto, `riskAnalysisHelpers.test.ts:19–44`, risolto **additivamente** — il
@@ -1019,6 +1045,6 @@ passa fra test.
 
 - **Analisi**: [`analysis-phase00PrivacyGlobal.md`](./analysis-phase00PrivacyGlobal.md) — contratto §2,
   primitive §3, store §4, trappole §5, domande aperte §6, ordine §7.2, falsi negativi §1.8
-- **Fonte**: [`../09_feedbackJobs/06_piano_sprint.md`](../09_feedbackJobs/06_piano_sprint.md) §5 U2 (riga 311)
+- **Fonte**: [`../../Phase_0/09_feedbackJobs/06_piano_sprint.md`](../../Phase_0/09_feedbackJobs/06_piano_sprint.md) §5 U2 (riga 311)
 - **→ Follow-up**: [`plan-phase00PrivacyGlobalRound2-PostReview.prompt.md`](./plan-phase00PrivacyGlobalRound2-PostReview.prompt.md)
   — correzioni dalla review d'uso del 22/09 (valuta sotto maschera, R20, assi, quantità D5′)

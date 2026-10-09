@@ -8,11 +8,17 @@
 > gate UX. Il piano d'implementazione è
 > [`plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md`](./plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md),
 > in questa stessa cartella, con cross-link in entrambe le direzioni.
+>
+> **Esito (verifica d'archivio 2026-10-09).** L'analisi è stata eseguita per intero da due piani:
+> [Round 1](./plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md) (passi 1-5 di §7.2, completato il
+> 2026-09-22) e [Round 2](./plan-phase00PrivacyGlobalRound2-PostReview.prompt.md) (correzioni dalla
+> review d'uso, completato il 2026-09-24, integrato il 2026-09-25). Le divergenze dalle decisioni qui
+> scritte (D5′, `SensitiveValue` non costruito) sono dichiarate in quei piani. Cartella archiviata.
 
 | | |
 |---|---|
 | **Sprint** | SP15 — task **U2** |
-| **Fonte** | [`09_feedbackJobs/06_piano_sprint.md` §5 U2](../09_feedbackJobs/06_piano_sprint.md) (riga 311) |
+| **Fonte** | [`09_feedbackJobs/06_piano_sprint.md` §5 U2](../../Phase_0/09_feedbackJobs/06_piano_sprint.md) (riga 311) |
 | **Workstream** | J — lane 6158, worktree `e-alfy-literate-lamp` |
 | **Revisione di osservazione** | **`1982c254b`** salvo dove diversamente attribuito |
 | **Redatto** | 2026-09-01 |
@@ -1040,10 +1046,10 @@ L'interfaccia deve dire questo confine, e il piano d'implementazione deve indica
 
 ## §9 — Cross-link
 
-- Fonte del task: [`09_feedbackJobs/06_piano_sprint.md` §5 U2](../09_feedbackJobs/06_piano_sprint.md)
-- Backlog strutturale: [`09_feedbackJobs/00_backlog_strutturale_P4.md`](../09_feedbackJobs/00_backlog_strutturale_P4.md)
-- UX dashboard (origine di U2): [`09_feedbackJobs/01_ux_dashboard.md`](../09_feedbackJobs/01_ux_dashboard.md)
-- Workstream J, lavoro precedente (SP11/U8): [`21_onboarding/`](../21_onboarding/)
+- Fonte del task: [`09_feedbackJobs/06_piano_sprint.md` §5 U2](../../Phase_0/09_feedbackJobs/06_piano_sprint.md)
+- Backlog strutturale: [`09_feedbackJobs/00_backlog_strutturale_P4.md`](../../Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md)
+- UX dashboard (origine di U2): [`09_feedbackJobs/01_ux_dashboard.md`](../../Phase_0/09_feedbackJobs/01_ux_dashboard.md)
+- Workstream J, lavoro precedente (SP11/U8): [`21_onboarding/`](../../Phase_0/21_onboarding/)
 - Piano d'implementazione (passi 1-5 di §7.2):
   [`plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md`](./plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md)
 

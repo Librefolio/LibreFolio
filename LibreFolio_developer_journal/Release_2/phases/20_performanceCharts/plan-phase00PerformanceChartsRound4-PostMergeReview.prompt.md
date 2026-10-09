@@ -1,6 +1,10 @@
 # Performance charts — round 4: review d'uso post-merge (R5–R11, R21, §2.5, P4-11, emoji K) + prosecuzione
 
-**Stato:** IN ESECUZIONE — piano v3 presentato il 2026-09-23, approvato il 2026-09-24. C1 committato il 2026-09-24
+**Stato:** ✅ **COMPLETATO E INTEGRATO il 2026-10-02** — S12 chiusa alle 00:36; gate G-K sulla revisione unita
+con K; committato alle 12:40 (`9a77b1b61`, `6de5646a1`) e integrato per fast-forward: `dev_release2` = `975a115ae`
+(registro «Dopo l'integrazione»); ultimo commit del journal `dd538d650` (13:18). R-D15 è stata chiusa dopo, nella
+famiglia di Risk (riga R-D15). Verificato e archiviato il 2026-10-09 (registro «Verifica d'archivio», in fondo).
+*Storia dello stato:* IN ESECUZIONE — piano v3 presentato il 2026-09-23, approvato il 2026-09-24. C1 committato il 2026-09-24
 alle 14:18: 8 commit per slice, `cb7ae3476`…`804bc9903`. C2 committato alle 14:51: `980dee4bf` (gallery) e
 `6a88561fd` (registro). C3 committato alle 15:39: `671d4ab49` (docs di S11 in parte: memoria, privacy e candele) e
 `4d885f1e8` (registri). Il 25/09 il developer ha deciso tutto nella chat di I: D4 (via coordinator), poi D16, D17, D18
@@ -29,9 +33,9 @@ Precedenti e collegati:
 - Piano madre: [plan-phase00PerformanceCharts.prompt.md](plan-phase00PerformanceCharts.prompt.md) — §6.0.20 punta
   qui. Review precedenti di I: round 1 = §6.0.15, round 2 = §6.0.17, round 3 = §6.0.18; inventario dei 12 rossi =
   §6.0.19.
-- Review d'uso del developer: [08_review_visiva_20260922.md](../09_feedbackJobs/08_review_visiva_20260922.md)
+- Review d'uso del developer: [08_review_visiva_20260922.md](../../Phase_0/09_feedbackJobs/08_review_visiva_20260922.md)
   (R1…R21; §8 secondo passaggio).
-- Analisi statica: [09_reperti_analisi_statica_20260922.md](../09_feedbackJobs/09_reperti_analisi_statica_20260922.md)
+- Analisi statica: [09_reperti_analisi_statica_20260922.md](../../Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md)
   — **leggere la §9 prima di fidarsi della §1**: due voci sono state smentite dalla review.
 - Seguito: [plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md)
   — i marcatori degli eventi spariscono con «Tutti» sul hit della cache prezzi (2026-10-07). È una regressione di
@@ -77,7 +81,7 @@ Indicatore di lettura rapida: va riletto **a ogni consegna**, non a ogni sospett
 | S10 | Debiti e test residui | S1 | 🔄 **OK del developer sulla test list, 2026-09-25**, con E8 ed E9 in più (D8 ✅ 2026-09-24). Ordine: `needs_engine` per primo, in un commit a sé (coordinator, 15:24 e 15:37), poi il contratto di `/portfolio/report` (registro «Triage del contratto di `/portfolio/report`») e il resto di §4. **Passo 1 ✅ 2026-09-25 10:38**: `needs_engine` corretto (6 rossi → verdi), contratto a 13 chiavi, `api portfolio` 55/55, `services roi-fifo-utils` 507/507 (registro «S10 passo 1»). **Passo 2 ✅ 11:10**: D20, il test dei Proventi pulisce i suoi dati, misurato con un controllo positivo; `api portfolio` 55/55 (registro «S10 passo 2»). **Passo 3 ✅ 11:37**: `chartCoreHelpers.test.ts` 159 → 145 (D19: −14), i 7 specchi ri-pinnati ognuno col suo perché, C4 convertito sulla copia fedele; 145/145, 0 falliti (registro «S10 passo 3»). Reperti del passo → D21, ✅ deciso dal developer (§7). **Passo 4 ✅ 11:59**: `AllocationPanel.test.ts` (3 casi) e `allocationTypeEmoji.test.ts` (8 casi), nuovi, 11/11 (registro «S10 passo 4»). **Passo 5 ✅ 12:15**: `GrowthChart.test.ts` 6 → 17 casi (S2a, S5, S9) e la `why` di D13, 23/23 (registro «S10 passo 5»). **Passo 6 ✅ 12:15**: i 3 file nuovi registrati nel runner, nome visibile di `growth-chart-memo`; `check-orphans` pulito (registro «S10 passo 6»). **Passo 7 ✅ 12:27**: la pulizia di `…positions_contribution_is_date_aware`, assegnata sotto D20, misurata con un controllo positivo: nessuna perdita; `api portfolio` 55/55 (registro «S10 passo 7»). **Passo 8 ✅ 12:30**: `PerformanceChart.test.ts`, nuovo, 6/6 (registro «S10 passo 8»). **Passo 9 ✅ 12:30**: D21 e D22 su `chartCoreHelpers.test.ts`, 145 → 142 → 144, 144/144, 0 falliti (registro «S10 passo 9»). **Passo 10 ✅ 12:33**: `front check` al floor, 3 errori e 41 avvisi, nessuno nei miei file (registro «S10 passo 10»). **C4 ✅ 2026-09-28 11:41** (8 commit, `00bb1ac75`→`472f51498`), poi il merge di `dev_release2` (`9016bb0d1`) e i gate sulla revisione combinata, tutti verdi (registro «Validazione sulla revisione combinata»). **Brief 03 ✅ 13:00**: dashboard 15/5 → **18/18**, broker detail 28/1 → **28/28**, in seriale e con `--workers 4` (registro «S10 — brief 03»). **E7 ✅ 13:52**: asset detail 28/1 → **28/28**, in seriale e con `--workers 4`; la coda risvegliata è verde (registro «S10 — E7 completato»). **C5 ✅ committato 2026-09-29 10:02** (registro «Checkpoint C5 — committato»). **C6 ✅ committato 22:26**, merge `921f1fc05` e gate rapido verde (registro «Checkpoint C6 — committato»). **D23 con D23b ✅ 2026-09-30 00:03**: il segno del locale in `fmtCurrency` e `shortMoney`, una sola forma per le righe con segno, il colore dello zero; test ri-pinnati e nuovi, corsia verde (registro «D23 + D23b»). **C7 pronto 2026-09-30 00:07** (registro «Checkpoint C7 — pronto») · ✅ **chiusa 2026-10-02 00:36**, in S12: l'E2E della scala delle larghezze c'è (`dashboard.spec.ts:720` e `:801`, da `026bc20fb`, C5); il seguito di `maskFormattedNumber` l'ha fatto D23; DBT-A e DBT-B fuori dal round per D9 (registro «S12 — handoff finale») |
 | S11 | Docs (docs-writer) | S2b, S3, S4b, S8, S9 | 🔄 in parte, ✅ 2026-09-24 (autorizzata dal coordinator alle 14:45; registro «S11 in parte»): `charts.en.md` (memoria della vista, privacy di Crescita, didascalia delle candele, candele senza broker, memoria di Allocazione) e `positions.en.md` (privacy di Performance). Accettato dal coordinator (15:24) ed entrato in C3 (`671d4ab49`). Il resto dopo S7/S8, più due voci aggiunte (coordinator, 16:07): `index.en.md`, che conta tre schede invece di quattro (reperto di J), e la deriva dei nomi, che c'è anche nella mia frase di C3 (registro «S11-finale — voci aggiunte») · ▶️ ripresa 2026-10-01 (coordinator, dopo `1c568bfe0`): fatti verificati in tre passate; docs-writer ✅ 00:00; revisione con due correzioni mie; `mkdocs build` EXIT 0 e `check-links` con il solo rosso di D28, entrambi rieseguiti sui blob finali · ✅ **2026-10-02 00:12** (registro «S11-finale — le tre pagine inglesi riallineate al codice») |
 | S12 | Handoff | S10, S11, S2c | ⏳ · ▶️ avviata 2026-10-02 (coordinator, dopo `1c568bfe0`): merge-tree contro `ed3bf870a` pulito, vitest intero 6733/6733, S10 chiusa, residui, CHANGELOG e commit proposti · ✅ **2026-10-02 00:36** (registro «S12 — handoff finale») |
-| R-D15 | Review manuale di D15 sulla copia nella 6167, con il developer | S12, D15 | ▶️ avviata 2026-10-02 09:54 (coordinator, 09:45, dopo `e11298294`): build, server staccato, domanda al developer nella mia finestra · ⏸️ **sospesa 10:03**: il developer chiede di fare il punto con il coordinator (la torta qui non ha il secondo anello, che sta nei rami di Risk e F) · ⏭️ **spostata alla review della revisione unita** (2026-10-02 10:05): la torta col secondo anello vive solo nella famiglia di Risk e nessuna build mostra insieme i due lavori. Decisione del developer, verbatim: «Sì, procedi così». Server spento alle 10:35, 6167 libera, copia cancellata |
+| R-D15 | Review manuale di D15 sulla copia nella 6167, con il developer | S12, D15 | ▶️ avviata 2026-10-02 09:54 (coordinator, 09:45, dopo `e11298294`): build, server staccato, domanda al developer nella mia finestra · ⏸️ **sospesa 10:03**: il developer chiede di fare il punto con il coordinator (la torta qui non ha il secondo anello, che sta nei rami di Risk e F) · ⏭️ **spostata alla review della revisione unita** (2026-10-02 10:05): la torta col secondo anello vive solo nella famiglia di Risk e nessuna build mostra insieme i due lavori. Decisione del developer, verbatim: «Sì, procedi così». Server spento alle 10:35, 6167 libera, copia cancellata · ✅ **chiusa nella famiglia di Risk** (verifica d'archivio 2026-10-09): `e648c274d` (05/10, `feat(charts): history groups types by family (D15)`) e `7383ee64b` (06/10, D375); prova in `Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md:2546-2573` e checkpoint 4 ✅ (`:2988`). Oggi torta e storico usano `resolvePrimary: assetTypeFamily` (`AllocationPieChart.svelte:207`, `AllocationHistoryChart.svelte:577`) |
 | G-K | Gate sulla revisione unita dopo K (`9e9820253`) | R-D15, merge di `dev_release2` | ▶️ avviata 2026-10-02 11:05 (coordinator, 11:04, dopo il merge `9e9820253`): controllo in sola lettura ✅ 11:05; gate 1–15 nella 6157, un rosso nuovo (`S7-E4`), triage ✅ 11:50: assunzione, il gutter dell'host più le etichette dei dati; correzione solo test autorizzata alle 11:54, scritta da test-author, dashboard 24/24 in seriale e con 4 worker ✅ 12:22 · ✅ **2026-10-02 12:29**: rossi noti D28 e `toolbar-width-sweep` fr/es (a K); 2 commit proposti sopra `9e9820253` (registro «G-K») · ✅ **committato 12:40 e integrato**: `9a77b1b61`, `6de5646a1`; `dev_release2` = `975a115ae`, col CHANGELOG del coordinator (registro «Dopo l'integrazione») |
 | P-tmp | I file di `/tmp` derivati dalla copia di prod del 29/09 (le sonde dei margini e del crash `axisBuilder`) | integrazione, OK del coordinator (12:47) | ✅ **2026-10-02 12:51**: trovati nel controllo dopo l'integrazione; 15 file cancellati senza aprirli, `ls` come prova. I 5 citati nel piano non esistono più; i reperti restano scritti nei registri che li citano (registro «Dopo l'integrazione») |
 
@@ -540,6 +544,19 @@ rifatta con `git merge-tree` contro il target **al momento** di ogni checkpoint.
 | D26 | developer (da S8 passo 1, 2026-10-01) | Il colore del nuovo capitale nella colonna degli acquisti dei Proventi. Oggi le due zone hanno i colori dei pool di Abs: salvia `cashContributed` per il nuovo capitale, emerald `cashGenerated` per il reinvestito (`GrowthChart.svelte:1634-1639`). Lo storyboard di R11 (§2) dice «blu KPI», e con D2 la colonna prende il nome «Valore di acquisto»: lo stesso testo dell'area blu di Abs (`dashboard.assetsAtCost` e `dashboard.bookValue` coincidono in en, it, fr ed es) e della barra blu della scheda KPI (`KpiSection.svelte:364`). Quale colore? | **Blu KPI (consigliata)**: stesso nome, stesso colore. Il nuovo capitale prende `cc('bookAssetLike')`, `#3b82f6`/`#60a5fa`, gli stessi esadecimali di `bg-blue-500`/`dark:bg-blue-400` della scheda; il reinvestito resta emerald, `cc('cashGenerated')`, il colore dell'area «Rendimento» di Abs.<br>Alternativa: salvia ed emerald come oggi, coerenti con i pool, ma sotto un nome che in Abs indica l'area blu<br>✅ **Deciso dal developer (2026-10-01 15:49, `ask_user` nella chat di I), testuale: «Blu KPI, come nello storyboard: stesso nome, stesso colore di Abs (consigliato)»** |
 | D27 | developer (da S8 passo 3, 2026-10-01) | La legenda condivisa fra le viste. Con D2 le barre degli acquisti dei Proventi e l'area blu di Abs hanno lo stesso testo in tutte e quattro le lingue. ECharts tiene la selezione della legenda per nome, e GrowthChart usa una sola istanza per tutte le viste, fondendo la legenda (`replaceMerge` copre `series` e `xAxis`). Nascondere «Valore di acquisto» in Abs lo nasconde anche nei Proventi, e viceversa: sonda ECharts 6.0.0 (registro «S8», passo 3). Il tooltip dei Proventi mostra comunque le righe. Precedente: «P&L totale» fra Linea e Candele | **Accettare (consigliata)**: stessa voce, stesso interruttore in tutte le viste; un commento nel codice.<br>Alternative: azzerare la legenda a ogni cambio di vista, per tutte le voci, con un test nuovo, fuori da R11; separare il solo «Valore di acquisto», con più codice<br>✅ **Deciso dal developer (2026-10-01 17:14, `ask_user` nella chat di I), testuale: «Accetta: stessa voce, stesso interruttore in tutte le viste; lo annoto nel diario (consigliato)»** |
 | D28 | developer (da S8b passo 4, 2026-10-01) | Il gate `mkdocs check-links` è rosso sul link di D24: `user/assets/detail/chart/#rolling-return` → «anchor not found» (`+page.svelte:3006`). Il controllo sta in `dev.py` (`_mkdocs_check_anchor`, `:1133`, da `b35a8581e`, 18/09): l'ancora deve esistere in inglese **e** in ogni traduzione presente. `chart.{it,fr,es}.md` esistono, senza la sezione delle modalità (58 righe contro 123), e le eccezioni (`MKDOCS_ANCHOR_EXCEPTIONS`, `:1126`) «devono solo restringersi». Lo schema di D24 (link con l'ancora in S8b, ancora inglese in S11-finale, traduzione dopo) non passa quindi il gate in nessun momento prima della traduzione. Oggi il link apre la pagina in cima in tutte e quattro le lingue, con o senza `#`. Che fare? | **A (consigliata)**: ora il link alla pagina senza ancora (`user/assets/detail/chart/`), gate verde, ri-pin dei 2 URL dell'E2E via test-author; per l'utente nulla cambia rispetto a oggi. In S11-finale il docs-writer mette `{: #rolling-return }` sull'intestazione inglese (nessun link lo usa ancora: nessun gate). Il `#rolling-return` torna sul link, con il ri-pin dell'E2E, nel cambio che porta in it/fr/es la traduzione della sezione con lo stesso id, come le schede KPI (`kpi-cards.*.md:15`): voce per la lista del debito di traduzione del coordinator.<br>**B**: ora l'ancora inglese (docs-writer, anticipo di S11-finale) e la traduzione della sezione in it/fr/es, chiesta dal developer (Aphra o modifica diretta): gate verde con l'ancora, E2E invariato; traduzione fuori da S8b, forse da rifare dopo S11-finale.<br>**C (sconsigliata)**: l'ancora inglese ora e una voce nuova in `MKDOCS_ANCHOR_EXCEPTIONS` per it/fr/es: contro la regola «solo restringersi», in un file condiviso.<br>Scartate senza chiedere: un'ancora piantata nelle traduzioni in cima o su un'intestazione estranea (passa il controllo ma porta nel posto sbagliato: nasconde il debito che la lista rende visibile); la pagina teorica (D24 ha scelto la guida)<br>✅ **Deciso dal developer (2026-10-01, due `ask_user` nella chat di I, entro le 21:28), testuale:** «per ora ignora l'errore, lo risolveremo dopo che avvieremo la pipeline di traduzione, l'importante è che sia in inglese»; poi, sui tempi dell'ancora inglese: «Ora in S8b, nello stesso commit: in inglese funziona subito, il rosso resta solo per it/fr/es (Consigliata)».<br>→ Il link resta `#rolling-return`. `{: #rolling-return }` va ora sull'intestazione inglese (`chart.en.md:22`), via docs-writer, senza timbro Aphra: il debito di traduzione è reale. Il rosso residuo di `check-links` («missing in: it, fr, es») è accettato fino al giro Aphra di fine round, che deve portare lo stesso id nelle tre lingue. Vincoli del coordinator, la stessa sera: le traduzioni tutte insieme a fine giro (developer, 30/09), quindi niente B; C esclusa; la voce va nella sua lista del debito di traduzione |
+
+> **Decisioni superate dopo la chiusura del round** (verifica d'archivio 2026-10-09, codice letto a `3cceb4f90`).
+> Non sono buchi: lavori successivi, approvati dal developer, le hanno sostituite.
+>
+> - **D16** (bucket ancorati alla fine, parziale marcato): superata da `8c7b0c0a7` (06/10, «P&L periods follow the
+>   calendar»): il developer rovescia l'ancoraggio alla fine a giorni fissi
+>   (`Phase_0/02_riskfolioIntegration/implementation_2/progress/A-dashboard-esecuzione.md:2774-2775`).
+> - **La partenza dei Proventi dal gradino più fine**, condivisa con le Candele (registro «S11-finale»): i Proventi
+>   aprono su 1M da `9b57893ae` (06/10, «growth chart gap and Income at 1M»), su decisione del developer del 05/10.
+> - **D4 e D4-bis, solo le regole sul testo delle etichette:** sostituite da
+>   [plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md)
+>   (`bc08101d6`, 08/10). I separatori restano.
+> - **D15:** applicata nella famiglia di Risk, `e648c274d` (05/10) e `7383ee64b` (06/10, D375); vedi la riga R-D15.
 
 ---
 
@@ -6081,6 +6098,35 @@ comando la porta 6157 è libera.
 >   15. Le etichette di `PrivacyToggle` sono solo inglesi: girate a J.
 >   16. D9: DBT-A rinviato, DBT-B al suo autore.
 >   17. I bundle di C1–C3 esistono solo nella cartella di sessione.
+> - **Stato dei residui alla verifica d'archivio** (2026-10-09, codice letto a `3cceb4f90`, nessun test). Ognuno ha
+>   una casa:
+>   - **rinviati** a `Phase_0/38_postReleaseBacklog/README.md`:
+>     - 1 → voce «I-03 · `%` premuto ma disabilitato». Oggi in `GrowthChart.svelte`: `hasPctData` a `:772`, il
+>       ripiego a `:779-781`, il bottone a `:2444-2449`, il banner a `:2573`;
+>     - 5 → voce «I-05 · precisione del gate privacy su PerformanceChart», con la proposta di fonderla con P4-11;
+>     - 6 → voce «I-06 · `npx` nel runner» (`scripts/test_runner/_frontend_asset.py:14`, `:66`);
+>     - 9 → voce «I-07 · `tsc` degli E2E, 2 errori», rimisurati il 2026-10-09 (`onboarding-tour.spec.ts:863`,
+>       `files.ts:9`);
+>     - 14 → voce «I-08 · debito di traduzione MkDocs»;
+>     - 16 → voci «I-01 · DBT-A» e «I-02 · DBT-B»;
+>   - **tracciati altrove:**
+>     - 8 → `Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md:193-195`;
+>     - P4-11, da cui dipende anche il 5, resta in `Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md:97`
+>       (owner M). La riga cita `:1834`; oggi `fmtCurrency` è a `GrowthChart.svelte:2156`. Q tiene aperta la
+>       cartella 09 e ha ricevuto la nota;
+>   - **chiusi:**
+>     - 10 da `1c2f88d67` (08/10): `kpi-cards.en.md:125` dice «Purchase Cost»;
+>     - 11 dalla voce 10, decisione (c) (`48e736855`, `2ee77d04e`): il gate controlla i cataloghi, nessun sito
+>       toccato ([piano](plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md));
+>     - 12 nella famiglia di Risk (riga R-D15);
+>     - 13 da `6d8b951bc`;
+>     - 15 da `1466a76d6` di J: `PrivacyToggle.svelte:14` usa `header.privacy.*`;
+>   - **superato:** 2, dalle guardie della gallery di M (`c80508be8`, `ee5a2e277`): `toBeEnabled` a
+>     `gallery.spec.ts:723`, `aria-pressed` a `:1054` e `:1148`;
+>   - **accettato:** 3. `AllocationPanel.test.ts:131-142` risale gli antenati dal testid e legge `invisible`
+>     apposta, perché jsdom non ha CSS;
+>   - **osservazioni, nessun lavoro:** 4, 7 e 17. Per il 17, i commit di C1–C3 sono nella storia e i bundle non
+>     servono più.
 > - **CHANGELOG** (lo scrive il coordinator). Controllo di novità contro `v1.1.0` (`837a8f2c7`):
 >   - in `v1.1.0` non c'erano la vista P&L (`'pnl'` compare 0 volte in `GrowthChart.svelte`), il plugin
 >     `calendar_rolling_return.py`, la memoria delle viste di Crescita e Allocazione, la privacy;
@@ -6120,7 +6166,13 @@ comando la porta 6157 è libera.
 > - Nella stessa rilettura il residuo 5 aveva il numero di riga del reperto (`:170`), spostato da D23 a `:180`, e
 >   legava con un «quindi» due fatti separati: corretto, con la ragione per cui `axisTickAmount` resta fuori.
 
-### D15 — review manuale con il developer, sulla copia nella 6167 ⏭️ spostata alla revisione unita, 2026-10-02 10:05
+### D15 — review manuale con il developer, sulla copia nella 6167 ⏭️ spostata alla revisione unita, 2026-10-02 10:05 · ✅ chiusa da Risk, 2026-10-06
+
+> **Esito (verifica d'archivio 2026-10-09).** D15 è stata applicata e rivista nella famiglia di Risk, non qui:
+> `e648c274d` (05/10, «history groups types by family (D15)») e `7383ee64b` (06/10, D375). Prova in
+> `Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md:2546-2573` e nel suo checkpoint 4 ✅
+> (`:2988`). Oggi torta e storico usano `resolvePrimary: assetTypeFamily` (`AllocationPieChart.svelte:207`,
+> `AllocationHistoryChart.svelte:577`). Il registro sotto resta com'era il 02/10.
 
 > **Note implementazione:**
 > - **Mandato.** Coordinator, 09:45, dopo `e11298294`: il developer ha approvato la review manuale di D15, cioè il
@@ -6565,3 +6617,68 @@ comando la porta 6157 è libera.
 > - Verifiche finali (12:54): `git diff --check` pulito, stage vuoto, 0 file non tracciati, 1 file tracciato
 >   (questo piano); porte 6157 e 6167 senza listener, nessun processo della corsia.
 > - Stato: FROZEN, nessun edit, test, server o Git fino ai SHA del commit di questo registro.
+
+### Verifica d'archivio delle cartelle 19, 20 e 24 — ✅ 2026-10-09
+
+> **Mandato.** Il coordinator mi ha girato la richiesta del developer: verificare i piani completati delle cartelle
+> `19_yieldOnCost` (H), `20_performanceCharts` (I) e `24_privacyGlobal` (J), allinearli al codice e archiviare in
+> `Release_2/phases/` solo le cartelle davvero finite, intere. Base `3cceb4f90`, pulita. Il codice si legge soltanto.
+>
+> - **Esito della verifica:** tutte e tre le cartelle sono FINITE. I residui veri sono le voci I-01…I-12
+>   proposte al coordinator per `Phase_0/38_postReleaseBacklog/README.md`; lui ha confermato la numerazione.
+> - **Fatto, a cartelle ancora in `Phase_0/`:**
+>   - `19_yieldOnCost`: stato in testa, H11, rinvio delle traduzioni (I-08), §14 «Aggiornamento 2026-10-09»,
+>     link verso la 09 in forma `../../Phase_0/…`;
+>   - `24_privacyGlobal`: l'analisi (nota d'esito, link); Round 1 (stato, residuo #3 superato da `804bc9903`,
+>     passo 5 superato, SHA dei passi 6-8, link); Round 2 (stato, checkpoint C5-C7, SHA dei passi 12-15, nota
+>     sull'integrazione di I, rinvio I-05, link);
+>   - `20_performanceCharts`, questo piano: stato in testa, link verso la 09, riga R-D15 chiusa da Risk.
+> - **Pausa e ripresa:** il coordinator ha messo in pausa la verifica il 2026-10-09 e l'ha fatta riprendere alle
+>   15:22 dello stesso giorno. Alla pausa nessun file era a metà.
+> - **Fatto dopo la ripresa, sempre in `Phase_0/`:**
+>   - questo piano: annotazione sotto il titolo di D15, stato dei residui di S12 (1-17), decisioni superate dopo
+>     la chiusura (D16, Proventi su 1M, D4/D4-bis);
+>   - piano madre: testata, link verso la 09, DBT e ADJ verso I-01/I-02/I-04 e P4-9, «Esito» del Gate 0 e
+>     dell'inventario dei 12 rossi, §6.0.20 con i seguiti, righe I50 e I90, footer §12;
+>   - i quattro piani di bugfix: stato finale con SHA e treno, collegamenti «Seguito» e «Piano precedente»,
+>     limiti di AssetEvents verso I-09…I-12, link di ritorno di TooltipI18nEscape al piano madre;
+>   - un `README.md` in italiano per cartella: descrizione, tabella dei file, residui tracciati.
+> - **Spostamento** con lo script `/tmp/libreFolio_archive_mv.sh`:
+>   - `mv` normale e non `git mv`, su istruzione del coordinator: lo stage resta vuoto fino al commit del
+>     developer, che porta cancellazione e aggiunta nello stesso commit;
+>   - guardie: HEAD `3cceb4f90`, stage vuoto, sorgenti presenti, destinazioni assenti;
+>   - esito: 10 file tracciati escono da `Phase_0/`, 13 file entrano in `phases/` (i 10 più i 3 README), lo stage
+>     resta vuoto.
+> - **Link interni**, con lo script della skill, che normalizza ogni link relativo che inizia con `./` o `../`:
+>   - prima dello spostamento, in `Phase_0/`: 53 OK, 0 rotti;
+>   - dopo, in `phases/`: 52 OK e 1 rotto per scelta. È il link del piano madre al piano di F, scritto nella
+>     forma archiviata `../17_assetDataOperations/…`, e si risolve quando la 17 viene archiviata;
+>   - i link verso la 09 e la 21 hanno la forma `../../Phase_0/…`: restano validi finché quelle cartelle restano
+>     in `Phase_0/`.
+> - **Link in ingresso** da fuori delle tre cartelle:
+>   - 11 link veri: 10 nella 09, che Q ha già riscritto nel suo ramo, e 1 nella 21 (Round 8, riga 7);
+>   - 6 menzioni senza percorso, che non cambiano: 4 nel journal e 2 commenti di test nel frontend;
+>   - li ho girati al coordinator. Non ho toccato file fuori dalle tre cartelle.
+> - **P4-9, la parte E2E (DBT-D): superata.**
+>   - La misura del 24/09 su `f1047f766` (`08_review_visiva_20260922.md:842`) dava 5 rossi su 15 nella
+>     dashboard e 1 su 28 nel broker. I rossi E1–E6 erano assunzioni dei test:
+>     - E1–E3 sono stati cancellati, E4 ed E5 riallineati in `026bc20fb`, E6 in `5b395204f`;
+>     - l'08/10 erano verdi sulla revisione unita `56483392c`: dashboard 27/27, broker 33/33;
+>     - da allora `dashboard.spec.ts` e `brokers-detail.spec.ts` non sono cambiate. Oggi non le ho rilanciate.
+>   - Resta aperta la conversione dei test specchio: è il coordinator a decidere se resta in P4-9 o diventa una
+>     voce nuova.
+> - **Deviazioni dalla skill `plan-archive`**, entrambe del coordinator:
+>   - `mv` normale invece di `git mv`;
+>   - i collegamenti fra piani usano «Seguito» e «Piano precedente», nella sezione «Precedenti e collegati».
+> - **Controlli finali** su `3cceb4f90`:
+>   - sui 13 file, confrontati con `HEAD` senza toccare l'indice: nessun errore di spazi sulle righe aggiunte,
+>     nessun marcatore di conflitto;
+>   - i 10 file spostati conservano almeno il 99% delle righe, quindi git riconosce lo spostamento;
+>   - `git diff --check` pulito, stage vuoto, 6157 e 6167 senza listener;
+>   - nessun server, nessun test.
+>
+> > **⚠️ Fuori pista — l'uscita di `git diff --no-index`.** Il primo controllo degli spazi segnalava tutti i 13
+> > file. Il motivo: `git diff --no-index` esce con 1 ogni volta che i file differiscono. L'ho rifatto leggendo
+> > l'uscita invece del codice di ritorno, ed è pulito.
+>
+> - Stato: FROZEN, in attesa del commit del developer.
