@@ -20,9 +20,14 @@
 
 ---
 
-## 1. Difetti di prodotto verificati (non ancora riparati)
+## 1. Difetti di prodotto verificati (al 09/10 riparati o chiusi)
 
-### 1.1 🔴 La card del tool PAC mostra la descrizione del prototipo cancellato
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`):
+> - **Riparati**: §1.1 (la card PAC ha il testo del planner v2, `en.json`), §1.6, §1.7 (chiavi mantenute, decisione §4), §2.3, §2.5 (`{accepted: false}`, `ff9038487`) e §2.6.
+> - **Non difetti**: §1.2, §1.3 e §1.5, e §1.4 per AI Export, per decisione del developer del 2026-10-09: AI Export non ha anteprima (sotto, §1.4).
+> - **Aperto**: solo il debito di **§2.4**. Nella §1.4 FX e Tools sono chiusi.
+
+### 1.1 ✅ (riparato) La card del tool PAC mostra la descrizione del prototipo cancellato
 
 - i18n `tools.pacAllocator.description` = testo del **P1**, rimosso in `b82e59ffa`
 - backend `pac_allocator.py:98` = testo del **v2**, vivo
@@ -73,7 +78,7 @@ impostazioni grafico senza grafici montati.
 Stessa pagina, stesso dato, un `localStorage` decide se la privacy esiste.
 Nessun test lo dichiara.
 
-### 1.4 🔴 Tre popolazioni senza masking
+### 1.4 ✅ (chiusa: FX e Tools chiusi, AI Export non è un difetto) Tre popolazioni senza masking
 
 | superficie | misura |
 |---|---|
@@ -83,6 +88,11 @@ Nessun test lo dichiara.
 
 `snapshotDataRenderer.ts` fa passare ogni numero per `scalar()` → `formatPromptNumber()`:
 l'anteprima del prompt è **l'intero portafoglio in chiaro**.
+
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`):
+> - **AI Export: non è un difetto**, per decisione del developer del 2026-10-09: *«ma l'ai export non ha anteprima»*. Verificato sul codice: in `frontend/src/lib/features/ai-export/` l'unica `textarea` sono le note dell'utente (`AiExportOptionsPanel.svelte:285`). Il prompt non si mostra a schermo: si copia negli appunti (`aiExportClipboard.ts:156-158`), e in chiaro per scelta, perché è lo scopo dell'export. L'«anteprima» della riga sopra è il testo copiato.
+> - **FX: chiuso** per la decisione (c): una quotazione non è patrimonio.
+> - **Tools: chiuso.** Il planner v2 (`0210f9848`) formatta gli importi in `frontend/src/lib/features/tools/pac-allocator/planner/format.ts`, che passa per `maskable` e `shouldMaskAmount` (`:21`, `:184`).
 
 ### 1.5 ~~🔴 I 9 render di denaro scoperti~~ → ❌ **0 DIFETTI SU 9** *(riclassificati da J il 23/09, verificato)*
 
@@ -144,7 +154,7 @@ Oggi salvo solo per **D3** (`privacyStore.svelte.ts:59`, «chiave assente = off�
 nessun test di `risk-lab` nomina la privacy.
 Riparazione: due righe che pinnano il flag a `off`. **Owner: Risk/A.**
 
-### 1.7 🔴 4 chiavi i18n vive dichiarate morte
+### 1.7 ✅ (chiavi mantenute) 4 chiavi i18n vive dichiarate morte
 
 `risk.betaBanner.{title,description,simulation.title,simulation.description}`
 
@@ -227,7 +237,7 @@ la quarta **viva**. Pezzo riusabile: `risk-lab.spec.ts` + marchio `algorithm_ver
 che impedisce al guardiano di diventare vacuo se qualcuno reinstalla i mock in un
 `beforeEach`.
 
-### 2.5 🔴 Un default che trasforma un'omissione in un consenso
+### 2.5 ✅ (riparato, `ff9038487`) Un default che trasforma un'omissione in un consenso
 
 `frontend/src/routes/(app)/assets/[id]/+page.svelte:2174`
 
@@ -728,6 +738,8 @@ pestargli i piedi: meglio che lui sta fisso.»*
 
 ⚠️ **Ma il piano `15_parallelRuntimeIsolation` lo dichiara isolato**, e non lo è. Il documento
 va corretto: è la differenza fra **un limite noto** e **una bugia**.
+
+> **Corretto il 09/10** (N, archivio della 15): il piano delle corsie, ora in `Release_2/phases/15_parallelRuntimeIsolation/`, registra il limite noto di `mkdocs gallery`, come deciso dal developer.
 
 ### 9.5 Il contratto PAC disatteso — documento invecchiato, non regressione
 
