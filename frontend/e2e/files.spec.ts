@@ -589,11 +589,14 @@ test.describe('Files Page', () => {
             await previewButton.click();
 
             await waitForPreviewReady(page);
-            // Two traps in one assertion. `toHaveCount(0)` is satisfied by a toolbar
-            // that has not painted yet — which is how this test stayed green for
-            // months — *and* it counts DOM nodes regardless of visibility, while the
-            // viewer disables a category by hiding the control rather than unmounting
-            // it. So: prove the toolbar is there, then assert the button is not usable.
+            // The viewer is finished when its stage says so: `data-state="ready"` once the document opened and
+            // every page in view is drawn (pdfPreviewState.ts). That closes the trap that kept this test green for
+            // months — a toolbar that has not painted yet satisfies any negative assertion. Generous, on purpose:
+            // the viewer fetches its engine (WASM) and renders the page tiles before it is ready.
+            await expect(page.getByTestId('file-preview-pdf')).toHaveAttribute('data-state', 'ready', {timeout: 20_000});
+            // The other trap is the matcher: `toHaveCount(0)` counts DOM nodes regardless of visibility, while the
+            // viewer disables a category by hiding the control rather than unmounting it. So: prove the toolbar is
+            // there, then assert the button is not usable.
             await expect(page.locator('[data-epdf-i]').first()).toBeVisible({timeout: 20_000});
             await expect(page.locator('[data-epdf-i="search-button"]')).toBeVisible({timeout: 8_000});
             await expect(page.locator('[data-epdf-i="comment-button"]')).toBeHidden({timeout: 8_000});
