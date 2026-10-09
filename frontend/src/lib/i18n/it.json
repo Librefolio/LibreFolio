@@ -633,7 +633,19 @@
     "parseErrorsTitle": "Non è stato possibile analizzare {n} file",
     "brimNotice": {
       "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:",
-      "corporate_action": "Manca il costo unitario ereditato (PMC): inserisci il costo di una singola unità, non il totale, per importare questa riga."
+      "corporate_action": "Manca il costo unitario ereditato (PMC): inserisci il costo di una singola unità, non il totale, per importare questa riga.",
+      "scalable_unreadable_rows": "{count, plural, one {# riga non è stata letta e non è stata importata} other {# righe non sono state lette e non sono state importate}}: manca la data, l’importo, la valuta, la quantità o il titolo.",
+      "scalable_fee_in_amount": "{count, plural, one {# operazione ha} other {# operazioni hanno}} la commissione dentro l’importo, come la scriveva l’esportatore LibreFolio 1.0.0: l’importo resta quello del file, senza una commissione separata. Esporta di nuovo con l’esportatore 1.0.1 o successivo per vedere le commissioni a parte.",
+      "scalable_fees_unknown": "{count, plural, one {# riga è arrivata} other {# righe sono arrivate}} senza i dettagli di commissioni e tasse: l’importo è quello che mostra Scalable, senza commissioni o tasse separate. Esporta di nuovo con l’opzione che include commissioni e tasse per averle.",
+      "scalable_open_partial": "{count, plural, one {# ordine è eseguito in parte e ancora aperto: non è ancora importato e arriverà eseguito con un export successivo.} other {# ordini sono eseguiti in parte e ancora aperti: non sono ancora importati e arriveranno eseguiti con un export successivo.}}",
+      "scalable_reversal": "{count, plural, one {# riga storna un movimento già registrato e non è stata importata.} other {# righe stornano movimenti già registrati e non sono state importate.}} Controlla i movimenti stornati e correggili a mano.",
+      "scalable_not_imported": "{count, plural, one {# riga non è stata importata} other {# righe non sono state importate}}: trasferimenti di titoli, operazioni societarie e tipi che LibreFolio non legge ancora. Aggiungile a mano se spostano titoli o liquidità.",
+      "scalable_several_overnight_accounts": "Il file contiene {count} conti deposito: tutte le loro righe vanno in questo broker, il cui saldo è la loro somma.",
+      "scalable_not_executed": "{count, plural, one {# riga non è stata eseguita (in attesa, annullata, scaduta o rifiutata) e non è stata importata.} other {# righe non sono state eseguite (in attesa, annullate, scadute o rifiutate) e non sono state importate.}} Un ordine eseguito più tardi arriva con l’export successivo.",
+      "scalable_internal_transfers": "{count, plural, one {# trasferimento} other {# trasferimenti}} tra il conto broker e il conto deposito: importa il file dell’altro conto nel suo broker, poi unisci ogni coppia in un «Bonifico» nell’editor bulk.",
+      "scalable_dividends_net": "{count, plural, one {# dividendo è stato importato come accreditato} other {# dividendi sono stati importati come accreditati}}, al netto della ritenuta: il file non riporta l’imposta.",
+      "scalable_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come deposito} other {# rimborsi d’imposta sono stati importati come depositi}}: in LibreFolio una tassa toglie sempre denaro.",
+      "scalable_cash_by_sign": "{count, plural, one {# riga di liquidità ha un tipo che LibreFolio non conosce, o un segno inatteso: è stata registrata come deposito o prelievo} other {# righe di liquidità hanno un tipo che LibreFolio non conosce, o un segno inatteso: sono state registrate come depositi o prelievi}}, secondo il segno dell’importo."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -911,7 +923,28 @@
       "suggestions": "Cosa ha trovato l'importatore",
       "technical": "Dettagli tecnici"
     },
-    "todoGoto": "Vai alla riga"
+    "todoGoto": "Vai alla riga",
+    "brokerMismatch": {
+      "title": "Questo file potrebbe appartenere a un altro broker",
+      "counter": "File {current} di {total}",
+      "intro": "«{file}» è assegnato a {broker}, il cui plugin di import predefinito, {plugin}, non sa leggerlo.",
+      "reasonTitle": "Il motivo di {plugin}",
+      "targetOne": "Lo legge {plugin}, il plugin di import predefinito di {broker}.",
+      "targetMany": "Lo leggono i plugin di import predefiniti di questi broker: scegli dove spostarlo.",
+      "noTarget": "Lo legge {plugins}, ma nessuno dei tuoi broker lo usa come plugin di import predefinito.",
+      "noReader": "Nessun plugin di import sa leggerlo.",
+      "move": "Sposta in {broker}",
+      "keep": "Tienilo qui",
+      "remove": "Rimuovi il file",
+      "moveFailed": "Non è stato possibile spostare il file",
+      "removeFailed": "Non è stato possibile rimuovere il file"
+    },
+    "parseRefusal": {
+      "scalable_deposit_file": "Questo è l’export del conto deposito di Scalable: va letto con il plugin {plugin_name}.",
+      "scalable_broker_file": "Questo è l’export del conto broker di Scalable: va letto con il plugin {plugin_name}.",
+      "scalable_prime_file": "Questo è l’export di Scalable del conto broker: va letto con il plugin {plugin_name}.",
+      "scalable_mixed_file": "Il file mescola il conto broker e il conto deposito: esporta i due conti separatamente."
+    }
   },
   "brokers": {
     "title": "Broker",

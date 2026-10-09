@@ -2533,6 +2533,223 @@ class TestDegiroConversionsThroughTheBatch:
 
 
 # ============================================================================
+# CATEGORY 17: ASK ONE PLUGIN ABOUT AN UPLOADED FILE (37_brimScalable, plan §7.1)
+# ============================================================================
+#
+# ``GET /brokers/import/files/{file_id}/plugin-check?plugin_code=…`` says whether one plugin reads an uploaded file and,
+# when it does not, why: the plugin's ``can_parse``, then its ``cannot_parse_detail`` (a stable code the frontend
+# translates, the English sentence, the context of the code). The import wizard asks it right after an upload, for the
+# broker's default plugin. Access as for ``GET /files/{file_id}``: any role on the file's broker (VIEWER+), 403 without one.
+# 404 for an unknown file or plugin, 422 without ``plugin_code``. Nothing is parsed: the file stays ``uploaded``.
+# The overnight account's sample uploaded to a broker is the case the endpoint was made for: the broker plugin refuses it
+# and names the plugin that reads it. Only RS-PC01 and RS-PC02 need the Scalable plugins; the others ask the generic CSV.
+# What the plugins answer, file by file, is in test_external/test_brim_scalable.py; the default refusal of every plugin,
+# in test_external/test_brim_providers.py (category 4d). Each test deletes the files and the broker it created.
+
+SCALABLE_DEPOSIT_SAMPLE = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "scalable-deposit-export.csv"
+SCALABLE_BROKER_CODE = "broker_scalable"
+SCALABLE_DEPOSIT_CODE = "broker_scalable_deposit"
+# What the broker plugin owes about the overnight account's export, but the English sentence: its code and its context.
+SCALABLE_DEPOSIT_REFUSAL = {"code": "scalable_deposit_file", "context": {"plugin_code": SCALABLE_DEPOSIT_CODE, "plugin_name": "Scalable Capital overnight account"}}
+UNKNOWN_PLUGIN_CODE = "broker_does_not_exist"
+# The generic CSV's own reason about CSV_WITHOUT_DATE (category 12), wrapped by the default cannot_parse_detail.
+GENERIC_REFUSAL = {"code": None, "message": "required column 'date' not found in the CSV header", "context": {}}
+
+
+async def _plugin_check(client: httpx.AsyncClient, file_id: str, **params: str) -> httpx.Response:
+    """``GET /files/{file_id}/plugin-check`` with the query ``params``; while the route does not exist, the test fails saying so."""
+    response = await client.get(f"{API_BASE}/brokers/import/files/{file_id}/plugin-check", params=params, timeout=TIMEOUT)
+    if _route_missing(response):
+        pytest.fail(f"GET /brokers/import/files/{{file_id}}/plugin-check does not exist yet (37_brimScalable, plan §7.1): {response.status_code} {response.text}", pytrace=False)
+    return response
+
+
+def _check_of(response: httpx.Response) -> Tuple[str, bool, Optional[dict]]:
+    """``(plugin_code, can_parse, refusal)`` of a 200 answer."""
+    assert response.status_code == 200, f"{response.status_code} {response.text}"
+    body = response.json()
+    return body["plugin_code"], body["can_parse"], body["refusal"]
+
+
+async def _upload_for_check(client: httpx.AsyncClient, broker_id: int, content: bytes, filename: str, file_ids: list) -> str:
+    """Upload one CSV to ``broker_id``; its id joins ``file_ids``, which the test deletes."""
+    upload = await _upload_csv(client, broker_id, content, filename)
+    assert upload.status_code == 200, upload.text
+    file_ids.append(upload.json()["file_id"])
+    return file_ids[-1]
+
+
+async def _upload_scalable_deposit(client: httpx.AsyncClient, broker_id: int, file_ids: list) -> str:
+    """Upload the overnight account's sample; the premise is that the test backend reads it with the overnight account's plugin, not the broker's."""
+    file_id = await _upload_for_check(client, broker_id, SCALABLE_DEPOSIT_SAMPLE.read_bytes(), SCALABLE_DEPOSIT_SAMPLE.name, file_ids)
+    info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+    assert info.status_code == 200, info.text
+    compatible = info.json()["compatible_plugins"]
+    if SCALABLE_DEPOSIT_CODE not in compatible or SCALABLE_BROKER_CODE in compatible:
+        pytest.fail(f"premise: the test backend reads {SCALABLE_DEPOSIT_SAMPLE.name} with {SCALABLE_DEPOSIT_CODE} and not with {SCALABLE_BROKER_CODE}: compatible {compatible} (37_brimScalable, plan §4)", pytrace=False)
+    return file_id
+
+
+async def _assert_still_uploaded(client: httpx.AsyncClient, file_id: str) -> None:
+    """The file as the upload left it: ``uploaded``, no parse result, no error, no parsing plugin."""
+    info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+    assert info.status_code == 200, info.text
+    data = info.json()
+    assert (data["status"], data["last_parse_result"], data["error_message"], data["parsed_plugin_code"]) == ("uploaded", None, None, None), f"the plugin check changed the file: {data}"
+
+
+class TestPluginCheckEndpoint:
+    """§7.1 — ``GET /files/{file_id}/plugin-check``: one plugin's answer about an uploaded file, with the code and the context of a refusal; nothing is parsed."""
+
+    @pytest.mark.asyncio
+    async def test_the_broker_plugin_refuses_the_overnight_account_export_and_names_its_plugin(self, test_server):
+        """RS-PC01: ``scalable-deposit-export.csv`` on the user's broker. ``broker_scalable``: 200, ``can_parse`` false, refusal ``scalable_deposit_file``
+        whose context names ``broker_scalable_deposit``, with an English sentence. ``broker_scalable_deposit``: ``can_parse`` true, no refusal. The file
+        is still ``uploaded`` after both."""
+        print_section("RS-PC01: the broker plugin refuses the overnight account's export and names its plugin")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                file_id = await _upload_scalable_deposit(client, broker_id, file_ids)
+
+                refused = _check_of(await _plugin_check(client, file_id, plugin_code=SCALABLE_BROKER_CODE))
+                accepted = _check_of(await _plugin_check(client, file_id, plugin_code=SCALABLE_DEPOSIT_CODE))
+
+                assert refused[:2] == (SCALABLE_BROKER_CODE, False), refused
+                refusal = refused[2] or {}
+                assert {key: refusal.get(key) for key in SCALABLE_DEPOSIT_REFUSAL} == SCALABLE_DEPOSIT_REFUSAL, refused
+                assert isinstance(refusal.get("message"), str) and refusal["message"].strip(), f"the refusal has no English sentence to fall back on: {refused}"
+                assert accepted == (SCALABLE_DEPOSIT_CODE, True, None), accepted
+                await _assert_still_uploaded(client, file_id)
+                print_success("✓ the broker plugin refuses the overnight account's export and names the plugin that reads it")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_another_broker_s_file_is_refused_without_a_refusal(self, test_server, sample_csv_content):
+        """RS-PC02: a generic CSV asked to ``broker_scalable``: 200, ``can_parse`` false, ``refusal`` null: the plugin has nothing to say about it."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                file_id = await _upload_for_check(client, broker_id, sample_csv_content, f"generic_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                check = _check_of(await _plugin_check(client, file_id, plugin_code=SCALABLE_BROKER_CODE))
+
+                assert check == (SCALABLE_BROKER_CODE, False, None), check
+                await _assert_still_uploaded(client, file_id)
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_without_a_code_is_the_plugin_s_reason(self, test_server):
+        """RS-PC03: the CSV without a date column of RS-G05 asked to ``broker_generic_csv``, which overrides only ``cannot_parse_reason``: ``can_parse``
+        false, refusal ``{code: null, message: <the reason>, context: {}}``."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                file_id = await _upload_for_check(client, broker_id, CSV_WITHOUT_DATE, f"no_date_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                check = _check_of(await _plugin_check(client, file_id, plugin_code=GENERIC_CSV_CODE))
+
+                assert check == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL), check
+                await _assert_still_uploaded(client, file_id)
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_plugin_is_404(self, test_server, sample_csv_content):
+        """RS-PC04: ``plugin_code=broker_does_not_exist`` on an uploaded file: 404 "Plugin 'broker_does_not_exist' not found"; the file is untouched."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                file_id = await _upload_for_check(client, broker_id, sample_csv_content, f"generic_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                response = await _plugin_check(client, file_id, plugin_code=UNKNOWN_PLUGIN_CODE)
+
+                assert response.status_code == 404, response.text
+                assert _detail_text(response) == f"Plugin '{UNKNOWN_PLUGIN_CODE}' not found"
+                await _assert_still_uploaded(client, file_id)
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_file_is_404(self, test_server):
+        """RS-PC05: a file id nobody uploaded, with a registered plugin: 404 "File not found"."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            response = await _plugin_check(client, str(uuid.uuid4()), plugin_code=GENERIC_CSV_CODE)
+
+            assert response.status_code == 404, response.text
+            assert _detail_text(response) == "File not found"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("params", [pytest.param({}, id="missing"), pytest.param({"plugin_code": ""}, id="empty")])
+    async def test_plugin_code_is_required(self, test_server, sample_csv_content, params):
+        """RS-PC06: without ``plugin_code``, or with an empty one: 422 naming ``plugin_code``; the file is untouched."""
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                file_id = await _upload_for_check(client, broker_id, sample_csv_content, f"generic_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                response = await _plugin_check(client, file_id, **params)
+
+                assert response.status_code == 422, response.text
+                errors = response.json().get("detail")
+                assert isinstance(errors, list) and any("plugin_code" in [str(part) for part in error.get("loc", [])] for error in errors), errors
+                await _assert_still_uploaded(client, file_id)
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_a_viewer_may_ask_and_a_user_without_access_may_not(self, test_server):
+        """RS-PC07: a VIEWER of the broker gets the owner's answer; a user without access to the broker gets 403; the file is untouched."""
+        print_section("RS-PC07: plugin-check access, VIEWER+ only")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as viewer, httpx.AsyncClient() as stranger:
+            owner_id = await create_test_user(owner)
+            viewer_id = await create_test_user(viewer)
+            await create_test_user(stranger)
+            broker_id = await create_test_broker(owner)
+            file_ids = []
+            try:
+                access = await owner.put(
+                    f"{API_BASE}/brokers/{broker_id}/access",
+                    json=[{"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0}, {"user_id": viewer_id, "role": "VIEWER", "share_percentage": 0}],
+                    timeout=TIMEOUT,
+                )
+                assert access.status_code == 200, access.text
+                file_id = await _upload_for_check(owner, broker_id, CSV_WITHOUT_DATE, f"no_date_{uuid.uuid4().hex[:8]}.csv", file_ids)
+
+                as_owner = await _plugin_check(owner, file_id, plugin_code=GENERIC_CSV_CODE)
+                as_viewer = await _plugin_check(viewer, file_id, plugin_code=GENERIC_CSV_CODE)
+                as_stranger = await _plugin_check(stranger, file_id, plugin_code=GENERIC_CSV_CODE)
+
+                assert _check_of(as_owner) == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL), "presence barrier: the owner gets the plugin's answer"
+                assert _check_of(as_viewer) == _check_of(as_owner), "a VIEWER of the broker gets the owner's answer"
+                assert as_stranger.status_code == 403, f"a user without access: {as_stranger.status_code} {as_stranger.text}"
+                await _assert_still_uploaded(owner, file_id)
+                print_success("✓ a VIEWER may ask, a user without access may not")
+            finally:
+                await _delete_files(owner, file_ids)
+                await _delete_created(owner, broker_ids=[broker_id])
+
+
+# ============================================================================
 # Note: E2E tests are in test_e2e/test_brim_e2e.py
 # ============================================================================
 

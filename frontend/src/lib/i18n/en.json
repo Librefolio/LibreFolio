@@ -633,7 +633,19 @@
     "parseErrorsTitle": "{n} file(s) could not be parsed",
     "brimNotice": {
       "ca_succession_transfer_in": "Securities transferred in from another custody account were detected ({n} rows).\nThey were recorded as «Adjustment» transactions because they have no matching cash movement: the assumption is that you already owned them at a different broker.\nIf that is the case, and that broker is tracked in LibreFolio, then when you import the other half of the transaction the system will offer to link the two and turn them into a «Securities transfer».\nThe rows in detail:",
-      "corporate_action": "Missing inherited per-unit cost (WAC): enter the cost of a single unit, not the total, to import this row."
+      "corporate_action": "Missing inherited per-unit cost (WAC): enter the cost of a single unit, not the total, to import this row.",
+      "scalable_unreadable_rows": "{count, plural, one {# row could not be read and was not imported} other {# rows could not be read and were not imported}}: a date, an amount, a currency, the shares or the security is missing.",
+      "scalable_fee_in_amount": "{count, plural, one {# trade carries} other {# trades carry}} the fee inside the amount, as LibreFolio exporter 1.0.0 wrote it: the amount is kept as in the file, without a separate fee. Export again with exporter 1.0.1 or later to see the fees apart.",
+      "scalable_fees_unknown": "{count, plural, one {# row came} other {# rows came}} without the fee and tax details: the amount is the one Scalable shows, without separate fees or taxes. Export again with the option to include fees and taxes to get them.",
+      "scalable_open_partial": "{count, plural, one {# order is filled in part and still open: it is not imported yet and will arrive executed with a later export.} other {# orders are filled in part and still open: they are not imported yet and will arrive executed with a later export.}}",
+      "scalable_reversal": "{count, plural, one {# row reverses a transaction already booked and was not imported.} other {# rows reverse transactions already booked and were not imported.}} Check the reversed transactions and correct them by hand.",
+      "scalable_not_imported": "{count, plural, one {# row was} other {# rows were}} not imported: security transfers, corporate actions and types LibreFolio does not read yet. Add them by hand if they move shares or cash.",
+      "scalable_several_overnight_accounts": "The file holds {count} overnight accounts: all their rows go into this broker, whose balance is their sum.",
+      "scalable_not_executed": "{count, plural, one {# row was not executed (pending, cancelled, expired or rejected) and was not imported.} other {# rows were not executed (pending, cancelled, expired or rejected) and were not imported.}} An order executed later arrives with the next export.",
+      "scalable_internal_transfers": "{count, plural, one {# transfer} other {# transfers}} between the broker account and the overnight account: import the other account's file into its own broker, then merge each pair into a Cash Transfer in the bulk editor.",
+      "scalable_dividends_net": "{count, plural, one {# dividend was imported as credited} other {# dividends were imported as credited}}, net of the tax withheld: the file does not give the tax.",
+      "scalable_tax_refund": "{count, plural, one {# tax refund was imported as a deposit} other {# tax refunds were imported as deposits}}: in LibreFolio a tax always takes money out.",
+      "scalable_cash_by_sign": "{count, plural, one {# cash row has a type LibreFolio does not know, or an unexpected sign: it was recorded as a deposit or a withdrawal} other {# cash rows have a type LibreFolio does not know, or an unexpected sign: they were recorded as deposits or withdrawals}}, by the sign of the amount."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -911,7 +923,28 @@
       "suggestions": "What the importer found",
       "technical": "Technical details"
     },
-    "todoGoto": "Go to row"
+    "todoGoto": "Go to row",
+    "brokerMismatch": {
+      "title": "This file may belong to another broker",
+      "counter": "File {current} of {total}",
+      "intro": "“{file}” is assigned to {broker}, whose default import plugin, {plugin}, cannot read it.",
+      "reasonTitle": "Reason given by {plugin}",
+      "targetOne": "It is read by {plugin}, the default import plugin of {broker}.",
+      "targetMany": "The default import plugins of these brokers read it: choose where to move it.",
+      "noTarget": "It is read by {plugins}, but none of your brokers uses it as its default import plugin.",
+      "noReader": "No import plugin can read it.",
+      "move": "Move to {broker}",
+      "keep": "Keep it here",
+      "remove": "Remove the file",
+      "moveFailed": "The file could not be moved",
+      "removeFailed": "The file could not be removed"
+    },
+    "parseRefusal": {
+      "scalable_deposit_file": "This is the export of the Scalable overnight account: read it with the {plugin_name} plugin.",
+      "scalable_broker_file": "This is the export of the Scalable broker account: read it with the {plugin_name} plugin.",
+      "scalable_prime_file": "This is Scalable's own export of the broker account: read it with the {plugin_name} plugin.",
+      "scalable_mixed_file": "The file mixes the broker account and the overnight account: export the two accounts separately."
+    }
   },
   "brokers": {
     "title": "Brokers",

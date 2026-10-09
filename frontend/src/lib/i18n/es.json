@@ -633,7 +633,19 @@
     "parseErrorsTitle": "No se pudieron analizar {n} archivo(s)",
     "brimNotice": {
       "ca_succession_transfer_in": "Se han identificado valores transferidos desde otra cuenta de custodia ({n} filas).\nSe han registrado como transacciones de tipo «Ajuste» porque no tienen un movimiento de efectivo asociado: se supone por tanto que ya eran tuyos en otro bróker.\nEn ese caso, y si ese bróker está registrado en LibreFolio, al importar la otra mitad de la transacción el sistema propondrá vincular ambas y convertirlas en una «Transferencia de valores».\nA continuación, las filas en detalle:",
-      "corporate_action": "Falta el coste unitario heredado (PMC): introduce el coste de una sola unidad, no el total, para importar esta fila."
+      "corporate_action": "Falta el coste unitario heredado (PMC): introduce el coste de una sola unidad, no el total, para importar esta fila.",
+      "scalable_unreadable_rows": "{count, plural, one {# fila no se pudo leer y no se importó} other {# filas no se pudieron leer y no se importaron}}: falta la fecha, el importe, la divisa, la cantidad o el valor.",
+      "scalable_fee_in_amount": "{count, plural, one {# operación lleva} other {# operaciones llevan}} la comisión dentro del importe, como lo escribía el exportador LibreFolio 1.0.0: el importe queda como en el archivo, sin una comisión aparte. Exporta de nuevo con el exportador 1.0.1 o posterior para ver las comisiones por separado.",
+      "scalable_fees_unknown": "{count, plural, one {# fila llegó} other {# filas llegaron}} sin el detalle de comisiones e impuestos: el importe es el que muestra Scalable, sin comisiones ni impuestos aparte. Exporta de nuevo con la opción que incluye comisiones e impuestos para obtenerlos.",
+      "scalable_open_partial": "{count, plural, one {# orden está ejecutada en parte y sigue abierta: aún no se importa y llegará ejecutada con una exportación posterior.} other {# órdenes están ejecutadas en parte y siguen abiertas: aún no se importan y llegarán ejecutadas con una exportación posterior.}}",
+      "scalable_reversal": "{count, plural, one {# fila anula un movimiento ya registrado y no se importó.} other {# filas anulan movimientos ya registrados y no se importaron.}} Revisa los movimientos anulados y corrígelos a mano.",
+      "scalable_not_imported": "{count, plural, one {# fila no se importó} other {# filas no se importaron}}: traspasos de valores, operaciones corporativas y tipos que LibreFolio aún no lee. Añádelas a mano si mueven valores o efectivo.",
+      "scalable_several_overnight_accounts": "El archivo contiene {count} cuentas remuneradas: todas sus filas van a este bróker, cuyo saldo es su suma.",
+      "scalable_not_executed": "{count, plural, one {# fila no se ejecutó (pendiente, cancelada, caducada o rechazada) y no se importó.} other {# filas no se ejecutaron (pendientes, canceladas, caducadas o rechazadas) y no se importaron.}} Una orden ejecutada más tarde llega con la siguiente exportación.",
+      "scalable_internal_transfers": "{count, plural, one {# transferencia} other {# transferencias}} entre la cuenta de valores y la cuenta remunerada: importa el archivo de la otra cuenta en su propio bróker y después une cada par en una «Transferencia bancaria» en el editor masivo.",
+      "scalable_dividends_net": "{count, plural, one {# dividendo se importó tal como se abonó} other {# dividendos se importaron tal como se abonaron}}, después de la retención: el archivo no indica el impuesto.",
+      "scalable_tax_refund": "{count, plural, one {# devolución de impuestos se importó como depósito} other {# devoluciones de impuestos se importaron como depósitos}}: en LibreFolio un impuesto siempre retira dinero.",
+      "scalable_cash_by_sign": "{count, plural, one {# fila de efectivo tiene un tipo que LibreFolio no conoce, o un signo inesperado: se registró como depósito o retiro} other {# filas de efectivo tienen un tipo que LibreFolio no conoce, o un signo inesperado: se registraron como depósitos o retiros}}, según el signo del importe."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -911,7 +923,28 @@
       "suggestions": "Lo que encontró el importador",
       "technical": "Detalles técnicos"
     },
-    "todoGoto": "Ir a la fila"
+    "todoGoto": "Ir a la fila",
+    "brokerMismatch": {
+      "title": "Este archivo puede pertenecer a otro bróker",
+      "counter": "Archivo {current} de {total}",
+      "intro": "«{file}» está asignado a {broker}, cuyo plugin de importación predeterminado, {plugin}, no puede leerlo.",
+      "reasonTitle": "El motivo de {plugin}",
+      "targetOne": "Lo lee {plugin}, el plugin de importación predeterminado de {broker}.",
+      "targetMany": "Lo leen los plugins de importación predeterminados de estos brókers: elige adónde moverlo.",
+      "noTarget": "Lo lee {plugins}, pero ninguno de tus brókers lo usa como plugin de importación predeterminado.",
+      "noReader": "Ningún plugin de importación puede leerlo.",
+      "move": "Mover a {broker}",
+      "keep": "Dejarlo aquí",
+      "remove": "Quitar el archivo",
+      "moveFailed": "No se pudo mover el archivo",
+      "removeFailed": "No se pudo quitar el archivo"
+    },
+    "parseRefusal": {
+      "scalable_deposit_file": "Es la exportación de la cuenta remunerada de Scalable: léela con el plugin {plugin_name}.",
+      "scalable_broker_file": "Es la exportación de la cuenta de valores de Scalable: léela con el plugin {plugin_name}.",
+      "scalable_prime_file": "Es la exportación propia de Scalable de la cuenta de valores: léela con el plugin {plugin_name}.",
+      "scalable_mixed_file": "El archivo mezcla la cuenta de valores y la cuenta remunerada: exporta las dos cuentas por separado."
+    }
   },
   "brokers": {
     "title": "Brókeres",

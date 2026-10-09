@@ -19,7 +19,7 @@ do, so `currentStepId` is never a number and there is nothing to renumber when a
 
 | # | `StepId` | Always shown | Purpose |
 |---|---|---|---|
-| 1 | `upload` | ✅ | Pick the broker, drop one or more files. |
+| 1 | `upload` | ✅ | Pick the broker, drop one or more files. A file that its broker's default import plugin cannot read raises a [prompt](#broker-mismatch) right after the upload. |
 | 2 | `select` | ✅ | Pick which of the broker's stored files to parse and, per file, which BRIM plugin reads it. A [report set](#report-sets) is one card, above the table of the broker's other files. |
 | 3 | `analyze` | ✅ | Parse each file (backend), show per-file stats via `ParseDetailModal`. A report set is combined first, then its combined file is parsed. |
 | — | `assets` | ⚪ conditional | **Unify assets** — decide how many distinct instruments the files actually describe (`AssetGroupStep`). |
@@ -80,6 +80,99 @@ the merge.
     translation table because the links are already rewritten.
 
 ---
+
+## 🧭 Step `upload`: a file in the wrong broker {: #broker-mismatch }
+
+A broker that sets a **default import plugin** says what its files are. Right after an upload, the
+wizard checks each file just uploaded against it: a file that plugin cannot read was probably
+assigned to the wrong broker. Scalable Capital is the case that prompted it — two accounts, two
+brokers, two default plugins that refuse each other's export. Without the check, `pickBestPlugin`
+quietly reads such a file with the first compatible plugin, in the wrong broker.
+
+### 🪝 The hook
+
+`goNext()` on `upload` notes the entries it is about to upload (`uploadIds`: the `pending` entries
+that have a broker), awaits `uploadAllPendingFiles()`, then calls
+`reviewDefaultPluginMismatches(uploadIds)`:
+
+1. among those entries, it keeps the ones that uploaded (`status === 'uploaded'`, with a
+   `serverFileId`) and that `findDefaultPluginMismatch` flags, from the `compatible_plugins` the
+   upload returned and the wizard's `brokers`;
+2. for each, in upload order, `fetchRefusalReason` asks the default plugin why it refuses the file
+   ([below](#broker-mismatch-reason)), then `askMismatch` opens the prompt and returns a promise
+   that `answerMismatch` resolves;
+3. it applies the answer — `moveUploadedFile`, `removeUploadedFile`, or nothing for *keep* — and
+   goes no further once the wizard is closed.
+
+The check comes before `collectStep1SetWarnings()`
+([the missing export](#step-upload-the-missing-export)), so a file is moved, kept or removed before
+anything groups it into a set. Only the files this click uploads are checked: a stored file reused
+with **Next** is not. When the user removed every file (`pendingFiles` is empty), the wizard stays
+on `upload`.
+
+### 🧮 The pure util and its tests
+
+`lib/utils/brim/defaultPluginCheck.ts` holds the two decisions, without state or I/O:
+
+| Function | Contract |
+|---|---|
+| `findDefaultPluginMismatch(compatiblePlugins, brokerId, brokers)` | `null` when the broker has no default import plugin (absent, `null` or `''`, or a broker missing from the list) or when its default plugin is among the file's `compatible_plugins`. Otherwise `{brokerId, defaultPlugin, readers, targets}`: `readers`, a copy of `compatible_plugins` (empty when no plugin reads the file); `targets`, the **other** brokers whose default plugin is one of the readers, in the order of `brokers` — possibly none |
+| `resolveParseRefusalMessage(refusal, t)` | The refusal in the UI language: `importWizard.parseRefusal.<code>` with `context` as values, as the notices do (`resolveBrimNoticeMessage`), shown as written. Without a code or a translation, the plugin's English `message`, trimmed, with a capital and a final period unless it already ends with `.`, `!` or `?`; an empty message stays empty |
+
+`defaultPluginCheck.test.ts`, beside it (Vitest), pins both contracts on the Scalable pair: when a
+broker is never questioned, the order of the targets and who is never one (the broker itself,
+brokers without a default plugin), the empty reader list, inputs left untouched, and the
+refusal's translation and fallback sentence.
+
+### 💬 The reason {: #broker-mismatch-reason }
+
+`fetchRefusalReason(fileId, pluginCode)` calls
+`GET /brokers/import/files/{file_id}/plugin-check?plugin_code=<default plugin>` — see
+[Saying why with a code](../../../architecture/patterns/brim_plugin_guide.md#cannot-parse-detail) —
+and resolves its `refusal` with `resolveParseRefusalMessage`. A failed call, or a plugin with
+nothing to say, leaves the reason out: the prompt still says where the file belongs.
+
+### 🪟 The prompt: `ImportBrokerMismatchModal.svelte`
+
+`lib/components/transactions/modals/ImportBrokerMismatchModal.svelte`
+(`import-broker-mismatch-modal`), mounted by the wizard while `mismatchPrompt` is set:
+
+- the intro names the file, its broker and the default plugin; the reason follows, when there is
+  one;
+- one target: `targetOne`; several: `targetMany` and a radio list, the first preselected; none:
+  `noTarget` with the names of the plugins that read the file, or `noReader` when none does;
+- **Move to ‹broker›** (only with a target), **Keep it here** and **Remove the file**, with a
+  counter (`File {current} of {total}`) when several files are questioned;
+- closing — Escape or a click on the backdrop — answers *keep*; while a move or a removal runs
+  (`busy`), the buttons are disabled and closing does nothing.
+
+### ↪️ The answers
+
+- **Move** — `moveUploadedFile(entryId, brokerId)` uploads the same `File` again to the chosen
+  broker, with the session's `batch_id` (`uploadBatchId`, so it can still join a set) and its
+  `custom_filename` when the user renamed it, points the entry at the new upload, then deletes the
+  copy in the wrong broker. A failed upload changes nothing; a failed delete leaves the old copy,
+  which Files can delete, while the entry follows the moved file. Both are reported in a toast: the
+  server's error, else `brokerMismatch.moveFailed` or `brokerMismatch.removeFailed`.
+- **Remove** — `removeUploadedFile(entryId)` deletes the upload and drops the entry; when the delete
+  fails, the entry stays (`brokerMismatch.removeFailed`).
+- **Keep** — nothing changes: in `select`, `pickBestPlugin` chooses as before — the first
+  compatible plugin, or the default one when no plugin reads the file.
+
+`resetState()` answers *keep* to a prompt left open when the wizard closes: nothing is moved or
+removed behind the user's back.
+
+### 🌐 i18n
+
+Both namespaces exist in the four catalogues:
+
+- `importWizard.brokerMismatch.*` — the prompt: `title`, `counter`, `intro`, `reasonTitle`,
+  `targetOne`, `targetMany`, `noTarget`, `noReader`, `move`, `keep`, `remove`, `moveFailed`,
+  `removeFailed`;
+- `importWizard.parseRefusal.<code>` — the plugins' refusals by code, with the refusal's `context`
+  as parameters: today the four Scalable codes (`scalable_deposit_file`, `scalable_broker_file`,
+  `scalable_prime_file`, `scalable_mixed_file`), which use `{plugin_name}`. A refusal whose code
+  has no key is shown in the plugin's English.
 
 ---
 
@@ -223,7 +316,7 @@ role is unknown before that. One `batch_id` per wizard session (`uploadBatchId`,
 `generateUUID()` rather than `crypto.randomUUID()`, which only exists in a secure context — and a
 self-hosted LibreFolio may be served over plain HTTP.
 
-After the upload, `collectStep1SetWarnings()` groups the session's uploaded files with
+After the upload and the [default-plugin check](#broker-mismatch), `collectStep1SetWarnings()` groups the session's uploaded files with
 `groupBrokerFiles`, runs `POST /sets/preview` for each set and, when a set is incomplete, the
 wizard **stays on `upload`** with one `import-wizard-step1-set-warning` per missing role
 (`data-plugin-code`, `data-role`): plugin, role, extensions, the period from `missing`, and the

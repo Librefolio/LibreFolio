@@ -633,7 +633,19 @@
     "parseErrorsTitle": "{n} fichier(s) n'ont pas pu être analysés",
     "brimNotice": {
       "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :",
-      "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne."
+      "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne.",
+      "scalable_unreadable_rows": "{count, plural, one {# ligne n’a pas pu être lue et n’a pas été importée} other {# lignes n’ont pas pu être lues et n’ont pas été importées}} : il manque la date, le montant, la devise, la quantité ou le titre.",
+      "scalable_fee_in_amount": "{count, plural, one {# opération contient} other {# opérations contiennent}} les frais dans le montant, comme l’écrivait l’exportateur LibreFolio 1.0.0 : le montant reste celui du fichier, sans frais séparés. Exportez à nouveau avec l’exportateur 1.0.1 ou ultérieur pour voir les frais à part.",
+      "scalable_fees_unknown": "{count, plural, one {# ligne est arrivée} other {# lignes sont arrivées}} sans le détail des frais et des taxes : le montant est celui qu’affiche Scalable, sans frais ni taxes séparés. Exportez à nouveau avec l’option qui inclut les frais et les taxes pour les obtenir.",
+      "scalable_open_partial": "{count, plural, one {# ordre est exécuté en partie et encore ouvert : il n’est pas encore importé et arrivera exécuté avec un export ultérieur.} other {# ordres sont exécutés en partie et encore ouverts : ils ne sont pas encore importés et arriveront exécutés avec un export ultérieur.}}",
+      "scalable_reversal": "{count, plural, one {# ligne annule une opération déjà enregistrée et n’a pas été importée.} other {# lignes annulent des opérations déjà enregistrées et n’ont pas été importées.}} Vérifiez les opérations annulées et corrigez-les à la main.",
+      "scalable_not_imported": "{count, plural, one {# ligne n’a pas été importée} other {# lignes n’ont pas été importées}} : transferts de titres, opérations sur titres et types que LibreFolio ne lit pas encore. Ajoutez-les à la main si elles déplacent des titres ou des espèces.",
+      "scalable_several_overnight_accounts": "Le fichier contient {count} comptes rémunérés : toutes leurs lignes vont dans ce courtier, dont le solde est leur somme.",
+      "scalable_not_executed": "{count, plural, one {# ligne n’a pas été exécutée (en attente, annulée, expirée ou rejetée) et n’a pas été importée.} other {# lignes n’ont pas été exécutées (en attente, annulées, expirées ou rejetées) et n’ont pas été importées.}} Un ordre exécuté plus tard arrive avec l’export suivant.",
+      "scalable_internal_transfers": "{count, plural, one {# transfert} other {# transferts}} entre le compte-titres et le compte rémunéré : importez le fichier de l’autre compte dans son propre courtier, puis fusionnez chaque paire en un « Virement » dans l’éditeur groupé.",
+      "scalable_dividends_net": "{count, plural, one {# dividende a été importé tel que crédité} other {# dividendes ont été importés tels que crédités}}, après la retenue à la source : le fichier n’indique pas l’impôt.",
+      "scalable_tax_refund": "{count, plural, one {# remboursement d’impôt a été importé comme dépôt} other {# remboursements d’impôt ont été importés comme dépôts}} : dans LibreFolio, une taxe retire toujours de l’argent.",
+      "scalable_cash_by_sign": "{count, plural, one {# ligne d’espèces a un type que LibreFolio ne connaît pas, ou un signe inattendu : elle a été enregistrée comme dépôt ou retrait} other {# lignes d’espèces ont un type que LibreFolio ne connaît pas, ou un signe inattendu : elles ont été enregistrées comme dépôts ou retraits}}, selon le signe du montant."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -911,7 +923,28 @@
       "suggestions": "Ce que l'importateur a trouvé",
       "technical": "Détails techniques"
     },
-    "todoGoto": "Aller à la ligne"
+    "todoGoto": "Aller à la ligne",
+    "brokerMismatch": {
+      "title": "Ce fichier appartient peut-être à un autre courtier",
+      "counter": "Fichier {current} sur {total}",
+      "intro": "« {file} » est attribué à {broker}, dont le plugin d’import par défaut, {plugin}, ne sait pas le lire.",
+      "reasonTitle": "La raison donnée par {plugin}",
+      "targetOne": "{plugin}, le plugin d’import par défaut de {broker}, sait le lire.",
+      "targetMany": "Les plugins d’import par défaut de ces courtiers savent le lire : choisissez où le déplacer.",
+      "noTarget": "{plugins} sait le lire, mais aucun de vos courtiers ne l’utilise comme plugin d’import par défaut.",
+      "noReader": "Aucun plugin d’import ne sait le lire.",
+      "move": "Déplacer vers {broker}",
+      "keep": "Le garder ici",
+      "remove": "Retirer le fichier",
+      "moveFailed": "Impossible de déplacer le fichier",
+      "removeFailed": "Impossible de retirer le fichier"
+    },
+    "parseRefusal": {
+      "scalable_deposit_file": "C’est l’export du compte rémunéré Scalable : lisez-le avec le plugin {plugin_name}.",
+      "scalable_broker_file": "C’est l’export du compte-titres Scalable : lisez-le avec le plugin {plugin_name}.",
+      "scalable_prime_file": "C’est l’export de Scalable pour le compte-titres : lisez-le avec le plugin {plugin_name}.",
+      "scalable_mixed_file": "Le fichier mélange le compte-titres et le compte rémunéré : exportez les deux comptes séparément."
+    }
   },
   "brokers": {
     "title": "Courtiers",

@@ -734,6 +734,7 @@ nav:
                   - Avanza: user/transactions/import/avanza.md
                   - Disnat: user/transactions/import/disnat.md
                   - InvestEngine: user/transactions/import/investengine.md
+                  - Scalable Capital: user/transactions/import/scalable.md
                   - Trade Republic: user/transactions/import/traderepublic.md
                   - XTB: user/transactions/import/xtb.md
                   - Saxo: user/transactions/import/saxo.md

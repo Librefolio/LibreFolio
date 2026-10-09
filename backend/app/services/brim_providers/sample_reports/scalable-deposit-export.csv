@@ -1,0 +1,9 @@
+date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency;lf_account;lf_account_index;lf_id;lf_subtype;lf_is_cancellation
+2026-07-01;02:00:00;Pending;"";"Auszahlung an DE89 3704 0044 0532 0130 00";Cash;Withdrawal;;;;-100;;;EUR;deposit;1;synthD0000000000000009;WITHDRAWAL;
+2026-06-30;02:00:00;Executed;"";"Zinsen";Cash;Interest;;;;2,95;;;EUR;deposit;1;synthD0000000000000008;INTEREST;
+2026-06-15;02:00:00;Executed;"";"Auszahlung an DE89 3704 0044 0532 0130 00";Cash;Withdrawal;;;;-1500;;;EUR;deposit;1;synthD0000000000000007;WITHDRAWAL;
+2026-06-01;02:00:00;Executed;"";"Interner Übertrag";Cash;Withdrawal;;;;-300;;;EUR;deposit;1;synthD0000000000000006;CASH_TRANSFER_OUT;
+2026-05-31;02:00:00;Executed;"INTEREST-PAY-account-5e1f0a7b-0002";"Zinsen";Cash;Interest;;;;2,58;;0,92;EUR;deposit;1;synthD0000000000000005;INTEREST;
+2026-04-30;02:00:00;Executed;"INTEREST-PAY-account-5e1f0a7b-0001";"Zinsen";Cash;Interest;;;;1,82;;0,65;EUR;deposit;1;synthD0000000000000004;INTEREST;
+2026-04-02;02:00:00;Executed;"";"Interner Übertrag";Cash;Deposit;;;;1000;;;EUR;deposit;1;synthD0000000000000003;CASH_TRANSFER_IN;
+2026-03-02;02:00:00;Executed;"";"Einzahlung von DE89 3704 0044 0532 0130 00";Cash;Deposit;;;;5000;;;EUR;deposit;1;synthD0000000000000002;DEPOSIT;
