@@ -15,12 +15,12 @@
  * confirm (`beforeNavigate`): the test never navigates away; the page closes with the test.
  *
  * What it holds ({@link PAC_SCENARIO}): valuation in EUR; liquidity copied from DEGIRO (EUR), a
- * new contribution in EUR and an external account in EUR; DEGIRO (one order mode, EUR, by amount,
+ * new contribution in EUR and an external account in USD; DEGIRO (one order mode, EUR, by amount,
  * a percentage fee with minimum and maximum, the Broker converting) and Interactive Brokers (by
  * units, a fixed fee, you converting); Apple (Auto price) and Microsoft (Manual price) taken from
  * «Your Assets» and a Manual Asset; DEGIRO may buy only the Manual Asset, with every limit of a
  * route filled; targets 30/30/40. The USD Assets can be bought on Interactive Brokers only, and
- * most of the money is in EUR: the plan has a currency exchange to make.
+ * the external account's dollars are not enough for them: the plan has a currency exchange to make.
  *
  * The seed moved shares in USD on DEGIRO (populate_mock_data.py, the AAPL and MSFT transfers, amount
  * 0): a copy of DEGIRO brings a USD cash row at zero and a USD order mode. The draft removes both,
@@ -80,13 +80,10 @@ export const PAC_SCENARIO = {
     copiedCash: {currency: 'EUR', toUse: '2000'},
     contribution: {label: 'PAC', amount: '500'},
     /**
-     * In EUR, as every source: a foreign source makes the engine fail — in USD it lets the plan convert USD into EUR at the
-     * inverse of the stored EUR/USD rate, an exact value that never terminates in base 10, which the engine then fails to publish
-     * (WireNumberTooLargeError, planner_report.py `ratio_to_fixed_decimal(ledger.raw_rounding_delta)`); in CHF the calculation
-     * fails on a negative value (ValueError, models.py `_require_nonnegative`). Both end in «Calculation failed». With EUR
-     * sources only, the plan's one conversion is EUR into USD at Interactive Brokers. Back to a foreign currency once fixed.
+     * In USD, the one source not in the valuation currency: its dollars keep their currency on the way to a Broker, and the
+     * valuation counts them in EUR at the stored EUR/USD rate.
      */
-    externalAccount: {name: 'Northwind Bank', currency: 'EUR', declared: '3000', toUse: '1200'},
+    externalAccount: {name: 'Northwind Bank', currency: 'USD', declared: '3000', toUse: '1200'},
     ibUsdFixedFee: '1',
     degiroFee: {floor: '1.5', ratePercent: '0.19', cap: '18'},
     microsoftManualPrice: '410',
@@ -477,7 +474,8 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
     await typeValue(targetInput(page, keys.bond), s.targets.bond);
     await expect(page.getByTestId('pac-planner-targets-control')).toHaveAttribute('data-state', 'balanced');
 
-    // FX: the one pair in play (EUR/USD), read from LibreFolio as the step opens (Auto); none may be missing.
+    // FX: the one pair in play, EUR/USD — it values the USD account and the USD Assets in EUR and prices a conversion either
+    // way — read from LibreFolio as the step opens (Auto); none may be missing.
     await goToPacStep(page, 'fx');
     const fx = page.getByTestId('pac-planner-fx');
     await expect(fx.locator('[data-testid="pac-planner-fx-pair"][data-pair="EUR/USD"]'), 'no EUR/USD rate stored: check populate_mock_data.py').toHaveAttribute('data-rate', 'set', {timeout: READ_TIMEOUT});
@@ -613,6 +611,8 @@ export async function framePacLiquidity(page: Page, draft: PacDraft): Promise<Lo
     await expect(copied).toHaveAttribute('data-origin', 'copied');
     await expect(step.getByTestId('pac-planner-contribution')).toHaveCount(1);
     await expect(externalAccountCard(page)).toHaveCount(1);
+    // The one source in another currency than the valuation's: the external account, in USD.
+    await expect(externalAccountCard(page).getByTestId('pac-planner-cash-currency'), 'the external account is not in USD').toHaveAttribute('data-currency', PAC_SCENARIO.externalAccount.currency);
     // A remounted step shows no copy notice (CopyFlow is the step's own): the cards follow the three sources directly.
     await framePacBlock(page, {first: step, last: externalAccountCard(page), fallback: copied});
     return step;
@@ -802,15 +802,28 @@ export async function framePacResult(page: Page): Promise<Locator> {
 }
 
 /**
- * `tools/pac-result-plan`: the Operational plan from its title — numbered cash steps, the currency exchange made on Interactive
- * Brokers (it converts before buying), then the orders. Interactive Brokers always has orders: Apple and Microsoft are bought
- * there only.
+ * `tools/pac-result-plan`: the Operational plan from its title — the numbered cash steps, the external account's dollars sent to
+ * Interactive Brokers among them, then the currency exchanges made there (it converts before buying), then the orders.
+ * Interactive Brokers always has orders: Apple and Microsoft are bought there only.
  */
 export async function framePacPlan(page: Page, draft: PacDraft): Promise<Locator> {
     const plan = resultSection(page, 'plan');
     await expect(plan).toHaveAttribute('data-open', 'true');
-    await expect(plan.locator('[data-testid="pac-planner-plan-step"][data-kind="funding"]'), 'the plan moves no cash').not.toHaveCount(0);
-    await expect(plan.locator('[data-testid="pac-planner-plan-step"][data-kind="conversion"]'), 'the plan makes no currency exchange').not.toHaveCount(0);
+    const steps = plan.getByTestId('pac-planner-plan-step');
+    const funding = plan.locator('[data-testid="pac-planner-plan-step"][data-kind="funding"]');
+    await expect(funding, 'the plan moves no cash').not.toHaveCount(0);
+    // The draft's only dollars are the external account's, and Interactive Brokers is the one Broker that buys in USD: a transfer
+    // takes them there as they are — not necessarily all of them, DEGIRO may take some and convert them when it buys.
+    const usd = PAC_SCENARIO.externalAccount.currency;
+    await expect(funding.filter({has: page.locator(`[data-funding="transfer"] [data-broker="${draft.keys.ib}"][data-currency="${usd}"]`)}), 'the external account sends no USD to Interactive Brokers').toHaveCount(1);
+    // A numbered exchange is one you make yourself: on Interactive Brokers, the one Broker that converts before buying — DEGIRO
+    // converts when it buys (no number) and the external account buys nothing. Which way it converts is the plan's call.
+    const conversions = plan.locator('[data-testid="pac-planner-plan-step"][data-kind="conversion"]');
+    await expect(conversions, 'the plan makes no currency exchange').not.toHaveCount(0);
+    await expect(conversions.filter({hasNot: page.locator(`[data-broker="${draft.keys.ib}"]`)}), 'a numbered currency exchange is not on Interactive Brokers').toHaveCount(0);
+    // One sequence for the whole plan (planner_report.py, `_SequenceAllocator`): the cash first, then the exchanges.
+    const kinds = () => steps.evaluateAll((items) => items.map((item) => item.getAttribute('data-kind')).join(' '));
+    await expect.poll(kinds, {message: 'the cash steps do not all come before the currency exchanges'}).toMatch(/^funding( funding)*( conversion)+$/);
     const ibOrders = plan.locator(`[data-testid="pac-planner-plan-orders"][data-broker="${draft.keys.ib}"]`);
     await expect(ibOrders, 'Interactive Brokers has no orders').toBeVisible();
     // From the section's title whatever fits: the numbered steps come first, the orders follow them.

@@ -4,6 +4,8 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import type {FilePreviewResponse} from '$lib/types';
     import {formatBytes} from '$lib/utils/files/upload';
+    import {NO_PDF_REPORTS, pdfPreviewState, type PdfPreviewReports, type PdfPreviewState} from '$lib/utils/files/pdfPreviewState';
+    import type {DocumentManagerCapability, TilingCapability} from '@embedpdf/snippet';
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
     import katex from 'katex';
     import 'katex/dist/katex.min.css';
@@ -79,6 +81,8 @@
     let renderedMarkdown = $state('');
     let markdownError: string | null = $state(null);
     let pdfError: string | null = $state(null);
+    /** Whether the PDF pages in view are drawn: the stage's data-state (pdfPreviewState.ts). */
+    let pdfState: PdfPreviewState = $state('loading');
     let tableError: string | null = $state(null);
 
     let pdfHost: HTMLDivElement | null = $state(null);
@@ -176,17 +180,22 @@
         if (!browser || !host || !sourceUrl) {
             if (host) host.innerHTML = '';
             pdfError = null;
+            pdfState = 'loading';
             return;
         }
 
         const token = ++pdfToken;
         pdfError = null;
+        pdfState = 'loading';
         host.innerHTML = '';
+        // The viewer's reports, unsubscribed with the viewer; `disposed` keeps a late subscription from outliving it.
+        const stopListening: Array<() => void> = [];
+        let disposed = false;
 
         void (async () => {
             try {
-                const {default: EmbedPDF} = await import('@embedpdf/snippet');
-                await Promise.resolve(
+                const {default: EmbedPDF, DocumentManagerPlugin, TilingPlugin} = await import('@embedpdf/snippet');
+                const viewer = await Promise.resolve(
                     EmbedPDF.init({
                         type: 'container',
                         target: host,
@@ -199,6 +208,25 @@
                         disabledCategories: PDF_PREVIEW_DISABLED,
                     }),
                 );
+                if (!viewer || disposed) return;
+                // Whether the pages in view are drawn, published on the stage as data-state and aria-busy
+                // (pdfPreviewState.ts). Both reports replay their latest value to a late listener, so
+                // listening once the viewer is up misses nothing.
+                const registry = await viewer.registry;
+                if (disposed) return;
+                const documents: DocumentManagerCapability | undefined = registry.getPlugin(DocumentManagerPlugin.id)?.provides?.();
+                const tiling: TilingCapability | undefined = registry.getPlugin(TilingPlugin.id)?.provides?.();
+                if (!documents || !tiling) return;
+                let reports: PdfPreviewReports = NO_PDF_REPORTS;
+                const report = (next: Partial<PdfPreviewReports>) => {
+                    reports = {...reports, ...next};
+                    pdfState = pdfPreviewState(reports);
+                };
+                stopListening.push(
+                    documents.onDocumentOpened(() => report({opened: true})),
+                    documents.onDocumentError(() => report({failed: true})),
+                    tiling.onTileRendering(({tiles}) => report({tiles})),
+                );
             } catch (err) {
                 if (token === pdfToken) {
                     pdfError = err instanceof Error ? err.message : 'Failed to render PDF';
@@ -208,6 +236,8 @@
         })();
 
         return () => {
+            disposed = true;
+            for (const stop of stopListening) stop();
             host.innerHTML = '';
         };
     });
@@ -734,7 +764,7 @@
                         </div>
                         <iframe class="pdf-fallback" src={preview.source_url} title={preview.filename} data-testid="file-preview-pdf-fallback"></iframe>
                     {:else}
-                        <div class="pdf-stage" bind:this={pdfHost} data-testid="file-preview-pdf"></div>
+                        <div class="pdf-stage" bind:this={pdfHost} data-testid="file-preview-pdf" data-state={pdfState} aria-busy={pdfState === 'loading'}></div>
                     {/if}
                 {:else if previewType === 'table'}
                     <div class="table-stage">
