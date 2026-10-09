@@ -41,8 +41,8 @@
     },
     "benchmark": {
       "it": "benchmark",
-      "fr": "benchmark",
-      "es": "benchmark"
+      "fr": "indice de référence",
+      "es": "índice de referencia"
     },
     "allocation": {
       "it": "allocazione",
@@ -59,7 +59,7 @@
       "fr": "barre latérale",
       "es": "barra lateral"
     },
-    "toggle": {
+    "toggle (on/off switch)": {
       "it": "interruttore",
       "fr": "interrupteur",
       "es": "interruptor"
@@ -70,7 +70,7 @@
       "es": "menú desplegable"
     },
     "tooltip": {
-      "it": "suggerimento",
+      "it": "tooltip",
       "fr": "infobulle",
       "es": "información emergente"
     },
@@ -82,7 +82,7 @@
     "dashboard": {
       "it": "dashboard",
       "fr": "tableau de bord",
-      "es": "panel de control"
+      "es": "panel"
     },
     "self-hosted": {
       "it": "self-hosted",
@@ -92,7 +92,7 @@
     "open-source": {
       "it": "open-source",
       "fr": "open-source",
-      "es": "open-source"
+      "es": "código abierto"
     },
     "provider": {
       "it": "provider",
@@ -106,8 +106,8 @@
     },
     "overview": {
       "it": "panoramica",
-      "fr": "aperçu",
-      "es": "descripción general"
+      "fr": "vue d'ensemble",
+      "es": "resumen"
     },
     "transaction": {
       "it": "transazione",
@@ -118,11 +118,6 @@
       "it": "posizione",
       "fr": "position",
       "es": "posición"
-    },
-    "watchlist": {
-      "it": "watchlist",
-      "fr": "liste de suivi",
-      "es": "lista de seguimiento"
     },
     "signal": {
       "it": "segnale",
@@ -142,27 +137,12 @@
     "viewer": {
       "it": "visualizzatore",
       "fr": "lecteur",
-      "es": "visor"
-    },
-    "price sync": {
-      "it": "sincronizzazione prezzi",
-      "fr": "synchronisation des prix",
-      "es": "sincronización de precios"
-    },
-    "bulk assign": {
-      "it": "assegnazione in blocco",
-      "fr": "assignation en masse",
-      "es": "asignación masiva"
+      "es": "lector"
     },
     "currency conversion": {
-      "it": "conversione valutaria",
+      "it": "conversione di valuta",
       "fr": "conversion de devise",
       "es": "conversión de divisa"
-    },
-    "OHLCV": {
-      "it": "OHLCV",
-      "fr": "OHLCV",
-      "es": "OHLCV"
     },
     "classification": {
       "it": "classificazione",
@@ -171,7 +151,7 @@
     },
     "geographic breakdown": {
       "it": "distribuzione geografica",
-      "fr": "répartition géographique",
+      "fr": "distribution géographique",
       "es": "distribución geográfica"
     },
     "sector distribution": {
@@ -199,20 +179,10 @@
       "fr": "mesure",
       "es": "medida"
     },
-    "smart search": {
-      "it": "ricerca intelligente",
-      "fr": "recherche intelligente",
-      "es": "búsqueda inteligente"
-    },
-    "auto-fill": {
-      "it": "compilazione automatica",
-      "fr": "remplissage automatique",
-      "es": "autocompletado"
-    },
-    "split": {
-      "it": "frazionamento",
+    "split (corporate action)": {
+      "it": "split",
       "fr": "division",
-      "es": "división"
+      "es": "desdoblamiento"
     },
     "maturity": {
       "it": "scadenza",
@@ -239,10 +209,10 @@
       "fr": "cache",
       "es": "caché"
     },
-    "live ticker": {
-      "it": "ticker in tempo reale",
-      "fr": "ticker en temps réel",
-      "es": "ticker en tiempo real"
+    "live price": {
+      "it": "prezzo live",
+      "fr": "prix live",
+      "es": "precio en vivo"
     },
     "scraper": {
       "it": "scraper",
@@ -251,13 +221,13 @@
     },
     "WAC": {
       "it": "PMC",
-      "fr": "PMP",
-      "es": "PMP"
+      "fr": "PRU",
+      "es": "PMC"
     },
     "weighted average cost": {
       "it": "prezzo medio di carico (PMC)",
-      "fr": "prix moyen pondéré (PMP)",
-      "es": "precio medio ponderado (PMP)"
+      "fr": "prix de revient unitaire (PRU)",
+      "es": "precio medio de compra (PMC)"
     },
     "buy": {
       "it": "acquisto",
@@ -286,14 +256,588 @@
     },
     "tax": {
       "it": "imposta",
-      "fr": "taxe",
+      "fr": "impôt",
       "es": "impuesto"
     },
+    "taxes": {
+      "it": "imposte",
+      "fr": "impôts",
+      "es": "impuestos"
+    },
     "cash transfer": {
-      "it": "trasferimento di liquidità",
-      "fr": "transfert de liquidités",
-      "es": "transferencia de efectivo"
+      "it": "giroconto",
+      "fr": "virement",
+      "es": "transferencia de fondos"
+    },
+    "asset transfer": {
+      "it": "trasferimento asset",
+      "fr": "transfert d'actif",
+      "es": "transferencia de activos"
+    },
+    "currency exchange": {
+      "it": "cambio valuta",
+      "fr": "change de devises",
+      "es": "cambio de divisas"
+    },
+    "FX conversion": {
+      "it": "conversione FX",
+      "fr": "conversion FX",
+      "es": "conversión FX"
+    },
+    "adjustment": {
+      "it": "rettifica",
+      "fr": "ajustement",
+      "es": "ajuste"
+    },
+    "price adjustment": {
+      "it": "rettifica prezzo",
+      "fr": "ajustement de prix",
+      "es": "ajuste de precio"
+    },
+    "cost basis": {
+      "it": "costo di carico",
+      "fr": "coût de base",
+      "es": "coste base"
+    },
+    "purchase cost": {
+      "it": "valore di acquisto",
+      "fr": "coût d'achat",
+      "es": "coste de compra"
+    },
+    "book value": {
+      "it": "valore contabile",
+      "fr": "valeur comptable",
+      "es": "valor contable"
+    },
+    "deposited capital": {
+      "it": "capitale versato",
+      "fr": "capital versé",
+      "es": "capital depositado"
+    },
+    "P&L": {
+      "it": "P&L",
+      "fr": "P&L",
+      "es": "P&L"
+    },
+    "realized P&L": {
+      "it": "P&L realizzato",
+      "fr": "P&L réalisé",
+      "es": "P&L realizado"
+    },
+    "unrealized P&L": {
+      "it": "P&L latente",
+      "fr": "P&L latent",
+      "es": "P&L no realizado"
+    },
+    "period P&L": {
+      "it": "P&L periodo",
+      "fr": "P&L période",
+      "es": "P&L período"
+    },
+    "NAV": {
+      "it": "NAV",
+      "fr": "NAV",
+      "es": "NAV"
+    },
+    "net asset value": {
+      "it": "valore netto",
+      "fr": "valeur nette",
+      "es": "valor neto"
+    },
+    "net worth": {
+      "it": "patrimonio netto",
+      "fr": "valeur nette",
+      "es": "patrimonio neto"
+    },
+    "in transit": {
+      "it": "in transito",
+      "fr": "en transit",
+      "es": "en tránsito"
+    },
+    "cash balance": {
+      "it": "saldo di cassa",
+      "fr": "solde de trésorerie",
+      "es": "saldo de efectivo"
+    },
+    "capital loss": {
+      "it": "minusvalenza",
+      "fr": "moins-value",
+      "es": "minusvalía"
+    },
+    "yield on cost": {
+      "it": "rendimento sul costo",
+      "fr": "rendement sur coût",
+      "es": "rendimiento sobre coste"
+    },
+    "YOC": {
+      "it": "YOC",
+      "fr": "YOC",
+      "es": "YOC"
+    },
+    "timing effect": {
+      "it": "effetto timing",
+      "fr": "effet timing",
+      "es": "efecto timing"
+    },
+    "custody": {
+      "it": "custodia",
+      "fr": "conservation",
+      "es": "custodia"
+    },
+    "FX pair": {
+      "it": "coppia FX",
+      "fr": "paire FX",
+      "es": "par FX"
+    },
+    "interest schedule": {
+      "it": "piano interessi",
+      "fr": "calendrier d'intérêts",
+      "es": "calendario de intereses"
+    },
+    "session (trading day with a quote)": {
+      "it": "seduta",
+      "fr": "séance",
+      "es": "sesión"
+    },
+    "session (login)": {
+      "it": "sessione",
+      "fr": "session",
+      "es": "sesión"
+    },
+    "risk analysis": {
+      "it": "analisi del rischio",
+      "fr": "analyse des risques",
+      "es": "análisis de riesgos"
+    },
+    "value at risk": {
+      "it": "Value at Risk",
+      "fr": "valeur à risque",
+      "es": "valor en riesgo"
+    },
+    "VaR": {
+      "it": "VaR",
+      "fr": "VaR",
+      "es": "VaR"
+    },
+    "conditional value at risk": {
+      "it": "VaR condizionale",
+      "fr": "VaR conditionnelle",
+      "es": "VaR condicional"
+    },
+    "CVaR": {
+      "it": "CVaR",
+      "fr": "CVaR",
+      "es": "CVaR"
+    },
+    "drawdown": {
+      "it": "drawdown",
+      "fr": "repli",
+      "es": "caída"
+    },
+    "max drawdown": {
+      "it": "drawdown massimo",
+      "fr": "perte maximale",
+      "es": "caída máxima"
+    },
+    "maximum drawdown": {
+      "it": "drawdown massimo",
+      "fr": "perte maximale",
+      "es": "caída máxima"
+    },
+    "current drawdown": {
+      "it": "drawdown attuale",
+      "fr": "repli actuel",
+      "es": "caída actual"
+    },
+    "per-asset drawdowns": {
+      "it": "drawdown per asset",
+      "fr": "replis par actif",
+      "es": "caídas por activo"
+    },
+    "drawdown at risk": {
+      "it": "drawdown a rischio",
+      "fr": "repli à risque",
+      "es": "caída en riesgo"
+    },
+    "conditional drawdown at risk": {
+      "it": "drawdown a rischio condizionale",
+      "fr": "repli à risque conditionnel",
+      "es": "caída en riesgo condicional"
+    },
+    "Ulcer index": {
+      "it": "indice di Ulcer",
+      "fr": "indice d'Ulcer",
+      "es": "índice de Ulcer"
+    },
+    "worst realization": {
+      "it": "peggior realizzazione",
+      "fr": "pire réalisation",
+      "es": "peor realización"
+    },
+    "underwater": {
+      "it": "sotto il picco",
+      "fr": "sous le sommet",
+      "es": "bajo el pico"
+    },
+    "Sharpe ratio": {
+      "it": "indice di Sharpe",
+      "fr": "ratio de Sharpe",
+      "es": "ratio de Sharpe"
+    },
+    "Sortino ratio": {
+      "it": "indice di Sortino",
+      "fr": "ratio de Sortino",
+      "es": "ratio de Sortino"
+    },
+    "risk-free rate": {
+      "it": "tasso privo di rischio",
+      "fr": "taux sans risque",
+      "es": "tasa libre de riesgo"
+    },
+    "beta": {
+      "it": "beta",
+      "fr": "bêta",
+      "es": "beta"
+    },
+    "active return": {
+      "it": "rendimento attivo",
+      "fr": "rendement actif",
+      "es": "rendimiento activo"
+    },
+    "tracking error": {
+      "it": "tracking error",
+      "fr": "erreur de suivi",
+      "es": "error de seguimiento"
+    },
+    "information ratio": {
+      "it": "information ratio",
+      "fr": "ratio d'information",
+      "es": "ratio de información"
+    },
+    "risk contribution": {
+      "it": "contributo al rischio",
+      "fr": "contribution au risque",
+      "es": "contribución al riesgo"
+    },
+    "confidence level": {
+      "it": "livello di confidenza",
+      "fr": "niveau de confiance",
+      "es": "nivel de confianza"
+    },
+    "historical replay": {
+      "it": "replay storico",
+      "fr": "rejeu historique",
+      "es": "repetición histórica"
+    },
+    "hypothetical shock": {
+      "it": "shock ipotetico",
+      "fr": "choc hypothétique",
+      "es": "choque hipotético"
+    },
+    "exposure bucket": {
+      "it": "bucket di esposizione",
+      "fr": "catégorie d'exposition",
+      "es": "grupo de exposición"
+    },
+    "synthetic benchmark": {
+      "it": "benchmark sintetico",
+      "fr": "benchmark synthétique",
+      "es": "benchmark sintético"
+    },
+    "Calm market": {
+      "it": "Mercato calmo",
+      "fr": "Marché calme",
+      "es": "Mercado tranquilo"
+    },
+    "Prolonged crisis": {
+      "it": "Crisi prolungata",
+      "fr": "Crise prolongée",
+      "es": "Crisis prolongada"
+    },
+    "Shock and recovery": {
+      "it": "Shock e recupero",
+      "fr": "Choc et reprise",
+      "es": "Shock y recuperación"
+    },
+    "Reshuffled history": {
+      "it": "Storia rimescolata",
+      "fr": "Historique remélangé",
+      "es": "Historial remezclado"
+    },
+    "Normal curve (GBM)": {
+      "it": "Curva normale (GBM)",
+      "fr": "Courbe normale (MBG)",
+      "es": "Curva normal (MBG)"
+    },
+    "carried forward": {
+      "it": "mantenuto",
+      "fr": "reporté",
+      "es": "arrastrado"
+    },
+    "data quality": {
+      "it": "qualità dei dati",
+      "fr": "qualité des données",
+      "es": "calidad de datos"
+    },
+    "rolling window": {
+      "it": "finestra mobile",
+      "fr": "fenêtre glissante",
+      "es": "ventana móvil"
+    },
+    "PAC": {
+      "it": "PAC",
+      "fr": "PAC",
+      "es": "PAC"
+    },
+    "PAC allocator": {
+      "it": "allocatore PAC",
+      "fr": "allocateur PAC",
+      "es": "asignador PAC"
+    },
+    "operational plan": {
+      "it": "piano operativo",
+      "fr": "plan opérationnel",
+      "es": "plan operativo"
+    },
+    "target weight": {
+      "it": "peso obiettivo",
+      "fr": "poids cible",
+      "es": "peso objetivo"
+    },
+    "target share": {
+      "it": "quota obiettivo",
+      "fr": "part cible",
+      "es": "parte objetivo"
+    },
+    "Targets (PAC allocator step)": {
+      "it": "Obiettivi",
+      "fr": "Cibles",
+      "es": "Objetivos"
+    },
+    "Routing (PAC allocator step)": {
+      "it": "Route",
+      "fr": "Routes",
+      "es": "Rutas"
+    },
+    "Review (PAC allocator step)": {
+      "it": "Riepilogo",
+      "fr": "Récapitulatif",
+      "es": "Revisión"
+    },
+    "FX (PAC allocator step)": {
+      "it": "FX",
+      "fr": "Change",
+      "es": "Cambio"
+    },
+    "order route": {
+      "it": "route d'ordine",
+      "fr": "route d'ordre",
+      "es": "ruta de orden"
+    },
+    "conversion route": {
+      "it": "percorso di conversione",
+      "fr": "route de conversion",
+      "es": "ruta de conversión"
+    },
+    "conversion spread": {
+      "it": "spread di conversione",
+      "fr": "spread de conversion",
+      "es": "spread de conversión"
+    },
+    "purchase fee": {
+      "it": "commissione di acquisto",
+      "fr": "frais d'achat",
+      "es": "comisión de compra"
+    },
+    "increment": {
+      "it": "incremento",
+      "fr": "incrément",
+      "es": "incremento"
+    },
+    "price margin": {
+      "it": "margine sul prezzo",
+      "fr": "marge sur le prix",
+      "es": "margen sobre el precio"
+    },
+    "minimum purchase": {
+      "it": "acquisto minimo",
+      "fr": "achat minimum",
+      "es": "compra mínima"
+    },
+    "required purchase": {
+      "it": "acquisto obbligatorio",
+      "fr": "achat obligatoire",
+      "es": "compra obligatoria"
+    },
+    "maximum purchase": {
+      "it": "acquisto massimo",
+      "fr": "achat maximum",
+      "es": "compra máxima"
+    },
+    "order mode": {
+      "it": "modalità d'ordine",
+      "fr": "mode d'ordre",
+      "es": "modo de orden"
+    },
+    "valuation currency": {
+      "it": "valuta di valutazione",
+      "fr": "devise de valorisation",
+      "es": "divisa de valoración"
+    },
+    "new contribution": {
+      "it": "nuovo versamento",
+      "fr": "nouveau versement",
+      "es": "nueva aportación"
+    },
+    "smallest unit of the currency": {
+      "it": "unità minima della valuta",
+      "fr": "plus petite unité de la devise",
+      "es": "unidad mínima de la divisa"
+    },
+    "import wizard": {
+      "it": "procedura guidata di importazione",
+      "fr": "assistant d'importation",
+      "es": "asistente de importación"
+    },
+    "report set": {
+      "it": "set di report",
+      "fr": "lot de rapports",
+      "es": "conjunto de informes"
+    },
+    "broker report": {
+      "it": "report del broker",
+      "fr": "rapport de courtier",
+      "es": "informe del bróker"
+    },
+    "securities transactions": {
+      "it": "movimenti titoli",
+      "fr": "opérations sur titres",
+      "es": "movimientos de valores"
+    },
+    "cash statement": {
+      "it": "estratto del conto",
+      "fr": "relevé du compte espèces",
+      "es": "extracto de la cuenta de efectivo"
+    },
+    "todo banner": {
+      "it": "banner dei campi da completare",
+      "fr": "bannière des champs à compléter",
+      "es": "banner de campos por completar"
+    },
+    "data-quality banner": {
+      "it": "banner di qualità dei dati",
+      "fr": "bannière de qualité des données",
+      "es": "banner de calidad de datos"
+    },
+    "bulk workspace": {
+      "it": "workspace bulk",
+      "fr": "espace de travail groupé",
+      "es": "espacio de trabajo masivo"
+    },
+    "bulk editor": {
+      "it": "editor bulk",
+      "fr": "éditeur groupé",
+      "es": "editor masivo"
+    },
+    "privacy mode": {
+      "it": "modalità privacy",
+      "fr": "mode confidentialité",
+      "es": "modo privacidad"
+    },
+    "Hide amounts": {
+      "it": "Nascondi importi",
+      "fr": "Masquer les montants",
+      "es": "Ocultar importes"
+    },
+    "Show amounts": {
+      "it": "Mostra importi",
+      "fr": "Afficher les montants",
+      "es": "Mostrar importes"
+    },
+    "connection security indicator": {
+      "it": "indicatore di sicurezza della connessione",
+      "fr": "indicateur de sécurité de la connexion",
+      "es": "indicador de seguridad de la conexión"
+    },
+    "Connection: secure": {
+      "it": "Connessione: sicura",
+      "fr": "Connexion : sécurisée",
+      "es": "Conexión: segura"
+    },
+    "Connection: local network": {
+      "it": "Connessione: rete locale",
+      "fr": "Connexion : réseau local",
+      "es": "Conexión: red local"
+    },
+    "Connection: not secure": {
+      "it": "Connessione: non sicura",
+      "fr": "Connexion : non sécurisée",
+      "es": "Conexión: no segura"
+    },
+    "How to connect securely": {
+      "it": "Come connettersi in sicurezza",
+      "fr": "Comment se connecter en toute sécurité",
+      "es": "Cómo conectarse de forma segura"
+    },
+    "onboarding": {
+      "it": "primo utilizzo",
+      "fr": "prise en main",
+      "es": "introducción"
+    },
+    "welcome setup": {
+      "it": "configurazione iniziale",
+      "fr": "configuration d'accueil",
+      "es": "configuración de bienvenida"
+    },
+    "Core tour": {
+      "it": "Tour principale",
+      "fr": "Parcours principal",
+      "es": "Recorrido principal"
+    },
+    "quick tour": {
+      "it": "tour rapido",
+      "fr": "visite rapide",
+      "es": "recorrido rápido"
+    },
+    "contextual guide": {
+      "it": "guida contestuale",
+      "fr": "guide contextuel",
+      "es": "guía contextual"
+    },
+    "replay (onboarding guide)": {
+      "it": "ripetere",
+      "fr": "relancer",
+      "es": "repetir"
+    },
+    "card": {
+      "it": "scheda",
+      "fr": "carte",
+      "es": "tarjeta"
+    },
+    "tab": {
+      "it": "scheda",
+      "fr": "onglet",
+      "es": "pestaña"
+    },
+    "modal": {
+      "it": "modale",
+      "fr": "modale",
+      "es": "modal"
+    },
+    "chart settings": {
+      "it": "impostazioni grafico",
+      "fr": "paramètres du graphique",
+      "es": "ajustes del gráfico"
+    },
+    "AI Export": {
+      "it": "AI Export",
+      "fr": "export IA",
+      "es": "exportación IA"
+    },
+    "scheduler": {
+      "it": "scheduler",
+      "fr": "planificateur",
+      "es": "planificador"
     }
   }
 }
-
