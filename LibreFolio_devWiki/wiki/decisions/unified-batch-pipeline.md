@@ -40,12 +40,17 @@ Internal pipeline: `_parse_lenient()` does per-row `Model.model_validate(raw)` i
 - Frontend simplified: 1 commit endpoint, 1 preview endpoint
 - HTTP 200 always (committed=false is semantic, not an error)
 - Net −290 lines backend, 7 deprecated schemas deleted
+- **2026-09-11 (SP16)**: `execute_batch` became an orchestrator over named stages in
+  `transaction_batch_stages.py` with a shared `TransactionBatchContext`; the caller still owns the DB transaction and
+  every invariant of this decision was kept — [[entities/transaction-batch-pipeline]]
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Pipeline implementation | `backend/app/services/transaction_service.py` |
+| Pipeline orchestrator (`execute_batch`) | `backend/app/services/transaction_service.py` |
+| Pipeline stages (since 2026-09-11) | `backend/app/services/transaction_batch_stages.py` |
+| Shared batch context | `backend/app/services/transaction_batch_context.py` |
 | Endpoint definitions | `backend/app/api/v1/transactions.py` |
 | Schema definitions | `backend/app/schemas/transactions.py` |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md` |

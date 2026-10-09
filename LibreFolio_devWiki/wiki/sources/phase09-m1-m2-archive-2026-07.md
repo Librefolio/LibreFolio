@@ -126,12 +126,12 @@ future ingests.
 | Role | Path |
 |------|------|
 | Archived index (new) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/README.md` |
-| Active M3 index (root) | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/README.md` |
+| Active M3 index (root) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/README.md` |
 | Phase status doc | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-dashboard.md` |
 | M1 backend plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_1/` |
 | M2 dashboard + engine plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/` |
 | Holdings/Performance refactor notes | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/lowDashboard/Low-dashboard_implementation_notes.md` |
 | Service (get_summary, get_positions_contribution) | `backend/app/services/portfolio_service.py` |
 | Engine | `backend/app/services/portfolio_engine.py` |
-| Failing test (unrelated) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_transaction_implied.py` |
+| Failing test (unrelated) | *deleted 2026-07-14* (test_transaction_implied.py, no successor) — [[problems/test-transaction-implied-constructor-mismatch]] |
 | DataTable component (unrelated bug) | `frontend/src/lib/components/table/DataTable.svelte` |

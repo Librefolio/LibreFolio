@@ -106,6 +106,18 @@ edits/deletes."* The line above it was violating it.
 normally. **No merge policy** — someone who is writing does not get the document
 pulled out of their hands.
 
+### 5 — the request that changed its own identity (2026-10-07)
+
+On the asset detail, with "All" selected and prices already cached, the event markers, the backend signal
+overlays and the calendar return never appeared. The chart load resolves "All" to the asset's first price date
+(`resolveMaxStartFromChartData()`), which **moves `dateStart`** — and the staleness guard added a week earlier
+compared `dateStart === requestedStart`, so the request discarded its **own** answer. A silent `catch` hid it.
+
+**Fix**: `requestedStart` became a `let`, re-synced right after the request resolves the start itself
+(`frontend/src/routes/(app)/assets/[id]/+page.svelte`, ~1642 and ~1707). The rule it adds: *a request that changes
+its own identity must carry its staleness token along* — otherwise the guard cannot tell "superseded" from "I moved".
+Plan: `plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md` (`phases/20_performanceCharts/`).
+
 ## How to spot the shape
 
 - an `$effect` or a guard that **resets state** on a signature change;
@@ -124,4 +136,4 @@ In each case, ask: *if the input arrives late, does the user's intention survive
 | Signature reset + relaunch | `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` |
 | Async add guarded by `data-busy` | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
 | Dirty-preserving rebuild | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
-| Chart reload call sites | `frontend/src/routes/assets/[id]/+page.svelte` |
+| Chart reload call sites; `requestedStart` re-sync (case 5) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |

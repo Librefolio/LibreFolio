@@ -113,6 +113,16 @@ surfaces, and it needs to answer what the asset-detail tab should show.
 
 ### New, 23/09 — under global privacy the net is blind
 
+> The privacy feature itself — mask at the formatter, the sign and the currency kept (D8, round 2) — is
+> [[decisions/privacy-mask-at-the-formatter]] / [[features/F-101]].
+>
+> **Update 2026-10-09 (historian, checked at `586a4f0ea`).** The repair this section waited for landed on
+> 2026-09-24 (`176f19707`, "keep currency and sign under the mask"): `formatCurrencyAmount` in
+> `riskAnalysisHelpers.ts` now returns `maskCurrencyParts(…)`, so under privacy only the **number** becomes `•••` and
+> the symbol/code stay. The analysis below describes the state of 23/09. The money test still switches privacy off
+> through `privacy-toggle` (`risk-lab.spec.ts`); whether that pin is still needed is a decision for the Risk tests,
+> not recorded here.
+
 09 §1.6/§9.2 (22/09) concluded that under privacy only the *value* assertion goes blind,
 because the mask of `currencyFormat.ts` covers the number and leaves symbol, flag and code
 outside. That holds for `currencyFormat.ts` — **not on the laboratory's path**. `L4Replay`

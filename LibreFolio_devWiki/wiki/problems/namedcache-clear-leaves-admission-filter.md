@@ -64,4 +64,4 @@ wrong half to keep.
 |------|------|
 | Cache wrapper | `backend/app/utils/cache_utils.py` — `NamedCache.clear` |
 | Dependency | `theine` 2.0.0 (`requirements.txt`) |
-| Cache consumers | `backend/app/services/fx.py`, `backend/app/services/asset_service.py` |
+| Cache consumers | `backend/app/services/fx.py`, `backend/app/services/asset_sources/core.py` (and the price providers) |

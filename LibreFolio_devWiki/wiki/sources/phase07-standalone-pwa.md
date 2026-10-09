@@ -51,7 +51,7 @@ This is the archived standalone plan for the PWA and mobile optimization work, n
 | Role | Path |
 |------|------|
 | Archived plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md` |
-| Service Worker | `frontend/static/service-worker.js` |
+| Service Worker | `frontend/static/sw.js` |
 | Manifest | `frontend/static/manifest.json` |
 | Install logic | `frontend/src/lib/components/layout/HelpMenu.svelte` |
 | App HTML | `frontend/src/app.html` |

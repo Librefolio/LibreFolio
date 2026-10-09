@@ -16,7 +16,7 @@ Two of its four parallel passes, the large ones with 111 and 54 units, had print
 
 ```text
 coverage combine failed: Couldn't combine from non-existent path
-'…/.coverage_data/parts/.coverage.w1.MacBook Pro di Emanuele (2).pid10917.Xm9GZYYx'
+'…/.coverage_data/parts/.coverage.w1.<hostname>.pid10917.Xm9GZYYx'
 ```
 
 The two small passes, with 24 and 11 units, had combined normally. Afterwards `parts/` still held
