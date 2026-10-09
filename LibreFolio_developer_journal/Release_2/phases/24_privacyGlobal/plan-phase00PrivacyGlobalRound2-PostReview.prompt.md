@@ -4,12 +4,12 @@
 [Round 1 — nucleo di mascheramento](plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md)
 
 Piano gemello, stesso round di review:
-[Onboarding Round 8 — correzioni dalla review d'uso](../21_onboarding/plan-phase00OnboardingRound8-PostReview.prompt.md)
+[Onboarding Round 8 — correzioni dalla review d'uso](../../Phase_0/21_onboarding/plan-phase00OnboardingRound8-PostReview.prompt.md)
 
 Fonti:
-[review d'uso 22/09](../09_feedbackJobs/08_review_visiva_20260922.md) ·
-[reperti dell'analisi statica](../09_feedbackJobs/09_reperti_analisi_statica_20260922.md) ·
-[backlog P4](../09_feedbackJobs/00_backlog_strutturale_P4.md) (P4-10, P4-11)
+[review d'uso 22/09](../../Phase_0/09_feedbackJobs/08_review_visiva_20260922.md) ·
+[reperti dell'analisi statica](../../Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md) ·
+[backlog P4](../../Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md) (P4-10, P4-11)
 
 ## Confine e autorizzazione
 
@@ -21,7 +21,8 @@ Fonti:
 | **Lane copia prod** | porta `6168`, `/tmp/librefolio-r2-j-onboarding-prodcopy`, **solo dalla snapshot** `/tmp/librefolio-r2-prod-snapshot` |
 | **Lane suite** | porta `6158`, `/tmp/librefolio-r2-j-onboarding` — **solo** `dev.py test …` |
 | **Coordinator** | `c8328a01-f208-4ade-a352-0486d1f14de2` |
-| **Checkpoint** | C0 `2a5927c48` · C1 `176f19707` · C2 `64d78e244` · C3 `59cb80103` · C4 `5e7ae336e` (onboarding) — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) |
+| **Checkpoint** | C0 `2a5927c48` · C1 `176f19707` · C2 `64d78e244` · C3 `59cb80103` · C4 `5e7ae336e` (onboarding) — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) · C5 `503351f0f` (passi 9-10) · C6 `1466a76d6` + `1c8d12957` + `8347f8d6c` (passi 12-15) · C7 `3eb340822` (registrazione del passo 11) |
+| **Stato** | ✅ **COMPLETATO il 2026-09-24** (registrazione finale 2026-09-25); integrato in `dev_release2` col merge `2bbaa8db2` (2026-09-25 10:35, `merge(onboarding): dev_release2 into J for integration`). Verificato e archiviato il 2026-10-09 |
 
 **Autorizzazione developer verbatim, 2026-09-23:** `Plan approved! Exited plan mode.`
 
@@ -658,6 +659,15 @@ Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
 >
 > I punti 11–17 (aggiornamenti e onboarding) sono registrati nel piano gemello, Round 8, step 7. Nessun
 > difetto di privacy aperto in questo round; resta l'integrazione di Crescita e Performance (commit di I).
+>
+> **Verifica d'archivio (2026-10-09):** l'integrazione che restava è avvenuta. Il commit di I è
+> `804bc9903` (2026-09-24 14:18, `fix(privacy): mask growth and performance amounts`), entrato in
+> `dev_release2` con il Round 4 di I (2026-10-02, punta `975a115ae`). Oggi l'elenco `residual` del gate
+> è vuoto (`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts:281-283`) e la riga P&L del
+> tooltip di Crescita è registrata `masked` (`:193-197`). Il debito di precisione del gate su
+> `PerformanceChart` (due rami `maskable` sulla stessa riga, `axisTickAmount` non visto) è rinviato:
+> `Phase_0/38_postReleaseBacklog/README.md`, voce «I-05 · precisione del gate privacy su
+> PerformanceChart».
 
 ## Round 2b — checkpoint C6 (assegnato dal coordinator, 2026-09-24 16:07)
 
@@ -667,6 +677,9 @@ scrittore di `ui/PrivacyToggle.svelte`, `ui/ThemeToggle.svelte`, `transactions/T
 (K lo modifica nel suo ramo). Dopo C6 viene il passo 11.
 
 ### Passo 12 — Etichette dei pulsanti dell'header in i18n — **Stato: ✅ completato il 2026-09-24**
+
+> **Commit (verifica d'archivio 2026-10-09):** `1466a76d6` (2026-09-24 17:21,
+> `feat(i18n): translate the header toggles`).
 
 > **Note implementazione.** Nessuna chiave dell'header esisteva da riusare (cercate per valore e per
 > nome: solo `settings.theme*`, che dicono «Chiaro/Scuro», non l'azione). Namespace nuovo `header`,
@@ -689,6 +702,9 @@ scrittore di `ui/PrivacyToggle.svelte`, `ui/ThemeToggle.svelte`, `transactions/T
 > importi'*.
 
 ### Passo 13 — Sovra-mascheratura in Transazioni e anteprima WAC — **Stato: ✅ completato il 2026-09-24**
+
+> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (2026-09-24 17:21,
+> `fix(privacy): keep unit values visible`), insieme ai passi 14 e 15.
 
 Regola del developer (D5′-c): un valore **unitario** (prezzo, WAC, costo unitario) è `public`, un
 **totale** è `personal`; gli **eventi asset** descrivono l'asset, non il portafoglio (`public`); un campo
@@ -726,6 +742,8 @@ di modifica resta leggibile (D7).
 
 ### Passo 14 — Test della marcatura `public` di `AssetTable` — **Stato: ✅ completato il 2026-09-24**
 
+> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (vedi passo 13).
+
 Solo il file di test: `AssetTable.svelte` non si tocca. Il prezzo di mercato è `public`, e oggi nessun
 test lo protegge (il gate non riesamina una marcatura `public`).
 
@@ -739,6 +757,9 @@ test lo protegge (il gate non riesamina una marcatura `public`).
 > anche il passo *off → on* sul posto: prova che il toggle raggiunge la tabella.
 
 ### Passo 15 — Frase «fully embraces runes» (facoltativo) — **Stato: ✅ completato il 2026-09-24**
+
+> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (vedi passo 13), che corregge
+> `mkdocs_src/docs/developer/frontend/index.md`; registrazione dei passi 12-15 in `8347f8d6c`.
 
 > **Note implementazione.** Misurato compilando ogni componente con Svelte 5.48.0 (`metadata.runes`): **34 su
 > 253** componenti di `frontend/src` (esclusi `__tests__`) sono in modalità legacy, fra cui il layout

@@ -1,7 +1,13 @@
 # Performance charts — bugfix: gli eventi degli asset nell'editor dei dati
 
-**Stato:** IN CORSO. Reperti di Q (onda 2), verifiche chieste dal coordinator alle 17:42 («verifiche prima, e la
-correzione solo dei reperti confermati»). Decisioni del developer relayate alle 17:58 (testo sotto).
+**Stato:** ✅ **COMPLETATO E INTEGRATO**. Lotto chiuso il 2026-10-08 alle 20:32 (FROZEN). Commit del developer il
+2026-10-08 alle 22:16: `fba7edf07` (backend e i suoi test), `e0b2077d2` (frontend e i suoi test), `c160bd34c` (doc) e
+`994347f55` (questo giornale). In `dev_release2` col treno 19, merge `5423c334f`. I limiti residui hanno una voce di
+backlog (I-09…I-12, «Limiti residui»). Verificato e archiviato il 2026-10-09 in
+`Release_2/phases/20_performanceCharts/`. Reperti di Q (onda 2), verifiche chieste dal coordinator alle 17:42
+(«verifiche prima, e la correzione solo dei reperti confermati»). Decisioni del developer relayate alle 17:58 (testo
+sotto).
+*Storia dello stato:* IN CORSO (2026-10-08, dalle 17:42).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** HEAD = `108a2adf5` (treno 17), albero pulito, rimisurato prima di scrivere questo piano.
@@ -207,8 +213,8 @@ Reperti laterali trovati durante la verifica:
 |---|---|---|
 | S1 | Una riga aggiunta e poi eliminata prima del salvataggio ha `rowId` = data: `parseInt("2026-09-20")` = 2026 → `DELETE /assets/events?ids=2026`, e la cancellazione non è limitata all'asset (`delete_events_bulk`, `:816–882`). Anche la rimozione in memoria (`:399–403`) usa `parseInt`. Il commento in `eventsToEventRows` voleva evitare proprio questo, ma copriva un solo percorso di creazione. | Nel lotto |
 | S2 | `DataEditor.handleImport` (`:521–560`) abbina solo per data: vince la prima riga di quella data. Se è un evento automatico (readonly) l'import salta anche quando c'è una riga manuale; se è una riga manuale di un altro tipo, il tipo viene sovrascritto (con F1 corretto diventerebbe un cambio di tipo silenzioso). | Nel lotto, come parte di F1 |
-| S3 | `handleBulkDelete` (`:506–515`) non salta gli eventi automatici readonly. | Backlog |
-| S4 | La mini-modale riconosce l'evento appena creato da (tipo, data): può prendere un evento automatico. | Backlog |
+| S3 | `handleBulkDelete` (`:506–515`) non salta gli eventi automatici readonly. | Backlog: I-10 |
+| S4 | La mini-modale riconosce l'evento appena creato da (tipo, data): può prendere un evento automatico. | Backlog: I-10 |
 | S5 | L'aggiornamento dal provider (`refresh.py:556`) usa la stessa funzione: un evento automatico collegato a una transazione fa fallire il DELETE, e l'errore finisce in `errors`. | Nel lotto |
 
 ## Disegno
@@ -321,6 +327,17 @@ Uno alla volta, sulla 6157:
   residui.
 
 ## Limiti residui (non li correggo)
+
+> **Esito (verifica d'archivio, 2026-10-09).** Ogni limite qui sotto, con S3 e S4, ha una voce in
+> `Phase_0/38_postReleaseBacklog/README.md`:
+>
+> - «I-09 · tipo di evento non validato → 500»: N1;
+> - «I-10 · robustezza dell'editor degli eventi (S3/S4)»: S3, S4, la riga nuova senza id che si fonde in silenzio,
+>   le modifiche inviate prima delle cancellazioni, il messaggio d'errore generico;
+> - «I-11 · limiti del round-trip CSV degli eventi»: le date ripetute scartate da `CsvEditor`, `source` e `currency`
+>   ignorate dall'import, il selettore della data che disabilita le date già usate;
+> - «I-12 · guardie server degli eventi»: `DELETE /assets/events?ids=…` non limitato all'asset, il salvataggio per
+>   elemento di `bulk_upsert_events`.
 
 - `CsvEditor` scarta tutte le righe con una data ripetuta (`:416–436`): un export con due eventi nella stessa data si
   reimporta solo in parte. L'import prosegue con le altre righe.

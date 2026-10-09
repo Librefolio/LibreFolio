@@ -1,8 +1,11 @@
 # Performance charts — bugfix: i marcatori degli eventi spariscono con «Tutti» e i prezzi in cache
 
-**Stato:** COMPLETATO, FROZEN in attesa del commit (16:22). Lavoro approvato dal developer il 2026-10-07 («ok
-affidare a I la risoluzione», via coordinator alle 15:22). Il brief con diagnosi, correzione e test è andato al
+**Stato:** ✅ **COMPLETATO E INTEGRATO**. Commit del developer il 2026-10-07 alle 16:33: `60d8e790a` (la correzione
+con lo spec) e `f8f37ea5c` (questo giornale). In `dev_release2` col treno 9, merge `0a2359573` (17:42). Verificato e
+archiviato il 2026-10-09 in `Release_2/phases/20_performanceCharts/`. Lavoro approvato dal developer il 2026-10-07
+(«ok affidare a I la risoluzione», via coordinator alle 15:22). Il brief con diagnosi, correzione e test è andato al
 coordinator alle 15:31.
+*Storia dello stato:* COMPLETATO, FROZEN in attesa del commit (16:22).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** HEAD = `dev_release2` = `d07412899`, dopo il fast-forward da `dd538d650` (coordinator, 15:25). Albero
@@ -14,6 +17,8 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 Precedenti e collegati:
 
 - Piano precedente: [plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md),
+  che punta qui.
+- Seguito: [plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md),
   che punta qui.
 - Il concetto del devWiki che descrive questa classe di difetti:
   [discard-the-answer-not-the-question.md](../../../../LibreFolio_devWiki/wiki/concepts/discard-the-answer-not-the-question.md).
@@ -242,3 +247,7 @@ test-author.
 >      e il link «Seguito» nel piano del round 4.
 > - Nessuna riga nel CHANGELOG: il difetto non è mai uscito in una release.
 > - Handoff al coordinator, poi FROZEN.
+>
+> **Esito (verifica d'archivio, 2026-10-09).** Il coordinator ha accorciato l'oggetto del primo commit alla regola dei
+> 50 caratteri: `60d8e790a`, `fix(assets): keep events when All hits the cache`. Il secondo, `f8f37ea5c`, ha
+> l'oggetto proposto. Entrambi sono in `dev_release2` dal treno 9 (`0a2359573`).
