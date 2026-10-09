@@ -437,7 +437,8 @@
     },
     "invalidCredentials": "Invalid username or password",
     "invalidInput": "Invalid input",
-    "loginFailed": "Login failed"
+    "loginFailed": "Login failed",
+    "accountDisabled": "This account is disabled: ask an administrator to enable it again."
   },
   "importWizard": {
     "title": "Import Transactions",
@@ -5421,5 +5422,22 @@
     "deselectVisible": "Deselect visible",
     "confirm": "Add {count}",
     "allSelected": "Every asset is already in the selection."
+  },
+  "connectionSecurity": {
+    "level": {
+      "secure": "Connection: secure",
+      "local": "Connection: local network",
+      "insecure": "Connection: not secure"
+    },
+    "reason": {
+      "https": "Encrypted with HTTPS: your browser considers this connection secure.",
+      "localhost": "You are on the server itself: the traffic does not leave this computer.",
+      "vpn": "Encrypted by the VPN (Tailscale) between your device and the server.",
+      "lan": "Local network without encryption: anyone on the same network, for example the Wi-Fi, can read the traffic. For the best security, use the HTTPS address at home too.",
+      "uncertain": "Unclear: the address you opened and the source the server sees disagree, for example a public name reached through split DNS or a local proxy. The traffic is not encrypted: use the HTTPS address.",
+      "internet": "Not encrypted over the Internet: passwords and data travel in clear text."
+    },
+    "cookieWarning": "Your browser uses HTTPS, but the session cookie is not marked Secure. Make the reverse proxy send X-Forwarded-Proto (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), or set SESSION_COOKIE_SECURE back to auto if it is never.",
+    "learnMore": "How to connect securely"
   }
 }
