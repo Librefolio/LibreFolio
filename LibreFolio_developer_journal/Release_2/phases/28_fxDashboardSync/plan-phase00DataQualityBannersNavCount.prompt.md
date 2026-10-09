@@ -81,3 +81,6 @@ Nessuna chiave i18n, nessun file del runner, nessun codice di prodotto.
 4. ✅ (08/10) Checkpoint: 2 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_dq_C1..C2.txt` (lo spec;
    questo piano). Le liste dei path sono in `n_dq_paths_C1..C2.txt`, i blob in `n_dq_blobs.txt` e l'albero
    finale in `n_dq_final_tree.txt`. Stato: FROZEN.
+   > **Integrato** (allineamento del 09/10): `ce892dd7c` (spec), `5157b6762` (questo piano), treno 15 (`062ae68db`).
+   > La domanda per P sulla ricompensa di staking (§2) è chiusa: il seed di P, entrato nello stesso treno 15, toglie
+   > l'anomalia vera su Ethereum (messaggio del coordinator, 08/10 17:05). Il test non dipendeva più da quel seed.

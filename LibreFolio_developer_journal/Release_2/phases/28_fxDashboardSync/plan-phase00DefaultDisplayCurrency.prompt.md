@@ -109,3 +109,5 @@ della `PUT` e del ripristino. Nessuna scrittura condivisa. Precedenti di interce
 6. ✅ (08/10) Checkpoint: 3 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_defcur_C1..C3.txt` (la
    correzione con i suoi test e le registrazioni; l'NR di `asset-modal`; questo piano). Liste in
    `n_defcur_paths_C1..C3.txt`, blob in `n_defcur_blobs.txt`, albero in `n_defcur_final_tree.txt`. Stato: FROZEN.
+   > **Integrato** (allineamento del 09/10): `51d1a64db` (correzione, test, registrazioni), `4c214bc16` (NR di
+   > `asset-modal`), `9ca9078cc` (questo piano), treno 18 (`38a7230e2`). Nessun residuo.

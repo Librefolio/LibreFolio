@@ -2,7 +2,16 @@
 
 > Perimetro nuovo chiesto dal developer il 06/10 e assegnato dal coordinator. Analisi §1–§6; decisioni E1–E7 del
 > developer; **fase 1 implementata il 06/10** (via del coordinator alle 22:44) sul ramo a `593293b78`: passi in §7.
-> Resta da aggiungere, al via del coordinator, la parte di `RiskLevelsPanel.svelte` (ora di A, passo 24).
+> La parte di `RiskLevelsPanel.svelte` (allora di A, passo 24) è stata fatta col lotto 2: passo 10 (07/10).
+>
+> **Stato (09/10, allineato da N su `3cceb4f90`): FINITO e archiviato.** Tutti i passi di §7 sono fatti e
+> integrati; il resto del principio generale (§3.1-quater, fase 2) non è mai partito ed è rinviato:
+> `Phase_0/38_postReleaseBacklog/README.md`, voce N-1. Commit:
+> - fase 1 (passi 1-9): `cd1d42fb6` (feat), `a3d2fbc3c` (doc), `8baf74f29` (journal), treno 8;
+> - validazione del treno 8: `af154d84d` (`risk-lab.spec.ts`, i preset dei broker seguono la cache), treno 8;
+> - lotto 2 (passo 10): `3a83ad9c7`, `49d4ec8e0`, `c958f857c`, treno 9;
+> - rossi della coverage del 07/10 (passo 11): `a1a0a0b87`, `6a6429db7`, `bc3dc7bdb`, `fdb877bcc`, `9d1af831c`,
+>   treno 10.
 >
 > Segue lo step 1 ([`plan-phase00FxDashboardSync.prompt.md`](plan-phase00FxDashboardSync.prompt.md)).
 
@@ -277,7 +286,9 @@ Restano già coperte le altre scritture:
 
 - **Fase 1** (già verificata dal coordinator, 20 file): Dashboard, Rischio, lotti, dettaglio broker; regola dei sync
   (E2); valuta e filtri (E3); «Aggiorna» (E4); F2.
-- **Fase 2** (questo principio, il resto):
+- **Fase 2** (questo principio, il resto) — **rinviata: `Phase_0/38_postReleaseBacklog/README.md`, voce N-1**
+  (09/10). Non è mai partita: nessun via e nessun elenco verificato. Il codice di oggi è com'era (evidenze nella
+  voce):
   - core: `TimeSeriesStore` (+ `replaceRange`), `entityStore`;
   - pagine: lista e dettaglio asset, lista e dettaglio FX, file, transazioni;
   - i loro test.
@@ -456,7 +467,8 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
 - **E5 — Cache dei lotti:** **sì**. Il pannello è nel tuo percorso e oggi lo si richiede 3 volte.
 - **E6 — Cataloghi del rischio:** **non si svuotano** su una mutazione. La cache di idoneità invece sì, perché
   dipende dai prezzi.
-- **E7 — Ricalcolo visivo** (tween e animazioni): **passo a parte**, dopo questo.
+- **E7 — Ricalcolo visivo** (tween e animazioni): **passo a parte**, dopo questo. → **Superato** (09/10) da §3.1-ter:
+  la parte che serviva è il contesto opt-in di `TweenedValue` (passo 6); «il resto di E7 non c'è più».
 
 ---
 
@@ -654,7 +666,7 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
    > - Dashboard: anche `activeTab` e `activeAssetId` si leggono dall'URL all'init. Senza, un ritorno a
    >   `?tab=posizioni` montava prima la Panoramica (KPI, `GrowthChart`, allocazione) e la smontava subito.
    > - Dettaglio broker: anche `loadOverview` legge prima la cache (`peekReport`), altrimenti con dati
-   >   vecchi il contesto non scattava mai. Il contributo del broker resta com'è: fase 2.
+   >   vecchi il contesto non scattava mai. Il contributo del broker resta com'è: fase 2 (rinviata, voce N-1).
 6. ✅ (06/10) `TweenedValue`: contesto opt-in, default invariato.
 
    > **Note implementazione**: `<script module>` esporta `TWEEN_HYDRATION_CONTEXT` (un `Symbol`) e
@@ -662,12 +674,13 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
    > da sé stesso (`tweened(untrack(() => value))`), altrimenti da 0 come oggi. I cambi successivi animano
    > come prima. `KpiSection`, `KpiMetricBar` e `RiskMetricCard` restano intatti. Prova:
    > `vitest run KpiSection.test.ts` → 16/16.
-7. Gate della corsia, un comando per volta:
+7. ✅ (06/10–07/10) Gate della corsia, un comando per volta:
    - `front check`;
    - `front-portfolio store-unit` e `risk-unit`, `front-utility core-unit` e `component-unit`;
    - E2E: il nuovo spec, `front-portfolio banners`, `stale-price-banner`, `risk`;
    - `front-asset asset-detail`, `front-broker`.
-   - `front-portfolio dashboard` va rifatto sulla revisione comune dopo l'ingresso di A.
+   - `front-portfolio dashboard` va rifatto sulla revisione comune dopo l'ingresso di A. → ✅ Rifatto il 07/10 dopo
+     A: `dashboard` 26/26 (passo 11, «Altri cancelli verdi»).
 
    > **Evidenze (06/10–07/10, corsia 6159, `/tmp/librefolio-r2-n`, un comando per volta)**:
    >
@@ -785,7 +798,8 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
    >   `state/registries.md`, `developer/frontend/index.md`. Build strict pulito, `check-links` invariato.
    >   - Due modifiche oltre la richiesta in `state/index.md`, da approvare: tolti due archi falsi del diagramma.
    >   - Restano false, non toccate: in `registries.md` WebSocket/SSE e `getStore("AAPL")`; in
-   >     `frontend/index.md` le cartelle `registries/` e `app/` DateRange.
+   >     `frontend/index.md` le cartelle `registries/` e `app/` DateRange. → Ancora false il 09/10: rinviate,
+   >     `Phase_0/38_postReleaseBacklog/README.md`, voce N-6.
    >
    > **Decisione del developer sul tab Rischio** (07/10, testuale): «Solo i broker posseduti, come il resto della
    > Dashboard». **Lotto successivo**, dopo l'ingresso del passo 24 di A e un fast-forward:
@@ -902,6 +916,11 @@ Sonda `/tmp/libreFolio_n_redraw_probe.mjs`, tre ritorni Transazioni → Dashboar
     > **Ancora per Q**: `user/dashboard/index.en.md#risk-tab`, nuova sezione `## 🛡️ Risk Tab {: #risk-tab }`
     > (`:41`). Ci sono la spiegazione della voce 3, che ora rimanda alla sezione. È un titolo in più: debito di
     > traduzione IT/FR/ES.
+    >
+    > **Superati e non toccati** (fuori concessione, consegnati al coordinator il 07/10): i commenti di
+    > `risk-lab.spec.ts:3319` e `:6969-6973` e di `assets/+page.svelte:418-419` descrivono ancora le mutazioni che
+    > scartano le risposte in volo. Ancora presenti il 09/10: rinviati, `Phase_0/38_postReleaseBacklog/README.md`,
+    > voce N-5.
 
 11. ✅ (07/10) **Due rossi della coverage completa** (`d07412899`, carico 30–50, 2 worker), assegnati dal
     coordinator alle 16:08. Base `c958f857c`. Metodo: `test-triage`; i test li scrive il test-author; i difetti di
