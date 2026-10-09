@@ -97,10 +97,9 @@ def check_port_in_use(port: int) -> list:
                     except Exception:
                         processes.append((pid, "unknown"))
         elif platform.system() == "Linux":
-            result = subprocess.run(
-                ["fuser", f"{port}/tcp"],
-                capture_output=True, text=True, stderr=subprocess.DEVNULL
-                )
+            # fuser prints the PIDs on stdout and the "port/tcp:" label on stderr. `capture_output`
+            # cannot be combined with `stderr=`: Python raises ValueError before running anything.
+            result = subprocess.run(["fuser", f"{port}/tcp"], stdout=subprocess.PIPE, text=True, stderr=subprocess.DEVNULL)
             if result.stdout.strip():
                 pids = [int(p) for p in result.stdout.strip().split() if p]
                 for pid in pids:
