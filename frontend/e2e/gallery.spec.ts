@@ -299,6 +299,15 @@ test.describe('Gallery Screenshots', () => {
     test.describe.configure({mode: 'parallel'});
     // A hung action must fail in seconds, naming the real step, not at the test timeout; explicit per-call timeouts keep their value.
     test.use({actionTimeout: 20_000});
+    // Reduced motion, on the context: every page of a test has it from its first document. A text too long for its box —
+    // a broker or asset name on a card, a table cell, the Synthetic caption under the P&L candles — scrolls itself as a
+    // marquee (scrollOnOverflow.ts) from 2 s after it mounts: a JS loop freezeAnimations() cannot stop, so shots caught
+    // names mid-scroll. Under reduced motion the marquee never starts and the text rests on its beginning. The other
+    // readers of the preference show the same content, standing still (coordinator's audit): the coachmark's pulse ring
+    // and pointer, spinners, the price flash, a highlighted table row, Tailwind `motion-*`; the coachmark and the PAC
+    // result scroll to their target at once. svelte/motion's `tweened` ignores it, so the 1 s waits for the KPI count-up
+    // stay. A nested `test.use({contextOptions})` would replace this object: spread it there.
+    test.use({contextOptions: {reducedMotion: 'reduce'}});
 
     // Tests running in parallel create temporary brokers and files (group 3: disposable accounts, brokers
     // named `‹label› · ‹TOKEN›`). A session that cannot reach them still hears of them: every session caches
@@ -1043,11 +1052,6 @@ test.describe('Gallery Screenshots', () => {
             // twice that under parallel load: 8 × 22 s + 60 s.
             test.setTimeout(240_000);
             const viewport = getViewport(testInfo);
-            // The Synthetic caption under the candles is one line, and on a phone it overflows: it then scrolls itself as a
-            // marquee (scrollOnOverflow), from 2 s after it mounts, so a shot would catch it anywhere along the line. Under
-            // reduced motion the marquee never starts and the caption rests on its beginning. Nothing else in these frames
-            // reads the preference: ECharts ignores it, and the header's transition is frozen anyway.
-            await page.emulateMedia({reducedMotion: 'reduce'});
             await setupDashboardMockReport(page);
             const candleOpenings = new Set<string>();
 
@@ -2668,11 +2672,6 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('broker list - all languages and themes', async ({page}, testInfo) => {
-            // A broker name too long for its card scrolls itself as a marquee (scrollOnOverflow), from 2 s after it mounts: a
-            // JS loop freezeAnimations cannot stop, so after the 2 s wait below the shot caught names mid-scroll. Under reduced
-            // motion the marquee never starts and the name rests on its beginning. Nothing else in these frames reads the
-            // preference: the header's transition is frozen anyway.
-            await page.emulateMedia({reducedMotion: 'reduce'});
             const viewport = getViewport(testInfo);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
