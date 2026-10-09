@@ -56,10 +56,10 @@ Plan for building the `/transactions` frontend page as a DataTable read-view wit
 |------|------|
 | Transactions page | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | Transactions table | `frontend/src/lib/components/transactions/TransactionsTable.svelte` |
-| Staging modal | `frontend/src/lib/components/transactions/TransactionStagingModal.svelte` |
-| Promote modal | `frontend/src/lib/components/transactions/TransferPromoteModal.svelte` |
-| Bulk delete modal | `frontend/src/lib/components/transactions/BulkDeleteLinkedPairModal.svelte` |
+| Staging modal | *removed 2026-04-28* (TransactionStagingModal.svelte → the Form/Bulk modals) |
+| Promote modal | *removed 2026-04-28* (TransferPromoteModal.svelte) |
+| Bulk delete modal | *removed 2026-06-05* (BulkDeleteLinkedPairModal.svelte) — deletion runs through the bulk modal |
 | Asset store | `frontend/src/lib/stores/reference/assetStore.ts` |
-| TX type utilities | `frontend/src/lib/utils/transactionTypes.ts` |
+| TX type rules (transactionTypes.ts replaced by server-driven rules on 2026-04-30) | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
 | Broker colors | `frontend/src/lib/utils/broker/brokerColors.ts` |
 | Asset select | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |

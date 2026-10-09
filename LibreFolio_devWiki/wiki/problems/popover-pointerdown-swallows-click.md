@@ -47,7 +47,7 @@ One extra press when switching filter menus in an overflowing layout. No data im
 ## Source files
 | Role | Path |
 |------|------|
-| Popover shell | `frontend/src/lib/components/risk/LabPopover.svelte` |
-| Filter menus | `frontend/src/lib/components/risk/LabCheckMenu.svelte` |
+| Popover shell (LabPopover replaced 2026-10-05; the click-capture rule lives here now) | `frontend/src/lib/components/ui/select/SelectPopover.svelte` |
+| Filter menus (LabCheckMenu, moved and renamed 2026-10-05) | `frontend/src/lib/components/ui/select/CheckMenu.svelte` |
 | "+" picker | `frontend/src/lib/components/risk/LabAssetPicker.svelte` |
 | Regression test | `frontend/e2e/portfolio/risk-lab.spec.ts` |

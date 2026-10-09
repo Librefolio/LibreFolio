@@ -66,7 +66,7 @@ with Noto first; `9ab32912c` reordered it Apple-first for iOS. Both are supersed
 
 ## Source
 `LibreFolio_developer_journal/knowledge_base/05_project_conventions.md` — "Emoji Bandiera (Windows Fix)" section;
-`LibreFolio_developer_journal/Release_2/Phase_0/25_taxonomySelect/plan-phase00TaxonomySelectStep12ReviewFollowups.prompt.md`.
+`LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep12ReviewFollowups.prompt.md`.
 
 ## Source files
 
