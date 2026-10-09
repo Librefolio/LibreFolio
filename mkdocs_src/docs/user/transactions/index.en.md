@@ -59,7 +59,8 @@ The workspace is a grid of draft rows — marked **new**, **edit** or **del** �
 
 - **Add Row**, **Import** and **Reset All** sit above the grid. Ticking rows adds **Reset selected**, **Delete selected** and, for a matching pair, **🔗 Promote pair**.
 - Rows are checked as you work: problems appear at the top under *Validation errors were found*, and a click takes you to the row. With many rows, automatic checking pauses — press **⚡ Validate now** before saving.
-- When two rows look like the two halves of one transfer or exchange, a green banner offers to **Merge** them.
+- When two rows look like the two halves of one transfer or exchange, a green banner offers to **Merge** them — two new rows, two saved ones, or one of each.
+- When the other half is already saved but not in the workspace — a transfer whose first side you imported last month, say — the 💡 button, above the grid and in the row's menu, offers to add it: once it is in, the banner offers the pair.
 - **Save All** writes everything at once. **Cancel** closes the workspace, asking first if you have unsaved changes.
 
 ??? warning "🚦 Banners after an import — when they appear"
