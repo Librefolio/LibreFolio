@@ -50,8 +50,14 @@
     /** The row-number column stays put while the rest scrolls. */
     const FROZEN_COL_COUNT = 1;
 
-    /** A preview cannot save anything, so it must not offer to annotate or comment. */
-    const PDF_PREVIEW_DISABLED = ['annotation', 'annotation-comment', 'panel-comment'];
+    /**
+     * The preview is a viewer only: it cannot save, so it offers nothing that edits, exports or replaces the document.
+     * The viewer hides every control, and ignores every shortcut, whose command carries one of these categories: the
+     * editing modes with their tools, comments and undo/redo (`history`); the document menu's open, close, print,
+     * protect, capture and export; the area screenshot on Ctrl/Meta+Shift+S (`capture`). Reading, fullscreen and copying
+     * selected text remain.
+     */
+    const PDF_PREVIEW_DISABLED = ['annotation', 'annotation-comment', 'panel-comment', 'insert', 'form', 'redaction', 'history', 'document-open', 'document-close', 'document-print', 'document-protect', 'document-capture', 'document-export', 'capture'];
 
     /**
      * The grid's text font, pinned rather than left to the library's default.
@@ -179,7 +185,9 @@
         const host = pdfHost;
         if (!browser || !host || !sourceUrl) {
             if (host) host.innerHTML = '';
-            pdfError = null;
+            // No stage while a file is shown means the iframe fallback took its place: keep it. Clearing the error here
+            // would bring the stage back and start the failing viewer again, in a loop.
+            if (!sourceUrl) pdfError = null;
             pdfState = 'loading';
             return;
         }
@@ -194,7 +202,11 @@
 
         void (async () => {
             try {
-                const {default: EmbedPDF, DocumentManagerPlugin, TilingPlugin} = await import('@embedpdf/snippet');
+                const [{default: EmbedPDF, DocumentManagerPlugin, TilingPlugin}, {pdfViewerAssets, pdfViewerOfflineOptions}] = await Promise.all([import('@embedpdf/snippet'), import('$lib/utils/files/pdfViewerAssets')]);
+                // Our engine and fallback fonts when they answer, the viewer's CDN defaults otherwise; nothing else is
+                // asked of a third party (pdfViewerAssets.ts).
+                const assets = await pdfViewerAssets(document.baseURI);
+                if (disposed) return;
                 const viewer = await Promise.resolve(
                     EmbedPDF.init({
                         type: 'container',
@@ -206,12 +218,15 @@
                         // by *hiding* the control, not by unmounting it. A preview that
                         // cannot save anything must not offer to comment.
                         disabledCategories: PDF_PREVIEW_DISABLED,
+                        ...assets,
+                        ...pdfViewerOfflineOptions(getComputedStyle(host).fontFamily),
                     }),
                 );
                 if (!viewer || disposed) return;
                 // Whether the pages in view are drawn, published on the stage as data-state and aria-busy
                 // (pdfPreviewState.ts). Both reports replay their latest value to a late listener, so
-                // listening once the viewer is up misses nothing.
+                // listening once the viewer is up misses nothing. An open after an error — the password
+                // typed into the viewer's own prompt — clears the error.
                 const registry = await viewer.registry;
                 if (disposed) return;
                 const documents: DocumentManagerCapability | undefined = registry.getPlugin(DocumentManagerPlugin.id)?.provides?.();
@@ -223,9 +238,18 @@
                     pdfState = pdfPreviewState(reports);
                 };
                 stopListening.push(
-                    documents.onDocumentOpened(() => report({opened: true})),
+                    documents.onDocumentOpened(() => report({opened: true, failed: false})),
                     documents.onDocumentError(() => report({failed: true})),
                     tiling.onTileRendering(({tiles}) => report({tiles})),
+                    // The viewer must never stay on its own empty state: its «Open Document» button opens any PDF from
+                    // the user's disk inside the preview, and no category turns it off (the button calls the document
+                    // manager directly). The viewer empties itself on «Cancel» at its password prompt and on «Close» on
+                    // its error card; the preview then closes with it. Developer's decision (release 2): close, and do
+                    // not revisit. Only a viewer emptying itself on screen counts: when the preview drops the viewer
+                    // (closed, another file, the fallback), the stage is gone or this listener already stopped.
+                    documents.onDocumentClosed(() => {
+                        if (!disposed && host.isConnected && documents.getDocumentCount() === 0) onRequestClose();
+                    }),
                 );
             } catch (err) {
                 if (token === pdfToken) {

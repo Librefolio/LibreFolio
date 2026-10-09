@@ -34,11 +34,18 @@
  * last block turns `browser` on for itself and hands the preview a fake EmbedPDF
  * (`@embedpdf/snippet` mocked): the fake records who listens and lets the test speak
  * for the viewer. What the reports mean is pdfPreviewState.test.ts's job; here only
- * that they reach the stage, and that nothing listens once the preview is gone.
+ * that they reach the stage, and that nothing listens once the preview is gone. It
+ * also checks what the preview hands the viewer — our engine and fonts, or nothing so
+ * the viewer keeps its CDN defaults, and always the offline options — with the asset
+ * resolution mocked (`pdfViewerAssets`: its HEAD probe would leave jsdom). And one
+ * report leaves the preview as a request: a viewer left without a document asks to
+ * close the preview — a viewer the preview drops itself never does.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync} from 'svelte';
+import {PdfErrorCode} from '@embedpdf/models';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import type {FilePreviewResponse} from '$lib/types';
 import FilePreviewModal from './FilePreviewModal.svelte';
 
 /**
@@ -51,12 +58,16 @@ vi.mock('$app/environment', () => environment);
 /**
  * A fake EmbedPDF viewer: what the preview handed `init`, who subscribed to which report,
  * and one stop per subscription. The registry resolves at once unless a test holds it.
+ *
+ * Each `init` makes one viewer (`viewers`), as the real one does: one open document, its own
+ * `documentClosed` report and document count, and an element in the stage.
  */
 const viewer = vi.hoisted(() => {
     type Listener = (event?: unknown) => void;
     const opened: Listener[] = [];
     const failed: Listener[] = [];
     const tiles: Listener[] = [];
+    const closed: Listener[] = [];
     const stops: Array<ReturnType<typeof vi.fn>> = [];
     const subscribe = (listeners: Listener[]) => (listener: Listener) => {
         listeners.push(listener);
@@ -64,35 +75,116 @@ const viewer = vi.hoisted(() => {
         stops.push(stop);
         return stop;
     };
-    const plugins: Record<string, unknown> = {
-        'document-manager': {onDocumentOpened: subscribe(opened), onDocumentError: subscribe(failed)},
-        tiling: {onTileRendering: subscribe(tiles)},
-    };
-    /** What `await viewer.registry` gives: the two plugins the preview asks for, by the ids the module exports. */
-    const registry = {getPlugin: (id: string) => (id in plugins ? {provides: () => plugins[id]} : null)};
+
+    /**
+     * One viewer. Its `documentClosed` report behaves as the real one (`Uo` in the snippet): the document is gone before
+     * anyone hears it closed (the core reducer runs before the listeners), the last document closed is handed at once to a
+     * late subscriber, a repeat of it is dropped, and a stopped listener hears nothing more.
+     */
+    function makeViewer() {
+        const documents = new Set(['doc']);
+        const live = new Set<Listener>();
+        let last: string | undefined;
+        const made = {
+            /** The documents open in this viewer: what `getDocumentCount` counts. */
+            documents,
+            /** Every close this viewer reported, in order. */
+            closedReports: [] as string[],
+            /** The viewer closes a document: «Cancel» on its password prompt, «Close» on its error card (`closeDocument`). */
+            close(id: string) {
+                documents.delete(id);
+                if (last === id) return;
+                last = id;
+                made.closedReports.push(id);
+                for (const listener of [...live]) listener(id);
+            },
+            registry: null as unknown,
+        };
+        const plugins: Record<string, unknown> = {
+            'document-manager': {
+                onDocumentOpened: subscribe(opened),
+                onDocumentError: subscribe(failed),
+                onDocumentClosed(listener: Listener) {
+                    closed.push(listener);
+                    if (last !== undefined) listener(last);
+                    live.add(listener);
+                    const stop = vi.fn(() => live.delete(listener));
+                    stops.push(stop);
+                    return stop;
+                },
+                getDocumentCount: () => documents.size,
+            },
+            tiling: {onTileRendering: subscribe(tiles)},
+        };
+        /** What `await viewer.registry` gives: the two plugins the preview asks for, by the ids the module exports. */
+        made.registry = {getPlugin: (id: string) => (id in plugins ? {provides: () => plugins[id]} : null)};
+        return made;
+    }
+
+    /**
+     * The element a viewer puts in the stage, as the real `<embedpdf-container>`. Taken out of the DOM it closes what is
+     * still open, as unmounting the real one does — and when the real one does: its unmount destroys the plugin registry,
+     * which awaits before any plugin closes a document, so the report comes once the DOM change is over (a microtask
+     * later), never inside it.
+     */
+    function stageElement(onLeave: () => void): HTMLElement {
+        const tag = 'fake-embedpdf-container';
+        if (!customElements.get(tag)) {
+            customElements.define(
+                tag,
+                class extends HTMLElement {
+                    leave: (() => void) | undefined;
+                    disconnectedCallback() {
+                        this.leave?.();
+                    }
+                },
+            );
+        }
+        const element = document.createElement(tag) as HTMLElement & {leave?: () => void};
+        element.leave = onLeave;
+        return element;
+    }
+
     const fake = {
         inits: [] as Array<Record<string, unknown>>,
+        /** The viewers `init` made, in order. */
+        viewers: [] as Array<ReturnType<typeof makeViewer>>,
+        /** When set, `init` throws it: the viewer cannot start. */
+        initError: null as Error | null,
         /** How many times the preview asked a viewer for its registry. */
         registryAsks: 0,
-        registry,
         /** The promise a viewer's `registry` answers: resolved at once, unless a test holds it. */
-        resolveRegistry: (): Promise<unknown> => Promise.resolve(registry),
+        resolveRegistry: (registry: unknown): Promise<unknown> => Promise.resolve(registry),
         opened,
         failed,
         tiles,
+        closed,
         stops,
         reset() {
             fake.inits.length = 0;
+            fake.viewers.length = 0;
+            fake.initError = null;
             fake.registryAsks = 0;
-            fake.resolveRegistry = () => Promise.resolve(registry);
-            for (const list of [opened, failed, tiles, stops]) list.length = 0;
+            fake.resolveRegistry = (registry) => Promise.resolve(registry);
+            for (const list of [opened, failed, tiles, closed, stops]) list.length = 0;
         },
         init(config: Record<string, unknown>) {
             fake.inits.push(config);
+            // A preview that keeps restarting the viewer would spin the test forever (every step here is a microtask, so
+            // nothing else would ever run): past a few starts the fake stops answering, and the test can count them.
+            if (fake.inits.length > 10) return {registry: new Promise(() => {})};
+            if (fake.initError) throw fake.initError;
+            const made = makeViewer();
+            fake.viewers.push(made);
+            const leave = () =>
+                queueMicrotask(() => {
+                    for (const id of [...made.documents]) made.close(id);
+                });
+            (config.target as HTMLElement | undefined)?.append(stageElement(leave));
             return {
                 get registry() {
                     fake.registryAsks += 1;
-                    return fake.resolveRegistry();
+                    return fake.resolveRegistry(made.registry);
                 },
             };
         },
@@ -103,6 +195,20 @@ vi.mock('@embedpdf/snippet', () => ({
     default: {init: (config: Record<string, unknown>) => viewer.init(config)},
     DocumentManagerPlugin: {id: 'document-manager'},
     TilingPlugin: {id: 'tiling'},
+}));
+
+/**
+ * Where the viewer's assets come from, as the preview resolves them: what the test hands back, and the bases it was
+ * asked about. Only `pdfViewerAssets` is replaced — its HEAD probe would leave jsdom for the network; the options every
+ * preview gets (`pdfViewerOfflineOptions`) stay the module's own, so the test checks the real ones reach the viewer.
+ */
+const viewerAssets = vi.hoisted(() => ({next: {} as Record<string, unknown>, bases: [] as string[]}));
+vi.mock('$lib/utils/files/pdfViewerAssets', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('$lib/utils/files/pdfViewerAssets')>()),
+    pdfViewerAssets: async (base: string) => {
+        viewerAssets.bases.push(base);
+        return viewerAssets.next;
+    },
 }));
 
 // jsdom does not implement Element.scrollTo; the image viewport reset calls it on
@@ -414,6 +520,8 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
     beforeEach(async () => {
         await setupI18n();
         viewer.reset();
+        viewerAssets.next = {};
+        viewerAssets.bases.length = 0;
         environment.browser = true;
         // With `browser` on, ModalBase locks the page's scroll while open and puts it back on close: jsdom does not scroll.
         scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -451,6 +559,37 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
         expect(stage).toHaveAttribute('aria-busy', 'true');
     });
 
+    it('hands the viewer our engine and fonts when they answer, and turns off what a preview never loads', async () => {
+        const fontFallback = {fonts: {204: [{url: 'http://localhost:3000/_app/immutable/assets/NotoSans-Regular.test.ttf', weight: 400}]}};
+        viewerAssets.next = {wasmUrl: 'http://localhost:3000/_app/immutable/assets/pdfium.test.wasm', fontFallback};
+        mount({preview: pdfPreview()});
+        const stage = await listening();
+
+        // Resolved against the page the preview is opened from: the URLs the viewer gets are absolute.
+        expect(viewerAssets.bases).toEqual([document.baseURI]);
+        const config = viewer.inits[0] as {wasmUrl?: unknown; fontFallback?: unknown; fonts?: {ui?: {family?: unknown; stylesheetUrl?: unknown}; signature?: unknown}; stamp?: {manifests?: unknown}};
+        expect(config.wasmUrl).toBe('http://localhost:3000/_app/immutable/assets/pdfium.test.wasm');
+        expect(config.fontFallback).toBe(fontFallback);
+        // The interface in the app's own font, no stylesheet to fetch; no signature fonts; no stamp library.
+        expect(config.fonts?.ui?.stylesheetUrl).toBeNull();
+        expect(config.fonts?.ui?.family).toBe(getComputedStyle(stage).fontFamily);
+        expect(config.fonts?.signature).toBeNull();
+        expect(config.stamp?.manifests).toEqual([]);
+    });
+
+    it('leaves the viewer on its CDN defaults when our engine does not answer — and still turns off what a preview never loads', async () => {
+        viewerAssets.next = {};
+        mount({preview: pdfPreview()});
+        await listening();
+
+        const config = viewer.inits[0] as {fonts?: {ui?: {stylesheetUrl?: unknown}; signature?: unknown}; stamp?: {manifests?: unknown}};
+        expect('wasmUrl' in config, 'a wasmUrl reached the viewer: it would not fall back on its own engine').toBe(false);
+        expect('fontFallback' in config, 'a fontFallback reached the viewer: it would not fall back on its own fonts').toBe(false);
+        expect(config.fonts?.ui?.stylesheetUrl).toBeNull();
+        expect(config.fonts?.signature).toBeNull();
+        expect(config.stamp?.manifests).toEqual([]);
+    });
+
     it('is ready, and no longer busy, once the document opened and every tile in view is drawn', async () => {
         mount({preview: pdfPreview()});
         const stage = await listening();
@@ -485,10 +624,61 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
         expect(stage).toHaveAttribute('aria-busy', 'false');
     });
 
+    /**
+     * A protected PDF: the engine cannot open it without its password, so the viewer reports the error — as it reports
+     * it, with the Password code — and shows its own prompt; once the user types the password, it opens the document and
+     * draws it. The error was the prompt, not the end (developer's decision: protected PDFs can be previewed).
+     */
+    const passwordMissing = {documentId: 'doc', message: 'Password required', code: PdfErrorCode.Password};
+
+    it('is ready once a protected PDF opens after its password was asked', async () => {
+        mount({preview: pdfPreview()});
+        const stage = await listening();
+
+        viewer.failed[0](passwordMissing);
+        flushSync();
+        expect(stage, 'the prompt is up: the document did not open').toHaveAttribute('data-state', 'error');
+
+        // The password typed: the viewer opens the document, then draws the pages in view.
+        viewer.opened[0]({id: 'doc', status: 'loaded'});
+        flushSync();
+        expect.soft(stage, 'opened after the password, not drawn yet').toHaveAttribute('data-state', 'loading');
+        expect.soft(stage, 'opened after the password, not drawn yet').toHaveAttribute('aria-busy', 'true');
+
+        viewer.tiles[0]({documentId: 'doc', tiles: {0: [ready, ready]}});
+        flushSync();
+        expect(stage, 'opened and drawn after the password').toHaveAttribute('data-state', 'ready');
+        expect(stage, 'opened and drawn after the password').toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('stays error when the viewer reports an error and nothing more: a PDF that does not open', async () => {
+        mount({preview: pdfPreview()});
+        const stage = await listening();
+
+        viewer.failed[0](passwordMissing);
+        flushSync();
+        expect(stage).toHaveAttribute('data-state', 'error');
+        expect(stage).toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('stays error through a second error: a wrong password', async () => {
+        mount({preview: pdfPreview()});
+        const stage = await listening();
+
+        viewer.failed[0](passwordMissing);
+        flushSync();
+        // The wrong password typed: the viewer tries again and reports the same error.
+        viewer.failed[0]({...passwordMissing, message: 'Incorrect password'});
+        flushSync();
+        expect(stage).toHaveAttribute('data-state', 'error');
+        expect(stage).toHaveAttribute('aria-busy', 'false');
+    });
+
     it('stops listening to every report when the preview closes', async () => {
         const view = mount({preview: pdfPreview()});
         await listening();
-        expect(viewer.stops).toHaveLength(3);
+        // One stop per report the preview listens to: opened, error and tiles at least.
+        expect(viewer.stops.length).toBeGreaterThanOrEqual(3);
         for (const stop of viewer.stops) expect(stop).not.toHaveBeenCalled();
 
         await view.rerender({open: false});
@@ -499,7 +689,7 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
     it('stops listening to every report when the preview is unmounted', async () => {
         const view = mount({preview: pdfPreview()});
         await listening();
-        expect(viewer.stops).toHaveLength(3);
+        expect(viewer.stops.length).toBeGreaterThanOrEqual(3);
         for (const stop of viewer.stops) expect(stop).not.toHaveBeenCalled();
 
         view.unmount();
@@ -510,10 +700,10 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
     /** A registry the test releases: the viewer is up, and the preview waits on it. */
     function holdRegistry(): () => void {
         let release: () => void = () => {};
-        const held = new Promise<unknown>((resolve) => {
-            release = () => resolve(viewer.registry);
+        const held = new Promise<void>((resolve) => {
+            release = resolve;
         });
-        viewer.resolveRegistry = () => held;
+        viewer.resolveRegistry = (registry) => held.then(() => registry);
         return release;
     }
 
@@ -554,6 +744,90 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
         expect(viewer.opened).toHaveLength(0);
         expect(viewer.failed).toHaveLength(0);
         expect(viewer.tiles).toHaveLength(0);
+        expect(viewer.closed).toHaveLength(0);
         expect(viewer.stops).toHaveLength(0);
+    });
+
+    /*
+     * The viewer can be left with no document: «Cancel» on its password prompt and «Close» on its error card both close
+     * the one it had (`closeDocument`), and all an empty viewer offers is to open a file of one's own — not what a
+     * preview of this file is for. So the preview closes (developer's decision). Only the viewer emptying itself counts:
+     * when the preview drops the viewer — closed, another file, the browser's own viewer as a fallback — the document
+     * goes with it, and that is no request to close.
+     */
+
+    it('closes the preview when the viewer is left without a document', async () => {
+        const view = mount({preview: pdfPreview()});
+        await listening();
+        await queuedJobsRun();
+        const [shown] = viewer.viewers;
+
+        shown.close('doc');
+
+        await waitFor(() => expect(view.onRequestClose).toHaveBeenCalledTimes(1));
+        // The page closes the preview, as the Files page does: the viewer leaving the stage is no second request.
+        await view.rerender({open: false});
+        await queuedJobsRun();
+        expect(view.onRequestClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays open when the viewer closes a document but still shows another', async () => {
+        const {onRequestClose} = mount({preview: pdfPreview()});
+        await listening();
+        await queuedJobsRun();
+        const [shown] = viewer.viewers;
+        shown.documents.add('other');
+
+        shown.close('doc');
+        await queuedJobsRun();
+
+        expect(shown.closedReports, 'the viewer reported the document closed').toEqual(['doc']);
+        expect(shown.documents.size, 'and still shows one').toBe(1);
+        expect(onRequestClose).not.toHaveBeenCalled();
+    });
+
+    it('stays open when it moves to another file: the viewer it drops closes its document on the way out', async () => {
+        const view = mount({preview: pdfPreview()});
+        await listening();
+        await queuedJobsRun();
+
+        // The builders are loose on purpose (any field, any value); `rerender` takes the component's own props.
+        const otherFile = pdfPreview({filename: 'other.pdf', source_url: '/files/other.pdf'}) as unknown as FilePreviewResponse;
+        await view.rerender({preview: otherFile});
+        // The next viewer is up and listened to.
+        await waitFor(() => expect(viewer.tiles).toHaveLength(2));
+        await queuedJobsRun();
+
+        const [dropped, next] = viewer.viewers;
+        expect(viewer.inits.map((config) => config.src)).toEqual(['/files/ebook.pdf', '/files/other.pdf']);
+        expect(dropped.closedReports, 'the dropped viewer closed its document as it left the stage').toEqual(['doc']);
+        expect(next.documents.size, 'the next viewer shows its own').toBe(1);
+        expect(view.onRequestClose).not.toHaveBeenCalled();
+    });
+
+    it('does not ask to close when it is closed: the viewer it drops closes its document on the way out', async () => {
+        const view = mount({preview: pdfPreview()});
+        await listening();
+        await queuedJobsRun();
+
+        await view.rerender({open: false});
+        await queuedJobsRun();
+
+        expect(viewer.viewers[0].closedReports, 'the dropped viewer closed its document as it left the stage').toEqual(['doc']);
+        expect(view.onRequestClose).not.toHaveBeenCalled();
+    });
+
+    it('does not ask to close when the viewer cannot start and the browser shows the file instead', async () => {
+        viewer.initError = new Error('The viewer did not start');
+        const {onRequestClose} = mount({preview: pdfPreview()});
+
+        await screen.findByTestId('file-preview-pdf-fallback');
+        await queuedJobsRun();
+
+        // The fallback stays: the viewer was started once, and the browser keeps showing the file.
+        expect(viewer.inits.length, 'times the preview started the viewer').toBe(1);
+        expect(screen.queryByTestId('file-preview-pdf-fallback')).not.toBeNull();
+        expect(screen.queryByTestId('file-preview-pdf')).toBeNull();
+        expect(onRequestClose).not.toHaveBeenCalled();
     });
 });

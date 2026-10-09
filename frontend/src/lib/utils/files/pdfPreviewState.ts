@@ -24,6 +24,7 @@ export interface PdfPreviewTile {
 /** The viewer's latest reports. `tiles` is null until the first tile report. */
 export interface PdfPreviewReports {
     opened: boolean;
+    /** The latest attempt to open failed: a broken file, or a password still missing or wrong. A later open clears it. */
     failed: boolean;
     tiles: Readonly<Record<number, readonly PdfPreviewTile[]>> | null;
 }
@@ -31,7 +32,7 @@ export interface PdfPreviewReports {
 export const NO_PDF_REPORTS: PdfPreviewReports = {opened: false, failed: false, tiles: null};
 
 /**
- * - `error` once the document failed to open, whatever came before;
+ * - `error` while the latest attempt to open has failed, whatever else was reported;
  * - `ready` when it is open and every tile in view that is not a fallback is ready —
  *   at least one: before the first layout no page is in view yet, and nothing drawn
  *   is not "drawn";
