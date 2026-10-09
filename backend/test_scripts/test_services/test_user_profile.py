@@ -5,6 +5,8 @@ Tests profile update (username/email) with uniqueness validation.
 """
 
 import sys
+from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -19,8 +21,10 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
+from backend.app.db.base import SQLModel  # imports every model, so SQLModel.metadata holds the whole schema
 from backend.app.db.session import get_async_engine
 from backend.app.services import user_service
 
@@ -41,6 +45,31 @@ async def session(engine):
     async with AsyncSession(engine, expire_on_commit=False) as session:
         yield session
         await session.rollback()
+
+
+@pytest_asyncio.fixture
+async def isolated_engine(tmp_path: Path) -> AsyncIterator[AsyncEngine]:
+    """A private SQLite file under tmp_path with the whole ORM schema, disposed at teardown.
+
+    Only the users a test creates exist there. That is what the shared lane DB cannot give once the
+    answer depends on every other user: its other active admins (e2e_test_admin, ...) are always there.
+    NullPool as in get_async_engine, so a fresh session is a fresh connection; the connect listener of
+    backend.app.db.session applies its PRAGMAs (foreign_keys, WAL, busy_timeout) here too.
+    """
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'users.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def isolated_session(isolated_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    """The session under test, on the private database: read outcomes in a fresh session, never through this one."""
+    async with AsyncSession(isolated_engine, expire_on_commit=False) as session:
+        yield session
 
 
 import uuid
@@ -739,11 +768,26 @@ class TestSetUserAdmin:
         assert updated_user.is_superuser is True
 
     @pytest.mark.asyncio
-    async def test_demote_user_from_admin(self, session: AsyncSession):
-        """Should demote an admin user."""
+    async def test_demote_user_from_admin(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """Should demote an admin user while another active admin remains.
+
+        On the private database: on the shared lane DB it passed only because other active admins
+        (e2e_test_admin, ...) happen to exist there. It brings its own second active admin instead, so it
+        passes today and once demoting the last active administrator is refused (plan 34 step 2).
+        """
         unique_id = uuid.uuid4().hex[:8]
+        colleague, error = await user_service.create_user(
+            session=isolated_session,
+            username=f"colleague_{unique_id}",
+            email=f"colleague_{unique_id}@example.com",
+            password=uuid.uuid4().hex,  # never used: nobody logs in
+            is_superuser=True,
+        )
+        assert error is None
+        assert (colleague.is_superuser, colleague.is_active) == (True, True)
+
         user, error = await user_service.create_user(
-            session=session,
+            session=isolated_session,
             username=f"demote_{unique_id}",
             email=f"demote_{unique_id}@example.com",
             password="AdminPass123!",
@@ -753,12 +797,262 @@ class TestSetUserAdmin:
         assert user.is_superuser is True
 
         success, err_msg = await user_service.set_user_admin(
-            session=session,
+            session=isolated_session,
             username=f"demote_{unique_id}",
             is_admin=False,
         )
         assert success is True
         assert err_msg is None
 
-        updated_user = await user_service.get_user_by_username(session, f"demote_{unique_id}")
-        assert updated_user.is_superuser is False
+        async with AsyncSession(isolated_engine) as fresh:  # the committed row, not the identity map of the session under test
+            updated_user = await user_service.get_user_by_username(fresh, f"demote_{unique_id}")
+            assert updated_user.is_superuser is False
+
+
+# ============================================================================
+# THE LAST ACTIVE ADMINISTRATOR — plan 34_accountAndIdReuse, step 2 (workstream L)
+# ============================================================================
+# These imports and helpers serve the last-administrator tests only, so they live next to them.
+# Every test runs on the private database of isolated_engine: whether an admin is the last one
+# depends on every other user, and on the shared lane DB other active admins always exist.
+
+from datetime import datetime
+
+
+@dataclass(frozen=True)
+class _StoredUser:
+    """A committed users row, read in a fresh session (never the identity map of the session under test)."""
+
+    username: str
+    is_superuser: bool
+    is_active: bool
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class _UserRef:
+    """A user the test created, as plain values: nothing to expire if the service under test rolls back its session."""
+
+    id: int
+    username: str
+
+
+async def _stored_users(engine: AsyncEngine) -> dict[int, _StoredUser]:
+    """Every user of the private database, by id: the test owns all of them, so the whole table is its own rows."""
+    async with AsyncSession(engine) as fresh:
+        rows = await fresh.execute(select(User.id, User.username, User.is_superuser, User.is_active, User.updated_at))
+        return {row.id: _StoredUser(row.username, row.is_superuser, row.is_active, row.updated_at) for row in rows}
+
+
+def _flags(users: dict[int, _StoredUser]) -> dict[int, tuple[bool, bool]]:
+    """(is_superuser, is_active) by user id."""
+    return {user_id: (user.is_superuser, user.is_active) for user_id, user in users.items()}
+
+
+async def _new_user(session: AsyncSession, role: str, *, is_superuser: bool, is_active: bool = True) -> _UserRef:
+    """A user created through the service, inactive from the start when asked.
+
+    create_user(is_active=False), never set_user_active: deactivating the only active admin is refused.
+    The uuid tag keeps the username out of any fixed message text; the password is never used, nobody logs in.
+    """
+    tag = uuid.uuid4().hex[:8]
+    user, error = await user_service.create_user(session=session, username=f"{role}_{tag}", email=f"{role}_{tag}@example.com", password=uuid.uuid4().hex, is_superuser=is_superuser, is_active=is_active)
+    assert error is None, f"User setup failed: {error}"
+    return _UserRef(user.id, user.username)
+
+
+# The population of the mixed scenarios: (is_superuser, is_active) by role.
+_MIXED = {"admin": (True, True), "colleague": (True, True), "dormant": (True, False), "member": (False, True), "idle": (False, False)}
+
+
+def _mixed_flags(users: dict[str, _UserRef]) -> dict[int, tuple[bool, bool]]:
+    """The flags of _MIXED, by the ids of ``users``."""
+    return {users[role].id: flags for role, flags in _MIXED.items()}
+
+
+async def _mixed_users(session: AsyncSession, engine: AsyncEngine) -> dict[str, _UserRef]:
+    """Two active admins, an inactive admin, an active and an inactive regular user, and nobody else in the database."""
+    users: dict[str, _UserRef] = {}
+    for role, (is_superuser, is_active) in _MIXED.items():
+        users[role] = await _new_user(session, role, is_superuser=is_superuser, is_active=is_active)
+    stored = _flags(await _stored_users(engine))
+    assert stored == _mixed_flags(users), f"Precondition: the private database must hold exactly the five users of _MIXED: {stored}"
+    return users
+
+
+async def _assert_refused_as_last_active_admin(outcome: tuple[bool, Optional[str]], session: AsyncSession, engine: AsyncEngine, admin: _UserRef, before: dict[int, _StoredUser]) -> None:
+    """What demoting or deactivating ``admin``, the only active admin, must answer: (False, a message naming it), and no change.
+
+    The caller's session is committed before reading back: a refusal must leave nothing pending in it either.
+    """
+    success, message = outcome
+    assert success is False, f"{admin.username} is the only active administrator: the call must be refused, got {outcome}"
+    assert message is not None and "last active administrator" in message and admin.username in message, f"The refusal must say 'last active administrator' and name {admin.username}: {message!r}"
+    await session.commit()
+    after = await _stored_users(engine)
+    assert (after[admin.id].is_superuser, after[admin.id].is_active) == (True, True), f"{admin.username} must still be an active admin after the refusal: {after[admin.id]}"
+    assert after == before, "A refusal changes nothing in the database"
+
+
+class TestCountActiveSuperusers:
+    """Tests for user_service.count_active_superusers() — plan 34 step 2, on the private database.
+
+    The contract: the users that are both is_superuser and is_active (those who can still log in and
+    administer), with ``excluding_user_id`` left out. count_superusers stays as it is.
+
+    Today the function is a stub returning 0: both tests fail on their first count, after a setup that succeeds.
+    """
+
+    @pytest.mark.asyncio
+    async def test_counts_only_the_active_superusers(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """NEW, red today (0 instead of 2): the two active admins count; the inactive admin and the regular users, active or not, do not."""
+        await _mixed_users(isolated_session, isolated_engine)
+
+        count = await user_service.count_active_superusers(isolated_session)
+        assert count == 2, f"2 active superusers expected among {sorted(_MIXED)}, got {count}"
+
+    @pytest.mark.asyncio
+    async def test_excluding_user_id_leaves_that_user_out(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """NEW, red today (0 instead of 1): leaving out an active admin counts one less; leaving out the
+        inactive admin or a regular user still counts 2, since neither was counted."""
+        users = await _mixed_users(isolated_session, isolated_engine)
+
+        for role, expected in (("admin", 1), ("dormant", 2), ("member", 2)):
+            count = await user_service.count_active_superusers(isolated_session, excluding_user_id=users[role].id)
+            assert count == expected, f"excluding_user_id of {role} ({users[role].id}): {expected} active superuser(s) expected, got {count}"
+
+
+class TestLastActiveAdministrator:
+    """Neither demoting nor deactivating leaves the instance without an active admin — plan 34 step 2.
+
+    The contract, for set_user_admin(..., is_admin=False) and set_user_active(..., active=False): on an
+    ACTIVE superuser while no other active superuser exists, the answer is (False, message), the message
+    says "last active administrator" and names the user, and nothing changes in the database: the user
+    stays an active admin. Another active admin keeps the call allowed, and so does a target that is no
+    active admin: a regular user, or an admin already inactive (login refuses inactive users, so it
+    administers nothing).
+
+    Today there is no guard: the four refusals are red on their first assertion (the call succeeds and
+    is committed); the five permissions are guards, green today and after the cure.
+    """
+
+    # ---- demote: set_user_admin(..., is_admin=False) ----
+
+    @pytest.mark.asyncio
+    async def test_demoting_the_only_active_admin_is_refused(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """NEW, red today (returns (True, None) and demotes): the only admin, beside a regular user, who is no admin."""
+        only = await _new_user(isolated_session, "onlyadmin", is_superuser=True)
+        member = await _new_user(isolated_session, "member", is_superuser=False)
+        before = await _stored_users(isolated_engine)
+        assert _flags(before) == {only.id: (True, True), member.id: (False, True)}, f"Precondition: one active admin and one active regular user, nobody else: {before}"
+
+        outcome = await user_service.set_user_admin(session=isolated_session, username=only.username, is_admin=False)
+
+        await _assert_refused_as_last_active_admin(outcome, isolated_session, isolated_engine, only, before)
+
+    @pytest.mark.asyncio
+    async def test_demoting_the_only_active_admin_is_refused_beside_an_inactive_admin(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """NEW, red today (returns (True, None) and demotes): an inactive admin cannot log in to administer, so it does not count."""
+        only = await _new_user(isolated_session, "onlyadmin", is_superuser=True)
+        dormant = await _new_user(isolated_session, "dormant", is_superuser=True, is_active=False)
+        before = await _stored_users(isolated_engine)
+        assert _flags(before) == {only.id: (True, True), dormant.id: (True, False)}, f"Precondition: one active and one inactive admin, nobody else: {before}"
+
+        outcome = await user_service.set_user_admin(session=isolated_session, username=only.username, is_admin=False)
+
+        await _assert_refused_as_last_active_admin(outcome, isolated_session, isolated_engine, only, before)
+
+    @pytest.mark.asyncio
+    async def test_demoting_is_allowed_while_another_active_admin_remains(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """GUARD, green today and after the cure: the colleague stays an active admin, so the demotion goes
+        through, and only the target loses the role, beside an inactive admin and the regular users."""
+        users = await _mixed_users(isolated_session, isolated_engine)
+        admin = users["admin"]
+
+        outcome = await user_service.set_user_admin(session=isolated_session, username=admin.username, is_admin=False)
+
+        assert outcome == (True, None), f"Demoting {admin.username} must be allowed while another active admin remains"
+        after = _flags(await _stored_users(isolated_engine))
+        assert after == _mixed_flags(users) | {admin.id: (False, True)}, f"Only {admin.username} loses the role: {after}"
+
+    @pytest.mark.asyncio
+    async def test_demoting_an_inactive_admin_is_allowed_with_no_active_admin(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """GUARD, green today and after the cure: the only admin is inactive, so demoting it takes no active
+        admin away (there is none to protect)."""
+        dormant = await _new_user(isolated_session, "dormant", is_superuser=True, is_active=False)
+        member = await _new_user(isolated_session, "member", is_superuser=False)
+        assert _flags(await _stored_users(isolated_engine)) == {dormant.id: (True, False), member.id: (False, True)}, "Precondition: one inactive admin and one active regular user, nobody else"
+
+        outcome = await user_service.set_user_admin(session=isolated_session, username=dormant.username, is_admin=False)
+
+        assert outcome == (True, None), f"Demoting the inactive {dormant.username} removes no active admin: it must be allowed"
+        after = _flags(await _stored_users(isolated_engine))
+        assert after == {dormant.id: (False, False), member.id: (False, True)}, f"Only {dormant.username} loses the role: {after}"
+
+    # ---- deactivate: set_user_active(..., active=False) ----
+
+    @pytest.mark.asyncio
+    async def test_deactivating_the_only_active_admin_is_refused(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """NEW, red today (returns (True, None) and deactivates): the only admin, beside a regular user, stays active."""
+        only = await _new_user(isolated_session, "onlyadmin", is_superuser=True)
+        member = await _new_user(isolated_session, "member", is_superuser=False)
+        before = await _stored_users(isolated_engine)
+        assert _flags(before) == {only.id: (True, True), member.id: (False, True)}, f"Precondition: one active admin and one active regular user, nobody else: {before}"
+
+        outcome = await user_service.set_user_active(session=isolated_session, username=only.username, active=False)
+
+        await _assert_refused_as_last_active_admin(outcome, isolated_session, isolated_engine, only, before)
+
+    @pytest.mark.asyncio
+    async def test_deactivating_the_only_active_admin_is_refused_beside_an_inactive_admin(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """NEW, red today (returns (True, None) and deactivates): the inactive admin does not count, so the active one stays active."""
+        only = await _new_user(isolated_session, "onlyadmin", is_superuser=True)
+        dormant = await _new_user(isolated_session, "dormant", is_superuser=True, is_active=False)
+        before = await _stored_users(isolated_engine)
+        assert _flags(before) == {only.id: (True, True), dormant.id: (True, False)}, f"Precondition: one active and one inactive admin, nobody else: {before}"
+
+        outcome = await user_service.set_user_active(session=isolated_session, username=only.username, active=False)
+
+        await _assert_refused_as_last_active_admin(outcome, isolated_session, isolated_engine, only, before)
+
+    @pytest.mark.asyncio
+    async def test_deactivating_an_admin_is_allowed_while_another_active_admin_remains(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """GUARD, green today and after the cure: the colleague stays an active admin, so the deactivation goes
+        through, and only the target becomes inactive (still an admin), beside an inactive admin and the regular users."""
+        users = await _mixed_users(isolated_session, isolated_engine)
+        admin = users["admin"]
+
+        outcome = await user_service.set_user_active(session=isolated_session, username=admin.username, active=False)
+
+        assert outcome == (True, None), f"Deactivating {admin.username} must be allowed while another active admin remains"
+        after = _flags(await _stored_users(isolated_engine))
+        assert after == _mixed_flags(users) | {admin.id: (True, False)}, f"Only {admin.username} becomes inactive: {after}"
+
+    @pytest.mark.asyncio
+    async def test_deactivating_a_regular_user_is_allowed_beside_the_only_active_admin(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """GUARD, green today and after the cure: a regular user administers nothing, so deactivating one is
+        allowed while a single admin is active, and that admin stays active."""
+        only = await _new_user(isolated_session, "onlyadmin", is_superuser=True)
+        member = await _new_user(isolated_session, "member", is_superuser=False)
+        assert _flags(await _stored_users(isolated_engine)) == {only.id: (True, True), member.id: (False, True)}, "Precondition: one active admin and one active regular user, nobody else"
+
+        outcome = await user_service.set_user_active(session=isolated_session, username=member.username, active=False)
+
+        assert outcome == (True, None), f"Deactivating the regular user {member.username} takes no admin away: it must be allowed"
+        after = _flags(await _stored_users(isolated_engine))
+        assert after == {only.id: (True, True), member.id: (False, False)}, f"Only {member.username} becomes inactive: {after}"
+
+    @pytest.mark.asyncio
+    async def test_deactivating_an_already_inactive_admin_still_succeeds_with_no_active_admin(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """GUARD on today's behaviour, plain in the code (set_user_active has no "already inactive" check):
+        deactivating the only admin, already inactive, answers (True, None) and leaves the flags as they were.
+        It takes no active admin away, so the guard must not catch it. updated_at is not pinned."""
+        dormant = await _new_user(isolated_session, "dormant", is_superuser=True, is_active=False)
+        member = await _new_user(isolated_session, "member", is_superuser=False)
+        assert _flags(await _stored_users(isolated_engine)) == {dormant.id: (True, False), member.id: (False, True)}, "Precondition: one inactive admin and one active regular user, nobody else"
+
+        outcome = await user_service.set_user_active(session=isolated_session, username=dormant.username, active=False)
+
+        assert outcome == (True, None), f"Deactivating {dormant.username}, already inactive, takes no active admin away: today's (True, None) must stay"
+        after = _flags(await _stored_users(isolated_engine))
+        assert after == {dormant.id: (True, False), member.id: (False, True)}, f"The flags stay as they were: {after}"
