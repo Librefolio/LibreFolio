@@ -352,16 +352,26 @@ deciso davvero — e a scoprire che **una cosa data per decisa non lo era mai st
 
 ## 7. Definizione di finito
 
-- [ ] Gli **undici** mandati verificati uno per uno, con evidenza;
-- [ ] le otto verifiche trasversali di §4.2 passate;
-- [ ] banner rimosso da L1, L2, L3, replay e shock; **mantenuto sulla sola simulazione**;
-- [ ] Asset Detail invariato e ancora col suo banner;
+- [x] Gli **undici** mandati verificati uno per uno, con evidenza;
+  ↳ *allineamento 09/10*: ↪ superato: J non è mai stato aperto; il secondo giro ne ha preso il posto (`../implementation_2/00-proposta-organizzazione.md`, `../implementation_2/REGISTRO.md`)
+- [x] le otto verifiche trasversali di §4.2 passate;
+  ↳ *allineamento 09/10*: ↪ superato, come sopra
+- [x] banner rimosso da L1, L2, L3, replay e shock; **mantenuto sulla sola simulazione**;
+  ↳ *allineamento 09/10*: ✅ `levels/L4WhatIf.svelte` (il banner solo sulla simulazione); CHANGELOG 1.2.0
+- [x] Asset Detail invariato e ancora col suo banner;
+  ↳ *allineamento 09/10*: ✅ `AssetRiskScenariosView.svelte` (Asset Detail tiene il suo banner)
 - [ ] `### 🔄 Changed` creata in `[Unreleased]`, con la voce M2 nei suoi tre fatti;
-- [ ] gate di integrazione verdi sulla **revisione combinata**;
-- [ ] superfici condivise **rilette a mano**, non solo testate;
-- [ ] nessuna porta della banda `6240` in ascolto;
-- [ ] i rinvii di §5 ancora registrati e visibili;
-- [ ] messaggio di commit proposto — ⚠️ **il commit lo esegue il developer**.
+  ↳ *allineamento 09/10*: ⏳ **mai scritta**: il CHANGELOG 1.2.0 non ha né la voce M2 né quella A9 (§3) → README della cartella, buchi
+- [x] gate di integrazione verdi sulla **revisione combinata**;
+  ↳ *allineamento 09/10*: ↪ assorbito dal secondo giro e dai treni di `dev_release2`
+- [x] superfici condivise **rilette a mano**, non solo testate;
+  ↳ *allineamento 09/10*: ↪ assorbito dal secondo giro e dai treni di `dev_release2`
+- [x] nessuna porta della banda `6240` in ascolto;
+  ↳ *allineamento 09/10*: ↪ assorbito dal secondo giro
+- [x] i rinvii di §5 ancora registrati e visibili;
+  ↳ *allineamento 09/10*: ✅ `TODO_FUTURI.md` §§ «Tracking Error / Information Ratio», «Portfolio optimization», «Monte Carlo avanzato»
+- [x] messaggio di commit proposto — ⚠️ **il commit lo esegue il developer**.
+  ↳ *allineamento 09/10*: ↪ assorbito dal secondo giro
 
 
 ---

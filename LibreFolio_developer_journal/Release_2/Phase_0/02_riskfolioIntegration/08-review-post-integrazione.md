@@ -225,6 +225,9 @@ mode=current_composition   → {"code":"insufficient_history", "observations":15
 
 ### 🟡 P3 — da sistemare, ma non urgenti
 
+> *Allineamento 09/10*: P3.1 → `TODO_FUTURI.md` § «Separatore decimale»; P3.2 ✅ (`risk-mocks.ts` è letto da
+> `risk-benchmark-shared.spec.ts` e `risk-asset-detail.spec.ts`); P3.3 ✅ (`risk-broker-filter` in `risk-lab.spec.ts`).
+
 #### P3.1 · Due separatori decimali nella stessa riga
 
 In italiano: `−1.3%` (punto) accanto a `−175,91 €` (virgola).
@@ -419,6 +422,9 @@ offriva, e li ha implementati bene — con le due convenzioni piegate correttame
 realization* meritano un posto in L1 accanto al drawdown, o vanno rimossi dal contratto?
 Sono buone misure — l'Ulcer index misura **quanto a lungo e quanto sotto**, non solo l'ampiezza —
 ma «buona misura» non è ancora «risponde a una delle quattro domande».
+
+> *Allineamento 09/10*: chiusa nei fatti. Tutte e due stanno in L1: il worst realization come seconda riga della
+> giornata storta, l'Ulcer index come didascalia del grafico «sotto il massimo» (`levels/L1HowMuchItHurts.svelte`, S1).
 
 ---
 
