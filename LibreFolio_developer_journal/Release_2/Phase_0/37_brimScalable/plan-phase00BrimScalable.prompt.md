@@ -409,7 +409,7 @@ Altre superfici:
 8. ✅ (2026-10-09) **Icone** (§6).
 9. ✅ (2026-10-09, inglese) **Documentazione** (§11): pagina inglese prima del 14/10, card in `index.en.md`, navigazione, elenco dei provider, guida BRIM, pagine dell'assistente; righe di CHANGELOG proposte al coordinatore. Pagina, card, nav, elenco, guida BRIM, pagine dell'assistente e deduplica in `architecture.md` fatti.
 10. ✅ (2026-10-09) **Modale dell'assistente** (§7.2) e traduzioni (§10): `npm ci` dal lock, util, Vitest, E2E (a).
-11. **Editor in blocco per gli import separati** (§8): util, Vitest, E2E (b, c). Parte solo dopo il treno con lo step 23 di K e un mio aggiornamento di baseline.
+11. ✅ (2026-10-09) **Editor in blocco per gli import separati** (§8): util, Vitest, E2E (b, c). Partito dopo il treno 25 (step 23 di K) e il merge `5eb01e2ea`.
 12. **Prova umana** del developer e correzioni.
 13. **Controlli finali**: lint e format, tutte le suite, mkdocs, porte libere; handoff. Le note per la devWiki vanno nell'handoff: il coordinatore ha chiesto di non scrivere in `LibreFolio_devWiki/` (niente `wiki-file`) finché non lo dice lui.
 
@@ -589,3 +589,37 @@ Altre superfici:
 ### Checkpoint 1 — passi 1, 3–10 (2026-10-09)
 
 > Mandato al coordinatore dopo il treno 25 (`dev_release2` = `586a4f0ea`, con lo step 23 di K): il passo 11 (`TransactionBulkModal.svelte`) parte dopo il merge di `dev_release2` nel mio ramo. Stato: FROZEN fino alla risposta.
+
+### Passo 11 — Editor in blocco per gli import separati: codice 🚧 (2026-10-09)
+
+> **Baseline**: `5eb01e2ea` (`merge: train 25 into S for step 11`, parent `305b80202`, il checkpoint 1, e `586a4f0ea`); `TransactionBulkModal.svelte` assegnato dal coordinatore dopo lo step 23 di K.
+>
+> **Note implementazione**:
+> - `frontend/src/lib/utils/transactions/promoteSuggest.ts`: `newRowSuggestId` (id negativo `-(createdSeq + 1)`), `mixedPromotePairs` (coppie nuova × salvata nella finestra di date, con la regola di abbinamento passata dal componente) e `importableSuggestions` (i candidati del database non ancora nell'editor, per riga, per `tempId`).
+> - `TransactionBulkModal.svelte`:
+>   - `promote-suggest` riceve anche le righe nuove non collegate (`isSuggestable`: tipo, broker, data e un importo o una quantità non nulli). Senza importo il backend salta il controllo «importi opposti» e restituirebbe ogni deposito o prelievo della finestra;
+>   - il 💡, nella barra e sulla riga, vale anche per le righe nuove;
+>   - il banner propone anche le coppie nuova + salvata; «Unisci» passa dal ramo misto già esistente di `executePromote`.
+> - Pagina Scalable: il caso «file importati in momenti diversi» ora passa dal 💡 durante il secondo import.
+> - Controlli: `npm run check` 0 errori e 0 avvisi; Prettier pulito.
+>
+> **⚠️ Fuori pista** (richieste del coordinatore, da mettere nel prossimo checkpoint):
+> - `transactions.costBasisOverride.warningAdjustment` nelle 4 lingue con `dev.py i18n update`: in modalità manuale un costo vuoto non si salva (`COST_BASIS_REQUIRED`); per quote che non sono costate nulla si scrive 0. Decisione del developer, 09/10, testuale: «se i dati mancano lo 0 come fallback per auto è corretto. se bisogna cambiare sarà l'utente ad andare su quella transazione e correggere.» Il testo di ripiego inglese dentro `TransactionFormModal.svelte:1949` è ancora quello vecchio: il file non è mio.
+> - Guida BRIM: Fineco tolto dall'elenco dei plugin con gli avvisi nella lingua dell'export (scrive in inglese), con una nota che lo dice; docstring di `broker_fineco.py` corretta. La riga eToro di `providers_list.md` ora descrive cosa legge davvero il plugin (CSV dell'attività del conto; i CFD come le altre posizioni; commissioni overnight e SDRT saltate). La `description` del plugin eToro dice ancora «Supports stocks, CFDs»: da segnalare.
+
+### Passo 11 — Test e una correzione del ramo nuova + nuova ✅ (2026-10-09)
+
+> **Note implementazione** (test di `test-author`, eseguiti da me nella corsia 6163):
+> - `frontend/src/lib/utils/transactions/promoteSuggest.test.ts`: 20 test, registrato in `tx-unit` (**759 passed**).
+> - `frontend/e2e/transactions/tx-import-scalable-transfers.spec.ts` (runner `front-transaction tx-import-scalable-transfers`, account usa e getta per test):
+>   - **S1**, (b) stessa sessione: i due file in un solo giro dell'assistente; il banner propone esattamente i due trasferimenti; uno viene unito e salvato come `CASH_TRANSFER` collegato su A e B;
+>   - **S2**, (c) sessioni separate: le righe di cassa del broker salvate via API, poi l'import del conto deposito; il 💡 compare sulle gambe nuove dei trasferimenti, aggiunge la gamba salvata e il banner propone la coppia nuova + salvata, che viene unita.
+>   - **2 passed** a un worker e a quattro.
+> - Regressioni dell'editor in blocco: `tx-bulk-promote-exec` 9, `tx-bulk-suggest-ux` 8, `tx-split-promote` 6, `tx-fx-implied-rate` 3, `tx-commit-all-types` 19, `tx-paired-edit` 4, `tx-bulk-import-handoff` 3; `check-orphans` verde; `npm run check` 0/0.
+>
+> **⚠️ Fuori pista**: S1 ha trovato un difetto **preesistente** del ramo nuova + nuova di `executePromote`. L'editor mostra gli importi in valore assoluto e lascia il segno al tipo (`txCreateItemToPendingOp`, il form). Quando il tipo diventa CASH_TRANSFER o FX_CONVERSION, a segno libero, il prelievo partiva come +300 e `collapseIntoPaired` sceglieva il lato «da» a caso. Ora il segno passa nell'importo (`applySignRules` col tipo d'origine) prima del cambio di tipo. Il ramo misto non era colpito: la riga nuova parte col tipo d'origine (`promoteFromType`).
+>
+> **Dubbi del `test-author`, lasciati come sono**:
+> - le voci del banner non espongono le due righe né il tipo di destinazione (si potrebbero aggiungere attributi `data-*`);
+> - il select del broker per file al passo 1 non ha un `data-testid`;
+> - in `PromoteMergeModal`, che non è mio, un Annulla subito dopo la seconda apertura può chiedere «scartare le modifiche?» senza modifiche, perché `initialSnapshot` si aggiorna in un `setTimeout(0)`.

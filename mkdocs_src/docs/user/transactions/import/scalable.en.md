@@ -105,7 +105,7 @@ If a file lands in the wrong broker, the wizard says so right after the upload. 
 Money you move between the broker account and the overnight account appears in both files: a **Withdrawal** in one broker and a **Deposit** in the other, on the same day and for the same amount. Merge each pair into one **Cash Transfer**: the bulk workspace of the [Transactions](../index.md) page suggests the pairs.
 
 - **Files imported together**: the two halves meet in the workspace, where a green banner, *Complementary transactions detected*, offers to **Merge** each pair.
-- **Files imported at different times**: on the **Transactions** page, tick the transfer rows of both brokers and click **Edit**: the banner appears in the workspace.
+- **Files imported at different times**: when you import the second file, the workspace finds the halves already saved and shows the 💡 button: click it to add them, then **Merge** each pair from the banner. For transfers saved long ago, you can also tick the transfer rows of both brokers on the **Transactions** page and click **Edit**: the banner appears in the workspace.
 
 You can also link a pair by hand: tick its two rows on the **Transactions** page and click **🔗 Promote pair**.
 

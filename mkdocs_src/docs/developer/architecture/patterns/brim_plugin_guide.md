@@ -517,9 +517,10 @@ transaction breaks these rules, so flip source signs as needed:
 
     A plugin's user-facing `warnings` (and any `BRIMAssetNotice.reason`) should be written
     in the language of the export it parses. For a single-nation broker whose report is
-    published in only one language — e.g. Crédit Agricole, Directa, Intesa Sanpaolo, Fineco
+    published in only one language — e.g. Crédit Agricole, Directa and Intesa Sanpaolo
     (Italian), Danske Bank (Finnish) — emit the warnings in that language so they match the report the user is
-    reading. When a broker ships differently localized export layouts (a UK vs. IT Fineco
+    reading. Fineco is still an exception: it reads only the Italian export, but writes its warnings in English.
+    When a broker ships differently localized export layouts (a UK vs. IT Fineco
     file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
     warnings in its own language. Code, comments and docstrings stay in English.
 
