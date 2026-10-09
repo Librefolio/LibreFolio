@@ -1,11 +1,22 @@
 # Phase 0 — 29 · Audit i18n: chiavi inutilizzate, doppioni, plurali, strumento
 
-> **Stato: secondo turno PRONTO AL CHECKPOINT (workstream O), 2026-10-07.** Il primo turno (S0-S10) è
-> committato: `8730ca823` · `08b885d43` · `2b86cc175` · `6f10f33c5` · `a8bac445d` su `bae2515bd`. Il
-> secondo (S7b, S7c, S7a-bis, S7-ter, S8b, S11, S7-bis, S12) è su `d07412899`, che contiene A13 e N.
-> L'analisi (§1-§10, Appendici) è stata
-> scritta il 2026-10-06 su `9f06df702` in plan mode. Questa copia è entrata nel journal al passo S0,
-> non committata. Script, log e tabelle dell'analisi sono in `files/` della sessione O
+> **Stato: ✅ CHIUSO (workstream O), 2026-10-09.** Tutti i lotti, S0-S21, sono fatti e integrati in
+> `dev_release2`. Verificati sul codice di `3cceb4f90` (treno 24b) il 2026-10-09 (S22). Archiviato in
+> `Release_2/phases/29_i18nAudit/` lo stesso giorno. Nulla resta aperto: i rinvii sono elencati in S22,
+> ciascuno con dove è tracciato.
+>
+> | Lotti | Commit | Ingresso in `dev_release2` |
+> |---|---|---|
+> | S0-S10, primo turno | `8730ca823` · `08b885d43` · `2b86cc175` · `6f10f33c5` · `a8bac445d` | con la catena di N (`ff436d703`), treno 8 (`d07412899`) |
+> | S7b, S7c, S7a-bis, S7-ter, S8b, S11, S7-bis, S12-S14: secondo turno | `f5981cfec` · `ad40cf013` · `6f728a541` · `1e2b08804` | merge `ed1795d51`, treno 9 |
+> | S15, fix di sicurezza, e triage S16 | `95293ab51` · `1cad0d628` | merge `ed1795d51`, treno 9 |
+> | S17, cambio lingua senza rimontaggio | `d297ca481` · `1c20b254f` · `56e0970c9` | merge `4c51f42b8`, treno 10 |
+> | S18-S19, todo del bulk e testo PAC | `a312797bf` · `2a8b18aad` · `be2954522` · `ec0a698cc` | merge `5d9e9af01`, treno 14 |
+> | S20, reperti di Q | `0cc4a5077` · `d7767f2ea` · `5c9635d73` · `dd87e1669` | merge `bc700c8e8`, treno 19 |
+> | S21, login, scheduler, conteggio dell'import | `8368a49a1` · `4925ab430` · `13545be54` | merge `616acb5b7`, treno 22 |
+>
+> L'analisi (§1-§10, Appendici) è stata scritta il 2026-10-06 su `9f06df702` in plan mode, ed è entrata
+> nel journal al passo S0. Script, log e tabelle dell'analisi sono in `files/` della sessione O
 > (`analyze_keys.py`, `resolve_prefix.py`, `classify.py`, `dups.py`, `icu_collisions.js`,
 > `prototype_rules.py`, `plural_sites.py`, `classification.json`, `dup_groups.json`).
 >
@@ -761,6 +772,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   il gate dei testi delle guide) e `onboarding-component-unit`.
   > - Non sono girati gli E2E: C5 cambia solo chiavi con valori identici nelle 4 lingue, e la resa
   >   non cambia.
+  >
+  > **Integrazione** (annotata in S22): `f5981cfec` · `ad40cf013` · `6f728a541` · `1e2b08804`, merge
+  > `ed1795d51`, nel treno 9.
 - **S15** ✅ 2026-10-07 — Lotto a parte, non i18n: `GET /api/v1/system/plugin-diagnostics` richiede il
   login. Trovato da Q, verificato dal coordinatore. Decisione del developer: «Sì, correggilo con O nella
   1.2». Base `1e2b08804`.
@@ -804,7 +818,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   `start_server()`;
   > - la descrizione di `api system` nel runner («parse_pipfile, deps») è vecchia;
   > - il runner ha creato `frontend/build/`, che è ignorato.
-- **S16** ⏳ 2026-10-07 — Triage del rosso di coverage `auth.spec.ts:312` («3a: completing welcome…»),
+  >
+  > **Integrazione** (annotata in S22): `95293ab51` · `1cad0d628`, merge `ed1795d51`, nel treno 9.
+- **S16** ✅ 2026-10-07 — Triage del rosso di coverage `auth.spec.ts:312` («3a: completing welcome…»),
   chiesto dal coordinatore dopo il fix di sicurezza.
   > **Prove**:
   > - run completa 13:05-15:58 su `d07412899`, 2 worker, carico 30-50: a `:338` per 3 s
@@ -849,6 +865,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >
   > Decisione del developer (16:29): «Approva tutte e tre le correzioni», cioè segnaposto solo per il
   > primo dizionario, commento corretto ed E2E rosso prima; 3a non si tocca → S17.
+  >
+  > **Chiuso** (allineato in S22): il triage era il mandato, e si è concluso col verdetto e la decisione;
+  > la correzione è S17. La riga del journal è entrata con `1cad0d628`.
 - **S17** ✅ 2026-10-07 — Correzione: un cambio lingua non rimonta più l'app. Base `1cad0d628`, sopra il
   checkpoint di sicurezza (`95293ab51` · `1cad0d628`, verificato con i blob). Checkpoint a parte.
   > **Note implementazione**:
@@ -890,6 +909,9 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   la lezione è nella pagina wiki;
   > - `initI18n()` nello script di `(app)/+layout.svelte` resta: ora gira solo quando il gruppo
   >   `(app)` si crea davvero, e legge la lingua salvata. Non l'ho toccato, è fuori dall'approvazione.
+  >
+  > **Integrazione** (annotata in S22): `d297ca481` · `1c20b254f` · `56e0970c9`, merge `4c51f42b8`, nel
+  > treno 10.
 - **S18** ✅ 2026-10-08 — Analisi, senza codice: i todo del bulk non sono tradotti
   (`TransactionBulkModal.svelte:3171`, trovato da M nella gallery). Base `ffa72cc2b`, pulita.
   > **Origine**: due fonti arrivano al bulk da `onImportBatch` (`:2303-2306`).
@@ -1285,6 +1307,69 @@ Solo segnalazione, per il backlog: non è i18n, e qui non posso verificarlo senz
   >   cataloghi; `git diff --check` pulito;
   > - doc: `mkdocs build` strict ✅;
   > - porte 6160 e 6170 libere.
+  >
+  > **Integrazione** (annotata in S22): `8368a49a1` · `4925ab430` · `13545be54`, merge `616acb5b7`, nel
+  > treno 22.
+- **S22** ✅ 2026-10-09 — Verifica finale sul codice e archivio, chiesti dal developer: «verificare,
+  degli stati completati, che i piani siano allineati […] archivia solo le cose davvero finite». Base
+  `3cceb4f90` (treno 24b).
+  > **Verifica sul codice di oggi**, in sola lettura (`/tmp/libreFolio_o_arch_verify.py`): tutti i
+  > risultati promessi ci sono ancora.
+  > - Strumento: i test sono esclusi (`scripts/i18n_usage.py`, `is_test_source`). `i18n audit` dà 4215
+  >   chiavi, 0 morte, 3 non verificate, e le 4 lingue hanno lo stesso insieme di chiavi.
+  > - Plurali P1-P4 su `plannerPlainDecimalCount`, nessun `count: Number(` nel planner; il gate ICU c'è;
+  >   i 3 rami FR `many` di M1 ci sono.
+  > - Rimozioni e condensazioni (S7, S8, S11): le chiavi tolte mancano; `WeightBars.svelte` e
+  >   `AgeLabel.svelte` non ci sono più; `dataEditor.editorTip*` c'è.
+  > - Gli altri lotti:
+  >   - S15: la diagnostica dei plugin richiede il login;
+  >   - S17: il segnaposto vale solo per il primo dizionario;
+  >   - S19: il bulk usa `resolveBrimNotice`, e la chiave `corporate_action` c'è;
+  >   - S20: `syncRequestTimeoutMs`, l'URL d'aiuto di Borsa e `fx.loadFailed`;
+  >   - S21: le chiavi del login, il nome di `scheduler_enabled`, il plurale senza numero doppio.
+  >
+  > **Allineamenti**, fatti qui:
+  > - lo stato in testa al piano, fermo al 07/10, ora con la mappa dei commit;
+  > - S16 ✅: il triage era chiuso, la correzione è S17;
+  > - il rimando alle risposte del §14;
+  > - gli SHA del secondo turno, di S15, di S17 e di S21.
+  >
+  > **Superato, non è un buco.** Il login rivelava gli account disattivati (fuori pista di S21). L'ha
+  > chiuso `3392c4f05` (piano 36): la password si controlla per prima, e un account disattivato riceve
+  > 403 `ACCOUNT_DISABLED`. Il piano 36 ha esteso il contratto di S21 con `auth.accountDisabled`
+  > (`frontend/src/lib/stores/app/auth.ts:138-139`).
+  >
+  > **Proposta per `TODO_FUTURI.md`**, che non ho toccato: la voce «L'audit i18n non può dire
+  > "inutilizzata" su un terzo del catalogo» (`:1734-1849`) è risolta.
+  > - S2 (R3, l'unione tipizzata anche con un solo membro) e S12 (i prefissi legacy declassati a «non
+  >   verificati») fanno ciò che chiedeva la sua «riparazione».
+  > - Delle sue 4 morte, `risk.simulation.regimeTruncated` l'ha tolta S7c, e
+  >   `risk.levels.l3.{beta,sharpe,sortino}Help` le ha tolte `f55b2e42a`.
+  >
+  > **Rinvii**, tutti ancora aperti sul codice di `3cceb4f90`. Rinviato:
+  > `Phase_0/38_postReleaseBacklog/README.md`, voci:
+  > - §2.4, decisione 7: «Famiglia i18n fantasma `tools.allocation.constraints.`»;
+  > - secondo turno: «File morti per knip: `onboardingTourSurfaces.svelte.ts` ed `EditBuffer.ts`»;
+  > - S15: «`ensure_started()` documentato ma inesistente» e «Descrizione vecchia dell'azione
+  >   `api system` nel runner»;
+  > - S19: «`FixFlaggedStep` traduce le notice con una copia locale», «Dialogo di conferma del bulk
+  >   senza agganci per i test» e «`schemas/brim.py` descrive `message` come ripiego inglese»;
+  > - S20: «Stringhe fisse in inglese nell'editor dei dati degli asset», «Parametri di justETF senza
+  >   chiavi i18n», «`provider-contracts` registrato senza classe d'isolamento» e «Titolo di U1:
+  >   "block Continue"»;
+  > - S21: «`importWizard.assetsCount` senza plurale», «IWR-001 cerca il badge per classe CSS», «Riga
+  >   booleana `scheduler_enabled` senza `data-testid`» ed «Errori di rete al login in inglese»;
+  > - §6, §8 e §4: «Plurale scritto a mano nel tooltip del Gantt dei lotti», «Debito Prettier in
+  >   `DistributionDialog.svelte`» e «Segnalare a monte la cache di svelte-i18n».
+  >
+  > Tracciata altrove, quindi non nel 38: l'àncora `#rolling-return`, che c'è solo in inglese. È il D28
+  > di `Phase_0/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md:430`, e la chiude
+  > l'allineamento di `Phase_0/27_releaseImages/plan-phase00ReleaseGallery.prompt.md:123`.
+  >
+  > **Archivio.** La cartella è spostata intera in `Release_2/phases/29_i18nAudit/`, con `mv` e non
+  > `git mv`: è la regola del coordinatore, lo stage resta vuoto fino al commit. Il piano non ha link
+  > relativi. I link in ingresso li aggiorna il coordinatore: sono 3 pagine della devWiki, nelle
+  > tabelle delle fonti.
 
 ## 12. Definition of done
 
@@ -1311,6 +1396,9 @@ I test nuovi li scrive il **test-author**, con le regole della corsia. Non servo
 comportamento di pagina cambia, salvo un testo FR e il plurale «unit/units».
 
 ## 14. Decisioni per il developer
+
+> **Risposte** (allineato in S22): il developer ha deciso tutte e 8 il 2026-10-07. Le risposte sono in
+> testa al piano, in «Decisioni del §14» e «Permessi», e sono state applicate da S2 a S12.
 
 1. **Backlog PAC**: togliere ora le 107 morte, più le 2 nascoste (`routeCapMissing`, `sections.assets`)?
    Consigliato sì.
