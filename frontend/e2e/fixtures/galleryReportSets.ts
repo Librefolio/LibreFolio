@@ -24,9 +24,10 @@
  * closed through its discard guard. A parse writes no transaction either: it moves the file and
  * caches its result in the file's own metadata, which goes with the file.
  *
- * Data: the repository's synthetic Danske Bank samples (invented values), two statements written
- * under the test's output folder, and nothing else. Copied, not imported, from
- * transactions/tx-import-report-set.spec.ts and transactions/tx-bulk-import-handoff.spec.ts.
+ * Data: the repository's synthetic Danske Bank samples (invented values), one statement written
+ * under the test's output folder (the savings statement of the todo-banner shot), and nothing else.
+ * Copied, not imported, from transactions/tx-import-report-set.spec.ts and
+ * transactions/tx-bulk-import-handoff.spec.ts.
  *
  * ## Offline, gallery-wide
  *
@@ -676,30 +677,6 @@ export async function combineSet(api: APIRequestContext, brokerId: number, batch
     const combined = (JSON.parse(body) as {combined: StoredFile}).combined;
     expect(combined.kind, 'the combine answers with the combined file').toBe('combined');
     return combined;
-}
-
-/**
- * The bank's cash statement, extended so the generic CSV reads it too: the sample's rows, plus four
- * columns the generic CSV maps (`date`, `type`, `amount`, `currency`) after the bank's, which Danske
- * Bank ignores. The bank's own statement names no `date` and no `type` column, so nothing but Danske
- * Bank reads it and its ⋮ menu never offers "Read alone with…"; this one does (decision 1 of the
- * report-set workstream, `writeDualCash` in tx-import-report-set.spec.ts). Latin-1 and `;`, like the
- * sample; a fixed name, so the shots are the same on every run (the output folder is per test).
- */
-export function writeExtendedCashStatement(testInfo: OutputFolder): string {
-    const filePath = testInfo.outputPath('danske_bank-cash-extended.csv');
-    const [header, ...rows] = readFileSync(DANSKE_SAMPLES.cash, 'latin1')
-        .split(/\r?\n/)
-        .filter((line) => line !== '');
-    const extended = rows.map((row) => {
-        const [day, , amount] = row.split(';');
-        const [dd, mm, yyyy] = day.split('.');
-        const value = Number(amount.replace(',', '.'));
-        return `${row};${yyyy}-${mm}-${dd};${value < 0 ? 'withdrawal' : 'deposit'};${value.toFixed(2)};EUR`;
-    });
-    mkdirSync(path.dirname(filePath), {recursive: true});
-    writeFileSync(filePath, Buffer.from([`${header};date;type;amount;currency`, ...extended, ''].join('\n'), 'latin1'));
-    return filePath;
 }
 
 /** The savings statement of the todo-banner shot: cash movements only (no asset, nothing to resolve), invented. */

@@ -47,7 +47,9 @@ Where does the money come from? You can combine several sources:
 The Broker that receives a contribution or an external account's money is
 chosen in the **Brokers** step. Each amount stays in its own currency.
 
-<!-- [Screenshot Placeholder: tools/pac-step-liquidity — the Liquidity step with cash copied From your Brokers, a New contribution and an External account, each amount in its own currency] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-liquidity" alt="The Liquidity step, beside the list of steps: cash from a Broker, with the amount to use out of what is available; a new contribution, with its amount and currency; and an external account, with its declared liquidity and the amount to use">
+</div>
 
 ### 🏦 Brokers
 
@@ -95,7 +97,9 @@ Each Broker also has two settings of its own:
   step minus the spread, so the calculation is the same either way: only the
   way the plan shows the conversion changes.
 
-<!-- [Screenshot Placeholder: tools/pac-step-brokers — the Broker editor: order mode By number of units or By amount, Increment, purchase fee, and currency conversion mode] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-brokers" alt="The Broker editor, as scenario data that leaves the Broker unchanged: under How you buy, currency by currency, the Order type By amount, the Increment and the Purchase fee with its minimum, percentage, maximum and fixed part; Currency conversion with The Broker converts when you buy selected; and Apply to the draft">
+</div>
 
 Not supported yet: a tax regime, losses, and sell fees for a Broker.
 
@@ -119,7 +123,9 @@ A missing price stays in the draft: the calculation asks for it.
 The composition by country, sector, and type, copied from the Asset or typed,
 feeds only the exposure maps and bars of the result, not the calculation.
 
-<!-- [Screenshot Placeholder: tools/pac-step-assets — the Assets step with an Asset added from LibreFolio and a Manual Asset, each price Auto or Manual] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-assets" alt="The Assets step: Search Asset, Your Assets and Manual Asset, then an Asset from LibreFolio priced Auto, another priced Manual, and a Manual Asset with its Manual badge, each with its price and composition">
+</div>
 
 ### 🔀 Routing
 
@@ -150,7 +156,9 @@ Two more settings shape how the plan buys there:
 
 Empty fields restrict nothing.
 
-<!-- [Screenshot Placeholder: tools/pac-step-routing — the Routing step: the Assets each Broker may buy, with Minimum purchase, Required purchase, Maximum purchase, Priority and Price margin] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-routing" alt="The Routing step: for each Broker, its order settings, Allow all, Exclude all and how many Assets it may buy; on the first Broker, excluded Assets and an allowed one with its Minimum purchase, Required purchase, Maximum purchase, Price margin and Priority">
+</div>
 
 ### ⚖️ Targets
 
@@ -189,7 +197,9 @@ Two actions help you get there:
     them, and a target you changed is not overwritten without your
     confirmation.
 
-<!-- [Screenshot Placeholder: tools/pac-step-targets — the Targets step with target percentages adding up to 100% and the Balance all and Copy current distribution actions] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-targets" alt="The Targets step of the PAC allocator: a target percentage per Asset, with its distribution bar, adding up to 100%; Balance all, disabled because the targets are already balanced; and Copy current distribution">
+</div>
 
 ### 💱 FX (only when needed)
 
@@ -264,7 +274,9 @@ A last check before the calculation. It lists the complete copy that will be
 sent (the backend receives this copy, and only this), flags the fields still
 to complete, and offers **Calculate plan**.
 
-<!-- [Screenshot Placeholder: tools/pac-step-review — the Review step with the calculation data, the fields still to complete and the Calculate plan button] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-review" alt="The Review step: the summary of each step, with the Targets step flagged; the field still to complete before calculating, with a link to its step; Calculation data folded; and Calculate plan, disabled until that field is completed">
+</div>
 
 ### 📋 Copied or typed values
 
@@ -307,7 +319,9 @@ listed just below, under **Notes on the calculation**. **Edit configuration**
 takes you back to the **Review** step, and **Calculate new plan** runs the
 calculation again.
 
-<!-- [Screenshot Placeholder: tools/pac-result — a calculated plan: the outcome badges, the Key figures and the Allocation per Asset table] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-result" alt="A calculated plan: the header with its outcome badges, the L2 distance, Not invested and the notes, Edit configuration and Calculate new plan; the Key figures, each with its parts, beside the Calculation box; and the title of Allocation per Asset">
+</div>
 
 A calculation ends with one of these outcomes:
 
@@ -376,7 +390,9 @@ them together. Without a plan (**Infeasible with these constraints** or
 **No plan within the limits**), **Proof and solver** is the only section, and
 the key figures show only the **Calculation** box.
 
-<!-- [Screenshot Placeholder: tools/pac-result-plan — the Operational plan: numbered cash and currency exchange steps, then the orders table of a Broker] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="The Operational plan: numbered steps, first the transfers and the deposit that bring the cash to a Broker, then a currency exchange, each with its amount; then that Broker's orders, with Instruction, Price, Order amount and Fee; and the title of the next Broker's orders">
+</div>
 
 Click an order, or its **Detail** button, to open its detail: the instruction,
 the economic quantity, the prices used (source price, mid price, and charge
@@ -388,7 +404,9 @@ with the date and time of the copy or of your entry.
 **Proof and timings**, at the top of the result, opens **Proof and solver** and
 scrolls to it.
 
-<!-- [Screenshot Placeholder: tools/pac-result-proof — the Proof and solver section: outcome, proof and stop badges, exact objective values, solver stages and backend timings] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-proof" alt="The Proof and solver section: the Outcome, Proof and Stop badges; the exact value of each objective, in order, with the final tie-break; the Solver stages table; the Backend timings; and Where the time went, a bar of the calculation's phases">
+</div>
 
 Every figure comes from the backend accounting; the interface adds nothing up.
 With privacy mode on (see [User preferences](../../settings/preferences.md)),
