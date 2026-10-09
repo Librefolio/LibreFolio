@@ -59,7 +59,7 @@ Playwright `webServer` command line.
 ```bash
 ./dev.py db create-clean               # Recreate prod DB from 001_initial.py
 ./dev.py db create-clean --test        # Recreate test DB
-./dev.py db check                      # Check Alembic migration status
+./dev.py db check                      # Verify the model CHECK constraints exist in the DB
 ./dev.py db current                    # Show current revision
 ./dev.py db migrate "Add new table"    # Create new migration
 ./dev.py db upgrade                    # Apply pending migrations
