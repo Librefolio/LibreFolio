@@ -18,6 +18,8 @@
 > incorporata; restano approvazione developer, contratto result
 > product-shaped e gate capacità/packaging SCIP.
 >
+> **Al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): il gate SCIP è superato (D-X1, sotto; PySCIPOpt `==6.2.1` nel `Pipfile`), e il planner PAC 1.0.0 è nel target. **Il Rebalancer non è implementato** (`backend/app/services/tool_plugins/pac_allocator.py:10-14`): è il prossimo lavoro di D, in `13_pacAllocator`.
+>
 > **Piano C attivo:** [Piattaforma Tool atomica](../16_toolPlatform/plan-phase00ToolPlatform.prompt.md)
 > — base generica completa; [handoff PAC D](../16_toolPlatform/handoff-pac-D.md)
 > pubblicato, pilot reale aperto.
@@ -225,10 +227,10 @@ dal modello numerico e dagli adapter di copia autorizzati.
 | ID | Esito e taglia | Sprint |
 |---|---|---|
 | T0 | ✅ Piattaforma Tool custom-first integrata (`570beb386`). | SP12 |
-| T1 — specifica/evaluator | 🟡 Round 7 pronto, implementazione Gate P1 congelata: contratto operativo, ledger Decimal e clean break P1 definiti. | SP13 |
-| T2 — snapshot | 🟡 Round 7 pronto: funding/Broker separati, copy da API dominio, parametri operativi per-run; nessuna migration planner v1. | SP13 |
-| T1 — allocator/solver | 🟡 Round 7 riaperto: primario fixed-L2 condiviso + variante margine BUY-only; SCIP candidato approvato, dependency/probe/capacità/payload ancora a gate. | SP14 |
-| T2 — editor/report | 🟡 Round 6 UI approvato; Round 7 descrive migrazione e componenti shared. Nessuna UI operativa implementata. | SP14 |
+| T1 — specifica/evaluator | ✅ Al 09/10 per il PAC (`pac_allocator/evaluator.py`, `b82e59ffa`); il Rebalancer non c'è. Storico: 🟡 Round 7 pronto, implementazione Gate P1 congelata: contratto operativo, ledger Decimal e clean break P1 definiti. | SP13 |
+| T2 — snapshot | ✅ Al 09/10 (`features/tools/pac-allocator/planner/copies.ts`, `copyFlow.svelte.ts`). Storico: 🟡 Round 7 pronto: funding/Broker separati, copy da API dominio, parametri operativi per-run; nessuna migration planner v1. | SP13 |
+| T1 — allocator/solver | ✅ Al 09/10 per il PAC: SCIP via PySCIPOpt (`pac_allocator/solver.py`). Rebalancer e verifier SELL non implementati (`tool_plugins/pac_allocator.py:10-14`), lavoro di D. Storico: 🟡 Round 7 riaperto: primario fixed-L2 condiviso + variante margine BUY-only; SCIP candidato approvato, dependency/probe/capacità/payload ancora a gate. | SP14 |
+| T2 — editor/report | ✅ Al 09/10 la UI del planner PAC è nel target (`planner/PacPlannerTool.svelte`, `0210f9848`); quella del Rebalancer no. Storico: 🟡 Round 6 UI approvato; Round 7 descrive migrazione e componenti shared. Nessuna UI operativa implementata. | SP14 |
 
 > **Aggiornamento 2026-09-14:** Round 4 ha completato implementazione e gate
 > automatici, ma la review ha confermato che il risultato teorico non soddisfa

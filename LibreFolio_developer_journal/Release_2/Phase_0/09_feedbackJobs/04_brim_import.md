@@ -5,7 +5,7 @@ Skill di riferimento per chi esegue: `brim-plugin`.
 
 > **Chiusura urgente E — 2026-09-09:** matching/refresh degli asset nel wizard
 > Generic CSV e vincolo "un file piatto per broker" sono stati corretti e
-> documentati in [14_feedbackImportUrgent](../14_feedbackImportUrgent/manifest-integrazione-E.md).
+> documentati in [14_feedbackImportUrgent](../../phases/14_feedbackImportUrgent/manifest-integrazione-E.md).
 > Il parser resta verbatim, non genera FX e il primo asset resta una scelta
 > esplicita. Le successive workstream F/G hanno chiuso B1 e B3; stato aggiornato
 > nella tabella finale.
@@ -115,6 +115,6 @@ Baseline `a9138140`; rischi, dipendenze e DoD in [06_piano_sprint.md](06_piano_s
 
 | ID | Esito | Sprint |
 |---|---|---|
-| B1 | ✅ Integrato e developer-accepted con G: conversion fee nonzero come FEE separata, withdrawal preservato; assunzione documentata. [Piano](../18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
+| B1 | ✅ Integrato e developer-accepted con G: conversion fee nonzero come FEE separata, withdrawal preservato; assunzione documentata. [Piano](../../phases/18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
 | B2 | ✅ Allocazione/net FIFO v4 già consegnati; WAC lordo separato intenzionalmente. | Nessun codice |
-| B3 | ✅ Integrato e developer-reviewed con F: persistenza/count affidabili e link transazioni singolo/bulk/dettaglio. [Piano](../17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md). | SP03 |
+| B3 | ✅ Integrato e developer-reviewed con F: persistenza/count affidabili e link transazioni singolo/bulk/dettaglio. [Piano](../../phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md). | SP03 |

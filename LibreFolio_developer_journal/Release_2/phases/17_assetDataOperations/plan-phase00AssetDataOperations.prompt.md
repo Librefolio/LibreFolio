@@ -1,10 +1,11 @@
 # Asset data operations — bond classification, distribution CSV, delete links
 
 **Avvio:** 2026-09-10. **Owner:** workstream F coordinato da Release 2.
+**Stato:** ✅ COMPLETATO 2026-09-10 · codice in `e50d66408` (A1, A2, B3) e `cc57b6a38` (rifinitura dell'import CSV, 2026-09-11) · developer-reviewed (`09_feedbackJobs/03_asset_dati_classificazione.md:77-78`, `04_brim_import.md:120`) · verificato sul codice il 2026-10-09 (Q, base `3cceb4f90`) e archiviato in `Release_2/phases/`.
 **Baseline:** `8b99e0020c92a945daf0821ee0654a0a2a21efd0`
 (`dev_release2`).
 **Scope:** SP03 A1, A2 e B3 da
-[`06_piano_sprint.md`](../09_feedbackJobs/06_piano_sprint.md).
+[`06_piano_sprint.md`](../../Phase_0/09_feedbackJobs/06_piano_sprint.md).
 **Autorizzazione developer:** `Approva F con queste decisioni (Consigliato)`.
 **Vincolo Git:** nessun commit, push, rebase, reset o altra mutazione della
 cronologia.
@@ -59,8 +60,10 @@ cronologia.
 ## 1. A1 — categorie bond canoniche ✅ 2026-09-10
 
 - [x] Aggiungere enum, alias, API/portfolio emoji e fallback frontend.
-- [ ] Riallineare i mapping espliciti Borsa Italiana per government/corporate.
-- [ ] Conservare sovranazionali in `Financials` e dati esistenti invariati.
+- [x] Riallineare i mapping espliciti Borsa Italiana per government/corporate. ✅ 2026-09-10
+  > **Note implementazione** (verifica Q del 2026-10-09): `backend/app/services/asset_source_providers/borsa_italiana.py:226-240` mappa «government bonds», «t-bonds», «titoli di stato» su `Government Bonds`, e «corporate», «obbligazioni corporate» su `Corporate Bonds`. La casella non era stata spuntata.
+- [x] Conservare sovranazionali in `Financials` e dati esistenti invariati. ✅ 2026-09-10
+  > **Note implementazione** (verifica Q del 2026-10-09): `borsa_italiana.py:232,240` mappa «supranational bonds» e «obbligazioni sovranazionali» su `Financials`; nessuna migrazione.
 - [x] Far aggiungere/aggiornare i test mirati dal `test-author`.
 - [x] Eseguire i selettori A1 nella lane F.
 
@@ -228,8 +231,10 @@ cronologia.
 - [x] Riutilizzare `identityLabel` nel testo duplicati. ✅ 2026-09-10
   > **Note implementazione**: la status bar mantiene `dates` per gli editor
   > datati e mostra `names` per i CSV distribuzione, senza nuove chiavi i18n.
-- [ ] Aggiungere/regolare il test minimo e rieseguire gate component/format.
-- [ ] Inviare delta/evidenza al coordinatore e tornare FROZEN.
+- [x] Aggiungere/regolare il test minimo e rieseguire gate component/format. ✅ 2026-09-10
+  > **Note implementazione** (verifica Q del 2026-10-09): `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts:365-377` («blocks duplicate canonical identities»), con il testo `duplicate names`.
+- [x] Inviare delta/evidenza al coordinatore e tornare FROZEN. ✅ 2026-09-10
+  > **Note implementazione** (verifica Q del 2026-10-09): assorbito dal checkpoint finale del §10 (riga «Validare, inviare checkpoint e tornare FROZEN»); il codice è entrato con `e50d66408`.
 
 ## 9. Detour post-integrazione — cost basis FX
 
