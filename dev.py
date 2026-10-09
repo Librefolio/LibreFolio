@@ -154,6 +154,17 @@ def _resolve_server_workers(value) -> int:
     return workers
 
 
+def _ensure_shared_jwt_secret(env: dict) -> None:
+    """Give every uvicorn worker the same JWT secret: a fresh one when ``env`` has none.
+
+    An empty or blank value counts as none: ``JWT_SECRET=`` in .env reaches the environment as ''
+    through pipenv, and each worker would then make its own secret (auth_service), logging users
+    out whenever a request lands on another worker.
+    """
+    if not env.get("JWT_SECRET", "").strip():
+        env["JWT_SECRET"] = secrets.token_urlsafe(64)
+
+
 def cmd_server(args):
     """Start the development server."""
     test_mode = getattr(args, 'test', False)
@@ -301,7 +312,7 @@ def cmd_server(args):
     # On macOS, Python uses 'spawn' (not fork) for multiprocessing, so each
     # uvicorn worker is a fresh process. Without a shared env var, each worker
     # would generate its own random secret → tokens invalid across workers.
-    env.setdefault("JWT_SECRET", secrets.token_urlsafe(64))
+    _ensure_shared_jwt_secret(env)
 
     # uvicorn closes idle keep-alive connections after 5 s by default. A test
     # client that reuses a socket the server has just closed gets ECONNRESET on

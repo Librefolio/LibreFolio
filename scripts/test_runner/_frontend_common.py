@@ -190,8 +190,11 @@ def _ensure_test_users() -> bool:
 
     for username, email, password in users:
         result = subprocess.run(["python", "scripts/user_cli.py", "--test-db", "create-superuser", username, email, password], capture_output=True, text=True)
-        if result.returncode != 0 and "already exists" not in result.stderr.lower():
-            print_error(f"Failed to create user {username}: {result.stderr}")
+        # The CLI exits 1 on failure and reports on stdout ("Username already taken",
+        # "Email already registered"): an existing user is fine, anything else is not.
+        output = f"{result.stdout}\n{result.stderr}".lower()
+        if result.returncode != 0 and not any(marker in output for marker in ("already taken", "already registered", "already exists")):
+            print_error(f"Failed to create user {username}: {(result.stderr or result.stdout).strip()}")
             return False
 
     # Promote admin
