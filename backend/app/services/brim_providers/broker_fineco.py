@@ -4,10 +4,11 @@ Fineco Broker Report Import Plugin.
 This plugin parses CSV exports from FinecoBank (Italian bank/broker),
 specifically the "Movimenti Dossier Titoli" (securities dossier movements) report.
 
-**Warning language follows the input format.** Only the Italian FinecoBank export
-is supported today, so user-facing warnings are emitted in Italian. FinecoBank also
-operates in the UK; if a UK (or other) export layout — different columns and
-language — is added later, it should emit its warnings in that format's language.
+**Warning language.** Only the Italian FinecoBank export is supported today, yet its
+user-facing warnings are written in English, while the BRIM guide wants them in the
+language of the export (Italian here). FinecoBank also operates in the UK; if a UK (or
+other) export layout — different columns and language — is added later, its warnings
+should follow that layout's language.
 
 **Import philosophy (verbatim / no forex):**
 This plugin is a faithful transcriber, not a re-calculator. Numbers are imported
