@@ -238,10 +238,25 @@ currencies other than the valuation currency. Otherwise the calculation does
 not start and the outcome is **Input not valid** (see
 [Reading the result](#reading-the-result)): the cause can be a **Manual** rate
 or **Auto** rates from different days or sources, so align the rates or set a
-**Conversion spread** that covers the difference.
+**Conversion spread** that covers the difference. Only a gap small enough to
+come from storing rates with ten decimals is tolerated: the conversion then
+uses the rate through the valuation currency when that is lower,
 
-Like order amounts and fees, the amount received from a conversion is
-rounded half up to the smallest unit of its currency, and the **Rounding**
+$$
+\min\left(x_{\text{CHF} \to \text{USD}}\,(1 - s),\;
+\frac{x_{\text{CHF} \to \text{EUR}}}{x_{\text{USD} \to \text{EUR}}}\right)
+$$
+
+so it still creates no value. When the rates agree, this rate is the usual
+$x\,(1 - s)$. Your rates are not changed: each conversion of the plan shows
+the rate it starts from as *spot* and the rate it uses as *effective*.
+
+Every amount the plan books is rounded once, on its exact final value, to the
+smallest unit of its currency (the cent for EUR or USD), and always against
+the plan: amounts it receives (what a conversion delivers) are rounded down,
+amounts it pays (the cost of an order and its fee) are rounded up. So rounding
+never improves a plan, splitting a conversion into smaller ones gains nothing,
+and the rounding part of **Not invested** is never negative. The **Rounding**
 column of **Balances per Broker and currency** shows how much of each row
 comes from rounding: ≈ marks a figure shown rounded, as when the exact
 difference has no finite decimal form (for example after converting USD → EUR
