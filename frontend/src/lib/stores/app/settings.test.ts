@@ -12,6 +12,13 @@
  * load: `$lib/api` is replaced by a client whose every call fails, so a case that reached the network would say so
  * instead of waiting on it. `$app/environment` stays the shared mock (`browser: false`), which keeps both stores off
  * `localStorage`, and both are reset around every case: no case inherits a neighbour's settings.
+ *
+ * The second describe is the one place this file loads. It pins how `globalSettings.load()` reads `enable_registration`
+ * (K, step 22), the setting the login page follows to offer «Register here»: as the backend reads a `bool` setting
+ * (`_convert_value` in `backend/app/services/global_settings_service.py`), true exactly when `value.lower()` is `true`,
+ * `1`, `yes` or `on` and false for anything else, and open when the answer has no such row, the backend default
+ * (`GLOBAL_SETTINGS_DEFAULTS`). `GET /settings/global` is answered one call at a time (`mockResolvedValueOnce`); the
+ * client fails again right after.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {get, type Readable} from 'svelte/store';
@@ -34,6 +41,7 @@ vi.mock('$lib/api', () => {
     };
 });
 
+import {zodiosApi} from '$lib/api';
 import {defaultDisplayCurrency, userSettings, type UserSettings} from '$lib/stores/app/settings';
 import {globalSettings} from '$lib/stores/app/globalSettings';
 
@@ -105,5 +113,93 @@ describe('defaultDisplayCurrency — the Default Currency of the user first, the
         } finally {
             unsubscribe();
         }
+    });
+});
+
+describe('globalSettings.load() — enable_registration, read as the backend reads a bool setting', () => {
+    const listGlobalSettings = vi.mocked(zodiosApi.list_global_settings_api_v1_settings_global_get);
+
+    /**
+     * The part of the store these cases read: the setting under test, and `default_currency`, the witness that a load
+     * took its answer. `enable_registration` is `unknown` on purpose: the cases assert its type, not only its truth.
+     */
+    interface Observed {
+        enable_registration?: unknown;
+        default_currency: string;
+    }
+
+    function observed(): Observed {
+        return globalSettings.get();
+    }
+
+    /** One row of `GET /settings/global`, as the backend sends it. */
+    function row(key: string, value: string, value_type: 'bool' | 'int' | 'string') {
+        return {key, value, value_type};
+    }
+
+    /**
+     * `globalSettings.load()`, with `GET /settings/global` answering `rows` for this one call, plus a `default_currency`
+     * row set to `witness`. A load that fails keeps the old values without a word, and what the store held could pass
+     * for a parse, so every case first proves that the store took its answer.
+     */
+    async function loadAnswering(rows: ReturnType<typeof row>[], witness: string): Promise<void> {
+        expect(observed().default_currency, 'premise: the witness is not in the store yet').not.toBe(witness);
+        listGlobalSettings.mockResolvedValueOnce({items: [row('default_currency', witness, 'string'), ...rows]});
+        await globalSettings.load();
+        expect(observed().default_currency, 'the store took this answer: a failed load keeps the old values silently').toBe(witness);
+    }
+
+    // `clear()` is the whole reset. It puts the singleton back on its defaults and, in a browser, drops the
+    // `global_settings` localStorage cache with them; the store reads that cache only when its module loads, never
+    // between cases. Here `browser` is false anyway (the shared mock), and Vitest's node environment has no
+    // localStorage. `mockReset()` empties the queue of answers and puts the failing client back.
+    function reset(): void {
+        globalSettings.clear();
+        listGlobalSettings.mockReset();
+    }
+    beforeEach(reset);
+    afterEach(reset);
+
+    it.each(['true', 'True', 'TRUE', '1', 'yes', 'On'])('reads %j as open: the boolean true', async (value) => {
+        await loadAnswering([row('enable_registration', value, 'bool')], 'GBP');
+
+        expect(observed().enable_registration).toBe(true);
+    });
+
+    // `enabled` is in neither list on purpose: the backend's rule is "true only for those four", not "false only for
+    // these".
+    it.each(['false', 'FALSE', '0', 'no', 'off', '', 'enabled'])('reads %j as closed: the boolean false', async (value) => {
+        await loadAnswering([row('enable_registration', value, 'bool')], 'GBP');
+
+        expect(observed().enable_registration).toBe(false);
+    });
+
+    it('reads an answer without the row as open: the backend default, GLOBAL_SETTINGS_DEFAULTS', async () => {
+        // The store last heard «closed»: an open below can only come from reading the absence, never from what it held.
+        await loadAnswering([row('enable_registration', 'false', 'bool')], 'GBP');
+        await loadAnswering([row('session_ttl_hours', '24', 'int')], 'USD');
+
+        expect(observed().enable_registration).toBe(true);
+    });
+
+    it('keeps what it held when a load fails', async () => {
+        // A guard, green today: the catch in `load()` already keeps the current values. Pinned so that the fix keeps
+        // them too: a failure must not reopen registration on screen, nor close it.
+        await loadAnswering([row('enable_registration', 'false', 'bool')], 'GBP');
+        const held = {...globalSettings.get()};
+        const heldRegistration = observed().enable_registration;
+
+        listGlobalSettings.mockRejectedValueOnce(new Error('GET /settings/global: the server did not answer'));
+        // `load()` reports the failure on the console: silenced here, where the failure is the point.
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await globalSettings.load();
+        } finally {
+            consoleError.mockRestore();
+        }
+
+        expect(listGlobalSettings, 'the second read was asked, and failed').toHaveBeenCalledTimes(2);
+        expect(observed().enable_registration, 'enable_registration: still what the last answer said').toBe(heldRegistration);
+        expect(globalSettings.get(), 'and nothing else moved').toEqual(held);
     });
 });
