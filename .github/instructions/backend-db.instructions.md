@@ -135,7 +135,7 @@ leaving only a warning in the log.
 ### Standard Commands
 
 ```bash
-./dev.py db check                 # Check migration status
+./dev.py db check                 # Verify the model CHECK constraints exist in the DB
 ./dev.py db current               # Show current revision
 ./dev.py db upgrade               # Apply pending migrations
 ./dev.py db downgrade             # Revert last migration
