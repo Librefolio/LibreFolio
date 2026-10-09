@@ -98,6 +98,17 @@ function everyFlowCompleted() {
     return body;
 }
 
+/**
+ * The sidebar's connection-security line asks GET /api/v1/system/connection on every app
+ * page (plan 36): the answer the lane's plain-HTTP loopback gets. Checked against the
+ * generated schema, so a contract that moves fails here, by name.
+ */
+function loopbackConnection() {
+    const body = {client_class: 'loopback', cookie_secure: false} as const;
+    schemas.ConnectionSecurityResponse.parse(body);
+    return body;
+}
+
 type GetResponse = {
     body: unknown;
     requiredQuery?: Record<string, string>;
@@ -142,6 +153,7 @@ const test = base.extend<{uploaderPage: Page}>({
             ['/api/v1/settings/user', {body: {language: 'en', base_currency: 'EUR', theme: 'light', avatar_url: null}}],
             ['/api/v1/settings/global', {body: {items: []}}],
             ['/api/v1/settings/onboarding', {body: everyFlowCompleted()}],
+            ['/api/v1/system/connection', {body: loopbackConnection()}],
             // The Files page's contracts.
             ['/api/v1/brokers/import/plugins', {body: []}],
             [

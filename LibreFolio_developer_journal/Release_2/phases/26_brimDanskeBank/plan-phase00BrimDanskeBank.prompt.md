@@ -1,6 +1,7 @@
 # Piano Phase 00 — BRIM Danske Bank: pilota multi-report + fix della codifica CSV
 
 **Creato**: 2026-09-28
+**Stato**: ✅ chiuso (verifica del 2026-10-09 su `3cceb4f90`). Il pilota Danske e il framework dei report set sono integrati in `dev_release2`, attraverso i passi 4–9 dei piani accanto. Restano solo rinvii decisi, nel backlog dopo la 1.2 (§12).
 **Baseline/target**: `ea30d5ccf99e918a84ebd49bd5e65fb0f50a9628` (`dev_release2`), HEAD verificato
 **Workstream**: L — ramo `e-alfy-l-danske-bank`, worktree `LibreFolio-worktrees/e-alfy-shiny-train`
 **Coordinator**: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`
@@ -14,7 +15,7 @@
 **File collegati** (stessa cartella):
 - [analysis-phase00BrimDanskeBank.md](analysis-phase00BrimDanskeBank.md): l'analisi degli export, senza valori;
 - [issue26-reply.en.md](issue26-reply.en.md): la risposta pubblicata dal developer sulla issue il 2026-09-28;
-- [design-phase00BrimReportSets.md](design-phase00BrimReportSets.md): lo Step 2, in bozza e in attesa della revisione del developer.
+- [design-phase00BrimReportSets.md](design-phase00BrimReportSets.md): lo Step 2, in bozza e in attesa della revisione del developer. ✅ Approvato il 2026-09-30 (v5.3).
 
 ## 0. Decisioni del developer (verbatim)
 
@@ -555,11 +556,11 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 >
 > **⚠️ Fuori pista**: il design citava `POST /brokers/{id}/transactions/bulk`, che non esiste; l'editor salva con `POST /transactions/validate` e `/commit` (`execute_batch`). Il nome veniva da un vecchio commento in `schemas/brim.py`. Corretto nel design v5.3. Le esplorazioni hanno trovato anche due superfici che il design non considerava: la guida d'onboarding dell'import (step versionati) e la registrazione dei test nel runner.
 
-### 3. ⏳ Risposte dell'autore
+### 3. ✅ Risposte dell'autore — arrivate il 2026-09-28
 
 - ✅ 2026-09-28: il developer ha pubblicato la risposta sulla issue ([commento](https://github.com/Librefolio/LibreFolio/issues/26#issuecomment-5868387443)). È la v5 senza il paragrafo sul permesso; il testo pubblicato è in [issue26-reply.en.md](issue26-reply.en.md).
 - ✅ 2026-09-28: il permesso per il campione sintetico l'ha dato il developer (§0). Campioni e test Danske non sono più bloccati.
-- ⏳ Le risposte su menu, periodo e colonne servono:
+- ✅ Le risposte su menu, periodo e colonne, arrivate il 2026-09-28 (tabella sotto), servivano:
   - alla guida (step 7), che le aspetta;
   - a rifinire R4/R5, D4, D6 e D14.
 - Il plugin non le aspetta: i casi ignoti li gestisce in modo difensivo, con un'esclusione dichiarata.
@@ -595,7 +596,7 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
 >
 > Proposta applicata nella **v2 del design** (2026-09-29, §10 «Finestre temporali, stato iniziale e commissioni»), in attesa della revisione del developer.
 
-### 4. ⏸ Framework dei set (dopo il gate 2)
+### 4. ✅ Framework dei set — fatto nel piano Step4 (fasi A–E, 2026-10-01)
 
 > **Piano d'implementazione dettagliato degli step 4–8**: [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md), scritto il 2026-09-30. Contiene fasi, checkpoint, superfici condivise e decisioni D-I1…D-I3.
 
@@ -606,23 +607,23 @@ Reperto di L, verificato dal coordinatore. Decisione del developer: «L lo corre
   - all'integrazione `openapi.json` e `generated.ts` si rigenerano, non si uniscono a mano, perché anche D cambia il contratto (R4.9);
   - `POST /upload` riceve `batch_id` come campo del form. I tre chiamanti (wizard, pagina file, `BrokerImportFilesModal`) restano su `axiosInstance` con `FormData`, come oggi: nel codice è scritto che Zodios non gestisce bene il `FormData`.
 
-### 5. ⏸ Plugin Danske (dopo il gate 2)
+### 5. ✅ Plugin Danske — fatto nel piano Step4 (`fda716b46`, `791db7fee`)
 
 - Test rossi sui campioni sintetici: abbinamento, esclusioni R4, R5 e R6, riconciliazione, segni, valuta, `Tuotto`, scissione, latin-1, header HTML, colonna senza nome.
 - Poi il parser custody, il parser cash, il motore, l'assemblaggio.
 
-### 6. ⏸ Wizard: card del set e blocchi (mio, D11)
+### 6. ✅ Wizard: card del set e blocchi (mio, D11) — piano Step4, poi i passi 7–9
 
 - Si parte **dopo il merge di K** in `dev_release2` e l'allineamento del coordinatore: merge di `dev_release2` nel ramo, poi rilancio dei gate.
 - Vitest per la logica pura; Playwright per il flusso completo; `front build --debug` se serve.
 - Chiavi i18n solo in `importWizard.reportSet.*`.
 
-### 7. ⏸ Documentazione
+### 7. ✅ Documentazione — piano Step4 (fase E) e passi successivi
 
 - docs-writer, solo EN: pagina utente Danske (export, stesso periodo, esclusioni) e sezione «plugin multi-report» nella guida sviluppatore.
 - Registrazioni proposte (§9).
 
-### 8. ⏸ Gate finali e handoff
+### 8. ✅ Gate finali e handoff — consegnati a ogni passo
 
 - Suite BRIM, API dei set, E2E wizard, lint, `git diff --check`, porta libera, checkpoint.
 
@@ -695,3 +696,42 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test \
   - il wizard blocca i set incompleti e mostra i periodi;
   - la guida spiega l'export e la regola dei periodi;
   - test rossi prima e poi verdi; checkpoint consegnato.
+
+## 12. ✅ Chiusura del workstream (verifica del 2026-10-09 su `3cceb4f90`)
+
+| Passo | Piano | Codice (commit) | Stato |
+|---|---|---|---|
+| 1, la codifica dei CSV | questo piano, §6, passo 1 | `6ea71ea8d`, `8efbbed14` | ✅ |
+| 1c, il 422 dell'upload | questo piano, §6, passo 1c | `f82eaa020` | ✅ |
+| 2, il design dei set | `design-phase00BrimReportSets.md` (v5.3) | — | ✅ approvato il 2026-09-30 |
+| 3, le risposte dell'autore | questo piano, §6, passo 3 | — | ✅ 2026-09-28 |
+| 4–8, il framework, il plugin, il wizard, la doc | `plan-phase00BrimDanskeBankStep4Implementation.prompt.md` | `b271faaa2`, `b70e9ecce`, `75579a13b`, `fda716b46`, `791db7fee`, `8c3271235`, `9336c0e9b`, `1a3ba20f2`, `cdb8b3301`, `15c91d42a`, `aa9c62291`, `5df39167a` | ✅ |
+| Voce 8, la ririlevazione dei plugin | `plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md` | `b0abeb07d` | ✅ |
+| F2, la robustezza dell'upload | `plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md` | `c3e6fa0a8` | ✅ (F3/F4 rinviati) |
+| Il bottone e R6 | `plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md` | `955148dfb` | ✅ |
+| La card su mobile | `plan-phase00BrimDanskeBankStep8MobileCard.prompt.md` | `038109e91` (treno 14) | ✅ |
+| Il frontend vecchio, i set non raggruppati | `plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md` | `333bfc985`, `38dd5d1b4` (treno 16) | ✅ |
+
+> **Note implementazione — i rinvii, ricontrollati sul codice**:
+> - **Risolti dopo**:
+>   - A18: il campo `exclude_file_ids` esiste (`schemas/brim.py:633`), lo usa `collect_members` (`brim_report_sets.py:121-134`) e lo manda il wizard (`ImportWizardModal.svelte:3910`, `:3932`);
+>   - `compatible_plugins` non è più congelato: passo 5, `plugins_signature` in `brim_provider.py`;
+>   - R6: passo 7;
+>   - CAC-011/012 e i file `ca-*`: piano 33 (`860c934ac`, `abfcdf2be`);
+>   - E2-001: `5df39167a`;
+>   - la deriva della doc: `brim/architecture.md:46` non chiama più il CSV generico ripiego universale, e `get_provider()` non compare più nella doc;
+>   - la regola 8 della skill: gli ID finti sono «high positive», mai negativi;
+>   - la frase della pagina utente sulla mappatura manuale delle colonne: tolta dalla doc inglese;
+>   - «Continue is disabled»: corretto da O, treno 19.
+> - **In carico ad altri**: `initialOpsKey = ''` in `TransactionBulkModal.svelte:484`. È la 6b di K, corretta nel suo step 23 ed entra col prossimo treno.
+> - **Rinviati** in `Phase_0/38_postReleaseBacklog/README.md`:
+>   - L1, un membro del set cancellato (A17);
+>   - L2, le rettifiche negative e il capitale investito (A6);
+>   - L3, Crédit Agricole sui report set (§2.9, A10);
+>   - L4, l'upload: il `.json` sovrascritto dal sidecar e le estensioni lunghe (F3, F4, F3-bis);
+>   - L5, `get_file_path` sull'event loop;
+>   - L6, il nome salvato nel rifiuto del plugin;
+>   - L7, un plugin di set scelto a mano per un file che non legge;
+>   - L8, il ripiego `auto` → CSV generico;
+>   - L9, `clean_data_dirs` che conta «(0 files)».
+> - **Classificazione: FINITA.** Gli unici residui sono le voci L1–L9. Archiviata intera in `Release_2/phases/26_brimDanskeBank/`.

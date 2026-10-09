@@ -579,8 +579,8 @@ Decisione del developer, riportata dal coordinatore: «Correggerlo subito, prima
 ## 11. Avanzamento
 
 - ✅ **Piano scritto il 2026-09-30.** Il coordinatore ha dato il via sulle superfici del §7, aggiungendo i due modali condivisi con K; il developer ha deciso D-I1…D-I3.
-- ⏳ Prossimo passo: `CHECKPOINT READY` del journal, cioè design, piano principale e questo piano. Dopo il commit si parte con **A1**.
-- ⏸ C2 e C3 aspettano la voce 0 di K in `dev_release2` e l'aggiornamento della base di L.
+- ✅ Prossimo passo, fatto: il `CHECKPOINT READY` del journal (design, piano principale e questo piano) è stato committato, poi è partito **A1**.
+- ✅ C2 e C3 aspettavano la voce 0 di K in `dev_release2` e l'aggiornamento della base di L: fatte dopo il merge (C2, C3 sotto).
 
 ### A1 — ⏳ in corso (2026-09-30)
 
@@ -2318,7 +2318,7 @@ Richiesta del developer tramite il coordinatore: che il plugin di un set non lo 
   2. i file cp1252 caricati **prima del 28/09** non elencano il generico, anche quando con G potrebbe leggerli (cioè hanno `date` e `type`);
   3. **il più serio per l'alpha**: un plugin arrivato **dopo** il caricamento non viene mai offerto per quel file. E siccome `setPluginFor` (frontend) e `collect_members` (server) leggono proprio `compatible_plugins`, un export Danske caricato prima del plugin Danske **non entra mai in un set**: bisogna ricaricarlo.
 
-### 18.4 ⏳ Opzioni per la correzione, da decidere col developer (niente codice adesso)
+### 18.4 ✅ Opzioni per la correzione — decise: la voce 8 è il piano Step5 (ririlevazione dei plugin, `b0abeb07d`)
 
 | Opzione | Cosa | Superfici e costo |
 |---|---|---|
@@ -2621,3 +2621,9 @@ Sul server di review (`127.0.0.1:6166`), via API, come `e2e_test_user2` sui prop
 - **R6 resta da decidere**: togliere il bottone non lo elimina, perché ci si arriva anche togliendo la spunta con la casella della scheda e poi rimettendo nel set un file spuntato. Si chiede al developer in parole semplici quando si apre il lotto.
   - ✅ **Decisa il 2026-10-06** (developer, testuale): «Fermarsi con un avviso: spunta tutto il set o togli la spunta». Il bottone e R6 sono fatti in [plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md](plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md).
 - **Ordine** (coordinatore): voce 8 con F1 → robustezza dell'upload, F2–F4 (con 422, già deciso) → il bottone tolto più R6. Tre checkpoint, ognuno con le sue righe 🐛.
+
+## Chiusura (verifica del 2026-10-09 su `3cceb4f90`)
+
+> **Note implementazione**:
+> - Tutto il lavoro di questo piano è in `dev_release2`. I commit del codice sono `b271faaa2`, `b70e9ecce`, `75579a13b`, `fda716b46`, `791db7fee`, `8c3271235`, `9336c0e9b`, `1a3ba20f2`, `cdb8b3301`, `15c91d42a`, `aa9c62291` e `5df39167a`, più quelli della doc e del journal citati nelle sezioni.
+> - **Rinviati**: A17 in `Phase_0/38_postReleaseBacklog/README.md`, voce L1. Gli altri rinvii e quelli risolti dopo sono nel piano principale, §12.

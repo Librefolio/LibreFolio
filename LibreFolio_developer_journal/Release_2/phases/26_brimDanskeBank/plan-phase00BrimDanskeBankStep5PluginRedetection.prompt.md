@@ -1,6 +1,7 @@
 # Piano — fase 00, Danske Bank, passo 5: rilevare di nuovo i plugin dei file (voce 8, opzione A)
 
-> **Stato**: ✅ approvato (2026-10-06): via del developer, portato dal coordinatore, con i requisiti in §0. Base del codice: `a7d0b37ec` (il treno 1, con H, V1 e R5).
+> **Stato**: ✅ chiuso e integrato: `b0abeb07d` (fix(brim): re-detect plugins, lock sidecar writes), con la doc in `2b1a9d79f` (verifica del 2026-10-09 su `3cceb4f90`). Rinviato: `get_file_path` sull'event loop, in `Phase_0/38_postReleaseBacklog/README.md`, voce L5.
+> - Al checkpoint: ✅ approvato (2026-10-06): via del developer, portato dal coordinatore, con i requisiti in §0. Base del codice: `a7d0b37ec` (il treno 1, con H, V1 e R5).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md), §18 (analisi della voce 8) e §19.5 (scelta del developer).
 > - Workstream L, issue #26. Ramo `e-alfy-l-danske-bank`, base `172b8e616` (V1).

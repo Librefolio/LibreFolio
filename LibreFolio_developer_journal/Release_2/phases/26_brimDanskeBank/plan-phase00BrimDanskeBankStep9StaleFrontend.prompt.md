@@ -1,6 +1,7 @@
 # Piano — fase 00, Danske Bank, passo 9: il frontend vecchio dalla cache (#26, «non funziona su Chromium»)
 
-> **Stato**: ✅ pronta per il checkpoint (2026-10-08, §7.3). Via del developer per l'header e per la proposta UX (§0).
+> **Stato**: ✅ chiuso e integrato nel treno 16 (merge `9055293c7`): `333bfc985`, `38dd5d1b4`, `a683b884b` (verifica del 2026-10-09 su `3cceb4f90`).
+> - Al checkpoint: ✅ pronta per il checkpoint (2026-10-08, §7.3). Via del developer per l'header e per la proposta UX (§0).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep8MobileCard.prompt.md](plan-phase00BrimDanskeBankStep8MobileCard.prompt.md).
 > - Workstream L, issue #26. Base `9eb01c756` (`dev_release2`, treno 14).

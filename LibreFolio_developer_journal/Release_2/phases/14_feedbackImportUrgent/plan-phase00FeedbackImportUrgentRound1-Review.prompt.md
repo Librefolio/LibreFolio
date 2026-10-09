@@ -177,7 +177,7 @@ assente non fanno sparire file. Nessun ampliamento dei permessi.
 > DataTable, diventando ovale. Rimossa la soglia fissa: le dimensioni esplicite e
 > il default 32 px del renderer restano intatti, con flex-shrink disabilitato.
 
-## 8. U7 - prima variante verificata, raffinamento richiesto nel Round 2
+## 8. U7 - prima variante verificata, raffinamento richiesto nel Round 2 — ✅ superato dai Round 2–4 (2026-09-09, `ef722b552`)
 
 Implementare il blocco condiviso popup/About e la seconda modale di recupero manuale.
 Le schede social non chiudono l'origine. Nessuna pubblicazione automatica o diagnosi

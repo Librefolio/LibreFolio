@@ -4,6 +4,7 @@
 **Origine:** feedback diretto del dev delle 15:18, con screenshot/HTML TikTok.
 **Precedente:** [Round 3](plan-phase00FeedbackImportUrgentRound3-SocialFeedback.prompt.md).
 **Stato:** ✅ pronto tecnico 2026-09-09; dati originali ripristinati e R4 servita.
+> **Note implementazione** (verifica di L del 2026-10-09 su `3cceb4f90`): integrato in `ef722b552`.
 **Accettato dal dev:** badge e sottotesti confermati il 2026-09-09 alle 15:51.
 **Ultima richiesta:** ingresso diretto Crea Instagram, esito nella sezione 4.
 **Promozione dello stream:** condizionata dal dev a quest'ultima rifinitura;
@@ -112,7 +113,7 @@ Facebook/Instagram non diventano post precompilati grazie a questi ritocchi.
 > merge, staging, commit o archiviazione effettuato.
 > L'accettazione umana R4 resta aperta, separata dalla consegna tecnica.
 
-## 4. Ingresso diretto a Crea su Instagram - verifica conclusa 2026-09-09
+## 4. Ingresso diretto a Crea su Instagram - verifica conclusa 2026-09-09 — superato: decisione negativa, non adottato (`checklist-review-E.md:49`)
 
 **Esito:** non adottato; nessun ingresso web pubblico affidabile dimostrato.
 Non e' un fix implementato o una limitazione dichiarata accettata dal dev.

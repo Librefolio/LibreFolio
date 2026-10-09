@@ -41,11 +41,11 @@ remain in session messages and are not authorization to create production transa
 
 ## Source plans
 
-- [Feedback index](../09_feedbackJobs/README.md)
-- [Sprint analysis / master 06](../09_feedbackJobs/06_piano_sprint.md)
-- [UX backlog](../09_feedbackJobs/01_ux_dashboard.md)
-- [BRIM backlog](../09_feedbackJobs/04_brim_import.md)
-- [Urgent feedback report](../09_feedbackJobs/07_feedback_import_critici.md)
+- [Feedback index](../../Phase_0/09_feedbackJobs/README.md)
+- [Sprint analysis / master 06](../../Phase_0/09_feedbackJobs/06_piano_sprint.md)
+- [UX backlog](../../Phase_0/09_feedbackJobs/01_ux_dashboard.md)
+- [BRIM backlog](../../Phase_0/09_feedbackJobs/04_brim_import.md)
+- [Urgent feedback report](../../Phase_0/09_feedbackJobs/07_feedback_import_critici.md)
 - The coordinator owns the urgent feedback report and master/backlog updates; E does not
   edit those documents.
 
@@ -312,3 +312,10 @@ remain in session messages and are not authorization to create production transa
 > PID 68600, index SHA256 `ab8b1458c1a49f1b835b3958d745e83e5a44f5d30e7c58d30ed4837941d0a4b6`.
 > Operational checklist: `~/Documents/test-ui-urgenti/REVIEW-E-R2.md`.
 > No commit/staging/push or production operation; no changes imported from A/B/C/D.
+
+## Chiusura (verifica del 2026-10-09 su `3cceb4f90`)
+
+> **Note implementazione** (L, per la sessione E, che non esiste più):
+> - Tutte le sezioni sono ✅. Il codice è in `dev_release2` con `ef722b552`, e i Round 1–5 e il manifest lo confermano.
+> - Nessun buco nel codice.
+> - **Classificazione: FINITA.** Archiviata in `Release_2/phases/14_feedbackImportUrgent/`. I link verso `09_feedbackJobs/`, che resta in `Phase_0/`, sono riscritti di conseguenza.

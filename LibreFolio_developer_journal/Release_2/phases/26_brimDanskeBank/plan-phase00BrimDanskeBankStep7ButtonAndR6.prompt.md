@@ -1,6 +1,7 @@
 # Piano — fase 00, Danske Bank, passo 7: via il bottone «Escludi dall'import», e R6 (il set spuntato solo in parte)
 
-> **Stato**: ✅ pronta per il checkpoint (2026-10-06, §8.5). Via del coordinatore, con la decisione del developer su R6 (§0).
+> **Stato**: ✅ chiuso e integrato: `955148dfb` (fix(import): untick sets, block partly ticked ones), con il journal in `9ff440e34` (verifica del 2026-10-09 su `3cceb4f90`). «Continue is disabled» (§8) l'ha corretto O nel treno 19.
+> - Al checkpoint: ✅ pronta per il checkpoint (2026-10-06, §8.5). Via del coordinatore, con la decisione del developer su R6 (§0).
 >
 > - Viene da: [plan-phase00BrimDanskeBankStep4Implementation.prompt.md](plan-phase00BrimDanskeBankStep4Implementation.prompt.md), §22 (le decisioni rimandate: il bottone e R6); [plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md](plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md) (F2, il passo prima).
 > - Segue: [plan-phase00BrimDanskeBankStep8MobileCard.prompt.md](plan-phase00BrimDanskeBankStep8MobileCard.prompt.md) — la card su mobile (intestazione e timeline), 2026-10-08.
