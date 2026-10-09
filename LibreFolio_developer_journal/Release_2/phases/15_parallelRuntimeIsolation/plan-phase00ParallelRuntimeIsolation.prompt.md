@@ -11,6 +11,28 @@ istruzioni/skill, validare due lane realmente indipendenti e poi sbloccare B/C/D
 **Vincolo Git:** il dev crea il commit dedicato; l'agente non esegue commit,
 push, rebase o reset.
 
+> **Stato (09/10, verificato da N su `3cceb4f90`): FINITO, archiviato in
+> `Release_2/phases/`.** Il contratto regge nel codice di oggi:
+> - `server --port --data-dir` (`dev.py:2388-2389`) e `test --test-port
+>   --data-dir` (`scripts/test_runner/_cli.py:523`, `:532`);
+> - la guardia contro la produzione, `validate_test_data_dir`
+>   (`backend/app/config.py:228-243`);
+> - nessun URL E2E con la porta fissa: restano solo 20 commenti «Prerequisites:
+>   … port 6041» nelle intestazioni degli spec;
+> - `.env.example:30-33`, `.github/copilot-instructions.md:206`,
+>   `test-author.agent.md` e le skill `devpy-server`, `testing-backend`,
+>   `testing-frontend` descrivono le corsie;
+> - `utils runtime-isolation` 153/153 (09/10, corsia N 6159).
+>
+> Le corsie sono in uso da tutti i workstream (coordinatore 6150, N 6159, …),
+> con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc` come da §3.
+>
+> **⚠️ Fuori pista (allineamento del 09/10):** la sezione «Contratto» non
+> diceva che `mkdocs gallery` resta fuori dalle corsie. Il reperto del 22/09
+> ([`09_reperti_analisi_statica_20260922.md` §9.4](../../Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md))
+> chiedeva di correggerlo: ora il limite è scritto sotto, con la decisione del
+> developer.
+
 ## Contratto
 
 - Senza opzioni, tutto resta invariato: produzione `6040` +
@@ -25,6 +47,15 @@ push, rebase o reset.
   database e utenti.
 - Il target test non puo' coincidere, anche tramite path relativo/symlink, con
   la directory dati produzione canonica o configurata.
+- **Limite noto, per decisione del developer (22/09): `./dev.py mkdocs gallery`
+  non è una corsia isolata.**
+  - Accetta `--test-port` (`dev.py:2501`), ma non `--data-dir`.
+  - Ripopola sempre la data dir di test configurata
+    (`dev.py test -q db populate --force --clean …`, `dev.py:969`).
+  - Ha un `--force` che libera la porta (`dev.py:2507`).
+  - Gira da solo, alla fine. Decisione: «non è un difetto, è che all'epoca non
+    avevamo porte e db diversi. Tanto è una cosa che gira alla fine […] meglio
+    che lui sta fisso» (§9.4 del reperto citato sopra).
 
 ## 0. Baseline, conoscenza e regressioni - ✅ completato 2026-09-09
 
