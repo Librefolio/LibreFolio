@@ -102,7 +102,9 @@ where:
 
 **On the Assets page.** Its [Correlation tab](../../../user/assets/correlation.md#what-did-each-pay), which compares a selection of assets you put together, draws the same line when a benchmark is chosen and measured over the window: it starts at the risk-free rate the page uses — 0 today, as on the Dashboard — and runs through the benchmark's diamond, so its slope is the benchmark's Sharpe ratio and a dot above it was better paid for its risk than the benchmark. A benchmark that is one of the selected assets is drawn once, as that asset's own dot in the benchmark's style, and the line runs through it. With no benchmark, or one that could not be measured over the window, no line is drawn, because no portfolio can take the benchmark's place — a selection has no weights and so no whole of its own to run a line through — and the chart shows the trade-off and leaves the judgement to you.
 
-<!-- [Screenshot Placeholder: risk/lab-risk-return — "What did each of these pay for its risk?" on the Correlation tab with a benchmark chosen: the table opened by the benchmark's row, and the chart with the asset circles, the benchmark's diamond and the dashed line from the risk-free rate through it] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-risk-return" alt="What did each of these pay for its risk? on the Correlation tab, with S&P 500 as the benchmark: the table opened by its tinted row, and the chart with the asset circles, the benchmark's diamond and the dashed line from the risk-free rate through it" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 !!! warning "Prices only, for now"
 
