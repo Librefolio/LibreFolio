@@ -7,6 +7,11 @@ Source: merge `d9e8f6d3bcb59080ea10f8849015ee3336b55818`, with parents
 `74bfd9cf021af885abfb136c4e4f08b6a526f87a` and
 `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`; the post-review compact-toast
 delta remains for the developer's next manual commit.
+**Aligned (workstream O, 2026-10-09):** that delta was committed as `00c469c3f`
+("fix(fx): compact creation sync feedback", 2026-09-10) and entered
+`dev_release2` with merge `514582a47`. The duplicate creation sync noted in
+section 2 is deferred: rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce
+«Doppia sync alla creazione di un asset dalla pagina Asset».
 
 ## 1. Accepted work and fixed scope
 

@@ -6,9 +6,23 @@
 `916f12bddf3eb9b8e834e4b9033eb52ce4bde25a`.
 **Status:** ✅ B00-B10 complete; combined automated and developer UI acceptance
 completed 2026-09-10.
+**Integration:** checkpoint `74bfd9cf0` (B00-B10 and Round 1), reconciled with
+the runtime lanes by merge `d9e8f6d3b`, compact-toast correction `00c469c3f`;
+entered `dev_release2` with merge `514582a47` (2026-09-10).
+**Archive check (workstream O, 2026-10-09):** every B00-B10 and Round 1 claim
+still holds on `3cceb4f90` (train 24b): the 17 typed AI Export raises, the FX
+route schemas (`backend/app/schemas/fx.py:399-451`) and their ordered providers,
+the SignalResult rule tables (`backend/app/schemas/signals.py:1150-1272`), the
+three Runes components, `fxCreationSync`, `entityLink` and the compact row
+(`syncToastHelpers.ts:110-118`). The only open residuals are deferred: the FX
+chain concerns of section 9 (rinviato: `Phase_0/38_postReleaseBacklog/README.md`,
+voce «Catene FX: chiave `leg_rates` senza provider ed estremi invertiti») and the
+duplicate creation sync of Round 1 section 2 (rinviato:
+`Phase_0/38_postReleaseBacklog/README.md`, voce «Doppia sync alla creazione di
+un asset dalla pagina Asset»). Moved whole to `Release_2/phases/11_feedbackContractsRunes/`.
 
-Previous/master: [sprint plan, sections 4/10-12](../09_feedbackJobs/06_piano_sprint.md).
-Scope source: [structural backlog](../09_feedbackJobs/00_backlog_strutturale_P4.md).
+Previous/master: [sprint plan, sections 4/10-12](../../Phase_0/09_feedbackJobs/06_piano_sprint.md).
+Scope source: [structural backlog](../../Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md).
 Only the coordinator writes forward links in those files.
 
 This is the portable execution record of the approved session plan and its
@@ -429,6 +443,15 @@ Static, unproven FX concerns (provider-less leg_rates key and reverse-endpoint
 chain normalization) were handed to the coordinator separately; no fixes,
 backfills or new backlog tasks are authorized here. P4-6 and alias6.7 close
 once; SP04/SP05 close only after their real acceptance and developer review.
+
+> **Deferred (workstream O, 2026-10-09):** both FX concerns are still static and
+> unproven on `3cceb4f90`: `leg_rates` is keyed `(norm_base, norm_quote, date)`
+> without the provider (`backend/app/services/fx.py:820`, filled by every
+> provider's parallel fetch at `:893`), while `leg_events` and `leg_errors` carry
+> it (`:819`, `:821`); `compute_chain_rate` normalizes each step alphabetically
+> (`:680-716`). They were not tracked anywhere: rinviato:
+> `Phase_0/38_postReleaseBacklog/README.md`, voce «Catene FX: chiave `leg_rates`
+> senza provider ed estremi invertiti».
 
 ## 10. Current developer-review handoff (2026-09-08)
 
