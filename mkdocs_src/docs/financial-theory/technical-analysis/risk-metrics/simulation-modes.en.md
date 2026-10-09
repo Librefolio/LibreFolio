@@ -24,7 +24,9 @@ Beside the mode, the step asks for a **Horizon (days)** — 365 by default, at m
 
 The **Risk & Scenarios** tab of an asset's detail page still runs the normal curve alone, with Monte Carlo or quasi-Monte Carlo sampling.
 
-<!-- [Screenshot Placeholder: risk/whatif-simulation — the Dashboard's What if…? simulation step with the beta notice and the model warning above the five modes, the horizon, paths and seed fields, and a result: terminal figures, cone and "What this simulation assumed"] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The Dashboard's What if…? Simulation box: the beta notice and the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ---
 

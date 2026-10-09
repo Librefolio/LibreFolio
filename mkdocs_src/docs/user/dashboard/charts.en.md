@@ -21,7 +21,9 @@ The chart remembers your last view, P&L sub-view included, in this browser and f
 
 **Hide amounts** (the eye button in the top bar) turns every amount on the axis and in the tooltips into `•••`; signs, currencies, lines, and colours stay. See [Privacy mode](../settings/preferences.md#privacy-mode).
 
-<!-- [Screenshot Placeholder: dashboard/privacy-masked — the Dashboard with Hide amounts on: the eye button in the header and every amount, including the Growth chart's axis and tooltip values, shown as •••] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="The Dashboard with Hide amounts on: the crossed-out eye button in the header, the amounts of the KPI cards and of Cash Balances shown as ••• with their sign and currency, the percentages still readable, and the Portfolio Growth axis masked" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ### 💶 Abs — absolute values
 
@@ -68,7 +70,11 @@ A second toggle, at the top-left of the plot, picks how to draw it (icons only o
 - The line is **green above zero and red below**.
 - A **dashed grey line** marks the P&L of the first day in view: the gap to it is what you gained or lost since the left edge.
 
-<!-- [Screenshot Placeholder: dashboard/growth-pnl-line — the Growth chart in P&L mode, Line submode: the Total P&L line, green above zero and red below, with the dashed grey reference line] -->
+<div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="The Portfolio Growth chart in P&L mode, Line view: the Total P&L line in green, the dashed grey line at the P&L of the first day in view, and a dashed line per broker">
+     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-line" alt="The Portfolio Growth chart in P&L mode, Line view: the Total P&L line in green, the dashed grey line at the P&L of the first day in view, and a dashed line per broker">
+  </div>
+</div>
 
 **Broker lines.** With two or more brokers in scope, each broker gets a dashed line and a tooltip row with its share of the total; the shares add up to the total every day. A share is not the broker's own performance: money in transit counts for the broker it left, so a broker line can jump on a transfer date. With one broker, or on a broker's page, only the total is drawn.
 
@@ -76,7 +82,11 @@ A second toggle, at the top-left of the plot, picks how to draw it (icons only o
 
 Each period of the [width you pick](#pnl-width) becomes a **candle** made of P&L values, not prices. Its **close** is exactly the Total P&L that **Line** shows for that day.
 
-<!-- [Screenshot Placeholder: dashboard/growth-pnl-candles — the Growth chart in P&L mode, Candles submode: synthetic P&L candles, the candle-width buttons (1D to 1Y) in the top-right corner of the plot, and the Synthetic caption under it] -->
+<div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="The Portfolio Growth chart in P&L mode, Candles view at 3D: the synthetic P&L candles, the width buttons from 3D to 6M in the top-right corner of the plot, the period labels on the axis, and the Synthetic caption under the chart">
+     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="The Portfolio Growth chart in P&L mode, Candles view at 3D: the synthetic P&L candles, the width buttons from 3D to 6M in the top-right corner of the plot, the period labels on the axis, and the Synthetic caption under the chart">
+  </div>
+</div>
 
 !!! warning "Highs and lows are hypothetical"
 
@@ -100,7 +110,11 @@ The tooltip gives the period, **Open**, **Close**, **High**, and **Low**, plus a
 | Deposits | **Deposit** | Fresh money you put in (withdrawals are not drawn) |
 | Purchases | **Purchase Cost**, in two zones: **New capital** at the bottom, **Reinvested** on top | What you spent on buys, split by where the money came from |
 
-<!-- [Screenshot Placeholder: dashboard/growth-pnl-income — the Growth chart in P&L mode, Income submode at 1M: monthly groups of bars for dividends and interest (fees and taxes below zero), deposits, and purchase cost split into new capital and reinvested] -->
+<div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="The Portfolio Growth chart in P&L mode, Income view at 1M: monthly groups of bars for Interest, Fees & taxes below zero, Deposit and Purchase Cost">
+     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-income" alt="The Portfolio Growth chart in P&L mode, Income view at 1M: monthly groups of bars for Interest, Fees & taxes below zero, Deposit and Purchase Cost">
+  </div>
+</div>
 
 How to read it:
 

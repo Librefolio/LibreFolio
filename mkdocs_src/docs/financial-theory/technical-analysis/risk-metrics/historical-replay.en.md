@@ -93,7 +93,9 @@ On those three tabs, the replay says what it left out before the figures it repo
 - a column with nothing to show is left out, not filled with dashes: a selection of assets has no weights, no contributions and no money, so its table shows just the **Return** and the **Effect**;
 - when every holding is left out, no figure: the result says there is **nothing to replay**, and lists the reasons.
 
-<!-- [Screenshot Placeholder: risk/lab-replay — a replay that left assets out: the box of assets left out, as badges grouped by reason, with the common-period button, above the table of the assets replayed with its Return and Effect columns] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-replay" alt="What if…? on the Correlation tab after Run replay: the box of assets left out, as badges grouped by reason, with the common-period button, above the table of the assets replayed, with Return and Effect" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ### 📆 The Common Period {: #the-common-period }
 
