@@ -28,7 +28,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-30 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-37 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -60,7 +60,7 @@ Origine: [28_fxDashboardSync](../../phases/28_fxDashboardSync/README.md) e
 - **N-5 · Commenti superati dalla cache della fase 1** — basso. Dicono che una mutazione scarta le risposte in volo:
   `frontend/e2e/portfolio/risk-lab.spec.ts:3319`, `:6969-6973`; `frontend/src/routes/(app)/assets/+page.svelte:418-419`.
   Origine: lotto 2 di N (07/10).
-- **N-6 · Doc sviluppatore falsa sullo stato del frontend** — basso. `mkdocs_src/docs/developer/frontend/state/registries.md:29`
+- **N-6 · Doc sviluppatore falsa sullo stato del frontend** — ✅ chiusa il 09/10 da Q (S23, treno 27). Era: basso. `mkdocs_src/docs/developer/frontend/state/registries.md:29`
   (WebSocket e SSE: nessun uso nel frontend) e `:55-56` (`getStore("AAPL")`; l'API è
   `getAssetPriceStore(assetId, currency)`, `assetPriceStoreRegistry.ts:39`); `developer/frontend/index.md:47` (il
   DateRange non è in `app/` ma in `stores/dateRangeStore.svelte.ts`) e `:54` (`registries/` non esiste). Origine:
@@ -93,7 +93,7 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
   `frontend/src/lib/features/onboarding/onboardingTourSurfaces.svelte.ts` e `frontend/src/lib/stores/core/EditBuffer.ts`
   non hanno import fuori dai test. Con il primo vanno i flag `*TourPreview` delle pagine, mai veri
   (`assets/+page.svelte:149`, `fx/+page.svelte:119`, `brokers/+page.svelte:62`; Q, 07/10). Origine: 29, secondo turno.
-- **O-3 · `ensure_started()` documentato ma inesistente** — basso. `.github/instructions/backend-testing.instructions.md:109`,
+- **O-3 · `ensure_started()` documentato ma inesistente** — ✅ chiusa il 09/10 da Q (S23, treno 27). Era: basso. `.github/instructions/backend-testing.instructions.md:109`,
   `.github/skills/devpy-tools/testing-backend/SKILL.md:107`, `LibreFolio_developer_journal/knowledge_base/06_testing_backend.md:138`;
   esiste solo `start_server()` (`backend/test_scripts/test_server_helper.py:294`). Origine: 29, S15.
 - **O-4 · Descrizione vecchia dell'azione `api system` nel runner** — minimo. `scripts/test_runner/_backend_api.py:246`
@@ -257,11 +257,13 @@ K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefi
 - **K-23 · `TreeSelect`: dopo l'Esc il focus cade su `<body>`** — basso. `close()` (`lib/components/ui/select/TreeSelect.svelte:230-234`)
   non riporta il focus al trigger, e il campo di ricerca che l'aveva sparisce (`:355`); ereditato da `SignalTreeSelect`.
   Origine: piano madre, passo 4.
-- **K-24 · Doc della qualità dei dati** — basso; **assegnata a Q il 09/10**. In `developer/frontend/data-quality-banner.md`
+- **K-24 · Doc della qualità dei dati** — ✅ chiusa il 09/10 da Q (S23, treno 27). Era: basso. In `developer/frontend/data-quality-banner.md`
   mancano `TRANSACTION_IMPLIED` e `MWRR_SERIES_UNRELIABLE` (`backend/app/schemas/portfolio.py:167`, `:174`) e i test
   dicono «all 5 codes» (`:232-234`) contro 9 codici; `user/dashboard/index.en.md:93` dice «valued at purchase cost», ma
   il motore usa l'ultimo prezzo di transazione. Origine: step 13 (13.4).
-- **K-25 · devWiki: quattro pagine mai scritte** — minimo, knowledge base; per il secondo giro dell'historian. Il teardown
+- **K-25 · devWiki: quattro pagine mai scritte** — ✅ chiusa il 09/10 dal secondo giro dell'historian (treno 27):
+  `problems/svelte5-teardown-reads-stale-state-timers`, `decisions/html-escape-at-the-source` (con `F-047` corretta),
+  `problems/stale-price-banner-never-emitted`, `concepts/responsive-4mode-layout` riscritta. Era: minimo, knowledge base. Il teardown
   di Svelte 5 e i timer (step 14); le regole di escape con i due gate (step 13); `valuation_stale` anche per i prezzi di
   transazione; la taratura delle soglie delle barre. Origine: step 13 e 14.
 - **K-26 · Intestazione superata in `catalogIcuLocale.test.ts`** — minimo. `lib/i18n/catalogIcuLocale.test.ts:26` dice
@@ -307,8 +309,8 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
   un'acquisizione di costo sconosciuto (`financial_math/average_cost.py:265`, `:290`, `:428`), e l'avviso esce sulla
   Dashboard (`portfolio_engine.py:2072-2077`, via `portfolio_service.py:561`) e nei lotti
   (`lots_analysis_service.py:855`). Lo fissa `test_portfolio_wac.py:521-588`. Origine: 39, §1.6.
-- **P-11 · Tre testi promettono un lotto a costo zero col costo vuoto** — basso, solo testi; **in corso il 09/10**: la
-  doc EN a Q, la chiave a S. La chiave `transactions.costBasisOverride.warningAdjustment` («No cost basis set — lot will
+- **P-11 · Tre testi promettono un lotto a costo zero col costo vuoto** — doc EN chiusa da Q (S23, treno 27); la chiave e
+  il ripiego inline li ha corretti S (checkpoint 2 e 3), e si chiude quando S entra. Restano IT/FR/ES di `form` in I-08. La chiave `transactions.costBasisOverride.warningAdjustment` («No cost basis set — lot will
   be created with zero cost…», `TransactionFormModal.svelte:1947-1950`), la doc utente `user/transactions/form.en.md:39`
   (più IT, FR, ES) e `developer/frontend/components/features/transaction-form.md:198-199`; il backend invece, in Manuale
   col campo vuoto, rifiuta la riga con `COST_BASIS_REQUIRED` (`transaction_service.py:157-165`,
@@ -342,6 +344,8 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   - dal treno 25: `admin/cli_tools` (N-7), `user/files/index` (anteprima PDF), `user/connection-security`, la gallery
     e il suo indice con la sezione Security (M, lotto 8); Sharpe e Sortino, la cui formula del tasso privo di rischio
     esiste solo in inglese (Q);
+  - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D); `user/transactions/form`
+    e `user/dashboard/index` (Q, S23); `developer/dev_workflow` (N);
   - dal treno 26: le otto pagine EN riscritte da K senza IT/FR/ES (`financial-theory/instruments/asset-types/{index,etfs,real-estate}`,
     `user/assets/{create-edit,index,detail/index}`, `user/dashboard/index`, `user/transactions/import/how-to`);
   - `admin/docker_advanced` in FR, IT ed ES mostra ancora `docker exec … db upgrade` e gli esempi `server --test` e
@@ -390,7 +394,8 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-6 · eToro: dividendi `KER/EUR` etichettati EUR** — basso, serve un export reale. L'importo è nella valuta del
   conto, mentre la valuta viene dal ticker `SYMBOL/CURRENCY` (`broker_etoro.py:143`; Q, 08/10). La voce eToro di
   [04_brim_import.md](../09_feedbackJobs/04_brim_import.md) chiede lo stesso export.
-- **C-7 · Doc BRIM da allineare** — basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
+- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `94271713b`); si chiude quando S entra in
+  `dev_release2`. Era: basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
   Fineco sono in inglese (`broker_fineco.py:279-297`), e sbaglia anche la docstring del modulo (`:7-8`); la riga eToro
   di `providers_list.md:9` è da precisare (Q, 08/10).
 - **C-8 · Docstring e commenti superati** — basso.
@@ -407,7 +412,8 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   - Non riverificati il 09/10 (Q, 08/10): la docstring di Intesa, l'intestazione di `PositionsPanel` (clic e doppio
     clic), lo zoom di `ImageCropper`, la gomma degli eventi (`ErasableNumberCell`), `AssetSetRiskReturnSection.svelte`
     («there is no picker here», ma il picker del benchmark c'è), la coda delle immagini in `files/+page.svelte:355`.
-- **C-9 · Doc admin di Docker** — basso. `.env.example:77-81` dice che UID e GID valgono anche a runtime, ma
+- **C-9 · Doc admin di Docker** — ✅ chiusa il 09/10 (treno 27): `docker_advanced.en.md` e `.env.example` da Q (S23),
+  il commento di `docker-compose.yml` e gli esempi di `dev.py` da N. Era: basso. `.env.example:77-81` dice che UID e GID valgono anche a runtime, ma
   l'entrypoint legge `LIBREFOLIO_UID` e `LIBREFOLIO_GID` (`entrypoint.sh:21`) e compose passa `UID` solo come
   argomento di build (`docker-compose.yml:32`). `docker_advanced.en.md` non dice che `server --test` e
   `test db populate` non girano nel container (niente Node né `test_scripts`): lo dice solo il manuale dev (Q, 08/10).
@@ -487,6 +493,33 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   risolvono fuori dalla radice: risponde sempre «aggiornato». Collegata a P-6.
 - **C-30 · Docstring di `patch_assets_bulk`: `exclude_none` invece di `exclude_unset`** — minimo (historian, 09/10).
   `backend/app/services/asset_sources/crud.py:489-490`.
+- **C-31 · Il formato black non ha un gate** — basso, processo (D, 09/10). `dev.py lint` lancia solo `ruff check backend/`
+  (`dev.py:1811-1823`), così il debito di black entra senza rossi (vedi P-9). Proposta di D: `black --check` sui file
+  toccati nella checklist dei checkpoint.
+- **C-32 · Commenti e docstring superati** — minimo (Q, S23). `portfolio_engine.py:1990`, `:2034`;
+  `portfolio_service.py:1139-1146`, `:1184-1191`; `schemas/portfolio.py:165`; `test_data_quality_report.py:3`; nel runner
+  `_archive.py:7`, `_run_cache.py:7-10`, `_cli.py:470`, `:568-572`, `__init__.py:15-31`, `_consolidate.py:69-71`,
+  `_frontend_ai_export.py:69-71`; `EditBuffer.ts:10`.
+- **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
+  rossi, tutti già nella v1.1.0; **in correzione** per decisione del developer («Correggere 1 e 2 nel backend con una sola
+  cura, e 3 facendo chiedere il costo anche col promote»), piano `Phase_0/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
+  svuota il pool prima della media (`transaction_service.py:976`, `average_cost.py:407-423`); (2) un transfer esistente
+  modificato in Auto farebbe la media sul broker che riceve (gli update non hanno `link_uuid`,
+  `schemas/transactions.py:533-585`); (3) il promote salta il controllo del costo (`transaction_batch_stages.py:845-866`,
+  `:701-729`), contro `developer/backend/transactions/wac.md:423-424`.
+- **C-34 · `escapeHtml` definita tre volte, una copia più debole** — basso, difesa in profondità (historian, 09/10). La
+  copia locale di `CorrelationHeatmap.svelte` sfugge solo `& < >`, e il gate XSS accetta qualunque funzione con quel nome;
+  oggi è sicuro perché ogni uso è testo. Vedi K-15.
+- **C-35 · `test_settings_api.py` salta cinque controlli se l'endpoint risponde 404** — minimo (historian, 09/10). Gli
+  endpoint esistono, quindi i controlli girano; ma una rotta rinominata li farebbe saltare invece di fallire.
+- **C-36 · Docstring di `AssetType`: i sottotipi «confluiscono» nel tipo base** — minimo (historian, 09/10).
+  `backend/app/db/models.py` (~`:178`); `allocation_by_type` del backend usa i valori grezzi, e i grafici raggruppano per
+  famiglia.
+- **C-37 · `docker-compose.yml` pubblica la 6041 su cui nel container non ascolta niente** — basso, configurazione,
+  decisione del developer (N, 09/10, letto nel codice). `docker-compose.yml:47` mappa `${TEST_PORT:-6041}:6041`, ma
+  l'immagine non sa fare il test mode; con lo stack attivo, `./dev.py server --test` sul host rifiuta la porta occupata
+  (`dev.py:238`, `:256-260`), e l'aiuto suggerisce `kill -9` o `--force`, che ucciderebbero l'inoltro di Docker. Proposta:
+  togliere la mappatura. La pagina `developer/dev_workflow` lo dice dal treno 27.
 
 ## Tracciate altrove
 
