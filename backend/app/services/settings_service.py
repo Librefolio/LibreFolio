@@ -16,6 +16,7 @@ registry constants (e.g. `SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key`)
 instead of raw string literals.
 """
 
+from collections.abc import Sequence
 from typing import Optional
 
 import structlog
@@ -30,6 +31,7 @@ from backend.app.schemas.settings import (
     GlobalSettingRead,
     UserSettingsRead,
     UserSettingsUpdate,
+    validate_global_setting_value,
 )
 from backend.app.services.global_settings_service import get_setting_value
 from backend.app.utils.datetime_utils import utcnow
@@ -192,31 +194,69 @@ async def get_all_global_settings(session: AsyncSession) -> list[GlobalSettingRe
     ]
 
 
-async def update_global_setting(key: str, value: str, user_id: int, session: AsyncSession) -> Optional[GlobalSettingRead]:
-    """Update a global setting. Returns None if key doesn't exist."""
-    result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
-    setting = result.scalar_one_or_none()
+class GlobalSettingNotFoundError(LookupError):
+    """A bulk update names a key that has no global setting."""
 
-    if not setting:
-        return None
+    def __init__(self, key: str) -> None:
+        super().__init__(key)
+        self.key = key
 
-    setting.value = value
-    setting.updated_at = utcnow()
-    setting.updated_by_user_id = user_id
 
+class GlobalSettingValueError(ValueError):
+    """A bulk update carries values their settings refuse; ``errors`` holds every (key, reason)."""
+
+    def __init__(self, errors: list[tuple[str, str]]) -> None:
+        self.errors = errors
+        super().__init__("Invalid global settings: " + "; ".join(f"{key}: {reason}" for key, reason in errors))
+
+
+async def update_global_settings(items: Sequence[tuple[str, str]], user_id: int, session: AsyncSession) -> list[GlobalSettingRead]:
+    """Update several global settings at once, all or nothing.
+
+    Unknown keys are checked first (GlobalSettingNotFoundError), then every value against its type and
+    constraint (GlobalSettingValueError, listing every refusal). Only then are the values written, in one
+    commit. Returns one entry per item, in request order.
+    """
+    keys = [key for key, _value in items]
+    result = await session.execute(select(GlobalSetting).where(GlobalSetting.key.in_(keys)))  # type: ignore[attr-defined]
+    rows = {row.key: row for row in result.scalars()}
+    for key in keys:
+        if key not in rows:
+            raise GlobalSettingNotFoundError(key)
+
+    stored_values: list[str] = []
+    errors: list[tuple[str, str]] = []
+    for key, value in items:
+        try:
+            stored_values.append(validate_global_setting_value(key, value, rows[key].value_type))
+        except ValueError as exc:
+            errors.append((key, str(exc)))
+    if errors:
+        raise GlobalSettingValueError(errors)
+
+    now = utcnow()
+    for key, stored in zip(keys, stored_values, strict=True):
+        row = rows[key]
+        row.value = stored
+        row.updated_at = now
+        row.updated_by_user_id = user_id
     await session.commit()
-    await session.refresh(setting)
+    for row in rows.values():
+        await session.refresh(row)
 
-    logger.info("Updated global setting", key=key, user_id=user_id)
+    logger.info("Updated global settings", keys=keys, user_id=user_id)
 
-    return GlobalSettingRead(
-        key=setting.key,
-        value=setting.value,
-        value_type=setting.value_type,
-        description=setting.description,
-        updated_at=setting.updated_at,
-        updated_by=setting.updated_by_user_id,
-    )
+    return [
+        GlobalSettingRead(
+            key=rows[key].key,
+            value=rows[key].value,
+            value_type=rows[key].value_type,
+            description=rows[key].description,
+            updated_at=rows[key].updated_at,
+            updated_by=rows[key].updated_by_user_id,
+        )
+        for key in keys
+    ]
 
 
 async def initialize_global_settings(session: AsyncSession) -> int:
