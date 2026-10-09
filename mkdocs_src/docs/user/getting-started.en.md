@@ -52,14 +52,18 @@ The first time you log in, LibreFolio opens a **Welcome** page before the dashbo
 - ✅ Click **Continue** to save, or **Skip setup permanently** to keep the current settings.
 - 🚪 Need to leave? **Log out** is at the top right.
 
-<!-- [Screenshot Placeholder: onboarding/welcome-setup — the Welcome page with the Language and Default Currency fields pre-filled, the optional profile picture, and the Continue and Skip setup permanently actions] -->
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="The first-run Welcome page: the profile picture block with the initials avatar and Choose picture, Language and Default Currency pre-filled, the note that your theme preference is kept unchanged, and Skip setup permanently and Continue" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 A short welcome animation follows, then the **Quick tour** starts by itself — click **Start tour**
 to begin right away, or **✕** to skip it. The tour shows where things are: the menu button, then
 **Dashboard**, **Transactions**, **Brokers**, **FX**, **Assets**, **Tools** and **Settings**. It
 only points: it never opens a form or creates data.
 
-<!-- [Screenshot Placeholder: onboarding/core-tour-step — a step of the Core tour pointing at a destination in the sidebar, with its message panel] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="core-tour-step" alt="The Quick tour on the Dashboard at step 5 of 8, FX rates: a frame and a cursor on the FX Rates entry of the sidebar, and the message panel with Back and Next" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ??? note "👋 Already using LibreFolio? — accounts older than the guides"
 
@@ -93,7 +97,9 @@ Later, short guides start the first time you reach a place where they help:
 - Leave a page mid-guide and its guide picks up at the same step when you come back; closing a form
   restarts that form's guide.
 
-<!-- [Screenshot Placeholder: onboarding/contextual-guide — a contextual guide on the FX page highlighting a real control, with its message panel] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="contextual-guide" alt="The FX page guide at step 2 of 4, on filtering dates, currencies and views: a frame around the currency filters, and the message panel with Back and Next" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 You can replay any guide from
 **[Settings → Preferences → Onboarding and guides](settings/preferences.md#onboarding-and-guides)**.

@@ -77,7 +77,7 @@ read, and each file's **⋮** menu can take it out of the set (**Read alone with
 </div>
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="A cash file's ⋮ menu in a report set: Preview, Read alone with Generic CSV, Remove from the set and Delete" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="A cash file's ⋮ menu in a report set: Preview, Remove from the set and Delete" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Parse is disabled?** A ticked file has no plugin, or a ticked set is incomplete or only partly

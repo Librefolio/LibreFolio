@@ -9,7 +9,7 @@ The **Preferences** tab controls **how the app looks and behaves for you** — c
 | Setting | Category | Description |
 |---------|----------|-------------|
 | **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies as soon as you save it |
-| **Default Currency** | 💰 Currency | Your own base currency, proposed when you create something new — an asset, a new broker's first cash balance, a PAC plan. This menu lists every currency |
+| **Default Currency** | 💰 Currency | Your own base currency. The Dashboard, the Brokers page and each broker's page, and the **Correlation** tab of the Assets page open in it, and the AI Export of a currency pair uses it too; a currency you pick on the Dashboard stays for the session. It is also proposed when you create something new — an asset, a new broker's first cash balance, a PAC plan. This menu lists every currency |
 | **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system) |
 
 <style>
@@ -68,7 +68,9 @@ A replay never changes the saved status, and guides never click or save for you.
 a Welcome replay, **Continue** saves the language, currency and picture you chose (**Exit tour**
 leaves without saving).
 
-<!-- [Screenshot Placeholder: settings/onboarding-replay — the Onboarding category of Preferences: flows grouped by area with their status badges, version lines, and Replay actions] -->
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="The Onboarding category of Preferences: Onboarding and guides with Replay all; Setup and Core tour open, each guide with its Completed badge, Seen v1 · current v1 and Replay; the other areas folded with their counts">
+</div>
 
 ??? info "🧩 Import guide and Bulk workspace overview — guides with steps"
 
@@ -104,7 +106,9 @@ The change applies at once to the page you are on, without a reload, and privacy
 you move between pages and after a reload, until you switch it off. Not to be confused with the eye
 icon of a **table toolbar**, which shows or hides table columns.
 
-<!-- [Screenshot Placeholder: dashboard/privacy-masked — the Dashboard with privacy mode on: amounts shown as ••• with their currency and sign, percentages still visible] -->
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="The Dashboard with privacy mode on: the crossed-out eye button in the header, the amounts of the KPI cards and of Cash Balances shown as ••• with their sign and currency, the percentages still readable, and the Portfolio Growth axis masked">
+</div>
 
 ### 🔒 What is hidden
 

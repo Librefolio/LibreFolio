@@ -47,6 +47,15 @@
  * - `risk/lab-replay` ({@link injectReplayLeftOut}): a replay over the page's period in which one
  *   selected asset is left out, for a first quote 60 days after the window began (invented), with the
  *   part of the window that would bring it back. The other assets' rows are the engine's own.
+ *
+ * ## Screens taller than the desktop's
+ *
+ * On the desktop only, the simulation and the four Dashboard Risk blocks (`dashboard/risk-*`) are taller than the
+ * project's 720 px, and their pages want each of them whole in one image: the Simulation box is about 1,100 px high (1090
+ * measured). {@link fitViewportToBlock} gives each of those shots a screen as tall as its box or block plus the frame's
+ * margins, its width and scale unchanged (coordinator's decision, provisional). The mobile project keeps its phone.
+ *
+ * The Dashboard's own Risk tab shots stand on this module too: galleryRiskDashboard.ts.
  */
 
 import type {APIResponse, Route} from '@playwright/test';
@@ -57,10 +66,10 @@ import {galleryOfflineGuard, type GalleryOfflineGuard, waitForStillness} from '.
 /** The lab: the Assets page on its Correlation tab. */
 export const LAB_URL = '/assets?tab=correlation';
 
-const RISK_QUERY = '**/api/v1/risk/query';
+export const RISK_QUERY = '**/api/v1/risk/query';
 const RISK_ELIGIBILITY = '**/api/v1/risk/eligibility';
 /** A risk answer is computed on the shared backend: under load it takes seconds, never this long. */
-const ANSWER_TIMEOUT = 120_000;
+export const ANSWER_TIMEOUT = 120_000;
 
 /** What a shot says when the clean gallery data turns out not to be clean. */
 const STALE_DATA_HINT = 'the lab reports a data problem on the clean gallery data: the lane database is probably older than the 7-day threshold — re-populate it (./dev.py db populate --force)';
@@ -293,6 +302,25 @@ export async function frameBlock(page: Page, block: {first: Locator; last: Locat
     await frameFromTop(page, bottom - top + 2 * margin <= viewport.height ? block.first : block.fallback, margin);
 }
 
+/**
+ * Make the screen as tall as `block` plus `margin` above and below it — never shorter than `minimumHeight`, the project's
+ * own — keeping its width and its scale (`setViewportSize` leaves the device scale factor alone). For the shots whose
+ * subject is taller than the desktop's screen: the simulation (`risk/whatif-simulation`) and the four Dashboard Risk
+ * blocks (`dashboard/risk-*`), desktop only. Measured on the page as it stands, every time: the block's sentences wrap
+ * differently in each language. The block must not move while it is measured, and nothing in it depends on the screen's
+ * height, so the resize changes no layout inside it — a chart may still redraw, which the caller's settle waits out.
+ * Returns the height measured and the screen's.
+ */
+export async function fitViewportToBlock(page: Page, block: Locator, margin: number, minimumHeight: number): Promise<{blockHeight: number; viewportHeight: number}> {
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error('the page has no viewport');
+    await waitForStillness(block, 'the block the screen is fitted to');
+    const blockHeight = await block.evaluate((element) => element.getBoundingClientRect().height);
+    const viewportHeight = Math.max(minimumHeight, Math.ceil(blockHeight) + 2 * margin);
+    if (viewportHeight !== viewport.height) await page.setViewportSize({width: viewport.width, height: viewportHeight});
+    return {blockHeight: Math.ceil(blockHeight), viewportHeight};
+}
+
 /** Back to the top, where the header — and the language and theme controls — are on screen again. */
 export async function scrollBackToHeader(page: Page): Promise<void> {
     await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
@@ -343,7 +371,7 @@ export async function revealListSection(section: Locator): Promise<void> {
 // The answers edited on their way
 // ---------------------------------------------------------------------------
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
 interface RiskRequest {
     scope?: {kind?: string};
@@ -352,7 +380,7 @@ interface RiskRequest {
     analytics?: Array<{analytic_code?: string; parameters?: Json}>;
 }
 
-interface RiskItem extends Json {
+export interface RiskItem extends Json {
     instance_id: string;
     analytic_code: string;
     status: string;
@@ -379,7 +407,7 @@ interface EligibilityRequest {
     date_range?: {start?: string; end?: string | null};
 }
 
-function isRecord(value: unknown): value is Json {
+export function isRecord(value: unknown): value is Json {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
@@ -404,7 +432,7 @@ function riskRequestOf(route: Route): RiskRequest | null {
 }
 
 /** A response's JSON body, or null when it has none. */
-async function jsonOf(response: APIResponse): Promise<unknown> {
+export async function jsonOf(response: APIResponse): Promise<unknown> {
     try {
         return await response.json();
     } catch {
@@ -413,7 +441,7 @@ async function jsonOf(response: APIResponse): Promise<unknown> {
 }
 
 /** The results of a risk answer, or null when the body is not a `RiskQueryResponse`. */
-function riskItemsOf(body: unknown): RiskItem[] | null {
+export function riskItemsOf(body: unknown): RiskItem[] | null {
     if (!isRecord(body) || !Array.isArray(body.items)) return null;
     return body.items.every((item) => isRecord(item) && typeof item.instance_id === 'string' && typeof item.analytic_code === 'string' && typeof item.status === 'string') ? (body.items as RiskItem[]) : null;
 }
@@ -430,7 +458,7 @@ async function fulfillWith(route: Route, response: APIResponse, json: unknown): 
 }
 
 /** An ISO day, `YYYY-MM-DD`: the only shape {@link shiftDay} is given. */
-const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+export const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** An ISO day moved by `days`, in UTC so the day never shifts. */
 function shiftDay(isoDay: string, days: number): string {

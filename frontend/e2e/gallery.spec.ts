@@ -58,7 +58,6 @@ import {
     uploadSet,
     waitForStillness,
     walkToReview,
-    writeExtendedCashStatement,
     writeSavingsStatement,
 } from './fixtures/galleryReportSets';
 import {selectBrokerFile} from './fixtures/import-wizard';
@@ -67,6 +66,7 @@ import {
     chooseLabYear,
     currentUserId,
     expectLabClean,
+    fitViewportToBlock,
     forgetWhatIfTools,
     frameBlock,
     frameFromTop,
@@ -85,6 +85,7 @@ import {
     scrollBackToHeader,
     seedLabStorage,
 } from './fixtures/galleryRiskLab';
+import {assetIdNamed, canvasStill, chooseReplayPreset, CRISIS_PRESET_ID, DASHBOARD_BENCHMARK_NAME, forgetDashboardRiskMemory, framedParts, historicalReplayPreset, injectCrisisReplay, seedDashboardBenchmark, textStill} from './fixtures/galleryRiskDashboard';
 import {
     chartsDrawn,
     chooseOnboardingCategory,
@@ -101,6 +102,28 @@ import {
     setAccountLanguage,
     walkCoreTourToFx,
 } from './fixtures/galleryOnboarding';
+import {
+    buildPacDraft,
+    calculatePacPlan,
+    closePacBrokerEditor,
+    fitScreenToPacProof,
+    framePacAssets,
+    framePacBrokerEditor,
+    framePacLiquidity,
+    framePacPlan,
+    framePacProof,
+    framePacResult,
+    framePacReview,
+    framePacRouting,
+    framePacTargets,
+    leavePacTargetsIncomplete,
+    openPacPlanner,
+    resolvePacIds,
+    restorePacScreen,
+    settlePacShot,
+} from './fixtures/galleryPac';
+import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
+import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
@@ -243,6 +266,8 @@ async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Lang
     ensureDir(dir);
     await page.screenshot({
         path: path.join(dir, `${name}.png`),
+        // Never Playwright's full page: it keeps the screen and paints the rest of the page under it, so the sidebar — fixed,
+        // one screen tall — stops at the screen's edge. A whole page is a screen as tall as the page (galleryTallShots.ts).
         fullPage: false,
     });
     console.log(`  📸 ${viewport}/${lang}/${theme}/${category}/${name}.png`);
@@ -277,6 +302,15 @@ test.describe('Gallery Screenshots', () => {
     test.describe.configure({mode: 'parallel'});
     // A hung action must fail in seconds, naming the real step, not at the test timeout; explicit per-call timeouts keep their value.
     test.use({actionTimeout: 20_000});
+    // Reduced motion, on the context: every page of a test has it from its first document. A text too long for its box —
+    // a broker or asset name on a card, a table cell, the Synthetic caption under the P&L candles — scrolls itself as a
+    // marquee (scrollOnOverflow.ts) from 2 s after it mounts: a JS loop freezeAnimations() cannot stop, so shots caught
+    // names mid-scroll. Under reduced motion the marquee never starts and the text rests on its beginning. The other
+    // readers of the preference show the same content, standing still (coordinator's audit): the coachmark's pulse ring
+    // and pointer, spinners, the price flash, a highlighted table row, Tailwind `motion-*`; the coachmark and the PAC
+    // result scroll to their target at once. svelte/motion's `tweened` ignores it, so the 1 s waits for the KPI count-up
+    // stay. A nested `test.use({contextOptions})` would replace this object: spread it there.
+    test.use({contextOptions: {reducedMotion: 'reduce'}});
 
     // Tests running in parallel create temporary brokers and files (group 3: disposable accounts, brokers
     // named `‹label› · ‹TOKEN›`). A session that cannot reach them still hears of them: every session caches
@@ -696,7 +730,7 @@ test.describe('Gallery Screenshots', () => {
      * awaited after, so the shot follows a pass of the new mode, not a guessed animation length.
      * The mode must really change — a click on the active one draws nothing.
      */
-    async function switchGrowthMode(page: Page, mode: 'eur' | 'pct'): Promise<void> {
+    async function switchGrowthMode(page: Page, mode: 'eur' | 'pct' | 'pnl'): Promise<void> {
         const growthChart = page.getByTestId('growth-chart');
         const toggle = growthChart.getByTestId(`growth-toggle-${mode}`);
         const drawing = growthChart.locator('[data-chart-renders]');
@@ -707,6 +741,119 @@ test.describe('Gallery Screenshots', () => {
         await toggle.click();
         await expect(toggle).toHaveAttribute('aria-pressed', 'true');
         await expect.poll(renders, {message: `the growth chart never redrew in ${mode}`, timeout: 10_000}).toBeGreaterThan(before);
+    }
+
+    /**
+     * Switch the growth chart's P&L view to `submode` and return once it has drawn it: switchGrowthMode's contract, one
+     * level down. The render count is read before the click and awaited after, so the submode must really change — a
+     * click on the active one draws nothing.
+     */
+    async function switchPnlSubmode(page: Page, submode: 'line' | 'candles' | 'income'): Promise<void> {
+        const toggle = page.getByTestId('growth-chart').getByTestId(`growth-pnl-submode-${submode}`);
+        await expect(toggle).toBeVisible();
+        await expect(toggle, `the P&L view is already ${submode}: no render pass would follow the click`).not.toHaveAttribute('aria-pressed', 'true');
+        const before = await growthChartRenders(page);
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(() => growthChartRenders(page), {message: `the growth chart never redrew in ${submode}`, timeout: 10_000}).toBeGreaterThan(before);
+    }
+
+    /** Where the growth chart draws: the element that counts its finished render passes (attachChartReady) and holds its ECharts instance (`__lfChart`). */
+    function growthDrawing(page: Page): Locator {
+        return page.getByTestId('growth-chart').locator('[data-chart-renders]');
+    }
+
+    /** The growth chart's finished render passes: read before an action, awaited after it. */
+    async function growthChartRenders(page: Page): Promise<number> {
+        const drawing = growthDrawing(page);
+        return Number((await drawing.getAttribute('data-chart-renders', {timeout: 2_000}).catch(() => null)) ?? '0');
+    }
+
+    /**
+     * The items of the growth chart's `type` series that carry a value — a candle rather than the `'-'` gap, a bar or a
+     * point that is not zero — in the option the chart handed ECharts, read through its test hook (`__lfChart`) as
+     * dashboard.spec.ts reads it: the canvas has no DOM to ask.
+     */
+    async function growthItems(page: Page, type: 'line' | 'candlestick' | 'bar'): Promise<number> {
+        return growthDrawing(page).evaluate((node, seriesType) => {
+            const series: any[] = ((node as any).__lfChart?.getOption?.()?.series ?? []).filter((entry: any) => entry?.type === seriesType);
+            const amountOf = (item: any) => {
+                const value = item !== null && typeof item === 'object' && !Array.isArray(item) ? item.value : item;
+                return Array.isArray(value) ? value[value.length - 1] : value;
+            };
+            return series.flatMap((entry) => (Array.isArray(entry.data) ? entry.data : [])).filter((item) => typeof amountOf(item) === 'number' && amountOf(item) !== 0).length;
+        }, type);
+    }
+
+    /**
+     * How many x-axis labels the growth chart painted: canvas text, read off the zrender scene through the same hook —
+     * dashboard.spec.ts's `ladderSnapshot`, reduced to a count. A label the overlap pass hid, or a blank one, does not count.
+     */
+    async function paintedAxisLabels(page: Page): Promise<number> {
+        return growthDrawing(page).evaluate((node) => {
+            const chart = (node as any).__lfChart;
+            const axis = chart?.getModel?.()?.getComponent?.('xAxis', 0);
+            const view = axis ? chart.getViewOfComponentModel?.(axis) : null;
+            let painted = 0;
+            view?.group?.traverse((el: any) => {
+                if (el.type !== 'text' || !String(el.anid ?? '').startsWith('label_') || el.ignore || el.invisible) return;
+                const spans: any[] = el.childrenRef?.() ?? el._children ?? [];
+                if (spans.some((span) => typeof span?.style?.text === 'string' && span.style.text.trim() !== '')) painted += 1;
+            });
+            return painted;
+        });
+    }
+
+    /** What the growth chart's own y-axis formatter prints for `values`, read fresh from `getOption()`: dashboard.spec.ts's `axisLabels`. */
+    async function growthAxisLabels(page: Page, values: number[]): Promise<string[]> {
+        return growthDrawing(page).evaluate((node, amounts) => {
+            const formatter = (node as any).__lfChart?.getOption?.()?.yAxis?.[0]?.axisLabel?.formatter;
+            return typeof formatter === 'function' ? amounts.map((amount) => String(formatter(amount))) : [];
+        }, values);
+    }
+
+    /**
+     * Frame the growth chart as `main` frames it — from the top of the page, scrolled into view by the browser: on the
+     * desktop the end of the page, on a phone the card centred — and return the card's top. Called once per combination,
+     * with the card at its height in `main` (nothing under the chart), and every P&L view is shot from there: those shots
+     * join `main`'s carousel, where a card that moved between two items would jump. The Candles caption only adds height
+     * below. The pointer rests off the chart first, so the scroll slides no chart under it and no tooltip opens.
+     */
+    async function frameGrowthChart(page: Page): Promise<number> {
+        const growthChart = page.getByTestId('growth-chart');
+        await parkPointer(page);
+        await scrollBackToHeader(page);
+        await growthChart.scrollIntoViewIfNeeded();
+        await expect(growthChart, 'the whole card is in the frame').toBeInViewport({ratio: 1});
+        await expect(page.getByTestId('app-header'), 'the header has slid away, as in main').toHaveAttribute('data-scroll-state', 'hidden');
+        const box = await growthChart.boundingBox();
+        if (!box) throw new Error('the growth chart has no box');
+        return box.y;
+    }
+
+    /** The card is still where frameGrowthChart() put it: switching views moves nothing above its bottom edge. */
+    async function expectGrowthChartAt(page: Page, top: number): Promise<void> {
+        await expect.poll(async () => (await page.getByTestId('growth-chart').boundingBox())?.y ?? Number.NaN, {message: 'the growth chart moved since it was framed'}).toBeCloseTo(top, 0);
+    }
+
+    /**
+     * `PRIVACY_PLACEHOLDER` of src/lib/utils/privacy/maskable.ts, copied rather than imported, as privacy-masking.spec.ts
+     * does: that module imports the runes privacy store, which Playwright's loader cannot compile.
+     */
+    const PRIVACY_PLACEHOLDER = '•••';
+
+    /**
+     * Hide or show amounts from the header's eye button, the state asserted on both sides: privacy-masking.spec.ts's
+     * flipPrivacy. Focused, the button pins the header (Header.svelte, handleFocusIn), so the header stays on screen
+     * however the page scrolls next — which is what keeps the button in the privacy shot.
+     */
+    async function setPrivacyFromHeader(page: Page, on: boolean): Promise<void> {
+        const toggle = page.getByTestId('privacy-toggle');
+        await expect(toggle, `privacy must start ${on ? 'off' : 'on'}`).toHaveAttribute('aria-pressed', String(!on));
+        await toggle.focus();
+        await expect(page.getByTestId('app-header'), 'focused, the eye button pins the header').toHaveAttribute('data-scroll-state', 'pinned');
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-pressed', String(on));
     }
 
     /**
@@ -812,15 +959,24 @@ test.describe('Gallery Screenshots', () => {
         await page.waitForTimeout(400); // settle for chart redraw (treemap/performance-chart use ECharts)
     }
 
-    async function screenshotPositionsVariants(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string) {
+    async function screenshotPositionsVariants(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string, tall: readonly string[] = []) {
         const positionsPanel = page.getByTestId('positions-panel');
         await expect(positionsPanel).toBeVisible({timeout: 5_000});
         await positionsPanel.scrollIntoViewIfNeeded();
         await page.waitForTimeout(300);
+        // DESKTOP, tall shots: the frame from the top of the page, every combination. The scroll above races the panel's load
+        // (still a short skeleton, it is already in view and nothing scrolls; loaded, it is not and the page scrolls), so the
+        // same shot came from two frames (b5_c4_2); the tall screen holds the whole panel from the top.
+        if (viewport === 'desktop' && tall.length > 0) await scrollBackToHeader(page);
 
         for (const variant of POSITIONS_SCREENSHOT_VARIANTS) {
             await setPositionsView(page, variant.semantic, variant.visual);
+            // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the variants in `tall` get a screen as tall
+            // as the panel — the holdings map and the performance chart grow with the screen, so it is measured again after
+            // each resize — and the project's screen again right after the shot.
+            if (viewport === 'desktop' && tall.includes(variant.name)) await extendScreenToBlock(page, positionsPanel, `desktop/${lang}/${theme}/${category}/${variant.name}`);
             await screenshot(page, viewport, lang, theme, category, variant.name);
+            await restoreTallScreen(page);
         }
     }
 
@@ -903,6 +1059,138 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('dashboard growth P&L submodes - all languages and themes', async ({page}, testInfo) => {
+            // Per combination one full load, the 1 s count-up and three views, each with its render pass and its shot, ~11 s,
+            // twice that under parallel load: 8 × 22 s + 60 s.
+            test.setTimeout(240_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+            const candleOpenings = new Set<string>();
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                // On the desktop the last rows of the KPI cards are in these frames, above the chart.
+                // The svelte/motion `tweened()` count-up (TweenedValue, 900 ms, JS-driven — not a
+                // CSS animation, so freezeAnimations() cannot stop it) publishes no settled state,
+                // so this wait stays until the component exposes one.
+                await page.waitForTimeout(1_000);
+
+                const growthChart = page.getByTestId('growth-chart');
+                const candleWidths = growthChart.getByTestId('growth-candle-width');
+                const pressedWidth = candleWidths.locator('[aria-pressed="true"]');
+
+                // P&L on Line before the first shot. A fresh browser opens the chart in Abs, and P&L on Line; from the second
+                // combination on, the chart opens where the previous one left it: P&L on Line. Never on Income — entering
+                // Income, by a click or on mounting, opens it on 1M, and Candles would then keep 1M: their own opening applies
+                // only on the first entry into the width ladder after a load.
+                if ((await growthChart.getByTestId('growth-toggle-pnl').getAttribute('aria-pressed')) !== 'true') await switchGrowthMode(page, 'pnl');
+                await expect(growthChart.getByTestId('growth-pnl-submode-line'), 'P&L opens on Line: Candles will be the first view on the width ladder since this load').toHaveAttribute('aria-pressed', 'true');
+                const top = await frameGrowthChart(page);
+
+                // Candles, on the width their opening picks: the finest this plot can draw. Recorded, not asserted — on a
+                // phone the plot is a few pixels from the 3D/1W edge, where the host's scrollbar gutter decides.
+                await switchPnlSubmode(page, 'candles');
+                await expect(pressedWidth, 'one candle width is pressed: the one the opening picked').toHaveCount(1);
+                await expect.poll(() => growthItems(page, 'candlestick'), {message: "the snapshot's pnl_candles reached the chart"}).toBeGreaterThan(0);
+                await expect.poll(() => paintedAxisLabels(page), {message: 'the axis names the periods under the candles'}).toBeGreaterThanOrEqual(2);
+                await parkPointer(page);
+                await expectGrowthChartAt(page, top);
+                await expect(growthDrawing(page), 'the candles and their axis are in the shot').toBeInViewport({ratio: 1});
+                await expect(candleWidths, 'and so is the width picker').toBeInViewport({ratio: 1});
+                await expect(growthChart.getByTestId('growth-pnl-candles-hypothetical-label'), 'and the Synthetic caption').toBeInViewport({ratio: 1});
+                const opening = ((await pressedWidth.getAttribute('data-testid')) ?? '').replace('growth-candle-width-', '').toUpperCase();
+                candleOpenings.add(opening);
+                console.log(`  🕯️ ${viewport}/${lang}/${theme}: Candles opened on ${opening}`);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'growth-pnl-candles');
+
+                // Income opens on 1M on every entry: monthly groups of bars, and under them the axis naming each month.
+                await switchPnlSubmode(page, 'income');
+                await expect(growthChart.getByTestId('growth-candle-width-1m'), 'Income opens on 1M').toHaveAttribute('aria-pressed', 'true');
+                await expect(pressedWidth).toHaveCount(1);
+                await expect.poll(() => growthItems(page, 'bar'), {message: "the snapshot's income, costs, deposits and purchases reached the chart"}).toBeGreaterThan(0);
+                await expect.poll(() => paintedAxisLabels(page), {message: 'the axis names the months under the bars'}).toBeGreaterThanOrEqual(2);
+                await parkPointer(page);
+                await expectGrowthChartAt(page, top);
+                await expect(growthChart, 'the whole card is in the shot').toBeInViewport({ratio: 1});
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'growth-pnl-income');
+
+                // Line last: it leaves the chart on P&L Line for the next combination.
+                await switchPnlSubmode(page, 'line');
+                await expect.poll(() => growthItems(page, 'line'), {message: 'the P&L line reached the chart'}).toBeGreaterThan(0);
+                await parkPointer(page);
+                await expectGrowthChartAt(page, top);
+                await expect(growthChart, 'the whole card is in the shot').toBeInViewport({ratio: 1});
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'growth-pnl-line');
+            });
+
+            // The width Candles opened on, per viewport, for the run's report.
+            testInfo.annotations.push({type: 'candles-opening-width', description: `${viewport}: ${[...candleOpenings].join(', ')}`});
+        });
+
+        test('dashboard privacy mode - all languages and themes', async ({page}, testInfo) => {
+            // Per combination one full load, the 1 s count-up, the eye button both ways with the chart's redraw and one shot,
+            // ~7 s, twice that under parallel load: 8 × 14 s + 50 s.
+            test.setTimeout(180_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+                await expect(page.getByTestId('growth-toggle-eur'), 'the growth chart is in Abs: a fresh browser opens it there, and this test never leaves it').toHaveAttribute('aria-pressed', 'true');
+                // The KPI cards are the subject of this shot.
+                // The svelte/motion `tweened()` count-up (TweenedValue, 900 ms, JS-driven — not a
+                // CSS animation, so freezeAnimations() cannot stop it) publishes no settled state,
+                // so this wait stays until the component exposes one.
+                await page.waitForTimeout(1_000);
+
+                // Hide amounts, from the eye button at the top of the page. The growth chart's axis labels are canvas text
+                // that ECharts caches, so masking them redraws the whole chart: its count is read before, awaited after.
+                await scrollBackToHeader(page);
+                const rendersBefore = await growthChartRenders(page);
+                await setPrivacyFromHeader(page, true);
+                await expect.poll(() => growthChartRenders(page), {message: 'the growth chart never redrew under privacy', timeout: 10_000}).toBeGreaterThan(rendersBefore);
+
+                // Masked. The chart, through its own y-axis formatter (`__lfChart`): the magnitude and its k/M suffix become
+                // the placeholder, the sign stays outside it (D8).
+                await expect.poll(() => growthAxisLabels(page, [20_000, -5_000, 0]), {message: "the growth chart's amount axis is masked, the sign kept"}).toEqual([expect.stringMatching(/^•••$/), expect.stringMatching(/^[-\u2212]•••$/), expect.stringMatching(/^•••$/)]);
+                // The KPI amounts have no hook of their own: maskable() swaps the digits for the placeholder before the string
+                // exists, so the placeholder and the missing digits are what there is to read — data, not translation. ROI is
+                // a percentage, no amount, and stays readable (D5′, D6): the negative control.
+                for (const card of ['kpi-period-pnl', 'kpi-net-worth']) {
+                    const amount = page.getByTestId(card).getByTestId('kpi-value');
+                    await expect(amount, `${card}: the amount is masked`).toContainText(PRIVACY_PLACEHOLDER);
+                    await expect(amount, `${card}: no digit is left`).not.toHaveText(/\d/);
+                }
+                await expect(page.getByTestId('kpi-return-roi-value'), 'ROI stays readable').toHaveText(/\d/);
+
+                // The frame: the KPI row right under the header, which the focused eye button keeps on screen. The date-range
+                // toolbar above the cards scrolls away, and the room it leaves goes to the growth chart below them: on the
+                // desktop its header and the top of its masked axis, on a phone none of it, the cards being stacked there.
+                await page.getByTestId('kpi-row').evaluate((row) => {
+                    const header = document.querySelector('[data-testid="app-header"]')?.getBoundingClientRect().height ?? 0;
+                    // 16 px: the dashboard's gap between its blocks (space-y-4).
+                    window.scrollTo({top: Math.max(0, row.getBoundingClientRect().top + window.scrollY - header - 16), behavior: 'instant'});
+                });
+                await expect(page.getByTestId('app-header'), 'the header stays: the focused eye button pins it').toHaveAttribute('data-scroll-state', 'pinned');
+                await expect(page.getByTestId('privacy-toggle'), 'the eye button is in the shot').toBeInViewport({ratio: 1});
+                await expect(page.getByTestId('kpi-period-pnl').getByTestId('kpi-value'), 'and so is the first masked amount').toBeInViewport({ratio: 1});
+                await parkPointer(page);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'privacy-masked');
+
+                // Off again, from the same button, and the amounts come back in place: the next combination loads in the clear.
+                await setPrivacyFromHeader(page, false);
+                await expect(page.getByTestId('kpi-net-worth').getByTestId('kpi-value'), 'the amounts are back').toHaveText(/\d/);
+            });
+        });
+
         test('mobile menu open', async ({page}, testInfo) => {
             if (testInfo.project.name !== 'mobile') {
                 test.skip();
@@ -973,6 +1261,9 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('dashboard positions tab - all languages and themes', async ({page}, testInfo) => {
+            // Four variants a combination; on the desktop each on a screen as tall as the panel (the map and the chart need a
+            // few resizes, they grow with the screen) and back: above the 4-minute default.
+            test.setTimeout(420_000);
             const viewport = getViewport(testInfo);
             await setupDashboardMockReport(page);
 
@@ -988,7 +1279,7 @@ test.describe('Gallery Screenshots', () => {
                 await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
                 // Each variant is shot once setPositionsView() has its content root on screen: the
                 // holdings table or treemap, the contribution table or the performance chart.
-                await screenshotPositionsVariants(page, viewport, lang, theme, 'dashboard');
+                await screenshotPositionsVariants(page, viewport, lang, theme, 'dashboard', ['positions-holdings-table', 'positions-holdings-map', 'positions-performance-table', 'positions-performance-map']);
             });
         });
 
@@ -1286,7 +1577,10 @@ test.describe('Gallery Screenshots', () => {
                     .catch(() => {});
                 await waitForNetworkSettled(page);
                 await page.waitForTimeout(500);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole page, on a screen as tall as it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.locator(PAGE_BLOCK), `desktop/${lang}/${theme}/settings/global-settings`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'global-settings');
+                await restoreTallScreen(page);
             });
         });
 
@@ -1340,12 +1634,29 @@ test.describe('Gallery Screenshots', () => {
                 await navigateTo(page, '/settings');
                 await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
-                const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
-                if (await profileTab.isVisible().catch(() => false)) {
-                    await profileTab.click();
-                    await page.waitForTimeout(300);
-                    await screenshot(page, viewport, lang, theme, 'settings', 'profile');
-                }
+                // By its test id, on both viewports. The tab's label is translated, and on a phone the TabBar shows its icon only
+                // (hideLabelOnMobile): the old filter on the English word found the tab on the English desktop alone, and every
+                // other combination skipped the shot in silence — no phone and no it/fr/es desktop image was ever made.
+                const profileTab = page.getByTestId('settings-tab-profile');
+                await expect(profileTab).toBeVisible({timeout: 10_000});
+                await profileTab.click();
+                await expect(profileTab).toHaveAttribute('aria-selected', 'true');
+                const profile = page.getByTestId('profile-tab');
+                await expect(profile).toBeVisible();
+                await expect(profile).toHaveAttribute('data-busy', 'false');
+                // The avatar comes with the user's settings, after the tab is drawn (ProfileTab's onMount): the gallery's admin
+                // has one — the sidebar shows it — so its picture, loaded, is what says the tab is complete.
+                const avatar = profile.getByTestId('profile-avatar').locator('img');
+                await expect(avatar, "the admin's avatar is not on the Profile tab").toBeVisible({timeout: 10_000});
+                await expect.poll(() => avatar.evaluate((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0), {message: "the admin's avatar never loaded", timeout: 10_000}).toBe(true);
+                await parkPointer(page);
+                await waitForMotionSettled(profile, 'the Profile tab');
+                await expectNoToast(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, its tab bar and the
+                // profile down to its rounded bottom edge — `profile-tab` alone stops inside the card's padding.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/profile`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'profile');
+                await restoreTallScreen(page);
             });
         });
 
@@ -1561,7 +1872,16 @@ test.describe('Gallery Screenshots', () => {
                     await diagnostics.scrollIntoViewIfNeeded();
                     await freezeAnimations(page);
                     await page.waitForTimeout(300);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts). The scroll above races the Tools panel,
+                    // which grows the block once its catalogue is in (b5_c4_5: 7 frames scrolled to the whole block, 1 not):
+                    // on the desktop the frame is taken again once the panel is in, so every combination frames the whole block.
+                    if (viewport === 'desktop') {
+                        await expect(diagnostics.getByTestId('tool-about-panel')).toHaveAttribute('data-state', /^(ready|degraded)$/, {timeout: 15_000});
+                        await diagnostics.scrollIntoViewIfNeeded();
+                        await extendScreenToBlock(page, diagnostics, `desktop/${lang}/${theme}/settings/about-plugin-diagnostics`);
+                    }
                     await screenshot(page, viewport, lang, theme, 'settings', 'about-plugin-diagnostics');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -1607,7 +1927,10 @@ test.describe('Gallery Screenshots', () => {
                     // every viewport, with as much of the panel above them as fits.
                     await loaded.evaluate((el) => el.scrollIntoView({block: 'end'}));
                     await freezeAnimations(page);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole Tools panel.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, tools, `desktop/${lang}/${theme}/settings/about-tool-diagnostics`);
                     await screenshot(page, viewport, lang, theme, 'settings', 'about-tool-diagnostics');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -1630,12 +1953,15 @@ test.describe('Gallery Screenshots', () => {
                 const section = await expectOnboardingCategory(page);
                 // On a phone the card's own header is brought to the top of the screen, so the Core tour's area is on show too.
                 await frameOnboardingCategory(page, viewport);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                if (viewport === 'desktop') await extendScreenToBlock(page, section, `desktop/${lang}/${theme}/settings/onboarding-replay`);
                 await parkPointer(page);
                 await freezeAnimations(page);
                 await waitForMotionSettled(section, 'the Onboarding category');
                 await expect(page.getByTestId('deferred-app-popups'), 'a popup lies over the shot').toHaveAttribute('data-active-popup', 'none');
                 await expectNoToast(page);
                 await screenshot(page, viewport, lang, theme, 'settings', 'onboarding-replay');
+                await restoreTallScreen(page);
                 // The next combination starts in the header: on a phone it slid away with the scroll down.
                 if (viewport === 'mobile') await scrollBackToHeader(page);
             });
@@ -1662,6 +1988,87 @@ test.describe('Gallery Screenshots', () => {
                 await expect(hub.getByTestId('tools-hub-refresh')).toBeEnabled();
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'tools', 'hub');
+            });
+        });
+
+        // PAC allocator — user/tools/pac-allocator/index.en.md: one placeholder per wizard step, three for the result.
+        // The planner's draft lives in the open page only and survives a language or theme picked from the header, so
+        // each test builds it once and every combination photographs the same draft. The planner only reads the database
+        // and the calculation runs in the local solver (galleryPac.ts says what the draft holds, and why). Two tests, so
+        // the wizard and the result run side by side.
+        test('PAC allocator steps - all languages and themes', async ({page}, testInfo) => {
+            // One draft (about forty interactions, a few database reads) and 48 shots: about 4 minutes on a quiet lane.
+            test.setTimeout(600_000);
+            const viewport = getViewport(testInfo);
+            const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string, tall?: Locator) => {
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): `tall`, the part of the step the screen
+                // cuts, gets a screen as tall as it, with room under it for the wizard's sticky footer; the project's screen
+                // again right after the shot.
+                if (viewport === 'desktop' && tall) await extendScreenToBlock(page, tall, `desktop/${lang}/${theme}/tools/${name}`, {footer: page.getByTestId('pac-planner-footer')});
+                await settlePacShot(page, region, what, waitForMotionSettled);
+                await screenshot(page, viewport, lang, theme, 'tools', name);
+                await restoreTallScreen(page);
+            };
+            await login(page, TEST_ADMIN);
+            const ids = await resolvePacIds(page);
+            await openPacPlanner(page);
+            await freezeAnimations(page);
+            const draft = await buildPacDraft(page, ids);
+            await scrollBackToHeader(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await shoot(await framePacLiquidity(page, draft), 'the Liquidity step', lang, theme, 'pac-step-liquidity', page.locator('[data-testid="pac-planner-cash"][data-origin="manual"]'));
+                // The editor works on a copy of the Broker: cancelled after the shot, the draft keeps what buildPacDraft applied.
+                await shoot(await framePacBrokerEditor(page, draft, waitForMotionSettled), 'the Broker editor', lang, theme, 'pac-step-brokers');
+                await closePacBrokerEditor(page);
+                await shoot(await framePacAssets(page, draft), 'the Assets step', lang, theme, 'pac-step-assets');
+                await shoot(await framePacRouting(page, draft), 'the Routing step', lang, theme, 'pac-step-routing');
+                // The Review is shot with one field still to complete (the target total at 90%); the Targets shot completes it.
+                await leavePacTargetsIncomplete(page, draft);
+                await shoot(await framePacReview(page), 'the Review step', lang, theme, 'pac-step-review');
+                await shoot(await framePacTargets(page, draft), 'the Targets step', lang, theme, 'pac-step-targets');
+                // The next language and theme are picked from the header, which the framing scrolled away.
+                await scrollBackToHeader(page);
+            });
+        });
+
+        test('PAC allocator result - all languages and themes', async ({page}, testInfo) => {
+            // One draft, one calculation by the local solver (milliseconds for this draft) and 24 shots: about 2 minutes on a
+            // quiet lane; on the desktop the proof shot also resizes the screen and back, every combination.
+            test.setTimeout(360_000);
+            const viewport = getViewport(testInfo);
+            const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string, tall?: Locator) => {
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): `tall`, the section the screen cuts, gets
+                // a screen as tall as it; the project's screen again right after the shot. The proof shot has its own fit below.
+                if (viewport === 'desktop' && tall) await extendScreenToBlock(page, tall, `desktop/${lang}/${theme}/tools/${name}`);
+                await settlePacShot(page, region, what, waitForMotionSettled);
+                await screenshot(page, viewport, lang, theme, 'tools', name);
+                await restoreTallScreen(page);
+            };
+            await login(page, TEST_ADMIN);
+            const ids = await resolvePacIds(page);
+            await openPacPlanner(page);
+            await freezeAnimations(page);
+            const draft = await buildPacDraft(page, ids);
+            await calculatePacPlan(page);
+            await scrollBackToHeader(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await shoot(await framePacResult(page), 'the PAC result', lang, theme, 'pac-result', page.locator('[data-testid="pac-planner-result-section"][data-section="allocation"]'));
+                await shoot(await framePacPlan(page, draft), 'the Operational plan', lang, theme, 'pac-result-plan', page.locator('[data-testid="pac-planner-result-section"][data-section="plan"]'));
+                // «Proof and timings» opens the section on the first combination; it stays open for the next ones.
+                const proof = await framePacProof(page);
+                // DESKTOP — coordinator's decision, provisional: the simulation shot's rule (see 'risk what-if simulation on the
+                // dashboard' and «Screens taller than the desktop's» in galleryRiskLab.ts). The page wants the whole Proof and
+                // solver section in one image — badges, objective values, solver stages, backend timings — far taller than 720 px:
+                // the shot gets a screen as tall as the section plus the frame's margins, width (1280) and scale unchanged,
+                // measured and logged (📐) every combination. The mobile project keeps its phone: the section from its title.
+                // Reverting the decision is deleting this line.
+                if (viewport === 'desktop') await fitScreenToPacProof(page, proof, `desktop/${lang}/${theme}/tools/pac-result-proof`, waitForMotionSettled);
+                await shoot(proof, 'Proof and solver', lang, theme, 'pac-result-proof');
+                // The project's screen again, before anything else: the next combination's result and plan are 720 px shots.
+                await restorePacScreen(page);
+                await scrollBackToHeader(page);
             });
         });
     });
@@ -1803,7 +2210,10 @@ test.describe('Gallery Screenshots', () => {
                 await page.goto('/files?tab=static');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('files-table-static'), `desktop/${lang}/${theme}/files/static-tab`);
                 await screenshot(page, viewport, lang, theme, 'files', 'static-tab');
+                await restoreTallScreen(page);
             });
         });
 
@@ -2048,7 +2458,11 @@ test.describe('Gallery Screenshots', () => {
                     for (const {type, name} of TX_FORM_VARIANT_TYPES) {
                         await selectTransactionType(page, type);
                         await freezeAnimations(page);
+                        // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the Transfer form scrolls at
+                        // 720 px; the project's screen again before the next type.
+                        if (viewport === 'desktop' && name === 'form-modal-transfer') await fitScreenToDialog(page, formModal, `desktop/${lang}/${theme}/transactions/${name}`, {body: page.getByTestId('tx-form-body')});
                         await screenshot(page, viewport, lang, theme, 'transactions', name);
+                        await restoreTallScreen(page);
                     }
 
                     await closeTxFormAndBulkModal(page, formModal);
@@ -2132,7 +2546,10 @@ test.describe('Gallery Screenshots', () => {
                             const actionModal = page.getByTestId('tx-action-modal');
                             await expect(actionModal).toBeVisible({timeout: 5_000});
                             await page.waitForTimeout(300);
+                            // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                            if (viewport === 'desktop') await fitScreenToDialog(page, actionModal, `desktop/${lang}/${theme}/transactions/action-modal`);
                             await screenshot(page, viewport, lang, theme, 'transactions', 'action-modal');
+                            await restoreTallScreen(page);
                             await page.getByTestId('tx-action-modal-cancel').click();
                             await page.waitForTimeout(200);
                             found = true;
@@ -2334,7 +2751,10 @@ test.describe('Gallery Screenshots', () => {
                 await page.locator('[data-testid^="broker-card-"]').first().waitFor({state: 'visible', timeout: 10_000});
                 // Extra time for broker icons to load (favicon fetching)
                 await page.waitForTimeout(2000);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole page, on a screen as tall as it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.locator(PAGE_BLOCK), `desktop/${lang}/${theme}/brokers/list`);
                 await screenshot(page, viewport, lang, theme, 'brokers', 'list');
+                await restoreTallScreen(page);
             });
         });
 
@@ -2358,7 +2778,10 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     // Wait for broker icon to load
                     await page.waitForTimeout(1000);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('broker-overview-tab'), `desktop/${lang}/${theme}/brokers/detail`);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'detail');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -2387,7 +2810,10 @@ test.describe('Gallery Screenshots', () => {
                     await expect(editBtn).toBeVisible({timeout: 5000});
                     await editBtn.click();
                     await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 5000});
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await fitScreenToDialog(page, page.getByTestId('broker-modal'), `desktop/${lang}/${theme}/brokers/edit-modal`);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'edit-modal');
+                    await restoreTallScreen(page);
 
                     // Close modal
                     await page.keyboard.press('Escape');
@@ -2442,12 +2868,18 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('broker-metadata')).toBeVisible({timeout: 5_000});
                     await expect(page.getByTestId('broker-sharing-section')).toBeVisible({timeout: 5_000});
                     await page.waitForTimeout(500);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('broker-info-tab'), `desktop/${lang}/${theme}/brokers/info-tab`);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'info-tab');
+                    await restoreTallScreen(page);
                 }
             }
         });
 
         test('broker positions tab - all languages and themes', async ({page}, testInfo) => {
+            // Four variants a combination, two of them on the desktop on a screen as tall as the panel (the map needs a few
+            // resizes, it grows with the screen) and back: more than the 4-minute default leaves.
+            test.setTimeout(360_000);
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
@@ -2463,7 +2895,7 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.getByTestId('broker-tab-posizioni').click();
                     await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
-                    await screenshotPositionsVariants(page, viewport, lang, theme, 'brokers');
+                    await screenshotPositionsVariants(page, viewport, lang, theme, 'brokers', ['positions-holdings-map', 'positions-performance-table']);
                 }
             }
         });
@@ -3097,29 +3529,33 @@ test.describe('Gallery Screenshots', () => {
             test.setTimeout(240_000);
             const viewport = getViewport(testInfo);
             const brokerId = await startAccount(page, request, 'Danske Bank');
-            // "Read alone with…" is offered only for a file a single-file plugin reads too. The bank's own
-            // statement is read by Danske Bank alone, so the set holds the extended statement instead.
+            // The bank's two exports, as it exports them, uploaded together: one set. No single-file plugin reads the bank's
+            // own cash statement (decision 1), so its ⋮ menu holds Preview, Remove from the set and Delete, and no «Read alone
+            // with…»: the menu of a real export, which the Danske Bank page shows.
             const {
                 batchId,
-                files: [custody, statement],
-            } = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.custody, writeExtendedCashStatement(testInfo)]);
-            expect(statement.compatible_plugins ?? [], 'premise: Danske Bank and the generic CSV both read the extended statement').toEqual(expect.arrayContaining([DANSKE, GENERIC]));
+                files: [custody, cash],
+            } = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.custody, DANSKE_SAMPLES.cash]);
+            expect(cash.compatible_plugins ?? [], 'premise: Danske Bank reads the bank’s cash statement').toContain(DANSKE);
+            expect(cash.compatible_plugins ?? [], 'premise: the generic CSV does not').not.toContain(GENERIC);
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
                     await onTransactions(page, lang, theme);
                     const card = await openSetCard(page, brokerId, batchId, 'complete');
                     await expect(roleRow(card, 'custody', custody.file_id)).toBeVisible();
-                    const row = roleRow(card, 'cash', statement.file_id);
-                    await expect(row, 'the extended statement is the cash export of the set').toBeVisible();
+                    const row = roleRow(card, 'cash', cash.file_id);
+                    await expect(row, 'the bank’s statement is the cash export of the set').toBeVisible();
                     await scrollToTop(card);
                     await freezeAnimations(page);
 
-                    await row.getByTestId(`row-actions-${statement.file_id}`).click();
+                    await row.getByTestId(`row-actions-${cash.file_id}`).click();
                     const menu = page.getByTestId('context-menu');
                     await expect(menu).toBeVisible();
-                    await expect(menu.getByTestId(`context-menu-action-read-alone-${GENERIC}`), 'the file can be read alone with the generic CSV').toBeVisible();
-                    await expect(menu.getByTestId('context-menu-action-remove-from-set')).toBeVisible();
+                    // What the menu holds first, then what it must not: the absences would also hold for a menu not drawn yet.
+                    for (const action of ['preview', 'remove-from-set', 'delete']) await expect(menu.getByTestId(`context-menu-action-${action}`)).toBeVisible();
+                    await expect(menu.getByTestId(`context-menu-action-read-alone-${GENERIC}`), 'no "Read alone with" the generic CSV: it does not read the statement').toHaveCount(0);
+                    await expect(menu.locator('[data-testid^="context-menu-action-read-alone-"]'), 'nor with any other plugin').toHaveCount(0);
                     await waitForStillness(menu, 'the file menu');
                     await expect(menu).toBeInViewport();
                     await waitForMotionSettled(menu, 'the file menu');
@@ -3747,7 +4183,10 @@ test.describe('Gallery Screenshots', () => {
                     await parkPointer(page);
                     await page.waitForTimeout(500); // Extra settle time for provider icons
 
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole dialog, its body unscrolled.
+                    if (viewport === 'desktop') await fitScreenToDialog(page, modal, `desktop/${lang}/${theme}/fx/add-pair-chain`);
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-chain');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(300);
                 }
@@ -3822,7 +4261,10 @@ test.describe('Gallery Screenshots', () => {
                             await page.waitForTimeout(300);
                         }
                     }
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart under the signals.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('fx-detail-chart'), `desktop/${lang}/${theme}/fx/detail-signals`);
                     await screenshot(page, viewport, lang, theme, 'fx', 'detail-signals');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -3945,7 +4387,10 @@ test.describe('Gallery Screenshots', () => {
                     const settingsModal = page.getByTestId('chart-settings-modal');
                     await expect(settingsModal).toBeVisible({timeout: 3000});
                     await page.waitForTimeout(300);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await fitScreenToDialog(page, settingsModal, `desktop/${lang}/${theme}/fx/chart-settings`);
                     await screenshot(page, viewport, lang, theme, 'fx', 'chart-settings');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }
@@ -4022,7 +4467,10 @@ test.describe('Gallery Screenshots', () => {
                         await tableBtn.click();
                         await page.waitForTimeout(1000); // Wait for table to render
                     }
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('assets-table-panel-own'), `desktop/${lang}/${theme}/assets/list-table`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'list-table');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -4067,7 +4515,11 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(500);
                     // Screenshot 1: line chart (default)
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts), for this shot and the candlestick's.
+                    const detailChart = page.getByTestId('asset-detail-chart');
+                    if (viewport === 'desktop') await extendScreenToBlock(page, detailChart, `desktop/${lang}/${theme}/assets/detail-chart`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart');
+                    await restoreTallScreen(page);
 
                     // Screenshot 2: candlestick chart
                     const candlestickBtn = page.getByTestId('chart-type-candlestick');
@@ -4075,7 +4527,9 @@ test.describe('Gallery Screenshots', () => {
                         await candlestickBtn.click();
                         await page.waitForTimeout(800); // Wait for candlestick to render
                         await freezeAnimations(page);
+                        if (viewport === 'desktop') await extendScreenToBlock(page, detailChart, `desktop/${lang}/${theme}/assets/detail-chart-candlestick`);
                         await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart-candlestick');
+                        await restoreTallScreen(page);
                         // Reset to line for next iteration
                         const lineBtn = page.getByTestId('chart-type-line');
                         if (await lineBtn.isVisible({timeout: 1000}).catch(() => false)) {
@@ -4223,7 +4677,10 @@ test.describe('Gallery Screenshots', () => {
                         await signalsToggle.click();
                         await page.waitForTimeout(500);
                     }
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart under the signals.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('asset-detail-chart'), `desktop/${lang}/${theme}/assets/detail-signals`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -4433,7 +4890,10 @@ test.describe('Gallery Screenshots', () => {
                     await fullHistoryParam.scrollIntoViewIfNeeded();
                     await page.waitForTimeout(300);
                     await freezeAnimations(page);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart under the card.
+                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('asset-detail-chart'), `desktop/${lang}/${theme}/assets/detail-signals-drawdown`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-drawdown');
+                    await restoreTallScreen(page);
                 }
             }
         });
@@ -4464,7 +4924,10 @@ test.describe('Gallery Screenshots', () => {
                         .catch(() => {});
                     await page.waitForTimeout(500);
                     await freezeAnimations(page);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                    if (viewport === 'desktop') await fitScreenToDialog(page, settingsModal, `desktop/${lang}/${theme}/assets/chart-settings`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'chart-settings');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }
@@ -4665,7 +5128,10 @@ test.describe('Gallery Screenshots', () => {
                         await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
                         await page.waitForTimeout(300);
                         await freezeAnimations(page);
+                        // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                        if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('asset-detail-measures-section'), `desktop/${lang}/${theme}/assets/detail-measures-active`);
                         await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures-active');
+                        await restoreTallScreen(page);
                     }
                 }
             }
@@ -4744,7 +5210,10 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('assets-add-button').click();
                     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
                     await page.waitForTimeout(500);
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the body is the form's box.
+                    if (viewport === 'desktop') await fitScreenToDialog(page, page.getByTestId('asset-modal'), `desktop/${lang}/${theme}/assets/create-modal`, {body: page.getByTestId('asset-modal-form').locator('..')});
                     await screenshot(page, viewport, lang, theme, 'assets', 'create-modal');
+                    await restoreTallScreen(page);
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }
@@ -4805,6 +5274,44 @@ test.describe('Gallery Screenshots', () => {
                     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
                 }
             }
+        });
+
+        // The Provider Data Comparison a new asset meets after a Search Online pick (user/assets/create-edit.en.md). The
+        // search and the provider are answered by routes registered here, after the offline guard; nothing is created.
+        // galleryProviderCompare.ts says what is answered, and why.
+        test('Asset create provider compare - all languages and themes', async ({page}, testInfo) => {
+            // 8 combinations of about 10 s each: the Assets page, the search, two answered probes, the shot.
+            test.setTimeout(300_000);
+            const viewport = getViewport(testInfo);
+            const mock = await mockProviderCompare(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    const probesBefore = mock.probes.length;
+                    const dialog = await openProviderCompare(page, waitForMotionSettled);
+                    // This pick's connection test and its read of the details, both answered by the mock.
+                    expect(mock.probes.slice(probesBefore).sort(), 'the pick did not probe the provider as expected').toEqual(['current_price+history', 'metadata']);
+                    // DESKTOP — coordinator's decision, provisional: the simulation shot's rule (see 'risk what-if simulation on
+                    // the dashboard' and «Screens taller than the desktop's» in galleryRiskLab.ts). The dialog's body is capped at
+                    // 60% of the screen and its three rows are taller than that: the shot gets a screen tall enough for the body to
+                    // stop scrolling, width (1280) and scale unchanged, measured and logged (📐) every combination. The mobile
+                    // project keeps its phone, the body scrolled to the identifier and Type rows. Reverting the decision is
+                    // deleting this line.
+                    if (viewport === 'desktop') await fitScreenToCompareDialog(page, dialog, `desktop/${lang}/${theme}/assets/create-provider-compare`, waitForMotionSettled);
+                    await settleProviderCompareShot(page, dialog, waitForMotionSettled);
+                    await screenshot(page, viewport, lang, theme, 'assets', 'create-provider-compare');
+                    // The project's screen again, before anything else: the next combination's asset form opens on 720 px.
+                    await restoreCompareScreen(page);
+                    // Both dialogs cancelled, the form discarded: nothing is created.
+                    await closeProviderCompare(page);
+                }
+            }
+            expect(mock.problems, 'the mocked search or probe met a request it does not answer').toEqual([]);
         });
 
         test('Asset distribution editors - sector and geographic', async ({page}, testInfo) => {
@@ -4976,6 +5483,12 @@ test.describe('Gallery Screenshots', () => {
      * (fixtures/galleryRiskLab.ts); the live-price poll and every sync are aborted. Two shots edit a real answer where
      * the gallery's clean data cannot show the state: the partial-results notice and the replay that leaves an asset
      * out — galleryRiskLab.ts says which fields, and why.
+     *
+     * Every shot keeps its project's screen — 1280×720 on the desktop — but, on the desktop only, the simulation and the
+     * four Dashboard Risk blocks after this group (coordinator's decision, provisional): their pages want the whole box or
+     * block in one image, and none fits 720 px — the Simulation box is about 1,100 px high (1090 measured). Each of those
+     * shots takes a screen as tall as its box or block plus the frame's margins, at the same width and scale; the mobile
+     * project keeps its phone.
      */
     test.describe('Risk Analysis', () => {
         test.beforeEach(async ({page}) => {
@@ -4985,6 +5498,8 @@ test.describe('Gallery Screenshots', () => {
         /** The simulation's run: fewer paths than the default 8192, for speed — 2048 still draw a smooth cone — and a fixed seed. */
         const SIMULATION_PATHS = 2048;
         const SIMULATION_SEED = 123456;
+        /** The space the simulation's frame leaves above the box — and, on the desktop's fitted screen, below it. */
+        const SIMULATION_FRAME_MARGIN = 8;
 
         /**
          * The last steps before a shot: the pointer parked where nothing reacts to it and no tooltip left, every image of
@@ -5071,8 +5586,11 @@ test.describe('Gallery Screenshots', () => {
 
                 // The section from its title when it fits on the screen, otherwise from the table's benchmark row.
                 await frameBlock(page, {first: paid, last: scatter, fallback: paidTable});
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole chart and its notes.
+                if (viewport === 'desktop') await extendScreenToBlock(page, paid.getByTestId('risk-asset-set-l3-risk-return'), `desktop/${lang}/${theme}/risk/lab-risk-return`);
                 await settleShot(page, paid, 'the risk/return section');
                 await screenshot(page, viewport, lang, theme, 'risk', 'lab-risk-return');
+                await restoreTallScreen(page);
 
                 await scrollBackToHeader(page);
             });
@@ -5313,6 +5831,9 @@ test.describe('Gallery Screenshots', () => {
             // the admin's portfolio, then a 2048-path bootstrap over a 365-day horizon.
             test.setTimeout(480_000); // 8 minutes
             const viewport = getViewport(testInfo);
+            // The project's own screen: the desktop shot below grows from it, never shrinks under it.
+            const projectScreen = page.viewportSize();
+            if (!projectScreen) throw new Error('the page has no viewport');
             const guard = await guardReadOnly(page);
             await forgetWhatIfTools(page, await currentUserId(page));
             await navigateTo(page, '/dashboard');
@@ -5365,14 +5886,396 @@ test.describe('Gallery Screenshots', () => {
                 await waitForChart(simulation, 30_000);
                 await expect(box.getByTestId('risk-l4-provenance')).toBeVisible();
 
-                // From the top of the step: the beta notice and the model warning above the modes come first. The whole
-                // step is taller than a screen, so the shot ends inside the result.
-                await frameFromTop(page, box);
+                // From the top of the step: the box's own header, then the beta notice and the model warning above the modes.
+                //
+                // DESKTOP — coordinator's decision. The page (user/dashboard/risk.md, risk/whatif-simulation) wants the whole
+                // Simulation box in one image: the beta notice and the model warning, the five modes with Reshuffled history
+                // recommended, and after Simulate the cone with the terminal figures and «What this simulation assumed». With a
+                // result the box is about 1,100 px high (1090 measured), which no 720 px screen holds, so this shot gets a screen
+                // exactly as tall as the box plus the frame's margins — measured every combination, because the box's sentences
+                // wrap differently in each language, and logged (📐). The width (1280) and the scale stay the desktop project's,
+                // so the image sits beside the other desktop shots. The four Dashboard Risk blocks follow the same rule. The
+                // mobile project keeps its phone: the top of the step, with its beta notice.
+                if (viewport === 'desktop') {
+                    const fit = await fitViewportToBlock(page, box, SIMULATION_FRAME_MARGIN, projectScreen.height);
+                    console.log(`  📐 desktop/${lang}/${theme}: Simulation box ${fit.blockHeight} px → screen ${projectScreen.width}×${fit.viewportHeight}`);
+                }
+                await frameFromTop(page, box, SIMULATION_FRAME_MARGIN);
                 await settleShot(page, box, 'the simulation');
+                await expect(box.locator('[data-testid="risk-beta-banner"][data-scope="simulation"]'), 'the beta notice falls outside the shot').toBeInViewport({ratio: 1});
+                if (viewport === 'desktop') {
+                    await expect(box, 'the Simulation box is not whole in the shot').toBeInViewport({ratio: 1});
+                    await expect(box.getByTestId('risk-l4-provenance'), '«What this simulation assumed» falls outside the shot').toBeInViewport({ratio: 1});
+                }
                 await screenshot(page, viewport, lang, theme, 'risk', 'whatif-simulation');
 
                 await scrollBackToHeader(page);
             });
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
+        });
+    });
+
+    /**
+     * The Dashboard's Risk tab (user/dashboard/risk.md), `dashboard` category: one shot per block — How much can it hurt?,
+     * Am I as diversified as I think?, Am I being paid for this risk? (compared with the MSCI World Index) and What if…?
+     * after a crisis replay. The tab measures the gallery database's own portfolio, the admin's — every broker it owns —
+     * over the Dashboard's 1Y period: live answers, never the frozen report of the other Dashboard shots, whose broker ids
+     * are not the database's. Everything runs as the admin, read-only: the benchmark and the What if…? tools left open live
+     * in the browser's storage, written there before every load and removed at the end; the live-price poll and every sync
+     * are aborted (guardReadOnly). One shot edits what the page receives, where the gallery's year of prices cannot show
+     * the state: the crisis replay — fixtures/galleryRiskDashboard.ts says what, and why.
+     *
+     * Each block is framed from its top. On the desktop it then gets a screen as tall as the whole block plus the frame's
+     * margins, width (1280) and scale unchanged, and the whole block is asserted in the shot (fitScreenToRiskBlock): the
+     * simulation shot's rule, extended to these four blocks — the exception is the simulation and the four Dashboard Risk
+     * blocks, desktop only (coordinator's decision, provisional). The mobile project keeps its phone: a block taller than
+     * it shows its top part. Each shot asserts in frame the parts the page names first, and logs where every part lies
+     * (🖼️ ✓ whole · ◐ partly · ✗ out · – not drawn).
+     */
+    test.describe('Dashboard Risk', () => {
+        test.beforeEach(async ({page}) => {
+            await login(page, TEST_ADMIN);
+        });
+
+        /** The space the frame leaves above a block — and, on the desktop's fitted screen, below it: the simulation shot's. */
+        const RISK_FRAME_MARGIN = 8;
+
+        /**
+         * Load the Dashboard on its Risk tab and end on every answer the four levels read being in: the period, the
+         * capability catalogue and both base waves, the report the money lines are read from, and the benchmark picker's
+         * asset list and verdicts — so every name the levels print has been read, and nothing redraws for a late one.
+         */
+        async function openRiskTab(page: Page): Promise<Locator> {
+            // The live report, not the snapshot: the risk tab measures the gallery DB's own portfolio.
+            await navigateTo(page, '/dashboard');
+            await expect(page.getByTestId('date-preset-1y'), 'the Dashboard opened on another period than 1Y').toHaveAttribute('data-active', 'true', {timeout: 15_000});
+            await page.getByTestId('dashboard-tab-risk').click();
+            await expect(page.getByTestId('dashboard-risk-tab')).toBeVisible({timeout: 15_000});
+            await freezeAnimations(page);
+            const levels = page.getByTestId('risk-levels-panel');
+            await expect(levels).toHaveAttribute('data-catalog', 'ready', {timeout: 30_000});
+            await expect(levels).toHaveAttribute('data-busy', 'false', {timeout: 60_000});
+            await waitForSettled(page.getByTestId('dashboard-page'), 30_000);
+            await expect(levels.getByTestId('risk-l3-benchmark-select-control'), "the benchmark picker never had the asset list and the engine's verdicts").toHaveAttribute('data-eligibility', 'ready', {timeout: 30_000});
+            return levels;
+        }
+
+        /**
+         * The last steps before a shot: the pointer parked where nothing reacts to it and no tooltip left, every image of
+         * the block loaded, every chart's pixels still and no figure counting up, nothing animating or moving, no toast.
+         */
+        async function settleRiskShot(page: Page, region: Locator, what: string): Promise<void> {
+            await parkPointer(page);
+            await imagesSettled(region);
+            await canvasStill(region, what);
+            await textStill(region, what);
+            await waitForMotionSettled(region, what);
+            await waitForStillness(region, what);
+            await expectNoToast(page);
+        }
+
+        /** Log where each part of the shot lies on the screen: what the image holds, beyond what the test asserts in frame. */
+        async function logFrame(page: Page, shot: string, parts: Readonly<Record<string, Locator>>): Promise<void> {
+            console.log(`  🖼️  ${shot}: ${await framedParts(page, parts)}`);
+        }
+
+        /**
+         * DESKTOP — the simulation shot's rule, extended to the four Risk blocks (coordinator's decision, provisional; see the
+         * comment in 'risk what-if simulation on the dashboard'): the page wants the whole block in one image, and none fits
+         * the desktop project's 720 px. Called once the block is framed and settled — every verdict, chart and answer in it
+         * drawn and still — it measures the block, gives the screen its height plus the frame's margins (never under 720;
+         * width and scale unchanged), logs it (📐), frames the block again, settles it again — a resize may redraw a chart,
+         * which the settle waits out (canvasStill reads the pixels and the render counters) — and asserts the whole block in
+         * the shot. One call per test: reverting the decision is deleting those four calls.
+         */
+        async function fitScreenToRiskBlock(page: Page, block: Locator, shot: string, what: string): Promise<void> {
+            const fit = await fitViewportToBlock(page, block, RISK_FRAME_MARGIN, 720);
+            console.log(`  📐 ${shot}: Risk block ${fit.blockHeight} px → screen ${page.viewportSize()?.width}×${fit.viewportHeight}`);
+            await frameFromTop(page, block, RISK_FRAME_MARGIN);
+            await settleRiskShot(page, block, what);
+            await expect(block, `${what}: the block is not whole in the shot`).toBeInViewport({ratio: 1});
+        }
+
+        test('dashboard risk how much can it hurt - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh Dashboard load with the risk tab's two base waves over a year of the admin's
+            // portfolio and the benchmark picker's verdicts. About 15 s a combination on a quiet lane; risk answers slow down
+            // under load. On the desktop each combination settles twice: to measure the block, then on its fitted screen.
+            test.setTimeout(360_000); // 6 minutes
+            const viewport = getViewport(testInfo);
+            const guard = await guardReadOnly(page);
+            // No benchmark: L3 asks no comparison, which this shot does not show.
+            await seedDashboardBenchmark(page, await currentUserId(page), null);
+            await navigateTo(page, '/dashboard');
+            await selectOneYearPreset(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const levels = await openRiskTab(page);
+                const level = levels.getByTestId('risk-level-1');
+                await expect(level.getByTestId('risk-l1-loading')).toHaveCount(0);
+                await expect(level.getByTestId('risk-level-1-alert'), 'a measurement of How much can it hurt? did not come back').toHaveCount(0);
+
+                // The cards, from A bad day to The worst fall, each with its amount — the loss applied to the net worth, so the
+                // Dashboard's report reached the tab — and the detail lines the page names: the worst day actually seen under A
+                // bad day; the fall's duration, the rise it needs, the drawdown at risk and the average beyond it under The
+                // worst fall.
+                const cards = level.getByTestId('risk-l1-cards');
+                for (const row of ['day', 'month', 'worst'] as const) {
+                    await expect(cards.getByTestId(`risk-l1-card-${row}-caption`), `the ${row} card has no amount: the Dashboard's net worth never reached the tab`).toHaveText(/\d/, {timeout: 20_000});
+                }
+                for (const line of ['risk-l1-worst-realization', 'risk-l1-duration-worst', 'risk-l1-recovery-worst', 'risk-l1-drawdown-at-risk', 'risk-l1-conditional-drawdown-at-risk']) {
+                    await expect(cards.getByTestId(line), `the detail line ${line} is not drawn`).toBeVisible();
+                }
+                await expect(cards.locator('[data-columns]'), 'the card grid has not measured its columns').toHaveAttribute('data-columns', /^\d+$/);
+
+                // Time spent below the peak, drawn, with its ulcer index; the distribution of daily returns, with its VaR threshold.
+                const underwater = level.getByTestId('risk-l1-underwater');
+                const underwaterChart = underwater.getByTestId('risk-l1-underwater-chart');
+                await waitForChart(underwaterChart, 30_000);
+                await expect(underwater.getByTestId('risk-l1-ulcer')).toBeVisible();
+                const histogram = level.getByTestId('risk-l1-histogram');
+                await expect(histogram.getByTestId('risk-l1-histogram-bars')).toHaveAttribute('data-bin-count', /^[1-9]\d*$/);
+                await expect(histogram.getByTestId('risk-l1-histogram-cut'), 'the distribution of daily returns has no VaR threshold').toBeVisible();
+
+                // «Currently down from the peak» is drawn only while the portfolio stands below its last high: a fact of the
+                // day's prices, not of the page. It comes from the answer the chart above is drawn from, already in, so its
+                // presence is read, not awaited; drawn, it carries its amount and its peak's date. The log says which it was.
+                const current = cards.getByTestId('risk-l1-card-current');
+                if ((await current.count()) > 0) {
+                    await expect(current.getByTestId('risk-l1-card-current-caption'), 'the current fall has no amount').toHaveText(/\d/);
+                    await expect(current.getByTestId('risk-l1-current-since')).toBeVisible();
+                }
+
+                // From the top of the block: its title and the first card in frame on every screen.
+                await frameFromTop(page, level, RISK_FRAME_MARGIN);
+                await settleRiskShot(page, level, 'How much can it hurt?');
+                // DESKTOP — the simulation shot's rule (coordinator's decision, see its comment): a screen as tall as the whole block.
+                if (viewport === 'desktop') await fitScreenToRiskBlock(page, level, `desktop/${lang}/${theme}/dashboard/risk-hurt`, 'How much can it hurt?');
+                for (const part of [level.getByTestId('risk-level-1-title'), cards.getByTestId('risk-l1-card-day')]) await expect(part, 'the top of the block falls outside the shot').toBeInViewport({ratio: 1});
+                await logFrame(page, `${viewport}/${lang}/${theme}/dashboard/risk-hurt`, {
+                    cards,
+                    'currently down': current,
+                    'below the peak': underwaterChart,
+                    'ulcer index': underwater.getByTestId('risk-l1-ulcer'),
+                    distribution: histogram.getByTestId('risk-l1-histogram-bars'),
+                    'VaR threshold': histogram.getByTestId('risk-l1-histogram-cut'),
+                });
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'risk-hurt');
+
+                await scrollBackToHeader(page);
+            });
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
+        });
+
+        test('dashboard risk diversification - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh Dashboard load with the two base waves and the picker's verdicts, the matrix
+            // drawn, then a second of stillness for the cards' count-up. About 15 s a combination on a quiet lane. On the
+            // desktop each combination settles twice: to measure the block, then on its fitted screen.
+            test.setTimeout(360_000); // 6 minutes
+            const viewport = getViewport(testInfo);
+            const guard = await guardReadOnly(page);
+            // No benchmark: L3 asks no comparison, which this shot does not show.
+            await seedDashboardBenchmark(page, await currentUserId(page), null);
+            await navigateTo(page, '/dashboard');
+            await selectOneYearPreset(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const levels = await openRiskTab(page);
+                const level = levels.getByTestId('risk-level-2');
+                await expect(level.getByTestId('risk-l2-loading')).toHaveCount(0);
+                await expect(level.getByTestId('risk-level-2-alert'), 'a measurement of Am I as diversified as I think? did not come back').toHaveCount(0);
+
+                // The lead, written only when one holding carries at least 5 points more of the risk than of the money
+                // (levelHelpers.ts, leadDivergence) — on the seeded portfolio, the crypto. Then the three cards, laid out once
+                // measured, and the line on what the level does not cover.
+                const lead = level.getByTestId('risk-level-2-lead');
+                await expect(lead, 'no holding stands out: the lead sentence the page shows is not written').toBeVisible();
+                const metrics = level.getByTestId('risk-l2-metrics');
+                for (const card of ['effective-assets', 'diversification-ratio', 'uncovered']) await expect(metrics.getByTestId(`risk-l2-card-${card}`)).toBeVisible();
+                await expect(metrics, 'the card grid has not measured its columns').toHaveAttribute('data-columns', /^\d+$/);
+                await expect(level.getByTestId('risk-l2-uncovered')).toBeVisible();
+
+                // The holdings, each with its weight, its share of the risk and its two-sided bar.
+                const holdings = level.getByTestId('risk-l2-rows');
+                const rows = holdings.locator('[data-testid^="risk-l2-row-"]');
+                await expect.poll(() => rows.count(), {message: 'the list of holdings is empty'}).toBeGreaterThan(1);
+                const rowCount = await rows.count();
+                for (const part of ['weight', 'contribution', 'divergence-bar']) await expect(holdings.locator(`[data-testid^="risk-l2-${part}-"]`), `a holding has no ${part}`).toHaveCount(rowCount);
+
+                // Which of these are the same bet?: the matrix drawn over the holdings, and its two lists of pairs.
+                const matrix = level.getByTestId('risk-l2-correlation');
+                await waitForChart(matrix, 30_000);
+                const heatmap = matrix.getByTestId('risk-correlation-heatmap');
+                await expect.poll(async () => idSet(await heatmap.getAttribute('data-asset-order')).length, {message: 'the matrix draws fewer than two holdings'}).toBeGreaterThan(1);
+                await expect(matrix.getByTestId('risk-correlation-pairs-correlated')).toBeVisible();
+                await expect(matrix.getByTestId('risk-correlation-pairs-offsetting')).toBeVisible();
+
+                // From the top of the block: its title, the lead and the three cards in frame on every screen.
+                await frameFromTop(page, level, RISK_FRAME_MARGIN);
+                await settleRiskShot(page, level, 'Am I as diversified as I think?');
+                // DESKTOP — the simulation shot's rule (coordinator's decision, see its comment): a screen as tall as the whole block.
+                if (viewport === 'desktop') await fitScreenToRiskBlock(page, level, `desktop/${lang}/${theme}/dashboard/risk-diversification`, 'Am I as diversified as I think?');
+                for (const part of [level.getByTestId('risk-level-2-title'), lead, metrics]) await expect(part, 'the top of the block falls outside the shot').toBeInViewport({ratio: 1});
+                await logFrame(page, `${viewport}/${lang}/${theme}/dashboard/risk-diversification`, {
+                    cards: metrics,
+                    holdings,
+                    matrix: heatmap,
+                    pairs: matrix.getByTestId('risk-correlation-pairs'),
+                });
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'risk-diversification');
+
+                await scrollBackToHeader(page);
+            });
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
+        });
+
+        test('dashboard risk being paid against a benchmark - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh Dashboard load with the two base waves and the picker's verdicts, then the MSCI
+            // World comparison, asked once the picker confirms the stored choice. About 20 s a combination on a quiet lane. On
+            // the desktop each combination settles twice: to measure the block, then on its fitted screen.
+            test.setTimeout(420_000); // 7 minutes
+            const viewport = getViewport(testInfo);
+            const guard = await guardReadOnly(page);
+            const userId = await currentUserId(page);
+            const benchmarkId = await assetIdNamed(page, DASHBOARD_BENCHMARK_NAME);
+            // «Compared with»: the MSCI World Index, chosen in the browser before every load — never in the database.
+            await seedDashboardBenchmark(page, userId, benchmarkId);
+            await navigateTo(page, '/dashboard');
+            await selectOneYearPreset(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const levels = await openRiskTab(page);
+                const level = levels.getByTestId('risk-level-3');
+                await expect(level.getByTestId('risk-l3-loading')).toHaveCount(0);
+
+                // The choice confirmed — the index is priced over the whole period, so the engine lets it be measured — and
+                // its comparison back: nobody holds the index, so the table adds its row under the Portfolio's.
+                const benchmark = level.getByTestId('risk-l3-benchmark');
+                await expect(benchmark).toHaveAttribute('data-benchmark-state', 'set', {timeout: 20_000});
+                await expect(benchmark).toHaveAttribute('data-benchmark-id', String(benchmarkId));
+                const table = level.getByTestId('risk-l3-table');
+                await expect(table, 'the MSCI World comparison did not come back').toHaveAttribute('data-reference-count', '2', {timeout: 60_000});
+                const portfolioRow = table.locator('[data-testid="risk-l3-row-ref-name"][data-reference="portfolio"]');
+                const benchmarkRow = table.locator(`[data-testid="risk-l3-row-ref-name"][data-reference="benchmark"][data-asset-id="${benchmarkId}"]`);
+                await expect(portfolioRow).toBeVisible();
+                await expect(benchmarkRow).toBeVisible();
+                // The table opens on them, in that order: nobody sorted it.
+                await expect
+                    .poll(() => table.locator('[data-testid="risk-l3-row-ref-name"], [data-testid="risk-l3-row-name"]').evaluateAll((cells) => cells.slice(0, 2).map((cell) => cell.getAttribute('data-reference'))), {
+                        message: 'the table does not open on the Portfolio and the benchmark',
+                    })
+                    .toEqual(['portfolio', 'benchmark']);
+                // Beta and correlation, the comparison's own columns, measured for the portfolio.
+                for (const column of ['beta', 'correlation']) await expect(table.locator(`[data-testid="risk-l3-row-ref-${column}"][data-measured="true"]`), `the portfolio's ${column} is not measured`).toHaveCount(1);
+                await expect(level.getByTestId('risk-level-3-alert'), 'a measurement of Am I being paid for this risk? did not come back').toHaveCount(0);
+
+                // The chart: every dot placed — the holdings', the portfolio's, the benchmark's diamond — and the dashed line
+                // drawn through the benchmark, as the note under the chart says.
+                const scatter = level.getByTestId('risk-l3-scatter');
+                await waitForChart(scatter, 30_000);
+                await expect(scatter).toHaveAttribute('data-dropped-count', '0');
+                const lineNote = level.getByTestId('risk-l3-scatter-line');
+                await expect(lineNote).toHaveAttribute('data-anchor', 'benchmark');
+
+                // From the top of the block: its title, «Compared with» and the table's first two rows in frame on every screen.
+                await frameFromTop(page, level, RISK_FRAME_MARGIN);
+                await settleRiskShot(page, level, 'Am I being paid for this risk?');
+                // DESKTOP — the simulation shot's rule (coordinator's decision, see its comment): a screen as tall as the whole block.
+                if (viewport === 'desktop') await fitScreenToRiskBlock(page, level, `desktop/${lang}/${theme}/dashboard/risk-paid`, 'Am I being paid for this risk?');
+                for (const part of [level.getByTestId('risk-level-3-title'), benchmark, portfolioRow, benchmarkRow]) await expect(part, 'the top of the block falls outside the shot').toBeInViewport({ratio: 1});
+                await logFrame(page, `${viewport}/${lang}/${theme}/dashboard/risk-paid`, {table, chart: scatter, 'line note': lineNote});
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'risk-paid');
+
+                await scrollBackToHeader(page);
+            });
+            await forgetDashboardRiskMemory(page, userId);
+            expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
+        });
+
+        test('dashboard risk what-if crisis replay (injected window) - all languages and themes', async ({page}, testInfo) => {
+            // Eight combinations, each a fresh Dashboard load with the two base waves and the picker's verdicts, then What
+            // if…? opened (the scenario catalogue) and one replay; the first replay also asks the portfolio's deepest fall.
+            // About 20 s a combination on a quiet lane. On the desktop each combination settles twice: to measure the block,
+            // then on its fitted screen.
+            test.setTimeout(480_000); // 8 minutes
+            const viewport = getViewport(testInfo);
+            const guard = await guardReadOnly(page);
+            const userId = await currentUserId(page);
+            await forgetWhatIfTools(page, userId);
+            // No benchmark: L3 asks no comparison, which this shot does not show.
+            await seedDashboardBenchmark(page, userId, null);
+            const crisis = await historicalReplayPreset(page, CRISIS_PRESET_ID);
+            // INJECTED (galleryRiskDashboard.ts, injectCrisisReplay): the Global Financial Crisis's replay, asked over the
+            // crisis's own dates, is answered with the engine's own answer over the portfolio's deepest fall in the page's
+            // period. The gallery's prices cover about the last year: replayed for real, the crisis leaves every holding out.
+            const injection = await injectCrisisReplay(page, crisis);
+            await navigateTo(page, '/dashboard');
+            await selectOneYearPreset(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const levels = await openRiskTab(page);
+
+                // What if…? is born closed, and with no tool open (the init script forgets the ones left open): opened from its
+                // title, then the replay added the way a user adds it, the Add: buttons left for the other two tools.
+                const whatIf = levels.getByTestId('risk-level-4');
+                await expect(whatIf).toHaveAttribute('data-open', 'false');
+                await whatIf.getByTestId('risk-level-4-toggle').click();
+                await expect(whatIf).toHaveAttribute('data-open', 'true');
+                const tools = whatIf.getByTestId('risk-l4-tools');
+                await expect(tools).toBeVisible();
+                const box = whatIf.getByTestId('risk-l4-replay');
+                await expect(box, 'a What if…? tool came back open').toHaveCount(0);
+                await tools.getByTestId('risk-l4-add-replay').click();
+                await expect(box).toBeVisible();
+                await expect(tools.getByTestId('risk-l4-add-replay')).toHaveCount(0);
+                for (const tool of ['shock', 'simulation']) await expect(tools.getByTestId(`risk-l4-add-${tool}`)).toBeVisible();
+
+                // The crisis chosen in Preset — it sets the period to the crisis's dates, which the compact fields print as
+                // they are — then Run replay. The answer is the engine's over the deepest fall; the request it answers proves
+                // the box asked the crisis's own dates.
+                const replay = box.getByTestId('risk-replay');
+                await chooseReplayPreset(replay, crisis.id);
+                const period = replay.getByTestId('risk-replay-period');
+                await expect(period.getByTestId('date-range-input-start'), "the crisis did not set the period's start").toHaveValue(crisis.start);
+                await expect(period.getByTestId('date-range-input-end'), "the crisis did not set the period's end").toHaveValue(crisis.end);
+                const run = replay.getByTestId('risk-replay-run');
+                await expect(run).toBeEnabled();
+                const editedBefore = injection.edited;
+                await run.click();
+                await expect.poll(() => injection.edited - editedBefore + injection.problems.length, {message: "the box never asked the crisis's replay: the preset did not set its dates", timeout: 120_000}).toBeGreaterThanOrEqual(1);
+                expect(injection.problems, 'the crisis replay was not answered over the deepest fall').toEqual([]);
+                const fall = injection.fall;
+                if (!fall || injection.total === null) throw new Error('the edited replay names no fall or no total');
+                console.log(`  🧪 ${viewport}/${lang}/${theme}/dashboard/risk-whatif: ${crisis.start}…${crisis.end} answered over the deepest fall ${fall.start}…${fall.end} (total ${(injection.total * 100).toFixed(2)}%, ${injection.rows} rows)`);
+
+                // The answer on screen: the total sentence, and one row per holding replayed with what it did to the whole.
+                const total = replay.getByTestId('risk-replay-total');
+                await expect(total).toBeVisible({timeout: 30_000});
+                await expect(run).toBeEnabled({timeout: 30_000});
+                await expect(replay.getByTestId('risk-replay-nothing')).toHaveCount(0);
+                const tornado = replay.getByTestId('risk-replay-tornado');
+                await expect(tornado.getByTestId('risk-replay-tornado-row')).toHaveCount(injection.rows);
+                await expect(tornado.getByTestId('risk-replay-tornado-contribution')).toHaveCount(injection.rows);
+
+                // From the top of the block: its title, the Add: buttons, the crisis, its period and the total sentence in frame
+                // on every screen; on the desktop, the table's first row as well.
+                await frameFromTop(page, whatIf, RISK_FRAME_MARGIN);
+                await settleRiskShot(page, whatIf, 'What if…?');
+                // DESKTOP — the simulation shot's rule (coordinator's decision, see its comment): a screen as tall as the whole block.
+                if (viewport === 'desktop') await fitScreenToRiskBlock(page, whatIf, `desktop/${lang}/${theme}/dashboard/risk-whatif`, 'What if…?');
+                const framed = [whatIf.getByTestId('risk-level-4-title'), tools, replay.getByTestId('risk-replay-preset'), period, total];
+                if (viewport === 'desktop') framed.push(tornado.getByTestId('risk-replay-tornado-row').first());
+                for (const part of framed) await expect(part, 'a part the page names falls outside the shot').toBeInViewport({ratio: 1});
+                await logFrame(page, `${viewport}/${lang}/${theme}/dashboard/risk-whatif`, {
+                    notice: whatIf.getByTestId('risk-level-4-alert'),
+                    'left out': replay.getByTestId('risk-replay-excluded'),
+                    total,
+                    table: tornado,
+                });
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'risk-whatif');
+
+                await scrollBackToHeader(page);
+            });
+            await forgetDashboardRiskMemory(page, userId);
             expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started').toEqual([]);
         });
     });

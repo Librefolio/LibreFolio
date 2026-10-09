@@ -555,7 +555,7 @@
 
 ## Batch 4 — base `57f3d96a8` (merge of `dev_release2`, train 14, into M)
 
-### 17. ✅ Group 5 and two tooling fixes: combined revision, `--no-populate`, gallery fallback under `serve` — 2026-10-08
+### 17. ✅ Group 5 and two tooling fixes: combined revision, `--no-populate`, gallery fallback under `serve` — 2026-10-08 (committed `6a9000898…3a8e9a05d`, train 18 `70d02cd8e`)
 
 > **Note implementazione**:
 >
@@ -701,3 +701,387 @@
 > - Lane DB: 0 `provider:*` price rows; prices and `fx_rates` only from the 15:00 UTC populate; 0 disposable accounts, 0 marked brokers. Ports 6158 and 6168 free.
 > - Prettier ok on the 7 frontend files. `tsc` e2e: only the 2 known errors. `git diff --check`: clean.
 > - Build strict and check-links were verified at 16:42 (0 WARNING/ERROR, baseline links). The later changes touch only e2e files.
+
+## Batch 5 — images in the user pages (base `70d02cd8e`, train 18, branch fast-forwarded; Q's waves 1 and 2 integrated)
+
+### 18. ✅ User-page images, risk dashboard, group 2, PAC, provider compare, Danske reshoot, reduced motion, tall shots — 2026-10-08/09
+
+> **Note implementazione**:
+>
+> **Coordinator decisions:**
+> - Scope:
+>   - risk pages: `user/assets/correlation` (7), the three `risk-metrics` theory pages, `user/dashboard/risk` (5);
+>   - group 2 (P&L and privacy);
+>   - PAC and provider-compare;
+>   - the `file-menu` reshoot with the real cash export, plus L's sentence (#26) on `danske-bank`;
+>   - retakes of Coinbase and `/transactions` with P's seed (ETH staking as ADJUSTMENT, Coinbase cash −5 USD).
+> - Out: `dashboard/data-quality-sync-rates`. No user page has its placeholder since train 15; the gallery entry is enough.
+> - **Taller viewport for `risk/whatif-simulation`, desktop only:** 1280 wide, same scale, height just enough for the whole Simulation box (~1000).
+>   - Why: `user/dashboard/risk` asks for the whole box in one image, and at 720 px the ~930 px box does not fit.
+>   - Mobile keeps the phone viewport and the top of the step, which is what the mobile gallery entry describes.
+> - `user/getting-started` (3) and `user/settings/preferences` (2) are now M's. Wave 2 is integrated, and wave 3 does not touch them. Only the placeholders are replaced; Q's text stays.
+> - The four `dashboard/risk-*` also go in the gallery's «📉 Risk Analysis» section, with the terms of `user/dashboard/risk`.
+> - **Organisation:** one checkpoint at the end of the batch (integration after the coverage run, ~22:00), one test-author at a time on `gallery.spec.ts`, docs-writer in parallel on the pages. Until ~22:00, gallery with 1 worker on lane 6158.
+>
+> **Placeholders at the base:** 71 in total.
+> - Gallery: 14 per page (growth-pnl 3, privacy-masked 1, create-provider-compare 1, `tools/pac-*` 9).
+> - User and theory pages: correlation 7, theory 3, dashboard/risk 5, dashboard/charts 4, preferences 2, getting-started 3, create-edit 1, pac-allocator 9, danske-bank 1.
+> - The 8 broker-portal placeholders stay until after 1.2.
+>
+> **In progress:**
+> - test-author A: the tall simulation and the four `dashboard/risk-*`.
+> - docs-writer 1: correlation, theory, the `risk.en.md` simulation, Danske (`file-menu` and L's sentence), then getting-started and preferences (onboarding).
+> - test-author C, preparation only: PAC (9) and provider-compare in two new modules, `galleryPac.ts` and `galleryProviderCompare.ts`. It doesn't touch `gallery.spec.ts`: the `test(...)` blocks go in when the spec is free.
+> - test-author B, preparation only (read-only, code in its report): group 2, plus the `file-menu` reshoot with `[DANSKE_SAMPLES.custody, DANSKE_SAMPLES.cash]`.
+>   - The new premise: Danske reads the file, the generic CSV does not.
+>   - The menu must have no `read-alone`.
+>   - `writeExtendedCashStatement`, used only by that scenario, gets removed.
+>   - It edits the spec after A.
+>
+> **Group 2 checks (before the brief):**
+> - I's batch is in the base: `bc08101d6 feat(charts): gold dividends, period axis labels`, integrated in train 13. Group 2 is unblocked.
+> - Hide amounts lives in `localStorage` only (`privacyStore.svelte.ts`), so it does not leak between tests. The header's `privacy-toggle` is visible on mobile too (no `hidden` class).
+> - The mode and the P&L submode persist in `localStorage` (`dashboard-growth-pnl-submode`). Income opens at `1M` (`INCOME_OPENING_WIDTH`).
+>   - So group 2 goes in a separate test after `main dashboard`, which stays untouched, with the same framing as `main`: the three P&L shots join its carousel.
+> - **The real fixture (D1: nothing invented) limits what the shots can show:**
+>   - `total_pnl` is positive on all 366 days (≈1 196 → 6 268 EUR), so the P&L line is all green. The dashed grey line is at the first visible day's P&L, not at zero, so it is always visible.
+>   - `income_history`: dividends are 0 in all 12 months; interest, fees (`cost_history`), deposits and the split of purchases (`acquisition_funding`) are there.
+>   - `pnl_candles.hypothetical: true`, so the Synthetic caption is there.
+>   - The pages' text describes the function in general and stays true. The alt texts must not promise red or dividends.
+>
+> **docs-writer 1, finished (2 rounds):**
+> - Round 1: 11 placeholders replaced.
+>   - `correlation` 7, the 3 theory pages (`benchmark-selection`, `historical-replay`, `simulation-modes`), `risk.en.md` simulation, `danske-bank` `file-menu`.
+>   - L's sentence, as its own paragraph, in «🧺 Upload both files together».
+>   - Markup: the instructions' template, 700px. No `.it/.fr/.es` versions on those pages, so no translation debt.
+> - Round 2: `getting-started` (welcome-setup 600px, core-tour-step and contextual-guide 700px) and `preferences` `onboarding-replay` (600px, no `style` like the rest of `user/settings/`).
+>   - Q's text untouched. `privacy-masked` is still a placeholder, now at about line 109.
+>   - Translation debt on both pages: the sections were already ahead of the translations after Q's wave 2. Nothing stamped.
+> - Review: every alt text checked against the images in the base. The `lab-correlation` alt (0.94 Roma↔Milano, The ones that offset empty) matches today's PNG.
+>   - The −0.30 threshold is about 5σ from independent mock series, so the alt stays true when regenerated.
+>   - The `whatif-simulation` and `file-menu` alts describe the reshoots, which are still to come.
+>
+> **Two decisions raised by docs-writer 1, settled by M (fix tied to L's sentence):**
+> 1. **«Continue» or «Parse»:** in Select Files the disabled button is **Parse (N)** (`import-wizard-parse`, `disabled={!step2CanParse}`, `ImportWizardModal.svelte:338/5280`). No «Continue» exists in that step, and the page already says **Parse** (lines 33 and 51).
+>    - So L's sentence on the page now says **Parse**.
+>    - The product message `importWizard.reportSet.ungroupedBlocks` says «Continue…» in all 4 languages. Reported to the coordinator for L (#26).
+> 2. **Duplicate sentence:** Q's «Exports uploaded with LibreFolio 1.1.0 or earlier cannot: upload the two again, together.» repeated L's paragraph with another version threshold, so it was removed. «before 1.2» stays, consistent with the CHANGELOG (1.1.0 → 1.2.0).
+>
+> **test-author B, preparation finished (code in its report, nothing written).** M's review:
+> - Accepted:
+>   - `switchPnlSubmode` and the render-pass helpers, via `__lfChart` as in `dashboard.spec.ts`;
+>   - the Candles → Income → Line order. Candles take their opening width only on the first entry after a load, and Income always reopens on 1M. The comment at `GrowthChart.svelte:89-90` says «every entry»: a note for I, not blocking;
+>   - `reducedMotion: 'reduce'` only in the growth test, so the Synthetic caption's marquee stays still on mobile.
+> - Privacy:
+>   - the frame has the KPI row under the header, pinned by the focused eye button: the eye, the masked KPIs, and on desktop the chart's header with its masked axis;
+>   - no tooltip, because there's no deterministic room for it;
+>   - the masking checks read `•••` and the absence of digits: that's data, not a translation, as in `privacy-masking.spec.ts`;
+>   - no product hook.
+> - File menu: a real pair; premise DANSKE ∈ and GENERIC ∉ `compatible_plugins`; the menu has `preview`, `remove-from-set` and `delete`, and no `read-alone-*` at all. `writeExtendedCashStatement` is removed (no other user).
+> - Docs crop `.chart-crop-container` (Q's `extra.css`): 580×420 at (−280, −290), so image rows 290–710.
+>   - B estimates the Candles caption at y≈696–712: the bottom 2 px could be cut off. Checked on the real PNG before deciding.
+> - Texts tied to the reshoot, already fixed:
+>   - the `how-to.en.md:80` alt: «Preview, Remove from the set and Delete», no more «Read alone with Generic CSV». The IT/FR/ES translations don't have that image, so there's no stamp;
+>   - the description of the gallery entry `🗃️ File Menu`, desktop and mobile.
+>   - The `danske-bank` alt already matched the new menu.
+> - Order: B writes to the spec only after A's lane run, which reads the spec.
+>
+> **Lane run 1 — A's code (fresh populate, 1 worker, port 6158):** `-f 'Dashboard Risk|what-if simulation'`, **10/10 passed in 9.9 min**, log `release-pipeline/runs/b5_runA_risk.log`. Load 15–30 at the start, 11 at the end.
+> - Simulation, desktop: box **1090 px**, so the screen is **1280×1106** in all 8 combinations (A's estimate was ~930). The whole box is in frame, with notices, modes, cone and «What this simulation assumed». Checked on `desktop/en/light`.
+> - `risk-whatif`: GFC chosen and dates 2007-10-09 → 2009-03-09 shown; the request window is moved to the portfolio's deepest fall (2026-09-29…2026-10-04).
+>   - The engine's real answer: total −0.46%, 7 rows, KRW left out (no KRW/EUR rate), «Historical replay: Partial» notice. Same in all combinations.
+>   - **Product nit** (Risk/F backlog, not blocking): the sentence «would have ended the period at −0.46% -€273.85» mixes U+2212 (percent) and the hyphen (amount).
+> - At 720 px on desktop: `risk-hurt` VaR threshold ✗; `risk-diversification` matrix and pairs ✗; `risk-paid` chart ◐; `risk-whatif` table ◐. On mobile, the top of each block, as expected.
+>
+> **Coordinator decision (provisional, the developer is away until ~21:00): option 1.** The 4 desktop `dashboard/risk-*` get the screen as tall as the block, 1280 wide, same scale; mobile unchanged.
+> - To make it reversible: one line per test, `if (viewport === 'desktop') await fitScreenToRiskBlock(…)`, with a reference to the simulation's comment.
+> - If the developer chooses 720: delete the 4 lines and retake the 4 shots.
+> - The alt texts are written on the whole block either way.
+> - **GO A** at 20:03; the mobile shots from run 1 are final.
+> - A done at 20:06: `RISK_FRAME_MARGIN = 8`, `fitScreenToRiskBlock` (fit, then 📐 log, reframe, double settle, whole block ratio 1), one desktop line per test; `canvasStill` also compares every `[data-chart-renders]`; timeouts 360/360/420/480 s; docblocks updated (exception = simulation + 4 Dashboard Risk blocks, desktop only, provisional). Prettier/tsc ok.
+> - **GO B** at 20:06, done at 20:08: two new tests after `main dashboard` (untouched), file-menu with the real pair, `writeExtendedCashStatement` removed. Prettier ok, tsc 2 known errors, `-f` verified on 111 titles: only its 3 tests.
+> - **Lane run 2a** (20:09, `--no-populate` on run 1's DB, so the desktop and mobile risk shots have the same data): `-f '(desktop .*Dashboard Risk)|growth P&L submodes|privacy mode|report set file menu'`. Log `runs/b5_run2a_riskdesk_group2.log`.
+>   - **10/10 passed in 7.3 min**, load ~9; ports 6158/6168 free afterwards.
+>   - Desktop Risk block → screen: hurt 801 → **1280×817**, diversification 1269 → **1280×1285**, paid 1149 → **1280×1165**, what-if 892 → **1280×908**. All 🖼️ parts ✓.
+>   - Candles open on **3D** in all 16 combinations; Income on 1M.
+>   - Images checked:
+>     - risk-diversification: the whole block, matrix and pairs included;
+>     - risk-paid: the table with Portfolio and MSCI World, the chart, the notes;
+>     - risk-whatif: the whole block, 7 rows;
+>     - risk-hurt: the whole block, but see the bug below;
+>     - growth-pnl-line: all green, grey dashed reference line, dashed directa and Recrowd lines;
+>     - candles: 3D–6M picker, period labels, Synthetic caption at y≈697–709, inside the `chart-crop-container` crop (rows 290–710);
+>     - income: 1M, interest, fees, deposits, purchases; no dividends, as in the data;
+>     - privacy-masked: `•••` with sign and currency, percentages readable, the chart's axis masked on desktop;
+>     - file-menu: Preview, Remove from the set, Delete. The cash row is `danske_bank-cash.csv`.
+>   - Accepted: the eye button's **focus ring** in `privacy-masked`, blue on desktop and amber on mobile. The focus is what keeps the header on screen, it's what a keyboard user sees, and it highlights the subject.
+>   - Accepted: the mobile candles caption is cut on the right, because reduced motion stops the marquee.
+> - **Product bug** (reported to the coordinator for Risk/F; the test needs no change):
+>   - In `risk-hurt`, «Distribution of daily returns» has only 2 bars, plus «VaR threshold at −0.0%» (negative zero).
+>   - Cause: `return_histogram` (`backend/app/services/risk/metrics.py:867`) takes the FD width from `np.histogram_bin_edges(bins="fd")`. With IQR = 0 and a non-zero range, NumPy gives a single bin over the whole range. The code only handles the zero-range case.
+>   - In the test DB the admin's portfolio has had positions only since late summer, so most daily returns are 0. The mock prices are dense: 273–381 days per asset, checked read-only on the lane DB.
+>   - The CI regenerates the PNGs at release, so once the bug is fixed the shot is right on its own.
+> - **docs-writer 1, round 3** (20:20): the 4 `dashboard/risk-*` in the page and in the gallery (Risk Analysis section opened by the Dashboard's 5 entries, «🎲 Simulation» moved after «🔮 What If…?»), and group 2.
+>   - In `charts.en.md` the 3 P&L shots use the same crop as `main`, through a single-item carousel: the JS ignores carousels with ≤1 item (`gallery-img-loader.js:195`), and the crop is CSS alone (`extra.css:1043-1075`, `!important`).
+>   - **Done at 20:36.** Every alt written after looking at the PNG (desktop en/light, mobile en/light for the mobile gallery). No numbers; nothing the images don't show (no red, no Dividend bars, no split of purchases, no tooltip, no «Currently down…» card, no bug histogram).
+>     - `risk.en.md` 19–21/47–49/71–73/98–100, at 700px.
+>     - Gallery: Risk Analysis opens with Hurt → Diversified → Paid → What If → Simulation, then the lab's 7. Mobile descriptions match the mobile PNGs (top of the block).
+>     - Growth carousel: +3 items, and the sentence now covers P&L. «### 🙈 Privacy Mode» uses the placeholder's sentence.
+>     - `charts.en.md`: privacy at 24–26 (700px), P&L at 73–77/85–89/113–117 (crop).
+>     - `preferences.en.md` 109–111 at 600px, like the page's other images.
+>   - Translation debt: `charts`, `preferences` and the gallery IT/FR/ES already lacked these sections. Nothing stamped. `risk` is English-only.
+>   - M review: gallery markup (carousel `img` items, `---` rule) and single-item carousels checked; `git diff --check` clean.
+> - **Lane run 2b** (20:17, fresh populate, P's seed): `-f 'Screenshots (Brokers|Transactions) '`, **58 tests**; the form variants count one per combination. Log `runs/b5_run2b_retakes.log`.
+> - **test-author C, preparation finished** (20:20): `galleryPac.ts` (784 lines) and `galleryProviderCompare.ts` (335). Prettier ok, tsc 2 known errors. Not yet in the spec: it writes after run 2b.
+>   - PAC: real data, read only. One draft per test, two tests (steps, result). The draft survives language and theme changes (store and `ToolHost`, checked in the code); every result shot asserts `data-stale=false`.
+>   - Provider-compare: an invented fund (`IE000NWGE006`, ticker `NWGE.MI`). Search, REST fallback and probe are answered by routes registered after the guard, validated on the Zod schemas; everything else uses `route.fallback()`. Nothing is created.
+>   - Scan: no `waitForTimeout`, no `isVisible({timeout})`, no text or CSS selectors, only GETs via `page.request`.
+>   - **Open question to the coordinator** (20:24): extend the tall-screen rule to `tools/pac-result-proof` (~1100 px) and to `assets/create-provider-compare` (body `max-h-[60vh]`, content ~700 px, so ~1200 px of screen).
+>     - **Coordinator decision (20:27, provisional):** yes, the same rule, desktop only, one line per test. The 6 shots go to the developer as a single question.
+>     - C changes only its two modules during run 2b. The spec gets written on «GO C SPEC».
+>     - The tall screen is restored to 1280×720 after the tall shot, within the same combination: the other shots of the same test (`pac-result`, `pac-result-plan`, the asset form) must stay at 720.
+>   - Accepted: «Calculation data (N)» stays closed in Review, otherwise Calculate goes off screen.
+>   - **C, update after the decision** (20:33): `fitScreenToPacProof` and `fitScreenToCompareDialog`.
+>     - The compare dialog: H = max(720, ⌈(scrollHeight+1)/0.6⌉, ⌈dialog/0.9⌉), then wait until the body stops scrolling.
+>     - Plus `restorePacScreen` and `restoreCompareScreen`, which put back the screen the fit found; they do nothing on mobile, because `setViewportSize` would also overwrite the emulated screen there.
+>     - One `if (viewport === 'desktop')` line per test, with a comment pointing to the simulation's decision.
+>     - Correction: the mobile viewport is **430×740** (the iPhone screen is 430×932).
+> - **Marquee caught mid-scroll** (found in the run 2b retakes; it predates this batch):
+>   - `scrollOnOverflow` (`frontend/src/lib/actions/scrollOnOverflow.ts`) starts 2 s after mount. `freezeAnimations()` doesn't stop it, because it's JS.
+>   - `broker list` waits exactly 2000 ms, so the card names are always mid-scroll («harle», «oinba», «EGIR»).
+>   - The same marquee is in KpiCard, AssetCard, RiskMetricCard, AssetPickerPanel, ImportWizardModal, AssetGroupStep, CorrelationPairsList, the asset detail page and the PAC.
+>   - Under `prefers-reduced-motion: reduce` it doesn't start (`scrollOnOverflow.ts:49`).
+>   - **Now:** one `emulateMedia({reducedMotion: 'reduce'})` line in the `broker list` test, via C together with its insertion, then reshoot in run 3.
+>   - **Proposal to the coordinator** (gallery-wide reduced motion + full gallery, after integration): awaiting a decision.
+>   - **Coordinator decision (20:40):**
+>     1. Yes to the `broker list` line in this batch.
+>     2. Yes to `reducedMotion: 'reduce'` in the gallery's top-level `beforeEach`, **after 22:00** (end of the run on 6150): first the audit, then a full gallery on the lane and a comparison of the changed shots, which must only be marquees or wanted effects. In a **separate commit** of the same checkpoint, with the list of changed shots in the body.
+>   - **Audit of who reads `prefers-reduced-motion`** (code and CSS, `frontend/src`, at 20:45):
+>
+>     | Where | Effect under `reduce` | Photographed? | Verdict |
+>     |---|---|---|---|
+>     | `lib/actions/scrollOnOverflow.ts:49,121` (KpiCard, AssetCard, BrokerCard, BrokerDiscoveryCard, RiskMetricCard, AssetPickerPanel, ImportWizardModal, AssetGroupStep, TransactionCompareModal, DataTableColumnFilter, CorrelationPairsList, AboutTab, GrowthChart, asset detail, PAC) | the marquee doesn't start; the text rests at its start | yes | **the goal** |
+>     | `components/onboarding/OnboardingIntroScene.svelte:54-166` | all the phrases together, dots all active, no fade | **no**: `walkCoreTourToFx` only clicks Start | no visible effect |
+>     | `components/onboarding/OnboardingCoachmark.svelte:468-479,542,546` | `scrollIntoView` auto instead of smooth; pulse ring and cursor bounce stopped (`motion-reduce:animate-none`) | yes (`core-tour-step`, `contextual-guide`) | wanted: ring at opacity 1 instead of ~0.95 (frozen at 0.1 s), cursor a few px lower |
+>     | `features/tools/pac-allocator/planner/result/ResultView.svelte:94` | `scrollIntoView` auto | the final state, yes | no static difference |
+>     | `app.css:356` (`.lf-price-flash-*`) | no animation, peak colour while the class is on | no: the gallery is offline, prices are fixed, nothing flashes | none |
+>     | `components/table/DataTable.svelte:1925` (`tr.highlighted`) | static highlight | only if a row is highlighted at the shot | wanted |
+>     | Tailwind `motion-safe:animate-spin` (PAC AssetsStep, FxStep, BusyPanel), `motion-reduce:animate-none` (ToolsHub, ToolHost, ToolDiagnosticsPanel, ToolAboutPanel), `motion-reduce:transition-none` (Header, IntroScene), `motion-safe:transition-*` (PAC StepNav) | spinners and pulses stopped, no transitions | no: shots wait for idle/ready, and `freezeAnimations()` already zeroes transitions | none |
+>     | `ui/TweenedValue.svelte` (`tweened` from `svelte/motion`) | **none**: `tweened` ignores the preference | — | the KPI count-ups stay, and so does the 1 s wait |
+>
+>     Nothing hides content that the pages describe. ECharts doesn't read the preference.
+>   - **Plan after 22:00:**
+>     - (a) Fresh-populate **baseline** full gallery with the batch's spec, without the global rule. Copy the PNGs to `/tmp/librefolio-r2-m-gallery-baseline/` (2148 PNGs, 354 MB; 40 GB free).
+>     - (b) test-author adds the line to the top-level `beforeEach` (the per-test lines become redundant).
+>     - (c) Full gallery, fresh populate, same day.
+>     - (d) Pixel diff per PNG (script in `release-pipeline/scripts/`), then classify every changed shot by eye: marquee, coachmark, or noise to explain.
+> - **Lane run 2b — Brokers and Transactions retakes:** **58/58 passed in 26.8 min** (20:17–20:45), 737 shots, 0 failures. Log `runs/b5_run2b_retakes.log`. Ports free afterwards.
+>   - P's seed is visible: Coinbase with 4,181.08 USD + 200 EUR in the list; transactions with ETH ADJUSTMENT movements.
+>   - **Observation, predates this batch** (not in scope): `brokers/fifo-lots-panel` (Bitcoin, Coinbase) shows «1 error(s)» and «Lot analysis could not be reconstructed reliably (inconsistent quantities or transfers)», with the average cost jumping to ~43K.
+>     - The image published on GitHub Pages (built from v1.1.0, fetched with curl) already had the same banner.
+>     - It goes in the handoff as a backlog note (seed or FIFO).
+> - `gallery_diff.py` script (in `release-pipeline/scripts/`, shared venv for Pillow and NumPy): per-PNG diff with threshold 8 per channel, CSV + MD grouped by shot (changed combinations, maximum pixels, union bbox). Self-test ok.
+> - **GO C SPEC** (20:46), done at 20:52:
+>   - imports after `galleryOnboarding`;
+>   - the 2 PAC tests in `Tools` after `tools hub`;
+>   - provider compare in `Assets` between `Asset type picker open` and `Asset distribution editors`;
+>   - `broker list` with `emulateMedia({reducedMotion: 'reduce'})` as its first line.
+>   - Prettier ok, tsc 2 known errors. Filter `PAC allocator|provider compare|broker list - all` checked against 115 titles plus 16 describes: exactly 4.
+> - **Lane run 3** (20:53, fresh populate, 1 worker): `-f 'PAC allocator|provider compare|broker list - all'`. Log `runs/b5_run3_pac_compare_brokerlist.log`.
+>   - **4 passed, 4 failed** (3.1 min). Provider compare ✓ and broker list ✓, desktop and mobile. Both PAC tests ✗ in both projects, before any shot.
+>   - **PAC cause:** a selector in `galleryPac.ts:265` (`copyFromBroker`). `…-copy-cash` → `[data-currency="EUR"]` matches 2 elements: the cash row «EUR custody 8,200.00» and the inner currency label. Strict mode violation.
+>     - The message «Broker 2 holds no EUR cash» was misleading: the cash is there. Sent to C (fix the selector and check the other `[data-currency]`), then rerun with `--no-populate`.
+>   - Provider compare, desktop: dialog 867–887 px, body 734–754 px, so the screen is **1280×1225–1259** depending on the language.
+>     - Complete: TICKER with «Which TICKER is the main one…» (`NWGE.MI` from the provider vs `NWGE` already saved, alternates kept); Type ETF → Equity ETF as badges; Sector Distribution Industrials 100% vs 3 sectors; Apply Selected (3/3).
+>     - The asset names behind the dialog are caught mid-marquee: the gallery-wide rule will fix it.
+>   - Broker list: the names now rest at their beginning («Charl», «Coinb», «DEGII»).
+>     - **Product layout note** (backlog, not in scope): at 1280 the BrokerCard header leaves ~5 characters for the name next to the crown and 4 icons.
+> - **C's selector fix** (`:scope > [data-currency="EUR"]`, at least one row; other locators checked), then **rerun 3b** (`--no-populate`, `-f 'PAC allocator'`, log `runs/b5_run3b_pac.log`): 4 failed, at the next step.
+>   - `galleryPac.ts:415` expected the DEGIRO→Apple route to be `data-ready=false`, because DEGIRO had no USD mode. The product has it `true`: in the draft DEGIRO converts the currency itself («the Broker converts»).
+>   - So the precondition is wrong, not the product.
+> - **Lane granted to C (21:02) for the PAC tests only**, so it can iterate without round trips: the exact command, 1 worker, 6158, `--no-populate`, logs in `runs/b5_run3c_pac_<n>.log`, port free after every run, budget until 21:40. M runs nothing on the lane in the meantime.
+> - **docs-writer 1, round 4** (provider-compare), done:
+>   - `create-edit.en.md` 87–89 at 700px, with an alt on the whole dialog (no fund, code or numbers);
+>   - gallery «### 🔍 Provider Data Comparison», desktop 719–725 and mobile 723–729; the mobile description covers only TICKER and Type, which is what the phone shows.
+>   - `create-edit` IT/FR/ES already lacked the section, and the gallery IT/FR/ES lack the entry. Nothing stamped.
+> - **Interim gates** (21:02–21:05, outside the lane, `nice -n 10`), same as the baseline:
+>   - `mkdocs build` (strict): exit 0, 38.7 s;
+>   - `mkdocs check-links`: 89 valid, 3 known exceptions, 1 broken = the pre-existing `user/assets/detail/chart/#rolling-return`;
+>   - Prettier on the 6 e2e files touched: clean;
+>   - `tsc -p tsconfig.e2e.json`: only the 2 known errors.
+>   - Logs `runs/b5_gates_docs_1.log` and `runs/b5_gates_front_1.log`. To repeat after the PAC round.
+> - **Developer on the tall shots** (via the coordinator, 21:15), verbatim: «in effetti, alzare il blocco potrebbe essere una grande idea, anche per dashboard e altre pagine che proseguono più a lungo, puoi chiedere una lista ad M prima di partire, così decidiamo assieme?»
+>   - Request: a list of every desktop shot (existing and from this batch) whose subject continues beyond 720 px. For each:
+>     - the shot name and the app page;
+>     - the measured height of its subject at 1280;
+>     - what is cut off today;
+>     - the doc pages that use it, and their texts;
+>     - a proposal: (a) screen as tall as the block, (b) `fullPage` for continuous lists, (c) stay at 720;
+>     - the resulting height in the doc at 700 px;
+>     - the cost of retaking it.
+>   - Grouped by gallery section. The 6 provisional shots stay as they are; the rule is not extended until a decision is made.
+> - **How M measures:**
+>   - A temporary hook in `screenshot()`, the only point all 136 calls pass through, as a patch outside the repo: `release-pipeline/scripts/gallery_measure.patch`.
+>     - Guarded by `LF_GALLERY_MEASURE=log|only` + `LF_GALLERY_MEASURE_OUT`. It reads layout only.
+>     - Per shot: tallest blocks cut at the bottom edge, blocks cut at the top, page height and scroll, scroll containers with hidden content, open dialogs.
+>     - Applied only for that run, then reverted with `git apply -R`; never committed.
+>   - `release-pipeline/scripts/gallery_tall_list.py` crosses the measurements with the docs (pages and alts per `data-category`/`data-name`) and with the log (test and duration of each shot).
+>   - Proposed to the coordinator: the measurement rides on the **baseline** full gallery that the reduced-motion comparison needs anyway (one full gallery saved, ~45 min). If the coordinator prefers a separate run without PNGs, M does that.
+>   - **Approved (21:20)**; the patch comes off before the checkpoint.
+>   - **Load constraint:** from ~21:55 the train 19 gates run on 6150 (~1h15, 2 E2E workers). Until they finish, the gallery runs at **2 workers**, then 4. The red runs tonight came from the load.
+>   - Q's two sentences are coming, to apply as they are (`correlation.en.md:153`, the returns' currency = Default Currency since train 18; `preferences.en.md`, the currency the pages open in).
+>   - **Applied verbatim at 21:24** (Q's message, sources `stores/app/settings.ts` `defaultDisplayCurrency`, `routes/(app)/assets/+page.svelte:1618`, `restoredView.targetCurrency`):
+>     - `correlation.en.md` «One currency.» now points to the Default Currency in [Preferences](../settings/preferences.md);
+>     - the **Default Currency** row in `preferences.en.md` now lists the pages that open in it, and says the Dashboard keeps its choice for the session.
+>     - English only, no stamp. Q won't touch `correlation`, `preferences` or `getting-started` until this batch is integrated.
+> - **C, PAC iteration on the lane** (21:02–21:33, runs `b5_run3c_pac_1…8.log`): **both PAC tests green** on desktop (`_8`, 2 passed 1.3 min) and mobile (`_7`, 2 passed 1.4 min). Lane free after every run.
+>   - **Routing:** a route is ready when the Broker has an order mode in the asset's price currency (`draft.modeFor`, `draft.svelte.ts:397`).
+>     - The seed books the AAPL and MSFT transfers on DEGIRO in USD with amount 0 (`populate_mock_data.py` ~1593, ~1800), so the copy brings a «DEGIRO USD 0» cash row.
+>     - The draft removes that row and DEGIRO's USD mode, then excludes Apple and Microsoft with the toggle.
+>   - **PAC product bug** (reported to the coordinator at 21:34): with a foreign-currency source, «Calculation failed».
+>     - USD: `WireNumberTooLargeError` (`wire_numbers.py:142`). The conversion uses the inverse of the stored rate (`evaluator.py:206`), giving an infinitely repeating decimal (`numeric.py:252`) that `planner_report.py:667` can't write.
+>     - CHF: `ValueError` `_require_nonnegative` (`models.py:129`).
+>     - Gallery workaround: the external account is in EUR; the reason and the way back are next to `PAC_SCENARIO.externalAccount`.
+>   - The header reappears after a resize. The fit helper now waits for the resize event, goes to the top, waits two frames, then reframes.
+>   - Phone broker editor: the conversion choice is below the fold (asserted only when the block fits, on desktop).
+>   - Desktop proof 📐: en 1383 → **1280×1399**; it, fr 1399 → 1415; es 1419 → 1435.
+>   - **Compromises:**
+>     - Liquidity framed from the first card;
+>     - Review with the step title scrolled away, so Calculate clears the footer;
+>     - Result: on desktop only the title of «Allocation per Asset» fits. A candidate for the tall-screen list.
+>   - M checked `pac-result-plan` (4 steps, orders by broker): ok.
+> - **Measurement patch applied** (21:36): `git apply`; copy of the spec before it in `/tmp/librefolio-r2-m-measure/spec_before_measure.ts`, for a byte-for-byte check after `git apply -R`.
+>   - Probe in `only` mode (`-f 'transaction list - all|dashboard allocation charts'`, desktop, 1 worker): 2 passed, 56 JSONL lines, no PNG, port free.
+>   - `gallery_tall_list.py` leaves out `app-shell` and reports the top 3 blocks cut; on the probe it lists `transactions/list` (page 3095, `tx-table` 2918), with its doc pages and test.
+> - **docs-writer 1, round 5 (PAC)** sent at 21:40.
+>   - **Done at 21:44.** All 18 PNGs viewed before writing (desktop and mobile en/light).
+>     - `pac-allocator/index.en.md`: 9 blocks in the form of `user/tools/index.en.md` (700px, no `style`), at lines 50–52, 100–102, 126–128, 159–161, 200–202, 277–279, 322–324, 393–395, 407–409.
+>     - Alts with no names, amounts or counts; the only number is «100%», the rule for the targets.
+>     - Nothing the images don't show: Liquidity without «its own currency», Result with only the title of «Allocation per Asset», Balance all disabled (checked in `TargetsStep.svelte`).
+>   - Gallery: the Tools section is Tools Hub followed by 9 PAC entries. The placeholders' descriptions were kept when true and corrected when they promised parts that aren't visible: Result without the allocation, the mobile entries on what the phone shows.
+>   - Debt: `pac-allocator` English-only; the gallery IT/FR/ES have no Tools section at all. Nothing stamped.
+>   - **Census:** the only placeholders left in the EN docs are the **8 broker portals** (after 1.2, by decision).
+> - **B, gallery-wide reduced motion prepared** (21:43, not written: waiting for «GO B2» after the baseline):
+>   - The choice is `test.use({contextOptions: {reducedMotion: 'reduce'}})` next to `actionTimeout`.
+>     - In Playwright 1.61 `reducedMotion` exists only under `contextOptions`.
+>     - Set on the context, it covers every page from the first document, regardless of hook order, and future popups too.
+>   - Inventory: 128 tests and hooks, all on the `page` fixture (`{page}` 117, `{page, request}` 11). No `newContext`, `newPage`, popup or `window.open` in the spec or its helpers. Second users sign in on the same page.
+>   - The 2 per-test lines (growth, broker list) are removed. In growth, `toBeInViewport` reads the box, not the scroll position. In broker list the 2 s wait stays because it's for the favicons.
+>   - Audit check: spinners rest at 0°; the coachmark fade is a JS timer, so `holdPanelAtFullStrength` still works; ECharts 6.0.0 and `tweened` (svelte 5.48) ignore the preference.
+> - **Baseline full gallery + measurement** (21:50, fresh populate, **2 workers**, `LF_GALLERY_MEASURE=log`): log `runs/b5_baseline_full.log`, measurements `runs/b5_baseline_measure.jsonl`.
+>   - Load 46–50 at the start. Mostly macOS system processes: `mediaanalysisd` ~170% and Spotlight, probably set off by the thousands of PNGs written in the gallery folders. Not the lanes.
+>   - **Result: 243 passed, 1 skipped, 0 failed in 1.1 h** (21:52–22:58). 2711 measurement lines. Ports free afterwards.
+> - **After the baseline** (`release-pipeline/scripts/b5_after_baseline.sh`):
+>   - 2796 baseline PNGs in `/tmp/librefolio-r2-m-gallery-baseline/`;
+>   - measurement hook taken off with `git apply -R`, and the spec matches the pre-hook copy byte for byte (`cmp`);
+>   - the **C1 spec** saved as `release-pipeline/c1_gallery.spec.ts` (sha256 `b38973ab…`);
+>   - `git diff --check` ok.
+> - **New product bug seen in `brokers/import-wizard-step4-resolution`:** the badge reads «1 1 assets unresolved». `ImportWizardModal.svelte:4972` prints `{step4UnresolvedCount}` and then the string `importWizard.unresolvedCount` = "{n} assets unresolved", which already contains `{n}`. The singular is missing too. Goes in the handoff.
+> - **Tall-shot list** (sent to the coordinator at 23:03): `release-pipeline/lista_scatti_alti.md`, in Italian, grouped by section.
+>   - Scripts: `gallery_shot_tests.py` (static map from shot to test and helper, with durations), `gallery_tall_report.py` (facts and table), `gallery_tall_proposals.py` (rules plus per-shot judgments).
+>   - **175 desktop shots, 135 continue beyond 720 px** (or are already tall). 7 are already tall; **new proposals: 36 (a), 2 (b), 90 (c)**.
+>   - Retaking (a)/(b): 27 desktop tests, ~13 min. Once only: a generic helper for dialogs (11 of the (a) are dialogs whose body is in `vh`) and a `fullPage` parameter.
+>   - Doc height of (a)/(b) at 700 px: median 494, maximum ~1004.
+>   - Judgments checked by eye on the PNGs:
+>     - `positions-performance-table`: 6 rows of ~17;
+>     - `detail-signals`: chart mostly cut off;
+>     - `import-wizard-step2` and `step4`: subject in view, so (c);
+>     - lot detail: the doc's Asset Income row is in view, so (c);
+>     - risk lab: the measured cut block is the next section, so (c), except `lab-risk-return` (a, 75 px).
+>     - A false positive in the regex («per**form**ance») was fixed.
+> - **GO B2** (22:59): `test.use({contextOptions: {reducedMotion: 'reduce'}})` at lines 302–310, the per-test lines in growth (≈1050) and broker list (≈2674) removed. Prettier ok, tsc 2 known errors.
+>   - **C3 patch** = diff between C1 and the final spec: `release-pipeline/c3_reduced_motion.patch`, 3 hunks, 19 lines. Final spec copy: `c3_gallery.spec.ts`.
+> - **Reduced-motion full gallery** (23:00, fresh populate, **2 workers like the baseline**, so the timing conditions match): log `runs/b5_reduced_motion_full.log`.
+> - **Developer on the tall-shot list** (via the coordinator, 23:12), verbatim: «si si modifica il codice, tanto la pipeline poi rigira tutto a prescindere, per le prove però lancia solo quelle che modifica per ora».
+>   - **All M's proposals approved:** 36 (a), 2 (b) (`brokers/list` and `settings/global-settings` as full pages), 90 (c).
+>   - **The list is the reference for this step:** `/Users/ea_enel/Documents/00_My/LibreFolio-cloud-sizing/release-pipeline/lista_scatti_alti.md`, with data in `runs/b5_tall_report.json`, `b5_tall_proposals.json` and `b5_tall_worklist.json` (38 shots, ~27 tests).
+>   - Code to write:
+>     - a generic dialog helper;
+>     - an `extendScreenToBlock` that keeps today's framing;
+>     - an optional `fullPage` in `screenshot()`;
+>     - one desktop line per shot.
+>   - Proof: **only the modified tests** (`--desktop-only`), no full gallery for this change.
+>   - **A separate commit** (C4) with the list of shots touched in its body.
+>   - The reduced-motion gallery runs to the end, for the comparison.
+>   - Briefed to **A** (23:15): phase 1 is the new module `galleryTallShots.ts` (safe while the run is going); phase 2, on «GO A2» after the run, writes the spec and gets the lane `--desktop-only`.
+>   - **A, phase 1 done (23:50):** `galleryTallShots.ts`, Prettier ok, tsc 2 known errors.
+>     - `extendScreenToBlock` keeps frame and scroll. The header hides only after 8 px of scrolling down, so the helper re-scrolls with a 16 px step and asserts it's hidden. It re-measures blocks that grow with the screen (holdings map 65vh, performance chart 70vh), never goes past the end of the page, and leaves room for the PAC sticky footer.
+>     - `fitScreenToDialog` reads the cascade of caps and fails loudly on a cap in px.
+>     - `restoreTallScreen` does nothing if there was no fit.
+>     - `screenshot()` gets `{fullPage?}` (desktop only).
+>   - **5 of M's proposals change to (c)** on technical grounds (accepted by M; goes to the coordinator):
+>     - `assets/detail-editor`, `fx/detail-editor`: the box is capped at 500 px (`DataEditor.svelte:684`);
+>     - `assets/type-picker-open`: the menu is capped at 420 px (`TreeSelect.svelte:398`);
+>     - `fx/detail-csv-import`: the measurement was of the editor behind; the CSV dialog is already whole;
+>     - `assets/detail-signals-tree`: with more height the menu would open downwards, over the chart.
+>   - So **33 shots in 34 tests** (26 titles + the 8 form-variant tests). The `--desktop-only` filter was checked by A against all 115 titles.
+>   - Expected H corrected upwards for the blocks and dialogs whose caps grow with the screen: holdings map ~1146 (dashboard) and ~1277 (brokers), `fx/add-pair-chain` ~1182, `assets/create-modal` ~916.
+>   - Risk to check: fullPage and the fixed sidebar. The fallback is `extendScreenToBlock(body)`.
+> - **Reduced-motion full gallery: 243 passed, 1 skipped, 0 failed in 1.1 h** (23:01–00:04). Copy in `/tmp/librefolio-r2-m-gallery-rm/` (2796 PNGs). Ports free afterwards.
+> - **Base vs reduced motion comparison** (`gallery_diff.py`, threshold 8): **659 of 2796 PNGs changed, 124 groups**.
+>   - Every group checked by eye: samples top/bottom from `gallery_diff_samples.py`, contact sheets, heat maps for the doubtful ones.
+>   - Classification in `release-pipeline/runs/b5_rm_classification.md`:
+>     1. **Marquee at rest (the goal):** `assets/list-filtered` (desktop and mobile), `assets/create-provider-compare` (cards behind the dialog), `tools/pac-result-proof` (solver stages), `tools/pac-result-plan` (order names), `support/social-share-modal` mobile (browser line).
+>     2. **Wanted static state:** the FIFO lot tables. `DataTable.svelte:1925` stops the `tr.highlighted` animation; before, the shot froze a frame of it.
+>     3. **Not caused by reduced motion:**
+>        - data that changes from one populate to the next: file times, random images, `demo_*` accounts, tokens, process id, scheduler, PAC timings, KPI ±0.1%;
+>        - pre-existing orderings and races: imports, «validando…», wizard panels, «1/16», favicons, About framing, `fifo-lots-panel`;
+>        - AnimatedBackground frozen at a variable frame;
+>        - **the midnight rollover** (115 mobile PNGs after 00:00, the mock price window moves with the date);
+>        - sub-10-px noise.
+>   - So the coordinator's condition holds: the look changes caused by reduced motion are only the marquee and the wanted static states.
+>   - The C3 body lists the changed shots (commit proposal updated).
+>   - The pre-existing gallery nondeterminism goes in the handoff as a backlog item.
+> - **The coordinator's request (00:10): CI red `Files › file preview modal (image)`**, to analyse after the checkpoint without interrupting it. Read-only pre-analysis with `test-triage` while A uses the lane: `release-pipeline/runs/b5_ci_triage_file_preview.md`.
+>   - **Verdict: assumption (time + position).**
+>     - 32 `page.goto` + `setLanguage`/`setTheme` + `networkidle` + 2.4 s of fixed waits. Locally 3.5–3.6 min of the 240 s budget (87–90%); in CI it goes over at `es`. The failing line varies, which is the sign of a time limit.
+>     - The image is whatever row comes first (`.first()`): men_12 and men_15 between two runs.
+>     - **Hidden defect:** two `if (await …isVisible({timeout}))`. Playwright 1.61 ignores the timeout, so a shot can be skipped silently.
+>     - The older nightly's grid red: `networkidle` 20 s on the Files page.
+>   - **Fix** (spec, test-author, after the checkpoint):
+>     - one test per type;
+>     - one navigation per test, with language and theme switched in the app;
+>     - the row by name (seeded avatar `men_01.png`);
+>     - `expect().toBeVisible()`;
+>     - readiness (img `complete`, rendered content, PDF state or a §6 hook);
+>     - same treatment for the grid and table tests.
+>   - **Release:** `continue-on-error: ${{ github.ref_name == 'dev' }}`. On a `release` event the ref is the tag, so **the 4 steps block, `-rc.N` included**.
+>     - The first one stopping the job today is `translate-diff --issues-only` (translation debt), then translation links, `check-links` (`#rolling-return`), then the gallery.
+> - **A, C4 done (00:35):** 33 shots, `b5_c4_5` **34/34 green in 8.6 min** (desktop only), plus `b5_c4_6` 2/2 after the framing fixes. Lane free; Prettier ok; tsc 2 known errors.
+>   - Measured H, at 1280:
+>     - Dashboard positions: holdings-table 929, holdings-map 1145, performance-table 1325, performance-map 1102.
+>     - Brokers: holdings-map 1275, performance-table 767, detail 1253, info-tab 1026–1056, list 1101–1161.
+>     - Settings: global-settings 1820–1836, profile 830, about-plugin-diagnostics 728, about-tool-diagnostics 858, onboarding-replay 854–874.
+>     - PAC: liquidity 823, result 973–1021, result-plan 789.
+>     - Assets: list-table 878, detail-chart 865 (and candlestick), detail-signals 1019, drawdown 1157, measures-active 804, chart-settings 1004, create-modal 916.
+>     - Others: lab-risk-return 804, fx/detail-signals 903, files/static-tab 891, form-modal-transfer 884, action-modal 1163, edit-modal 1011, add-pair-chain 1162–1200, fx/chart-settings 1004.
+>   - **⚠️ Fuori pista:**
+>     1. **`fullPage` dropped.** Playwright's full-page capture keeps the 720 px screen, so the fixed sidebar stops at 720 and the page below is blank (seen in `b5_c4_1`). The 2 (b) shots take the body as the block, so the screen is as tall as the page: the same result the developer approved, with the sidebar whole. The `{fullPage}` option has been taken out of `screenshot()`.
+>     2. **Treemap canvas** with broker logos from other origins can't be read (tainted). The stillness check uses size + `data-chart-renders` instead.
+>     3. **Broker edit modal:** the sticky footer hangs 16 px below the form, so the fit uses natural height vs visible height.
+>     4. Charts that grow with the screen are re-measured until they fit.
+>     5. **Two pre-existing framing races fixed** (desktop only): the positions panel is framed from the top of the page (929 in all 8 combinations; one was 728 before), and About plugin diagnostics waits for the Tools panel (728 in all 8; one was 852).
+>   - **Pre-existing defect found by A:** `profile tab` looked for /profile/i in the tab text. It never matched it/fr/es, nor mobile (`hideLabelOnMobile`), and the `if (isVisible())` skipped silently. **The only `settings/profile` PNG ever produced is desktop en** (it/fr/es and mobile are 404 on Pages too). Assigned to A at 00:38 (testid `settings-tab-profile` + `expect`), with a run on both viewports.
+>   - **Profile fix** (`b5_c4_7`, both viewports): 2/2 in 31 s.
+>     - Locator `settings-tab-profile` with `expect` and `aria-selected`; waits for `profile-tab` `data-busy=false` and the avatar loaded (no 300 ms).
+>     - The desktop tall block is `settings-page` (1280×855 in all 8 combinations), so the card is whole.
+>     - The 16 `settings/profile` PNGs now exist; it/fr/es and mobile for the first time.
+>     - Product nit: «Account Created» is formatted in the browser's locale (`toLocaleDateString(undefined, …)`), not the app's.
+>   - M checked by eye `positions-performance-table` (14 rows + Other period effects), `brokers/list` (8 cards, sidebar whole) and `pac-result` (Allocation per Asset table whole).
+>   - No doc crop container uses one of the 40 tall shots.
+>   - **C4 patch** = diff between C3 and the final spec: `release-pipeline/c4_tall_shots.patch`, 34 hunks, 148 lines; plus `galleryTallShots.ts`. The other fixtures haven't changed since the C1 snapshot (mtimes ≤ 21:25, C1 22:58).
+>
+> **Final state, 2026-10-09 00:45:**
+> - Gates:
+>   - Prettier clean on the 7 e2e files;
+>   - `tsc -p tsconfig.e2e.json`: only the 2 known errors;
+>   - strict build and check-links as in `b5_gates_docs_2` (docs unchanged since then): 89 valid, 3 known, 1 pre-existing (`#rolling-return`);
+>   - `git diff --check` ok.
+> - Ports 6158/6168 free.
+> - Lane DB clean: 0 `provider:*` rows, 0 `demo_*` accounts, 0 brokers marked with `·`.
+> - The measurement hook is not in the spec (`git apply -R` checked with `cmp`).
+> - Spec versions for the commits:
+>   - C1 `release-pipeline/c1_gallery.spec.ts` (sha256 `b38973ab4adc557d…`);
+>   - C3 `c3_gallery.spec.ts` (`643df57ac45b9db0…`);
+>   - C4 = the worktree (`89ba5fe5e12532df…`).
+> - Commit proposals: `release-pipeline/commit_proposal_B5.txt` (C1 test, C2 docs, C3 reduced motion, C4 tall shots + journal).

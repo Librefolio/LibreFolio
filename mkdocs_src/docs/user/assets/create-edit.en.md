@@ -84,7 +84,9 @@ identifier.
   provider* means there is nothing to review.
 - Anything that differs opens the **Provider Data Comparison** dialog.
 
-<!-- [Screenshot Placeholder: assets/create-provider-compare — the Provider Data Comparison dialog with an identifier row and its main-code chooser, a Type row shown as icon badges, and a distribution row] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="The Provider Data Comparison dialog over the Add Asset form: the TICKER row asking which code is the main one, with the provider's code chosen over the one already saved, which is kept as an alternate; the Type row with its current and provider values as icon badges; the Sector Distribution row, current against provider; and Select All, Deselect All, Cancel and Apply Selected">
+</div>
 
 Each row of the dialog shows your **Current Value** next to the **Provider Value**, and starts
 ticked:
