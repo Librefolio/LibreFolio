@@ -100,7 +100,17 @@ pipenv run ./dev.py db upgrade
 
 # Show the migration the database is at
 pipenv run ./dev.py db current
+
+# Look for missing CHECK constraints: changes nothing, exits with 1 if any
+pipenv run ./dev.py db check
+
+# Upgrade and check another database file, such as a copy
+pipenv run ./dev.py db upgrade /path/to/copy/app.db
+pipenv run ./dev.py db check /path/to/copy/app.db
 ```
+
+- 📄 Without a path, the commands use the configured database. A path names another SQLite file: a relative one starts at the project root, wherever you run the command from. The file must exist, except for `db upgrade`, which creates it (folder included) and brings it up to date.
+- 🐳 In Docker, the path is inside the container, where `LibreFolio-data/` is `/app/backend/data/prod-docker` (the database is `sqlite/app.db` in it). `db current` and `db check` work in the running container: `docker compose exec librefolio python dev.py db current <path>`. `db upgrade` and `db downgrade` need the server stopped (`docker compose stop librefolio`), then a one-off container: `docker compose run --rm librefolio python dev.py db upgrade <path>` ([details](docker_advanced.md#docker-exec)).
 
 ### 🩹 Post-Migration Fixes {: #post-migration-fixes }
 
