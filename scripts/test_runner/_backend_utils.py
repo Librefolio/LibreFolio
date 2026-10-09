@@ -241,6 +241,15 @@ def utils_dev_cli_db_path(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "dev.py db path tests", verbose=verbose)
 
 
+def utils_dev_port_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that dev.py's check_port_in_use names who holds a TCP port on Linux (fuser) as it does on macOS (lsof)."""
+    print_section("Utils: dev.py port check")
+    print_info("Testing: dev.py check_port_in_use, the port check of server and mkdocs gallery (the list --force kills)")
+    print_info("Tests: Linux fuser branch through the real subprocess.run argument check, host lsof/fuser on a 127.0.0.1 listener and on a released port, no capture_output with stdout=/stderr= in dev.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_port_check.py", test_names)
+    return run_command(cmd, "dev.py port check tests", verbose=verbose)
+
+
 def utils_coverage_combine(verbose: bool = False, test_names: list = None) -> bool:
     """Test that coverage parts renamed or landing late are still combined, that run directories never pile up, that an empty finished part is dropped, and that a failed combine is a red pass."""
     print_section("Utils: Coverage Combine")
@@ -424,6 +433,17 @@ Tests for utility modules and helper functions:
         # Temporary databases and data dirs under tmp_path, free ports, dev.py and alembic
         # in subprocesses: no lane DB, no server, no network, no repo writes (db migrate
         # only ever runs its refusal, with no database at head within its reach).
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-port-check",
+        utils_dev_port_check,
+        name="Dev port check",
+        desc="dev.py check_port_in_use names who holds a TCP port on Linux as on macOS: the fuser call passes Python's own subprocess.run argument check and its PIDs come back with their process names; on the host, lsof (macOS) or fuser (Linux) report this process while it listens on 127.0.0.1 and no longer once it has closed the socket; no call in dev.py passes capture_output together with stdout= or stderr=",
+        # platform.system and subprocess.run monkeypatched for the Linux case, a 127.0.0.1
+        # socket on a port the OS picks, read-only lsof/fuser/ps children, dev.py parsed:
+        # no DB, no server, no network beyond loopback, no writes.
         isolation="pure",
     )
     add_test(
