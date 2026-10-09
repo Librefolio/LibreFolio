@@ -4,19 +4,28 @@ Authentication API Tests
 Tests for login, logout, register, and session management endpoints.
 """
 
+import uuid
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 import httpx
 import pytest
 import pytest_asyncio
+from fastapi import Request
+from pydantic import ValidationError
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
-from backend.app.config import get_settings
+from backend.app.config import Settings, get_settings
+from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import GlobalSetting
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.auth import AuthRegisterRequest
+from backend.app.services import user_service
+from backend.app.services.global_settings_service import is_registration_enabled
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -181,23 +190,28 @@ class TestRegister:
                 await set_registration_enabled(True)
 
     @pytest.mark.asyncio
-    async def test_register_disabled_allows_bootstrap_when_no_users(self, test_server, monkeypatch):
-        """REG-007: Disabled registration still allows bootstrap when user count is zero."""
+    async def test_register_disabled_allows_bootstrap_when_no_users(self, tmp_path):
+        """REG-007: Disabled registration still allows bootstrap when user count is zero.
+
+        On a private database (a fresh SQLite file under tmp_path with the whole ORM schema), zero
+        users and enable_registration=false are its real state, not a patched counter. The lane's
+        users and global settings are never touched, and the bootstrap administrator no longer
+        stays behind in the shared database.
+        """
         print_section("REG-007: Disabled registration allows bootstrap user")
 
-        async def count_no_users(_session):
-            return 0
-
-        monkeypatch.setattr(auth_api.user_service, "count_users", count_no_users)
-
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'bootstrap.db'}", poolclass=NullPool)
         try:
-            await set_registration_enabled(False)
-
-            timestamp = int(datetime.now().timestamp() * 1000)
-            username = f"bootstrapreg_{timestamp}"
-
-            engine = get_async_engine()
+            async with engine.begin() as connection:
+                await connection.run_sync(SQLModel.metadata.create_all)
             async with AsyncSession(engine) as session:
+                session.add(GlobalSetting(key="enable_registration", value="false", value_type="bool"))
+                await session.commit()
+
+            username = "bootstrapreg"
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                assert await user_service.count_users(session) == 0, "Precondition: the private database must have no user"
+                assert await is_registration_enabled(session) is False, "Precondition: registration must be disabled"
                 response = await auth_api.register(
                     AuthRegisterRequest(
                         username=username,
@@ -211,7 +225,7 @@ class TestRegister:
             assert response.user.is_superuser is True
             print_success("Disabled registration allowed bootstrap user")
         finally:
-            await set_registration_enabled(True)
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_register_duplicate_username(self, test_server):
@@ -885,3 +899,316 @@ class TestDeleteOwnAccount:
             assert relogin_resp.status_code == 401
 
             print_success("Own account deleted and session invalidated")
+
+
+# ============================================================================
+# THE SESSION COOKIE'S SECURE ATTRIBUTE (plan 34 step 2, §7.3)
+# ============================================================================
+
+#: The lane's server by its IPv4 address, never "localhost": see TestSessionCookieSecure.
+IPV4_API_BASE = f"http://127.0.0.1:{settings.TEST_PORT}/api/v1"
+#: What a reverse proxy terminating TLS on the same host adds to the request it forwards.
+FORWARDED_HTTPS = {"X-Forwarded-Proto": "https"}
+
+
+@dataclass
+class _DisposableUser:
+    """A regular user one test registered; ``deleted`` once the test deleted the account itself."""
+
+    username: str
+    password: str
+    deleted: bool = False
+
+    @property
+    def credentials(self) -> dict[str, str]:
+        return {"username": self.username, "password": self.password}
+
+
+def _session_set_cookie(response: httpx.Response) -> tuple[str, dict[str, str]]:
+    """The response's ``session`` Set-Cookie: its value, and its attributes by lower-cased name ("" for a flag).
+
+    Parsed by name, never by position: the attribute order is http.cookies', not a contract.
+    """
+    cookies: list[tuple[str, dict[str, str]]] = []
+    for header in response.headers.get_list("set-cookie"):
+        pair, *attributes = (part.strip() for part in header.split(";"))
+        name, _, value = pair.partition("=")
+        if name.strip() == auth_api.SESSION_COOKIE_NAME:
+            cookies.append((value, {key.strip().lower(): attribute_value.strip() for key, _, attribute_value in (attribute.partition("=") for attribute in attributes if attribute)}))
+    assert len(cookies) == 1, f"Expected exactly one {auth_api.SESSION_COOKIE_NAME} Set-Cookie, got {response.headers.get_list('set-cookie')}"
+    return cookies[0]
+
+
+async def _login(client: httpx.AsyncClient, user: _DisposableUser, headers: Optional[dict[str, str]] = None) -> httpx.Response:
+    response = await client.post(f"{IPV4_API_BASE}/auth/login", json=user.credentials, headers=headers, timeout=TIMEOUT)
+    assert response.status_code == 200, f"Login as {user.username} failed: {response.status_code} {response.text}"
+    return response
+
+
+def _request(scheme: str, forwarded_proto: Optional[str] = None, client_host: str = "127.0.0.1") -> Request:
+    """A request as uvicorn hands it to the app: ``scheme`` is the one uvicorn left in the scope.
+
+    Like every request uvicorn hands over, the scope carries a Host header and the server address,
+    so request.url is absolute and request.url.scheme is the scheme. ``forwarded_proto`` adds an
+    X-Forwarded-Proto header as received: uvicorn turns it into the scheme only for a client it
+    trusts (FORWARDED_ALLOW_IPS), and leaves the header in the scope either way.
+    """
+    port = 443 if scheme == "https" else 80
+    headers = [(b"host", b"librefolio.example")]
+    if forwarded_proto is not None:
+        headers.append((b"x-forwarded-proto", forwarded_proto.encode("latin-1")))
+    scope = {
+        "type": "http",
+        "scheme": scheme,
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "root_path": "",
+        "query_string": b"",
+        "headers": headers,
+        "client": (client_host, 50000),
+        "server": ("librefolio.example", port),
+    }
+    return Request(scope)
+
+
+class TestSessionCookieSecure:
+    """The session cookie's Secure attribute, on the live test server (plan 34 step 2, §7.3).
+
+    The developer's rule: secure by default, insecure only when turned off explicitly. Under the
+    default SESSION_COOKIE_SECURE=auto, every session Set-Cookie (login, logout, account deletion)
+    is Secure when the request arrived over HTTPS, or when the first value of its X-Forwarded-Proto
+    says https — whoever sent the header, which can only switch Secure on (COOKIE-011).
+
+    These tests reach the server at 127.0.0.1 (IPV4_API_BASE), a client uvicorn trusts by default
+    (FORWARDED_ALLOW_IPS=127.0.0.1): there its proxy-headers handling also turns X-Forwarded-Proto
+    into the request's scheme, so a forwarded request is https by both routes. Neither route is
+    needed alone, and COOKIE-010 and COOKIE-011 pin each one in-process. They depend on the server
+    listening on IPv4 (the runner's 0.0.0.0 with HOST unset, the in-process server's localhost) and
+    on SESSION_COOKIE_SECURE unset or auto (checked, see lane_runs_auto).
+
+    Write-safe: a login test registers a regular user of its own and deletes it at teardown;
+    logout needs no session, the handler clears the cookie unconditionally.
+    """
+
+    @pytest.fixture(autouse=True)
+    def lane_runs_auto(self):
+        """Precondition: the default mode. The server reads the same .env and environment as this process."""
+        mode = auth_api.SESSION_COOKIE_SECURE_MODE
+        assert mode == "auto", f"Precondition: these tests need SESSION_COOKIE_SECURE=auto, the default; this lane runs {mode!r} (set in .env or in the environment)"
+
+    @pytest_asyncio.fixture
+    async def disposable_user(self, test_server):
+        """A regular user of this test only, registered over plain HTTP, deleted at teardown.
+
+        Teardown logs in over plain HTTP and sends the session explicitly, so the deletion works
+        whatever the cookie's Secure says; a test that deleted the account itself marks it deleted.
+        """
+        user = _DisposableUser(username=f"cookiesec_{uuid.uuid4().hex[:12]}", password="cookiepassword123")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{IPV4_API_BASE}/auth/register", json={**user.credentials, "email": f"{user.username}@example.com"}, timeout=TIMEOUT)
+        assert response.status_code == 201, f"Setup failed: {response.status_code} {response.text}"
+        assert response.json()["user"]["is_superuser"] is False, "Precondition: a regular user (the lane has its administrators), so its account deletion is never refused"
+
+        yield user
+
+        if user.deleted:
+            return
+        async with httpx.AsyncClient() as client:
+            token, _ = _session_set_cookie(await _login(client, user))
+            response = await client.delete(f"{IPV4_API_BASE}/auth/users/me", headers={"Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)
+        assert response.status_code == 200, f"Cleanup: deleting {user.username} failed: {response.status_code} {response.text}"
+
+    @pytest.mark.asyncio
+    async def test_login_over_plain_http_sets_no_secure_cookie(self, test_server, disposable_user):
+        """COOKIE-001 — GUARD, green today and after: under auto, plain HTTP leaves Secure off.
+
+        Browsers refuse a Secure cookie set by an http:// origin (localhost aside), so a plain-HTTP
+        install (a LAN, a container without TLS) would never stay logged in.
+        """
+        print_section("COOKIE-001: login over plain HTTP sets no Secure cookie")
+        async with httpx.AsyncClient() as client:
+            response = await _login(client, disposable_user)
+
+        token, attributes = _session_set_cookie(response)
+        assert token, f"The login must set a session token: {attributes}"
+        assert "secure" not in attributes, f"Over plain HTTP the session cookie must not be Secure under auto: {attributes}"
+        assert "httponly" in attributes and attributes.get("samesite", "").lower() == "lax", f"The session cookie must stay HttpOnly and SameSite=Lax: {attributes}"
+
+        print_success("✓ Plain HTTP: no Secure; HttpOnly and SameSite=Lax")
+
+    @pytest.mark.asyncio
+    async def test_login_behind_an_https_proxy_sets_a_secure_cookie(self, test_server, disposable_user):
+        """COOKIE-002 — NEW, red today: behind a trusted proxy reporting HTTPS, the login cookie is Secure.
+
+        X-Forwarded-Proto: https from 127.0.0.1 is what a reverse proxy on the same host sends, and
+        uvicorn makes it the request's scheme. HttpOnly and SameSite=Lax stay as they are.
+
+        Today the cookie is never Secure: the red lists its attributes, without "secure".
+        """
+        print_section("COOKIE-002: login behind an HTTPS proxy sets a Secure cookie")
+        async with httpx.AsyncClient() as client:
+            response = await _login(client, disposable_user, headers=FORWARDED_HTTPS)
+
+        token, attributes = _session_set_cookie(response)
+        assert token, f"The login must set a session token: {attributes}"
+        assert "secure" in attributes, f"[new] Behind a trusted proxy reporting HTTPS (X-Forwarded-Proto: https from 127.0.0.1) the session cookie must be Secure under auto, the default: Set-Cookie attributes {attributes}"
+        assert "httponly" in attributes and attributes.get("samesite", "").lower() == "lax", f"The session cookie must stay HttpOnly and SameSite=Lax: {attributes}"
+
+        print_success("✓ HTTPS behind the proxy: Secure, HttpOnly and SameSite=Lax")
+
+    @pytest.mark.asyncio
+    async def test_logout_behind_an_https_proxy_clears_with_a_secure_cookie(self, test_server):
+        """COOKIE-003 — NEW, red today: the Set-Cookie that clears the session is Secure over HTTPS too.
+
+        Every session Set-Cookie written over HTTPS is Secure, the one that deletes it included.
+        Presence barrier first: the response must be the deletion (Max-Age=0).
+        """
+        print_section("COOKIE-003: logout behind an HTTPS proxy clears with a Secure cookie")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{IPV4_API_BASE}/auth/logout", headers=FORWARDED_HTTPS, timeout=TIMEOUT)
+        assert response.status_code == 200, f"Logout failed: {response.status_code} {response.text}"
+
+        _, attributes = _session_set_cookie(response)
+        assert attributes.get("max-age") == "0", f"The logout must clear the session cookie (Max-Age=0): {attributes}"
+        assert "secure" in attributes, f"[new] Behind a trusted proxy reporting HTTPS the Set-Cookie that clears the session must be Secure under auto: {attributes}"
+
+        print_success("✓ HTTPS behind the proxy: the clearing Set-Cookie is Secure")
+
+    @pytest.mark.asyncio
+    async def test_logout_over_plain_http_clears_without_secure(self, test_server):
+        """COOKIE-004 — GUARD, green today and after: over plain HTTP the clearing Set-Cookie is not Secure."""
+        print_section("COOKIE-004: logout over plain HTTP clears without Secure")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{IPV4_API_BASE}/auth/logout", timeout=TIMEOUT)
+        assert response.status_code == 200, f"Logout failed: {response.status_code} {response.text}"
+
+        _, attributes = _session_set_cookie(response)
+        assert attributes.get("max-age") == "0", f"The logout must clear the session cookie (Max-Age=0): {attributes}"
+        assert "secure" not in attributes, f"Over plain HTTP the clearing Set-Cookie must not be Secure under auto: {attributes}"
+
+        print_success("✓ Plain HTTP: the clearing Set-Cookie has no Secure")
+
+    @pytest.mark.asyncio
+    async def test_account_deletion_behind_an_https_proxy_clears_with_a_secure_cookie(self, test_server, disposable_user):
+        """COOKIE-005 — NEW, red today: DELETE /auth/users/me, the third session Set-Cookie, is Secure over HTTPS.
+
+        The user logs in over plain HTTP and deletes the account through the proxy, the session
+        sent explicitly. The account goes either way; the red is the clearing Set-Cookie without
+        "secure".
+        """
+        print_section("COOKIE-005: account deletion behind an HTTPS proxy clears with a Secure cookie")
+        async with httpx.AsyncClient() as client:
+            token, _ = _session_set_cookie(await _login(client, disposable_user))
+            response = await client.delete(f"{IPV4_API_BASE}/auth/users/me", headers={**FORWARDED_HTTPS, "Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)
+        disposable_user.deleted = response.status_code == 200
+        assert response.status_code == 200, f"Account deletion failed: {response.status_code} {response.text}"
+
+        _, attributes = _session_set_cookie(response)
+        assert attributes.get("max-age") == "0", f"The account deletion must clear the session cookie (Max-Age=0): {attributes}"
+        assert "secure" in attributes, f"[new] Behind a trusted proxy reporting HTTPS the Set-Cookie that clears the deleted account's session must be Secure under auto: {attributes}"
+
+        print_success("✓ HTTPS behind the proxy: the account deletion's clearing Set-Cookie is Secure")
+
+
+class TestSessionCookieSecureMode:
+    """auth_api.session_cookie_secure(request), in-process: the mode decides; auto follows the scheme, or the first X-Forwarded-Proto."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "scheme", "secure"),
+        [
+            pytest.param("always", "http", True, id="always-http"),
+            pytest.param("always", "https", True, id="always-https"),
+            pytest.param("auto", "https", True, id="auto-https"),
+            pytest.param("auto", "http", False, id="auto-http"),
+            pytest.param("never", "https", False, id="never-https"),
+            pytest.param("never", "http", False, id="never-http"),
+        ],
+    )
+    async def test_secure_follows_the_mode_and_the_scheme(self, monkeypatch, mode, scheme, secure):
+        """COOKIE-010 — always → True, never → False, auto → whether the request arrived over https.
+
+        These requests carry no X-Forwarded-Proto (COOKIE-011 covers it). RED today on the three
+        True cases: the stub answers False to everything. The three False cases are guards: auto
+        stays off over plain HTTP, and never is the only way to turn it off over HTTPS.
+        """
+        print_section(f"COOKIE-010: SESSION_COOKIE_SECURE={mode} over {scheme}")
+        monkeypatch.setattr(auth_api, "SESSION_COOKIE_SECURE_MODE", mode)
+        request = _request(scheme)
+        assert request.url.scheme == scheme, f"Precondition: the request must arrive over {scheme}: {request.url}"
+
+        assert auth_api.session_cookie_secure(request) is secure, f"session_cookie_secure() with SESSION_COOKIE_SECURE={mode!r} over {scheme} must be {secure}"
+
+        print_success(f"✓ {mode} over {scheme}: Secure={secure}")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "scheme", "forwarded_proto", "secure"),
+        [
+            pytest.param("auto", "http", "https", True, id="auto-http-xfp-https"),
+            pytest.param("auto", "http", "http, https", False, id="auto-http-xfp-http-then-https"),
+            pytest.param("never", "http", "https", False, id="never-http-xfp-https"),
+            pytest.param("auto", "http", "HTTPS , http", True, id="auto-http-xfp-first-value-trimmed-any-case"),
+            pytest.param("auto", "https", "http", True, id="auto-https-xfp-http"),
+            pytest.param("always", "http", "http", True, id="always-http-xfp-http"),
+        ],
+    )
+    async def test_auto_also_follows_the_first_forwarded_proto(self, monkeypatch, mode, scheme, forwarded_proto, secure):
+        """COOKIE-011 — in auto, the first X-Forwarded-Proto value, trimmed and in any case, switches Secure on.
+
+        Whoever sent the header: the request comes from 203.0.113.7, an address uvicorn does not
+        trust by default, so the scheme stays as uvicorn left it and only the app's own reading of
+        the header can switch Secure on. Only the first comma-separated value counts. The header
+        never switches Secure off: auto over https stays Secure. always and never ignore it, and
+        never is the documented way out when a proxy claims https to a browser on plain HTTP.
+
+        RED today on the True cases (the stub answers False); the False cases are guards.
+        """
+        print_section(f"COOKIE-011: SESSION_COOKIE_SECURE={mode} over {scheme}, X-Forwarded-Proto: {forwarded_proto}")
+        monkeypatch.setattr(auth_api, "SESSION_COOKIE_SECURE_MODE", mode)
+        request = _request(scheme, forwarded_proto=forwarded_proto, client_host="203.0.113.7")
+        assert request.url.scheme == scheme, f"Precondition: the request must arrive over {scheme}: {request.url}"
+        assert request.headers.get("x-forwarded-proto") == forwarded_proto, f"Precondition: the request must carry X-Forwarded-Proto: {forwarded_proto!r}: {request.headers}"
+
+        assert auth_api.session_cookie_secure(request) is secure, f"session_cookie_secure() with SESSION_COOKIE_SECURE={mode!r} over {scheme} and X-Forwarded-Proto: {forwarded_proto!r} must be {secure}"
+
+        print_success(f"✓ {mode} over {scheme}, X-Forwarded-Proto {forwarded_proto!r}: Secure={secure}")
+
+
+class TestSessionCookieSecureSetting:
+    """Settings.SESSION_COOKIE_SECURE: auto by default, stripped and lower-cased, nothing but auto/always/never (guards).
+
+    Every Settings here is built with _env_file=None: the repo's .env must not decide the outcome.
+    """
+
+    @pytest.mark.asyncio
+    async def test_default_is_auto(self, monkeypatch):
+        """COOKIE-020 — GUARD: unset, the mode is auto (neither .env nor the environment may set it here)."""
+        print_section("COOKIE-020: SESSION_COOKIE_SECURE defaults to auto")
+        monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
+
+        assert Settings(_env_file=None).SESSION_COOKIE_SECURE == "auto"
+
+        print_success("✓ The default is auto")
+
+    @pytest.mark.asyncio
+    async def test_value_is_stripped_and_lower_cased(self, monkeypatch):
+        """COOKIE-021 — GUARD: " ALWAYS " reads as always, passed to Settings or set in the environment (a Docker deployment)."""
+        print_section("COOKIE-021: SESSION_COOKIE_SECURE is stripped and lower-cased")
+        assert Settings(_env_file=None, SESSION_COOKIE_SECURE=" ALWAYS ").SESSION_COOKIE_SECURE == "always"
+
+        monkeypatch.setenv("SESSION_COOKIE_SECURE", " Never ")
+        assert Settings(_env_file=None).SESSION_COOKIE_SECURE == "never"
+
+        print_success("✓ Stripped and lower-cased, from an argument and from the environment")
+
+    @pytest.mark.asyncio
+    async def test_unknown_value_is_rejected(self):
+        """COOKIE-022 — GUARD: anything else is a ValidationError on SESSION_COOKIE_SECURE, so a wrong value stops the start."""
+        print_section("COOKIE-022: an unknown SESSION_COOKIE_SECURE is rejected")
+        with pytest.raises(ValidationError) as rejected:
+            Settings(_env_file=None, SESSION_COOKIE_SECURE="sometimes")
+
+        assert [error["loc"] for error in rejected.value.errors()] == [("SESSION_COOKIE_SECURE",)], f"Only SESSION_COOKIE_SECURE must be rejected: {rejected.value}"
+
+        print_success("✓ 'sometimes' is a ValidationError on SESSION_COOKIE_SECURE")
