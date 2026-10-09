@@ -3,6 +3,12 @@
 > **Seguito**: [step 2 — cache del frontend tra le pagine](plan-phase00FxDashboardSyncStep2PageCache.prompt.md)
 > (06/10, analisi).
 
+> **Stato (09/10, allineato da N su `3cceb4f90`): FINITO e archiviato in `Release_2/phases/28_fxDashboardSync/`.**
+> Questo step è stato implementato e integrato il 06/10: `5c1b52612` (FX), `f7134bb7f` (segno del KPI), `929887ad8`
+> (doc), `b4bddc411` (journal). Le righe sotto che parlano di «analisi» e di *plan mode* raccontano la mattina del
+> 06/10. Tutti i lotti di N in questa cartella sono indicizzati nel [README](README.md). L'unico residuo di questo
+> piano è la pagina devWiki di D6 (§11): rinviata, `Phase_0/38_postReleaseBacklog/README.md`, voce N-9.
+
 > Workstream **N** di Release 2. Coordinator: «Release 2 backlog analysis» (`c8328a01-f208-4ade-a352-0486d1f14de2`).
 > Questo file è per ora **l'analisi** (sola lettura, nessun codice): l'implementazione parte solo dopo
 > l'autorizzazione esplicita del developer, inoltrata dal coordinator.
@@ -310,7 +316,7 @@ provider (`AssetModal.svelte:1449-1461`); margine di una settimana prima e dopo 
   colpo, ma riscarica e riscrive tutta la serie da `date_from − 7`: il provider è considerato la fonte autorevole
   (`mkdocs_src/docs/user/fx/sync.en.md:34`, `:42`).
 - C: riconoscere i tassi FX «stantii» come STALE_PRICE fa per i prezzi. È lavoro backend a parte (TODO_FUTURI, del
-  coordinator).
+  coordinator). → Opzione non scelta: il developer ha deciso A. Nessun rinvio (allineamento del 09/10).
 
 ### D7 — V2: che cosa mostra la percentuale su una base negativa (card 1)
 - **A (raccomandata)**: rispetto a **|P&L totale di ieri|**, così il segno segue sempre l'importo.
@@ -656,4 +662,4 @@ $P mkdocs build ; $P mkdocs check-links ; $P mkdocs translate-validate
 - [[domains/dashboard]], [[features/F-054]]: `DataQualityBanner` legge il campo unificato `data_quality`.
 - [[concepts/fx-range-helper-pattern]]: `ensureFxRangeLoaded`, la cache della pagina; non viene toccata.
 - Dopo il lavoro: `wiki-file` per «il backward-fill FX illimitato trasforma i buchi interni in tassi stantii
-  silenziosi» (D6).
+  silenziosi» (D6). → Mai archiviata: rinviata, `Phase_0/38_postReleaseBacklog/README.md`, voce N-9 (09/10).

@@ -78,6 +78,9 @@
 
 ## 4. Cura minima (solo `dev.py`), con le decisioni e la mia raccomandazione
 
+> **Realizzata** (passo 4) con tre helper invece di uno: `_named_db_file`, `_existing_db_file` e `_alembic`.
+> Il comportamento è quello descritto qui sotto.
+
 1. **Un helper** `_db_target(args, *, create_ok: bool)`. Senza `path` restituisce `None`. Con `path`:
    - `expanduser`;
    - se è relativo, lo risolve contro `PROJECT_ROOT`, poi `.resolve()`;
@@ -224,12 +227,17 @@ Non tocco `service_exposure` (è di Q) né `docker_advanced`.
      file di questo lotto.
    > **Fuori perimetro, per il backlog** (segnalati dal docs-writer, letti nel codice e non provati):
    > - la nota in cima a `cli_tools.en.md:7` dice che i comandi del database funzionano con `exec`, ma `upgrade` e
-   >   `downgrade` no;
+   >   `downgrade` no → la riga è la `:8`; ancora vera il 09/10: rinviata, `Phase_0/38_postReleaseBacklog/README.md`,
+   >   voce N-7;
    > - in Docker, un `PORT` in `.env` diverso da 6040 (passato da `env_file`) farebbe controllare a `db upgrade` via
-   >   `exec` la porta sbagliata. È precedente a questo lotto.
+   >   `exec` la porta sbagliata. È precedente a questo lotto. → Ancora vero il 09/10: rinviato, voce N-8.
+   > - Il link `#rolling-return` rotto in it/fr/es è già nel backlog del coordinator come D28.
 7. ✅ (09/10) Checkpoint: 4 commit proposti in `/tmp/libreFolio_commits/libreFolio_commit_n_dbpath_C1..C4.txt`.
    Liste in `n_dbpath_paths_C1..C4.txt`, blob in `n_dbpath_blobs.txt`, albero in `n_dbpath_final_tree.txt`. Stato:
    FROZEN.
+   > **Integrato** (allineamento del 09/10): `964f3427d` (`dev.py`, test, registrazione), `7ef4ea287` (doc admin),
+   > `faa2b2120` (le due righe `.github`), `0c953f841` (questo piano), treno 23 (`103ac1ab1`). La riga di CHANGELOG
+   > (🐛 Fixed) l'ha scritta il coordinator.
 
 **Fatto quando**:
 - i 5 comandi rispettano `path`, assoluto o relativo;
