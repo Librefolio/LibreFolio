@@ -2366,7 +2366,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override del coste medio ponderado. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
-      "warningAdjustment": "No se ha definido coste base — el lote se creará con coste cero. Establezca un valor si no se trata de un split o regalo."
+      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Si estas participaciones no costaron nada (un split o un regalo), escribe 0."
     },
     "wacPreview": {
       "calculating": "Calculando...",

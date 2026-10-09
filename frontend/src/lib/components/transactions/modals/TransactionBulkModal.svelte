@@ -69,6 +69,7 @@
     } from '$lib/utils/transactions/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {cashAmountsCancel} from '$lib/utils/transactions/promoteHelpers';
+    import {importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/utils/transactions/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -2036,8 +2037,7 @@
             label: () => $t('transactions.bulk.suggestLightbulb') || 'Import suggestion',
             onClick: (row: PendingOp) => {
                 // BUG-C7: open suggest picker filtered to this row's importable candidates
-                const txId = (row as any).txId as number;
-                const entry = importableSuggestions.find((s) => s.txId === txId);
+                const entry = importableSuggestions.find((s) => s.tempId === row.tempId);
                 if (entry && entry.candidates.length > 0) {
                     // Open picker filtered to just this row's candidates
                     suggestPickerOpen = true;
@@ -2053,9 +2053,8 @@
             },
             visible: (row: PendingOp) => {
                 if (getPartnerOp(row.tempId)) return false;
-                const txId = (row as any).txId;
-                // Show if this row has importable DB candidates OR is in banner suggestions
-                return importableSuggestions.some((s) => s.txId === txId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
+                // Show if this row (saved or new) has importable DB candidates OR is in banner suggestions
+                return importableSuggestions.some((s) => s.tempId === row.tempId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
             },
         },
         {
@@ -2650,10 +2649,16 @@
         } else if (opA.op === 'create' && opB.op === 'create') {
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
-            opA.link_uuid = sharedUuid;
-            opB.link_uuid = sharedUuid;
-            opA.fields.type = match.targetType as TransactionTypeCode;
-            opB.fields.type = match.targetType as TransactionTypeCode;
+            for (const op of [opA, opB]) {
+                // The editor shows a magnitude and lets the type carry the sign (txCreateItemToPendingOp,
+                // the form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so the sign has
+                // to move into the amount before the type changes, or the withdrawal leaves as a deposit.
+                const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
+                op.fields.quantity = signedQty;
+                op.fields.cash = signedCash;
+                op.link_uuid = sharedUuid;
+                op.fields.type = match.targetType as TransactionTypeCode;
+            }
         } else {
             // 1 saved + 1 new (mixed)
             const savedOp = opA.op === 'edit' ? opA : opB;
@@ -2693,22 +2698,41 @@
     // C6 — Promote Suggest: DB candidates ($effect + debounce) + local candidates ($derived)
     // =========================================================================
 
+    /** The id a row is asked under in promote-suggest: its transaction id when saved, a negative id when new. */
+    function suggestKeyOf(op: PendingOp): number {
+        return op.op === 'edit' ? ((op as any).txId as number) : newRowSuggestId(op.createdSeq);
+    }
+
+    /**
+     * The rows the database search is asked about: standalone saved rows not marked for deletion, and
+     * new rows not linked to anything that can be compared (type, broker, date, and an amount or a
+     * quantity: without them the backend skips the "opposite amounts" check and every deposit or
+     * withdrawal of the window would come back). A new row's other side may already be saved — the
+     * overnight account imported a month after the broker account.
+     */
+    function isSuggestable(op: PendingOp): boolean {
+        if (op.pairedWith || getPartnerOp(op.tempId)) return false;
+        if (op.op === 'edit') return !(op as any).markedDelete;
+        const measured = Number(op.fields.cash?.amount ?? 0) !== 0 || Number(op.fields.quantity ?? 0) !== 0;
+        return !op.link_uuid && !!op.fields.type && Number(op.fields.broker_id) > 0 && !!op.fields.date && measured;
+    }
+
     /** Reactive effect: when ops change, debounce-call promote-suggest API for
-     *  standalone edit ops (saved rows without partner). */
+     *  standalone rows, saved and new. */
     $effect(() => {
         if (!open) return;
-        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).markedDelete);
-        if (editStandalone.length === 0) {
+        const asked = ops.filter(isSuggestable);
+        if (asked.length === 0) {
             untrack(() => {
                 suggestFromDB = new Map();
             });
             return;
         }
-        const inputs = editStandalone.map((o) => {
+        const inputs = asked.map((o) => {
             const rule = getTypeRule(o.fields.type);
             const {signedQty, signedCash} = applySignRules(o.fields.quantity, o.fields.cash, rule);
             return {
-                id: (o as any).txId as number,
+                id: suggestKeyOf(o),
                 type: o.fields.type,
                 broker_id: o.fields.broker_id,
                 date: o.fields.date,
@@ -2886,22 +2910,30 @@
             }
         }
 
+        // New + saved: a side imported now whose other side was saved earlier, both in the editor.
+        // The mixed branch of executePromote links the saved id to the new row's link_uuid.
+        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid);
+        const mixed = mixedPromotePairs(newStandalone, editStandalone, {
+            keyOf: (o) => o.tempId,
+            daysBetween: (a, b) => daysDiff(a.fields.date, b.fields.date),
+            maxDeltaDays,
+            match: (a, b) => {
+                const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
+                if (!match) return null;
+                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
+                return match.targetType;
+            },
+        });
+        for (const pair of mixed) combined.push({tempIdA: pair.newTempId, tempIdB: pair.savedTempId, targetType: pair.targetType});
+
         return combined;
     });
 
-    /** Importable suggestions: DB candidates NOT yet in ops (for 💡 button) */
+    /** Importable suggestions: DB candidates NOT yet in ops, for saved and new rows (for 💡 button) */
     let importableSuggestions = $derived.by(() => {
-        const result: Array<{txId: number; tempId: string; candidates: Array<{id: number; type: string; broker_id: number; date: string}>}> = [];
         const opsEditIds = new Set(ops.filter((o) => o.op === 'edit').map((o) => (o as any).txId as number));
-        for (const [txId, candidates] of suggestFromDB) {
-            const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
-            if (!op) continue;
-            const importable = candidates.filter((c) => !opsEditIds.has(c.id));
-            if (importable.length > 0) {
-                result.push({txId, tempId: op.tempId, candidates: importable});
-            }
-        }
-        return result;
+        const tempIdByKey = new Map(ops.map((o) => [suggestKeyOf(o), o.tempId]));
+        return importableFromResults(suggestFromDB, (key) => tempIdByKey.get(key), opsEditIds);
     });
 
     let suggestPickerIncludeIds = $derived(new Set(importableSuggestions.flatMap((s) => s.candidates.map((c) => c.id))));

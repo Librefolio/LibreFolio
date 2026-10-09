@@ -2366,7 +2366,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
-      "warningAdjustment": "Nessun costo base impostato — il lotto sarà creato con costo zero. Imposta un valore se non si tratta di un frazionamento o regalo."
+      "warningAdjustment": "Il costo base manuale è vuoto: senza, la transazione non si può salvare. Se queste quote non sono costate nulla (un frazionamento o un regalo), scrivi 0."
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",
