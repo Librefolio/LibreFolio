@@ -1,6 +1,7 @@
 # Piano — fase 00, 36: l'indicatore di sicurezza della connessione e il login senza enumerazione
 
-> **Stato**: ✅ pronto per il checkpoint (2026-10-09), FROZEN dopo l'handoff. L'analisi è approvata dal developer e la revisione dal coordinatore; la cura del login è approvata dal developer; D1, D3 e D5 sono decise (§0.1).
+> **Stato**: ✅ chiuso e integrato nel treno 24 (merge `01da03047`): `3392c4f05`, `07da532fb`, `28c85d34f` (verifica del 2026-10-09 su `3cceb4f90`, §8.7).
+> - Al checkpoint: ✅ pronto per il checkpoint (2026-10-09), FROZEN dopo l'handoff. L'analisi è approvata dal developer e la revisione dal coordinatore; la cura del login è approvata dal developer; D1, D3 e D5 sono decise (§0.1).
 >
 > - Workstream L, ramo `e-alfy-l-danske-bank`.
 > - Base `da8d7a10b` (treno 22), worktree pulito al via.
@@ -464,3 +465,20 @@ I messaggi e i percorsi sono in `/tmp/libreFolio_commits/l-36-c{1,2,3}.{msg,path
 - Ogni commit è coerente da solo:
   - C1 non tocca l'indicatore;
   - C2 usa `session_cookie_secure`, che è del 34s2, e i login degli utenti attivi, che non cambiano.
+
+### 8.7 ✅ Integrazione e verifica finale (2026-10-09)
+
+> **Note implementazione**:
+> - **I commit**, integrati nel treno 24 (merge `01da03047`, 2026-10-09):
+>   - `3392c4f05` fix(auth): login does not reveal accounts;
+>   - `07da532fb` feat(ui): connection security indicator;
+>   - `28c85d34f` docs(journal): plan 36, connection security.
+> - **Verifica** su `3cceb4f90`:
+>   - `GET /system/connection` (`system.py:220-221`);
+>   - l'indicatore e il pallino sul burger;
+>   - la pagina utente di Q, `user/connection-security.en.md` (S20, stesso treno);
+>   - la riga della FAQ (`faq.en.md:83`).
+> - **Fuori dal piano, e già in carico ad altri**:
+>   - le traduzioni IT/FR/ES della FAQ, al giro delle traduzioni;
+>   - lo screenshot `security/connection-indicator`, nella gallery di M.
+> - **Classificazione: FINITA.** Nessun residuo. Archiviata in `Release_2/phases/36_connectionSecurity/`.

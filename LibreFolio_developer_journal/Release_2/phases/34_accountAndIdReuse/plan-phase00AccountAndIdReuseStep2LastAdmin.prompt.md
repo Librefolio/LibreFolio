@@ -1,6 +1,7 @@
 # Piano — fase 00, 34, passo 2: l'ultimo amministratore attivo
 
-> **Stato**: ✅ pronto per il checkpoint (2026-10-09), FROZEN dopo l'handoff. Il developer ha deciso tutto (§0.1); le aggiunte del lotto sono il cookie `Secure`, il setup E2E e le configurazioni morte (§7.3–§7.6).
+> **Stato**: ✅ chiuso e integrato nel treno 22 (merge `47c56581b`): `2fb8b8502`, `11be06988`, `c529b3147`, `696105587` (verifica del 2026-10-09 su `3cceb4f90`, §7.8).
+> - Al checkpoint: ✅ pronto per il checkpoint (2026-10-09), FROZEN dopo l'handoff. Il developer ha deciso tutto (§0.1); le aggiunte del lotto sono il cookie `Secure`, il setup E2E e le configurazioni morte (§7.3–§7.6).
 >
 > - Viene da: [plan-phase00AccountAndIdReuse.prompt.md](plan-phase00AccountAndIdReuse.prompt.md), la cancellazione dell'account e il rifiuto dell'unico amministratore.
 > - Workstream L. Base `9b2acdd5d` (treno 21). Corsia 6156/6166, `/tmp/librefolio-r2-l`.
@@ -240,7 +241,7 @@ I comandi sono tutti `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run pyt
 > - `_ensure_test_users` (`scripts/test_runner/_frontend_common.py:192-195`) crea gli 8 utenti E2E con `create-superuser` dopo il populate, che 3 di loro li ha già creati. Tollera l'errore solo con «already exists» in **stderr**; la CLI scrive su stdout e dice «Username already taken» / «Email already registered».
 > - Quel controllo non ha mai funzionato: lo nascondeva l'uscita sempre a 0, corretta in questo lotto (decisione 3). Si fermano tutti gli E2E e la gallery (`dev.py:938`, stessa funzione).
 > - Verdetto (test-triage): **defect**, nel chiamante.
-> - Proposta al coordinatore: il controllo guarda stdout e stderr e accetta le tre frasi; ogni altro errore resta un errore. È un file del runner, quindi in attesa del suo sì.
+> - Proposta al coordinatore: il controllo guarda stdout e stderr e accetta le tre frasi; ogni altro errore resta un errore. È un file del runner, quindi in attesa del suo sì. ✅ Concesso; la cura è sotto.
 > - A margine, preesistente: `create-superuser` crea **amministratori** i 5 utenti che il populate non crea (alice…eve). Non toccato.
 >
 > **La cura del chiamante** (coordinatore: «`_frontend_common.py` è tuo, solo per `_ensure_test_users`»):
@@ -314,3 +315,19 @@ I messaggi e i percorsi sono in `/tmp/libreFolio_commits/l-34s2-c{1..4}.{msg,pat
 - I commit si separano per percorso, e ognuno è coerente da solo. La versione HEAD di `test_dev_cli_image.py` non degrada né disattiva nessuno, quindi C1 da solo non la rompe. La tolleranza del runner arriva in C3 insieme alle uscite a 1.
 - Porte 6156 e 6166 libere; `git diff --check` pulito.
 - Dopo questo checkpoint `dev.py` passa a N (coordinatore): niente altro pianificato su `dev.py`.
+
+### 7.8 ✅ Integrazione e verifica finale (2026-10-09)
+
+> **Note implementazione**:
+> - **I commit**, integrati nel treno 22 (merge `47c56581b`, 2026-10-09):
+>   - `2fb8b8502` fix(users): keep one active administrator;
+>   - `11be06988` fix(auth): Secure cookie, active admin on delete;
+>   - `c529b3147` fix(cli): exit status, shared JWT secret;
+>   - `696105587` docs(journal): plan 34 step 2, last admin.
+> - **Verifica** su `3cceb4f90`:
+>   - le guardie in `user_service.py:223`, `:239` e `:262`;
+>   - `session_cookie_secure` in `auth.py`;
+>   - la tolleranza di `_ensure_test_users` (`_frontend_common.py`).
+>   - Il piano 36 ha poi riordinato il login (`3392c4f05`) senza toccare queste guardie.
+> - **Rinviato**: gli utenti E2E alice…eve creati amministratori da `create-superuser` (`scripts/test_runner/_frontend_common.py:192`), in `Phase_0/38_postReleaseBacklog/README.md`, voce L12.
+> - **Classificazione: FINITA.** L'unico residuo è la voce L12. Archiviata insieme al piano principale.
