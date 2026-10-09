@@ -391,7 +391,7 @@ provenance: `fx_info` (rate date and days back), `original_unit_cost`,
 
 | Caller | `as_of_date` | Target currency |
 |--------|--------------|-----------------|
-| Batch auto modes (`TransactionService._compute_wac_for_auto_items()`) | The transaction date | The `cost_basis_override.code` sent as a hint, or the last acquisition's currency |
+| Batch auto modes (`TransactionService._compute_wac_for_auto_items()`) | The row's date; the partner's date for the receiving side of a `TRANSFER` | The `cost_basis_override.code` sent as a hint, or the last acquisition's currency |
 | `POST /portfolio/wac` (`portfolio_api.py`) | The query's end date, or today | The last acquisition's currency |
 | PAC planner (`portfolio_allocation_source.py`) | The planner's date | The planner's target currency, as override, with `use_cache=False` |
 
@@ -419,9 +419,20 @@ A `BUY` costs the absolute cash amount, in its cash currency. A `TRANSFER` or
 `ADJUSTMENT` adding quantity costs `cost_basis_override × quantity`, in
 `cost_basis_currency`, converted at its own date like any other acquisition. A
 `BUY` without amount is a free acquisition; a `TRANSFER` or `ADJUSTMENT` without
-override has an unknown cost (see [Diagnostics](#diagnostics)). The batch flows
-reject such a row without an override (`costBasisRequired`), so an acquisition of
-unknown cost comes from a row that did not go through that check.
+override has an unknown cost (see [Diagnostics](#diagnostics)). The batch rejects
+such a row without an override (`costBasisRequired`) whether it is created,
+updated, or made the receiving side of a promoted pair (see
+[Promote boundary](#promote-boundary)); a row in Auto is given the computed WAC
+instead. An acquisition of unknown cost therefore comes from:
+
+- data the batch never checked: written outside it, or promoted by an earlier
+  version, which did not check promoted pairs; or
+- an `ADJUSTMENT` linked to a `SPLIT` event that is later retyped. Auto stores no
+  cost on a split-linked row (see
+  [Split-linked adjustment skip](#split-linked-adjustment-skip)), so once the
+  event is no longer a `SPLIT` its units have an unknown cost
+  (`test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition`
+  in `backend/test_scripts/test_api/test_portfolio_wac.py`).
 
 ---
 
@@ -450,19 +461,35 @@ already exists. That helper scans only `parsed_creates` and `parsed_updates` for
 
 For each selected row:
 
-- a create carrying `link_uuid` uses the linked partner's broker as the WAC
-  source;
-- an unlinked item uses its own broker and excludes its own row from the WAC
-  history;
+- `_auto_cost_source()` chooses the pool to average. The receiving side of a
+  `TRANSFER` — a `TRANSFER` row with `related_transaction_id` — averages its
+  partner's broker as of the partner's date, when the units left, leaving out the
+  partner's outgoing leg and the row itself;
+- any other row — an incoming `ADJUSTMENT` — averages its own broker as of its
+  own date, leaving itself out;
 - a supplied `cost_basis_override.code` acts as the target-currency hint; and
 - a calculated `wac` is written to `cost_basis_override` and
   `cost_basis_currency` on the staged ORM row.
+
+`related_transaction_id` is in place before the WAC step whatever the origin of
+the pair: `resolve_create_links()` sets it for a pair created in the same batch,
+`apply_promotes()` for a pair formed by a promote, and a saved pair being updated
+brings it from the database (`TXUpdateItem` has no `link_uuid`). Since
+`cost_basis_mode` is accepted only on a `TRANSFER` or `ADJUSTMENT` adding quantity
+(`costBasisModeIncompatible` otherwise), a `TRANSFER` in Auto is always the
+receiving side.
+
+Reading the source pool as it was when the units left keeps their cost: a
+transfer of the whole position keeps the source's average, where counting the
+outgoing leg would empty the pool and give 0; a partial transfer gets the same
+value with or without that leg, since a reduction does not move the unit cost;
+and purchases made on the source broker while the units are in transit stay out.
 
 The create stage has already flushed new rows for generated IDs, and all of this
 work remains in the caller's session. Neither the WAC helper nor the surrounding
 batch stages commit.
 
-### 🧬 Split-linked adjustment skip
+### 🧬 Split-linked adjustment skip {: #split-linked-adjustment-skip }
 
 If the selected row references an `AssetEvent` of type `SPLIT`, auto mode clears
 both stored cost-basis fields and emits a batch WAC result with `wac=None` and no
@@ -483,17 +510,29 @@ batch stage appends a `TXValidationIssue` with:
 The response may still include `wac_results`, but the issue makes
 `committed=False`; the route that owns the session then rolls back.
 
-### 🔗 Promote boundary
+### 🔗 Promote boundary {: #promote-boundary }
 
 `TXPromoteBatchItem` has no `cost_basis_mode`, and `apply_promotes()` no longer
 performs an automatic WAC calculation. A promote-specific resolved value arrives
 as `resolved_fields.cost_basis_override` from the frontend merge flow (or another
 API client). The promote stage applies it to the positive-quantity transfer leg
-and clears it from the sender.
+and clears it from the sender; without that key, the receiver keeps the cost basis
+it already has.
 
 Rows that are also present in `creates[]` or `updates[]` enter auto-WAC only
 because that create/update item requested an auto mode, never because of the
 promote item itself.
+
+`validate_cost_basis()` checks the receiving side of a promoted pair like any
+other row:
+
+- a new row is checked as a create, unless it is in Auto: `costBasisRequired` on
+  operation `create`, with its index;
+- a saved row also present in `updates[]` is checked as that update, unless it is
+  in Auto; and
+- any other saved row without a cost basis gets `costBasisRequired` on operation
+  `promote`, with the promote's index and `ref_id` set to that row
+  (`_check_promoted_saved_cost_basis()`).
 
 ---
 

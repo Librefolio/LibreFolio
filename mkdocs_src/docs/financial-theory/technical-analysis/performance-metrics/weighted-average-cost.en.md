@@ -111,7 +111,7 @@ For transfers and adjustments, LibreFolio supports a **cost basis override**: a 
 
 **When auto mode (`cost_basis_mode = "auto"`):**
 
-- LibreFolio computes the WAC of the source position at the transaction date — the sending broker's position for a transfer, the position itself (without this transaction) for an adjustment — and stores it as the override
+- LibreFolio computes the WAC of the source position — for a transfer, the sending broker's position when the units left (the transfer-out date), before the outgoing leg; for an adjustment, the position itself at the transaction date, without this transaction — and stores it as the override
 - From then on the transaction is an ordinary weighted acquisition at that unit cost. For an adjustment on the same position, the WAC therefore stays algebraically unchanged, in the currency it was computed in:
 
 $$
