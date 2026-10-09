@@ -59,6 +59,16 @@ raises ``ExactReplayRejectedError``, which the Tool reports as
   buys what ``min`` buys (test_compact_twin_*); a rate-only schedule charges
   like its explicit EUR twin (test_rate_only_*). The last two may differ only in
   ``request_fingerprint``, by design.
+* **A funding source in another currency plans, or is refused, but never
+  fails** (FX conversion fix): USD funding for a EUR-quoted Asset converts at
+  the reciprocal of the stored EUR/USD rate, so the EUR pool's rounding residual
+  does not terminate; it is published as an ``exact_ratio`` and the plan stays
+  ``optimal_proven`` (test_fx_usd_funding_*), while a residual that terminates
+  is a ``finite_decimal`` (test_fx_eur_funding_*). A cross rate that, net of the
+  spread, beats the triangle through the valuation currency is an FX arbitrage:
+  an ``invalid`` result with ``allocation.fx_rate_inconsistent``
+  (test_fx_incoherent_cross_rate_*), never a crash; the implied rate itself,
+  and a spread that covers the gap, still plan (test_fx_coherent_cross_rate_*).
 
 These are pure in-process tests (``isolation="pure"``) except the one deliberate
 subprocess in ``test_scip_import_isolation_in_subprocess``: no server, no
@@ -112,7 +122,7 @@ from backend.app.services.pac_allocator.evaluator import build_exact_policy_view
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
-from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scaled
+from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, fx_conversion_request, make, scaled
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -929,6 +939,217 @@ def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
         debit, credit = action["source_debit"], action["destination_credit"]
         assert (debit["currency"], credit["currency"]) == ("EUR", "USD"), action
         assert Decimal(credit["amount"]) == (Decimal(debit["amount"]) * Decimal("1.1298")).quantize(usd_minor_unit, rounding=ROUND_HALF_UP), action
+
+
+# --------------------------------------------------------------------------
+# FX conversions across currencies — the FX conversion fix. A funding source in
+# a currency other than the Asset's ended in "Calculation failed", through two
+# separate defects. Each one is pinned by RED cases, and each has green controls
+# that already pass and must keep passing.
+#
+# 1. A rounding residual that does not terminate. USD funding for a EUR-quoted
+#    Asset (valuation EUR, stored pair EUR/USD) converts USD→EUR at the
+#    reciprocal of the stored rate, so the exact credit repeats and the EUR
+#    pool's rounding residual (posted − exact) is a ratio such as −47/21700.
+#    ``planner_report.build_ledger_rows`` spelled it as fixed-decimal text and
+#    raised ``WireNumberTooLargeError``. The ledger row's ``rounding_delta`` is
+#    now an ``ExactNumber``: ``exact_ratio`` (non-authoritative display) when it
+#    does not terminate, ``finite_decimal`` when it does. Nothing else moves:
+#    the credit is still the HALF_UP posting at the minor unit and the plan is
+#    still ``optimal_proven``. R1 (both conversion modes) and R1b (with a
+#    spread) pin the ratio; V1, the EUR→USD direction that always planned, pins
+#    the terminating branch, its plan figures being the control.
+# 2. A cross rate that is an arbitrage. CHF funding for a USD-quoted Asset
+#    (valuation EUR, CHF/EUR 1.06, EUR/USD 1.085): a declared CHF/USD that, net
+#    of the spread, beats the implied 1.06 × 1.085 = 1.1501 makes the CHF→USD
+#    credit worth more EUR than the CHF it cost. The evaluator turned the gain
+#    into a negative ``spread_loss`` and raised ``ValueError``. The normalizer
+#    now refuses the rate up front (``allocation.fx_rate_inconsistent``), so the
+#    plan is an ``invalid`` result. R2 (1.1502, no spread) and V2-invalid (1.16
+#    against a 0.8% spread) pin it; R3 (exactly 1.1501, since equality is
+#    coherent) and V2-ready (1.16 with a 1% spread, which covers the gap) are the
+#    controls that still plan.
+# The normalizer-level cases of the new check live in
+# test_pac_planner_normalize.py.
+# --------------------------------------------------------------------------
+_FX_BROKER_ID = "broker-one"
+_FX_STORED_EUR_USD = Fraction(Decimal("1.085"))
+# Both directions between EUR and USD read the one stored pair EUR/USD: the rate itself
+# for EUR→USD, its reciprocal for USD→EUR.
+_FX_EUR_USD_RATES = {("EUR", "USD"): _FX_STORED_EUR_USD, ("USD", "EUR"): 1 / _FX_STORED_EUR_USD}
+# The one issue an incoherent CHF/USD raises. Its params are sorted by name.
+_FX_RATE_INCONSISTENT_CHF_USD = {
+    "code": "allocation.fx_rate_inconsistent",
+    "severity": "error",
+    "kind": "invalid",
+    "path": {"kind": "field", "section": "fx", "entity_kind": "fx_rate", "entity_id": "CHF/USD", "field": "rate"},
+    "message_key": "allocation.fx_rate_inconsistent",
+    "params": [
+        {"kind": "currency", "name": "destination_currency", "value": "USD"},
+        {"kind": "id", "name": "pair", "value": "CHF/USD"},
+        {"kind": "currency", "name": "source_currency", "value": "CHF"},
+        {"kind": "currency", "name": "valuation_currency", "value": "EUR"},
+    ],
+}
+
+
+def _fx_actions(wire: dict) -> list[tuple[str, str, str, str]]:
+    """Every published FX action as ``(source currency, debit, destination currency, credit)``."""
+    return [(action["source_debit"]["currency"], action["source_debit"]["amount"], action["destination_credit"]["currency"], action["destination_credit"]["amount"]) for action in wire["primary_solution"]["fx_actions"]]
+
+
+def _fx_orders(wire: dict) -> list[tuple[str, str, str]]:
+    """Every published order as ``(asset id, cash debit, its currency)``."""
+    return [(row["asset_id"], row["cash_debit"]["amount"], row["cash_debit"]["currency"]) for row in wire["primary_solution"]["order_rows"]]
+
+
+def _fx_ledger_row(wire: dict, currency: str) -> dict:
+    """The ledger row of ``broker-one``'s ``currency`` pool, found by its key and never by position."""
+    rows = wire["primary_solution"]["ledger_rows"]
+    matches = [row for row in rows if (row["broker_id"], row["currency"]) == (_FX_BROKER_ID, currency)]
+    assert len(matches) == 1, f"expected one ledger row for ({_FX_BROKER_ID}, {currency}), got {[(row['broker_id'], row['currency']) for row in rows]}"
+    (row,) = matches
+    return row
+
+
+def _fx_eur_usd_residual(wire: dict, currency: str, spread: str) -> Fraction:
+    """The ``currency`` pool's rounding residual, recomputed from the published FX actions alone.
+
+    Independent of the planner's arithmetic: every action credited in ``currency`` adds its
+    posted credit minus the exact one, ``debit × (1 − spread) × rate``, where the rate is the
+    stored EUR/USD read in the action's direction (its reciprocal for USD→EUR).
+    """
+    kept = 1 - Fraction(Decimal(spread))
+    residual = Fraction(0)
+    for action in wire["primary_solution"]["fx_actions"]:
+        debit, credit = action["source_debit"], action["destination_credit"]
+        if credit["currency"] == currency:
+            exact = Fraction(Decimal(debit["amount"])) * kept * _FX_EUR_USD_RATES[(debit["currency"], credit["currency"])]
+            residual += Fraction(Decimal(credit["amount"])) - exact
+    return residual
+
+
+@pytest.mark.parametrize("mode", _CONVERSION_MODES)
+def test_fx_usd_funding_publishes_a_repeating_rounding_residual_as_an_exact_ratio(mode):
+    """R1: USD funding, a EUR-quoted Asset at 10.01. The result is a plan, not ``WireNumberTooLargeError``.
+
+    97.75 USD convert to exactly 97.75 / 1.085 = 90.0921658… EUR, posted HALF_UP as 90.09, which
+    buys nine units. The EUR pool's residual is −47/21700, which no decimal of any length spells,
+    so it is published as an ``exact_ratio`` with a non-authoritative display. It must equal the
+    residual recomputed from the published action. The USD pool, funded and debited in whole
+    cents, has a zero residual. The conversion mode changes nothing (R4.9), and the plan stays a
+    proven optimum: only its publication was broken. The ratio's display digits are deliberately
+    not pinned.
+    """
+    wire = _plan_wire(fx_conversion_request(f"usd-funds-eur-{mode}", funding_currency="USD", assets=[("EUR", "10.01")], fx_rates={"EUR/USD": "1.085"}, conversion_mode=mode))
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == [("USD", "97.75", "EUR", "90.09")]
+    eur_residual = _fx_ledger_row(wire, "EUR")["rounding_delta"]
+    assert eur_residual["kind"] == "exact_ratio", eur_residual
+    assert eur_residual["display_authority"] == "non_authoritative", eur_residual
+    assert _wire_exact(eur_residual) == Fraction(-47, 21700)
+    assert _wire_exact(eur_residual) == _fx_eur_usd_residual(wire, "EUR", spread="0")
+    assert _fx_ledger_row(wire, "USD")["rounding_delta"] == {"kind": "finite_decimal", "value": "0"}
+
+
+def test_fx_usd_funding_with_a_spread_publishes_its_residual_as_an_exact_ratio():
+    """R1b: the same direction with a 1% spread, which enters the exact credit and never the posting rule.
+
+    98.64 USD credit exactly 98.64 × 0.99 / 1.085 = 90.0033179… EUR, posted as 90.00, which buys
+    nine units at 10.00. The EUR pool's residual is −18/5425: an ``exact_ratio`` equal to the
+    residual recomputed from the published action, spread included.
+    """
+    wire = _plan_wire(fx_conversion_request("usd-funds-eur-spread", funding_currency="USD", assets=[("EUR", "10.00")], fx_rates={"EUR/USD": "1.085"}, fx_spread_rate="0.01"))
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == [("USD", "98.64", "EUR", "90")]
+    eur_residual = _fx_ledger_row(wire, "EUR")["rounding_delta"]
+    assert eur_residual["kind"] == "exact_ratio", eur_residual
+    assert eur_residual["display_authority"] == "non_authoritative", eur_residual
+    assert _wire_exact(eur_residual) == Fraction(-18, 5425)
+    assert _wire_exact(eur_residual) == _fx_eur_usd_residual(wire, "EUR", spread="0.01")
+
+
+@pytest.fixture(scope="module")
+def eur_funds_usd_wire() -> dict:
+    """V1: EUR funding for a USD-quoted Asset at 10.01, planned once and read by two tests."""
+    return _plan_wire(fx_conversion_request("eur-funds-usd", funding_currency="EUR", assets=[("USD", "10.01")], fx_rates={"EUR/USD": "1.085"}))
+
+
+def test_fx_eur_funding_buys_a_usd_asset_through_one_conversion(eur_funds_usd_wire):
+    """V1, control: the direction that always planned, and must still plan the same way.
+
+    92.26 EUR credit exactly 92.26 × 1.085 = 100.1021 USD, posted as 100.10, which buys ten units
+    at 10.01: a proven optimum before and after the fix. Nothing here reads the residual, whose
+    shape is the next test's subject.
+    """
+    wire = eur_funds_usd_wire
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == [("EUR", "92.26", "USD", "100.1")]
+    assert _fx_orders(wire) == [("asset-1", "100.1", "USD")]
+
+
+def test_fx_eur_funding_publishes_a_terminating_residual_as_a_finite_decimal(eur_funds_usd_wire):
+    """V1: a residual that terminates is the ``finite_decimal`` branch of the same ``ExactNumber``, never bare text.
+
+    The USD pool posts 100.10 against an exact 100.1021: −0.0021, equal to the residual
+    recomputed from the published action. The EUR pool, debited in whole cents, has a zero one,
+    and a zero is an exact number too.
+    """
+    wire = eur_funds_usd_wire
+
+    usd_residual = _fx_ledger_row(wire, "USD")["rounding_delta"]
+    assert usd_residual == {"kind": "finite_decimal", "value": "-0.0021"}
+    assert _wire_exact(usd_residual) == _fx_eur_usd_residual(wire, "USD", spread="0")
+    assert _fx_ledger_row(wire, "EUR")["rounding_delta"] == {"kind": "finite_decimal", "value": "0"}
+
+
+@pytest.mark.parametrize(
+    ("cross_rate", "spread"),
+    (
+        pytest.param("1.1502", "0", id="R2-above-the-implied-rate"),
+        pytest.param("1.16", "0.008", id="V2-spread-too-thin"),
+    ),
+)
+def test_fx_incoherent_cross_rate_is_an_invalid_result_not_a_failure(cross_rate, spread):
+    """R2 / V2-invalid: a CHF/USD that, net of the spread, beats CHF/EUR × EUR/USD = 1.1501.
+
+    CHF→USD at the declared cross, valued back at USD→EUR, would be worth more EUR than CHF→EUR
+    directly: 1.1502 / 1.085 > 1.06 with no spread, and 1.16 × 0.992 / 1.085 > 1.06 with a 0.8%
+    spread (covering 1.16 would take about 0.853%). The evaluator used to turn that gain into a
+    negative ``spread_loss`` and raise. The normalizer now refuses the rate, so the plan is an
+    ``invalid`` result naming the pair, the conversion's two currencies and the valuation currency.
+    """
+    payload = fx_conversion_request(f"chf-funds-usd-{cross_rate}-{spread}", funding_currency="CHF", assets=[("USD", "10.00")], fx_rates={**FX_TRIANGLE, "CHF/USD": cross_rate}, fx_spread_rate=spread)
+    result = plan_pac_allocation(_validated(payload))
+
+    assert isinstance(result, PacPlannerInvalidResult), type(result).__name__
+    assert (result.result_state, result.availability) == ("invalid", "invalid")
+    assert [issue.model_dump(mode="json") for issue in result.issues] == [_FX_RATE_INCONSISTENT_CHF_USD]
+    _revalidate(result)
+
+
+@pytest.mark.parametrize(
+    ("cross_rate", "spread", "fx_actions"),
+    (
+        pytest.param("1.1501", "0", [("CHF", "95.64", "USD", "110")], id="R3-exactly-the-implied-rate"),
+        pytest.param("1.16", "0.01", [("CHF", "95.79", "USD", "110.01")], id="V2-spread-covers-the-gap"),
+    ),
+)
+def test_fx_coherent_cross_rate_still_plans_to_a_proven_optimum(cross_rate, spread, fx_actions):
+    """R3 / V2-ready, controls: the new check refuses an arbitrage and nothing else.
+
+    The implied rate itself is coherent, because equality is allowed. So is a rate above it once
+    the spread covers the gap (1.16 × 0.99 / 1.085 < 1.06). Both plan to a proven optimum, buying
+    eleven units at 10.00 USD through one CHF→USD conversion.
+    """
+    wire = _plan_wire(fx_conversion_request(f"chf-funds-usd-{cross_rate}-{spread}", funding_currency="CHF", assets=[("USD", "10.00")], fx_rates={**FX_TRIANGLE, "CHF/USD": cross_rate}, fx_spread_rate=spread))
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == fx_actions
+    assert _fx_orders(wire) == [("asset-1", "110", "USD")]
 
 
 # --------------------------------------------------------------------------

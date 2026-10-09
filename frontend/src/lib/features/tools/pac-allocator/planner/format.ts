@@ -11,6 +11,8 @@
  * R14: an amount the backend computed is shown at the minor unit of its
  * currency, rounded exactly from its decimal or ratio; `≈` marks a value the
  * rounding changed. Prices, typed values and posted flows keep their digits.
+ * G3: a nonzero amount that would round to zero there keeps about two
+ * significant digits instead, so a fraction of a cent never reads as zero.
  */
 import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {formatDateTime} from '$lib/utils/core/formatDateTime';
@@ -61,8 +63,8 @@ export function exactDisplay(value: PacExactNumber): {text: string; approx: bool
     return {text: value.display_decimal, approx: !isExactProjection(value)};
 }
 
-/** R14: an exact backend amount rounded to `places` fraction digits, and whether the rounding changed it. */
-export function exactMoneyDisplay(value: PacExactNumber, places: number): {text: string; approx: boolean} {
+/** R14: an exact backend number rounded to `places` fraction digits, and whether the rounding changed it. */
+function exactRoundedDisplay(value: PacExactNumber, places: number): {text: string; approx: boolean} {
     if (value.kind === 'finite_decimal') {
         const canonical = canonicalDecimal(value.value);
         const rounded = canonical === null ? null : roundDecimal(canonical, places);
@@ -71,6 +73,19 @@ export function exactMoneyDisplay(value: PacExactNumber, places: number): {text:
     const rounded = roundRatio(value.numerator, value.denominator, places);
     if (rounded !== null) return {text: rounded, approx: !decimalEqualsRatio(rounded, value.numerator, value.denominator)};
     return {text: roundDecimal(value.display_decimal, places) ?? value.display_decimal, approx: true};
+}
+
+/**
+ * R14: an exact backend amount rounded to `places` fraction digits, and whether the rounding changed it.
+ * G3: a nonzero amount that would round to zero there is rounded at one place past its first nonzero
+ * fraction digit instead (at most twenty), never shown as zero; a true zero stays an exact `0`.
+ */
+export function exactMoneyDisplay(value: PacExactNumber, places: number): {text: string; approx: boolean} {
+    const shown = exactRoundedDisplay(value, places);
+    if (shown.text !== '0') return shown;
+    const finest = exactRoundedDisplay(value, MAX_DISPLAY_FRACTION).text;
+    const first = (finest.split('.')[1] ?? '').search(/[1-9]/);
+    return first < 0 ? shown : exactRoundedDisplay(value, Math.min(first + 2, MAX_DISPLAY_FRACTION));
 }
 
 interface MoneyOptions {
@@ -228,9 +243,12 @@ export function formatExactPercent(value: PacExactNumber, digits = 2): string {
     return formatPlannerPercent(exactDisplay(value).text, {digits});
 }
 
-/** L2 distance in squared valuation money: personal, unit outside the mask (`≈••• EUR²`). R14: two decimals, `≈` when the rounding changes it. */
+/**
+ * L2 distance in squared valuation money: personal, unit outside the mask (`≈••• EUR²`). R14: two decimals, `≈` when
+ * the rounding changes it. Squared money has no minor unit, so G3 does not apply: 0.004 is `≈0`.
+ */
 export function formatPlannerL2(value: PacExactNumber, currencyCode: string): string {
-    const shown = exactMoneyDisplay(value, SOLVER_COUNT_DIGITS);
+    const shown = exactRoundedDisplay(value, SOLVER_COUNT_DIGITS);
     const canonical = canonicalDecimal(shown.text);
     if (canonical === null) return EMPTY;
     const digits = maskable(Number(canonical).toLocaleString(undefined, {maximumFractionDigits: SOLVER_COUNT_DIGITS}), 'personal');
@@ -247,7 +265,8 @@ export function formatObjectiveValue(value: PacExactNumber, unit: PacObjectiveUn
 
 /**
  * A raw solver number (primal, dual, gap) carrying the stage unit. R14: money at the minor unit of its
- * currency, a count to two decimals; `≈` when the rounding changes the reported float.
+ * currency, a count to two decimals; `≈` when the rounding changes the reported float. A solver float is
+ * not an exact amount, so G3 does not apply: 0.004 EUR is `≈0.00`.
  */
 export function formatSolverNumber(value: string | null | undefined, unit: PacObjectiveUnit, digits?: CurrencyDigits): string {
     if (value === null || value === undefined) return EMPTY;

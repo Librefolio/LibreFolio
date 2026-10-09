@@ -1,6 +1,7 @@
 // @vitest-environment node
 /**
- * model — the help the proof badge opens, and the catalogue behind every badge (Vitest, node).
+ * model — the help the proof badge opens, the catalogue behind every badge, and the ledger's
+ * rounding column (Vitest, node).
  *
  * Subject. `resultBadges` turns a ready result into the badges at the head of the result:
  * availability, the Decimal check when the plan carries it, proof and stop reason, each with the
@@ -35,7 +36,16 @@
  * solution on `ready_incumbent` and knows its validation only as `decimal_verified`, so there the
  * Decimal-check badge appears and enters the catalogue check too.
  *
- * Environment. `resultBadges` reads plain fields and touches no DOM: node is enough.
+ * Ledger columns (fix A). The ledger table shows a balance column only when some row is not 0
+ * there (`ledgerFields`, R9.8). A ledger row's `rounding_delta` is an exact number, a finite
+ * decimal or an exact ratio, because a conversion through the reciprocal of a stored rate leaves
+ * a residual with no finite decimal (-47/21700 EUR). The filter reads it as such: it hides the
+ * column when every residual is an exact zero and shows it for a nonzero ratio or decimal on any
+ * row. Before fix A the field was decimal text, and the filter, reading an object as text, threw.
+ * The rows are minimal objects cast to `PacLedgerRow`, every balance `'0'`, so the rounding
+ * residual is the only value that can make its column speak.
+ *
+ * Environment. `resultBadges` and `ledgerFields` read plain fields and touch no DOM: node is enough.
  */
 import {describe, expect, it, vi} from 'vitest';
 
@@ -46,8 +56,8 @@ vi.mock('$lib/api', () => ({
 }));
 
 import en from '$lib/i18n/en.json';
-import type {PacProof, PacReadyResult} from '../types';
-import {resultBadges, type ResultBadge} from './model';
+import type {PacExactNumber, PacLedgerRow, PacProof, PacReadyResult} from '../types';
+import {LEDGER_FIELDS, ledgerFields, resultBadges, type ResultBadge} from './model';
 
 interface ProofCase {
     proof: PacProof['kind'];
@@ -136,5 +146,39 @@ describe('resultBadges — every fallback is the EN catalogue message at its key
         expect([...checkedIds]).toEqual(expect.arrayContaining(['availability', 'validation', 'proof', 'stop']));
         expect([...checkedKeys]).toEqual(expect.arrayContaining([DECIMAL_CHECK_KEY, ...STOP_KEYS]));
         expect(mismatches).toEqual([]);
+    });
+});
+
+// Fix A: a ledger row's rounding residual is an exact number, no longer decimal text.
+
+const ZERO_RESIDUAL: PacExactNumber = {kind: 'finite_decimal', value: '0'};
+/** A USD funding converted to EUR through the reciprocal of a stored EUR/USD: no finite decimal. */
+const RATIO_RESIDUAL: PacExactNumber = {kind: 'exact_ratio', numerator: '-47', denominator: '21700', display_decimal: '-0.002166', display_scale: 6, display_authority: 'non_authoritative'};
+/** A terminating residual below the minor unit. */
+const DECIMAL_RESIDUAL: PacExactNumber = {kind: 'finite_decimal', value: '-0.0021'};
+
+/** A ledger row of `broker-one` whose balances are all 0, so only its rounding residual can make a column speak. */
+function ledgerRow(currency: string, rounding_delta: PacExactNumber): PacLedgerRow {
+    const zeros = Object.fromEntries(LEDGER_FIELDS.map((field) => [field, '0']));
+    return {...zeros, broker_id: 'broker-one', currency, rounding_delta} as unknown as PacLedgerRow;
+}
+
+describe('ledgerFields — the rounding column reads an exact number', () => {
+    it('hides the rounding column when every residual is an exact zero', () => {
+        const rows = [ledgerRow('EUR', ZERO_RESIDUAL), ledgerRow('USD', ZERO_RESIDUAL)];
+        // Control: `all` brings every column back without reading a value.
+        expect(ledgerFields(rows, true)).toEqual([...LEDGER_FIELDS]);
+
+        const fields = ledgerFields(rows, false);
+        expect(fields, 'the anchors are always shown').toEqual(expect.arrayContaining(['initial_selected', 'final_spendable']));
+        expect(fields).not.toContain('rounding_delta');
+    });
+
+    it('shows it for a residual with no finite decimal, an exact ratio', () => {
+        expect(ledgerFields([ledgerRow('EUR', RATIO_RESIDUAL), ledgerRow('USD', ZERO_RESIDUAL)], false)).toContain('rounding_delta');
+    });
+
+    it('shows it for a nonzero finite decimal on any row, not only the first', () => {
+        expect(ledgerFields([ledgerRow('EUR', ZERO_RESIDUAL), ledgerRow('USD', DECIMAL_RESIDUAL)], false)).toContain('rounding_delta');
     });
 });

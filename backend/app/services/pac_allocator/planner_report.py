@@ -639,13 +639,16 @@ def build_order_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
 def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
     """Project Broker×currency ledgers.
 
-    Every field is a **posted** amount, which is why the schema's own identity
-    (``initial_selected + funding_in + fx_credit + gross_sell_credit − ...``)
-    reconciles without any rounding term. ``rounding_delta`` carries the
-    *raw* posted-minus-exact residue and is informational only — note that the
-    identically-named field on ``PlannerAccountingSummary`` maps from a
-    *different* source (see ``build_accounting``); the shared name is a trap,
-    not a hint.
+    Every amount field is a **posted** amount, which is why the schema's own
+    identity (``initial_selected + funding_in + fx_credit + gross_sell_credit −
+    ...``) reconciles without any rounding term, and why each one terminates
+    and goes out as fixed-decimal text. ``rounding_delta`` is the exception: it
+    carries the *raw* posted-minus-exact residue, is informational only, and
+    goes out as an exact number, because the exact credit of a conversion at
+    the reciprocal of a stored rate (USD → EUR at 1/1.085) need not terminate,
+    and then neither does the residue. Note that the identically-named field
+    on ``PlannerAccountingSummary`` maps from a *different* source (see
+    ``build_accounting``); the shared name is a trap, not a hint.
     """
     rows: list[PlannerLedgerRow] = []
     for ledger in evaluation.ledgers:
@@ -664,7 +667,7 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
                 sell_fees=ratio_to_fixed_decimal(ledger.sell_fees),
                 broker_withheld_tax=ratio_to_fixed_decimal(ledger.broker_withheld_tax),
                 self_reserved_tax=ratio_to_fixed_decimal(ledger.self_reserved_tax),
-                rounding_delta=ratio_to_fixed_decimal(ledger.raw_rounding_delta),
+                rounding_delta=ratio_to_exact_number(ledger.raw_rounding_delta),
                 final_spendable=ratio_to_fixed_decimal(ledger.final_spendable),
                 final_physical=ratio_to_fixed_decimal(ledger.final_physical),
             )

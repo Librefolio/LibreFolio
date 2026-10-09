@@ -64,6 +64,15 @@ a whole class of arbitrage the old model made expressible — cycling cash throu
 inconsistent rate directions — by making it structurally impossible rather than
 checking for it afterwards.
 
+> ⚠️ **Correction 2026-10-09.** "Structurally impossible" holds for cycles between **two**
+> currencies: the map keeps one rate per pair, inverted exactly. It does not hold for
+> **triangles** of three currencies, which the map can still make incoherent: a direct rate, net
+> of the spread, can give more than going through the valuation currency. Since the
+> [PAC FX conversion fix](../implementation/plan-phase00PacFxConversionFix.prompt.md) (§1.4, fix
+> 2A), the normalizer checks it and rejects such a scenario as invalid input, with
+> `allocation.fx_rate_inconsistent`. The archived plans that repeat the claim stay as history; the
+> list is in that plan.
+
 A third thing happened that was not a fork but is worth recording: **six defects
 in this slice were invisible to every static gate** (`ruff`, `black`,
 `py_compile` all green) and were caught only by running the code. Two were mine

@@ -11,6 +11,7 @@ from babel.numbers import get_currency_precision
 
 from backend.app.schemas.pac_allocator import (
     AmountFeeCap,
+    CurrencyIssueParam,
     DomainAssetIdentity,
     DomainBrokerIdentity,
     DomainCopyProvenance,
@@ -134,6 +135,7 @@ class _PlannerV2Normalizer:
         self.capability_by_broker: dict[str, dict[str, object]] = {}
         self.fee_by_broker: dict[str, dict[str, object]] = {}
         self.reported_fx_rate_missing: set[str] = set()
+        self.reported_fx_rate_inconsistent: set[str] = set()
 
     def issue(self, code: PlannerIssueCode, path: PlannerIssuePath, *, params: tuple[PlannerIssueParam, ...] = ()) -> None:
         self.issues.append(make_issue(normalizer_issue_definition(code), path, params=params))
@@ -656,6 +658,52 @@ class _PlannerV2Normalizer:
             for pool_currency in sorted(pool_currencies_by_broker.get(route.broker_id, set())):
                 self.require_fx_pair(pool_currency, asset.quote.currency)
 
+    def validate_fx_coherence(self) -> None:
+        """Refuse a cross rate that, net of the spread, beats the triangle through V.
+
+        A BUY conversion from pool currency c into quote currency q is worth
+        ``rate(c→q)·(1−spread)·rate(q→V)`` in the valuation currency V; above
+        ``rate(c→V)`` it would create value, which the evaluator meets as a
+        negative spread loss. Equality is coherent. The checked conversions are
+        exactly those ``validate_fx_pair_closure`` requires; a conversion from
+        or into V never forms a triangle. A missing or nonpositive rate and an
+        out-of-range spread are reported elsewhere and skip the check.
+        """
+        valuation = self.request.valuation_currency
+        spread = ExactRatio.from_decimal(Decimal(self.request.fx_spread_rate))
+        if not self._rate_in_half_open_unit_interval(spread):
+            return
+        kept = ExactRatio(1) - spread
+        pool_currencies_by_broker = self._cash_pool_currencies_by_broker()
+        for route in self.request.order_routes:
+            if route.side != "buy":
+                continue
+            asset = self.asset_by_id.get(route.asset_id)
+            if asset is None or asset.quote is None or asset.quote.currency == valuation:
+                continue
+            quote_currency = asset.quote.currency
+            for pool_currency in sorted(pool_currencies_by_broker.get(route.broker_id, set())):
+                pair = self._fx_pair_key(pool_currency, quote_currency)
+                if pool_currency in (quote_currency, valuation) or pair in self.reported_fx_rate_inconsistent:
+                    continue
+                cross = self.fx_rate(pool_currency, quote_currency)
+                to_valuation = self.fx_rate(quote_currency, valuation)
+                direct = self.fx_rate(pool_currency, valuation)
+                if cross is None or to_valuation is None or direct is None:
+                    continue
+                if cross * kept * to_valuation > direct:
+                    self.reported_fx_rate_inconsistent.add(pair)
+                    self.issue(
+                        "allocation.fx_rate_inconsistent",
+                        field_path("fx", "fx_rate", pair, "rate"),
+                        params=(
+                            IdIssueParam(kind="id", name="pair", value=pair),
+                            CurrencyIssueParam(kind="currency", name="source_currency", value=pool_currency),
+                            CurrencyIssueParam(kind="currency", name="destination_currency", value=quote_currency),
+                            CurrencyIssueParam(kind="currency", name="valuation_currency", value=valuation),
+                        ),
+                    )
+
     def validate_sell_context(self) -> None:
         if not isinstance(self.request, RebalancerInvestAndSellRequest):
             return
@@ -1133,6 +1181,7 @@ class _PlannerV2Normalizer:
         self.validate_sell_context()
         self.validate_current_portfolio()
         self.validate_fx_pair_closure()
+        self.validate_fx_coherence()
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)
         normalized = self.build_scenario() if availability == "ready" else None

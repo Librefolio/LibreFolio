@@ -1123,7 +1123,10 @@
         "sell_fees": "0",
         "broker_withheld_tax": "0",
         "self_reserved_tax": "0",
-        "rounding_delta": "0",
+        "rounding_delta": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
         "final_spendable": "0",
         "final_physical": "0"
       },
@@ -1141,7 +1144,10 @@
         "sell_fees": "0",
         "broker_withheld_tax": "0",
         "self_reserved_tax": "0",
-        "rounding_delta": "0",
+        "rounding_delta": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
         "final_spendable": "0",
         "final_physical": "0"
       },
@@ -1159,7 +1165,10 @@
         "sell_fees": "0",
         "broker_withheld_tax": "0",
         "self_reserved_tax": "0",
-        "rounding_delta": "0",
+        "rounding_delta": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
         "final_spendable": "0",
         "final_physical": "0"
       }

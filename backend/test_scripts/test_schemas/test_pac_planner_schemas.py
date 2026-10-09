@@ -288,7 +288,7 @@ def _pac_incumbent_result() -> JsonObject:
             "sell_fees": "0",
             "broker_withheld_tax": "0",
             "self_reserved_tax": "0",
-            "rounding_delta": "0",
+            "rounding_delta": _finite("0"),
             "final_spendable": "0",
             "final_physical": "0",
         }
@@ -368,9 +368,9 @@ def _rebalancer_no_op_result() -> JsonObject:
             "sell_fees",
             "broker_withheld_tax",
             "self_reserved_tax",
-            "rounding_delta",
         ):
             ledger[field] = "0"
+        ledger["rounding_delta"] = _finite("0")
         ledger["final_spendable"] = ledger["initial_selected"]
         ledger["final_physical"] = ledger["initial_selected"]
 
@@ -1109,6 +1109,7 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.fee_schedule_missing",
     "allocation.fiscal_currency_missing",
     "allocation.funding_cap_negative",
+    "allocation.fx_rate_inconsistent",
     "allocation.fx_rate_missing",
     "allocation.fx_spread_rate_out_of_range",
     "allocation.identity_fx_rate_not_allowed",
@@ -1211,7 +1212,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 76
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 77
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(pac_schemas.PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -1662,6 +1663,8 @@ DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
     _normalizer_issue_case("allocation.fiscal_currency_missing", "needs_input"),
     _normalizer_issue_case("allocation.wac_missing", "needs_input"),
     _normalizer_issue_case("allocation.fx_rate_missing", "needs_input", FX_RATE_ISSUE_PATH),
+    # FX conversion fix: once every needed pair is present, the rates are checked for coherence.
+    _normalizer_issue_case("allocation.fx_rate_inconsistent", "invalid", FX_RATE_ISSUE_PATH),
     _normalizer_issue_case("portfolio_rebalancer.cost_basis_negative", "invalid"),
     _normalizer_issue_case("portfolio_rebalancer.withholding_missing", "needs_input"),
     _normalizer_issue_case("portfolio_rebalancer.carried_loss_negative", "invalid"),
@@ -3158,6 +3161,83 @@ def test_rebalancer_ledger_cannot_go_negative_and_has_no_top_up() -> None:
     _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "Rebalancer ledger balances cannot be negative")
 
 
+# FX conversion fix - a ledger row's rounding residual is an exact number.  USD->EUR at the
+# reciprocal of a stored EUR/USD leaves a residual that repeats (-47/21700), which no
+# fixed-decimal text can carry, so ``rounding_delta`` is an ``ExactNumber`` like every other
+# exact value of the contract: ``finite_decimal`` when it terminates, ``exact_ratio`` when it
+# does not.  Every test below sets the field on every ledger row explicitly, so none of them
+# depends on what the builders and fixtures happen to publish.
+
+LEDGER_ROUNDING_RATIO = _ratio("-47", "21700", "-0.002166")
+NO_OP_LEDGER_ROUNDING_CASES = (
+    pytest.param(PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, ("broker-one", "EUR"), id="pac"),
+    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_no_op_result, ("broker-alpha", "EUR"), id="rebalancer"),
+)
+
+
+def _with_ledger_rounding(payload: JsonObject, value: Any, *, only: tuple[str, str] | None = None) -> JsonObject:
+    """Set ``rounding_delta`` on every ledger row: ``value`` on the ``only`` row (on all of them when ``None``), an exact zero elsewhere."""
+    rows = payload["primary_solution"]["ledger_rows"]
+    assert only is None or only in [(row["broker_id"], row["currency"]) for row in rows], only
+    for row in rows:
+        row["rounding_delta"] = deepcopy(value) if only in (None, (row["broker_id"], row["currency"])) else _finite("0")
+    return payload
+
+
+def _ledger_rounding_by_row(rows: list[JsonObject]) -> dict[tuple[str, str], Any]:
+    return {(row["broker_id"], row["currency"]): row["rounding_delta"] for row in rows}
+
+
+@pytest.mark.parametrize(
+    "rounding",
+    (
+        pytest.param(_finite("0"), id="finite-zero"),
+        pytest.param(LEDGER_ROUNDING_RATIO, id="repeating-ratio"),
+    ),
+)
+def test_ledger_rounding_delta_is_an_exact_number(rounding: JsonObject) -> None:
+    """Both branches of the exact number are accepted, and published back exactly as given."""
+    payload = _with_ledger_rounding(_pac_incumbent_result(), rounding, only=("broker-one", "EUR"))
+    expected = _ledger_rounding_by_row(payload["primary_solution"]["ledger_rows"])
+
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+
+    published = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]["ledger_rows"]
+    assert _ledger_rounding_by_row(published) == expected
+
+
+def test_ledger_rounding_delta_rejects_bare_decimal_text() -> None:
+    """The field has one type: a reader dispatches on ``kind`` and never has to guess whether it received text."""
+    payload = _with_ledger_rounding(_pac_incumbent_result(), "0")
+
+    with pytest.raises(ValidationError) as exc_info:
+        PAC_PLAN_OUTPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert any("rounding_delta" in error["loc"] for error in errors), errors
+
+
+@pytest.mark.parametrize(("adapter", "build", "residual_row"), NO_OP_LEDGER_ROUNDING_CASES)
+def test_no_op_ledger_accepts_an_exact_zero_rounding_delta(adapter: TypeAdapter[Any], build: PayloadFactory, residual_row: tuple[str, str]) -> None:
+    """A no-op posts nothing, so every residual is an exact zero, the row the next test breaks included."""
+    payload = _with_ledger_rounding(build(), _finite("0"), only=residual_row)
+    rows = payload["primary_solution"]["ledger_rows"]
+    assert all(row["rounding_delta"] == _finite("0") for row in rows), rows
+
+    model, _emitted = _strict_roundtrip(adapter, payload)
+
+    published = adapter.dump_python(model, mode="json")["primary_solution"]["ledger_rows"]
+    assert _ledger_rounding_by_row(published) == _ledger_rounding_by_row(rows)
+
+
+@pytest.mark.parametrize(("adapter", "build", "residual_row"), NO_OP_LEDGER_ROUNDING_CASES)
+def test_no_op_ledger_refuses_a_nonzero_rounding_residual(adapter: TypeAdapter[Any], build: PayloadFactory, residual_row: tuple[str, str]) -> None:
+    """A nonzero residual is action-derived whatever its expansion: a ratio is refused by the no-op rule, not by its type."""
+    payload = _with_ledger_rounding(build(), LEDGER_ROUNDING_RATIO, only=residual_row)
+
+    _reject_because(adapter, payload, "No-op ledger rows cannot contain action-derived postings")
+
+
 # R4.9 - conversions.  An FX action is an engine decision keyed by order route; what
 # the user executes is its Broker x currency-pair conversion, numbered only when the
 # Broker converts manually.  The medium Rebalancer fixture carries one of each: the
@@ -3758,17 +3838,18 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
+# FX conversion fix: recomputed for the ``ExactNumber`` ledger ``rounding_delta`` and the new ``allocation.fx_rate_inconsistent`` issue code.
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "4f061103f96ac9f4fc2fbe69d94beed7381e2dce6e4fea2c57b2eb97f27b58bb",
+        "a999932e80a10819b8dc1455629d8721a973e2ecefb59800d88288357460cbad",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "be2bb19d144e07fb208ae08a26f31433ac418b722786aeab62b1021b82b18e62",
+        "a1daf5130b4e4c965ddd8b625c18b630ad3c6905b0fcf8926b0458e482727822",
         id="rebalancer",
     ),
 )
