@@ -376,20 +376,20 @@ El diagrama de red ilustra el escenario de múltiples nodos expuestos en paralel
 
 ```mermaid
 graph LR
- User["👤 Usuario Externo"] -->|HTTPS| Funnel1["☁️ Funnel 1<br>(service2.yourtailnet.ts.net)"]
- User -->|HTTPS| Funnel2["☁️ Funnel 2<br>(service3.yourtailnet.ts.net)"]
- User -->|HTTPS| Funnel3["☁️ Funnel 3<br>(librefolio.yourtailnet.ts.net)"]
- User -->|HTTPS| Funnel4["☁️ Funnel 4<br>(service1.yourtailnet.ts.net)"]
+ User["👤 Usuario Externo"] -->|HTTPS| Funnel1["☁️ Funnel 1<br>(librefolio.yourtailnet.ts.net)"]
+ User -->|HTTPS| Funnel2["☁️ Funnel 2<br>(service1.yourtailnet.ts.net)"]
+ User -->|HTTPS| Funnel3["☁️ Funnel 3<br>(service3.yourtailnet.ts.net)"]
+ User -->|HTTPS| Funnel4["☁️ Funnel 4<br>(service4.yourtailnet.ts.net)"]
  
- Funnel1 -->|WireGuard| TSC1["🐳 Contenedor Tailscale 1<br>(100.1.1.1)"]
- Funnel2 -->|WireGuard| TSC2["🐳 Contenedor Tailscale 2<br>(100.4.4.4)"]
- Funnel3 -->|WireGuard| TSC3["🐳 Contenedor Tailscale 3<br>(100.3.3.3)"]
- Funnel4 -->|WireGuard| TSC4["🐳 Contenedor Tailscale 4<br>(100.2.2.2)"]
+ Funnel1 -->|WireGuard| TSC1["🐳 Contenedor Tailscale 1<br>(100.101.x.x)"]
+ Funnel2 -->|WireGuard| TSC2["🐳 Contenedor Tailscale 2<br>(100.102.x.x)"]
+ Funnel3 -->|WireGuard| TSC3["🐳 Contenedor Tailscale 3<br>(100.103.x.x)"]
+ Funnel4 -->|WireGuard| TSC4["🐳 Contenedor Tailscale 4<br>(100.104.x.x)"]
  
  subgraph LAN ["Red Local LAN (192.168.1.0/24)"]
  subgraph Host2 ["Servidor 2 (ej. Mini PC - 192.168.1.10)"]
- TSC3 -->|socat: TCP/8080| Service3["🔌 Servicio 3<br>(192.168.1.10:80)"]
- TSC4 -->|socat: TCP/9000| Service4["🔌 Servicio 4<br>(192.168.1.10:80)"]
+ TSC3 -->|socat: TCP/8080| Service3["🔌 Servicio 3<br>(192.168.1.10:8080)"]
+ TSC4 -->|socat: TCP/9000| Service4["🔌 Servicio 4<br>(192.168.1.10:9000)"]
  end
  subgraph Host1 ["Servidor 1 (ej. NAS - 192.168.1.20)"]
  TSC1 -->|socat: TCP/6040| LibreFolio["📊 LibreFolio<br>(192.168.1.20:6040)"]
@@ -447,7 +447,7 @@ services:
       - /custom_startup.sh
     environment:
 
-      - HOST_IP=192.168.1.10 # IP local del servicio a exponer (ej. Servidor 1)
+      - HOST_IP=192.168.1.20 # IP local del servicio a exponer (ej. Servidor 1)
       - HOST_PORT=6040 # Puerto real del servicio a exponer
       - TAILSCALE_FUNNEL_PORT=6040 # Puerto interno del Funnel
       - TS_HOSTNAME=librefolio # Nombre de host público personalizado (ej. librefolio)
@@ -572,7 +572,7 @@ services:
           - /custom_startup.sh
         environment:
 
-          - HOST_IP=192.168.1.10 # IP local del servicio a exponer (ej. Servidor 1)
+          - HOST_IP=192.168.1.20 # IP local del servicio a exponer (ej. Servidor 1)
           - HOST_PORT=6040 # Puerto real del servicio a exponer
           - TAILSCALE_FUNNEL_PORT=6040 # Puerto interno del Funnel
           - TS_HOSTNAME=librefolio # Nombre de host público personalizado (ej. librefolio)
@@ -675,7 +675,7 @@ Press Ctrl+C to exit.
 
 ### ¿Qué es MagicDNS?
 
-**MagicDNS** asigna automáticamente un nombre de dominio DNS local y público a cada uno de tus dispositivos registrados en la Tailnet. En lugar de tener que recordar direcciones IP como `100.110.222.112`, puedes escribir `http://tu-servidor` en el navegador.
+**MagicDNS** asigna automáticamente un nombre de dominio DNS local y público a cada uno de tus dispositivos registrados en la Tailnet. En lugar de tener que recordar direcciones IP como `100.110.x.x`, puedes escribir `http://tu-servidor` en el navegador.
 Los dominios públicos asignados por MagicDNS terminan con el sufijo `*.ts.net` (por ejemplo, `https://librefolio.tu-tailnet.ts.net`).
 
 ### Cómo Usar un Dominio Personalizado con Tailscale
@@ -688,7 +688,7 @@ Esta es la solución más simple para acceder a tus dispositivos de forma privad
 
 1. Inicia sesión en la consola de tu registrador de dominios (ej., Cloudflare, GoDaddy, Namecheap).
 2. Crea un registro DNS de tipo **A** (o **AAAA** para IPv6) para el subdominio elegido (ej., `librefolio.midominio.com`).
-3. Apunta el registro directamente a la **IP privada de Tailscale** de tu servidor (ej., `100.77.72.90`).
+3. Apunta el registro directamente a la **IP privada de Tailscale** de tu servidor (ej., `100.77.x.x`).
 4. **Cómo funciona**: Dado que las direcciones IP en la red `100.64.0.0/10` no son enrutables públicamente a nivel global, el dominio se resolverá y funcionará **solo** cuando estés conectado a tu VPN de Tailscale, asegurando que ningún usuario externo pueda acceder o escanear el servicio. Para más detalles, consulta la [Documentación oficial sobre configuración de DNS](https://tailscale.com/kb/1054/dns#public-dns).
 
 #### Método 2: DNS Dividido (Con Servidor DNS Interno)
