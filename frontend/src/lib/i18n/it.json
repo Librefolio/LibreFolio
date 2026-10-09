@@ -434,7 +434,10 @@
     "serverUnreachable": {
       "title": "Il server non risponde",
       "body": "Questa pagina resta aperta e la tua sessione non è stata chiusa. Riprova tra un momento."
-    }
+    },
+    "invalidCredentials": "Nome utente o password non validi",
+    "invalidInput": "Dati non validi",
+    "loginFailed": "Accesso non riuscito"
   },
   "importWizard": {
     "title": "Importa Transazioni",
@@ -467,7 +470,7 @@
     "allConfigured": "Tutti i file configurati",
     "selectPlugin": "Seleziona plugin…",
     "extensionError": "Tipo file non supportato: {ext}. Accettati: .csv, .xlsx, .xls",
-    "unresolvedCount": "{n} asset non risolti",
+    "unresolvedCount": "{n, plural, one {# asset non risolto} other {# asset non risolti}}",
     "warningsCount": "{n} avvisi",
     "importedCount": "{n} transazioni importate nell'editor",
     "resolveAssets": "Risolvi Asset",
@@ -2053,7 +2056,8 @@
       "scheduler_current_price_frequency_minutes": "Frequenza Aggiornamento Prezzi",
       "scheduler_history_sync_times": "Orari Sincronizzazione Storico",
       "scheduler_history_sync_days": "Giorni Sincronizzazione Storico",
-      "scheduler_history_sync_horizon_days": "Orizzonte di Recupero"
+      "scheduler_history_sync_horizon_days": "Orizzonte di Recupero",
+      "scheduler_enabled": "Scheduler Abilitato"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Per quanto tempo una sessione utente rimane valida prima di richiedere un nuovo login",
@@ -2065,7 +2069,7 @@
       "default_theme": "Tema predefinito per i nuovi utenti",
       "scheduler_enabled": "Abilita o disabilita lo scheduler automatico dei dati di mercato",
       "scheduler_current_price_frequency_minutes": "Ogni quanti minuti vengono aggiornati i prezzi correnti",
-      "scheduler_history_sync_times": "Orari giornalieri in cui vengono sincronizzati i dati storici (ora del server)",
+      "scheduler_history_sync_times": "Orari giornalieri in cui vengono sincronizzati i dati storici (nel fuso orario dello scheduler)",
       "scheduler_history_sync_days": "Giorni della settimana in cui vengono sincronizzati i dati storici",
       "scheduler_history_sync_horizon_days": "Quanti giorni indietro cercare dati storici mancanti"
     },
@@ -2094,7 +2098,7 @@
         "currentPriceFreqHint": "Ogni quanti minuti vengono aggiornati i prezzi (1–1440 minuti)",
         "currentPriceFreqSuffix": "minuti",
         "historyTimesLabel": "Orari di sincronizzazione",
-        "historyTimesHint": "Orari in cui viene eseguita la sincronizzazione giornaliera (ora del server)",
+        "historyTimesHint": "Orari in cui viene eseguita la sincronizzazione giornaliera (nel fuso orario dello scheduler)",
         "historyTimesAdd": "Aggiungi orario",
         "historyDaysLabel": "Giorni di sincronizzazione",
         "historyDaysHint": "Giorni della settimana in cui viene eseguita la sincronizzazione",

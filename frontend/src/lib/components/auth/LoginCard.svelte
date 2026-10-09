@@ -55,7 +55,7 @@
             <!-- Error Message -->
             {#if $authError}
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg text-sm" data-testid="login-error">
-                    {$authError}
+                    {'key' in $authError ? $_($authError.key) : $authError.message}
                 </div>
             {/if}
 

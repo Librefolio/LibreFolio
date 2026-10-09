@@ -11,7 +11,7 @@ import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
 import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
-import type {AuthState, AuthUser} from '$lib/types';
+import type {AuthError, AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
 import {currentLanguage} from '$lib/stores/app/language';
 import {userSettings} from '$lib/stores/app/settings';
@@ -120,17 +120,18 @@ function createAuthStore() {
                 if (!isCurrentAuthOperation(operationGeneration)) return false;
                 transitionClientSession(null);
                 debug.log('AuthStore', 'Login error:', error);
-                let errorMessage = 'Login failed';
+                // One key for every 401: telling an unknown user from a wrong password would reveal which accounts exist.
+                let authError: AuthError = {key: 'auth.loginFailed'};
 
                 if (isAxiosError(error)) {
                     debug.log('AuthStore', 'Axios error status:', error.response?.status);
                     debug.log('AuthStore', 'Axios error data:', error.response?.data);
                     if (error.response?.status === 401) {
-                        errorMessage = 'Invalid username or password';
+                        authError = {key: 'auth.invalidCredentials'};
                     } else if (error.response?.status === 422) {
-                        errorMessage = 'Invalid input';
+                        authError = {key: 'auth.invalidInput'};
                     } else {
-                        errorMessage = error.message;
+                        authError = {message: error.message};
                     }
                 }
 
@@ -138,7 +139,7 @@ function createAuthStore() {
                     ...state,
                     user: null,
                     isLoading: false,
-                    error: errorMessage,
+                    error: authError,
                     isInitialized: true,
                 }));
 

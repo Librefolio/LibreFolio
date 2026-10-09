@@ -434,7 +434,10 @@
     "serverUnreachable": {
       "title": "The server is not responding",
       "body": "This page stays open and you have not been signed out. Try again in a moment."
-    }
+    },
+    "invalidCredentials": "Invalid username or password",
+    "invalidInput": "Invalid input",
+    "loginFailed": "Login failed"
   },
   "importWizard": {
     "title": "Import Transactions",
@@ -467,7 +470,7 @@
     "allConfigured": "All files configured",
     "selectPlugin": "Select plugin…",
     "extensionError": "Unsupported file type: {ext}. Accepted: .csv, .xlsx, .xls",
-    "unresolvedCount": "{n} assets unresolved",
+    "unresolvedCount": "{n, plural, one {# asset unresolved} other {# assets unresolved}}",
     "warningsCount": "{n} warnings",
     "importedCount": "{n} transactions imported to editor",
     "resolveAssets": "Resolve Assets",
@@ -2053,7 +2056,8 @@
       "scheduler_current_price_frequency_minutes": "Price Refresh Frequency",
       "scheduler_history_sync_times": "History Sync Times",
       "scheduler_history_sync_days": "History Sync Days",
-      "scheduler_history_sync_horizon_days": "Lookback Horizon"
+      "scheduler_history_sync_horizon_days": "Lookback Horizon",
+      "scheduler_enabled": "Scheduler Enabled"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "How long a user session remains valid before requiring re-login",
@@ -2065,7 +2069,7 @@
       "default_theme": "Default theme for new users",
       "scheduler_enabled": "Enable or disable the automatic market data scheduler",
       "scheduler_current_price_frequency_minutes": "How often current prices are refreshed (in minutes)",
-      "scheduler_history_sync_times": "Times of day when historical data is synced (server time)",
+      "scheduler_history_sync_times": "Times of day when historical data is synced (in the scheduler timezone)",
       "scheduler_history_sync_days": "Days of the week when historical data is synced",
       "scheduler_history_sync_horizon_days": "How many days back to look for missing historical data"
     },
@@ -2094,7 +2098,7 @@
         "currentPriceFreqHint": "How often current prices are updated (1–1440 minutes)",
         "currentPriceFreqSuffix": "minutes",
         "historyTimesLabel": "Sync times",
-        "historyTimesHint": "Times at which daily history sync runs (server time)",
+        "historyTimesHint": "Times at which daily history sync runs (in the scheduler timezone)",
         "historyTimesAdd": "Add time",
         "historyDaysLabel": "Sync days",
         "historyDaysHint": "Days of the week when history sync runs",
