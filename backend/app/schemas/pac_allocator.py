@@ -1441,7 +1441,7 @@ class PlannerLedgerRow(AllocationStrictModel):
     @model_validator(mode="after")
     def validate_ledger_identity(self) -> PlannerLedgerRow:
         # The final balances may be negative: a PAC pool a few minor units short
-        # to HALF_UP rounding is published with the top-up that covers it
+        # to rounding against the plan is published with the top-up that covers it
         # (``PacPlanSolution``); ``RebalancerPlanSolution`` still refuses them.
         nonnegative_fields = (
             "initial_selected",
@@ -1479,13 +1479,13 @@ class PlannerLedgerRow(AllocationStrictModel):
 
 
 class PlannerRoundingTopUp(AllocationStrictModel):
-    """Cash one ledger pool lacks because the exact replay rounds HALF_UP (QX1-b).
+    """Cash one ledger pool lacks because the exact replay rounds every posting against the plan (QX1-b).
 
     ``amount`` is what to add on ``broker_id`` in ``currency`` for the plan to
     execute: the pool's negative final balance, negated. ``rounded_postings``
-    counts the pool's postings that carry a quantum (BUY debit, nonzero fee, FX
-    credit), and bounds ``amount`` at that many minor units. ``valuation_amount``
-    is ``amount`` in the scenario valuation currency.
+    counts the pool's nonzero postings that carry a quantum (BUY debit, SELL
+    credit, fee, tax, FX credit), and bounds ``amount`` at that many minor units.
+    ``valuation_amount`` is ``amount`` in the scenario valuation currency.
     """
 
     broker_id: PlannerId
@@ -1551,7 +1551,7 @@ class PlannerAccountingSummary(AllocationStrictModel):
     physical_reserves: ExactMoney
     economic_losses: ExactMoney
     rounding_delta: ExactMoney = Field(description="Raw posted-exact aggregate rounding delta.")
-    rounding_bound: ExactMoney
+    rounding_bound: ExactMoney = Field(description="One minor unit per rounded posting, in the valuation currency: each posting rounds against the plan by less than its unit.")
     identity_delta: ExactMoney
 
 
@@ -1704,7 +1704,7 @@ class PacPlanSolution(AllocationStrictModel):
     conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
     order_rows: list[PlannerBuyOrderRow]
     ledger_rows: list[PlannerLedgerRow]
-    rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by HALF_UP rounding; empty when every pool balances.")
+    rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by rounding against the plan; empty when every pool balances.")
     exposure_rows: list[PacExposurePlanRow]
     accounting: PlannerAccountingSummary
     costs: PlannerCostTotals

@@ -25,9 +25,10 @@ and ``SolverInfeasibilityContradictedError`` is raised instead
 authoritative. SCIP's incumbent is a floating proposal that has to survive
 exact arithmetic before a single number of it is published. The one deficit
 the replay tolerates is rounding (QX1-b, developer decision of 2026-09-25): a
-plan whose HALF_UP postings leave a cash pool (broker x currency) at most N
-minor units short, N being the pool's postings that carry a quantum, is
-published with one top-up per such pool — "this broker/currency needs D more".
+plan whose postings, rounded against the plan, leave a cash pool (broker x
+currency) at most N minor units short, N being the pool's postings that carry
+a quantum, is published with one top-up per such pool — "this broker/currency
+needs D more".
 ``evaluator.rounding_top_ups`` decides. Any other rejection raises
 ``ExactReplayRejectedError``, which the Tool reports as ``execution_failed``:
 publishing an unverified plan is the one outcome this package exists to

@@ -25,9 +25,14 @@ whole discrete domain, so it is independent ground truth. Adding a fixture to
 Scope, as everywhere else in this package: PAC `proportional` policy,
 `primary` purpose only. Every fixture is small enough for the oracle to
 enumerate in a fraction of a second (the coarse funding/FX case, which is the
-fixture that caught the Step3 §16.11 HALF_UP ledger defect, has 585
+fixture that caught the Step3 §16.11 posted-ledger defect, has 585
 candidates, the QX1-a example 501, the exact FX-credit tie case 240; the rest
-are in the tens). Fixtures with a *binding* fee cap are no longer excluded
+are in the tens). Those are domain sizes -- every point of the decision boxes
+-- so how a posting rounds moves only how many of them are feasible, never how
+many there are. Every rounded posting is rounded against the plan, credits at
+their floor and debits at their ceiling, and the compiled rows encode exactly
+that, so the model's feasible set is the exact replay's and the gate admits no
+slack on any fixture. Fixtures with a *binding* fee cap are no longer excluded
 from the agreement gate: since QX1-a (found 2026-09-24) the fee epigraph
 models the cap exactly (`constraints.py`), so a capped route that makes the
 solver prefer another candidate is a disagreement like any other, and the
@@ -196,10 +201,12 @@ def _fee_cap_never_binds_scenario() -> ExactPlannerScenario:
 
 def _exact_credit_tie_fx_scenario() -> ExactPlannerScenario:
     """Option A (R13): an exact FX-credit tie decides the optimum. 5 EUR at
-    3/2 with no spread is exactly 7.5 USD, a HALF_UP tie that posts 8, and
-    those 8 USD buy the 4th unit at 2 USD; without the round-up only 3 fit.
-    The oracle suite derives that optimum by hand. Zero fee and a whole-USD
-    price: a credit tie is reachable, no debit tie is. 240 candidates.
+    3/2 with no spread is exactly 7.5 USD, a tie of the USD quantum; a credit
+    is rounded against the plan, so it posts its floor, 7 USD, and the 4th
+    unit at 2 USD (8 USD) stays out of reach -- the optimum buys 3 units with
+    4 EUR, an exact 6 USD. The oracle suite derives that optimum by hand.
+    Zero fee and a whole-USD price: a credit tie is reachable, and no debit
+    is ever rounded. 240 candidates, 40 of them feasible.
     """
     return _credit_tie_fx_scenario(price=R(2), cap=R(4))
 
@@ -210,18 +217,19 @@ _ORACLE_AGREEMENT_FIXTURES = [
     pytest.param(_single_buy_scenario, id="single_buy"),
     pytest.param(_proportional_fee_no_cap_scenario, id="proportional_fee_no_cap"),
     pytest.param(_execution_margin_scenario, id="execution_margin"),
-    # X2: fee minimum above `rate * notional_upper`. Every amount is whole cents, so no HALF_UP tie is reachable.
+    # X2: fee minimum above `rate * notional_upper`. Every amount is whole cents, so rounding never moves a posting.
     pytest.param(_fee_floor_above_linear_upper_scenario, id="fee_floor_above_linear_upper"),
     pytest.param(_small_route_cap_fee_floor_scenario, id="small_route_cap_fee_floor"),
     pytest.param(_flat_minimum_fee_scenario, id="flat_minimum_fee"),
-    # QX1-a: a fee cap that binds inside the route's range. Every amount is whole cents, so no HALF_UP tie is reachable.
+    # QX1-a: a fee cap that binds inside the route's range. Every amount is whole cents, so rounding never moves a posting.
     pytest.param(_fee_cap_binds_scenario, id="fee_cap_binds"),
     pytest.param(_fee_fixed_floor_cap_scenario, id="fee_fixed_floor_cap"),
     pytest.param(_fee_cap_binds_qx1a_example_scenario, id="fee_cap_binds_qx1a_example"),
     pytest.param(_fee_cap_never_binds_scenario, id="fee_cap_never_binds"),  # control: a cap the route never reaches
-    # Option A: an exact FX-credit tie is reachable and no debit tie is, so the optima must coincide exactly. The
-    # allowance for SCIP beating the oracle covers DEBIT ties only (X3 rejected): at a credit tie the model may post
-    # either neighbour, but whatever the lower one admits the true round-up admits too, so the feasible sets agree.
+    # Option A: an exact FX-credit tie is reachable, so the optima must coincide exactly -- as on every fixture. A
+    # credit posts its floor and a debit its ceiling, in the replay and in the compiled rows alike (`q*u <= exact <=
+    # q*u + q` for a credit, `q*u - q <= exact <= q*u` for a debit), so the model admits exactly the replay's points:
+    # no more credit and no less debit than the replay posts, even at a tie.
     pytest.param(_exact_credit_tie_fx_scenario, id="credit_tie_fx"),
 ]
 

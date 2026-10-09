@@ -199,10 +199,12 @@ class ExactRatio:
 class PostedAmount:
     """Exact value and its one-time posting on an explicit quantum.
 
-    ``rounding_delta`` is the raw ``posted - exact`` difference. The future
-    ledger must use that sign for debit families and negate it for credit
-    families when composing ``A_round``. Posting direction remains outside
-    this pre-G3 numeric primitive.
+    ``rounding_delta`` is the raw ``posted - exact`` difference. The ledger
+    uses that sign for debit families and negates it for credit families when
+    composing ``A_round``. A ledger posting rounds against the plan
+    (``post_floor`` for a credit, ``post_ceiling`` for a debit), so its
+    accounting adjustment lies in ``[0, quantum)``; ``post_half_up`` is the
+    nearest-quantum rule the wire display mirrors.
     """
 
     exact: ExactRatio
@@ -251,6 +253,40 @@ def post_half_up(value: ExactRatio, quantum: ExactRatio) -> PostedAmount:
         units=units,
         rounding_delta=posted - value,
     )
+
+
+def _post_directed(value: ExactRatio, quantum: ExactRatio, *, ceiling: bool) -> PostedAmount:
+    _require_ratio("value", value)
+    _require_positive_quantum(quantum)
+    scaled_numerator = value.numerator * quantum.denominator
+    scaled_denominator = value.denominator * quantum.numerator
+    units = -((-scaled_numerator) // scaled_denominator) if ceiling else scaled_numerator // scaled_denominator
+    posted = quantum * units
+    return PostedAmount(
+        exact=value,
+        posted=posted,
+        quantum=quantum,
+        units=units,
+        rounding_delta=posted - value,
+    )
+
+
+def post_floor(value: ExactRatio, quantum: ExactRatio) -> PostedAmount:
+    """Post a signed exact value at the largest quantum multiple not above it.
+
+    A ledger credit posts its floor: the plan never counts cash it would not
+    receive, and ``-quantum < rounding_delta <= 0``.
+    """
+    return _post_directed(value, quantum, ceiling=False)
+
+
+def post_ceiling(value: ExactRatio, quantum: ExactRatio) -> PostedAmount:
+    """Post a signed exact value at the smallest quantum multiple not below it.
+
+    A ledger debit posts its ceiling: the plan never pays less than the
+    movement costs, and ``0 <= rounding_delta < quantum``.
+    """
+    return _post_directed(value, quantum, ceiling=True)
 
 
 def ceil_to_quantum_units(value: ExactRatio, quantum: ExactRatio) -> int:
@@ -305,23 +341,61 @@ def calculate_effective_fx_rate(
     return approved_rate * (_EXACT_ONE - spread)
 
 
+def calculate_planning_fx_rate(
+    *,
+    approved_rate: ExactRatio,
+    spread: ExactRatio,
+    source_valuation_rate: ExactRatio,
+    destination_valuation_rate: ExactRatio,
+) -> ExactRatio:
+    """Return the rate a conversion is planned at: the spread rate, capped at
+    the triangle through the valuation currency.
+
+    Each valuation rate is valuation-currency units per unit of its currency,
+    so their ratio is the rate of the round trip through the valuation
+    currency. Stored rates carry ten decimals, and the normalizer tolerates a
+    cross rate just above that triangle by the error of that storage; at the
+    raw rate such a conversion would create value. The cap removes it. The
+    result equals ``calculate_effective_fx_rate`` when either currency is the
+    valuation currency or the rates agree, and the approved rate stays the
+    published spot.
+    """
+    effective_rate = calculate_effective_fx_rate(
+        approved_rate=approved_rate,
+        spread=spread,
+    )
+    for name, value in (
+        ("source_valuation_rate", source_valuation_rate),
+        ("destination_valuation_rate", destination_valuation_rate),
+    ):
+        _require_ratio(name, value)
+        if value <= _EXACT_ZERO:
+            raise InvalidEconomicInputError(f"{name} must be positive")
+    return min(effective_rate, source_valuation_rate / destination_valuation_rate)
+
+
 def calculate_fx_credit(
     *,
     source_debit: ExactRatio,
     approved_rate: ExactRatio,
     spread: ExactRatio,
+    source_valuation_rate: ExactRatio,
+    destination_valuation_rate: ExactRatio,
 ) -> ExactRatio:
     """Return exact target-currency credit before quantum posting.
 
     ``source_debit`` is in source-currency units and ``approved_rate`` is
-    target-currency units per one source-currency unit.
+    target-currency units per one source-currency unit. The credit uses the
+    planning rate (``calculate_planning_fx_rate``).
     """
     _require_nonnegative("source_debit", source_debit)
-    effective_rate = calculate_effective_fx_rate(
+    planning_rate = calculate_planning_fx_rate(
         approved_rate=approved_rate,
         spread=spread,
+        source_valuation_rate=source_valuation_rate,
+        destination_valuation_rate=destination_valuation_rate,
     )
-    return source_debit * effective_rate
+    return source_debit * planning_rate
 
 
 def calculate_taxable_gain(
