@@ -41,30 +41,49 @@ The contract:
   before anything is created;
 * **IMG-006**: the password reset path: ``user create``, ``user reset`` and ``user list``
   exit 0, the list shows the user, and the stored hash takes the new password and refuses
-  the old one. ``dev.py user`` exits 0 even when it prints ``❌``, so the exit codes alone
-  would prove nothing;
+  the old one, which no exit code can prove;
+* **IMG-006b**: a ``user`` command that fails exits 1: ``user reset`` of a user who does
+  not exist prints ``❌`` and exits 1. It exited 0 whatever happened;
 * **IMG-007**: likewise ``dev.py i18n audit`` names ``frontend/scripts`` and
   ``dev.py mkdocs translate`` names ``mkdocs_src/aphra-pipeline``, both exiting 2;
 * **IMG-008**: the ``Dockerfile``'s ``HEALTHCHECK`` probes a literal port, the one the
   final ``CMD`` passes to uvicorn with ``--port``, which is also the port the healthcheck
   of service ``librefolio`` probes in ``docker-compose.yml`` (and in any other
   ``docker-compose*.yml`` giving it one); a failure quotes the lines it read.
-  **IMG-008b** runs the same check on synthetic files, to show it can fail.
+  **IMG-008b** runs the same check on synthetic files, to show it can fail;
+* **IMG-009**: on a database of its own, where the user it creates is checked to be the
+  only active administrator, ``user demote`` and ``user deactivate`` refuse: exit 1, the
+  "last active administrator" named, and ``user list`` still showing it 👑 and ✅. They
+  used to succeed and leave the instance with nobody to administer it.
+  **IMG-009b**, the other side of the guard: with other active administrators left, both
+  commands succeed and exit 0;
+* **IMG-010**: ``_ensure_shared_jwt_secret``, through which ``dev.py server`` gives every
+  uvicorn worker the same JWT secret, run on plain dicts from the repository's ``dev.py``,
+  no server started: a missing secret gets a fresh one (**IMG-010**), and so does an empty
+  or blank one (**IMG-010b**), which used to survive (a ``JWT_SECRET=`` left in ``.env``,
+  then each worker made its own secret and users were logged out at random); a set one is
+  kept and nothing else changes (**IMG-010c**); every start gets a secret of its own
+  (**IMG-010d**). The process environment is only read, to show it is left alone.
 
-IMG-002b, IMG-004 and IMG-007 pin decision 1 of the plan's §0.1, IMG-008 its decision 4:
-a group whose sources the image lacks stays listed and answers for itself, instead of
-crashing or vanishing into argparse's "invalid choice". Their messages are English CLI
-output, not UI text, so the fragments above are the contract: "not available in this
-installation" (case aside) and the missing directory, nothing more.
+IMG-002b, IMG-004 and IMG-007 pin decision 1 of plan 35_devCliImage §0.1, IMG-008 its
+decision 4: a group whose sources the image lacks stays listed and answers for itself,
+instead of crashing or vanishing into argparse's "invalid choice". IMG-006b, IMG-009 and
+IMG-010 pin the decisions of plan 34_accountAndIdReuse step 2 §0.1. The messages are
+English CLI output, not UI text, so the fragments above are the contract: "not available in
+this installation" and "last active administrator" (case aside), the missing directory,
+``❌``, nothing more.
 
 "Without a traceback" means none of ``Traceback (most recent call last)``,
 ``ModuleNotFoundError`` and ``No module named`` in the combined output.
 
-PURE for the runner: the tree, its database and its environment are private to
+PURE for the runner: the tree, its databases and its environment are private to
 ``tmp_path``; the lane's database and server are never touched, nothing goes over the
-network, nothing is written in the repository.
+network, nothing is written in the repository. IMG-010 loads the repository's ``dev.py``
+into this process under a private name, and undoes the ``sys.path`` entries and the change
+of directory its module-level code makes as soon as it has loaded.
 """
 
+import importlib.util
 import json
 import os
 import posixpath
@@ -79,6 +98,7 @@ from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
@@ -140,6 +160,19 @@ OTHER_UNAVAILABLE_GROUPS = [
 COMPOSE_FILE = "docker-compose.yml"
 COMPOSE_SERVICE = "librefolio"
 LOCAL_URL_PORT = re.compile(r"https?://(?:localhost|127\.0\.0\.1|\[::1\]):([^/\s'\"]+)")
+
+#: Plan 34_accountAndIdReuse step 2 §0.1 (the developer, 2026-10-09): a failed ``user``
+#: command exits 1, and the service refuses to demote or deactivate the last active
+#: administrator with a message naming it.
+FAILED = "❌"
+LAST_ACTIVE_ADMIN = "last active administrator"
+GUARDED_COMMANDS = ["demote", "deactivate"]
+
+#: ``dev.py`` loaded in this process, for its JWT secret helper; private, so the ``dev``
+#: other tests import is not replaced.
+DEVPY_MODULE = "_test_dev_cli_image_devpy"
+#: Characters; ``secrets.token_urlsafe(64)``, what dev.py hands out, is 86 of them.
+MIN_SECRET_LENGTH = 32
 
 
 # ---------------------------------------------------------------------------
@@ -411,18 +444,18 @@ class Run:
         return f"`python {shlex.join(self.argv)}` in the image tree exited {self.returncode}, output:\n{self.output}"
 
 
-def run_python(image: ImageTree, *argv: str) -> Run:
+def run_python(image: ImageTree, *argv: str, env: dict[str, str] | None = None) -> Run:
     """``python <argv>`` at the tree's root, as ``docker compose exec`` runs it in ``/app``: stdout and stderr combined, in order."""
     try:
-        done = subprocess.run([sys.executable, *argv], cwd=image.app, env=image.env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace", timeout=CLI_TIMEOUT, check=False)
+        done = subprocess.run([sys.executable, *argv], cwd=image.app, env=image.env if env is None else env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace", timeout=CLI_TIMEOUT, check=False)
     except subprocess.TimeoutExpired as exc:
         partial = exc.output.decode("utf-8", "replace") if isinstance(exc.output, bytes) else exc.output or ""
         pytest.fail(f"`python {shlex.join(argv)}` in the image tree did not end within {CLI_TIMEOUT}s and was killed, output so far:\n{partial}")
     return Run(argv, done.returncode, done.stdout)
 
 
-def run_dev(image: ImageTree, *argv: str) -> Run:
-    return run_python(image, "dev.py", *argv)
+def run_dev(image: ImageTree, *argv: str, env: dict[str, str] | None = None) -> Run:
+    return run_python(image, "dev.py", *argv, env=env)
 
 
 def assert_no_crash(run: Run) -> None:
@@ -479,16 +512,18 @@ def top_help(image: ImageTree) -> Run:
 
 
 @dataclass(frozen=True)
-class Schema:
-    url: str
+class Database:
+    """A database where the tree's own settings put it for a ``LIBREFOLIO_DATA_DIR``, with its schema."""
+
     path: Path
+    env: dict[str, str]  # the tree's environment, pointed at this database
     upgrade: Run
 
 
-@pytest.fixture(scope="module")
-def image_db(image: ImageTree) -> Schema:
-    """A fresh schema where the tree's own settings put the database, which must be inside the tree's data dir."""
-    probe = run_python(image, "-c", SETTINGS_PROBE)
+def create_database(image: ImageTree, data_dir: Path) -> Database:
+    """Ask the tree where ``data_dir`` puts its database, refuse anything outside this module's tmp dir, then build the schema there with alembic."""
+    env = {**image.env, "LIBREFOLIO_DATA_DIR": str(data_dir)}
+    probe = run_python(image, "-c", SETTINGS_PROBE, env=env)
     assert_succeeds(probe)
     lines = probe.output.strip().splitlines()
     url = lines[-1].strip() if lines else ""
@@ -496,11 +531,29 @@ def image_db(image: ImageTree) -> Schema:
     path = Path(url.removeprefix("sqlite:///")).resolve()
     if not path.is_relative_to(image.root):
         pytest.fail(f"the image tree resolves its database to {path}, outside this module's tmp dir {image.root}: refusing to create a schema there")
-    assert path.is_relative_to(image.data_dir), f"the tree resolves its database to {path}, not inside LIBREFOLIO_DATA_DIR={image.data_dir}"
+    assert path.is_relative_to(data_dir), f"the tree resolves its database to {path}, not inside LIBREFOLIO_DATA_DIR={data_dir}"
     path.parent.mkdir(parents=True, exist_ok=True)
-    upgrade = run_python(image, "-m", "alembic", "-c", "backend/alembic.ini", "-x", f"sqlalchemy.url={url}", "upgrade", "head")
+    upgrade = run_python(image, "-m", "alembic", "-c", "backend/alembic.ini", "-x", f"sqlalchemy.url={url}", "upgrade", "head", env=env)
     assert_succeeds(upgrade)
-    return Schema(url=url, path=path, upgrade=upgrade)
+    return Database(path=path, env=env, upgrade=upgrade)
+
+
+@pytest.fixture(scope="module")
+def image_db(image: ImageTree) -> Database:
+    """The database where the image keeps it (``LIBREFOLIO_DATA_DIR`` as the Dockerfile and compose set it), shared by the password-reset tests."""
+    return create_database(image, image.data_dir)
+
+
+@pytest.fixture
+def fresh_db(image: ImageTree) -> Iterator[Database]:
+    """A database of its own, for a test that must know every user in it."""
+    data_dir = image.root / "databases" / uuid.uuid4().hex[:12]
+    yield create_database(image, data_dir)
+    shutil.rmtree(data_dir, ignore_errors=True)
+
+
+def unique_username() -> str:
+    return f"img_{uuid.uuid4().hex[:12]}"
 
 
 def stored_password_hash(db_path: Path, username: str) -> str:
@@ -508,6 +561,54 @@ def stored_password_hash(db_path: Path, username: str) -> str:
         row = conn.execute("SELECT hashed_password FROM users WHERE username = ?", (username,)).fetchone()
     assert row is not None, f"{username!r} is not in {db_path}"
     return row[0]
+
+
+def active_admins(db_path: Path) -> list[str]:
+    """The usernames of the active administrators, oldest first, read from the database itself."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        return [name for (name,) in conn.execute("SELECT username FROM users WHERE is_superuser AND is_active ORDER BY id")]
+
+
+def user_row(listed: Run, username: str) -> str:
+    """The line of ``user list`` whose username column is ``username``."""
+    rows = [line for line in listed.output.splitlines() if username in line.split()]
+    assert len(rows) == 1, f"user list must show {username} exactly once: {listed}"
+    return rows[0]
+
+
+@pytest.fixture(scope="module")
+def devpy() -> Iterator[ModuleType]:
+    """The repository's ``dev.py`` as a module, loaded under a private name with its import-time side effects undone.
+
+    Its module-level code inserts two ``sys.path`` entries and changes directory to the
+    project root: both are restored as soon as it has loaded, before any test runs.
+    """
+    cwd, path = Path.cwd(), list(sys.path)
+    spec = importlib.util.spec_from_file_location(DEVPY_MODULE, PROJECT_ROOT / "dev.py")
+    assert spec is not None and spec.loader is not None, f"cannot load {PROJECT_ROOT / 'dev.py'} as a module"
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[DEVPY_MODULE] = module
+    try:
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            os.chdir(cwd)
+            sys.path[:] = path
+        yield module
+    finally:
+        sys.modules.pop(DEVPY_MODULE, None)
+
+
+def ensure_secret(devpy: ModuleType, env: dict[str, str]) -> dict[str, str]:
+    """Run the helper on ``env`` and return it, checking that the process environment was left alone."""
+    before = dict(os.environ)
+    devpy._ensure_shared_jwt_secret(env)
+    assert dict(os.environ) == before, "_ensure_shared_jwt_secret changed os.environ: it must write into the env it is given"
+    return env
+
+
+def assert_usable_secret(secret: object, context: str = "") -> None:
+    assert isinstance(secret, str) and len(secret.strip()) >= MIN_SECRET_LENGTH, f"not a usable JWT secret: {secret!r}{context}"
 
 
 # ---------------------------------------------------------------------------
@@ -686,7 +787,7 @@ class TestTestRunnerIsAbsent:
 
 
 # ---------------------------------------------------------------------------
-# IMG-005..IMG-006: the password reset path, on a fresh database
+# IMG-005..IMG-006b: the password reset path, on a fresh database, and a failed command
 # ---------------------------------------------------------------------------
 
 
@@ -707,12 +808,12 @@ class TestPasswordReset:
         for password in (OLD_PASSWORD, NEW_PASSWORD):
             valid, errors = validate_password(password)
             assert valid, f"test bug: {password!r} breaks the CLI's password rules: {errors}"
-        name = f"img_{uuid.uuid4().hex[:12]}"
+        name = unique_username()
         email = f"{name}@example.com"
 
-        assert_succeeds(run_dev(image, "user", "create", name, email, OLD_PASSWORD))
-        assert_succeeds(run_dev(image, "user", "reset", name, NEW_PASSWORD))
-        listed = run_dev(image, "user", "list")
+        assert_succeeds(run_dev(image, "user", "create", name, email, OLD_PASSWORD, env=image_db.env))
+        assert_succeeds(run_dev(image, "user", "reset", name, NEW_PASSWORD, env=image_db.env))
+        listed = run_dev(image, "user", "list", env=image_db.env)
         assert_succeeds(listed)
 
         assert any(name in line and email in line for line in listed.output.splitlines()), f"user list does not show {name} <{email}>: {listed}"
@@ -720,6 +821,18 @@ class TestPasswordReset:
         assert verify_password(NEW_PASSWORD, stored), f"the stored hash of {name} refuses the new password: user reset exited 0 without resetting it"
         assert not verify_password(OLD_PASSWORD, stored), f"the stored hash of {name} still takes the old password"
         print_success(f"{name}: created, reset and listed; the new password verifies, the old one does not")
+
+    def test_failed_command_exits_1(self, image, image_db):
+        """IMG-006b: user reset of a user who does not exist reports it with ❌ and exits 1, not 0."""
+        print_section("IMG-006b: user reset of an unknown user in the image")
+        name = unique_username()
+
+        run = run_dev(image, "user", "reset", name, NEW_PASSWORD, env=image_db.env)
+
+        assert_no_crash(run)
+        assert FAILED in run.output, f"expected the failure to be reported with {FAILED}: {run}"
+        assert run.returncode == 1, f"a failed user command must exit 1: {run}"
+        print_success(f"user reset {name}: {FAILED}, exit 1")
 
 
 # ---------------------------------------------------------------------------
@@ -773,3 +886,105 @@ class TestHealthcheck:
 
         assert (not violations) is passes, f"expected {'no violation' if passes else 'a violation'}, got: {violations}"
         print_success(f"violations: {violations or 'none'}")
+
+
+# ---------------------------------------------------------------------------
+# IMG-009: the last active administrator stays, through the CLI
+# ---------------------------------------------------------------------------
+
+
+class TestLastActiveAdministrator:
+    @pytest.mark.parametrize("command", GUARDED_COMMANDS)
+    def test_refuses_to_remove_the_last_active_admin(self, image, fresh_db, command):
+        """IMG-009: user demote / deactivate of the only active administrator exit 1 naming the last active administrator, and change nothing."""
+        print_section(f"IMG-009: user {command} of the last active administrator, in the image")
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=fresh_db.env))
+        assert active_admins(fresh_db.path) == [name], f"premise: {name} must be the only active administrator of its fresh database"
+
+        run = run_dev(image, "user", command, name, env=fresh_db.env)
+        listed = run_dev(image, "user", "list", env=fresh_db.env)
+
+        assert_no_crash(run)
+        assert_succeeds(listed)
+        row = user_row(listed, name)
+        assert run.returncode == 1, f"user {command} of the last active administrator must fail with exit 1: {run}\nuser list afterwards: {row}"
+        assert LAST_ACTIVE_ADMIN in run.output.lower(), f"expected {LAST_ACTIVE_ADMIN!r}: {run}"
+        assert "👑" in row and "✅" in row, f"{name} must still be an active administrator (👑, ✅) after the refused {command}: {row}"
+        assert active_admins(fresh_db.path) == [name], f"the refused {command} changed the database"
+        print_success(f"user {command} {name}: refused, exit 1, still 👑 and ✅")
+
+    def test_lets_an_admin_go_while_another_stays(self, image, fresh_db):
+        """IMG-009b: with other active administrators left, user demote and user deactivate succeed and exit 0."""
+        print_section("IMG-009b: user demote / deactivate with other active administrators, in the image")
+        names = [unique_username() for _ in range(3)]
+        for name in names:
+            assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=fresh_db.env))
+        assert active_admins(fresh_db.path) == names, "premise: the three users must be the active administrators of their fresh database"
+        demoted, deactivated, remaining = names
+
+        assert_succeeds(run_dev(image, "user", "demote", demoted, env=fresh_db.env))
+        assert_succeeds(run_dev(image, "user", "deactivate", deactivated, env=fresh_db.env))
+        listed = run_dev(image, "user", "list", env=fresh_db.env)
+
+        assert_succeeds(listed)
+        assert "👑" not in user_row(listed, demoted), f"{demoted} must no longer be an administrator: {listed}"
+        assert "👑" in user_row(listed, deactivated) and "❌" in user_row(listed, deactivated), f"{deactivated} must be an inactive administrator (👑, ❌): {listed}"
+        assert active_admins(fresh_db.path) == [remaining], f"only {remaining} must be left as an active administrator"
+        print_success(f"{demoted} demoted, {deactivated} deactivated, {remaining} still an active administrator")
+
+
+# ---------------------------------------------------------------------------
+# IMG-010: one JWT secret for every uvicorn worker, even when .env leaves it empty
+# ---------------------------------------------------------------------------
+
+
+class TestSharedJwtSecret:
+    """``cmd_server`` copies the environment for its workers and hands it to ``_ensure_shared_jwt_secret``.
+
+    ``pipenv run`` loads ``.env`` into that environment, so ``JWT_SECRET=`` arrives as
+    ``''``. ``setdefault`` kept it, ``auth_service`` (``os.environ.get("JWT_SECRET") or
+    token_urlsafe(64)``) then gave each worker a secret of its own, and with several
+    workers a token signed by one was refused by the next: users logged out at random.
+    A value made of spaces is no better: it is truthy, so the workers would share it and
+    sign every token with a blank key.
+    """
+
+    def test_missing_secret_gets_a_fresh_one(self, devpy):
+        """IMG-010: no JWT_SECRET in the env: the helper writes a fresh one, long enough to sign tokens, and nothing else."""
+        print_section("IMG-010: dev.py server, JWT_SECRET missing")
+
+        env = ensure_secret(devpy, {})
+
+        assert set(env) == {"JWT_SECRET"}, f"the helper must add JWT_SECRET and nothing else: {sorted(env)}"
+        assert_usable_secret(env["JWT_SECRET"])
+        print_success(f"a fresh secret of {len(env['JWT_SECRET'])} characters")
+
+    @pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "spaces"])
+    def test_blank_secret_counts_as_missing(self, devpy, blank):
+        """IMG-010b: an empty or whitespace-only JWT_SECRET, as a bare `JWT_SECRET=` in .env gives, is replaced by a fresh secret."""
+        print_section(f"IMG-010b: dev.py server, JWT_SECRET={blank!r}")
+
+        env = ensure_secret(devpy, {"JWT_SECRET": blank})
+
+        assert_usable_secret(env["JWT_SECRET"], f", kept from JWT_SECRET={blank!r}: a blank value must count as missing")
+        print_success(f"{blank!r} replaced by a fresh secret of {len(env['JWT_SECRET'])} characters")
+
+    def test_set_secret_is_kept(self, devpy):
+        """IMG-010c: a non-blank JWT_SECRET is kept as is, and nothing else in the env changes."""
+        print_section("IMG-010c: dev.py server, JWT_SECRET set")
+        given = {"JWT_SECRET": "keep-me", "PORT": "6040"}
+
+        env = ensure_secret(devpy, dict(given))
+
+        assert env == given, f"a set JWT_SECRET must be kept and the rest left alone: {env}"
+        print_success("kept")
+
+    def test_every_start_gets_its_own_secret(self, devpy):
+        """IMG-010d: two starts without a secret get two different ones: the fresh secret is made at each start, not once."""
+        print_section("IMG-010d: dev.py server, a fresh secret at every start")
+
+        first, second = ensure_secret(devpy, {}), ensure_secret(devpy, {})
+
+        assert first["JWT_SECRET"] != second["JWT_SECRET"], "two starts got the same secret"
+        print_success("two starts, two secrets")
