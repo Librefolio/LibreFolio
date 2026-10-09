@@ -2125,53 +2125,63 @@ def test_exact_flow_posting_families_have_zero_raw_delta(
 
 
 @pytest.mark.parametrize(
-    ("family", "direction", "accounting_delta"),
+    ("family", "direction"),
     [
-        pytest.param("fx_credit", "credit", R(-1, 200), id="fx-credit"),
-        pytest.param("buy_debit", "debit", R(1, 200), id="buy-debit"),
+        pytest.param("fx_credit", "credit", id="fx-credit"),
+        pytest.param("buy_debit", "debit", id="buy-debit"),
+        pytest.param("gross_sell_credit", "credit", id="sell-gross"),
+        pytest.param("buy_fee", "debit", id="buy-fee"),
+        pytest.param("sell_fee", "debit", id="sell-fee"),
+        pytest.param("broker_withheld_tax", "debit", id="broker-tax"),
+        pytest.param("self_reserved_tax", "debit", id="self-tax"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("exact_amount", "credit_posting", "debit_posting"),
+    [
+        # (posted, rounding_delta, accounting adjustment): a credit posts its
+        # floor and a debit its ceiling, so both adjustments cost the plan.
+        # 1.005 is the half-cent tie, which HALF_UP posted as 1.01 either way.
         pytest.param(
-            "gross_sell_credit",
-            "credit",
-            R(-1, 200),
-            id="sell-gross",
+            R(201, 200),
+            (ONE, R(-1, 200), R(1, 200)),
+            (R(101, 100), R(1, 200), R(1, 200)),
+            id="tie",
         ),
-        pytest.param("buy_fee", "debit", R(1, 200), id="buy-fee"),
-        pytest.param("sell_fee", "debit", R(1, 200), id="sell-fee"),
+        # 1.004 is below the tie, which HALF_UP posted as 1.00 either way.
         pytest.param(
-            "broker_withheld_tax",
-            "debit",
-            R(1, 200),
-            id="broker-tax",
-        ),
-        pytest.param(
-            "self_reserved_tax",
-            "debit",
-            R(1, 200),
-            id="self-tax",
+            R(251, 250),
+            (ONE, R(-1, 250), R(1, 250)),
+            (R(101, 100), R(3, 500), R(3, 500)),
+            id="below-tie",
         ),
     ],
 )
-def test_monetary_posting_families_use_signed_half_up_once(
+def test_monetary_posting_families_round_against_the_plan_once(
     family: LedgerPostingFamily,
     direction: str,
-    accounting_delta: ExactRatio,
+    exact_amount: ExactRatio,
+    credit_posting: tuple[ExactRatio, ExactRatio, ExactRatio],
+    debit_posting: tuple[ExactRatio, ExactRatio, ExactRatio],
 ) -> None:
     posting = rounded_money_posting(
         posting_id=f"posting:{family}",
         family=family,
         broker_id="broker:a",
         currency="EUR",
-        exact_amount=R(201, 200),
+        exact_amount=exact_amount,
         quantum=CENT,
     )
+    posted_amount, rounding_delta, accounting_delta = credit_posting if direction == "credit" else debit_posting
 
     assert posting.direction == direction
-    assert posting.exact_amount == R(201, 200)
-    assert posting.posted_amount == R(101, 100)
+    assert posting.exact_amount == exact_amount
+    assert posting.posted_amount == posted_amount
     assert posting.quantum == CENT
-    assert posting.rounding_delta == R(1, 200)
+    assert posting.rounding_delta == rounding_delta
     assert posting.accounting_rounding_adjustment == accounting_delta
     assert posting.rounding_delta == posting.posted_amount - posting.exact_amount
+    assert ZERO <= posting.accounting_rounding_adjustment < posting.quantum
 
 
 @pytest.mark.parametrize(
@@ -2293,7 +2303,8 @@ def test_native_ledger_rows_include_empty_domain_keys_in_canonical_order() -> No
         pytest.param("undeclared-family", id="undeclared-family"),
         pytest.param("exact-extra-quantum", id="exact-extra-quantum"),
         pytest.param("rounded-missing-quantum", id="rounded-missing-quantum"),
-        pytest.param("noncanonical-half-up", id="noncanonical-half-up"),
+        pytest.param("debit-rounded-down", id="debit-rounded-down"),
+        pytest.param("credit-rounded-up", id="credit-rounded-up"),
     ],
 )
 def test_reconciliation_rejects_malformed_posting_contracts(
@@ -2348,7 +2359,8 @@ def test_reconciliation_rejects_malformed_posting_contracts(
             quantum=None,
             rounding_delta=ZERO,
         )
-    elif case == "noncanonical-half-up":
+    elif case == "debit-rounded-down":
+        # 1.004 posted 1.00 is what HALF_UP gave; a debit must post its ceiling, 1.01.
         malformed = ExactLedgerPosting(
             posting_id="posting:a",
             family="buy_debit",
@@ -2357,9 +2369,23 @@ def test_reconciliation_rejects_malformed_posting_contracts(
             currency="EUR",
             entity_refs=(),
             exact_amount=R(251, 250),
+            posted_amount=ONE,
+            quantum=CENT,
+            rounding_delta=R(-1, 250),
+        )
+    elif case == "credit-rounded-up":
+        # 1.005 posted 1.01 is what HALF_UP gave; a credit must post its floor, 1.00.
+        malformed = ExactLedgerPosting(
+            posting_id="posting:a",
+            family="fx_credit",
+            direction="credit",
+            broker_id="broker:a",
+            currency="EUR",
+            entity_refs=(),
+            exact_amount=R(201, 200),
             posted_amount=R(101, 100),
             quantum=CENT,
-            rounding_delta=R(3, 500),
+            rounding_delta=R(1, 200),
         )
     else:
         raise AssertionError(f"Unknown malformed posting {case!r}")
@@ -2849,6 +2875,118 @@ def test_direct_fx_replay_preserves_direction_and_spread() -> None:
     assert (action.source_debit / CENT).denominator == 1
 
 
+def _planning_rate_scenario(cross_rate: ExactRatio) -> ExactPlannerScenario:
+    """RON 100 at one Broker, one USD 21.83 unit, and the RON/USD ``cross_rate``.
+
+    The valuation currency is EUR (4.97 RON and 1.085 USD per EUR), so the
+    triangle RON -> EUR -> USD is 1.085 / 4.97 = 31/142 = 0.21830985915...
+    No spread, no fee: the conversion is the only arithmetic.
+    """
+    capability = _capability("capability:usd")
+    buy_fee = _fee(
+        "fee:buy:usd",
+        capability.capability_id,
+        "buy",
+        currency="USD",
+    )
+    broker = _broker("broker:a", (capability,), (buy_fee,))
+    return _scenario(
+        "scenario:planning-rate",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:usd", price=R(2183, 100), currency="USD"),),
+        brokers=(broker,),
+        existing_cash=(_cash("cash:ron", broker.broker_id, R(100), currency="RON"),),
+        order_routes=(
+            _order_route(
+                "route:buy:usd",
+                broker_id=broker.broker_id,
+                asset_id="asset:usd",
+                capability=capability,
+                fee_id=buy_fee.fee_schedule_id,
+                side="buy",
+                cap=ONE,
+                currency="USD",
+            ),
+        ),
+        fx_rates=(
+            _fx_rate("EUR", "RON", R(497, 100)),
+            _fx_rate("EUR", "USD", R(217, 200)),
+            _fx_rate("RON", "USD", cross_rate),
+        ),
+        currency_quantums=(("EUR", CENT), ("RON", CENT), ("USD", CENT)),
+    )
+
+
+def _planning_rate_replay(cross_rate: ExactRatio) -> ExactEvaluation:
+    """Convert the whole RON 100 to USD and buy the one unit with it."""
+    scenario = _planning_rate_scenario(cross_rate)
+    view = build_exact_policy_view(scenario)
+    return evaluate_exact_candidate(
+        scenario,
+        view,
+        _candidate(
+            view,
+            {
+                exact_decision_id(
+                    "fx_debit",
+                    _fx_debit_key("route:buy:usd", "RON"),
+                ): 10_000,
+                exact_decision_id("buy_quantum", "route:buy:usd"): 1,
+            },
+        ),
+    )
+
+
+def test_fx_replay_plans_a_cross_rate_just_above_the_triangle_at_the_triangle() -> None:
+    """A cross rate inside the coherence band converts at the triangle.
+
+    RON/USD 0.2183098592 is the triangle rounded at the tenth decimal, a hair
+    above it: the normalizer accepts it, and the conversion plans at
+    min(approved x (1 - spread), val(RON) / val(USD)) = 31/142. The approved
+    rate stays the user's. RON 100 credits exactly 1550/71 = USD 21.8309...,
+    posted at its floor, 21.83, which pays the unit to the cent; valued in EUR
+    the conversion loses nothing, where the user's rate would have gained.
+    """
+    evaluation = _planning_rate_replay(R(2_183_098_592, 10**10))
+    action = _by_id(evaluation.fx, "order_route_id", "route:buy:usd")
+
+    assert evaluation.feasible is True, evaluation.conflict_codes
+    assert action.source_currency == "RON"
+    assert action.destination_currency == "USD"
+    assert action.source_debit == R(100)
+    assert action.approved_rate == R(2_183_098_592, 10**10)
+    assert action.effective_rate == R(31, 142)
+    assert action.exact_destination_credit == R(1550, 71)
+    assert action.posted_destination_credit == R(2183, 100)
+    assert action.spread_loss == ZERO
+    assert _pool_ledger(evaluation, "broker:a", "RON").final_spendable == ZERO
+    assert _pool_ledger(evaluation, "broker:a", "USD").final_spendable == ZERO
+
+
+def test_fx_replay_keeps_a_cross_rate_below_the_triangle() -> None:
+    """Below the triangle the user's rate is the planning rate, and it loses the gap.
+
+    RON/USD 0.2183098591 sits under 31/142: the credit is RON 100 at the
+    approved rate, USD 21.83098591, posted 21.83. The spread loss is the EUR
+    value of the RON debit minus that of the exact USD credit: a few
+    billionths of a euro, but strictly positive.
+    """
+    approved_rate = R(2_183_098_591, 10**10)
+    evaluation = _planning_rate_replay(approved_rate)
+    action = _by_id(evaluation.fx, "order_route_id", "route:buy:usd")
+
+    assert evaluation.feasible is True, evaluation.conflict_codes
+    assert action.approved_rate == approved_rate
+    assert action.effective_rate == approved_rate
+    assert action.exact_destination_credit == R(2_183_098_591, 10**8)
+    assert action.posted_destination_credit == R(2183, 100)
+    assert action.spread_loss == R(10_000, 497) - R(2_183_098_591, 10**8) * R(200, 217)
+    assert action.spread_loss > ZERO
+    assert _pool_ledger(evaluation, "broker:a", "RON").final_spendable == ZERO
+    assert _pool_ledger(evaluation, "broker:a", "USD").final_spendable == ZERO
+
+
 def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
     """A single BUY (route:buy:1) draws from two currency pools (GBP and USD
     existing cash) at the same Broker, each converting to its own EUR quote
@@ -3169,7 +3307,7 @@ def test_buy_capabilities_preserve_measure_quantity_and_quote_basis(
     assert order.posted_cash_amount > ZERO
 
 
-def test_positive_buy_quanta_with_zero_rounded_debit_is_infeasible() -> None:
+def test_positive_buy_quanta_post_a_nonzero_ceiling_debit() -> None:
     scenario = _pac_scenario(
         price=ONE,
         capability_kind="monetary_amount",
@@ -3193,12 +3331,24 @@ def test_positive_buy_quanta_with_zero_rounded_debit_is_infeasible() -> None:
         ),
     )
     order = _by_id(evaluation.orders, "route_id", "route:buy:a")
+    constraint = _by_id(
+        evaluation.constraints,
+        "ref_id",
+        "constraint:buy_debit_positive:route:buy:a",
+    )
 
+    # One EUR 0.004 quantum posts its ceiling 0.01, never a zero debit (HALF_UP
+    # posted 0.00, which only BUY_DEBIT_POSITIVE caught). The 0.006 rounding
+    # cost stays inside the one-cent band and the pool keeps EUR 0.99.
     assert order.exact_cash_amount == R(1, 250)
-    assert order.posted_cash_amount == ZERO
-    assert "BUY_DEBIT_POSITIVE" in evaluation.conflict_codes
+    assert order.posted_cash_amount == CENT
+    assert (constraint.value, constraint.satisfied) == (CENT, True)
+    assert "BUY_DEBIT_POSITIVE" not in evaluation.conflict_codes
+    assert evaluation.accounting is not None
+    assert (evaluation.accounting.rounding_adjustment, evaluation.accounting.rounding_bound) == (R(3, 500), CENT)
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == R(99, 100)
     assert evaluation.candidate_valid is True
-    assert evaluation.feasible is False
+    assert evaluation.feasible is True
 
 
 @pytest.mark.parametrize(
@@ -4486,12 +4636,14 @@ def test_deployment_objectives_measure_incremental_cost_and_rows() -> None:
     assert evaluation.costs.explicit_cost == ONE
 
 
-def test_shortfall_objective_is_signed_and_rounding_bounded() -> None:
+def test_shortfall_objective_carries_the_ceiling_rounding_cost() -> None:
+    # One unit of 100.004 is a buy debit posted at its ceiling, 100.01: the 0.006
+    # the rounding costs is the shortfall, inside the one-cent band.
     scenario = _pac_scenario(
         price=ONE,
         capability_kind="monetary_amount",
         step=R(25_001, 250),
-        cash=R(100),
+        cash=R(10_001, 100),
         route_cap=R(101),
     )
     view = build_exact_policy_view(scenario)
@@ -4511,13 +4663,13 @@ def test_shortfall_objective_is_signed_and_rounding_bounded() -> None:
 
     assert evaluation.feasible is True
     assert evaluation.accounting is not None
-    assert evaluation.accounting.fixed_reference == R(100)
+    assert evaluation.accounting.fixed_reference == R(10_001, 100)
     assert evaluation.accounting.final_invested == R(25_001, 250)
-    assert evaluation.accounting.shortfall == R(-1, 250)
-    assert evaluation.accounting.rounding_adjustment == R(-1, 250)
-    assert evaluation.accounting.rounding_bound == R(1, 200)
+    assert evaluation.accounting.shortfall == R(3, 500)
+    assert evaluation.accounting.rounding_adjustment == R(3, 500)
+    assert evaluation.accounting.rounding_bound == CENT
     assert evaluation.accounting.identity_delta == ZERO
-    assert _objective_map(view, evaluation)["shortfall"] == R(-1, 250)
+    assert _objective_map(view, evaluation)["shortfall"] == R(3, 500)
 
 
 @pytest.mark.parametrize(
@@ -4634,8 +4786,9 @@ def test_cancellation_propagates_from_nontrivial_exact_loops(
     assert checkpoint.observed is True
 
 
-# Rounding top-ups (commit 5, QX1-b). The Decimal HALF_UP replay stays
-# authoritative, but a candidate whose ONLY violation is negative final
+# Rounding top-ups (commit 5, QX1-b). The Decimal replay stays authoritative,
+# every rounded posting against the plan (credits at their floor, debits at
+# their ceiling), but a candidate whose ONLY violation is negative final
 # spendable cash per pool (broker x currency), each pool short by
 # D <= N x minor unit -- N = the pool's postings that carry a quantum: the buy
 # debit of every order, a nonzero fee, the FX credit -- is published with one
@@ -4654,7 +4807,7 @@ _TOP_UP_TOLERATED_CODES = frozenset(
     }
 )
 _CASH_ONLY_CODES = ("NO_SHORT_OR_LEVERAGE", "SPENDABLE_CASH_NONNEGATIVE")
-_TIE_PRICE = R(33335, 1000)  # 3 x 33.335 = 100.005, posted HALF_UP as 100.01
+_TIE_PRICE = R(33335, 1000)  # 3 x 33.335 = 100.005, a buy debit posted at its ceiling, 100.01
 _BUY_A = exact_decision_id("buy_quantum", "route:buy:a")
 _BUY_B = exact_decision_id("buy_quantum", "route:buy:b")
 _FUND_EUR = exact_decision_id("funding_transfer", "route:funding:eur")
@@ -4719,8 +4872,9 @@ def _eur_tie() -> tuple[ExactPlannerScenario, ExactPolicyView, ExactEvaluation]:
 def test_rounding_top_ups_of_a_feasible_replay_are_empty() -> None:
     """A replay that already balances announces nothing: the classifier answers ``()``.
 
-    2 x 33.336 = 66.672 posts as 66.67 against EUR 100: every rule holds, so the
-    plan is published exactly as before commit 5, with no top-up to show.
+    2 x 33.336 = 66.672 posts its ceiling 66.68 against EUR 100: every rule
+    holds, so the plan is published exactly as before commit 5, with no top-up
+    to show.
     """
     scenario = _pac_scenario(price=R(33336, 1000), cash=R(100))
     _, evaluation = _replay(scenario, {_BUY_A: 2})
@@ -4729,18 +4883,18 @@ def test_rounding_top_ups_of_a_feasible_replay_are_empty() -> None:
     assert EV.rounding_top_ups(scenario, evaluation) == ()
 
 
-def test_rounding_top_up_covers_a_one_cent_half_up_deficit() -> None:
+def test_rounding_top_up_covers_a_one_cent_ceiling_deficit() -> None:
     """The EUR tie is published with a top-up of exactly the missing cent.
 
-    100.005 posts HALF_UP as 100.01, so the pool ends at -0.01. Its one
+    100.005 posts its ceiling 100.01, so the pool ends at -0.01. Its one
     quantum-carrying posting is the buy debit (the initial cash carries none, a
     zero fee is not posted): D = 0.01 <= 1 x 0.01. Only the cash rules fail;
-    ``ROUNDING_BOUND`` holds (shortfall -0.005 against a 0.005 bound). The pool is
+    ``ROUNDING_BOUND`` holds (shortfall -0.005 inside the 0.01 band). The pool is
     in the valuation currency, so the top-up is valued at its own amount.
     """
     scenario, _, evaluation = _eur_tie()
     assert "ROUNDING_BOUND" not in evaluation.conflict_codes
-    assert (evaluation.accounting.shortfall, evaluation.accounting.rounding_bound) == (-R(1, 200), R(1, 200))
+    assert (evaluation.accounting.shortfall, evaluation.accounting.rounding_bound) == (-R(1, 200), CENT)
 
     assert EV.rounding_top_ups(scenario, evaluation) == (_top_up("broker:a", CENT, 1),)
 
@@ -4909,7 +5063,7 @@ def _funding_fx_evaluation(fx_debit_cents: int) -> tuple[ExactPlannerScenario, E
     )
     assert evaluation.candidate_valid is True
     assert evaluation.conflict_codes == _CASH_ONLY_CODES
-    # N counts the HALF_UP FX credit next to the buy debit; the funding transfer
+    # N counts the floored FX credit next to the buy debit; the funding transfer
     # and the FX debit carry no quantum on this scenario (read off the postings).
     assert _pool_rounded_families(evaluation, "broker:destination", "USD") == ["buy_debit", "fx_credit"]
     return scenario, evaluation
@@ -4918,8 +5072,8 @@ def _funding_fx_evaluation(fx_debit_cents: int) -> tuple[ExactPlannerScenario, E
 def test_rounding_top_up_counts_the_fx_credit_and_values_the_deficit_in_eur() -> None:
     """The FX credit is a rounded posting, and the top-up is valued in EUR.
 
-    EUR 84.16 converted with the spread credits a HALF_UP-rounded USD amount that
-    leaves the USD pool at -0.02 after the USD 100 unit: two rounded postings
+    EUR 84.16 converted with the spread credits a USD amount, posted at its
+    floor, that leaves the USD pool at -0.02 after the USD 100 unit: two rounded postings
     (FX credit + buy debit), so D = 0.02 <= 2 x 0.01 is accepted. The valuation
     uses the evaluator's own conversion, pinned first against its free cash:
     every final pool converted at the scenario's EUR/USD rate.
@@ -4963,25 +5117,61 @@ def test_rounding_top_ups_reject_a_contract_invalid_candidate() -> None:
         EV.rounding_top_ups(scenario, evaluation)
 
 
-def test_rounding_top_up_accepts_a_failed_rounding_bound_the_top_up_explains() -> None:
-    """``ROUNDING_BOUND`` may fail when the top-up is exactly what it lacks.
+def test_rounding_top_up_covers_an_unrounded_one_cent_deficit_inside_the_band() -> None:
+    """A deficit nothing rounded is still published when one cent per posting covers it.
 
     Four EUR 25 units cost exactly EUR 100.00 (nothing rounds; the buy debit
     still carries its quantum) against EUR 99.99: the pool and the shortfall end
-    at -0.01, beyond the 0.005 favorable bound, so ``ROUNDING_BOUND`` fails too.
-    The rounding adjustment is 0 (within the bound) and shortfall + top-up
-    valuation = 0 >= -bound: the classifier accepts the one-cent top-up.
+    at -0.01, on the edge of the one-cent band, so ``ROUNDING_BOUND`` holds and
+    only the cash rules fail. D = 0.01 <= 1 x 0.01: the top-up is the missing cent.
     """
     scenario = _pac_scenario(price=R(25), cash=R(9999, 100))
     _, evaluation = _replay(scenario, {_BUY_A: 4})
     assert evaluation.candidate_valid is True
-    assert evaluation.conflict_codes == ("NO_SHORT_OR_LEVERAGE", "ROUNDING_BOUND", "SPENDABLE_CASH_NONNEGATIVE")
+    assert evaluation.conflict_codes == _CASH_ONLY_CODES
     assert _pool_ledger(evaluation, "broker:a").final_spendable == -CENT
     assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit"]
     accounting = evaluation.accounting
-    assert (accounting.shortfall, accounting.rounding_adjustment, accounting.rounding_bound) == (-CENT, ZERO, R(1, 200))
+    assert (accounting.shortfall, accounting.rounding_adjustment, accounting.rounding_bound) == (-CENT, ZERO, CENT)
 
     assert EV.rounding_top_ups(scenario, evaluation) == (_top_up("broker:a", CENT, 1),)
+
+
+def test_rounding_top_up_accepts_a_failed_rounding_bound_the_top_up_explains() -> None:
+    """``ROUNDING_BOUND`` may fail when the top-up is exactly what it lacks.
+
+    Fabricated on the same EUR 100.00 cost against EUR 99.99: the bound drops to
+    0.005 and ``ROUNDING_BOUND`` fails next to the cash rules, the -0.01
+    shortfall being beyond it. The rounding adjustment is 0 (within the bound)
+    and shortfall + top-up valuation = 0 >= -bound: the classifier accepts the
+    one-cent top-up, where an adjustment beyond the bound is rejected (below).
+    """
+    scenario = _pac_scenario(price=R(25), cash=R(9999, 100))
+    view, evaluation = _replay(scenario, {_BUY_A: 4})
+    assert evaluation.candidate_valid is True
+    assert _pool_ledger(evaluation, "broker:a").final_spendable == -CENT
+    assert _pool_rounded_families(evaluation, "broker:a") == ["buy_debit"]
+    (ref,) = (row for row in view.constraints if row.code == "ROUNDING_BOUND")
+    conflicts = tuple(
+        sorted(
+            {*evaluation.conflicts, ExactConflict(code=ref.code, entity_refs=ref.entity_refs)},
+            key=lambda item: (item.code, tuple((entity.kind, entity.entity_id) for entity in item.entity_refs)),
+        )
+    )
+    fabricated = replace(
+        evaluation,
+        conflicts=conflicts,
+        conflict_codes=tuple(sorted({item.code for item in conflicts})),
+        constraints=tuple(replace(row, satisfied=False, upper_bound=R(1, 200)) if row.ref_id == ref.ref_id else row for row in evaluation.constraints),
+        accounting=replace(evaluation.accounting, rounding_bound=R(1, 200)),
+    )
+    accounting = fabricated.accounting
+    assert fabricated.conflict_codes == ("NO_SHORT_OR_LEVERAGE", "ROUNDING_BOUND", "SPENDABLE_CASH_NONNEGATIVE")
+    assert (accounting.shortfall, accounting.rounding_adjustment, accounting.rounding_bound) == (-CENT, ZERO, R(1, 200))
+    assert accounting.shortfall < -accounting.rounding_bound
+    assert accounting.shortfall + CENT >= -accounting.rounding_bound
+
+    assert EV.rounding_top_ups(scenario, fabricated) == (_top_up("broker:a", CENT, 1),)
 
 
 def test_rounding_top_ups_reject_a_negative_holding() -> None:

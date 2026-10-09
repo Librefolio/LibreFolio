@@ -1941,7 +1941,8 @@ def test_defaults_omitted_dump_normalizes_exactly_like_the_explicit_request(
 # The rule: for every BUY route quoted in q, and every cash-pool currency c ≠ q
 # of its Broker (existing cash, funding routes, SELL-route quote currencies),
 # skip when c or q is the valuation currency V or a needed rate is missing;
-# otherwise it is a violation iff rate(c→q)·(1−spread)·rate(q→V) > rate(c→V).
+# otherwise it is a violation iff rate(c→q)·(1−spread)·rate(q→V) > rate(c→V),
+# beyond the ten-decimal coherence band pinned further down.
 # The comparison is strict, so the implied rate itself is coherent. The issue
 # is reported once per pair, however many routes reach it.
 # The planner-level cases, and the rounding-residual defect, live in
@@ -2017,6 +2018,56 @@ def test_cross_rate_just_beyond_the_spread_is_one_typed_invalid_issue() -> None:
     assert result.availability == "invalid"
     assert result.normalized is None
     assert _issue_dumps(result) == [CHF_USD_INCONSISTENT_ISSUE]
+
+
+# The coherence band. A stored rate carries ten decimals, so a cross rate cannot
+# always hit the triangle exactly: a cross just above it, within half a unit of
+# the tenth decimal on each of the three stored rates, is coherent, and the
+# conversion then plans at the triangle (the evaluator suite pins that rate).
+# RON→USD through EUR: 1.085 / 4.97 = 31/142 = 0.21830985915…
+RON_USD_INCONSISTENT_ISSUE: JsonObject = {
+    "code": FX_RATE_INCONSISTENT_CODE,
+    "severity": "error",
+    "kind": "invalid",
+    "path": _field_wire_path("fx", "fx_rate", "RON/USD", "rate"),
+    "message_key": FX_RATE_INCONSISTENT_CODE,
+    "params": [
+        {"kind": "currency", "name": "destination_currency", "value": "USD"},
+        {"kind": "id", "name": "pair", "value": "RON/USD"},
+        {"kind": "currency", "name": "source_currency", "value": "RON"},
+        {"kind": "currency", "name": "valuation_currency", "value": "EUR"},
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("cross_rate", "availability", "issues"),
+    (
+        # The triangle rounded at the tenth decimal: relatively 2.1e-10 above it, inside the 2.9e-10 band.
+        pytest.param("0.2183098592", "ready", [], id="above-triangle-inside-band"),
+        # One unit of the tenth decimal more: relatively 6.6e-10 above the triangle, beyond the band.
+        pytest.param("0.2183098593", "invalid", [RON_USD_INCONSISTENT_ISSUE], id="above-triangle-beyond-band"),
+        # The triangle truncated at the tenth decimal: below it, coherent with or without the band.
+        pytest.param("0.2183098591", "ready", [], id="below-triangle"),
+    ),
+)
+def test_cross_rate_within_the_ten_decimal_band_of_the_triangle_is_coherent(
+    cross_rate: str,
+    availability: str,
+    issues: list[JsonObject],
+) -> None:
+    payload = fx_conversion_request(
+        f"ron-usd-band-{cross_rate}",
+        funding_currency="RON",
+        assets=[("USD", "21.83")],
+        fx_rates={"EUR/RON": "4.97", "EUR/USD": "1.085", "RON/USD": cross_rate},
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == availability
+    assert _issue_dumps(result) == issues
+    assert (result.normalized is None) == (availability == "invalid")
 
 
 def test_missing_cross_rate_is_reported_missing_and_not_also_inconsistent() -> None:

@@ -23,7 +23,7 @@
     const stages = $derived(result.solver_evidence.stages);
     const finished = $derived(stages.filter((stage) => stage.status === 'finished').length);
     const minimums = $derived(result.result_state === 'ready_infeasible' ? requiredMinimumRoutes(request) : []);
-    // Cash the plan still needs per pool because of HALF_UP rounding (QX1-b): computed by the backend.
+    // Cash the plan still needs per pool because every posting rounds against the plan (QX1-b): computed by the backend.
     const topUps: PacRoundingTopUp[] = $derived('primary_solution' in result ? result.primary_solution.rounding_top_ups : []);
     const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
     const goToLabel = (step: PlannerStep, fallback: string) => $t(`${PLANNER_KEY}.actions.goTo`, {default: 'Go to {step}', values: {step: $t(`${PLANNER_KEY}.steps.${step}`, {default: fallback})}});

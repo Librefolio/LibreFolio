@@ -12,6 +12,10 @@ from fractions import Fraction
 
 import pytest
 
+# Plan-direction posting and the planning FX rate are reached through the module
+# object, inside the tests: a name the kernel does not export yet must fail its
+# own test, never the collection of this file.
+from backend.app.services.pac_allocator import numeric as NUM
 from backend.app.services.pac_allocator.numeric import (
     HUNDRED,
     ONE,
@@ -352,6 +356,128 @@ def test_half_up_is_odd_and_delta_bounded_on_deterministic_domain():
                 assert abs(negative.rounding_delta) <= quantum / 2, witness
 
 
+# Postings round against the plan: a credit posts the floor of its exact value
+# on the quantum, a debit the ceiling, so rounding never favours the plan.
+# HALF_UP above stays the display formatter's rounding.
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_posted", "expected_delta", "expected_units"),
+    [
+        pytest.param("1.005", "1.00", "-0.005", 100, id="positive-tie"),
+        pytest.param("-1.005", "-1.01", "-0.005", -101, id="negative-tie"),
+        pytest.param("1.004", "1.00", "-0.004", 100, id="positive-below-tie"),
+        pytest.param("-1.004", "-1.01", "-0.006", -101, id="negative-below-tie"),
+        pytest.param("1.25", "1.25", "0", 125, id="positive-exact-multiple"),
+        pytest.param("-1.25", "-1.25", "0", -125, id="negative-exact-multiple"),
+    ],
+)
+def test_signed_floor_posts_once_toward_negative_infinity(
+    value,
+    expected_posted,
+    expected_delta,
+    expected_units,
+):
+    exact = _ratio(value)
+    quantum = _ratio("0.01")
+    result = NUM.post_floor(exact, quantum)
+
+    assert isinstance(result, PostedAmount)
+    assert result.exact == exact
+    assert result.quantum == quantum
+    assert result.posted == _ratio(expected_posted)
+    assert result.rounding_delta == _ratio(expected_delta)
+    assert result.units == expected_units
+    assert -quantum < result.rounding_delta <= ExactRatio(0)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_posted", "expected_delta", "expected_units"),
+    [
+        pytest.param("1.004", "1.01", "0.006", 101, id="positive-below-tie"),
+        pytest.param("-1.004", "-1.00", "0.004", -100, id="negative-below-tie"),
+        pytest.param("1.005", "1.01", "0.005", 101, id="positive-tie"),
+        pytest.param("-1.005", "-1.00", "0.005", -100, id="negative-tie"),
+        pytest.param("1.25", "1.25", "0", 125, id="positive-exact-multiple"),
+        pytest.param("-1.25", "-1.25", "0", -125, id="negative-exact-multiple"),
+    ],
+)
+def test_signed_ceiling_posts_once_toward_positive_infinity(
+    value,
+    expected_posted,
+    expected_delta,
+    expected_units,
+):
+    exact = _ratio(value)
+    quantum = _ratio("0.01")
+    result = NUM.post_ceiling(exact, quantum)
+
+    assert isinstance(result, PostedAmount)
+    assert result.exact == exact
+    assert result.quantum == quantum
+    assert result.posted == _ratio(expected_posted)
+    assert result.rounding_delta == _ratio(expected_delta)
+    assert result.units == expected_units
+    assert ExactRatio(0) <= result.rounding_delta < quantum
+
+
+@pytest.mark.parametrize("posting", ["post_floor", "post_ceiling"])
+@pytest.mark.parametrize(
+    ("value", "quantum", "error"),
+    [
+        pytest.param(Decimal("1"), ExactRatio(1, 100), InvalidEconomicInputError, id="decimal-value"),
+        pytest.param(ExactRatio(1), ExactRatio(0), InvalidQuantumError, id="zero-quantum"),
+        pytest.param(ExactRatio(1), ExactRatio(-1, 100), InvalidQuantumError, id="negative-quantum"),
+        pytest.param(ExactRatio(1), Decimal("0.01"), InvalidQuantumError, id="decimal-quantum"),
+    ],
+)
+def test_plan_direction_posting_rejects_invalid_value_or_quantum_with_typed_error(
+    posting,
+    value,
+    quantum,
+    error,
+):
+    post = getattr(NUM, posting)
+
+    with pytest.raises(error) as raised:
+        post(value, quantum)
+
+    assert type(raised.value) is error
+
+
+def test_plan_direction_postings_bracket_the_exact_value_on_deterministic_domain():
+    quantums = (ExactRatio(1, 100), ExactRatio(1, 8), ExactRatio(3, 20))
+
+    for quantum in quantums:
+        step = _fraction(quantum)
+        for numerator in range(-20, 21):
+            for denominator in range(1, 10):
+                value = ExactRatio(numerator, denominator)
+                floor_posting = NUM.post_floor(value, quantum)
+                ceiling_posting = NUM.post_ceiling(value, quantum)
+                mirrored = NUM.post_floor(-value, quantum)
+                witness = (
+                    value.as_integer_ratio(),
+                    quantum.as_integer_ratio(),
+                )
+
+                assert floor_posting.exact == value, witness
+                assert ceiling_posting.exact == value, witness
+                assert floor_posting.quantum == quantum, witness
+                assert ceiling_posting.quantum == quantum, witness
+                assert floor_posting.units == _fraction(value) // step, witness
+                assert ceiling_posting.units == -(-_fraction(value) // step), witness
+                assert floor_posting.posted == quantum * floor_posting.units, witness
+                assert ceiling_posting.posted == quantum * ceiling_posting.units, witness
+                assert floor_posting.rounding_delta == floor_posting.posted - value, witness
+                assert ceiling_posting.rounding_delta == ceiling_posting.posted - value, witness
+                assert -quantum < floor_posting.rounding_delta <= ExactRatio(0), witness
+                assert ExactRatio(0) <= ceiling_posting.rounding_delta < quantum, witness
+                assert mirrored.posted == -ceiling_posting.posted, witness
+                assert mirrored.units == -ceiling_posting.units, witness
+                assert mirrored.rounding_delta == -ceiling_posting.rounding_delta, witness
+
+
 @pytest.mark.parametrize(
     ("value", "quantum", "expected_units"),
     [
@@ -511,6 +637,9 @@ def test_fx_credit_uses_effective_rate_without_rounding(source_debit, expected):
             source_debit=source_debit,
             approved_rate=ExactRatio(6, 5),
             spread=ExactRatio(1, 100),
+            # The triangle through the valuation currency is 6/5, above 6/5 x 0.99: no cap.
+            source_valuation_rate=ExactRatio(1),
+            destination_valuation_rate=ExactRatio(5, 6),
         )
         == expected
     )
@@ -551,6 +680,120 @@ def test_fx_credit_rejects_invalid_source_debit(source_debit):
             source_debit=source_debit,
             approved_rate=ExactRatio(1),
             spread=ExactRatio(0),
+            source_valuation_rate=ExactRatio(1),
+            destination_valuation_rate=ExactRatio(1),
+        )
+
+    assert type(raised.value) is InvalidEconomicInputError
+
+
+# The planning rate: min(approved x (1 - spread), val(source) / val(destination)),
+# where val(c) is valuation-currency units per unit of c. A cross rate the
+# normalizer accepts just above the triangle through the valuation currency
+# converts at the triangle; the approved rate stays the user's published spot.
+# RON/USD through EUR: (100/497) / (200/217) = 31/142 = 0.21830985915...
+
+
+def test_planning_fx_rate_caps_the_approved_rate_at_the_valuation_triangle():
+    approved_rate = ExactRatio(2183098592, 10**10)
+    valuation_rates = {
+        "source_valuation_rate": ExactRatio(100, 497),
+        "destination_valuation_rate": ExactRatio(200, 217),
+    }
+
+    assert NUM.calculate_planning_fx_rate(
+        approved_rate=approved_rate,
+        spread=ExactRatio(0),
+        **valuation_rates,
+    ) == ExactRatio(31, 142)
+    assert calculate_fx_credit(
+        source_debit=ExactRatio(100),
+        approved_rate=approved_rate,
+        spread=ExactRatio(0),
+        **valuation_rates,
+    ) == ExactRatio(1550, 71)
+
+
+@pytest.mark.parametrize(
+    ("approved_rate", "spread", "source_valuation_rate", "destination_valuation_rate", "expected"),
+    [
+        # The valuation currency is the source: the triangle is the approved rate itself.
+        pytest.param(ExactRatio(6, 5), ExactRatio(1, 100), ExactRatio(1), ExactRatio(5, 6), ExactRatio(297, 250), id="valuation-source"),
+        # The valuation currency is the destination, in the inverse direction.
+        pytest.param(ExactRatio(5, 6), ExactRatio(1, 100), ExactRatio(5, 6), ExactRatio(1), ExactRatio(33, 40), id="valuation-destination"),
+        pytest.param(ExactRatio(7, 4), ExactRatio(0), ExactRatio(1), ExactRatio(4, 7), ExactRatio(7, 4), id="zero-spread-at-triangle"),
+        # The triangle truncated at the tenth decimal: below it, the user's rate stands.
+        pytest.param(ExactRatio(2183098591, 10**10), ExactRatio(0), ExactRatio(100, 497), ExactRatio(200, 217), ExactRatio(2183098591, 10**10), id="cross-below-triangle"),
+        # Above the triangle, but the spread brings it back under: the spread rate stands.
+        pytest.param(ExactRatio(2183098592, 10**10), ExactRatio(1, 100), ExactRatio(100, 497), ExactRatio(200, 217), ExactRatio(2183098592 * 99, 10**12), id="spread-below-triangle"),
+    ],
+)
+def test_planning_fx_rate_keeps_the_spread_rate_at_or_below_the_triangle(
+    approved_rate,
+    spread,
+    source_valuation_rate,
+    destination_valuation_rate,
+    expected,
+):
+    assert (
+        NUM.calculate_planning_fx_rate(
+            approved_rate=approved_rate,
+            spread=spread,
+            source_valuation_rate=source_valuation_rate,
+            destination_valuation_rate=destination_valuation_rate,
+        )
+        == expected
+    )
+
+
+@pytest.mark.parametrize("field", ["source_valuation_rate", "destination_valuation_rate"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(ExactRatio(0), id="zero"),
+        pytest.param(ExactRatio(-1), id="negative"),
+        pytest.param(Decimal("1"), id="non-ratio"),
+    ],
+)
+def test_planning_fx_rate_rejects_invalid_valuation_rates(field, value):
+    planning_fx_rate = NUM.calculate_planning_fx_rate
+    valuation_rates = {
+        "source_valuation_rate": ExactRatio(1),
+        "destination_valuation_rate": ExactRatio(5, 6),
+    }
+    valuation_rates[field] = value
+
+    with pytest.raises(InvalidEconomicInputError) as raised:
+        planning_fx_rate(
+            approved_rate=ExactRatio(6, 5),
+            spread=ExactRatio(1, 100),
+            **valuation_rates,
+        )
+
+    assert type(raised.value) is InvalidEconomicInputError
+
+
+@pytest.mark.parametrize(
+    ("approved_rate", "spread"),
+    [
+        pytest.param(ExactRatio(0), ExactRatio(0), id="zero-approved-rate"),
+        pytest.param(ExactRatio(-1), ExactRatio(0), id="negative-approved-rate"),
+        pytest.param(ExactRatio(1), ExactRatio(-1, 100), id="negative-spread"),
+        pytest.param(ExactRatio(1), ExactRatio(1), id="spread-one"),
+        pytest.param(ExactRatio(1), ExactRatio(101, 100), id="spread-above-one"),
+        pytest.param(Decimal("1"), ExactRatio(0), id="non-ratio-approved-rate"),
+        pytest.param(ExactRatio(1), Decimal("0.01"), id="non-ratio-spread"),
+    ],
+)
+def test_planning_fx_rate_validates_approved_rate_and_spread_like_the_effective_rate(approved_rate, spread):
+    planning_fx_rate = NUM.calculate_planning_fx_rate
+
+    with pytest.raises(InvalidEconomicInputError) as raised:
+        planning_fx_rate(
+            approved_rate=approved_rate,
+            spread=spread,
+            source_valuation_rate=ExactRatio(1),
+            destination_valuation_rate=ExactRatio(1),
         )
 
     assert type(raised.value) is InvalidEconomicInputError
