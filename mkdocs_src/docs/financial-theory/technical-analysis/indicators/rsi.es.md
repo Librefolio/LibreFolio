@@ -1,6 +1,6 @@
 # 💪 RSI — Índice de Fuerza Relativa
 
-El RSI mide si los compradores o los vendedores han dominado *recientemente*. Responde a: *"En los últimos $N$ días, ¿qué proporción del movimiento total del precio fue ascendente frente a descendente?"*
+El RSI mide si los compradores o los vendedores han dominado *recientemente*. Responde a: *"En las últimas $N$ sesiones, ¿qué proporción del movimiento total del precio fue ascendente frente a descendente?"*
 
 ---
 
@@ -15,7 +15,7 @@ El resultado se comprime en un rango de 0 a 100:
 
 ## 🔢 Fórmulas Matemáticas
 
-1. **Descomponer** los cambios diarios en ganancias y pérdidas:
+1. **Descomponer** el cambio de una sesión a la siguiente en ganancias y pérdidas:
 
     $$
     U_t = \max(P_t - P_{t-1},\; 0), \qquad
@@ -44,7 +44,7 @@ La normalización $100 - 100/(1+RS)$ es una sigmoide monótonamente creciente qu
 
 | Parámetro | Clave | Por defecto | Descripción |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Ventana de retroceso para SMMA. |
+| Periodo ($N$) | `period` | 14 | Ventana de retroceso para SMMA, en sesiones. |
 | Sobrecompra | `overbought` | 70 | Umbral para la zona de sobrecompra. |
 | Sobreventa | `oversold` | 30 | Umbral para la zona de sobreventa. |
 

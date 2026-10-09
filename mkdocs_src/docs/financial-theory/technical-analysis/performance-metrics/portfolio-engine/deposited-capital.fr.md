@@ -94,9 +94,8 @@ Le capital retourne correctement vers $K$ ; seul le gain de 5 € va vers $R$. *
 
 Le modèle à 3 pools s'exécute dans une **boucle unique par transaction** (basé sur les événements, et non par delta quotidien) :
 
-1. Lecture du PMP avant la mutation du pool
-2. Mise à jour de K/R/W selon les règles par type de transaction
-3. Décrémentation ensuite du pool PMP (pour les VENTES)
+1. Lecture de la variation que la transaction produit dans le pool au coût moyen de sa position, calculée avant le rejeu — pour une VENTE, le coût qu'elle retire ($C$ = PRU avant la vente × quantité vendue, aux taux historiques)
+2. Mise à jour de K/R/W selon les règles par type de transaction, avec ce $C$ pour une VENTE
 
 
 La série d'entrées ROI/TWRR/MWRR est dérivée des variations jour après jour du `cumulative_external_cash_flow`, la baseline de capital. Elle n'est pas dérivée du champ `external_cash_flow` (liquidités uniquement).

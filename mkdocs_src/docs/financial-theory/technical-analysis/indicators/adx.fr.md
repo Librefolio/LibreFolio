@@ -22,7 +22,7 @@ Les traders associent souvent l'ADX à un système de suivi de tendance (croisem
     -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{si} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ sinon } 0
     $$
 
-2. **True Range** $TR_t$ (voir [ATR](atr.md)), lissé sur $N$ périodes, normalise les mouvements directionnels en **+DI** / **-DI** :
+2. **True Range** $TR_t$ (voir [ATR](atr.md)), lissé sur $N$ séances, normalise les mouvements directionnels en **+DI** / **-DI** :
 
     $$
     +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
@@ -42,7 +42,7 @@ Les traders associent souvent l'ADX à un système de suivi de tendance (croisem
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre de lissage pour +DM, -DM, TR et DX. |
+| Période ($N$) | `period` | 14 | Fenêtre de lissage pour +DM, -DM, TR et DX, en séances. |
 
 ---
 

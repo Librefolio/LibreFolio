@@ -16,7 +16,7 @@ Matematicamente, la maggior parte degli indicatori di momentum sono derivate dis
 |-----------|-------------------|---------|---------|
 | **RSI** | Bilancio tra guadagni e perdite recenti | Ipercomprato/ipervenduto, ritorno alla media | [📖](rsi.md) |
 | **MACD** | Accelerazione del trend | Incroci rialzisti/ribassisti | [📖](macd.md) |
-| **ROC** | Variazione percentuale del prezzo su $N$ giorni | Momentum puro, individuazione di divergenze | [📖](roc.md) |
+| **ROC** | Variazione percentuale del prezzo su $N$ sedute | Momentum puro, individuazione di divergenze | [📖](roc.md) |
 | **Stochastic RSI** | Estremi di ipercomprato/ipervenduto dell'RSI stesso | Segnali di inversione più veloci e sensibili | [📖](stochastic-rsi.md) |
 | **PPO** | MACD, normalizzato per il prezzo | Confronto del momentum tra asset con livelli di prezzo diversi | [📖](ppo.md) |
 | **CCI** | Deviazione dalla media del prezzo tipico | Punti di svolta ciclici | [📖](cci.md) |

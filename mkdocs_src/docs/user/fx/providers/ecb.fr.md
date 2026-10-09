@@ -1,6 +1,6 @@
 # <img src="https://www.ecb.europa.eu/favicon-32.png" alt=""> Banque centrale européenne (BCE)
 
-La **Banque centrale européenne (BCE)** est le principal fournisseur de taux de référence pour les portefeuilles européens. Elle publie quotidiennement les taux de change de l'euro par rapport à environ 45 devises majeures et émergentes.
+La **Banque centrale européenne (BCE)** est le principal fournisseur de taux de référence pour les portefeuilles européens. Elle publie chaque jour des taux de référence de l'euro par rapport à environ 30 devises.
 
 ## 📊 Fonctionnalités
 
@@ -16,11 +16,13 @@ La **Banque centrale européenne (BCE)** est le principal fournisseur de taux de
 
 ## 💰 Devises prises en charge
 
-La BCE prend en charge un large éventail de devises, notamment :
+La BCE publie un taux chaque jour ouvré pour environ 30 devises, notamment :
 
 - **Majeures** : USD 🇺🇸, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿
-- **Européennes/Régionales** : SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, BGN 🇧🇬, TRY 🇹🇷
+- **Européennes/Régionales** : SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, ISK 🇮🇸, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, TRY 🇹🇷
 - **Globales / Émergentes** : CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, BRL 🇧🇷, MXN 🇲🇽, ZAR 🇿🇦
+
+Les devises que la BCE ne publie plus, comme le lev bulgare (BGN, remplacé par l'euro en 2026), la kuna croate (HRK) ou le rouble russe (RUB), conservent leurs taux passés : une synchronisation télécharge toujours leur historique, et aucun nouveau taux n'arrive.
 
 ## 📝 Notes importantes
 

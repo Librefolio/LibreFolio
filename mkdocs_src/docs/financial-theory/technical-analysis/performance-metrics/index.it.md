@@ -34,6 +34,7 @@ Contabilità aggregata basata su PMC per l'intero portafoglio (o qualsiasi ambit
 | **[Effetto di Tempismo](portfolio-engine/timing-effect.md)** | Differenza tra MWRR Cumulativo e TWRR Cumulativo — quantifica l'impatto del tempismo dei flussi di cassa sui rendimenti. |
 | **[ROI Semplice](portfolio-engine/roi.md)** | Rendimento percentuale rispetto al capitale investito netto. Semplice ma soggetto alla diluizione dei flussi di cassa. |
 | **[Rendimento Annualizzato Netto](portfolio-engine/net-annualized-return.md)** | Definizioni del CAGR netto per posizioni, contributo di periodo e lotti FIFO, con finestra minima di 30 giorni. |
+| **[Rendimento sul costo](portfolio-engine/yield-on-cost.md)** | Dividendi/interessi lordi non negativi degli ultimi 365 giorni per unità storica ammissibile, divisi per il prezzo medio di carico (PMC) di ogni coppia asset/broker. |
 | **[TWRR](portfolio-engine/twrr.md)** | Tasso di Rendimento Ponderato nel Tempo. Performance pura di asset/strategia, che neutralizza il tempismo di depositi/prelievi. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Tasso di Rendimento Ponderato per il Capitale. Performance personale dell'investitore che tiene conto del tempismo dei flussi di cassa. Forme annualizzate e cumulative. |
 
@@ -50,7 +51,7 @@ Contabilità per lotto: tiene traccia di ogni lotto di acquisizione attraverso i
 
 | Metrica / Concetto | Descrizione |
 |------------------|-------------|
-| **[Prezzo Medio di Carico (PMC)](weighted-average-cost.md)** | PMC iterativo sensibile all'inventario per posizione (broker, asset). Calcolato inline durante il ciclo giornaliero del motore. |
+| **[Prezzo Medio di Carico (PMC)](weighted-average-cost.md)** | PMC iterativo sensibile all'inventario per posizione (broker, asset), con ogni acquisizione al tasso di cambio della propria data. Calcolato una volta per report, poi riprodotto dal ciclo giornaliero del motore. |
 
 ---
 
@@ -97,6 +98,11 @@ Per aiutarti a scegliere la metrica giusta per la tua analisi, utilizza questa g
 * **Domanda Chiave:** "Qual è il rendimento cumulativo equivalente ponderato per il capitale su questa finestra temporale selezionata?"
 * **Concetto della Formula:** Compone il MWRR annualizzato per il numero effettivo di giorni trascorsi.
 * **Caso d'Uso Ideale:** Grafici seriali e widget della dashboard per confrontare visivamente i trend di performance fianco a fianco con TWRR e ROI.
+
+### 💸 9. [Rendimento sul costo](portfolio-engine/yield-on-cost.md)
+* **Domanda Chiave:** "Quanto reddito lordo da dividendi e interessi ha prodotto ogni unità attuale negli ultimi 365 giorni di calendario rispetto al suo prezzo medio di carico?"
+* **Concetto della Formula:** Somma il reddito non negativo, convertito al cambio della data della transazione, per ogni unità long ammissibile del giorno precedente, rettifica per i frazionamenti collegati, poi divide per il prezzo medio di carico (PMC) alla data di fine del report.
+* **Caso d'Uso Ideale:** Confrontare la produttività di reddito registrata delle posizioni aperte asset/broker senza confonderla con il dividend yield di mercato, il CAGR o il rendimento a scadenza (YTM) di un'obbligazione.
 
 ---
 
@@ -168,4 +174,4 @@ Per facilitare la navigazione, le tre card KPI nella dashboard di LibreFolio —
 1. L'icona di aiuto apre la sezione corrispondente della pagina [KPI Cards](../../../user/dashboard/kpi-cards.md) della guida utente ([Card 1](../../../user/dashboard/kpi-cards.md#card-1-period-pl), [Card 2](../../../user/dashboard/kpi-cards.md#card-2-returns), [Card 3](../../../user/dashboard/kpi-cards.md#card-3-net-worth)).
 2. Da lì, ogni metrica collega al proprio capitolo di teoria finanziaria: [P&L di Periodo](portfolio-engine/period-pnl.md), [Valore Contabile](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Effetto di Tempismo](portfolio-engine/timing-effect.md), [NAV / Patrimonio Netto](portfolio-engine/nav.md), [Capitale Depositato e P&L Totale](portfolio-engine/deposited-capital.md).
 
-Altrove nell'app, l'anteprima PMC nel modulo di transazione collega direttamente al capitolo [Prezzo Medio di Carico (PMC)](weighted-average-cost.md), e ogni segnale/indicatore dei grafici collega alla propria pagina di teoria.
+Altrove nell'app, l'anteprima PMC nel modulo di transazione collega direttamente al capitolo [Prezzo Medio di Carico (PMC)](weighted-average-cost.md), la tabella delle posizioni collega la sua colonna YOC a [Rendimento sul costo](portfolio-engine/yield-on-cost.md), e ogni segnale/indicatore dei grafici collega alla propria pagina di teoria.
