@@ -1,6 +1,11 @@
 # H - Yield on Cost da ledger transazioni (U3 / primo incremento SP06)
 
-**Stato:** ✅ **H REFINEMENT DEVELOPER ACCEPTED / FROZEN 2026-09-11**;
+**Stato:** ✅ **COMPLETATO E INTEGRATO il 2026-09-11** — commit `74afcebce`
+(`feat(portfolio): add yield on cost`), merge di `dev_release2` nel ramo H
+`0d5787430`, ultimo commit del ramo `f092a194b`; integrato in `dev_release2` dal
+merge `d7d40c0ec` (2026-09-11 20:22, cataloghi, docs e nav MkDocs). Verificato e
+archiviato il 2026-10-09 (§14, «Aggiornamento 2026-10-09»).
+*Storia:* ✅ **H REFINEMENT DEVELOPER ACCEPTED / FROZEN 2026-09-11**;
 implementazione, gate, review e walkthrough completati. Checkpoint pronto per
 staging/integrazione manuale coordinator/developer.
 **Owner:** workstream H.
@@ -17,8 +22,8 @@ developer/coordinator; H non esegue staging, commit o merge.
 
 Fonti:
 
-- [U3 - UX e Dashboard](../09_feedbackJobs/01_ux_dashboard.md)
-- [Piano sprint - U3 / SP06](../09_feedbackJobs/06_piano_sprint.md)
+- [U3 - UX e Dashboard](../../Phase_0/09_feedbackJobs/01_ux_dashboard.md)
+- [Piano sprint - U3 / SP06](../../Phase_0/09_feedbackJobs/06_piano_sprint.md)
 - [Decisione FIFO D-1](../../../../LibreFolio_devWiki/wiki/decisions/fifo-v4-income-eligibility-d1.md)
 - [Finestra di eligibility D-1](../../../../LibreFolio_devWiki/wiki/concepts/d1-income-eligibility-window.md)
 
@@ -511,7 +516,7 @@ Requisiti mobile/accessibilita':
 | H08 | Docs EN tramite docs-writer + nav coordinator | ✅ 2026-09-10 - EN complete; nav handed to coordinator |
 | H09 | Gate mirati/integrati nella lane H | ✅ 2026-09-10 - backend/API/component/type/build green |
 | H10 | Walkthrough Dashboard/Broker e feedback developer | ✅ 2026-09-11 - developer accepted |
-| H11 | Checkpoint finale, integrazione e chiusura documentale | ✅ 2026-09-11 - frozen checkpoint ready |
+| H11 | Checkpoint finale, integrazione e chiusura documentale | ✅ 2026-09-11 - frozen checkpoint ready; committato `74afcebce`, ramo chiuso `f092a194b`, integrato `d7d40c0ec` (verifica d'archivio 2026-10-09) |
 
 > **Note implementazione** (H00, 2026-09-10): creati esclusivamente piano e
 > storyboard, con backlink U3/SP06 ora marcati PLAN/DESIGN APPROVED. Nessun file applicativo,
@@ -751,6 +756,9 @@ Requisiti mobile/accessibilita':
 > negative YOC. D-1, broker, transfer, split e FX restano
 > rigorosi. MkDocs strict build e link check sono verdi; il debito traduzioni
 > resta intenzionalmente rinviato.
+> *(Verifica d'archivio 2026-10-09: la pagina teorica `yield-on-cost.en.md` non
+> ha ancora le versioni it/fr/es — rinviato: `Phase_0/38_postReleaseBacklog/README.md`,
+> voce «I-08 · debito di traduzione MkDocs».)*
 >
 > **Note verifica rifinimento backend** (2026-09-11): il contratto transazioni
 > esistente e' confermato da **73 passed** nello schema suite; la regressione
@@ -1013,3 +1021,31 @@ sono presenti nel worktree. Il developer ha accettato il build raffinato dopo
 review delle cinque fixture reali. H e' frozen; restano coordinator/developer:
 staging selettivo, commit manuale, integrazione e aggiornamento dei record
 release finali.
+
+### Aggiornamento 2026-10-09 — verifica d'archivio (workstream I, su `3cceb4f90`)
+
+> **Note implementazione (verifica d'archivio):** i passi che il paragrafo sopra
+> lasciava a coordinator e developer sono tutti avvenuti, e il codice di oggi
+> corrisponde al contratto:
+>
+> | Passo | Prova |
+> |---|---|
+> | commit dell'implementazione | `74afcebce` `feat(portfolio): add yield on cost` (2026-09-11 15:53, padre `b22998f21`) |
+> | allineamento del ramo H | merge `0d5787430` (16:07), poi `f092a194b` `fix(signals): normalize generated points` (16:40), ultimo commit del ramo |
+> | integrazione in `dev_release2` | merge `d7d40c0ec` (20:22), genitori `8273335ff` + `f092a194b`: cataloghi, docs e nav MkDocs |
+> | CHANGELOG | `CHANGELOG.md:26` |
+> | nav MkDocs | `mkdocs_src/mkdocs.yml:910` |
+>
+> Tutti e quattro i commit sono antenati di `3cceb4f90`. La citazione «follow-up
+> finale `f092a194b`» in `09_feedbackJobs/01_ux_dashboard.md:332` è corretta.
+>
+> **Residuo tracciato, non un buco:** il debito di traduzione dichiarato sopra
+> («intenzionalmente rinviato») è ancora aperto: `yield-on-cost.en.md` non ha
+> it/fr/es, mentre le pagine sorelle li hanno. Rinviato:
+> `Phase_0/38_postReleaseBacklog/README.md`, voce «I-08 · debito di traduzione
+> MkDocs». La tabella H-UI della §13 resta com'è: è evidenza storica della
+> revisione `b22998f` + H dirty, non uno stato.
+>
+> **Fuori pista:** nessuno. Il piano era fermo al FROZEN del 2026-09-11 perché H
+> non poteva registrare un'integrazione fatta da altri; la sessione H non esiste
+> più, e il riallineamento lo fa I su richiesta del coordinator.
