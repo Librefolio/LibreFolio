@@ -8,7 +8,7 @@
  * list, the plugin catalogue and the user's choices, so they live here, tested without the
  * wizard; the component keeps the reactive state and the server calls.
  *
- * Design: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md`, §4.
+ * Design: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md`, §4.
  */
 
 /** One export a report-set plugin reads (from `GET /brokers/import/plugins`). */
