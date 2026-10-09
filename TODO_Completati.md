@@ -4,10 +4,25 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 🔤 L'audit i18n distingue «usata», «morta» e «non verificata» ✅
+
+**Data completamento:** 9 Ottobre 2026
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md` (workstream O); lotti integrati nei treni 8, 9, 10, 14, 19 e 22, cartella archiviata il 09/10
+
+### Risultato
+
+- Chiusa la voce di `TODO_FUTURI.md` «L'audit i18n non può dire "inutilizzata" su un terzo del catalogo» (S4, 21/09): un'interpolazione al primo segmento (`risk.${prefix}.${code}`) faceva risultare «usata» ogni chiave del namespace, un terzo del catalogo.
+- S2 (R1-R7): l'audit legge le unioni tipizzate dei prefissi, anche con un solo membro (R3), così `risk.*` è verificabile. S12 (R8-R12): i prefissi legacy che non si possono risolvere rendono le chiavi «non verificate», non «usate».
+- Le 4 chiavi morte della voce sono tolte: `risk.simulation.regimeTruncated` (S7c) e `risk.levels.l3.{beta,sharpe,sortino}Help` (`f55b2e42a`).
+- Al 09/10 `./dev.py i18n audit` dà 4215 chiavi, 0 morte e 3 non verificate, con lo stesso insieme di chiavi nelle 4 lingue.
+- I residui sono nel backlog dopo la 1.2: `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md`, voci O-1…O-18.
+
+---
+
 ## 🆔 Gli id degli asset (e delle altre tabelle) non si riusano più ✅
 
 **Data completamento:** 8 Ottobre 2026
-**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/Phase_0/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` (workstream L); commit/SHA in attesa del commit manuale
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` (workstream L); commit `6b66ee306`, `298ed96f3` e `b0740c901`, merge `637c5d105` (treno 12)
 
 ### Risultato
 
@@ -63,7 +78,7 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 ### Evidenze e confini
 
 - Piano, cinque round, checklist e inventario:
-  [`14_feedbackImportUrgent`](LibreFolio_developer_journal/Release_2/Phase_0/14_feedbackImportUrgent/manifest-integrazione-E.md).
+  [`14_feedbackImportUrgent`](LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/manifest-integrazione-E.md).
 - Tutte le fixture versionate sono sintetiche; ledger, DB, upload, backup e log
   privati sono esclusi.
 - Restano aperti privacy globale, YOC, onboarding e i tre approfondimenti

@@ -236,4 +236,4 @@ average cost comes from this one function.
 | Developer docs (layer rule, function, callers) | `mkdocs_src/docs/developer/backend/transactions/wac.md` |
 | Theory | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/weighted-average-cost.en.md` |
 | Theory — unrealized split by currency | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.en.md` |
-| Plan (decisions D1–D12, measurements) | `LibreFolio_developer_journal/Release_2/Phase_0/30_wacUnification/plan-phase00WacUnification.prompt.md` |
+| Plan (decisions D1–D12, measurements) | `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00WacUnification.prompt.md` |
