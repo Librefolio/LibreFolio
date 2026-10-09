@@ -232,6 +232,15 @@ def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Test runner CLI contract tests", verbose=verbose)
 
 
+def utils_dev_cli_db_path(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that dev.py db current/upgrade/downgrade/migrate/check act on the path they are given, never on the configured database."""
+    print_section("Utils: dev.py db [path]")
+    print_info("Testing: dev.py db current|upgrade|downgrade|migrate|check <path> on temporary databases (tmp_path), the configured one a sentinel")
+    print_info("Tests: absolute and project-root-relative paths, missing file refused (upgrade creates it), %/?/# refused, db check runs the CHECK constraints hook, no path = configured database")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_db_path.py", test_names)
+    return run_command(cmd, "dev.py db path tests", verbose=verbose)
+
+
 def utils_coverage_combine(verbose: bool = False, test_names: list = None) -> bool:
     """Test that coverage parts renamed or landing late are still combined, that run directories never pile up, that an empty finished part is dropped, and that a failed combine is a red pass."""
     print_section("Utils: Coverage Combine")
@@ -404,6 +413,17 @@ Tests for utility modules and helper functions:
         desc="test_names → pytest -k semantics on the real coverage-js-adapter action, registry dispatch forwarding, coverage_js.py compile check",
         # Monkeypatches run_command/subprocess.run and reads source text only;
         # no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-cli-db-path",
+        utils_dev_cli_db_path,
+        name="Dev CLI db path",
+        desc="dev.py db current/upgrade/downgrade/migrate/check act on the [path] they are given (absolute, or relative to the project root), never on the configured database: a missing file is refused (upgrade creates it), a path with %, ? or # is refused, db check runs the CHECK constraints hook; without a path the configured database is used",
+        # Temporary databases and data dirs under tmp_path, free ports, dev.py and alembic
+        # in subprocesses: no lane DB, no server, no network, no repo writes (db migrate
+        # only ever runs its refusal, with no database at head within its reach).
         isolation="pure",
     )
     add_test(
