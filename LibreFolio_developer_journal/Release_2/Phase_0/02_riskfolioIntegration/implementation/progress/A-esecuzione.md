@@ -195,9 +195,10 @@ file di `ai_export/`, nessuna pagina MkDocs (di I).
 - [x] **A7. M5 + D39** — ✅ 2026-09-18 · **M5 declinata, D39 dichiarata NON bloccata da M5**
   Se rinviata, **D39 la segue e va dichiarato**.
 
-- [ ] **A8. Chiusura** — `risk-all` verde, porta libera, messaggio di commit proposto.
+- [x] **A8. Chiusura** — `risk-all` verde, porta libera, messaggio di commit proposto.
+  ↳ *allineamento 09/10*: ✅ chiusa più sotto, «A8 — chiusura del mandato · FROZEN»
 
-- [ ] **A9. Tasso privo di rischio coerente con la frequenza** — ✅ **AUTORIZZATO**
+- [x] **A9. Tasso privo di rischio coerente con la frequenza** *(allineamento 09/10: ✅ `backend/app/services/risk/quant/riskfolio_worker.py` e `metrics.py`, `(1 + r)^(1/f) − 1`; fatto più sotto)* — ✅ **AUTORIZZATO**
   2026-09-18 come **passo separato dopo M6**. Terza estensione di confine concessa
   (dopo i quattro `rolling_*.py` e i due `risk_plugins/`).
   Segnalato dal coordinatore su scoperta di I, confermato **e ridiagnosticato** da me.

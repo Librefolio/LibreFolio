@@ -429,22 +429,35 @@ Dopo la modifica di schema: **`./dev.py api sync`**.
 
 Oltre a quella comune ([`README.md`](./README.md) §6):
 
-- [ ] `acquired.py` esiste, con la **nostra** convenzione di segno, e non tocca `metrics.py`;
-- [ ] NEA e diversification ratio su `RiskContributionOutput`, **insieme**;
-- [ ] la convenzione sulla **cassa** è decisa, scritta e coerente con AI Export — o la
+- [x] `acquired.py` esiste, con la **nostra** convenzione di segno, e non tocca `metrics.py`;
+  ↳ *allineamento 09/10*: ✅ `backend/app/services/risk/acquired.py`
+- [x] NEA e diversification ratio su `RiskContributionOutput`, **insieme**;
+  ↳ *allineamento 09/10*: ✅ `backend/app/schemas/risk.py` (`effective_number_of_assets`, `diversification_ratio`)
+- [x] la convenzione sulla **cassa** è decisa, scritta e coerente con AI Export — o la
       divergenza è motivata per iscritto;
-- [ ] il test `NEA == 10000 / herfindahl_index_points` passa;
-- [ ] `WR` su `RiskKpiOutput`, con il segno dichiarato e testato;
-- [ ] MDD, DaR, CDaR, UCI in variante **`_Rel`**, con il test che fallisce allo scambio
+  ↳ *allineamento 09/10*: ✅ `acquired.py` e `schemas/risk.py`
+- [x] il test `NEA == 10000 / herfindahl_index_points` passa;
+  ↳ *allineamento 09/10*: ✅ `backend/test_scripts/test_services/test_risk_analytics.py`
+- [x] `WR` su `RiskKpiOutput`, con il segno dichiarato e testato;
+  ↳ *allineamento 09/10*: ✅ `schemas/risk.py` (`worst_realization`)
+- [x] MDD, DaR, CDaR, UCI in variante **`_Rel`**, con il test che fallisce allo scambio
       con `_Abs`;
-- [ ] verificato che `max_drawdown` **coincida** con `MDD_Rel`, o la differenza è
+  ↳ *allineamento 09/10*: ✅ `schemas/risk.py` e `acquired.py`
+- [x] verificato che `max_drawdown` **coincida** con `MDD_Rel`, o la differenza è
       riportata;
-- [ ] **nessun campo esistente modificato** — solo aggiunte;
-- [ ] `git diff` limitato ai cinque file di §9;
-- [ ] `api sync` eseguito;
-- [ ] `services risk-all`, `schemas risk`, `api risk` verdi;
-- [ ] **K8 consegnato e comunicato a E**;
-- [ ] nessun processo in ascolto su `6248`.
+  ↳ *allineamento 09/10*: ✅ `progress/N-esecuzione.md`: differiscono di un'unità in virgola mobile, valore corretto
+- [x] **nessun campo esistente modificato** — solo aggiunte;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] `git diff` limitato ai cinque file di §9;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] `api sync` eseguito;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] `services risk-all`, `schemas risk`, `api risk` verdi;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] **K8 consegnato e comunicato a E**;
+  ↳ *allineamento 09/10*: ✅ `progress/N-esecuzione.md`
+- [x] nessun processo in ascolto su `6248`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
 
 ---
 

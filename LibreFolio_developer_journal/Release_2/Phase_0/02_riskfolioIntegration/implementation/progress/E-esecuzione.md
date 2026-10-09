@@ -232,21 +232,23 @@ l'estrazione e nient'altro.
 > `mkdocs_src/docs/static/icons/asset-types/commodity.png` e `real-estate.png`. Non li ho
 > creati e non li tocco. Segnalati al coordinatore, **non messi in stage**.
 
-### ⏳ Passo 4 — `RiskLevelsPanel`, contenitore e mappa dei livelli
+### ✅ Passo 4 — `RiskLevelsPanel`, contenitore e mappa dei livelli
 
-### ⏳ Passo 5 — L1 «Quanto può fare male?»
+### ✅ Passo 5 — L1 «Quanto può fare male?»
 
-### ⏳ Passo 6 — L2 «Sono diversificato come credo?»
+### ✅ Passo 6 — L2 «Sono diversificato come credo?»
 
-### ⏳ Passo 7 — L3 «Sto venendo pagato per questo rischio?»
+### ✅ Passo 7 — L3 «Sto venendo pagato per questo rischio?»
 
-### ⏳ Passo 8 — L4 «Cosa succede se…?», chiuso di default
+### ✅ Passo 8 — L4 «Cosa succede se…?», chiuso di default
 
-### ⏳ Passo 9 — Rimozioni (TE, IR, `sobol_start_index`, barre a mano)
+### ✅ Passo 9 — Rimozioni (TE, IR, `sobol_start_index`, barre a mano)
 
-### ⏳ Passo 10 — Innesti K1, K3, K4, K6, K7, K8
+### ✅ Passo 10 — Innesti K1, K3, K4, K6, K7, K8
 
-### ⏳ Passo 11 — Gate finali e porta libera
+### ✅ Passo 11 — Gate finali e porta libera
+
+> *Allineamento 09/10*: i passi 4–11 erano rimasti ⏳ in questo indice, ma sono chiusi più sotto in questo file, ognuno con la sua sezione datata, fino a «Gate finali · FROZEN».
 
 ---
 
@@ -829,6 +831,7 @@ Sembrava prudente. Era **una falsa accusa**:
 - **5** — `correlation` richiesta e mai resa: ora non è più *mal attribuita*, ma resta un
   giro O(n²) sprecato per lo scope portafoglio.
 - **6** — `HurtRow.secondaryLoss` calcolato e mai reso.
+- *Allineamento 09/10*: **3** ✅ (gli avvisi tradotti e l'avviso unico, giro R5 del 24–25/09); **5** ✅ (la correlazione è resa in L2: `RiskLevelsPanel.svelte` la passa a `L2Diversification.svelte`); **6** ↪ superato: il VaR si legge come soglia dell'istogramma (S1), e `secondaryLoss` resta un campo morto in `levelHelpers.ts`, da togliere alla ripresa; **NUOVO 8** ✅ (`AssetSetReplaySection.test.ts`, `AssetSetCorrelationSection.test.ts`).
 - **NUOVO 8** — la riga `{testId}-health` **è resa ma non asserita da nessun test**: l'E2E
   passa identico con e senza. Sarà chiesta a `test-author` insieme alle asserzioni di L4,
   per non spendere due passaggi di lane. Finché non c'è, il verde su quella riga è **vuoto**.
