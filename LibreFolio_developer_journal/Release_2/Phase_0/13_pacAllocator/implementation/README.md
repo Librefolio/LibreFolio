@@ -80,7 +80,7 @@ al precedente in testa.
 | 13 | [Rimozione finale del P1](plan-phase00PacP1FinalRemoval.prompt.md) | diversa dalla riga 8: toglie il ramo `allocation_source` di `POST /portfolio/report`, i suoi 7 schemi, `allocationSource.ts` e le chiavi i18n morte (le 28 `tools.portfolioRebalancer.*` comprese); il report passa da 13 a 12 sezioni; poi R7 in un `fix(pac)` a sé | ✅ S0–S8 `6ebad820b` `refactor(pac)`, `838be2b6f` journal: 285 chiavi tolte ×4 (da 4 508 a 4 223 per lingua), 18 gate verdi sulla 6151; S10 validazione del treno 2 ✅; R7 (plurali delle quantità e aiuti della distribuzione) `dbedcc822` `fix(pac)`, `f374f1e5b` journal; merge `9f06df702` con `dev_release2` `c9a602f74`, rivalidato sulla 6151: 8 gate su 8 verdi |
 | 14 | Analisi del Rebalancer — piano da definire | massimo riuso del PAC (compilatore, verifier, report, UI); domanda (b) sul numero di Asset con le misure; un solo salto di versione del contratto; E2E backend del motore; squadra e rischi | ⏳ dopo la riga 13 |
 | 15 | [Conversioni FX del PAC](plan-phase00PacFxConversionFix.prompt.md) | difetto trovato da M con la gallery: «Calculation failed» appena una fonte di finanziamento è in una valuta diversa da quella dello scenario. Correzione A (residuo di arrotondamento del ledger esatto, `ExactNumber`), 2A (cambi incrociati incoerenti rifiutati con `allocation.fx_rate_inconsistent`), precisione adattiva in pagina; log del motore coi chiamanti in un commit a sé; contratto 1.0.0. Pagina utente del PAC: cambi coerenti e residuo «≈» (S9, `docs(pac)`). Eseguita prima della riga 14 | ✅ `bffc634b0` `fix(pac)`, `b3843e2f8` `chore(pac)`, `f720f7879` `docs(pac)`, `8a79ff34d` journal; merge `95fb05f17` nel treno 21 (`dev_release2` = `9b2acdd5d`), gate verdi del coordinator: `api all` 828, `schemas all` 1705, le 9 suite PAC, i tool e `tools-wire` |
-| 16 | [Arrotondamento contro il piano](plan-phase00PacRoundingDirectionFix.prompt.md) | reperto di M con la gallery in USD: l'ottimizzatore sfrutta l'arrotondamento HALF_UP dei crediti (passi da pochi centesimi, «Rounding ≈ −0,02 EUR»). Regola (a): crediti per difetto, debiti per eccesso, su tutte e 7 le famiglie; banda del validatore di una minor unit per posting; C-FXPOS; n. 15 B1 (banda β dei tassi a dieci decimali, tasso al triangolo dentro la banda); contratto 1.0.0 | 🔄 S0–S9 ✅ il 2026-10-09: kit 80/80, suite PAC 705 + 552 + 12 e 8 gate verdi sulla 6151, `mkdocs build` strict verde; CHECKPOINT READY, in attesa degli SHA |
+| 16 | [Arrotondamento contro il piano](plan-phase00PacRoundingDirectionFix.prompt.md) | reperto di M con la gallery in USD: l'ottimizzatore sfrutta l'arrotondamento HALF_UP dei crediti (passi da pochi centesimi, «Rounding ≈ −0,02 EUR»). Regola (a): crediti per difetto, debiti per eccesso, su tutte e 7 le famiglie; banda del validatore di una minor unit per posting; C-FXPOS; n. 15 B1 (banda β dei tassi a dieci decimali, tasso al triangolo dentro la banda); contratto 1.0.0 | ✅ `96283eaa5` `fix(pac)`, `85b2a3125` `docs(pac)`, `9a6974eff` journal; merge `b81b92fd1` nel treno 26 (`dev_release2` = `083ed26dc`). Chiusura S10: `style(pac)` sul debito di formato del S8 |
 
 ## Ordine e parallelismo
 
@@ -143,10 +143,12 @@ assegnata; il parallelismo dei file non autorizza runtime concorrenti.
 
 ## Stato
 
-**Stato al 2026-10-05.** Il bundle è stato eseguito. Il planner PAC 1.0.0 è integrato in
-`dev_release2` (righe 7–11). Restano le righe 12–14, nell'ordine approvato dal developer il
-05/10. Il Rebalancer non è ancora implementato: gli Step 1–6 restano il riferimento per il suo
-disegno, con le note di mappatura del 05/10.
+**Stato al 2026-10-09.** Il bundle è stato eseguito. Il planner PAC 1.0.0 è integrato in
+`dev_release2` con le righe 7–13, 15 e 16; l'ultima è entrata col treno 26 (`083ed26dc`). Fuori
+dalla 1.2 restano la riga 14, l'analisi del Rebalancer, e con essa gli E2E dedicati del PAC, che si
+fanno insieme a quelli del Rebalancer. L'opzione (e) della riga 16, una sola conversione per broker e
+coppia, resta nel backlog di questa cartella. Il Rebalancer non è ancora implementato: gli Step 1–6
+restano il riferimento per il suo disegno, con le note di mappatura del 05/10.
 
 **Stato alla nascita del bundle** (testo originale):
 

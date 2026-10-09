@@ -1,10 +1,12 @@
 # Piano D — Arrotondamento del PAC sempre contro il piano
 
-**Stato:** 🔄 iniziato il 2026-10-09 alle 12:03; CHECKPOINT READY il 2026-10-09 alle 16:59, poi
-FROZEN in attesa degli SHA. Il via è del developer, inoltrato dal coordinator:
+**Stato:** ✅ chiuso il 2026-10-09. Iniziato alle 12:03, CHECKPOINT READY alle 16:59, poi i commit
+`96283eaa5` `fix(pac)`, `85b2a3125` `docs(pac)` e `9a6974eff` journal; merge `b81b92fd1` nel treno 26
+(`dev_release2` = `083ed26dc`). Il S10 chiude il debito di formato lasciato al S8, con uno
+`style(pac)` a sé. Il via è del developer, inoltrato dal coordinator:
 regola (a) su tutte e 7 le famiglie arrotondate, banda esplicita del validatore, top-up mantenuti come
 rete, (e) nel backlog. Sul n. 15 il developer ha scelto «B1: banda + tasso peggiorativo dentro la banda
-(Consigliato)». Un solo checkpoint.
+(Consigliato)». Un solo checkpoint per (a) e B1; il S10 ha il suo.
 **Baseline:** `9b2acdd5d` su `e-alfy-allocatore-pac`, cioè `dev_release2` col treno 21 (merge
 `95fb05f17` della riga 15, poi `docs(changelog)`). Verificata alle 11:41, 11:50, 11:53, 11:57 e 12:03:
 albero pulito, stage vuoto, porta 6151 libera. Carico alle 12:03: 14.26 / 18.47 / 21.83.
@@ -622,6 +624,24 @@ README.
 >   checkpoint. Il ✅ con gli SHA lo mette il coordinator.
 > - `git diff --check` pulito; porta 6151 libera. CHECKPOINT READY al coordinator, poi FROZEN.
 
+### S10 — Chiusura: SHA e debito di formato ✅ 2026-10-09
+
+Via del coordinator alle 18:15, base `083ed26dc` (treno 26). Due commit in un solo checkpoint:
+`style(pac)` passa `black` sul solo `test_pac_planner_schemas.py`; `docs(journal)` chiude la riga 16
+con gli SHA.
+
+> **Nota implementazione** (18:17–18:19, carico alle 18:19: 45.02 / 38.90 / 26.24):
+> - Base verificata: `HEAD` `083ed26dc`, albero pulito, stage vuoto, porta 6151 libera.
+> - `black --check --diff` sul file dà gli stessi due blocchi del S8, `@@ -2028,18 +2028,11 @@` e
+>   `@@ -3925,17 +3918,11 @@`, con corpo identico a `/tmp/libreFolio_pacround_s8_schemas_wt.diff`.
+>   Sono due comprehension su più righe che `black` riporta su una, dentro le 300 colonne di
+>   `pyproject.toml`. Secondo `git blame`, le 15 righe tolte vengono tutte da `ac18ce097` (riga 11).
+> - `black` sul solo file (26.5.1, configurazione del progetto). Delta: 1 file, +2 −15, AST identico a
+>   `HEAD`; `black --check`, `ruff check` e `git diff --check` puliti.
+> - `schemas pac-planner` sulla 6151: 552 passati, come al S4 (`/tmp/libreFolio_pacclose_schemas.log`).
+> - Journal: riga 16 del README con gli SHA e paragrafo «Stato»; qui lo stato, il S10 e il §8.
+> - Record in `/tmp/libreFolio_commits/d-pacclose-*`.
+
 ## 5. Commit proposti
 
 1. `fix(pac): round postings against the plan` — codice, test, testi dello schema, commento di
@@ -672,3 +692,4 @@ E, dopo la frase sui cambi coerenti:
 | S7 pagina utente | ✅ 2026-10-09 16:44 — `index.en.md` +17 −3; build strict verde; check-links: 1 rosso preesistente non di D (`#rolling-return` it/fr/es) |
 | S8 gate | ✅ 2026-10-09 16:57 — 8 gate verdi (check 0/0, core 3452, component 2899, i18n 4199); black su `exact.py`, core 230; porta libera |
 | S9 checkpoint | ✅ 2026-10-09 16:59 — record C1–C3 (20 + 1 + 5 percorsi) e blob; CHECKPOINT READY; FROZEN in attesa degli SHA |
+| S10 chiusura | ✅ 2026-10-09 18:19 — `style(pac)` su `test_pac_planner_schemas.py` (AST identico, 552 verdi); SHA della riga 16 nel README e nello stato |
