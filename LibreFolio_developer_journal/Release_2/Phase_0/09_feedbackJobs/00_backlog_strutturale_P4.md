@@ -8,6 +8,7 @@ Queste 8 aree ereditano il debito dell'audit di pulizia (02/09). La verifica del
 distinto i refactor ancora aperti dagli alias e dalle voci S6 già risolte nella tornata P0–P3.
 I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `a9138140`:
 `grep -rn "TODO(P2-refactor)" backend/ scripts/`. Non sono 25 task autonomi approvati.
+Al 2026-10-09 sono **21**, con la stessa `grep` (verifica Q del 2026-10-09, base `3cceb4f90`).
 
 > ⚠️ I report citati sotto sono **archiviati** in `../../phases/08_newCleanAndDocumentation_audit/`
 > (li descrivono con l'evidenza del 02/09; le righe possono essere scivolate da allora).
@@ -22,6 +23,8 @@ I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `a913
 | P4-6 | **Matrice dichiarativa per `validate_status_matrix`** (`schemas/signals.py:1050`, C901 32) | Tabella di presenza/assenza più predicati semantici; conservare sottomatrice FAILED e invarianti trasversali | M | [05 §T4](../../phases/08_newCleanAndDocumentation_audit/05_signals_risk.md) |
 | P4-7 | **Ciclo di vita dei cache store frontend** (`removeAssetPriceStore` mai chiamato, registry non completamente collegati al reset sessione) | Confine account già presente; pool limitato a 8 worker. Misurare entry, punti, intervalli e riferimenti prima di scegliere budget/rilascio | L | [08 §T2](../../phases/08_newCleanAndDocumentation_audit/08_frontend_state_api.md) · [14 #9](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
 | P4-8 | **Coda S6 riconciliata**: 6.2/6.3/6.4/6.7/6.8/6.11/6.12 chiuse; 6.14 limitata al refactor G già consegnato; **TRY003 congelata** | Il report 14 non incorpora tutte le chiusure successive: fa fede la verifica corrente sotto | varie | [14 #23/#26](../../phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md) |
+
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`): P4-1…P4-6 sono nel target; P4-8 è come sopra. **P4-7 resta aperto**: `frontend/src/lib/stores/assetPriceStoreRegistry.ts:30` è una `Map` senza limite né eviction, `removeAssetPriceStore` (`:64`) non viene chiamata da nessun altro file, e niente la aggancia al reset di sessione.
 
 ## Come leggerlo
 
@@ -38,17 +41,17 @@ I marker `TODO(P2-refactor)` erano 26 al 03/09 e sono **25** alla baseline `a913
 Baseline `a9138140`; superfici, rischi e DoD in [06_piano_sprint.md](06_piano_sprint.md).
 La pubblicazione iniziale non avviava refactor. Successivamente il dev ha approvato
 il solo Gruppo B r2 (SP04-SP05), in esecuzione dal 2026-09-07 nel
-[piano dedicato](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
+[piano dedicato](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md).
 Le spunte di presa in carico sotto non attestano il completamento dell'implementazione.
 
 | Task | Nota di analisi | Sprint |
 |---|---|---|
-| P4-1 | ✅ Integrato con K/SP08: `asset_source.py` è una facciata compatibile; implementazione canonica separata per responsabilità. [Piano](../22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md). | SP08 |
-| P4-2 | ✅ Integrato con L/SP16: `execute_batch` ridotto a orchestratore esplicito, contesto typed + stage ordinati, contratto/atomicità invariati. [Piano](../23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md). | SP16 |
-| P4-3 | ✅ Integrato e developer-accepted con G; caratterizzazione CA, helper maturity CA/Intesa ed eToro FEE. [Piano](../18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
-| P4-4 | ✅ Integrato con K/SP08: acquisizione, mapping prezzi ed eventi Yahoo separati con contratto invariato. [Piano](../22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md). | SP08 |
-| P4-5 | ✅ Integrato con B/SP05 (`514582a47`). [Piano](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP05 |
-| P4-6 | ✅ Integrato con B/SP04 (`514582a47`), incluso alias S6 6.7. [Piano](../11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP04 |
+| P4-1 | ✅ Integrato con K/SP08: `asset_source.py` è una facciata compatibile; implementazione canonica separata per responsabilità. [Piano](../../phases/22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md). | SP08 |
+| P4-2 | ✅ Integrato con L/SP16: `execute_batch` ridotto a orchestratore esplicito, contesto typed + stage ordinati, contratto/atomicità invariati. [Piano](../../phases/23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md). | SP16 |
+| P4-3 | ✅ Integrato e developer-accepted con G; caratterizzazione CA, helper maturity CA/Intesa ed eToro FEE. [Piano](../../phases/18_brimTargeted/plan-phase00BrimTargeted.prompt.md). | SP09 |
+| P4-4 | ✅ Integrato con K/SP08: acquisizione, mapping prezzi ed eventi Yahoo separati con contratto invariato. [Piano](../../phases/22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md). | SP08 |
+| P4-5 | ✅ Integrato con B/SP05 (`514582a47`). [Piano](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP05 |
+| P4-6 | ✅ Integrato con B/SP04 (`514582a47`), incluso alias S6 6.7. [Piano](../../phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md). | SP04 |
 | P4-7 | Parziale, L: misura/ownership prima di eviction e rilascio. | SP10 |
 | P4-8 | Coda deduplicata nella tabella seguente. | Per voce |
 
@@ -92,33 +95,47 @@ Tre voci **misurate**, non stimate: ciascuna riporta il comando che la riproduce
 
 | # | Task | Perché / cosa comporta | Dimensione |
 |---|------|------------------------|-----------|
-| P4-9 | **Conversione dei 12 test specchio** di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` da lettura del testo sorgente a esecuzione delle funzioni | Rossi **noti e nominati**, non silenziosi. 5 descrivono comportamenti rimossi su richiesta (residui da cancellare), 7 pinnano proprietà ancora vere in helper rinominati o rimodellati | M |
+| P4-9 | **Conversione dei test specchio** di `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` da lettura del testo sorgente a esecuzione delle funzioni (DBT-D di I) | Un test che legge il sorgente si rompe a ogni cambio di sola grafia e non prova il comportamento: la stessa proprietà si fissa **eseguendo** la funzione. Il file è verde; da convertire restano i 7 specchi ri-pinnati da `2e4c8589f`, che leggono ancora il sorgente (35 `readFileSync` nel file) | M |
 | P4-10 | **Sei siti di Risk** che rendono denaro fuori dal canale di mascheratura: 3 `not-money`, 3 che delegano a una funzione mascherata | Non registrabili nel gate per ragioni strutturali (sotto); vanno decisi come classe, non uno per uno | S |
 | P4-11 | **Copertura del gate privacy**: aggancia 1 degli 8 **consumatori** di `fmtCurrency` in `GrowthChart.svelte` | Lo scanner esige **due** token nello stesso template literal (uno valuta, uno numerico): quattro righe che rendono denaro cadono lì. L'unico consumatore visto sopravvive per i nomi delle variabili accanto, e un rename porta il gate al rosso sbagliato | M |
 
-### P4-9 — le due trappole già pagate
+> **Stato al 2026-10-09** (verifica Q del 2026-10-09, base `3cceb4f90`; P4-9 e P4-11 precisati con le note di I):
+> - **P4-11 è chiuso**: `804bc9903` (24/09) maschera `fmtCurrency` alla sua definizione, oggi a `GrowthChart.svelte:2156`, con `maskFormattedNumber`. Il gate custodisce quel confine (`moneyRenderSites.test.ts:193-196`), la lista `residual` è vuota (`:281`) e `GrowthChart.test.ts:1080` fissa il comportamento. Lo stesso commit maschera il secondo grafico, `PerformanceChart.svelte` (`shortMoney` `:166`, `axisTickAmount` `:183`). Le righe dell'analisi qui sotto sono del 22/09.
+> - **P4-9 resta aperto, come conversione** (DBT-D di I, [piano 20 §6.0.11](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md)): `2e4c8589f` (28/09) ha chiuso i rossi e il file è verde (145/145 alla misura di I). Restano i 7 specchi ri-pinnati, che leggono ancora il sorgente; nel file le letture con `readFileSync` sono 35.
+> - **P4-10 è da riverificare** dopo il Round 2 della privacy: `riskAnalysisHelpers.ts` risulta `masked` in `moneyRenderSites.test.ts`.
 
-**Non cancellare i 5 residui in automatico.** Un passaggio a conteggio di parentesi ha
-tagliato oltre il confine di un `it()` e vitest è passato a *«no tests»*: **12 rossi
-nominati sono diventati 162 test spariti in silenzio**. Se si cancellano, una alla volta
-a mano, verificando il conteggio dopo ciascuna.
+### P4-9 — la conversione, e le due trappole già pagate
+
+**Cosa resta** (09/10). I rossi non ci sono più: `2e4c8589f` (28/09) ha cancellato per
+nome, uno alla volta, gli specchi di comportamenti rimossi, e ha ri-pinnato i 7 che
+fissavano proprietà ancora vere, ciascuno con un commento sul cambio di prodotto che
+l'aveva rotto. Resta la sostanza, DBT-D di I: quei 7 specchi leggono ancora il testo
+sorgente, quindi si romperanno al prossimo cambio di sola grafia. Convertirli vuol dire
+fissare la stessa proprietà **eseguendo** la funzione.
+
+Le due trappole valgono anche per la conversione.
+
+**Non cancellare in automatico.** Un passaggio a conteggio di parentesi ha tagliato oltre
+il confine di un `it()` e vitest è passato a *«no tests»*: i rossi nominati sono diventati
+162 test spariti in silenzio. Si converte o si cancella una voce alla volta, a mano,
+verificando il conteggio dopo ciascuna.
 
 **Non usare `.skip`.** Criterio del developer del 22/09: *«non mi importa di chi è la
 causa, basta che non si nasconda… l'importante è che i rossi non diventino silenziosi»*.
 Uno `.skip` è un rosso che smette di chiedere.
 
-I dodici nomi sono nel corpo del commit `22b82e3fb`, divisi in 5 + 7. È l'unico testo
-legato alla revisione esatta: al 22/09 la corrispondenza è **12 su 12** verificata per
-nome, quindi l'elenco sa ancora distinguere un rosso ereditato da uno nuovo.
-
 ```
-cd frontend && npx vitest run src/lib/components/charts/chartCoreHelpers.test.ts
-atteso: 12 failed | 150 passed (162)
+cd frontend && node_modules/.bin/vitest run src/lib/components/charts/chartCoreHelpers.test.ts
+atteso: tutto verde, con lo stesso numero di test prima e dopo ogni conversione
 ```
 
-Rinvio deciso dal developer con la sua causa: *«è imperativo riallineare la baseline,
-tanto i test bisognerà rigirarli tutti»*. Un debito senza causa si eredita; con causa si
-ri-discute.
+> **Storico.** Al 22/09 i rossi nominati erano 12: 5 residui di comportamenti rimossi su
+> richiesta e 7 proprietà ancora vere in helper rinominati o rimodellati. I nomi sono nel
+> corpo del commit `22b82e3fb`, e il comando dava 12 rossi su 162 test. Il rinvio l'aveva
+> deciso il developer con la sua causa: *«è imperativo riallineare la baseline, tanto i
+> test bisognerà rigirarli tutti»*. Un debito senza causa si eredita; con causa si
+> ri-discute. Al 28/09 i rossi erano 11 su 159 test, e `2e4c8589f` ha portato il file a
+> 144 test, tutti verdi.
 
 > 🔗 **P4-9 e P4-11 condividono un meccanismo, non solo un'area.** In entrambi i casi la
 > riparazione che il rosso *suggerisce* è quella che distrugge la copertura: là cancellare
@@ -133,7 +150,7 @@ non produce è stantia nell'istante in cui la si scrive — provato con una sond
 **due rossi insieme** (il controllo del marcio e il controllo positivo).
 
 Serve a impedire che un sito **noto** cambi in silenzio, non a ricordarne uno invisibile.
-I sei sono dichiarati nel [piano di J](../24_privacyGlobal/plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md);
+I sei sono dichiarati nel [piano di J](../../phases/24_privacyGlobal/plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md);
 `formatScopedCurrencyAmount` è entrata invece in `SAFE_CALL`, che è il posto dove una
 promessa si può verificare.
 
@@ -144,6 +161,9 @@ che comincia uguale, creando un permesso che non si può revocare cancellando la
 sembra concederlo.
 
 ### P4-11 — perché un rosso piccolo è il segnale peggiore
+
+> Righe del 22/09, quando il file ne aveva 2 246. Oggi ne ha 2 583, e `fmtCurrency` è a
+> `:2156`, mascherata alla definizione: vedi lo stato al 2026-10-09 sopra.
 
 La dimensione del rosso misura quanto il gate **vede**, non quanto il file **espone**, e
 le due quantità divergono esattamente dove il file è peggiore. `GrowthChart.svelte`

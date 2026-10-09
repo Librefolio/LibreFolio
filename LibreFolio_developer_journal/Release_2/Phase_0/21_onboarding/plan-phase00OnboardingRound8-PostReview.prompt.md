@@ -4,7 +4,7 @@
 [Onboarding Round 7 — anchor stall](plan-phase00OnboardingRound7-AnchorStall.prompt.md)
 
 Piano gemello, stesso round di review:
-[Privacy Round 2 — correzioni dalla review d'uso](../24_privacyGlobal/plan-phase00PrivacyGlobalRound2-PostReview.prompt.md)
+[Privacy Round 2 — correzioni dalla review d'uso](../../phases/24_privacyGlobal/plan-phase00PrivacyGlobalRound2-PostReview.prompt.md)
 
 Fonti:
 [review d'uso 22/09](../09_feedbackJobs/08_review_visiva_20260922.md) (R3, R4, R19) ·
@@ -492,6 +492,8 @@ questo ramo non tocca `charts/`).
 
 ### Step 7 — Review manuale e FROZEN — **Stato: ✅ review fatta il 2026-09-24; correzioni in C7**
 
+> **⏳ Aperto** (verifica Q del 2026-10-09, base `3cceb4f90`): la review manuale delle correzioni C7 (step 8 e sezione «Runbook review manuale — copia prod `6168`») non è stata fatta. Lo conferma il developer, il 09/10, che decide di non archiviare. Vedi «Cosa resta aperto» in [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md).
+
 > **Esito della review del developer, 2026-09-24 17:38** (copia rinfrescata, server `6168`, C6 nel working tree;
 > punti della test list; i punti 1–10 di privacy sono nel piano gemello, passo 11):
 >
@@ -527,6 +529,7 @@ questo ramo non tocca `charts/`).
    guidato»* descrive il modulo). **Chiavi morte** del vecchio tour (`tour.steps.transactionsImport`, `brokers`,
    `assets`, `tools`, `settings`, `brokersAdd`, …, non lette da nessun file; `settings` cita ancora la guida di
    import): da togliere a fine round, quando le rimozioni sono ammesse.
+   > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): le chiavi morte del vecchio tour sono state tolte dopo il round, in `08b885d43` (2026-10-07, «remove 172 dead keys», audit i18n di O). Oggi `onboarding.tour.steps` in `frontend/src/lib/i18n/en.json` ha 8 chiavi: `dashboard`, `navigation`, `transactionsNav`, `brokersNav`, `fxNav`, `assetsNav`, `toolsNav`, `settingsNav`.
 2. **Punto 14:** `createOnboardingSessionResetter` azzera solo lo stato in memoria; tolta `clearAccountReplays`
    (non ha più chiamanti). Le chiavi sono già per account, quindi un altro account sullo stesso browser non le
    legge. Testo `armedAtNextTrigger` senza più la frase sul logout, 4 lingue. Test unitari e l'E2E OB-8 (b)
@@ -637,6 +640,8 @@ questo ramo non tocca `charts/`).
 > | scansione delle righe aggiunte | `0` importi, `0` password (unico numero decimale: la versione di kit) |
 >
 > Porta 6158 libera a fine corsa; 6168 mai accesa.
+>
+> **⚠️ Fuori pista** (verifica Q del 2026-10-09, base `3cceb4f90`): la cura del punto 4 (`onNavigate` in `(app)/+layout.svelte`, `26554a57b` del 25/09) è stata tolta il 29/09 in `0aac5ef1e` («keep the app title on every page»). Ora nessuna pagina imposta il titolo: i `<title>` di Files e Tools sono stati rimossi, e `frontend/src/routes/documentTitle.guard.test.ts` vieta `<svelte:head><title>` e le scritture di `document.title` in `src`. La riga del runbook su Files e Strumenti è quindi superata.
 >
 > **⚠️ Fuori pista — riavvio del Mac alle 08:58.** `/tmp` svuotato: la cartella della lane
 > `/tmp/librefolio-r2-j-onboarding` non c'è più (la ricrea il runner al primo run) e nemmeno `-prodcopy`.

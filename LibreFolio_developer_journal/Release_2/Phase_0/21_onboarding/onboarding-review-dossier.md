@@ -7,6 +7,15 @@
 > (`Merge branch 'e-alfy-allocatore-pac' into dev_release2`) — it arrived folded inside the PAC
 > branch, which is why it has never been described on its own terms.
 >
+> **⚠️ Superato in parte** (verifica Q del 2026-10-09, base `3cceb4f90`). Il dossier fotografa `580bd504f`; da allora:
+>
+> - la migrazione `003` è stata assorbita in `004_release_1_2_0_schema.py`, con le tabelle a `:127` e `:143`, quindi il §3.3 è superato;
+> - i replay sono in `localStorage` (Round 8, OB-8), quindi il §2.5 e la riga B8 sono superati;
+> - i punti 1–3 del §6 sono chiusi dai Round 7 e 8: l'ancora bloccata con `1982c254b`, OB-8 e OB-9, e l'E2E dei flussi in `frontend/e2e/onboarding-guides.spec.ts`;
+> - il dossier è committato.
+>
+> I punti 4–8 del §6 restano aperti: vedi «Cosa resta aperto» in [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md). Il punto 9 è chiuso per decisione del developer del 2026-10-09.
+>
 > **Author**: workstream J (agent). **This document exists because a feature that was explicitly
 > backlogged as "do not estimate until the user details it with us" was built anyway.** Everything
 > in §2 is a product decision an agent made on the developer's behalf. I am the named owner of
@@ -414,7 +423,7 @@ build time.
 | 6 | **641–1023px viewport band untested** (§5.2). | Low |
 | 7 | **No admin/CLI reset.** Resetting a user to not-yet-onboarded requires SQL (§7.2). | Low, but it's what makes review hard |
 | 8 | **No analytics/telemetry** on completion vs skip rates. Never requested; noting it because "did anyone finish the tour" is unanswerable today. | Low |
-| 9 | **Intro tour is arguably 5 steps too long** (§2.2). Not a defect; a design opinion I'd like overruled or confirmed. | Design |
+| 9 | **Intro tour is arguably 5 steps too long** (§2.2). Not a defect; a design opinion I'd like overruled or confirmed. · ✅ **Chiuso il 2026-10-09** per decisione del developer: *«il tour iniziale va bene già ora, toglilo»*. | Design |
 
 No known defects are open. The one Medium finding from the final read-only review — a
 `transaction_create_guide` left queued after the Add Transaction form was closed or destroyed, able
