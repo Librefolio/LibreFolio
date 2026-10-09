@@ -28,7 +28,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-37 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-38 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -501,8 +501,9 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   `_archive.py:7`, `_run_cache.py:7-10`, `_cli.py:470`, `:568-572`, `__init__.py:15-31`, `_consolidate.py:69-71`,
   `_frontend_ai_export.py:69-71`; `EditBuffer.ts:10`.
 - **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
-  rossi, tutti già nella v1.1.0; **in correzione** per decisione del developer («Correggere 1 e 2 nel backend con una sola
-  cura, e 3 facendo chiedere il costo anche col promote»), piano `Phase_0/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
+  rossi, tutti già nella v1.1.0; ✅ **corretti il 09/10 (treno 28)** per decisione del developer («Correggere 1 e 2 nel
+  backend con una sola cura, e 3 facendo chiedere il costo anche col promote»; data d'uscita: «Alla data in cui le quote
+  escono dal broker d'origine»), piano `Phase_0/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
   svuota il pool prima della media (`transaction_service.py:976`, `average_cost.py:407-423`); (2) un transfer esistente
   modificato in Auto farebbe la media sul broker che riceve (gli update non hanno `link_uuid`,
   `schemas/transactions.py:533-585`); (3) il promote salta il controllo del costo (`transaction_batch_stages.py:845-866`,
@@ -520,6 +521,11 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   l'immagine non sa fare il test mode; con lo stack attivo, `./dev.py server --test` sul host rifiuta la porta occupata
   (`dev.py:238`, `:256-260`), e l'aiuto suggerisce `kill -9` o `--force`, che ucciderebbero l'inoltro di Docker. Proposta:
   togliere la mappatura. La pagina `developer/dev_workflow` lo dice dal treno 27.
+- **C-38 · `DataTable` su mobile: l'intestazione «Actions» resta fissa, il ⋮ scorre via** — medio-basso, letto nel
+  codice (D, 09/10, dagli scatti PAC del lotto 9 di M). Sotto i 768 px la media query rende statiche le celle delle
+  azioni, ma `thead.sticky-header th` è più specifica di `.th-actions`, quindi l'intestazione resta sticky a `right: 0`
+  mentre il ⋮ delle righe esce dallo schermo. Riguarda ogni tabella con azioni; nel PAC spiega F e la tabella Targets
+  (backlog della 13). Componente condiviso: la cura va concordata con chi lo possiede.
 
 ## Tracciate altrove
 
