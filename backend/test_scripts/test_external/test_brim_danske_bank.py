@@ -30,8 +30,8 @@ Edge cases are built in temporary folders by two small writers: an XLSX custody 
 writes it (Latin-1, ``;``, LF, newest first, the running ``Saldo`` computed from the
 rows). Every value is invented. No server, no database: this module is pure.
 
-Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3)
-Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §4 B0
+Design: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3)
+Plan: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §4 B0
 """
 
 from __future__ import annotations
