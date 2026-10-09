@@ -170,3 +170,53 @@ export function resolveBulkIssueRows(issue: BulkIssue, rows: readonly BulkIssueR
     if (issue.ref_id != null) return rows.filter((row) => row.txId === issue.ref_id);
     return [];
 }
+
+/** What the close guard reads of an editor row, beyond its content: the identities a reset regenerates. */
+export interface GuardKeyRow {
+    tempId: string;
+    createdSeq: number;
+    txId?: number;
+    pairedWith?: string;
+    link_uuid?: string | null;
+}
+
+/** The value with every object's keys in sorted order, at every depth; arrays keep their order. */
+function sortedKeys(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(sortedKeys);
+    if (value === null || typeof value !== 'object') return value;
+    const object = value as Record<string, unknown>;
+    return Object.fromEntries(
+        Object.keys(object)
+            .sort()
+            .map((key) => [key, sortedKeys(object[key])]),
+    );
+}
+
+/**
+ * The key the editor's close guard compares: the drafts as they stand, against the snapshot taken when they were
+ * seeded. A reset rebuilds the saved rows from the ledger under new identities, and nothing the user sees changes,
+ * so the key reads what survives a reset and nothing else:
+ * - `tempId` and `createdSeq` are dropped;
+ * - `pairedWith` names the row it points at: `tx:<txId>` for a saved row, `new:<tempId>` for a new one, which no
+ *   reset regenerates;
+ * - `link_uuid` names its group: the sorted references of the rows that share it, `null` when there is none;
+ * - object keys are sorted at every depth, so the order a row was built in does not count. Array order does.
+ */
+export function serializeOps(rows: readonly GuardKeyRow[]): string {
+    const refs = new Map(rows.map((row) => [row.tempId, row.txId != null ? `tx:${row.txId}` : `new:${row.tempId}`]));
+    const groups = new Map<string, string[]>();
+    for (const row of rows) {
+        if (row.link_uuid) groups.set(row.link_uuid, [...(groups.get(row.link_uuid) ?? []), refs.get(row.tempId) ?? row.tempId]);
+    }
+    return JSON.stringify(
+        rows.map((row) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const {tempId: _tempId, createdSeq: _createdSeq, pairedWith, link_uuid, ...rest} = row;
+            return sortedKeys({
+                ...rest,
+                pairedWith: pairedWith === undefined ? undefined : (refs.get(pairedWith) ?? pairedWith),
+                link_uuid: link_uuid ? [...(groups.get(link_uuid) ?? [])].sort() : null,
+            });
+        }),
+    );
+}
