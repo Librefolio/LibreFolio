@@ -33,7 +33,8 @@
  *
  * The same outer beforeEach installs {@link guardGalleryOffline} on every page: no gallery scenario reaches a real
  * price or exchange-rate provider, or writes a price. The section of that name below lists every endpoint of the API
- * client that would, and what the gallery answers instead (galleryOfflineData.ts).
+ * client that would, and what the gallery answers instead (galleryOfflineData.ts). Nor does any scenario reach a
+ * third-party host — the PDF viewer's CDN, Google Fonts —: the gallery must work without the network.
  *
  * ## Favicon images, gallery-wide
  *
@@ -327,6 +328,12 @@ async function fulfillWith(route: Route, response: APIResponse, json: unknown): 
  *
  * And outside the backend: an admin's browser asks GitHub for the latest release on load (updateCheck.ts) — aborted,
  * so no update prompt can depend on the day the gallery runs.
+ *
+ * And third-party hosts the gallery must never need ({@link THIRD_PARTY_HOSTS}) — aborted, recorded in `thirdParty`,
+ * and a red at the end of the test: the gallery must work without the network, PDF preview included. The PDF viewer
+ * (EmbedPDF) asks jsDelivr for its engine, its stamps and its fallback fonts, and Google Fonts for its UI fonts, unless
+ * the app serves them itself (developer's decision, release 2 batch 7: it must). Its engine runs in a worker, whose
+ * requests the page's routes see and abort as well.
  */
 export interface GalleryOfflineGuard {
     /** How the live-price poll is answered: from the fixture (the default), or aborted. */
@@ -345,6 +352,8 @@ export interface GalleryOfflineGuard {
     releaseProbes: number;
     /** Syncs, metadata refreshes and provider probes attempted, by method and path: aborted, each one a red. */
     syncs: string[];
+    /** Requests to a third-party host the gallery must never need ({@link THIRD_PARTY_HOSTS}), by method and URL: aborted, each one a red. */
+    thirdParty: string[];
     /** What the guard could not answer as designed (a fixture asset not in the database, a request it cannot read): each one a red. */
     problems: string[];
 }
@@ -356,6 +365,15 @@ const PROVIDER_SEARCH_STREAM = `${API}/assets/provider/search/stream`;
 const PROVIDER_CALLS = new Set([`${API}/assets/prices/sync`, `${API}/assets/provider/refresh`, `${API}/assets/provider/probe`, `${API}/fx/currencies/sync`]);
 /** What each provider reports, as the search stream does for a provider that raised (asset_sources/search.py). */
 const OFFLINE_SEARCH_ERROR = 'provider not reached: the gallery runs offline';
+
+/**
+ * Hosts no gallery page may reach: jsDelivr (the PDF viewer's engine — pdfium's WASM —, its stamps, its fallback fonts)
+ * and Google Fonts (fonts.googleapis.com, the stylesheets of the viewer's UI and signature fonts; fonts.gstatic.com,
+ * their files). Nothing else in the app asks them (checked on the built bundle, b7). Exact names, never a suffix: the
+ * favicons the gallery shows come from each broker's own site, and Google's favicon service — one import plugin's icon —
+ * answers from www.google.com and t*.gstatic.com, not fonts.gstatic.com.
+ */
+const THIRD_PARTY_HOSTS = new Set(['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com']);
 
 const offlineGuards = new WeakMap<Page, GalleryOfflineGuard>();
 
@@ -404,7 +422,7 @@ async function offlinePricesById(page: Page, guard: GalleryOfflineGuard): Promis
  * and the outer afterEach fails the test on any sync or problem it recorded ({@link expectGalleryOffline}).
  */
 export async function guardGalleryOffline(page: Page): Promise<GalleryOfflineGuard> {
-    const guard: GalleryOfflineGuard = {livePrices: 'fixture', livePolls: 0, pricedPolls: 0, pricedAssets: new Map(), catalogueReads: 0, searches: 0, releaseProbes: 0, syncs: [], problems: []};
+    const guard: GalleryOfflineGuard = {livePrices: 'fixture', livePolls: 0, pricedPolls: 0, pricedAssets: new Map(), catalogueReads: 0, searches: 0, releaseProbes: 0, syncs: [], thirdParty: [], problems: []};
     offlineGuards.set(page, guard);
     let pricesById: Promise<Map<number, OfflineCurrentPrice>> | null = null;
 
@@ -480,6 +498,16 @@ export async function guardGalleryOffline(page: Page): Promise<GalleryOfflineGua
             await route.abort();
         },
     );
+    // The gallery must work without the network, PDF preview included: a request to a third-party host is aborted, and
+    // fails the test at its end (expectGalleryOffline). A worker's requests too — the PDF viewer's engine runs in a module
+    // worker made from a blob, and page.route sees and aborts what such a worker asks (checked in Playwright 1.61).
+    await page.route(
+        (url) => THIRD_PARTY_HOSTS.has(url.hostname),
+        async (route) => {
+            guard.thirdParty.push(`${route.request().method()} ${route.request().url()}`);
+            await route.abort();
+        },
+    );
     return guard;
 }
 
@@ -509,10 +537,11 @@ export async function expectOfflinePricesDrawn(page: Page, since: number): Promi
     }
 }
 
-/** Nothing tried to sync, refresh or probe, and every call the guard answered was answered as designed. */
+/** Nothing tried to sync, refresh or probe, nothing asked a third-party host, and every call the guard answered was answered as designed. */
 export function expectGalleryOffline(page: Page): void {
     const guard = galleryOfflineGuard(page);
     expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started: the gallery never presses one (it was aborted, nothing reached a provider)').toEqual([]);
+    expect(guard.thirdParty, 'a page asked a third-party host (it was aborted): the gallery must work without the network, PDF preview included').toEqual([]);
     expect(guard.problems, "the gallery's offline guard could not answer as designed").toEqual([]);
 }
 
