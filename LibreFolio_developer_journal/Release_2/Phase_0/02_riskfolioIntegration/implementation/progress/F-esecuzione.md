@@ -141,8 +141,12 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front check
 #     nei miei file: 0 errori, 0 warning
 ```
 
-### ⏳ Passo 10 — titolo coerente col contenuto → **fatto nel blocco 2-9**; resta da passare `allowedStressMethods` quando K9 arriva da E
+### ✅ Passo 10 — titolo coerente col contenuto → **fatto nel blocco 2-9**; resta da passare `allowedStressMethods` quando K9 arriva da E
+
+> *Allineamento 09/10*: la parte K9 è superata. Il laboratorio ha la sua sezione del replay (`AssetSetReplaySection.svelte`), il replay accetta lo scope `asset_set` (`risk_plugins/stress.py`) e ne mostra l'audit (D372, D376): `allowedStressMethods` non è servito.
 ### 🚫 Passo 11 — colonne di rischio (D54) — **rinviata**, Q-F4
+
+> ⚠️ *Allineamento 09/10*: il rinvio a `TODO_FUTURI.md` non è mai stato scritto, e le colonne non esistono. Oggi la fonte dei dati c'è (`asset_set_kpi`, `asset_set_drawdown` del secondo giro) → README della cartella, buchi.
 ### ✅ Passo 12 — la regola dei pesi come rete sul futuro · 18 Set 2026
 
 > **Note implementazione**: spec delegato a `test-author` — `e2e/portfolio/risk-lab.spec.ts`,
