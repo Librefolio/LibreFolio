@@ -16,7 +16,9 @@ Each block below follows one pattern: what it answers, a screenshot, its tools a
 
 How much could you lose, and how bad has it already been? Every figure here is something your portfolio really went through in the period; deposits and withdrawals do not count as gains or losses.
 
-<!-- [Screenshot Placeholder: dashboard/risk-hurt — the How much can it hurt? block: the cards from A bad day to Currently down from the peak with their amounts and detail lines, the Time spent below the peak chart with its ulcer index, and the Distribution of daily returns with its VaR threshold] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="The How much can it hurt? block: the A bad day, A bad month and The worst fall cards, each with its amount, and their detail lines (worst day actually seen, how long the fall lasted, recovery needed, Drawdown at risk, Average beyond that threshold); then Time spent below the peak with the Ulcer index, and the Distribution of daily returns with the VaR threshold" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -42,7 +44,9 @@ How much could you lose, and how bad has it already been? Every figure here is s
 
 Owning many holdings is not the same as being diversified. This block shows which holdings really carry your risk, and which move together so closely that they are the same bet.
 
-<!-- [Screenshot Placeholder: dashboard/risk-diversification — the Am I as diversified as I think? block: the lead sentence, the three cards, the list of holdings with their weight, risk contribution and two-sided bar, and the Which of these are the same bet? matrix with its two lists of pairs] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-diversification" alt="The Am I as diversified as I think? block: the sentence under the title; the cards How many independent bets do I really hold?, Did spreading the money achieve anything? and How much of me is not measured here?; the holdings with weight, risk contribution and the two-sided bar; and Which of these are the same bet?, with its matrix, The most alike and The ones that offset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -64,7 +68,9 @@ Owning many holdings is not the same as being diversified. This block shows whic
 
 Risk is worth taking only if it pays. This block sets the return of your portfolio and of each holding against its swings — in a table and in a chart — and, if you choose one, against a benchmark.
 
-<!-- [Screenshot Placeholder: dashboard/risk-paid — the Am I being paid for this risk? block with a benchmark chosen in Compared with: the table opened by the Portfolio and benchmark rows, and the risk/return chart with the holdings' dots, the benchmark's diamond and the dashed line] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-paid" alt="The Am I being paid for this risk? block, compared with MSCI World Index: the table opened by the Portfolio and benchmark rows, with Weight, Volatility, Ann. return, Sortino, Sharpe, Beta and Correlation; the risk/return chart with the dots of the holdings and of the portfolio sized by weight, the benchmark's diamond and the dashed line from the risk-free rate; and the notes under the chart" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -89,7 +95,9 @@ Risk is worth taking only if it pays. This block sets the return of your portfol
 
 What would a past crisis, or a shock you imagine, do to the portfolio you hold today — and what could lie ahead? The block starts closed: click its title to open it.
 
-<!-- [Screenshot Placeholder: dashboard/risk-whatif — the What if…? block open, with the Add: buttons and the Historical replay box after Run replay: the crisis preset and period, the total sentence, and the table of what each holding contributed] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-whatif" alt="The What if…? block open: the Historical replay: Partial notice, Add: Hypothetical shock and Simulation, and the Historical replay box after Run replay, with the Global Financial Crisis preset and its period, the box of the asset left out, the total sentence, and the table with Weight, Return, Contribution, Impact and Effect" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -108,7 +116,9 @@ What would a past crisis, or a shock you imagine, do to the portfolio you hold t
 
     Its outcome depends heavily on how much history the period holds compared with the horizon — see [Why the Simulation Is Still in Beta](../../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta).
 
-<!-- [Screenshot Placeholder: risk/whatif-simulation — the Simulation box of What if…?: the beta notice and the model warning, the five modes with Reshuffled history recommended, and after Simulate the cone with the terminal figures and What this simulation assumed] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="The What if…? Simulation box: the beta notice and the model warning, the five modes with Reshuffled history recommended, horizon, paths and seed, and after Simulate the terminal figures, the cone and What this simulation assumed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ---
 
