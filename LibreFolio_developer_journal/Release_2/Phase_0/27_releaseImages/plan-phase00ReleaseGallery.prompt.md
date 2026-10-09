@@ -1085,3 +1085,110 @@
 >   - C3 `c3_gallery.spec.ts` (`643df57ac45b9db0…`);
 >   - C4 = the worktree (`89ba5fe5e12532df…`).
 > - Commit proposals: `release-pipeline/commit_proposal_B5.txt` (C1 test, C2 docs, C3 reduced motion, C4 tall shots + journal).
+>
+> **Committed** (train 21, 2026-10-09): `ee5a2e277`, `797a629d7`, `02ae0e09d`, `d7481a7e7`, merge `e3c1aee06`; `dev_release2` = `9b2acdd5d`.
+
+## Batch 6 — the gallery Files family and the PDF preview state (base `9b2acdd5d`, train 21, M and D integrated)
+
+### 19. ✅ The CI red `Files › file preview modal (image)` and its family; PDF loaded state; PAC back to USD — 2026-10-09
+
+> **Note implementazione**:
+>
+> **Origin:** the coordinator (2026-10-09 00:10).
+> - Nightly `37843184859`: the desktop test hit 240 s on all 3 attempts; mobile went green on the second retry.
+> - Nightly `37772325521`: the same, plus `static resources grid view` red.
+> - Triage `release-pipeline/runs/b5_ci_triage_file_preview.md`. **Verdict: assumption (time + position).**
+>
+> **Coordinator decisions** (00:50, 07:52):
+> 1. In the product, `data-state="loading|ready|error"` and `aria-busy` on `file-preview-pdf` (§6 of `test-triage`).
+>    - M is the only writer of `FilePreviewModal.svelte` until the checkpoint.
+>    - The state logic goes in a pure helper with unit tests.
+>    - Also run the existing non-gallery E2E tests that open the preview.
+> 2. Scope = the whole gallery `Files` family, 5 tests: static tab, broker reports tab, grid view, BRIM preview, image/PDF/markdown/text preview.
+> 3. Proof: only the tests that change, plus the preview E2E tests. No CHANGELOG entry: this is test and observability work.
+> 4. D (PAC, row 15, train 21) fixed the engine (`bffc634b0 fix(pac): exact FX residual, coherent cross rates`), so `PAC_SCENARIO.externalAccount` goes back to USD.
+>    - Both PAC tests share the draft, so both get run: this also checks D's fix on the result path.
+> 5. Load: the train-21 gates run on 6150 for about 30 min, so 2 workers.
+>
+> **Facts about the product (EmbedPDF `@embedpdf/snippet` 2.14.3)**
+> - `EmbedPDF.init()` returns the container, whose `registry` is a `Promise<PluginRegistry>`.
+> - Plugins: `document-manager` (`onDocumentOpened`, `onDocumentError`) and `tiling` (`onTileRendering`: `{documentId, tiles: Record<page, Tile[]>}`, each `Tile.status` is `queued|rendering|ready` plus `isFallback`).
+> - Both are **behavior emitters** (`createBehaviorEmitter`): a late listener receives the latest value, so subscribing after `init` loses nothing.
+> - A tile becomes `ready` when its render task finishes (`plugin-tiling/dist/index.js:317-328`). Once all of a page's new tiles are `ready`, the fallback ones are dropped (`:110-118`).
+> - Rule chosen: **ready = document open AND at least one non-fallback tile AND every non-fallback tile visible `ready`**; **error = `onDocumentError`**; anything else is loading.
+>
+> **19.1 ✅ Product (M), 2026-10-09 08:15**
+> - New pure helper `frontend/src/lib/utils/files/pdfPreviewState.ts`: `pdfPreviewState(reports)` → `loading|ready|error`, from `{opened, failed, tiles}`. Fallback tiles are ignored.
+> - `FilePreviewModal.svelte`, PDF effect only:
+>   - after `EmbedPDF.init`, `await viewer.registry`; the two plugins are `getPlugin(DocumentManagerPlugin.id / TilingPlugin.id).provides()`, with the ids and types taken from the same lazy `import('@embedpdf/snippet')`;
+>   - subscribes to `onDocumentOpened`, `onDocumentError` and `onTileRendering`; unsubscribes in the cleanup;
+>   - a `disposed` flag means a subscription that arrives after unmount is never made;
+>   - the stage: `data-state={pdfState}` and `aria-busy={pdfState === 'loading'}`. Nothing changes on screen.
+> - Checks: Prettier ok. `npm run check` (svelte-check): **0 errors, 0 warnings**, after `dev.py api sync`.
+> - **⚠️ Fuori pista:** the first `svelte-check` found 2 errors in D's PAC code (`model.ts:352`, `LedgerTable.svelte:92`). The cause was the worktree's stale generated client (10-08 19:51), from before D's schema change (`rounding_delta` ExactNumber).
+>   - `dev.py api sync` regenerated it (ignored files only, `git status` unchanged), and the errors went away.
+>   - The gallery's test server rebuilds the frontend with `api sync` (`cmd_fe_build`), so the runs use the up-to-date client.
+>
+> **19.2 ⏳ Delegation (08:25)**
+> - Test-author C (PAC, batch 5) no longer exists, so there are two new test-authors with separate files:
+>   - **ta-pac-usd** (`448b1e80…`): `galleryPac.ts` only. External account back to USD, then the EUR-only assertions re-checked. It runs the 2 PAC tests on lane 6158 first, with 2 workers and a fresh populate.
+>   - **ta-files-family** (`7e188ef4…`):
+>     - the gallery `Files` describe (5 tests; the image preview test becomes 4, one per type);
+>     - `pdfPreviewState.test.ts`, plus a PDF block in `FilePreviewModal.test.ts` (EmbedPDF mocked);
+>     - in `files.spec.ts` the PDF test waits for `data-state=ready`;
+>     - the runner catalogue if needed.
+>     - It writes code and runs vitest without the lane; the lane comes on «LANE FREE» after the PAC.
+>   - Preview E2E to run: `front-utility files` and `component-unit`, `front-broker detail`, `front-transaction tx-import-report-set` and `tx-import-resolution`.
+>
+> **19.3 ✅ PAC back to USD (ta-pac-usd, 08:47)**
+> - Only `galleryPac.ts` (+27/−14):
+>   - `PAC_SCENARIO.externalAccount` back to USD, same name and amounts; comment and docblock without the bug;
+>   - the Liquidity frame asserts the external account in USD;
+>   - `framePacPlan` asserts what the draft guarantees: ≥1 cash step, exactly one USD transfer into Interactive Brokers, ≥1 numbered exchange (all on IB, either direction), cash before exchanges, IB orders.
+> - Runs: `b6_pac_1` (fresh populate) **4/4** in 3.4 min; `b6_pac_2` (`--no-populate`) **4/4** in 2.7 min, same plan. Lane free.
+> - 📐: `pac-result-plan` block 773 → **1024** (screen 1040); `pac-result` screen 957–981; liquidity and proof unchanged.
+> - **Engine finding** (reported to the coordinator for D, 08:50): the plan **exploits rounding**. Checked by eye on `pac-result-plan` desktop en/light:
+>   - step 4 transfers 0.01 USD Northwind→DEGIRO, auto-converted to 0.01 EUR (exact 0.00893);
+>   - step 6 converts 0.14 USD → «about 0.13 EUR» on IB (exact 0.12507), after step 5 EUR→USD on the same broker, to pay exactly the 20th unit of the bond;
+>   - step 5 credits «about 1,233.42 USD» where the exact amount is 1,233.4109;
+>   - «Not invested» shows Rounding ≈ −0.02 EUR.
+>   - Probable cause: credits posted half-up at the minor unit (D's commit) + spread 0% + no cost per step.
+>   - Not worked around and not asserted (it would be red today). Gallery options sent to the coordinator; M recommends (a), keep it until D fixes.
+> - **Shared surface:** the Files author added a line to `scripts/test_runner/_frontend_utility.py:100` (`pdfPreviewState.test.ts` in `front_utility_unit`). Writer confirmation requested from the coordinator.
+> - **LANE FREE** given to ta-files-family at 08:48.
+>
+> **19.4 ✅ The gallery Files family (ta-files-family, 10:15)**
+> - `gallery.spec.ts`: only the `Files` describe plus one import.
+>   - **8 tests**: the image preview test becomes 4, one per type.
+>   - One page load per test; language and theme switched in place; files found by exact name (`men_01.png`, `ebook.pdf`, `preview_markdown_sample.md`, `preview_notes_sample.txt`, `schwab-export.csv`) through the API and opened from their row.
+>   - No `networkidle`, sleep or silent skip.
+>   - Names, categories and the desktop tall-screen line unchanged.
+> - `fixtures/galleryFiles.ts` (new, 336 lines), readiness:
+>   - tables: files loaded, uploaders resolved, images on screen loaded (a broken image fails with its URL);
+>   - image preview: picture decoded;
+>   - PDF: `data-state=ready`, tiles loaded and still;
+>   - markdown: heading, KaTeX and fonts;
+>   - text: lines shown;
+>   - spreadsheet: canvas painted and still.
+> - `files.spec.ts`: `pdf preview hides comment button` waits for `data-state="ready"`.
+> - Unit tests: `pdfPreviewState.test.ts` (19) and 7 PDF tests with a fake EmbedPDF in `FilePreviewModal.test.ts`, 45/45.
+> - Runner: one line in `scripts/test_runner/_frontend_utility.py:100` (core-unit), confirmation requested from the coordinator.
+> - **Runs** (lane 6158, 2 workers):
+>   - gallery `b6_files_5` **16/16 in 1.8 min** (fresh populate, both viewports). The old image preview test alone took 3.5 min. The PDF test takes ~50 s of its 180 s; the others 4–12 s of 90 s.
+>   - E2E: `front-utility files` 22/22, `front-broker detail` 33/33, `tx-import-report-set` 32 passed (32 skipped by its own viewport split), `tx-import-resolution` 12/12.
+>   - Units: core-unit 3471/3471, component-unit 2906/2906.
+> - Images checked by M: `preview-modal-pdf` desktop (ebook.pdf rendered, no page pill), `preview-modal-image` mobile (men_01.png loaded).
+> - **Findings for the coordinator:**
+>   1. **Product defect:** the static grid's size units (B/KB → o/Ko) don't follow a language switch; FileGrid formats at mount. The test reopens the grid, so the shots are correct.
+>   2. EmbedPDF's page pill «‹ 1 4 ›» was in every PDF shot; now the test waits for it to disappear (~4.5 s per combination, state-based).
+>   3. **The PDF preview reaches the internet** (checked in the bundle): `cdn.jsdelivr.net/npm/@embedpdf/pdfium@2.14.3/dist/pdfium.wasm` (the WASM engine, yet `node_modules/@embedpdf/pdfium/dist/pdfium.wasm` is local, 4.4 MB), `fonts.googleapis.com` (Open Sans for the UI, signature fonts), `cdn.jsdelivr.net/npm/@embedpdf/default-stamps/…`. For a self-hosted app, privacy and offline. The snippet accepts a `wasmUrl` option.
+>   4. The Files describe uses its own shot without the global `networkidle` + 200 ms; the other describes are unchanged.
+>
+> **Final gates (10:20):**
+> - Prettier on the 8 files: clean;
+> - `tsc -p tsconfig.e2e.json`: only the 2 known errors;
+> - `svelte-check`: 0 errors and 0 warnings;
+> - vitest: 45/45;
+> - ruff on the runner file: ok;
+> - `git diff --check` ok;
+> - ports free.
