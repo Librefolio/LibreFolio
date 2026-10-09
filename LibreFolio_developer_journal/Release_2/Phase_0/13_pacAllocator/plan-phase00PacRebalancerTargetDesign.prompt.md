@@ -44,6 +44,27 @@ specialistici e non è un contratto wire definitivo.
 > Sezioni toccate: §2 (flusso), §9.1, §9.3 e §10. La matematica è nel
 > [nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md), in testa.
 
+> **⚠️ Aggiornamento del 2026-10-09: prevale sul testo sotto, e sulla nota del 2026-09-25, dove sono
+> in conflitto.**
+> Riga 16 del [bundle](implementation/README.md), col via del developer; decisioni e prove nel
+> [piano della riga 16](implementation/plan-phase00PacRoundingDirectionFix.prompt.md), §2.
+>
+> - **Ogni importo postato si arrotonda contro il piano.** Crediti per difetto, debiti per eccesso,
+>   alla minor unit della propria valuta; i flussi esatti restano esatti. Nessun `ROUND_HALF_UP`
+>   economico: resta solo per mostrare i numeri.
+>   - Spezzare una conversione o un ordine non conviene mai, e l'arrotondamento non crea mai valore.
+>   - Il piano resta `optimal_proven` quando SCIP chiude ogni stage: modello e replay arrotondano
+>     allo stesso modo.
+> - **«Arrotondare solo alla fine».** Ogni movimento reale si arrotonda una volta sola, sul suo
+>   importo esatto finale; i calcoli intermedi restano esatti.
+> - **Validatore.** Banda esplicita di una minor unit per posting arrotondato, valutata in $v$. I
+>   top-up della nota QX1-b restano come rete di sicurezza.
+> - **Tassi quasi coerenti (scelta B1 sul n. 15).** Uno scarto dovuto ai dieci decimali dei tassi
+>   salvati è tollerato; la conversione usa allora il tasso attraverso la valuta di valutazione.
+>
+> Sezioni toccate: §4.4 (ultimo paragrafo) e §6.5 (la riserva fiscale si arrotonda per eccesso). La
+> matematica è nel [nucleo matematico](plan-phase00PacRebalancerMathematicalCore.prompt.md), in testa.
+
 ---
 
 ## 0. Mappa della suite target
