@@ -1,8 +1,13 @@
 # Performance charts — voce 10: le traduzioni nell'HTML dei tooltip si leggono come testo
 
-**Stato:** IN CORSO. La voce 10 del riepilogo del 06/10 è stata affidata a I dal developer («Sì: la 10 a I subito»).
-Dopo l'analisi, il 2026-10-09 il developer ha scelto la cura (c): «(c) Controllo dei cataloghi nel gate, nessun sito
-toccato» (via coordinator, 11:48). Il lavoro entra nel treno 23.
+**Stato:** ✅ **COMPLETATO E INTEGRATO**. Lotto chiuso il 2026-10-09 alle 12:25 (FROZEN). Commit del developer il
+2026-10-09 alle 12:52: `48e736855` (il gate) e `2ee77d04e` (questo giornale). In `dev_release2` col treno 23, merge
+`2c382824d`, punta `1ead733f2`. I residui 1–4 sono limiti accettati con la scelta (c) e dichiarati nell'intestazione
+del gate («Completeness, stated honestly»): nessuna voce di backlog. Verificato e archiviato il 2026-10-09 in
+`Release_2/phases/20_performanceCharts/`. La voce 10 del riepilogo del 06/10 è stata affidata a I dal developer
+(«Sì: la 10 a I subito»). Dopo l'analisi, il 2026-10-09 il developer ha scelto la cura (c): «(c) Controllo dei
+cataloghi nel gate, nessun sito toccato» (via coordinator, 11:48).
+*Storia dello stato:* IN CORSO (2026-10-09), «Il lavoro entra nel treno 23».
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** HEAD = `dev_release2` = `da8d7a10b`. Albero pulito, rimisurato alle 11:57.
@@ -16,6 +21,8 @@ Precedenti e collegati:
 - Il gate di K (step 13, voce 0): `frontend/src/htmlInterpolation.gate.test.ts`, registrato in
   `front-utility core-unit` (`scripts/test_runner/_frontend_utility.py:106`).
 - Voce indipendente: non nasce da un piano precedente di I, quindi niente collegamenti incrociati.
+- *Verifica d'archivio, 2026-10-09:* il piano madre la elenca fra i seguiti (§6.0.20):
+  [plan-phase00PerformanceCharts.prompt.md](plan-phase00PerformanceCharts.prompt.md).
 - CHANGELOG: nessuna riga proposta. È un gate interno e l'utente non vede nulla; decide il coordinator.
 
 ## Stato di esecuzione

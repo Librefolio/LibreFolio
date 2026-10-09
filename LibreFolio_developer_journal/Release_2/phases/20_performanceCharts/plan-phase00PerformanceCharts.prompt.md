@@ -1,8 +1,12 @@
 # Performance charts - SP06 G3/G1c and SP07 G1a/G1b
 
-**Status:** contratto §3 (G3, G1a, G1b, G1c) consegnato e integrato in `dev_release2`; I60 accettata dal
-developer (review 22/09 §8.3). **Round 4** — le correzioni della review d'uso post-merge del 22/09 (I90) — in
-esecuzione dal 2026-09-24: §6.0.20 e il [piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md).
+**Status:** ✅ **COMPLETATO E INTEGRATO** — contratto §3 (G3, G1a, G1b, G1c) consegnato e integrato in
+`dev_release2`; I60 accettata dal developer (review 22/09 §8.3). **Round 4** (I90), le correzioni della review
+d'uso post-merge del 22/09, completato e integrato il 2026-10-02 (`975a115ae`): §6.0.20 e il
+[piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md). I quattro lotti seguiti sono
+integrati, l'ultimo il 2026-10-09 (§6.0.20, «Seguiti»). Verificato e archiviato il 2026-10-09: i debiti rimasti hanno
+una casa («Esito dei debiti», sotto la tabella DBT).
+*Storia dello stato:* **Round 4** in esecuzione dal 2026-09-24.
 **Implementation:** I10 completed on 2026-09-10. I60 implementation and
 post-merge combined validation completed on 2026-09-11. Manual review closed
 the I60 follow-up contract on 2026-09-11. I20–I50 completed on 2026-09-18,
@@ -35,9 +39,9 @@ post-H target SHA supplied after the H-before-I integration gate.
 
 Previous/master:
 
-- [Advanced charts backlog](../09_feedbackJobs/02_grafici_avanzati.md)
-- [Sprint analysis and dependency map](../09_feedbackJobs/06_piano_sprint.md)
-- [Feedback-jobs index](../09_feedbackJobs/README.md)
+- [Advanced charts backlog](../../Phase_0/09_feedbackJobs/02_grafici_avanzati.md)
+- [Sprint analysis and dependency map](../../Phase_0/09_feedbackJobs/06_piano_sprint.md)
+- [Feedback-jobs index](../../Phase_0/09_feedbackJobs/README.md)
 - [Workstream F plan](../17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md)
 
 This plan is the durable record of the final product decisions and the
@@ -97,6 +101,10 @@ shared theme is temporal performance; the real code ownership splits into:
 ## 2. Hard Gate 0 - post-F code refresh and implementation authorization
 
 **Gate 0 blocks every production/test implementation step in this plan.**
+
+> **Esito (verifica d'archivio 2026-10-09):** Gate 0 è stato rilasciato fase per fase: I10 il 2026-09-10, le fasi
+> portfolio dopo H0 (I20–I40, 2026-09-18). Il «BLOCKED» qui sotto è lo stato alla data in cui fu scritto; lo stato
+> vero è nella riga G0 di §6.
 
 The F checkpoint is now present in the technical-refresh HEAD. The source
 refresh items below are complete, but Gate 0 remains **BLOCKED** because the
@@ -2149,6 +2157,22 @@ difetto residuo.
 | DBT-C | ② ladder di risoluzione a 8 rung | il developer, viste le candele a 44 px, dichiara che i **salti** gli danno fastidio | Costo misurato: `mapDateToBucket` in 9 file, tripletta conteggi in 8, deroga su `ChartResolution`, goldens da rigenerare. **SUPERATO 2026-09-24**: il bisogno di prodotto — la scala a otto gradini — è consegnato da §6.0.16 **in locale** a `GrowthChart`, che dichiara i riduttori condivisi non riusabili per larghezze in giorni. Il refactor condiviso resta possibile, ma nessuna voce aperta lo richiede |
 | DBT-D | `chartCoreHelpers.test.ts`: asserzioni che specchiano **il testo sorgente** | nessuno — valutabile subito | Tre ri-pinnature in una settimana, tutte di sola grafia. La stessa proprietà è esprimibile **eseguendo** la funzione invece di leggerne il sorgente |
 
+> **Esito dei debiti alla verifica d'archivio** (2026-10-09, codice letto a `3cceb4f90`, nessun test). Nessuno si è
+> chiuso in silenzio, e ognuno ha una casa:
+>
+> - **DBT-A** → rinviato: `Phase_0/38_postReleaseBacklog/README.md`, voce «I-01 · DBT-A». Il difetto c'è ancora:
+>   `timeSeriesAggregation.ts:200` costruisce il bucket con `{...lastPoint, value: sum}`.
+> - **DBT-B** → rinviato: stessa pagina, voce «I-02 · DBT-B». `aggregateEnvelope` (`timeSeriesAggregation.ts:268`)
+>   ha ancora zero chiamanti di produzione.
+> - **DBT-C** → superato il 2026-09-24 (vedi la riga).
+> - **DBT-D** → aperto, tracciato dalla voce P4-9 del backlog P4
+>   (`Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md:95`, owner M), che descrive proprio questa conversione.
+>   `2e4c8589f` (28/09, S10 del round 4) ha chiuso i 12 rossi: 4 cancellati per nome (con i 10 verdi del loro
+>   blocco, D19), 7 ri-pinnati, e C8 era già guarito in S9; 145 su 145. La conversione non l'ha fatta: oggi il file
+>   ha 35 righe con `readFileSync` e 12 commenti «Why (re-pin, S10)».
+>   Al coordinator ho segnalato che la chiusura di P4-9 del 28/09 copre i rossi e non la conversione, perché la
+>   conversione resti tracciata.
+
 #### Backlog adiacente — non debito di questo piano
 
 Criterio di proprietà, non di vicinanza di file: **il piano possiede il *primary mode* di
@@ -2161,6 +2185,11 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 | ADJ-1 | `PriceChartFull`: il recompute di risoluzione non riparte al cambio tipo grafico (parte solo da dataZoom e resize) | misurato |
 | ADJ-2 | `PriceChartFull`: la risoluzione delle candele è decisa in un ramo **non renderizzato**. Il container è bindato solo dentro `{#if chartType === 'line'}`, quindi in modo candela `renderChart()` esce subito e `CandlestickChart` riceve una risoluzione calcolata sotto grammatica **linea**, mai ricalcolata mentre le candele sono a schermo | misurato |
 |  | **Ipotesi — non misurata da nessuno:** ADJ-1 potrebbe chiudersi *per conseguenza* di ADJ-2. Se la decisione si sposta dentro `CandlestickChart`, quel componente ha `chartInstance` e dataZoom propri, quindi il recompute ripartirebbe per costruzione invece che per aggiunta. **Indizio con una ragione, non un piano**: chi la prende in mano deve sapere che non è stata verificata | ipotesi |
+
+> **Esito alla verifica d'archivio** (2026-10-09): ADJ-1 e ADJ-2 → rinviati:
+> `Phase_0/38_postReleaseBacklog/README.md`, voce «I-04 · risoluzione delle candele in `PriceChartFull`». Il codice
+> è com'era: il container è bindato solo dentro `{#if chartType === 'line'}` (`PriceChartFull.svelte:1118-1119`),
+> e il recompute parte solo da dataZoom e resize. L'ipotesi resta non misurata.
 
 > **⚠️ Fuori pista (la regola applicata come lista di compiti, 2026-09-21):** §6.0.8 aveva
 > corretto la deriva degli indicatori su **due** punti — tabella fasi §6 e footer §12 — perché
@@ -2807,6 +2836,10 @@ candlestick dal modo N-day. Quindi le due voci seguenti sono *adiacenti*, non da
 
 #### Inventario nominato dei 12 rossi residui
 
+> **Esito:** chiusi nel round 4, S10, da `2e4c8589f` (28/09): 145 su 145 (registro di S10 nel
+> [piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md)). La conversione degli specchi
+> resta aperta: DBT-D, «Esito dei debiti» di §6.0.11.
+
 `frontend/src/lib/components/charts/chartCoreHelpers.test.ts` — **tutti specchi sul testo
 sorgente** (DBT-D), tutti rotti da firme che il developer ha chiesto di cambiare. **Nessuno è un
 difetto di prodotto.**
@@ -2862,8 +2895,9 @@ Il piano del round ha un file proprio: **[plan-phase00PerformanceChartsRound4-Po
 puntatore, perché il round è largo (sette voci di prodotto, due di privacy, una dall'analisi statica) e questo
 documento è già oltre le 5 500 righe.
 
-- **Sorgenti:** [review d'uso](../09_feedbackJobs/08_review_visiva_20260922.md) (R5–R11, R21) e
-  [analisi statica](../09_feedbackJobs/09_reperti_analisi_statica_20260922.md) (§2.5; leggere la §9 prima della §1).
+- **Sorgenti:** [review d'uso](../../Phase_0/09_feedbackJobs/08_review_visiva_20260922.md) (R5–R11, R21) e
+  [analisi statica](../../Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md) (§2.5; leggere la §9
+  prima della §1).
 - **Baseline:** `dev_release2` = `f1047f766`, dopo il consolidamento Alembic in `004_release_1_2_0_schema` —
   **nessuna migrazione nuova** in questo round.
 - **Perimetro:** privacy degli importi in Crescita e Performance (R5/R6/R7, P4-11), candele e barre Income
@@ -2875,6 +2909,18 @@ documento è già oltre le 5 500 righe.
 - **Indicatori riallineati in S0 (2026-09-24)**, con un passaggio meccanico su tutti i punti di lettura rapida
   (regola di §6.0.11): stato in testa, contatore di revisione, baseline portfolio, righe G0/I60/I90 e I60.6,
   §6.3, DBT-C, due voci di §6.0.7, refuso di §6.0.19 («Quattro» → «Cinque»), footer §12.
+- **Esito:** ✅ completato e integrato il 2026-10-02: commit `9a77b1b61` e `6de5646a1`, fast-forward di
+  `dev_release2` a `975a115ae`, ultimo commit del journal `dd538d650`.
+- **Seguiti**, ognuno col suo piano in questa cartella e tutti integrati:
+
+  | piano | cosa | commit | integrazione |
+  |---|---|---|---|
+  | [EventsOnCacheHit](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md) | gli eventi della pagina asset spariscono sul cache hit | `60d8e790a`, `f8f37ea5c` (2026-10-07) | treno 9, `0a2359573` |
+  | [IncomeColorsAxisLabels](plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md) | dividendo oro, etichette dell'asse per periodo | `bc08101d6`, `835c65d7d`, `e379cff59` (2026-10-08); merge del treno 12 `56483392c`; journal `ffda8fc84` | treno 13: fast-forward a `ffda8fc84`, poi il merge di K `c001c0968` |
+  | [AssetEvents](plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md) | eventi manuali: cambio di tipo, aggiornamento sul posto, alias CSV | `fba7edf07`, `e0b2077d2`, `c160bd34c`, `994347f55` (2026-10-08) | treno 19, `5423c334f` |
+  | [TooltipI18nEscape](plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md) | il gate controlla i cataloghi usati nei tooltip | `48e736855`, `2ee77d04e` (2026-10-09) | treno 23, `2c382824d` |
+
+- **Verifica d'archivio (2026-10-09):** registro in fondo al piano del round 4.
 
 ## 6. Dependency-safe phases and owners
 
@@ -2887,11 +2933,11 @@ documento è già oltre le 5 500 righe.
 | I20 | L | Portfolio backend integrator | G0 + H0 + F engine released | Additive daily broker P&L + signed canonical income | COMPLETE 2026-09-18 (`8ed7a0f0d`, esteso `d5e834de4`) |
 | I30 | L | Portfolio backend integrator | I20 + same-resolver OHLC envelope | Daily total candles + flat fallback + strict close identity | COMPLETE 2026-09-18 (`8ed7a0f0d`; fix crash asse category `eba37ba41`) |
 | I40 | M | Portfolio backend integrator + coordinator | I20 + I30 + post-H report contract | DTO/report/cache wiring, then coordinator API sync | COMPLETE 2026-09-18 (`8ed7a0f0d`, `d5e834de4`; API sync e i18n eseguiti dal coordinatore) |
-| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); leggibilità candele risolta 2026-09-21 (`70e87ac3a`, soglia per grammatica — §6.0.10), resta la conferma visiva del developer |
+| I50 | L | GrowthChart owner | I40 | Value/Return/P&L core modes; Line/Candles/Income P&L submodes; broker lines and sum aggregation | COMPLETE 2026-09-18 (`8ed7a0f0d` → `69d0d27c6`); leggibilità candele risolta 2026-09-21 (`70e87ac3a`, soglia per grammatica — §6.0.10); la conferma visiva è venuta dalla review d'uso del 22/09 (I90), le cui correzioni sulle candele (R8–R10) sono nel round 4, integrato il 2026-10-02 (verifica d'archivio 2026-10-09) |
 | I60 | XL follow-up | G3 Asset UI + shared chart owner | Initial I60 integrated; explicit developer authorization | Compact duration, contextual Asset/FX axes, separate Return measures, same-N Asset comparisons | IMPLEMENTAZIONE COMPLETA 2026-09-16 (vedi §6.6, ultime note); **ACCETTATA 2026-09-22** dal developer (review 22/09 §8.3: *«Mi pare funzioni MOOOLTO bene»*) |
 | I70 | L | Test author + owners | Relevant implementation phases; H test ownership released | Targeted backend/frontend regressions and integration gates | COMPLETE 2026-09-21 — §6.0.13: 9 casi E2E sulla superficie P&L (dashboard 14/14, broker detail 28/28), oltre agli unit backend |
 | I80 | S | Docs writer + coordinator | Stable integrated UI | English docs, coordinator i18n/runner/changelog records | COMPLETE 2026-09-21 — docs G3 in `2d22130bd` (`assets/detail/chart\|measures\|signals`, `fx/chart-settings`); docs G1a/G1b/G1c in `d44065d70` (`dashboard/charts.en.md`, sezione `P&L mode` +104 righe, cinque heading con anchor espliciti). Voce condizionale di §10 (pagina di teoria P&L) valutata e **non** eseguita — motivazione in §6.0.14 |
-| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | **IN CORSO**: la review d'uso del 22/09 (`08_review_visiva_20260922.md`) è I90; le sue correzioni sono il round 4 (§6.0.20), in esecuzione dal 2026-09-24 |
+| I90 | M | Developer + coordinator | I50 + I60 + I70 + I80 | Desktop/mobile operational review, corrections, integration handoff | ✅ **COMPLETE 2026-10-02** (`975a115ae`): la review d'uso del 22/09 (`08_review_visiva_20260922.md`) è I90; le sue correzioni sono il round 4 (§6.0.20), integrato il 2026-10-02, con quattro lotti seguiti (verifica d'archivio 2026-10-09). *Storia:* IN CORSO, round 4 in esecuzione dal 2026-09-24 |
 
 > **Note implementazione (I00, 2026-09-10):** only the durable plan, final
 > product decisions, updated ASCII v2 storyboards and minimal feedback-job
@@ -5602,9 +5648,17 @@ The current durable state remains:
 
 ```text
 CONTRATTO §3 CONSEGNATO E INTEGRATO in dev_release2 (fast-forward 22b82e3fb)
-I60 ACCETTATA 2026-09-22 · I90 = review d'uso 22/09 → ROUND 4 IN ESECUZIONE (§6.0.20)
-DEBITI APERTI: DBT-A, DBT-B, DBT-D (§6.0.11; DBT-C superato) + 12 rossi nominati di §6.0.19 (rimisura: round 4 S1)
+I60 ACCETTATA 2026-09-22 · I90 = review d'uso 22/09 → ROUND 4 INTEGRATO 2026-10-02 (975a115ae, §6.0.20)
+SEGUITI INTEGRATI: EventsOnCacheHit, IncomeColorsAxisLabels, AssetEvents, TooltipI18nEscape (ultimo 2026-10-09)
+12 ROSSI DI §6.0.19 CHIUSI 2026-09-28 (2e4c8589f) · DEBITI: DBT-A → I-01, DBT-B → I-02, DBT-D → P4-9 (§6.0.11)
+CARTELLA ARCHIVIATA 2026-10-09 in Release_2/phases/20_performanceCharts
 ```
+
+Aggiornato **2026-10-09**. Il round 4 è integrato dal 2026-10-02 e i quattro lotti seguiti dal 2026-10-09.
+La verifica d'archivio ha riletto il codice a `3cceb4f90`: ogni residuo ha una casa (§6.0.11, «Esito dei debiti»;
+ADJ-1/ADJ-2 → I-04), e la cartella è archiviata intera. Il registro è in fondo al
+[piano del round 4](plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md). La nota del 24/09 resta come
+storia, non come stato.
 
 Aggiornato **2026-09-24**. Il ramo è entrato nel target in fast-forward (`22b82e3fb`) e il developer ha fatto
 la review d'uso sull'integrato: I60 è accettata (review §8.3) e le correzioni di I90 sono il round 4, con un

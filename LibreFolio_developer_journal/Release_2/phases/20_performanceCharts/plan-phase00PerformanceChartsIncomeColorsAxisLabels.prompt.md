@@ -1,9 +1,12 @@
 # Performance charts — Proventi: dividendo oro ed etichette dell'asse X (Candele e Proventi)
 
-**Stato:** COMPLETATO il 2026-10-08. Lotto approvato dal developer il 2026-10-07 (via coordinator, 17:37), in corso dal
-2026-10-07 18:10. Commit del developer il 2026-10-08 alle 12:18, su `9ea2d519b`: `bc08101d6` (codice, test e
-cataloghi), `835c65d7d` (docs) e `e379cff59` (giornale). Poi il merge della punta del treno 12, `ffa72cc2b`, nel ramo:
-`56483392c`, alle 12:54. L'integrazione in `dev_release2` è nel treno 13.
+**Stato:** ✅ **COMPLETATO E INTEGRATO**. Completato il 2026-10-08. Lotto approvato dal developer il 2026-10-07 (via
+coordinator, 17:37), in corso dal 2026-10-07 18:10. Commit del developer il 2026-10-08 alle 12:18, su `9ea2d519b`:
+`bc08101d6` (codice, test e cataloghi), `835c65d7d` (docs) e `e379cff59` (giornale). Poi il merge della punta del treno
+12, `ffa72cc2b`, nel ramo: `56483392c`, alle 12:54; le note del merge in `ffda8fc84` (13:01). In `dev_release2` col
+treno 13: fast-forward a `ffda8fc84`, poi il merge di K, `c001c0968`. Verificato e archiviato il 2026-10-09 in
+`Release_2/phases/20_performanceCharts/`.
+*Storia dello stato:* «L'integrazione in `dev_release2` è nel treno 13» (2026-10-08).
 **Workstream:** I (grafici performance) · ramo `e-alfy-performance-charts-plan` · coordinatore
 `c8328a01-f208-4ade-a352-0486d1f14de2`.
 **Baseline:** HEAD = `dev_release2` = `9ea2d519b`, la punta del treno 9, dopo il fast-forward segnalato dal
@@ -18,6 +21,8 @@ Precedenti e collegati:
   che punta qui. Questo piano **sostituisce le regole sul testo di D4 e D4-bis** (§7 e «S7 — passo 0» di quel piano).
   I separatori di D4 restano com'erano.
 - Bugfix precedente: [plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md](plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md).
+- Seguito: [plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md](plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md),
+  che punta qui.
 - Dopo questo lotto M fotografa `growth-pnl-*` per la gallery.
 - CHANGELOG: la riga la scrive il coordinator. La frase su cosa vede l'utente è in §11.
 - Rosso noto sulla base, non mio: `core-unit` ha 1 file rosso, `optionFilter.test.ts` (R13). Lo corregge L nel
