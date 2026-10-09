@@ -14,7 +14,9 @@ The decided contract (developer decisions D6 and «una sola funzione condivisa»
   commits; the endpoint removes the BRIM files of the deleted brokers after the commit;
 - a transfer between a broker that goes and one that stays keeps its surviving half, unlinked
   (``related_transaction_id`` NULL), its ``cost_basis_override`` untouched;
-- the sole administrator is still refused (400): a product rule, not a technical error.
+- the sole administrator is still refused (400): a product rule, not a technical error. Since plan
+  34 step 2 (§3.2) «sole» means the last ACTIVE administrator: login refuses an inactive account,
+  so the guard counts the other active administrators (``user_service.count_active_superusers``).
 
 Write-scoped: every user, broker, asset, transaction and file is created here and removed here,
 also after a red. Two details keep the physical checks honest under ``--workers``:
@@ -23,28 +25,38 @@ also after a red. Two details keep the physical checks honest under ``--workers`
   W lives, and SQLite without AUTOINCREMENT only ever reuses the highest id (part B of the same
   plan), so no neighbour's new broker can take their id before the checks run;
 - every physical read is scoped to this test's own broker ids.
+
+The administrator guard (ACCDEL-002 to ACCDEL-005) runs on a private instance instead: a fresh
+SQLite file and BRIM directory under ``tmp_path``, the handler called in-process. The shared lane
+always has e2e_test_admin, so «the only active administrator» can be a real state only there, and
+nothing of it reaches the lane.
 """
 
 import asyncio
 import io
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import httpx
 import pytest
-from fastapi import HTTPException, Response
+import pytest_asyncio
+from fastapi import HTTPException, Request, Response
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.config import is_test_mode
-from backend.app.db.models import Broker, BrokerUserAccess, Transaction, User, UserRole
+from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
+from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRDeleteItem
-from backend.app.services import brim_provider
+from backend.app.services import brim_provider, user_service
 from backend.app.services.broker_service import BrokerService
 from backend.test_scripts.test_api.test_broker_access_api import (
     API_BASE,
@@ -66,6 +78,8 @@ TRANSFER_DATE = "2026-01-10"
 TRANSFER_QUANTITY = Decimal("5")
 TRANSFER_COST_BASIS = ("USD", Decimal("50"))
 REPORT_CSV = b"date,description,amount,currency\n2026-01-05,account deletion probe,1000.00,EUR\n"
+PRIVATE_PASSWORD = "PrivateInstance123!"
+ACCOUNT_DELETED = {"message": "Account deleted successfully"}
 
 
 # ============================================================================
@@ -472,18 +486,124 @@ async def _cleanup(owned: _Owned, engine: AsyncEngine) -> list[str]:
     return errors
 
 
-async def _refusal_as_sole_administrator(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, sole_admin: User) -> HTTPException:
-    """Call the DELETE /auth/users/me handler as the only administrator of the instance (REG-007's pattern, test_auth_api.py)."""
+# ============================================================================
+# THE ADMINISTRATOR GUARD, ON A PRIVATE INSTANCE (plan 34 step 2, §3.2)
+# ============================================================================
 
-    async def only_one_superuser(_session: AsyncSession) -> int:
-        return 1
 
-    with monkeypatch.context() as patch:
-        patch.setattr(auth_api.user_service, "count_superusers", only_one_superuser)
-        async with AsyncSession(engine, expire_on_commit=False) as session:
-            with pytest.raises(HTTPException) as refusal:
-                await auth_api.delete_own_account(response=Response(), current_user=sole_admin, session=session)
-    return refusal.value
+@dataclass(frozen=True)
+class _PrivateInstance:
+    """A database and a BRIM directory this test owns entirely, both under its tmp_path."""
+
+    engine: AsyncEngine
+    reports_dir: Path
+
+
+@dataclass(frozen=True)
+class _Account:
+    """An account of the private instance, created through user_service.create_user as the CLI creates one."""
+
+    username: str
+    superuser: bool
+    active: bool = True
+
+
+async def _create_accounts(engine: AsyncEngine, *accounts: _Account) -> dict[str, int]:
+    """Create ``accounts`` in order on the private instance; return {username: id}."""
+    ids: dict[str, int] = {}
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        for account in accounts:
+            user, error = await user_service.create_user(session, username=account.username, email=f"{account.username}@example.com", password=PRIVATE_PASSWORD, is_superuser=account.superuser, is_active=account.active)
+            assert user is not None, f"Setup: create_user({account.username!r}) failed: {error}"
+            ids[account.username] = user.id
+    return ids
+
+
+async def _deactivate(engine: AsyncEngine, username: str) -> None:
+    """Deactivate an account through user_service.set_user_active, the path of `dev.py user deactivate`."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        deactivated, error = await user_service.set_user_active(session, username, False)
+    assert deactivated, f"Setup: set_user_active({username!r}, False) refused: {error}"
+
+
+async def _accounts(engine: AsyncEngine) -> dict[str, tuple[bool, bool]]:
+    """Every account of the private instance, {username: (is_superuser, is_active)}, read in a fresh session."""
+    async with AsyncSession(engine) as session:
+        rows = (await session.execute(select(User.username, User.is_superuser, User.is_active))).all()
+    return {username: (is_superuser, is_active) for username, is_superuser, is_active in rows}
+
+
+def _plain_http_request() -> Request:
+    """The handler's ``http_request`` over plain HTTP; Host and server make request.url absolute, as uvicorn's always is.
+
+    The Secure attribute of the cookie it clears is not this file's subject: test_auth_api.py (COOKIE-005).
+    """
+    scope = {
+        "type": "http",
+        "scheme": "http",
+        "method": "DELETE",
+        "path": "/api/v1/auth/users/me",
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", b"127.0.0.1")],
+        "client": ("127.0.0.1", 50000),
+        "server": ("127.0.0.1", 80),
+    }
+    return Request(scope)
+
+
+async def _delete_own_account(engine: AsyncEngine, user_id: int) -> Union[dict[str, str], HTTPException]:
+    """Call the DELETE /auth/users/me handler as ``user_id``, wired as FastAPI wires the request.
+
+    get_current_user and the handler share the request's session (FastAPI resolves
+    get_session_generator once per request, with expire_on_commit=False): the user is loaded
+    through it as get_current_user loads it, then the handler runs on it, with a plain-HTTP
+    request. The outcome is returned, never raised, so the caller reads the state before
+    asserting and a red says what happened.
+    """
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        current_user = await user_service.get_user_by_id(session, user_id)
+        assert current_user is not None and current_user.is_active, f"Precondition: user {user_id} must exist and be active, as get_current_user requires"
+        try:
+            return await auth_api.delete_own_account(response=Response(), http_request=_plain_http_request(), current_user=current_user, session=session)
+        except HTTPException as refusal:
+            return refusal
+
+
+async def _sole_owned_broker(engine: AsyncEngine, owner_id: int) -> tuple[int, int]:
+    """A broker of the private instance whose only OWNER is ``owner_id``, with one DEPOSIT; return (broker id, deposit id)."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        broker = Broker(name="AccDel sole administrator's broker")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(user_id=owner_id, broker_id=broker.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+        deposit = Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date.fromisoformat(DEPOSIT_DATE), amount=Decimal("1000"), currency="EUR")
+        session.add(deposit)
+        await session.commit()
+        return broker.id, deposit.id
+
+
+async def _private_report(instance: _PrivateInstance, broker_id: int, user_id: int) -> str:
+    """A BRIM report of ``broker_id`` uploaded by ``user_id``, through the service the upload endpoint calls."""
+    info = await asyncio.to_thread(brim_provider.save_uploaded_file, REPORT_CSV, "accdel_sole_admin_report.csv", user_id, broker_id)
+    assert any(instance.reports_dir.rglob(f"{info.file_id}.json")), f"Report {info.file_id} must be stored under the private {instance.reports_dir}, never in the lane's broker_reports"
+    return info.file_id
+
+
+async def _sole_admin_holdings(instance: _PrivateInstance, broker_id: int, deposit_id: int, file_id: str) -> dict[str, object]:
+    """What a refused deletion must leave in place: the accounts, the broker, its access rows, its DEPOSIT and its report."""
+    async with AsyncSession(instance.engine) as session:
+        broker = await session.scalar(select(Broker.id).where(Broker.id == broker_id))
+        grants = (await session.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.user_id, BrokerUserAccess.role).where(BrokerUserAccess.broker_id == broker_id))).all()
+        deposits = (await session.execute(select(Transaction.id, Transaction.broker_id).where(Transaction.id == deposit_id))).all()
+    report = await asyncio.to_thread(brim_provider.get_file_info, file_id)
+    return {
+        "accounts": await _accounts(instance.engine),
+        "broker": broker,
+        "grants": sorted(tuple(row) for row in grants),
+        "deposits": [tuple(row) for row in deposits],
+        "report of broker": None if report is None else report.target_broker_id,
+    }
 
 
 # ============================================================================
@@ -498,6 +618,35 @@ def test_server():
         if not server_manager.start_server():
             pytest.fail("Failed to start test server")
         yield server_manager
+
+
+@pytest_asyncio.fixture
+async def private_instance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_PrivateInstance]:
+    """An instance this test owns entirely: a fresh SQLite file and a BRIM directory, both under tmp_path.
+
+    «The only active administrator» depends on every account of the instance, and the shared lane
+    always has e2e_test_admin and the administrators other units registered: there it could only
+    be simulated, by patching the counter the handler happens to call, a patch that simulates
+    nothing the day the handler calls another one. Here it is a real state.
+
+    - The schema is SQLModel.metadata with every model imported (backend.app.db.base). NullPool as
+      get_async_engine, and backend.app.db.session's connect listener applies the same PRAGMAs
+      (foreign_keys, WAL, busy_timeout). Disposed at teardown.
+    - The BRIM directory moves with it, because private ids start at 1 like the lane's. A report
+      stored for private broker N in the lane's broker_reports would belong to the lane's broker N,
+      and the handler's after-commit cleanup of a deleted private broker would remove a neighbour's
+      files. Every storage path of brim_provider derives from get_broker_reports_dir, and
+      ACCDEL-002 checks that its report really lands here.
+    """
+    reports_dir = tmp_path / "broker_reports"
+    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports_dir)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'instance.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        yield _PrivateInstance(engine=engine, reports_dir=reports_dir)
+    finally:
+        await engine.dispose()
 
 
 # ============================================================================
@@ -551,47 +700,142 @@ class TestAccountDeletion:
         print_success("✓ X and Z went with their transactions and files; Y and W stayed with B; the surviving leg is unlinked with its cost basis")
 
     @pytest.mark.asyncio
-    async def test_sole_administrator_is_still_refused(self, test_server, monkeypatch):
+    async def test_sole_administrator_is_still_refused(self, private_instance: _PrivateInstance):
         """ACCDEL-002 — GUARD, green today and after the fix (D6: refusing the only administrator is a product rule).
 
-        The shared lane always has e2e_test_admin, so no test user can really be the only
-        administrator, and the shared admin must never be the one to try. As REG-007 does for the
-        bootstrap rule (test_auth_api.py), the handler is called directly: this test's own user,
-        presented as a superuser, with count_superusers patched to 1 in this process only.
+        On a private instance (fixture private_instance) «the only administrator» is a real state,
+        not a patched counter: today's handler counts with count_superusers, the cure with
+        count_active_superusers, and a patch on either name simulates nothing the day the handler
+        calls the other. The shared admin is never involved: it does not exist there.
+
+        A, the instance's only administrator, is the only OWNER of a broker with a DEPOSIT and a
+        BRIM report. C, a regular active user, is there too, so a guard counting active accounts
+        instead of active administrators would let A go.
 
         The refusal must be the exact 400 the cleanup helpers recognise (SOLE_ADMIN_DELETE_DETAIL),
-        and it must come before anything is touched: the account, its sole-owned broker, the
-        broker's DEPOSIT, its access row and its BRIM file all still exist afterwards — leaving the
-        brokers or cleaning the files before the check would delete them.
+        and it must come before anything is touched: both accounts, the broker, its DEPOSIT, its
+        access row and its BRIM file all still exist afterwards — leaving the brokers or cleaning
+        the files before the check would delete them.
         """
         print_section("ACCDEL-002: the sole administrator is still refused, and keeps everything")
-        engine = _test_db_engine()
-        owned = _Owned()
+        instance = private_instance
+        ids = await _create_accounts(instance.engine, _Account("sole_admin", superuser=True), _Account("regular_user", superuser=False))
+        broker_id, deposit_id = await _sole_owned_broker(instance.engine, ids["sole_admin"])
+        file_id = await _private_report(instance, broker_id, ids["sole_admin"])
 
-        async with httpx.AsyncClient() as client:
-            try:
-                user_id, username, email = await _register(client, owned, "accdel_admin")
-                broker_id = await create_broker(client, unique_name("AccDelAdmin"))
-                owned.broker_ids.append(broker_id)
-                deposit_id = await _deposit(client, broker_id)
-                file_id = await _upload_report(client, broker_id, owned)
+        # Presence barrier: every «still there» checked after the refusal was a «there» right before it.
+        before = await _sole_admin_holdings(instance, broker_id, deposit_id, file_id)
+        expected = {
+            "accounts": {"sole_admin": (True, True), "regular_user": (False, True)},
+            "broker": broker_id,
+            "grants": [(broker_id, ids["sole_admin"], UserRole.OWNER)],
+            "deposits": [(deposit_id, broker_id)],
+            "report of broker": broker_id,
+        }
+        assert before == expected, f"Precondition: the private instance must hold {expected}, it holds {before}"
 
-                sole_admin = User(id=user_id, username=username, email=email, hashed_password="unused", is_active=True, is_superuser=True)
-                refusal = await _refusal_as_sole_administrator(monkeypatch, engine, sole_admin)
-                assert refusal.status_code == 400, f"The only administrator must be refused with 400, got {refusal.status_code}: {refusal.detail}"
-                assert refusal.detail == SOLE_ADMIN_DELETE_DETAIL, f"Unexpected refusal detail: {refusal.detail}"
+        outcome = await _delete_own_account(instance.engine, ids["sole_admin"])
+        after = await _sole_admin_holdings(instance, broker_id, deposit_id, file_id)
 
-                async with AsyncSession(engine) as session:
-                    assert await session.scalar(select(User.id).where(User.id == user_id, User.username == username)) == user_id, "The refused account was deleted"
-                    assert await session.get(Broker, broker_id) is not None, "The refused account's broker was deleted"
-                    grants = await session.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.user_id, BrokerUserAccess.role).where(BrokerUserAccess.broker_id == broker_id))
-                    assert {tuple(row) for row in grants.all()} == {(broker_id, user_id, UserRole.OWNER)}, "The refused account lost its access row"
-                    deposit = await session.get(Transaction, deposit_id)
-                    assert deposit is not None and deposit.broker_id == broker_id, "The refused account's transaction was deleted"
-                resp = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-                assert resp.status_code == 200, f"The refused account's BRIM file must still be there, got {resp.status_code}"
-            finally:
-                cleanup_errors = await _cleanup(owned, engine)
-                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
+        assert isinstance(outcome, HTTPException), f"The only administrator must be refused, the handler answered {outcome!r}; the instance now holds {after}"
+        assert outcome.status_code == 400, f"The only administrator must be refused with 400, got {outcome.status_code}: {outcome.detail}"
+        assert outcome.detail == SOLE_ADMIN_DELETE_DETAIL, f"Unexpected refusal detail: {outcome.detail}"
+        assert after == before, f"The refusal must touch nothing: before {before}, after {after}"
 
-        print_success("✓ Sole administrator refused with the exact 400; account, broker, transaction, access and file intact")
+        print_success("✓ Sole administrator refused with the exact 400; accounts, broker, transaction, access and file intact")
+
+
+class TestLastActiveAdministrator:
+    """DELETE /auth/users/me refuses the last ACTIVE administrator (plan 34 step 2, §3.2), on a private instance.
+
+    Login refuses an inactive account, so an inactive administrator administers nothing. The cure
+    counts the OTHER ACTIVE administrators (user_service.count_active_superusers, the caller
+    excluded): when there is none, the 400 and the message of today, and nothing deleted.
+    """
+
+    @pytest.mark.asyncio
+    async def test_active_administrator_whose_only_fellow_is_inactive_is_refused(self, private_instance: _PrivateInstance):
+        """ACCDEL-003 — NEW, red today: an inactive fellow administrator does not count.
+
+        A and B are administrators; B is then deactivated through set_user_active (`dev.py user
+        deactivate`, still allowed after the cure because A is active). A asks to delete the
+        account: the same 400 as the only administrator, with the same message, and both accounts
+        still there afterwards.
+
+        Today the guard counts every superuser (count_superusers: 2, B included), so the handler
+        deletes A and answers {'message': 'Account deleted successfully'}. The instance is left
+        with B alone, who cannot log in: no active administrator. That is the red.
+        """
+        print_section("ACCDEL-003: the last ACTIVE administrator is refused, an inactive fellow does not count")
+        engine = private_instance.engine
+        ids = await _create_accounts(engine, _Account("admin_a", superuser=True), _Account("admin_b", superuser=True))
+        await _deactivate(engine, "admin_b")
+        before = await _accounts(engine)
+        assert before == {"admin_a": (True, True), "admin_b": (True, False)}, f"Precondition: A an active administrator, B an inactive one: {before}"
+
+        outcome = await _delete_own_account(engine, ids["admin_a"])
+        after = await _accounts(engine)
+
+        assert isinstance(outcome, HTTPException), f"[new] A is the last ACTIVE administrator (B is inactive, and login refuses it): the deletion must be refused with 400 «{SOLE_ADMIN_DELETE_DETAIL}», but the handler answered {outcome!r} and left the accounts {after}"
+        assert (outcome.status_code, outcome.detail) == (400, SOLE_ADMIN_DELETE_DETAIL), f"The refusal must be today's 400 with today's message, got {outcome.status_code}: {outcome.detail}"
+        assert after == before, f"The refusal must delete nothing: before {before}, after {after}"
+
+        print_success("✓ The last active administrator is refused; the inactive fellow does not count")
+
+    @pytest.mark.asyncio
+    async def test_administrator_with_another_active_administrator_can_delete_the_account(self, private_instance: _PrivateInstance):
+        """ACCDEL-004 — GUARD, green today and after: another ACTIVE administrator remains, so A may go.
+
+        A and B are both active administrators. A has no broker, so the after-commit BRIM cleanup
+        has nothing to do. The handler returns normally, A is gone and B is untouched.
+
+        This pins that the cure counts the other active administrators instead of refusing every
+        administrator: a count stuck at 0 (the stub of today) would refuse A here.
+        """
+        print_section("ACCDEL-004: an administrator with another active administrator can delete the account")
+        engine = private_instance.engine
+        ids = await _create_accounts(engine, _Account("admin_a", superuser=True), _Account("admin_b", superuser=True))
+        before = await _accounts(engine)
+        assert before == {"admin_a": (True, True), "admin_b": (True, True)}, f"Precondition: two active administrators: {before}"
+
+        outcome = await _delete_own_account(engine, ids["admin_a"])
+        after = await _accounts(engine)
+
+        assert outcome == ACCOUNT_DELETED, f"B is an active administrator, so A must be allowed to go; the handler answered {outcome!r}, the accounts are now {after}"
+        assert after == {"admin_b": (True, True)}, f"A must be gone and B untouched: {after}"
+
+        print_success("✓ Another active administrator remains: the account is deleted")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "others",
+        [
+            pytest.param((), id="no-administrator-at-all"),
+            pytest.param((_Account("inactive_admin", superuser=True, active=False),), id="only-an-inactive-administrator"),
+        ],
+    )
+    async def test_regular_user_is_never_refused_by_the_administrator_guard(self, private_instance: _PrivateInstance, others: tuple[_Account, ...]):
+        """ACCDEL-005 — GUARD, green today and after: the guard concerns administrators only.
+
+        A regular user deletes the account in the two states where no other account can
+        administer the instance: no administrator at all, or an inactive one only. A guard applied
+        to every account would refuse there. The handler returns normally, the regular user is gone
+        and nobody else is touched.
+
+        The inactive administrator is created inactive (create_user's is_active). After the cure,
+        deactivating the last active administrator is refused, so this state predates the cure.
+        """
+        print_section("ACCDEL-005: a regular user is never refused by the administrator guard")
+        engine = private_instance.engine
+        ids = await _create_accounts(engine, _Account("regular_user", superuser=False), *others)
+        expected_others = {account.username: (account.superuser, account.active) for account in others}
+        before = await _accounts(engine)
+        assert before == {"regular_user": (False, True), **expected_others}, f"Precondition: a regular user and no other active administrator: {before}"
+
+        outcome = await _delete_own_account(engine, ids["regular_user"])
+        after = await _accounts(engine)
+
+        assert outcome == ACCOUNT_DELETED, f"A regular user is never refused by the administrator guard; the handler answered {outcome!r}, the accounts are now {after}"
+        assert after == expected_others, f"The regular user must be gone and nobody else touched: {after}"
+
+        print_success("✓ The regular user's account is deleted: the guard concerns administrators only")
