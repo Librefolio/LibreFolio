@@ -42,6 +42,12 @@ export function isSignOutRequested(): boolean {
     return signOutRequested;
 }
 
+/** The login's 403 for a disabled account, sent only to whoever gave its right password (plan 36). */
+function isAccountDisabled(body: unknown): boolean {
+    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
+    return typeof detail === 'object' && detail !== null && (detail as {error_code?: unknown}).error_code === 'ACCOUNT_DISABLED';
+}
+
 /**
  * Create the authentication store
  */
@@ -121,6 +127,7 @@ function createAuthStore() {
                 transitionClientSession(null);
                 debug.log('AuthStore', 'Login error:', error);
                 // One key for every 401: telling an unknown user from a wrong password would reveal which accounts exist.
+                // A disabled account is told so only with its right password, as a 403 ACCOUNT_DISABLED (plan 36).
                 let authError: AuthError = {key: 'auth.loginFailed'};
 
                 if (isAxiosError(error)) {
@@ -128,6 +135,8 @@ function createAuthStore() {
                     debug.log('AuthStore', 'Axios error data:', error.response?.data);
                     if (error.response?.status === 401) {
                         authError = {key: 'auth.invalidCredentials'};
+                    } else if (error.response?.status === 403 && isAccountDisabled(error.response.data)) {
+                        authError = {key: 'auth.accountDisabled'};
                     } else if (error.response?.status === 422) {
                         authError = {key: 'auth.invalidInput'};
                     } else {
