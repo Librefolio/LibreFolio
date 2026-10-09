@@ -2,7 +2,7 @@
 title: "A premise gate keyed by content: fail when the set of sites changes, not when a line moves"
 category: concept
 tags: [testing, gates, method, privacy, i18n, false-positive, anti-regression]
-related: [decisions/privacy-mask-at-the-formatter, concepts/span-as-a-detector, concepts/characterisation-test-latch, problems/i18n-audit-false-dead-and-false-used, concepts/echarts-chart-gotchas]
+related: [decisions/privacy-mask-at-the-formatter, concepts/span-as-a-detector, concepts/characterisation-test-latch, problems/i18n-audit-false-dead-and-false-used, concepts/echarts-chart-gotchas, decisions/html-escape-at-the-source]
 ---
 
 # Concept: gate the premise, key it by content
@@ -32,6 +32,9 @@ stated honestly"): it does not see ECharts axis formatters, which only behaviour
 - The same idea, applied to data instead of call sites: the tooltip-HTML gate checks the **catalogues** — every
   translation must render as itself — instead of escaping ~109 interpolation sites
   (`frontend/src/htmlInterpolation.gate.test.ts`).
+- The two XSS gates of 2026-09-30: the interpolation gate (sources: user text in hand-built HTML must pass
+  through `escapeHtml`) and `frontend/src/htmlSink.gate.test.ts` (every `{@html}` is `sanitizeHtml(…)` or a
+  reviewed entry keyed by content) — [[decisions/html-escape-at-the-source]].
 - Related failure it avoids: a gate that cries wolf ([[concepts/span-as-a-detector]]).
 
 ## Source files

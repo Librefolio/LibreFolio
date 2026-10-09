@@ -2423,3 +2423,81 @@ Issues found: 14 (7 high, 4 medium, 3 low).
 Repaired: H1, H3, H4, H5, H7, M1, M3, part of M2. Deferred: H2 (re-baseline), H6 (SCHEMA snippet), M4 (graph run).
 Next recommended: a graphify semantic `--update` over `wiki/` (289 pages) once the cost is approved — it closes P-6;
 then fix the corpus symlink scan so the incremental check stops reporting "up to date" on an unscanned corpus.
+
+## [2026-10-09] file | P-1 closed without code — Auto cost basis without a position (folder 39)
+Second pass, HEAD `083ed26dc` (train 26). `phases/39_autoCostNoPosition/` holds one plan of workstream P, written and
+closed today. The developer's decision, verbatim: «no chat, non facciamolo e segnamo la decisione, se i dati mancano
+lo 0 come fallback per auto è corretto. se bisogna cambiare sarà l'utente ad andare su quella transazione e
+correggere.» P's draft note was used as input and every claim re-checked on the code (the zero WAC on an empty pool,
+`ADD_ZERO_COST`, `if wac_result.wac:` in the inline WAC, the batch's Auto indices, the form default `'auto'`, the
+existing test `test_wacp27_empty_pool_wac_zero`); the draft's "enter the field and leave it = 0" gesture does not exist
+in the code and is recorded as the developer's first direction, superseded.
+Created: [[decisions/auto-cost-basis-zero-without-position]], [[sources/phase00-auto-cost-no-position-2026-10]].
+Updated: [[decisions/wac-inline-validate-commit]] (`'auto'` on an empty pool → 0 by decision),
+[[decisions/financial-math-single-average-cost]] ("never a silent zero" does not cover Auto's known 0),
+[[sources/phase00-wac-unification-2026-10]] (P-1 residual closed).
+Graph: not updated (deferred to after 1.2 by the developer; P-6 and C-29 stay in the backlog).
+
+## [2026-10-09] file | PAC allocator — rounding against the plan (D's notes, merge `b81b92fd1`)
+No PAC page existed (folder 13 is still active, no feature code yet). Filed from
+`Phase_0/13_pacAllocator/implementation/plan-phase00PacRoundingDirectionFix.prompt.md`, checked against
+`services/pac_allocator/` at `083ed26dc`: rule (a) — one table `_PLAN_ROUNDING` in `ledger.py` (credits `fx_credit`,
+`gross_sell_credit` floor; debits `buy_debit`, `buy_fee`, `sell_fee`, `broker_withheld_tax`, `self_reserved_tax`
+ceiling) and the same direction in the SCIP rows; the band `rounding_bound` = one minor unit per rounded posting with
+the strict per-posting check `_validate_posting`; C-FXPOS (row and evaluator fact) with its residual SCIP tolerance →
+`execution_failed`; B1 (β = h·Σ1/Rᵢ on the three stored rates, h = half a unit of the tenth decimal of
+`Numeric(24, 10)`; planning rate `min(spot·(1−s), val(origin)/val(destination))`; beyond it
+`allocation.fx_rate_inconsistent`); the lesson (the principle lives in MathCore §7.3, not TargetDesign §4.4; no test
+states it literally — the tests pin its halves).
+Created: [[decisions/pac-rounding-against-the-plan]]. Updated: [[concepts/backend-only-calculations]] (scope link).
+Graph: not updated (deferred).
+
+## [2026-10-09] file | Backlog K-25 — the four devWiki pages of workstream K
+Written from steps 13 and 14 of `phases/25_taxonomySelect/`, every claim checked on the code:
+[[problems/svelte5-teardown-reads-stale-state-timers]] (Tooltip and TreeSelect; residuals K-12, C-13),
+[[decisions/html-escape-at-the-source]] (escape rules and the two gates; `escapeHtml` is defined **three** times at
+HEAD — the canonical helper, the KaTeX variant, a local copy in `CorrelationHeatmap.svelte` — so
+[[features/F-047]]'s "× 4 copies cleanup (deferred)" was corrected to done-with-two-left),
+[[problems/stale-price-banner-never-emitted]] (`valuation_stale` also flags trade-derived marks; rule D8; `/assets`
+writes today's price), and [[concepts/responsive-4mode-layout]] rewritten from the code (four tiers per page,
+thresholds measured in four languages, the gutter rule) — none of the four was already covered.
+Cross-links: [[concepts/premise-gate-keyed-by-content]], [[concepts/echarts-chart-gotchas]] (K-15; tooltip width on
+phones), [[problems/fx-backward-fill-unbounded-stale-rates]], [[features/F-054]].
+Graph: not updated (deferred).
+
+## [2026-10-09] ingest | Release 2 archive, folder 25 — workstream K, taxonomy and selects (steps 1–23)
+One analysis and 18 plans; `wiki-search` found only [[problems/flag-emoji-windows]] citing the folder (step 12) and
+nothing on the taxonomy, the import-duplicate keeper, the request loop, the bulk guards, app start or Escape layering.
+Code over plan: D-K3 expected real-estate crowdfunding inside the Real-estate slice of the allocation pie, but the
+charts now group by family (workstream I, D15); [[features/F-048]]'s "JSON snapshot comparison" is still true for the
+form modal — only the bulk editor's guard became canonical (`serializeOps`); the `AssetType` docstring's "subtypes roll
+up to the base type they contain" is not what the backend's `allocation_by_type` does (reported, not fixed).
+Created: [[sources/phase00-taxonomy-select-2026-10]], [[decisions/asset-type-two-level-taxonomy]],
+[[problems/broker-icon-fields-request-loop]], [[problems/modal-layers-escape-and-backdrop]],
+[[problems/fixture-skip-hid-api-test]].
+Updated: [[features/F-001]] (app start: only a 401 signs out, `?redirect=` through `safeInternalPath`, register link),
+[[features/F-008]] (missing ICU argument shows raw text; the argument guard), [[features/F-024]] and
+[[entities/db-models]] (the `AssetType` list was stale since July: `CROWDFUND_LOAN` → `CROWDFUND`, subtypes),
+[[features/F-032]] (stored XSS fixed, type filter), [[features/F-033]] (‹ n/N › browsing, phone tooltip),
+[[features/F-048]] (creation order, canonical close guard, cloning pairs, K-1 … K-4), [[features/F-098]] (opaque and
+maskable PWA icons; the old Apple-first flag stack marked superseded), [[features/F-099]] (metadata currency from the
+price API; K-16), [[entities/import-wizard-modal]] (C1/C2/C6), [[concepts/entity-store-pattern]] (K-11),
+[[concepts/svelte5-runes]] (known traps), [[problems/testid-grep-false-negative]] (`testIdPrefix`),
+[[problems/flag-emoji-windows]] (K-13/K-14).
+Not filed (nothing durable beyond the source page): the app-title guard, the selection cleared after a save, the
+avatar merge in `PreferencesTab`, the AssetModal footer on phones, the date and size formats of step 22 (C-10/C-11).
+Registry: 22 rows at `083ed26dc` (19 for folder 25, 1 for folder 39, 2 for the PAC plans).
+Graph: not updated (deferred).
+
+## [2026-10-09] lint | Second-pass checks
+- `check_source_paths.py`: 1 missing path (1 occurrence) of 2 757 cited, in 1 page — `backend/app/api/v1/admin.py`
+  in [[features/F-078]], unchanged from the first pass; every path cited by the 11 new and 24 updated pages is
+  tracked in git at `083ed26dc`.
+- Wikilinks: 0 broken in pages and in the index; every new page has inbound links besides the index.
+- Privacy: no absolute paths, e-mails, IBANs, IPs, venv names or `/tmp` logs in the added text.
+- Feature registry: no new code needed — K's lots extend F-001, F-008, F-024, F-032, F-033, F-048, F-054, F-098,
+  F-099, whose statuses stand; the PAC allocator still has no code (to assign when folder 13 is archived).
+- Reported, not fixed: the `AssetType` docstring vs the backend allocation (above); `test_settings_api.py` skips five
+  checks on a 404 from endpoints that exist (latent false green, [[problems/fixture-skip-hid-api-test]]); the mkdocs
+  data-quality page still says "All 5 codes" (K-24, assigned).
+- Graph debt grows by the 11 new pages; P-6 and C-29 stay in the backlog by the developer's decision.

@@ -4,7 +4,7 @@ category: problem
 status: accepted
 date: 2026-10-06
 tags: [backend, fx, data-quality, silent-failure, dashboard, risk, accepted, backward-fill]
-related: [problems/zero-purchase-cost-foreign-asset-paid-in-report-currency, decisions/financial-math-single-average-cost, decisions/manual-fx-sentinel, concepts/daily-point-policy, problems/fx-multi-route-no-fallback, features/F-017, features/F-057, sources/phase00-fx-dashboard-sync-2026-10]
+related: [problems/zero-purchase-cost-foreign-asset-paid-in-report-currency, decisions/financial-math-single-average-cost, decisions/manual-fx-sentinel, concepts/daily-point-policy, problems/fx-multi-route-no-fallback, features/F-017, features/F-057, sources/phase00-fx-dashboard-sync-2026-10, problems/stale-price-banner-never-emitted]
 ---
 
 # Problem: unbounded FX backward-fill turns interior gaps into silent stale rates
@@ -77,7 +77,7 @@ Plan `plan-phase00FxDashboardSync.prompt.md` (§ D6, ~lines 306-319, summary at 
 - **B — rejected**: the banner's Sync runs to today. It closes the hole in one go, but re-downloads and rewrites
   the whole series from `date_from − 7`, because the provider is treated as the authority
   (`mkdocs_src/docs/user/fx/sync.en.md`).
-- **C — not chosen**: treat stale FX the way `STALE_PRICE` treats prices. Separate backend work; the developer chose
+- **C — not chosen**: treat stale FX the way `STALE_PRICE` treats prices ([[problems/stale-price-banner-never-emitted]]). Separate backend work; the developer chose
   A and nothing was deferred (alignment of 2026-10-09) — this page is the only trace it leaves.
 
 The same backward-fill is what makes weekends and bank holidays convert at all (a central bank publishes no rate on
