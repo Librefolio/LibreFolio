@@ -1524,3 +1524,125 @@
 >   - `dev_release2` = `1ead733f2` (train 23): from `2e8d6a551` no overlap with the batch 7 paths, only `CHANGELOG.md`, which M does not touch;
 >   - load at 13:36: 14.2 / 14.2 / 14.9.
 > - **Step 20 closed.** Updated CHECKPOINT READY sent to the coordinator; M FROZEN.
+
+## Batch 8 — English pages that can already be fixed (base `3cceb4f90`, train 24b, M integrated with L and Q)
+
+### 21. ✅ Connection indicator shot, PDF preview line, Docker box in `cli_tools` — 2026-10-09
+
+> **Coordinator's brief** (13:49), on the developer's wish to start the translations as late as possible:
+> 1. the shot `security/connection-indicator` in the gallery, then in `user/connection-security.en.md` in place of the placeholder (line 14);
+> 2. one line in `user/files/index.en.md`: the PDF preview is read-only; a protected PDF asks for the password, which stays in the browser and is gone when it closes;
+> 3. `admin/cli_tools.en.md:8`: the Docker box says «User and database commands work there», but `db upgrade` and `db downgrade` with `exec` do not work (in Docker the server is always running; `:113` already says so). Fix it, with a link. `docker_advanced:207` is already right: do not touch it.
+> - English only: no stamp, no translation, the PAC page untouched (it is D's).
+> - Gates: `mkdocs build` strict, `check-links` (only the known `#rolling-return` may remain), the gallery only for the new shot, desktop and mobile.
+>
+> **21.1 ✅ Baseline and analysis (M, 14:00)**
+> - HEAD `3cceb4f90` = `dev_release2` (fast-forward after train 24b: `6bd947519`, M's B7 commits `1028a1978` and `908f9bf1d`); worktree clean.
+> - Placeholder `connection-security.en.md:14`: `<!-- [Screenshot Placeholder: security/connection-indicator — the sidebar's connection security indicator open on Connection: local network, with its reason and the How to connect securely link] -->`.
+> - How to reproduce it (L, `frontend/e2e/layout/connection-security.spec.ts`):
+>   - Chromium with `--host-resolver-rules=MAP lf-e2e.lan 127.0.0.1`;
+>   - log in through the form under `http://lf-e2e.lan:<port>/`, because cookies are per host;
+>   - wait for `data-server-checked`, then `data-level="local"` and `data-reason="lan"`;
+>   - open `connection-security-toggle`.
+>   - `launchOptions` is worker-scoped: Playwright refuses it inside a describe, so it goes in a `test.use` at the top of the file.
+> - `screenshot()` in the gallery: always full screen (no crop; tall shots via galleryTallShots).
+> - Gallery pages convention: every new shot gets an entry in `gallery/desktop.en.md` and `mobile.en.md` (as «🗃️ File Menu» did in batch 3). There is no Security section today.
+> - `cli_tools`: the database section is `## 🗄️ Maintain the Database` → `### ⬆️ Apply Migrations` (line 93); `:113` describes `db upgrade`/`downgrade` in Docker; `docker_advanced.md#docker-exec` (line 196) and `:207` («Database migrations need no command»).
+> - Assignments:
+>   - test-author: the gallery test, lane 6158;
+>   - docs-writer: the placeholder, the gallery pages, the PDF line and the `cli_tools` box; no lane, only `mkdocs build` and `check-links`.
+>
+> **21.2 ✅ English docs (docs-writer, 14:15)**
+> - `user/connection-security.en.md:14`: the placeholder → the standard block (`max-width: 700px`), `data-category="security" data-name="connection-indicator"`.
+>   - Alt text: «The connection security indicator at the bottom of the sidebar, open on Connection: local network: its reason, that anyone on the same network can read the traffic, and the How to connect securely link».
+>   - The strings come from `en.json`; the position from `Sidebar.svelte:273`, under Logout and above the version.
+> - `gallery/desktop.en.md` and `mobile.en.md`: a new `## 🔒 Security` → `### 🚦 Connection Indicator` after Authentication, with a description, the img, and `---`. Mobile uses `screenshot-container mobile`.
+> - `user/files/index.en.md`: a bullet under Preview, in Static resources, the only section that takes PDFs (the BRIM uploader accepts `.csv,.xlsx,.xls`): read-only viewer (read, search, copy; no edit, annotate or print; **Download** to keep the file); a protected PDF asks for its password, which stays in the browser, is never sent or saved, and is gone when the preview closes.
+> - `admin/cli_tools.en.md:8`: «User commands, `db current` and `db check` work there; `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations))…».
+>   - Plus `{: #apply-migrations }` on line 93: same value as the generated slug, so it protects the link in the translations (100 of the 102 same-page links already use fixed anchors). Accepted by M.
+>   - `:113` and `docker_advanced` untouched. Verified in `dev.py:490-549`: upgrade and downgrade refuse while the server runs; current and check do not.
+> - Gates:
+>   - `mkdocs build` strict: exit 0, 0 WARNING (`b8_docs_build.log`);
+>   - `check-links`: only `#rolling-return`, plus the 3 already on the exception list (`b8_docs_links.log`);
+>   - `git diff --check` clean.
+> - No timestamp (not a convention); no stamp; the translation debt is left visible (IT/FR/ES gallery pages, the files bullet, cli_tools, connection-security).
+> - Note for the checkpoint: if the viewer fails, the fallback iframe (the browser's own PDF viewer) may offer print and download. The line describes the normal viewer.
+> - **Follow-up approved by M:** a **Security** bullet in «What You'll See» in `gallery/index.en.md`, the convention for a new section (Onboarding in `3a8e9a05d`), then build and check-links again.
+>
+> **21.3 ✅ Gallery index (docs-writer, 14:20)**
+> - `gallery/index.en.md:25`, «What You'll See»: `- **Security**: Connection security indicator in the sidebar, open on its level and the reason for it` (after Authentication).
+> - Build strict: exit 0, 0 WARNING; the bullet is in `gallery/index.html`.
+> - `check-links`: only `#rolling-return`, plus the 3 known ones on the exception list.
+> - `git diff --check` clean.
+> - 6 EN docs files modified. The IT/FR/ES debt is left visible.
+>
+> **⚠️ Off track: pause and the session error (14:21 → 15:22).** The coordinator asked for a pause at 14:21; M's session went down with an error on that very message, before replying «IN PAUSA». It resumed at 15:22 on the coordinator's signal, with HEAD `3cceb4f90`, 9 files modified, ports 6158 and 6168 free.
+>
+> **21.4 State on resume (M, 15:25)**
+> - Docs: done (21.2, 21.3).
+> - The gallery shot: the first test-author (`bc4a6092`) **shows `running` but has given no sign of activity since 14:50** (last edit to `gallery.spec.ts` 14:20:58; failure evidence copied at 14:50), and no lane process is running.
+> - **Its runs**, all with `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-m` and port 6158 (`runs/b8_connection_*.meta`):
+>   - `red_first` (14:11, desktop only): exit 1;
+>   - `b8_connection_1` (14:18): **green on desktop and mobile, 74 s**;
+>   - `b8_connection_2` (14:21, load 48): **red on both**: under `http://lf-e2e.lan:6158` the page stays on the splash (snapshot: the LibreFolio logo only), and `login-page` does not appear within 30 s.
+> - The spec **changed between the green run and the red one**: a `TEMP-DIAG-B8` block was added; its console output is not in the runner's log.
+> - **The test's design** (from the diff):
+>   - a top-level `test.use` that maps only `lf-e2e.lan`;
+>   - the admin's `login()` on the baseURL, then `keepTempDataHiddenUnder` (new in `galleryReportSets.ts`: the two listings that `hideGalleryTempData` reads in Node, where `lf-e2e.lan` does not resolve, are redirected to the baseURL);
+>   - the form login under the LAN name, and a positive check that the offline guard answers a catalogue read from the page;
+>   - per language and theme: `/dashboard`, 1Y, `data-server-checked`, then `local`/`lan`, the drawer on mobile, the toggle, the reason, the link with `href` in the UI's language, no cookie warning;
+>   - settled waits, `toBeInViewport`, `expectUncovered`, then the screenshot.
+> - **Next action:**
+>   - STOP sent to the first test-author;
+>   - a new test-author takes over: `test-triage` on the red (what keeps the boot on the splash under the LAN name), the fix, `TEMP-DIAG` removed, 2 green runs on both viewports, `view` of the images, Prettier and tsc;
+>   - then the CHECKPOINT READY.
+>
+> **21.5 The first test-author is alive (M, 15:30)**
+> - The new test-author (`96a01a8b`) **stopped before any edit or run**, under the concurrency rule.
+> - The first test-author (`bc4a6092`) resumed together with M's session:
+>   - it changed `gallery.spec.ts` at 15:23:41 (sha256 `5cdfa8b2…`);
+>   - it ran `b8_connection_3_diag` (15:23:47–15:25:03, load 30.8 → 18.1): **exit 0 on both viewports in 76 s**, 16 PNGs written.
+> - TEMP-DIAG is still in the spec (lines 1632–1667). Its output now reaches the runner's log.
+>   - `signed in under LAN` at about 5.3 s on both viewports: run 2's red (the splash, at load 48) does not reproduce at load about 31.
+>   - Still pending: 1–3 chunks `http://localhost:6158/_app/immutable/chunks/*.js`, probably abandoned when the page moved to the LAN origin, and two 401s at about 0.6 s and 3.1 s (`auth/me` before each login). To be confirmed.
+> - **Decision (M):** the first agent finishes; it has the context and is in the middle of the triage. The second stays idle. The «STOP» sent at 15:25 will reach it only at the end of its turn, so it does not interrupt its work.
+> - On the report: check the verdict on run 2's red (not «flaky»), TEMP-DIAG removed, at least 2 clean green runs, the images, the gates.
+>
+> **21.6 ✅ The connection indicator shot: final report and confirmation (test-author `bc4a6092` + M, 15:35)**
+> - **The test**, `gallery.spec.ts` (+154, additions only):
+>   - a file-level `test.use` with `--host-resolver-rules=MAP lf-e2e.lan 127.0.0.1` (only that name; the config's `slowMo` kept; `--list` collects all 252 tests with no worker error);
+>   - `test.describe('Security')` between Dashboard and Settings. The flow:
+>     - the admin's `login()` on the baseURL, then `keepTempDataHiddenUnder`, then the form login under `lf-e2e.lan`;
+>     - a positive check that the offline guard answers a catalogue read from the LAN page;
+>     - per combination: `/dashboard` 1Y, the language and theme on `<html>`, `data-server-checked`, then `local`/`lan`, the drawer on mobile, the toggle, the reason, `href` in the UI's language, no cookie line;
+>     - settled waits (`textStill`, `canvasStill`, images, motion), `toBeInViewport({ratio: 1})`, `expectUncovered`, the screenshot.
+> - **The fixture**, `galleryReportSets.ts` (+29): `keepTempDataHiddenUnder`. The guard's routes match paths, not the origin, so they also hold under the LAN name. But `hideGalleryTempData` reads `/brokers` and `/brokers/import/files` in Node, where `lf-e2e.lan` does not resolve. Without the fix: `getaddrinfo ENOTFOUND` (the no-fix run, 14:11).
+> - **Runs** (`dev.py mkdocs gallery … -f 'connection indicator on a local network'`, `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-m`, port 6158, 2 workers, fresh populate):
+>
+> | run | result | elapsed | load at start → end |
+> |---|---|---|---|
+> | no fix (desktop only) | ✘ ENOTFOUND | 167 s | 14.6 → 23.9 |
+> | 1 | ✓ | 74 s | 15.8 → 10.7 |
+> | 2 | ✘ both (splash > 30 s) | 203 s | 16.0 → **48.5** |
+> | 3 (TEMP-DIAG) | ✓ | 76 s | 30.8 → 18.1 |
+> | 4 (final code) | ✓ desktop 37.9 s / mobile 37.6 s | 73 s | 7.4 → 11.6 |
+> | **5 (final code, M)** | ✓ desktop 34.9 s / mobile 36.2 s, 16 PNGs | 72 s | 8.7 → 10.9 |
+>
+> - **Triage of run 2: verdict *environment*.**
+>   - Both workers sat on the splash at the same moment, before any API call (the splash waits for the app's code). Setup was about 5× slower, load reached 48.5 on 10 CPUs, swap 7.7 of 8 GB, with no backend error.
+>   - The same flow is green in runs 1, 3, 4 and 5; the sign-in under the LAN name takes about 2.8–5.3 s against a 30 s budget (the same as L's).
+>   - TEMP-DIAG removed (grep: none).
+> - **Images** (`mkdocs_src/docs/gallery/{desktop,mobile}/{lang}/{theme}/security/connection-indicator.png`, gitignored; desktop 1280×720, mobile 1290×2220). M viewed desktop en/light and mobile en/dark; the test-author viewed six variants. They show «Connection: local network», the reason («Local network without encryption: …») and «How to connect securely», with the mocked dashboard behind; the drawer on mobile. Nothing live or private.
+>   - **Framing:** on desktop the open details push the menu into its scroll («FX Rates» half cut, Files and Settings hidden). The subject is whole, so rule (c) applies: stay at 720. Option for the developer: a taller desktop screen, about 1280×900, one line.
+>   - The version label reads `-dirty` (local build from the worktree); it will be clean in the release run.
+> - **Gates:**
+>   - Prettier clean (run from `frontend/`);
+>   - `tsc -p tsconfig.e2e.json`: only the 2 known errors;
+>   - `check-orphans` clean;
+>   - `git diff --check` clean;
+>   - 6158 and 6168 free;
+>   - `dev_release2` still `3cceb4f90`: no overlap.
+> - Docs gates: unchanged since 21.3 (build strict 0 WARNING, check-links only `#rolling-return`).
+> - **Not run:** the other 125 gallery shots under the new launch rule (it maps only `lf-e2e.lan`). The CI runs the whole gallery.
+> - Agents: `bc4a6092` stopped and idle, nothing half done; `96a01a8b` idle, no edit made.
+> - **Step 21 closed.** CHECKPOINT READY sent to the coordinator; M FROZEN.
