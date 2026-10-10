@@ -4961,8 +4961,8 @@
           "spread": "Spread",
           "stale": "Pas du jour",
           "strategy": "Stratégie",
-          "title": "Récapitulatif",
-          "toggle": "Récapitulatif",
+          "title": "Résumé",
+          "toggle": "Résumé",
           "total": "Total (contrôle)",
           "versions": "Backend/API {api} · UI {ui}",
           "rates": "Taux"
