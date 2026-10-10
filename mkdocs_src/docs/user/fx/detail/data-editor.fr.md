@@ -54,7 +54,7 @@ Vos modifications apparaissent sur le graphique sous forme de ligne **Aperçu** 
 Les lignes rejoignent l'éditeur : vérifiez-les, puis cliquez sur **Enregistrer**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Fenêtre d'import CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Modale d'import CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ### 📄 Format du fichier
