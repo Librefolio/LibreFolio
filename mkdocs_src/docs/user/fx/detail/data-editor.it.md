@@ -55,7 +55,7 @@ Le modifiche vengono mostrate sul grafico come una linea **Anteprima** viola. **
 Le righe vengono aggiunte all'editor: esaminale, poi fai clic su **Salva**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Finestra di importazione CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Modale di importazione CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ### 📄 Formato del file
