@@ -4007,3 +4007,36 @@ altrui. Passaggio visivo sulla 6162 (copia della snapshot, revisione combinata).
 > `docs(journal): align risk plans with the code`. `diff --check` pulito, 0 link rotti, privacy pulita, corsia 6152
 > libera. Le due righe di CHANGELOG di B4 e le evidenze dei buchi sono nell'handoff al coordinatore. FROZEN fino al
 > commit del developer.
+
+---
+
+## Consegne alla prossima release — 10/10/2026 · ✅ (CHECKPOINT READY)
+
+> **Perché**: il developer, tramite il coordinatore, vuole aprire la prossima release con chat nuove, «così da
+> alleggerire la memoria e ripartire col botto, ma senza perdere conoscenza», e chiede se le sessioni Risk, A e F
+> possono essere archiviate. Prima, ciò che stava solo nella loro memoria va scritto nel README della cartella.
+>
+> **Note implementazione**:
+> - le fonti: i 12 checkpoint e le note della sessione Risk, letti da cinque esplorazioni in sola lettura, e gli
+>   elenchi di A e di F. Ogni voce l'ho riverificata io su `d59762e0a` prima di scriverla;
+> - nel README: A6 riprovato (con 101 id, `ValidationError` → `invalid_parameters`), A7 chiuso (`647475999`), B4 e B5
+>   chiusi (`586a4f0ea`, `1fdcaef38`), B7 e B8 nuovi, sei difetti nuovi, i buchi nei test, R12f fra le domande, il
+>   rimando alle voci del backlog 38, e la guida «🧭 Ripartire da qui»: letture, mappa del codice, gate, decisioni,
+>   trappole;
+> - in `04`: D383 (il riquadro degli avvisi di livello, ovunque) e D384 (il preset del broker richiede una volta
+>   sola), due decisioni del developer rimaste fuori dal registro;
+> - nel piano di A: i 12 titoli 🔶 chiusi, come A ha verificato, e V4 riaperta; in J e in I, le caselle del
+>   CHANGELOG e delle traduzioni.
+>
+> **⚠️ Fuori pista**:
+> - **Un mio errore del 09/10**: avevo segnato ✅ la V4 di A perché la heatmap è montata in L2, ma è montata senza le
+>   mappe, quindi gli ordinamenti per tipo, settore e area non ci sono. L'ha trovato un'esplorazione sulle mie note;
+>   corretto (B7).
+> - **Una chiusura sbagliata nel backlog 38**: la riga «`portfolio_optimization` oltre 100 titoli» della tabella
+>   «Chiuse alla verifica del 09/10» cita il ramo di `OptimizationResourceLimitError`, ma con più di 100 id la
+>   richiesta si ferma prima, nella validazione di Pydantic. Segnalata al coordinatore, che possiede il file; A6
+>   resta aperto.
+> - **Tre candidati che il codice non conferma**: `min_observations = 2` del plugin di correlazione non è morto (lo
+>   legge `service.py:263`); il riuso degli id l'ha chiuso il piano 34 (`sqlite_autoincrement` in
+>   `db/models.py`); il cambio su un giorno di prezzo riportato l'ho letto come esposizione vera al cambio, perché il
+>   valore in euro si muove davvero, e non l'ho messo fra i difetti.

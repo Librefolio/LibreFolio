@@ -32,7 +32,7 @@ non mio passa **prima** da Risk. Il via per il codice lo dà il developer.
 | V1b | **la frase sotto lo scatter di L3** che chiama «liquidità» gli asset senza prezzo | ✅ (passi 1 e 4) |
 | V2 | tooltip vero sulle barre dell'istogramma di L1 | ⏳ **mai fatto**: `levels/l1/ReturnHistogram.svelte` usa ancora il `title` nativo → README della cartella, buchi (allineamento 09/10) |
 | V3 | aspetto delle card L1–L3: niente troncamenti, `Tooltip` al posto del `title` nativo | ✅ `line-clamp-2` in `ui/display/RiskMetricCard.svelte` (allineamento 09/10) |
-| V4 | ordinamenti per tipo/settore/area nella matrice di L2 | ✅ `CorrelationHeatmap.svelte`, montata in `L2Diversification.svelte` (allineamento 09/10) |
+| V4 | ordinamenti per tipo/settore/area nella matrice di L2 | ⏳ **aperto**: la heatmap è montata in `L2Diversification.svelte:363`, ma senza le mappe di tipo, settore e area (`assetTypes`, `assetSectors`, `assetRegions`), che passa solo il laboratorio → README della cartella, buchi (B7). *Correzione del 10/10: il 09/10 l'avevo segnato ✅ per errore* |
 | V5 | icone del manuale su L1–L4, come nel lab | ✅ (passo 3) |
 | V6 | spazio vuoto a sinistra dello scatter (`scatterChartHelpers.ts:208`) | ✅ `charts/scatterChartHelpers.ts` (allineamento 09/10) |
 | F2b | L3 dichiara i risultati `current_composition` che legge | ✅ (passo 6) |
@@ -104,7 +104,7 @@ liquidità, con i numeri invariati · badge come nel lab.
 > occorrenze, la chiave i18n in 4 lingue. `api sync` → client 29/09 22:33, 6 occorrenze di
 > `excluded_weight` nel client, `git status` vuoto.
 
-### Passo 1 — V1b: la frase sotto lo scatter di L3 · 🔶 29/09
+### Passo 1 — V1b: la frase sotto lo scatter di L3 · ✅ 29/09 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Note implementazione**:
 > - **Rete prima**: in `l3Helpers.test.ts`, 6 casi nuovi per `uncoveredShares()` più un'asserzione nel
@@ -131,7 +131,7 @@ liquidità, con i numeri invariati · badge come nel lab.
 > fixture dei test unitari sono grezze. La stessa frase sta nel docstring di `uncoveredShares()` e nel commento del
 > suo test: spariscono con loro (vedi «Una sola regola per il peso non coperto», sotto).
 
-### Passo 2 — V1: l'avviso · 🔶 29/09
+### Passo 2 — V1: l'avviso · ✅ 29/09 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 **Decisione del developer**: **un badge per asset**, con icona e nome barrato come nel lab, e **una frase
 breve con la sola causa**. I nomi escono dalla frase e diventano badge.
@@ -413,7 +413,7 @@ resta, altrimenti l'albero non compila):
 > copia di prod del 29/09 la causa era **una sola** (sezione V1), quindi lì l'avviso dovrebbe essere blu. Sui dati di
 > oggi del developer non lo so: l'output della sonda del 29/09 non è salvato. Lo si vede sulla 6163 quando lo chiede.
 
-### Passo 6 — l'avviso «causa → effetto», e F2b · 🔶 30/09
+### Passo 6 — l'avviso «causa → effetto», e F2b · ✅ 30/09 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 **Scelta del developer (30/09)**: fra «causa → effetto» e l'alternativa minima (solo la lista raggruppata per
 livello), **causa → effetto**. Prima, alla domanda «vuoi vedere il tono sulla 6163?», ha risposto «passiamo alla parte
@@ -632,7 +632,7 @@ mentre L3 disegna quello della composizione attuale, scelto da `selectKpiWave`).
 >   lavoro di F è arrivato nel mio ramo: uno scrittore per file. Verifiche: E2E `risk` (lo scatter di L3,
 >   `data-point-count` 3) e `risk-lab`.
 
-### Passo 8 — il benchmark condiviso: posseduto ammesso, scelta sempre visibile, id morto ignorato · 🔶 01/10
+### Passo 8 — il benchmark condiviso: posseduto ammesso, scelta sempre visibile, id morto ignorato · ✅ 01/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 **Decisione del developer (01/10, via Risk), testuale**: «credo che matematicamente può avere senso usare come
 benchmark un asset posseduto […] Vorrei che ovunque serve scegliere un benchmark ci sia un selettore che permette di
@@ -922,7 +922,7 @@ commit del checkpoint 1.
 - **17:12 — fusione committata dal developer**: `738ddc064`, genitori `2b9362618` + `a7f1dbea4`, albero `01a6c2d67673` =
   quello in stage, albero di lavoro pulito (verificato dal coordinator e da me). Non sono più congelato.
 
-### Passo 8 (ripresa) — `L3Benchmark` sulla primitiva `BenchmarkSelect` · 🔶 01/10
+### Passo 8 (ripresa) — `L3Benchmark` sulla primitiva `BenchmarkSelect` · ✅ 01/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Note implementazione**:
 > - **B1–B4 riapplicati** sullo spec fuso con `git merge-file` (base = versione del checkpoint, full = versione con i
@@ -1248,7 +1248,7 @@ commit del checkpoint 1.
 > - E2E `front-portfolio risk` → **23 passed**, **0 chiamate ai provider** nel log del backend (finestra 12:56:42 → 12:58:59
 >   UTC: 1032 eventi, l'unica riga di provider è lo spegnimento di JustETF, 0 URL esterni). Porta libera dopo.
 
-### Passo 12 — la didascalia di L2: decisioni e test rossi · 🔶 05/10
+### Passo 12 — la didascalia di L2: decisioni e test rossi · ✅ 05/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Decisioni del developer (05/10)**: (1) la didascalia della scheda «Quanto di me non è misurato qui?» dice di cosa è
 > fatto il numero, **con le quote** («Con le quote (consigliato)»): solo senza prezzo → «tutto in posizioni senza prezzo»;
@@ -1272,7 +1272,7 @@ commit del checkpoint 1.
 >     misurate).
 > - **Il codice aspetta la fine della review**: cambiarlo ora ricostruirebbe la build che la 6163 serve.
 
-### La review della Dashboard sui dati veri · 🔶 05/10
+### La review della Dashboard sui dati veri · ✅ 05/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Richiesta del developer**: «Sui miei dati veri: chiedi una copia nuova al coordinator» (lo snapshot del 30/09 era stato
 > cancellato dalla pulizia di `/tmp`). **Scope, deciso dal developer via coordinator**: anche la metà Dashboard della review
@@ -1444,7 +1444,7 @@ commit del checkpoint 1.
 > - **Resta scoperto, dichiarato**: un `display` diverso che spegnesse il limite lasciando la classe passerebbe, finché la
 >   frase sta su una riga.
 
-### Passo 14 — le 6 proposte: decisioni, poi il codice da mostrare · 🔶 05/10
+### Passo 14 — le 6 proposte: decisioni, poi il codice da mostrare · ✅ 05/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Decisioni del developer (05/10)**:
 > - **V3** («Sì, a capo come la didascalia (chiude V3)»): su tutte le card L1–L3 anche il titolo e il sottotitolo vanno a
@@ -1666,7 +1666,7 @@ commit del checkpoint 1.
 >   lab non cambia niente. La sua guida, `correlation.en.md:113`, sulle pagine di portafoglio con benchmark diventa
 >   inesatta; il file è suo.
 
-### Passo 15 — l'ordine verso il componente condiviso, e i tre punti piccoli · 🔶 06/10
+### Passo 15 — l'ordine verso il componente condiviso, e i tre punti piccoli · ✅ 06/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Accordi (06/10)**:
 > - **F**: d'accordo su tutto. Io scrivo `RiskReturnLevel.svelte` con i suoi helper e i suoi test, e **nello stesso
@@ -1781,7 +1781,7 @@ commit del checkpoint 1.
 > - E2E `risk` → **24 passed**, **0 chiamate ai provider** (08:09:57–08:12:23 UTC);
 > - E2E `risk-lab` → **41 passed**, con i test nuovi di F. Una sola chiamata, la SNB del suo spec, già segnalata.
 
-### Passo 17 — il componente condiviso, passo 1 (spostamento puro) · 🔶 06/10
+### Passo 17 — il componente condiviso, passo 1 (spostamento puro) · ✅ 06/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **F (06/10)**:
 > - **sceglie (a)**: `risk.assetSet.levels.l3.scatterNote` si ritira. Con (b) ci sarebbero due frasi di fila sull'asse
@@ -1893,7 +1893,7 @@ commit del checkpoint 1.
 - **Il tasso senza rischio modificabile**: con l'analisi a Risk prima, perché lo store condiviso è suo. Quando arriva,
   si aggiorna la frase del manuale sul tasso.
 
-### Passo 18 — passo 1b: righe di riferimento, via le card di L3, selettore delle colonne · 🔶 06/10
+### Passo 18 — passo 1b: righe di riferimento, via le card di L3, selettore delle colonne · ✅ 06/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Accordi (06/10)**:
 > - **F**: la forma va bene, con tre precisazioni.
@@ -2761,7 +2761,7 @@ commit del checkpoint 1.
 >   finestra E2E) con il suo riepilogo. Ho ricostruito le finestre dalle ore di fine e dalle durate misurate. Il DB e
 >   il server non ne sono stati toccati.
 
-### Passo 26 — analisi dei bucket di Income (solo lettura) · 🔶 06/10
+### Passo 26 — analisi dei bucket di Income (solo lettura) · ✅ 06/10 *(chiuso nei passi seguenti; allineamento del 10/10, su verifica di A)*
 
 > **Mandato del coordinator (19:28)**: `GrowthChart.svelte` è mio da `9b57893ae`. Prima l'analisi, senza codice. Gli
 > appunti del developer (build `v1.1.0-436`):

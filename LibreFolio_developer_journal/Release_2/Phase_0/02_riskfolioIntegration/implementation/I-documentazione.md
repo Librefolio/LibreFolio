@@ -186,7 +186,7 @@ se uno slug deve cambiare, lo si comunica, non lo si cambia e basta.
 
 **Terzo tempo** (solo su richiesta esplicita del developer, a documentazione finita):
 
-- [ ] traduzioni in blocco unico tramite la pipeline;
-  ↳ *allineamento 09/10*: ⏳ solo su richiesta esplicita del developer (regola del progetto); oggi 5 pagine su 22 hanno le traduzioni → README della cartella, aperti
+- [x] traduzioni in blocco unico tramite la pipeline;
+  ↳ *allineamento 10/10*: ✅ il giro di traduzione della 1.2 (`647475999`) porta le 22 pagine di teoria del rischio in it, fr ed es. Il 09/10 erano 5 su 22
 - [ ] `translate-validate` verde.
-  ↳ *allineamento 09/10*: ⏳ come sopra
+  ↳ *allineamento 10/10*: non verificato qui: il debito di traduzione che resta lo conta `./dev.py mkdocs translate-validate`, e lo tiene il backlog 38
