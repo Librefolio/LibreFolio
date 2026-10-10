@@ -1,4 +1,4 @@
- # 🌐 Translation Pipeline
+# 🌐 Translation Pipeline
 
 Automated translation of LibreFolio MkDocs documentation into multiple languages using [Aphra](https://github.com/DavidLMS/aphra) — an LLM-based agentic translation workflow. Supports both **cloud** (OpenRouter) and **local** (Ollama) LLM backends.
 
@@ -28,9 +28,12 @@ The pipeline translates `*.en.md` source files into `it`, `fr`, `es`. The transl
 mkdocs_src/aphra-pipeline/
 ├── .env                    # API key + model config (gitignored)
 ├── .env.example            # Template for contributors
-├── .gitignore              # Ignores .env, config.toml, cache
+├── .gitignore              # Ignores .env, config.toml, Python caches
+├── .translate-hashes.json  # Translation cache, tracked in git (see Caching)
 ├── README.md               # Quick-start guide
 ├── code_blocks.py          # Fenced-block pairing + code indentation restore (shared helper)
+├── glossaries/             # glossary.json: term mappings per language (Critique + Refine)
+├── prompts/short_article/  # Aphra prompt overrides (see 7. Prompt overrides)
 ├── translate_docs.py       # Orchestration script (integrated with dev.py)
 └── validate_translations.py # translate-validate checks (integrated with dev.py)
 ```
@@ -254,6 +257,27 @@ cases, a corpus guard checks that every up-to-date translation (English MD5 equa
 cached one and language in `langs_done`, the rule `translate` uses to skip a page) keeps
 the English code indentation.
 
+### 💬 7. Prompt overrides
+
+The generated `config.toml` points Aphra's `prompts_dir` at
+`mkdocs_src/aphra-pipeline/prompts/short_article/`. A file there named like an Aphra prompt
+replaces it (`step1_system.txt` and the system and user prompts of steps 3, 4 and 5), and
+`step1_user_append.txt` is added after Aphra's own Step 1 user prompt.
+
+For HTML, the three prompts that write or judge the translation share one rule:
+
+- tags, attribute names and technical attribute values (`src`, `href`, `class`, `id`,
+  `style`, and `data-*` other than `data-title`, such as `data-category` or `data-name`)
+  are copied character for character;
+- the human-readable values of `alt`, `title`, `aria-label` and `data-title` (the carousel
+  caption) are prose: Translate (`step3_user.txt`) and Refine (`step5_user.txt`) translate
+  them, keeping any HTML inside a `data-title` unchanged, and Critique (`step4_user.txt`)
+  checks that they were not left in English.
+
+The earlier wording asked to copy every HTML attribute, which left image descriptions in
+English. The `text-untranslated` check ([Validation Checks](#validation-checks)) reports the
+values of three words or more still in English.
+
 ---
 
 ## Configuration
@@ -415,14 +439,108 @@ The `autobatcher` library handles queue submission and polling transparently.
 
 ## Caching
 
-The pipeline caches **source file MD5 hashes** in `.translate-hashes.json` to skip unchanged files between runs. If a source `.en.md` hasn't changed, all its translations are skipped.
+`mkdocs_src/aphra-pipeline/.translate-hashes.json` (tracked in git) records which languages
+of each English page are up to date, and for which version of the English. Only the English
+side is hashed: translated files never enter the decision, so a manual repair of a
+translation (a whitespace-only fix, for example) neither triggers a re-translation nor needs
+a stamp.
 
-Only the English side is hashed: `translate` skips a language when the `.en.md` MD5 equals
-the cached one and the language is in `langs_done`, and `translate-stamp` updates those two
-fields. Translated files never enter the decision, so a manual repair of a translation (a
-whitespace-only fix, for example) neither triggers a re-translation nor needs a stamp.
+### 🗃️ Entries and the skip rule
 
-Use `--force` to ignore the cache and re-translate everything.
+One entry per English page, keyed by its path under `mkdocs_src/docs/` (for example
+`user/assets/create-edit.en.md`):
+
+| Field | Content |
+|-------|---------|
+| `md5` | MD5 of the English version the languages in `langs_done` were translated or stamped from |
+| `langs_done` | The languages up to date for that version |
+| `langs.<lang>` | The language's record: `translated_at` with the run's `models`, `critique`, `structural_diff`, `structural_issues` and `elapsed_s` after a translation (plus `final_structural_diff` and `final_structural_issues` when the written file has structural issues); `stamped_at` and `stamped_by` after a stamp; `failed`, `failed_at`, `failure_reason` and `failed_models` after a failure |
+| `last_translated` | Time of the last successful translation; a stamp that creates the entry sets it to the stamp time |
+| `analysis`, `analysis_model` | The Step 1 (Analyze) output shared by the languages, and the model that wrote it |
+
+`translate` plans each page and language for which `_needs_translation()` holds: a language
+is skipped only when the English MD5 equals the entry's `md5` **and** the language is in
+`langs_done`. The records under `langs` are history: the skip rule reads only those two
+fields. Use `--force` to ignore the cache and re-translate every page and language in scope
+(`--file`, `--lang`).
+
+### 🔄 Transitions
+
+Every write to an entry goes through one of four functions of `translate_docs.py`, so a
+language counts as done only for the English text it was translated or stamped from.
+Before them, an analysis moved `md5` to the new English and kept `langs_done`, so a language
+that then failed, or was never reached, stayed done and its stale translation was never
+offered again.
+
+| Event | Function | Effect on the entry |
+|-------|----------|---------------------|
+| The analysis of the page succeeds (a failed one writes nothing) | `_cache_mark_analyzed()` | Sets `md5` to the analyzed version, with `analysis` and `analysis_model`. A changed `md5` empties `langs_done`, the same `md5` keeps it. The `langs` records stay: they still describe the files on disk |
+| A language succeeds | `_cache_mark_translated()` | Adds the language to `langs_done`, sets `last_translated` and replaces the language's record with a fresh one (`translated_at`, `models`, …), which drops any failure or stamp fields |
+| A language fails | `_cache_mark_failed()` | Never marks the language done. Adds `failed`, `failed_at`, `failure_reason` and `failed_models` to its record and keeps its last `translated_at`: a translation file is written only on success, so the old file is left as it was |
+| `./dev.py mkdocs translate-stamp` | `_cache_stamp()` | Moves `md5` to the current English and adds the stamped languages to `langs_done`. The other languages stay done only if `md5` did not change; otherwise the command lists them as `pending again`. Records `stamped_at` and `stamped_by` and clears the failure fields of the stamped languages |
+
+A failed `--force` retry of an up-to-date page leaves the language done, since its file
+still translates that version. `translate-stamp` skips an entry already current for the
+stamped languages (`Already stamped, skipping`), so it does not clear that failure record;
+the next successful translation does.
+
+The MD5 recorded is the one of the text translated: `_read_source()` reads the English page
+once and returns its text with the MD5 of the same bytes, and the analysis records that MD5.
+An English edit saved after that read, while the analysis or the translation steps run (on
+the Doubleword flex queue a step can wait hours), is therefore translated by the next run
+instead of being recorded as done.
+
+So after a failure, an interruption or a `--lang` subset, the next run, and
+`translate --dry-run`, which prints the same plan, offer exactly the page and language pairs
+not yet done for the current English.
+
+Tests: `./dev.py test utils translation-cache`
+(`backend/test_scripts/test_utilities/test_translation_cache.py`), next to
+`translation-code-blocks` ([Code block indentation](#code-block-indentation)). It drives the
+real `run_translate` and `run_stamp`, on the parallel (`--workers 3`) and the sequential
+path, over a docs tree and a cache in a temporary directory with the LLM calls faked, and
+checks `_needs_translation()` and the four transitions directly.
+
+---
+
+## 🔎 Validation Checks {: #validation-checks }
+
+`./dev.py mkdocs translate-validate` (`validate_translations.py`) compares each translation
+with its English page, for every target language, and exits non-zero on any ❌ ERROR, which
+fails the release workflow outside `dev` (see
+[Code block indentation](#code-block-indentation)). Among its checks (`code-block-indent` is
+described above, `admonition-empty-line` under
+[Prettier Compatibility](#prettier-compatibility)), three catch what a translation can break
+while the structure stays intact:
+
+- `text-untranslated` (⚠️ WARN): an `alt`, `title`, `aria-label` or `data-title` value (in
+  double quotes), or the alt text of a Markdown image, of at least three words (two letters
+  or more each) that is identical to one of the English page's values, so left in English.
+  Code is ignored, and the name "Buy Me a Coffee" is allowed. The `html-attrs` check skips
+  these attributes, whose translation is expected; this one checks that it happened.
+- `anchor-missing` (❌ ERROR): a Markdown link to `page.md#anchor` or `#anchor` in a
+  translation (code ignored) must land on an anchor of the page it opens: the translated
+  target `page.<lang>.md`, or the English page when no translation exists. Anchors are the
+  explicit `{: #id }` ids, the heading slugs (Python-Markdown's default slugify; a repeated
+  slug gets `_1`, `_2`, …) and HTML `id`s. `mkdocs build --strict` stops at the first
+  language with a warning, so it surfaces these links one language at a time; this check
+  reports every language in one pass.
+- `inline-code-missing` (⚠️ WARN): every inline code span of the English must appear
+  verbatim in the translation, as many times; digit grouping is ignored, so `1,000.50`
+  matches `1.000,50`. Identifiers, enum values and parameters are never translated.
+
+The HTML checks (`html-tag-mismatch`, `html-attr-missing`, `html-attr-mismatch`) read only
+rendered HTML: fenced code (any fence, found by `code_line_mask()` in `code_blocks.py`) and
+inline code are removed first, so inline code such as `EUR<USD` is no longer taken for a
+tag.
+
+The structural diff, `_structural_diff()` in `translate_docs.py`, runs on each draft before
+the Critique step (its report goes to Critique and Refine), on every file a run writes, and
+in `./dev.py mkdocs translate-diff`, which exits non-zero on any issue or missing
+translation. Its `LINE_COUNT` check compares blank-line-separated blocks, not lines, and
+flags a difference of more than max(3, 15% of the English blocks): the English wraps at
+about 80 columns while a translation often keeps a paragraph on one line, but a dropped or
+truncated section still removes blocks.
 
 ---
 
