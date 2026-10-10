@@ -23,12 +23,20 @@ Connexion épurée et accessible sur les appareils mobiles.
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Page de connexion">
 </div>
 
-### 📝 Inscription
+### 📝 Inscription - Formulaire vide
 
-Création de compte facile avec indicateur de robustesse du mot de passe.
+Les nouveaux utilisateurs peuvent créer un compte depuis leur téléphone : nom d'utilisateur, e-mail, mot de passe et confirmation.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Modale d'inscription">
+    <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Modale d'inscription">
+</div>
+
+### 🔒 Inscription - Avec indicateur de robustesse du mot de passe
+
+Le retour en temps réel sur la robustesse du mot de passe et la liste des exigences, à la taille de l'écran du téléphone, aident les utilisateurs à créer des mots de passe sécurisés.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Inscription avec indicateur de robustesse du mot de passe">
 </div>
 
 ### ⬆️ Mise à jour disponible
@@ -732,6 +740,15 @@ La comparaison entre l'actif et les données du fournisseur après le choix de l
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Comparaison des données du fournisseur">
+</div>
+
+### 🗺️ Distribution sectorielle et géographique
+
+La modale Modifier l'Actif à la section Classification sur un téléphone : Distribution sectorielle et Distribution géographique avec leurs barres de poids et le Total à 100 %, et les liens pour importer un CSV, ajouter et demander au fournisseur réduits à des icônes.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribution sectorielle" alt="Éditeur de distribution sectorielle dans la modale de l'actif">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribution géographique" alt="Éditeur de distribution géographique dans la modale de l'actif">
 </div>
 
 ### 🌳 Recherche groupée d'indicateurs

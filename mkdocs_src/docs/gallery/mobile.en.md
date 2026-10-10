@@ -23,12 +23,20 @@ Clean and accessible login on mobile devices.
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page">
 </div>
 
-### 📝 Registration
+### 📝 Registration - Empty Form
 
-Easy account creation with password strength feedback.
+New users can create an account from their phone: username, email, password and confirmation.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Register Modal">
+    <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Register Modal">
+</div>
+
+### 🔒 Registration - With Password Strength
+
+Real-time password strength feedback and the requirements checklist, sized for the phone screen, help users create secure passwords.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Register with Password Strength">
 </div>
 
 
@@ -738,6 +746,15 @@ The comparison between the asset and the provider's data after the ISIN choice: 
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Provider Data Comparison">
+</div>
+
+### 🗺️ Sector & Geographic Distribution
+
+The Edit Asset modal at Classification on a phone: Sector Distribution and Geographic Distribution with their weight bars and the Total at 100.00%, the Import CSV, Add and Ask Provider links reduced to icons.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Sector Distribution" alt="Sector distribution editor in the asset modal">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Geographic Distribution" alt="Geographic distribution editor in the asset modal">
 </div>
 
 ### 🌳 Grouped Indicator Search
