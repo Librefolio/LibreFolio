@@ -4846,7 +4846,7 @@
           "fxRated": "{count, plural, one {# cambio} other {# cambi}}{missing, plural, =0 {} other { · # senza tasso}}{stale, plural, =0 {} other { · # non di oggi}}",
           "lead": "Ultimo controllo prima del calcolo.",
           "help": "Il calcolo usa solo i dati elencati qui. Subito prima, LibreFolio rilegge i prezzi, i cambi e i saldi che hai preso da LibreFolio senza modificarli; quelli che hai scritto o modificato restano così.",
-          "colSummary": "Riepilogo",
+          "colSummary": "Sintesi",
           "colKind": "Tipo",
           "kind": {
             "broker": "Broker",
@@ -4961,8 +4961,8 @@
           "spread": "Spread",
           "stale": "Non del giorno",
           "strategy": "Strategia",
-          "title": "Riepilogo",
-          "toggle": "Riepilogo",
+          "title": "Sintesi",
+          "toggle": "Sintesi",
           "total": "Totale (controllo)",
           "versions": "Backend/API {api} · UI {ui}",
           "rates": "Tassi"
