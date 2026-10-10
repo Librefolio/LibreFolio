@@ -6,7 +6,7 @@ previews the set (roles, coverage, gaps and the broker history already in
 LibreFolio), combines it into the derived combined file, and applies the broker
 history to the parse of a combined file.
 
-Design: ``LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md``.
+Design: ``LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md``.
 """
 
 from __future__ import annotations

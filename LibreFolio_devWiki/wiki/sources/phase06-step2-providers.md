@@ -153,7 +153,7 @@ Comprehensive checklist for CSS Scraper and Scheduled Investment asset providers
 | Role | Path |
 |------|------|
 | Source checklist | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/checklist-AssetProviders-CSSandScheduled.md` |
-| CSS Scraper provider | `backend/app/services/asset_source_providers/cssscraper.py` |
+| CSS Scraper provider | `backend/app/services/asset_source_providers/css_scraper.py` |
 | Scheduled Investment provider | `backend/app/services/asset_source_providers/scheduled_investment.py` |
 | Provider base class | `backend/app/services/asset_source.py` |
 | ScheduledInvestmentEditor | `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte` |

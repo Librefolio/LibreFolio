@@ -1,1 +1,0 @@
-/Users/ea_enel/Documents/00_My/LibreFolio/mkdocs_src/docs/financial-theory/portfolio-theory/risk-metrics/sortino-ratio.en.md

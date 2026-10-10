@@ -43,11 +43,13 @@ from backend.app.services.onboarding_service import (
 from backend.app.services.scheduler import read_job_log
 from backend.app.services.scheduler.state import load_state
 from backend.app.services.settings_service import (
+    GlobalSettingNotFoundError,
+    GlobalSettingValueError,
     get_all_global_settings,
     get_global_setting,
     get_or_create_user_settings,
     initialize_global_settings,
-    update_global_setting,
+    update_global_settings,
     update_user_settings,
 )
 from backend.app.utils.cache_utils import clear_all_caches, clear_cache, list_caches
@@ -322,18 +324,17 @@ async def bulk_update_global_settings(
     admin: Annotated[User, Depends(require_admin)],
     session: AsyncSession = Depends(get_session_generator),
 ) -> list[GlobalSettingRead]:
-    """Bulk update global settings. Admin only."""
-    results = []
-    for item in update.items:
-        result = await update_global_setting(item.key, item.value, admin.id, session)
-        if result:
-            results.append(result)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Setting '{item.key}' not found",
-            )
-    return results
+    """Bulk update global settings. Admin only.
+
+    All or nothing: an unknown key answers 404, a value its setting refuses answers 422 with a ``detail``
+    string naming every refused key, and in both cases nothing is saved.
+    """
+    try:
+        return await update_global_settings([(item.key, item.value) for item in update.items], admin.id, session)
+    except GlobalSettingNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{exc.key}' not found") from None
+    except GlobalSettingValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
 
 
 @router.post("/global/initialize", status_code=status.HTTP_200_OK, response_model=GlobalSettingsInitializeResponse)

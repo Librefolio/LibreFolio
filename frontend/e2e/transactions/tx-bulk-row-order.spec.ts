@@ -13,17 +13,31 @@
  * (`serializeOps`) must ignore it exactly as it ignores `tempId` — or closing the
  * editor after a reset would ask to discard changes that do not exist. One test
  * edits a saved row, resets it and closes; the other opens and closes untouched.
- * The row is an owned, NON-paired DEPOSIT on an owned broker: a pair would get a
- * fresh link_uuid on reset, which is a separate matter.
+ * The row is an owned, NON-paired DEPOSIT on an owned broker; a saved pair is
+ * E-reset-pair's subject.
+ *
+ * E-reset-pair (step 23, 6a): the same promise on a SAVED pair, an owned
+ * FX_CONVERSION. Reset regenerates its rows, and re-pairing them gives both
+ * halves a fresh link_uuid and points the hidden half at the new visible row:
+ * none of that is a change. Reset all after an edit through the pair's form;
+ * the row's own Reset after marking the row for deletion, a change the visible
+ * row holds alone; and an untouched control, which tells the pair itself apart
+ * from the reset.
+ *
+ * E-reset-pair-*-edited (6c): an edit through the pair's form reaches the hidden
+ * half too, so resetting the row — from its ⋮ menu or through the selection —
+ * must rebuild both halves: afterwards the editor validates no change, offers
+ * nothing to reset and closes without asking.
  *
  * Every row is identified by a description only its test knows: never by
  * position, never by translated text. Nothing is saved — E-order discards the
- * editor through its own guard and checks the ledger for its marker; E-reset
- * deletes exactly the broker and DEPOSIT it created.
+ * editor through its own guard and checks the ledger for its marker; E-reset and
+ * E-reset-pair delete exactly the broker and transactions they created.
  *
  * Mock data contract: e2e_test_user has OWNER/EDITOR on Interactive Brokers.
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {randomUUID} from 'crypto';
+import {expect, test, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
@@ -38,6 +52,15 @@ const ROW_COUNT = 5;
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 type Owned = {brokerIds: number[]; transactionIds: number[]};
 type OwnedDeposit = {brokerId: number; transactionId: number; description: string};
+/** A saved FX_CONVERSION: `mainId` the paying EUR half, the row the editor shows; `partnerId` the USD half it hides. */
+type OwnedFxPair = {brokerId: number; mainId: number; partnerId: number; description: string};
+type SavedTx = {id: number; description?: string | null; related_transaction_id?: number | null; cash?: {code: string; amount: string} | null};
+/** The body of a `/transactions/validate` request: empty lists are left out. */
+type BatchPayload = {creates?: unknown[]; updates?: unknown[]; deletes?: unknown[]};
+
+/** What a validation would change in the ledger, empty lists spelled out. */
+const pendingChanges = (sent: BatchPayload) => ({creates: sent.creates ?? [], updates: sent.updates ?? [], deletes: sent.deletes ?? []});
+const NO_CHANGES = {creates: [], updates: [], deletes: []};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -117,24 +140,62 @@ async function applyFormModal(page: Page) {
     await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 10_000});
 }
 
-/** An owned broker (unique name) and one owned, non-paired DEPOSIT on it; every id is recorded for cleanup as soon as it exists. */
-async function createOwnedDeposit(page: Page, owned: Owned, label: string, suffix: string): Promise<OwnedDeposit> {
-    const name = `E-reset ${label} ${suffix}`;
+/** An owned broker under a unique name; its id is recorded for cleanup as soon as it exists. */
+async function createOwnedBroker(page: Page, owned: Owned, name: string): Promise<number> {
     const created = await jsonFrom<{results: Array<{broker_id: number | null; name: string; success: boolean}>}>(await page.request.post(`${API}/brokers`, {data: [{name, opened_at: '2020-01-01'}]}), 'create owned broker');
     const broker = created.results.find((item) => item.name === name);
     if (!broker?.success || typeof broker.broker_id !== 'number') throw new Error(`Broker creation failed: ${JSON.stringify(created)}`);
     owned.brokerIds.push(broker.broker_id);
+    return broker.broker_id;
+}
 
-    const description = `E-reset ${label} saved ${suffix}`;
-    const committed = await jsonFrom<{committed: boolean; issues?: unknown; results: Array<{operation: string; ids: number[]}>}>(
-        await page.request.post(`${API}/transactions/commit`, {data: {creates: [{broker_id: broker.broker_id, type: 'DEPOSIT', date: '2024-01-02', cash: {code: 'EUR', amount: '100'}, description}]}}),
-        'commit owned DEPOSIT',
-    );
-    expect(committed.committed, `owned DEPOSIT rolled back: ${JSON.stringify(committed.issues ?? [])}`).toBe(true);
+/** Commit `creates` as one batch; the ids are recorded for cleanup before anything is asserted on them. */
+async function commitOwnedCreates(page: Page, owned: Owned, creates: Array<Record<string, unknown>>, purpose: string): Promise<number[]> {
+    const committed = await jsonFrom<{committed: boolean; issues?: unknown; results: Array<{operation: string; ids: number[]}>}>(await page.request.post(`${API}/transactions/commit`, {data: {creates}}), purpose);
+    expect(committed.committed, `${purpose} rolled back: ${JSON.stringify(committed.issues ?? [])}`).toBe(true);
     const ids = committed.results.filter((result) => result.operation === 'create').flatMap((result) => result.ids);
     owned.transactionIds.push(...ids);
+    return ids;
+}
+
+/** The saved rows with these ids, in this order. */
+async function readTransactions(page: Page, ids: number[], purpose: string): Promise<SavedTx[]> {
+    return jsonFrom<SavedTx[]>(await page.request.get(`${API}/transactions?${ids.map((id) => `ids=${id}`).join('&')}`), purpose);
+}
+
+/** An owned broker (unique name) and one owned, non-paired DEPOSIT on it; every id is recorded for cleanup as soon as it exists. */
+async function createOwnedDeposit(page: Page, owned: Owned, label: string, suffix: string): Promise<OwnedDeposit> {
+    const brokerId = await createOwnedBroker(page, owned, `E-reset ${label} ${suffix}`);
+    const description = `E-reset ${label} saved ${suffix}`;
+    const ids = await commitOwnedCreates(page, owned, [{broker_id: brokerId, type: 'DEPOSIT', date: '2024-01-02', cash: {code: 'EUR', amount: '100'}, description}], 'commit owned DEPOSIT');
     expect(ids, 'the commit created exactly the one owned DEPOSIT').toHaveLength(1);
-    return {brokerId: broker.broker_id, transactionId: ids[0], description};
+    return {brokerId, transactionId: ids[0], description};
+}
+
+/**
+ * An owned broker holding one SAVED FX_CONVERSION, EUR → USD, under a description
+ * only this test knows. The broker is funded the day before, so the paying half
+ * never takes it below zero (overdraft stays off); the pair then goes out the
+ * way the app sends one — both halves in one batch, one link_uuid, the same
+ * description — and is read back: two halves pointing at each other.
+ */
+async function createOwnedFxPair(page: Page, owned: Owned, label: string, suffix: string): Promise<OwnedFxPair> {
+    const brokerId = await createOwnedBroker(page, owned, `E-reset ${label} ${suffix}`);
+    const funding = await commitOwnedCreates(page, owned, [{broker_id: brokerId, type: 'DEPOSIT', date: '2024-01-02', cash: {code: 'EUR', amount: '1000'}, description: `E-reset ${label} funding ${suffix}`}], 'fund owned broker');
+    expect(funding, 'the commit created exactly the one funding DEPOSIT').toHaveLength(1);
+
+    const description = `E-reset ${label} saved ${suffix}`;
+    const linkUuid = randomUUID();
+    const half = (code: string, amount: string) => ({broker_id: brokerId, type: 'FX_CONVERSION', date: '2024-01-03', quantity: '0', cash: {code, amount}, link_uuid: linkUuid, description});
+    const ids = await commitOwnedCreates(page, owned, [half('EUR', '-400'), half('USD', '440')], 'commit owned FX_CONVERSION pair');
+    expect(ids, 'the commit created both halves of the pair').toHaveLength(2);
+
+    const halves = await readTransactions(page, ids, 'read owned FX_CONVERSION pair');
+    const main = halves.find((tx) => tx.cash?.code === 'EUR');
+    const partner = halves.find((tx) => tx.cash?.code === 'USD');
+    if (!main || !partner) throw new Error(`The owned pair is missing a half: ${JSON.stringify(halves)}`);
+    expect([main.related_transaction_id, partner.related_transaction_id], 'premise: the two halves are linked to each other').toEqual([partner.id, main.id]);
+    return {brokerId, mainId: main.id, partnerId: partner.id, description};
 }
 
 /** Delete exactly the ids this test created, and say what could not be deleted. */
@@ -153,7 +214,7 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<string[]> {
     });
     if (owned.transactionIds.length > 0) {
         await attempt(`transactions ${owned.transactionIds.join(', ')}`, async () => {
-            const result = await jsonFrom<{committed: boolean}>(await page.request.post(`${API}/transactions/commit`, {data: {creates: [], updates: [], deletes: owned.transactionIds}}), 'delete owned DEPOSIT');
+            const result = await jsonFrom<{committed: boolean}>(await page.request.post(`${API}/transactions/commit`, {data: {creates: [], updates: [], deletes: owned.transactionIds}}), 'delete owned transactions');
             expect(result.committed).toBe(true);
         });
     }
@@ -166,12 +227,12 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<string[]> {
     return failures;
 }
 
-/** Run `body` on an owned DEPOSIT, then delete it and its broker whatever the outcome. */
-async function withOwnedDeposit(page: Page, label: string, body: (deposit: OwnedDeposit) => Promise<void>): Promise<void> {
+/** Run `body` on what `create` makes, then delete exactly that, whatever the outcome. */
+async function withOwned<T>(page: Page, create: (owned: Owned, suffix: string) => Promise<T>, body: (made: T) => Promise<void>): Promise<void> {
     const owned: Owned = {brokerIds: [], transactionIds: []};
     let passed = false;
     try {
-        await body(await createOwnedDeposit(page, owned, label, uniqueSuffix()));
+        await body(await create(owned, uniqueSuffix()));
         passed = true;
     } finally {
         const failures = await cleanupOwned(page, owned);
@@ -181,17 +242,27 @@ async function withOwnedDeposit(page: Page, label: string, body: (deposit: Owned
     }
 }
 
+/** Run `body` on an owned DEPOSIT, then delete it and its broker whatever the outcome. */
+async function withOwnedDeposit(page: Page, label: string, body: (deposit: OwnedDeposit) => Promise<void>): Promise<void> {
+    await withOwned(page, (owned, suffix) => createOwnedDeposit(page, owned, label, suffix), body);
+}
+
+/** Run `body` on an owned FX_CONVERSION pair, then delete it, its funding and its broker whatever the outcome. */
+async function withOwnedFxPair(page: Page, label: string, body: (pair: OwnedFxPair) => Promise<void>): Promise<void> {
+    await withOwned(page, (owned, suffix) => createOwnedFxPair(page, owned, label, suffix), body);
+}
+
 /**
  * Open the owned row in the bulk editor the way a user does: select it in the
  * table, then the toolbar's Edit. One selected row makes the editor open that
  * row's FormModal by itself (autoForm 'edit'), so this ends with both on screen.
  */
-async function openInBulkEditor(page: Page, deposit: OwnedDeposit) {
-    await navigateTo(page, `/transactions?broker_id=${deposit.brokerId}`);
+async function openInBulkEditor(page: Page, saved: {brokerId: number; transactionId: number}) {
+    await navigateTo(page, `/transactions?broker_id=${saved.brokerId}`);
     const transactionsPage = page.getByTestId('transactions-page');
     await expect(transactionsPage).toBeVisible({timeout: 10_000});
     await waitForSettled(transactionsPage, 20_000);
-    const checkbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${deposit.transactionId}`);
+    const checkbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${saved.transactionId}`);
     await expect(checkbox).toBeVisible({timeout: 10_000});
     await checkbox.click();
     await expect(checkbox).toHaveAttribute('data-state', 'checked');
@@ -202,21 +273,126 @@ async function openInBulkEditor(page: Page, deposit: OwnedDeposit) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
+/** The editor's grid row showing `text`, a description only its test knows. */
+function bulkRow(page: Page, text: string): Locator {
+    return page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]').filter({hasText: text});
+}
+
+/** The editor's grid row of the owned pair, as the ledger describes it. */
+function pairRow(page: Page, pair: OwnedFxPair): Locator {
+    return bulkRow(page, pair.description);
+}
+
+/**
+ * Open the owned pair the way a user does: select its paying half in the table,
+ * then Edit. The editor brings the other half along, shows the pair as one grid
+ * row and opens the pair's form by itself, both halves in it.
+ */
+async function openPairInBulkEditor(page: Page, pair: OwnedFxPair) {
+    await openInBulkEditor(page, {brokerId: pair.brokerId, transactionId: pair.mainId});
+    await expect(page.getByTestId('tx-form-dual-split'), 'the form holds both halves: the editor opened the pair').toBeVisible({timeout: 5_000});
+    await expect(pairRow(page, pair), 'the pair is one row of the grid').toHaveCount(1, {timeout: 5_000});
+}
+
+/**
+ * Change the pair's description through the form the editor opened — both halves
+ * take it — and push it back to the grid; returns the new description. Reset all
+ * appearing is the proof the edit registered.
+ */
+async function editPairDescription(page: Page, pair: OwnedFxPair): Promise<string> {
+    const changed = pair.description.replace(' saved ', ' changed ');
+    await fillDescription(page, changed);
+    await applyFormModal(page);
+    await expect(bulkRow(page, changed)).toHaveCount(1, {timeout: 5_000});
+    await expect(page.getByTestId('tx-bulk-reset-all')).toBeVisible({timeout: 5_000});
+    return changed;
+}
+
+/** Leave the form the editor opened untouched: it closes without a guard of its own. */
+async function closeFormUntouched(page: Page) {
+    await page.getByTestId('tx-form-cancel').click();
+    await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 5_000});
+    await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+}
+
+/** One of a grid row's own actions, from the ⋮ menu the row carries; ends with the menu gone. */
+async function runRowAction(page: Page, row: Locator, action: string) {
+    await row.locator('[data-testid^="row-actions-"]').click();
+    const item = page.getByTestId(`context-menu-action-${action}`);
+    await expect(item).toBeVisible({timeout: 5_000});
+    await item.click();
+    await expect(page.getByTestId('context-menu')).toHaveCount(0);
+}
+
+/** Select a grid row through its own checkbox, then reset the selection from the editor's toolbar. */
+async function resetThroughSelection(page: Page, row: Locator) {
+    const checkbox = row.locator('[data-testid^="dt-row-checkbox-"]');
+    await checkbox.click();
+    await expect(checkbox).toHaveAttribute('data-state', 'checked');
+    await page.getByTestId('tx-bulk-reset-selected').click();
+}
+
+/**
+ * The last validation the editor sends after `action`, read once it has settled.
+ *
+ * The editor validates again whenever its rows change (debounced), and that
+ * request is the ledger it would commit. `data-validate-runs` is read before the
+ * action and must grow after it — a delta, so a run from before cannot pass for
+ * one after — and the editor is settled before and after, so the last request
+ * recorded is the one behind the verdict on screen.
+ */
+async function lastValidationAfter(page: Page, action: () => Promise<void>): Promise<BatchPayload> {
+    const root = page.getByTestId('tx-bulk-modal-root');
+    await waitForSettled(root);
+    const runsBefore = Number(await root.getAttribute('data-validate-runs'));
+    const sent: BatchPayload[] = [];
+    const record = (request: Request) => {
+        if (request.method() === 'POST' && request.url().includes('/transactions/validate')) sent.push((request.postDataJSON() ?? {}) as BatchPayload);
+    };
+    page.on('request', record);
+    try {
+        await action();
+        await expect.poll(async () => Number(await root.getAttribute('data-validate-runs')), {message: 'the editor validates again after the action', timeout: 10_000}).toBeGreaterThan(runsBefore);
+        await waitForSettled(root);
+    } finally {
+        page.off('request', record);
+    }
+    const last = sent.at(-1);
+    if (!last) throw new Error('the editor counted a validation after the action, yet no /transactions/validate request was sent');
+    return last;
+}
+
+/** Closing wrote nothing: both halves are in the ledger as the test saved them, still linked. */
+async function expectPairAsSaved(page: Page, pair: OwnedFxPair) {
+    const halves = await readTransactions(page, [pair.mainId, pair.partnerId], 'read owned FX_CONVERSION pair');
+    expect(halves.map((tx) => [tx.id, tx.description, tx.related_transaction_id])).toEqual([
+        [pair.mainId, pair.description, pair.partnerId],
+        [pair.partnerId, pair.description, pair.mainId],
+    ]);
+}
+
 /**
  * Close the editor and prove its discard guard stayed silent.
  *
  * `requestClose()` is either/or: it opens the guard and returns, or it closes the
  * editor — only a click on the guard's confirm, which never happens here, closes
- * it afterwards. So the editor gone after one click on its close button is the
- * proof the guard did not fire, and no confirm in the DOM at that point is the
- * proof none is waiting on screen. The editor is settled first, so the verdict
- * is the rows against the opening snapshot and nothing else.
+ * it afterwards. So one click on its close button has two outcomes, and this waits
+ * for whichever comes and names it: `closed` is the pass, `guard` is a «Discard
+ * changes?» where nothing should be left to discard, and a click that brought
+ * neither stays `open` until the deadline — three verdicts, never one generic
+ * red. No confirm in the DOM after `closed` is the proof none is waiting on
+ * screen. The editor is settled first, so the verdict is the rows against the
+ * opening snapshot and nothing else.
  */
 async function closeEditorWithoutGuard(page: Page) {
     await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
     await page.getByTestId('tx-bulk-close').click();
-    await expect(page.getByTestId('tx-bulk-modal'), 'the editor closes on the first click: its discard guard did not fire').toBeHidden({timeout: 5_000});
-    await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+    const editor = page.getByTestId('tx-bulk-modal');
+    const guard = page.getByTestId('confirm-modal-confirm');
+    const outcome = async () => ((await guard.isVisible()) ? 'guard' : (await editor.isVisible()) ? 'open' : 'closed');
+    await expect.poll(outcome, {message: 'one click on close either closes the editor or opens its guard', timeout: 5_000}).not.toBe('open');
+    expect(await outcome(), 'the editor closes on the first click: its discard guard did not fire').toBe('closed');
+    await expect(guard).toHaveCount(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +515,95 @@ test.describe('Bulk editor close guard', () => {
             await expect(page.getByTestId('tx-bulk-reset-all')).toBeHidden();
 
             await closeEditorWithoutGuard(page);
+        });
+    });
+
+    test('E-reset-pair-all — edit a saved FX pair, Reset all, close: nothing is left to discard, so the editor closes without asking', async ({page}) => {
+        await withOwnedFxPair(page, 'pair-all', async (pair) => {
+            await openPairInBulkEditor(page, pair);
+            const changed = await editPairDescription(page, pair);
+            const resetAll = page.getByTestId('tx-bulk-reset-all');
+
+            // Reset all regenerates both halves from the ledger and pairs them again — new row objects, the old content.
+            await resetAll.click();
+            await expect(pairRow(page, pair)).toHaveCount(1, {timeout: 5_000});
+            await expect(bulkRow(page, changed)).toHaveCount(0);
+            await expect(resetAll).toBeHidden();
+
+            await closeEditorWithoutGuard(page);
+            await expectPairAsSaved(page, pair);
+        });
+    });
+
+    test("E-reset-pair-row — mark a saved FX pair's row for deletion, reset that row, close: nothing is left to discard, so the editor closes without asking", async ({page}) => {
+        await withOwnedFxPair(page, 'pair-row', async (pair) => {
+            await openPairInBulkEditor(page, pair);
+            await closeFormUntouched(page);
+            const resetAll = page.getByTestId('tx-bulk-reset-all');
+            await expect(resetAll).toBeHidden();
+
+            // A change the visible row holds alone: marked for deletion. Reset all appears, so it registered.
+            await runRowAction(page, pairRow(page, pair), 'mark-delete');
+            await expect(resetAll).toBeVisible({timeout: 5_000});
+
+            // The row's own Reset regenerates it from the ledger and pairs it again — a new row object, the old content.
+            await runRowAction(page, pairRow(page, pair), 'reset');
+            await expect(resetAll).toBeHidden({timeout: 5_000});
+            await expect(pairRow(page, pair)).toHaveCount(1);
+
+            await closeEditorWithoutGuard(page);
+            await expectPairAsSaved(page, pair);
+        });
+    });
+
+    test('E-reset-pair-untouched (control) — open a saved FX pair, close: the editor closes without asking', async ({page}) => {
+        await withOwnedFxPair(page, 'pair-untouched', async (pair) => {
+            await openPairInBulkEditor(page, pair);
+            await closeFormUntouched(page);
+            await expect(page.getByTestId('tx-bulk-reset-all')).toBeHidden();
+
+            await closeEditorWithoutGuard(page);
+        });
+    });
+
+    // (a) and (b) are soft: a red names every symptom of a half-reset pair before the close is judged.
+    test('E-reset-pair-row-edited — edit a saved FX pair through its form, then reset its row: both halves are as saved, so the editor validates no change, offers nothing to reset and closes without asking', async ({page}) => {
+        await withOwnedFxPair(page, 'pair-row-edited', async (pair) => {
+            await openPairInBulkEditor(page, pair);
+            const changed = await editPairDescription(page, pair);
+
+            // The row's own Reset, from its ⋮ menu; the validation that follows is the ledger the editor would commit.
+            const sent = await lastValidationAfter(page, () => runRowAction(page, bulkRow(page, changed), 'reset'));
+            // Premise: the visible half shows the ledger again — what follows is about the half the row hides.
+            await expect(pairRow(page, pair)).toHaveCount(1);
+            await expect(bulkRow(page, changed)).toHaveCount(0);
+
+            // (a) No change to validate: the hidden half was rebuilt from the ledger too.
+            expect.soft(pendingChanges(sent), `the validation after the row's Reset carries no change (visible half ${pair.mainId}, hidden half ${pair.partnerId})`).toEqual(NO_CHANGES);
+            // (b) Nothing to reset: Reset all exists only while a saved row differs from the ledger, its hidden half included.
+            await expect.soft(page.getByTestId('tx-bulk-reset-all'), 'after the row reset nothing is left to reset').toBeHidden();
+            // (c) Nothing to discard.
+            await closeEditorWithoutGuard(page);
+            await expectPairAsSaved(page, pair);
+        });
+    });
+
+    test('E-reset-pair-selected-edited — edit a saved FX pair through its form, then reset it through the selection: the editor validates no change and closes without asking', async ({page}) => {
+        await withOwnedFxPair(page, 'pair-selected-edited', async (pair) => {
+            await openPairInBulkEditor(page, pair);
+            const changed = await editPairDescription(page, pair);
+
+            // The pair's row selected through its checkbox, then the toolbar's Reset for the selection.
+            const sent = await lastValidationAfter(page, () => resetThroughSelection(page, bulkRow(page, changed)));
+            // Premise: the visible half shows the ledger again — what follows is about the half the row hides.
+            await expect(pairRow(page, pair)).toHaveCount(1);
+            await expect(bulkRow(page, changed)).toHaveCount(0);
+
+            // (a) No change to validate: the hidden half was rebuilt from the ledger too.
+            expect.soft(pendingChanges(sent), `the validation after the selection's Reset carries no change (visible half ${pair.mainId}, hidden half ${pair.partnerId})`).toEqual(NO_CHANGES);
+            // (c) Nothing to discard.
+            await closeEditorWithoutGuard(page);
+            await expectPairAsSaved(page, pair);
         });
     });
 });

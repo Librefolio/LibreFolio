@@ -48,7 +48,7 @@ Step 2 (schedule config) and Step 4 (preview) reordered for better UX. Cache key
 aligned with new step order.
 
 ### 4.d — #22 `saveWithRetry` Helper + Modal Adoption
-New helper `saveWithRetry(fn, opts)` in `frontend/src/lib/utils/saveWithRetry.ts`:
+New helper `saveWithRetry(fn, opts)` in `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`):
 - Centralized error extraction (Zodios error → human message)
 - Optional toast on success/failure
 - `onError` hook for per-modal custom handling (e.g., map 409 to `formError`)
@@ -200,7 +200,7 @@ with matching currency instead.
 
 | Role | Path |
 |------|------|
-| saveWithRetry helper | `frontend/src/lib/utils/saveWithRetry.ts` |
+| saveWithRetry helper | `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`) |
 | AssetModal | `frontend/src/lib/components/assets/AssetModal.svelte` |
 | BrokerImportFilesModal | `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte` |
 | BrokerSharingModal | `frontend/src/lib/components/brokers/BrokerSharingModal.svelte` |

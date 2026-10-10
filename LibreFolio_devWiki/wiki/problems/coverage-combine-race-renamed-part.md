@@ -16,7 +16,7 @@ Two of its four parallel passes, the large ones with 111 and 54 units, had print
 
 ```text
 coverage combine failed: Couldn't combine from non-existent path
-'…/.coverage_data/parts/.coverage.w1.MacBook Pro di Emanuele (2).pid10917.Xm9GZYYx'
+'…/.coverage_data/parts/.coverage.w1.<hostname>.pid10917.Xm9GZYYx'
 ```
 
 The two small passes, with 24 and 11 units, had combined normally. Afterwards `parts/` still held
@@ -123,4 +123,4 @@ run stayed green. The full coverage is to be re-measured once every branch has b
 | Spawn context that starts the resource tracker; `stop()` | `backend/app/services/risk/quant/spawn_worker.py` |
 | Double SIGTERM | `backend/app/services/tools/process_tree.py` |
 | Runner documentation | `mkdocs_src/docs/developer/test-walkthrough/runner_architecture.md` |
-| Plan, analysis and evidence | `LibreFolio_developer_journal/Release_2/Phase_0/28_fxDashboardSync/plan-phase00CoverageCombineRace.prompt.md` |
+| Plan, analysis and evidence | `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00CoverageCombineRace.prompt.md` |

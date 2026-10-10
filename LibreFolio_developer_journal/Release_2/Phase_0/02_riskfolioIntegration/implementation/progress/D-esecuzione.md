@@ -36,9 +36,12 @@
 - [x] 5. Consegnare **K5 parte 1** (la divisione) al coordinatore — *2026-09-18*
 - [x] 6. Spostare le due barre in `ui/display/` + i 2 import di `KpiSection` — *2026-09-18*
 - [x] 7. Estendere `KpiDivergingFlowBar` in modo additivo — *2026-09-18*
-- [ ] 8. Creare `RiskMetricCard` + il suo Vitest (via `test-author`) — componente fatto, test in corso
-- [ ] 9. Gate statici e suite sulla lane `6243`
-- [ ] 10. Consegnare **K5 parte 2** e dichiarare `FROZEN`
+- [x] 8. Creare `RiskMetricCard` + il suo Vitest (via `test-author`) — componente fatto, test in corso
+  ↳ *allineamento 09/10*: ✅ `ui/display/RiskMetricCard.svelte` e `RiskMetricCard.test.ts`
+- [x] 9. Gate statici e suite sulla lane `6243`
+  ↳ *allineamento 09/10*: ✅ più sotto (`component-unit` verde), `FROZEN` in STATO.md
+- [x] 10. Consegnare **K5 parte 2** e dichiarare `FROZEN`
+  ↳ *allineamento 09/10*: ✅ più sotto, e `contracts/K5.md`
 
 > **Note implementazione (passo 5+)**: sbloccato il seed `mathjax` dal coordinatore, la rete
 > Asset Detail è stata rieseguita **a runtime**: `2 passed (6.8s)`. La divisione non è più solo

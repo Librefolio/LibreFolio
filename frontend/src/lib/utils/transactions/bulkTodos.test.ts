@@ -21,7 +21,7 @@
  * not exist, every test fails on its own with "not implemented yet", instead of the whole file
  * failing at collection.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D6).
+ * Plan: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D6).
  */
 import {describe, expect, it} from 'vitest';
 

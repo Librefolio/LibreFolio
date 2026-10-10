@@ -14,16 +14,17 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from backend.app.api.v1.auth import get_current_user
+from backend.app.api.v1.auth import get_current_user, session_cookie_secure
 from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, is_test_mode
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
-from backend.app.schemas.system import ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.schemas.system import ConnectionSecurityResponse, ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
 from backend.app.services.container_registry import probe_container_image
 from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
+from backend.app.utils.network_utils import classify_ip, client_address
 from backend.app.utils.version import get_git_version
 
 router = APIRouter(prefix="/system", tags=["System"])
@@ -214,6 +215,26 @@ async def get_container_image_status(
 ) -> ContainerImageStatusResponse:
     """Check whether a stable LibreFolio image tag is pullable from GHCR."""
     return await probe_container_image(tag)
+
+
+@router.get("/connection", response_model=ConnectionSecurityResponse)
+async def get_connection_security(
+    request: Request,
+    _current_user: Annotated[User, Depends(get_current_user)],
+) -> ConnectionSecurityResponse:
+    """How the server sees this request, for the connection-security indicator.
+
+    The client address is classified, never returned or logged. The class reads the last
+    X-Forwarded-For value when there is one, else the TCP peer: advisory only, since a forged
+    header misleads just the sender's own indicator. ``cookie_secure`` is the decision the session
+    cookie gets on this very request.
+    """
+    forwarded_for = ", ".join(request.headers.getlist("x-forwarded-for")) or None
+    peer = request.client.host if request.client else None
+    return ConnectionSecurityResponse(
+        client_class=classify_ip(client_address(forwarded_for, peer)),
+        cookie_secure=session_cookie_secure(request),
+    )
 
 
 @router.get("/health", response_model=HealthCheckResponse)

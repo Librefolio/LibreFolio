@@ -690,3 +690,15 @@ N giorni» della peggior discesa non veniva resa (sintassi di traduzione errata)
 > - la pagina di teoria `financial-theory/…/data-quality.en.md:52,60` descrive ancora l'intersezione
 >   («one holding with a gap shortens the window for everyone»). → owner della teoria.
 > - il docstring di `AssetSetComparisonLevels.svelte:19-26` (già registrato, file congelato per R2-128).
+
+---
+
+## Chiusura — allineamento 09/10/2026 (scritta da Risk)
+
+Le voci passate a Risk qui sopra, sul codice di `3cceb4f90`:
+- la baseline fra i punti riportati: ✅ la guardia c'è (`backend/app/services/series_preparation.py`);
+- l'**inizio tardivo** che non si vede: ⏳ **aperto**, nessun lettore di `baseline_inside_requested_range` e
+  `short_history` nel frontend → README della cartella, aperti;
+- l'intersezione in `data-quality.en.md`: ✅ la pagina ora dice che un buco dentro la storia non accorcia niente;
+- il docstring di `AssetSetComparisonLevels.svelte`: ✅ descrive le richieste separate del laboratorio e perché restano
+  commensurabili.

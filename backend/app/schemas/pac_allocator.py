@@ -153,6 +153,7 @@ PlannerIssueCode = Literal[
     "allocation.fee_schedule_missing",
     "allocation.fiscal_currency_missing",
     "allocation.funding_cap_negative",
+    "allocation.fx_rate_inconsistent",
     "allocation.fx_rate_missing",
     "allocation.fx_spread_rate_out_of_range",
     "allocation.identity_fx_rate_not_allowed",
@@ -1433,14 +1434,14 @@ class PlannerLedgerRow(AllocationStrictModel):
     sell_fees: PlannerFixedDecimal
     broker_withheld_tax: PlannerFixedDecimal
     self_reserved_tax: PlannerFixedDecimal
-    rounding_delta: PlannerFixedDecimal = Field(description="Raw posted-exact rounding delta; credits are negated in the accounting identity.")
+    rounding_delta: ExactNumber = Field(description="Raw posted-exact rounding delta; credits are negated in the accounting identity.")
     final_spendable: PlannerFixedDecimal
     final_physical: PlannerFixedDecimal
 
     @model_validator(mode="after")
     def validate_ledger_identity(self) -> PlannerLedgerRow:
         # The final balances may be negative: a PAC pool a few minor units short
-        # to HALF_UP rounding is published with the top-up that covers it
+        # to rounding against the plan is published with the top-up that covers it
         # (``PacPlanSolution``); ``RebalancerPlanSolution`` still refuses them.
         nonnegative_fields = (
             "initial_selected",
@@ -1478,13 +1479,13 @@ class PlannerLedgerRow(AllocationStrictModel):
 
 
 class PlannerRoundingTopUp(AllocationStrictModel):
-    """Cash one ledger pool lacks because the exact replay rounds HALF_UP (QX1-b).
+    """Cash one ledger pool lacks because the exact replay rounds every posting against the plan (QX1-b).
 
     ``amount`` is what to add on ``broker_id`` in ``currency`` for the plan to
     execute: the pool's negative final balance, negated. ``rounded_postings``
-    counts the pool's postings that carry a quantum (BUY debit, nonzero fee, FX
-    credit), and bounds ``amount`` at that many minor units. ``valuation_amount``
-    is ``amount`` in the scenario valuation currency.
+    counts the pool's nonzero postings that carry a quantum (BUY debit, SELL
+    credit, fee, tax, FX credit), and bounds ``amount`` at that many minor units.
+    ``valuation_amount`` is ``amount`` in the scenario valuation currency.
     """
 
     broker_id: PlannerId
@@ -1550,7 +1551,7 @@ class PlannerAccountingSummary(AllocationStrictModel):
     physical_reserves: ExactMoney
     economic_losses: ExactMoney
     rounding_delta: ExactMoney = Field(description="Raw posted-exact aggregate rounding delta.")
-    rounding_bound: ExactMoney
+    rounding_bound: ExactMoney = Field(description="One minor unit per rounded posting, in the valuation currency: each posting rounds against the plan by less than its unit.")
     identity_delta: ExactMoney
 
 
@@ -1703,7 +1704,7 @@ class PacPlanSolution(AllocationStrictModel):
     conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
     order_rows: list[PlannerBuyOrderRow]
     ledger_rows: list[PlannerLedgerRow]
-    rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by HALF_UP rounding; empty when every pool balances.")
+    rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by rounding against the plan; empty when every pool balances.")
     exposure_rows: list[PacExposurePlanRow]
     accounting: PlannerAccountingSummary
     costs: PlannerCostTotals
@@ -1774,10 +1775,9 @@ def _validate_no_op_common(solution: PacPlanSolution | RebalancerPlanSolution) -
         "sell_fees",
         "broker_withheld_tax",
         "self_reserved_tax",
-        "rounding_delta",
     )
     for row in solution.ledger_rows:
-        if any(_fixed_fraction(getattr(row, name)) != 0 for name in flow_fields):
+        if any(_fixed_fraction(getattr(row, name)) != 0 for name in flow_fields) or _exact_fraction(row.rounding_delta) != 0:
             raise ValueError("No-op ledger rows cannot contain action-derived postings")
         if _fixed_fraction(row.final_spendable) != _fixed_fraction(row.initial_selected) or _fixed_fraction(row.final_physical) != _fixed_fraction(row.initial_selected):
             raise ValueError("No-op ledger balances must preserve selected initial cash")

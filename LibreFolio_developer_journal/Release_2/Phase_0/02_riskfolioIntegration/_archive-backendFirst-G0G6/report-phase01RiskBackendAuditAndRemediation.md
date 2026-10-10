@@ -471,7 +471,7 @@ La remediation è completa solo se:
 - benchmark registra cold/warm/reap/restart/RSS;
 - Riskfolio resta 7.0.1 con NumPy 2.5.1;
 - Step 6 descrive il gap reale senza dichiarare G6 completato;
-- GF resta aperta.
+- GF resta aperta. *(↪ superata dalla ripianificazione del 16/09 — allineamento 09/10)*
 
 ---
 
@@ -603,7 +603,7 @@ due ripetizioni resta la base più robusta per mantenere default un worker per p
 | G4 multi-asset deterministico | ✅ chiuso |
 | G5 simulation/scale/P13 backend | ✅ chiuso e auditato |
 | G6 frontend | ⏸️ capability parziali presenti; piano riconciliato, non eseguito |
-| GF finale | ⏳ aperto |
+| GF finale | ↪ superata dalla ripianificazione del 16/09 (allineamento 09/10) |
 
 Lavoro restante:
 

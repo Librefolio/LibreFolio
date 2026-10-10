@@ -65,6 +65,7 @@ from typing import Any
 
 import pytest
 
+from backend.app.services.pac_allocator import numeric as NUM
 from backend.app.services.pac_allocator.compiler import (
     CompiledProgram,
     PolicyProgramScopeError,
@@ -92,7 +93,6 @@ from backend.app.services.pac_allocator.evaluator import (
 )
 from backend.app.services.pac_allocator.ledger import _ROUNDED_FAMILIES
 from backend.app.services.pac_allocator.models import ExactPlannerScenario, ExactPolicyView
-from backend.app.services.pac_allocator.numeric import post_half_up
 from backend.app.services.pac_allocator.objectives import build_canonical_tie_stages
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     CENT,
@@ -315,6 +315,17 @@ def _single_funding_route_scenario() -> ExactPlannerScenario:
         funding_routes=(_funding_route("route:funding:a", broker_id=dest.broker_id, source_kind="existing_cash", source_id="cash:source", amount=R(50), priority=1),),
         order_routes=(_order_route("route:buy:a", broker_id=dest.broker_id, asset_id="asset:a", capability=capability, fee_id=fee.fee_schedule_id, side="buy", cap=R(1), priority=5),),
     )
+
+
+def _sub_quantum_fx_credit_scenario() -> ExactPlannerScenario:
+    """`_coarse_funding_fx_scenario` (sibling oracle suite) re-rated so one
+    euro converts into less than one whole-USD quantum: EUR/USD 2/5 with no
+    spread. 1 EUR is an exact 0.4 USD credit and 2 EUR an exact 0.8 USD, both
+    of which floor to 0 USD; 3 EUR (an exact 1.2 USD) is the first conversion
+    whose floor reaches 1 USD. EUR is both the valuation and the source
+    currency, so the planning rate is the approved rate itself.
+    """
+    return replace(_coarse_funding_fx_scenario(), fx_rates=(_fx_rate("EUR", "USD", R(2, 5)),), fx_spread_rate=ZERO)
 
 
 # --------------------------------------------------------------------------
@@ -875,25 +886,29 @@ def test_compiled_variables_match_view_and_routes(build_scenario) -> None:
 
 
 # --------------------------------------------------------------------------
-# Item A1: the HALF_UP ledger regression (Step3 §16.11) that would have caught
-# the defect -- SCIP and the Decimal-exact replay must AGREE on feasibility.
+# Item A1: a fractional FX credit is posted AGAINST THE PLAN -- it floors at
+# its currency quantum (README row 16). SCIP and the Decimal-exact replay sum
+# the same POSTED amounts (Step3 §16.11) and must AGREE on feasibility, on the
+# point the floor can no longer finance and on the one it still can.
 # --------------------------------------------------------------------------
 
 
-def test_half_up_ledger_fx_credit_regression_scip_agrees_with_exact_replay() -> None:
-    """A genuinely *fractional* FX credit is the crux of the Step3 §16.11
-    defect. In `_coarse_funding_fx_scenario` the effective rate is
-    `297/250 = 1.188`, so converting 8 EUR (fx quanta 8) yields an exact
-    credit of `8 * 297/250 = 1188/125 = 9.504` USD -- not a whole-USD
-    multiple. HALF_UP posts that as **10** USD, and a 2-unit BUY at 5 USD
-    debits exactly **10** USD, so the destination USD cell reconciles to
-    `final_spendable == 0`: feasible.
+def test_fractional_fx_credit_floors_and_the_buy_it_cannot_cover_is_infeasible() -> None:
+    """A genuinely *fractional* FX credit. In `_coarse_funding_fx_scenario`
+    the effective rate is `6/5 * (1 - 1/100) = 297/250 = 1.188`, so
+    converting 8 EUR (fx quanta 8) yields an exact credit of
+    `8 * 297/250 = 1188/125 = 9.504` USD -- not a whole-USD multiple. A
+    credit is rounded against the plan: it posts `floor(9.504) = 9` USD, a
+    rounding delta of `-63/125` that the accounting charges to the plan as a
+    `+63/125` adjustment -- never the 10 USD a round-half-up gives. A 2-unit
+    BUY at 5 USD debits exactly 10 USD, so the destination USD cell closes at
+    `9 - 10 = -1`: the point is infeasible.
 
-    The old ledger model summed the *exact* 9.504 credit against the
-    *posted* 10 debit, got `-0.496 < 0`, and declared this feasible point
-    infeasible -- pruning the true optimum. This test locks the fix: the
-    Decimal-exact replay says feasible AND the pinned SCIP model says
-    `optimal`, i.e. the two now agree.
+    Under HALF_UP the credit posted 10 USD and this very point was the coarse
+    fixture's optimum, financed by 0.496 USD the conversion never delivers.
+    Both sides must now reject it: the Decimal-exact replay AND the pinned
+    SCIP model, whose ledger rows sum the same posted amounts (Step3 §16.11:
+    never the exact ones).
     """
     scenario = _coarse_funding_fx_scenario()
     view = build_exact_policy_view(scenario)
@@ -902,52 +917,90 @@ def test_half_up_ledger_fx_credit_regression_scip_agrees_with_exact_replay() -> 
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
     quanta = {funding: 8, fx: 8, buy: 2}
 
-    candidate = _candidate(view, quanta, candidate_id="candidate:halfup-regression")
+    candidate = _candidate(view, quanta, candidate_id="candidate:fx-credit-floor")
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
-    assert evaluation.feasible is True
+    assert evaluation.candidate_valid is True  # inside every box: only the cash rules can decide
 
-    # The fractional FX credit: exact 9.504, posted 10 (a genuine HALF_UP round-up).
+    # The fractional FX credit: exact 9.504, posted at its floor, 9.
     fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
     assert fx_evaluation.exact_destination_credit == R(1188, 125)  # 9.504, NOT a quantum multiple
-    assert fx_evaluation.posted_destination_credit == R(10)
+    assert fx_evaluation.posted_destination_credit == R(9)
+    fx_posting = next(posting for posting in evaluation.postings if posting.family == "fx_credit" and posting.broker_id == "broker:destination" and posting.currency == "USD")
+    assert fx_posting.rounding_delta == R(-63, 125)  # posted - exact, signed: a credit only ever rounds down
+    assert fx_posting.accounting_rounding_adjustment == R(63, 125)  # debit-positive: a cost to the plan
 
     order_evaluation = next(item for item in evaluation.orders if item.route_id == "route:buy:usd")
     assert order_evaluation.posted_cash_amount == R(10)  # the 2-unit BUY posts a 10 USD debit
 
     usd_cell = next(ledger for ledger in evaluation.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
-    assert usd_cell.fx_credit == R(10)  # POSTED credit, not the exact 9.504
-    assert usd_cell.buy_debit == R(10)
-    assert usd_cell.final_spendable == ZERO  # 10 - 10, exactly feasible
+    assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(9), R(10))  # POSTED amounts on both sides
+    assert usd_cell.final_spendable == R(-1)
 
-    # The regression itself: with the old exact-sum ledger SCIP said
-    # "infeasible" at this very point; it must now say "optimal".
+    assert evaluation.feasible is False
+    assert {"NO_SHORT_OR_LEVERAGE", "SPENDABLE_CASH_NONNEGATIVE"} <= set(evaluation.conflict_codes)
+    assert _pinned_status(scenario, view, quanta=quanta) == "infeasible"
+
+
+def test_fractional_fx_credit_whose_floor_covers_the_buy_stays_feasible() -> None:
+    """Green control for the test above, one euro further: 9 EUR convert
+    into an exact `9 * 297/250 = 2673/250 = 10.692` USD. Its floor, 10 USD,
+    still covers the same 10 USD debit -- as every rounding of 10.692 at the
+    whole-USD quantum does -- so the point is feasible in the exact replay
+    and in the pinned SCIP model alike, whether the credit posts 10 against
+    the plan or 11 under HALF_UP. Funding 9 EUR fits the fixture's 12 EUR
+    funding cap and source cash, and the destination EUR cell closes at
+    `9 - 9 = 0`.
+    """
+    scenario = _coarse_funding_fx_scenario()
+    view = build_exact_policy_view(scenario)
+    funding = exact_decision_id("funding_transfer", "route:funding:eur")
+    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
+    quanta = {funding: 9, fx: 9, buy: 2}
+
+    candidate = _candidate(view, quanta, candidate_id="candidate:fx-credit-floor-covers")
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert evaluation.candidate_valid is True
+
+    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    assert fx_evaluation.exact_destination_credit == R(2673, 250)  # 10.692, NOT a quantum multiple
+    assert fx_evaluation.posted_destination_credit >= R(10)  # at least its floor, whatever the rounding
+
+    usd_cell = next(ledger for ledger in evaluation.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
+    assert usd_cell.buy_debit == R(10)
+    assert usd_cell.fx_credit >= usd_cell.buy_debit
+    assert usd_cell.final_spendable >= ZERO
+
+    assert evaluation.feasible is True
     assert _pinned_status(scenario, view, quanta=quanta) == "optimal"
 
 
 # --------------------------------------------------------------------------
-# Item A2: an exact FX-credit tie is admitted at its true HALF_UP value, and
-# not one quantum more -- SCIP and the Decimal-exact replay agree on both
-# sides of the tie, with no guard in between (option A).
+# Item A2: an exact FX-credit tie posts its FLOOR, and the BUY may spend that
+# floor and not one quantum more -- SCIP and the Decimal-exact replay agree on
+# both sides of it, with no guard in between (option A).
 # --------------------------------------------------------------------------
 
 
-def test_exact_fx_credit_tie_admits_the_true_round_up_and_not_one_quantum_more() -> None:
-    """`_posted_units_term` encodes a posting as `quantum * units` with the
-    non-strict pair `q*u - q/2 <= exact <= q*u + q/2`, so at an exact HALF_UP
-    tie `units` may take either neighbour, `k` or `k+1`, while the true
-    posting is `k+1`. For the FX credit that looseness can never decide
-    feasibility: the credit enters the ledger `>= 0` rows only with a `+`
-    sign and appears in no objective, so a point is feasible with some
-    `units` exactly when it is feasible with `k+1`. Before option A the
-    compiler refused this very scenario with `LedgerPostingScopeError` (the
-    credit-tie guard, now removed) before a model existed; `_pinned_status`
-    compiling it at all is the first half of this regression.
+def test_exact_fx_credit_tie_posts_its_floor_and_not_one_quantum_more() -> None:
+    """`_credit_tie_fx_scenario` converts 5 EUR at 3/2 with no spread into an
+    exact 7.5 USD -- a tie of the whole-USD quantum. A credit is rounded
+    against the plan, so even at a tie it posts its floor: 7 USD, a rounding
+    delta of -1/2 -- never the 8 a round-half-up gives. With a 1 USD
+    whole-unit asset and a zero fee every BUY debit is a whole USD, so no
+    debit is ever rounded at all: 7 units (exactly the posted credit) are
+    feasible, 8 units (one quantum more) are not, in the exact replay and in
+    the pinned SCIP model alike.
 
-    `_credit_tie_fx_scenario` converts 5 EUR at 3/2 with no spread into an
-    exact 7.5 USD -- a tie of the whole-USD quantum -- that posts 8 USD. With a
-    1 USD whole-unit asset and a zero fee no debit can land on a tie, so the
-    model's feasible set must equal the exact one: 8 units (exactly the
-    posted credit) feasible in both, 9 units (one quantum more) in neither.
+    `_posted_units_term` encodes a credit as `quantum * units` under
+    `q*u <= exact <= q*u + q`. Off a quantum multiple -- 7.5 here -- that pins
+    `units` to the floor itself; only at an exact multiple does it also admit
+    one quantum less, and a smaller credit never helps a ledger `>= 0` row. So
+    the model's feasible set equals the exact one, with no neighbour left to
+    choose at the tie. Before option A the compiler refused this very scenario
+    with `LedgerPostingScopeError` (the credit-tie guard, now removed) before
+    a model existed; `_pinned_status` compiling it at all is the first half of
+    this regression.
     """
     scenario = _credit_tie_fx_scenario(price=R(1), cap=R(10))
     view = build_exact_policy_view(scenario)
@@ -955,14 +1008,15 @@ def test_exact_fx_credit_tie_admits_the_true_round_up_and_not_one_quantum_more()
     fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
 
-    # The real rounding function, independently of the ledger: 7.5 sits
-    # exactly on the .5 boundary of quantum ONE and rounds up to 8.
-    assert post_half_up(R(15, 2), ONE).posted == R(8)
-    assert post_half_up(R(15, 2), ONE).rounding_delta == ONE / 2
+    # The rounding function itself, independently of the ledger: 7.5 sits
+    # exactly on the .5 boundary of quantum ONE and still floors to 7.
+    floored = NUM.post_floor(R(15, 2), ONE)
+    assert floored.posted == R(7)
+    assert floored.rounding_delta == R(-1, 2)
 
     for units, expected_feasible, expected_status, expected_usd_balance in (
-        (8, True, "optimal", ZERO),  # 8 posted credit - 8 posted debit
-        (9, False, "infeasible", R(-1)),  # one quantum more than the posted credit
+        (7, True, "optimal", ZERO),  # 7 posted credit - 7 posted debit
+        (8, False, "infeasible", R(-1)),  # one quantum more than the posted credit
     ):
         quanta = {funding: 5, fx: 5, buy: units}
         candidate = _candidate(view, quanta, candidate_id=f"candidate:credit-tie:{units}")
@@ -970,13 +1024,13 @@ def test_exact_fx_credit_tie_admits_the_true_round_up_and_not_one_quantum_more()
         assert evaluation.candidate_valid is True, units  # inside every box: only the cash rules can decide
 
         # Precondition, verified rather than assumed: the conversion really is
-        # an exact tie, posted at its true HALF_UP value.
+        # an exact tie, posted at its floor.
         fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
         assert fx_evaluation.exact_destination_credit == R(15, 2), units  # 7.5 USD, an exact tie
-        assert fx_evaluation.posted_destination_credit == R(8), units
+        assert fx_evaluation.posted_destination_credit == R(7), units
 
         usd_cell = next(ledger for ledger in evaluation.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
-        assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(8), R(units)), units
+        assert (usd_cell.fx_credit, usd_cell.buy_debit) == (R(7), R(units)), units
         assert usd_cell.final_spendable == expected_usd_balance, units
 
         assert evaluation.feasible is expected_feasible, units
@@ -1026,17 +1080,21 @@ def test_rounded_family_guard_fails_closed_on_unmodelled_sell_families() -> None
 
 # --------------------------------------------------------------------------
 # Item A4: non-negativity is ENFORCED (a `:nonneg` row per rounded flow), not
-# assumed -- `floor(x+1/2)` only matches HALF_UP-away-from-zero for x >= 0.
+# assumed -- a non-negative `units` floored (credit) or ceiled (debit) at the
+# quantum only matches the ledger's posting against the plan for x >= 0.
 # --------------------------------------------------------------------------
 
 
 def test_posted_units_terms_add_nonneg_row_per_rounded_flow() -> None:
-    """`_posted_units_term` encodes `units = floor(exact/quantum + 1/2)`,
-    which agrees with `numeric.post_half_up` (ties away from zero) only for a
-    non-negative amount. Each rounded flow therefore gets an explicit
-    `:nonneg` row that *enforces* non-negativity rather than assuming it, so a
-    future negative-capable flow fails loudly instead of rounding the wrong
-    way. This asserts those rows are actually in the compiled model.
+    """`_posted_units_term` encodes a posting as `quantum * units` for a
+    non-negative integer `units`, rounded against the plan: a credit at
+    `floor(exact/quantum)`, a debit at `ceil(exact/quantum)`. That matches the
+    ledger's posting of a non-negative magnitude (`numeric.post_floor` /
+    `numeric.post_ceiling`) only for a non-negative amount. Each rounded flow
+    therefore gets an explicit `:nonneg` row that *enforces* non-negativity
+    rather than assuming it, so a future negative-capable flow fails loudly
+    instead of rounding the wrong way. This asserts those rows are actually
+    in the compiled model.
     """
     scenario = _coarse_funding_fx_scenario()
     view = build_exact_policy_view(scenario)
@@ -1081,3 +1139,132 @@ def test_exact_flow_families_are_not_posted_through_units_terms() -> None:
     }
     assert not any("funding" in name for name in posted_variable_names)
     assert not any(name.startswith("posted_fx_debit") for name in posted_variable_names)
+
+
+# --------------------------------------------------------------------------
+# Item A6 (C-FXPOS): an active FX conversion must post a nonzero credit. The
+# Decimal-exact replay checks it (`FX_CREDIT_POSITIVE`); the compiled model
+# must carry it too, as a live `posted_fx_credit:{route}:{currency}:active`
+# row -- the rounding rows alone happily post a zero credit.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        pytest.param("nonneg", id="nonneg-rounding-row"),
+        pytest.param("lo", id="lo-rounding-row"),
+        pytest.param("hi", id="hi-rounding-row"),
+        pytest.param("active", id="active-fx-credit-positive-row"),
+    ],
+)
+def test_fx_credit_positive_has_a_compiled_row_per_fx_conversion(suffix: str) -> None:
+    """The exact replay rejects an FX action whose credit posts zero
+    (`FX_CREDIT_POSITIVE`: no action, or a posted credit `> 0`). The compiled
+    model mirrors that rule with one `:active` row per FX conversion, next
+    to the rounding rows of the same posted credit -- `:nonneg`, `:lo`,
+    `:hi`, which keep their names (the controls of this parametrization).
+    The coarse fixture has exactly one conversion, EUR into the USD route.
+    """
+    scenario = _coarse_funding_fx_scenario()
+    view = build_exact_policy_view(scenario)
+    program = _fresh_program(scenario, view)
+    constraint_names = {constraint.name for constraint in program.model.getConss()}
+
+    assert f"posted_fx_credit:route:buy:usd:EUR:{suffix}" in constraint_names
+
+
+_ZERO_POSTED_FX_CREDIT_CASES = [
+    pytest.param(1, R(2, 5), id="0.4-usd-posts-zero-under-any-rounding"),
+    pytest.param(2, R(4, 5), id="0.8-usd-floors-to-zero"),
+]
+
+
+@pytest.mark.parametrize(("source_eur", "exact_credit"), _ZERO_POSTED_FX_CREDIT_CASES)
+def test_fx_credit_that_posts_zero_is_rejected_by_the_exact_replay(source_eur: int, exact_credit: Any) -> None:
+    """On `_sub_quantum_fx_credit_scenario`, converting 1 or 2 EUR yields an
+    exact 0.4 or 0.8 USD, whose floor at the whole-USD quantum is 0. Spending
+    euros to receive nothing is not a conversion: the exact replay rejects
+    the point on `FX_CREDIT_POSITIVE` alone -- nothing is bought, so every
+    cash cell stays `>= 0`.
+
+    The 0.4 USD case posts 0 under a round-half-up too, so it holds already
+    (a control); the 0.8 USD case posted 1 under HALF_UP and needs the credit
+    to floor.
+    """
+    scenario = _sub_quantum_fx_credit_scenario()
+    view = build_exact_policy_view(scenario)
+    funding = exact_decision_id("funding_transfer", "route:funding:eur")
+    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
+    quanta = {funding: source_eur, fx: source_eur, buy: 0}
+
+    candidate = _candidate(view, quanta, candidate_id=f"candidate:fx-credit-zero:{source_eur}")
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert evaluation.candidate_valid is True  # inside every box: only the posting rules can decide
+
+    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    assert fx_evaluation.exact_destination_credit == exact_credit
+    assert fx_evaluation.posted_destination_credit == ZERO
+
+    positive = next(item for item in evaluation.constraints if item.ref_id == "constraint:fx_credit_positive:route:buy:usd:EUR")
+    assert (positive.satisfied, positive.value) == (False, ZERO)
+    assert evaluation.feasible is False
+    assert evaluation.conflict_codes == ("FX_CREDIT_POSITIVE",)
+
+
+@pytest.mark.parametrize(("source_eur", "exact_credit"), _ZERO_POSTED_FX_CREDIT_CASES)
+def test_active_fx_conversion_whose_credit_posts_zero_is_infeasible_in_the_compiled_model(source_eur: int, exact_credit: Any) -> None:
+    """The compiled half of the test above, on the very same points: the
+    pinned SCIP model must reject them as the exact replay does. Its rounding
+    rows admit the zero credit (`q*u <= exact <= q*u + q` holds at `u = 0`
+    for any exact credit below one quantum) and nothing is bought with it,
+    so only the `:active` row can object.
+    """
+    scenario = _sub_quantum_fx_credit_scenario()
+    view = build_exact_policy_view(scenario)
+    funding = exact_decision_id("funding_transfer", "route:funding:eur")
+    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
+    quanta = {funding: source_eur, fx: source_eur, buy: 0}
+
+    # Precondition, verified rather than assumed: the exact credit (which no
+    # rounding rule moves) is below one whole-USD quantum, so its floor is 0.
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta, candidate_id=f"candidate:fx-credit-zero-compiled:{source_eur}"))
+    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    assert fx_evaluation.exact_destination_credit == exact_credit
+    assert ZERO < exact_credit < ONE
+
+    assert _pinned_status(scenario, view, quanta=quanta) == "infeasible"
+
+
+def test_fx_credit_positive_admits_a_nonzero_floored_credit_and_no_conversion() -> None:
+    """Green controls on the same fixture: the `:active` row may never prune
+    a point the exact replay accepts. 3 EUR convert into an exact 1.2 USD
+    that posts 1 USD (floor and round-half-up agree), a nonzero credit; and
+    no conversion at all leaves the rule nothing to check. Both points are
+    feasible in the exact replay and in the pinned SCIP model.
+    """
+    scenario = _sub_quantum_fx_credit_scenario()
+    view = build_exact_policy_view(scenario)
+    funding = exact_decision_id("funding_transfer", "route:funding:eur")
+    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
+    constraint_id = "constraint:fx_credit_positive:route:buy:usd:EUR"
+
+    converting = {funding: 3, fx: 3, buy: 0}
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, converting, candidate_id="candidate:fx-credit-one"))
+    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    assert (fx_evaluation.exact_destination_credit, fx_evaluation.posted_destination_credit) == (R(6, 5), R(1))
+    positive = next(item for item in evaluation.constraints if item.ref_id == constraint_id)
+    assert (positive.satisfied, positive.value) == (True, R(1))
+    assert evaluation.feasible is True
+    assert _pinned_status(scenario, view, quanta=converting) == "optimal"
+
+    idle = {funding: 0, fx: 0, buy: 0}
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, idle, candidate_id="candidate:fx-idle"))
+    assert not evaluation.fx  # no FX action at all
+    positive = next(item for item in evaluation.constraints if item.ref_id == constraint_id)
+    assert positive.satisfied is True
+    assert evaluation.feasible is True
+    assert _pinned_status(scenario, view, quanta=idle) == "optimal"

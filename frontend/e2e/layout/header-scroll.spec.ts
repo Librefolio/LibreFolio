@@ -32,6 +32,8 @@ const test = base.extend<{reviewHeader: Page}>({
             ],
             ['/api/v1/settings/user', {language: 'en', base_currency: 'EUR', theme: 'light', avatar_url: null}],
             ['/api/v1/settings/global', {items: []}],
+            // The sidebar's connection-security line (plan 36): the answer the lane's plain-HTTP loopback gets.
+            ['/api/v1/system/connection', {client_class: 'loopback', cookie_secure: false}],
             [
                 '/api/v1/settings/onboarding',
                 {

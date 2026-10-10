@@ -11,7 +11,7 @@ import {browser} from '$app/environment';
 import {goto} from '$app/navigation';
 import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
-import type {AuthState, AuthUser} from '$lib/types';
+import type {AuthError, AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
 import {currentLanguage} from '$lib/stores/app/language';
 import {userSettings} from '$lib/stores/app/settings';
@@ -40,6 +40,12 @@ let signOutRequested = false;
 
 export function isSignOutRequested(): boolean {
     return signOutRequested;
+}
+
+/** The login's 403 for a disabled account, sent only to whoever gave its right password (plan 36). */
+function isAccountDisabled(body: unknown): boolean {
+    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
+    return typeof detail === 'object' && detail !== null && (detail as {error_code?: unknown}).error_code === 'ACCOUNT_DISABLED';
 }
 
 /**
@@ -120,17 +126,21 @@ function createAuthStore() {
                 if (!isCurrentAuthOperation(operationGeneration)) return false;
                 transitionClientSession(null);
                 debug.log('AuthStore', 'Login error:', error);
-                let errorMessage = 'Login failed';
+                // One key for every 401: telling an unknown user from a wrong password would reveal which accounts exist.
+                // A disabled account is told so only with its right password, as a 403 ACCOUNT_DISABLED (plan 36).
+                let authError: AuthError = {key: 'auth.loginFailed'};
 
                 if (isAxiosError(error)) {
                     debug.log('AuthStore', 'Axios error status:', error.response?.status);
                     debug.log('AuthStore', 'Axios error data:', error.response?.data);
                     if (error.response?.status === 401) {
-                        errorMessage = 'Invalid username or password';
+                        authError = {key: 'auth.invalidCredentials'};
+                    } else if (error.response?.status === 403 && isAccountDisabled(error.response.data)) {
+                        authError = {key: 'auth.accountDisabled'};
                     } else if (error.response?.status === 422) {
-                        errorMessage = 'Invalid input';
+                        authError = {key: 'auth.invalidInput'};
                     } else {
-                        errorMessage = error.message;
+                        authError = {message: error.message};
                     }
                 }
 
@@ -138,7 +148,7 @@ function createAuthStore() {
                     ...state,
                     user: null,
                     isLoading: false,
-                    error: errorMessage,
+                    error: authError,
                     isInitialized: true,
                 }));
 

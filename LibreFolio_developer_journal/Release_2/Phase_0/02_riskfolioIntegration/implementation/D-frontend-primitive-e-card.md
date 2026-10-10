@@ -313,17 +313,27 @@ Per scrivere gli spec si invoca **`test-author`**.
 
 ## 10. Definizione di finito
 
-- [ ] `KpiMetricBar` e `KpiDivergingFlowBar` in `components/ui/`, con tutti gli import
+- [x] `KpiMetricBar` e `KpiDivergingFlowBar` in `components/ui/`, con tutti gli import
       aggiornati;
-- [ ] **la dashboard è visivamente invariata** — è la prova che lo spostamento è
+  ↳ *allineamento 09/10*: ✅ `frontend/src/lib/components/ui/display/KpiMetricBar.svelte` e `KpiDivergingFlowBar.svelte`
+- [x] **la dashboard è visivamente invariata** — è la prova che lo spostamento è
       innocuo;
-- [ ] card metrica del rischio esistente, con tipografia fluida, striscia d'accento,
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] card metrica del rischio esistente, con tipografia fluida, striscia d'accento,
       `DocsLink`, `TweenedValue`, skeleton senza spostamento di layout;
-- [ ] etichetta doppia e slot sparkline opzionale supportati;
-- [ ] **`risk-analysis.spec.ts` diviso in quattro file** (§5.1), con lo **stesso numero
+  ↳ *allineamento 09/10*: ✅ `ui/display/RiskMetricCard.svelte`
+- [x] etichetta doppia e slot sparkline opzionale supportati;
+  ↳ *allineamento 09/10*: ✅ `ui/display/RiskMetricCard.svelte` (`sparkline` e `submetrics` facoltativi)
+- [x] **`risk-analysis.spec.ts` diviso in quattro file** (§5.1), con lo **stesso numero
       di test prima e dopo** e nessuna asserzione cambiata;
-- [ ] i selettori nuovi registrati in `_frontend_portfolio.py`;
-- [ ] i due test di Asset Detail **isolati e verdi**;
-- [ ] lint, `svelte-check` e spec dashboard verdi;
-- [ ] **K5 consegnato e comunicato a E ed F**;
-- [ ] nessun processo in ascolto su `6243`.
+  ↳ *allineamento 09/10*: ✅ `risk-analysis`, `risk-lab`, `risk-asset-detail` e `risk-mocks.ts` in `frontend/e2e/portfolio/`
+- [x] i selettori nuovi registrati in `_frontend_portfolio.py`;
+  ↳ *allineamento 09/10*: ✅ `scripts/test_runner/_frontend_portfolio.py`
+- [x] i due test di Asset Detail **isolati e verdi**;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] lint, `svelte-check` e spec dashboard verdi;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] **K5 consegnato e comunicato a E ed F**;
+  ↳ *allineamento 09/10*: ✅ `contracts/K5.md`
+- [x] nessun processo in ascolto su `6243`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato

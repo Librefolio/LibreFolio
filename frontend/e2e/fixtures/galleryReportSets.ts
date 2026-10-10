@@ -24,15 +24,17 @@
  * closed through its discard guard. A parse writes no transaction either: it moves the file and
  * caches its result in the file's own metadata, which goes with the file.
  *
- * Data: the repository's synthetic Danske Bank samples (invented values), two statements written
- * under the test's output folder, and nothing else. Copied, not imported, from
- * transactions/tx-import-report-set.spec.ts and transactions/tx-bulk-import-handoff.spec.ts.
+ * Data: the repository's synthetic Danske Bank samples (invented values), one statement written
+ * under the test's output folder (the savings statement of the todo-banner shot), and nothing else.
+ * Copied, not imported, from transactions/tx-import-report-set.spec.ts and
+ * transactions/tx-bulk-import-handoff.spec.ts.
  *
  * ## Offline, gallery-wide
  *
  * The same outer beforeEach installs {@link guardGalleryOffline} on every page: no gallery scenario reaches a real
  * price or exchange-rate provider, or writes a price. The section of that name below lists every endpoint of the API
- * client that would, and what the gallery answers instead (galleryOfflineData.ts).
+ * client that would, and what the gallery answers instead (galleryOfflineData.ts). Nor does any scenario reach a
+ * third-party host — the PDF viewer's CDN, Google Fonts —: the gallery must work without the network.
  *
  * ## Favicon images, gallery-wide
  *
@@ -297,6 +299,35 @@ async function fulfillWith(route: Route, response: APIResponse, json: unknown): 
     await route.fulfill({response, headers, json});
 }
 
+/**
+ * Keep {@link hideGalleryTempData} working for a page served under another name of the lane: a name Chromium maps onto the
+ * loopback (`--host-resolver-rules`), where the lane's backend answers — the connection-security shot's LAN name.
+ *
+ * The gallery's routes match a path or a third-party host, never the baseURL's origin, so such a page is guarded and
+ * filtered as on the baseURL. But the two listings hideGalleryTempData filters are fetched in Node (`route.fetch()`), and
+ * Node resolves names without Chromium's rules: under the other name the fetch fails (`getaddrinfo ENOTFOUND`), and the
+ * page's request with it. So a GET of either listing under `alias` goes on to hideGalleryTempData with the same path and
+ * query under `lane`, the baseURL's origin, which Node reaches; the page receives the filtered listing under its own name.
+ * Node sends the cookies of `lane`, and the gallery's own reads (`page.request`) go to the baseURL too: the same user must
+ * be signed in there first — read back here. Nothing else under `alias` is touched.
+ *
+ * Registered by the test, after the outer beforeEach: it runs before hideGalleryTempData.
+ */
+export async function keepTempDataHiddenUnder(page: Page, alias: string, lane: string): Promise<void> {
+    const aliasOrigin = new URL(alias).origin;
+    const laneOrigin = new URL(lane).origin;
+    const me = await page.request.get(`${laneOrigin}${API}/auth/me`);
+    expect(me.ok(), `precondition: the reads made in Node go to ${laneOrigin}, where this page's user must be signed in (GET ${API}/auth/me answered HTTP ${me.status()})`).toBe(true);
+    await page.route(
+        (url) => url.origin === aliasOrigin && (url.pathname === BROKERS_PATH || url.pathname === FILES_PATH),
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            const {pathname, search} = new URL(route.request().url());
+            await route.fallback({url: `${laneOrigin}${pathname}${search}`});
+        },
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Offline: no scenario reaches a real provider
 // ---------------------------------------------------------------------------
@@ -326,6 +357,12 @@ async function fulfillWith(route: Route, response: APIResponse, json: unknown): 
  *
  * And outside the backend: an admin's browser asks GitHub for the latest release on load (updateCheck.ts) — aborted,
  * so no update prompt can depend on the day the gallery runs.
+ *
+ * And third-party hosts the gallery must never need ({@link THIRD_PARTY_HOSTS}) — aborted, recorded in `thirdParty`,
+ * and a red at the end of the test: the gallery must work without the network, PDF preview included. The PDF viewer
+ * (EmbedPDF) asks jsDelivr for its engine, its stamps and its fallback fonts, and Google Fonts for its UI fonts, unless
+ * the app serves them itself (developer's decision, release 2 batch 7: it must). Its engine runs in a worker, whose
+ * requests the page's routes see and abort as well.
  */
 export interface GalleryOfflineGuard {
     /** How the live-price poll is answered: from the fixture (the default), or aborted. */
@@ -344,6 +381,8 @@ export interface GalleryOfflineGuard {
     releaseProbes: number;
     /** Syncs, metadata refreshes and provider probes attempted, by method and path: aborted, each one a red. */
     syncs: string[];
+    /** Requests to a third-party host the gallery must never need ({@link THIRD_PARTY_HOSTS}), by method and URL: aborted, each one a red. */
+    thirdParty: string[];
     /** What the guard could not answer as designed (a fixture asset not in the database, a request it cannot read): each one a red. */
     problems: string[];
 }
@@ -355,6 +394,15 @@ const PROVIDER_SEARCH_STREAM = `${API}/assets/provider/search/stream`;
 const PROVIDER_CALLS = new Set([`${API}/assets/prices/sync`, `${API}/assets/provider/refresh`, `${API}/assets/provider/probe`, `${API}/fx/currencies/sync`]);
 /** What each provider reports, as the search stream does for a provider that raised (asset_sources/search.py). */
 const OFFLINE_SEARCH_ERROR = 'provider not reached: the gallery runs offline';
+
+/**
+ * Hosts no gallery page may reach: jsDelivr (the PDF viewer's engine — pdfium's WASM —, its stamps, its fallback fonts)
+ * and Google Fonts (fonts.googleapis.com, the stylesheets of the viewer's UI and signature fonts; fonts.gstatic.com,
+ * their files). Nothing else in the app asks them (checked on the built bundle, b7). Exact names, never a suffix: the
+ * favicons the gallery shows come from each broker's own site, and Google's favicon service — one import plugin's icon —
+ * answers from www.google.com and t*.gstatic.com, not fonts.gstatic.com.
+ */
+const THIRD_PARTY_HOSTS = new Set(['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com']);
 
 const offlineGuards = new WeakMap<Page, GalleryOfflineGuard>();
 
@@ -403,7 +451,7 @@ async function offlinePricesById(page: Page, guard: GalleryOfflineGuard): Promis
  * and the outer afterEach fails the test on any sync or problem it recorded ({@link expectGalleryOffline}).
  */
 export async function guardGalleryOffline(page: Page): Promise<GalleryOfflineGuard> {
-    const guard: GalleryOfflineGuard = {livePrices: 'fixture', livePolls: 0, pricedPolls: 0, pricedAssets: new Map(), catalogueReads: 0, searches: 0, releaseProbes: 0, syncs: [], problems: []};
+    const guard: GalleryOfflineGuard = {livePrices: 'fixture', livePolls: 0, pricedPolls: 0, pricedAssets: new Map(), catalogueReads: 0, searches: 0, releaseProbes: 0, syncs: [], thirdParty: [], problems: []};
     offlineGuards.set(page, guard);
     let pricesById: Promise<Map<number, OfflineCurrentPrice>> | null = null;
 
@@ -479,6 +527,16 @@ export async function guardGalleryOffline(page: Page): Promise<GalleryOfflineGua
             await route.abort();
         },
     );
+    // The gallery must work without the network, PDF preview included: a request to a third-party host is aborted, and
+    // fails the test at its end (expectGalleryOffline). A worker's requests too — the PDF viewer's engine runs in a module
+    // worker made from a blob, and page.route sees and aborts what such a worker asks (checked in Playwright 1.61).
+    await page.route(
+        (url) => THIRD_PARTY_HOSTS.has(url.hostname),
+        async (route) => {
+            guard.thirdParty.push(`${route.request().method()} ${route.request().url()}`);
+            await route.abort();
+        },
+    );
     return guard;
 }
 
@@ -508,10 +566,11 @@ export async function expectOfflinePricesDrawn(page: Page, since: number): Promi
     }
 }
 
-/** Nothing tried to sync, refresh or probe, and every call the guard answered was answered as designed. */
+/** Nothing tried to sync, refresh or probe, nothing asked a third-party host, and every call the guard answered was answered as designed. */
 export function expectGalleryOffline(page: Page): void {
     const guard = galleryOfflineGuard(page);
     expect(guard.syncs, 'a sync, a metadata refresh or a provider probe was started: the gallery never presses one (it was aborted, nothing reached a provider)').toEqual([]);
+    expect(guard.thirdParty, 'a page asked a third-party host (it was aborted): the gallery must work without the network, PDF preview included').toEqual([]);
     expect(guard.problems, "the gallery's offline guard could not answer as designed").toEqual([]);
 }
 
@@ -676,30 +735,6 @@ export async function combineSet(api: APIRequestContext, brokerId: number, batch
     const combined = (JSON.parse(body) as {combined: StoredFile}).combined;
     expect(combined.kind, 'the combine answers with the combined file').toBe('combined');
     return combined;
-}
-
-/**
- * The bank's cash statement, extended so the generic CSV reads it too: the sample's rows, plus four
- * columns the generic CSV maps (`date`, `type`, `amount`, `currency`) after the bank's, which Danske
- * Bank ignores. The bank's own statement names no `date` and no `type` column, so nothing but Danske
- * Bank reads it and its ⋮ menu never offers "Read alone with…"; this one does (decision 1 of the
- * report-set workstream, `writeDualCash` in tx-import-report-set.spec.ts). Latin-1 and `;`, like the
- * sample; a fixed name, so the shots are the same on every run (the output folder is per test).
- */
-export function writeExtendedCashStatement(testInfo: OutputFolder): string {
-    const filePath = testInfo.outputPath('danske_bank-cash-extended.csv');
-    const [header, ...rows] = readFileSync(DANSKE_SAMPLES.cash, 'latin1')
-        .split(/\r?\n/)
-        .filter((line) => line !== '');
-    const extended = rows.map((row) => {
-        const [day, , amount] = row.split(';');
-        const [dd, mm, yyyy] = day.split('.');
-        const value = Number(amount.replace(',', '.'));
-        return `${row};${yyyy}-${mm}-${dd};${value < 0 ? 'withdrawal' : 'deposit'};${value.toFixed(2)};EUR`;
-    });
-    mkdirSync(path.dirname(filePath), {recursive: true});
-    writeFileSync(filePath, Buffer.from([`${header};date;type;amount;currency`, ...extended, ''].join('\n'), 'latin1'));
-    return filePath;
 }
 
 /** The savings statement of the todo-banner shot: cash movements only (no asset, nothing to resolve), invented. */

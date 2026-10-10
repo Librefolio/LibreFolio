@@ -1344,3 +1344,185 @@ test.describe('Broker detail — import history upload', () => {
         expect(expectUuid(next.batch_id, 'batch_id of the next upload'), 'every upload action opens a new batch').not.toBe(batchId);
     });
 });
+
+/**
+ * 6b — the Bulk editor opened before the transaction types are cached.
+ *
+ * The editor snapshots its rows when it opens, to tell "nothing to discard" from unsaved work.
+ * With the type rules not cached yet it takes its slow path: rows held back until the types
+ * arrive, and the snapshot written as `''` while the rows stand at `[]`, whose key is `'[]'`.
+ * With rows (edit, clone, delete) the snapshot is written again once the types land; with none
+ * (create, import) it never is, so every close asks to discard changes nobody made.
+ *
+ * The broker page is where that happens for real: unlike the transactions page it never loads
+ * the types itself, and the cache is module state, empty after every full load. So each test
+ * loads the page from scratch, on a broker it owns, and checks that premise instead of assuming
+ * it — no request for the types before the click, one answered after the editor opened.
+ *
+ * Why the barriers before each close: the editor's open sequence awaits four reference caches
+ * (brokers, currencies, assets, types) and then opens its auto-opened child again — the form,
+ * or the import wizard — if that child is closed by then. A child closed before the sequence
+ * ends comes back over the editor. So the page's own loads have landed before the click, and
+ * the types are in the page before the child is closed.
+ */
+
+/** The caches the Bulk editor awaits when it opens (`ensure*Loaded`), by endpoint. */
+const BULK_REFERENCE_PATHS = {
+    types: `${API}/transactions/types`,
+    brokers: `${API}/brokers`,
+    assets: `${API}/assets/query`,
+    currencies: `${API}/utilities/currencies`,
+} as const;
+type BulkReference = keyof typeof BULK_REFERENCE_PATHS;
+const BULK_REFERENCES = Object.keys(BULK_REFERENCE_PATHS) as BulkReference[];
+
+/** The page's GET requests to the four caches since the watch began. */
+interface BulkReferenceLoads {
+    requested: Record<BulkReference, number>;
+    /** Requests whose whole answer has arrived (`requestfinished`). */
+    finished: Record<BulkReference, number>;
+    /** Requests to any of the four still waiting for their answer. */
+    inFlight: () => number;
+}
+
+/** Count the reference loads request by request: each one is settled by its own finished or failed event. */
+function watchBulkReferenceLoads(page: Page): BulkReferenceLoads {
+    const counter = () => Object.fromEntries(BULK_REFERENCES.map((name) => [name, 0])) as Record<BulkReference, number>;
+    const requested = counter();
+    const finished = counter();
+    const pending = new Map<object, BulkReference>();
+    const referenceOf = (request: {method(): string; url(): string}) => (request.method() === 'GET' ? BULK_REFERENCES.find((name) => BULK_REFERENCE_PATHS[name] === new URL(request.url()).pathname) : undefined);
+    page.on('request', (request) => {
+        const name = referenceOf(request);
+        if (!name) return;
+        requested[name] += 1;
+        pending.set(request, name);
+    });
+    page.on('requestfinished', (request) => {
+        const name = pending.get(request);
+        if (!name) return;
+        pending.delete(request);
+        finished[name] += 1;
+    });
+    page.on('requestfailed', (request) => {
+        pending.delete(request);
+    });
+    return {requested, finished, inFlight: () => pending.size};
+}
+
+/**
+ * Load the owned broker's page from scratch and stop on its Transactions tab, the premise verified.
+ *
+ * The watch starts on a blank page, so it counts that one document's requests and nothing the
+ * landing page left in flight; `page.goto` is the full load that empties the types cache.
+ */
+async function openBrokerTransactionsCold(page: Page, brokerId: number, brokerName: string): Promise<BulkReferenceLoads> {
+    await page.goto('about:blank');
+    const loads = watchBulkReferenceLoads(page);
+    await navigateTo(page, `/brokers/${brokerId}`);
+    await expect(page.getByTestId('broker-name')).toHaveText(brokerName, {timeout: 10_000});
+    await goToTransazioniTab(page);
+    await expect
+        .poll(() => ({brokers: loads.finished.brokers > 0, assets: loads.finished.assets > 0, currencies: loads.finished.currencies > 0, inFlight: loads.inFlight()}), {
+            message: 'the broker page has loaded its brokers, assets and currencies itself, and nothing is in flight, before the Bulk editor opens',
+            timeout: 15_000,
+        })
+        .toEqual({brokers: true, assets: true, currencies: true, inFlight: 0});
+    expect(loads.requested.types, 'premise: the broker page never asked for the transaction types, so the Bulk editor opens on an empty types cache (its slow path)').toBe(0);
+    return loads;
+}
+
+/** The premise's second half: once open, the editor fetched the types itself — and every load its open sequence awaits has landed. */
+async function bulkFetchedTheTypes(loads: BulkReferenceLoads): Promise<void> {
+    await expect
+        .poll(() => ({typesAnswered: loads.finished.types > 0, inFlight: loads.inFlight()}), {
+            message: 'premise: the Bulk editor fetched the transaction types itself after opening (it opened before they were cached), and its reference loads have landed',
+            timeout: 15_000,
+        })
+        .toEqual({typesAnswered: true, inFlight: 0});
+}
+
+/**
+ * Close the Bulk editor while it holds no row, and prove its discard guard stayed silent.
+ *
+ * The premise first: the editor's body is on screen and holds no row, so there is nothing to
+ * discard. `requestClose()` is either/or — it opens the guard and returns, or it closes the
+ * editor — so after one click the outcome is read as one state, and a guard that fired is
+ * reported by name instead of as a timeout on an editor that stayed open.
+ */
+async function closeEmptyBulkWithoutGuard(page: Page): Promise<void> {
+    const bulk = page.getByTestId('tx-bulk-modal');
+    const discard = page.getByTestId('confirm-modal-confirm');
+    const body = page.getByTestId('tx-bulk-body');
+    await expect(body).toBeVisible();
+    await expect(body.locator('tbody tr[data-row-id]'), 'the editor holds no row: nothing was added').toHaveCount(0);
+    await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
+
+    await page.getByTestId('tx-bulk-close').click();
+    await expect
+        .poll(async () => ((await discard.isVisible()) ? 'discard guard' : (await bulk.isVisible()) ? 'open' : 'closed'), {
+            message: 'one click on the close button of an editor holding no row closes it, without asking to discard changes',
+            timeout: 5_000,
+        })
+        .toBe('closed');
+    await expect(discard).toHaveCount(0);
+}
+
+test.describe('Broker detail — the Bulk editor opened before the transaction types are cached (6b)', () => {
+    let ownedBrokerId: number | undefined;
+
+    test.beforeEach(async ({page}) => {
+        ownedBrokerId = undefined;
+        await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion
+    // error it follows. Nothing is saved here, so the owned broker is all there is to remove.
+    test.afterEach(async ({page}) => {
+        if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    });
+
+    test('B6a New transaction on a cold broker page, its form closed untouched: the Bulk closes without asking to discard', async ({page}) => {
+        test.setTimeout(60_000);
+        // Sorts after every seeded broker, so a neighbour's "first card" stays a mock broker.
+        const brokerName = `Unsaved guard new ${uniqueSuffix()}`;
+        ownedBrokerId = await createOwnedBroker(page, brokerName);
+        const loads = await openBrokerTransactionsCold(page, ownedBrokerId, brokerName);
+
+        await page.getByTestId('broker-new-transaction').click();
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        const form = page.getByTestId('tx-form-modal');
+        await expect(form, 'creating from the broker page opens the Bulk editor with its form already open').toBeVisible({timeout: 5_000});
+        await bulkFetchedTheTypes(loads);
+        // The in-page side of the same fact: the type select lists no type until the type rules
+        // are in the page, so it shows the selected type — with its icon — only from then on.
+        await expect(form.getByTestId('tx-form-type').locator('img')).toHaveCount(1, {timeout: 5_000});
+
+        await form.getByTestId('tx-form-cancel').click();
+        await expect(form, 'the untouched form closes on its own Cancel, without a guard of its own').toBeHidden({timeout: 5_000});
+        await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+
+        await closeEmptyBulkWithoutGuard(page);
+    });
+
+    test('B6b Import on a cold broker page, its wizard closed untouched: the Bulk closes without asking to discard', async ({page}) => {
+        test.setTimeout(60_000);
+        const brokerName = `Unsaved guard import ${uniqueSuffix()}`;
+        ownedBrokerId = await createOwnedBroker(page, brokerName);
+        const loads = await openBrokerTransactionsCold(page, ownedBrokerId, brokerName);
+
+        await page.getByTestId('broker-import-transactions').click();
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        const wizard = page.getByTestId('import-wizard-modal');
+        await expect(wizard, 'importing from the broker page opens the Bulk editor with its import wizard already open').toBeVisible({timeout: 5_000});
+        await bulkFetchedTheTypes(loads);
+        // The wizard's first step is idle only once its brokers, type rules and plugins are in the page.
+        await waitForSettled(page.getByTestId('import-wizard-step1'));
+
+        await page.getByTestId('import-wizard-close').click();
+        await expect(wizard, 'the untouched wizard closes without a guard of its own').toBeHidden({timeout: 5_000});
+        await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+
+        await closeEmptyBulkWithoutGuard(page);
+    });
+});

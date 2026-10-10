@@ -1381,7 +1381,7 @@ class ExactEvaluation:
 
 @dataclass(frozen=True, slots=True)
 class ExactRoundingTopUp:
-    """Cash one pool (broker x currency) lacks because the replay rounds HALF_UP.
+    """Cash one pool (broker x currency) lacks because the replay rounds every posting against the plan.
 
     ``amount`` is the pool's negative final spendable balance, in the pool's own
     currency; ``rounded_postings`` counts the pool's postings that carry a

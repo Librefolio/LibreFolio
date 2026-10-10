@@ -22,12 +22,12 @@
 |---|---|---|---|
 | 0 | Analisi (consegna 1) | ✅ | 2026-09-18 |
 | 1 | Ricollocare la heatmap fuori dal legacy | ✅ | 2026-09-18 |
-| — | 🚦 **Cancello**: il coordinatore guarda la superficie nel browser | 🔴 **bloccato**: porta 6157 di un altro worktree (§B3) | — |
-| 2 | Smontare `RiskAnalysisPanel` da `AssetSetRiskPanel` | ⏸ bloccato dal cancello | — |
-| 3 | Colonna gratuita: correlazione media con il resto dell'insieme | ⏳ **volutamente non iniziato**: il cancello esiste per validare le fondamenta prima che ci si costruisca sopra | — |
-| 4 | `L4Replay` con `showMoney={false}` — **mai `L4Shock`** | 🔴 **non eseguibile**: vedi §B1 | — |
+| — | 🚦 **Cancello**: il coordinatore guarda la superficie nel browser | ✅ superato nei fatti: la review del laboratorio col developer, 24/09 (F-3, `F-laboratorio-postmerge.md`) (allineamento 09/10) | — |
+| 2 | Smontare `RiskAnalysisPanel` da `AssetSetRiskPanel` | ✅ `daa03c0f2` (A, 21/09) (allineamento 09/10) | — |
+| 3 | Colonna gratuita: correlazione media con il resto dell'insieme | ⏳ **mai costruita** (D54) → README della cartella, buchi (allineamento 09/10) | — |
+| 4 | `L4Replay` con `showMoney={false}` — **mai `L4Shock`** | ✅ in altra forma: la sezione del replay del laboratorio (`AssetSetReplaySection.svelte`), senza importi (allineamento 09/10) | — |
 | 5 | ~~Nuova chiave i18n «fuori scopo» × 4 lingue~~ | ❌ **decaduto**: la chiave esiste già, il difetto è altrove e non è mio — vedi §R1 | 2026-09-18 |
-| 6 | Requisito del cancello-euro a T3 | ⏳ | — |
+| 6 | Requisito del cancello-euro a T3 | ✅ assorbito in F-6 (`F-laboratorio-postmerge.md` §6); nessun importo nel laboratorio (allineamento 09/10) | — |
 
 ---
 

@@ -1,7 +1,7 @@
 # Manifest checkpoint C — Piattaforma Tool
 
 **Data:** 2026-09-10
-**Stato:** base C completa · merge `bb0cdc33` · checkpoint finale staged · handoff D pronto
+**Stato:** base C completa · commit `1656aff69` · merge `bb0cdc334` · handoff D: §1–§7 storici, §0 contratto vivo di D (vedi [handoff-pac-D.md](handoff-pac-D.md)) · allineato il 2026-10-09 (Q)
 **Piano:** [plan-phase00ToolPlatform.prompt.md](plan-phase00ToolPlatform.prompt.md)
 
 ## 1. Fotografia esatta del checkpoint `1656aff6` pre-merge

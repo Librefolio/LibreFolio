@@ -65,5 +65,5 @@ Phase 09 Milestone 2 delivers the production-grade portfolio calculation engine 
 | API | `backend/app/api/v1/portfolio_api.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | ROI utilities | `backend/app/utils/financial/roi_utils.py` |
-| FIFO utilities | `backend/app/utils/financial/fifo_utils.py` |
-| WAC utilities | `backend/app/utils/financial/wac_utils.py` |
+| FIFO utilities (fifo_utils.py, deleted 2026-09-03 → the FIFO engine) | `backend/app/services/fifo_lot_engine.py` |
+| WAC utilities (wac_utils.py, deleted 2026-10-07 → the average-cost function) | `backend/app/services/financial_math/average_cost.py` |

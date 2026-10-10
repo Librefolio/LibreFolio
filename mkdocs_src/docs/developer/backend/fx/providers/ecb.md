@@ -7,14 +7,14 @@
 | **API Endpoint** | `https://data-api.ecb.europa.eu/service/data/EXR/` |
 | **API Format** | JSON (SDMX) |
 | **API Key** | Not required |
-| **Currencies** | ~45 (all major + many emerging markets) |
+| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-10-08, 29 published daily and 44 plus EUR in the history |
 | **Update Frequency** | Daily, ~16:00 CET on ECB business days |
 | **Historical Data** | Available from 1999 |
 | **API Docs** | [ECB Data Portal API](https://data.ecb.europa.eu/help/api/overview) |
 
 ### ⚙️ How It Works
 
-The European Central Bank publishes daily reference exchange rates for the Euro against approximately 45 currencies. The provider queries the ECB Statistical Data Warehouse using the SDMX REST API.
+The European Central Bank publishes daily reference exchange rates for the Euro against about 30 currencies. The provider queries the ECB Statistical Data Warehouse using the SDMX REST API; `get_supported_currencies()` (`backend/app/services/fx_providers/ecb.py`) reads the currency list from the same API, so it also returns the discontinued currencies that are still in the history.
 
 - **Dataset**: `EXR` (Exchange Rates)
 - **Frequency**: `D` (Daily)
@@ -23,7 +23,9 @@ The European Central Bank publishes daily reference exchange rates for the Euro 
 
 ### 💰 Supported Currencies
 
-Major: USD 🇺🇸, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿, SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, BRL 🇧🇷, MXN 🇲🇽, ZAR 🇿🇦, TRY 🇹🇷, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, BGN 🇧🇬, HRK 🇭🇷, RUB 🇷🇺, and many more.
+Published daily (29 on 2026-10-08, from the ECB's `eurofxref-daily.xml`): AUD, BRL, CAD, CHF, CNY, CZK, DKK, GBP, HKD, HUF, IDR, ILS, INR, ISK, JPY, KRW, MXN, MYR, NOK, NZD, PHP, PLN, RON, SEK, SGD, THB, TRY, USD, ZAR.
+
+History only: discontinued currencies such as BGN (last rate 2025-12-31, before Bulgaria adopted the euro), HRK and RUB. `fetch_rates()` gets their past observations from the same `EXR` series and nothing after the last one.
 
 ### ⚠️ Limitations
 

@@ -98,6 +98,74 @@ test.describe('Authentication', () => {
         });
     });
 
+    // «Register here» follows the instance setting (K, step 22). Once an admin closes registration
+    // (`enable_registration` = 'false') the backend refuses `POST /auth/register` with a 403, and the login page
+    // offered the link anyway: the refusal came only after a filled-in form. Closed here for this page only — the real
+    // `GET /api/v1/settings/global`, answered with that one value changed, never a hand-built list (Zodios validates the
+    // response) — and never written: the setting is shared by every user of the lane. The open case is
+    // `can open register modal from login` above, on the real setting.
+    test.describe('Register link and the registration setting', () => {
+        type RegistrationStub = {reads: number; problems: string[]};
+
+        /**
+         * Answer this page's `GET /api/v1/settings/global` — that path only, never `/global/{key}` or `/global/bulk` —
+         * with the real response and `enable_registration` set to `'false'`. `reads` counts the reads the stub handled,
+         * `problems` why one of them was not answered with registration closed. The item must be in the real list: the
+         * backend creates every global setting at startup, so a list without it is a broken precondition, reported by
+         * name instead of as a link that stayed. Any other method falls through: nothing here writes a setting.
+         */
+        async function closeRegistrationForThisPage(page: Page): Promise<RegistrationStub> {
+            const stub: RegistrationStub = {reads: 0, problems: []};
+            await page.route('**/api/v1/settings/global', async (route, request) => {
+                if (request.method() !== 'GET') {
+                    await route.fallback();
+                    return;
+                }
+                try {
+                    const response = await route.fetch();
+                    if (!response.ok()) {
+                        stub.problems.push(`the real GET /settings/global answered ${response.status()}`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    const body = (await response.json()) as {items?: Array<Record<string, unknown>>};
+                    const items = body.items ?? [];
+                    if (!items.some((item) => item.key === 'enable_registration')) {
+                        stub.problems.push(`the real GET /settings/global has no enable_registration item (keys: ${items.map((item) => String(item.key)).join(', ') || 'none'})`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    await route.fulfill({response, json: {...body, items: items.map((item) => (item.key === 'enable_registration' ? {...item, value: 'false'} : item))}});
+                } catch (error) {
+                    // Nobody awaits a route callback: what it throws would surface as an unhandled rejection on
+                    // whatever the worker runs next. Recorded instead, and asserted by the test that needed the read.
+                    stub.problems.push(`the stub failed: ${String(error)}`);
+                } finally {
+                    stub.reads += 1;
+                }
+            });
+            return stub;
+        }
+
+        test('the login page does not offer «Register here» once an admin closed registration', async ({page}) => {
+            const stub = await closeRegistrationForThisPage(page);
+
+            await page.goto('/');
+            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 10_000});
+            await expect(page.getByTestId('login-form')).toBeVisible();
+            // A sibling control of the link: the card is up, so a link missing below is the setting, not a slow page.
+            await expect(page.getByTestId('goto-forgot')).toBeVisible();
+
+            // Until the page has read the setting, a missing link proves nothing. Soft, so that a page that never asks
+            // still goes on to report the link it shows; the test stays red either way.
+            await expect.soft.poll(() => stub.reads, {message: 'The login page never read GET /api/v1/settings/global: it cannot know that an admin closed registration', timeout: 10_000}).toBeGreaterThan(0);
+            expect(stub.problems, 'The stub could not answer «registration closed»: the precondition is broken, not the page').toEqual([]);
+
+            await expect(page.getByTestId('goto-register'), 'Registration is closed: the login page must not offer «Register here»').toHaveCount(0, {timeout: 5_000});
+            await expect(page.getByTestId('goto-forgot'), 'Only the register link goes: the rest of the card stays').toBeVisible();
+        });
+    });
+
     test.describe('Forgot Password Modal', () => {
         test('can open forgot password modal from login', async ({page}) => {
             await page.goto('/');

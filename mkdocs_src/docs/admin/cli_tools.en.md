@@ -5,7 +5,7 @@
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. ⚠️ With the current image these commands do not start yet: see [Running commands inside the container](docker_advanced.md#docker-exec).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current` and `db check` work there; `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -75,7 +75,7 @@ pipenv run ./dev.py user activate <username>
 ```
 
 - ⏱️ A reset does not end the sessions already open: they stay valid until they expire. To lock someone out at once, deactivate the account: it is refused from its next request.
-- 💬 The app's **Forgot Password?** screen shows the older form `./dev.sh user:reset <username> <new_password>`, which runs the same command on a host installation.
+- 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front.
 
 ### 👑 Grant or Remove Administrator Rights
 
@@ -90,7 +90,7 @@ pipenv run ./dev.py user demote <username>
 
 ## 🗄️ Maintain the Database
 
-### ⬆️ Apply Migrations
+### ⬆️ Apply Migrations {: #apply-migrations }
 
 Every start of the server applies the pending migrations by itself, so you rarely need this. To do it by hand, **stop the server** first: `db upgrade` refuses to run while the server answers on the configured port.
 
@@ -100,7 +100,17 @@ pipenv run ./dev.py db upgrade
 
 # Show the migration the database is at
 pipenv run ./dev.py db current
+
+# Look for missing CHECK constraints: changes nothing, exits with 1 if any
+pipenv run ./dev.py db check
+
+# Upgrade and check another database file, such as a copy
+pipenv run ./dev.py db upgrade /path/to/copy/app.db
+pipenv run ./dev.py db check /path/to/copy/app.db
 ```
+
+- 📄 Without a path, the commands use the configured database. A path names another SQLite file: a relative one starts at the project root, wherever you run the command from. The file must exist, except for `db upgrade`, which creates it (folder included) and brings it up to date.
+- 🐳 In Docker, the path is inside the container, where `LibreFolio-data/` is `/app/backend/data/prod-docker` (the database is `sqlite/app.db` in it). `db current` and `db check` work in the running container: `docker compose exec librefolio python dev.py db current <path>`. `db upgrade` and `db downgrade` need the server stopped (`docker compose stop librefolio`), then a one-off container: `docker compose run --rm librefolio python dev.py db upgrade <path>` ([details](docker_advanced.md#docker-exec)).
 
 ### 🩹 Post-Migration Fixes {: #post-migration-fixes }
 

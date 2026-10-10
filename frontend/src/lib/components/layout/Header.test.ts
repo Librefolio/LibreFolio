@@ -11,6 +11,9 @@ import {tick} from 'svelte';
 import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import Header from './Header.svelte';
 import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
+import {get} from 'svelte/store';
+import {connectionSecurity, refreshConnectionSecurity, resetConnectionSecurity, type LocationLike} from '$lib/stores/app/connectionSecurityStore';
+import type {ConnectionLevel, ServerView} from '$lib/utils/security/connectionSecurity';
 
 let scrollY: number;
 let measuredHeight: number;
@@ -500,5 +503,81 @@ describe('Header navigation, resizing and teardown', () => {
         outside.focus();
         await tick();
         expect(frames.size).toBe(0);
+    });
+});
+
+/**
+ * The menu dot — plan 36 (§2.2). On a phone the sidebar, and with it the connection-security line, hides behind the
+ * burger; when the level is `insecure` the header says so on the burger itself: `mobile-menu-security-dot`, inside
+ * `mobile-menu-toggle`. Secure and local draw nothing.
+ *
+ * The store is the real one, primed as a page load leaves it (`refreshConnectionSecurity` with an injected location
+ * and server answer, `force`), and its level is a premise checked before the header is read: an absent dot means
+ * something only once the store is known to hold a level that draws none. The header never asks the server itself
+ * (the sidebar's line does), so nothing here reaches the network. Written RED-FIRST against the stubs of plan 36.
+ */
+describe('Header menu security dot (plan 36)', () => {
+    async function primeConnection(location: LocationLike, answer: ServerView): Promise<void> {
+        resetConnectionSecurity();
+        await refreshConnectionSecurity({location, fetchServerView: () => Promise.resolve(answer), force: true});
+    }
+
+    /** The dot, looked for inside the burger only. */
+    function menuDot(): HTMLElement | null {
+        return within(within(header()).getByTestId('mobile-menu-toggle')).queryByTestId('mobile-menu-security-dot');
+    }
+
+    beforeEach(() => {
+        resetConnectionSecurity();
+    });
+    afterEach(() => {
+        resetConnectionSecurity();
+    });
+
+    it('insecure: the dot sits inside the menu toggle', async () => {
+        await primeConnection({protocol: 'http:', hostname: 'lf.example'}, {clientClass: 'public', cookieSecure: false});
+        expect(get(connectionSecurity).level, 'premise: the store holds insecure').toBe('insecure');
+
+        await mount();
+
+        expect(menuDot(), 'an insecure connection marks the burger').not.toBeNull();
+    });
+
+    const NO_DOT: Array<{name: string; level: ConnectionLevel; location: LocationLike; answer: ServerView}> = [
+        {name: 'secure, http on localhost', level: 'secure', location: {protocol: 'http:', hostname: 'localhost'}, answer: {clientClass: 'loopback', cookieSecure: false}},
+        {name: 'secure, https', level: 'secure', location: {protocol: 'https:', hostname: 'lf.example'}, answer: {clientClass: 'public', cookieSecure: true}},
+        {name: 'local, a .lan name', level: 'local', location: {protocol: 'http:', hostname: 'lf.lan'}, answer: {clientClass: 'lan', cookieSecure: false}},
+        {name: 'local, a public name the server sees from a LAN', level: 'local', location: {protocol: 'http:', hostname: 'lf.example'}, answer: {clientClass: 'lan', cookieSecure: false}},
+    ];
+
+    it.each(NO_DOT.map((testCase): [string, (typeof NO_DOT)[number]] => [testCase.name, testCase]))('%s: no dot', async (_name, {level, location, answer}) => {
+        await primeConnection(location, answer);
+        expect(get(connectionSecurity).level, `premise: the store holds ${level}`).toBe(level);
+
+        await mount();
+
+        expect(within(header()).getByTestId('mobile-menu-toggle'), 'presence barrier: the burger is drawn').toBeInTheDocument();
+        expect(screen.queryByTestId('mobile-menu-security-dot'), `${level} draws no dot`).toBeNull();
+    });
+
+    it('follows the store after mount: on while only the browser has spoken (insecure), off once the server reports a LAN client', async () => {
+        // Created up front, so the answer can be given whenever the store gets round to asking.
+        let answer: (view: ServerView) => void = () => undefined;
+        const serverView = new Promise<ServerView>((resolve) => {
+            answer = resolve;
+        });
+        resetConnectionSecurity();
+        const refreshing = refreshConnectionSecurity({location: {protocol: 'http:', hostname: 'lf.example'}, fetchServerView: () => serverView, force: true});
+        await vi.waitFor(() => expect(get(connectionSecurity), 'premise: alone, the browser calls a public name over http insecure').toMatchObject({level: 'insecure', serverChecked: false}));
+
+        await mount();
+        expect(menuDot(), 'while the server is asked, the browser’s verdict marks the burger').not.toBeNull();
+
+        answer({clientClass: 'lan', cookieSecure: false});
+        await refreshing;
+        await tick();
+
+        expect(get(connectionSecurity), 'premise: a LAN client makes the public name uncertain').toMatchObject({level: 'local', reason: 'uncertain', serverChecked: true});
+        expect(screen.queryByTestId('mobile-menu-security-dot'), 'the dot leaves with the insecure level').toBeNull();
     });
 });

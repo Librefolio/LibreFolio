@@ -1,0 +1,860 @@
+# Piano d'implementazione — U2 / SP15 privacy globale, Round 2: correzioni dalla review d'uso
+
+← Previous:
+[Round 1 — nucleo di mascheramento](plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md)
+
+Piano gemello, stesso round di review:
+[Onboarding Round 8 — correzioni dalla review d'uso](../../Phase_0/21_onboarding/plan-phase00OnboardingRound8-PostReview.prompt.md)
+
+Fonti:
+[review d'uso 22/09](../../Phase_0/09_feedbackJobs/08_review_visiva_20260922.md) ·
+[reperti dell'analisi statica](../../Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md) ·
+[backlog P4](../../Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md) (P4-10, P4-11)
+
+## Confine e autorizzazione
+
+| | |
+|---|---|
+| **Workstream** | J — privacy e onboarding |
+| **Worktree** | `e-alfy-literate-lamp`, branch `e-alfy-onboarding-foundation` |
+| **Baseline** | `f1047f766` (`fix(db): widen enum columns to VARCHAR(32)`), verificata 2026-09-23 10:33, albero pulito |
+| **Lane copia prod** | porta `6168`, `/tmp/librefolio-r2-j-onboarding-prodcopy`, **solo dalla snapshot** `/tmp/librefolio-r2-prod-snapshot` |
+| **Lane suite** | porta `6158`, `/tmp/librefolio-r2-j-onboarding` — **solo** `dev.py test …` |
+| **Coordinator** | `c8328a01-f208-4ade-a352-0486d1f14de2` |
+| **Checkpoint** | C0 `2a5927c48` · C1 `176f19707` · C2 `64d78e244` · C3 `59cb80103` · C4 `5e7ae336e` (onboarding) — C2 e C3 con la storia locale riscritta il 2026-09-24 (passo 7, *Fuori pista*) · C5 `503351f0f` (passi 9-10) · C6 `1466a76d6` + `1c8d12957` + `8347f8d6c` (passi 12-15) · C7 `3eb340822` (registrazione del passo 11) |
+| **Stato** | ✅ **COMPLETATO il 2026-09-24** (registrazione finale 2026-09-25); integrato in `dev_release2` col merge `2bbaa8db2` (2026-09-25 10:35, `merge(onboarding): dev_release2 into J for integration`). Verificato e archiviato il 2026-10-09 |
+
+**Autorizzazione developer verbatim, 2026-09-23:** `Plan approved! Exited plan mode.`
+
+**Decisione developer verbatim su Q1, 2026-09-23:**
+*«Mascherate solo dove si affiancano a un prezzo (posizioni, lotti), visibili nelle transazioni»*.
+
+**Decisioni di perimetro del developer (22/09), vincolanti:**
+
+1. *«Il patrimonio entra in gioco quando da quel numero si riesce a risalire a quanto possiede
+   l'utente, e generalmente quindi ha a che fare con le transazioni e le quantità possedute.»*
+   Un prezzo di mercato **non** è patrimonio.
+2. Il **WAC** è ammissibile; il **numero di movimenti** in Asset è mostrabile.
+3. *«Il privacy deve nascondere il numero, non la valuta, quindi se lo fa è un errore.»*
+
+Nessuna migrazione. Nessuna chiave i18n rimossa. Nessun `git commit`/`merge`/`rebase`/`push`.
+
+## Premesse corrette prima di scrivere
+
+Misurate durante l'analisi del 2026-09-23 e **accolte dal coordinator**:
+
+- **08 §3.2 / 09 §9.2** (*«la privacy non nasconde la valuta — già corretto»*): vero per le
+  primitive D8 di `currencyFormat.ts`, falso per i **soli due** siti che le aggirano, entrambi
+  miei: `riskAnalysisHelpers.ts:160` e `LotComparisonChart.svelte:261`.
+- **09 §1.3 Dual View asimmetrica** (voce mia): non è un difetto. `AssetTable.svelte:211` passa
+  `{sensitivity: 'public'}`; il mio «2 chiamate mascherate» contava la riga di `import`.
+- **09 §1.5 «4 patrimonio su 9»** (voce mia): con i criteri del developer, **0 difetti su 9** —
+  3 quotazioni (1) · 2 fallback WAC (2) · 2 `CompactCashCell` che sono un `<input
+  value={amountStr}>` (D7, regola mia del Round 1) · 2 importi di **eventi asset** (`models.py`:
+  *«Events are NOT transactions — they describe what happens to the asset globally»*).
+
+## Inventario
+
+| # | difetto | causa | file | scrittore |
+|---|---|---|---|---|
+| ③a | rischio: `•••` **senza valuta** | `riskAnalysisHelpers.ts:160` ritorna il segnaposto nudo; pinnato di proposito a `.test.ts:387` (*«the currency labels the column, not the cell»*, scelta del Round 1 che la decisione 3 rovescia) | `riskAnalysisHelpers.ts` + `.test.ts` | **J**, unico per tutto il round (file interi) |
+| ③a′ | rischio: segno nascosto | `.test.ts:379` *«hides the sign of a loss»*, senza motivazione scritta; D8 tiene il segno fuori | idem | J — Q7 |
+| ③b | lotti: `•••` senza valuta | `LotComparisonChart.svelte:261` | `LotComparisonChart.svelte` | **J**, unico per `:261` |
+| R20 | Broker globale non si riscopre | ignota — ipotesi H1/H2 sotto | `BrokerCard.svelte`, `brokers/+page.svelte` | J (nessun owner attivo) |
+| R5/R6/R7 | Growth: asse Y (`eur`, `pnl`, `income`, `candles`) e tooltip | `yAxisFormatter:1815`, `axisLabel:2051`, `fmtCurrency:1834` | `GrowthChart.svelte` | **I** — J fa review |
+| R5b | Performance: P&L netto e asse valori | `shortMoney:161` → `netValueText:234`; `axisTickAmount:170` | `PerformanceChart.svelte` | **I** — J fa review |
+| D5′ | quantità in posizioni e lotti | la regola D5 le lasciava visibili | 5 file, §Passo 7 | **J**, unico scrittore per il round (coordinator, 2026-09-24) |
+
+**R20 — ipotesi e osservazione che le separa.** `BrokerCard` e `brokers/+page.svelte` sono
+entrambi in **modalità legacy** (`export let`, `$:` ×2, zero rune); la catena `{@html}` →
+`maskable` → `$state` è reattiva nei due versi *sulla carta*, e il §9.1 del foglio 09 insegna
+che è proprio il ciclo di vita dello stato ciò che la rilettura non vede.
+
+| ipotesi | predizione |
+|---|---|
+| H1 — il template legacy non ridipinge al toggle | `/brokers` caricata con privacy **off**, toggle **on** sul posto: **non** nasconde. L'«occultamento» visto era al montaggio |
+| H2 — guasto locale a un solo verso | on sul posto nasconde, off sul posto no |
+| controllo | `brokers/[id]/+page.svelte:606,777` è legacy con la stessa forma: se lì il ritorno funziona, H1 è falsa |
+
+Già falsificate: `scrollOnOverflow` (sta sul nome, `:107`); cache nel formatter (nessuna).
+
+## Decisioni
+
+| Q | decisione | fonte |
+|---|---|---|
+| Q1 | **D5′**: quantità mascherate dove si affiancano a un prezzo (posizioni, lotti), visibili nelle transazioni | developer, verbatim sopra |
+| Q3 | asse di valore sotto privacy: tacche → `•••` | default approvato |
+| Q4 | AI Export fuori perimetro per D4 («export grezzi») | default approvato |
+| Q7 | il formatter del rischio mascherato mostra il **segno**, come D8 | default approvato |
+| Q8 | cella lotto «aperta / originale» sotto privacy → `••• (60 %)` | default approvato |
+| D5′-c | **prezzi unitari visibili, totali nascosti** — pubblici: prezzo, `pmc`/WAC, prezzi di apertura, chiusura e unitari, serie WAC e di mercato; mascherati: valore, proventi, commissioni, tasse, P&L | developer, 2026-09-24 11:5x, come corollario di D5′ (verbatim: *«Prezzi unitari visibili, totali nascosti»*) |
+
+⚠️ **Residuo accettato da D5′**: in Transazioni quantità × prezzo resta ricostruibile. È una
+scelta del developer, non una svista.
+
+## Passi
+
+Ogni passo aggiorna questo file dopo il completamento: stato con data, `Note implementazione`,
+`Fuori pista` per ogni deviazione, comando ed evidenza.
+
+### Passo 1 — Piano durevole — **Stato: ✅ fatto** — 2026-09-23
+
+Questo file, il gemello onboarding, cross-link dal Round 1 (§5) e dal Round 7 onboarding.
+
+> **Note implementazione.** Scritti questo piano e
+> `21_onboarding/plan-phase00OnboardingRound8-PostReview.prompt.md`; aggiunto `→ Follow-up` nel
+> §5 del Round 1 e in testa al Round 7. Verifica: ogni link relativo dei quattro file risolve
+> (5 + 4 + 3 + 3 link, 0 rotti); nessun titolo senza riga vuota prima.
+
+### Passo 2 — Gate-prep — **Stato: ✅ fatto** — 2026-09-24 — *checkpoint C0*
+
+`moneyRenderSites.test.ts`:
+
+- il test *«sees both branches of a two-branch money line»* usa `PerformanceChart` come
+  **esemplare**. Quando I la maschera con `maskable(`, la riga entra in `SAFE_CALL`, smette di
+  essere un hit, e il controllo positivo perde il soggetto: il ramo di I non resterebbe verde.
+  Il test passa su una **fixture sintetica**, estraendo dallo scanner la logica per riga;
+- nuovo stato `public`, allineato a `AmountSensitivity`; `EventCreateMiniModal` da `unmasked` a
+  `public` (importo di un evento asset).
+
+Con questo integrato, I tocca soltanto le sue 4 voci (da **cancellare**: una riga con `maskable(`
+non è più un hit) e le due liste letterali `residual` / `unmasked`.
+
+> **⚠️ Fuori pista — perimetro modificato dal coordinator, 2026-09-23.** (1) Il gate-prep è il
+> **checkpoint C0, da solo**: il primo commit dopo `f1047f766`, con dentro soltanto
+> `moneyRenderSites.test.ts` e le righe di registrazione nel runner; I lo riceve con un merge del
+> **commit** C0, non della punta del ramo. I file del journal restano fuori da C0. (2) La
+> registrazione dei 5 test privacy orfani nel runner è **a carico mio**, dentro C0: se la facesse
+> il coordinator all'integrazione, nel ramo di I il gate resterebbe fuori dal runner fino a fine
+> round. (3) D13 di I: la voce `GrowthChart:1899` resta un hit (il gate non segue una closure
+> locale) e passerà da `residual` a `masked` nel commit di I, con una `why` che cita la
+> definizione mascherata e il test di I che la blocca; I cancella quindi **3** voci, non 4.
+> (4) I cinque file di D5′ sono assegnati a J come unico scrittore.
+
+> **Note implementazione — registrazione nel runner (C0).** `scripts/test_runner/_frontend_utility.py`,
+> azione `front-utility core-unit` (Vitest in **node**: i 5 file non dichiarano
+> `@vitest-environment`, e il default di `vitest.config.ts` è node): +5 righe, ciascuna accanto ai
+> vicini della stessa cartella, nulla riordinato, la riga `desc` **non** toccata (è una sola riga di
+> ~2000 caratteri che altri workstream allungano: aggiungerci testo garantirebbe un conflitto).
+> Un'azione registrata gira per costruzione nel `all` della categoria (`_get_category_tests_for_all`).
+> Evidenza: elenco `core-unit` 94 percorsi, 0 inesistenti, 0 duplicati; `check-orphans` nella lane
+> 6158 → exit 0, 242/242 registrati e raggiungibili da `all`. **Controllo positivo**: la stessa
+> regola ricalcolata sul catalogo di `HEAD` dà **5 orfani, esattamente i 5 file privacy** → ora 0.
+
+> **Note implementazione — gate (C0), 2026-09-24.** Scritto via `test-author`, riletto e rieseguito
+> da me. `moneyRenderSites.test.ts` +62/−18: `scanLine()` estratta da `scan()` senza cambiare
+> semantica (dump degli hit prima/dopo identico, sha256 `7881aac8…`, misurato dall'agente); il test
+> dei due rami gira su una fixture sintetica di `PerformanceChart.shortMoney` attraverso la stessa
+> `scanLine`; stato `public` con `EventCreateMiniModal` riclassificata; liste `residual`,
+> `unmasked`, `public` un elemento per riga, tenute spezzate da un commento di riga (0
+> `prettier-ignore` nel repo, e resta 0). Evidenza, eseguita da me:
+>
+> | comando | esito |
+> |---|---|
+> | `npx vitest run …/moneyRenderSites.test.ts` | `Test Files 1 passed (1)`, `Tests 6 passed (6)` |
+> | suite privacy, 6 percorsi | `Test Files 6 passed (6)`, `Tests 126 passed (126)` |
+> | controllo negativo su **copia** con `CURRENCY_TOKEN = /currency/i` | 3 rossi: i due rami, controllo positivo, marcio. Copia rimossa, file vero con sha invariato |
+> | `dev.py test --test-port 6158 --data-dir /tmp/librefolio-r2-j-onboarding front-utility core-unit "money rendered outside the masking channel"` | exit 0 · `Test Files 1 passed \| 93 skipped (94)` · `Tests 6 passed \| 2433 skipped (2439)` |
+> | `npx prettier --check`, `git diff --check` sui due file di C0 | puliti, exit 0 |
+>
+> *Nota del 2026-09-24:* i due `npx` della tabella sono registrazioni vere, lanciati da `frontend/`,
+> dove npx trova il binario locale in `node_modules/.bin`. **Non vanno ripetuti così**: se il binario
+> locale manca (per esempio lanciando da un'altra cartella), npx interroga il registry ed esegue,
+> oppure installa, l'ultima versione pubblicata, non quella del lock; `--no-install` non basta,
+> perché una copia già in cache viene eseguita lo stesso. Si usa
+> `frontend/node_modules/.bin/<strumento>` oppure `npm run <script>`: se il binario manca, il comando
+> fallisce invece di scaricare. *Fuori pista, mio:* controllando la cache di npx ho letto la data di
+> modifica delle cartelle (`find -newermt`) come data d'installazione, ma anche una semplice
+> esecuzione la aggiorna; la data di nascita, su macOS, si legge con `stat -f %SB`.
+>
+> Il controllo negativo mostra anche una cosa da tenere a mente: oggi il restringimento fa cadere
+> **tre** test perché la riga vera di `PerformanceChart` è ancora sul disco. Quando I la maschera,
+> il test della fixture resta **l'unico** a vedere la regressione — che è la ragione del passo.
+
+> **⚠️ Fuori pista — `core-unit` senza filtro è rosso, e non per C0.** Stesso comando senza il
+> filtro di nome: exit 1, `Test Files 2 failed | 92 passed (94)`, `Tests 33 failed | 2406 passed`.
+> I due file rossi sono `components/risk/assetSetLevels.test.ts` (26) e
+> `features/tools/registry.test.ts` (7), entrambi già nell'elenco a `HEAD`, nessuno dei due importa
+> un file di C0. Causa misurata: il client generato di questa worktree è del **22/09 00:02**
+> (ignorato da git, `generated.ts` sha `f2d51864cd7b`) e non contiene né
+> `RiskAssetSetVarCvarOutput` (backend `d3afb92b6`, 0 occorrenze) né il contratto
+> `pac_allocator 2.0.0` (0 occorrenze in `tool-contract-map.generated.ts`) — gli errori lo dicono
+> alla lettera: *«the compiled pac_allocator 2.0.0 contract must be generated»*, e `schema`
+> `undefined` in `riskOutput`. È la trappola dell'artefatto derivato scaduto (09 §3.1). Rimedio:
+> `dev.py api sync`, statico; **non eseguito** in attesa dell'OK del coordinator.
+>
+> **⚠️ Fuori pista — errore mio di invocazione.** Il primo lancio con `--verbose` è uscito con
+> exit 2 da argparse, prima della raccolta: nessun test, nessun DB, nessuna porta. Il verbose è già
+> il default (`-q` lo spegne).
+
+> **Note implementazione — C0 committato `2a5927c48` (genitore `f1047f766`), 2026-09-24 10:02.**
+> Poi `dev.py api sync` con l'OK del coordinator: exit 0, nessuna porta aperta (6158/6168 libere
+> dopo), `git status` **identico** prima e dopo (confronto con `cmp`), tre file ignorati
+> rigenerati (`generated.ts` `f2d51864cd7b` → `a085da1c8dac`). `RiskAssetSetVarCvarOutput`: 0 → 6
+> occorrenze. `core-unit` senza filtro, lane 6158: exit 0, **`Test Files 94 passed (94)`,
+> `Tests 2439 passed (2439)`** — i 33 rossi erano tutti del client scaduto.
+>
+> **⚠️ Fuori pista — una delle due prove di C0 era cieca.** Per il contratto `pac_allocator 2.0.0`
+> avevo dichiarato «0 occorrenze» con un grep su riga singola; nel file le chiavi stanno su righe
+> diverse (`"pac_allocator": {` / `"2.0.0": {`), e sul client **nuovo**, dove il contratto c'è, lo
+> stesso grep dà ancora 0. Quel grep non poteva trovarlo in nessun caso: non provava nulla. La
+> conclusione regge per un'altra via — il test stesso diceva *«the compiled pac_allocator 2.0.0
+> contract must be generated»*, ed è verde dopo il sync — ma la misura che avevo messo accanto era
+> una sonda senza controllo positivo. Il file vecchio è sovrascritto e non si può rimisurare.
+
+### Passo 3 — Primitiva `maskCurrencyParts` — **Stato: ✅ fatto** — 2026-09-24 — *C1*
+
+In `utils/privacy/maskable.ts`: riceve le parti di `Intl.NumberFormat#formatToParts` e sostituisce
+la corsa numerica (`integer`, `group`, `decimal`, `fraction`, `compact`, `exponent*`) con **un**
+segnaposto; conserva `currency`, `literal`, `minusSign`, `plusSign`. `compact` sta dentro la
+maschera: `€•••K` rivelerebbe l'ordine di grandezza. Serve ai soli formatter `Intl` con
+`style: 'currency'`; a I bastano `maskable()` e le primitive D8.
+
+> **Note implementazione.** `maskable.ts`: `MAGNITUDE_PARTS` e `maskCurrencyParts(parts,
+> sensitivity?)`. La corsa va dalla prima all'ultima parte di grandezza e include i `literal`
+> interni, perché il compatto tedesco è `1,2 Mio. €` — `integer`, `decimal`, `fraction`,
+> `literal`, `compact`, `literal`, `currency` — e mascherare solo le parti numeriche lascerebbe
+> un doppio spazio. Misurato con `formatToParts` su sei casi prima di scrivere: `en-US` → `-$•••`,
+> `it-IT` → `••• €`, `de-DE` compatto → `••• €`, `en-US` compatto → `-$•••`, `fr-FR` CHF →
+> `-••• CHF`, `ja-JP` → `￥•••`. Una parte `currency` dentro la corsa viene conservata: per
+> nessuna locale misurata succede, ma se succedesse perderla violerebbe la decisione 3.
+
+### Passo 4 — ③a rischio — **Stato: ✅ fatto** — 2026-09-24 — *C1*
+
+`riskAnalysisHelpers.ts:160` via primitiva. Test: invertire `:387` (valuta presente, USD e EUR
+mascherati diversi) e `:379` (segno presente, Q7); aggiornare le asserzioni a `:330…:402`.
+Gate: contratto Risk + suite privacy, `Test Files N` = N. **Poi avvisare il coordinator**: il pin
+privacy di F su `risk-lab` dipende da questo output.
+
+> **Note implementazione.** `formatCurrencyAmount` → `maskCurrencyParts(…formatToParts(amount))`
+> dopo i due controlli di assenza invariati; import ridotto a `maskCurrencyParts` (0 residui di
+> `PRIVACY_PLACEHOLDER` / `shouldMaskAmount` nel file, nessun re-export). Docstring: la vecchia
+> ragione (*«the currency labels the column»*) è citata come superata dalla regola del developer.
+> Rossi attesi dopo il cambio, misurati: **7**, tutti nel blocco privacy. Due hanno un nome che
+> non torna — *«still says em-dash…»* — e ho letto perché cadono invece di presumerlo: le
+> asserzioni sull'assenza passano, cade il **controllo positivo** in fondo, che si aspettava `•••`
+> e riceve `$•••`. Test riscritti via `test-author`.
+
+### Passo 5 — ③b lotti — **Stato: ✅ fatto** — 2026-09-24 — *C1*
+
+`LotComparisonChart.svelte:261` via primitiva, e il ramo `catch` con il segno fuori dalla maschera.
+
+> **Note implementazione.** Il formatter è uscito dal componente: `formatAxisCurrency(value,
+> currency, locale?)` in `lotComparisonChartHelpers.ts`, accanto a `formatAxisPercent`, così il
+> ramo `catch` si prova in node con un codice valuta invalido (`'EURO'` → `RangeError`). Le due
+> uscite si mascherano ciascuna per sé: `Intl` con `maskCurrencyParts`, il fallback con
+> `maskable` sul solo numero e il codice fuori. Il controllo unico al confine della funzione, che
+> nel Round 1 copriva entrambe le uscite, restituiva il segnaposto nudo: era la forma della
+> violazione. Il componente tiene un wrapper di una riga. Registro del gate aggiornato: voce
+> `riskAnalysisHelpers` con lo snippet nuovo, voce di forma A spostata su
+> `lotComparisonChartHelpers.ts`, voce del `catch` **cancellata** (la riga contiene `maskable(`,
+> quindi `SAFE_CALL` la salta: non è più un hit). Gate 6/6, `REGISTRY` 9 = hit 9.
+
+> **⚠️ Fuori pista — un buco nuovo nello stesso grafico: l'asse del modo valore.** Il formatter
+> dell'asse Y (`:1241` a `HEAD`), in modo `value`, usava `formatAxisNumber(value)`: il **valore
+> dei lotti**, cioè
+> patrimonio, in chiaro sotto privacy. È la classe di R5 in un file mio. Né il gate né la mia rete
+> larga del 22/09 potevano vederlo: nessun token di valuta sulla riga, e nessun identificatore di
+> denaro. Aggiunto `formatAxisAmount(value, locale?)`, mascherato con il segno fuori (Q3: tacche →
+> `•••`). Trovato leggendo la riga che chiamava il formatter che stavo cambiando, non da una
+> ricerca: *una verifica che non trova ciò che cercava può trovare ciò che nessuno cercava*.
+
+> **⚠️ Fuori pista — il toggle non ridisegnava l'asse.** ECharts chiama i formatter d'asse fuori
+> dall'effect di render, quindi la lettura del flag non era tracciata: a privacy cambiata l'asse
+> restava com'era fino al rebuild successivo (il limite §3.4 del Round 1). L'effect elenca le sue
+> dipendenze con `void …`: aggiunto `void isPrivacyEnabled();`. Una riga, con il commento sul
+> perché.
+>
+> Perimetro: il coordinator mi ha assegnato `:261`; queste modifiche stanno nello stesso grafico
+> (`:1241`, l'effect, gli import) e in `lotComparisonChartHelpers.ts`, fermo dal 30/08 e senza
+> owner. Dichiarato nell'handoff.
+
+> **⚠️ Fuori pista — una regressione mia, trovata dal `test-author`: il segno.** La prima
+> versione dei due helper ricostruiva il segno come `'-'` ASCII davanti al valore assoluto. Così
+> cambiava anche l'output **non mascherato**: `formatAxisNumber` scrive il meno come lo scrive la
+> locale. Misurato con `formatToParts(-1234)`: U+2212 in `sv-SE`, `fi-FI` e `fa-IR`, e in `ar`,
+> `he-IL` e `fa-IR` il meno viene **dopo** un segno bidi (parte 1 di 5, non 0). Nuova primitiva
+> `maskFormattedNumber(formatted)` in `maskable.ts`: non mascherato restituisce la stringa
+> invariata; mascherato tiene la corsa iniziale `/^[\p{Cf}+\-\u2212]*/u` (segno e marcature bidi,
+> esattamente come le ha scritte la locale) e sostituisce il resto con un solo segnaposto. I due
+> helper la usano; l'output non mascherato torna identico byte per byte a `formatAxisNumber`.
+> `maskFormattedNumber\(` entra in `SAFE_CALL`: è un export fissato da test che si romperebbero
+> togliendo la maschera, il prezzo che la docstring di `SAFE_CALL` chiede.
+
+> **Limite dichiarato — `maskCurrencyParts` in `pt-CV`.** Misurato con `formatToParts(1234.56)`:
+> `integer 1234` · `decimal "$"` · `fraction 56` · `literal U+00A0` · `currency U+200B`. ICU tipizza
+> come **separatore decimale** il segno dell'escudo, e la parte `currency` è uno spazio a larghezza
+> zero. Mascherata, la cifra perde quindi l'unico simbolo visibile. È un caso limite dei dati CLDR,
+> non fissato da test; lo scrivo perché chi lo incontra non lo scambi per un difetto della regola.
+
+> **Note implementazione — evidenza dei passi 3–5 (C1), 2026-09-24.** Test scritti via
+> `test-author` in due giri, rieseguiti da me:
+>
+> | comando | esito |
+> |---|---|
+> | set di 8 percorsi (6 privacy + `lotComparisonChartHelpers` + `lotChartShared`) | `Test Files 8 passed (8)` · `Tests 241 passed (241)` |
+> | contratto Risk, `riskAnalysisHelpers.test.ts` | **78** prima e dopo: nessun test aggiunto o tolto, 3 rinominati, 7 riscritti al contratto nuovo |
+> | `maskable.test.ts` · `lotComparisonChartHelpers.test.ts` | 11 → 27 · 70 → 80 |
+> | controlli negativi dell'agente (primitiva riportata al segnaposto nudo, poi ripristinata con sha identico) | 18 rossi, poi 8 rossi, tutti nominati |
+> | `dev.py test … front-utility core-unit`, lane 6158, senza filtro | exit 0 · `Test Files 94 passed (94)` · `Tests 2465 passed (2465)` = 2439 + 16 + 10, come previsto |
+> | gate | 6/6, `REGISTRY` 9 = hit 9 |
+> | `dev.py front check` (client `generated.ts` `a085da1c8dac`, 09-24 10:02) | `3 errors and 41 warnings in 4 files` = il pavimento noto; per nome: errori in `TransactionFormModal.test.ts:787,819` e `ToolExecutionMetrics.svelte:44`, warning in `BrokerSharingPanel` e `GlobalSettingsTab`. **Nessuno** dei 4 file è nel mio delta |
+> | prettier, `git diff --check` | puliti |
+>
+> **Non coperto da un test automatico, dichiarato:** il cablaggio di `LotComparisonChart.svelte`
+> (wrapper con `currency`, asse del modo valore, `void isPrivacyEnabled()` nell'effect). Nessun test
+> unitario, di componente o E2E monta quel grafico: le occorrenze trovate sono commenti e la
+> galleria della doc. Lo coprono `svelte-check` pulito, la review manuale sulla copia prod e l'E2E
+> privacy del passo 9.
+>
+> Anche `currencyFormat.test.ts` è cambiato, solo nel commento che dichiarava l'asimmetria con il
+> rischio e i lotti *«da non armonizzare»*: la regola del developer l'ha armonizzata, e il
+> commento l'ha trovato il `test-author`.
+
+### Passo 6 — R20 — **Stato: ✅ fatto** — 2026-09-24 — *C2*
+
+Prima un test di componente su `BrokerCard` (off→on→off, e montaggio con privacy attiva poi off):
+è insieme la sonda che separa H1 da H2 e la regressione. Poi la riproduzione sulla copia prod,
+con il controllo di `brokers/[id]`. Il fix si decide dopo la misura, non prima.
+
+> **Note implementazione — la misura, prima del fix.**
+>
+> **Dal vivo**, copia prod su 6168 (`v1.1.0-230-g176f19707`), sonda Playwright usa-e-getta, login
+> `alfy`, letture del DOM a 400 ms e 2 s da ogni click:
+>
+> | scenario | esito |
+> |---|---|
+> | `/brokers`, privacy **spenta** al caricamento | `aria-pressed` commuta, **le cifre restano in chiaro** |
+> | `/brokers`, privacy **accesa** al caricamento | `aria-pressed` commuta, **`•••` resta** |
+> | `/brokers/2`, importo della pagina (controllo) | `0.00` fisso in entrambi gli stati |
+>
+> 🔴 **Più grave di come è stato riportato.** Le card non reagiscono **mai**: decide lo stato al
+> montaggio. *«Si nascondono ma non si riscoprono»* era il percorso di chi arriva con la privacy già
+> accesa; nel verso opposto — accendere la privacy sulla pagina — **i dati restano visibili**. E il
+> «controllo» non era un controllo: anche gli importi propri della pagina di dettaglio (`:606`
+> saldi, `:777` totale) sono congelati; il developer ha visto funzionare le **tabelle figlie**, che
+> sono componenti runes.
+>
+> **In jsdom**, `BrokerCard.test.ts` via `test-author`, tre test: **3 rossi**, tutti nel componente,
+> con i controlli positivi verdi (`isPrivacyEnabled()` e una chiamata fresca del formatter seguivano il
+> flag). Il `test-author` ha trovato il meccanismo **compilando** il componente con `svelte/compiler`
+> 5.48.0: in modalità legacy una chiamata dentro un'espressione del template diventa
+> `$.untrack(() => formatCurrencyAmountHtml(…))`, e si tracciano solo i valori nominati
+> (`$.deep_read_state(summary())`). Il flag letto dentro `maskable` non viene mai tracciato.
+>
+> **Perimetro misurato**: fra i componenti che chiamano un formatter mascherato, classificati per uso
+> reale delle rune e non per `export let`, i legacy sono **esattamente due** — `BrokerCard.svelte`
+> (3 siti) e `brokers/[id]/+page.svelte` (2 siti). Nessun `runes: true` a livello di compilatore.
+>
+> **Fix**: `ui/display/CurrencyAmount.svelte`, componente runes di una riga di template che rende
+> l'importo con `formatCurrencyAmountHtml`; i 5 siti legacy lo usano. Migrare a runes una pagina di
+> 830 righe con 12 `$:` per due importi sarebbe stato sproporzionato. **`BrokerCard.test.ts`,
+> invariato, passa da 3 rossi a 3/3.**
+
+> **Note implementazione — evidenza dopo il fix.**
+>
+> **Dal vivo, stessa sonda e stessa copia**, server riavviato con la build delle 11:24
+> (`v1.1.0-230-g176f19707-dirty`, cioè con C2):
+>
+> | scenario | prima | dopo |
+> |---|---|---|
+> | `/brokers`, privacy spenta al caricamento, tre click | cifre sempre in chiaro | `•••` → cifre → `•••` |
+> | `/brokers`, privacy accesa al caricamento, tre click | `•••` sempre | cifre → `•••` → cifre |
+> | `/brokers/2`, importo della pagina | `0.00` fisso | `•••` → `0.00` → `•••` |
+>
+> Ogni lettura a 400 ms dal click. `+•••` sul guadagno: il segno resta fuori per D8.
+>
+> **Test** (via `test-author`, rieseguiti da me): `BrokerCard.test.ts` 3; `CurrencyAmount.test.ts` 6,
+> montato **dentro un genitore legacy** (`__tests__/harness/CurrencyAmountLegacyHost.svelte`, legacy
+> per costruzione: il compilatore rifiuta `export let` in modalità runes), che rende anche la vecchia
+> chiamata inline come controllo congelato. Controllo negativo: `untrack(…)` dentro `CurrencyAmount`
+> → 8 rossi nominati, ripristino con sha identico.
+>
+> | comando | esito |
+> |---|---|
+> | set di 7 file (i 6 di C2 + gate) | `Test Files 7 passed (7)` · `Tests 85 passed (85)` |
+> | `check-orphans`, lane 6158 | 245/245 registrati e raggiungibili da `all` |
+> | `front-utility component-unit` | exit 0 · `76 passed (76)` · `2008 passed` |
+> | `front-utility onboarding-component-unit` | exit 0 · `13 passed (13)` · `400 passed` |
+> | `front-utility core-unit` | exit 0 · `94 passed (94)` · `2465 passed`, invariato da C1 |
+> | `dev.py front check` (client `a085da1c8dac`) | `3 errors and 41 warnings in 4 files`, gli stessi 4 file; **nessuno** nel mio delta |
+>
+> Runner: `BrokerCard.test.ts` e `CurrencyAmount.test.ts` in `component-unit`,
+> `DeferredAppPopups.test.ts` in `onboarding-component-unit` (lista della funzione e tupla di
+> `add_test`); 0 percorsi fantasma, 0 duplicati.
+>
+> 📌 **La regola che ne esce, per chi scrive dopo**: in un componente **legacy**, una funzione che
+> legge uno stato runes dentro un'espressione del template **non viene tracciata**. Vale per ogni
+> formatter mascherato. Oggi i legacy del canale sono zero; un sesto sito legacy nascerebbe
+> congelato, e né il gate né un test di formatter lo vedrebbero. Va detto nella skill e nella doc
+> sviluppatore (passo 10).
+
+### Passo 7 — Quantità D5′ — **Stato: ✅ fatto** — 2026-09-24 — *C3 · quantità 1: decisa dal developer, (a)*
+
+La classe di una quantità dipende ora dal **contesto**: la stessa `formatQuantity` va mascherata
+in un lotto e resta visibile in una transazione. La regola sta quindi al sito di chiamata.
+
+1. Inventario per contenuto, con controllo positivo. Punto di partenza misurato:
+   `ExposureTable:374`, `UnifiedLotsTable` (5 `formatQuantity`), `LotCustodyModal` (8),
+   `LotGanttChart` (2 + tooltip), `LotWacPriceChart` (69 menzioni, 0 `formatQuantity`).
+   Fuori: `AssetTable` `quote_base_quantity` (base di quotazione) e `formatTxQuantity`.
+2. Primitiva `maskableQuantity(formatted)`, con nome distinto perché la distinzione resti
+   cercabile; docstring aggiornato a D5′. `SensitiveValue` (Round 1, passo 5) resta sospeso: i
+   siti sono stringhe HTML e tooltip, cioè il livello formattatore.
+3. Applicazione: cella lotto per Q8; tooltip ed etichette dei grafici con ricostruzione
+   dell'`option` al toggle. Le grafiche restano, lunghezza delle barre inclusa.
+4. Nota in testa a D5 nell'analisi, senza cancellare il testo originale.
+
+> **Note implementazione — inventario (Q-1).** Ricerca per contenuto su tutto `src` fuori dalle
+> transazioni: righe che rendono un'interpolazione con un identificatore di quantità **e** una
+> chiamata di formattazione → 21 righe in 11 file, triate a mano: 14 da mascherare, in esattamente
+> i 5 file assegnati; il resto sono percentuali, pesi di distribuzione, byte dell'AI export e il
+> reddito per unità (già mascherato come denaro). Controllo positivo: i due siti noti in partenza
+> (`ExposureTable:374`, la cella di `UnifiedLotsTable`) compaiono. Secondo passaggio per le rese
+> **senza** formattazione nelle aree di posizioni e lotti: nessun sito nuovo.
+>
+> Tre forme diverse per lo stesso dato: la `formatQuantity` condivisa di `lotGanttChartHelpers`,
+> `formatLotQuantity` dei helper della tabella, e **due copie locali omonime** (`LotCustodyModal`,
+> `ExposureTable`); il grafico WAC ne ha una quarta, `formatQuantityValue`, per 12 siti.
+>
+> **Primitiva (Q-2)**: `maskableQuantity(formatted)` in `maskable.ts`, che delega a
+> `maskFormattedNumber` (segno tenuto come l'ha scritto la locale: una posizione corta conserva
+> la direzione). Nome distinto perché la distinzione resti cercabile: la classe la decide il
+> contesto, non il formattatore.
+>
+> **Applicazione (Q-3)**:
+>
+> | file | cosa |
+> |---|---|
+> | `unifiedLotsTableHelpers.ts` | `formatLotQuantityMasked` (assenza sempre `—`) e `formatLotQuantityCell`: Q8, lotto parziale mascherato → `••• (60%)` |
+> | `UnifiedLotsTable.svelte` | cella quantità, colonna quantità, tooltip di custodia |
+> | `LotCustodyModal.svelte` | la `formatQuantity` locale: numero mascherato, segno e unità fuori |
+> | `LotWacPriceChart.svelte` | `formatQuantityValue`, cioè i 12 siti in un punto |
+> | `LotGanttChart.svelte` | etichetta sulla barra e tooltip; `void isPrivacyEnabled()` nell'effect, perché l'etichetta nasce in `renderItem` |
+> | `ExposureTable.svelte` | la `formatQuantity` locale |
+>
+> **⚠️ Fuori pista — D5′ capovolge le compensazioni di D5.** Il commento di `ExposureTable` sul
+> prezzo — scritto da me nel Round 1 — diceva: mascherato *di proposito*, perché la riga porta la
+> `quantity` (visibile per D5) e quantità × prezzo ricostruisce il valore. Con la quantità
+> mascherata la ragione non c'è più, e resta una **sovra-mascheratura**, che il runbook approvato
+> elenca come difetto (*«prezzi … mascherati = sovra-mascheratura»*). Stessa forma, senza commento,
+> altrove: prezzi unitari resi pubblici con le decisioni del 22/09 (un prezzo non è patrimonio,
+> il WAC è ammissibile):
+>
+> | file | prezzi unitari resi pubblici | totali che restano mascherati |
+> |---|---|---|
+> | `ExposureTable` | prezzo, `pmc` (WAC) | valore |
+> | `UnifiedLotsTable` | prezzo d'apertura (colonna e media a piè di tabella) | valore, proventi, commissioni, tasse |
+> | `LotCustodyModal` | prezzo d'apertura, di chiusura, unitario d'apertura | valore d'apertura e corrente, proventi, commissioni, tasse |
+> | `LotWacPriceChart` | prezzo unitario, di vendita, precedente e successivo; le serie WAC e mercato nel tooltip | valore d'apertura, proventi, P&L realizzato, bolle, reddito |
+>
+> Nel grafico WAC l'incoerenza era già visibile: l'asse mostrava i prezzi in chiaro, il tooltip
+> delle stesse linee li mascherava. **Nessun test esistente proteggeva nessuna di queste colonne**:
+> i 282 test delle superfici toccate sono rimasti verdi dopo il cambio, prezzo compreso.
+>
+> 📌 La regola che ne esce: *una compensazione scritta per una decisione va riesaminata quando la
+> decisione cambia*. Il commento che nominava D5 ha reso questa trovabile; le altre no.
+>
+> **Decisione del developer, 2026-09-24 11:5x**, dopo la mia segnalazione prima dell'handoff:
+> *«Prezzi unitari visibili, totali nascosti»* — registrata come corollario di D5′ (D5′-c nella
+> tabella delle decisioni). Confermato l'elenco della tabella sopra; chiesti i test che mancavano.
+
+> **Note implementazione — test e verifica.**
+>
+> | comando | esito |
+> |---|---|
+> | test via `test-author`: `maskable` 27 → 33, `unifiedLotsTableHelpers` 40 → 48, `ExposureTable` 9 → 11 | 4 file · `98 passed` (da 82) |
+> | controllo negativo 1: `maskableQuantity` che restituisce l'input | 10 rossi nominati (5 primitiva, 3 helper, 2 componente) |
+> | controllo negativo 2: tolto `{sensitivity: 'public'}` dal prezzo | 2 rossi, **gate verde**: la marcatura `public` la protegge **solo** il test di componente |
+> | set di 8 file (privacy + helper dei lotti) | `8 passed (8)` · `378 passed` |
+> | `core-unit` · `component-unit` dal runner | 94 / **2479** = 2465 + 6 + 8 · 76 / **2010** = 2008 + 2 |
+> | `dev.py front check` (client `a085da1c8dac`) | pavimento invariato, nessuna segnalazione nei miei file |
+>
+> **Dal vivo**, copia prod **rinfrescata dalla snapshot**, server `--test` su 6168 con la build di
+> C3; tre stati, spenta → accesa → spenta, senza navigare. Nessun importo reale è riportato qui:
+>
+> | superficie | spenta | accesa | spenta |
+> |---|---|---|---|
+> | posizioni: quantità | cifre `📈` | `••• 📈` | cifre |
+> | posizioni: prezzo, `pmc` (colonne rivelate) | cifre + valuta | **cifre + valuta** | cifre + valuta |
+> | posizioni: valore (controllo) | cifre | `••• € 🇪🇺 EUR` | cifre |
+> | lotti: quantità aperta | cifre | `•••` | cifre |
+> | lotti: prezzo d'apertura (colonna rivelata) | cifre | **cifre** | cifre |
+> | asse del confronto lotti, hash dei pixel | `ac7c29a8` | `59b49564` | **`ac7c29a8`** |
+> | canvas del Gantt, hash dei pixel | `ab36408f` | `ad657519` | **`ab36408f`** |
+>
+> Le ultime due righe chiudono la domanda della review di I: i miei grafici lotti si ridisegnano al
+> toggle **in entrambi i versi**, e tornano identici al pixel. Pixel letti con `getImageData` sul
+> canvas, perché il testo di ECharts non è nel DOM.
+>
+> **⚠️ Fuori pista — errori miei nella sonda, tutti prima della misura.** (1) Ho cercato il
+> pannello posizioni su `/dashboard` e non c'era: la dashboard ha le schede, le posizioni stanno in
+> `?tab=posizioni`. (2) Ho indovinato la forma della risposta di `/api/v1/auth/me` (`{id}`) invece di
+> leggerla (`{user: {id}}`), e il primo giro ha rivelato colonne per un utente `None`. Entrambi
+> hanno prodotto un'**assenza** (nessuna riga, colonna non visibile), non un valore sbagliato;
+> corretti leggendo il codice, non riprovando a caso.
+>
+> **⚠️ Fuori pista — ho scritto importi reali nel journal.** Nella nota di R20 (passo 6) avevo
+> riportato due cifre lette dalla copia dei dati del developer, e sono entrate nel commit C2. Le
+> regole vietano di committare valori finanziari. Le ho tolte in C3; poi la storia locale del ramo
+> è stata riscritta il 24/09, prima di ogni push, con uno script del coordinator lanciato dal
+> developer, e oggi nessun commit del ramo le contiene. Gli esiti delle sonde in `/tmp`, che le
+> contenevano, sono cancellati. Seconda prova, mia: 0 occorrenze nella storia, negli alberi dei
+> commit del round e nel working tree, con controllo positivo sull'oggetto del vecchio commit. Resta
+> un residuo locale: quell'oggetto è ancora raggiungibile dai ref di checkpoint dell'app Copilot
+> della mia sessione, che nessun push ordinario invia; la decisione è del developer.
+> *Regola che ne esce:* in una nota di verifica dal vivo si scrive la **forma** del valore
+> (`#.###,## €`, «cifre in chiaro»), mai la cifra.
+>
+> **✅ Decisione del developer, 2026-09-24 — quantità 1: (a).** La domanda: una posizione può essere
+> detenuta **in un solo pezzo**, e lì il prezzo unitario visibile **è** il valore mascherato; per
+> quel bene, D5′-c lo rivela. Le opzioni erano: (a) accettarlo come residuo, perché serve sapere che
+> la quantità è 1; (b) mascherare il prezzo unitario per i **tipi** di asset tipicamente in un pezzo
+> (immobili, crowdfunding, private) — per tipo, non per quantità, così la maschera non rivela a sua
+> volta la quantità; (c) mascherarlo quando la quantità è 1, rivelando però che è 1. **Scelta (a)**:
+> il residuo è accettato, perché per ricavare il valore bisogna sapere che la quantità è 1, e la
+> quantità resta mascherata. Il codice di C3 resta com'è.
+
+### Passo 8 — Review del diff privacy di I — **Stato: ✅ fatto** — 2026-09-24 — *verdetto: approvato*
+
+Via coordinator, prima del checkpoint di I: `fmtCurrency` maschera il numero e tiene
+`${baseCurrency}`; asse per Q3, `compact` dentro la maschera; `isPrivacyEnabled()` letto nello
+scope reattivo che costruisce l'`option` — le etichette d'asse non si ridipingono da sole
+(limite §3.4 del Round 1). J non tocca le righe di I nel registro.
+
+> **Note implementazione.** Lettura **in sola lettura** della worktree di I
+> (`git -C …/e-alfy-crispy-pancake diff`, HEAD `2a5927c48`, solo `GrowthChart.svelte`,
+> `PerformanceChart.svelte`, `moneyRenderSites.test.ts`): **eccezione esplicita del coordinator**
+> alla regola del mio agente (*«never read another child's worktree»*), per un compito del piano
+> approvato; nessuna scrittura, copia del diff in `/tmp` rimossa dopo la lettura. Per ciò che il
+> diff non mostra ho letto i due grafici nel **mio** albero, identici alla base di I.
+>
+> **Verdetto: approvato.** `fmtCurrency` → `EUR -•••`; asse Y non-% → `-•••` con `k`/`M` dentro la
+> maschera, `%` intatto; `shortMoney` → `+€•••` / `-••• CHF`; `axisTickAmount` zero compreso;
+> ridisegno con `void shouldMaskAmount()` e `lastRenderedMasked`, che forza la ricostruzione
+> completa quando il percorso «solo dati» di Growth non ripasserebbe l'asse; `markLine` con
+> etichetta spenta. Chiesti: una parola nella `why` di D13 (*the **definition** line*, non *that
+> line*); in S10, test via `__lfChart` che fissino tacche senza cifre né suffisso, modo `%` **non**
+> mascherato e zero mascherato; in S6, il ridisegno dal vivo **in entrambi i versi**, soprattutto da
+> spenta ad accesa. Lo zero come `—` nel tooltip Abs: accettato, stessa classe del costo di D8.
+> Non bloccante: il segno ASCII fa perdere U+2212 in `sv-SE`; quando I avrà C1,
+> `maskFormattedNumber` lo chiude.
+>
+> **⚠️ Fuori pista — la review ha rivolto una domanda a me.** I ha trovato che ECharts mette in
+> cache le etichette d'asse: al toggle serve una ricostruzione completa. I miei grafici lotti (C1,
+> C3) ridisegnano con il solo `void isPrivacyEnabled()`. Passano l'`option` completa a ogni render,
+> ma **non l'ho misurato dal vivo**: va nella verifica di C3.
+
+### Passo 9 — E2E privacy — **Stato: ✅ completato il 2026-09-24**
+
+Spec nuovo: ogni rotta, toggle nei due versi, navigazione con privacy attiva; importi con valuta
+visibile; quantità mascherate in posizioni e lotti e visibili in transazioni. Registrazione nel
+runner a carico del coordinator. Nessun E2E oggi nomina la privacy.
+
+> **Note implementazione.** Via `test-author`: spec nuova `frontend/e2e/portfolio/privacy-masking.spec.ts`
+> (+662; in `portfolio/` perché ogni cartella E2E corrisponde a una categoria del runner), registrata in
+> `_frontend_portfolio.py` (+20, additiva: `front-portfolio privacy-masking`, `project=""`, desktop **e**
+> mobile, perché il pulsante dell'header è raggiungibile anche su mobile). Legge i dati di `TEST_USER` via
+> API, mai per posizione di riga, e non scrive nulla: la privacy è solo nel browser. 9 test per progetto:
+> riepilogo della dashboard; posizioni (valore, P&L e **quantità** nascosti, prezzo, WAC e peso leggibili);
+> lista broker e dettaglio broker **nei due versi, sul posto** (R20); posizioni e lotti del broker (quantità e
+> totali nascosti, prezzi leggibili, lotto parziale `••• (NN%)`); modale di custodia montata con la privacy
+> attiva; transazioni (importi nascosti con valuta e segno, **quantità leggibili**, `—` e conteggio
+> invariati); navigazione con privacy attiva su ogni rotta; ricaricamento che conserva la preferenza, con una
+> card montata mascherata che torna in chiaro sul posto (R20). Ogni cella mascherata deve tenere il codice
+> ISO e il segno; simbolo e bandiera possono mancare (vedi sotto).
+>
+> | comando (lane 6158) | esito |
+> |---|---|
+> | `front-portfolio privacy-masking`, del `test-author` | primo giro `14 passed, 4 failed` (tutti della spec, corretti), poi `18 passed (34.8s)` e `18 passed (33.9s)` — 9 desktop + 9 mobile |
+> | idem con `--workers 4` | `18 passed (21.3s)` |
+> | idem, lanciato da me dopo il rimedio del layout | exit 0 · `18 passed (33.1s)` |
+>
+> **Non coperti, dichiarati:** i grafici (canvas: i loro formatter hanno test unitari), il totale della
+> scheda Info del broker (**ramo morto**: `total_value_base_currency` è dichiarato in
+> `backend/app/schemas/brokers.py` ma nessun codice lo valorizza), i prezzi di mercato di `/assets`
+> (aprire la pagina chiama i provider veri e scrive prezzi: vietato; e la marcatura `public` di
+> `AssetTable` non ha nemmeno un test unitario privacy: **oggi non è protetta da niente**), i tassi FX
+> (non passano dai formatter mascherati), gli eventi asset, la vista Performance e le schede transazioni
+> dentro dashboard e broker.
+>
+> **Reperto, cosmetico:** una cella disegnata prima che il catalogo delle valute sia caricato mostra solo il
+> codice finché qualcosa non la ridisegna (`<n> EUR` in chiaro, poi `••• € 🇪🇺 EUR` dopo il toggle).
+> `ExposureTable`, la tabella dei lotti e i KPI non osservano `currencyStoreVersion`; `TransactionsTable`,
+> `AssetTable` e `YieldOnCostCell` sì. Per questo la spec accetta simbolo e bandiera assenti, mai il codice.
+
+### Passo 10 — Documentazione — **Stato: ✅ completato il 2026-09-24**
+
+Via `docs-writer`: cosa nasconde la privacy (numero e quantità in posizioni/lotti) e cosa no
+(valuta, percentuali, prezzi, WAC, conteggi, eventi asset, tassi). Sezione in una pagina
+esistente. Contratto per i renderer dei tool (D: denaro solo via primitive D8) nella guida
+sviluppatore.
+
+> **Note implementazione.** Via `docs-writer`, nessuna pagina nuova, nessuna modifica alla nav:
+>
+> - **utente** — `user/settings/preferences.en.md`, sezione nuova `🙈 Privacy mode` (+92): il
+>   pulsante nell'header, cosa si nasconde (numero, mai valuta né segno; `•••` costante, anche
+>   `K`/`M`) e dove, cosa resta visibile (percentuali, prezzi unitari, WAC, tassi, conteggi,
+>   eventi asset, quantità in Transazioni, campi di modifica), dove vive l'impostazione (questo
+>   browser, non l'account; niente sincronizzazione fra schede aperte), e un avviso su cosa non
+>   copre (AI Export, download, strumenti del browser, il residuo della quantità 1 deciso in (a));
+> - **sviluppatore** — `developer/frontend/state/app-state.md`, sezione `🙈 Privacy masking`
+>   (+202): lo store, il canale di mascheratura con le firme verificate, il gate e i suoi tre
+>   punti ciechi, la regola legacy di R20 (verificata compilando con Svelte 5.48.0: legacy dà
+>   `$.untrack(() => formatCurrencyAmountHtml(…))`), la regola ECharts, e il contratto per i
+>   renderer dei tool (l'adapter PAC di D è descritto come **pianificato**: non esiste ancora);
+> - **guida dei tool** — `developer/architecture/patterns/tool_plugins.en.md` (+2), un rimando
+>   al contratto (pagina solo inglese);
+> - **istruzioni e skill (mie):** `frontend.instructions.md` (sezione *Privacy masking*), skill
+>   `testing-frontend` (i punti ciechi del gate, misurati) e skill `tool-plugin` (il contratto).
+>
+> | comando | esito |
+> |---|---|
+> | `dev.py mkdocs build` (strict) | exit 0 — il primo giro falliva: la pagina sviluppatore si costruisce anche in it/fr/es, dove `preferences.md#privacy-mode` punta a una traduzione senza àncora; ora il link è alla pagina, e torna all'àncora quando le traduzioni l'avranno |
+> | `dev.py mkdocs check-links` | exit 0, `80 valid link(s)` |
+> | `translate-validate` su `preferences` | exit 1: debito reale (sezione nuova, più la sezione onboarding mai tradotta). Nessuno stamp |
+>
+> **⚠️ Fuori pista — Growth e Performance non sono citati.** In questo albero i loro assi e
+> tooltip sono ancora in chiaro: la correzione è il commit di I (`804bc9903`), non ancora nel
+> target. La sezione utente non ne parla, così non afferma nulla di falso; quando entra, due voci
+> da aggiungere (asse e tooltip di Crescita tranne il modo %, etichette e asse di Performance).
+>
+> **Reperti del `docs-writer`, verificati da me nel codice, non corretti (fuori perimetro):**
+> **sovra-mascheratura** contro le regole del developer in `TransactionsTable.svelte`
+> (`eventTooltipText`: il valore di un evento asset collegato passa per
+> `formatCurrencyAmountPlain` senza `sensitivity`, quindi mascherato — gli eventi sono pubblici) e in
+> `transactions/wac/WacPreviewSection.svelte` (costo unitario e WAC progressivo mascherati: sono
+> prezzi unitari, pubblici per D5′-c); **etichette non tradotte** di `PrivacyToggle.svelte:13`
+> («Hide amounts» / «Show amounts», mie, `b66e93003`), la stessa forma di `ThemeToggle` e di altri
+> controlli dell'header; `isPrivacyPersisted()` non letto da nessun componente, quindi nessun
+> avviso se il browser rifiuta di salvare; due frasi false nelle doc (`developer/frontend/index.md`:
+> «fully embraces runes», ma tre file sono legacy; `user/dashboard/index.en.md`: tre schede, sono
+> quattro).
+
+### Passo 11 — Review manuale e FROZEN — **Stato: ✅ completato il 2026-09-24** — *review del developer sulla copia, C6 incluso*
+
+Runbook sotto, sulla copia prod rinfrescata dalla snapshot.
+
+> **Stato 2026-09-24.** Tutto ciò che il runbook chiede e che un test può leggere è coperto dal passo 9
+> (E2E, desktop e mobile) e dai test unitari; restano per l'occhio del developer i grafici (Crescita e
+> Performance dopo l'integrazione del commit di I, lotti, Gantt, WAC), `/assets` e `/fx`, e la
+> sovra-mascheratura segnalata al passo 10 (`TransactionsTable`, `WacPreviewSection`). La `6168` si
+> riaccende su richiesta, con la copia rinfrescata dalla snapshot.
+>
+> **Esito della review del developer, 2026-09-24 17:38** (copia rinfrescata dalla snapshot, server `6168`,
+> versione `v1.1.0-235-g503351f0f-dirty`, cioè C6 nel working tree; punti della test list):
+>
+> | # | cosa | esito |
+> |---|---|---|
+> | 1 | etichette dei pulsanti dell'header nelle 4 lingue (C6) | ✅ *«risolto, ben fatto»* |
+> | 2 | dashboard: KPI, liquidità, allocazione | ✅ KPI; il grafico Crescita è ancora in chiaro → **I** (atteso: il suo commit non è in questa base) |
+> | 3 | posizioni (portafoglio e periodo) e analisi lotti | ✅ anche l'asse Y dell'ultimo grafico dei lotti nascosto, e tutto torna col secondo click |
+> | 4 | lista broker nei due versi (R20) | ✅ |
+> | 5 | dettaglio broker | ✅ come in dashboard; manca solo il grafico di *Portfolio growth* → **I** |
+> | 6 | pannelli rischio | ✅ |
+> | 7 | transazioni (importi, quantità, tooltip evento) | ✅ |
+> | 8 | anteprima WAC | ✅; e **decisione del developer (D7 confermato)**: il campo di inserimento del costo (totale o per unità) resta in chiaro, *«se non vuole che si veda basta che non la scriva»* |
+> | 9 | controlli negativi (asset, FX) | ✅ *«tutto si mostra sempre, come mi aspetto»* |
+> | 10 | navigazione e ricarica con privacy attiva | ✅ |
+>
+> I punti 11–17 (aggiornamenti e onboarding) sono registrati nel piano gemello, Round 8, step 7. Nessun
+> difetto di privacy aperto in questo round; resta l'integrazione di Crescita e Performance (commit di I).
+>
+> **Verifica d'archivio (2026-10-09):** l'integrazione che restava è avvenuta. Il commit di I è
+> `804bc9903` (2026-09-24 14:18, `fix(privacy): mask growth and performance amounts`), entrato in
+> `dev_release2` con il Round 4 di I (2026-10-02, punta `975a115ae`). Oggi l'elenco `residual` del gate
+> è vuoto (`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts:281-283`) e la riga P&L del
+> tooltip di Crescita è registrata `masked` (`:193-197`). Il debito di precisione del gate su
+> `PerformanceChart` (due rami `maskable` sulla stessa riga, `axisTickAmount` non visto) è rinviato:
+> `Phase_0/38_postReleaseBacklog/README.md`, voce «I-05 · precisione del gate privacy su
+> PerformanceChart».
+
+## Round 2b — checkpoint C6 (assegnato dal coordinator, 2026-09-24 16:07)
+
+Base: C5 committato, A `cc20b8288` e B `503351f0f`. Perimetro verificato dal coordinator: J unico
+scrittore di `ui/PrivacyToggle.svelte`, `ui/ThemeToggle.svelte`, `transactions/TransactionsTable.svelte`,
+`transactions/wac/WacPreviewSection.svelte` e dei test nuovi; `AssetTable.svelte` **non** si tocca
+(K lo modifica nel suo ramo). Dopo C6 viene il passo 11.
+
+### Passo 12 — Etichette dei pulsanti dell'header in i18n — **Stato: ✅ completato il 2026-09-24**
+
+> **Commit (verifica d'archivio 2026-10-09):** `1466a76d6` (2026-09-24 17:21,
+> `feat(i18n): translate the header toggles`).
+
+> **Note implementazione.** Nessuna chiave dell'header esisteva da riusare (cercate per valore e per
+> nome: solo `settings.theme*`, che dicono «Chiaro/Scuro», non l'azione). Namespace nuovo `header`,
+> 6 chiavi × 4 lingue via `dev.py i18n add`: `header.privacy.hide|show`,
+> `header.theme.switchToDark|switchToLight|dark|light`. L'inglese resta **identico** a prima
+> («Hide amounts», «Switch to dark mode», …: riportato con `i18n update` dopo una prima stesura che
+> diceva *theme*), così nulla cambia per chi legge in inglese; le traduzioni seguono il lessico di
+> `settings.theme*` («tema scuro», «thème sombre», «tema oscuro»). `PrivacyToggle` (runes) e
+> `ThemeToggle` (legacy) leggono `$_()`: **compilato** `ThemeToggle`, le due etichette sono thunk
+> tracciati (`$.get(theme)` e `$_()`), quindi seguono sia il tema sia la lingua. `ThemeToggle` sta
+> anche nella pagina di login, che usava già `$_`. Nessun test o E2E legge quei testi (cercati i
+> quattro letterali): i test passano da `data-testid`. `Header.test.ts` (ThemeToggle vero): `22 passed`.
+>
+> **Test** (via `test-author`, nuovo `ui/HeaderToggles.i18n.test.ts`, +253, registrato in `component-unit`):
+> ogni etichetta attesa è **letta dal catalogo** (`en.json`, `it.json`), mai scritta nel test; lingua
+> cambiata sul posto con `currentLanguage.set`, come fa l'app; `PrivacyToggle` segue lo store nei due versi
+> e `aria-pressed` lo segue; `ThemeToggle` (legacy) alterna le due chiavi al click e segue il cambio di
+> lingua sul posto. `7 passed`. **Controllo negativo:** puntato alle versioni di HEAD (inglese fisso),
+> `4 failed | 3 passed` — ogni passo in italiano rosso, per esempio *expected 'Show amounts' to be 'Mostra
+> importi'*.
+
+### Passo 13 — Sovra-mascheratura in Transazioni e anteprima WAC — **Stato: ✅ completato il 2026-09-24**
+
+> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (2026-09-24 17:21,
+> `fix(privacy): keep unit values visible`), insieme ai passi 14 e 15.
+
+Regola del developer (D5′-c): un valore **unitario** (prezzo, WAC, costo unitario) è `public`, un
+**totale** è `personal`; gli **eventi asset** descrivono l'asset, non il portafoglio (`public`); un campo
+di modifica resta leggibile (D7).
+
+| sito | valore | classe | stato |
+|---|---|---|---|
+| `TransactionsTable.eventTooltipText` | valore dell'evento asset collegato (tooltip e `aria-label` del puntino) | **public** (evento) | oggi `personal` per default → da correggere |
+| idem, ramo non finito `${ev.value} ${ev.currency}` | stesso valore | public | già in chiaro, invariato |
+| `TransactionsTable.linkedPairTooltip.fmtCash` | importo di cassa del movimento collegato | personal (totale) | invariato |
+| cella *importo* di `TransactionsTable` | importo di cassa della transazione | personal | invariato |
+| `WacPreviewSection`, colonna quantità | quantità della transazione | visibile (D5′: transazioni) | invariato |
+| `WacPreviewSection`, costo unitario originale → convertito | unitario | **public** | oggi mascherato → da correggere |
+| `WacPreviewSection`, costo unitario | unitario | **public** | oggi mascherato → da correggere |
+| `WacPreviewSection`, WAC progressivo | unitario (costo medio per quota) | **public** | oggi mascherato → da correggere |
+| `WacPreviewSection`, rami `toFixed` senza valuta | unitario | public | già in chiaro, invariato |
+| `WacPreviewSection`, campo `CompactCashCell` (totale o per unità) | campo di modifica | visibile (D7) | invariato |
+
+> **Note implementazione.** Test prima del fix, via `test-author`: `transactions/wac/WacPreviewSection.test.ts`
+> (+279) e `transactions/TransactionsTable.privacy.test.ts` (+309), registrati da me in `component-unit`
+> (+2 righe nel runner). Commutano la privacy **sul posto, nei due versi**, e montano anche con la privacy
+> già attiva. **Rossi prima:** `Test Files 2 failed (2)`, `Tests 4 failed (4)`, e ognuno solo sul valore in
+> esame (costo unitario e WAC di una riga in EUR e di una USD→EUR resi `••• € 🇪🇺 EUR`; valore dell'evento
+> reso `••• $ 🇺🇸 USD`), con **controlli verdi nello stesso passo**: la cella di cassa della stessa riga si
+> maschera e torna (prova che la tabella si ridisegna davvero sul posto), le quantità restano, il tooltip
+> della coppia collegata resta mascherato. **Fix:** `{sensitivity: 'public'}` su una chiamata di
+> `TransactionsTable` e su quattro di `WacPreviewSection`, con un commento che cita D5′-c; formato invariato.
+> **Dopo:** `Test Files 2 passed (2)`, `Tests 4 passed (4)`; i passi *on → off* sono raggiunti (provato con
+> una sentinella su copie dei test). **Controllo negativo sulla correzione vera**, su copie in una cartella che
+> gate e copertura saltano: tolto `public` da `WacPreviewSection` → rossi solo i suoi 2 test, sui costi
+> unitari e sul WAC; tolto da `TransactionsTable` → rossi solo i suoi 2, sul valore dell'evento; i controlli
+> (cassa mascherata, coppia collegata mascherata, quantità e data visibili) verdi in entrambi. Tolto un sito
+> alla volta, ciascuna copia maschera **esattamente** il proprio importo e nessun altro. sha256 dei componenti e
+> dei test identici prima e dopo; copie cancellate.
+
+### Passo 14 — Test della marcatura `public` di `AssetTable` — **Stato: ✅ completato il 2026-09-24**
+
+> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (vedi passo 13).
+
+Solo il file di test: `AssetTable.svelte` non si tocca. Il prezzo di mercato è `public`, e oggi nessun
+test lo protegge (il gate non riesamina una marcatura `public`).
+
+> **Note implementazione.** Via `test-author`, nuovo `assets/AssetTable.privacy.test.ts` (+197, registrato in
+> `component-unit`): la quotazione dell'ultimo prezzo tiene cifre, simbolo, bandiera e codice montata con la
+> privacy attiva e poi spenta e riaccesa sul posto, e viceversa; prima di ogni passo il test verifica che lo
+> store sia davvero cambiato e che un importo `personal` passato dallo stesso formatter si mascheri.
+> `AssetTable.svelte` non è stato toccato (sha256 identico prima e dopo, nessuna differenza da HEAD).
+> **Controllo negativo:** su una copia con la riga della quotazione senza `{sensitivity: 'public'}`, servita da
+> una configurazione temporanea con alias (una copia identica, per lo stesso alias, passa `2/2`), `2 failed`,
+> anche il passo *off → on* sul posto: prova che il toggle raggiunge la tabella.
+
+### Passo 15 — Frase «fully embraces runes» (facoltativo) — **Stato: ✅ completato il 2026-09-24**
+
+> **Commit (verifica d'archivio 2026-10-09):** `1c8d12957` (vedi passo 13), che corregge
+> `mkdocs_src/docs/developer/frontend/index.md`; registrazione dei passi 12-15 in `8347f8d6c`.
+
+> **Note implementazione.** Misurato compilando ogni componente con Svelte 5.48.0 (`metadata.runes`): **34 su
+> 253** componenti di `frontend/src` (esclusi `__tests__`) sono in modalità legacy, fra cui il layout
+> `(app)`, `BrokerCard`, il dettaglio broker e `ThemeToggle`. Il `docs-writer` ha riscritto
+> `developer/frontend/index.md`: i componenti nuovi usano le rune, una minoranza dei vecchi no, e l'unica
+> conseguenza da sapere (la chiamata dentro un'espressione del template compila in `$.untrack`, R20), con
+> il rimando a `app-state.md#privacy-legacy-freeze`. Il numero esatto non è nella pagina: invecchierebbe
+> alla prossima migrazione.
+
+### Verifica di C6 — lane 6158, 2026-09-24
+
+| comando | esito |
+|---|---|
+| `front-utility core-unit` | `94 passed`, `2513 passed` |
+| `front-utility component-unit` (con i 4 test nuovi) | `80 passed`, `2023 passed` |
+| `front-utility onboarding-component-unit` (coachmark) | `14 passed`, `408 passed` |
+| `front-utility onboarding-tour` · `onboarding-guides` | `10 passed` · `24 passed` |
+| `front-utility auth` · `settings` · `header-scroll` | `24` · `45` · `4 passed` |
+| `front-portfolio privacy-masking` | `18 passed` |
+| `front-transaction tx-import-flow` · `tx-asset-identity` · `tx-import-resolution` | `10` · `9` · `12 passed` |
+| `front-transaction transactions-table` · `tx-tooltips` | `25` · `2 passed` |
+| `front-transaction tx-wac` · `tx-wac-fx` · `tx-wac-mode` | `7` · `9` · `5 passed` |
+| `front-transaction tx-wac-bulk` | **rosso preesistente, non di C6** (sotto) |
+| `dev.py front check` (client `a085da1c8dac`) | `3 errors and 41 warnings in 4 files`, il pavimento noto |
+| `prettier --check`, `git diff --check`, `ruff` sul runner | puliti |
+
+> **⚠️ Fuori pista — `tx-wac-bulk` rosso, e non per C6 (test-triage).** Tre giri, esiti diversi sullo stesso
+> codice: nel giro completo `2 failed | 8 passed` (WB3, WB10); da solo `5 failed | 5 passed` (WB2, WB3, WB8,
+> WB9, WB10); da solo con `WacPreviewSection.svelte` **di HEAD** (ripristinato poi, sha256 identico)
+> `3 failed | 7 passed` (WB2, WB3, WB8). Sempre lo stesso modo: nella modale il blocco del costo di carico non
+> c'è (`tx-form-cost-basis-input-amount`, `…-toggle-auto`, `…-show-qualifying` *not found*), o un click va
+> in timeout. **Perché non può essere C6:** `sensitivity` entra solo in `maskable(abs, sensitivity)`
+> (`currencyFormat.ts`), e con la privacy spenta — come in queste E2E — `public` e `personal` producono la
+> stessa stringa per la stessa via; in più la tabella che ho toccato si disegna solo dopo il click su
+> *show-qualifying*, che è proprio l'elemento che manca. Causa **non** indagata (la spec è del 14–27/08, fuori
+> dal mio perimetro): girata al coordinator. Ogni categoria ripopola il DB all'avvio (`_ensure_db_populated`,
+> un processo per categoria), quindi non è sporcizia lasciata dalle spec lanciate prima.
+
+## Previsione conflitti
+
+| file | owner | intervento J | stato |
+|---|---|---|---|
+| `GrowthChart.svelte`, `PerformanceChart.svelte` | I | review | deciso |
+| `moneyRenderSites.test.ts` | J | gate-prep e voci proprie | I scrive le sue 4 voci: ordine gate-prep → I |
+| `maskable.ts` (+ test) | J | primitive | primitive per I su richiesta via coordinator |
+| `riskAnalysisHelpers.ts` + `.test.ts` | J (round) | ③a | deciso |
+| `LotComparisonChart.svelte:261` | J | ③b | deciso |
+| `BrokerCard.svelte`, `brokers/+page.svelte`, `brokers/[id]/+page.svelte` | — | R20 | dopo la misura |
+| `ExposureTable`, `UnifiedLotsTable`, `LotCustodyModal` | **J** (round) | D5′ | assegnati; K cita `LotCustodyModal` solo in analisi e ne è avvisato |
+| `LotGanttChart`, `LotWacPriceChart` | **J** (round) | D5′ | assegnati: il v3 di I non li include (S1b tocca solo Growth e Performance); I ne è avvisato |
+| `risk-lab.spec.ts` | F | nessuno | F dopo il mio avviso su ③a |
+
+## Test list — approvata con il piano
+
+| # | livello | asserzione |
+|---|---|---|
+| T1 | unit | `maskCurrencyParts`: `en-US` → `$•••`, `-$•••`; `it-IT` → `••• €`; compact senza `K/M`; valuta sempre presente |
+| T2 | unit | rischio: `:387` e `:379` invertiti; `:330…:402` aggiornati; `—` e guardia di scope invariati |
+| T3 | unit | lotti: formatter mascherato con simbolo, anche il ramo `catch` |
+| T4/T5 | review | test di I su Growth e Performance |
+| T6 | gate | test dei due rami su fixture sintetica; stato `public`; controllo positivo; totali per stato |
+| T7 | componente | `BrokerCard`: off→on→off, montaggio con on→off |
+| T12 | E2E | privacy su ogni rotta, due versi, navigazione; quantità per D5′ |
+| T13 | unit | `maskableQuantity` |
+| T14 | unit/componente | cella lotto Q8; custodia senza cifre; tooltip Gantt/WAC mascherati |
+
+## Runbook review manuale — copia prod `6168`
+
+| rotta | col toggle | difetto se |
+|---|---|---|
+| `/dashboard` Crescita, modi `eur/pnl/income/candles` | asse Y e tooltip | una cifra in chiaro |
+| `/dashboard` Crescita, modo `pct` | asse | `•••` al posto delle % |
+| `/dashboard` Posizioni, vista Performance | etichette nette e asse | cifre in chiaro |
+| `/dashboard` Posizioni, vista detenzioni | colonna quantità | cifra in chiaro (D5′) |
+| `/brokers` | caricare off, on sul posto, off sul posto; ricaricare on, off sul posto | un verso non risponde (R20) |
+| `/brokers/[id]` | saldi `:606` e totale `:777` contro le tabelle figlie; lotti, custodia, Gantt, WAC | comportamento diverso fra i gruppi; quantità in chiaro; cella lotto senza `%` |
+| rischio L1/L4, scope portafoglio | importi | `•••` senza simbolo; segno sparito |
+| `/transactions` | colonna quantità | mascherata = sovra-mascheratura |
+| controlli negativi | prezzi (card e tabella), tassi FX, WAC, n. movimenti, eventi asset, % | mascherati = sovra-mascheratura |
+
+## Definition of done
+
+- Privacy attiva: nessuna cifra di patrimonio su dashboard (assi e tooltip in ogni modo), broker,
+  rischio, lotti; **valuta sempre visibile** accanto a un importo mascherato; segno per D8/Q7.
+- D5′: quantità mascherate in posizioni e lotti, visibili in transazioni; cella lotto per Q8.
+- Toggle nei due versi su ogni rotta, anche dopo navigazione con privacy attiva.
+- Gate a 0 rossi; suite privacy verde con `Test Files N` = N; contratto Risk verde.
+- Gate-prep integrato prima del commit di I; review del diff di I consegnata.
+- Coordinator avvisato a ③a pronta.
+- Nessuna migrazione, nessuna chiave rimossa, porte 6158/6168 provate libere al FROZEN.
+
+## CHANGELOG proposto — lo scrive il coordinator
+
+- 🐛 Privacy: il simbolo della valuta resta visibile accanto a un importo mascherato anche nei
+  pannelli di rischio e nel confronto lotti.
+- 🐛 Privacy: la pagina Broker torna a mostrare gli importi quando la privacy viene disattivata.
+- 🔄 Privacy: con la privacy attiva sono nascoste anche le quantità possedute nelle posizioni e
+  nei lotti; restano visibili nelle transazioni.

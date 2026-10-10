@@ -1731,123 +1731,6 @@ il difetto di prodotto più grande trovato nella review della fase 2.
 
 ---
 
-## 🔴 L'audit i18n non può dire «inutilizzata» su un terzo del catalogo
-
-**Misurato da S4 il 21 Set**, interrogando **la funzione dell'audit** invece di leggerne la regex.
-
-### La causa, in una riga
-
-```js
-RiskResultFrame.svelte:27     const key = `risk.${prefix}.${code}`
-                                           ↑ l'interpolazione è al PRIMO segmento
-```
-
-L'audit estrae come prefisso tutto ciò che precede la prima `${`, cioè `risk.`, toglie il punto
-→ **`risk`**. E `is_key_potentially_used` fa `key.startswith(prefix)`.
-
-> **Nessuna chiave `risk.*` può comparire nell'elenco degli inutilizzati. Mai. Per costruzione.**
-
-### La taglia
-
-⚠️ **Cifre corrette il 21 Set da C**, su un catalogo nel frattempo cresciuto. Le misure di S4
-restano vere alla loro data; quelle qui sotto sono le attuali.
-
-```
-prefissi radice NUDI: 14     →     1 016 chiavi su 3 363     =     30,2 % del catalogo
-                       ↑ ma 4 sono spazzatura di regex: `0`, `axios`, `msg`, `test`
-```
-
-🔑 **E la cifra che conta è più piccola e più precisa**: delle 1 016 schermate, **819 hanno un
-riscontro letterale indipendente**. Le chiavi **senza altra prova che il cancello cieco** sono
-**197 — il 5,9 %**.
-
-> ⚠️ **Il 5,9 % non consola**, ed è C stesso a mostrare perché: quei riscontri indipendenti
-> possono essere **accidentali**. Le 14 `risk.errors.*` si salvano solo perché un *secondo* sito
-> (`levelHelpers.ts:210`) scrive il segmento **fisso**. Se domani quella riga usasse
-> `translatedCode('errors', …)` come il suo gemello, **cadrebbero tutte e quattordici in
-> silenzio**. Un riscontro accidentale è una prova che può sparire con un refactor innocuo.
-
-🔴 **E `risk.warnings` non esiste come stringa da nessuna parte nel sorgente**: l'unione
-tipizzata è **l'unica prova che quel prefisso esista**. Leggerla non è un modo più preciso di
-indovinare — è l'unico posto dove l'informazione c'è.
-
-| namespace | chiavi rese non verificabili |
-|---|---:|
-| `risk` | **332** |
-| `importWizard` | 273 |
-| `signals` | 148 |
-| `common` | 120 |
-| `chartSettings` | 102 |
-| `providerErrors` · `sectors` · `fileStatus` | 29 |
-
-⚠️ **Il `complete · 0 incomplete` riportato più volte in questa campagna era vero
-come uscita del comando, e su quei namespace non misurava niente.**
-
-### 🔑 Perché è peggio del cancello dei link
-
-`dev.py:1238` salta i `path={espressione}` e **tace**. Questo **risponde «usata»**.
-
-> **Non un silenzio letto come assoluzione: un'assoluzione esplicita.**
-
-### La riparazione è nella stessa riga che causa il difetto
-
-```ts
-function translatedCode(prefix: 'errors' | 'warnings', …)
-```
-
-**L'insieme esatto dei prefissi è già scritto nel codice, come unione tipizzata.** L'audit lo
-butta via e ripiega sul troncamento alla prima interpolazione.
-
-> **La cecità non è fondamentale: è una rinuncia.**
-
-Il lavoro è insegnare all'audit a leggere le unioni tipizzate dove ci sono, e a **dichiarare
-"non verificabile"** dove non ci sono — invece di dire «usata».
-
-### 🔴 21 Set — la trappola era nel MIO testo, e C l'ha disinnescata prima di raccoglierla
-
-Avevo scritto: *«la regola ancorata al punto (`risk.` invece di `risk`) dà 63 chiavi orfane»*.
-**Falso, e in modo pericoloso.** C ha girato **cinque varianti** invece di dichiarare il numero
-irriproducibile:
-
-| regola | orfane `risk.*` |
-|---|---:|
-| il cancello com'è oggi | 0 |
-| **«ancorata al punto»** ← *la mia etichetta* | 🔴 **0 — inerte** |
-| togliere il prefisso nudo `risk` | 47 |
-| + scartare il credito di `find_used_keys_in_backend()` | **60** ← *era questa la mia misura* |
-| solo riscontri letterali | 115 |
-
-`'risk.simulation.regimeTruncated'.startswith('risk.')` è **ancora `True`**: ancorare al punto
-ferma `riskFoo`, **mai `risk.qualunque.cosa`**. La regola che avevo girato non ancorava al punto:
-**buttava via il credito del backend.**
-
-> 🔑 **«Chi raccoglie questo testo e implementa alla lettera ciò che c'è scritto ottiene zero
-> orfane e un cancello che si dichiara riparato.»**
->
-> È **la stessa forma del difetto che la voce descrive**, applicata alla voce che lo descrive:
-> un'istruzione che sembra prescrivere una misura e ne prescrive una **inerte**.
-
-### 🎯 Il numero da raggiungere è **4**, non 63 e non 47
-
-Triage delle 47 (*leaf* presente in `src` **oppure** codice snake emesso da `backend/app`):
-**43 vive · 4 morte.**
-
-| chiave | prova |
-|---|---|
-| `risk.simulation.regimeTruncated` | codice `regime_truncated` emesso da **0** file di backend |
-| `risk.levels.l3.{beta,sharpe,sortino}Help` | leaf assente e **nessun template `${…}Help` esiste** |
-
-I 7 `risk.warnings.*` che emergono sono **tutti emessi dal backend** → vivi. Le 14
-`risk.errors.*` pure.
-
-> **63 = rotto · 47 = a metà · 4 = riparato.** Il cancello di accettazione è un **diff
-> prima/dopo** in cui l'unico delta ammesso sono quelle quattro.
-
-**Priorità**: media. **Non blocca nulla**, ma ogni misura i18n fatta finora su quei namespace
-va riletta come «non verificata» invece che come «pulita».
-
----
-
 ## 🔴 I 110 `raise ValueError` del motore di rischio — il metodo per separarli, non il risultato
 
 **Aperto da B, round 3, 21 Set 2026.** Il pacchetto «errori come codici» ha chiuso B1/B2/B4;
@@ -2264,3 +2147,47 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   Prima di scriverla va deciso se i flussi si reinvestono nell'asset o si sommano come cassa.
 - Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
 - Quando arriva: togliere la riga «solo prezzi» dall'interfaccia, l'avviso dal manuale e il TODO dal codice.
+
+## 🔑 Sessioni — il cambio della password non chiude le sessioni già aperte
+
+**Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — da ragionarci in seguito · **Priorità**: Bassa
+
+### Contesto
+- Reperto dell'onda 3 della doc inglese (Q, 08/10/2026), verificato sul codice. Il login emette un JWT senza stato nel
+  cookie `session`, con la durata presa dalle impostazioni globali; a ogni richiesta `get_current_user`
+  (`backend/app/api/v1/auth.py`) controlla la firma, la scadenza e `is_active`, ma non sa nulla dei cambi di password.
+- Quindi, dopo un cambio della password (dall'utente o con `user reset` dell'admin), una sessione già aperta, anche
+  rubata, resta valida fino alla sua scadenza.
+- Mitigazioni di oggi: la scadenza della sessione; un riavvio senza `JWT_SECRET` fisso invalida tutte le sessioni.
+- Decisione del developer (09/10/2026), testuale: «ora non è prioritario e a suo tempo avevamo già accettato che questa
+  cosa succedesse, non sono certo di volerla risolvere, ci devo pensare». **Prima di qualsiasi lavoro va ragionato se
+  risolverlo.**
+
+### Azione Futura
+- Decidere se il comportamento va cambiato.
+- Se sì, le strade già individuate:
+  - un numero di versione del token per utente (colonna e migrazione), copiato nel JWT e incrementato a ogni cambio
+    password; il controllo costa poco, perché `get_current_user` ricarica già l'utente a ogni richiesta;
+  - in alternativa, un `password_changed_at` confrontato con l'emissione del token;
+  - una lista di revoca (più costosa, e non serve per questo caso).
+- Da coordinare con l'accesso OIDC (#27), che tocca lo stesso punto.
+
+## 🔀 PAC/Rebalancer — un solo passo di cambio per broker e coppia
+
+**Data aggiunta**: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — **da fare con urgenza insieme al Rebalancer** ·
+**Priorità**: Alta, quando si apre il Rebalancer
+
+### Contesto
+- Reperto della gallery (M, 09/10/2026) e analisi di D (opzione «e»): le decisioni di cambio sono una per rotta d'ordine
+  × valuta del pool (`backend/app/services/pac_allocator/evaluator.py`, `constraints.py`), quindi il piano può contenere
+  più conversioni separate della stessa coppia sullo stesso broker, che il report poi somma (`planner_report.py`).
+- Con la regola «arrotondamento sempre contro il piano» (crediti per difetto, debiti per eccesso, 1.2) queste
+  conversioni spezzate non creano più valore, ma allungano il piano e lo rendono meno leggibile.
+- Decisione del developer (09/10/2026), testuale: «da fare con urgenza quando si fa anche il ribilanciamento, che
+  probabilmente sarà più soggetto al bug rispetto il pac».
+
+### Azione Futura
+- Una sola decisione di cambio per broker × coppia: variabili, vincoli, ledger e report del motore. È un rifacimento
+  ampio.
+- Test di equivalenza sui piani esistenti e oracolo sui casi con vendite (Rebalancer), dove le conversioni in entrambi i
+  versi sono più frequenti.

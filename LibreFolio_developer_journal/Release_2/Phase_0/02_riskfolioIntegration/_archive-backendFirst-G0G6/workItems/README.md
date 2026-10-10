@@ -6,6 +6,10 @@ l'implementazione della Risk Analysis.
 **Data snapshot**: 29 Luglio 2026
 **Totale**: 53 work item — 32 `done`, 21 `pending`
 
+> ↪ *Allineamento 09/10/2026*: catena **superata** dalla ripianificazione del 16/09 (README della cartella: «La catena G6
+> non viene ripresa»). I ⏳ qui sotto non sono lavoro aperto: Dashboard, Broker e laboratorio sono stati rifatti nei giri
+> `implementation/` e `implementation_2/`; la scheda di Asset Detail resta parcheggiata (D47).
+
 I testi inglesi di titolo e descrizione sono copiati senza riscrittura dal
 tracker della sessione. Questi file documentano la scomposizione esecutiva; i
 contratti e i piani nella cartella padre restano le fonti autoritative.

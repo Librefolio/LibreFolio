@@ -1,10 +1,15 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`, base `108a2adf5`) è stata approvata dal developer il 2026-10-08 alle 21:22: checkpoint pronto, FROZEN. Le traduzioni sono rinviate per decisione del developer.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, `5980ab86f`) sono entrati col treno 24 (merge di Q `e994979f9`). **Il piano resta attivo** fino al giro di traduzioni, rinviato per decisione del developer: vedi «Cosa resta aperto» qui sotto.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
 > `translation_debt_baseline.txt`, `app_doc_links.tsv`, i report dei 9 audit).
+>
+> **Cosa resta aperto** (aggiornato il 2026-10-09, base `586a4f0ea`, treno 25):
+> - **Traduzioni IT/FR/ES** delle pagine cambiate nella 1.2, e delle pagine nuove mai tradotte. Il dry-run del 08/10 contava 131 pagine, circa 9,4 milioni di token (S18, «Resoconto per il lancio delle traduzioni»). Il giro lo decide il developer; finché non parte, questo piano resta in `Phase_0/`.
+> - **Screenshot:** gli 8 segnaposto dei portali dei broker (Trading212, Coinbase, …) restano TODO nascosti, per decisione del developer (S18). Il segnaposto `security/connection-indicator` l'ha chiuso M con `dbf4263e9`.
+> - Nessun altro seguito aperto. L'avviso Docker è stato tolto in S19; l'ancora `#session-cookie-secure` non serve (coordinatore, S20).
 >
 > **Autorizzazione del developer**, inoltrata dal coordinatore (07/10): «Piano approvato dal developer,
 > in modalità interattiva». Il piano è stato approvato anche in questa sessione (exit plan mode,
@@ -790,7 +795,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - `core-ui/select.md:424`: `BenchmarkSelect` **usa già** `AssetPickerPanel mode="single"` (`BenchmarkSelect.svelte:197`); resta in programma solo il segnale Asset Comparison.
   > - **In corso:** il writer della Dashboard Risk aggiunge `## 🛡️ Dashboard Risk Tab {: #dashboard-risk-tab }` a `risk-lab.md`, con rimandi e non duplicati, e cambia l'H1 in «Risk UI: Correlation and Dashboard Risk Tabs».
 
-- **S16** 🟡 2026-10-08 (onda 1 ✅; onde 2-3 da fare) — Semplificazione di tutta la doc utente: il tecnico va nel manuale dev.
+- **S16** ✅ 2026-10-08 (onda 1 qui; le onde 2 e 3 sono chiuse in S17 e S18) — Semplificazione di tutta la doc utente: il tecnico va nel manuale dev.
   > **Feedback** (developer, 08/10 13:08): «in danske bank il titolo va a capo, ma vedo che lo fa con anche le altre banche, Poi è un muro di testo, troppi dettagli tecnici, e te lo dico, vale per tutto, non solo per questa pagina, quindi riguarda anche le altre e cerca di semplificare e scorporare, mettere in dev manual le cose tecniche e qui le info utili».
   >
   > **Note implementazione**:
@@ -1230,6 +1235,9 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >   - O: stringhe FX, aiuto di Borsa, timeout del sync, testi di justETF, conteggi delle valute e AI Export;
   >   - I: eventi;
   >   - il resto (L, etichette, Total Value, codice morto, docstring) in backlog.
+  > - **Reperti AI Export per il coordinatore**, spostati qui il 2026-10-08: per un errore di inserimento erano finiti in coda a S18.
+  >   - I tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valevano solo per i prezzi, mentre gli indicatori arrivano a 84/28/14. **Corretto da O nel treno 19** (`aiExport.detailLevelHelp.*`).
+  >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
 
 - **S18** ✅ 2026-10-08 — Onda 3: le pagine admin, su base `108a2adf5` (treno 17). Chiusa con l'approvazione del developer alle 21:22: «chiudi l'onda 3 e sistemiamo gli effetti del treno 18, ma non avviamo ancora le traduzioni». Checkpoint pronto, FROZEN.
   > **Via libera** (coordinatore 17:44 e 17:50, con l'approvazione del developer «Sì, Q parte con l'onda 3 dopo il treno 17»). Nessuna pagina riservata a M, né di P o di L. `mkdocs.yml` e i CSS restano di Q.
@@ -1372,7 +1380,7 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **`admin/settings`**, pannello `init-settings`: prefisso `pipenv run` come in `cli_tools`, con link alla pagina dei comandi.
   > - **`developer/dev_workflow.en.md:119`**: la cache tiene solo il sottoinsieme delle bandiere di Noto Color Emoji, servito dalla face `'LF Flags'` (`frontend/static/lf-flags.css`; `scripts/update_js_cache.py:91-100`).
   > - **Cancello `w3b`**: build strict exit 0, 0 WARNING/ERROR; check-links con il solo link rotto di base; scope, placeholder, stile e `diff --check` verdi; self-check 217 pagine, 0 problemi. Anteprima aggiornata alle 18:36.
-  > - In attesa della risposta del developer.
+  > - Risposta del developer (18:39): «ok, grazie», con la domanda qui sotto.
   >
   > **Cosa resta da migliorare** (domanda del developer, 18:39; dati di Q, script `/tmp/libreFolio_q_remaining.py`, `_placeholders.py`, `_transdebt.py`):
   > - **Pagine mai semplificate:**
@@ -1458,17 +1466,323 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   > - **Approvazione del developer** (21:22): chiudere l'onda 3 con gli effetti del treno 18. Niente traduzioni per ora: non ne è stata avviata nessuna, solo il dry-run, e nessun file IT/FR/ES è cambiato.
   > - **Server:** l'anteprima (`q-preview-6162d`) è fermata. `lsof -nP -iTCP:6162 -sTCP:LISTEN` e `lsof -nP -iTCP:6042 -sTCP:LISTEN` non trovano processi in ascolto (rc 1).
   > - **Delta:** 22 file tracciati modificati, nessun file nuovo, con HEAD `108a2adf5` e target `dev_release2` = `70d02cd8e` (treno 18). Nessuna sovrapposizione con i 43 path cambiati dal target dopo la base: merge testuale pulito.
-  > - **Privacy:** 1412 righe aggiunte, nessun percorso personale, e-mail o segreto. `JWT_SECRET=paste-the-generated-value-here` e `tskey-auth-...` sono segnaposto. Gli IP sono privati d'esempio; i due IP Tailscale (`100.110.222.112`, `100.77.72.90`) erano già pubblicati dalla v1.1.0 in tutte e 4 le lingue.
+  > - **Privacy:** 1412 righe aggiunte, nessun percorso personale, e-mail o segreto. `JWT_SECRET=paste-the-generated-value-here` e `tskey-auth-...` sono segnaposto. Gli IP sono privati d'esempio; i due IP Tailscale della sezione MagicDNS erano già pubblicati dalla v1.1.0 in tutte e 4 le lingue (in S20 si sostituiscono con indirizzi d'esempio).
   > - **`git diff --check`:** pulito.
   > - **Commit proposto:** `/tmp/libreFolio_commit_w3.txt`, «docs: simplify wave 3 admin pages, fix from code».
   > - **Seguiti dopo il checkpoint:**
   >   - **dopo il treno 19, al via del coordinatore:** togliere l'avviso Docker e aggiornare `cli_tools:8,78` e `dev_workflow:143-144`;
   >   - **sempre dopo il treno 19:** confrontare le pagine EN con i testi cambiati da O;
   >   - **traduzioni:** quando le decide il developer.
-  > - In attesa della review del developer.
-  > - **Reperti per il coordinatore:**
-  >   - i tooltip dei livelli di dettaglio in `en.json` («buckets up to 30/14/7 days») valgono solo per i prezzi; gli indicatori arrivano a 84/28/14;
-  >   - `.github/instructions/frontend-ai-export.instructions.md` descrive un flusso `ClipboardItem`, ma il codice usa `writeText` con un fallback.
+
+- **S19** ✅ 2026-10-08 — Seguiti del treno 19, su base `4d09ac2ac`. Il treno contiene l'onda 3 (`22d80282a`, merge `bd60dbdaf`), L (Docker), O (FX e i18n), I (eventi) e N. HEAD e worktree sono verificati: `4d09ac2ac` = `dev_release2`, worktree pulito, `22d80282a` antenato. Checkpoint pronto, FROZEN.
+  > **Via libera** (coordinatore, 22:17):
+  > - i seguiti di L: l'avviso `docker_advanced#docker-exec`, `cli_tools.en.md:8,78` e `dev_workflow.en.md:143-144`;
+  > - poi il confronto tra i testi cambiati da O e le pagine EN, e la pagina `data-editor` di I.
+  > - Niente pagine riservate a M, niente `getting-started` né `preferences`. Anteprima solo sulla 6162, perché sulla 6150 girano i gate del treno 19.
+  >
+  > **Note implementazione, L** (il codice di `cdde3bc4d`):
+  > - **Comportamento nel container:** `dev.py` registra un gruppo di comandi solo se esistono le directory da cui dipende (`_has()`). `test`, `i18n`, `mkdocs translate` e `translate-validate` restano elencati, ma rispondono «'…' is not available in this installation: … is not part of it» ed escono con 2. `user`, `db` e `info` funzionano. L'`HEALTHCHECK` sonda la 6040. La card Forgot Password ora mostra `# Docker` e `# Manual install` (`ForgotPasswordCard.svelte:41-46`).
+  > - **`admin/docker_advanced.en.md`:** l'avviso «Not available with the current image» diventa una nota: nell'immagine funzionano `user`, `db` e `info`, mentre i comandi di sviluppo sono elencati ma «not available in this installation».
+  > - **`admin/cli_tools.en.md`:**
+  >   - `:8`: i comandi utente e database funzionano nell'immagine; quelli di sviluppo, come `test`, no, con link a `docker_advanced#docker-exec`;
+  >   - `:78`: la card mostra il comando nelle due forme, Docker e host; quella host va lanciata dopo `pipenv shell` o con `pipenv run`.
+  > - **`developer/dev_workflow.en.md#docker-test-mode`:** al posto del blocco «`dev.py` cannot start», `test` non fa parte dell'immagine (`_has()`, uscita 2, `./dev.py test utils dev-cli-image`). Resta l'ostacolo di `server --test`, perché manca Node.
+  > - **`developer/architecture/overview.md#docker-image`:** aggiunti i comandi non disponibili e la porta 6040 dell'`HEALTHCHECK`.
+  >
+  > **Note implementazione, O** (`bc700c8e8`; `en.json` fra `70d02cd8e` e `4d09ac2ac`: 6 valori cambiati, 32 chiavi nuove, nessuna rimossa):
+  > - **`aiExport.detailLevelHelp.*`:** le pagine utente non citano i bucket. Le tabelle di `ai_export_sampling.md:68-104` hanno già K 30/14/7 per i prezzi e 84/28/14 per gli indicatori più lenti, coerenti col nuovo aiuto: nessuna modifica.
+  > - **Avvisi dei report set, ora «Parse»:** la doc diceva già **Parse** (`how-to.en.md:83`, `danske-bank.en.md:49`): nessuna modifica.
+  > - **Le 32 chiavi nuove:** sono stringhe che prima erano scritte fisse nel codice (errori CSV, messaggi FX), con lo stesso significato. La pagina `fx/detail/data-editor` diceva già che un tasso zero, negativo o vuoto viene saltato (`:45`).
+  > - **Provider:**
+  >   - BOE con 15 valute e justETF con «latest daily price» erano già coerenti;
+  >   - l'aiuto di Borsa ora apre la pagina utente;
+  >   - **ECB era sbagliata:** diceva «approximately 45». Il feed ufficiale `eurofxref-daily.xml` del 2026-10-08 ha 29 valute; BGN non c'è più (l'API `EXR` ha l'ultimo dato al 2025-12-31). Corrette `user/fx/providers/ecb.en.md` (circa 30 valute, ISK aggiunta, BGN tolta dall'elenco, le valute dismesse restano nello storico) e `developer/backend/fx/providers/ecb.md` (scoperta a runtime con `get_supported_currencies()`, le 29 valute giornaliere, quelle solo storiche).
+  > - **Timeout del sync:** il campo **Timeout** ora allunga davvero la richiesta, `max(120 s, campo + 5 s)` (`syncRequestTimeoutMs()`).
+  >   - **`developer/backend/fx/architecture.md:61-64` era sbagliata:** diceva «drives only the countdown… not the request». Corretta: 120 s fissi solo per la sync della coppia nuova e per la Dashboard, mentre le finestre di sync usano il campo.
+  >   - Aggiunta la regola in `core-ui/modals.md` (Sync modals), e una riga in `user/fx/sync.en.md`: con *Request timed out*, alzare **Timeout** e usare **Retry N failed**.
+  >
+  > **Note implementazione, I** (`5423c334f`): `user/assets/detail/data-editor.en.md` ha nuove regole: modificare un evento ne cambia anche il tipo; un tipo doppio nella stessa data viene rifiutato; l'import aggiorna o salta righe. È coerente con `events.en.md:39` (gli eventi del provider sono di sola lettura e un import non li cambia) e con `create-edit.en.md:108-115` (il backup al cambio di valuta). Nessuna modifica.
+  >
+  > **Note implementazione, checkpoint** (circa 22:40):
+  > - **Cancello `t19a`:** `Q_GATE_ARGS=--t19` (nuova modalità di `q_gate.py`). Build strict exit 0, 0 WARNING/ERROR; `check-links` con 89 validi e il solo link rotto di base; scope 10 path, segnaposto, stile e `git diff --check` verdi. Self-check su 212 pagine EN/dev, 0 problemi.
+  > - **Delta:** 10 file tracciati modificati, nessun file nuovo. HEAD = target = `4d09ac2ac`, quindi nessuna divergenza. Nessuna pagina riservata a M, né `getting-started` o `preferences`; nessuna traduzione.
+  > - **Privacy:** 60 righe aggiunte, nessun percorso personale, e-mail o segreto.
+  > - **Server:** nessuno avviato in questo giro; 6162 e 6042 libere (`lsof` rc 1).
+  > - **Commit proposto:** `/tmp/libreFolio_commit_t19.txt`, «docs: align EN docs with train 19».
+  > - **Fuori pista:** in coda a S18 erano rimaste 4 righe di S17 (un «In attesa della review» superato e due reperti AI Export). Le ho riportate in S17, annotando che il primo reperto l'ha corretto O nel treno 19.
+  > - **Nota per L, non bloccante:** la card mostra la forma host `./dev.py user reset …` senza `pipenv run`. Fuori da `pipenv shell` fallisce con `ModuleNotFoundError` (`host_installation.en.md:71`). La doc lo spiega.
+  > - **Esito:** commit `ef1397227`, entrato col treno 20 (merge di Q `3af9aac63`).
+
+- **S20** ✅ 2026-10-09 — Pagina per l'indicatore di sicurezza della connessione (L), più gli IP Tailscale, su base `9b2acdd5d` (treno 21). HEAD = `dev_release2`, worktree pulito. Checkpoint pronto, FROZEN.
+  > **Incarico** (coordinatore, 10:40, approvato dal developer). Le parole del developer: «una notifica … che se cliccato rimanda a una pagina di doc che spiega i vari problemi e suggerisce, per avere la sicurezza massima, di seguire la guida per esporre il servizio in modo sicuro e di accedere passando per l'url anche in rete locale».
+  > - **I quattro livelli:** verde pieno (HTTPS o localhost); verde «VPN» (HTTP verso Tailscale: 100.64/10, `*.ts.net`, `fd7a:115c:a1e0::/48`); verde non pieno (HTTP in LAN, oppure segnali discordi come lo split DNS); rosso (HTTP da internet).
+  > - **Il server** comunica lo schema e la classe della sorgente, mai l'IP, e se il proxy non è fidato (`FORWARDED_ALLOW_IPS`). `SESSION_COOKIE_SECURE=auto|always|never` lo documenta L in `admin/configuration`.
+  > - Pagina solo EN. `admin/configuration` e `service_exposure` sono di L in questo momento: si possono solo linkare. Gate: build strict e `check-links`, poi checkpoint.
+  >
+  > **Note implementazione** (2026-10-09, mattina):
+  > - **Percorso:** `user/connection-security.en.md`, nel User Manual dopo «Install as App (PWA)», perché l'indicatore riguarda l'accesso, non un'impostazione. Mandato subito a L (circa 10:45): il link va alla radice, `user/connection-security/`. Chiesti a L i testi esatti della UI, le classi di sorgente, il default di `FORWARDED_ALLOW_IPS` e le eventuali ancore in `configuration`.
+  > - **`mkdocs.yml`:** voce di nav e `nav_translations` IT/FR/ES (Sicurezza della connessione, Sécurité de la connexion, Seguridad de la conexión), come per le altre pagine solo EN.
+  > - **Fatti verificati da Q:**
+  >   - uvicorn 0.52.4: `proxy_headers=True`, e `forwarded_allow_ips` vale `os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1")`;
+  >   - il `CMD` del `Dockerfile` non ha opzioni di proxy;
+  >   - Compose passa `.env` al container (`env_file: .env`);
+  >   - `service_exposure:112-115` ha già `tailscale serve --bg 6040` per l'HTTPS nel tailnet;
+  >   - `docker_advanced` ha la sezione su reverse proxy e Tailscale.
+  > - **Stesura:** affidata a un `docs-writer`, con le ancore vietate verso pagine tradotte, perché la pagina solo EN viene costruita anche per IT/FR/ES. Le etichette della UI restano marcate finché L non risponde.
+  >
+  > **Risposta di L** (dopo le 10:48; testi proposti, che diventano definitivi quando entrano nel catalogo tramite O):
+  > - **I livelli visibili sono 3:**
+  >   - **Connection: secure**, con i motivi https, localhost e vpn;
+  >   - **Connection: local network**, con i motivi lan e uncertain;
+  >   - **Connection: not secure**, con il motivo internet.
+  > - **Classificazione:** il client classifica l'host dell'URL in loopback, vpn, lan o public; il server classifica la sorgente con la stessa tabella (più `unknown`) e comunica solo la classe, mai l'IP. Il server può confermare o rendere incerto, mai alzare il livello.
+  > - **Link dell'indicatore:** **How to connect securely**, verso `/mkdocs/<lang>/user/connection-security/`.
+  > - **`SESSION_COOKIE_SECURE=auto|always|never`:** default `auto`; un valore non valido ferma l'avvio. In `auto` il cookie è `Secure` se la richiesta è HTTPS oppure se `X-Forwarded-Proto` è `https`, chiunque lo mandi. Tailscale Serve/Funnel, Caddy e Traefik lo mandano già; Nginx ha bisogno di `proxy_set_header X-Forwarded-Proto $scheme;`.
+  > - **`FORWARDED_ALLOW_IPS` non serve:** LibreFolio non usa l'IP del client.
+  > - **Avviso solo per gli admin:** il browser è in HTTPS ma il cookie non è `Secure`.
+  > - **Ancora `admin/configuration/#session-cookie-secure`:** non la uso, perché esiste solo in EN e la pagina viene costruita anche per IT/FR/ES.
+  > - **Coordinatore** (due messaggi successivi): approvata la revisione di L. Al posto di `FORWARDED_ALLOW_IPS` va il consiglio per Nginx. Il brief del writer è aggiornato con `write_agent`.
+  >
+  > **Note implementazione, IP Tailscale** (incarico del coordinatore delle 10:48, poi via libera: «non lo so, ma nel dubbio cambiali»):
+  > - **Dove erano:** solo in `admin/service_exposure.{en,it,fr,es}.md`, che da adesso è di Q in tutte e 4 le lingue.
+  > - **Script:** `/tmp/libreFolio_q_tailscale_fix.py`, con dry run e conteggi verificati per lingua, poi `--apply`. 14 righe per lingua, stesso numero di righe totali.
+  > - **Modifiche:**
+  >   - MagicDNS: prima i due IP del server sono diventati `100.64.0.1`. Poi, con la nuova indicazione del developer (coordinatore, 11:06: «top se li trasformiamo, negli ultimi numeri, in "x" così si capisce la struttura ma non l'ip»), sono diventati **`100.110.x.x`** e **`100.77.x.x`**;
+  >   - `HOST_IP=192.168.1.10` diventa `.20` (2 righe per lingua), come Server 1 nel diagramma, che ospita LibreFolio;
+  >   - nel diagramma del livello 4, stesso criterio degli ultimi due ottetti in `x`: i container sono **`100.101.x.x`–`100.104.x.x`**, nell'ordine e distinti, dentro `100.64.0.0/10`. Prima erano `100.1.1.1`–`100.4.4.4`, fuori range e scambiati tra i container. Script: `/tmp/libreFolio_q_tailscale_mask.py`, con dry run e poi `--apply`, 6 righe per lingua.
+  >   - Verifica nelle 4 lingue: solo indirizzi mascherati più il range `100.64.0.0/10`.
+  > - **⚠️ Fuori pista**, nello stesso diagramma, correzioni di coerenza:
+  >   - i Funnel puntavano a nomi sbagliati: `librefolio.…ts.net` portava a Service 3 sul Server 2, e `service2` non esisteva. Ora Funnel 1 è `librefolio`, Funnel 2 `service1`, Funnel 3 `service3` e Funnel 4 `service4`, come i servizi e il `TS_HOSTNAME=librefolio` del compose;
+  >   - Service 3 e 4 stavano entrambi su `192.168.1.10:80`. Ora sono `:8080` e `:9000`, come le loro porte `socat`.
+  > - **Niente stamp**, confermato dal coordinatore. La cache di `service_exposure` è già vecchia (MD5 `f8c9f742`, contro `06c36e4e` dell'EN): uno stamp nasconderebbe il debito dell'onda 3.
+  > - **Fuori dal repo:** storia git e tag `v1.1.0` non si riscrivono, lo dice il coordinatore al developer. Dal journal ho tolto gli IP della nota privacy dell'onda 3. In `mkdocs_src` e nel journal non resta nessuna occorrenza.
+  >
+  > **Note implementazione, pagina e righe di L** (circa 11:25):
+  > - **`user/connection-security.en.md`**, nuova: circa 750 parole visibili, 1105 in tutto.
+  >   - Struttura: introduzione; i tre livelli con le etichette di L e le ancore `#connection-secure`, `#connection-local-network`, `#connection-not-secure`; un pannello «How the level is chosen»; «How to Connect Securely» (indirizzo HTTPS, poi usarlo ovunque); «Behind a Reverse Proxy» (`#reverse-proxy`); «What the Indicator Does Not Do»; Related.
+  >   - Link a pagine tradotte sempre senza ancora. Esempio Tailscale mascherato (`100.110.x.x`).
+  >   - Segnaposto proposto per M: `security/connection-indicator`.
+  >   - Scritta da un `docs-writer`, che ha verificato `addProxyForwardedHeaders` in `ipn/ipnlocal/serve.go` di Tailscale, il default di Caddy e Traefik e `proxy_set_header` di Nginx (documentazione ufficiale), e `.env` letto da `dev.py server` (`scripts/cli_base.py:146-149`).
+  > - **Righe di L in `admin/service_exposure.en.md`**, solo EN (contenuto nuovo):
+  >   - livello 3, Step 1, e livello 4, Step 3: Funnel manda `X-Forwarded-Proto: https`, quindi con `SESSION_COOKIE_SECURE=auto` il cookie è `Secure`;
+  >   - verificati da Q `addProxyForwardedHeaders` di Tailscale e il socat TCP di `custom_startup.sh:47`;
+  >   - link `configuration.md` **senza** l'ancora `#session-cookie-secure`, perché nella base non c'è ancora (`grep` = 0 su HEAD e sul target). Seguito poi annullato dal coordinatore: l'ancora non serve (vedi sotto).
+  > - **`q_gate.py`:** nuova modalità `--cs`, con `TRANSLATION_EXCEPTIONS` per i 3 file `service_exposure` IT/FR/ES approvati dal coordinatore.
+  > - **Cancello `cs1`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con 89 validi e il solo link rotto di base; scope 7 path (con l'eccezione approvata), segnaposto (1 nome proposto), stile e `git diff --check` verdi. Self-check su 212 pagine, 0 problemi.
+  > - **Diff delle traduzioni:** 14 righe per lingua, solo quelle attese (IP mascherati, `HOST_IP`, diagramma). **Nessuno stamp.**
+  > - **Privacy:** 271 righe aggiunte, solo indirizzi d'esempio e range.
+  > - **Porte:** 6162 e 6042 libere; nessun server avviato.
+  > - **Note mandate a L** (dubbi del writer):
+  >   - «mai alzare il livello» contro il passaggio da rosso a «uncertain»;
+  >   - Docker Desktop e i proxy locali nascondono l'IP del client;
+  >   - uvicorn applica `X-Forwarded-Proto` solo da `127.0.0.1`, quindi il cookie deve leggere l'intestazione grezza;
+  >   - dove compare l'avviso solo per gli admin.
+  > - **Dipendenza:** la pagina e le righe descrivono codice di L non ancora nel target (`SESSION_COOKIE_SECURE` e indicatore). Vanno integrate insieme o dopo i suoi lotti.
+  > - **Commit proposto:** `/tmp/libreFolio_commit_cs.txt`, «docs: connection security page, Tailscale examples».
+  >
+  > **Note implementazione, risposte di L e aggiunte** (circa 11:30, ok del coordinatore a farle dentro S20):
+  > - **Risposte di L:**
+  >   - la frase della pagina («può confermare o rendere incerto, mai rendere sicuro») è quella giusta, e il passaggio da rosso a incerto è voluto;
+  >   - Docker Desktop e i proxy senza `X-Forwarded-For` sono un limite noto, da scrivere. Il server legge l'ultimo `X-Forwarded-For`; Caddy e Traefik lo mandano già; Docker Engine su Linux conserva l'IP con il DNAT;
+  >   - il test COOKIE-011 copre l'intestazione grezza;
+  >   - l'avviso per gli admin è una riga in più nei dettagli dell'indicatore, e il livello resta verde.
+  > - **`user/connection-security.en.md`:**
+  >   - la sezione Nginx ha 2 righe (`X-Forwarded-Proto` e `X-Forwarded-For $proxy_add_x_forwarded_for`), e Caddy e Traefik passano già l'indirizzo;
+  >   - l'avviso è nei dettagli dell'indicatore, solo per gli admin, con il livello che resta **Connection: secure**;
+  >   - nuovo punto in «What the Indicator Does Not Do»: Docker Desktop o un proxy senza `X-Forwarded-For` mostrano **Connection: local network** (incerto) invece di **not secure**;
+  >   - lo step 1 dice «Nginx needs two lines».
+  > - **Coordinatore:** l'ancora `#session-cookie-secure` non serve, perché `SESSION_COOKIE_SECURE` è una riga di tabella e un riquadro, non un titolo. Il seguito «aggiungere l'ancora» è **annullato**: il link resta `configuration.md`. Il lotto 34s2 di L (`configuration.en.md`) entra col treno 22; **S20 entra solo col lotto dell'indicatore di L (treno 23)**.
+  > - **Cancello `cs2`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con 89 validi e il solo link rotto di base; scope 7 path, segnaposto (1 nome proposto), stile e `git diff --check` verdi. Self-check su 212 pagine, 0 problemi. 6162 e 6042 libere.
+  >
+  > **Note implementazione, testi aggiornati da L** (coordinatore, 11:59):
+  > - **`uncertain`:** il testo nuovo copre i due versi del disaccordo. Il paragrafo della pagina ora li descrive entrambi: un indirizzo pubblico visto dalla LAN (split DNS, proxy locale), e un indirizzo locale o Tailscale visto da internet.
+  > - **Avviso per gli admin:**
+  >   - testo nuovo citato alla lettera, con la direttiva Nginx in code span, per evitare un `$` fuori codice (arithmatex: 0 nella pagina costruita);
+  >   - la frase che lo introduce ora dice che compare se il cookie non è `Secure` perché il proxy non manda `X-Forwarded-Proto` **oppure** perché `SESSION_COOKIE_SECURE` è `never`;
+  >   - il pannello `always` resta valido come alternativa.
+  > - **Cancello `cs3`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con il solo link rotto di base; scope, segnaposto, stile e `diff --check` verdi. Self-check su 212 pagine, 0 problemi. Testi presenti nel sito costruito. 6162 libera.
+  >
+  > **Note implementazione, come si vede il motivo** (coordinatore, 13:06):
+  > - **Confronto col catalogo definitivo di L** (`connectionSecurity.*`, piano 36): etichette, avviso e link coincidono. L'indicatore però **non ha tooltip**:
+  >   - con la Sidebar aperta, un clic sulla riga apre o chiude i dettagli in linea;
+  >   - con la Sidebar chiusa, lo scudo mostra il livello al passaggio del mouse, e un clic apre la Sidebar con i dettagli;
+  >   - su telefono, con «not secure», compare un pallino rosso sul pulsante del menu.
+  > - **Correzioni:**
+  >   - introduzione: come aprire i dettagli, anche con la Sidebar chiusa;
+  >   - «The tooltip gives the reason» diventa «The details give the reason»;
+  >   - il caso incerto ha ora un motivo che inizia con *Unclear* nei dettagli;
+  >   - in «not secure», il pallino rosso su telefono.
+  >   - Nessun «tooltip» resta nella pagina.
+  > - **Cancello `cs4`:** build strict exit 0, 0 WARNING/ERROR; `check-links` con il solo link rotto di base; scope 7 path, segnaposto, stile e `diff --check` verdi. Self-check su 212 pagine, 0 problemi. Nessuna sovrapposizione col target `1ead733f2`. 6162 e 6042 libere.
+  > - **Integrazione:** S20 entra col treno 24, insieme al piano 36 di L (indicatore). Il coordinatore ha verificato che il merge simulato sul treno 23 è pulito.
+  > - **Esito:** commit `5980ab86f` («docs: connection security page, Tailscale examples»), entrato col treno 24 (merge di Q `e994979f9`) insieme al piano 36 di L.
+
+- **S21** ✅ 2026-10-09 — Verifica e archiviazione dei piani completati, su base `3cceb4f90` (treno 24b). HEAD = `dev_release2`, worktree pulito, verificati.
+  > **Incarico** (coordinatore, 13:55). Le parole del developer: «verificare, degli stati completati, che i piani siano allineati, in caso contrario allinearli e poi usando la skill plan-archive spostarli ordinatamente in LibreFolio_developer_journal/Release_2/phases … verificare come le cose stanno nel codice e se ci sono incongruenze, cose mancanti per davvero (non piani cambiati e quindi punti diventati obsoleti) di segnarcelo per affrontarlo poi», e «archivia solo le cose davvero finite, non quelle parziali, ed evita di fare mezza cartella sopra e mezza cartella sotto».
+  > - **Cartelle assegnate:**
+  >   - `32_docsEnglish12`: la mia, resta attiva fino alle traduzioni, si allinea soltanto;
+  >   - `21_onboarding` (J), `16_toolPlatform` (C, con `handoff-pac-D.md` che la cartella attiva `13_pacAllocator` usa ancora) e `17_assetDataOperations` (F): di sessioni che non esistono più;
+  >   - `09_feedbackJobs`: backlog del coordinatore, da verificare voce per voce.
+  > - **Regole del coordinatore:**
+  >   - archiviare in `Release_2/phases/<stesso nome>/`, con `mv` e non `git mv`, perché lo stage resta vuoto fino al commit del developer; questo prevale sulla skill, che indica `git mv`;
+  >   - una cartella si sposta intera o resta intera;
+  >   - i link interni si correggono, quelli in ingresso si elencano senza toccarli;
+  >   - non si toccano `00-index.md` né `TODO_FUTURI.md`;
+  >   - codice in sola lettura.
+  >
+  > **Note implementazione** (pomeriggio del 2026-10-09):
+  > - **`32_docsEnglish12` allineata:**
+  >   - S16 portato a ✅, perché le onde 2 e 3 sono S17 e S18;
+  >   - in S18, «In attesa della risposta» sostituito con la risposta del developer;
+  >   - le note di S20 non sono più «in corso», e c'è l'esito (`5980ab86f`, treno 24, merge `e994979f9`);
+  >   - in cima, il blocco «Cosa resta aperto»: traduzioni, segnaposto `security/connection-indicator`, 8 portali dei broker come TODO nascosti.
+  >   - Segnaposto EN rimasti alla punta: 9 (1 più 8 portali). M ha consegnato tutti gli altri scenari.
+  > - **Verifica sul codice:** affidata a 5 sottoagenti `explore` in sola lettura, uno per `21_onboarding`, uno per `16_toolPlatform` con `17_assetDataOperations`, e tre per `09_feedbackJobs` (00-05, 06, 07-09).
+  > - **Link in ingresso** (`grep` su journal, devWiki, `.github`, `mkdocs_src`, `scripts`, `TODO_FUTURI.md`, `CHANGELOG.md`): 42 righe in `/tmp/libreFolio_q_inbound.log`. `16_toolPlatform/handoff-pac-D.md` è citato più di 20 volte dalla cartella attiva `13_pacAllocator`.
+  > - **Link interni:** script `/tmp/libreFolio_q_archive_links.py` (dry-run, poi `--apply`). Riscrive solo i link che escono dalla cartella spostata: 2 in `21_onboarding`, 2 in `16_toolPlatform`, 1 in `17_assetDataOperations`.
+  > - **Verifica dei sottoagenti, controllata da Q:**
+  >   - SHA e righe citate controllati uno per uno;
+  >   - due report si contraddicevano sul Rebalancer. Ha deciso il codice: non esiste (`backend/app/services/tool_plugins/pac_allocator.py:10-14`, «has no service here yet»; CHANGELOG: «it does not sell or rebalance»);
+  >   - il conteggio dei marker `TODO(P2-refactor)` è 21.
+  > - **Regole aggiunte dal coordinatore:**
+  >   - i rinvii vivono in `Phase_0/38_postReleaseBacklog/README.md` (la crea lui), citati per titolo;
+  >   - il developer, sulla 21: «no non l'ho fatta … ma non archiviamo». Le 6 voci della 21 restano nella 21, non nel 38;
+  >   - nella 09 aggiornati due link per gli archivi di N.
+  > - **Classificazione e azioni:**
+  >   - **`17_assetDataOperations`: FINITA.** Allineate le 4 caselle non spuntate e lo stato. Spostata con `mv` in `Release_2/phases/17_assetDataOperations/`, con 1 link riscritto e 0 rotti. Aggiornati i 3 link in ingresso dalla 09.
+  >   - **`16_toolPlatform`: resta.** Tutto il lavoro di C è chiuso o superato: lo step 6 è chiuso da D (renderer `registry.ts:241-245`), il §3 è superato dal round di capacità di D. Ma la §0 di `handoff-pac-D.md` è il contratto vivo di D (`13_pacAllocator` attiva, più di 20 link), quindi si archivia insieme alla 13. Allineati stato, caselle e manifest.
+  >   - **`21_onboarding`: resta**, per decisione del developer. In cima al piano principale ci sono gli aperti: la review C7 e le 6 voci del dossier §6 più `tools.hub`. In Round 8, note sulle chiavi morte (`08b885d43`), un Fuori pista sul titolo (`0aac5ef1e`) e l'aperto dello step 7; nel dossier, i punti superati.
+  >   - **`09_feedbackJobs`: resta attiva.** README con «Cosa resta aperto» in cima e la sezione «Stato verificato sul codice — 2026-10-09»; 43 modifiche di stato (celle, note e titoli) in README, 00, 01, 02, 05, 06, 07, 08 e 09, conservando lo storico, più 23 link: 3 da 03 e 04 verso `phases/17_…`, e 20 verso gli archivi di N, L e O, cioè `15_parallelRuntimeIsolation` (1), `14_feedbackImportUrgent` (7), `18_brimTargeted` (2) e `11_feedbackContractsRunes` (10). Trovati per nome di cartella, perché le righe del coordinatore si riferivano a `3cceb4f90`. Quei 20 qui risultano rotti finché il treno non porta gli spostamenti. Il link `06_piano_sprint.md:41` va a `phases/15_…`: risulta rotto finché il treno non porta lo spostamento di N.
+  >   - **`32_docsEnglish12`: resta attiva** fino alle traduzioni.
+  > - **Buchi veri, tutti tracciati nelle cartelle attive:**
+  >   - 21: catalogo TS e registry Python, re-trigger di versione, fascia 641–1023 px, reset CLI, telemetria, `tools.hub`;
+  >   - 09: P4-7, R2 `VERSION`, §1.4 AI Export, P4-9, P4-10, §2.4.
+  > - **Link in ingresso da sistemare fuori dalle mie cartelle:** solo `Phase_0/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md:41`, che va a `../../phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md`.
+  > - **Checkpoint:** manifest con i blob e commit «docs(journal): archive 17, align active plans». Stato FROZEN.
+- **S21b** ✅ 2026-10-09 — Riapertura del checkpoint S21, già verificato dal coordinator (19 percorsi, albero `3fd22c6e34a6`), per i link di P nella 09 e per le due note di I su P4-9 e P4-11. In pausa su richiesta del coordinator fino alle 15:22; alla ripresa base invariata (`3cceb4f90`, 19 percorsi).
+  > **Note implementazione:**
+  > - **Link di P.** Ho riscritto 5 link della 09 verso `../../phases/<cartella>/`, trovati per nome di cartella e con il conteggio atteso:
+  >   - `22_assetPricingRefactor`: 3 (`00:49`, `00:52`, `06:177`);
+  >   - `23_transactionBatchRefactor`: 2 (`00:50`, `06:193`).
+  >
+  >   Nelle altre mie cartelle non ce n'erano. Qui risultano rotti finché il treno non porta lo spostamento di P.
+  > - **P4-9, riscritto come conversione** (DBT-D di I), senza «12 failed».
+  >   - In 00: la voce della tabella, la nota «Stato al 2026-10-09» e la sezione §P4-9. La sezione ora dice cosa resta, tiene le due trappole (valgono anche per la conversione) e sposta i fatti del 22/09 in «Storico».
+  >   - Nel blocco del comando, `npx vitest` è diventato `node_modules/.bin/vitest`, come vuole la regola del progetto.
+  >   - Nel README: la voce di «Cosa resta aperto» e la cella dell'indice.
+  >   - I fatti: `2e4c8589f` (28/09) ha chiuso i rossi, da 11 su 159 test a 144 verdi. Restano i 7 specchi ri-pinnati, e il file ha 35 `readFileSync`. I 145/145 di oggi sono la misura di I, citata come sua.
+  > - **P4-11, chiuso, con le righe di oggi.**
+  >   - `fmtCurrency` è a `GrowthChart.svelte:2156`, mascherata alla definizione da `804bc9903`.
+  >   - La custodiscono il gate (`moneyRenderSites.test.ts:193-196`, lista `residual` vuota a `:281`) e il pin `GrowthChart.test.ts:1080`.
+  >   - In testa a §P4-11, una riga avverte che i numeri dell'analisi sono del 22/09.
+  > - **08, tre celle:**
+  >   - `:831` «privacy e valuta, secondo sito»: chiuso da `176f19707` (24/09). L'asse di `LotComparisonChart.svelte:258` delega a `formatAxisCurrency` (`lotComparisonChartHelpers.ts:120`), che maschera solo le cifre e lascia valuta e segno.
+  >   - `:833` «P4-11, secondo grafico»: fatto da `804bc9903`. Oggi `shortMoney` `:166` e `axisTickAmount` `:183` mascherano le cifre.
+  >   - `:852`: accanto a «12 falliti su 162 (P4-9)», la chiusura del 28/09.
+  >
+  > **⚠️ Fuori pista:**
+  > - Le celle `08:831` e `08:833` erano sfuggite al giro S21: le ho trovate verificando P4-11.
+  > - In `08:852` la parte E2E (misura di I del 24/09: `dashboard.spec.ts` e `brokers-detail.spec.ts`) non l'ho riverificata. È di I: la segnalo al coordinator.
+  >
+  > **Evidenze:**
+  > - Validatore normpath: 27 file e 195 link, 25 rotti. Sono tutti e soli i link verso `phases/{11,14,15,18,22,23}_…`, cioè 10, 7, 1, 2, 3 e 2, che si risolvono quando il treno porta gli spostamenti.
+  > - `git diff --check` pulito.
+  > - Controllo privacy delle righe aggiunte: pulito.
+  > - Codice in sola lettura: nessun test, nessun server, 6162 libera.
+- **S21c** ✅ 2026-10-09 — Ultimo giro dei link, su richiesta del coordinator: I ha classificato FINITE `19_yieldOnCost`, `20_performanceCharts` e `24_privacyGlobal` e le sta spostando in `Release_2/phases/`.
+  > **Note implementazione:**
+  > - **12 link riscritti** in `../../phases/<cartella>/`, cercati per nome di cartella in 09, 16, 21 e 32, con il conteggio atteso per file:
+  >   - verso `19_yieldOnCost`, 6: `01` ×2, `README` ×1, `06` ×3;
+  >   - verso `20_performanceCharts`, 4: `02`, `README`, `06`, e il link di S21b in `00`;
+  >   - verso `24_privacyGlobal`, 2: `00` e `21/plan-phase00OnboardingRound8-PostReview.prompt.md:7`.
+  > - **Nota su `SensitiveValue`** in «Cosa resta aperto» del README: da testo semplice a link verso il Round 1 archiviato della 24, passo 5, sospeso dal 21/09 (`plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md:402`).
+  > - **Le menzioni dei nomi di cartella in testo semplice** (`piano 24_privacyGlobal` e simili) restano: il nome non cambia con l'archivio.
+  > - **Verso le mie cartelle**, le cartelle di I hanno 20 link: 17 verso la 09, 2 verso la 21, 1 verso la 17. Li riscrive I spostando le sue cartelle, ma li ho segnalati al coordinator.
+  >
+  > **Evidenze:**
+  > - Validatore normpath: 27 file e 196 link, 38 rotti. Sono tutti e soli quelli verso `phases/{11,14,15,18,19,20,22,23,24}_…`, e i 13 file di destinazione esistono oggi in `Phase_0/` con lo stesso nome.
+  > - `git diff --check` pulito.
+  > - Codice in sola lettura: nessun test, nessun server, 6162 libera.
+- **S22** ✅ 2026-10-09 — Su richiesta del coordinator: C2 (B5 di Risk) e due decisioni del developer da registrare nel journal, in C1.
+  > **C2, `docs(theory)`: il tasso senza rischio secondo la frequenza della serie.**
+  > - **Il difetto:** `sharpe-ratio.en.md:24` e `sortino-ratio.en.md:24` convertivano il tasso annuo con $1/365$. Il codice usa il fattore di annualizzazione $f$ della serie, lo stesso della volatilità:
+  >   - `backend/app/services/risk/metrics.py:208-222`, `daily_risk_free_rate`, che calcola `expm1(log1p(r)/f)`;
+  >   - lo usano `annualized_sharpe` (`:225-238`) e `annualized_sortino` (`:241-256`).
+  > - **La correzione**, del docs-writer, nei due riquadri, 3 righe per pagina:
+  >   - la formula diventa $r_{period} = (1 + r_{annual})^{1/f} - 1$;
+  >   - $f$ rimanda a §Annualization nella Sharpe e a `observed-annualization.md` nella Sortino;
+  >   - «ogni rendimento di periodo» al posto di «ogni rendimento giornaliero»;
+  >   - nella Sharpe, una frase sul perché lo stesso $f$, con «when the rate is positive»: è giusto, perché con un tasso negativo $1/365$ sottostima un credito.
+  > - **Traduzioni:** IT, FR ed ES non hanno la formula. Sono precedenti alla riscrittura EN: niente riquadro, e ancora $\sqrt{252}$. Quindi nessuna modifica a mano e nessuno stamp: il debito resta per il giro delle traduzioni.
+  > - **Verificati corretti, fuori perimetro:** `synthetic-benchmarks/compound:46` ($1/365$ per giorno di calendario, come `CompoundSignal.ts:68`), `returns:85`, `scheduled-investment` (ACT/365).
+  > - **Gate:**
+  >   - `mkdocs build`: rc 0, zero WARNING o ERROR (`/tmp/libreFolio_q_build_c2.log`);
+  >   - `check-links`: rotto solo `#rolling-return`, come nella baseline (`/tmp/libreFolio_q_checklinks_c2.log`).
+  >
+  > **Decisioni del developer, in C1:**
+  > - **09 §1.4, la parte AI Export: non è un difetto** («ma l'ai export non ha anteprima»).
+  >   - Verificato: l'unica `textarea` di `features/ai-export/` sono le note (`AiExportOptionsPanel.svelte:285`), e il prompt si copia negli appunti (`aiExportClipboard.ts:156-158`).
+  >   - La §1.4 è chiusa: FX per la decisione (c), Tools con `planner/format.ts:21,184`.
+  >   - Aggiornati il titolo e la nota di stato del §1, e nel README della 09 «Cosa resta aperto» e l'indice.
+  > - **21, dossier §6 #9: chiuso** («il tour iniziale va bene già ora, toglilo»). L'ho scritto nella riga del dossier, nella sua nota iniziale e nella frase del piano principale; non l'ho aggiunto a «Cosa resta aperto».
+  >
+  > **⚠️ Fuori pista:** cercando le menzioni di AI Export ho trovato due celle vecchie in 06, contraddette da `00:60` e `00:65`:
+  > - `06:283`, S6 6.2 «Parziale»: i due campi sono in sola lettura (`schemas/fx.py:430-451`);
+  > - `06:288`, S6 6.11 «Aperto»: nei 7 file della 6.11 non resta nessun `assert`.
+  >
+  > Le ho allineate, con l'integrazione `514582a47`.
+- **S23** ✅ 2026-10-09 — Ultime pagine EN prima del giro di traduzione (coordinator, su richiesta del developer). Base `586a4f0ea` (treno 25), worktree pulita, verificato. Ogni voce è riverificata sul codice di `586a4f0ea`; scrive il docs-writer, solo in inglese, senza stamp.
+  > **Passi:**
+  > 1. ✅ 2026-10-09 Costo con il campo vuoto (docs-writer A): `user/transactions/form.en.md` e `developer/frontend/components/features/transaction-form.md`.
+  >    - Fatti: in Manuale un TRANSFER o un ADJUSTMENT positivo senza costo riceve `costBasisRequired` (`transaction_service.py:157-165`, `transaction_batch_stages.py:878-966`), e qualunque issue annulla il batch (`:1013-1027`, rollback in `api/v1/transactions.py:151-180`). In Auto, se il broker non ha altre transazioni dell'asset fino a quella data, il WAC vale 0 (`portfolio_service.py:180-185`) e si scrive come costo (`transaction_service.py:1000-1003`): è la decisione del developer del 09/10.
+  >    - Pagina utente: Auto a 0 per scelta, da correggere poi in Manuale; Manuale vuoto non si salva, 0 per quote gratuite. La pagina dev descrive il percorso backend e il disallineamento noto: `warningAdjustment` (`TransactionFormModal.svelte:1947-1951`) dice ancora «zero cost». La chiave è di S: non toccata.
+  >    - Il docs-writer ha corretto anche le fonti di `wacCurrencyHint` e l'eccezione del promote (`transaction_batch_stages.py:845-866`).
+  > 2. ✅ 2026-10-09 K-24, qualità dei dati (docs-writer A): `developer/frontend/data-quality-banner.md` e `user/dashboard/index.en.md:93`.
+  >    - Aggiunto `MWRR_SERIES_UNRELIABLE` (`portfolio_service.py:2245-2291`, `:2408-2418`), con la sua regola. `TRANSACTION_IMPLIED` è riscritto: il motore valuta all'ultimo prezzo di transazione (`LAST_TRADE_PRICE`, `portfolio_engine.py:1468-1506`), non al costo; la regola vale a fine periodo, con 14 giorni di grazia dal primo BUY o SELL (`portfolio_service.py:385`, `:831-838`, `:1135-1193`; `data_quality_thresholds.py:22`) e solo per gli asset con provider.
+  >    - Sezione test: 38 test su 7 dei 9 codici, più i test «five» e «six codes» (`:392`, `:444`); `MISSING_COST_BASIS` sta altrove, e nessun test copre `MWRR_SERIES_UNRELIABLE`.
+  >    - Corrette anche, perché false sul codice: le righe di `MISSING_PRICE` (una BUY ha già il suo prezzo), `NAV_INCOMPLETE`, `MWRR_NOT_CALCULABLE` (`portfolio_service.py:1072-1090`) e la frase su `STALE_PRICE` (vince l'osservazione più recente, `price_resolver.py:146-235`).
+  >    - Pagina utente `:93`: gli asset senza provider sono valutati all'ultimo prezzo di transazione, salvo un prezzo inserito a mano più recente (`portfolio_engine.py:2492-2500`); in più una frase sul caso con provider senza quotazione dopo due settimane.
+  >    - **⚠️ Fuori pista, reperti da girare:** tre possibili bug, letti nel codice e non provati: un transfer Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita svuota il pool prima della media (`transaction_service.py:976`, `average_cost.py:407-423`); un transfer esistente modificato in Auto media sul broker che riceve, perché gli update non hanno `link_uuid` (`schemas/transactions.py:533-585`); con il promote, un ADJUSTMENT positivo diventato transfer salta il controllo del costo (`transaction_batch_stages.py:845-866`, `:701-729`). In più: commenti e docstring con «valued at cost» (`portfolio_engine.py:1990`, `:2034`; `portfolio_service.py:1139-1146`, `:1184-1191`; `schemas/portfolio.py:165`; `test_data_quality_report.py:3`), le chiavi i18n `dataQuality.transactionImplied` e `warningAdjustment` (di S), e `backend/transactions/wac.md:423-424` (di P), smentita dall'eccezione del promote.
+  > 3. ✅ 2026-10-09 N-6 (docs-writer B): `developer/frontend/state/registries.md` e `developer/frontend/index.md`.
+  >    - `registries.md`: tolti il flusso WebSocket/SSE (nel frontend non ce n'è), `getStore("AAPL")` e la pulizia a zero iscritti. Ora descrive il codice: `Map` di modulo di `TimeSeriesStore` con chiave `"{assetId}:{CURRENCY}"` o slug della coppia, buchi con `getMissingIntervals`, `merge` e `markFetched`, invalidazione dopo un sync, nessuna eviction (`assetPriceStoreRegistry.ts:30-112`, `fxStoreRegistry.ts:83-484`, `TimeSeriesStore.ts:153-214`). Scoperto che `ensureAssetPriceRangeLoaded` e `ensureFxRangeLoadedBulk` non hanno chiamanti fuori dai test: le pagine asset fanno il controllo dei buchi in linea.
+  >    - `frontend/index.md`: DateRange sta in `stores/dateRangeStore.svelte.ts`, non in `app/`; la cartella `registries/` non esiste; l'albero ora parte da `frontend/`, perché `e2e/` e `static/` non stanno sotto `src/`.
+  > 4. ✅ 2026-10-09 S9 (docs-writer B): `developer/api/overview.md`, `test-walkthrough/{external,index,runner_architecture}.md`.
+  >    - `api/overview.md`: l'esempio di `POST /assets/prices/current` usa `as_of_date` (una data), `source` reali (`provider:<code>`, `db:last_known`), `success_count` ed `errors` (`schemas/prices.py:533-551`). La strategia è riscritta su `price_query.py:703-911`: massimo 5 chiamate alla volta, 10 s ciascuna, cache di 2 minuti, ricaduta sul database. È aggiunto l'effetto collaterale: una quotazione di oggi scrive o allarga la riga `PriceHistory` del giorno.
+  >    - `external.md`: `-v` non esiste, l'esempio diventa `-q` (`_cli.py:430`).
+  >    - `index.md`: le sei opzioni mancanti (`_cli.py:441-447`), con una nota sulla cache delle esecuzioni e sulla campagna (`_run_cache.py`); le categorie sono 15, non 11 (`_registry.py:28-41`, verificato importando il registro), con le righe delle 8 categorie frontend.
+  >    - `runner_architecture.md`: i 6 moduli mancanti (`__main__`, `_archive`, `_consolidate_backend`, `_run_cache`, `_server`, `_frontend_common`). Il nome reale degli archivi è `<label>_<YYYYMMDD_HHMMSS>.tar.xz` (`_archive.py:41`), non quello della docstring.
+  >    - **⚠️ Fuori pista, allargamento deciso da Q:** B ha trovato errori nelle stesse pagine e in due vicine, che contraddicevano quelle appena corrette. Corretti in due giri di seguito:
+  >      - `index.md`:
+  >        - `:25` `api --list` diventa `api all --list` (`_cli.py:324`), e `api test_auth_api` diventa `api auth`;
+  >        - il diagramma con le 15 categorie;
+  >        - i test BRIM usano file d'esempio locali;
+  >        - l'archivio della coverage è `00_archive/<label>_<ts>.tar.xz`, e `.coverage_data/frontend` si sovrascrive;
+  >        - `:308` e `:331`: `./dev.py test --coverage all` si fermava con «test category required», perché `normalize_coverage_argv` (`_cli.py:759-784`) prende `all` come linguaggio; ora è `--coverage all all`, con una nota.
+  >      - `external.md`: tre azioni mancanti (`justetf-multicurrency`, `brim-danske-bank`, `brim-degiro`, `_backend_external.py:283-301`).
+  >      - `runner_architecture.md`: progetti Playwright (AI Export solo desktop, `_frontend_ai_export.py:72`; 11 azioni su entrambi), e l'esempio di `run_command` con `description` (`_common.py:461`).
+  >      - `front-overview.md`: le 8 categorie, la tabella delle opzioni, e «Automated Setup» e «Test isolation» (build solo se serve, backend condiviso, corsia).
+  >      - `core-infrastructure.md`: `getMissingIntervals`, la riga di `entityStore` (cache, non «optimistic»), la riga di stato e l'introduzione.
+  >      - `registries.md:3`: la riga di stato con le date di git.
+  >    - Un passo falso dichiarato da B: un heredoc `python3` vuoto, che non ha eseguito niente.
+  >    - Ultimo giro di B: `core-infrastructure.md` dalla riga 17 descriveva un flusso «Edit Mode» con `EditBuffer` e un salvataggio in blocco. Ora descrive l'API reale della classe (`EditBuffer.ts:22-249`) e dice che nessun componente la usa, solo il suo test (`git log -S`: nessun altro file l'ha mai importata). Gli editor reali usano `DataEditor`.
+  >    - Fuori dalle pagine, da riportare: docstring e commenti superati in `_archive.py:7`, `_run_cache.py:7-10`, `_cli.py:470`, `:568-572`, `__init__.py:15-31`, `_consolidate.py:69-71`, `_frontend_ai_export.py:69-71`, `EditBuffer.ts:10`.
+  > 5. ✅ 2026-10-09 Docker: `admin/docker_advanced.en.md` (docs-writer C) e il commento di `.env.example`.
+  >    - Pagina, §docker exec: `test db populate` riceve la stessa risposta *not available* di ogni comando `test` (`dev.py:2455-2460`, `:2306-2318`; `.dockerignore:30`). `server --test` si ferma con «Frontend build failed. Server not started.», perché la modalità test ricompila il frontend in debug (`dev.py:196`, `:227`, `:2102-2122`) e l'immagine non ha né Node.js né i sorgenti (`Dockerfile:72-88`, `:106-115`).
+  >    - Pagina, §User & Permissions, riga (1) della tabella e commenti del compose: `UID`/`GID` sono argomenti di build, conservati come `LIBREFOLIO_UID`/`LIBREFOLIO_GID` e letti dall'entrypoint a ogni avvio. `./dev.py docker build` usa gli id di chi lo lancia (`dev.py:1651-1652`). Cambiarli in `.env` vale solo dopo un nuovo build; con l'immagine ufficiale non hanno effetto.
+  >    - **Aggiunta del 09/10 sera** (coordinatore, reperto di N): in §Test Mode la cella «Database» della porta `6041` (`:252`) diceva «Test database inside the container, lost with `docker compose down`». Ora dice che il server di test non parte nel container: in un checkout usa `backend/data/test/sqlite/app.db` (`cli_base.py:96`, `test_db_config.py:51-53`), che `./dev.py test db populate --force` cancella e ricrea con dati finti (`_backend_db.py:137-167`, `populate_mock_data.py:3831-3866`). Il paragrafo dopo la tabella era già vero. `dev_workflow.en.md` resta di N. Reperto di C da girare: il container del repo occupa `TEST_PORT` sull'host (`docker-compose.yml:43`), quindi un server di test avviato dal checkout si ferma su «Port … is already in use!», e con `--force` potrebbe uccidere il port forwarder di Docker (`dev.py:238-262`). Gate rifatti: build rc 0 e zero WARNING (`/tmp/libreFolio_q_build_s23b.log`); `check-links` come la baseline (`/tmp/libreFolio_q_checklinks_s23b.log`).
+  >    - Tenute tre correzioni vicine del docs-writer: la frase sulle migrazioni («`db upgrade` needs the server stopped»: la guardia legge `PORT`, `cli_base.py:80-82`, `:353`), `/etc/group` accanto a `/etc/passwd`, e la riga del riquadro sul nuovo build.
+  >    - **⚠️ Fuori pista, reperti da girare (niente modifiche: codice e configurazione):** l'intestazione di `docker-compose.yml:17-20` consiglia ancora `docker exec server --test` e `test db populate`; `dev.py:1782-1791` li usa come esempi; con `PORT≠6040` in `.env`, la guardia dei comandi `db` nel container controlla la porta sbagliata (`cli_base.py:80-82`), e `db create-clean` via `docker exec` non vedrebbe il server attivo.
+  >    - ✅ 2026-10-09 `.env.example:74-81`, scritto da Q: `UID`/`GID` sono argomenti di build (`docker-compose.yml:31-33`); l'immagine li conserva come `LIBREFOLIO_UID`/`LIBREFOLIO_GID` (`Dockerfile:136-137`), che l'entrypoint usa per il proprietario della cartella dati e per l'utente del server (`entrypoint.sh:18-29`); cambiarli richiede un nuovo build.
+  > 6. ✅ 2026-10-09 O-3, facoltativa, scritta da Q (non sono pagine MkDocs): nei 3 esempi il metodo inesistente `ensure_started()` diventa il pattern reale dei test API, una fixture di modulo `test_server()` con `with _TestingServerManager() as server_manager:` e `start_server()` (`backend/test_scripts/test_server_helper.py:294`, `:396-401`; lo stesso pattern in 51 file di `test_api`, per esempio `test_asset_prices_export.py:614-620`), ricevuta dai test come argomento.
+  >    - File: `.github/instructions/backend-testing.instructions.md:105-114`, `.github/skills/devpy-tools/testing-backend/SKILL.md:102-112`, `LibreFolio_developer_journal/knowledge_base/06_testing_backend.md:130-145`.
+  >    - La voce O-3 nel README del 38 (`:94`) è del coordinatore: la chiude lui.
+  > 7. ✅ 2026-10-09 Segnaposto `security/connection-indicator` tolto da «Cosa resta aperto»: chiuso da M con `dbf4263e9` (il file `user/connection-security.en.md:15` ha l'immagine).
+  > 8. ✅ 2026-10-09 Gate, su 18 percorsi (nessuna traduzione, nessun file di codice):
+  >    - `mkdocs build`: rc 0, zero WARNING o ERROR (`/tmp/libreFolio_q_build_s23.log`);
+  >    - `check-links`: 90 validi, rotto solo `#rolling-return` come nella baseline, più 3 ancore in eccezione (`/tmp/libreFolio_q_checklinks_s23.log`);
+  >    - i diagrammi Mermaid nuovi (`registries.md`, `core-infrastructure.md`, `test-walkthrough/index.md`) li ho controllati a mano: il build non li valida, perché si disegnano nel browser;
+  >    - `translate-validate`, solo per il debito: 2126 errori e 72 file mancanti in tutto (`/tmp/libreFolio_q_tv_s23.log`). Delle pagine toccate hanno traduzioni solo `user/transactions/form` (12 errori), `user/dashboard/index` (39) e `admin/docker_advanced` (72): vanno al giro di traduzione, senza stamp;
+  >    - `git diff --check` pulito, privacy pulita, nessun server, 6162 libera.
 
 ## 4. Conflitti, rischi, definizione di fatto
 

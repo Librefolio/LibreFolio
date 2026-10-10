@@ -11,6 +11,7 @@ from babel.numbers import get_currency_precision
 
 from backend.app.schemas.pac_allocator import (
     AmountFeeCap,
+    CurrencyIssueParam,
     DomainAssetIdentity,
     DomainBrokerIdentity,
     DomainCopyProvenance,
@@ -84,6 +85,9 @@ from backend.app.services.pac_allocator.numeric import (
 # Shared by v2: these were defined inside the P1 block removed on 2026-09-21.
 type _PlannerV2Request = PacPlannerRequest | RebalancerInvestOnlyRequest | RebalancerInvestAndSellRequest
 _RATIO_WIRE_INTEGER_CHARS = 192
+# Half a unit of the tenth decimal: the rounding error of an FX rate stored as
+# Numeric(24, 10) (``backend/app/db/models.py``, ``FxRate.rate``).
+_FX_STORED_RATE_HALF_UNIT = ExactRatio(1, 2 * 10**10)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +138,7 @@ class _PlannerV2Normalizer:
         self.capability_by_broker: dict[str, dict[str, object]] = {}
         self.fee_by_broker: dict[str, dict[str, object]] = {}
         self.reported_fx_rate_missing: set[str] = set()
+        self.reported_fx_rate_inconsistent: set[str] = set()
 
     def issue(self, code: PlannerIssueCode, path: PlannerIssuePath, *, params: tuple[PlannerIssueParam, ...] = ()) -> None:
         self.issues.append(make_issue(normalizer_issue_definition(code), path, params=params))
@@ -606,6 +611,11 @@ class _PlannerV2Normalizer:
     def _fx_pair_key(first: str, second: str) -> str:
         return "/".join(sorted((first, second)))
 
+    @staticmethod
+    def _stored_fx_rate(rate: ExactRatio, source: str, destination: str) -> ExactRatio:
+        """Return the stored value behind ``rate`` (source → destination): the key "A/B" with A < B stores B per A."""
+        return rate if source < destination else ExactRatio(1) / rate
+
     def fx_rate(self, source: str, destination: str) -> ExactRatio | None:
         if source == destination:
             return ExactRatio(1)
@@ -655,6 +665,69 @@ class _PlannerV2Normalizer:
                 continue
             for pool_currency in sorted(pool_currencies_by_broker.get(route.broker_id, set())):
                 self.require_fx_pair(pool_currency, asset.quote.currency)
+
+    def validate_fx_coherence(self) -> None:
+        """Refuse a cross rate that, net of the spread, beats the triangle through V.
+
+        A BUY conversion from pool currency c into quote currency q is worth
+        ``rate(c→q)·(1−spread)·rate(q→V)`` in the valuation currency V; above
+        ``rate(c→V)`` it would create value. Rates are stored with ten
+        decimals, so three coherent rates can miss the triangle by their
+        storage error: the check tolerates the first-order relative error of
+        the product, ``β = h·(1/R₁ + 1/R₂ + 1/R₃)`` over the three stored
+        values, with h half a unit of the tenth decimal. Inside that band the
+        evaluator plans the conversion at the triangle
+        (``calculate_planning_fx_rate``), so it creates no value either. The
+        checked conversions are exactly those ``validate_fx_pair_closure``
+        requires; a conversion from or into V never forms a triangle. A
+        missing or nonpositive rate and an out-of-range spread are reported
+        elsewhere and skip the check.
+        """
+        valuation = self.request.valuation_currency
+        spread = ExactRatio.from_decimal(Decimal(self.request.fx_spread_rate))
+        if not self._rate_in_half_open_unit_interval(spread):
+            return
+        kept = ExactRatio(1) - spread
+        pool_currencies_by_broker = self._cash_pool_currencies_by_broker()
+        for route in self.request.order_routes:
+            if route.side != "buy":
+                continue
+            asset = self.asset_by_id.get(route.asset_id)
+            if asset is None or asset.quote is None or asset.quote.currency == valuation:
+                continue
+            quote_currency = asset.quote.currency
+            for pool_currency in sorted(pool_currencies_by_broker.get(route.broker_id, set())):
+                pair = self._fx_pair_key(pool_currency, quote_currency)
+                if pool_currency in (quote_currency, valuation) or pair in self.reported_fx_rate_inconsistent:
+                    continue
+                cross = self.fx_rate(pool_currency, quote_currency)
+                to_valuation = self.fx_rate(quote_currency, valuation)
+                direct = self.fx_rate(pool_currency, valuation)
+                if cross is None or to_valuation is None or direct is None:
+                    continue
+                band = _FX_STORED_RATE_HALF_UNIT * sum(
+                    (
+                        ExactRatio(1) / self._stored_fx_rate(rate, source, destination)
+                        for rate, source, destination in (
+                            (cross, pool_currency, quote_currency),
+                            (to_valuation, quote_currency, valuation),
+                            (direct, pool_currency, valuation),
+                        )
+                    ),
+                    ExactRatio(0),
+                )
+                if cross * kept * to_valuation > direct * (ExactRatio(1) + band):
+                    self.reported_fx_rate_inconsistent.add(pair)
+                    self.issue(
+                        "allocation.fx_rate_inconsistent",
+                        field_path("fx", "fx_rate", pair, "rate"),
+                        params=(
+                            IdIssueParam(kind="id", name="pair", value=pair),
+                            CurrencyIssueParam(kind="currency", name="source_currency", value=pool_currency),
+                            CurrencyIssueParam(kind="currency", name="destination_currency", value=quote_currency),
+                            CurrencyIssueParam(kind="currency", name="valuation_currency", value=valuation),
+                        ),
+                    )
 
     def validate_sell_context(self) -> None:
         if not isinstance(self.request, RebalancerInvestAndSellRequest):
@@ -1133,6 +1206,7 @@ class _PlannerV2Normalizer:
         self.validate_sell_context()
         self.validate_current_portfolio()
         self.validate_fx_pair_closure()
+        self.validate_fx_coherence()
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)
         normalized = self.build_scenario() if availability == "ready" else None

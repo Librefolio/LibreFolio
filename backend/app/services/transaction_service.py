@@ -923,9 +923,10 @@ class TransactionService:
     ) -> list[WACPreviewResultItem] | None:
         """Compute WAC for items with cost_basis_mode in ('auto', 'auto-detail').
 
-        Called post-flush: all rows are in the session (not committed).
-        For TRANSFER (has link_uuid): source broker = partner's broker_id.
-        For ADJUSTMENT (no link_uuid): source broker = own broker_id, exclude self.
+        Called post-flush, after link resolution and promotes: all rows are in the session
+        (not committed). The pool to average comes from ``_auto_cost_source``: a receiving
+        TRANSFER averages its partner's broker before the transfer, any other row its own
+        broker without itself.
 
         Returns list of WACPreviewResultItem with batch-context fields populated
         (operation, index, source_broker_id).
@@ -952,14 +953,7 @@ class TransactionService:
         results: list[WACPreviewResultItem] = []
 
         for operation, idx, schema_item, db_tx in auto_items:
-            # Determine source broker
-            link_uuid = getattr(schema_item, "link_uuid", None)
-            if link_uuid:
-                # TRANSFER: find partner via link_uuid_map → use partner's broker_id
-                source_broker_id = self._resolve_source_broker_from_link(link_uuid, db_tx.id, link_uuid_map)
-            else:
-                # ADJUSTMENT standalone: own broker, exclude self
-                source_broker_id = db_tx.broker_id
+            source_broker_id, excluded, as_of_date = await self._auto_cost_source(db_tx)
 
             # SPLIT-linked ADJUSTMENT: cost is derived live from the ratio at WAC/FIFO
             # computation time (the split rescale of financial_math.average_cost), never
@@ -990,21 +984,19 @@ class TransactionService:
             asset_result = await self.session.execute(select(Asset.currency).where(Asset.id == db_tx.asset_id))
             asset_currency = asset_result.scalar_one_or_none() or "USD"
 
-            # Compute WAC (session sees all flushed rows)
-            excluded = [db_tx.id] if not link_uuid else []
-
             # Extract currency hint from cost_basis_override when mode is auto
             ccy_hint: str | None = None
             if getattr(schema_item, "cost_basis_override", None) is not None:
                 ccy_hint = schema_item.cost_basis_override.code
 
+            # Compute WAC (session sees all flushed rows)
             wac_result = await compute_wac_iterative(
                 self.session,
                 broker_id=source_broker_id,
                 asset_id=db_tx.asset_id,
-                as_of_date=db_tx.date,
+                as_of_date=as_of_date,
                 asset_currency=asset_currency,
-                excluded_tx_ids=excluded if excluded else None,
+                excluded_tx_ids=excluded,
                 target_currency_override=ccy_hint,
             )
 
@@ -1058,21 +1050,17 @@ class TransactionService:
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    def _resolve_source_broker_from_link(
-        self,
-        link_uuid: str,
-        self_id: int,
-        link_uuid_map: dict[str, list[tuple[int, Transaction]]],
-    ) -> int:
-        """For a TRANSFER with link_uuid, find the partner's broker_id (source)."""
-        if link_uuid in link_uuid_map:
-            pairs = link_uuid_map[link_uuid]
-            for _, tx in pairs:
-                if tx.id != self_id:
-                    return tx.broker_id
-        # Fallback: if partner not found in map, use own broker
-        # This shouldn't happen in a valid batch but is safe.
-        for _, tx in link_uuid_map.get(link_uuid, []):
-            if tx.id == self_id:
-                return tx.broker_id
-        return 0  # Should never reach here
+    async def _auto_cost_source(self, db_tx: Transaction) -> tuple[int, list[int], date_type]:
+        """The pool an Auto cost basis averages: broker, rows left out, and the date.
+
+        The receiving side of a TRANSFER averages its partner's broker as it was when the units
+        left: up to the partner's date, without the partner's outgoing leg, so moving a whole
+        position keeps its cost. The pair can come from this batch, from the database or from a
+        promote — all three set ``related_transaction_id`` before the WAC step. Any other row
+        averages its own broker, without itself, up to its own date.
+        """
+        if db_tx.type == TransactionType.TRANSFER and db_tx.related_transaction_id is not None:
+            partner = await self.session.get(Transaction, db_tx.related_transaction_id)
+            if partner is not None:
+                return partner.broker_id, [db_tx.id, partner.id], partner.date
+        return db_tx.broker_id, [db_tx.id], db_tx.date

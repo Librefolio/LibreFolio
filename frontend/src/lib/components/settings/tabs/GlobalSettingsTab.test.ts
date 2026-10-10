@@ -24,7 +24,8 @@
  * untested. The dictionary is owned by this file and deliberately partial, so both
  * arms are reachable. Assertions therefore name either a key (untranslated) or a
  * value this file put in the dictionary — never a phrase from the product
- * catalogue.
+ * catalogue. One block reads the real catalogues, for whether a key is there and
+ * never for its wording: "every row it renders is named in the four catalogues".
  *
  * What it deliberately does NOT assert:
  *   - `SettingToggle` / `SettingNumber` internals — another lane owns them; here
@@ -126,9 +127,15 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 
 import GlobalSettingsTab from './GlobalSettingsTab.svelte';
 import {zodiosApi} from '$lib/api';
-import {_, locale} from '$lib/i18n';
+import {_, locale, type SupportedLocale} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import * as clickOutside from '$lib/utils/core/clickOutside';
+// The real catalogues, read only by the naming invariant below: the rest of the
+// file keeps its own dictionary.
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 
 // --- Fixtures & helpers -------------------------------------------------
 
@@ -486,6 +493,115 @@ describe('GlobalSettingsTab — how a setting is labelled', () => {
         // neither: the id, capitalised
         expect(screen.getByTestId('global-settings-category-sync')).toHaveTextContent('Sync');
         expect(screen.getByTestId('global-settings-category-defaults')).toHaveTextContent('Defaults');
+    });
+});
+
+// =========================================================================
+/**
+ * Every row the tab renders is named in the four catalogues (O, step 21, finding 6).
+ *
+ * `getSettingLabel` names a row from `SETTING_LABEL_OVERRIDES` (today only
+ * `default_currency`, whose name already lives at `settings.defaultCurrency`),
+ * else from `settings.globalSettingNames.<key>`; when the catalogue has neither it
+ * de-slugs the key, in English, whatever the language. That last resort is meant
+ * for a key the frontend does not know yet. `scheduler_enabled`, the row of the
+ * Sync category, had no name in any catalogue: every administrator read
+ * "Scheduler Enabled".
+ *
+ * The invariant: no setting row the tab renders falls back to its humanized key —
+ * every rendered row is in the label override map, or has
+ * `settings.globalSettingNames.<key>` in en, it, fr and es.
+ *
+ * How it is observed, without copying the override map or the de-slugging here.
+ * For these cases the file's dictionary gives way to the real catalogues, seen
+ * through a translator that records every key it is asked for: a key present in
+ * all four comes back marked, `⟦key⟧`; a key missing from any comes back
+ * unchanged, which is how the tab learns there is no translation. The tab asks
+ * for `settings.globalSettingNames.<key>` exactly for the rows it renders outside
+ * the override map; a name it asked for that a catalogue lacks is a row that falls
+ * back.
+ *
+ * The first case is the control, in both halves: a named row passes and shows its
+ * name, the override row and a key the tab hides are exempt, a key no catalogue
+ * names is reported. Red today: `scheduler_enabled`, absent from all four
+ * catalogues.
+ */
+describe('GlobalSettingsTab — every row it renders is named in the four catalogues', () => {
+    const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
+    const NAME = 'settings.globalSettingNames.';
+    /** A key no catalogue will ever name: the row the control must see reported. */
+    const UNNAMED = 'lf_test_setting_with_no_name';
+    /** What the instance sends: every key of the backend's `GLOBAL_SETTINGS_DEFAULTS` (`schemas/settings.py`), at its default. */
+    const SERVER_LIST: Fixture[] = [
+        setting('session_ttl_hours', '24', 'int'),
+        setting('enable_registration', 'true', 'bool'),
+        setting('require_email_verification', 'false', 'bool'),
+        setting('max_file_upload_mb', '10', 'int'),
+        setting('scheduler_enabled', 'true', 'bool'),
+        setting('scheduler_current_price_frequency_minutes', '10', 'int'),
+        setting('scheduler_history_sync_times', '06:00,23:00', 'str'),
+        setting('scheduler_history_sync_days', 'mon,tue,wed,thu,fri,sat', 'str'),
+        setting('scheduler_history_sync_horizon_days', '14', 'int'),
+        setting('scheduler_timezone', 'UTC', 'str'),
+        setting('default_currency', 'EUR', 'str'),
+        setting('default_language', 'en', 'str'),
+        setting('default_theme', 'auto', 'str'),
+    ];
+
+    /** The leaf behind a dotted key, read from the catalogue file itself. */
+    const leaf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    /** The catalogues that have no sentence for `key`. */
+    const missingFrom = (key: string): string[] =>
+        Object.entries(CATALOGUES)
+            .filter(([, catalogue]) => typeof leaf(catalogue, key) !== 'string')
+            .map(([lang]) => lang);
+    const marked = (key: string): string => `⟦${key}⟧`;
+
+    /** Every key the tab asked the translator for, in this case. */
+    let asked: Set<string>;
+
+    beforeEach(() => {
+        asked = new Set();
+        translator.set((key: string) => {
+            asked.add(key);
+            return missingFrom(key).length === 0 ? marked(key) : key;
+        });
+    });
+
+    /** The rows the tab named by the catalogue convention: every row it renders outside the override map. */
+    const conventionRows = (): string[] => [...asked].filter((key) => key.startsWith(NAME)).map((key) => key.slice(NAME.length));
+    /** Those of them whose name a catalogue lacks, with the catalogues that lack it: the rows that fall back to their humanized key. */
+    function fallingBack(): {row: string; missingFrom: string[]}[] {
+        const rows = conventionRows().map((row) => ({row, missingFrom: missingFrom(NAME + row)}));
+        return rows.filter((entry) => entry.missingFrom.length > 0);
+    }
+
+    it('the check, in both halves: a named row passes, the override row and a hidden key are exempt, a row no catalogue names is reported', async () => {
+        await mount([setting('session_ttl_hours', '24', 'int'), setting('default_currency', 'EUR', 'str'), setting('scheduler_timezone', 'UTC', 'str'), setting(UNNAMED, 'x', 'str')]);
+
+        expect(screen.getByText(marked(`${NAME}session_ttl_hours`)), 'a row named in all four catalogues shows that name').toBeInTheDocument();
+        expect(screen.getByText(marked('settings.defaultCurrency')), 'the override row shows the name it borrows').toBeInTheDocument();
+        expect(conventionRows(), 'the tab asks the catalogue name of every row it renders outside the override map').toEqual(expect.arrayContaining(['session_ttl_hours', UNNAMED]));
+        expect(conventionRows(), 'the override row is never asked for by the convention').not.toContain('default_currency');
+        expect(conventionRows(), 'a key the scheduler modal owns is no row of the tab, so it is never asked for (nor does any catalogue name it)').not.toContain('scheduler_timezone');
+        expect(fallingBack(), 'only the row no catalogue names is reported, from all four catalogues').toEqual([{row: UNNAMED, missingFrom: ['en', 'it', 'fr', 'es']}]);
+    });
+
+    it('names every row of the instance’s full list in all four catalogues — the Sync row scheduler_enabled included', async () => {
+        await mount(SERVER_LIST);
+
+        expect(conventionRows(), 'premise: the scheduler_enabled row (category Sync) is rendered and named by the catalogue convention').toContain('scheduler_enabled');
+        expect(fallingBack(), 'no setting row the tab renders falls back to its humanized key: every rendered row is in the label override map or has settings.globalSettingNames.<key> in en, it, fr and es').toEqual([]);
+    });
+
+    it('shows the scheduler switch of the Sync category under its catalogue name', async () => {
+        await mount(SERVER_LIST);
+
+        await fireEvent.click(screen.getByTestId('global-settings-category-sync'));
+
+        // The Sync category claims one setting, `scheduler_enabled`: its switch is the only one left.
+        await waitFor(() => expect(screen.getAllByTestId('setting-toggle-switch'), 'premise: the Sync category shows one setting switch, scheduler_enabled').toHaveLength(1));
+        expect(screen.queryByText(marked(`${NAME}scheduler_enabled`)), 'the Sync row is named from the catalogue, not de-slugged from its key').not.toBeNull();
     });
 });
 

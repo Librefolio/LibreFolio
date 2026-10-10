@@ -38,6 +38,37 @@ four commits are `0088748a8`, `75309672e`, `9229085e9`, `c25c1e874`.
 > - **Debt register.** Passo F closes DBT-5: a SCIP `infeasible` becomes `ready_infeasible` with
 >   `completed`. DBT-4 and DBT-6 stay open.
 
+> ⚠️ **Update 2026-10-09: this note overrides the text below, and the 2026-09-25 note, wherever they
+> conflict.** It records row 16 of the [implementation index](../implementation/README.md), approved
+> by the developer, and the developer's choice B1 on item 15. Decisions and evidence are in the
+> [rounding-direction plan](../implementation/plan-phase00PacRoundingDirectionFix.prompt.md) (§2).
+>
+> - **Every posting rounds against the plan (rule (a)).** Credits (`fx_credit`,
+>   `gross_sell_credit`) round down and debits (`buy_debit`, `buy_fee`, `sell_fee`, both tax
+>   families) round up, to the minor unit of their currency. HALF_UP survives only in display
+>   formatting.
+>
+>   Why: on the USD gallery, after row 15, session M saw the solver split conversions to harvest
+>   fractions of a cent. 1,101.89 EUR converted once is 1,233.41087… USD and posts 1,233.41; split
+>   into 0.13 + 1,101.76 EUR it posted 0.15 + 1,233.27 = 1,233.42 USD. Under (a), Σ floor ≤ floor Σ,
+>   so splitting never pays: the same split now posts 0.14 + 1,233.26 = 1,233.40.
+> - **The plan stays `optimal_proven`** when SCIP closes every stage: the model and the exact replay
+>   round the same way. The only economic rounding is to the minor unit, always against the plan.
+> - **§5.7, the bound.** `rounding_delta` now lies in [0, `rounding_bound`): rounding never creates
+>   value. `rounding_bound` becomes one minor unit per rounded posting, valued in the scenario
+>   currency (it was half a unit). The strict check stays per posting, in the ledger.
+> - **QX1-b.** At an exact multiple the compiled model can now only be more cautious than the
+>   ledger. Top-ups stay as a safety net, with the same limit.
+> - **C-FXPOS.** An active conversion must post a positive credit: a live row in the model, as in
+>   the replay.
+> - **Item 15, B1.** The triangle check of the §1 correction tolerates a relative gap
+>   β = 5·10⁻¹¹ · Σ 1/R over the three stored rates: the rounding of rates stored with ten decimals.
+>   The planning rate is min(spot · (1 − s), the rate through the valuation currency), so within the
+>   band the conversion uses the triangle and creates no value. The published spot is unchanged, and
+>   the contract stays 1.0.0.
+>
+> Sections affected: §1 (the 2026-10-09 correction), §3.2 (`numeric.py`, `ledger.py`) and §5.7.
+
 ---
 
 ## 1. The arc
@@ -63,6 +94,15 @@ FX routes with per-pair quotes, inversion flags and a per-broker `fx_mode`.
 a whole class of arbitrage the old model made expressible — cycling cash through
 inconsistent rate directions — by making it structurally impossible rather than
 checking for it afterwards.
+
+> ⚠️ **Correction 2026-10-09.** "Structurally impossible" holds for cycles between **two**
+> currencies: the map keeps one rate per pair, inverted exactly. It does not hold for
+> **triangles** of three currencies, which the map can still make incoherent: a direct rate, net
+> of the spread, can give more than going through the valuation currency. Since the
+> [PAC FX conversion fix](../implementation/plan-phase00PacFxConversionFix.prompt.md) (§1.4, fix
+> 2A), the normalizer checks it and rejects such a scenario as invalid input, with
+> `allocation.fx_rate_inconsistent`. The archived plans that repeat the claim stay as history; the
+> list is in that plan.
 
 A third thing happened that was not a fork but is worth recording: **six defects
 in this slice were invisible to every static gate** (`ruff`, `black`,

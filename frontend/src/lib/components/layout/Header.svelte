@@ -8,6 +8,7 @@
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import {getDocumentScrollY} from '$lib/utils/layout/headerScroll';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {connectionSecurity} from '$lib/stores/app/connectionSecurityStore';
 
     type ScrollState = 'visible' | 'hidden' | 'pinned';
 
@@ -221,8 +222,18 @@
     data-guide-active={guideActive ? 'true' : 'false'}
 >
     <div class="flex items-center justify-between">
-        <button aria-label="Toggle menu" class="lg:hidden p-2 rounded-lg transition-colors" data-testid="mobile-menu-toggle" use:guideAnchor={'nav.toggle.mobile'} onclick={onToggleSidebar}>
+        <!-- The sidebar's connection line hides behind the burger on a phone: an insecure level marks it (plan 36). -->
+        <button
+            aria-label={$connectionSecurity.level === 'insecure' ? `Toggle menu — ${$_('connectionSecurity.level.insecure')}` : 'Toggle menu'}
+            class="relative lg:hidden p-2 rounded-lg transition-colors"
+            data-testid="mobile-menu-toggle"
+            use:guideAnchor={'nav.toggle.mobile'}
+            onclick={onToggleSidebar}
+        >
             <Menu class="text-libre-dark dark:text-gray-200" size={24} />
+            {#if $connectionSecurity.level === 'insecure'}
+                <span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-libre-beige dark:ring-slate-900" data-testid="mobile-menu-security-dot" aria-hidden="true"></span>
+            {/if}
         </button>
 
         <div class="hidden lg:block"></div>

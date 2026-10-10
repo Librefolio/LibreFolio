@@ -133,4 +133,4 @@ effect inside the unrealized change); they are listed in [[decisions/financial-m
 | Unit tests | `backend/test_scripts/test_services/test_financial_math/test_average_cost.py` |
 | API regression test | `backend/test_scripts/test_api/test_portfolio_api.py` |
 | Developer docs | `mkdocs_src/docs/developer/backend/transactions/wac.md` |
-| Plan (§1 analysis, §3.2 the #32 numbers) | `LibreFolio_developer_journal/Release_2/Phase_0/30_wacUnification/plan-phase00WacUnification.prompt.md` |
+| Plan (§1 analysis, §3.2 the #32 numbers) | `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00WacUnification.prompt.md` |

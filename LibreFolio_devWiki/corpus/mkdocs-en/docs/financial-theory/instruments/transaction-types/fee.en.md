@@ -1,1 +1,1 @@
-/Users/ea_enel/Documents/00_My/LibreFolio/mkdocs_src/docs/financial-theory/instruments/transaction-types/fee.en.md
+../../../../../../../mkdocs_src/docs/financial-theory/instruments/transaction-types/fee.en.md

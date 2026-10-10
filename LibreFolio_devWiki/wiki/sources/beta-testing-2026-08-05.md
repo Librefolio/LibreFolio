@@ -110,7 +110,7 @@ already in the taxonomy or belongs to the feature pages. They are listed in
 
 | Role | Path |
 |------|------|
-| Tester report | `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/00_20260805_betaTester_report.md` |
+| Tester report | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/00_20260805_betaTester_report.md` |
 | Taxonomy of findings | `.../01_tassonomia_findings.md` |
 | Reconciliation | `.../02_riconciliazione_credit_agricole.md` |
 | Index and P1-P8 status | `.../INDEX.md` |

@@ -41,7 +41,9 @@ So you upload them **together**: LibreFolio reads them as one **report set**, ma
     <img class="gallery-img" data-category="brokers" data-name="import-report-set-pairing" alt="Parse detail of the set: Matching securities ↔ cash, with the outcome chips and the reasons with their number of rows" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Files uploaded together from the [Files](../../files/index.md#broker-reports) page or a broker's **Uploaded Reports** form a set too. Exports uploaded with LibreFolio 1.1.0 or earlier cannot: upload the two again, together.
+Files uploaded together from the [Files](../../files/index.md#broker-reports) page or a broker's **Uploaded Reports** form a set too.
+
+Exports uploaded with a LibreFolio version before 1.2 are in no set and cannot be read on their own: the wizard keeps **Parse** disabled while one of them is selected. Upload all the exports of the set again together, in one go, then select that set; the old copies can be deleted.
 
 ### 🧩 If one file is missing
 
@@ -63,7 +65,9 @@ Normally there is nothing to change: **Read as**, in the card's header, shows **
     <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="Set card with the Read as list open: Danske Bank (detected), selected, and Read the files one by one" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-<!-- [Screenshot Placeholder: brokers/import-report-set-file-menu — the ⋮ menu of the cash statement in a Danske Bank set's card: Preview, Remove from the set and Delete, with no Read alone] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="Danske Bank set card in Select Files with the cash statement's ⋮ menu open: Preview, Remove from the set and Delete" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ---
 

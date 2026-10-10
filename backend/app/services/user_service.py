@@ -220,6 +220,9 @@ async def set_user_active(
     """
     Activate or deactivate a user.
 
+    The last active administrator cannot be deactivated: an inactive user cannot log in, so the
+    instance would be left with nobody to administer it.
+
     Args:
         session: Database session
         username: Username
@@ -232,13 +235,19 @@ async def set_user_active(
     if not user:
         return False, f"User '{username}' not found"
 
+    if not active and await _is_last_active_admin(session, user):
+        return False, f"User '{username}' is the last active administrator: promote or activate another administrator first"
+
+    # Store user_id before commit (to avoid lazy load after commit)
+    user_id = user.id
+
     user.is_active = active
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
 
     status = "activated" if active else "deactivated"
-    logger.info(f"User {status}", user_id=user.id, username=username)
+    logger.info(f"User {status}", user_id=user_id, username=username)
     return True, None
 
 
@@ -249,6 +258,9 @@ async def set_user_admin(
 ) -> tuple[bool, Optional[str]]:
     """
     Promote or demote a user to/from admin.
+
+    The last active administrator cannot be demoted: the instance would be left with nobody to
+    administer it. Demoting an inactive administrator removes no active one, and is allowed.
 
     Args:
         session: Database session
@@ -265,6 +277,9 @@ async def set_user_admin(
     if user.is_superuser == is_admin:
         status = "already an admin" if is_admin else "not an admin"
         return False, f"User '{username}' is {status}"
+
+    if not is_admin and await _is_last_active_admin(session, user):
+        return False, f"User '{username}' is the last active administrator: promote another user first"
 
     # Store user_id before commit (to avoid lazy load after commit)
     user_id = user.id
@@ -346,6 +361,20 @@ async def count_superusers(session: AsyncSession) -> int:
     stmt = select(func.count(User.id)).where(User.is_superuser == True)  # noqa: E712 — SQLAlchemy filter
     result = await session.execute(stmt)
     return result.scalar() or 0
+
+
+async def count_active_superusers(session: AsyncSession, *, excluding_user_id: Optional[int] = None) -> int:
+    """The active superusers — those who can still administer the instance — with ``excluding_user_id`` left out."""
+    stmt = select(func.count(User.id)).where(User.is_superuser == True, User.is_active == True)  # noqa: E712 — SQLAlchemy filter
+    if excluding_user_id is not None:
+        stmt = stmt.where(User.id != excluding_user_id)
+    result = await session.execute(stmt)
+    return result.scalar() or 0
+
+
+async def _is_last_active_admin(session: AsyncSession, user: User) -> bool:
+    """True when ``user`` is an active administrator and no other active administrator remains."""
+    return bool(user.is_superuser and user.is_active) and await count_active_superusers(session, excluding_user_id=user.id) == 0
 
 
 async def delete_user(session: AsyncSession, user_id: int) -> Optional[AccountDeletion]:

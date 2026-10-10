@@ -1,7 +1,8 @@
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
+    import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {auth, authError, isAuthLoading} from '$lib/stores/app/auth';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
     import {goto} from '$app/navigation';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
 
@@ -17,6 +18,11 @@
 
     let username = '';
     let password = '';
+
+    // Public settings: whether registration is open decides the register link below.
+    onMount(() => {
+        void globalSettings.load();
+    });
 
     async function handleSubmit() {
         username = username.trim();
@@ -55,7 +61,7 @@
             <!-- Error Message -->
             {#if $authError}
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg text-sm" data-testid="login-error">
-                    {$authError}
+                    {'key' in $authError ? $_($authError.key) : $authError.message}
                 </div>
             {/if}
 
@@ -99,13 +105,15 @@
                 {/if}
             </button>
 
-            <!-- Register Link -->
-            <div class="text-center pt-2 text-xs text-gray-600">
-                <span>{$_('auth.noAccount')} </span>
-                <button class="font-bold text-libre-dark hover:underline" data-testid="goto-register" on:click={() => dispatch('gotoRegister')} type="button">
-                    {$_('auth.registerHere')}
-                </button>
-            </div>
+            <!-- Register Link: hidden only once the instance says registration is closed; unknown keeps it -->
+            {#if $globalSettings.enable_registration !== false}
+                <div class="text-center pt-2 text-xs text-gray-600">
+                    <span>{$_('auth.noAccount')} </span>
+                    <button class="font-bold text-libre-dark hover:underline" data-testid="goto-register" on:click={() => dispatch('gotoRegister')} type="button">
+                        {$_('auth.registerHere')}
+                    </button>
+                </div>
+            {/if}
         </form>
     </div>
 </div>

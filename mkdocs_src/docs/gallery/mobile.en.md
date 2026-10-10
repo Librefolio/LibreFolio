@@ -42,6 +42,18 @@ The post-login modal announcing a newer release, with current vs latest version 
 
 ---
 
+## 🔒 Security
+
+### 🚦 Connection Indicator
+
+The connection security indicator at the bottom of the sidebar, open on Connection: local network, with the reason for that level and the How to connect securely link.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="security" data-name="connection-indicator" alt="🚦 Connection Indicator">
+</div>
+
+---
+
 ## 🧭 Onboarding
 
 ### 👋 Welcome Setup
@@ -84,16 +96,15 @@ Period P&L, returns, and net worth — the first thing you see when you land on 
 
 ### 📈 Portfolio Growth
 
-Track your portfolio's growth over time, in absolute or percentage terms.
+Track your portfolio's growth over time, in absolute or percentage terms, or as P&L: the Total P&L line, synthetic candles, and monthly income bars.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-9" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Absolute" alt="Growth Chart — Absolute">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📊 Percentage" alt="Growth Chart — Percentage">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="growth-pnl-line" data-title="💹 P&L Line" alt="Growth Chart — P&L Line">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="growth-pnl-candles" data-title="🕯️ P&L Candles" alt="Growth Chart — P&L Candles">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="growth-pnl-income" data-title="🧾 Income" alt="Growth Chart — Income">
 </div>
-
-<!-- [Screenshot Placeholder: dashboard/growth-pnl-line — add to the "📈 Portfolio Growth" carousel above as item "💹 P&L Line": The cumulative total P&L line.] -->
-<!-- [Screenshot Placeholder: dashboard/growth-pnl-candles — add to the "📈 Portfolio Growth" carousel above as item "🕯️ P&L Candles": Synthetic P&L candles with the width picker.] -->
-<!-- [Screenshot Placeholder: dashboard/growth-pnl-income — add to the "📈 Portfolio Growth" carousel above as item "🧾 Income": Monthly bars of dividends and interest, fees and taxes, deposits and purchases.] -->
 
 ### 📊 Asset Allocation
 
@@ -174,7 +185,13 @@ The data-quality banner listing missing exchange rates with its Sync rates butto
     <img class="gallery-img" data-category="dashboard" data-name="data-quality-sync-rates" alt="💱 Missing Exchange Rates">
 </div>
 
-<!-- [Screenshot Placeholder: dashboard/privacy-masked — gallery entry "### 🙈 Privacy Mode": The dashboard with privacy mode on — the eye button in the header and every amount shown as •••.] -->
+### 🙈 Privacy Mode
+
+The dashboard with privacy mode on — the eye button in the header and every amount shown as •••.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Privacy Mode">
+</div>
 
 ---
 
@@ -601,7 +618,7 @@ The Read as menu of a report set.
 
 ### 🗃️ File Menu
 
-A file's ⋮ menu inside a report set: read it alone with another plugin, or remove it from the set.
+The ⋮ menu of a bank's export inside a report set: preview it, remove it from the set, or delete it.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="🗃️ File Menu">
@@ -715,7 +732,13 @@ The searchable two-level type menu open, with the ETF family expanded and compos
     <img class="gallery-img" data-category="assets" data-name="type-picker-open" alt="🧬 Asset Type Picker">
 </div>
 
-<!-- [Screenshot Placeholder: assets/create-provider-compare — gallery entry "### 🔍 Provider Data Comparison": The comparison between the asset and the provider's data after the ISIN choice.] -->
+### 🔍 Provider Data Comparison
+
+The comparison between the asset and the provider's data after the ISIN choice: which TICKER is the main one, and the Type row with its icon badges.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Provider Data Comparison">
+</div>
 
 ### 🌳 Grouped Indicator Search
 
@@ -752,6 +775,46 @@ Corporate events appear as colored markers on the chart; hovering reveals the de
 ---
 
 ## 📉 Risk Analysis
+
+### 📉 How Much Can It Hurt?
+
+The Risk tab of the Dashboard — what your portfolio really went through: the A bad day, A bad month and The worst fall cards, one under the other, above the start of the time spent below the peak.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="📉 How Much Can It Hurt?">
+</div>
+
+### 🧩 Am I as Diversified as I Think?
+
+Which holdings really carry your risk: the sentence under the title, the three cards, and the first holdings with their weight, risk contribution and two-sided bar.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-diversification" alt="🧩 Am I as Diversified as I Think?">
+</div>
+
+### ⚖️ Am I Being Paid for This Risk?
+
+The return of your portfolio and of each holding against its swings, compared with a benchmark: the table opened by the Portfolio and benchmark rows, above the start of the risk/return chart.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-paid" alt="⚖️ Am I Being Paid for This Risk?">
+</div>
+
+### 🔮 What If…?
+
+A real past period applied to the portfolio you hold today: the Historical replay with a crisis preset, the holding left out, the total, and the first rows of the table.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-whatif" alt="🔮 What If…?">
+</div>
+
+### 🎲 Simulation
+
+The What if…? simulation step with its beta notice.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulation">
+</div>
 
 ### 🔗 Correlation Matrix
 
@@ -807,14 +870,6 @@ The replay table with the left-out assets as badges and the common-period button
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="risk" data-name="lab-replay" alt="🕰️ Historical Replay">
-</div>
-
-### 🎲 Simulation
-
-The What if…? simulation step with its beta notice.
-
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulation">
 </div>
 
 ---
@@ -983,12 +1038,74 @@ The Tools catalogue with the PAC allocator card, its version pair and the Docume
     <img class="gallery-img" data-category="tools" data-name="hub" alt="🗂️ Tools Hub">
 </div>
 
-<!-- [Screenshot Placeholder: tools/pac-step-liquidity — gallery entry "### 💶 PAC — Liquidity": The Liquidity step with a new contribution and an external account.] -->
-<!-- [Screenshot Placeholder: tools/pac-step-brokers — gallery entry "### 🏦 PAC — Brokers": The broker editor with order mode, increment, fees and conversion mode.] -->
-<!-- [Screenshot Placeholder: tools/pac-step-assets — gallery entry "### 💼 PAC — Assets": The Assets step with automatic and manual prices and their origin badges.] -->
-<!-- [Screenshot Placeholder: tools/pac-step-routing — gallery entry "### 🔀 PAC — Routing": The Routing step with allow/exclude, minimum/required/maximum purchases and priorities.] -->
-<!-- [Screenshot Placeholder: tools/pac-step-targets — gallery entry "### 🎯 PAC — Targets": The target weights with Balance all.] -->
-<!-- [Screenshot Placeholder: tools/pac-step-review — gallery entry "### ✅ PAC — Review": The review step with the Calculate plan button.] -->
-<!-- [Screenshot Placeholder: tools/pac-result — gallery entry "### 📊 PAC — Result": The outcome header, key figures and the allocation per asset.] -->
-<!-- [Screenshot Placeholder: tools/pac-result-plan — gallery entry "### 🧾 PAC — Operational Plan": The orders by broker and route with their fees.] -->
-<!-- [Screenshot Placeholder: tools/pac-result-proof — gallery entry "### 🔬 PAC — Proof and Solver": The proof behind the outcome and the solver details.] -->
+### 💶 PAC — Liquidity
+
+The Liquidity step with cash from a broker, a new contribution and the top of an external account.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-liquidity" alt="💶 PAC — Liquidity">
+</div>
+
+### 🏦 PAC — Brokers
+
+The broker editor with order mode, increment and fees.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-brokers" alt="🏦 PAC — Brokers">
+</div>
+
+### 💼 PAC — Assets
+
+The Assets step with automatic and manual prices and their origin badges.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-assets" alt="💼 PAC — Assets">
+</div>
+
+### 🔀 PAC — Routing
+
+The Routing step with allow/exclude, minimum/required/maximum purchases and priorities.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-routing" alt="🔀 PAC — Routing">
+</div>
+
+### 🎯 PAC — Targets
+
+The target weights adding up to 100%, with Balance all and Copy current distribution, under the step counter.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-targets" alt="🎯 PAC — Targets">
+</div>
+
+### ✅ PAC — Review
+
+The review step with the summary of each step, a field still to complete and the Calculate plan button.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-review" alt="✅ PAC — Review">
+</div>
+
+### 📊 PAC — Result
+
+The outcome header with its badges, and the first key figures.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-result" alt="📊 PAC — Result">
+</div>
+
+### 🧾 PAC — Operational Plan
+
+The numbered cash and currency exchange steps, down to the title of a broker's orders.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="🧾 PAC — Operational Plan">
+</div>
+
+### 🔬 PAC — Proof and Solver
+
+The proof behind the outcome: its badges and the first exact objective values.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-proof" alt="🔬 PAC — Proof and Solver">
+</div>

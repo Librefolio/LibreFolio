@@ -77,8 +77,8 @@ uploaded with 1.1.0, which recorded no ``batch_id``: detected again, it forms no
 must be uploaded again, together. The rules of the detection and of the broker lock are
 in ``test_brim_parse_race.py``.
 
-Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.1–§3.5 and §3.8
-Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1 and A2
+Design: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.1–§3.5 and §3.8
+Plan: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1 and A2
 """
 
 from __future__ import annotations

@@ -14,11 +14,16 @@ hand-rolled.
 SCIP is the only production search engine, and since D-X1 its own status is
 the proof: ``proof.conclude_with_solver`` is the only reader of it. The replay
 is unconditional and its verdict is authoritative: SCIP is never trusted to
-report its own result. A plan whose only violation is a rounding deficit
-within N minor units per cash pool (N = the pool's postings that carry a
-quantum) is published with its top-ups — one per negative pool, "this
-broker/currency needs D more" (test_rounding_tie_*). Any other rejection
-raises ``ExactReplayRejectedError``, which the Tool reports as
+report its own result. Every rounded posting is rounded against the plan at
+its currency's minor unit — credits (FX credits, sale proceeds) floored, debits
+(buys, fees, taxes) ceiled — and the model encodes the same rule, so rounding
+never creates value and a natural plan never ends a pool short
+(test_rounding_tie_*, test_rounding_direction_*). Top-ups stay as a safety
+net: a candidate whose only violation is a rounding deficit within N minor
+units per cash pool (N = the pool's postings that carry a quantum) is
+published with its top-ups — one per negative pool, "this broker/currency
+needs D more" (test_rounding_top_up_*). Any other rejection raises
+``ExactReplayRejectedError``, which the Tool reports as
 ``execution_failed``; it is never ``ready_no_incumbent``
 (test_replay_rejection_*). The locked properties, each mapped to a test:
 
@@ -59,6 +64,19 @@ raises ``ExactReplayRejectedError``, which the Tool reports as
   buys what ``min`` buys (test_compact_twin_*); a rate-only schedule charges
   like its explicit EUR twin (test_rate_only_*). The last two may differ only in
   ``request_fingerprint``, by design.
+* **A funding source in another currency plans, or is refused, but never
+  fails** (FX conversion fix): USD funding for a EUR-quoted Asset converts at
+  the reciprocal of the stored EUR/USD rate, so the EUR pool's rounding residual
+  does not terminate; it is published as an ``exact_ratio`` and the plan stays
+  ``optimal_proven`` (test_fx_usd_funding_*), while a residual that terminates
+  is a ``finite_decimal`` (test_fx_eur_funding_*). A cross rate that, net of the
+  spread, beats the triangle through the valuation currency is an FX arbitrage:
+  an ``invalid`` result with ``allocation.fx_rate_inconsistent``
+  (test_fx_incoherent_cross_rate_*), never a crash; the implied rate itself,
+  and a spread that covers the gap, still plan (test_fx_coherent_cross_rate_*),
+  and so does a cross rate above the triangle by less than its three stored
+  rates' own rounding, which converts at the triangle
+  (test_rounding_direction_cross_rate_*).
 
 These are pure in-process tests (``isolation="pure"``) except the one deliberate
 subprocess in ``test_scip_import_isolation_in_subprocess``: no server, no
@@ -85,7 +103,7 @@ import subprocess
 import sys
 import textwrap
 from dataclasses import replace
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from fractions import Fraction
 from pathlib import Path
 from typing import get_args
@@ -112,7 +130,7 @@ from backend.app.services.pac_allocator.evaluator import build_exact_policy_view
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
-from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scaled
+from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, fx_conversion_request, make, scaled
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -348,11 +366,14 @@ def test_failure_result_mapping_is_direct(builder, availability, issue_kind, res
 
 
 # --------------------------------------------------------------------------
-# Item 5 — the replay's verdict is authoritative (commit 5, QX1-b): a plan whose
-# only violation is a rounding deficit within N minor units per cash pool is
-# published with its top-ups; any other rejection raises
-# ExactReplayRejectedError, never ready_no_incumbent. Asserted on the published
-# wire result, never on the planner's internal path.
+# Item 5 — the replay's verdict is authoritative (commit 5, QX1-b). Every
+# posting is rounded against the plan (credits floored, debits ceiled) and the
+# model encodes the same rule, so a natural plan is never short: a tie buys
+# only what the cash covers. A candidate whose only violation is a rounding
+# deficit within N minor units per cash pool is still published with its
+# top-ups (the safety net, reached here through a seam); any other rejection
+# raises ExactReplayRejectedError, never ready_no_incumbent. Asserted on the
+# published wire result, never on the planner's internal path.
 # --------------------------------------------------------------------------
 _BROKER_ONE_ID = "broker-one"
 
@@ -360,8 +381,9 @@ _BROKER_ONE_ID = "broker-one"
 _TOP_UP_TOLERATED_CODES = frozenset({"FX_SOURCE_CASH", "NO_SHORT_OR_LEVERAGE", "ROUNDING_BOUND", "SPENDABLE_CASH_NONNEGATIVE"})
 
 # currency -> (tie price, cash, cash plus one minor unit). Three whole units at
-# the tie price cost exactly half a minor unit more than the cash, which the
-# HALF_UP replay posts as one whole minor unit more.
+# the tie price cost exactly half a minor unit more than the cash, so their
+# ceiled debit is one whole minor unit more: the cash alone buys two units
+# (an exact debit), and the third needs the extra minor unit.
 _ROUNDING_TIES = {
     "BHD": ("33.3335", "100.000", "100.001"),
     "EUR": ("33.335", "100.00", "100.01"),
@@ -400,11 +422,12 @@ def _published_minor_unit(wire: dict, currency: str) -> Decimal:
     return Decimal(row["minor_unit"])
 
 
-def _assert_three_units_bought(wire: dict) -> None:
+def _assert_units_bought(wire: dict, units: int) -> None:
+    """The plan buys ``units`` whole units of asset-one on its one route, and nothing else."""
     order_rows = wire["primary_solution"]["order_rows"]
     bought = {(row["asset_id"], row["route_id"]): _order_summary(row) for row in order_rows}
     assert len(bought) == len(order_rows), f"more than one order row on one route: {order_rows}"
-    assert bought == {(_ASSET_ONE_ID, _ASSET_ONE_ROUTE_ID): ("buy", "whole_quantity", Fraction(3), "asset_unit")}
+    assert bought == {(_ASSET_ONE_ID, _ASSET_ONE_ROUTE_ID): ("buy", "whole_quantity", Fraction(units), "asset_unit")}
 
 
 def _broker_one_final_cash(wire: dict, currency: str) -> tuple[Decimal, Decimal]:
@@ -413,57 +436,118 @@ def _broker_one_final_cash(wire: dict, currency: str) -> tuple[Decimal, Decimal]
 
 
 @pytest.mark.parametrize("currency", sorted(_ROUNDING_TIES))
-def test_rounding_tie_is_published_with_its_top_up(currency):
-    """A HALF_UP tie is a published, proven plan with one top-up of one minor unit.
+def test_rounding_tie_buys_only_what_the_cash_covers(currency):
+    """A tie buys two units, not three: a proven plan the cash covers, with no top-up.
 
-    SCIP closes every stage with 3 units; the Decimal replay posts their cost one
-    minor unit above the cash, so broker-one ends one minor unit short. The
-    pool's only quantum-carrying posting is the buy debit (the initial cash has
-    none, a zero fee is not posted): N = 1 and D = one minor unit, within the
-    rule. The result is ``ready_incumbent`` / ``optimal_proven``; its one top-up
-    names the pool, the missing minor unit (read from the published currency
-    catalogue, never hard-coded), its one rounded posting and its valuation in
-    the valuation currency; the ledger shows the pool at minus one minor unit.
-    Before commit 5 the same plan was suppressed as ``ready_no_incumbent``.
+    Three whole units cost exactly half a minor unit more than the cash. Rounded
+    against the plan, their debit is ceiled to one whole minor unit more, and
+    the model encodes the same ceiling, so SCIP stops at two units, whose debit
+    is exact. The result is ``ready_incumbent`` / ``optimal_proven``, broker-one
+    keeps the cash minus the two units' exact cost (read from the tie table and
+    the published currency catalogue, never hard-coded), and
+    ``rounding_top_ups`` is published and empty. Posted HALF_UP, the same tie
+    bought three units one minor unit over the cash, a plan only a top-up could
+    fund; the top-up is now a safety net (test_rounding_top_up_*).
     """
     price, cash, _ = _ROUNDING_TIES[currency]
     wire = _plan_wire(_tie_payload(currency, price, cash))
     minor = _published_minor_unit(wire, currency)
     assert 3 * Decimal(price) - Decimal(cash) == minor / 2, "the scenario must be a tie: exactly half a minor unit over the cash"
+    assert (3 * Decimal(price)).quantize(minor, rounding=ROUND_CEILING) == Decimal(cash) + minor, "three units' ceiled debit must be one minor unit over the cash"
+    two_units = 2 * Decimal(price)
+    assert two_units == two_units.quantize(minor), "two units must cost a whole number of minor units: their debit is exact"
 
     assert (wire["result_state"], wire["outcome"], wire["stop_reason"]) == ("ready_incumbent", "incumbent_found", "completed")
     assert wire["proof"]["kind"] == "optimal_proven"
-    _assert_three_units_bought(wire)
-    assert _broker_one_final_cash(wire, currency) == (-minor, -minor)
+    _assert_units_bought(wire, 2)
+    assert _broker_one_final_cash(wire, currency) == (Decimal(cash) - two_units, Decimal(cash) - two_units)
 
-    top_ups = wire["primary_solution"]["rounding_top_ups"]
-    assert [(row["broker_id"], row["currency"]) for row in top_ups] == [(_BROKER_ONE_ID, currency)]
-    (top_up,) = top_ups
-    assert Decimal(top_up["amount"]) == minor
-    assert top_up["rounded_postings"] == 1
-    valuation = top_up["valuation_amount"]
-    assert (valuation["currency"], valuation["value"]["kind"]) == (currency, "finite_decimal")
-    assert Decimal(valuation["value"]["value"]) == minor
+    assert "rounding_top_ups" in wire["primary_solution"], sorted(wire["primary_solution"])
+    assert wire["primary_solution"]["rounding_top_ups"] == []
 
 
 @pytest.mark.parametrize("currency", sorted(_ROUNDING_TIES))
 def test_rounding_tie_with_one_more_minor_unit_needs_no_top_up(currency):
-    """The counterfactual: one more minor unit of cash buys the same plan, with no top-up.
+    """The counterfactual: one more minor unit of cash buys the third unit, with no top-up.
 
-    Proves the announced top-up is exactly enough: the same 3 units, the pool
-    back at zero, and ``rounding_top_ups`` published and empty.
+    Three units' ceiled debit is exactly the cash plus one minor unit, so that
+    minor unit is all the third unit lacks: three units, the pool back at zero,
+    and ``rounding_top_ups`` published and empty.
     """
     price, cash, one_more = _ROUNDING_TIES[currency]
     wire = _plan_wire(_tie_payload(currency, price, one_more))
 
     assert (wire["result_state"], wire["outcome"], wire["stop_reason"]) == ("ready_incumbent", "incumbent_found", "completed")
     assert wire["proof"]["kind"] == "optimal_proven"
-    _assert_three_units_bought(wire)
+    _assert_units_bought(wire, 3)
     assert Decimal(one_more) - Decimal(cash) == _published_minor_unit(wire, currency)
     assert _broker_one_final_cash(wire, currency) == (0, 0)
 
     assert "rounding_top_ups" in wire["primary_solution"], sorted(wire["primary_solution"])
     assert wire["primary_solution"]["rounding_top_ups"] == []
+
+
+def test_rounding_top_up_covers_a_candidate_one_minor_unit_short(monkeypatch):
+    """The safety net: a candidate one minor unit short is published with the one top-up that covers it.
+
+    Rounded against the plan, a natural plan is never short (the EUR tie buys
+    two units), so the top-up is reached through a seam:
+    ``planner.solve_policy_program`` runs the real SCIP and hands the replay the
+    same candidate (same view and candidate ids) with the route's buy decision
+    set to the tie's three units; the replay, the classifier and the report stay
+    real. The seam sets the quantity rather than adding to it, so the replay
+    receives the same candidate whatever SCIP chose. The third unit is inside
+    the view's box (verified, not assumed: outside it the replay would reject a
+    contract failure, not publish a top-up). Its ceiled debit leaves broker-one
+    exactly one EUR cent short over the pool's one quantum-carrying posting,
+    the buy debit (the initial cash has none, a zero fee is not posted):
+    N = 1 and D = one minor unit, within the rule. The result is a
+    ``ready_incumbent`` buying three units, the pool at minus one minor unit,
+    and one top-up naming the pool, the missing minor unit (read from the
+    published currency catalogue), its one rounded posting and its valuation in
+    the valuation currency. The proof is not pinned: what the planner proves
+    about a candidate SCIP did not choose is not this test's subject.
+    """
+    price, cash, _ = _ROUNDING_TIES["EUR"]
+    request = _validated(_tie_payload("EUR", price, cash))
+    buy_id = exact_decision_id("buy_quantum", _ASSET_ONE_ROUTE_ID)
+    tie_units = 3
+
+    scenario = normalize_pac_plan(request).normalized
+    (access,) = [access for access in build_exact_policy_view(scenario, purpose="primary").decisions if access.decision_id == buy_id]
+    assert access.mode == "mutable"
+    assert access.lower_quanta <= tie_units <= access.upper_quanta, f"the seam's {tie_units} units must lie inside the buy decision's box [{access.lower_quanta}, {access.upper_quanta}]"
+
+    real_solve = planner.solve_policy_program
+    scip_units = []
+
+    def solve_and_buy_the_tie(*args, **kwargs):
+        run = real_solve(*args, **kwargs)
+        assert run.candidate is not None, "SCIP must hold a candidate for the seam to tamper with"
+        scip_units.append({item.decision_id: item.quanta for item in run.candidate.decisions}[buy_id])
+        candidate = replace(run.candidate, decisions=tuple(replace(item, quanta=tie_units) if item.decision_id == buy_id else item for item in run.candidate.decisions))
+        return replace(run, candidate=candidate)
+
+    monkeypatch.setattr(planner, "solve_policy_program", solve_and_buy_the_tie)
+    result = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert len(scip_units) == 1, "the planner must run SCIP exactly once and replay its candidate"
+    assert isinstance(result, PacPlannerReadyIncumbentResult), f"SCIP chose {scip_units[0]} units, the seam {tie_units}: {type(result).__name__}"
+    _revalidate(result)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
+    minor = _published_minor_unit(wire, "EUR")
+    assert (wire["result_state"], wire["outcome"]) == ("ready_incumbent", "incumbent_found")
+    _assert_units_bought(wire, tie_units)
+    assert _broker_one_final_cash(wire, "EUR") == (-minor, -minor)
+
+    top_ups = wire["primary_solution"]["rounding_top_ups"]
+    assert [(row["broker_id"], row["currency"]) for row in top_ups] == [(_BROKER_ONE_ID, "EUR")]
+    (top_up,) = top_ups
+    assert Decimal(top_up["amount"]) == minor
+    assert top_up["rounded_postings"] == 1
+    valuation = top_up["valuation_amount"]
+    assert (valuation["currency"], valuation["value"]["kind"]) == ("EUR", "finite_decimal")
+    assert Decimal(valuation["value"]["value"]) == minor
 
 
 def _threshold_breach_payload() -> dict:
@@ -486,12 +570,14 @@ def test_replay_rejection_beyond_the_rounding_threshold_raises(monkeypatch):
     Seam: ``planner.solve_policy_program`` runs the real SCIP and hands the
     replay the same candidate (same view and candidate ids) with one more buy
     quantum; the replay and the classifier stay real. The zero-fee tie cannot
-    host it: its view bounds the route at 3 units, so a 4th would be out of
-    bounds (a contract failure, not a threshold breach). With a EUR 1 fixed fee
-    SCIP buys 2 units, and the tampered 3rd ends broker-one EUR 1.01 short over
-    two rounded postings (buy debit and fee). The candidate is also replayed
-    directly, to prove that the cash rules are the only ones it breaks and that
-    D > N x minor unit: the raise is attributable to the threshold alone.
+    host it: one unit more than its cash covers leaves that pool a single minor
+    unit short over its one rounded posting, within the threshold — the safety
+    net test_rounding_top_up_* publishes. With a EUR 1 fixed fee SCIP buys 2
+    units, and the tampered 3rd (still inside the view's box) ends broker-one
+    EUR 1.01 short over two rounded postings (buy debit and fee). The candidate
+    is also replayed directly, to prove that the cash rules are the only ones
+    it breaks and that D > N x minor unit: the raise is attributable to the
+    threshold alone.
     """
     real_solve = planner.solve_policy_program
     buy_id = exact_decision_id("buy_quantum", _ASSET_ONE_ROUTE_ID)
@@ -750,9 +836,10 @@ def _fx_contribution_payload(conversion_mode: str) -> dict:
     only. A 1.25 EUR/USD rate with a 4% spread makes the conversion cost
     something, so equal figures across modes are not trivially equal zeros.
     The spread is chosen, not incidental: the effective rate 1.25 × 0.96 = 6/5
-    has an odd denominator, so no EUR→USD credit lands on a HALF_UP tie of the
-    USD cent. Ties are no longer refused (option A removed the compiler's
-    credit-tie guard) and
+    makes every EUR→USD credit a whole number of fifths of a USD cent, never
+    half a cent, so the conversion-mode tests never meet a credit tie. Ties
+    plan like any other credit (option A removed the compiler's credit-tie
+    guard, and a credit is floored against the plan), and
     ``test_manual_conversion_reaching_an_exact_credit_tie_still_plans`` plans
     one, but this fixture keeps the conversion-mode tests free of them.
     """
@@ -873,22 +960,24 @@ def test_conversion_mode_decides_whether_the_conversion_is_a_step(fx_plan_by_mod
 
 
 # --------------------------------------------------------------------------
-# R13 — option A: a conversion whose range reaches an exact HALF_UP credit tie
-# plans like any other. The compiler's credit-tie guard is gone; the developer's
-# EUR→USD case, rebuilt synthetically on the R4.9 FX fixture, is the regression.
+# R13 — option A: a conversion whose range reaches an exact credit tie (half a
+# quantum) plans like any other. The compiler's credit-tie guard is gone; the
+# developer's EUR→USD case, rebuilt synthetically on the R4.9 FX fixture, is
+# the regression. Rounded against the plan, a credit is floored, so a tie is
+# an ordinary point of the range.
 # --------------------------------------------------------------------------
 def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
     """1.1298 EUR/USD, no spread, a €30 contribution: a proven optimum, not ``execution_failed``.
 
-    €25.00 converts to exactly 28.245 USD, half a USD cent: an exact HALF_UP
-    credit tie inside the conversion's range (the EUR quantum is one cent and
-    the FX decision's box reaches 2500 of them). Before option A the
-    compiler's credit-tie guard raised ``LedgerPostingScopeError`` as soon as
-    such a tie was reachable, published as ``execution_failed``, while €20
-    (below the first tie, at €25) already planned. A posted credit enters the
-    ledger only with a ``+`` sign, so the model's latitude at a tie cannot
-    change what is feasible: the request must plan to a proven optimum, and
-    every published credit must be the HALF_UP posting of its exact conversion.
+    €25.00 converts to exactly 28.245 USD, half a USD cent: an exact credit tie
+    inside the conversion's range (the EUR quantum is one cent and the FX
+    decision's box reaches 2500 of them). Before option A the compiler's
+    credit-tie guard raised ``LedgerPostingScopeError`` as soon as such a tie
+    was reachable, published as ``execution_failed``, while €20 (below the
+    first tie, at €25) already planned. Rounded against the plan, a credit is
+    floored at its minor unit (28.245 posts as 28.24), so a tie gives the model
+    no latitude at all: the request must plan to a proven optimum, and every
+    published credit must be the floor of its exact conversion.
     """
     payload = _fx_contribution_payload("manual")
     payload["fx_rates"] = {"EUR/USD": "1.1298"}
@@ -928,7 +1017,509 @@ def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
     for action in solution["fx_actions"]:
         debit, credit = action["source_debit"], action["destination_credit"]
         assert (debit["currency"], credit["currency"]) == ("EUR", "USD"), action
-        assert Decimal(credit["amount"]) == (Decimal(debit["amount"]) * Decimal("1.1298")).quantize(usd_minor_unit, rounding=ROUND_HALF_UP), action
+        assert Decimal(credit["amount"]) == (Decimal(debit["amount"]) * Decimal("1.1298")).quantize(usd_minor_unit, rounding=ROUND_FLOOR), action
+
+
+# --------------------------------------------------------------------------
+# FX conversions across currencies — the FX conversion fix. A funding source in
+# a currency other than the Asset's ended in "Calculation failed", through two
+# separate defects. Each one is pinned by RED cases, and each has green controls
+# that already pass and must keep passing.
+#
+# 1. A rounding residual that does not terminate. USD funding for a EUR-quoted
+#    Asset (valuation EUR, stored pair EUR/USD) converts USD→EUR at the
+#    reciprocal of the stored rate, so the exact credit repeats and the EUR
+#    pool's rounding residual (posted − exact) is a ratio such as −47/21700.
+#    ``planner_report.build_ledger_rows`` spelled it as fixed-decimal text and
+#    raised ``WireNumberTooLargeError``. The ledger row's ``rounding_delta`` is
+#    now an ``ExactNumber``: ``exact_ratio`` (non-authoritative display) when it
+#    does not terminate, ``finite_decimal`` when it does. Nothing else moves:
+#    the credit is still posted at the minor unit (floored, rounded against the
+#    plan) and the plan is still ``optimal_proven``. R1 (both conversion modes)
+#    and R1b (with a spread) pin the ratio; V1, the EUR→USD direction that
+#    always planned, pins the terminating branch, its plan figures being the
+#    control.
+# 2. A cross rate that is an arbitrage. CHF funding for a USD-quoted Asset
+#    (valuation EUR, CHF/EUR 1.06, EUR/USD 1.085): a declared CHF/USD that, net
+#    of the spread, beats the implied 1.06 × 1.085 = 1.1501 makes the CHF→USD
+#    credit worth more EUR than the CHF it cost. The evaluator turned the gain
+#    into a negative ``spread_loss`` and raised ``ValueError``. The normalizer
+#    now refuses the rate up front (``allocation.fx_rate_inconsistent``), so the
+#    plan is an ``invalid`` result. R2 (1.1502, no spread) and V2-invalid (1.16
+#    against a 0.8% spread) pin it; R3 (exactly 1.1501, since equality is
+#    coherent) and V2-ready (1.16 with a 1% spread, which covers the gap) are the
+#    controls that still plan, each credit floored at the planning rate (the
+#    lower of the net rate and the triangle). A cross rate above the triangle
+#    by less than its stored rates' own rounding is coherent too
+#    (test_rounding_direction_cross_rate_*).
+# The normalizer-level cases of the new check live in
+# test_pac_planner_normalize.py.
+# --------------------------------------------------------------------------
+_FX_BROKER_ID = "broker-one"
+_FX_STORED_EUR_USD = Fraction(Decimal("1.085"))
+# Both directions between EUR and USD read the one stored pair EUR/USD: the rate itself
+# for EUR→USD, its reciprocal for USD→EUR.
+_FX_EUR_USD_RATES = {("EUR", "USD"): _FX_STORED_EUR_USD, ("USD", "EUR"): 1 / _FX_STORED_EUR_USD}
+# The one issue an incoherent CHF/USD raises. Its params are sorted by name.
+_FX_RATE_INCONSISTENT_CHF_USD = {
+    "code": "allocation.fx_rate_inconsistent",
+    "severity": "error",
+    "kind": "invalid",
+    "path": {"kind": "field", "section": "fx", "entity_kind": "fx_rate", "entity_id": "CHF/USD", "field": "rate"},
+    "message_key": "allocation.fx_rate_inconsistent",
+    "params": [
+        {"kind": "currency", "name": "destination_currency", "value": "USD"},
+        {"kind": "id", "name": "pair", "value": "CHF/USD"},
+        {"kind": "currency", "name": "source_currency", "value": "CHF"},
+        {"kind": "currency", "name": "valuation_currency", "value": "EUR"},
+    ],
+}
+
+
+def _fx_actions(wire: dict) -> list[tuple[str, str, str, str]]:
+    """Every published FX action as ``(source currency, debit, destination currency, credit)``."""
+    return [(action["source_debit"]["currency"], action["source_debit"]["amount"], action["destination_credit"]["currency"], action["destination_credit"]["amount"]) for action in wire["primary_solution"]["fx_actions"]]
+
+
+def _fx_orders(wire: dict) -> list[tuple[str, str, str]]:
+    """Every published order as ``(asset id, cash debit, its currency)``."""
+    return [(row["asset_id"], row["cash_debit"]["amount"], row["cash_debit"]["currency"]) for row in wire["primary_solution"]["order_rows"]]
+
+
+def _fx_ledger_row(wire: dict, currency: str) -> dict:
+    """The ledger row of ``broker-one``'s ``currency`` pool, found by its key and never by position."""
+    rows = wire["primary_solution"]["ledger_rows"]
+    matches = [row for row in rows if (row["broker_id"], row["currency"]) == (_FX_BROKER_ID, currency)]
+    assert len(matches) == 1, f"expected one ledger row for ({_FX_BROKER_ID}, {currency}), got {[(row['broker_id'], row['currency']) for row in rows]}"
+    (row,) = matches
+    return row
+
+
+def _fx_eur_usd_residual(wire: dict, currency: str, spread: str) -> Fraction:
+    """The ``currency`` pool's rounding residual, recomputed from the published FX actions alone.
+
+    Independent of the planner's arithmetic: every action credited in ``currency`` adds its
+    posted credit minus the exact one, ``debit × (1 − spread) × rate``, where the rate is the
+    stored EUR/USD read in the action's direction (its reciprocal for USD→EUR).
+    """
+    kept = 1 - Fraction(Decimal(spread))
+    residual = Fraction(0)
+    for action in wire["primary_solution"]["fx_actions"]:
+        debit, credit = action["source_debit"], action["destination_credit"]
+        if credit["currency"] == currency:
+            exact = Fraction(Decimal(debit["amount"])) * kept * _FX_EUR_USD_RATES[(debit["currency"], credit["currency"])]
+            residual += Fraction(Decimal(credit["amount"])) - exact
+    return residual
+
+
+@pytest.mark.parametrize("mode", _CONVERSION_MODES)
+def test_fx_usd_funding_publishes_a_repeating_rounding_residual_as_an_exact_ratio(mode):
+    """R1: USD funding, a EUR-quoted Asset at 10.01. The result is a plan, not ``WireNumberTooLargeError``.
+
+    97.75 USD convert to exactly 97.75 / 1.085 = 90.0921658… EUR, floored to 90.09, which
+    buys nine units. The EUR pool's residual is −47/21700, which no decimal of any length spells,
+    so it is published as an ``exact_ratio`` with a non-authoritative display. It must equal the
+    residual recomputed from the published action. The USD pool, funded and debited in whole
+    cents, has a zero residual. The conversion mode changes nothing (R4.9), and the plan stays a
+    proven optimum: only its publication was broken. The ratio's display digits are deliberately
+    not pinned.
+    """
+    wire = _plan_wire(fx_conversion_request(f"usd-funds-eur-{mode}", funding_currency="USD", assets=[("EUR", "10.01")], fx_rates={"EUR/USD": "1.085"}, conversion_mode=mode))
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == [("USD", "97.75", "EUR", "90.09")]
+    eur_residual = _fx_ledger_row(wire, "EUR")["rounding_delta"]
+    assert eur_residual["kind"] == "exact_ratio", eur_residual
+    assert eur_residual["display_authority"] == "non_authoritative", eur_residual
+    assert _wire_exact(eur_residual) == Fraction(-47, 21700)
+    assert _wire_exact(eur_residual) == _fx_eur_usd_residual(wire, "EUR", spread="0")
+    assert _fx_ledger_row(wire, "USD")["rounding_delta"] == {"kind": "finite_decimal", "value": "0"}
+
+
+def test_fx_usd_funding_with_a_spread_publishes_its_residual_as_an_exact_ratio():
+    """R1b: the same direction with a 1% spread, which enters the exact credit and never the posting rule.
+
+    98.64 USD credit exactly 98.64 × 0.99 / 1.085 = 90.0033179… EUR, floored to 90.00, which buys
+    nine units at 10.00. The EUR pool's residual is −18/5425: an ``exact_ratio`` equal to the
+    residual recomputed from the published action, spread included.
+    """
+    wire = _plan_wire(fx_conversion_request("usd-funds-eur-spread", funding_currency="USD", assets=[("EUR", "10.00")], fx_rates={"EUR/USD": "1.085"}, fx_spread_rate="0.01"))
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == [("USD", "98.64", "EUR", "90")]
+    eur_residual = _fx_ledger_row(wire, "EUR")["rounding_delta"]
+    assert eur_residual["kind"] == "exact_ratio", eur_residual
+    assert eur_residual["display_authority"] == "non_authoritative", eur_residual
+    assert _wire_exact(eur_residual) == Fraction(-18, 5425)
+    assert _wire_exact(eur_residual) == _fx_eur_usd_residual(wire, "EUR", spread="0.01")
+
+
+@pytest.fixture(scope="module")
+def eur_funds_usd_wire() -> dict:
+    """V1: EUR funding for a USD-quoted Asset at 10.01, planned once and read by two tests."""
+    return _plan_wire(fx_conversion_request("eur-funds-usd", funding_currency="EUR", assets=[("USD", "10.01")], fx_rates={"EUR/USD": "1.085"}))
+
+
+def test_fx_eur_funding_buys_a_usd_asset_through_one_conversion(eur_funds_usd_wire):
+    """V1, control: the direction that always planned, and must still plan the same way.
+
+    92.26 EUR credit exactly 92.26 × 1.085 = 100.1021 USD, floored to 100.10, which buys ten units
+    at 10.01: a proven optimum before and after the fix. Nothing here reads the residual, whose
+    shape is the next test's subject.
+    """
+    wire = eur_funds_usd_wire
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == [("EUR", "92.26", "USD", "100.1")]
+    assert _fx_orders(wire) == [("asset-1", "100.1", "USD")]
+
+
+def test_fx_eur_funding_publishes_a_terminating_residual_as_a_finite_decimal(eur_funds_usd_wire):
+    """V1: a residual that terminates is the ``finite_decimal`` branch of the same ``ExactNumber``, never bare text.
+
+    The USD pool posts 100.10 against an exact 100.1021: −0.0021, equal to the residual
+    recomputed from the published action. The EUR pool, debited in whole cents, has a zero one,
+    and a zero is an exact number too.
+    """
+    wire = eur_funds_usd_wire
+
+    usd_residual = _fx_ledger_row(wire, "USD")["rounding_delta"]
+    assert usd_residual == {"kind": "finite_decimal", "value": "-0.0021"}
+    assert _wire_exact(usd_residual) == _fx_eur_usd_residual(wire, "USD", spread="0")
+    assert _fx_ledger_row(wire, "EUR")["rounding_delta"] == {"kind": "finite_decimal", "value": "0"}
+
+
+@pytest.mark.parametrize(
+    ("cross_rate", "spread"),
+    (
+        pytest.param("1.1502", "0", id="R2-above-the-implied-rate"),
+        pytest.param("1.16", "0.008", id="V2-spread-too-thin"),
+    ),
+)
+def test_fx_incoherent_cross_rate_is_an_invalid_result_not_a_failure(cross_rate, spread):
+    """R2 / V2-invalid: a CHF/USD that, net of the spread, beats CHF/EUR × EUR/USD = 1.1501.
+
+    CHF→USD at the declared cross, valued back at USD→EUR, would be worth more EUR than CHF→EUR
+    directly: 1.1502 / 1.085 > 1.06 with no spread, and 1.16 × 0.992 / 1.085 > 1.06 with a 0.8%
+    spread (covering 1.16 would take about 0.853%). The evaluator used to turn that gain into a
+    negative ``spread_loss`` and raise. The normalizer now refuses the rate, so the plan is an
+    ``invalid`` result naming the pair, the conversion's two currencies and the valuation currency.
+    """
+    payload = fx_conversion_request(f"chf-funds-usd-{cross_rate}-{spread}", funding_currency="CHF", assets=[("USD", "10.00")], fx_rates={**FX_TRIANGLE, "CHF/USD": cross_rate}, fx_spread_rate=spread)
+    result = plan_pac_allocation(_validated(payload))
+
+    assert isinstance(result, PacPlannerInvalidResult), type(result).__name__
+    assert (result.result_state, result.availability) == ("invalid", "invalid")
+    assert [issue.model_dump(mode="json") for issue in result.issues] == [_FX_RATE_INCONSISTENT_CHF_USD]
+    _revalidate(result)
+
+
+@pytest.mark.parametrize(
+    ("cross_rate", "spread", "fx_actions"),
+    (
+        pytest.param("1.1501", "0", [("CHF", "95.65", "USD", "110")], id="R3-exactly-the-implied-rate"),
+        pytest.param("1.16", "0.01", [("CHF", "95.79", "USD", "110")], id="V2-spread-covers-the-gap"),
+    ),
+)
+def test_fx_coherent_cross_rate_still_plans_to_a_proven_optimum(cross_rate, spread, fx_actions):
+    """R3 / V2-ready, controls: the new check refuses an arbitrage and nothing else.
+
+    The implied rate itself is coherent, because equality is allowed. So is a rate above it once
+    the spread covers the gap (1.16 × 0.99 / 1.085 < 1.06). Both plan to a proven optimum, buying
+    eleven units at 10.00 USD through one CHF→USD conversion whose credit is floored at the USD
+    cent at the planning rate, the lower of the net rate and the triangle 1.1501. R3 converts at
+    1.1501: 95.65 CHF credit 110.007065 → 110.00, while 95.64 would credit 109.995564 → 109.99,
+    one cent short. V2-ready converts at its net rate 1.16 × 0.99 = 1.1484, below the triangle:
+    95.79 CHF credit 110.005236 → 110.00, leaving no USD behind.
+    """
+    wire = _plan_wire(fx_conversion_request(f"chf-funds-usd-{cross_rate}-{spread}", funding_currency="CHF", assets=[("USD", "10.00")], fx_rates={**FX_TRIANGLE, "CHF/USD": cross_rate}, fx_spread_rate=spread))
+
+    assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    assert _fx_actions(wire) == fx_actions
+    assert _fx_orders(wire) == [("asset-1", "110", "USD")]
+
+
+# --------------------------------------------------------------------------
+# Rounding against the plan (README row 16). Every rounded posting is rounded
+# at its currency's minor unit in the plan's disfavour: an FX credit (and a
+# sale's gross credit) is floored; a buy debit, a fee and a tax are ceiled; an
+# initial balance, a funding transfer and an FX debit are exact. Rounded
+# HALF_UP, each credit could gain up to half a minor unit, and the optimizer
+# exploited it: it split one conversion into several, or converted back and
+# forth, to buy with cents that rounding had created. Floored and ceiled,
+# Σ floor ≤ floor Σ and Σ ceil ≥ ceil Σ, so splitting never pays, and an FX
+# action whose credit would floor to zero does not exist (C-FXPOS).
+#
+# One Broker, no fee, valuation EUR, every BUY route capped at one unit, and
+# one stored EUR/USD of 1.1193593463 USD per EUR (no spread unless stated). The
+# RON case is a cross rate inside the coherence band of its triangle, converted
+# at the planning rate: the user's rate net of the spread, never above the
+# triangle through EUR. Each case pins the outcome its rounded postings afford
+# (never which Asset, where either would do), and every case is checked against
+# the rule itself, recomputed from the wire with Fractions.
+# --------------------------------------------------------------------------
+_RD_EUR_USD = "1.1193593463"
+# A stored RON/USD a hair above the triangle EUR/USD ÷ EUR/RON = 1.085 / 4.97 = 31/142.
+_RD_RON_RATES = {"EUR/RON": "4.97", "EUR/USD": "1.085", "RON/USD": "0.2183098592"}
+
+# case -> the request: (quote currency, price) per Asset, (amount, currency) per balance held at
+# broker-one, one optional (amount, currency) external contribution, target weights, spread.
+_ROUNDING_DIRECTION_CASES = {
+    "P1-11.18": {"assets": [("EUR", "10.00")], "contribution": ("11.18", "USD")},
+    "P1-11.19": {"assets": [("EUR", "10.00")], "contribution": ("11.19", "USD")},
+    "P1-11.20": {"assets": [("EUR", "10.00")], "contribution": ("11.20", "USD")},
+    "R1b": {"assets": [("EUR", "10.00")], "cash": [("9.99", "EUR")], "contribution": ("0.01", "USD")},
+    "P2": {"assets": [("USD", "615.63"), ("USD", "617.79")], "cash": [("1101.89", "EUR")]},
+    "P2-ctrl": {"assets": [("USD", "615.63"), ("USD", "617.79")], "cash": [("1101.90", "EUR")]},
+    "P3": {"assets": [("EUR", "52.40"), ("USD", "410.00")], "weights": ["0.125", "0.875"], "cash": [("52.26", "EUR"), ("410.15", "USD")]},
+    "P4": {"assets": [("EUR", "10.004")], "cash": [("10.00", "EUR")]},
+    "P4-ctrl": {"assets": [("EUR", "10.004")], "cash": [("10.01", "EUR")]},
+    "CTRL": {"assets": [("USD", "11.19")], "cash": [("10.00", "EUR")]},
+    "R1s": {"assets": [("EUR", "10.00")], "contribution": ("11.20", "USD"), "spread": "0.001"},
+    "R2s": {"assets": [("USD", "615.63"), ("USD", "616.56")], "cash": [("1101.89", "EUR")], "spread": "0.001"},
+}
+
+
+def _rounding_direction_request(case: str, *, assets: list[tuple[str, str]], cash: list[tuple[str, str]] | None = None, contribution: tuple[str, str] | None = None, weights: list[str] | None = None, spread: str = "0") -> dict:
+    """``fx_conversion_request`` at the stored EUR/USD, every BUY route capped at one unit, ``cash`` held at broker-one.
+
+    ``contribution`` is the external contribution routed to broker-one, or ``None`` for none at
+    all; ``weights`` replace the equal target weights.
+    """
+    amount, currency = ("100.00", "EUR") if contribution is None else contribution
+    payload = fx_conversion_request(f"rounding-direction-{case.lower()}", funding_currency=currency, assets=assets, fx_rates={"EUR/USD": _RD_EUR_USD}, fx_spread_rate=spread, amount=amount)
+    if contribution is None:
+        payload.pop("contributions")
+        payload.pop("funding_routes")
+    for route in payload["order_routes"]:
+        route["cap"]["quantity"] = "1"
+    if weights is not None:
+        for target, weight in zip(payload["target_weights"], weights, strict=True):
+            target["weight"] = weight
+    payload["existing_cash"] = [
+        {
+            "cash_id": f"cash-{_FX_BROKER_ID}-{balance_currency.lower()}",
+            "broker_id": _FX_BROKER_ID,
+            "available": {"amount": balance, "currency": balance_currency},
+            "selected": {"amount": balance, "currency": balance_currency},
+            "provenance_id": "prov-manual",
+        }
+        for balance, balance_currency in cash or []
+    ]
+    return payload
+
+
+def _rounding_direction_payload(case: str) -> dict:
+    """The case's request, built fresh; RON is ``fx_conversion_request`` itself (100 RON, routes capped at 100)."""
+    if case == "RON":
+        return fx_conversion_request("rounding-direction-ron", funding_currency="RON", assets=[("USD", "21.83")], fx_rates=_RD_RON_RATES)
+    return _rounding_direction_request(case, **_ROUNDING_DIRECTION_CASES[case])
+
+
+class _RoundingDirectionPlans(dict):
+    """``case -> (payload, wire)``: each case planned once, on first use, and shared by every test that reads it."""
+
+    def __missing__(self, case: str) -> tuple[dict, dict]:
+        payload = _rounding_direction_payload(case)
+        planned = self[case] = (payload, _plan_wire(payload))
+        return planned
+
+
+@pytest.fixture(scope="module")
+def rounding_direction_plans() -> _RoundingDirectionPlans:
+    return _RoundingDirectionPlans()
+
+
+def _rd_value_in_valuation(payload: dict) -> dict[str, Fraction]:
+    """``val[c]``: units of the valuation currency per unit of ``c``, read off the stored pairs that touch it.
+
+    A pair ``A/B`` stores B per A: ``V/c`` gives ``val[c] = 1 / rate``, ``c/V`` gives ``val[c] = rate``.
+    """
+    valuation = payload["valuation_currency"]
+    val = {valuation: Fraction(1)}
+    for pair, rate in payload["fx_rates"].items():
+        first, second = pair.split("/")
+        if first == valuation:
+            val[second] = 1 / Fraction(Decimal(rate))
+        elif second == valuation:
+            val[first] = Fraction(Decimal(rate))
+    return val
+
+
+def _rd_planning_rate(payload: dict, source: str, destination: str) -> Fraction:
+    """Destination units per source unit: the user's rate net of the spread, never above the triangle through V."""
+    rates = payload["fx_rates"]
+    direct = f"{source}/{destination}"
+    user_rate = Fraction(Decimal(rates[direct])) if direct in rates else 1 / Fraction(Decimal(rates[f"{destination}/{source}"]))
+    val = _rd_value_in_valuation(payload)
+    return min(user_rate * (1 - Fraction(Decimal(payload["fx_spread_rate"]))), val[source] / val[destination])
+
+
+def _rd_decimal(value: Fraction) -> Decimal:
+    """A whole number of minor units, spelled exactly for a failure message."""
+    return Decimal(value.numerator) / Decimal(value.denominator)
+
+
+def _rd_rounding_violations(payload: dict, wire: dict) -> list[str]:
+    """Every way ``wire`` breaks rounding against the plan, recomputed with Fractions from the request and the wire alone."""
+    violations = []
+    state = (wire["result_state"], (wire.get("proof") or {}).get("kind"), wire.get("stop_reason"))
+    if state not in {("ready_incumbent", "optimal_proven", "completed"), ("ready_no_op", "optimal_proven", "completed")}:
+        violations.append(f"result {state}, issues {[issue['code'] for issue in wire.get('issues', [])]}")
+    solution = wire.get("primary_solution")
+    if solution is None:
+        return [*violations, "no primary solution"]
+
+    val = _rd_value_in_valuation(payload)
+    for action in solution["fx_actions"]:
+        debit, credit = action["source_debit"], action["destination_credit"]
+        debit_amount, credit_amount = Fraction(Decimal(debit["amount"])), Fraction(Decimal(credit["amount"]))
+        minor = Fraction(_published_minor_unit(wire, credit["currency"]))
+        floored = math.floor(debit_amount * _rd_planning_rate(payload, debit["currency"], credit["currency"]) / minor) * minor
+        if credit_amount != floored:
+            violations.append(f"FX {debit['amount']} {debit['currency']} credits {credit['amount']} {credit['currency']}, not its floor {_rd_decimal(floored)}")
+        if credit_amount * val[credit["currency"]] > debit_amount * val[debit["currency"]]:
+            violations.append(f"FX {debit['amount']} {debit['currency']} -> {credit['amount']} {credit['currency']} is worth more {payload['valuation_currency']} than it costs")
+
+    quotes = {asset["asset_id"]: asset["quote"] for asset in payload["assets"]}
+    for row in solution["order_rows"]:
+        quote, cash_debit = quotes[row["asset_id"]], row["cash_debit"]
+        exact = _wire_exact(row["economic_quantity"]["value"]) * Fraction(Decimal(quote["amount"])) / Fraction(Decimal(quote["quote_base_quantity"]))
+        minor = Fraction(_published_minor_unit(wire, quote["currency"]))
+        ceiled = math.ceil(exact / minor) * minor
+        if (cash_debit["currency"], Fraction(Decimal(cash_debit["amount"]))) != (quote["currency"], ceiled):
+            violations.append(f"order {row['asset_id']} debits {cash_debit['amount']} {cash_debit['currency']}, not its ceiling {_rd_decimal(ceiled)} {quote['currency']}")
+
+    rounding_delta = _wire_exact(solution["accounting"]["rounding_delta"]["value"])
+    if rounding_delta < 0:
+        violations.append(f"accounting.rounding_delta {float(rounding_delta):+.6f}: rounding paid the plan")
+    return violations
+
+
+@pytest.mark.parametrize("case", [pytest.param(case, id=f"rounding-direction-{case}") for case in ("P1-11.18", "P1-11.19", "R1b", "P4", "R1s")])
+def test_rounding_direction_buys_nothing_only_rounding_would_pay_for(rounding_direction_plans, case):
+    """An order the rounded postings cannot afford is not planned: a proven no-op, with no conversion at all.
+
+    * P1-11.18, control: 11.18 USD credit exactly 9.98785… EUR, short of a 10.00 unit whichever
+      way the credit is rounded.
+    * P1-11.19: 11.19 USD credit exactly 9.99679… EUR, floored to 9.99. Posted HALF_UP, the
+      credit was 10.00, and the unit was bought with 0.00321 EUR that rounding had created.
+    * R1b: 9.99 EUR at the Broker and a 0.01 USD contribution, worth 0.00893… EUR. Its credit
+      floors to 0.00, and a conversion that credits nothing is no conversion (C-FXPOS).
+    * P4: 10.00 EUR against a EUR Asset at 10.004, whose debit is ceiled to 10.01.
+    * R1s: P1-11.20 with a 0.1% spread: 11.20 USD credit exactly 9.99571… EUR, floored to 9.99.
+    """
+    _, wire = rounding_direction_plans[case]
+
+    assert (wire["result_state"], (wire.get("proof") or {}).get("kind"), wire.get("stop_reason")) == ("ready_no_op", "optimal_proven", "completed")
+    assert _fx_actions(wire) == []
+    assert wire["primary_solution"]["order_rows"] == []
+
+
+@pytest.mark.parametrize(
+    ("case", "fx_actions", "orders"),
+    (
+        pytest.param("P1-11.20", [("USD", "11.2", "EUR", "10")], [("asset-1", "10", "EUR")], id="rounding-direction-P1-11.20"),
+        pytest.param("P3", [], [("asset-2", "410", "USD")], id="rounding-direction-P3"),
+        pytest.param("CTRL", [("EUR", "10", "USD", "11.19")], [("asset-1", "11.19", "USD")], id="rounding-direction-CTRL"),
+    ),
+)
+def test_rounding_direction_converts_only_what_a_floored_credit_affords(rounding_direction_plans, case, fx_actions, orders):
+    """Plans the rounded postings pin, conversions and orders alike.
+
+    * P1-11.20: 11.20 USD credit exactly 10.00572… EUR, floored to 10.00: the whole contribution
+      converts and buys the unit. Posted HALF_UP, 11.19 USD already credited 10.00 (from an exact
+      9.99679…), so the plan converted one cent less.
+    * P3: 52.26 EUR and 410.15 USD at the Broker, a EUR bond at 52.40 (weight 0.125) and a USD
+      stock at 410.00 (0.875). The USD buys the stock; the bond lacks 0.14 EUR, and the 0.15 USD
+      left credit 0.13 EUR at most, floored: no conversion at all. Posted HALF_UP, a round trip
+      (0.21 USD → 0.19 EUR, 0.05 EUR → 0.06 USD) created the missing cent and bought the bond too.
+    * CTRL, control: 10.00 EUR credit exactly 11.19359… USD, floored to 11.19, which buys a USD
+      Asset at 11.19 whichever way the credit is rounded.
+    """
+    _, wire = rounding_direction_plans[case]
+
+    assert (wire["result_state"], wire["proof"]["kind"], wire["stop_reason"]) == ("ready_incumbent", "optimal_proven", "completed")
+    assert _fx_actions(wire) == fx_actions
+    assert _fx_orders(wire) == orders
+
+
+@pytest.mark.parametrize(
+    ("case", "order_rows"),
+    (
+        pytest.param("P2", range(1, 2), id="rounding-direction-P2"),
+        pytest.param("P2-ctrl", range(2, 3), id="rounding-direction-P2-ctrl"),
+        pytest.param("P4-ctrl", range(1, 2), id="rounding-direction-P4-ctrl"),
+        pytest.param("R2s", range(0, 2), id="rounding-direction-R2s"),
+    ),
+)
+def test_rounding_direction_buys_no_more_than_one_conversion_affords(rounding_direction_plans, case, order_rows):
+    """How many orders the rounded postings afford; which Asset is bought is an incidental choice, never pinned.
+
+    Every route is capped at one unit, so each order row buys exactly one.
+
+    * P2: 1101.89 EUR against two USD Assets at 615.63 and 617.79, 1233.42 USD for both. One
+      conversion credits exactly 1233.41087… USD, floored to 1233.41: one Asset, not both.
+      Posted HALF_UP, a split conversion (0.13 EUR → 0.15 USD, 1101.76 EUR → 1233.27 USD)
+      created the missing cent, and the plan bought both.
+    * P2-ctrl, control: 1101.90 EUR credit exactly 1233.42206… USD, floored to 1233.42: both.
+    * P4-ctrl, control: 10.01 EUR buys the EUR Asset at 10.004, whose debit is ceiled to 10.01.
+    * R2s: P2 with a 0.1% spread and the second Asset at 616.56, 1232.19 USD for both. One
+      conversion credits exactly 1232.17745… USD, floored to 1232.17: one Asset at most.
+    """
+    _, wire = rounding_direction_plans[case]
+
+    rows = wire["primary_solution"]["order_rows"]
+    assert len(rows) in order_rows, (_fx_actions(wire), _fx_orders(wire))
+    assert [_order_summary(row) for row in rows] == [("buy", "whole_quantity", Fraction(1), "asset_unit")] * len(rows)
+
+
+@pytest.mark.parametrize("case", [pytest.param(case, id=f"rounding-direction-{case}") for case in (*_ROUNDING_DIRECTION_CASES, "RON")])
+def test_rounding_direction_rounds_every_posting_against_the_plan(rounding_direction_plans, case):
+    """Every case, checked against the rule itself, recomputed from the request and the wire alone.
+
+    With Fractions, never through the planner's own rounding: each FX credit is the floor, at
+    the destination's minor unit, of its debit at the planning rate (the user's rate net of the
+    spread, never above the triangle through EUR), and is worth no more EUR than its debit; each
+    order's cash debit is the ceiling, at its minor unit, of its exact quantity at the quoted
+    price; the plan's ``accounting.rounding_delta`` (positive when rounding costs the plan) is
+    never negative; and the result is a proven plan or a proven no-op.
+    """
+    payload, wire = rounding_direction_plans[case]
+
+    assert _rd_rounding_violations(payload, wire) == []
+
+
+def test_rounding_direction_cross_rate_inside_the_coherence_band_converts_at_the_triangle(rounding_direction_plans):
+    """RON: a stored cross rate a hair above its triangle is coherent, and converts at the triangle.
+
+    100 RON fund a USD Asset at 21.83 (EUR/RON 4.97, EUR/USD 1.085, RON/USD 0.2183098592). The
+    triangle through EUR is 1.085 / 4.97 = 31/142 = 0.21830985915…; the stored cross is that
+    rate rounded to its 10th decimal, above it by less than half a unit of that decimal, a
+    relative gap inside β = 5e-11 × (1/4.97 + 1/1.085 + 1/0.2183098592), the three stored
+    rates' own rounding. So the request plans, where it was refused as
+    ``allocation.fx_rate_inconsistent``: the conversion uses the planning rate
+    min(0.2183098592, 31/142) = 31/142, 100 RON credit exactly 21.8309859… USD, floored to
+    21.83, and the unit is bought. The FX action publishes the user's rate as its spot and the
+    planning rate as its effective rate, and a conversion at the triangle loses nothing to the
+    spread.
+    """
+    payload, wire = rounding_direction_plans["RON"]
+    rates = {pair: Fraction(Decimal(rate)) for pair, rate in payload["fx_rates"].items()}
+    triangle = rates["EUR/USD"] / rates["EUR/RON"]
+    assert triangle == Fraction(31, 142)
+    beta = Fraction(5, 10**11) * sum(1 / rate for rate in rates.values())
+    assert 0 < rates["RON/USD"] / triangle - 1 <= beta, "the stored cross must sit above the triangle, inside the coherence band"
+
+    assert wire["result_state"] == "ready_incumbent", [issue["code"] for issue in wire.get("issues", [])]
+    assert (wire["proof"]["kind"], wire["stop_reason"]) == ("optimal_proven", "completed")
+    assert _fx_actions(wire) == [("RON", "100", "USD", "21.83")]
+    assert [_order_summary(row) for row in wire["primary_solution"]["order_rows"]] == [("buy", "whole_quantity", Fraction(1), "asset_unit")]
+    (action,) = wire["primary_solution"]["fx_actions"]
+    spot, effective = action["spot_rate"], action["effective_rate"]
+    assert (spot["source_currency"], spot["destination_currency"], _wire_exact(spot["value"])) == ("RON", "USD", rates["RON/USD"])
+    assert (effective["source_currency"], effective["destination_currency"], _wire_exact(effective["value"])) == ("RON", "USD", Fraction(31, 142))
+    assert _wire_exact(action["spread_loss"]["value"]) == 0
 
 
 # --------------------------------------------------------------------------

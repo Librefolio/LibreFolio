@@ -837,19 +837,16 @@ async def validate_cost_basis(
     service: TransactionService,
     context: TransactionBatchContext,
 ) -> None:
-    """Verify required cost basis after auto-WAC and promote handling."""
+    """Verify required cost basis after auto-WAC and promote handling.
+
+    A promote turns an incoming ADJUSTMENT into the receiving side of a TRANSFER, which
+    needs a cost basis like any other: new promoted rows are checked as creates, saved
+    ones on the promote that paired them.
+    """
     await service.session.flush()
 
     auto_create_indices = _auto_mode_indices(context.parsed_creates)
     auto_update_indices = _auto_mode_indices(context.parsed_updates)
-    promoted_create_indices = {
-        original_index
-        for link_uuid in context.consumed_link_uuids
-        for original_index, _transaction in context.link_uuid_map.get(
-            link_uuid,
-            [],
-        )
-    }
 
     checked_create_indices = _check_linked_create_cost_basis(
         service,
@@ -860,7 +857,6 @@ async def validate_cost_basis(
         service,
         context,
         auto_create_indices,
-        promoted_create_indices,
         checked_create_indices,
     )
     await _check_update_cost_basis(
@@ -868,6 +864,7 @@ async def validate_cost_basis(
         context,
         auto_update_indices,
     )
+    await _check_promoted_saved_cost_basis(service, context)
 
 
 def _auto_mode_indices(parsed_items: list[tuple[int, Any]]) -> set[int]:
@@ -904,14 +901,13 @@ async def _check_result_create_cost_basis(
     service: TransactionService,
     context: TransactionBatchContext,
     auto_create_indices: set[int],
-    promoted_create_indices: set[int],
     checked_create_indices: set[int],
 ) -> None:
-    """Check standalone creates represented by successful result rows."""
+    """Check standalone and promoted creates represented by successful result rows."""
     for result in context.results:
         if result.operation != "create" or result.status != "success" or result.index in checked_create_indices:
             continue
-        if result.index in auto_create_indices or result.index in promoted_create_indices:
+        if result.index in auto_create_indices:
             continue
         for transaction_id in result.ids or []:
             transaction = await service.session.get(Transaction, transaction_id)
@@ -943,6 +939,32 @@ async def _check_update_cost_basis(
                 ref_id=item.id,
                 transaction=transaction,
             )
+
+
+async def _check_promoted_saved_cost_basis(
+    service: TransactionService,
+    context: TransactionBatchContext,
+) -> None:
+    """Check saved rows that a promote made the receiving side of a pair.
+
+    New rows of a promote are creates, and updated rows are updates: both are checked there.
+    """
+    updated_ids = {item.id for _original_index, item in context.parsed_updates}
+    for result in context.results:
+        if result.operation != "promote" or result.status != "success":
+            continue
+        for transaction_id in result.ids or []:
+            if transaction_id not in context.existing_by_id or transaction_id in updated_ids:
+                continue
+            transaction = await service.session.get(Transaction, transaction_id)
+            if transaction and service._requires_cost_basis(transaction) and transaction.cost_basis_override is None:
+                _append_cost_basis_issue(
+                    context,
+                    operation="promote",
+                    index=result.index,
+                    ref_id=transaction_id,
+                    transaction=transaction,
+                )
 
 
 def _append_cost_basis_issue(
