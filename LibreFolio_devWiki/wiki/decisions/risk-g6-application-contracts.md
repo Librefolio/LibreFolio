@@ -72,7 +72,7 @@ filtering, grouping, or tag UI.
 
 | Role | Path |
 |------|------|
-| Authoritative IA | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md` |
-| Execution plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendIntegration.prompt.md` |
-| Mathematical/semantic contract | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/contract-phase01RiskMetricsMathematical.md` |
-| Application plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01RiskAnalysisApplication.prompt.md` |
+| Authoritative IA | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md` |
+| Execution plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01Step6RiskFrontendIntegration.prompt.md` |
+| Mathematical/semantic contract | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/contract-phase01RiskMetricsMathematical.md` |
+| Application plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01RiskAnalysisApplication.prompt.md` |

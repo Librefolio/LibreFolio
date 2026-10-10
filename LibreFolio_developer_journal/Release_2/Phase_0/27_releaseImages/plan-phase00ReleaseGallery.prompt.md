@@ -1646,3 +1646,166 @@
 > - **Not run:** the other 125 gallery shots under the new launch rule (it maps only `lf-e2e.lan`). The CI runs the whole gallery.
 > - Agents: `bc4a6092` stopped and idle, nothing half done; `96a01a8b` idle, no edit made.
 > - **Step 21 closed.** CHECKPOINT READY sent to the coordinator; M FROZEN.
+>
+> **Batch 8 committed and integrated:** `dbf4263e9` (test gallery) and `4845bdefb` (docs), merge `43de22cbd`, train 25 (`dev_release2` = `586a4f0ea`).
+
+## Batch 9 — PAC shots after D's row 16 (base `083ed26dc`, train 26)
+
+### 22. ✅ PAC gallery shots on the integrated revision — 2026-10-09
+
+> **Coordinator's brief** (18:09): train 26 is in (`dev_release2` = `083ed26dc`; D's row 16, «rounding against the plan», merge `b81b92fd1`).
+> - Put `galleryPac.ts`'s external account back in USD (D's report);
+> - re-shoot the PAC gallery shots, desktop and mobile, PAC only;
+> - lane 6158/6168, data `/tmp/librefolio-r2-m`;
+> - look at the images one by one: nothing live or private;
+> - checkpoint with the manifest, then FROZEN.
+>
+> **22.1 ✅ Baseline and analysis (M, 18:15)**
+> - HEAD `083ed26dc` = `dev_release2`; worktree clean; 6158 and 6168 free.
+> - **The external account is already in USD:** `galleryPac.ts:86` `externalAccount: {name: 'Northwind Bank', currency: 'USD', declared: '3000', toUse: '1200'}`, since `2e8d6a551` (batch 6). D's own plan says so (`plan-phase00PacRoundingDirectionFix.prompt.md:30`). The report forwarded to M is out of date: **nothing to change**.
+> - **D's row 16** (`96283eaa5 fix(pac)`, `85b2a3125 docs(pac)`):
+>   - backend only (`pac_allocator/{constraints,evaluator,ledger,normalize,numeric,objectives,planner,models}.py` and the schemas), plus one comment in `StateNotice.svelte`;
+>   - credits are rounded down and debits up, once, on the exact value;
+>   - in D's own words, the dust it should remove from `pac-result-plan`: step 4 «0.01 USD Northwind → DEGIRO → 0.01 EUR», step 6 «0.14 USD → about 0.13 EUR», step 5 «about 1,233.42», and Not invested «Rounding ≈ −0.02 EUR».
+> - **PAC page** (`user/tools/pac-allocator/index.en.md`): no placeholders left; the 9 images are already referenced (`pac-step-{liquidity,brokers,assets,routing,targets,review}`, `pac-result`, `pac-result-plan`, `pac-result-proof`). D's «`:192`» means only that its edits (`:226-249`) stay away from the zone of M's images. Nothing to replace; the alt texts are to be checked against the new shots.
+> - **Tests:** `gallery.spec.ts` `Tools` → `PAC allocator steps` (6 shots × 8 combinations) and `PAC allocator result` (3 × 8). Filter `-f 'PAC allocator'`; 144 PNGs over the two projects, gitignored (`.gitignore:79`).
+> - **Before-hashes:** the PAC PNGs on disk come from batch 6 (USD, before row 16). Recorded in `runs/b9_pac_before.tsv`, to show which shots change.
+>
+> **22.2 ✅ Runs (M, 18:12–18:32)**
+> - **⚠️ Off track: run 1 red in setup** (`runs/b9_pac_1.{log,meta}`, 18:12:21–18:18:35, load 34.6 → 40.6).
+>   - `Error: Timed out waiting 300000ms from config.webServer`: no test ran.
+>   - The webServer is `dev.py server --test`, which first rebuilds a stale frontend and MkDocs (`playwright.config.ts:75-80`). After train 26's fast-forward the build was stale, and on a loaded machine the rebuild alone ate the 300 s.
+>   - DB populated (fresh, lane); port free before and after.
+>   - Verdict: **environment** (setup). No timeout raised.
+> - **Fix:** rebuilt before the run, outside Playwright's timer (`runs/b9_prebuild.meta`):
+>   - `dev.py front build` 222 s, exit 0;
+>   - `dev.py mkdocs build` 67 s, exit 0, 0 WARNING.
+>   - Together 289 s, which with the server's start confirms why 300 s was not enough.
+> - Load peaked at **127** (another lane's Playwright, `e-alfy-special-fishstick`, and a svelte-check in the main checkout); waited for a 1-min load < 25 (18:24 → 18:28; nothing in M's lane).
+> - **Run 2 green** (`runs/b9_pac_2.{log,meta}`, 18:28:55–18:32:25, 210 s, load 20.4 → 23.4): 4/4 in 3.1 min.
+>   - Desktop: steps 43.0 s, result 40.0 s. Mobile: steps 38.4 s, result 21.3 s.
+>   - 144 PNGs rewritten; port free before and after.
+> - **Before/after** (`runs/b9_pac_before.tsv`, `b9_pac_after.tsv`, script `scripts/b9_pac_hashes.py`):
+>   - **mobile, 6 steps: 48/48 byte-identical**: inputs, unchanged by D;
+>   - **desktop, 6 steps: 48/48 changed**, only the sidebar: the «Connection: secure» line (train 24, L) and the version label `v1.1.0-1078-g083ed26dc-dirty`, both absent from batch 6's shots;
+>   - **results: 48/48 changed**. `pac-result-plan` desktop goes from 1280×1040 to **1280×789** (block 773 px); `pac-result` en from 957 to 949.
+> - **D's fix seen by M** (desktop en/light):
+>   - «Operational plan (4)»: 2 transfers, 1 deposit and **one** exchange, «1,101.78 EUR → about 1,233.28 USD» with spot = effective 1.1193593463 and spread loss 0.00;
+>   - orders 5–8;
+>   - **no dust steps** (0.01 USD, 0.14 → 0.13);
+>   - Not invested ≈5.03 with **Rounding ≈0.01 EUR (not negative)**.
+>   - Nothing live or private: test account, mock brokers and assets, prices from the populated DB or Manual, the offline guard green.
+> - **The one-by-one review of the 144 images** goes to three read-only reviewers in parallel (desktop steps, mobile steps, results), each with the expected subject, a checklist and a TSV verdict per image (`runs/b9_review_*`).
+>
+> **22.3 ✅ One-by-one review of desktop steps and results; two alts (reviewers + docs-writer, 18:50)**
+> - **Results** (`runs/b9_review_results.{tsv,md}`): **48/48 OK**.
+>   - D's fix is in every image: the 16 plans have exactly steps 1–4, with no 0.01 USD or 0.14 USD; Rounding ≈0.01 in all 16 `pac-result`.
+>   - The rounding goes the right way: the exchange gives «about 1,233.28» (down from 1,233.2877); AAPL costs 1,201.28 (up from 1,201.274208).
+>   - The same data in every variant; no English strings left.
+>   - The only low-confidence doubt (a strip above `mobile/it/light/…/pac-result-proof`) was checked by M: it is the page background above the card, the frame's margin. No defect.
+> - **Desktop steps** (`runs/b9_review_desktop_steps.{tsv,md}`): **30 OK, 18 ISSUE**. Three defects, **all pre-existing** (the main content does not depend on the sidebar, the only change since batch 6):
+>   - **A** `pac-step-routing` it/light and it/dark: the second broker's row (Interactive Brokers: «Consenti tutti / Escludi tutti / 3 consentiti su 3») is cut mid-text by the sticky footer. In Italian DEGIRO's settings wrap to 3 lines (+32 px); in en/fr/es the row stays whole.
+>     - The first broker, the subject by rule **(c) «il primo broker basta»** (`lista_scatti_alti.md:195`), is whole in every variant. Seen by M (it and en light).
+>   - **B** `pac-step-review`, all 8: the top edge cuts about 8 px of the row above the summary table.
+>   - **C** `pac-step-targets`, all 8: the Asset column truncates «MSFT Microsoft Corporation» **without an ellipsis** («…Corp» with the last letter sliced; «…Cor» in es). This is the product's own display at 1280 px, not the framing.
+>   - Not counted: «ROUTING–» without a space before the dash (a product string); «Riepilogo» and «Récapitulatif» used both for the step and for the toggle; money in en format in it/fr/es (known, already in the results).
+> - **Alts** (docs-writer, `user/tools/pac-allocator/index.en.md`, the two `alt` attributes only):
+>   - `pac-result`: «… and the title of Allocation per Asset» → «… and the Allocation per Asset table, with each Asset's target share beside its share after the plan, its value after the plan and its ideal value, and the totals». This was M's own debt from batch 5: the (a) rule had already extended the shot to the end of the table.
+>   - `pac-result-plan`: «a currency exchange» → «a currency exchange with its rate»; «and the title of the next Broker's orders» → «and the next Broker's orders». The plan got shorter with D's fix, so DEGIRO's orders now fit.
+>   - User pages always load the **desktop** shots (`gallery-img-loader.js`), so the alts only need to match those. The page has no translations: no debt.
+>   - `mkdocs build` strict: 0 WARNING (`b9_docs_build.log`). `check-links`: only `#rolling-return` and the 3 known ones (`b9_docs_links.log`). `git diff --check` clean.
+>
+> **22.4 ✅ Mobile steps, manifest, gates (reviewer + M, 19:05)**
+> - **Mobile steps** (`runs/b9_review_mobile_steps.{tsv,md}`): **22 OK, 26 ISSUE**. All **pre-existing**: the 48 images are **byte-identical** to batch 6's.
+>   - **D** `pac-step-targets`, all 8: the table is shifted sideways and misaligned with its header. Names are cut on the left («APL Apple Inc.»), the Target % inputs on the right with no «%», and «Actions» sits over the inputs; the bond input keeps its focus ring. Seen by M (en/light).
+>     - Cause: the table **does not fit the width on a phone** (product, DataTable on mobile) plus the focus left on the input just typed (fixture).
+>   - **E** `pac-step-assets`, all 8: starts at the AAPL card, without Search Asset / Your Assets / Manual Asset. This is the fixture's phone fallback; the mobile gallery caption («automatic and manual prices and their origin badges») holds.
+>   - **F** `pac-step-review`, all 8: the «Actions» header with no ⋮ in the rows (the same DataTable on mobile); fr/es: the header row cut at the top edge; es: a sentence cut mid-letter.
+>   - **G** `pac-step-liquidity` es, 2: «· 100» / «% tuya» break apart: an ordinary space before «%» in `es.json` (needs NBSP; L's catalogues).
+> - **Manifest** (`runs/b9_pac_manifest.{md,tsv}`, script `scripts/b9_pac_manifest.py`): 144 images with path, size, sha256, change against batch 6 and verdict. **100 OK, 44 ISSUE: all in the step shots and pre-existing; none in the result shots**, the ones D's fix touches.
+> - **Gates:**
+>   - run `b9_pac_2` 4/4;
+>   - docs build strict 0 WARNING; check-links only the known ones;
+>   - `git diff --check` clean;
+>   - 6158 and 6168 free;
+>   - `dev_release2` still `083ed26dc`.
+> - **Tracked delta:** the PAC page (2 alts) and this journal. The PNGs are gitignored.
+> - **To the coordinator, for decision:**
+>   - **A** desktop IT routing: accept under (c), or a taller screen up to the second broker's control row;
+>   - **D** mobile targets: blur plus horizontal reset in the fixture, and the product item for DataTable on mobile;
+>   - accept B and E;
+>   - backlog **C** (truncation without an ellipsis), **F** (Actions without ⋮ on mobile), **G** (NBSP in `es.json`), «ROUTING–» without a space, «Riepilogo/Récapitulatif» used twice.
+> - **Step 22 closed.** CHECKPOINT READY sent; M FROZEN.
+>
+> **Batch 9 committed and integrated:** `29103f95b` (docs pac), merge `83cb002a2`, train 27 (`dev_release2` = `9f060ef6e`).
+>
+> **Coordinator's decisions on batch 9** (20:01):
+> - A (desktop IT Routing): accepted under rule (c);
+> - B (Review desktop, 8 px) and E (Assets mobile, the fallback): accepted;
+> - **D** (Targets mobile): batch 10 approved, fixture only;
+> - product defects:
+>   - to D (backlog of row 13): C (truncation without an ellipsis), F («Actions» without ⋮ on mobile), «ROUTING–», «Riepilogo/Récapitulatif», the Targets table layout on mobile;
+>   - to S (catalogues): G (NBSP before «%» in `es.json`).
+
+## Batch 10 — Targets shots: the fixture leaves no focus and no horizontal scroll (base `9f060ef6e`, train 27)
+
+### 23. ✅ `framePacTargets`: blur and horizontal scroll reset before the shot — 2026-10-09
+
+> **Coordinator's brief** (20:03):
+> - only the fixture of the Targets shots on mobile: remove the focus from the input and reset the scroll before the shot;
+> - re-shoot only the shots touched;
+> - lane 6158/6168;
+> - review the images as usual;
+> - checkpoint, then FROZEN.
+>
+> **23.1 ✅ Baseline and analysis (M, 20:10)**
+> - HEAD `9f060ef6e` = `dev_release2` (fast-forward; M's B9 commit `29103f95b` inside); worktree clean; 6158 and 6168 free.
+> - Train 27 touched no file under `frontend/e2e`, `components/ui` or `features/tools`: the fixture is the same as in batch 9.
+> - **Cause**, `galleryPac.ts`:
+>   - `framePacTargets` types the bond's target (`typeValue` → `input.fill`). `fill` focuses the input and scrolls it into view, inside the DataTable's horizontal scroller too: `.table-wrapper`, `overflow-x: auto` (`DataTable.svelte:1559-1561`).
+>   - On a phone the table is wider than the screen, so the wrapper stays scrolled. The selection column is sticky on the left (`.td-select`) and the Actions column sticky on the right (`.td-fixed`), so the names end up cut under the checkboxes and «Actions» over the inputs.
+>   - Header and body share the same scroller, so they are not really misaligned: it is the stickies that overlap.
+> - **On desktop too** the bond input keeps the **focus ring** in all 8 `pac-step-targets` (seen by M in en/light: a dark, thicker border), but the table fits, so there is no scroll.
+>   - The blur goes in the shared fixture: the desktop Targets shot changes too, only in its focus ring. A viewport-only blur would be artificial; to report in the checkpoint.
+> - **What changes on disk in a re-run:**
+>   - desktop: every shot, because of the version label in the sidebar (`v1.1.0-1089-g9f060ef6e-dirty` instead of `…1078-g083ed26dc…`);
+>   - mobile: the sidebar is not visible, so the other step shots should come out **byte-identical**.
+>   - Pixel diffs with PIL and numpy (present in the venv) delimit each change.
+> - Before-hashes `runs/b10_pac_before.tsv`, the same as batch 9's after.
+> - Test-author: red first (assertions in the fixture: input not focused, scroller at `scrollLeft` 0), then the fix, then green, diffs and review.
+>
+> **23.2 ✅ RED → fix → GREEN, diffs, review (test-author, 20:15–20:28)**
+> - **RED** (`runs/b10_targets_red.{log,meta}`, 20:15:05–20:17:54, load 10.8 → 36.0): the new guard `expectPacTargetsAtRest` fails at the first combination on both viewports, «the Targets shot is not at rest…»:
+>   - desktop `focused: input[data-testid="pac-planner-target-input"]`, `scroller: 0`;
+>   - mobile the same focus plus `scroller: 53`.
+> - **Fix** (`galleryPac.ts`, +51/−2, the only file):
+>   - in `framePacTargets`, after `typeValue`: `bond.blur()`, then `scrollBackToFirstColumn(bond)` (every box from the field up to the page back to `scrollLeft` 0, `behavior: 'instant'`), then a check that the value stays 40 and the control `balanced`;
+>   - after the framing, the guard `expectPacTargetsAtRest`, an `expect.poll` on `{focused: null, scroller: 0, scrolledBoxes: []}`. The scroller is found structurally (the nearest ancestor with `overflow-x` auto/scroll); not found → `null` → red.
+>   - The guard also covers boxes scrolled sideways other than the wrapper (cells with `overflow: hidden`): in practice `scrolledBoxes: []`. `settlePacShot` still runs after the reset.
+> - **GREEN:**
+>   - `b10_targets_green` (20:19:03–20:20:21, 78 s, 2/2: mobile 40.8 s, desktop 42.6 s);
+>   - control `b10_targets_green2_desktop` (`--desktop-only --no-populate`, 65 s, 1/1).
+>   - No webServer timeout (rebuild within 300 s). Port free before and after every run.
+> - **Pixel diffs** (`runs/b10_pixel_diff.tsv`, `_summary.txt`; scripts `b10_pixel_diff.py`, `b10_regions.py`; the before copies in `/tmp/libreFolio_b10_before_png`, 0 mismatches against `b10_pac_before.tsv`):
+>
+> | viewport | shots | byte-identical | change |
+> |---|---|---|---|
+> | mobile | 5 non-Targets × 8 | **40/40** | none |
+> | mobile | Targets × 8 | 0/8 | table header and 3 rows only (box (294,1126)–(1188,1734)); selection column and Total untouched |
+> | desktop | all 48 | 0/48 | the sidebar's version label (box (41,688)–(215,701); 1,342–1,376 px) |
+> | desktop | Targets × 8 | — | plus the bond field's box (1044,531)–(1158,571): the focus ring is gone |
+>
+> - **⚠️ Off track:**
+>   - Desktop has anti-aliasing noise on rounded edges (asset icons, field corners), at most 9/255 on one channel. It changes between two desktop runs with the same code, build and DB (12/48 shots; `b10_green1_vs_green2_desktop.txt`). Verdict: **environment** (the renderer), not the fix; mobile shows none. The desktop shots on disk come from the second run (`b10_pac_after.tsv`); the first one's are kept in `*_green1*`.
+> - **Review of the 16 Targets** (`runs/b10_review_targets.tsv`; M saw mobile en/light and desktop it/dark):
+>   - **desktop 8/8 OK:** the table whole, 30/30/40 with «%», no focus ring, Total 100.00%, Balance all disabled, ⋮ in every row;
+>   - **mobile 8/8 OK, with the layout caveat:** the table from its first column, names whole («AAPL Apple Inc.», «Global Bond ETF»), no focus. But the **Target % inputs are off the right edge** (their values are not visible) and «Distributio» is cut by the sticky Actions column. This is the mobile layout issue already routed to D: before the batch the values could be seen and the names were cut; now the reverse.
+>   - «MSFT Microsoft C…» is cut on both viewports, as before (C, routed to D).
+> - **Gates:**
+>   - Prettier clean;
+>   - `tsc -p tsconfig.e2e.json`: only the 2 known errors;
+>   - `git diff --check` clean;
+>   - 6158 and 6168 free;
+>   - `dev_release2` still `9f060ef6e`.
+> - Triage: the original defect is an **assumption** (the fixture took for granted that `fill` leaves the table at rest), fixed in the fixture.
+> - **Step 23 closed.** CHECKPOINT READY sent; M FROZEN.

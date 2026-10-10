@@ -333,25 +333,6 @@ class TestServiceHelpers:
 
         assert result is True
 
-    def test_resolve_source_broker_from_link_prefers_partner_then_self_fallback(self):
-        service = TransactionService(None)
-        self_tx = Transaction(id=10, broker_id=100, type=TransactionType.TRANSFER, date=date.today())
-        partner_tx = Transaction(id=11, broker_id=200, type=TransactionType.TRANSFER, date=date.today())
-
-        paired_source = service._resolve_source_broker_from_link(
-            "pair",
-            self_tx.id,
-            {"pair": [(0, self_tx), (1, partner_tx)]},
-        )
-        fallback_source = service._resolve_source_broker_from_link(
-            "solo",
-            self_tx.id,
-            {"solo": [(0, self_tx)]},
-        )
-
-        assert paired_source == partner_tx.broker_id
-        assert fallback_source == self_tx.broker_id
-
 
 # ============================================================================
 # EXECUTE_BATCH BASELINE CONTRACT

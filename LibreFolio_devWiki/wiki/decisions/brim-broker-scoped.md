@@ -45,12 +45,21 @@ Content-Type: multipart/form-data
 file=<required upload>
 broker_id=<required positive broker id>
 custom_filename=<optional display filename>
+batch_id=<optional UUID — since 2026-10: the files uploaded together form a report set>
 ```
 
 The endpoint is a shared BRIM collection route. `broker_id` is a required multipart form
 field; the route is **not** `/brokers/{broker_id}/import/upload`. A successful upload stores
 both `uploaded_by_user_id` and `target_broker_id` in the file metadata and places the file
 under the broker-specific report directory.
+
+**Report sets (2026-10, issue #26).** The wizard sends every file of one session with the same
+`batch_id` (a malformed one answers 422). A **report set** is scoped to *broker + batch + set
+plugin*: only files uploaded together, for the same broker, and recognised by the same set
+plugin are combined — earlier uploads are never pulled in. The combined file is a **derived**
+file linked to its originals through their `combined_into` list; parsing a single member alone
+answers 422. Endpoints: `POST /api/v1/brokers/import/sets/preview`, `…/sets/combine`,
+`…/gap-fix`. See [[decisions/brim-report-sets]].
 
 The rest of the current contract is:
 

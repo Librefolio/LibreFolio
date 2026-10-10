@@ -128,6 +128,10 @@ asset currency, P the currency actually paid, d the acquisition's date.
   cannot return a cost, that information must reach the banner.
 - **Per-position figures** (a WAC, an unrealized P&L, a point of a lots WAC line, a broker holding's `total_cost`) are
   withheld (`None`) while the pool is incomplete; aggregates such as the open cost basis keep the known part.
+- **Not covered by this rule (decided 2026-10-09):** an incoming row saved in **Auto** on an *empty* pool gets a cost
+  of 0 computed by the facade and written as such — a known value, not an unknown one, so no `MISSING_COST_BASIS`.
+  The developer kept it as the correct fallback; the user corrects that transaction if needed —
+  [[decisions/auto-cost-basis-zero-without-position]].
 
 ### Who calls it
 

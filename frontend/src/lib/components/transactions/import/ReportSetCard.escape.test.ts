@@ -27,7 +27,7 @@
  * where two report-set plugins read its member, so «Read as» offers three choices. Nothing here reads translated
  * text: testids, ARIA state and spies.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/25_taxonomySelect/plan-phase00TaxonomySelectStep20SimpleSelectEscape.prompt.md`.
+ * Plan: `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep20SimpleSelectEscape.prompt.md`.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';

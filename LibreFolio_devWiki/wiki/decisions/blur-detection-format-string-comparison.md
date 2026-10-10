@@ -51,6 +51,6 @@ function handleValueChange(next: {code: string; amount: string} | null) {
 | Role | Path |
 |------|------|
 | WacPreviewSection (handleValueChange) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
-| formatDecimalForDisplay | `frontend/src/lib/utils/formatters.ts` |
-| Plan | `…/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` (F10) |
+| formatDecimalForDisplay | `frontend/src/lib/utils/core/formatDecimal.ts` |
+| Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` (F10) |
 

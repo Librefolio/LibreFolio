@@ -151,6 +151,22 @@ replaces resolved placeholders with real asset ids, and preserves `ImportTodo`s.
 validation. The later **Save All** action builds and commits the standard bulk
 transaction payload; the wizard never commits directly.
 
+### Cross-file groups against the database (2026-09-24/28, workstream K step 9)
+
+- **C1 — a firm outside collision is never the default keeper.** The resolver used to keep the primary member of
+  every cross-file partition by default, overriding the database verdict: a row already in the DB ("likely
+  duplicate") could be preselected and imported again. `MergedTx` now carries `dbDuplicateStatus` and
+  `pendingMatchStatus`, written at parse/recheck and never overwritten by the batch logic;
+  `hasFirmOutsideCollision()` (DB `likely` or editor `pending_duplicate`) excludes a row from being the default
+  keeper — if every member collides there is none; manual choices stay; weak verdicts (`possible`) still do not
+  block. `compareTargetFor(row)` opens the comparison the badge announces (DB, editor or batch).
+- **C2 — resolver choices survive a recheck.** Changing an asset resolution forced a recheck that wiped the
+  resolver's choices, and any cross-file group then sent the user back to the duplicates step without a word.
+  `carryResolverChoices()` carries choices onto groups with **the same member set** (not the same key — the key
+  changes when an asset goes from an extracted ISIN to a real id); only new or changed groups send the user back,
+  with a toast (`importWizard.duplicatesChangedReview`).
+- **C6** removed the write-only fields `dupKeeperIndex` and `dupKeeperFileName`.
+
 ## Downstream Bulk Workspace Invariants (Group E7/E8)
 
 - Every draft keeps a stable `tempId`. API operation indices are mapped back to those
@@ -171,6 +187,7 @@ transaction payload; the wizard never commits directly.
 | 2026-06-08 | v5 introduced a wide multi-file, multi-broker wizard and four numbered product stages. |
 | 2026-06-25 | Identifier handling and modal-layer problems were recorded for follow-up. |
 | 2026-09-09 | Group E reconciliation: full asset edit loading, omission/null-safe classification PATCH, parent-relative nested modals, explicit first-asset resolution, refreshed final duplicate checks, guarded bulk handoff, and stable E7/E8 bulk diagnostics/display ordering. |
+| 2026-09-28 | Workstream K step 9: DB-colliding rows never default keepers (C1), resolver choices carried across rechecks (C2) — [[sources/phase00-taxonomy-select-2026-10]]. |
 
 ## Source files
 
@@ -180,6 +197,8 @@ transaction payload; the wizard never commits directly.
 | Parse-to-merge and placeholder remapping | `frontend/src/lib/utils/transactions/importMerge.ts` |
 | Wizard transaction and resolution types | `frontend/src/lib/utils/transactions/importTypes.ts` |
 | Final duplicate request shaping | `frontend/src/lib/utils/transactions/duplicateRecheckPayload.ts` |
+| Firm collision rule, compare target | `frontend/src/lib/utils/transactions/importDedup.ts` |
+| Carrying resolver choices | `frontend/src/lib/utils/transactions/importDuplicateResolver.ts` |
 | Full asset edit loader | `frontend/src/lib/components/assets/assetEditData.ts` |
 | Classification PATCH diff | `frontend/src/lib/components/assets/assetPayload.ts` |
 | Asset create/edit and nested modal orchestration | `frontend/src/lib/components/assets/AssetModal.svelte` |

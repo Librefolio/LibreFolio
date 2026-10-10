@@ -77,6 +77,6 @@ measured repeatable concurrent speedups at an approximately linear memory cost.
 | Simulation parent boundary | `backend/app/services/risk/quant/engine.py` |
 | Optimization parent boundary | `backend/app/services/risk/quant/optimization_engine.py` |
 | FastAPI lifecycle | `backend/app/main.py` |
-| Implementation plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step5SimulationScaleOptimization.prompt.md` |
-| Benchmark | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/benchmark-phase01SimulationScale.md` |
+| Implementation plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01Step5SimulationScaleOptimization.prompt.md` |
+| Benchmark | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/benchmark-phase01SimulationScale.md` |
 | Lifecycle tests | `backend/test_scripts/test_services/test_risk_spawn_worker.py` |

@@ -238,10 +238,25 @@ currencies other than the valuation currency. Otherwise the calculation does
 not start and the outcome is **Input not valid** (see
 [Reading the result](#reading-the-result)): the cause can be a **Manual** rate
 or **Auto** rates from different days or sources, so align the rates or set a
-**Conversion spread** that covers the difference.
+**Conversion spread** that covers the difference. Only a gap small enough to
+come from storing rates with ten decimals is tolerated: the conversion then
+uses the rate through the valuation currency when that is lower,
 
-Like order amounts and fees, the amount received from a conversion is
-rounded half up to the smallest unit of its currency, and the **Rounding**
+$$
+\min\left(x_{\text{CHF} \to \text{USD}}\,(1 - s),\;
+\frac{x_{\text{CHF} \to \text{EUR}}}{x_{\text{USD} \to \text{EUR}}}\right)
+$$
+
+so it still creates no value. When the rates agree, this rate is the usual
+$x\,(1 - s)$. Your rates are not changed: each conversion of the plan shows
+the rate it starts from as *spot* and the rate it uses as *effective*.
+
+Every amount the plan books is rounded once, on its exact final value, to the
+smallest unit of its currency (the cent for EUR or USD), and always against
+the plan: amounts it receives (what a conversion delivers) are rounded down,
+amounts it pays (the cost of an order and its fee) are rounded up. So rounding
+never improves a plan, splitting a conversion into smaller ones gains nothing,
+and the rounding part of **Not invested** is never negative. The **Rounding**
 column of **Balances per Broker and currency** shows how much of each row
 comes from rounding: ≈ marks a figure shown rounded, as when the exact
 difference has no finite decimal form (for example after converting USD → EUR
@@ -345,7 +360,7 @@ takes you back to the **Review** step, and **Calculate new plan** runs the
 calculation again.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="tools" data-name="pac-result" alt="A calculated plan: the header with its outcome badges, the L2 distance, Not invested and the notes, Edit configuration and Calculate new plan; the Key figures, each with its parts, beside the Calculation box; and the title of Allocation per Asset">
+    <img class="gallery-img" data-category="tools" data-name="pac-result" alt="A calculated plan: the header with its outcome badges, the L2 distance, Not invested and the notes, Edit configuration and Calculate new plan; the Key figures, each with its parts, beside the Calculation box; and the Allocation per Asset table, with each Asset's target share beside its share after the plan, its value after the plan and its ideal value, and the totals">
 </div>
 
 A calculation ends with one of these outcomes:
@@ -416,7 +431,7 @@ them together. Without a plan (**Infeasible with these constraints** or
 the key figures show only the **Calculation** box.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="The Operational plan: numbered steps, first the transfers and the deposit that bring the cash to a Broker, then a currency exchange, each with its amount; then that Broker's orders, with Instruction, Price, Order amount and Fee; and the title of the next Broker's orders">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="The Operational plan: numbered steps, first the transfers and the deposit that bring the cash to a Broker, then a currency exchange with its rate, each with its amount; then that Broker's orders, with Instruction, Price, Order amount and Fee; and the next Broker's orders">
 </div>
 
 Click an order, or its **Detail** button, to open its detail: the instruction,

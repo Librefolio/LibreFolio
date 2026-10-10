@@ -1,0 +1,1 @@
+../../../../../../../mkdocs_src/docs/financial-theory/instruments/transaction-types/dividend-interest.en.md

@@ -2280,3 +2280,224 @@ plugin's wording in the file's language, and `resolveBrimTodoMessage` now words 
 the bulk editor included (workstream O, S19).
 Updated: [[concepts/import-todo-signals]].
 Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-09] ingest | Release 2 archive, batch 1 — 28 FX in the Dashboard, 30 WAC unification, 29 i18n audit
+Nineteen work-stream folders moved today from `Release_2/Phase_0/` to `Release_2/phases/` (train 25, `586a4f0ea`).
+This batch covers the three whose knowledge was already partly in the wiki. `wiki-search` found the 2026-10-07/08
+filings (WAC decision and #32 problem, three i18n problems, the coverage-combine race) and nothing on FX in the
+Dashboard, the page cache, the display currency, `db <path>` or the settings bulk write. Every claim below was
+checked against the code at `586a4f0ea`; where the plans and an explore pass disagreed with the code, the code was
+written (the D6 scenario, the D7 percentage rule, the origin of `GLOBAL_SETTINGS_CONSTRAINTS`).
+Created: [[problems/fx-backward-fill-unbounded-stale-rates]] (**backlog N-9**: the page D6 promised — `convert_bulk`
+fills without a maximum age; Risk and Signals flag FX carried forward > 7 days, the engine's `_preload_fx_rates`
+discards the flag, so the Dashboard never does), [[concepts/stale-while-revalidate-page-cache]],
+[[problems/db-path-argument-ignored-by-alembic]], [[problems/global-settings-bulk-saved-unvalidated-values]],
+[[sources/phase00-fx-dashboard-sync-2026-10]], [[sources/phase00-wac-unification-2026-10]],
+[[sources/phase00-i18n-audit-2026-10]].
+Updated: [[features/F-016]] (auto-sync on creation, full history; dead `FxProviderConfig.svelte` row removed),
+[[features/F-008]] (840+ → 4 215 keys; audit tool and library traps), [[decisions/settings-write-path-contract]]
+(server-side all-or-nothing bulk write).
+Graph: not updated (decision of the coordinator: no graphify run in this session).
+
+## [2026-10-09] ingest | Release 2 archive, batch 2 — 20 performance charts, 19 Yield on Cost, 24 global privacy
+`wiki-search` found nothing citing these folders; F-088 still said "planned, client-side", F-055 knew nothing of
+the P&L modes, and [[decisions/asset-global-page-shows-no-money]] still waited for a formatter repair that landed on
+2026-09-24 (`176f19707`). The two largest plans of the archive (~5 700 and ~6 700 lines) were read through status
+headers, decisions and closing checks. Code wins over plan: the rolling-return window is preset **or custom** (the
+plan's "fixed windows, no custom input" is outdated); privacy has a user doc (Preferences → Privacy mode).
+Created: [[decisions/portfolio-pnl-series-contracts]] (additive broker lines in one replay; candles composed per day
+then bucketed; income from the ledger), [[concepts/echarts-chart-gotchas]], [[problems/asset-event-edit-delete-reinsert]],
+[[decisions/yield-on-cost-definition]], [[features/F-100]] (Yield on Cost), [[decisions/privacy-mask-at-the-formatter]],
+[[concepts/premise-gate-keyed-by-content]], [[features/F-101]] (global privacy mode),
+[[sources/phase00-performance-charts-2026-09]], [[sources/phase00-yield-on-cost-2026-09]],
+[[sources/phase00-privacy-global-2026-09]].
+Updated: [[features/F-088]] (planned → documented, rewritten to the backend calendar signal), [[features/F-055]]
+(P&L modes; implemented → documented), [[concepts/discard-the-answer-not-the-question]] (case 5, events on a cache
+hit; dead route path remapped), [[decisions/asset-global-page-shows-no-money]] (update note).
+Product defect confirmed in passing (backlog I-09, report only): `FAAssetEventPoint.type` is a free `str`, so an
+unknown event type is written and every later read of the row fails.
+
+## [2026-10-09] ingest | Release 2 archive, batch 3 — 36 connection security, 34 account deletion and id reuse
+`wiki-search`: nothing on the indicator, enumeration, account deletion, id reuse or the last admin. Reading the code
+to check the plans exposed three auth pages that had never matched it: [[features/F-002]] described an admin CRUD API
+and a Settings tab that do not exist (administration is `dev.py user …`), [[features/F-003]] called `UserRole`
+admin/user (it is the broker role; admin is `is_superuser`) and cited a `get_admin_user` that does not exist
+(`require_admin`), and [[features/F-065]] said Secure=False, UUID ids and passlib. All corrected, history kept.
+Created: [[problems/login-account-enumeration-before-password]] (pre-fix code read at `01da03047^1`: disabled checked
+before the password, no bcrypt for unknown users), [[decisions/connection-security-server-never-upgrades]],
+[[features/F-102]] (connection security indicator), [[problems/account-deletion-orphaned-brokers]],
+[[problems/reused-ids-after-delete]] (post-migration fix subsystem), [[sources/phase00-connection-security-2026-10]],
+[[sources/phase00-account-and-id-reuse-2026-10]].
+Updated: [[features/F-001]], [[features/F-002]], [[features/F-003]], [[features/F-065]] (blank `JWT_SECRET`,
+`SESSION_COOKIE_SECURE`), [[decisions/broker-last-owner-guard]] (second caller of the rule),
+[[concepts/single-migration-strategy]] (marked superseded: incremental migrations since the release; rule of record
+in `.github/instructions/backend-db.instructions.md`).
+Deliberately not written: plan 34 §0 B1 carries an instruction of the developer that one aspect of the id fix stays
+only in the plan; this wiki records the models, the schema test and the post-migration subsystem, nothing more.
+
+## [2026-10-09] ingest | Release 2 archive, batch 4 — 26 Danske Bank / report sets, 31 DEGIRO, 18 BRIM targeted, 33 E2E import infra
+`wiki-search`: only [[concepts/import-todo-signals]] mentioned Danske; nothing on report sets, the encoding chain,
+plugin re-detection or the stale-frontend fix. [[features/F-013]] still described a `detected()` method (detection is
+`can_parse`, plus `detect_role` for sets) and Generic CSV as "the fallback" (it is not a catch-all), and
+[[decisions/brim-broker-scoped]] lacked `batch_id`. Code wins over an explore pass once more: the damaged-workbook
+error family does include `IndexError` and `struct.error` (`file_preview.py`).
+Created: [[decisions/brim-report-sets]], [[features/F-103]] (BRIM report sets), [[problems/brim-text-exports-hardcoded-utf8]],
+[[problems/brim-compatible-plugins-frozen-at-upload]] (with the per-broker sidecar lock),
+[[problems/stale-frontend-after-update-html-cached]], [[sources/phase00-brim-danske-bank-2026-10]],
+[[sources/phase00-brim-degiro-2026-10]], [[sources/phase00-brim-targeted-2026-09]],
+[[sources/phase00-e2e-import-infra-2026-10]].
+Updated: [[features/F-013]] (31 modules, detection, encoding rule, DEGIRO/Danske/eToro/Crédit Agricole notes;
+implemented → documented, matching its registry row), [[decisions/brim-broker-scoped]] (report-set upload contract).
+Confirmed still present (backlog L10, report only): a stale `TODO(P2-refactor)` comment in `broker_credit_agricole.py`.
+
+## [2026-10-09] ingest | Release 2 archive, batch 5 — 11 contracts and Runes, 14 urgent import feedback, 15 runtime lanes, 35 dev.py in the image
+`wiki-search`: only [[problems/ghcr-browser-cors-auth-flow]] (14, Round 5) was filed. [[entities/devpy-cli]] said
+~1 050 lines (2 714), an 18-module runner (30) and "pre-build first" (`docker build` rebuilds stale assets itself);
+[[features/F-063]] said `./dev.py test gallery` (it is `mkdocs gallery`) and "no incremental migrations".
+Created: [[concepts/runtime-lanes]], [[problems/devpy-unusable-in-docker-image]] (with the HEALTHCHECK on 6040),
+[[problems/asset-classification-wiped-by-partial-save]] (absent vs `null` in a PATCH; `exclude_none` vs
+`exclude_unset`), [[features/F-104]] (recommend LibreFolio — copy and go), [[sources/phase00-feedback-contracts-runes-2026-09]],
+[[sources/phase00-feedback-import-urgent-2026-09]], [[sources/phase00-parallel-runtime-isolation-2026-09]],
+[[sources/phase00-dev-cli-image-2026-10]].
+Updated: [[entities/devpy-cli]] (lanes, image stubs, `db <path>`, venv gotcha, stale numbers), [[features/F-063]],
+[[features/F-062]] (HEALTHCHECK, CLI in the container, HTML revalidation).
+Docstring drift reported, not fixed: `AssetCRUDService` bulk patch docstring says `exclude_none` for
+`classification_params`, the code uses `exclude_unset` (`backend/app/services/asset_sources/crud.py`).
+
+## [2026-10-09] ingest | Release 2 archive, batch 6 — 17 asset data operations, 22 SP08 asset pricing, 23 SP16 transaction batch
+`wiki-search`: nothing on bond categories, the distributions CSV, the `asset_sources/` package or the batch stages;
+[[features/F-095]] was still `planned`, and [[concepts/prices-current-side-effect]] pointed at functions of the
+monolithic `asset_source.py`, now a facade.
+Created: [[entities/asset-sources-package]], [[entities/transaction-batch-pipeline]],
+[[sources/phase00-asset-data-operations-2026-09]], [[sources/phase00-asset-pricing-refactor-2026-09]],
+[[sources/phase00-transaction-batch-refactor-2026-09]].
+Updated: [[features/F-095]] (planned → documented: global transaction count + filtered link, per-item savepoints),
+[[decisions/unified-batch-pipeline]] (SP16 stages), [[concepts/prices-current-side-effect]] (moved functions).
+All nineteen archived folders now have a source page.
+
+## [2026-10-09] lint | Health check after the Release 2 archive ingest
+Graph: 1 650 nodes, 2 432 edges, 169 communities — `graph.json` of 2026-09-09, `GRAPH_REPORT.md` of 2026-09-22; **stale,
+not rebuilt** (no graphify run in this session, by instruction). God nodes unchanged (Feature Registry 99 edges, F-048 78,
+F-046 46, F-047 32, Domain TRANSACTIONS 27); the five surprising INFERRED edges are AI Export pairs, plausible. Every
+graph query was confirmed with `grep` over `wiki/`, `index.md`, `log.md` and the registry.
+Issues found: 14 (7 high, 4 medium, 3 low).
+- 🔴 H1 backlog N-9: the backward-fill page promised by D6 was never written → written
+  ([[problems/fx-backward-fill-unbounded-stale-rates]]).
+- 🔴 H2 `raw/ingest-registry.md`: 158 of the 181 rows dated up to 2026-08-31 carry commit hashes that are **not in this
+  repository's history** (only 2 resolve; the 14 `(blob)` rows still match), so `git diff {hash} HEAD` cannot measure
+  their drift; 64 rows name moved paths, 7 renamed Plan D files → documented with a path map at the top of the
+  registry; re-baselining deferred (it would assert that the derived pages were re-read).
+- 🔴 H3 `check_source_paths.py`: 59 missing paths / 80 occurrences / 47 pages on disk at session start (69 / 96 / 58 in
+  a clean worktree, where git-ignored artefacts do not exist) → **1 / 1 / 1** on disk and 11 / 17 / 12 clean; 58 paths
+  remapped to their successor (archived Risk plans, Plan R3 SP-D full paths, `phases/` moves, renamed modules,
+  backend signal plugins, `trySave.ts`, `sw.js`, `003_scheduler_timezone.py`, `TransactionBulkModal.svelte`…) or
+  turned into dated "removed" notes. Left: `backend/app/api/v1/admin.py` (F-078, a planned file "to create") and ten
+  git-ignored artefacts cited on purpose (generated API client, build/coverage outputs, the prod data directory).
+- 🔴 H4 feature catalogue: F-052/F-053 `planned` (the scheduler shipped in Phase 08), F-055 implemented, F-088 and F-095
+  `planned` (both shipped) → corrected; five shipped features had no code → F-100…F-104; statistics recomputed
+  (96 → 104).
+- 🔴 H5 pages contradicting the code → corrected with history kept: [[features/F-001]], [[features/F-002]] (no admin
+  CRUD API or tab), [[features/F-003]], [[features/F-065]], [[features/F-008]], [[features/F-013]],
+  [[features/F-063]], [[entities/devpy-cli]], [[concepts/single-migration-strategy]] (superseded),
+  [[domains/scheduler]], [[decisions/asset-global-page-shows-no-money]], [[decisions/brim-broker-scoped]],
+  [[concepts/prices-current-side-effect]].
+- 🔴 H6 tooling: `detect_incremental(Path('corpus/'))`, the SCHEMA's "is the graph up to date?" check, scans **0**
+  files with the installed graphify (the corpus roots are symlinks resolving outside the scan root) and would report
+  "up to date" → reported, not fixed (SCHEMA is outside this session's write scope). Measured instead from
+  `graphify-out/manifest.json`: 177 wiki pages changed since their semantic extraction + 112 wiki pages new = 289 to
+  re-extract (714 with the roadmap and mkdocs-en sub-corpora, whose manifest keys no longer match); 162 wiki pages are
+  newer than `graph.json`. The Release 2 plans are not in the corpus at all (`corpus/roadmap` → `RoadmapV4_UI`).
+- 🔴 H7 privacy: a page quoted a machine hostname containing a person's name → redacted to `<hostname>`.
+- 🟡 M1 15 of the 19 archived folders had no wiki coverage → six ingest batches above.
+- 🟡 M2 orphans: 91 → 84 (59 are source pages linked only from the index, by convention).
+- 🟡 M3 concept debt → [[concepts/echarts-chart-gotchas]], [[concepts/runtime-lanes]],
+  [[concepts/stale-while-revalidate-page-cache]], [[concepts/premise-gate-keyed-by-content]].
+- 🟡 M4 P-6 (graph step for the #32 pages) still open: those pages, and the 47 created today, are not in the graph.
+- 🟢 L1 broken wikilinks: 8 targets in historical `log.md` entries and 1 in a registry row
+  (`sources/knowledge-base-overview`) — left as history; none in pages or the index.
+- 🟢 L2 index: 57 feature pages are not listed one by one — by design (the registry is the catalogue); no other page
+  is missing.
+- 🟢 L3 code facts reported, not fixed: I-09 (free-text asset event type → 500 on read), L10 (stale TODO in the Crédit
+  Agricole parser), the `patch_assets_bulk` docstring (says `exclude_none`, code uses `exclude_unset`), and the
+  Dashboard path that discards FX staleness (part of N-9).
+Repaired: H1, H3, H4, H5, H7, M1, M3, part of M2. Deferred: H2 (re-baseline), H6 (SCHEMA snippet), M4 (graph run).
+Next recommended: a graphify semantic `--update` over `wiki/` (289 pages) once the cost is approved — it closes P-6;
+then fix the corpus symlink scan so the incremental check stops reporting "up to date" on an unscanned corpus.
+
+## [2026-10-09] file | P-1 closed without code — Auto cost basis without a position (folder 39)
+Second pass, HEAD `083ed26dc` (train 26). `phases/39_autoCostNoPosition/` holds one plan of workstream P, written and
+closed today. The developer's decision, verbatim: «no chat, non facciamolo e segnamo la decisione, se i dati mancano
+lo 0 come fallback per auto è corretto. se bisogna cambiare sarà l'utente ad andare su quella transazione e
+correggere.» P's draft note was used as input and every claim re-checked on the code (the zero WAC on an empty pool,
+`ADD_ZERO_COST`, `if wac_result.wac:` in the inline WAC, the batch's Auto indices, the form default `'auto'`, the
+existing test `test_wacp27_empty_pool_wac_zero`); the draft's "enter the field and leave it = 0" gesture does not exist
+in the code and is recorded as the developer's first direction, superseded.
+Created: [[decisions/auto-cost-basis-zero-without-position]], [[sources/phase00-auto-cost-no-position-2026-10]].
+Updated: [[decisions/wac-inline-validate-commit]] (`'auto'` on an empty pool → 0 by decision),
+[[decisions/financial-math-single-average-cost]] ("never a silent zero" does not cover Auto's known 0),
+[[sources/phase00-wac-unification-2026-10]] (P-1 residual closed).
+Graph: not updated (deferred to after 1.2 by the developer; P-6 and C-29 stay in the backlog).
+
+## [2026-10-09] file | PAC allocator — rounding against the plan (D's notes, merge `b81b92fd1`)
+No PAC page existed (folder 13 is still active, no feature code yet). Filed from
+`Phase_0/13_pacAllocator/implementation/plan-phase00PacRoundingDirectionFix.prompt.md`, checked against
+`services/pac_allocator/` at `083ed26dc`: rule (a) — one table `_PLAN_ROUNDING` in `ledger.py` (credits `fx_credit`,
+`gross_sell_credit` floor; debits `buy_debit`, `buy_fee`, `sell_fee`, `broker_withheld_tax`, `self_reserved_tax`
+ceiling) and the same direction in the SCIP rows; the band `rounding_bound` = one minor unit per rounded posting with
+the strict per-posting check `_validate_posting`; C-FXPOS (row and evaluator fact) with its residual SCIP tolerance →
+`execution_failed`; B1 (β = h·Σ1/Rᵢ on the three stored rates, h = half a unit of the tenth decimal of
+`Numeric(24, 10)`; planning rate `min(spot·(1−s), val(origin)/val(destination))`; beyond it
+`allocation.fx_rate_inconsistent`); the lesson (the principle lives in MathCore §7.3, not TargetDesign §4.4; no test
+states it literally — the tests pin its halves).
+Created: [[decisions/pac-rounding-against-the-plan]]. Updated: [[concepts/backend-only-calculations]] (scope link).
+Graph: not updated (deferred).
+
+## [2026-10-09] file | Backlog K-25 — the four devWiki pages of workstream K
+Written from steps 13 and 14 of `phases/25_taxonomySelect/`, every claim checked on the code:
+[[problems/svelte5-teardown-reads-stale-state-timers]] (Tooltip and TreeSelect; residuals K-12, C-13),
+[[decisions/html-escape-at-the-source]] (escape rules and the two gates; `escapeHtml` is defined **three** times at
+HEAD — the canonical helper, the KaTeX variant, a local copy in `CorrelationHeatmap.svelte` — so
+[[features/F-047]]'s "× 4 copies cleanup (deferred)" was corrected to done-with-two-left),
+[[problems/stale-price-banner-never-emitted]] (`valuation_stale` also flags trade-derived marks; rule D8; `/assets`
+writes today's price), and [[concepts/responsive-4mode-layout]] rewritten from the code (four tiers per page,
+thresholds measured in four languages, the gutter rule) — none of the four was already covered.
+Cross-links: [[concepts/premise-gate-keyed-by-content]], [[concepts/echarts-chart-gotchas]] (K-15; tooltip width on
+phones), [[problems/fx-backward-fill-unbounded-stale-rates]], [[features/F-054]].
+Graph: not updated (deferred).
+
+## [2026-10-09] ingest | Release 2 archive, folder 25 — workstream K, taxonomy and selects (steps 1–23)
+One analysis and 18 plans; `wiki-search` found only [[problems/flag-emoji-windows]] citing the folder (step 12) and
+nothing on the taxonomy, the import-duplicate keeper, the request loop, the bulk guards, app start or Escape layering.
+Code over plan: D-K3 expected real-estate crowdfunding inside the Real-estate slice of the allocation pie, but the
+charts now group by family (workstream I, D15); [[features/F-048]]'s "JSON snapshot comparison" is still true for the
+form modal — only the bulk editor's guard became canonical (`serializeOps`); the `AssetType` docstring's "subtypes roll
+up to the base type they contain" is not what the backend's `allocation_by_type` does (reported, not fixed).
+Created: [[sources/phase00-taxonomy-select-2026-10]], [[decisions/asset-type-two-level-taxonomy]],
+[[problems/broker-icon-fields-request-loop]], [[problems/modal-layers-escape-and-backdrop]],
+[[problems/fixture-skip-hid-api-test]].
+Updated: [[features/F-001]] (app start: only a 401 signs out, `?redirect=` through `safeInternalPath`, register link),
+[[features/F-008]] (missing ICU argument shows raw text; the argument guard), [[features/F-024]] and
+[[entities/db-models]] (the `AssetType` list was stale since July: `CROWDFUND_LOAN` → `CROWDFUND`, subtypes),
+[[features/F-032]] (stored XSS fixed, type filter), [[features/F-033]] (‹ n/N › browsing, phone tooltip),
+[[features/F-048]] (creation order, canonical close guard, cloning pairs, K-1 … K-4), [[features/F-098]] (opaque and
+maskable PWA icons; the old Apple-first flag stack marked superseded), [[features/F-099]] (metadata currency from the
+price API; K-16), [[entities/import-wizard-modal]] (C1/C2/C6), [[concepts/entity-store-pattern]] (K-11),
+[[concepts/svelte5-runes]] (known traps), [[problems/testid-grep-false-negative]] (`testIdPrefix`),
+[[problems/flag-emoji-windows]] (K-13/K-14).
+Not filed (nothing durable beyond the source page): the app-title guard, the selection cleared after a save, the
+avatar merge in `PreferencesTab`, the AssetModal footer on phones, the date and size formats of step 22 (C-10/C-11).
+Registry: 22 rows at `083ed26dc` (19 for folder 25, 1 for folder 39, 2 for the PAC plans).
+Graph: not updated (deferred).
+
+## [2026-10-09] lint | Second-pass checks
+- `check_source_paths.py`: 1 missing path (1 occurrence) of 2 757 cited, in 1 page — `backend/app/api/v1/admin.py`
+  in [[features/F-078]], unchanged from the first pass; every path cited by the 11 new and 24 updated pages is
+  tracked in git at `083ed26dc`.
+- Wikilinks: 0 broken in pages and in the index; every new page has inbound links besides the index.
+- Privacy: no absolute paths, e-mails, IBANs, IPs, venv names or `/tmp` logs in the added text.
+- Feature registry: no new code needed — K's lots extend F-001, F-008, F-024, F-032, F-033, F-048, F-054, F-098,
+  F-099, whose statuses stand; the PAC allocator still has no code (to assign when folder 13 is archived).
+- Reported, not fixed: the `AssetType` docstring vs the backend allocation (above); `test_settings_api.py` skips five
+  checks on a 404 from endpoints that exist (latent false green, [[problems/fixture-skip-hid-api-test]]); the mkdocs
+  data-quality page still says "All 5 codes" (K-24, assigned).
+- Graph debt grows by the 11 new pages; P-6 and C-29 stay in the backlog by the developer's decision.

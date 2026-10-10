@@ -6,6 +6,7 @@ related:
   - concepts/timeseries-store-pattern
   - sources/phase07-part4-round2
   - features/F-047
+  - problems/broker-icon-fields-request-loop
 ---
 
 # Concept: Entity Store Pattern
@@ -58,6 +59,14 @@ Callsites wired in Round 2:
 - `/assets/+page.svelte` (delete, wipe)
 - `/assets/[id]/+page.svelte` (delete, wipe)
 - `BrokerModal.svelte` (save, delete)
+
+## Known sharp edge — `merge` bumps on identical data
+
+`merge()` marks an existing entry changed whatever the values (`entityStore.ts`), so every merge bumps `version`.
+An `$effect` that reads props derived from the version and also merges into the store can loop: in 2026-09 a broker
+with no icon fields was re-fetched 40–60 times a second ([[problems/broker-icon-fields-request-loop]]). That loop
+was closed at the loader (a per-generation "settled" set in `brokerStore.ts`); a `merge` that bumps only on a real
+change is open as backlog **K-11**.
 
 ## Relationship to TimeSeriesStore
 

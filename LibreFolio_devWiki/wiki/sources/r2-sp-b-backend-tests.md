@@ -49,7 +49,7 @@ Test coverage plan (✅ completed, commit `473d2611`) for the WAC feature. Creat
 ## Source files
 | Role | Path |
 |------|------|
-| WAC test file | `backend/test_scripts/test_api/test_transactions_wac.py` |
+| WAC test file (test_transactions_wac.py replaced on 2026-05-29) | `backend/test_scripts/test_api/test_wac_inline.py` |
 | Test server helper | `backend/test_scripts/test_server_helper.py` |
 | Test utilities | `backend/test_scripts/test_utils.py` |
 | Test runner registration | `scripts/test_runner/_backend_api.py` |

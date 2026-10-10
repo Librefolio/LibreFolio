@@ -10,15 +10,15 @@
 
 | Page | Domain | Features | Status |
 |------|--------|----------|--------|
-| [[domains/auth]] | AUTH | F-001–F-003 | stable |
-| [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008 | stable |
-| [[domains/brokers]] | BROKERS | F-009–F-014 | stable |
+| [[domains/auth]] | AUTH | F-001–F-003, F-102 | stable |
+| [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008, F-101, F-104 | stable |
+| [[domains/brokers]] | BROKERS | F-009–F-014, F-103 | stable |
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
 | [[domains/assets]] | ASSETS | F-024–F-036 | stable |
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
 | [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
-| [[domains/scheduler]] | SCHEDULER | F-052–F-053 | planned |
-| [[domains/dashboard]] | DASHBOARD | F-054–F-055 | implemented |
+| [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
+| [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100 | implemented |
 | [[domains/calculations]] | CALCULATIONS | F-056–F-058 | stable |
 | [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074 | stable |
 
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (96 features across 12 domains) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (104 features across 12 domains, 2026-10-09) |
 
 ## Individual Feature Pages
 
@@ -43,6 +43,11 @@
 
 | Page | Title | Domain | Status |
 |------|-------|--------|--------|
+| [[features/F-100]] | Yield on Cost (YOC) per position — trailing-year ledger income per eligible unit over the residual average cost | Dashboard | documented |
+| [[features/F-101]] | Global Privacy Mode — mask at the formatter, sign and currency kept, device-scoped | Layout & Settings | documented |
+| [[features/F-102]] | Connection Security Indicator (+ login without account enumeration) | Auth | documented |
+| [[features/F-103]] | BRIM Report Sets — one import from several exports, gap fix against the bank's truth points | Brokers | documented |
+| [[features/F-104]] | Recommend LibreFolio — social share with «Copy and go» | Layout & Settings | documented |
 | [[features/F-012]] | BRIM Framework | Brokers | implemented |
 | [[features/F-019]] | MANUAL Sentinel FX Provider | FX | implemented |
 | [[features/F-020]] | FX Currency Conversion Graph | FX | implemented |
@@ -76,7 +81,16 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
-| [[decisions/asset-global-page-shows-no-money]] | With weights → euros → "me"; without weights → percentages → "these". On 2026-09-05 it had no frontend guard; since 18–21/09 it has two (`formatScopedCurrencyAmount` → `—` off `portfolio`; `showMoney={false}` into `L4Replay`) and the per-asset levels take no currency at all. The stub-money-in net is green — but blind under global privacy (the risk formatter masks the whole string), so it pins privacy off until J repairs the formatter | 2026-09-05 (upd. 2026-09-23) | frontend, risk, asset-set, ux, testing, invariant, privacy |
+| [[decisions/auto-cost-basis-zero-without-position]] | **P-1, closed without code.** An incoming row in Auto on an empty pool is saved at cost 0 — the correct fallback when data is missing; the user corrects that transaction. Options weighed (missing cost basis, warning, "leave field = 0") and rejected | 2026-10-09 | transactions, cost-basis, wac, auto-mode, product-decision |
+| [[decisions/pac-rounding-against-the-plan]] | PAC allocator: credits round down, debits round up, one table (`_PLAN_ROUNDING`) mirrored by the SCIP rows; band = one minor unit per rounded posting; C-FXPOS; B1 tolerance β = h·Σ1/Rᵢ on stored rates; the "no conversion creates value" principle lives in MathCore §7.3 | 2026-10-09 | pac-allocator, rounding, fx, scip, invariant |
+| [[decisions/html-escape-at-the-source]] | After a stored XSS in v1.1.0: `escapeHtml` at the source (one helper), `sanitizeHtml` (DOMPurify) only for mixed-markup sinks, `*Html`/`*Url` naming, truncate then escape; two gates — sources (`htmlInterpolation.gate`) and `{@html}` sinks (`htmlSink.gate`, reviewed list keyed by content); K-15 open (ECharts formatters) | 2026-09-30 | frontend, security, xss, gates |
+| [[decisions/asset-type-two-level-taxonomy]] | Asset types: 11 base values + 7 subtypes (ETF_*, CROWDFUND_REAL_ESTATE); family view (select, allocation charts) vs content view (pastille, badge); `TreeSelect`, composite icons, crowdfunding RE shocked as a loan, tiered select ranking (D-K1 … D-K5); enum and scenario coverage gates | 2026-09-24 | assets, asset-types, taxonomy, select, risk |
+| [[decisions/portfolio-pnl-series-contracts]] | Growth-chart P&L series: broker lines are additive contributions of ONE combined replay (Σ = total, every day; per-broker runs rejected: transfers become flows); candles composed per day then bucketed; income from the ledger, never `AssetEvent` | 2026-09-22 | backend, frontend, portfolio-engine, charts, pnl, invariant |
+| [[decisions/yield-on-cost-definition]] | YOC = trailing 365 days of gross DIVIDEND/INTEREST per D-1 eligible unit ÷ residual average cost, per (asset, broker); `available`/`no_income`/`unavailable`+reason; five alternatives rejected | 2026-09-11 | backend, portfolio, yield-on-cost, fifo, wac |
+| [[decisions/privacy-mask-at-the-formatter]] | "Hide values": mask where the number becomes a string; device-scoped; money only, quantities by context (D5′); sign (D8) and currency stay; unclassified = personal; no promise against DevTools/API | 2026-09-22 | frontend, privacy, formatters, gates |
+| [[decisions/connection-security-server-never-upgrades]] | The server may confirm the browser's verdict or make it uncertain, never make it secure; returns only `{client_class, cookie_secure}`, never the address; admin warning when HTTPS without Secure cookie | 2026-10-09 | security, https, proxy, cookies, auth |
+| [[decisions/brim-report-sets]] | Several exports of one bank → one derived combined file parsed as usual; a set = files uploaded together (same `batch_id`, broker, set plugin; D-S31 auto-completion rejected); truth points → `gap_fix` proposals, verification never corrects | 2026-09-28 | brim, import, report-sets, danske-bank, issue-26 |
+| [[decisions/asset-global-page-shows-no-money]] | With weights → euros → "me"; without weights → percentages → "these". On 2026-09-05 it had no frontend guard; since 18–21/09 it has two (`formatScopedCurrencyAmount` → `—` off `portfolio`; `showMoney={false}` into `L4Replay`) and the per-asset levels take no currency at all. The stub-money-in net is green; it was blind under global privacy (the risk formatter masked the whole string) and pins privacy off — the formatter was repaired on 2026-09-24 (`176f19707`: only the number is masked) | 2026-09-05 (upd. 2026-10-09) | frontend, risk, asset-set, ux, testing, invariant, privacy |
 | [[decisions/drawdown-full-history-warmup]] | Drawdown has unlimited memory: `full_history` param (UI toggle) loads from `date.min`, AI Export always full; a SQL max-seed is FX-unsafe | 2026-09-02 | backend, signals, risk, drawdown, ai-export, warmup |
 | [[decisions/settings-write-path-contract]] | Confirm before applying, report per field, never stop at the first refusal — C1-C9 answered as one contract | 2026-08-30 | settings, frontend, ux, api-contract |
 | [[decisions/broker-last-owner-guard]] | Removal of the last owner is blocked while demotion to VIEWER is not; the obvious repair was rejected in favour of a dialogue | 2026-08-30 | brokers, sharing, permissions, ux |
@@ -154,6 +168,10 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/stale-while-revalidate-page-cache]] | A write marks portfolio answers stale and keeps them; pages show the old figures and refresh in background (E1); a sync is a write only if it wrote; phase 2 outside the portfolio is backlog N-1 | frontend, stores, cache, portfolio, ux |
+| [[concepts/echarts-chart-gotchas]] | ECharts behaviours that looked like our bugs: split lines follow labels, time-axis bar width follows the minimum gap, formatters are not reactive (privacy), legend selection by name, raw edge ticks, tooltip HTML | frontend, charts, echarts, privacy |
+| [[concepts/premise-gate-keyed-by-content]] | A gate that tests the premise of a rule (the set of money-rendering sites is known), keyed by content not line, that never judges intent and states what it cannot see | testing, gates, method, privacy |
+| [[concepts/runtime-lanes]] | One port + one data directory per parallel server/test run (`--port`/`--test-port`, `--data-dir`); production guards, readiness nonce, gallery limit, per-worktree venv gotcha | cli, testing, parallelism, isolation |
 | [[concepts/span-as-a-detector]] | Tell one write-act from two by the span `MAX−MIN(fetched_at)` (0.1 s vs 5 885 s), not by counting instants; v1 cried "contaminated" on a clean lane and was retired, not tuned — a false positive on what *authorises* teaches people to ignore it. A detector proven only on the case it must catch is not proven | testing, method, gates, false-positive, lanes, contamination |
 | [[concepts/test-isolation-classes]] | PURE/READ/WRITE_SCOPED/WRITE_GLOBAL derived from the real data model; `exclusive_because` declares class and reason in one place | testing, test-runner, parallelism, isolation |
 | [[concepts/derived-test-inventory]] | Everything the runner needs is computable from the registry without executing a test; actions are near-pure command producers | testing, test-runner, registry, tooling |
@@ -172,7 +190,7 @@
 | [[concepts/gross-net-dual-reporting]] | Gross accumulators untouched; net = gross minus allocated fees/taxes, always additive | backend, frontend, fifo |
 | [[concepts/async-io-rule]] | **CRITICAL**: sync I/O in async handlers blocks uvicorn event loop | backend, async, performance |
 | [[concepts/daily-point-policy]] | One record per day for prices and FX rates (upsert semantics) | backend, db, prices |
-| [[concepts/single-migration-strategy]] | Modify 001_initial.py + recreate DB — no incremental migrations | backend, db, alembic |
+| [[concepts/single-migration-strategy]] | ⚠️ **SUPERSEDED** — the pre-release rule (one migration file, recreate the DB). Since the release: incremental migrations (`00N_<release or scope>`), rule of record in `.github/instructions/backend-db.instructions.md` | backend, db, alembic |
 | [[concepts/backend-only-calculations]] | All financial calculations in backend — frontend is pure display | architecture |
 | [[concepts/dual-view-pattern]] | Card grid + DataTable toggle persisted in localStorage | frontend, ux |
 | [[concepts/svelte5-runes]] | New components use $state/$derived/$effect — not $: reactive | frontend, svelte |
@@ -188,7 +206,7 @@
 | [[concepts/fifo-lot-tracking]] | FIFO lot model: acquisitions form lots, disposals consume them oldest-first — the basis of cost, gain and tax reporting | finance, fifo, holdings, tax |
 | [[concepts/interactive-pros-cons-slider]] | The mkdocs pros/cons slider used to present a trade-off without picking a side for the reader | ui, mkdocs, user-guidance |
 | [[concepts/e2e-data-testid-rule]] | ALWAYS use data-testid for Playwright selectors — NEVER CSS classes or text | testing, frontend, e2e, i18n |
-| [[concepts/responsive-4mode-layout]] | Filter bar pages use 4 breakpoint modes (wide/tablet/tablet-s/mobile) for better intermediate-width UX | frontend, responsive, layout, ux |
+| [[concepts/responsive-4mode-layout]] | Page toolbars (`PageToolbar`) switch between four tiers per page — oneRow, denseRow, stackFilters, oneColumn — at thresholds **measured** in four languages (longest + 16 px, rounded to ten); gate `toolbar-width-sweep.spec.ts` with the scrollbar-gutter rule (K-25, rewritten 2026-10-09) | frontend, responsive, layout, i18n, calibration |
 | [[concepts/prices-current-side-effect]] | `/assets/prices/current` is not read-only — it upserts today's OHLC; never chain with `/sync` | backend, frontend, assets, api-contract, side-effect |
 | [[concepts/savewithretry-frontend-pattern]] | Unified modal save helper: error extraction, inline formError, optional toast, onError hook | frontend, ux, error-handling, modals |
 | [[concepts/entity-store-pattern]] | `createEntityStore<T>()` factory for bounded entity caches with proper `invalidate()` semantics | frontend, stores, cache, svelte5 |
@@ -218,6 +236,23 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/svelte5-teardown-reads-stale-state-timers]] | **K-25.** A Svelte 5 effect teardown reads `$state` as it was before its last write, so timers kept in `$state` survived the destroy (Tooltip, TreeSelect); keep timer handles in plain variables, cancel in the teardown, assert `vi.getTimerCount()` | resolved | frontend, svelte5, timers, teardown |
+| [[problems/stale-price-banner-never-emitted]] | **K-25.** `STALE_PRICE` was never emitted from the 2026-06-19 engine rewrite to 2026-09-30; `valuation_stale` also flags trade-derived marks, so rule D8 (provider + market price + open + > 7 days) filters it; CTA `sync_asset_prices`; `/assets` writes today's price, so E2E use `INVALID_TICKER_12345` | resolved | portfolio, data-quality, dashboard, testing |
+| [[problems/broker-icon-fields-request-loop]] | A broker without icon fields was re-fetched 40–60 times/s: props are getters, the badge derived a new object per store bump, `entityStore.merge` bumps on identical data; fixed with a per-generation settled set; K-11 open | resolved | frontend, svelte5, stores, performance |
+| [[problems/modal-layers-escape-and-backdrop]] | One Escape closed an inner layer and the modal (ContextMenu, SearchSelect, SimpleSelect did not stop propagation) — each layer stops the Escape it consumes, no global stack; a `space-y-8` margin shortened the fixed backdrop — `margin: 0`; C-12 open | resolved | frontend, modals, escape, tailwind |
+| [[problems/fixture-skip-hid-api-test]] | A fixture that called `pytest.skip` on an unexpected status (422, then 201 checked as 200) hid `test_delete_linked_without_pair` for ten months; a setup failure is a failure; same shape latent in `test_settings_api.py` | resolved | testing, pytest, fixtures, false-green |
+| [[problems/fx-backward-fill-unbounded-stale-rates]] | **Backlog N-9.** `convert_bulk` fills FX gaps with the last earlier rate, however old; Risk/Signals flag FX carried > 7 days, the engine's `_preload_fx_rates` drops the flag, so the Dashboard never does. The banner's ±7-day sync can create such a hole (D6, accepted); repair = sync MAX | accepted | backend, fx, data-quality, silent-failure, dashboard |
+| [[problems/db-path-argument-ignored-by-alembic]] | `dev.py db … <file>` set `DATABASE_URL`, which `get_settings()` recomputes: Alembic acted on the configured DB (a `downgrade` of a "copy" hit production). Fixed with `-x sqlalchemy.url` | resolved | cli, devpy, alembic, silent-failure |
+| [[problems/global-settings-bulk-saved-unvalidated-values]] | `PATCH /settings/global/bulk` stored any string and applied part of a refused batch; reads coerce bad values to 0/False. Now validated per key (`GLOBAL_SETTINGS_CONSTRAINTS`), every refusal named (422), all or nothing | resolved | backend, settings, validation, atomicity |
+| [[problems/asset-event-edit-delete-reinsert]] | The event editor edited by delete+insert: duplicates on a type change, 500 on events linked to transactions (`RESTRICT`), wrong deletes, a CSV that could not come back. Now in-place by id; I-09 (free-text type → 500 on read) still open | resolved | backend, frontend, asset-events, upsert |
+| [[problems/login-account-enumeration-before-password]] | Login said "disabled" before checking the password and skipped bcrypt for unknown users. Now password first, identical 401, dummy hash, 403 `ACCOUNT_DISABLED` only for the right password | resolved | backend, auth, security, enumeration |
+| [[problems/account-deletion-orphaned-brokers]] | Deleting an account left the brokers it alone owned (no FK `brokers→users`). Now the last-owner rule per broker via `leave_broker`, all or nothing, files after the commit | resolved | backend, auth, brokers, data-integrity |
+| [[problems/reused-ids-after-delete]] | SQLite reissued the id of a deleted newest row, and `broker_<id>` folders/saved references followed it. Six tables never reuse ids; existing DBs converted by the new post-migration fix subsystem (integrity check, backup, verify, never blocks start-up) | resolved | backend, sqlite, ids, post-migration |
+| [[problems/brim-text-exports-hardcoded-utf8]] | 27 BRIM plugins opened files as `utf-8-sig`; Windows-1252/Latin-1 exports failed. One chain `TEXT_ENCODINGS` (UTF-8 → cp1252 → Latin-1 last) + a guard test | resolved | backend, brim, csv, encoding |
+| [[problems/brim-compatible-plugins-frozen-at-upload]] | A file's compatible plugins were detected once at upload; after an update old files never offered a new plugin. Now keyed by the app version and re-detected; per-broker sidecar lock | resolved | backend, brim, plugins, detection |
+| [[problems/stale-frontend-after-update-html-cached]] | HTML entry points had no `Cache-Control`, so browsers kept the old build after an upgrade (issue #26 "does not work on Chromium"). HTML now `no-cache, must-revalidate`, hashed chunks immutable | resolved | backend, http, caching, deployment |
+| [[problems/asset-classification-wiped-by-partial-save]] | Saving from the import wizard wiped sector/geography: form built from a summary, and `exclude_none` collapsed an explicit `null`. Now full edit data + `model_fields_set`/`exclude_unset` | resolved | backend, frontend, assets, patch-semantics |
+| [[problems/devpy-unusable-in-docker-image]] | In 1.1.0 no `dev.py` command worked in the container (it imported the excluded test tree). Now groups register only when their files exist, others say "not available" (exit 2); HEALTHCHECK on 6040 | resolved | docker, cli, devpy, healthcheck |
 | [[problems/i18n-audit-false-dead-and-false-used]] | `dev.py i18n audit` called 118 of 250 «dead» keys live (wrappers, props, backend dicts, relative helpers) and absolved all 481 `risk.*` keys (a union of one); tests counted as evidence. Fixed: product sources only, any whole-key literal, backend f-string families, same-file members, nested templates, legacy prefixes demoted to «not verified» → 180 dead, none alive. Second pass: one import hop, unreferenced sources (📦), generated clients excluded, codes in any spelling, multi-slot shapes → 0 dead, 78 → 3 not verified (all live) | resolved | frontend, backend, i18n, tooling, audit, gates |
 | [[problems/svelte-i18n-formatter-cache-ignores-locale]] | svelte-i18n 4.0.1 memoizes `getMessageFormatter` by message text only, so a plural/number ICU text identical in two catalogues keeps the first locale's rules after an in-place switch. Fix: never identical across locales (FR `many` branch) + catalogue gate and a latch | resolved | frontend, i18n, svelte-i18n, icu, plural |
 | [[problems/i18n-loading-gate-remounts-app]] | Both layouts swapped the whole app for a placeholder whenever `$i18nLoading` (svelte-i18n raises it after 200 ms of any catalogue load): under load or on a real network, picking a language in Welcome rebuilt the app, re-read the persisted language and lost the choice (auth 3a red). Fixed: placeholder only until the first dictionary; regression E2E 3c holds the chunk at the network | resolved | frontend, i18n, svelte-i18n, onboarding, e2e |
@@ -305,13 +340,15 @@
 
 | Page | Summary |
 |------|---------|
+| [[entities/asset-sources-package]] | `asset_sources/` — asset pricing split by responsibility (core, crud, manager, metadata, price_query, price_store, provider_management, refresh, search) behind the permanent `asset_source.py` facade (SP08, 2026-09-11) |
+| [[entities/transaction-batch-pipeline]] | `execute_batch` as an orchestrator over 13 ordered stages (`transaction_batch_stages.py`) sharing a `TransactionBatchContext`; the caller owns the DB transaction (SP16, 2026-09-11) |
 | [[entities/ai-export-snapshot-service]] | Sole AI Export runtime service with 67 components, 40 internal datasets, 8 public data exports, 11 analyses, exact stats, and a safe frontend prompt/clipboard boundary |
 | [[entities/fifo-lot-engine]] | Canonical FIFO engine (backend/app/services/fifo_lot_engine.py) — quantitative replay + v4 economic allocation (income/fees/taxes, net metrics, 3-level audit) |
 | [[entities/lots-analysis-service]] | Orchestration service between API and FifoLotEngine — FX prep, economic event building, DTO mapping; no longer the income allocator of record. Since 2026-10-07 its WAC lines come from one `compute_average_costs()` call sampled with `state_at` (gaps → `missing_fx_pairs` / `MISSING_COST_BASIS`, `DEGRADED`); FIFO lot conversions still fall back to unconverted amounts |
 | [[entities/api-router]] | FastAPI router structure — all v1 API routes and their modules |
 | [[entities/backup-router]] | `/api/v1/backup` read-only export router (asset prices/events, FX rates) — Policy D pre-wipe snapshot |
 | [[entities/db-models]] | All SQLModel ORM models — tables, enums, constraints, design notes |
-| [[entities/devpy-cli]] | `dev.py` — single CLI entry point for all developer operations |
+| [[entities/devpy-cli]] | `dev.py` — single CLI entry point for all developer operations; runtime lanes, image-aware command groups (2 714 lines, 2026-10-09) |
 | [[entities/import-wizard-modal]] | Conditional BRIM import state machine — multi-file/broker parsing, explicit asset resolution, final duplicate recheck, and guarded bulk-editor handoff |
 | [[entities/market-data-scheduler]] | Embedded FastAPI scheduler daemon — current-price + history-sync jobs, leader election, JSONL log |
 | [[entities/portfolio-engine]] | 4-layer portfolio engine (2 714 lines on 2026-10-07) — ScopeAwareClassifier→DailyStateBuilder→DerivedViewsBuilder→PortfolioCalculationEngine. Since 2026-10-07 costs come from one `compute_average_costs()` call that the replay follows (`average_costs` required; historical cost in the report currency, `realized_sales`, `missing_fx`, `unrealized_by_currency`) |
@@ -331,6 +368,27 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-taxonomy-select-2026-10]] | `Release_2/phases/25_taxonomySelect/` — workstream K: asset taxonomy and selects, then 15 lots (import duplicates, request loop, bulk guards, stored XSS, stale prices, PWA icons, toolbars, app start, Escape layers); K-1 … K-26 | 2026-10-09 | phase0, workstream-k, assets, xss, auth, modals |
+| [[sources/phase00-auto-cost-no-position-2026-10]] | `Release_2/phases/39_autoCostNoPosition/` — P-1 analysed, closed without code by the developer's decision | 2026-10-09 | phase0, cost-basis, product-decision |
+| [[sources/phase00-fx-dashboard-sync-2026-10]] | `Release_2/phases/28_fxDashboardSync/` — FX in the Dashboard (D1–D7), page cache, display currency, banners, `db <path>`, coverage combine | 2026-10-09 | phase0, fx, dashboard, cache, cli |
+| [[sources/phase00-wac-unification-2026-10]] | `Release_2/phases/30_wacUnification/` — single average cost (#32) index + settings bulk validation | 2026-10-09 | phase0, wac, financial-math, settings |
+| [[sources/phase00-i18n-audit-2026-10]] | `Release_2/phases/29_i18nAudit/` — i18n audit S0–S22, 4 215 keys, 0 dead | 2026-10-09 | phase0, i18n, audit, tooling |
+| [[sources/phase00-performance-charts-2026-09]] | `Release_2/phases/20_performanceCharts/` — rolling return, broker P&L lines, candles, income; four follow-up fixes | 2026-10-09 | phase0, charts, dashboard, echarts |
+| [[sources/phase00-yield-on-cost-2026-09]] | `Release_2/phases/19_yieldOnCost/` — Yield on Cost from the ledger (U3, SP06) | 2026-10-09 | phase0, yield-on-cost, income |
+| [[sources/phase00-privacy-global-2026-09]] | `Release_2/phases/24_privacyGlobal/` — global privacy, rounds 1–2 (U2, SP15) | 2026-10-09 | phase0, privacy, formatters, gates |
+| [[sources/phase00-connection-security-2026-10]] | `Release_2/phases/36_connectionSecurity/` — connection indicator, login without enumeration | 2026-10-09 | phase0, security, auth |
+| [[sources/phase00-account-and-id-reuse-2026-10]] | `Release_2/phases/34_accountAndIdReuse/` — account deletion, reused ids, last admin, JWT secret, cookie Secure | 2026-10-09 | phase0, auth, sqlite, post-migration |
+| [[sources/phase00-brim-danske-bank-2026-10]] | `Release_2/phases/26_brimDanskeBank/` — report-set pilot, CSV encoding, steps 4–9 (issue #26) | 2026-10-09 | phase0, brim, report-sets, encoding |
+| [[sources/phase00-brim-degiro-2026-10]] | `Release_2/phases/31_brimDegiro/` — DEGIRO by position, every language (issue #35) | 2026-10-09 | phase0, brim, degiro |
+| [[sources/phase00-brim-targeted-2026-09]] | `Release_2/phases/18_brimTargeted/` — Crédit Agricole refactor, eToro withdrawal fees | 2026-10-09 | phase0, brim, credit-agricole, etoro |
+| [[sources/phase00-e2e-import-infra-2026-10]] | `Release_2/phases/33_e2eImportInfra/` — deterministic import E2E; found the account/id defects | 2026-10-09 | phase0, testing, e2e, import |
+| [[sources/phase00-feedback-contracts-runes-2026-09]] | `Release_2/phases/11_feedbackContractsRunes/` — API contracts B00–B10, Runes, FX creation sync, entity links | 2026-10-09 | phase0, api-contract, svelte5, fx |
+| [[sources/phase00-feedback-import-urgent-2026-09]] | `Release_2/phases/14_feedbackImportUrgent/` — urgent import fixes E1–E9, social share, GHCR auth, integration rules | 2026-10-09 | phase0, import-wizard, social-share, ghcr |
+| [[sources/phase00-parallel-runtime-isolation-2026-09]] | `Release_2/phases/15_parallelRuntimeIsolation/` — runtime lanes | 2026-10-09 | phase0, cli, testing, isolation |
+| [[sources/phase00-dev-cli-image-2026-10]] | `Release_2/phases/35_devCliImage/` — `dev.py` inside the Docker image | 2026-10-09 | phase0, docker, cli |
+| [[sources/phase00-asset-data-operations-2026-09]] | `Release_2/phases/17_assetDataOperations/` — bond categories, distributions CSV, delete result link | 2026-10-09 | phase0, assets, csv |
+| [[sources/phase00-asset-pricing-refactor-2026-09]] | `Release_2/phases/22_assetPricingRefactor/` — SP08 asset pricing split | 2026-10-09 | phase0, refactor, assets |
+| [[sources/phase00-transaction-batch-refactor-2026-09]] | `Release_2/phases/23_transactionBatchRefactor/` — SP16 batch stages | 2026-10-09 | phase0, refactor, transactions |
 | [[sources/p7-js-coverage-instrumentation]] | P7 — JS/Svelte coverage via monocart; the feared obstacle (a different build artefact) did not exist | 2026-08-31 | testing, coverage, frontend, instrumentation |
 | [[sources/p8-runner-parallel-architecture]] | P8 — runner migration: isolation classes, derived inventory, resource broker, three-level contract | 2026-08-31 | testing, test-runner, parallelism, architecture |
 | [[sources/p9-test-semantics]] | P9 — what the suite's numbers mean; OOM is instrumentation, and a green is not evidence | 2026-08-31 | testing, semantics, method |
@@ -428,6 +486,8 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-09 | **Second pass (train 26, `083ed26dc`).** Folders 25 (workstream K) and 39 (P-1) ingested; backlog K-25's four pages written; PAC rounding notes (merge `b81b92fd1`) filed; F-001, F-008, F-024, F-032, F-033, F-047, F-048, F-054, F-098, F-099 and `entities/db-models` corrected to the code | [[sources/phase00-taxonomy-select-2026-10]], [[sources/phase00-auto-cost-no-position-2026-10]], [[decisions/asset-type-two-level-taxonomy]], [[decisions/html-escape-at-the-source]], [[decisions/auto-cost-basis-zero-without-position]], [[decisions/pac-rounding-against-the-plan]], [[problems/svelte5-teardown-reads-stale-state-timers]], [[problems/stale-price-banner-never-emitted]], [[problems/broker-icon-fields-request-loop]], [[problems/modal-layers-escape-and-backdrop]], [[problems/fixture-skip-hid-api-test]] |
+| 2026-10-09 | **Release 2 archive ingest + lint.** Nineteen folders moved from `Phase_0/` to `phases/` (train 25) — six ingest batches, one source page each; F-100–F-104 registered; F-002/F-003/F-065 corrected to the code; F-052/F-053/F-055/F-088/F-095 statuses corrected; backlog N-9 written | [[problems/fx-backward-fill-unbounded-stale-rates]] and *(47 new pages — 19 sources, 12 problems, 5 decisions, 4 concepts, 2 entities, 5 features; see log)* |
 | 2026-09-01 | **Lint repair.** 233 source-file paths remapped across 109 pages after the June 2026 refactors; three invented paths removed; [[entities/test-runner]] rewritten from the code; [[concepts/backend-test-isolation]] retired; the two bare-slug source twins deleted into [[sources/phase07-part4-round3-staging-rewrite]] and [[sources/phase07-part4-round5-server-type-rules]] | [[concepts/unique-test-identifiers]], [[concepts/silent-no-op-option]], [[concepts/assert-on-identity-not-prose]] |
 | 2026-08-31 | **Consolidation ingest** — 14 session plans + the 2026-08-05 beta report. 9 source pages, 10 concepts, 3 decisions, 14 problems. All listed in the tables above; the sources are grouped under [[sources/coverage-campaign-2026-08]] and its siblings | *(38 pages — see log)* |
 | 2026-07-15 | Phase 09 M3 broker redesign archived | [[sources/phase09-m3-broker-redesign-2026-07]], [[concepts/chart-resolution-semantic-zoom]], [[entities/time-series-aggregation]], [[decisions/broker-list-visibility-non-members]], [[decisions/broker-card-aggregation-no-n-plus-one]], [[problems/portfolio-asset-history-regression-restored]] |

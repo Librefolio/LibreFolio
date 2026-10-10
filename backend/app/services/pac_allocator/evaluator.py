@@ -5,9 +5,9 @@ must be able to *prove* a result, and a proof cannot rest on a representation
 that rounds. The evaluator is deliberately independent of the solver — it scores
 a candidate without knowing how that candidate was produced, which is what makes
 it usable as the formula the SCIP objectives mirror, as the referee that replays
-every SCIP incumbent (``rounding_top_ups`` then tells a HALF_UP cash deficit the
-user can top up from a rejection), and — in the test tree — as the scorer
-behind the exhaustive oracle.
+every SCIP incumbent (``rounding_top_ups`` then tells a cash deficit left by
+rounding against the plan, which the user can top up, from a rejection), and —
+in the test tree — as the scorer behind the exhaustive oracle.
 
 The P1 ``analyze`` arithmetic that used to open this file was removed on
 2026-09-21 (`b82e59ffa` and its follow-up): it was a Decimal prototype for
@@ -77,9 +77,9 @@ from backend.app.services.pac_allocator.models import (
 )
 from backend.app.services.pac_allocator.numeric import (
     ExactRatio,
-    calculate_effective_fx_rate,
     calculate_fee,
     calculate_fx_credit,
+    calculate_planning_fx_rate,
     calculate_tax_reserve,
     calculate_taxable_gain,
 )
@@ -449,15 +449,19 @@ def _build_scenario_index(scenario: ExactPlannerScenario) -> _ScenarioIndex:
     return result
 
 
+def _valuation_rate_of(index: _ScenarioIndex, currency: str) -> ExactRatio:
+    try:
+        return index.valuation_rate[currency]
+    except KeyError as error:
+        raise ExactScenarioContractError(f"no valuation rate for {currency}") from error
+
+
 def _to_valuation(
     index: _ScenarioIndex,
     amount: ExactRatio,
     currency: str,
 ) -> ExactRatio:
-    try:
-        return amount * index.valuation_rate[currency]
-    except KeyError as error:
-        raise ExactScenarioContractError(f"no valuation rate for {currency}") from error
+    return amount * _valuation_rate_of(index, currency)
 
 
 def _convert_currency(
@@ -731,6 +735,10 @@ def _total_resource_bound(
 ) -> ExactRatio:
     current = _current_invested(scenario, index, checkpoint)
     selected = _selected_funding(scenario, index, checkpoint)
+    # Postings round against the plan, so no rounding adds resources any more.
+    # The half-quantum margin below predates that rule: it only widens the
+    # decision boxes by a few quanta, and keeping it keeps them, and the
+    # oracle's enumeration domains, stable.
     favorable_rounding_bound = _EXACT_ZERO
     for route in scenario.order_routes:
         check_budget(checkpoint)
@@ -1764,14 +1772,22 @@ def _evaluate_fx(
                 continue
             source_debit = index.currency_quantum[currency] * decision_quanta
             approved_rate = _fx_rate(index.fx_rate_by_pair, currency, quote_currency)
-            effective_rate = calculate_effective_fx_rate(
+            # The planning rate: the spread rate, capped at the triangle through
+            # the valuation currency, so no conversion creates value.
+            source_valuation_rate = _valuation_rate_of(index, currency)
+            destination_valuation_rate = _valuation_rate_of(index, quote_currency)
+            effective_rate = calculate_planning_fx_rate(
                 approved_rate=approved_rate,
                 spread=scenario.fx_spread_rate,
+                source_valuation_rate=source_valuation_rate,
+                destination_valuation_rate=destination_valuation_rate,
             )
             exact_credit = calculate_fx_credit(
                 source_debit=source_debit,
                 approved_rate=approved_rate,
                 spread=scenario.fx_spread_rate,
+                source_valuation_rate=source_valuation_rate,
+                destination_valuation_rate=destination_valuation_rate,
             )
             posting_refs = _entity_refs(
                 ("order_route", route.route_id),
@@ -2269,11 +2285,15 @@ def _evaluate_economic_state(
         ),
         _EXACT_ZERO,
     )
+    # The band: one minor unit per rounded posting, valued in the scenario
+    # currency. Every posting rounds against the plan, so the aggregate
+    # adjustment lies in [0, sum of quanta) however many movements a plan
+    # has; the strict rule stays per posting (``ledger._validate_posting``).
     rounding_bound = sum(
         (
             _to_valuation(
                 index,
-                posting.quantum / _EXACT_TWO,
+                posting.quantum,
                 posting.currency,
             )
             for posting in postings_tuple
@@ -2427,6 +2447,8 @@ def _fx_constraint_facts(
                 source_debit=source_debit,
                 approved_rate=approved_rate,
                 spread=scenario.fx_spread_rate,
+                source_valuation_rate=_valuation_rate_of(index, currency),
+                destination_valuation_rate=_valuation_rate_of(index, quote_currency),
             )
             expected_posted = (
                 rounded_money_posting(
@@ -3656,9 +3678,11 @@ def evaluate_exact_candidate(
     return result
 
 
-# The rules a pure HALF_UP deficit breaks: the pool's own cash rule, the FX
+# The rules a pure rounding deficit breaks: the pool's own cash rule, the FX
 # source cash rule (the same balance, seen from its FX debit), the global
-# no-leverage rule, and the rounding bound. A top-up repairs all four.
+# no-leverage rule, and the rounding bound. A top-up repairs all four. Every
+# posting rounds against the plan and SCIP models the same rule, so no natural
+# plan reaches a top-up any more: it stays as a safety net.
 _ROUNDING_DEFICIT_CODES = frozenset(
     {
         "FX_SOURCE_CASH",

@@ -6,7 +6,7 @@
 >   sono quelli che i piani archiviati citano: non vanno rinominati;
 > - il **backlog del coordinatore** (voci C-), raccolto dal 06/10 e riverificato il 09/10 sul codice del treno 25.
 >
-> Non contiene le voci aperte delle cartelle che restano in `Phase_0/` (02, 09, 13, 16, 21, 25, 27, 32, 37): vivono
+> Non contiene le voci aperte delle cartelle che restano in `Phase_0/` (02, 09, 13, 16, 21, 27, 32, 37): vivono
 > lì. Il developer, il 09/10, sulle voci dopo la 1.2: «si a tutto, dopo».
 
 ## Regole
@@ -25,10 +25,10 @@
 | N | `phases/28_fxDashboardSync/`, `phases/15_parallelRuntimeIsolation/` | N-1 … N-9 |
 | O | `phases/29_i18nAudit/`, `phases/11_feedbackContractsRunes/` | O-1 … O-20 |
 | L | `phases/26_brimDanskeBank/`, `18_brimTargeted/`, `33_e2eImportInfra/`, `34_accountAndIdReuse/` | L1 … L12 |
-| K | `Phase_0/25_taxonomySelect/` (step 23): K le ha rinviate al backlog del coordinatore | K-1 … K-4 |
-| P | `phases/30_wacUnification/` | P-1 … P-9 |
+| K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
+| P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-26 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-38 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -60,7 +60,7 @@ Origine: [28_fxDashboardSync](../../phases/28_fxDashboardSync/README.md) e
 - **N-5 · Commenti superati dalla cache della fase 1** — basso. Dicono che una mutazione scarta le risposte in volo:
   `frontend/e2e/portfolio/risk-lab.spec.ts:3319`, `:6969-6973`; `frontend/src/routes/(app)/assets/+page.svelte:418-419`.
   Origine: lotto 2 di N (07/10).
-- **N-6 · Doc sviluppatore falsa sullo stato del frontend** — basso. `mkdocs_src/docs/developer/frontend/state/registries.md:29`
+- **N-6 · Doc sviluppatore falsa sullo stato del frontend** — ✅ chiusa il 09/10 da Q (S23, treno 27). Era: basso. `mkdocs_src/docs/developer/frontend/state/registries.md:29`
   (WebSocket e SSE: nessun uso nel frontend) e `:55-56` (`getStore("AAPL")`; l'API è
   `getAssetPriceStore(assetId, currency)`, `assetPriceStoreRegistry.ts:39`); `developer/frontend/index.md:47` (il
   DateRange non è in `app/` ma in `stores/dateRangeStore.svelte.ts`) e `:54` (`registries/` non esiste). Origine:
@@ -73,7 +73,9 @@ Origine: [28_fxDashboardSync](../../phases/28_fxDashboardSync/README.md) e
   `docker-compose.yml:46` (`env_file`) porta `PORT` nel container, il server ascolta sempre su 6040 (`Dockerfile:158`)
   e `scripts/cli_base.py:80-82` legge `PORT`: con un `PORT` diverso da 6040, `db upgrade` via `exec` controlla la
   porta sbagliata. Origine: DbPathArgument.
-- **N-9 · devWiki: il backward-fill FX illimitato** — basso, knowledge base. Trasforma i buchi interni in tassi
+- **N-9 · devWiki: il backward-fill FX illimitato** — ✅ chiusa il 09/10 (treno 26): pagina
+  `LibreFolio_devWiki/wiki/problems/fx-backward-fill-unbounded-stale-rates.md`, scritta dall'historian e verificata sul
+  codice. Era: basso, knowledge base. Trasforma i buchi interni in tassi
   stantii senza avviso (`backend/app/services/fx.py:1247`, `:1384`); la pagina promessa da D6 non è mai stata scritta.
   Va fatta con l'aggiornamento della knowledge base. Origine:
   [FxDashboardSync](../../phases/28_fxDashboardSync/plan-phase00FxDashboardSync.prompt.md), §11.
@@ -91,7 +93,7 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
   `frontend/src/lib/features/onboarding/onboardingTourSurfaces.svelte.ts` e `frontend/src/lib/stores/core/EditBuffer.ts`
   non hanno import fuori dai test. Con il primo vanno i flag `*TourPreview` delle pagine, mai veri
   (`assets/+page.svelte:149`, `fx/+page.svelte:119`, `brokers/+page.svelte:62`; Q, 07/10). Origine: 29, secondo turno.
-- **O-3 · `ensure_started()` documentato ma inesistente** — basso. `.github/instructions/backend-testing.instructions.md:109`,
+- **O-3 · `ensure_started()` documentato ma inesistente** — ✅ chiusa il 09/10 da Q (S23, treno 27). Era: basso. `.github/instructions/backend-testing.instructions.md:109`,
   `.github/skills/devpy-tools/testing-backend/SKILL.md:107`, `LibreFolio_developer_journal/knowledge_base/06_testing_backend.md:138`;
   esiste solo `start_server()` (`backend/test_scripts/test_server_helper.py:294`). Origine: 29, S15.
 - **O-4 · Descrizione vecchia dell'azione `api system` nel runner** — minimo. `scripts/test_runner/_backend_api.py:246`
@@ -175,8 +177,9 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
 
 ## K · Bulk delle transazioni
 
-Origine: [step 23 della 25](../25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md).
-La cartella 25 resta attiva, ma K ha rinviato queste note al backlog del coordinatore.
+Origine: [25_taxonomySelect](../../phases/25_taxonomySelect/README.md), archiviata il 09/10 (treno 26). K-1…K-4 vengono
+dallo [step 23](../../phases/25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md),
+K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefisso sono sotto `frontend/src`.
 
 - **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
   dello stesso tipo come una coppia, ma il payload scarta il `link_uuid` dei tipi non di coppia
@@ -191,18 +194,93 @@ La cartella 25 resta attiva, ma K ha rinviato queste note al backlog del coordin
 - **K-4 · Bulk: l'`$effect` d'apertura legge `$currentLanguage` fuori da `untrack`** — basso.
   `TransactionBulkModal.svelte:513-514`: un cambio di lingua col Bulk aperto ricostruirebbe le righe.
 
+- **K-5 · Registrazione aperta senza utenti anche se l'admin l'ha chiusa** — minimo, decisione (un endpoint, oppure va
+  bene così). `backend/app/api/v1/auth.py:214`, `:217`: `is_first_user` vince su `enable_registration`, e il frontend,
+  che non conosce il numero di utenti, nasconde il link. Dal prodotto non si raggiunge: l'ultimo admin attivo non si
+  cancella né si declassa (piano 34, step 2). Origine: step 22, punto 7.
+- **K-6 · iPhone: nessuna immagine d'avvio** — medio-basso. `app.html:8`, `:11` ha solo `apple-touch-icon` e
+  `theme-color`, nessun `apple-touch-startup-image`: iOS mostra uno schermo vuoto fino al primo paint. Servono le
+  immagini dal generatore per ogni formato. Origine: step 17, voce 13.
+- **K-7 · Android: quadrato nero sull'icona della PWA** — basso; prima servono le prove del developer sul dispositivo.
+  Icone opache e `background_color` `#f5f4ef` (`frontend/static/manifest.json:9-10`); manifest e icone escono senza
+  `Cache-Control`, solo l'HTML rivalida (`backend/app/main.py:398-400`, `:505-511`). Ipotesi: icona vecchia in cache o
+  nella WebAPK, splash di Android 12+ in tema scuro, splash interno. Origine: step 17, voce 12.
+- **K-8 · E2E `tx-split-promote` C3: commit di uno split mai ripristinato** — medio-basso.
+  `frontend/e2e/transactions/tx-split-promote.spec.ts:305`, commit a `:363-371`, nessun `afterEach`: divide la coppia
+  condivisa «delete-safe», quindi in una run in cui C3 viene prima FE-SP-C1 diventa rosso. Origine: step 18 (18.4) e
+  step 19, §7.
+- **K-9 · E2E `multi-user`: nomi con `Date.now()` e due broker mai cancellati** — minimo.
+  `frontend/e2e/brokers/multi-user.spec.ts:53`, `:70`. Origine: step 18 (18.2).
+- **K-10 · `test_update_js_cache.py` esegue l'aggiornamento reale** — medio-basso.
+  `backend/test_scripts/test_utilities/test_update_js_cache.py:190-195` chiama `run_from_args`, che esegue
+  `update_all_libraries` (`scripts/update_js_cache.py:528`) con la rete, sulle cartelle vere di `frontend/static`; il
+  fixture autouse (`:39-44`) svuota solo le failure. Origine: step 12 (12.3).
+- **K-11 · `entityStore.merge` alza la versione anche a dati identici** — medio-basso. `lib/stores/core/entityStore.ts:163-177`:
+  per una voce già presente imposta `changed = true` senza confrontare, quindi chi dipende dalla versione ridisegna.
+  N-1 cita lo stesso file per un altro motivo. Origine: step 10.
+- **K-12 · Handle di timer tenuti in `$state`** — basso. `lib/components/table/DataTable.svelte:249` (`touchTimerId`) e
+  `routes/(app)/dashboard/+page.svelte:161` (`reloadTimer`): la regola dello step 14 (un teardown di Svelte 5 legge lo
+  `$state` di prima dell'ultima scrittura) chiede variabili normali. Origine: step 14 (14.6).
+- **K-13 · Bandiere nei grafici ECharts (D-b1)** — medio. Nessuna `fontFamily` con `'LF Flags'` nei 15 componenti con
+  `echarts.init`: su Windows le bandiere delle legende dei segnali, della mappa geografica e dello storico
+  dell'allocazione restano lettere. Pista: `textStyle.fontFamily` globale più `document.fonts.load` prima del disegno.
+  Origine: step 12.
+- **K-14 · Bandiere: pile scritte a mano e nome del file (D-b3)** — basso. `frontend/static/lf-flags.css:23` punta a
+  `noto-color-emoji.0.woff2`, un nome generato; pile monospace senza `'LF Flags'` in `CompactCashCell.svelte:166`,
+  `DataTable.svelte:2309`, `FilePreviewModal.svelte:1152`, `:1270`, `ImageEditModal.svelte`, `FileEditModal.svelte`.
+  Origine: step 12.
+- **K-15 · Formatter dei tooltip ECharts senza un `sanitizeHtml` finale né un gate** — basso, difesa in profondità. I
+  sink corretti usano `escapeHtml` (per esempio `GrowthChart.svelte:2245`), ma nessuno dei 21 file con un `formatter`
+  sotto `components/charts`, `charts`, `dashboard`, `risk` e `brokers/lots` chiama `sanitizeHtml`. Origine: step 13.
+- **K-16 · Borsa Italiana: ETC/ETN classificati come `ETF` generico** — basso. `borsa_italiana.py:82`
+  (`"etc/etn": AssetType.ETF`), benché esista `ETF_COMMODITY`; per gli ETN serve una scelta. La verifica sul server con
+  l'ETC sull'oro `IE00B579F325` (17.7) non è stata fatta. Origine: step 13 e step 17.
+- **K-17 · `PasswordInput`: pulsante «occhio» con `title` inglese fisso e `tabindex="-1"`** — basso.
+  `lib/components/ui/input/PasswordInput.svelte:47` («Hide password», «Show password»): servono due chiavi di
+  catalogo, e il pulsante è fuori dall'ordine di tabulazione. Origine: step 13.
+- **K-18 · Dashboard: nei 2 s di debounce il filtro nomina già il broker** — basso. `routes/(app)/dashboard/+page.svelte:686-691`
+  (`scheduleReload`): la pagina mostra ancora i totali di tutti i broker, e niente dice che un ricaricamento è in arrivo.
+  Origine: step 15 (15.5).
+- **K-19 · Lista degli asset: i filtri non si ritrovano al ritorno dal dettaglio (2b)** — medio-basso. Nessuno snapshot
+  della lista. Decisione del developer del 06/10: «Sì, ma dopo che Risk ha integrato la sua lista: per ora va nel
+  backlog». Origine: step 16.
+- **K-20 · Dettaglio dell'asset: il cambio di tab rimette le date vecchie** — medio-basso.
+  `routes/(app)/assets/[id]/+page.svelte:2670` ricostruisce l'URL da `$page.url`, ma il periodo è scritto con
+  `history.replaceState` (`lib/utils/url/dateRangeUrl.ts:13`), che SvelteKit non vede; la stessa cura c'è già in
+  `AssetBrowseNav.svelte:91` (`window.location.search`). Origine: step 16.
+- **K-21 · AssetModal (wizard): il prompt di riuso può aprirsi sopra il confronto** — basso. Alla scelta di un risultato
+  partono insieme il confronto dei metadati e la ricerca del riuso (`lib/components/assets/AssetModal.svelte:841`,
+  `:845`); il trattenimento copre solo i prompt già aperti (`:397-403`). Preesistente. Origine: piano madre, passo 2.
+- **K-22 · AssetModal: una lettura del catalogo dei provider sprecata alla riapertura** — minimo. Il corpo si ridisegna
+  con lo stato vecchio e monta per un istante `ProviderAssignmentSection`; il test la chiama «wasted read»
+  (`AssetModal.providerLifecycle.test.ts:1594-1599`). Origine: piano madre, passo 2.
+- **K-23 · `TreeSelect`: dopo l'Esc il focus cade su `<body>`** — basso. `close()` (`lib/components/ui/select/TreeSelect.svelte:230-234`)
+  non riporta il focus al trigger, e il campo di ricerca che l'aveva sparisce (`:355`); ereditato da `SignalTreeSelect`.
+  Origine: piano madre, passo 4.
+- **K-24 · Doc della qualità dei dati** — ✅ chiusa il 09/10 da Q (S23, treno 27). Era: basso. In `developer/frontend/data-quality-banner.md`
+  mancano `TRANSACTION_IMPLIED` e `MWRR_SERIES_UNRELIABLE` (`backend/app/schemas/portfolio.py:167`, `:174`) e i test
+  dicono «all 5 codes» (`:232-234`) contro 9 codici; `user/dashboard/index.en.md:93` dice «valued at purchase cost», ma
+  il motore usa l'ultimo prezzo di transazione. Origine: step 13 (13.4).
+- **K-25 · devWiki: quattro pagine mai scritte** — ✅ chiusa il 09/10 dal secondo giro dell'historian (treno 27):
+  `problems/svelte5-teardown-reads-stale-state-timers`, `decisions/html-escape-at-the-source` (con `F-047` corretta),
+  `problems/stale-price-banner-never-emitted`, `concepts/responsive-4mode-layout` riscritta. Era: minimo, knowledge base. Il teardown
+  di Svelte 5 e i timer (step 14); le regole di escape con i due gate (step 13); `valuation_stale` anche per i prezzi di
+  transazione; la taratura delle soglie delle barre. Origine: step 13 e 14.
+- **K-26 · Intestazione superata in `catalogIcuLocale.test.ts`** — minimo. `lib/i18n/catalogIcuLocale.test.ts:26` dice
+  «Red today with three keys», ma il suo gate è verde. Origine: step 21 (21.2).
+
 ## P · Costo medio e impostazioni
 
-Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnification.prompt.md), §9, e
-[SettingsBulkValidation](../../phases/30_wacUnification/plan-phase00SettingsBulkValidation.prompt.md) (P-4).
+Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnification.prompt.md), §9,
+[SettingsBulkValidation](../../phases/30_wacUnification/plan-phase00SettingsBulkValidation.prompt.md) (P-4) e
+[39_autoCostNoPosition](../../phases/39_autoCostNoPosition/plan-phase00AutoCostNoPosition.prompt.md) (P-1, P-10, P-11).
 
-- **P-1 · Costo Auto senza posizione: costo 0 salvato senza avviso** — medio. Senza movimenti precedenti il WAC vale
-  0 (`portfolio_service.py:185-190`; pool svuotata: `average_cost.py:155`), Auto lo scrive
-  (`transaction_service.py:1012-1014`) e la verifica del costo salta le righe Auto
-  (`transaction_batch_stages.py:889`, `:914`, `:935`); uno 0 esplicito non accende `MISSING_COST_BASIS`
-  (`average_cost.py:431-432`). Caso tipico: un ADJUSTMENT in entrata, in Auto, su un broker che non ha l'asset. C'era
-  già nella v1.1.0. **Deciso dal developer il 09/10**: «se si entra e poi esce è da considerare che l'utente accetta
-  lo 0»; P la cura in un lotto dopo il treno 25, riusando il flusso del costo mancante.
+- **P-1 · Costo Auto senza posizione: costo 0 salvato senza avviso** — ✅ chiusa senza codice il 09/10, per decisione
+  del developer: «no chat, non facciamolo e segnamo la decisione, se i dati mancano lo 0 come fallback per auto è
+  corretto. se bisogna cambiare sarà l'utente ad andare su quella transazione e correggere.» L'analisi di P, che ne è la
+  motivazione, è in [39_autoCostNoPosition](../../phases/39_autoCostNoPosition/plan-phase00AutoCostNoPosition.prompt.md).
+  In Auto, senza quote nel pool d'origine (`portfolio_service.py:185-190`, `average_cost.py:155`), il costo resta 0 per
+  scelta; il test P27 (`test_wac_inline.py:497`) fissa ora il comportamento voluto.
 - **P-2 · Anteprima WAC: etichetta sbagliata per le righe di split e ramo `add_at_wac` morto** — basso.
   `WacPreviewSection.svelte:571-585` riconosce solo `add`, `reduce` e `add_at_wac`: una riga `split_rescale`
   (`portfolio_service.py:230-236`) mostra «Diluizione», e `add_at_wac` non esiste più dal #32.
@@ -214,8 +292,9 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
   `Pipfile` (`Dockerfile:72`, `:86-88`).
 - **P-5 · Layer `financial_math`: migrare `roi_utils` e `valuation_utils`** — basso, refactor. È la decisione D1 del
   developer («poi in futuro fattorizziamo le altre»), scritta in `financial_math/__init__.py:8-10`.
-- **P-6 · Grafo del wiki: aggiornamento rinviato dal #32** — knowledge base. Le pagine devWiki nuove di P12 vanno nel
-  grafo.
+- **P-6 · Grafo del wiki: aggiornamento rinviato dal #32** — knowledge base; **rinviata a dopo la 1.2** dal developer il
+  09/10: «Rimandare a dopo la 1.2: le pagine bastano, P-6 e C-29 restano nel backlog». Le pagine devWiki nuove di P12 vanno nel grafo, e con loro le 47 scritte dall'historian il 09/10: misura del
+  09/10, 289 pagine della wiki da rielaborare (714 file con i sotto-corpus). Vedi anche C-29.
 - **P-7 · Chiudere la issue #32 al rilascio** — amministrativa. Il commit cita `(#32)` senza parola di chiusura, e la
   issue è aperta. Lo stesso vale per la [#35](https://github.com/Librefolio/LibreFolio/issues/35) (DEGIRO, piano 31):
   aperta, risolta nella 1.2.
@@ -224,6 +303,18 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
 - **P-9 · Black: riformattare due file di test API** — minimo. `black --check` fallisce su
   `backend/test_scripts/test_api/test_portfolio_api.py` e `test_portfolio_wac.py`; le righe da riformattare non sono
   di P.
+- **P-10 · `MISSING_COST_BASIS` raggiungibile dall'app riclassificando uno SPLIT** — basso, decisione (il cambio di tipo
+  chiede il costo, oppure basta l'avviso). Un ADJUSTMENT +q legato a uno SPLIT, in Auto, si salva senza costo
+  (`transaction_service.py:969-990`); se l'evento passa a PRICE_ADJUSTMENT la riga non è più legata allo split e diventa
+  un'acquisizione di costo sconosciuto (`financial_math/average_cost.py:265`, `:290`, `:428`), e l'avviso esce sulla
+  Dashboard (`portfolio_engine.py:2072-2077`, via `portfolio_service.py:561`) e nei lotti
+  (`lots_analysis_service.py:855`). Lo fissa `test_portfolio_wac.py:521-588`. Origine: 39, §1.6.
+- **P-11 · Tre testi promettono un lotto a costo zero col costo vuoto** — doc EN chiusa da Q (S23, treno 27); la chiave e
+  il ripiego inline li ha corretti S (checkpoint 2 e 3), e si chiude quando S entra. Restano IT/FR/ES di `form` in I-08. La chiave `transactions.costBasisOverride.warningAdjustment` («No cost basis set — lot will
+  be created with zero cost…», `TransactionFormModal.svelte:1947-1950`), la doc utente `user/transactions/form.en.md:39`
+  (più IT, FR, ES) e `developer/frontend/components/features/transaction-form.md:198-199`; il backend invece, in Manuale
+  col campo vuoto, rifiuta la riga con `COST_BASIS_REQUIRED` (`transaction_service.py:157-165`,
+  `transaction_batch_stages.py:878-946`). Origine: 39, §1.4.
 
 ## I · Grafici, eventi degli asset e traduzioni
 
@@ -253,6 +344,10 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   - dal treno 25: `admin/cli_tools` (N-7), `user/files/index` (anteprima PDF), `user/connection-security`, la gallery
     e il suo indice con la sezione Security (M, lotto 8); Sharpe e Sortino, la cui formula del tasso privo di rischio
     esiste solo in inglese (Q);
+  - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D); `user/transactions/form`
+    e `user/dashboard/index` (Q, S23); `developer/dev_workflow` (N);
+  - dal treno 26: le otto pagine EN riscritte da K senza IT/FR/ES (`financial-theory/instruments/asset-types/{index,etfs,real-estate}`,
+    `user/assets/{create-edit,index,detail/index}`, `user/dashboard/index`, `user/transactions/import/how-to`);
   - `admin/docker_advanced` in FR, IT ed ES mostra ancora `docker exec … db upgrade` e gli esempi `server --test` e
     `test db populate`, che nel container non girano;
   - la pagina `profile`, segnalata urgente da L l'08/10: l'inglese dice un'altra cosa.
@@ -299,7 +394,8 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-6 · eToro: dividendi `KER/EUR` etichettati EUR** — basso, serve un export reale. L'importo è nella valuta del
   conto, mentre la valuta viene dal ticker `SYMBOL/CURRENCY` (`broker_etoro.py:143`; Q, 08/10). La voce eToro di
   [04_brim_import.md](../09_feedbackJobs/04_brim_import.md) chiede lo stesso export.
-- **C-7 · Doc BRIM da allineare** — basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
+- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `94271713b`); si chiude quando S entra in
+  `dev_release2`. Era: basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
   Fineco sono in inglese (`broker_fineco.py:279-297`), e sbaglia anche la docstring del modulo (`:7-8`); la riga eToro
   di `providers_list.md:9` è da precisare (Q, 08/10).
 - **C-8 · Docstring e commenti superati** — basso.
@@ -316,7 +412,8 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   - Non riverificati il 09/10 (Q, 08/10): la docstring di Intesa, l'intestazione di `PositionsPanel` (clic e doppio
     clic), lo zoom di `ImageCropper`, la gomma degli eventi (`ErasableNumberCell`), `AssetSetRiskReturnSection.svelte`
     («there is no picker here», ma il picker del benchmark c'è), la coda delle immagini in `files/+page.svelte:355`.
-- **C-9 · Doc admin di Docker** — basso. `.env.example:77-81` dice che UID e GID valgono anche a runtime, ma
+- **C-9 · Doc admin di Docker** — ✅ chiusa il 09/10 (treno 27): `docker_advanced.en.md` e `.env.example` da Q (S23),
+  il commento di `docker-compose.yml` e gli esempi di `dev.py` da N. Era: basso. `.env.example:77-81` dice che UID e GID valgono anche a runtime, ma
   l'entrypoint legge `LIBREFOLIO_UID` e `LIBREFOLIO_GID` (`entrypoint.sh:21`) e compose passa `UID` solo come
   argomento di build (`docker-compose.yml:32`). `docker_advanced.en.md` non dice che `server --test` e
   `test db populate` non girano nel container (niente Node né `test_scripts`): lo dice solo il manuale dev (Q, 08/10).
@@ -384,18 +481,56 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   07/10); dominio della 21. Il gate passa da `appBootstrap.svelte.ts:43`, `:97` (`hasReplay('welcome', version)`).
 - **C-26 · Registry: un tag `test` rimasto** — minimo, amministrativa (Q, 08/10): da cancellare dal registry delle
   immagini.
+- **C-27 · `populate_mock_data` imposta `brim_plugin_key`, che il modello del broker non ha** — basso (S, 09/10). Il
+  valore non arriva mai al broker; correggerlo farebbe aprire la modale del broker sbagliato nella gallery (l'upload
+  Crédit Agricole sul broker Interactive Brokers del seed), quindi va fatto insieme agli scatti di M.
+- **C-28 · Registro degli ingest della devWiki: hash che non esistono più** — basso, knowledge base (historian, 09/10).
+  158 delle 181 righe vecchie di `LibreFolio_devWiki/raw/ingest-registry.md` citano commit fuori dalla storia del repo,
+  quindi il controllo di deriva non funziona; 64 righe puntano a percorsi spostati. È annotato in testa al registro; va
+  ri-baselinato solo con una rilettura vera delle fonti.
+- **C-29 · Il controllo «il grafo è aggiornato?» di `SCHEMA.md` non vede nulla** — basso (historian, 09/10).
+  `detect_incremental(Path('corpus/'))`, con il graphify installato, scansiona 0 file, perché i symlink del corpus si
+  risolvono fuori dalla radice: risponde sempre «aggiornato». Collegata a P-6.
+- **C-30 · Docstring di `patch_assets_bulk`: `exclude_none` invece di `exclude_unset`** — minimo (historian, 09/10).
+  `backend/app/services/asset_sources/crud.py:489-490`.
+- **C-31 · Il formato black non ha un gate** — basso, processo (D, 09/10). `dev.py lint` lancia solo `ruff check backend/`
+  (`dev.py:1811-1823`), così il debito di black entra senza rossi (vedi P-9). Proposta di D: `black --check` sui file
+  toccati nella checklist dei checkpoint.
+- **C-32 · Commenti e docstring superati** — minimo (Q, S23). `portfolio_engine.py:1990`, `:2034`;
+  `portfolio_service.py:1139-1146`, `:1184-1191`; `schemas/portfolio.py:165`; `test_data_quality_report.py:3`; nel runner
+  `_archive.py:7`, `_run_cache.py:7-10`, `_cli.py:470`, `:568-572`, `__init__.py:15-31`, `_consolidate.py:69-71`,
+  `_frontend_ai_export.py:69-71`; `EditBuffer.ts:10`.
+- **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
+  rossi, tutti già nella v1.1.0; ✅ **corretti il 09/10 (treno 28)** per decisione del developer («Correggere 1 e 2 nel
+  backend con una sola cura, e 3 facendo chiedere il costo anche col promote»; data d'uscita: «Alla data in cui le quote
+  escono dal broker d'origine»), piano `Phase_0/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
+  svuota il pool prima della media (`transaction_service.py:976`, `average_cost.py:407-423`); (2) un transfer esistente
+  modificato in Auto farebbe la media sul broker che riceve (gli update non hanno `link_uuid`,
+  `schemas/transactions.py:533-585`); (3) il promote salta il controllo del costo (`transaction_batch_stages.py:845-866`,
+  `:701-729`), contro `developer/backend/transactions/wac.md:423-424`.
+- **C-34 · `escapeHtml` definita tre volte, una copia più debole** — basso, difesa in profondità (historian, 09/10). La
+  copia locale di `CorrelationHeatmap.svelte` sfugge solo `& < >`, e il gate XSS accetta qualunque funzione con quel nome;
+  oggi è sicuro perché ogni uso è testo. Vedi K-15.
+- **C-35 · `test_settings_api.py` salta cinque controlli se l'endpoint risponde 404** — minimo (historian, 09/10). Gli
+  endpoint esistono, quindi i controlli girano; ma una rotta rinominata li farebbe saltare invece di fallire.
+- **C-36 · Docstring di `AssetType`: i sottotipi «confluiscono» nel tipo base** — minimo (historian, 09/10).
+  `backend/app/db/models.py` (~`:178`); `allocation_by_type` del backend usa i valori grezzi, e i grafici raggruppano per
+  famiglia.
+- **C-37 · `docker-compose.yml` pubblica la 6041 su cui nel container non ascolta niente** — basso, configurazione,
+  decisione del developer (N, 09/10, letto nel codice). `docker-compose.yml:47` mappa `${TEST_PORT:-6041}:6041`, ma
+  l'immagine non sa fare il test mode; con lo stack attivo, `./dev.py server --test` sul host rifiuta la porta occupata
+  (`dev.py:238`, `:256-260`), e l'aiuto suggerisce `kill -9` o `--force`, che ucciderebbero l'inoltro di Docker. Proposta:
+  togliere la mappatura. La pagina `developer/dev_workflow` lo dice dal treno 27.
+- **C-38 · `DataTable` su mobile: l'intestazione «Actions» resta fissa, il ⋮ scorre via** — medio-basso, letto nel
+  codice (D, 09/10, dagli scatti PAC del lotto 9 di M). Sotto i 768 px la media query rende statiche le celle delle
+  azioni, ma `thead.sticky-header th` è più specifica di `.th-actions`, quindi l'intestazione resta sticky a `right: 0`
+  mentre il ⋮ delle righe esce dallo schermo. Riguarda ogni tabella con azioni; nel PAC spiega F e la tabella Targets
+  (backlog della 13). Componente condiviso: la cura va concordata con chi lo possiede.
 
 ## Tracciate altrove
 
 Voci del backlog del coordinatore che una cartella attiva tiene già: non sono duplicate qui.
 
-- La registrazione aperta senza utenti (`is_first_user`) anche se l'admin l'ha chiusa:
-  [step 22 della 25](../25_taxonomySelect/plan-phase00TaxonomySelectStep22RegisterLinkProfileDate.prompt.md), riga 39.
-- `check_frontend_needs_build`, che conta anche i `*.test.ts` (`scripts/cli_base.py:560-562`):
-  [PacSolverRobustness](../13_pacAllocator/implementation/plan-phase00PacSolverRobustness.prompt.md), riga 1509.
-- I test del normalizzatore PAC sulle rotte di finanziamento, la deriva Prettier di `ProofPanel` e `StrategyStep`,
-  l'analisi del Rebalancer: nei piani della 13.
-- Le immagini di avvio per iPhone e il quadrato nero su Android: piani 12, 13 e 17 della 25.
 - Le immagini solo amd64: [ReleaseGallery](../27_releaseImages/plan-phase00ReleaseGallery.prompt.md), riga 209.
 - La doc developer precedente alla 1.1 (l'esempio JSON di `api/overview`, `-v` in `external.md`, «11 categories»,
   le opzioni del runner e i moduli mancanti): [DocsEnglish12](../32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md),
