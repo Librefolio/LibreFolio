@@ -48,8 +48,9 @@
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
-    import ImportBrokerMismatchModal, {type BrokerMismatchTarget} from '$lib/components/transactions/modals/ImportBrokerMismatchModal.svelte';
+    import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/components/transactions/modals/ImportBrokerMismatchModal.svelte';
     import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/utils/brim/defaultPluginCheck';
+    import {brimPluginName} from '$lib/utils/brim/pluginText';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
@@ -3271,8 +3272,8 @@ ${arrow}<span>${label}</span></span>`,
     interface MismatchPrompt {
         entryId: string;
         fileName: string;
-        brokerName: string;
-        defaultPluginName: string;
+        broker: BrokerMismatchBroker;
+        defaultPlugin: BrokerMismatchPlugin;
         reason: string | null;
         targets: BrokerMismatchTarget[];
         readerNames: string[];
@@ -3320,7 +3321,12 @@ ${arrow}<span>${label}</span></span>`,
      */
     async function reviewDefaultPluginMismatches(entryIds: Set<string>): Promise<void> {
         const plugins = await ensureImportPlugins();
-        const pluginName = (code: string) => plugins.find((p) => p.code === code)?.name ?? code;
+        const pluginName = (code: string) => brimPluginName({code, name: plugins.find((p) => p.code === code)?.name}, $t);
+        const pluginView = (code: string): BrokerMismatchPlugin => ({code, name: pluginName(code), iconUrl: (plugins.find((p) => p.code === code)?.icon_url as string | null | undefined) ?? null});
+        const brokerView = (id: number): BrokerMismatchBroker => {
+            const broker = brokers.find((b) => b.id === id);
+            return {id, name: broker?.name ?? String(id), iconUrl: broker?.icon_url ?? null, portalUrl: broker?.portal_url ?? null, pluginCode: broker?.default_import_plugin ?? null};
+        };
         const options = {
             reportSetPlugins: new Set(plugins.filter((p) => (p.report_roles ?? []).length > 0).map((p) => p.code)),
             fallbackPlugins: new Set(plugins.filter((p) => (p.detection_priority ?? 100) < 50).map((p) => p.code)),
@@ -3336,10 +3342,10 @@ ${arrow}<span>${label}</span></span>`,
             const choice = await askMismatch({
                 entryId,
                 fileName,
-                brokerName: brokers.find((b) => b.id === mismatch.brokerId)?.name ?? String(mismatch.brokerId),
-                defaultPluginName: pluginName(mismatch.defaultPlugin),
+                broker: brokerView(mismatch.brokerId),
+                defaultPlugin: pluginView(mismatch.defaultPlugin),
                 reason,
-                targets: mismatch.targets.map((target) => ({id: target.id, name: target.name, pluginName: pluginName(target.pluginCode)})),
+                targets: mismatch.targets.map((target) => ({...brokerView(target.id), name: target.name, plugin: pluginView(target.pluginCode)})),
                 readerNames: mismatch.readers.map(pluginName),
                 current: position + 1,
                 total: found.length,
@@ -3871,7 +3877,7 @@ ${arrow}<span>${label}</span></span>`,
                 warnings.push({
                     key: `${set.key}:${missing.role}`,
                     pluginCode: set.pluginCode,
-                    pluginName: plugin?.name ?? set.pluginCode,
+                    pluginName: plugin ? brimPluginName(plugin, $t) : set.pluginCode,
                     docsUrl: plugin?.docs_url ?? null,
                     roleCode: missing.role,
                     roleLabel: translated === roleKey ? (role?.description ?? missing.role) : translated,
@@ -3989,12 +3995,8 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function getPluginName(pluginCode: string): string {
-        const cached = getCachedPlugins();
-        if (cached) {
-            const plugin = cached.find((p: {code: string; name: string}) => p.code === pluginCode);
-            if (plugin) return plugin.name;
-        }
-        return pluginCode;
+        const plugin = getCachedPlugins()?.find((p: {code: string; name: string}) => p.code === pluginCode);
+        return brimPluginName({code: pluginCode, name: plugin?.name}, $t);
     }
 
     function initParseResults() {
@@ -5596,8 +5598,8 @@ ${arrow}<span>${label}</span></span>`,
         open={true}
         fileKey={mismatchPrompt.entryId}
         fileName={mismatchPrompt.fileName}
-        brokerName={mismatchPrompt.brokerName}
-        defaultPluginName={mismatchPrompt.defaultPluginName}
+        broker={mismatchPrompt.broker}
+        defaultPlugin={mismatchPrompt.defaultPlugin}
         reason={mismatchPrompt.reason}
         targets={mismatchPrompt.targets}
         readerNames={mismatchPrompt.readerNames}

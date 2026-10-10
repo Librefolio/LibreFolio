@@ -12,6 +12,7 @@
  * (`GET /brokers/import/files/{file_id}/plugin-check`) and translates the answer with
  * `resolveParseRefusalMessage`.
  */
+import {brimPluginName} from './pluginText';
 
 /** The broker fields the check reads. */
 export interface MismatchBroker {
@@ -85,11 +86,20 @@ type TranslateFn = (key: string, opts?: {values?: Record<string, any>}) => strin
 export function resolveParseRefusalMessage(refusal: ParseRefusal, t: TranslateFn): string {
     if (refusal.code) {
         const key = `importWizard.parseRefusal.${refusal.code}`;
-        const translated = t(key, {values: {...(refusal.context ?? {})}});
+        const translated = t(key, {values: refusalValues(refusal.context, t)});
         if (translated !== key) return translated;
     }
     const message = refusal.message.trim();
     if (!message) return message;
     const sentence = message.charAt(0).toUpperCase() + message.slice(1);
     return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+}
+
+/** A refusal's context as message values: a plugin it names by `plugin_code` gets its `plugin_name` in the UI language. */
+function refusalValues(context: Record<string, unknown> | null | undefined, t: TranslateFn): Record<string, unknown> {
+    const values: Record<string, unknown> = {...(context ?? {})};
+    if (typeof values.plugin_code === 'string') {
+        values.plugin_name = brimPluginName({code: values.plugin_code, name: typeof values.plugin_name === 'string' ? values.plugin_name : null}, t);
+    }
+    return values;
 }

@@ -61,17 +61,21 @@ from the same list (**Create new**).
 When you click **Next: Select Files**, the wizard checks each file you have just uploaded against
 its broker's **Default Import Plugin**. If that plugin cannot read a file, the file probably
 belongs to another broker, and the wizard asks you about it before going on (*This file may belong
-to another broker*). It shows:
+to another broker*). From top to bottom, it shows:
 
-- the reason the default plugin gives, when it gives one — translated into your language when a
-  translation exists;
-- where the file belongs: the broker whose default plugin reads it, or a list to choose from when
-  several do.
+- **Assigned to** — the broker the file is in, with its icon, and its default plugin, marked
+  *cannot read it*;
+- **Notes from the plugin** — why that plugin cannot read the file, when it says why: in your
+  language when a translation exists;
+- **Move it to** — the broker whose default plugin *can read it*. When the default plugins of
+  several brokers read it, the prompt lists those brokers instead: choose one, the first is already
+  selected.
 
 Then choose:
 
-- **Move to ‹broker›** — the file is uploaded to that broker, in the same session, and removed from
-  the wrong one. If the move fails, an error says so and the file stays where it was;
+- **Move to ‹broker›**, with that broker's icon — the file is uploaded to that broker, in the same
+  session, and removed from the wrong one. If the move fails, an error says so and the file stays
+  where it was;
 - **Keep it here** — the file stays, and the wizard reads it with another plugin that can, as
   before: you see it in the **Plugin** column of **Select Files**;
 - **Remove the file** — the file is deleted.
