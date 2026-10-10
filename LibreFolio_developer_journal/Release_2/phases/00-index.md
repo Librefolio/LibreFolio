@@ -38,12 +38,15 @@
 | `40_transferCostBasis/` | Costo dei trasferimenti in Auto e controllo del costo nei promote (P; C-33) | ✅ `d7c148564`, merge `2a5c15c3c` (treno 28); debito IT/FR/ES della pagina teorica del WAC → lotto 11 di M — archiviata il 10/10 |
 
 **Not archived (still active / paused):**
-- `../Phase_0/02_riskfolioIntegration/` — Risk Analysis: resta in `Phase_0` per decisione del developer (D382, 09/10); il suo README elenca il lavoro aperto (A1–A7, B1–B6).
+
+> Regola del developer (10/10, nella pulizia delle chat prima della 1.2): «non voglio archiviare i loro plan in
+> …/Phase_0/ voglio solo archiviare le chat». Le cartelle qui sotto restano in `Phase_0` anche da chiuse.
+- `../Phase_0/02_riskfolioIntegration/` — Risk Analysis: resta in `Phase_0` per decisione del developer (D382, 09/10); il suo README elenca il lavoro aperto (A1–A6, B1–B3, B6–B8; chiuse A7, B4, B5) e, dal treno 31, la guida «Ripartire da qui» per la prossima release.
 - `../Phase_0/09_feedbackJobs/` — backlog strutturale P4 ereditato dall'audit 08, reperti e review visiva (attivo: si pesca da lì al prossimo round).
 - `../Phase_0/13_pacAllocator/` — allocatore PAC (workstream D), in chiusura per la 1.2.
 - `../Phase_0/16_toolPlatform/` — piattaforma dei Tool, insieme alla 13.
 - `../Phase_0/21_onboarding/` — onboarding: aspetta la review manuale C7 del developer.
 - `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M).
-- `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q).
-- `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30; restano le traduzioni delle sue pagine (secondo giro di M), poi da archiviare.
+- `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q): chiusa con S24 (treno 31); le traduzioni sono nel lotto 11 di M, gli 8 scatti dei portali nel 38 (C-43).
+- `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30, piano chiuso nel treno 31; restano le traduzioni delle sue pagine (secondo giro di M).
 - `../Phase_0/38_postReleaseBacklog/` — backlog dopo la 1.2: i residui delle cartelle archiviate il 09/10 e il backlog del coordinatore.
