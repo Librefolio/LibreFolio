@@ -1386,14 +1386,14 @@
       "incompleteInputCoverage": "Les champs de prix requis sont incomplets : {fields}. Points utilisables : {available}/{requested}.",
       "insufficientHistory": "Historique exploitable insuffisant pour ces paramètres : {available} points disponibles, {required} nécessaires.",
       "incompleteWarmup": "Le signal est exploitable mais pas entièrement stabilisé : {used}/{required} points de préchauffage disponibles.",
-      "dataGaps": "L'historique requis contient des lacunes : {missing} points sur {requested} sont manquants (couverture {coverage} %).",
+      "dataGaps": "L'historique requis contient des lacunes : {missing} points sur {requested} sont manquants (couverture {coverage} %).",
       "missingEvents": "Événements requis manquants : {events}.",
       "incompatibleDomain": "Cet indicateur n'est pas compatible avec ce graphique.",
       "calculationFailed": "Échec du calcul du signal : {message}",
       "resultMissing": "Le backend n'a renvoyé aucun résultat pour ce signal. Relancez la requête des signaux.",
       "partialResult": "Ce signal n'est que partiellement disponible avec les données actuelles.",
       "unavailable": "Ce signal ne peut pas être calculé avec les données disponibles.",
-      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
+      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
     },
     "axes": {
       "exchangeRate": "Axe du taux de change ({pair})",
@@ -3348,11 +3348,11 @@
             "toPeak": "Hausse jusqu'au sommet"
           },
           "columnHelp": {
-            "badDay": "La perte moyenne sur les 5 % des pires jours de la fenêtre (CVaR historique à 95 %).",
-            "badMonth": "Comme la mauvaise journée, mais sur une plus longue suite de jours consécutifs : la perte moyenne sur les 5 % des pires de ces périodes (CVaR historique à 95 %).",
+            "badDay": "La perte moyenne sur les 5 % des pires jours de la fenêtre (CVaR historique à 95 %).",
+            "badMonth": "Comme la mauvaise journée, mais sur une plus longue suite de jours consécutifs : la perte moyenne sur les 5 % des pires de ces périodes (CVaR historique à 95 %).",
             "worstFall": "Le repli le plus profond d'un sommet jusqu'au point le plus bas qui a suivi dans la fenêtre, et sa durée.",
             "currentFall": "À quelle distance de son sommet de la fenêtre l'actif se trouve le dernier jour.",
-            "toPeak": "De combien il doit monter pour retrouver ce sommet : après une baisse de 20 %, il faut +25 %."
+            "toPeak": "De combien il doit monter pour retrouver ce sommet : après une baisse de 20 %, il faut +25 %."
           }
         },
         "l3": {
@@ -3461,7 +3461,7 @@
         "geography": "Géographie"
       },
       "auditTitle": "Audit des expositions appliquées",
-      "missingMetadataOther": "Les données de secteur ou de géographie étaient indisponibles pour cet actif. Il a été traité comme Other à 100 %.",
+      "missingMetadataOther": "Les données de secteur ou de géographie étaient indisponibles pour cet actif. Il a été traité comme Other à 100 %.",
       "exposureBucket": "Catégorie d'exposition",
       "exposure": "Exposition",
       "appliedBucket": "Catégorie appliquée",
@@ -3559,7 +3559,7 @@
       "sortino_undefined_assets": "Sortino indéfini pour {names} : l'écart baissier est nul.",
       "worst_realization_undefined_assets": "Aucune observation en perte sur la période pour {names}.",
       "worst_realization_undefined": "Aucune observation en perte sur la période.",
-      "hypothetical_metadata_other_fallback": "{names} : données de {dimension, select, sector {secteur} other {géographie}} manquantes — traité comme « Autre » à 100 %.",
+      "hypothetical_metadata_other_fallback": "{names} : données de {dimension, select, sector {secteur} other {géographie}} manquantes — traité comme « Autre » à 100 %.",
       "historical_replay_proxies_used": "Le rejeu a utilisé une série de substitution pour : {names}.",
       "historical_replay_excluded_manual": "Exclusion manuelle : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_excluded_no_prices": "Aucun prix dans la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
@@ -4063,8 +4063,8 @@
           "ticker": "Ticker / ISIN",
           "typeHelp": "Le type d’instrument, comme sur la page de l’actif. Il apparaît dans le résultat et ne change pas les ordres.",
           "pickCategory": "{dimension, select, asset_type {Choisir un type} sector {Choisir un secteur} other {Choisir un pays}}",
-          "weightsHelp": "Pour chaque dimension, indiquez les parts en pourcentage. Elles peuvent totaliser moins de 100 % ; au-delà de 100 %, le calcul refuse les données.",
-          "totalOver": "{dimension} : les parts dépassent 100 %. Réduisez-en une avant d’appliquer.",
+          "weightsHelp": "Pour chaque dimension, indiquez les parts en pourcentage. Elles peuvent totaliser moins de 100 % ; au-delà de 100 %, le calcul refuse les données.",
+          "totalOver": "{dimension} : les parts dépassent 100 %. Réduisez-en une avant d’appliquer.",
           "tickerHelp": "Facultatif : un ticker, un ISIN ou tout code qui vous aide à reconnaître l’actif dans le résultat. Il ne relie pas l’actif à LibreFolio, et deux actifs manuels ne sont jamais fusionnés par nom ou par code."
         },
         "assets": {
@@ -4122,7 +4122,7 @@
           "pickCurrency": "Devise du nouveau bloc",
           "priorityHelp": "Elle ne compte qu’entre des plans qui se rapprochent autant de la cible : le plan utilise alors d’abord les sources au numéro le plus bas. 0 = préférée.",
           "feeFixedHelp": "Payée sur chaque achat, quel que soit le montant, en plus de la partie en pourcentage. 0 = aucune.",
-          "feeRateHelp": "La part du montant acheté, en pourcentage : 0,19 signifie 0,19 %. Le minimum et le maximum ne limitent que cette partie.",
+          "feeRateHelp": "La part du montant acheté, en pourcentage : 0,19 signifie 0,19 %. Le minimum et le maximum ne limitent que cette partie.",
           "conversionManual": "Vous convertissez avant d’acheter",
           "conversionAutomatic": "Le courtier convertit à l’achat",
           "addedFor": "Mode {currency} ajouté pour acheter {asset}, avec des valeurs de départ : vérifiez le type d’ordre, l’incrément et les frais, puis appliquez.",
@@ -4140,7 +4140,7 @@
           "conversionHelp": "Quand un achat demande une devise que vous ne détenez pas ici, l’argent est converti au taux et avec le spread de l’étape Change. Si vous convertissez vous-même, le plan donne la conversion comme étape numérotée avant les ordres ; si le courtier convertit à l’achat, le plan l’affiche à côté de ses ordres. Le calcul est le même dans les deux cas.",
           "conversionLabel": "Conversion de devise",
           "conversionValue": "Vous convertissez avant d’acheter, au taux de l’étape Change moins le spread.",
-          "feeHelp": "Ce que le courtier facture sur chaque achat : le pourcentage du montant, maintenu entre le minimum et le maximum, plus la partie fixe. Pas d’achat, pas de frais. Ils sont payés avec vos liquidités et ne sont pas investis.\n\nExemples, dans la devise de l’achat :\n• 0,19 %, minimum 1,50, maximum 18 : sur 500 vous payez 1,50, sur 2 000 vous payez 3,80, sur 20 000 vous payez 18.\n• Seulement une partie fixe de 2,95 : 2,95 sur n’importe quel achat.\n• Partie fixe 1 plus 0,10 % : sur 1 000 vous payez 2.\n• Tout à 0 : pas de frais.",
+          "feeHelp": "Ce que le courtier facture sur chaque achat : le pourcentage du montant, maintenu entre le minimum et le maximum, plus la partie fixe. Pas d’achat, pas de frais. Ils sont payés avec vos liquidités et ne sont pas investis.\n\nExemples, dans la devise de l’achat :\n• 0,19 %, minimum 1,50, maximum 18 : sur 500 vous payez 1,50, sur 2 000 vous payez 3,80, sur 20 000 vous payez 18.\n• Seulement une partie fixe de 2,95 : 2,95 sur n’importe quel achat.\n• Partie fixe 1 plus 0,10 % : sur 1 000 vous payez 2.\n• Tout à 0 : pas de frais.",
           "feeMax": "max {amount}",
           "feeMin": "min {amount}",
           "fundingHelp": "L’argent que le plan peut utiliser pour acheter chez ce courtier : ses propres liquidités, plus les versements et les liquidités d’autres comptes que vous autorisez dans Modifier. Au départ, tout est autorisé ; dans Modifier, cliquez sur une source pour l’exclure.",
@@ -4236,7 +4236,7 @@
           "title": "Copier la répartition actuelle",
           "valuation": "Valorisation",
           "weight": "Poids",
-          "subtitle": "Combien pèse aujourd’hui chacun de ces actifs chez les courtiers cochés, en ne comptant que ces actifs : ensemble, ils font 100 %. Les liquidités et les autres actifs que vous détenez ne comptent pas.",
+          "subtitle": "Combien pèse aujourd’hui chacun de ces actifs chez les courtiers cochés, en ne comptant que ces actifs : ensemble, ils font 100 %. Les liquidités et les autres actifs que vous détenez ne comptent pas.",
           "changeColumn": "Cible",
           "confirmApply": "Remplacer"
         },
@@ -4286,10 +4286,10 @@
             "deployment_omitted": "La vue du déploiement n’a pas été calculée.",
             "duplicate_id": "Le même identifiant est utilisé deux fois.",
             "dynamic_fee_unsupported": "Ce barème de frais n’est pas pris en charge.",
-            "economic_share_out_of_range": "La part économique doit être comprise entre 0 et 100 %.",
+            "economic_share_out_of_range": "La part économique doit être comprise entre 0 et 100 %.",
             "execution_margin_missing": "La marge d’exécution est manquante.",
             "execution_margin_rate_out_of_range": "La marge d’exécution est hors plage.",
-            "exposure_total_exceeds_one": "Les expositions d’une dimension totalisent plus de 100 %.",
+            "exposure_total_exceeds_one": "Les expositions d’une dimension totalisent plus de 100 %.",
             "exposure_weight_out_of_range": "Un poids d’exposition est hors plage.",
             "fee_floor_exceeds_cap": "Les frais minimums sont supérieurs aux frais maximums.",
             "fee_rate_out_of_range": "Le taux des frais est hors plage.",
@@ -4329,9 +4329,9 @@
             "saved_fx_invalid": "Le taux de change enregistré n’est pas valide.",
             "saved_fx_missing": "Le taux de change enregistré est manquant.",
             "solver_limit_no_incumbent": "Le solveur a atteint sa limite avant de trouver un plan.",
-            "target_total_not_one": "Les cibles ne totalisent pas 100 %.",
+            "target_total_not_one": "Les cibles ne totalisent pas 100 %.",
             "target_weight_missing": "Une cible est manquante.",
-            "target_weight_out_of_range": "Une cible doit être comprise entre 0 et 100 %.",
+            "target_weight_out_of_range": "Une cible doit être comprise entre 0 et 100 %.",
             "tax_netting_unsupported": "La compensation fiscale n’est pas prise en charge.",
             "valuation_currency_missing": "La devise de valorisation est manquante.",
             "wac_fx_missing": "Le taux de change nécessaire au prix de revient unitaire est manquant.",
@@ -4375,7 +4375,7 @@
           "manualHint": "Un solde que vous avez déjà sur un compte non enregistré dans LibreFolio, par exemple à la banque. Vous déclarez combien il contient et combien en utiliser."
         },
         "liquidityCopy": {
-          "allYours": "100 % à vous",
+          "allYours": "100 % à vous",
           "apply": "{count, plural, one {Copier # ligne} other {Copier # lignes}}",
           "custody": "conservation {amount}",
           "noCash": "Aucun solde de liquidités à cette date.",
@@ -4466,7 +4466,7 @@
           "selectedMissing": "« Montant à utiliser » est vide.",
           "structureInvalid": "Un champ ne respecte pas le contrat du planificateur : {path}.",
           "targetInvalid": "La cible n’est pas un nombre à partir de 0.",
-          "targetTotalNotHundred": "Le total des cibles est de {total} %, il doit être de 100 % (contrôle).",
+          "targetTotalNotHundred": "Le total des cibles est de {total} %, il doit être de 100 % (contrôle).",
           "valuationCurrencyMissing": "La devise de valorisation est manquante."
         },
         "removal": {
@@ -4551,7 +4551,7 @@
           },
           "expandAll": "Tout développer",
           "exposures": {
-            "nothingDeclared": "Aucune classification déclarée · 100 % non classé",
+            "nothingDeclared": "Aucune classification déclarée · 100 % non classé",
             "uncategorised": "Non classé",
             "uncategorisedHint": "« Non classé » est la part sans classification déclarée.",
             "above": "Au-dessus de l’idéal",
@@ -4877,7 +4877,7 @@
           "requiredHelp": "Le plan achète ici au moins cette quantité, quoi qu’il arrive. Si les ressources ne suffisent pas, le plan devient impossible. Vide = aucune obligation.",
           "capHelp": "Le maximum que le plan peut acheter de cet actif chez ce courtier. Vide = aucune limite propre : le plan n’achète jamais plus que les liquidités qui peuvent atteindre ce courtier. Remplissez-le pour arrêter les achats ici au-delà d’une certaine taille.",
           "priorityHelp": "Elle ne compte qu’entre des plans qui se rapprochent autant de la cible : parmi eux, on préfère acheter chez les courtiers au numéro le plus bas. Elle pèse plus que les frais : pour laisser le coût décider, laissez-les tous à 0. Tous à 0 = aucune préférence.",
-          "marginHelp": "Chaque achat est compté au prix × (1 + marge), pour couvrir un prix qui monte avant l’ordre. Exemple : 0,5 % sur 100 → 100,50. La différence est une réserve pour la hausse : elle ne compte pas comme investie.",
+          "marginHelp": "Chaque achat est compté au prix × (1 + marge), pour couvrir un prix qui monte avant l’ordre. Exemple : 0,5 % sur 100 → 100,50. La différence est une réserve pour la hausse : elle ne compte pas comme investie.",
           "capNone": "aucune limite",
           "modeMissing": "{broker} n’a pas encore de mode d’ordre en {currency}",
           "modeMissingHelp": "Le mode d’ordre indique comment {broker} prend un ordre en {currency} : en unités ou en montant, avec quel incrément et quels frais. Le plan en a besoin pour dimensionner l’achat de cet actif, coté en {currency}. Ce n’est pas la conversion : si vous payez dans une autre devise, le plan ajoute la conversion telle que vous l’avez réglée sur le courtier. Ajoutez le mode, ou excluez l’actif chez ce courtier.",
@@ -4975,12 +4975,12 @@
           "target": "Cible %",
           "total": "Total",
           "wire": "La part de l’argent que vous investissez maintenant qui va à cet actif, en pourcentage. Les décimales sont admises.",
-          "copyHelp": "Lit combien pèse aujourd’hui chacun de ces actifs chez les courtiers que vous cochez, en ne comptant que ces actifs et pas les liquidités, et ramène les rapports à 100 %. Les actifs saisis à la main valent 0. Vous voyez les poids avant de les utiliser, et une cible que vous avez changée n’est remplacée qu’après votre confirmation.",
+          "copyHelp": "Lit combien pèse aujourd’hui chacun de ces actifs chez les courtiers que vous cochez, en ne comptant que ces actifs et pas les liquidités, et ramène les rapports à 100 %. Les actifs saisis à la main valent 0. Vous voyez les poids avant de les utiliser, et une cible que vous avez changée n’est remplacée qu’après votre confirmation.",
           "excess": "+{value} en trop",
-          "balance": "Équilibrer à 100 %",
-          "totalHelp": "Les cibles répartissent entre les actifs l’argent que vous investissez maintenant, liquidités et versements compris : pour calculer, leur somme doit faire exactement 100 %. « Tout équilibrer » redimensionne chaque cible en gardant leurs proportions (parts égales si elles sont toutes à 0). Cochez des lignes pour ne redimensionner que celles-ci, avec « Équilibrer les lignes sélectionnées à 100 % ». « Équilibrer à 100 % » sur une ligne donne à cet actif ce qui manque, ou retire l’excédent.",
+          "balance": "Équilibrer à 100 %",
+          "totalHelp": "Les cibles répartissent entre les actifs l’argent que vous investissez maintenant, liquidités et versements compris : pour calculer, leur somme doit faire exactement 100 %. « Tout équilibrer » redimensionne chaque cible en gardant leurs proportions (parts égales si elles sont toutes à 0). Cochez des lignes pour ne redimensionner que celles-ci, avec « Équilibrer les lignes sélectionnées à 100 % ». « Équilibrer à 100 % » sur une ligne donne à cet actif ce qui manque, ou retire l’excédent.",
           "balanceAll": "Tout équilibrer",
-          "balanceSelected": "Équilibrer les lignes sélectionnées à 100 %"
+          "balanceSelected": "Équilibrer les lignes sélectionnées à 100 %"
         },
         "toolErrors": {
           "cleanup_failed": "Le calcul est terminé, mais la plateforme n’a pas pu nettoyer après lui.",
