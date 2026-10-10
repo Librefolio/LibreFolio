@@ -6,9 +6,11 @@
  *
  * Fallback priority (invariant):
  *   1. icon_url          — custom icon explicitly uploaded by the user
- *   2. portal_url/favicon.ico — favicon heuristic (external, may fail)
- *   3. default_import_plugin icon — app-hosted plugin icon (async, shared cache)
- *   4. (caller renders initial letter as ultimate UI fallback)
+ *   2. default_import_plugin icon — the plugin's icon (async, shared cache), when the plugin is made for a broker
+ *   3. portal_url/favicon.ico — favicon heuristic (external, may fail)
+ *   4. default_import_plugin icon — when the plugin is a generic fallback (`isFallbackPlugin`, the generic CSV),
+ *      whose icon is the same for every broker
+ *   5. (caller renders its ultimate UI fallback, the briefcase)
  *
  * Usage — call at component init level (not inside if/for):
  * ```svelte
@@ -24,7 +26,7 @@
  * @module utils/broker/brokerIconChain
  */
 
-import {ensurePluginIconsLoaded, getPluginIconUrl, normalizeBrokerIconField, type BrokerIconSource} from './brokerHelpers';
+import {ensurePluginIconsLoaded, getPluginIconUrl, isFallbackPluginCode, normalizeBrokerIconField, type BrokerIconSource} from './brokerHelpers';
 
 export type {BrokerIconSource};
 
@@ -48,23 +50,28 @@ export function createBrokerIconChain(getSource: () => BrokerIconSource): Broker
     // =========================================================================
 
     let pluginIconUrl = $state<string | null>(null);
+    /** A generic fallback plugin's icon comes after the portal's favicon. */
+    let pluginIsGeneric = $state(false);
 
     $effect(() => {
         const code = normalizeBrokerIconField(getSource().default_import_plugin);
         if (!code) {
             pluginIconUrl = null;
+            pluginIsGeneric = false;
             return;
         }
         // Synchronous cache hit (populated by ensureBrokersLoaded / refreshAllBrokers)
         const cached = getPluginIconUrl(code);
         if (cached !== null) {
             pluginIconUrl = cached;
+            pluginIsGeneric = isFallbackPluginCode(code);
             return;
         }
         // Cache miss — trigger load (idempotent, shared across all callers).
         // After resolution, update local state so candidateUrls recomputes.
         ensurePluginIconsLoaded().then(() => {
             pluginIconUrl = getPluginIconUrl(code);
+            pluginIsGeneric = isFallbackPluginCode(code);
         });
     });
 
@@ -79,7 +86,9 @@ export function createBrokerIconChain(getSource: () => BrokerIconSource): Broker
         const portalUrl = normalizeBrokerIconField(src.portal_url);
         // 1. Custom uploaded icon (most reliable — user chose it)
         if (iconUrl) urls.push(iconUrl);
-        // 2. Portal favicon (external heuristic — may 404 or CORS-block)
+        // 2. Icon of a plugin made for this broker (arrives async — added when ready)
+        if (pluginIconUrl && !pluginIsGeneric) urls.push(pluginIconUrl);
+        // 3. Portal favicon (external heuristic — may 404 or CORS-block)
         if (portalUrl) {
             try {
                 urls.push(new URL(portalUrl).origin + '/favicon.ico');
@@ -87,8 +96,8 @@ export function createBrokerIconChain(getSource: () => BrokerIconSource): Broker
                 /* invalid URL — skip */
             }
         }
-        // 3. Plugin icon (app-hosted, arrives async — added when ready)
-        if (pluginIconUrl) urls.push(pluginIconUrl);
+        // 4. Icon of a generic fallback plugin, the same for every broker
+        if (pluginIconUrl && pluginIsGeneric) urls.push(pluginIconUrl);
         return urls;
     });
 
