@@ -24,7 +24,7 @@
       "INTEREST": "Interés",
       "PRICE_ADJUSTMENT": "Ajuste de precio",
       "MATURITY_SETTLEMENT": "Vencimiento",
-      "SPLIT": "División"
+      "SPLIT": "Desdoblamiento"
     },
     "eventTypeTooltip": {
       "DIVIDEND": "Distribución de efectivo de acción/ETF. El precio baja en fecha ex.",
@@ -239,7 +239,7 @@
       "deleteBoundaryHint": "Elige la fecha límite para redistribuir el rango entre los períodos vecinos.",
       "splitBoundaryHint": "Elige la fecha donde este período se dividirá en dos.",
       "boundaryDate": "Fecha Límite",
-      "confirmSplit": "Confirmar División",
+      "confirmSplit": "Confirmar desdoblamiento",
       "lateInterest": "Interés de Mora",
       "emptyTitle": "No hay períodos de interés definidos",
       "emptyHint": "Añade al menos un período para configurar el calendario de inversión.",
@@ -642,7 +642,7 @@
       "scalable_not_imported": "{count, plural, one {# fila no se importó} other {# filas no se importaron}}: traspasos de valores, operaciones corporativas y tipos que LibreFolio aún no lee. Añádelas a mano si mueven valores o efectivo.",
       "scalable_several_overnight_accounts": "El archivo contiene {count} cuentas remuneradas: todas sus filas van a este bróker, cuyo saldo es su suma.",
       "scalable_not_executed": "{count, plural, one {# fila no se ejecutó (pendiente, cancelada, caducada o rechazada) y no se importó.} other {# filas no se ejecutaron (pendientes, canceladas, caducadas o rechazadas) y no se importaron.}} Una orden ejecutada más tarde llega con la siguiente exportación.",
-      "scalable_internal_transfers": "{count, plural, one {# transferencia} other {# transferencias}} entre la cuenta de valores y la cuenta remunerada: importa el archivo de la otra cuenta en su propio bróker y después une cada par en una «Transferencia bancaria» en el editor masivo.",
+      "scalable_internal_transfers": "{count, plural, one {# transferencia} other {# transferencias}} entre la cuenta de valores y la cuenta remunerada: importa el archivo de la otra cuenta en su propio bróker y después une cada par en una «Transferencia de fondos» en el editor masivo.",
       "scalable_dividends_net": "{count, plural, one {# dividendo se importó tal como se abonó} other {# dividendos se importaron tal como se abonaron}}, después de la retención: el archivo no indica el impuesto.",
       "scalable_tax_refund": "{count, plural, one {# devolución de impuestos se importó como depósito} other {# devoluciones de impuestos se importaron como depósitos}}: en LibreFolio un impuesto siempre retira dinero.",
       "scalable_cash_by_sign": "{count, plural, one {# fila de efectivo tiene un tipo que LibreFolio no conoce, o un signo inesperado: se registró como depósito o retiro} other {# filas de efectivo tienen un tipo que LibreFolio no conoce, o un signo inesperado: se registraron como depósitos o retiros}}, según el signo del importe."
@@ -1071,7 +1071,7 @@
           "sell": "Ventas",
           "transfer": "Transferencias",
           "adjustment": "Ajustes",
-          "split": "Split",
+          "split": "Desdoblamiento",
           "income": "Dividendo / interés"
         },
         "eventType": {
@@ -1081,7 +1081,7 @@
           "ADJUSTMENT_OUT": "Ajuste de salida",
           "TRANSFER_DEPART": "Transferencia",
           "TRANSFER_ARRIVE": "Transferencia",
-          "SPLIT": "Split"
+          "SPLIT": "Desdoblamiento"
         },
         "unitPrice": "Precio unitario",
         "transitInterval": "Intervalo de tránsito",
@@ -1171,7 +1171,7 @@
           "closePrice": "Precio de cierre",
           "proceeds": "Ingresos",
           "realizedPnl": "P&L realizado",
-          "splitRatio": "Ratio de split",
+          "splitRatio": "Ratio de desdoblamiento",
           "sourceBroker": "Desde",
           "destinationBroker": "Hacia"
         },
@@ -1314,7 +1314,7 @@
     "badgeInterest": "{n} eventos de interés",
     "badgePriceAdjustment": "{n} eventos de ajuste de precio",
     "badgeMaturitySettlement": "{n} eventos de vencimiento/liquidación",
-    "badgeSplit": "{n} eventos de split",
+    "badgeSplit": "{n} eventos de desdoblamiento",
     "previewDescGlobal": "Datos sintéticos de ejemplo — muestra cómo los ajustes afectan todos los gráficos",
     "previewDescPair": "Vista previa en vivo con datos reales del par y señales overlay",
     "categories": {
@@ -1583,12 +1583,12 @@
     "assetsAtCostTooltip": "Coste de los activos",
     "cashFromContributedCapital": "Capital",
     "cashFromGeneratedReturns": "Rendimiento",
-    "pnlFormulaHint": "P&L = VAN − Capital depositado",
+    "pnlFormulaHint": "P&L = NAV − Capital depositado",
     "returns": "Rendimientos",
     "unrealizedDelta": "Variación no realizada",
     "unrealizedDeltaTooltip": "Variación de la ganancia/pérdida latente en posiciones aún abiertas.",
     "realizedSales": "Ventas",
-    "realizedSalesTooltip": "Ganancia o pérdida realizada de las ventas del período, calculada respecto al coste medio de adquisición.",
+    "realizedSalesTooltip": "Ganancia o pérdida realizada de las ventas del período, calculada respecto al precio medio de compra.",
     "income": "Dividendos e intereses",
     "incomeTooltip": "Ingresos recibidos en el período por dividendos, intereses o cupones.",
     "feesAndTaxes": "Costes e impuestos",
@@ -2059,7 +2059,7 @@
     "themeDark": "Oscuro",
     "themeAuto": "Automático",
     "version": "Versión",
-    "aboutDescription": "LibreFolio es un gestor de portafolio auto-hospedado y de código abierto. Rastrea tus inversiones, analiza el rendimiento y mantén el control total de tus datos financieros.",
+    "aboutDescription": "LibreFolio es un gestor de portafolio autoalojado y de código abierto. Rastrea tus inversiones, analiza el rendimiento y mantén el control total de tus datos financieros.",
     "viewSource": "Ver código fuente",
     "githubRepo": "Repositorio GitHub",
     "officialWebsite": "Sitio Web Oficial",
@@ -2131,7 +2131,7 @@
     },
     "selectCurrency": "Seleccionar moneda...",
     "userPreferences": "Preferencias de Usuario",
-    "all": "Todos los Ajustes",
+    "all": "Toda la configuración",
     "categoryDisplay": "Visualización",
     "categoryCurrency": "Moneda",
     "categoryAppearance": "Apariencia",
@@ -2312,7 +2312,7 @@
       "TAX": "Impuesto",
       "TRANSFER": "Transferencia de Activos",
       "WITHDRAWAL": "Retiro",
-      "CASH_TRANSFER": "Transferencia bancaria"
+      "CASH_TRANSFER": "Transferencia de fondos"
     },
     "refresh": "Recargar desde el servidor",
     "noAsset": "(Sin activo)",
@@ -2335,7 +2335,7 @@
       "assetEvent": "Evento de activo",
       "eventPickerNone": "Sin evento vinculado",
       "cashLabelTotal": "Importe total (no por acción)",
-      "costBasis": "Override de coste medio",
+      "costBasis": "Override del precio medio de compra",
       "linkUuid": "TX Vinculada",
       "pairPartner": "Transacción vinculada",
       "hintSignPositive": "debe ser > 0",
@@ -2345,7 +2345,7 @@
       "saveFailed": "No se pudo guardar la transacción",
       "fxTitle": "Cambio de Divisas",
       "transferAssetTitle": "Transferencia de Activo",
-      "transferCashTitle": "Transferencia Bancaria",
+      "transferCashTitle": "Transferencia de fondos",
       "sameCurrencyError": "Las divisas deben ser diferentes",
       "sameBrokerError": "Los brokers deben ser diferentes",
       "loadingPartner": "Cargando transacción vinculada…",
@@ -2393,34 +2393,34 @@
       "serverError": "Guardado imposible — error del servidor"
     },
     "costBasisOverride": {
-      "tooltip": "Override del coste medio ponderado. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
-      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Si estas participaciones no costaron nada (un split o un regalo), escribe 0."
+      "tooltip": "Override del precio medio de compra. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
+      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Si estas participaciones no costaron nada (un desdoblamiento o un regalo), escribe 0."
     },
     "wacPreview": {
       "calculating": "Calculando...",
       "unitModeLabel": "Mostrar como:",
       "unitModeTotal": "Total",
       "unitModePerUnit": "Por unidad",
-      "suggested": "CMP sugerido",
+      "suggested": "PMC sugerido",
       "txsUsed": "transacciones utilizadas",
-      "missingFx": "No se puede calcular el CMP: falta tasa FX",
-      "docsTooltip": "Descubre cómo se calcula el CMP (Coste Medio Ponderado)",
+      "missingFx": "No se puede calcular el PMC: falta tasa FX",
+      "docsTooltip": "Descubre cómo se calcula el PMC (precio medio de compra)",
       "toggleAuto": "Auto",
       "toggleManual": "Manual",
       "placeholderAuto": "auto (⚡️Validar ahora)",
       "currencyChanged": "Moneda cambiada — recalculando…",
       "unitCost": "Coste unitario",
       "effectLabel": "Efecto",
-      "columnWac": "CMP",
+      "columnWac": "PMC",
       "effect": {
         "add": "Ponderada",
         "reduce": "Cantidad reducida",
         "addZeroCost": "Dilución",
-        "addAtWac": "Auto CMP"
+        "addAtWac": "Auto PMC"
       },
       "pendingCreate": "Transacción pendiente (nueva, aún no guardada)",
       "pendingEdit": "Transacción pendiente (editada, aún no guardada)",
-      "validateHint": "Completa los campos y valida para calcular el CMP",
+      "validateHint": "Completa los campos y valida para calcular el PMC",
       "validateToRecalculate": "⚡ Valida ahora para recalcular la tabla"
     },
     "wac": {
@@ -2494,7 +2494,7 @@
       "wacFxUnavailable": "❌ Cálculo PMC fallido.",
       "wacFxUnavailableSyncLink": "Sincronizar tasas FX",
       "wacFxUnavailableOrManual": "o cambia al modo manual.",
-      "costBasisRequired": "❌ <b>{type}</b> con cantidad positiva requiere un coste base. Use el modo <b>Auto</b> (CMP) o introduzca un valor <b>manual</b>.",
+      "costBasisRequired": "❌ <b>{type}</b> con cantidad positiva requiere un coste base. Use el modo <b>Auto</b> (PMC) o introduzca un valor <b>manual</b>.",
       "pairDeleteIncomplete": "Transacción vinculada: eliminar esta fila requiere eliminar también su contraparte (transacción n.º {partnerId}). Si la contraparte está en un bróker que no puedes editar, pide a su propietario que la elimine."
     },
     "pydantic": {
@@ -4334,8 +4334,8 @@
             "target_weight_out_of_range": "Un objetivo debe estar entre 0 y 100 %.",
             "tax_netting_unsupported": "No se admite la compensación fiscal.",
             "valuation_currency_missing": "Falta la divisa de valoración.",
-            "wac_fx_missing": "Falta la tasa de cambio necesaria para el coste medio.",
-            "wac_missing": "Falta el coste medio.",
+            "wac_fx_missing": "Falta la tasa de cambio necesaria para el precio medio de compra.",
+            "wac_missing": "Falta el precio medio de compra.",
             "zero_selected_funding": "La liquidez seleccionada es cero.",
             "fx_rate_inconsistent": "Esta tasa de cambio no es coherente con las tasas de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea las tasas o define un spread de conversión."
           },
@@ -5072,7 +5072,7 @@
       "themeHint": "Tu preferencia de tema actual se mantiene sin cambios.",
       "skip": "Omitir la configuración permanentemente",
       "completed": "Configuración guardada. Puedes continuar a LibreFolio.",
-      "skipped": "Configuración omitida. Puedes repetirla más tarde desde Ajustes.",
+      "skipped": "Configuración omitida. Puedes repetirla más tarde desde Configuración.",
       "logout": "Cerrar sesión"
     },
     "errors": {
@@ -5132,8 +5132,8 @@
           "description": "Herramientas reúne programas y calculadoras para explorar escenarios y tomar decisiones financieras más informadas."
         },
         "settingsNav": {
-          "title": "Ajustes",
-          "description": "Ajustes contiene las preferencias y permite repetir cualquier guía cuando sea necesario."
+          "title": "Configuración",
+          "description": "Configuración contiene las preferencias y permite repetir cualquier guía cuando sea necesario."
         }
       }
     },
