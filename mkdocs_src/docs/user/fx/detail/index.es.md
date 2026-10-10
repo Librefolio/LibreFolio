@@ -1,36 +1,53 @@
-# 🔍 Página de Detalles del Par
+# 🔍 Página de detalle del par
 
-Haga clic en cualquier par de divisas de la [FX List](../index.md) para abrir su página de detalles. Aquí puede visualizar, analizar y gestionar los datos del tipo de cambio para ese par específico.
-
-La página de detalles está organizada en varias funcionalidades, cada una accesible desde la barra de herramientas:
+Haga clic en un par en la [lista de FX](../index.md) para abrir su página: un gráfico grande de sus tipos de cambio, con herramientas
+para analizar, editar y configurar el par.
 
 ---
 
-## 🧭 Funcionalidades
+## 🗺️ La página de un vistazo
 
-### 📈 [Gráfico Interactivo](chart.md)
+- **Encabezado** — ⇄ intercambia la dirección del par y la tarjeta de la lista se actualiza en consecuencia (con cambios sin guardar en el
+  editor de tipos de cambio, LibreFolio pregunta primero); ← vuelve a la lista.
+- **Barra de herramientas** — el periodo, el último tipo de cambio con su variación, y los botones **Exportación IA**, **Proveedores**,
+  **Sincronizar** y **Recargar**. **Recargar** vuelve a leer los tipos de cambio almacenados; **Sincronizar** descarga nuevos,
+  consulte [Sincronización](../sync.md).
+- **Debajo** — el panel **Señales** plegado, el gráfico, luego el panel **Medidas** plegado.
 
-La vista principal: un gráfico completo impulsado por ECharts con zoom, desplazamiento, interruptor de línea/velas y rangos de tiempo configurables. Aquí es donde puede visualizar el historial del tipo de cambio de un vistazo.
+---
+
+## 🧭 Características
+
+### 📈 [Gráfico interactivo](chart.md)
+
+El historial de tipos de cambio, con zoom, desplazamiento, una vista **Abs** / **%** y preajustes de periodo.
 
 ### 📊 [Señales](signals.md)
 
-Superponga indicadores técnicos en el gráfico — hay 9 plugins calculados por el backend disponibles para los pares FX (consulte [Señales](signals.md) para la lista y los detalles por señal). Cada señal se calcula a partir de los datos del tipo de cambio y se puede activar o desactivar de forma independiente.
+Indicadores, comparaciones y curvas de índices de referencia dibujadas en el gráfico; nueve indicadores funcionan con tipos de cambio de pares FX.
 
-### 📐 [Measures](measures.md)
+### 📐 [Medidas](measures.md)
 
-Herramienta de medición de clic a clic. Seleccione dos puntos en el gráfico para ver el delta, el cambio porcentual y el rendimiento anualizado entre ellos.
+La variación, la variación en % y la tasa anual entre dos puntos del gráfico.
 
 ### ✏️ [Editor de datos](data-editor.md)
 
-Visualice, añada, edite o elimine puntos de datos individuales. También incluye **Importación de CSV** para la carga masiva de datos históricos de tipos de cambio desde archivos.
+Añada, edite o elimine tipos de cambio individuales, o importe muchos tipos de cambio a la vez desde un archivo CSV.
 
 ### ⚙️ [Configuración del proveedor](provider.md)
 
-Cambie el proveedor de datos para este par, añada rutas de fallback o reconfigure la cadena de conversión.
+**Proveedores** cambia el origen de los tipos de cambio: el proveedor, las rutas de respaldo y las cadenas.
+
+### 🧠 Exportación IA
+
+**Exportación IA** prepara una instantánea del par, o una solicitud de **Análisis de par FX** o de **Impacto de exposición a FX**,
+para pegar en un asistente de IA. Impacto de exposición a FX solo cuenta el efectivo y las posiciones
+mantenidas directamente en las monedas del par: no analiza el contenido de los fondos. Consulte
+[Exportación IA de FX](../../ai-export/fx.md).
 
 ---
 
-## 🔗 Relacionados
+## 🔗 Relacionado
 
-- ⚙️ **[Configuración del gráfico](../chart-settings.md)** — Personalice la apariencia del gráfico, los colores y la configuración de la superposición de señales
-- 📋 **[Descripción general de FX](../index.md)** — Volver a la página de la lista de FX
+- ⚙️ **[Ajustes del gráfico](../chart-settings.md)** — Aspecto del gráfico y señales superpuestas
+- 📋 **[Resumen de FX](../index.md)** — Volver a la página de la lista de FX

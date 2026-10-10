@@ -1,135 +1,151 @@
-# ⚙️ Impostazioni Globali
+# ⚙️ Impostazioni globali
 
-LibreFolio dispone di una serie di **impostazioni a livello di sistema** che interessano tutti gli utenti. Queste sono gestite dagli amministratori e memorizzate nel database.
+Le impostazioni globali si applicano all'intera istanza e a ogni utente. Sono archiviate nel database:
+tutti possono leggerle, solo gli amministratori possono modificarle.
 
 ---
 
-## 👁️ Visualizzazione e modifica delle impostazioni
+## ✏️ Modificare un'impostazione
 
-### 🖥️ Dalla UI
+### 🔓 1. Sblocca la scheda
 
-1. Vai su **Impostazioni** (icona dell'ingranaggio nella barra laterale)
-2. Fai clic sulla scheda **Impostazioni Globali** (visibile a tutti gli utenti; solo admin/superuser possono modificarla)
-3. Fai clic sull'**icona del lucchetto** accanto a un'impostazione per sbloccarla e modificarla
-4. Modifica il valore e la modifica viene salvata automaticamente
+Apri **Impostazioni** (icona a forma di ingranaggio nella barra laterale), poi la scheda **Admin**: il suo pannello **Impostazioni globali**
+raggruppa le impostazioni per categoria. Fai clic sull'**icona a forma di lucchetto** (🔒) nell'intestazione per sbloccarla.
+Solo gli amministratori (superutenti) hanno il lucchetto; tutti gli altri ottengono una vista di sola lettura.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni Globali" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni globali" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! warning "Solo Amministratori"
+### 💾 2. Modifica e salva
 
-    Solo gli utenti con privilegi **superuser** possono modificare le impostazioni globali. Gli utenti normali vedono una vista di sola lettura.
+- Niente viene scritto finché non fai clic su **Salva** accanto a un'impostazione, o su **Salva tutto** nell'intestazione.
+  **Ripristina** e **Ripristina tutto** riportano indietro i valori salvati.
+- **Ripristina ai valori predefiniti** e **Ripristina tutti ai valori predefiniti** inseriscono i valori predefiniti, pronti per essere salvati.
+- I valori salvati vengono applicati immediatamente, senza riavvio.
 
-### 💻 Dalla CLI
+??? note "🔒 Blocco con modifiche non salvate — quando una finestra di dialogo chiede prima"
 
-Per inizializzare le impostazioni predefinite (crea solo quelle mancanti):
+    Facendo clic sul lucchetto con modifiche non salvate viene chiesto se scartarle. **Annulla** mantiene le
+    modifiche; **Scarta** riporta indietro i valori salvati e blocca la scheda.
 
-```bash
-./dev.py user init-settings
-```
+??? tip "💻 Impostazioni mancanti — ricrearle dalla riga di comando"
+
+    Ogni avvio del server ricrea qualsiasi impostazione mancante con il suo valore predefinito. Per farlo senza un
+    riavvio, esegui lo [strumento da riga di comando](cli_tools.md):
+
+    ```bash
+    pipenv run ./dev.py user init-settings
+    ```
+
+    I valori che hai modificato vengono mantenuti.
 
 ---
 
-## 🕐 Sessione
+## 📋 Cosa fa ogni impostazione
 
-| Chiave | Tipo | Predefinito | Descrizione |
-|-----|------|---------|-------------|
-| `session_ttl_hours` | int | `24` | Tempo di scadenza del token JWT in ore. Dopo questo periodo, gli utenti devono accedere nuovamente. |
+| Categoria | Impostazione | Predefinito | Cosa fa — quando modificarla |
+|---|---|---|---|
+| ⏳ Sessione | **Durata sessione** | 24 ore | Per quanto tempo gli utenti restano connessi. Accorciala su dispositivi condivisi; un nuovo valore si applica dal login successivo di ogni utente. |
+| 🛡️ Sicurezza | **Abilita registrazione** | Attiva | Consente a nuove persone di registrarsi. Disattivala una volta che tutti hanno un account, soprattutto se l'istanza è raggiungibile da Internet. Il primo account di una nuova istanza può sempre essere creato. |
+| 🛡️ Sicurezza | **Richiedi verifica email** | Disattivata | Non ancora attiva: l'invio di email è una funzionalità pianificata, quindi l'interruttore è di sola lettura e contrassegnato **In arrivo**. |
+| 🔄 Job di aggiornamento | **Scheduler abilitato** | Attivo | Attiva o disattiva gli aggiornamenti automatici di prezzi e tassi di cambio: vedi [Scheduler dei dati di mercato](#market-data-scheduler). |
+| 🧠 Memoria | **Dimensione massima caricamento file** | 10 MB | Il file più grande che gli utenti possono caricare, incluso il report del broker. Aumentala se un'esportazione di grandi dimensioni viene rifiutata. |
+| 🌍 Predefiniti | **Valuta predefinita** | `EUR` | La valuta in cui i nuovi utenti registrano i propri dati. |
+| 🌍 Predefiniti | **Lingua predefinita** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` o 🇪🇸 `es`. |
+| 🌍 Predefiniti | **Tema predefinito** | `auto` | ☀️ `light`, 🌙 `dark`, o 🖥️ `auto`, che segue il dispositivo. |
 
-## 🛡️ Sicurezza
-
-| Chiave | Tipo | Predefinito | Descrizione |
-|-----|------|---------|-------------|
-| `enable_registration` | bool | `true` | Indica se la registrazione di nuovi utenti è consentita. Imposta su `false` per impedire nuove iscrizioni. |
-| `require_email_verification` | bool | `false` | **Segnaposto — non ancora applicato.** Indica se i nuovi utenti devono verificare la propria email prima di accedere al sistema. L'invio di email (SMTP) è una funzionalità prevista, quindi nella UI questa impostazione è di sola lettura e riporta un'etichetta "coming soon". |
-
-## 🔄 Job di aggiornamento
-
-| Chiave | Tipo | Predefinito | Descrizione |
-|-----|------|---------|-------------|
-| `scheduler_enabled` | bool | `true` | Abilita o disabilita il daemon di sincronizzazione automatica in background per i tassi di cambio e i prezzi storici/in tempo reale. |
-
-I restanti parametri dello scheduler non vengono mostrati come campi individuali: vengono modificati tutti insieme tramite il modale **Configura** della riga Scheduler — vedi [Scheduler dei dati di mercato](#market-data-scheduler) di seguito.
-
-| Chiave | Tipo | Predefinito | Descrizione |
-|-----|------|---------|-------------|
-| `scheduler_current_price_frequency_minutes` | int | `10` | Frequenza (in minuti) con cui il daemon aggiorna i prezzi correnti in tempo reale (1-1440). |
-| `scheduler_history_sync_times` | str | `06:00,23:00` | Orari HH:MM separati da virgola per la sincronizzazione storica giornaliera, espressi **nel `scheduler_timezone` configurato**. Gli orari vengono memorizzati così come inseriti (orario locale); il daemon converte ogni slot locale in un istante UTC solo quando deve decidere se un job è da eseguire. |
-| `scheduler_history_sync_days` | str | `mon,tue,wed,thu,fri,sat` | Giorni specifici della settimana (separati da virgola) per eseguire la sincronizzazione storica. |
-| `scheduler_history_sync_horizon_days` | int | `14` | Finestra mobile di analisi retrospettiva (in giorni) utilizzata per verificare la presenza di prezzi storici mancanti. |
-| `scheduler_timezone` | str | `UTC` | Fuso orario IANA utilizzato per **memorizzare e valutare** i giorni e gli orari di sincronizzazione storica dello scheduler. Gli orari/giorni configurati sono espressi in ora locale di questa zona; i valori non validi vengono riportati a UTC. |
-
-## 🧠 Memoria
-
-| Chiave | Tipo | Predefinito | Descrizione |
-|-----|------|---------|-------------|
-| `max_file_upload_mb` | int | `10` | Dimensione massima di caricamento dei file in megabyte. Si applica a tutti i caricamenti (risorse statiche e report del broker). |
-
-La categoria Memoria ospita anche il pannello **Cache del server** — vedi [Cache del server](#server-caches) di seguito.
-
-## 🌍 Predefiniti
-
-| Chiave | Tipo | Predefinito | Descrizione |
-|-----|------|---------|-------------|
-| `default_currency` | str | `EUR` | Valuta di visualizzazione predefinita per i nuovi utenti registrati. Gli utenti possono modificarla nelle proprie impostazioni personali. |
-| `default_language` | str | `en` | Lingua predefinita per i nuovi utenti registrati. Supportate: 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr`, 🇪🇸 `es`. |
-| `default_theme` | str | `auto` | Tema predefinito per i nuovi utenti registrati: ☀️ `light`, 🌙 `dark`, 🖥️ `auto`. |
+I nuovi utenti partono dai tre valori predefiniti: la [Configurazione iniziale](../user/getting-started.md#welcome-setup)
+mostra lingua e valuta precompilate. Modificare un valore predefinito in seguito lascia invariate le
+[Preferenze](../user/settings/preferences.md) degli utenti esistenti.
 
 ---
 
 ## 🕐 Scheduler dei dati di mercato {: #market-data-scheduler }
 
-Quando lo scheduler in background è abilitato, gli amministratori possono configurare i parametri di sincronizzazione e ispezionare i log di esecuzione in background direttamente dall'interfaccia utente.
+Lo scheduler mantiene aggiornati prezzi e tassi di cambio da solo, anche quando nessuno è connesso:
 
-### ⚙️ Configura Scheduler
+- 💰 **Aggiornamento del prezzo corrente** — ogni pochi minuti, l'ultimo prezzo di ogni asset attivo che ha
+  un provider di prezzi.
+- 📊 **Sincronizzazione storica** — nei giorni e negli orari che scegli, i prezzi giornalieri di quegli asset e i
+  tassi di ogni coppia FX con un provider, nell'**Orizzonte di lookback**, per colmare eventuali lacune. Le coppie
+  con soli tassi manuali vengono saltate.
 
-Fai clic sul pulsante **Configura** nella riga Scheduler per personalizzare le frequenze e i parametri di esecuzione:
+### ⚙️ Configura la pianificazione
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Modale di Configurazione dello Scheduler" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-* **Frequenza del prezzo corrente**: La frequenza (in minuti) con cui il daemon recupera le quotazioni in tempo reale per mantenere aggiornata la cache della dashboard (predefinita: 10 min).
-* **Orari di sincronizzazione storica**: Orari giornalieri specifici (separati da virgola, es. `06:00,23:00`) per eseguire gli aggiornamenti giornalieri delle chiusure storiche. Gli orari indicano l'ora locale **del fuso orario dello scheduler configurato**.
-* **Giorni di sincronizzazione storica**: Giorni specifici della settimana in cui viene eseguita la sincronizzazione storica (di solito dal lunedì al sabato), valutati anch'essi nel fuso orario dello scheduler.
-* **Orizzonte storico**: La finestra di analisi (in giorni) per verificare i punti di prezzo storici mancanti (predefinita: 14 giorni).
-* **Fuso orario**: Il fuso orario IANA (`scheduler_timezone`) in cui vengono memorizzati e valutati gli orari e i giorni sopra indicati. Il modale mostra a fianco l'orologio UTC del server, così puoi valutare lo scostamento; il backend converte ogni slot locale in un istante UTC solo quando deve decidere se un job è da eseguire. I valori non validi vengono riportati a UTC.
-
-### 📜 Log dello Scheduler
-
-Fai clic su **Visualizza Log** per aprire il visualizzatore dei log. Questo modale mostra un elenco delle esecuzioni recenti dello scheduler:
+Sblocca la scheda, apri **Job di aggiornamento** e fai clic su **Configura…** nella riga **Configurazione pianificazione**.
+La finestra di dialogo ha il proprio pulsante **Salva**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Modale dei Log dello Scheduler" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Modale di configurazione dello scheduler" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Il log riporta il timestamp di esecuzione, il nome del job, lo stato (Success/Error), la durata dell'esecuzione e i dettagli strutturati degli asset elaborati, dei feed di prezzi e di eventuali tracce di errore.
+| Campo | Predefinito | Cosa imposta |
+|---|---|---|
+| **Fuso orario** | `UTC` | Il fuso orario degli orari e dei giorni sottostanti; l'orologio UTC del server è mostrato accanto. |
+| **Aggiorna ogni** | 10 minuti | Ogni quanto vengono aggiornati i prezzi correnti, da 1 a 1440 minuti. |
+| **Orari di sincronizzazione** | `06:00`, `23:00` | Quando viene eseguita la sincronizzazione storica; **Aggiungi orario** aggiunge uno slot. |
+| **Giorni di sincronizzazione** | Lun–Sab | I giorni della sincronizzazione storica. |
+| **Orizzonte di lookback** | 14 giorni | Quanti giorni passati controlla ogni sincronizzazione storica, da 1 a 365. |
+
+Mantieni almeno un orario e un giorno. Suggerimento: una sincronizzazione storica dopo la chiusura dei mercati (ad esempio
+`22:00`) ottiene i dati più completi.
+
+??? warning "🌍 Modifica del fuso orario — i job si spostano nel tempo"
+
+    Gli orari e i giorni mantengono i loro valori ma vengono conteggiati nel nuovo fuso orario, quindi i job vengono eseguiti in un altro
+    momento. Seguono anche l'ora legale del nuovo fuso: `06:00` in `Europe/Rome` viene eseguito alle 05:00 UTC
+    in inverno e alle 04:00 UTC in estate.
+
+### 📜 Leggi il log dello scheduler
+
+La riga **Stato dello scheduler** mostra l'ultimo aggiornamento del prezzo corrente, con un punto per il risultato.
+Fai clic sulla riga (o su **Dettagli…**) per aprire il **Log di esecuzione dello scheduler**. Solo gli amministratori possono
+leggere lo stato e il log.
+
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Modale del log dello scheduler" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+- Ogni voce è un'esecuzione: job, ora, durata e quanti elementi sono riusciti. 🟢 **OK**: tutti, o niente da
+  fare; 🟡 **Parziale**: alcuni non riusciti; 🔴 **Errore**: nessuno riuscito.
+- Fai clic su una voce per vedere ciascun asset o coppia FX, il relativo provider e i prezzi modificati (**Delta**).
+  Passa il mouse su un errore per leggerlo per intero; fai doppio clic (pressione prolungata su un telefono) per copiarlo.
+- Filtra per job, stato o periodo, dall'ultima ora agli ultimi 30 giorni. Vengono conservate solo le esecuzioni più recenti.
 
 ---
 
 ## 🗄️ Cache del server {: #server-caches }
 
-LibreFolio mantiene diverse **cache in memoria** sul backend (recupero dei prezzi, risultati di ricerca, calcoli di portafoglio, risposte dei provider e altro) in modo che le richieste ripetute non debbano interrogare i provider di dati esterni ogni volta. La scheda **Impostazioni Globali** termina con un **pannello Cache** (categoria Memoria) che elenca ogni cache registrata per nome, con le colonne **dimensione corrente / dimensione massima** e **TTL** (time-to-live) — ogni intestazione di colonna è cliccabile per ordinare per nome, dimensione o TTL; un pulsante **Aggiorna** rilegge le statistiche in tempo reale.
+Per rimanere veloce, LibreFolio conserva in memoria le risposte recenti dei provider e i risultati calcolati. Il
+pannello **Stato cache**, in fondo alla categoria **Memoria**, elenca ciascuna cache con **Dimensione / Max** e il suo **TTL** (per quanto tempo una voce viene conservata). Fai clic sull'intestazione di una colonna per ordinare;
+**Aggiorna** aggiorna i numeri.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Pannello delle cache del server nelle Impostazioni Globali (categoria Memoria)">
+    <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Pannello cache del server in Impostazioni globali (categoria Memoria)">
 </div>
 
-**Chi può fare cosa:**
+Tutti possono vedere il pannello. Un amministratore, con la scheda sbloccata, può svuotare una cache con
+**Svuota** o tutte con **Svuota tutto**, per forzare dati freschi senza riavvio. Anche un riavvio
+svuota tutte le cache.
 
-- 👁️ **La lettura dello stato** è disponibile per **qualsiasi utente autenticato** (`GET /api/v1/settings/cache/status`).
-- 🧹 **Lo svuotamento** è **solo per admin e richiede che la pagina sia sbloccata** (i pulsanti appaiono solo per i superuser in modalità di modifica): ogni riga ha il proprio pulsante **Svuota** (`POST /api/v1/settings/cache/clear/{name}`) e l'intestazione del pannello ha un pulsante **Svuota tutto** (`POST /api/v1/settings/cache/clear-all`).
+!!! warning "Svuotare una cache rallenta il recupero successivo"
 
-!!! warning "Lo svuotamento di una cache rallenta il recupero successivo"
+    Entrambe le azioni chiedono prima conferma. Dopo uno svuotamento, la richiesta successiva per quei dati torna
+    ai provider, quindi aspettati un rallentamento simile a un riavvio del server mentre le cache si riempiono
+    di nuovo.
 
-    Entrambe le azioni di svuotamento richiedono una conferma, per una buona ragione: dopo uno svuotamento, la richiesta successiva per quei dati **interroga nuovamente i provider esterni**, quindi prevedi un rallentamento paragonabile a un riavvio del server mentre le cache si ricostruiscono. Le cache si svuotano anche a ogni riavvio del server — lo svuotamento è utile solo per forzare il recupero di dati aggiornati senza riavviare.
+??? note "🧵 Più worker — quando il server viene eseguito con `--workers`"
+
+    Ogni processo worker ha le proprie cache. Il pannello mostra e svuota quelle del worker che ha
+    risposto; riavvia il server per svuotarle tutte.
 
 ---
 
-## 🔧 Note tecniche
+## 🔗 Correlati
 
-- 🗃️ Le impostazioni sono memorizzate come **coppie chiave-valore** nella tabella `global_settings`
-- 🔀 I valori sono memorizzati come stringhe e convertiti nel tipo appropriato (`int`, `bool`, `str`) quando vengono letti
-- 🔒 All'avvio multi-worker, le impostazioni vengono inizializzate con `INSERT ... ON CONFLICT DO NOTHING` per evitare condizioni di corsa
-- ⚡ Le modifiche hanno effetto **immediatamente** — non è richiesto alcun riavvio del server
+- 📝 **[Variabili d'ambiente](configuration.md)** — Le impostazioni che risiedono invece in `.env`
+- 👤 **[Preferenze utente](../user/settings/preferences.md)** — Cosa ogni utente può modificare per sé
+- 🧑‍💻 Per sviluppatori: **[Sistema delle impostazioni](../developer/architecture/settings.md)**,
+  **[Registro delle cache](../developer/architecture/settings_cache.md)** e
+  **[Scheduler dei dati di mercato](../developer/backend/scheduler.md)**

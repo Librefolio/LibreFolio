@@ -1,6 +1,8 @@
 # 📉 Indicadores Técnicos
 
-LibreFolio ofrece **22 indicadores técnicos calculados por el backend**, agrupados según la propiedad del mercado que miden. Los mismos contratos matemáticos alimentan los gráficos de activos, los gráficos FX compatibles, las anotaciones y los consumidores analíticos, como AI Export.
+LibreFolio ofrece **22 indicadores técnicos calculados por el backend**, agrupados según la propiedad del mercado que miden. Los mismos contratos matemáticos alimentan los gráficos de activos, los gráficos FX compatibles, las anotaciones y los consumidores analíticos, como la exportación IA.
+
+Los indicadores cuentan **sesiones**, no días naturales: una sesión es un día en que la serie tiene una cotización propia — un precio para un activo, un tipo publicado para un par FX. Un día que la serie rellena con el último valor conocido — un fin de semana, un festivo de mercado, cualquier día sin cotización — no es una sesión, como tampoco lo es un precio almacenado con fecha de fin de semana o de festivo de mercado que solo repite el cierre anterior (un [arrastre almacenado](../risk-metrics/data-quality.md#stored-carries)). Los periodos, el calentamiento y el historial mínimo se cuentan todos en sesiones, así que la SMA 200 promedia las últimas 200 sesiones, unos 290 días naturales. El gráfico conserva sus fechas de calendario: un indicador solo tiene valores en las sesiones, y su línea salva los días cerrados intermedios. La única excepción con ventana de calendario es la rentabilidad móvil en días naturales detrás del [modo Rentabilidad móvil](../../../user/assets/detail/chart.md#primary-modes) del gráfico, que compara cada fecha con el cierre resuelto exactamente $N$ días naturales antes.
 
 !!! info "Los campos de precio importan"
 
@@ -25,7 +27,7 @@ Los indicadores de tendencia suavizan el precio o miden si se ha establecido un 
 | **ADX** | ¿Qué intensidad tiene la tendencia? | Máximo, Mínimo, Cierre | [📖](adx.md) |
 | **Aroon** | ¿Hace cuánto se produjeron los nuevos extremos? | Máximo, Mínimo | [📖](aroon.md) |
 
-➡️ [Descripción general del grupo de Tendencia](trend.md)
+➡️ [Resumen del grupo de Tendencia](trend.md)
 
 ---
 
@@ -42,7 +44,7 @@ Los indicadores de momentum miden la velocidad, la presión direccional y la ace
 | **PPO** | ¿Cuál es el impulso de la media móvil en términos porcentuales? | Cierre | [📖](ppo.md) |
 | **CCI** | ¿Cuánto se aleja el precio de su media estadística reciente? | Máximo, Mínimo, Cierre | [📖](cci.md) |
 
-➡️ [Descripción general del grupo de Momentum](momentum.md)
+➡️ [Resumen del grupo de Momentum](momentum.md)
 
 ---
 
@@ -57,7 +59,7 @@ Los indicadores de volatilidad miden el rango, la dispersión y la anchura del c
 | **NATR** | ¿Qué magnitud tiene la volatilidad en relación con el precio? | Máximo, Mínimo, Cierre | [📖](natr.md) |
 | **Canales de Donchian** | ¿Cuáles son el máximo más alto y el mínimo más bajo del período? | Máximo, Mínimo | [📖](donchian-channels.md) |
 
-➡️ [Descripción general del grupo de Volatilidad](volatility.md)
+➡️ [Resumen del grupo de Volatilidad](volatility.md)
 
 ---
 
@@ -70,7 +72,7 @@ Los indicadores de volumen combinan la dirección del precio con la actividad de
 | **OBV** | ¿El volumen con signo se está acumulando o distribuyendo? | Cierre, Volumen | [📖](obv.md) |
 | **MFI** | ¿El flujo de dinero es presión de compra o de venta? | Máximo, Mínimo, Cierre, Volumen | [📖](mfi.md) |
 
-➡️ [Descripción general del grupo de Volumen](volume.md)
+➡️ [Resumen del grupo de Volumen](volume.md)
 
 ---
 
@@ -80,13 +82,13 @@ Los indicadores de riesgo convierten la propia serie de precios en una lectura d
 
 | Indicador | Pregunta principal | Datos | Detalles |
 |---|---|---|---|
-| **Drawdown bajo el máximo** | ¿Cuánto está el precio por debajo del máximo acumulado? | Cierre | [📖](../risk-metrics/max-drawdown.md) |
+| **Drawdown desde el máximo** | ¿Cuánto está el precio por debajo del máximo acumulado? | Cierre | [📖](../risk-metrics/max-drawdown.md) |
 | **Rentabilidad móvil** | ¿Qué rentabilidad compuesta ha generado la última ventana? | Cierre | [📖](../../fundamentals/returns.md) |
 | **Volatilidad móvil** | ¿Cuán dispersas están las rentabilidades recientes? | Cierre | [📖](../risk-metrics/volatility.md) |
 | **Ratio de Sharpe móvil** | ¿Está el exceso de rentabilidad compensando su riesgo? | Cierre | [📖](../risk-metrics/sharpe-ratio.md) |
 | **Beta móvil** | ¿Qué sensibilidad tiene el activo frente a un activo de comparación? | Cierre + activo de comparación | — |
 
-➡️ [Descripción general de las métricas de riesgo](../risk-metrics/index.md)
+➡️ [Resumen de las métricas de riesgo](../risk-metrics/index.md)
 
 ---
 

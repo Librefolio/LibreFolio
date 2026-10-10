@@ -101,7 +101,7 @@ $$
 
 ## 🔗 Relacionado
 
-- 📅 **[Descripción General de Eventos de Activos](index.md)** — Todos los tipos de eventos
+- 📅 **[Resumen de eventos de activos](index.md)** — Todos los tipos de eventos
 - 📈 **[Intereses](interest.md)** — Pagos de cupones periódicos antes del vencimiento
 - 📆 **[Convenciones de Recuento de Días](../../fundamentals/day-count.md)** — Cómo se calcula el devengo entre fechas de cupón
 - 📊 **[Ajuste de Precio](price-adjustment.md)** — Cambios de valor no monetarios antes del vencimiento

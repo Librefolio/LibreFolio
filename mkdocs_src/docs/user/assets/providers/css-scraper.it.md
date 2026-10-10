@@ -1,87 +1,78 @@
-# <img src="../../../../../static/cssscraper.png" alt=""> CSS Scraper
+# <img src="../../../../static/cssscraper.png" alt=""> CSS Scraper
 
-Il provider CSS Scraper consente di estrarre i dati dei prezzi da qualsiasi pagina web utilizzando i selettori CSS. Questo è particolarmente utile per gli asset non coperti da altri provider, come i titoli di stato italiani (BTP) su Borsa Italiana.
+Il CSS Scraper legge il prezzo di un asset da qualsiasi pagina web pubblica, usando un selettore CSS che punta
+al numero. Usalo quando nessun altro provider copre lo strumento. Nell'elenco **Provider** è
+chiamato **CSS Web Scraper**.
 
-## 📊 Capacità
+## 🔍 Cosa offre
 
-- ✅ **Prezzo Attuale**: Estrae il prezzo da una pagina web
-- ❌ **Storico**: Non supportato (⚠️ avviso, non un errore)
-- ❌ **Ricerca**: Non supportata
+- ✅ **Prezzo corrente**: letto dalla pagina a ogni sincronizzazione, nella valuta che scegli.
+- ❌ **Storico**: nessuno. Ogni sincronizzazione salva il prezzo del giorno, quindi lo storico cresce dal giorno in cui
+  inizi.
+- ❌ **Ricerca** e **dettagli**: assenti — inserisci tu stesso l'indirizzo della pagina e le impostazioni.
 
-## 🔧 Configurazione
+## 🧩 Configuralo
 
-- **Identifier**: L'URL completo della pagina da scansionare
-- **Identifier Type**: `OTHER`
-- **Parameters**:
+### 1️⃣ Copia il selettore CSS del prezzo
 
-| Parametro | Obbligatorio | Descrizione | Esempio |
-|-----------|:---:|---|---|
-| `current_css_selector` | ✅ | Selettore CSS per l'elemento del prezzo | `.summary-value strong` |
-| `currency` | ✅ | Codice valuta ISO 4217 | `EUR` |
-| `decimal_format` | ❌ | `us` (1,234.56) o `eu` (1.234,56) | `eu` |
-| `timeout` | ❌ | Timeout HTTP in secondi (default: 30) | `30` |
-| `user_agent` | ❌ | Header User-Agent personalizzato | `LibreFolio/1.0` |
+Il selettore indica a LibreFolio quale elemento della pagina contiene il prezzo.
 
-## 🔎 Come Trovare il Selettore CSS
+=== "Chrome"
 
-### Step (Chrome)
+    1. Apri la pagina e fai clic con il pulsante destro sul prezzo.
+    2. Scegli **Ispeziona** (o premi `F12`): DevTools evidenzia l'elemento del prezzo.
+    3. Fai clic con il pulsante destro sull'elemento evidenziato, poi **Copia** → **Copia selettore**.
 
-1. Apri la pagina con il prezzo in Chrome
-2. Fai **clic con il tasto destro** sul valore del prezzo
-3. Seleziona **Ispeziona** (o premi `F12`)
-4. Nel pannello Elementi dei DevTools, l'elemento del prezzo sarà evidenziato
-5. Fai **clic con il tasto destro** sull'elemento evidenziato nei DevTools
-6. Seleziona **Copia** → **Copia selettore**
-7. Incollalo nel campo `current_css_selector`
+=== "Firefox"
 
-### Step (Firefox)
+    1. Apri la pagina e fai clic con il pulsante destro sul prezzo.
+    2. Scegli **Ispeziona** (o premi `F12`): l'Ispettore evidenzia l'elemento del prezzo.
+    3. Fai clic con il pulsante destro sull'elemento evidenziato, poi **Copia** → **Selettore CSS**.
 
-1. Apri la pagina con il prezzo in Firefox
-2. Fai **clic con il tasto destro** sul valore del prezzo
-3. Seleziona **Ispeziona elemento** (o premi `F12`)
-4. Nell'Ispettore, fai **clic con il tasto destro** sull'elemento evidenziato
-5. Seleziona **Copia** → **Selettore CSS**
-6. Incollalo nel campo `current_css_selector`
+### 2️⃣ Compila le impostazioni del provider
 
-### 💡 Esempio: Borsa Italiana BTP
+In **Assegnazione provider**, scegli **CSS Web Scraper** e incolla l'indirizzo della pagina in **URL**. Le
+impostazioni appaiono con i loro nomi tecnici:
 
-Per un BTP su Borsa Italiana (es. `IT0005634800`):
+| Impostazione | Obbligatorio | Cosa inserire |
+|---|:---:|---|
+| `current_css_selector` | ✅ | Il selettore che hai copiato, ad es. `.summary-value strong` |
+| `currency` | ✅ | La valuta del prezzo, ad es. `EUR` |
+| `decimal_format` | — | `us` per `1,234.56` (predefinito) oppure `eu` per `1.234,56` |
+| `timeout` | — | Secondi di attesa per la pagina (predefinito `30`) |
+| `user_agent` | — | Come LibreFolio si presenta al sito (predefinito `LibreFolio/1.0`) |
 
-**URL** (versione inglese):
-```
-https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en
-```
+### 3️⃣ Provalo
 
-**CSS Selector**:
-```
-.summary-value strong
-```
+Fai clic su **Test configurazione**: **Prezzo corrente** deve mostrare il numero che vedi sulla pagina. Il ⚠️ su
+**Storico** è previsto, poiché questo provider non ne ha.
 
-**Configurazione**:
-- Identifier: `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en`
-- `current_css_selector`: `.summary-value strong`
-- `currency`: `EUR`
-- `decimal_format`: `us` (la pagina inglese usa il formato US: 100.39)
+!!! example "Un BTP su Borsa Italiana"
 
-Per la versione italiana, usa `decimal_format`: `eu` (la pagina italiana usa il formato EU: 100,39).
+    - **URL**: `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en`
+    - `current_css_selector`: `.summary-value strong`
+    - `currency`: `EUR`
+    - `decimal_format`: `us` — la pagina inglese mostra `100.39`. La pagina italiana (`lang=it`)
+      mostra `100,39`, quindi lì usa `eu`.
 
-## 🔢 Formato Decimale
+    Per gli strumenti quotati su Borsa Italiana, anche il provider [Borsa Italiana](borsa-italiana.md) ne fornisce lo storico.
 
-| Formato | Esempio | Quando usarlo |
-|--------|---------|-------------|
-| `us` | 1,234.56 | Pagine Inglesi/US (punto come separatore decimale) |
-| `eu` | 1.234,56 | Pagine Italiane/Tedesche/Francesi (virgola come separatore decimale) |
+## 🛠️ Risoluzione dei problemi
 
-## 🛠️ Risoluzione dei Problemi
+| Cosa vedi | Cosa fare |
+|---|---|
+| **Elemento del prezzo non trovato** | Il layout della pagina potrebbe essere cambiato: copia di nuovo il selettore. |
+| **Impossibile interpretare il prezzo** | Controlla `decimal_format`. L'elemento deve contenere solo il numero: gli spazi, €, $, £, ¥ e % vengono ignorati, mentre i caratteri alfabetici come `EUR` non vengono ignorati. |
+| **Errore HTTP** o **Richiesta non riuscita** | Controlla l'URL; aumenta `timeout` per un sito lento. L'errore 403 significa che il sito rifiuta le visite automatizzate. |
+| Un numero errato | Il selettore corrisponde a un altro elemento (LibreFolio usa la prima corrispondenza): rendilo più specifico. |
 
-### "Selector not found"
-Il selettore CSS non corrisponde a nessun elemento nella pagina. La struttura della pagina potrebbe essere cambiata: ispeziona nuovamente e copia un nuovo selettore.
+## ⚠️ Limiti
 
-### "Connection timeout"
-La pagina ha impiegato troppo tempo per rispondere. Prova ad aumentare il parametro `timeout` o verifica che l'URL sia corretto.
+- LibreFolio legge la pagina così come il sito la invia, senza eseguirne gli script: un prezzo inserito
+  da JavaScript non può essere letto, né possono esserlo le pagine dietro un login.
+- Quando il sito cambia layout, il selettore potrebbe smettere di corrispondere: prova di nuovo e copia un nuovo selettore.
 
-### "Parse error"
-Non è stato possibile interpretare il testo del prezzo come numero. Controlla l'impostazione `decimal_format`: se la pagina mostra `100,39`, usa `eu`; se mostra `100.39`, usa `us`.
+## 🔗 Correlati
 
-### Price prezzo mostra 0 o un valore errato
-Il selettore potrebbe corrispondere a un elemento diverso. Prova un selettore più specifico. Usa i DevTools per verificare esattamente a quale elemento corrisponde il tuo selettore.
+- ✏️ **[Editor dati](../detail/data-editor.md)** — Inserisci o correggi i prezzi manualmente
+- 🛠️ **Per gli sviluppatori: [Provider CSS Scraper](../../../developer/backend/assets/provider_cssscraper.md)** — Richiesta, analisi e codici di errore

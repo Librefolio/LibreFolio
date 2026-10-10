@@ -1,57 +1,80 @@
-# 🛡️ Manuale per amministratori
+# 🛡️ Manuale di amministrazione
 
-Questo manuale è destinato agli amministratori di sistema e agli utenti avanzati che devono eseguire attività di manutenzione, gestire gli utenti o interagire con il sistema tramite la riga di comando.
-
-## 📖 Panoramica
-
-La maggior parte delle attività amministrative e di manutenzione viene gestita tramite l'interfaccia a riga di comando principale o configurata tramite variabili d'ambiente.
+Questo manuale è destinato a chi installa ed esegue LibreFolio. La maggior parte delle operazioni di amministrazione avviene dalla riga di comando, tramite variabili d'ambiente o nella scheda **Admin** delle impostazioni dell'app.
 
 ---
 
 ## 📚 Guide
 
-La documentazione è organizzata in tre aree principali:
-
 ### 🐳 Distribuzione ed esposizione
-- 📦 **[Installazione su host](host_installation.md)**: Installazione manuale utilizzando Python, Node.js e Pipenv direttamente sulla macchina host.
-- 🐳 **[Docker avanzato](docker_advanced.md)**: Distribuzione containerizzata tramite Docker Compose, bind dei volumi e configurazione della proprietà utente tramite GID/UID.
-- 🌐 **[Esporre in modo sicuro](service_exposure.md)**: Esposizione sicura della tua istanza privata di LibreFolio su internet.
+- 📦 **[Installazione sull'host](host_installation.md)**: Configurazione manuale usando Python, Node.js e Pipenv direttamente sulla macchina host.
+- 🐳 **[Docker avanzato](docker_advanced.md)**: Distribuzione containerizzata tramite Docker Compose, binding dei volumi e configurazione della proprietà GID/UID dell'utente.
+- 🌐 **[Esposizione sicura](service_exposure.md)**: Esponi in modo sicuro la tua istanza privata di LibreFolio su Internet.
 
 ### ⚙️ Configurazione del sistema
 - 📝 **[Variabili d'ambiente](configuration.md)**: Elenco completo delle variabili `.env` supportate (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, ecc.) e precedenza di risoluzione delle variabili.
-- ⚙️ **[Impostazioni globali](settings.md)**: Configurazione delle impostazioni di runtime a livello di sistema (TTL delle sessioni, limiti di upload, intervalli di sincronizzazione dei dati di mercato).
+- ⚙️ **[Impostazioni globali](settings.md)**: Configura le impostazioni di runtime a livello di sistema (TTL sessione, limiti di caricamento, intervalli di sincronizzazione dei dati di mercato).
 
 ### 🧹 Manutenzione e operazioni
-- 🛠️ **[Strumenti CLI di amministrazione](cli_tools.md)**: Come usare lo script `dev.py` per le attività amministrative (gestione utenti, aggiornamenti del database).
-- 📂 **[Struttura del filesystem](filesystem.md)**: Dettagli su dove vengono archiviati database, log, upload e cartelle temporanee, e su come eseguire i backup.
+- 🛠️ **[Strumenti di amministrazione CLI](cli_tools.md)**: Come usare lo script `dev.py` per attività amministrative (gestione utenti, aggiornamenti del database).
+- 📂 **[Struttura del filesystem](filesystem.md)**: Dettagli su dove vengono archiviati database, log, caricamenti e cartelle temporanee, e su come eseguire backup.
 
 ---
 
 ## 🔔 Notifiche di aggiornamento {: #update-notifications }
 
-Dopo ogni accesso, il browser di un **amministratore** interroga l'API GitHub Releases per verificare la presenza di una versione **stabile** più recente di LibreFolio (bozze e pre-release non vengono mai prese in considerazione). Per non essere invadente:
-
-- Il controllo viene eseguito **al massimo una volta ogni ora** — l'ultimo risultato viene salvato nella memoria locale del browser.
-- La modale compare solo quando la release è **effettivamente installabile**: il controllo verifica anche che l'immagine Docker di quel tag esista sul registry, quindi una release la cui build è ancora in corso non viene ancora annunciata.
-- Nelle installazioni self-hosted senza accesso a Internet il recupero fallisce semplicemente in silenzio: **nessun errore, nessun banner**.
-
-Quando esiste una versione stabile più recente, appare una **modale di aggiornamento disponibile** che mostra la versione corrente e l'ultima versione affiancate, con collegamenti alla **[guida all'aggiornamento](../user/installation.md#updating)** e alla pagina delle release di GitHub. Due modi per chiuderla:
-
-- **"Più tardi"** — la modale si chiude e verrà riproposta al prossimo accesso.
-- **"Salta questa versione"** — la modale non segnalerà mai più quella specifica versione (una versione futura più recente verrà comunque annunciata).
-
-Gli utenti non amministratori non vengono mai interrogati al momento dell'accesso. Se un non amministratore controlla manualmente gli aggiornamenti dalla [modale del changelog](../user/settings/about.md#changelog-modal) e una versione più recente è disponibile, vede invece una finestra di dialogo che elenca gli amministratori dell'istanza (con gli indirizzi e-mail quando disponibili), così sa a chi chiedere l'aggiornamento.
+Quando un amministratore accede, LibreFolio controlla su GitHub se è disponibile una versione **stabile** più recente. Se esiste, la finestra **Nuova versione disponibile** mostra la tua versione e quella più recente affiancate, con un link **Come aggiornare** alla [guida all'aggiornamento](../user/installation.md#updating) e un link **Note di rilascio su GitHub**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Update available modal with current and latest version">
+    <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Modale di aggiornamento disponibile con versione corrente e più recente">
 </div>
+
+- **Ricordamelo più tardi** chiude la finestra fino a un accesso successivo.
+- **Salta questa versione** interrompe la richiesta automatica per quella versione; una più recente viene annunciata
+  di nuovo.
+- Una versione viene annunciata solo quando la sua immagine Docker può essere scaricata, e la finestra attende che
+  nessun'altra finestra o guida sia aperta.
+- Senza accesso a Internet, il controllo automatico fallisce silenziosamente: nessun errore, nessun banner.
+- Per controllare subito, usa **Controlla aggiornamenti** nel
+  [changelog](../user/settings/about.md#changelog-modal): segnala gli errori e anche le versioni che
+  hai saltato.
+
+??? note "👥 Altri utenti — quando qualcuno che non è un amministratore esegue il controllo"
+
+    Per gli utenti che non sono amministratori, non viene eseguito alcun controllo all'accesso. Se uno di loro esegue
+    **Controlla aggiornamenti** ed esiste una versione più recente, la
+    finestra di dialogo **Aggiornamento disponibile — contatta un amministratore** elenca gli amministratori, con i loro
+    indirizzi e-mail quando disponibili, così sanno a chi rivolgersi.
 
 ---
 
-## 🔐 Autenticazione e persistenza delle sessioni
+## 🔐 Mantieni gli utenti connessi dopo un riavvio {: #session-persistence }
 
-LibreFolio utilizza **JWT (JSON Web Tokens)** per l'autenticazione degli utenti. Per impostazione predefinita:
-- Se la variabile d'ambiente **`JWT_SECRET`** viene lasciata vuota nel tuo file `.env`, all'avvio il server genera una chiave di firma casuale. Questo offre la massima sicurezza, ma le sessioni utente andranno perse se il server viene riavviato.
-- Per rendere persistenti le sessioni tra i riavvii del server (o quando si eseguono più istanze server indipendenti dietro un load balancer), definisci una chiave **`JWT_SECRET`** stabile. Nota che più worker uvicorn generati sullo stesso host condividono automaticamente il segreto generato dal processo padre, il che significa che la persistenza delle sessioni è mantenuta tra i worker anche quando `JWT_SECRET` viene lasciato vuoto.
+LibreFolio firma ogni sessione di login con una chiave segreta, `JWT_SECRET`.
 
-Per i dettagli tecnici, consulta la pagina [Architettura di Sicurezza](../developer/architecture/security.md) dedicata agli sviluppatori.
+- **Non impostata** (impostazione predefinita): viene creata una nuova chiave casuale a ogni avvio, quindi tutti devono accedere
+  di nuovo dopo un riavvio o un aggiornamento.
+- **Impostata**: le sessioni sopravvivono ai riavvii. Impostala anche se diversi server LibreFolio separati condividono
+  gli stessi utenti dietro un load balancer.
+
+### 🔑 1. Genera una chiave
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+Non c'è Python sull'host? Esegui invece il comando all'interno del container:
+
+```bash
+docker exec librefolio python -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+### 📝 2. Aggiungila al file `.env` e riavvia
+
+```bash
+JWT_SECRET=paste-the-generated-value-here
+```
+
+Riavvia LibreFolio (con Docker Compose: `docker compose up -d`). Mantieni la chiave privata: chiunque la conosca può falsificare una sessione.
+
+I worker di un singolo `./dev.py server --workers …` condividono una chiave tra loro. La durata di una sessione è la **Durata sessione** in [Impostazioni globali](settings.md). Per i dettagli, consulta la pagina per sviluppatori [Architettura di sicurezza](../developer/architecture/security.md).

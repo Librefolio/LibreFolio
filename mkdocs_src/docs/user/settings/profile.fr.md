@@ -18,6 +18,14 @@ Survolez votre avatar (lorsque l'onglet est déverrouillé) et cliquez sur l'ic�
 
 L'avatar est enregistré immédiatement et est utilisé dans toute l'application, partout où votre identité est affichée — barre latérale, partage de courtier et listes de collaborateurs.
 
+!!! note "Aussi depuis la page de Bienvenue"
+
+    Les nouveaux comptes peuvent choisir la même photo une seule fois, pendant la **[configuration
+    d'accueil à la première connexion](../getting-started.md#welcome-setup)** : c'est le
+    même sélecteur, simplement ouvert depuis un autre écran. Si vous passez cette étape, vos
+    initiales restent votre avatar ; vous pouvez toujours ajouter ou changer une photo plus tard
+    depuis cette page.
+
 ## ✏️ Nom d'utilisateur, e-mail et date de création
 
 - Les champs **Nom d'utilisateur** et **e-mail** peuvent être modifiés (onglet déverrouillé requis). Les modifications s'appliquent immédiatement à vos identifiants de connexion.
@@ -28,7 +36,7 @@ L'avatar est enregistré immédiatement et est utilisé dans toute l'application
 ### 🔑 Changer le mot de passe
 
 <div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Change Password">
+ <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Changer le mot de passe">
 </div>
 
 Le bouton **Changer le mot de passe** (toujours disponible, aucun déverrouillage nécessaire) ouvre une fenêtre modale demandant :
@@ -59,6 +67,6 @@ Si la suppression échoue pour une raison technique, rien n'est supprimé.
 ## 🔗 Liens connexes
 
 - 🎛️ **[Préférences utilisateur](preferences.md)** — Langue, devise de base et thème
-- ⚙️ **[Aperçu des paramètres](index.md)** — Résumé des paramètres généraux
+- ⚙️ **[Vue d'ensemble des paramètres](index.md)** — Résumé des paramètres généraux
 - ℹ️ **[À propos](about.md)** — Informations de version, plugins et journal des modifications
 - 🛡️ **[Paramètres globaux](../../admin/settings.md)** — Options à l'échelle de l'instance (admin)

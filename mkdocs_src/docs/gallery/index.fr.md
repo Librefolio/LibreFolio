@@ -24,7 +24,7 @@ Bienvenue dans la galerie visuelle de LibreFolio ! Ici, vous pouvez explorer tou
     - **Authentification** : Connexion sécurisée avec indicateur de force du mot de passe
     - **Sécurité** : Indicateur de sécurité de la connexion dans la barre latérale, ouvert sur son niveau et sa raison
     - **Prise en main** : Configuration d'accueil au premier lancement, parcours principal guidé et guides contextuels, relançables depuis les Paramètres
-    - **Tableau de bord** : Aperçu rapide de votre portefeuille
+    - **Tableau de bord** : Vue d'ensemble rapide de votre portefeuille
     - **Courtiers** : Gérez plusieurs comptes de courtage
     - **Fichiers** : Importez et gérez les rapports de courtage avec des vues en grille et en tableau
     - **Paramètres** : Personnalisez votre expérience en 4 langues

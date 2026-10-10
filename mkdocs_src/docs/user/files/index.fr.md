@@ -1,92 +1,105 @@
-# 📁 Fichiers et Téléchargements
+# 📁 Fichiers & Téléversements
 
-La page **Fichiers** (`/files`) est votre centre névralgique pour gérer tous les contenus téléchargés dans LibreFolio. Elle se compose de deux sections distinctes avec des règles de visibilité différentes.
+La page **Fichiers** conserve tout ce qui est téléversé dans LibreFolio, dans deux onglets :
 
----
-
-## 📂 Deux Onglets, Deux Objectifs
-
-### 📁 Ressources Statiques
-
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-Les ressources statiques sont **visibles par tous les utilisateurs** du système. C'est ici que vous trouverez :
-
-- 🖼️ Les **avatars** et photos de profil des utilisateurs
-- 🏷️ Les **icônes** et logos des courtiers
-- 📄 Tout **document partagé** ou image téléchargée par les utilisateurs
-
-Ces fichiers résident dans le répertoire `custom-uploads/` sur le serveur.
-
-**Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne de fichier (dans la vue en liste) pour accéder aux actions rapides (Aperçu, Copier le Lien, Télécharger, Supprimer).
-
-Vous pouvez basculer entre la **vue en liste** et la **vue en grille** pour obtenir un aperçu visuel des fichiers image :
-
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-### 📊 Rapports de Courtier {: #broker-reports }
-
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Broker Reports Tab" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-Les rapports de courtier ont une **visibilité restreinte** : vous ne pouvez voir que les rapports des courtiers auxquels vous avez accès (en tant que propriétaire, éditeur ou lecteur). Ces fichiers comprennent :
-
-- 📋 Les **exportations de transactions** au format CSV ou Excel de votre courtier
-- ✅ Les **résultats de l'analyse** du système d'importation automatique (BRIM)
-- ❌ Les fichiers dont **l'analyse a échoué** (conservés pour le débogage)
-
-**Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne de rapport pour accéder aux actions rapides (Aperçu, Télécharger, Supprimer).
+- **Ressources statiques** — avatars, icônes de courtiers et autres images ou documents, visibles par tous les utilisateurs ;
+- **Rapports de courtiers** — les fichiers de relevés à partir desquels vous importez des transactions, visibles uniquement par les personnes ayant accès à leur courtier.
 
 ---
 
-## ⬆️ Téléchargement de Fichiers
+## 🖼️ Ressources statiques
 
-Pour télécharger un fichier :
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="files" data-name="static-tab" alt="Onglet Fichiers statiques" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
-1. Cliquez sur **l'zone de téléchargement** ou **glissez-déposez** les fichiers directement.
-2. Pour les **fichiers image**, l'outil de [recadrage d'image](../misc/image-crop.md) s'ouvre automatiquement pour vous permettre de redimensionner et recadrer l'image avant le téléchargement.
-3. Pour les **fichiers non image** (CSV, PDF, etc.), vous pouvez renommer le fichier avant de confirmer le téléchargement.
+Vous trouverez ici les **avatars** des utilisateurs, les **icônes** des courtiers et toute **image ou document** partagé par les utilisateurs. Toute personne disposant d’un compte LibreFolio peut les voir.
+
+- Basculez entre la vue **liste** et **grille** : la grille affiche un aperçu des images.
+- Dans la liste, faites un clic droit sur un fichier pour **Aperçu**, **Copier le lien**, **Télécharger** ou **Supprimer**. Vous ne pouvez supprimer que les fichiers que vous avez téléversés ; un administrateur peut supprimer n’importe lequel.
+- **Aperçu** affiche un PDF dans une visionneuse en lecture seule : vous pouvez le lire, y effectuer des recherches et copier son texte, mais pas le modifier, l’annoter ou l’imprimer ; pour conserver le fichier, utilisez **Télécharger**. Un PDF protégé par mot de passe demande son mot de passe, qui reste dans votre navigateur : il n’est jamais envoyé au serveur ni enregistré, et il disparaît dès que l’aperçu se ferme.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vue grille des fichiers statiques" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+### ⬆️ Téléverser un fichier
+
+1. Cliquez sur **Téléverser**, puis déposez les fichiers sur la zone ou cliquez dessus pour parcourir.
+2. Avant de téléverser, vous pouvez cliquer sur ✏️ **Modifier** sur une image pour la recadrer avec l’[outil de recadrage d’image](../misc/image-crop.md), puis confirmer avec **Recadrer** ; sur tout autre fichier, ✏️ **Renommer** change son nom. **Restaurer l’original** rétablit un fichier tel que vous l’avez sélectionné.
+3. Cliquez sur **Téléverser**.
 
 <div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Upload Drop Zone" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="Zone de dépôt de fichier" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! tip "Limite de Taille de Fichier"
+---
 
-    La taille maximale de téléchargement est configurée par l'administrateur système dans les [Paramètres Globaux](../../admin/settings.md). La valeur par défaut est généralement de 10 Mo.
+## 📊 Rapports de courtiers {: #broker-reports }
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Onglet Rapports de courtiers" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+Ce sont les relevés exportés par vos courtiers, en attente d’importation ou déjà importés. Vous voyez les rapports de chaque courtier auquel vous avez accès, en tant que Propriétaire, Éditeur ou Lecteur.
+
+La colonne **Statut** vous indique où en est chaque fichier :
+
+- **Téléversé** — stocké, pas encore analysé ;
+- **Analysé** — l’Assistant d’importation l’a lu avec succès ;
+- **Échec** — l’analyse a échoué ; le fichier reste ici pour que vous puissiez le vérifier ou le signaler.
+
+### 📤 Téléverser un rapport de courtier
+
+1. Dans **Rapports de courtiers**, cliquez sur **Téléverser** et sélectionnez des fichiers CSV ou Excel.
+2. Dans **Attribuer des courtiers**, choisissez le courtier de chaque fichier, ou un seul pour tous avec **Tout attribuer à**. **Créer nouveau** ajoute un courtier sur-le-champ ; si vous ne pouvez modifier qu’un seul courtier, il est déjà sélectionné.
+3. Cliquez sur **Téléverser**. Les fichiers sont stockés, mais **rien n’est encore importé**.
+
+Pour les importer, ouvrez l’[Assistant d’importation](../transactions/import/index.md) (**Transactions** → **Importer**) : son étape **Sélectionner des fichiers** liste les rapports que vous avez téléversés.
+
+Le courtier que vous choisissez détermine uniquement le compte qui reçoit les transactions. L’importateur reconnaît automatiquement le format du fichier, et un plugin d’importation peut lire les exports de plusieurs courtiers.
+
+### ⚙️ Gérer les rapports
+
+Faites un clic droit sur un rapport pour **Aperçu**, **Télécharger** ou **Supprimer**, ou cochez-en plusieurs pour les supprimer ensemble. Supprimer un rapport ne supprime jamais les transactions déjà importées à partir de celui-ci.
+
+### 🧩 Lots de rapports {: #report-sets }
+
+Certaines banques répartissent un compte sur plusieurs exports : [Danske Bank](../transactions/import/danske-bank.md), par exemple, nécessite un export d’opérations sur titres et un relevé du compte espèces. Les exports d’une telle banque que vous téléversez **ensemble** forment un **lot de rapports**, et LibreFolio les importe comme un seul lot, via un **fichier combiné** qu’il construit à partir de ceux-ci. La colonne **Lot de rapports** vous indique où en est chaque fichier (la même colonne apparaît dans les **Rapports téléversés** d’un courtier) :
+
+| Badge | Signification |
+|:--|:--|
+| **Lot du ‹date›** | Le fichier appartient au lot téléversé à cette date, avec les autres exports du lot. |
+| **Incomplet** | Le lot manque encore d’un export requis : survolez le badge pour voir lequel. Ajoutez-le depuis la carte du lot dans l’Assistant d’importation, avec **Téléverser le fichier manquant**. |
+| **Combiné** | Le fichier que LibreFolio a construit à partir des exports d’un lot — celui que l’importation lit réellement. Survolez le badge pour voir les fichiers à partir desquels il a été construit, et lesquels d’entre eux ont été supprimés depuis. |
+| **Utilisé dans un fichier combiné** | Cet export a été intégré à un fichier combiné de son lot. |
+| **À recombiner** | L’importateur a été modifié depuis la construction du fichier combiné : une nouvelle analyse du lot le reconstruit. |
+
+Vous pouvez prévisualiser, télécharger et supprimer ces fichiers comme n’importe quel autre rapport. Supprimer un export d’un lot laisse son fichier combiné en place, mais pour importer à nouveau le lot, vous devez d’abord y téléverser à nouveau cet export.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="files" data-name="brim-report-sets" alt="Onglet Rapports de courtiers avec les fichiers Danske Bank, leurs badges de lot de rapports et le filtre Téléversé par ouvert" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 ---
 
-## 📤 Gestion des Rapports de Courtiers
+## 👤 Qui a téléversé chaque fichier {: #uploaded-by }
 
-Si vous souhaitez importer des transactions ou gérer des relevés existants :
+Les deux onglets indiquent qui a téléversé chaque fichier dans la colonne **Téléversé par**, avec l’avatar et le nom de la personne :
 
-1. Allez sur l'onglet **Rapports de Courtier**.
-2. Téléchargez le fichier CSV ou Excel exporté de votre courtier (Degiro, Interactive Brokers, eToro, Directa SIM, etc.).
-3. Choisissez à quel **courtier associer** le fichier : cela détermine quel compte de courtier recevra les transactions importées.
-4. Le fichier est stocké et apparaît dans la liste des rapports. **Aucun import ne s'exécute encore** : pour réellement l'analyser et importer les transactions, ouvrez **[l'Assistant d'Importation](../transactions/import/index.md)** (Transactions → **Importer**) — son étape *Sélectionner des Fichiers* liste les rapports déjà téléversés, vous pouvez donc en choisir un au lieu de le téléverser à nouveau.
+- cliquez sur l’en-tête de colonne pour trier par téléverseur ;
+- ouvrez son filtre pour ne conserver que les fichiers d’une ou plusieurs personnes : cochez-les dans la liste, ou recherchez-les par nom ;
+- un fichier dont le téléverseur n’a pas été enregistré affiche *Téléverseur non enregistré*.
 
-### ⚙️ Actions sur les Rapports Existants
-
-Faites un clic droit sur n'importe quel rapport dans le tableau pour ouvrir son menu contextuel :
-- 👁️ **Aperçu (Preview)** : Inspecte le contenu du fichier sans quitter la page.
-- 📥 **Télécharger (Download)** : Télécharge le fichier brut d'origine.
-- 🗑️ **Supprimer (Delete)** : Supprime le fichier et ses métadonnées. Les transactions déjà importées à partir de celui-ci **restent dans le registre** — supprimer un rapport ne supprime jamais les transactions.
-
-!!! info "Association ≠ Analyse"
-
-    Le courtier que vous choisissez lors du téléchargement sert uniquement à **l'association** : il détermine quel compte de courtier recevra les transactions importées. La détection du format et l'analyse se font dans une étape distincte et sont **indépendantes** du courtier : le même plugin BRIM peut fonctionner pour plusieurs courtiers s'ils exportent dans le même format.
+Le filtre s’applique également à la vue grille des **Ressources statiques**. Il est enregistré dans l’adresse de la page, donc un signet ou un lien partagé s’ouvre avec le même filtre.
 
 ---
 
-## 🔒 Sécurité
+## 🔒 Accès et limites
 
-- 🌐 Les **fichiers statiques** sont accessibles à toute personne disposant d'un compte LibreFolio.
-- 🔐 Les **rapports de courtier** respectent le contrôle d'accès du courtier : seuls les utilisateurs ayant accès à ce courtier peuvent consulter ses rapports.
-- 🚫 Les **fichiers exécutables** (`.exe`, `.sh`, `.py`, etc.) sont bloqués pour des raisons de sécurité.
-- 🔍 Le **type MIME** du fichier est validé côté serveur pour empêcher l'usurpation de type de fichier (par exemple, renommer un `.exe` en `.jpg`).
+- 🌐 **Ressources statiques** — tout utilisateur connecté peut les voir.
+- 🔐 **Rapports de courtiers** — seuls les utilisateurs ayant accès au courtier peuvent les voir ; le téléversement et la suppression nécessitent un accès Propriétaire ou Éditeur.
+- 📏 **Taille** — jusqu’à la limite définie par l’administrateur dans les [Paramètres globaux](../../admin/settings.md) : 10 Mo sauf modification.
+- 🚫 **Types de fichiers** — les programmes et scripts (tels que les fichiers `.exe`, `.sh` ou `.py`) sont refusés comme ressources statiques ; les rapports de courtiers doivent être des fichiers CSV ou Excel.
+
+L’emplacement des fichiers sur le serveur est décrit dans la [Structure du système de fichiers](../../admin/filesystem.md).

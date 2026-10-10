@@ -1,65 +1,60 @@
-# 📉 Gráfico Interactivo
+# 📉 Gráfico interactivo
 
-El corazón de la página de Detalle del Par: un gráfico completo **impulsado por ECharts** que le permite visualizar el historial de tipos de cambio con potentes herramientas interactivas.
+El corazón de la página de detalle del par: el historial de cotización del par durante el periodo seleccionado.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Gráfico de Detalle de FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Gráfico de detalle FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔀 Modos de Vista
+## 🔀 Vista Abs o %
 
-Cambie entre dos modos de visualización utilizando la barra de herramientas:
+Cambia con **Abs** / **%** en la esquina superior izquierda del gráfico; la página se abre en la vista %.
 
-- 📈 **Absoluto** — Muestra los valores originales del tipo de cambio (ej. 1 EUR = 1.0845 USD). Ideal para ver los niveles reales de la tasa.
-- 📊 **Porcentaje (%)** — Muestra el cambio porcentual desde el primer punto de datos visible. Ideal para comparar movimientos relativos y superponer múltiples señales.
-
-Al cambiar al modo %, todas las señales superpuestas también se recalculan como porcentajes desde sus respectivos puntos de partida.
+- 📊 **%** — el cambio desde el primer día del periodo. Las superposiciones también empiezan desde 0 %, así que sus movimientos se pueden comparar de un vistazo.
+- 📈 **Abs** — la cotización en sí, p. ej. 1 EUR = 1.0845 USD.
 
 ---
 
-## 🔍 Navegación y Zoom
+## 🔍 Zoom, desplazamiento y periodo
 
 | Acción | Escritorio | Móvil |
 |--------|---------|--------|
-| **Desplazar** | Clic + arrastrar | Tocar + arrastrar |
-| **Acercar (Zoom in)** | Rueda del ratón arriba | Pellizcar hacia afuera |
-| **Alejar (Zoom out)** | Rueda del ratón abajo | Pellizcar hacia adentro |
-| **Restablecer zoom** | Doble clic | Doble toque |
+| **Zoom** | Rueda del ratón | Pellizcar |
+| **Desplazar** | Clic y arrastrar | Arrastrar con dos dedos (un dedo desplaza la página) |
 
-También puede utilizar los **ajustes preestablecidos de rango de tiempo** (1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX) o seleccionar un rango de fechas **Personalizado** para saltar rápidamente a periodos específicos. Cuando la barra de herramientas tiene espacio libre, aparecen **preajustes de relleno** adicionales para ocuparlo — 3Y, 5Y, 10Y junto a los preajustes de duración, y WTD, MTD, QTD junto a YTD.
+- **Periodo**: los preajustes **1W** a **2Y**, **YTD** y **Todo**, o **Personalizado** (un número de días, semanas, meses o años hacia atrás desde hoy); haz clic en las fechas para elegirlas en un calendario. Aparecen más preajustes cuando la barra de herramientas tiene espacio. Las páginas de la misma pestaña del navegador comparten el periodo.
+- En un periodo largo, el gráfico agrupa las cotizaciones por semana o mes y muestra una insignia **Semanal** o **Mensual**: amplía para ver las cotizaciones diarias.
+- En una pantalla estrecha, el eje muestra menos fechas y estas más cortas; la primera y la última siempre permanecen.
 
-!!! info "Disponibilidad de datos"
+??? info "📅 Historial más corto que el periodo — cuando el gráfico empieza más tarde"
 
-    Si el rango de tiempo seleccionado excede los datos disponibles, LibreFolio muestra lo que esté disponible. Use **Sync** para intentar obtener datos más antiguos del proveedor; tenga en cuenta que algunos proveedores tienen una cobertura histórica limitada.
+    Un banner muestra la fecha a partir de la cual hay datos disponibles. **Sincronizar** puede obtener cotizaciones más antiguas, si el proveedor las publica; de lo contrario, introdúcelas en el [Editor de datos](data-editor.md).
 
 ---
 
 ## 💬 Información emergente
 
-Pase el cursor sobre cualquier punto del gráfico para ver:
+Pasa el cursor sobre el gráfico, o tócalo en el móvil, para ver:
 
-- 📅 La **fecha**
-- 💱 El **tipo de cambio** con precisión completa
-- 📊 El **cambio porcentual** respecto al punto de datos anterior
+- 📅 la **fecha** (o la semana o el mes, cuando el gráfico agrupa las cotizaciones);
+- 💱 la **cotización** y el valor de cada superposición;
+- 📊 el **cambio desde el inicio del periodo**: Δ y % en la vista Abs, % en la vista %;
+- ⚠️ **Obsoleto: N día(s) de antigüedad** en días sin una nueva cotización, como fines de semana y días festivos.
 
 ---
 
-## 🧰 Barra de Herramientas
+## 🧰 Botones del gráfico
 
-La barra de herramientas del gráfico proporciona acceso rápido a:
-
-- 📊 **Interruptor de modo de vista** — Absoluto / Porcentaje
-- ⏱️ **Rango de tiempo** — 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX, Personalizado (más los preajustes de relleno 3Y/5Y/10Y y WTD/MTD/QTD cuando la barra de herramientas tiene espacio)
-- 📈 **[Señales](signals.md)** — Interruptor de superposiciones de indicadores técnicos
-- 📏 **[Medidas](measures.md)** — Herramienta de medición de clic a clic
-- ✏️ **[Editor de Datos](data-editor.md)** — Editar puntos de datos individuales
-- ⚙️ **[Configuración del Gráfico](../chart-settings.md)** — Personalización visual
+- 📏 **Medida** — consulta [Medidas](measures.md).
+- ✏️ **Editar cotizaciones** — consulta [Editor de datos](data-editor.md).
+- ⚙️ **Estética** — colores, relleno, cuadrícula y rangos de ejes, como en [Ajustes del gráfico](../chart-settings.md).
+- 📊 El panel **Señales** por encima del gráfico — consulta [Señales](signals.md).
 
 ---
 
 ## 🔗 Relacionado
 
-- ⚙️ **[Configuración del Gráfico](../chart-settings.md)** — Personalice colores, ancho de línea, relleno de área, cuadrícula
-- 📈 **[Señales](signals.md)** — Superponga indicadores técnicos en el gráfico
+- ⚙️ **[Ajustes del gráfico](../chart-settings.md)** — Aspecto del gráfico y señales de superposición
+- 📈 **[Señales](signals.md)** — Indicadores técnicos en el gráfico

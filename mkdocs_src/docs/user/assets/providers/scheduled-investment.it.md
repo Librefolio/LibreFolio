@@ -1,71 +1,94 @@
-# <img src="../../../../../static/scheduled_investment.png" alt=""> Scheduled Investment Provider
+# <img src="../../../../static/scheduled_investment.png" alt=""> Investimento Programmato
 
-Il provider Scheduled Investment è progettato per strumenti a reddito fisso in cui il valore è calcolato in base a un piano di tassi di interesse piuttosto che ai prezzi di mercato. Esempi includono conti di risparmio, depositi vincolati e titoli di stato con tassi di cedola noti.
+Il provider Investimento Programmato calcola il valore di un asset dal suo piano interessi invece
+di leggere un prezzo di mercato. Usalo per conti di risparmio, depositi a termine, prestiti P2P o crowdfunding,
+e obbligazioni che segui tramite i loro interessi maturati. Nella lista **Provider** è chiamato
+**Calcolatore Investimento Programmato**.
 
-## 📊 Capacità
+## 🔍 Cosa Offre
 
-- ✅ **Prezzo Corrente**: Calcolato deterministicamente da valore iniziale + piano di interessi + eventi dell'asset
-- ✅ **Cronologia**: Curva del valore storico completa basata sull'accumulo di interessi
-- ✅ **Eventi dell'Asset**: Genera eventi INTEREST e PRICE_ADJUSTMENT
-- ❌ **Ricerca**: Non applicabile
+- ✅ **Prezzo corrente** e **storico**, calcolati dal tuo piano interessi: non viene interrogato nessun sito web, e
+  lo stesso piano dà sempre gli stessi valori.
+- ✅ **Eventi**: con **Genera Cedola**, pagamenti di interessi e un regolamento finale a scadenza, più
+  gli eventi che aggiungi tu stesso.
+- ❌ **Ricerca** e **dettagli**: non applicabile. Non c'è nemmeno un identificatore da digitare: LibreFolio
+  ne crea uno per te.
 
-## 🔧 Configurazione
+## 📋 Editor del piano interessi {: #interest-schedule-editor }
 
-- **Identificatore**: Generato automaticamente (non è necessario un identificatore manuale)
-- **Tipo di Identificatore**: `AUTO_GENERATED`
-- **Parametri**: Configurati tramite l'**Interest Schedule Editor** (componente UI personalizzato)
+Scegliendo il provider in **Assegnazione Provider** si apre l'editor **Piano interessi**. Inizia con
+le impostazioni per l'intero piano interessi:
 
-### Campi Obbligatori
+- **Valore Iniziale** e **Valuta**: l'importo investito, o il valore nominale — ad es. 10.000 EUR.
+- **Tipo di Interesse**: **Semplice** o **Composto** — vedi
+  [Come viene calcolato il valore](#how-value-is-calculated).
+- **Conteggio Giorni**: come vengono contati i giorni di un anno — **ACT/365**, **ACT/360**, **ACT/ACT** o
+  **30/360**. Vedi [Convenzioni di conteggio dei giorni](../../../financial-theory/fundamentals/day-count.md).
 
-| Campo | Descrizione |
-|-------|-------------|
-| **Initial Value** | Il capitale / valore nominale dell'investimento (es. 10000) |
-| **Currency** | Codice valuta ISO 4217 (es. EUR, USD) |
+Poi aggiungi i periodi con **Aggiungi Primo Periodo**, e **Aggiungi Periodo** per i successivi:
 
-## 📋 Interest Schedule Editor
+| Colonna | Cosa inserire |
+|---|---|
+| **Periodo** | Data di inizio e fine, entrambe incluse |
+| **Tasso %** | Il tasso annuo come percentuale: `5.00` significa 5% all'anno |
+| **Frequenza** | Ogni quanto matura l'interesse: Giornaliero, Settimanale, Mensile, Trimestrale, Semestrale o Annuale |
+| **Genera Cedola** | Selezionalo per pagare gli interessi maturati a ogni data di scadenza |
 
-L'editor consente di definire molteplici periodi di tasso di interesse:
+I periodi devono susseguirsi, senza interruzioni o sovrapposizioni. **Dividi** taglia un periodo in due; seleziona
+periodi adiacenti e clicca **Unisci** per unirli.
 
-| Campo | Descrizione |
-|-------|-------------|
-| **Period** | Data di inizio e fine (entrambe inclusive) |
-| **Rate %** | Tasso di interesse annuo in percentuale (es. 5.00 = 5%) |
-| **Compounding** | Interesse semplice o composto |
-| **Comp. Freq.** | Frequenza di capitalizzazione (Annuale, Semestrale, Trimestrale, Mensile, Giornaliera) |
-| **Day Count** | Convenzione di conteggio dei giorni (ACT/365, ACT/360, 30/360, ACT/ACT) |
+### ⚡ Interessi di Mora {: #late-interest }
 
-### ⚡ Late Interest
+Per un prestito rimborsato in ritardo, attiva **⚡ Interessi di Mora** sotto i periodi: l'asset continua a crescere
+dopo la fine dell'ultimo periodo. Appare una riga di mora con il proprio **Tasso %**, **Frequenza** e
+**Genera Cedola**. Clicca il suo periodo per impostare i giorni di grazia, e scegli **Semplice** o
+**Composto** (il predefinito) accanto all'interruttore.
 
-È possibile abilitare il **Late Interest** per definire un tasso di penale applicato dopo la fine dell'ultimo periodo programmato. Si applica prima un **periodo di grazia** configurabile (in giorni); successivamente, gli interessi di mora iniziano a maturare.
+- Durante i giorni di grazia, gli interessi continuano a maturare al tasso dell'ultimo periodo.
+- Dopo di essi, si applica il tasso di mora.
 
-## 📋 Asset Events
+### 📅 Eventi dell'asset
 
-Gli eventi dell'asset descrivono quanto accade all'asset a livello globale (non transazioni a livello di portafoglio):
+Aggiungi eventi singoli con **Aggiungi Evento**: una **Data**, un **Tipo**, un **Valore** e **Note** opzionali.
+Ogni evento conta dalla sua data in poi.
 
-| Tipo di Evento | Effetto sul Prezzo | Descrizione |
-|-----------|----------------|-------------|
-| **INTEREST** | Il prezzo scende del valore dell'evento | Pagamento interessi — l'utente ha ricevuto contanti, quindi il valore dell'asset diminuisce |
-| **PRICE_ADJUSTMENT** | Modifica algebrica | Svalutazione (negativa) o rivalutazione (positiva) del valore dell'asset |
+| Tipo | Effetto sul valore |
+|---|---|
+| **Interesse** | Un pagamento di interessi che hai ricevuto: il valore diminuisce di quell'importo |
+| **Rettifica prezzo** | Una svalutazione (negativa) o una rivalutazione (positiva) |
 
-Gli eventi sono configurati nell'editor e influenzano il prezzo calcolato a partire dalla loro data.
+## 🧮 Come Viene Calcolato il Valore {: #how-value-is-calculated }
 
-## 🧮 Come viene calcolato il valore
+LibreFolio percorre il piano interessi giorno per giorno. Nel giorno $d$ il valore è
 
-1. Si parte da `initial_value` come capitale di base
-2. Per ogni periodo di interesse, si calcola l'interesse maturato in base al tasso, al tipo di capitalizzazione e alla convenzione di conteggio dei giorni
-3. Si applicano gli eventi dell'asset: gli eventi INTEREST riducono il prezzo, gli eventi PRICE_ADJUSTMENT lo modificano algebricamente
-4. Il valore corrente = `initial_value` + interessi maturati - Σ(eventi INTEREST) + Σ(eventi PRICE_ADJUSTMENT)
+$$
+V(d) = V_0 + I(d) - \sum \text{Eventi di interesse} + \sum \text{Rettifiche prezzo}
+$$
 
-Se è configurato `late_interest`, il provider prosegue oltre la scadenza usando prima il ramo del periodo di grazia, poi il ramo degli interessi di mora; se `generate_interest` è abilitato, emette anche eventi `INTEREST` tardivi e un `MATURITY_SETTLEMENT` finale, ove applicabile.
+dove $V_0$ è il **Valore Iniziale**, $I(d)$ l'interesse maturato finora, e le somme coprono gli
+eventi fino al giorno $d$. Ogni giorno aggiunge interesse al tasso annuo del periodo $r$ su $\Delta t$, la
+quota di un giorno dell'anno secondo il **Conteggio Giorni** (ad esempio $1/365$ con ACT/365):
 
-!!! note "Motore Puramente Deterministico"
+- **Semplice** — interesse solo sul valore iniziale: $\Delta I = V_0 \, r \, \Delta t$
+- **Composto** — interesse anche sull'interesse già maturato: $\Delta I = (V_0 + I) \, r \, \Delta t$
 
-    Il provider è completamente deterministico — a parità di configurazione, produce sempre gli stessi prezzi. NON accede al database né legge le transazioni. Tutti gli input provengono da `provider_params`.
+Con **Genera Cedola**, a ogni data di scadenza il guadagno $V(d) - V_0$, quando positivo, viene pagato
+come evento di interesse: il valore riparte da $V_0$, e $I$ e le somme ripartono da zero.
 
-## 🎯 Casi d'Uso
+- **Prima del primo periodo**, il valore è il Valore Iniziale.
+- **Dopo l'ultimo periodo**, rimane al suo importo finale, a meno che gli interessi di mora siano attivi. Con
+  **Genera Cedola** sull'ultimo periodo e nessun interesse di mora, un evento di regolamento a scadenza chiude
+  l'asset a quell'importo.
+- **Il grafico** riceve un punto a ogni data di **Frequenza**: scegli **Giornaliero** per una linea continua.
 
-- **Conti di risparmio** con tassi di interesse fissi o variabili
-- **Depositi a termine** (CD/Depositi vincolati)
-- **Titoli di stato** dove si desidera monitorare l'interesse maturato piuttosto che il prezzo di mercato
-- **Prestiti in crowdfunding** (P2P lending) con piani di interessi noti
-- **Qualsiasi strumento** con un piano di tassi di interesse noto
+??? example "🧮 Un prestito di €10.000 al 5%, con una cedola ogni mese"
+
+    Interesse semplice, ACT/365, un periodo che inizia il 1 gennaio, **Frequenza** Mensile,
+    **Genera Cedola** selezionato. La prima data di scadenza è il 1 febbraio, 31 giorni dopo: il prestito ha
+    maturato circa €42,47 ($10\,000 \times 0.05 \times 31/365$). Quell'importo viene pagato come
+    evento di interesse, e il valore torna a €10.000 per crescere di nuovo a febbraio.
+
+## 🔗 Correlati
+
+- 📅 **[Eventi dell'asset](../detail/events.md)** — Come gli eventi vengono mostrati sul grafico dell'asset
+- 🛠️ **Per gli sviluppatori: [Provider Investimento Programmato](../../../developer/backend/assets/provider_scheduled_investment.md)** — Motore, eventi e cache

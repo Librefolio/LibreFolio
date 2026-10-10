@@ -1,89 +1,75 @@
-# ✂️ Strumento di Ritaglio Immagini
+# ✂️ Strumento di ritaglio immagine
 
-LibreFolio include un potente strumento di editing interattivo per immagini che consente di ritagliare, ruotare e ridimensionare le immagini prima di caricarle.
+Inquadra, ruota e ridimensiona un'immagine prima che LibreFolio la salvi.
 
 ---
 
-## 🎯 Quando Appare?
+## 🎯 Quando appare?
 
-La finestra modale di ritaglio immagini si apre automaticamente ogni volta che carichi un file immagine in LibreFolio:
-
-- 📂 **Pagina File** → caricamento di qualsiasi immagine (JPEG, PNG, WebP, GIF)
-- 👤 **[Impostazioni profilo](../settings/profile.md)** → modifica del proprio avatar
-- 🏦 **Impostazioni Broker** → modifica dell'icona di un broker
+- 👤 **Immagine del profilo** — in **[Profilo](../settings/profile.md)** o nella pagina di benvenuto: nel
+  selettore di immagini, scegli **Carica** e seleziona un'immagine.
+- 🏦 **Icona broker** e 📈 **icona asset** — lo stesso selettore, dal modulo broker o asset.
+- 📂 **Pagina File** — aggiungi immagini alla lista di caricamento, poi fai clic sul pulsante ✏️ **Modifica** di un'immagine.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Modale di editing immagine" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Modale modifica immagine" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 📐 Preset
+## ✂️ Inquadra l'immagine
 
-Lo strumento offre dei preset per i casi d'uso più comuni:
-
-| Preset | Dimensione | Rapporto d'Aspetto | Caso d'Uso |
-|--------|------|-------------|----------|
-| **Avatar** | 200 × 200 px | 1:1 (quadrato) | Foto profilo utente |
-| **Icona Broker** | 64 × 64 px | 1:1 (quadrato) | Loghi dei broker |
-| **Icona Asset** | 256 × 256 px | 1:1 (quadrato) | Loghi degli asset |
-| **Personalizzato** | Libero | Libero | Qualsiasi dimensione e rapporto |
-
-Il preset imposta automaticamente il vincolo del rapporto d'aspetto e la dimensione di output.
-
-L'anteprima ellittica appare solo per i preset avatar e icona broker.
+- 📏 **Trascina** un angolo o un lato dell'area di ritaglio per ridimensionarla, l'interno per spostarla, l'esterno
+  per spostare l'immagine. L'area di ritaglio rimane sempre all'interno dell'immagine.
+- 🔍 **Zoom** con la rotellina del mouse o **+ / −** — l'area di ritaglio si stringe (o si allarga) prima, poi
+  l'immagine si ingrandisce o si riduce — o esegui un pinch su touch screen.
+- 🔄 **Ruota** di 15° alla volta con **↺ / ↻**, e 🪞 **capovolgi** con ↔ / ↕.
+- 👁️ Il pulsante con l'icona dell'occhio a sinistra attiva/disattiva un'**anteprima rotonda**: come appare l'immagine in un cerchio, come
+  il tuo avatar nella barra laterale.
+- 🔁 **Reimposta tutto** (in alto a destra) annulla il ritaglio, lo zoom, la rotazione e il capovolgimento.
 
 ---
 
-## 🎛️ Controlli
+## 📐 Preimpostazioni
 
-### ✂️ Area di Ritaglio
+| Preimpostazione | Dimensioni di output | Forma |
+|--------|------|-------------|
+| **Avatar** | 200 × 200 px | Quadrata, anteprima rotonda attiva |
+| **Icona** | 64 × 64 px | Quadrata, anteprima rotonda attiva |
+| **Personalizzata** | Come l'area di ritaglio | Libera, o un rapporto a tua scelta: 1:1, 16:9, 4:3, 3:4 |
 
-- 📏 **Trascina gli angoli** per ridimensionare l'area di ritaglio
-- ↔️ **Trascina all'interno** dell'area per spostarla
-- 🔒 L'area di ritaglio è **vincolata ai bordi dell'immagine** — non è possibile selezionare aree esterne all'immagine
-
-### 🔍 Zoom
-
-- 🖱️ **Rotella del mouse** o **pinch** (su dispositivi touch) per ingrandire/ridurre
-- ➕ **Pulsanti Zoom** (+/−) per un controllo preciso
-- 🎯 Lo zoom si centra sulla selezione del ritaglio
-
-### 🔄 Rotazione
-
-- 🔄 **Pulsanti di rotazione** (↺/↻) ruotano l'immagine a incrementi di 15°
-- 📍 La rotazione avviene rispetto al centro della selezione
-
-### 🪞 Rifletti
-
-- ↔️ **Specchia orizzontalmente** (↔) — specchia l'immagine da sinistra a destra
-- ↕️ **Specchia verticalmente** (↕) — specchia l'immagine dall'alto verso il basso
+Le immagini del profilo si aprono con **Avatar**, le icone broker con **Icona** e le immagini della pagina File con
+**Personalizzata**; le icone asset vengono ritagliate quadrate a 256 × 256 px. Puoi cambiare preimpostazione in qualsiasi momento.
 
 ---
 
-## ⚙️ Impostazioni di Output
+## ⚙️ Impostazioni di output
 
-Prima di confermare, puoi regolare:
-
-- 🎨 **Formato di output**: PNG (senza perdita, trasparenza), JPEG (più piccolo, senza trasparenza), WebP (moderno, miglior compressione)
-- 📊 **Qualità** (solo JPEG/WebP): Slider dal 10% al 100% — qualità inferiore = file più piccolo
-- 📐 **Dimensione di output**: Larghezza e altezza in pixel (collegate al preset, ma modificabili)
-
-!!! tip "Anteprima Ellisse"
-
-    Per i preset avatar e icona, un **overlay a ellisse** circolare viene mostrato sull'area di ritaglio. Questo ti aiuta a vedere in anteprima come apparirà l'immagine in una cornice circolare (ad es. gli avatar utente nella barra di navigazione).
+- 🎨 **Formato** — `.png` (senza perdita, mantiene la trasparenza), `.jpg` (più piccolo, senza trasparenza) o
+  `.webp` (migliore compressione), accanto al nome del file, che puoi anche cambiare. Un'immagine `.jpg` o `.webp`
+  mantiene il suo formato; qualsiasi altro inizia come `.png`.
+- 📊 **Qualità** (solo `.jpg` e `.webp`) — **−** / **+** a passi del 10%, dal 10% al 100%: una qualità
+  inferiore significa un file più piccolo.
+- 📐 **Output** — larghezza × altezza in pixel, impostate dalla preimpostazione ma modificabili. Le due restano
+  proporzionate all'area di ritaglio, e non puoi impostarle più grandi di essa; **Scala** le imposta entrambe
+  contemporaneamente.
 
 ---
 
-## 🔄 Workflow
+## ✅ Conferma o annulla
 
-1. **Carica o trascina** un file immagine
-2. La modale di ritaglio si apre con il preset appropriato
-3. **Regola** l'area di ritaglio, lo zoom e la rotazione secondo necessità
-4. **Visualizza l'anteprima** del risultato in tempo reale
-5. Clicca su **Carica** per confermare — l'immagine ritagliata viene salvata sul server
-6. Clicca su **Annulla** o chiudi la modale per scartare le modifiche
+- **Ritaglia e carica** salva l'immagine e la utilizza. Nella pagina File, **Ritaglia** la mette invece nella lista
+  di caricamento (**Ripristina originale** ↺ riporta l'originale), e **Carica** invia la lista.
+- **Annulla** o **✕** chiude lo strumento — dopo aver chiesto conferma, se hai modifiche non salvate
+  (**Scarta e chiudi**). Dal selettore di immagini, torni al selettore.
 
-!!! info "File non immagine"
+??? info "📄 File che non sono immagini — nella pagina File"
 
-    Se carichi un file che non è un'immagine (PDF, CSV, ecc.), la modale di ritaglio viene saltata. Al suo posto, appare un semplice dialogo di rinomina.
+    Un PDF, un CSV o qualsiasi altro file che non sia un'immagine non ha un passaggio di ritaglio: il suo pulsante ✏️ apre invece una semplice
+    finestra di dialogo **Rinomina**.
+
+---
+
+## 🔗 Correlati
+
+- 🛠️ **[Componenti di caricamento file e media](../../developer/frontend/components/core-ui/file-upload.md)** — Come è costruito lo strumento (per sviluppatori)

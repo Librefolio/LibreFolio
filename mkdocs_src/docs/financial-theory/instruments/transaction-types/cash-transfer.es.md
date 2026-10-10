@@ -1,10 +1,10 @@
-# ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Transferencia de Efectivo
+# ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Transferencia de fondos
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Formulario de transacción — Transferencia de fondos">
 </div>
 
-**Las transferencias de efectivo** (transferencias bancarias / bonifici) mueven dinero entre cuentas de bróker. El saldo disminuye en el origen y aumenta en el destino; no hay activos involucrados.
+**Las transferencias de fondos** (transferencias bancarias) mueven dinero entre cuentas de bróker. El saldo disminuye en el origen y aumenta en el destino; no hay activos involucrados.
 
 ---
 
@@ -23,7 +23,7 @@
 
 ## 📊 Cómo Funciona
 
-Una transferencia de efectivo registra **dos entradas**: un retiro en el bróker de origen y un depósito en el de destino. Ambos comparten la misma divisa con importes reflejados. Los dos lados pueden tener **fechas diferentes**; por ejemplo, una transferencia enviada el lunes puede llegar el miércoles.
+Una transferencia de fondos registra **dos entradas**: un retiro en el bróker de origen y un depósito en el de destino. Ambos comparten la misma divisa con importes reflejados. Los dos lados pueden tener **fechas diferentes**; por ejemplo, una transferencia enviada el lunes puede llegar el miércoles.
 
 Escenarios comunes:
 
@@ -39,12 +39,12 @@ Escenarios comunes:
 
 ## 🔀 Relación con Depósitos/Retiros
 
-Internamente, una Transferencia de Efectivo se compone de un Retiro y un Depósito. LibreFolio admite:
+Internamente, una Transferencia de fondos se compone de un Retiro y un Depósito. LibreFolio admite:
 
 | Operación | Resultado |
 |-----------|--------|
-| **División** (desvincular) | Transferencia de Efectivo → Retiro + Depósito independientes |
-| **Promover** (vincular) | Retiro + Depósito → Transferencia de Efectivo |
+| **Separar par** (desvincular) | Transferencia de fondos → Retiro + Depósito independientes |
+| **Promocionar** (vincular) | Retiro + Depósito → Transferencia de fondos |
 
 **Restricciones de promoción**: misma divisa, brókers diferentes, importes de efectivo opuestos.
 

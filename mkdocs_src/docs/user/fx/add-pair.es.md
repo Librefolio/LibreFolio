@@ -1,57 +1,83 @@
-# ➕ Agregar un Par de Divisas
+# ➕ Añadir un par de divisas
 
-Para agregar un nuevo par de divisas a su panel de control de FX:
+Un par le dice a LibreFolio de dónde proviene el tipo de cambio entre dos divisas: un proveedor de banco central,
+una cadena de proveedores o tipos que introduces tú mismo.
 
-1. Haga clic en **"Agregar par"** en la página de la lista de FX
-2. Seleccione las **dos divisas** utilizando el menú desplegable de búsqueda
-3. El sistema descubre automáticamente las **rutas de datos** disponibles, tanto rutas directas como en cadena
-4. Seleccione la ruta de su preferencia y haga clic en **Confirmar** — el par se crea y la sincronización de datos comienza automáticamente
+Haz clic en **Añadir par** en la [página de FX](index.md). La misma ventana se abre desde el panel, desde una
+página de activo y desde el paso Cambio del asignador PAC.
 
 ---
 
-## 🛤️ Rutas de Conversión (Directas y en Cadena)
+## 🧭 Añadir un par paso a paso
 
-Cuando selecciona una divisa base y una divisa de cotización, LibreFolio consulta a todos los proveedores instalados para descubrir las mejores rutas de tipos de cambio disponibles.
+### 💱 Paso 1: Elige las dos divisas
+
+En **Añadir nuevo par de divisas**, elige la **Divisa base** y la **Divisa cotizada**. Cada lista
+oculta las divisas que ya están emparejadas con la otra, por lo que un par no se puede añadir dos veces.
+
+### 🛤️ Paso 2: Elige una ruta
+
+Haz clic en **Añadir ruta de conversión** para ver todas las formas en que los proveedores pueden producir este tipo de cambio:
+
+- 🔗 **Conversión directa (1 paso)** — un proveedor publica el par;
+- 🔀 **Conversión en cadena** — pasa por otras divisas, agrupada por número de pasos;
+- 🚫 **No utilizable** — proveedores que no pueden alcanzar este par.
+
+Filtra con el cuadro de búsqueda (proveedor, divisa o país) y luego haz clic en una ruta para añadirla.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fx-routes" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="add-pair-routes" data-title="🔗 Rutas Directas" alt="Add Pair — Direct Routes">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="add-pair-chain" data-title="🔀 Rutas en Cadena (Multi-hop)" alt="Add Pair — Chain Routes">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="add-pair-routes" data-title="🔗 Rutas directas" alt="Añadir Par — Rutas directas">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="add-pair-chain" data-title="🔀 Rutas en cadena (varios saltos)" alt="Añadir Par — Rutas en cadena">
 </div>
 
-### 🔗 Rutas Directas
-Si un proveedor soporta directamente los tipos de cambio entre ambas divisas (por ejemplo, el BCE cotizando tipos de cambio para EUR 🇪🇺 / USD 🇺🇸), el sistema lo muestra como una opción de ruta directa.
+??? tip "🛟 Rutas de respaldo — cuando añades más de una"
 
-### 🔀 Rutas en Cadena
-Para pares exóticos (por ejemplo, RON 🇷🇴 / JPY 🇯🇵) donde ningún banco central publica tipos de cambio directamente, el sistema construye automáticamente **cadenas de conversión**: rutas de múltiples pasos a través de divisas intermedias (normalmente EUR 🇪🇺 o USD 🇺🇸).
+    LibreFolio usa la ruta **#1** primero y prueba la **#2** si falla durante una sincronización, y así sucesivamente. Arrastra
+    las rutas para reordenarlas; 🗑️ elimina una, y ⚠️ muestra una nota de su proveedor.
 
-!!! example "Ejemplo de Cadena"
+??? note "🔀 Crear también pares intermedios — cuando eliges una ruta en cadena"
 
-    **RON 🇷🇴 → JPY 🇯🇵** vía BCE:
+    Marca **Crear también pares intermedios** para guardar cada paso como un par propio. Luego puedes
+    sincronizar cada paso por separado y convertir también a la divisa intermedia: una cadena solo almacena
+    el tipo de cambio de su propio par.
 
-    1. RON 🇷🇴 → EUR 🇪🇺 (El BCE proporciona RON 🇷🇴 / EUR 🇪🇺)
-    2. EUR 🇪🇺 → JPY 🇯🇵 (El BCE proporciona EUR 🇪🇺 / JPY 🇯🇵)
+??? note "✏️ Sin ruta — solo tipos manuales"
 
-    El tipo de cambio final se calcula multiplicando los tipos de cambio intermedios.
+    Puedes guardar sin una ruta y luego introducir los tipos tú mismo en el
+    [Editor de datos](detail/data-editor.md) del par.
+
+### 💾 Paso 3: Guardar
+
+Haz clic en **Guardar configuración**; la ventana se cierra inmediatamente.
+
+- **Con un proveedor**, LibreFolio descarga el **historial completo** del par hasta hoy, sea cual
+  sea el periodo que muestre la página, incluidos los pares intermedios. Un mensaje informa del resultado, en verde solo
+  si todo funcionó.
+- **Sin un proveedor**, un mensaje confirma que se creó el par.
+
+Haz clic en el nombre del par en el mensaje para abrir su página.
 
 ---
 
-## 🧭 Cómo funciona el descubrimiento de rutas
+## 🛤️ Rutas directas y en cadena
 
-Cuando selecciona dos divisas, LibreFolio consulta a todos los proveedores instalados para encontrar:
+Una **ruta directa** usa un proveedor que publica ambas divisas, como el ECB para
+EUR 🇪🇺 / USD 🇺🇸. Cuando ningún banco central publica el par, una **ruta en cadena** multiplica los tipos de cambio de
+sus pasos. RON 🇷🇴 / USD 🇺🇸, por ejemplo, va RON → EUR → USD, ambos pasos del ECB, que
+publica EUR/RON y EUR/USD:
 
-- 🔗 **Rutas directas**: un único proveedor que cubre ambas divisas
-- 🔀 **Rutas en cadena**: dos o más proveedores que juntos pueden conectar las divisas a través de una divisa intermedia (por ejemplo, EUR 🇪🇺)
+$$
+r_{\text{RON}\to\text{USD}} = r_{\text{RON}\to\text{EUR}} \times r_{\text{EUR}\to\text{USD}}
+$$
 
-Cada ruta muestra:
+- Una cadena tiene un tipo de cambio solo los días en que **cada paso** tiene uno.
+- Si un paso falla durante una sincronización, toda la cadena falla: las cadenas más cortas son más fiables.
+- El tipo de cambio de una cadena puede diferir ligeramente de una cotización directa de mercado.
 
-- 🏛️ El nombre y el icono del **proveedor**
-- ➡️ La **dirección** (base → cotización)
-- 🔢 Para las cadenas: la **divisa intermedia** y el **número de saltos**
+---
 
-Puede elegir cualquier ruta disponible basándose en su preferencia de fuente de datos, periodo de cobertura o frecuencia de actualización.
+## 🔗 Relacionado
 
-!!! info "Para los Curiosos: Detrás de escena"
-
-    Si está interesado en los detalles matemáticos de cómo se calculan y enrutan las cadenas de conversión de múltiples saltos, puede leer la documentación para desarrolladores: [FX Configuration & Routing](../../developer/backend/fx/configuration.md) y [FX Chain Algorithm](../../developer/frontend/fx-chain-algorithm.md). 
- 
-    *Nota: Esta documentación técnica es solo para desarrolladores y no es necesaria para utilizar esta función.*
+- 🔄 **[Sincronización](sync.md)** — Descargar tipos de cambio de nuevo más tarde
+- 🔌 **[Configuración del proveedor](detail/provider.md)** — Cambiar las rutas de un par después de crearlo
+- 🧑‍💻 Para desarrolladores: **[Configuración y enrutamiento de FX](../../developer/backend/fx/configuration.md)** y **[Algoritmo de cadena de FX](../../developer/frontend/fx-chain-algorithm.md)**

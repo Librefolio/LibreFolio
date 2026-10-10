@@ -2,7 +2,7 @@
 
 Cette section documente les modèles financiers, les conventions et les définitions utilisés tout au long de LibreFolio.
 
-## 📖 Aperçu
+## 📖 Vue d'ensemble
 
 Des calculs financiers précis sont essentiels pour un suivi de portefeuille. LibreFolio implémente des conventions financières standards pour garantir la cohérence avec les rapports des courtiers et les données réelles. Cette section est organisée en quatre domaines thématiques.
 

@@ -1,51 +1,67 @@
 # 📐 Mesures
 
-Le panneau de Mesures fournit un **outil de mesure par clic** pour analyser les mouvements de taux entre deux points quelconques sur le graphique.
+Le panneau Mesures vous indique comment le taux de change a évolué entre deux points du graphique : la
+variation, la variation en % et le taux annuel.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Panneau de mesures FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Panneau des mesures FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🖱️ Mode d'emploi
+## 🖱️ Effectuer une mesure
 
-1. Cliquez sur l'interrupteur **Measures** (📏) dans la barre d'outils du graphique
-2. Le panneau de mesures s'ouvre sous le graphique
-3. **Cliquez** sur un point de départ sur le graphique — cela définit la date et le taux de début
-4. **Cliquez** sur un point d'arrivée — cela définit la date et le taux de fin
-5. Le panneau affiche immédiatement les indicateurs calculés entre les deux points
+### 📏 Étape 1 : Activer le mode de mesure
 
----
+Cliquez sur 📏 (**Ajouter une mesure**) en haut à droite du graphique. Le panneau **Mesures** sous le
+graphique s'ouvre et affiche **Actif — cliquez sur le graphique**.
 
-## 📊 Indicateurs calculés
+### 📍 Étape 2 : Cliquer sur le point de départ
 
-Pour chaque mesure, le panneau affiche :
+Une infobulle indique la date et le taux que vous avez choisis ; une ligne en tirets suit le
+pointeur.
 
-| Indicateur | Description | Exemple |
-|--------|-------------|---------|
-| **Plage de dates** | Dates De → À | 15 janv. 2024 → 20 mars 2024 |
-| **Jours** | Jours calendaires entre les deux points | 65 jours |
-| **Delta (Δ)** | Variation absolue du taux | +0,0342 |
-| **Pourcentage (%)** | Variation relative en pourcentage | +3,12% |
-| **Rendement annualisé** | Rendement annuel projeté basé sur la période mesurée | +17,8% p.a. |
+### 🏁 Étape 3 : Cliquer sur le point d'arrivée
 
-!!! info "📚 Rendement annualisé"
+La mesure est ajoutée et le mode de mesure se désactive. Les deux dates sont automatiquement remises
+dans l'ordre.
 
-    Le rendement annualisé utilise la formule du **Taux de Croissance Annuel Composé (CAGR)**. Pour une explication complète incluant les rendements logarithmiques, la capitalisation et le choix de la méthode à utiliser, consultez :
+??? tip "➕ Toute la période en un clic — pratique sur un téléphone"
 
-    :material-book-open-variant: **[Rendements et taux de croissance — Théorie financière](../../../financial-theory/fundamentals/returns.md)**
+    Le bouton **+** de la barre **Mesures** mesure la période sélectionnée de son premier taux à son
+    dernier, sans cliquer sur le graphique.
 
 ---
 
-## 🔁 Mesures multiples
+## 📊 Lire une mesure
 
-Vous pouvez effectuer plusieurs mesures à la suite — chaque nouvelle paire de clics remplace la mesure précédente. Cela vous permet de comparer rapidement les mouvements sur différentes fenêtres temporelles.
+Chaque mesure est une carte affichant ses dates, la variation en % et le nombre de jours
+calendaires ; vous pouvez aussi définir la couleur et le style de sa ligne. Dépliez-la pour modifier
+les dates et voir **Début**, **Fin**, **Δ Abs**, **Δ %** et **Δ%/an** pour la paire et pour chaque
+superposition sur le même axe.
+
+**Δ%/an** est le taux annuel (CAGR), où $d$ est le nombre de jours calendaires entre les deux
+dates :
+
+$$
+\Delta\%_{yr} = \left(\frac{P_{end}}{P_{start}}\right)^{365/d} - 1
+$$
+
+Voir [Rendements et taux de croissance — Théorie financière](../../../financial-theory/fundamentals/returns.md)
+pour les rendements logarithmiques et la capitalisation.
 
 ---
 
-## 💡 Conseils
+## 🔁 Plusieurs mesures
 
-- 🔍 **Zoomez** avant de mesurer pour une meilleure précision sur les points de clic
-- 📰 Utilisez les mesures pour comparer les mouvements de taux **avant/après un événement** (par exemple, avant et après une annonce d'une banque centrale)
-- ⚠️ Le rendement annualisé est plus significatif pour des périodes de **30 jours et plus** — des périodes très courtes peuvent produire des chiffres annualisés trompeurs
+Chaque nouvelle mesure s'ajoute à côté des autres, avec sa propre couleur ; 🗑️ en supprime une.
+Elles restent jusqu'à ce que vous quittiez la page.
+
+---
+
+## 💡 Astuces
+
+- 🔍 **Zoomez** avant de cliquer, pour viser les points exacts.
+- 📰 Comparez l'évolution **avant et après un événement**, comme l'annonce d'une banque centrale.
+- ⚠️ Interprétez **Δ%/an** avec prudence sur les périodes courtes : une variation de 1 % en 7 jours
+  équivaut à environ 68 % par an. Cette mesure est surtout significative sur 30 jours ou plus.

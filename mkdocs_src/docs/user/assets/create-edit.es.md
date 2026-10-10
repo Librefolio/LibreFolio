@@ -1,183 +1,221 @@
-# ➕ Crear y Editar Activos
+# ➕ Crear y editar activos
+
+Añade un instrumento que poseas o sigas, conéctalo a un proveedor de precios y mantén sus datos correctos.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-create" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Formulario de creación manual" alt="Modal de creación manual">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Formulario de auto-creación del asistente de importación" alt="Crear activo desde el asistente">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Formulario de creación manual" alt="Formulario de creación manual">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Formulario de autocreación del asistente de importación" alt="Crear activo desde el asistente">
 </div>
 
-## 🚀 Flujos de creación de activos {: #asset-creation-flows }
+## 🚀 Crear un activo {: #asset-creation-flows }
 
-En LibreFolio, puedes crear activos nuevos de dos maneras diferentes:
+=== "Desde la página Activos"
 
-=== "Creación manual (con búsqueda inteligente)"
+    1. En la página **Activos**, haz clic en **+ Añadir activo**.
+    2. En **Buscar en línea**, escribe un nombre, un ticker o un ISIN y elige un resultado: LibreFolio rellena el
+       formulario, conecta ese proveedor y [comprueba sus datos](#provider-data-comparison). ¿No hay resultados?
+       Rellena el formulario tú mismo.
+    3. Revisa los campos de abajo y haz clic en **Crear activo**.
 
- ```mermaid
- flowchart LR
- A[Start: Click '+ New Asset'] --> B[Type Name, ISIN, or Ticker in Smart Search]
- B --> C{Match Found?}
- C -->|Yes| D[Auto-fill details from external providers]
- C -->|No| E[Manually enter name, category, & currency]
- D --> F[Adjust config / Assign pricing provider]
- E --> F
- F --> G[Click Save]
- G --> H[Asset added to library]
- ```
+=== "Desde una importación de bróker"
 
-=== "Auto-creación mediante importación de bróker"
+    1. En la sección **Resolver activos** del asistente de importación, elige **Crear nuevo activo** en el
+       selector del valor.
+    2. El formulario se abre con los códigos y nombres del informe. Si el informe no tiene nombre, **Nombre**
+       empieza por el ISIN (o el ticker).
+    3. Haz clic en una de las **Sugerencias** bajo **Buscar en línea** para buscar el valor, o rellena
+       el formulario tú mismo. Después, haz clic en **Crear activo**.
 
- ```mermaid
- flowchart LR
- A[Start: Upload CSV report in Import Wizard] --> B[Parse report rows]
- B --> C{Asset ID recognized?}
- C -->|Yes| D[Auto-match with existing asset]
- C -->|No| E[Flag warning ⚠️ and show 'Create' button]
- E --> F[Click 'Create' to open pre-filled modal]
- F --> G[Save asset to resolve mapping]
- G --> D
- D --> H[Commit all transactions]
- ```
+    Si el resultado que eliges tiene el mismo nombre que uno de tus activos, LibreFolio te ofrece usar ese
+    activo en su lugar; **Usarlo y añadir la clave** también guarda los códigos del informe en él.
 
-## 🧪 Prueba de la configuración del proveedor
+Revisa estos campos antes de guardar:
 
-Tras configurar un proveedor, haz clic en **Probar configuración** para verificar que se pueden obtener los datos de precios. La prueba comprueba:
+- **Nombre**: obligatorio y único; aparece un aviso si otro activo ya lo usa.
+- **Tipo**: consulta [Elegir el tipo de activo](#choosing-the-asset-type).
+- **Unidades por precio**: a cuántas unidades se refiere un precio, normalmente 1. Los bonos se cotizan por
+  100: LibreFolio lo propone cuando eliges **Bono**.
+- **Divisa**: la divisa en la que se cotizan los precios. Para un fondo cotizado en euros, es EUR,
+  aunque el fondo esté denominado en otra divisa.
 
-- **Precio actual**: obtiene el último precio
-- **Historial**: obtiene los datos históricos de precios (si el proveedor lo admite)
+Tras guardar desde la página **Activos**, la confirmación enlaza con el nuevo activo. Si el activo tiene un
+proveedor, su historial de precios empieza a descargarse de inmediato.
 
-Los resultados se muestran en el propio formulario, junto con los tiempos de ejecución. Una advertencia ⚠️ significa que el proveedor no admite esa operación (p. ej., CSS Scraper no admite historial).
+## 🗂️ Elegir el tipo de activo {: #choosing-the-asset-type }
 
-## 🔎 Detalles de la búsqueda inteligente
+El campo **Tipo** abre un menú con búsqueda de
+[tipos de activo](../../financial-theory/instruments/asset-types/index.md). **ETF** y
+**Crowdfunding** son familias: abre una para ver primero su miembro genérico (**ETF**, **Crowdfund**)
+y después los específicos, como **Equity ETF** o **Real estate crowdfunding**. Escribe unas letras para
+buscar en ambos niveles, por nombre o por código (por ejemplo, `etf_bond`).
 
-La búsqueda inteligente consulta primero el buscador propio de cada proveedor. Si un proveedor compatible no encuentra nada,
-LibreFolio puede intentar, sin garantías, una búsqueda por enlaces web y resolver las páginas del proveedor para convertirlas
-de nuevo en candidatos a activo. Para Borsa Italiana, esto significa que una URL de fondo/detalle puede convertirse en un activo listo para guardar con
-los `provider_params` necesarios para valorar el fondo mediante su código interno.
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="type-picker-open" alt="Menú de tipos con la familia ETF expandida, cada tipo de ETF específico mostrando su icono compuesto">
+</div>
 
-Para los fondos de Borsa Italiana, el ISIN visible identifica el fondo cuando está disponible, pero la valoración utiliza el
-código interno del fondo de Borsa guardado en la configuración del proveedor. El NAV actual solo se usa si tiene fecha de hoy;
-el historial contiene un punto de NAV en su fecha real.
+**Buscar en línea** normalmente asigna un tipo general como **ETF**. Si sabes qué contiene el fondo,
+refínalo, por ejemplo a **Equity ETF**: su distintivo e icono mostrarán entonces lo que contiene. Una
+[comprobación posterior con los datos del proveedor](#provider-data-comparison) respeta tu elección.
 
-## 🔌 Asignación de proveedor
+## 🔌 Conectar un proveedor de precios
 
-A cada activo se le puede asignar un único proveedor de precios. Consulta [Proveedores](providers/index.md) para más detalles sobre los proveedores disponibles y su configuración.
+Elegir un resultado de **Buscar en línea** conecta su proveedor por ti. Para configurarlo a mano, despliega
+**Asignación de proveedor** (desmarca antes **Sin proveedor** si está marcado):
 
-## 🛠️ Edición de un activo {: #editing-an-asset }
+1. Elige el **Proveedor** e introduce el **Identificador**, su **Tipo de identificador** y cualquier configuración
+   que pida el proveedor.
+2. Haz clic en **Probar configuración**: LibreFolio obtiene un **Precio actual** y unos días de
+   **Historial**. ⚠️ significa que el proveedor no ofrece esos datos o ahora mismo no tiene ninguno (CSS Scraper
+   no tiene historial, por ejemplo); la prueba se supera igualmente. ❌ es un error: revisa el identificador y
+   la configuración.
 
-Haz clic en el botón **Editar** (✏️) en la [página de detalle](detail/index.md) para abrir el modal del activo con todos los campos ya rellenados. Todos los campos son editables, incluyendo la configuración del proveedor y las distribuciones.
+Un activo tiene como máximo un proveedor; marca **Sin proveedor** si vas a introducir tú mismo sus precios. Consulta
+[Proveedores](providers/index.md) para saber qué ofrece cada uno.
 
-El campo **Otros identificadores** es una lista editable de identificadores alternativos. Las importaciones y los
-proveedores pueden añadir ahí etiquetas de bróker, códigos técnicos o identificadores fallback; cada valor se mantiene como
-un elemento de lista independiente.
+## ⚖️ Comprobar los datos del proveedor {: #provider-data-comparison }
 
-## 🗺️ Distribuciones manuales geográficas y sectoriales
+LibreFolio compara los datos del proveedor con tu formulario después de elegir un resultado de **Buscar en línea**
+y cuando haces clic en **Consultar al proveedor**: en la parte superior de **Detalles del activo** para todo,
+junto a **Identificadores** o en un editor de distribuciones solo para esa parte. Necesita un proveedor y un
+identificador.
 
-Los proveedores rellenan las distribuciones de **área geográfica** y **sector** cuando pueden — pero muchos
-activos (instrumentos personalizados, bonos, inversiones programadas o, sencillamente, activos cuyo proveedor no ofrece
-desglose) llegan sin ninguna. Siempre puedes definir o corregir ambas distribuciones manualmente desde el
-modal del activo: alimentan los **gráficos de asignación** del panel de control (anillos geográficos y sectoriales, tanto actuales como
-a lo largo del tiempo) y el contexto de concentración de AI Export.
+- Los campos vacíos se rellenan, y los códigos adicionales del proveedor se añaden a **Otros identificadores**.
+- *El proveedor no tiene datos para: …* indica la distribución sectorial o geográfica que falta; *Todos los datos coinciden
+  con el proveedor* significa que no hay nada que revisar.
+- Todo lo que difiere abre el diálogo **Comparación de datos del proveedor**.
 
-En el modal del activo ([crear](#asset-creation-flows) o [editar](#editing-an-asset)) abre
-el área **Clasificación**:
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="El diálogo Comparación de datos del proveedor sobre el formulario Añadir activo: la fila TICKER preguntando qué código es el principal, con el código del proveedor elegido frente al ya guardado, que se conserva como alternativo; la fila Tipo con sus valores actual y del proveedor como distintivos de icono; la fila Distribución sectorial, actual frente al proveedor; y Seleccionar todo, Deseleccionar todo, Cancelar y Aplicar seleccionados">
+</div>
 
-1. **Distribución geográfica** — una fila por país o área, con su peso en porcentaje.
-2. **Distribución sectorial** — una fila por sector, con su peso en porcentaje.
+Cada fila del diálogo muestra tu **Valor actual** junto al **Valor del proveedor**, y empieza marcada:
 
-Para cada distribución puedes:
+1. Desmarca las filas en las que quieras conservar tu valor (**Seleccionar todo** y **Deseleccionar todo** te ayudan).
+2. En una fila de identificador, elige el código principal; el otro se conserva en **Otros identificadores** (consulta
+   [Editar identificadores](#one-instrument-several-codes)). Se propone el código del proveedor, ya que normalmente es
+   el cotizado.
+3. Haz clic en **Aplicar seleccionados**, que cuenta las filas que aceptas (por ejemplo, *Aplicar seleccionados (2/3)*),
+   o en **Cancelar** para no cambiar nada.
 
-- **Añadir una fila** — elige el área o el sector en el menú desplegable y escribe el peso.
-- **Editar los pesos en línea** — el **total** acumulado se muestra en la parte inferior del editor y se pone
- **verde al llegar exactamente al 100 %** — ámbar cuando falta algo, rojo cuando se supera.
-- **Eliminar** una fila con su botón de borrar.
+Los valores aceptados solo rellenan el formulario: se guardan cuando guardas el activo.
 
-!!! tip "La regla del 100 %"
+- **Tu tipo refinado se conserva.** Borsa Italiana, por ejemplo, informa todos los instrumentos de ETFplus como
+  **ETF** sin más: si elegiste **Equity ETF**, eso cuenta como coincidencia y no aparece ninguna fila (lo mismo
+  ocurre con **Crowdfunding**). Un tipo *más específico* que el tuyo sí se ofrece.
+- **Cada pregunta se hace una sola vez.** Cuando un resultado de búsqueda trae un ISIN (u otro código) distinto
+  del que hay en el formulario, LibreFolio pregunta primero cuál es el principal, y la comparación no vuelve a
+  preguntarlo.
 
-    El panel de control normaliza las distribuciones parciales, pero un 100 % exacto ofrece los anillos
-    de asignación más significativos. Si el instrumento es 100 % de un único país o sector,
-    una única fila al 100 % es a la vez válida y la opción más clara.
+## 🛠️ Editar un activo {: #editing-an-asset }
 
-*(Capturas de pantalla de los dos editores de distribución — `assets/detail-classification` ya existe y muestra el área; está previsto añadir primeros planos específicos de los editores en la próxima actualización de la galería.)*
+En la [página de detalle](detail/index.md) del activo, haz clic en **Editar** (✏️), cambia lo que necesites en el
+formulario **Editar activo** y haz clic en **Guardar cambios**.
 
-## 🏷️ Un instrumento, varios códigos
+Una **Divisa** nueva para un activo que ya tiene precios implica eliminar sus precios y eventos almacenados: al
+guardar, un diálogo enumera lo que se elimina (las transacciones se mantienen) y ofrece una copia de seguridad. Tras
+**Eliminar y cambiar divisa**, los precios se vuelven a descargar del proveedor, si lo hay.
 
-El mismo valor puede ser conocido por más de un código. Cuando eso ocurre, LibreFolio mantiene **un único
-activo** y guarda los códigos adicionales en **Otros identificadores**, donde se pueden buscar y se usan
-para reconocer el instrumento en importaciones posteriores.
+## 🏷️ Editar identificadores {: #one-instrument-several-codes }
 
-Qué código va en el campo **ISIN** principal no es una cuestión de gustos:
+Un mismo valor puede tener varios códigos. LibreFolio mantiene **un solo activo** con todos ellos, en
+**Más información** del formulario del activo:
+
+- **Identificadores**: los códigos principales, uno por tipo (ISIN, ticker…). **Añadir identificador** añade una fila y
+  **Consultar al proveedor** los obtiene.
+- **Otros identificadores**: cualquier código extra o etiqueta del bróker. Escribe uno y pulsa Intro, coma, punto y coma
+  o Tabulador. Estos códigos son buscables y ayudan a reconocer el activo en importaciones posteriores.
 
 !!! tip "Mantén el código cotizado como ISIN principal"
 
-    Un precio es el valor de la última operación, así que solo un código que pueda negociarse de verdad tiene
-    precio. Pon el código negociable en **ISIN** y todo lo demás en **Otros identificadores** —
-    de lo contrario, ningún proveedor podrá valorar el activo.
+    Un precio es el valor de la última negociación, así que solo un código negociable tiene precio. Pon ese código en
+    **ISIN** y todo lo demás en **Otros identificadores**, o ningún proveedor podrá poner precio al activo.
 
-### Bonos del Estado italianos para minoristas (BTP Valore, BTP Più, BTP Italia)
+### 🏛️ Bonos del Estado italianos para minoristas (BTP Valore, BTP Più, BTP Italia)
 
-Estos bonos se emiten con un ISIN y se negocian con otro:
+Estos bonos se suscriben con un ISIN y se negocian con otro:
 
 | Fase | Código | Qué hace |
 |---|---|---|
-| Suscripción en la emisión | el ISIN "CUM" | Da derecho a la **prima de fidelidad** si lo mantienes hasta el vencimiento. **No negociable**, por lo que ningún proveedor lo cotiza |
-| Mercado secundario | un ISIN distinto | Se negocia libremente y está **cotizado** — este es el que tiene precio |
+| Suscripción en la emisión | el ISIN «CUM» | Te da derecho a la **prima de fidelidad** si mantienes el bono hasta el vencimiento. **No es negociable**, así que ningún proveedor lo cotiza |
+| Mercado secundario | un ISIN distinto | Se negocia libremente y **se cotiza**: este es el que tiene precio |
 
-Para vender antes del vencimiento, el bono se convierte al código de mercado. En LibreFolio ambos son el
-mismo instrumento, por lo que:
+Para vender antes del vencimiento, el bono se convierte al código de mercado. Mantén ambos códigos en un mismo activo:
 
-1. Pon el **ISIN de mercado** en el campo **ISIN**.
-2. Pon el **ISIN CUM** en **Otros identificadores**.
-3. Registra la **prima de fidelidad**, cuando se pague, como una transacción de **Interés** en ese activo,
- con la fecha del día en que la recibas.
+1. Pon el **ISIN de mercado** en **ISIN**.
+2. Pon el **ISIN «CUM»** en **Otros identificadores**.
+3. Registra la **prima de fidelidad**, cuando se pague, como una transacción de **Interés** en ese activo.
+   Esto también funciona después del vencimiento: un activo desactivado sigue siendo seleccionable.
 
-El paso 3 funciona incluso después de que el bono haya vencido y el activo se haya desactivado: un activo
-desactivado sigue siendo seleccionable precisamente para que puedan registrarse el último cupón, el reembolso y la prima.
+Cuando una importación trae el código «CUM» para un activo que ya tiene el de mercado, LibreFolio pregunta qué
+código debe encabezar y conserva el otro en **Otros identificadores**.
 
-!!! note "Durante una importación se te pregunta, no se te impone"
+## 🗺️ Configurar las distribuciones por sector y país
 
-    Si un archivo de bróker lleva el código CUM y el activo ya tiene el de mercado, la importación
-    pregunta cuál de los dos debe prevalecer. El que no elijas se añade a **Otros identificadores** —
-    no se descarta nada, y la siguiente importación reconoce el bono por cualquiera de los dos códigos.
+Los proveedores rellenan las distribuciones sectorial y geográfica cuando pueden; para otros activos, configúralas
+tú mismo. Alimentan los gráficos de asignación del panel y la exportación IA.
 
-    Cuando el mismo bono aparece en dos archivos con códigos distintos, el paso **Unificar activos** del
-    asistente de importación los agrupa en un único instrumento antes de que se decida nada más.
+En el formulario del activo, despliega **Más información**: en **Clasificación**, **Distribución sectorial** y
+**Distribución geográfica** listan una fila por sector o país, con su peso en porcentaje.
 
-## 🧲 Fusión de activos duplicados
+<div class="lf-screenshot-carousel" data-carousel="carousel-assets-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribución sectorial" alt="Editor de distribución sectorial en el modal del activo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribución geográfica" alt="Editor de distribución geográfica en el modal del activo">
+</div>
 
-Si el mismo instrumento ha terminado dos veces en tu biblioteca — algo habitual cuando se importa un bono
-una vez con su código de suscripción y otra con su código de mercado —, puedes integrar uno en el
-otro desde la acción **Fusionar**, disponible en la lista de activos y en la página de detalle del activo.
+- **Añadir sector** / **Añadir país** añade una fila: elige la entrada y luego escribe su peso.
+- El **Total** se pone verde al 100 %, ámbar cuando falta algo y rojo cuando te pasas.
+- **Equilibrar al 100 %**, una acción de fila, traslada toda la diferencia a esa fila. **Equilibrar filas seleccionadas**
+  la reparte entre las filas seleccionadas, en proporción a sus pesos.
+- **Eliminar** borra una fila, **Consultar al proveedor** obtiene la distribución del proveedor e **Importar CSV**
+  carga una desde un archivo.
 
-La operación es **destructiva**, por lo que se realiza en dos pasos deliberados:
+### 📥 Importar una distribución desde CSV {: #importing-a-distribution-csv }
 
-1. **Elige el activo que se conserva.** El activo desde el que has empezado es el que desaparecerá; tú
- eliges a su superviviente de todo el catálogo, incluidos los activos desactivados — un bono vencido es
- exactamente el tipo de elemento que se fusiona.
-2. **Comprueba qué se traslada y define la identidad.** LibreFolio realiza primero una simulación y muestra las
- cifras reales: cuántas transacciones, precios y eventos se reasignarán, y qué ocurre con
- el proveedor de precios. Cuando ambos activos tienen un valor para el mismo identificador, pregunta cuál
- debe prevalecer; el otro se conserva en **Otros identificadores**.
+**Importar CSV** espera una cabecera `name,weight` y luego una fila por país o sector, con los pesos en
+porcentaje:
 
-| Qué se traslada | Qué ocurre |
-|---|---|
-| Transacciones | Se reasignan al activo superviviente |
-| Historial de precios | Se reasigna; si ambos activos tienen un precio el mismo día, prevalece el del superviviente |
-| Eventos corporativos (dividendos, cupones) | Se reasignan; los eventos idénticos se consolidan, y las transacciones que apuntaban a ellos se reasignan también |
-| Asignación de proveedor | Se traslada solo si el superviviente no tiene ninguno — de lo contrario, el superviviente conserva el suyo |
-| Identificadores | Se **fusionan**, nunca se descartan: todo lo que conocía el activo eliminado sobrevive como identificador alternativo |
+```csv
+name,weight
+USA,60
+Italy,40
+```
 
-!!! warning "El activo de origen se elimina"
+- Los **nombres** deben coincidir exactamente, sin distinguir mayúsculas y minúsculas ni espacios alrededor. Países: un código
+  ISO (`IT`, `ITA`) o el nombre en tu idioma. Sectores: la clave del sector (como `Government Bonds`)
+  o el nombre en tu idioma.
+- Los **pesos** van de `0` a `100` y deben sumar 100 (con un margen de 0,005 puntos); cada nombre aparece
+  una sola vez.
+- La importación es **todo o nada**: una fila incorrecta la bloquea. Cuando tiene éxito, **reemplaza** toda
+  la distribución.
 
-    La fusión no se puede deshacer desde la interfaz. Lee la vista previa antes de confirmar — es un
-    recuento exacto, no una estimación.
+!!! warning "Comas decimales"
 
-!!! tip "Puede que se te ofrezca una fusión durante una importación"
+    El separador, `,` o `;`, se lee de la cabecera. Con `,`, la fila `Italy,12,5` se lee
+    silenciosamente como `12`. Usa `;` en todo (`name;weight`, y luego `Italy;12,5`), entrecomilla el valor
+    (`Italy,"12,5"`) o escribe `Italy,12.5`.
 
-    Cuando una importación encuentra **dos** activos que responden al mismo código — la señal clásica de un
-    duplicado creado por una importación anterior —, el asistente muestra un aviso discreto con un botón **Fusionar**,
-    justo donde puedes verlos a ambos uno al lado del otro. Nunca se ofrecen coincidencias basadas únicamente en el nombre:
-    es normal que dos fondos del mismo emisor se parezcan.
+## 🧲 Fusionar activos duplicados
 
-## 🔗 Relacionados
+Si el mismo instrumento acabó como dos activos, cada uno guarda parte de su historial. Para integrar uno en
+el otro:
+
+1. En la página **Activos**, usa **Fusionar con…** en el activo que debe desaparecer: el botón de su tarjeta
+   o el menú del clic derecho en la tabla.
+2. Elige el activo que quieres conservar (también los inactivos) y haz clic en **Continuar**. En un día en que ambos
+   tengan precio, gana el precio del activo conservado; también gana su proveedor de precios, si tiene uno.
+3. Lee **Qué se traslada**: los recuentos exactos de transacciones, precios y eventos. Cuando ambos activos
+   tengan un código distinto del mismo tipo, elige el que encabeza.
+4. Haz clic en **Fusionar y eliminar**. El primer activo se elimina; esto no se puede deshacer.
+
+No se pierde ningún identificador: cada código del activo eliminado rellena un campo vacío del conservado o se añade a
+sus **Otros identificadores**. Los eventos idénticos se fusionan.
+
+Durante una importación, cuando dos de tus activos llevan el ISIN de un valor, su tarjeta **Resolver activos**
+dice *Dos activos guardados coinciden con este valor* y ofrece **Fusionar**. Que los nombres coincidan por sí solos
+nunca lo activa.
+
+## 🔗 Relacionado
 
 - 📊 **[Página de detalle del activo](detail/index.md)** — Consulta y analiza los datos del activo
 - 🔌 **[Proveedores](providers/index.md)** — Proveedores de precios disponibles
+- 🧬 **[Identidad del activo](../../developer/frontend/components/features/asset-identity.md)** — Para desarrolladores: cómo funcionan los identificadores, las comparaciones de proveedores y las fusiones

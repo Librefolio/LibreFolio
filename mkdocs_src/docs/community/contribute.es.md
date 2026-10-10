@@ -1,6 +1,6 @@
 # :heart: Apoya a LibreFolio
 
-LibreFolio es un proyecto **open-source**, licenciado bajo AGPL-3.0. El código fuente está disponible gratuitamente y cualquier persona con los conocimientos y la infraestructura necesarios puede instalarlo y ejecutarlo de forma independiente; esa es la belleza del open-source.
+LibreFolio es un proyecto de **código abierto**, licenciado bajo AGPL-3.0. El código fuente está disponible gratuitamente y cualquier persona con los conocimientos y la infraestructura necesarios puede instalarlo y ejecutarlo de forma independiente; esa es la belleza del código abierto.
 
 Si utilizas LibreFolio y te resulta valioso, nos encantaría contar con tu apoyo, ya sea a través de **código**, **ideas** o una **pequeña donación**. Cada contribución impulsa el crecimiento del proyecto.
 
@@ -13,6 +13,8 @@ Si LibreFolio te ayuda a gestionar mejor tus inversiones, considera apoyar el de
 <a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 Cada donación —por pequeña que sea— ayuda a cubrir las herramientas de desarrollo, la infraestructura de pruebas y motiva la mejora continua.
+
+Dentro de LibreFolio, el mismo enlace del café está junto a botones que comparten el proyecto en X, Reddit, Facebook, Instagram y TikTok con un mensaje ya preparado: los encuentras en **Configuración → Acerca de**, en **Apoya a LibreFolio**, y en la ventana emergente de donación que aparece de vez en cuando después de iniciar sesión. Consulta [Apoya a LibreFolio en la aplicación](../user/settings/about.md#support-librefolio) para ver cómo funciona el uso compartido — nunca se publica nada por ti.
 
 ---
 

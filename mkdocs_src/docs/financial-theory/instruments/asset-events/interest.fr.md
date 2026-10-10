@@ -151,7 +151,7 @@ Pour les actifs de fournisseurs de type **investissement programmé**, les évé
 
 ## 🔗 Liens connexes
 
-- 📅 **[Aperçu des événements d'actifs](index.md)** — Tous les types d'événements
+- 📅 **[Vue d'ensemble des événements d'actifs](index.md)** — Tous les types d'événements
 - 📆 **[Conventions de comptage des jours](../../fundamentals/day-count.md)** — Comment sont calculées les périodes d'accumulation des intérêts
 - 🏁 **[Règlement à l'échéance](maturity-settlement.md)** — Retour final du principal à l'échéance de l'obligation
 - 📈 **[Rendements et taux de croissance](../../fundamentals/returns.md)** — Mesurer le rendement total

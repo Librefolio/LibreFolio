@@ -101,7 +101,7 @@ $$
 
 ## 🔗 Liens connexes
 
-- 📅 **[Aperçu des événements d'actifs](index.md)** — Tous les types d'événements
+- 📅 **[Vue d'ensemble des événements d'actifs](index.md)** — Tous les types d'événements
 - 📈 **[Intérêts](interest.md)** — Paiements de coupons périodiques avant l'échéance
 - 📆 **[Conventions de comptage des jours](../../fundamentals/day-count.md)** — Comment le cumul est calculé entre les dates de coupon
 - 📊 **[Ajustement de prix](price-adjustment.md)** — Changements de valeur non monétaires avant l'échéance
