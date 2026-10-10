@@ -351,7 +351,7 @@
                 <!-- R11.1: the Route step says what it is for in its own title, on one line, with the «?» beside it. -->
                 <div class="mb-4 flex items-center gap-0.5">
                     <h2 id={STEP_TITLE_ID} tabindex="-1" class="{SECTION_TITLE} focus:outline-none">
-                        {$t(stepKey(step), {default: STEP_FALLBACKS[step]})}{#if step === 'routing'}<span data-testid="pac-planner-routing-intro"> – {$t(`${PLANNER_KEY}.routing.intro`, {default: 'What each Broker can buy'})}</span>{/if}
+                        {$t(stepKey(step), {default: STEP_FALLBACKS[step]})}{#if step === 'routing'}<span data-testid="pac-planner-routing-intro">{' '}– {$t(`${PLANNER_KEY}.routing.intro`, {default: 'What each Broker can buy'})}</span>{/if}
                     </h2>
                     {#if step === 'routing'}
                         <HelpTip
