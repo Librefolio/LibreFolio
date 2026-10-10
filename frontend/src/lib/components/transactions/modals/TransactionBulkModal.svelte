@@ -70,7 +70,7 @@
     } from '$lib/utils/transactions/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {cashAmountsCancel, mergeStrings, mergeTagSets} from '$lib/utils/transactions/promoteHelpers';
-    import {importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/utils/transactions/promoteSuggest';
+    import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/utils/transactions/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -2895,7 +2895,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
+                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule)) && (match.targetType !== 'TRANSFER' || assetQuantitiesCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2930,8 +2930,9 @@
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
                 if (!match) continue;
-                // CASH_TRANSFER: amounts must cancel. FX_CONVERSION: different currencies, no cancel check.
+                // CASH_TRANSFER: amounts must cancel. TRANSFER: same asset, quantities must cancel. FX_CONVERSION: different currencies, no cancel check.
                 if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) continue;
+                if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);
@@ -2956,6 +2957,7 @@
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
                 if (!match) return null;
                 if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
+                if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) return null;
                 return match.targetType;
             },
         });

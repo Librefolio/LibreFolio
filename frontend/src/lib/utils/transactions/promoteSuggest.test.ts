@@ -10,12 +10,17 @@
  *   the green banner: new rows outer, saved rows inner, the window checked before the match.
  * - `importableSuggestions`: the search's answer reduced to what the 💡 offers to add — per asked row still
  *   in the editor, the candidates the editor does not hold yet; nothing for a row with nothing missing.
+ * - `assetQuantitiesCancel`: the banner's test for an asset TRANSFER pair — one asset, exactly opposite
+ *   quantities once each type's sign rule has signed them — so that neither the banner nor «Merge all»
+ *   offers a pair the backend's promote rule refuses (a saved −3 with a new +5, two assets).
  *
- * The browser side is `e2e/transactions/tx-import-scalable-transfers.spec.ts`.
+ * The browser side is `e2e/transactions/tx-import-scalable-transfers.spec.ts` and, for the asset
+ * pairs, `e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` (PC4).
  */
 
 import {describe, expect, it, vi} from 'vitest';
-import {importableSuggestions, mixedPromotePairs, newRowSuggestId, type MixedPairingRules, type SuggestCandidate} from './promoteSuggest';
+import type {TypeRule} from '$lib/stores/transactions/transactionTypeStore';
+import {assetQuantitiesCancel, importableSuggestions, mixedPromotePairs, newRowSuggestId, type MixedPairingRules, type QuantityCancelable, type SuggestCandidate} from './promoteSuggest';
 
 describe('newRowSuggestId', () => {
     it('is minus the creation sequence plus one: the first new row is asked as -1', () => {
@@ -193,5 +198,141 @@ describe('importableSuggestions', () => {
         expect(partlyHeld).toEqual([candidate(601), candidate(602)]);
         expect(results.get(-1)).toBe(partlyHeld);
         expect(results.get(-2)).toBe(noneHeld);
+    });
+});
+
+/**
+ * The sign rules the backend sends for a quantity (`SignType`: positive, negative, zero, nonzero, free).
+ * ADJUSTMENT and TRANSFER — the rows the banner pairs into a TRANSFER — are `nonzero`: the typed sign is
+ * the sign. QTY_OUT and QTY_IN stand for a type that carries the sign, whose quantity the editor shows
+ * as a magnitude (SELL is `negative`, BUY `positive`). Anything else gets the rule of an unknown type,
+ * `free`. Only `quantityRule` is read by the helper.
+ */
+const SIGN_RULES: Record<string, string> = {ADJUSTMENT: 'nonzero', TRANSFER: 'nonzero', QTY_OUT: 'negative', QTY_IN: 'positive'};
+const resolveRule = (type: string): TypeRule => ({quantityRule: SIGN_RULES[type] ?? 'free'}) as unknown as TypeRule;
+
+/** An editor row as far as the helper goes: type (ADJUSTMENT unless given), quantity, asset (7 unless given, even as null/undefined). */
+function assetRow(quantity: string | number | null | undefined, options: {asset?: number | null; type?: string} = {}): QuantityCancelable {
+    return {fields: {type: options.type ?? 'ADJUSTMENT', quantity, asset_id: 'asset' in options ? options.asset : 7}};
+}
+
+describe('assetQuantitiesCancel', () => {
+    it('is true for one asset moved by exactly opposite quantities, in either order', () => {
+        expect(assetQuantitiesCancel(assetRow('-5'), assetRow('5'), resolveRule)).toBe(true);
+        expect(assetQuantitiesCancel(assetRow('5'), assetRow('-5'), resolveRule)).toBe(true);
+    });
+
+    it.each([
+        ['a saved −3 with a new +5', '-3', '5'],
+        ['a new +5 with a saved −3', '5', '-3'],
+        ['the same sign twice', '5', '5'],
+        ['a 6th-decimal difference on a small quantity', '-5', '5.000001'],
+    ])('is false when the quantities do not cancel: %s', (_label, a, b) => {
+        expect(assetQuantitiesCancel(assetRow(a), assetRow(b), resolveRule)).toBe(false);
+    });
+
+    it('is false for two assets, even when the quantities cancel', () => {
+        expect(assetQuantitiesCancel(assetRow('-5', {asset: 7}), assetRow('5', {asset: 8}), resolveRule)).toBe(false);
+    });
+
+    it.each([
+        ['the first row', null, 7],
+        ['the second row', 7, null],
+        ['either row — two unknown assets are not one asset', null, null],
+        ['either row, left undefined', undefined, undefined],
+    ])('is false when %s has no asset', (_label, first, second) => {
+        expect(assetQuantitiesCancel(assetRow('-5', {asset: first}), assetRow('5', {asset: second}), resolveRule)).toBe(false);
+    });
+
+    it.each([
+        ['0', '0'],
+        ['0', '-0'],
+        ['0.000000', '-0.000000'],
+        ['0', '5'],
+        ['-5', '0'],
+    ])('is false when a quantity is zero: %s with %s', (a, b) => {
+        expect(assetQuantitiesCancel(assetRow(a), assetRow(b), resolveRule)).toBe(false);
+    });
+
+    it.each([
+        ['empty', ''],
+        ['null', null],
+        ['missing', undefined],
+        ['not a number', 'abc'],
+    ])('is false when a quantity is %s, on either side', (_label, quantity) => {
+        expect(assetQuantitiesCancel(assetRow(quantity), assetRow('5'), resolveRule)).toBe(false);
+        expect(assetQuantitiesCancel(assetRow('-5'), assetRow(quantity), resolveRule)).toBe(false);
+    });
+});
+
+describe('assetQuantitiesCancel — a magnitude takes the sign its type carries', () => {
+    // Where the type carries the sign the editor shows a magnitude (fieldsFromTx), so the rule decides
+    // the sign, never the stored string.
+
+    it('cancels two magnitudes of opposite signed types', () => {
+        expect(assetQuantitiesCancel(assetRow('5', {type: 'QTY_OUT'}), assetRow('5', {type: 'QTY_IN'}), resolveRule)).toBe(true);
+    });
+
+    it('gives the same answer whatever sign the strings carry', () => {
+        for (const out of ['5', '-5']) {
+            for (const into of ['5', '-5']) {
+                expect(assetQuantitiesCancel(assetRow(out, {type: 'QTY_OUT'}), assetRow(into, {type: 'QTY_IN'}), resolveRule), `${out} out, ${into} in`).toBe(true);
+            }
+        }
+    });
+
+    it('never cancels two rows of one signed type', () => {
+        expect(assetQuantitiesCancel(assetRow('5', {type: 'QTY_OUT'}), assetRow('-5', {type: 'QTY_OUT'}), resolveRule)).toBe(false);
+        expect(assetQuantitiesCancel(assetRow('5', {type: 'QTY_IN'}), assetRow('-5', {type: 'QTY_IN'}), resolveRule)).toBe(false);
+    });
+
+    it('cancels a magnitude against a free-sign row typed with the opposite sign', () => {
+        expect(assetQuantitiesCancel(assetRow('5', {type: 'QTY_OUT'}), assetRow('5'), resolveRule)).toBe(true);
+        expect(assetQuantitiesCancel(assetRow('5', {type: 'QTY_IN'}), assetRow('-5'), resolveRule)).toBe(true);
+    });
+
+    it('still needs the magnitudes to match once signed', () => {
+        expect(assetQuantitiesCancel(assetRow('3', {type: 'QTY_OUT'}), assetRow('5', {type: 'QTY_IN'}), resolveRule)).toBe(false);
+    });
+});
+
+describe('assetQuantitiesCancel — a free-sign type keeps the typed sign', () => {
+    it.each([
+        ['nonzero: ADJUSTMENT, the rows the banner pairs', 'ADJUSTMENT'],
+        ['nonzero: TRANSFER', 'TRANSFER'],
+        ['free: the rule of an unknown type', 'SOMETHING_ELSE'],
+    ])('%s', (_label, type) => {
+        expect(assetQuantitiesCancel(assetRow('-5', {type}), assetRow('5', {type}), resolveRule)).toBe(true);
+        expect(assetQuantitiesCancel(assetRow('5', {type}), assetRow('5', {type}), resolveRule)).toBe(false);
+        expect(assetQuantitiesCancel(assetRow('-5', {type}), assetRow('-5', {type}), resolveRule)).toBe(false);
+    });
+});
+
+describe('assetQuantitiesCancel — values, not representations', () => {
+    it.each([
+        ['5.000000', '-5'],
+        ['-5.000000', '5'],
+        ['0005.50', '-5.500000'],
+        ['-0.000001', '0.000001'],
+    ])('%s cancels %s', (a, b) => {
+        expect(assetQuantitiesCancel(assetRow(a), assetRow(b), resolveRule)).toBe(true);
+    });
+
+    it('takes a number as readily as a string', () => {
+        expect(assetQuantitiesCancel(assetRow(5), assetRow('-5.0'), resolveRule)).toBe(true);
+        expect(assetQuantitiesCancel(assetRow(-2.5), assetRow(2.5), resolveRule)).toBe(true);
+    });
+});
+
+describe('assetQuantitiesCancel — exactly, as the backend compares', () => {
+    // The backend's promote rule compares Decimals: `tx_a.quantity != -tx_b.quantity` refuses any
+    // difference. A relative tolerance is not that: 1e-9 of 1 500 units is 1.5e-6, coarser than the 6th
+    // decimal the editor keeps, and past ~15 significant digits a Number cannot tell two quantities apart
+    // at all. Two legs an import rounded differently would be offered by the banner and refused on Save.
+    it.each([
+        ['an import rounding the 6th decimal of 1 500 units', '1500.123457', '-1500.123456'],
+        ['the widest quantity the form takes, 12 + 6 digits', '999999999999.123456', '-999999999999.123457'],
+    ])('is false for quantities one unit of the 6th decimal apart: %s', (_label, a, b) => {
+        expect(assetQuantitiesCancel(assetRow(a), assetRow(b), resolveRule)).toBe(false);
     });
 });
