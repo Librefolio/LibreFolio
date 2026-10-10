@@ -17,6 +17,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import ChangelogModal from '$lib/components/layout/ChangelogModal.svelte';
+    import {brimPluginName} from '$lib/utils/brim/pluginText';
 
     let changelogOpen = false;
     let toolPanelOpen = false;
@@ -506,14 +507,14 @@ Generated: ${new Date().toISOString()}
                                 class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getDocsUrl(p) ? 'hover:border-amber-400 hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
                                 {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
-                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
+                                    <img src={p.icon_url} alt={brimPluginName(p, $_)} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
                                         {codeInitials(p.code)}
                                     </div>
                                 {/if}
                                 <div class="min-w-0">
-                                    <p class="text-sm font-medium text-gray-800 truncate">{p.name}</p>
+                                    <p class="text-sm font-medium text-gray-800 truncate">{brimPluginName(p, $_)}</p>
                                     <p class="text-xs text-gray-400 truncate">{p.code}</p>
                                 </div>
                             </svelte:element>

@@ -9,13 +9,15 @@ from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_p
 
 def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Broker unit tests (Vitest) — brokerHelpers (getBrokerIconUrl fallback chain),
-    assetPanelUrl (broker panel deep-link parsing), tabUrl (tab query-param sync, shared with dashboard)."""
+    brokerIconChain (the reactive icon chain, jsdom), assetPanelUrl (broker panel deep-link parsing),
+    tabUrl (tab query-param sync, shared with dashboard)."""
     print_section("Frontend Broker Unit Tests (Vitest)")
     cmd = [
         "npx",
         "vitest",
         "run",
         "src/lib/utils/__tests__/brokerHelpers.test.ts",
+        "src/lib/utils/broker/__tests__/brokerIconChain.test.ts",
         "src/lib/utils/broker/__tests__/assetPanelUrl.test.ts",
         "src/lib/utils/url/__tests__/tabUrl.test.ts",
     ]
@@ -93,7 +95,7 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend broker tests: unit (brokerHelpers) + E2E (list, CRUD, detail page)",
         description="""Frontend Broker Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "broker-unit", front_broker_unit, test_names=False, name="Broker Unit Tests (Vitest)", desc="Unit tests: getBrokerIconUrl fallback chain, assetPanelUrl deep-link parsing, tabUrl tab-state sync", tests="vitest")
+    add_test(cat, "broker-unit", front_broker_unit, test_names=False, name="Broker Unit Tests (Vitest)", desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync", tests="vitest")
     add_test(cat, "list", front_broker_list, name="Broker List & CRUD Tests", desc="Broker list page, create/edit/delete", prereq="Login working", tests="brokers/brokers.spec.ts")
     add_test(cat, "detail", front_broker_detail, name="Broker Detail Tests", desc="Detail page sections, edit/import modals", prereq="Login working, brokers exist", tests="brokers/brokers-detail.spec.ts")
     add_test(cat, "broker-recovery", front_broker_recovery, name="Broker Recovery Tests", desc="Owned empty/cascade deletion success, failure notifications and preserved recovery dialog", tests="brokers/broker-recovery.spec.ts")

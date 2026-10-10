@@ -20,6 +20,12 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/transactions/bulkDisplay.test.ts",
            "src/lib/utils/transactions/importReportSets.test.ts",
            "src/lib/utils/transactions/importPairs.test.ts",
+           "src/lib/utils/transactions/promoteSuggest.test.ts",
+           "src/lib/utils/brim/defaultPluginCheck.test.ts",
+           "src/lib/utils/brim/pluginText.test.ts",
+           "src/lib/utils/brim/pluginKind.test.ts",
+           "src/lib/components/transactions/modals/ImportBrokerMismatchModal.test.ts",
+           "src/lib/components/transactions/modals/PromoteAllModal.test.ts",
            "src/lib/utils/transactions/gapFixModel.test.ts",
            "src/lib/components/transactions/import/GapFixStep.test.ts",
            "src/lib/components/transactions/import/ReportSetCard.test.ts",
@@ -209,6 +215,18 @@ def front_tx_bulk_promote_exec(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-bulk-promote-exec.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_promote_cost_basis(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run BulkModal promote → receiver without cost basis E2E tests (new/saved receiver, Merge all)."""
+    print_section("Frontend TX Bulk Promote Cost Basis Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-promote-cost-basis.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_fx_implied_rate(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX Implied Rate & Spread E2E tests (banner suffix, FormModal marker, semantic ordering)."""
     print_section("Frontend TX FX Implied Rate Tests")
@@ -396,6 +414,30 @@ def front_tx_import_degiro(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-import-degiro.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_import_broker_mismatch(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Import Wizard broker-mismatch E2E tests (a file its broker's default import plugin cannot read: Move, no question, Remove)."""
+    print_section("Frontend TX Import Broker Mismatch Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-broker-mismatch.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_import_scalable_transfers(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Import Wizard + bulk editor Scalable transfer E2E tests (new + new and new + saved internal transfers merged into Cash Transfers)."""
+    print_section("Frontend TX Import Scalable Transfers Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-scalable-transfers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_report_set_guide(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the import guide's gap-fix step on desktop and mobile (report sets C3, R9; a disposable account per test)."""
     print_section("Frontend TX Import Report Set Guide Tests")
@@ -577,6 +619,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
     add_test(cat, "tx-bulk-promote-exec", front_tx_bulk_promote_exec, name="TX Bulk Promote Execution Tests", desc="Promote execution: edit+edit/create+create/mixed, merge modal confirm/cancel, banner link, restore-and-edit", tests="transactions/tx-bulk-promote-exec.spec.ts")
+    add_test(
+        cat,
+        "tx-bulk-promote-cost-basis",
+        front_tx_bulk_promote_cost_basis,
+        name="TX Bulk Promote Cost Basis Tests",
+        desc="d7c148564 in the bulk editor, owned asset and brokers: a promoted TRANSFER receiver without a cost basis refuses the whole batch with costBasisRequired — PC1 new receiver (Manual, empty) + saved sender via the selection toolbar → create issue; PC2 saved receiver (SPLIT-linked, Auto: stored without a cost basis) + new sender via the banner link → promote issue with ref_id; PC3 «Merge all» with a valid cash pair → the one create issue; each checks the commit answer against the sent request, that nothing was written, and that the refused-save issue jumps to the pair's row only; PC4 the banner offers a new +5 only the saved −5 it cancels, never the saved −3 beside it (nothing saved)",
+        tests="transactions/tx-bulk-promote-cost-basis.spec.ts",
+    )
     add_test(cat, "tx-fx-implied-rate", front_tx_fx_implied_rate, name="TX FX Implied Rate Tests", desc="FX implied rate in banner suffix + FormModal marker + semantic ordering", tests="transactions/tx-fx-implied-rate.spec.ts")
     add_test(cat, "tx-wac", front_tx_wac, name="TX WAC Preview Tests", desc="WAC preview toggle, auto/manual, recalculate, qualifying TXs, missing FX", tests="transactions/tx-wac.spec.ts")
     add_test(cat, "tx-wac-bulk", front_tx_wac_bulk, name="TX WAC BulkModal Tests", desc="BulkModal WAC cell rendering: auto value, manual propagation, DB rows, clone link_uuid", tests="transactions/tx-wac-bulk.spec.ts")
@@ -613,6 +663,22 @@ def populate_registry(registry: dict) -> None:
         name="TX Import DEGIRO Tests",
         desc="DEGIRO Account Statement in English: currency conversions as one row per linked pair in review (From/To, implied rate, one tick for both legs), handed to the editor as pairs that validate",
         tests="transactions/tx-import-degiro.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-import-broker-mismatch",
+        front_tx_import_broker_mismatch,
+        name="TX Import Broker Mismatch Tests",
+        desc="Step 1 upload vs the broker's default import plugin (Scalable Capital): M1 on a disposable account, the overnight account's file on the broker account (broker_scalable) raises the mismatch modal with the plugin-check reason and one target, the overnight account (its generic-CSV broker dropped by the fallback rule), Continue disabled while it is open; Move re-uploads the file there in the same batch, deletes the old copy and step 2 lists it under the target; M2 on its own default broker no question and no plugin check; M3 Remove deletes the file, Continue is released and the wizard stays on step 1",
+        tests="transactions/tx-import-broker-mismatch.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-import-scalable-transfers",
+        front_tx_import_scalable_transfers,
+        name="TX Import Scalable Transfers Tests",
+        desc="Scalable Capital internal transfers (plan 37 step 11), each test on a disposable account with its two brokers (broker_scalable, broker_scalable_deposit): S1 both exports in one wizard run, new rows asked to promote-suggest under negative ids, the banner proposes exactly the two transfers (identified by the merge dialog's joined text), one merged and saved as a linked CASH_TRANSFER pair; S2 the broker account's cash rows saved over the API first, the overnight export imported, the 💡 (toolbar and row menu of the new transfer legs only) offers the saved sides, one added, the new + saved pair merged and saved as a linked CASH_TRANSFER through the mixed promote",
+        tests="transactions/tx-import-scalable-transfers.spec.ts",
     )
     add_test(
         cat,

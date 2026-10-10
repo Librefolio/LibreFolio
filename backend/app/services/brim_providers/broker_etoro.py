@@ -176,7 +176,7 @@ class EtoroBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import transactions from eToro CSV export. " "Supports stocks, CFDs, dividends, and interest."
+        return "Import eToro's account activity CSV: positions opened and closed (a CFD is read like any other position), dividends, interest, deposits, withdrawals, and withdrawal and conversion fees."
 
     @property
     def supported_extensions(self) -> List[str]:

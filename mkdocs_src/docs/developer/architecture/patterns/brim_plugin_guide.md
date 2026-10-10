@@ -199,8 +199,8 @@ mandatory for every new plugin:
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `provider_code` | `@property → str` | Unique identifier (e.g., `"directa_csv"`). Must `return` a **string literal** — see below |
-| `provider_name` | `@property → str` | Display name (e.g., `"Directa CSV"`) |
-| `description` | `@property → str` | Brief description for the UI |
+| `provider_name` | `@property → str` | Display name, in English (e.g., `"Directa CSV"`); the UI shows the value of `brimPlugins.<code>.name`, in the user's language — see [Register the name and description](#plugin-name-i18n) |
+| `description` | `@property → str` | Brief description for the UI, in English; the UI shows the value of `brimPlugins.<code>.description` |
 | `can_parse(file_path)` | `→ bool` | Quick check if this plugin can parse the file (check extension, header row) |
 | `parse(file_path, broker_id)` | `→ BRIMParseOutput` | Full parsing — returns structured BRIMParseOutput object containing transactions, warnings, and extracted asset info |
 
@@ -230,6 +230,7 @@ mandatory for every new plugin:
 | `supported_extensions` | `['.csv']` | Accepted file extensions |
 | `detection_priority` | `100` | Auto-detection priority (higher = checked first). Use 0-49 for generic plugins. |
 | `cannot_parse_reason(file_path)` | `None` | Why `can_parse` refuses a file, in one short sentence the user can act on — appended to the parse guard's 400. See [Saying why a file is refused](#cannot-parse-reason) |
+| `cannot_parse_detail(file_path)` | wraps `cannot_parse_reason`, no code | The same refusal as a `BRIMRefusal`, with a stable `code` the frontend translates and its `context` — asked by the import wizard right after an upload. See [Saying why with a code](#cannot-parse-detail) |
 | `icon_url` | `None` | Broker favicon URL for the UI (see [Favicons](#favicons)) |
 | `docs_url` | `None` | Link to a user-facing MkDocs page. Leave `None` if no page exists (avoids dead links). |
 | `plugin_version` | `"1.0.0"` | Semver of the parsing logic — **bump it** whenever output for the same input changes |
@@ -245,10 +246,11 @@ abstract one: it returns `None` by default, so a plugin written without it stays
 when your `can_parse` refuses a file for a cause the user can fix in the file — a missing column,
 say.
 
-- **When the core asks.** Only in the guard of `parse_file` (`brim_provider.py`), after
+- **When the core asks.** In the guard of `parse_file` (`brim_provider.py`), after
   `can_parse` answered `False` for the file the parse runs your plugin on. The guard asks about
   the path it checked last: the relocated one, when a concurrent parse moved the file in the
-  meantime.
+  meantime. The default [`cannot_parse_detail`](#cannot-parse-detail) asks it too, when the
+  import wizard checks an upload against the broker's default plugin.
 - **What it returns.** One short English sentence saying why `can_parse` refuses the file, with a
   lowercase start and no final period, because it completes the guard's message; `None` when
   there is nothing to add.
@@ -283,6 +285,87 @@ every registered plugin to the contract: `test_every_plugin_answers_nothing_or_o
 asks the method about every file of `sample_reports/` and about paths with nothing to read, and
 fails on an exception or on an answer that is neither `None` nor one sentence (a non-empty single
 line, lowercase start, no final period).
+
+### 🏷️ Saying why with a code {: #cannot-parse-detail }
+
+`cannot_parse_detail(file_path) -> Optional[BRIMRefusal]` gives the same refusal as
+[`cannot_parse_reason`](#cannot-parse-reason), with a stable code the frontend translates. It is a
+concrete method of `BRIMProvider` too: the default wraps `cannot_parse_reason` without a code
+(`BRIMRefusal(message=reason)`, or `None` when there is no reason), so every plugin answers it
+unchanged. Override it when the user should read your reason in their own language.
+
+`BRIMRefusal` (`backend/app/schemas/brim.py`):
+
+| Field | Type | Content |
+|-------|------|---------|
+| `code` | `Optional[str]` | Stable snake_case code (`^[a-z][a-z0-9_]*$`), translated by the frontend as `importWizard.parseRefusal.<code>`; `None` when the plugin gives only a sentence |
+| `message` | `str`, not empty | The `cannot_parse_reason` sentence — one short English sentence, lowercase start, no final period: the fallback text |
+| `context` | `Dict[str, Any]` | The parameters of the translation, e.g. the plugin that reads the file |
+
+- **Same rules as `cannot_parse_reason`**: as cheap as `can_parse`, `None` when there is nothing
+  to add, and never raise.
+- **One sentence, two methods**: `message` must be what `cannot_parse_reason` returns. Write the
+  detail and derive the sentence from it, as the Scalable plugins do — the parse guard keeps
+  reading `cannot_parse_reason`, the plugin check below reads `cannot_parse_detail`:
+
+    ```python
+    def cannot_parse_detail(self, file_path: Path) -> Optional[BRIMRefusal]:
+        return _scalable.refusal(self, file_path, _scalable.BROKER)
+
+    def cannot_parse_reason(self, file_path: Path) -> Optional[str]:
+        detail = self.cannot_parse_detail(file_path)
+        return detail.message if detail else None
+    ```
+
+**The endpoint.** `GET /api/v1/brokers/import/files/{file_id}/plugin-check?plugin_code=<code>`
+(`check_file_plugin` in `api/v1/brokers.py`) asks one plugin about one uploaded file and answers a
+`BRIMPluginCheck`: `plugin_code`, `can_parse` and `refusal`.
+
+```json
+{
+  "plugin_code": "broker_scalable",
+  "can_parse": false,
+  "refusal": {
+    "code": "scalable_deposit_file",
+    "message": "this is the export of the Scalable overnight account: read it with the Scalable Capital overnight account plugin",
+    "context": {"plugin_code": "broker_scalable_deposit", "plugin_name": "Scalable Capital overnight account"}
+  }
+}
+```
+
+- **Nothing is parsed**, and the file keeps its status. The work is `check_file_with_plugin`
+  (`brim_provider.py`), run off the event loop (`asyncio.to_thread`) because the plugin reads the
+  file.
+- **`refusal`** comes only with `can_parse: false`, and stays `null` when the plugin has nothing to
+  add. A `can_parse` that raises counts as `false`, and a `cannot_parse_detail` that raises leaves
+  `refusal` empty: both are logged, never a 500. As in the parse guard, a refusal on a path that a
+  concurrent parse has just moved is asked again on the new path.
+- **Access**: any user with access to the file's broker (VIEWER+), 403 otherwise. 404 for an
+  unknown file, an unknown plugin, or a file whose content is gone.
+
+**In the import wizard.** Right after an upload, the wizard asks the endpoint about the broker's
+default import plugin. When that plugin refuses the file, the wizard shows the reason under *Notes
+from the plugin* in its [wrong-broker prompt](../../frontend/components/features/import-wizard.md#broker-mismatch),
+translated as `importWizard.parseRefusal.<code>`, with `context` as its parameters, and falls back
+to the English `message` when the refusal has no code or the code no translation. A plugin that
+`context` names by `plugin_code` gets its name in the UI language as `plugin_name`, from its
+[catalogue key](#plugin-name-i18n): the `plugin_name` the refusal carries — the named plugin's
+English `provider_name` — is only the fallback.
+
+**Example: Scalable Capital.** One plugin per account, each account in its own LibreFolio broker:
+`broker_scalable` reads the broker account, `broker_scalable_deposit` the overnight account, and
+both import the shared reader `_scalable.py`. Each refuses the other account's file and names the
+plugin that reads it (`_scalable.refusal`):
+
+| `code` | Given by | For | `context` |
+|--------|----------|-----|-----------|
+| `scalable_deposit_file` | `broker_scalable` | the exporter's overnight account file | `broker_scalable_deposit`, `Scalable Capital overnight account` |
+| `scalable_broker_file` | `broker_scalable_deposit` | the exporter's broker account file | `broker_scalable`, `Scalable Capital broker` |
+| `scalable_prime_file` | `broker_scalable_deposit` | Scalable's own CSV (PRIME) | `broker_scalable`, `Scalable Capital broker` |
+| `scalable_mixed_file` | both | an exporter file mixing the two accounts | empty: the message asks to export the two accounts separately |
+
+`context` names the other plugin, as `plugin_code` and `plugin_name`. Any other file gets `None`:
+the two plugins give a reason only for Scalable's own exports.
 
 ### 🧰 Base-class helpers you should use
 
@@ -352,7 +435,13 @@ class MyBrokerProvider(BRIMProvider):
 
 ### 🔍 Auto-Discovery
 
-Place the file in `brim_providers/` and restart the app. The `BRIMProviderRegistry` will automatically discover and register it. The plugin will appear in the [ImportPluginSelect](../../frontend/components/core-ui/select.md#importpluginselect) dropdown.
+Place the file in `brim_providers/` and restart the app. The `BRIMProviderRegistry` will automatically discover and register it. The plugin will appear in the [ImportPluginSelect](../../frontend/components/core-ui/select.md#importpluginselect) dropdown, under its English `provider_name` until it has its [catalogue keys](#plugin-name-i18n).
+
+A module whose name starts with an underscore is not a plugin: `auto_discover` skips it
+(`provider_registry.py`), and the R13 test reads only `broker_*.py`. That is where code shared by
+several plugins lives — `_brim_io.py` and `_brim_output.py` for any plugin, `_scalable.py` for the
+two Scalable Capital plugins, whose `broker_*.py` files hold only their properties (the string
+literals R13 reads among them) and calls to it.
 
 ---
 
@@ -432,9 +521,10 @@ transaction breaks these rules, so flip source signs as needed:
 
     A plugin's user-facing `warnings` (and any `BRIMAssetNotice.reason`) should be written
     in the language of the export it parses. For a single-nation broker whose report is
-    published in only one language — e.g. Crédit Agricole, Directa, Intesa Sanpaolo, Fineco
+    published in only one language — e.g. Crédit Agricole, Directa and Intesa Sanpaolo
     (Italian), Danske Bank (Finnish) — emit the warnings in that language so they match the report the user is
-    reading. When a broker ships differently localized export layouts (a UK vs. IT Fineco
+    reading. Fineco is still an exception: it reads only the Italian export, but writes its warnings in English.
+    When a broker ships differently localized export layouts (a UK vs. IT Fineco
     file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
     warnings in its own language. Code, comments and docstrings stay in English.
 
@@ -462,6 +552,22 @@ transaction breaks these rules, so flip source signs as needed:
     editor list them. A todo is worth a key only when its message has no file language to
     honour, like the Generic CSV's `corporate_action`; every other todo keeps the file's
     language on purpose.
+
+    The comment under a notice's evidence table follows the notices' contract too, in its own
+    namespace: `importWizard.brimEvidence.<code>` — the notice's `code`, with its `context` as
+    values — replaces the [evidence](#brim-evidence)'s `comment` when the key exists
+    (`resolveBrimEvidenceComment`, in `resolveBrimNotice.ts` too, called by
+    `BrimNoticeList.svelte`). There is one key per notice, so a notice with several commented
+    tables shows the same text under each; and a key only replaces: a table without a `comment`
+    stays without. The caption needs no key: an empty `title` gets the wizard's own,
+    `importWizard.evidenceRowsTitle` (*Source rows*, *Righe del file*), where the table folds
+    behind its caption — the confirmation modal; the parse-detail modal shows such a table
+    without a caption. The Scalable plugins write in English, so they leave `title` empty and
+    give each of their twelve notice codes both keys: the user reads the whole notice —
+    message, caption and comment — in the UI language. `TestWhatTheWizardWords`
+    (`test_brim_scalable.py`, `./dev.py test external brim-scalable`) holds them to it: both
+    keys for every code in the four catalogues, and no title on the samples' evidence tables. A
+    plugin that writes in its file's language gives its evidence no key either.
 
 !!! warning "`cost_basis_override` is PER-UNIT, never a total"
 
@@ -649,7 +755,7 @@ warnings.append(
 - A bare `str` still works (coerced to `severity="warning"`, `code="legacy"`), but new code
   should never use it: the `code` is what lets the frontend and the tests address the notice.
 
-### 🔎 `BRIMEvidence` — show the row, do not just describe it
+### 🔎 `BRIMEvidence` — show the row, do not just describe it {: #brim-evidence }
 
 Every notice and every todo can carry evidence tables. This is what turns *"row 282 looks
 bundled"* into something the user can check without opening the file:
@@ -676,6 +782,12 @@ BRIMEvidence(
   who opened the row.
 - Several tables are allowed: Crédit Agricole shows the purchase row **and** the coupon row
   that supplied the nominal, each with its own comment.
+- **`title` may be empty.** The field is required, but `title=""` lets the wizard show its own
+  caption, translated (*Source rows*), where the table folds behind it: the Scalable plugins,
+  whose notices are translated, leave it empty rather than write an English caption. The
+  `comment` of a notice's table can be translated by code too — both are explained in the tip
+  *Warning language follows the input format*, under
+  [Sign conventions](#sign-conventions-enforced-by-the-test-suite).
 
 ### 🧩 `BRIMFieldTodo` — one field, one question, one screen
 
@@ -1297,11 +1409,59 @@ header check specific.
 A report-set plugin's members are never parsed alone: declare its samples as sets in
 `test_sample_sets` — see [Testing a report-set plugin](#report-set-tests).
 
+## 🌐 Register the name and description (required) {: #plugin-name-i18n }
+
+`provider_name` and `description` are written in English, and the UI shows them in the user's
+language: every plugin ships two keys in each of the four catalogues
+(`frontend/src/lib/i18n/{en,it,fr,es}.json`).
+
+| Key | In `en` | In `it`, `fr`, `es` |
+|-----|---------|---------------------|
+| `brimPlugins.<code>.name` | `provider_name`, character for character | A brand name stays as it is (`DEGIRO`, `Interactive Brokers`); only generic words are translated (`Generic CSV` → `CSV generico`; `Scalable Capital overnight account` → `Scalable Capital conto deposito`) |
+| `brimPlugins.<code>.description` | `description`, character for character | Translated |
+
+Add them with the i18n tool, which writes the four catalogues in one go — here for the plugin of
+the [Implementation Example](#implementation-example):
+
+```bash
+./dev.py i18n add "brimPlugins.my_broker_csv.name" --en "My Broker (CSV)" --it "My Broker (CSV)" --fr "My Broker (CSV)" --es "My Broker (CSV)"
+./dev.py i18n add "brimPlugins.my_broker_csv.description" --en "Import transactions from My Broker CSV exports" --it "…" --fr "…" --es "…"
+```
+
+- **Who reads them.** `brimPluginName` and `brimPluginDescription`
+  (`frontend/src/lib/utils/brim/pluginText.ts`): the plugin select (`ImportPluginSelect`, in the
+  broker form's **Default Import Plugin** and the wizard's **Plugin** column: the name as the
+  label; the description under each option, under the select and in its search), the import
+  wizard (the **Parse** table, the report-set card, the missing-export warning and the
+  [wrong-broker prompt](../../frontend/components/features/import-wizard.md#broker-mismatch)) and
+  **Settings → About** (the name).
+- **Without keys** — a plugin the catalogues do not know yet — both helpers fall back to the
+  plugin's own English text: the plugin still shows, in English.
+- **In a refusal.** A `BRIMRefusal` whose `context` names a plugin by `plugin_code` gets that
+  plugin's name in the UI language as `plugin_name`, before `importWizard.parseRefusal.<code>` is
+  filled in ([Saying why with a code](#cannot-parse-detail)).
+- **The tests.** `TestPluginTextCatalogues`, in `test_brim_providers.py`
+  (`./dev.py test external brim-providers`), holds the catalogues to the registry: the English
+  keys equal each plugin's `provider_name` and `description`, the Italian, French and Spanish ones
+  are filled in for every plugin, and no catalogue keeps a code that no registered plugin has.
+  Change a property and its English key together, and remove the keys with the plugin
+  (`./dev.py i18n remove`). The two lookups and their fallbacks are pinned by `pluginText.test.ts`
+  (`./dev.py test front-transaction tx-unit`).
+
 ## 🖼️ Favicons
 
 Set `icon_url` to the broker's favicon (`https://<domain>/favicon.ico`). It is rendered both in
 the app **Settings → Import** UI and on the mkdocs import page, so it must be embeddable
-**cross-origin**. Two failure modes to check for:
+**cross-origin**.
+
+It is also the icon of every broker that uses the plugin as its default import plugin and has no
+custom icon: it comes before the favicon of the broker's **Portal URL**. A generic fallback plugin —
+`detection_priority` below 50, like the Generic CSV — comes after that favicon instead, because its
+icon is the same for every broker (`FALLBACK_PLUGIN_PRIORITY_LIMIT` in
+`frontend/src/lib/utils/brim/pluginKind.ts`, used by `brokerIconChain.svelte.ts` and
+`getBrokerIconCandidates`).
+
+Two failure modes to check for:
 
 - **Cloudflare / bot block** — the domain returns `403`/`404` to non-browser requests but the
   icon still loads in a real browser. `curl -sI` is *not* conclusive here; if it renders in the
@@ -1352,7 +1512,9 @@ Then, reusing `<slug>` everywhere:
 1. **Page (×4 languages)** — create `<slug>.en.md`, `.it.md`, `.fr.md`, `.es.md` in
    `mkdocs_src/docs/user/transactions/import/`. A short beta placeholder is fine (favicon in
    the H1, a "how to export" line, a note that it was built from sample exports). Use
-   `directa.it.md` as a fuller reference once real export steps are known.
+   `directa.it.md` as a fuller reference once real export steps are known. In each language, call
+   the importer what its `brimPlugins.<code>.name` says ([above](#plugin-name-i18n)): that is the
+   name the user reads in the app.
 2. **Index card** — add an `<a href="<slug>/">` card in each
    `mkdocs_src/docs/user/transactions/import/index.<lang>.md` (in the matching broker group,
    before the final `Request New Plugin` / `generic-csv` card). Copy an existing card and
