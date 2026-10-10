@@ -62,7 +62,7 @@ Misure quantitative del rischio di portafoglio. Dalla deviazione standard all'in
     1. **Investitori razionali** che cercano di massimizzare l'utilità
     2. **Distribuzione normale** dei rendimenti (nella pratica, i rendimenti presentano code grasse (fat tails))
     3. Rendimenti attesi, volatilità e correlazioni **conosciuti** (nella pratica, questi vengono stimati con un margine di errore)
-    4. **Mercati senza attriti** — nessuna tassa, nessun costo di transazione (LibreFolio ti aiuta a monitorarli!)
+    4. **Mercati senza attriti** — nessuna imposta, nessun costo di transazione (LibreFolio ti aiuta a monitorarli!)
 
 Nonostante queste limitazioni, la MPT rimane il fondamento della gestione di portafoglio istituzionale e fornisce il vocabolario utilizzato da tutta l'industria degli investimenti.
 

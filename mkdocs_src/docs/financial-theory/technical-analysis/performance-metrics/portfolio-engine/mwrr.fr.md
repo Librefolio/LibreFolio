@@ -21,7 +21,7 @@ $$
 ??? note "🧮 Comment l'équation NPV est déroulée"
 
     #### 1. Formule intuitive de la valeur finale
-    Imaginez projeter votre valeur nette finale (VNI) en faisant croître chaque flux de trésorerie à un taux composé \(r\) :
+    Imaginez projeter votre valeur nette d'inventaire (NAV) finale en faisant croître chaque flux de trésorerie à un taux composé \(r\) :
     
     \[
     VNI_{finale} = CF_0 \times (1 + r)^{\frac{d_0}{365}} + CF_1 \times (1 + r)^{\frac{d_1}{365}} + \dots + CF_n \times (1 + r)^{\frac{d_n}{365}}
@@ -43,7 +43,7 @@ $$
     
     * **Jour 0 :** La valeur initiale du portefeuille est de 1 000 € (représentée comme un dépôt/investissement).
     * **Jour 15 :** Vous déposez 100 €.
-    * **Jour 31 :** La VNI finale du portefeuille est de 1 150 €.
+    * **Jour 31 :** Le NAV final du portefeuille est de 1 150 €.
     
     Tout d'abord, nous construisons le tableau des transactions du point de vue de l'investisseur (l'argent versé dans le portefeuille est négatif, l'argent récupéré est positif) :
     
@@ -51,7 +51,7 @@ $$
     |-------------|--------------|-----------|-----------------------------|
     | 0 | 0 | Solde Initial | **-1 000 €** (Sortie) |
     | 1 | 15 | Dépôt | **-100 €** (Sortie) |
-    | 2 | 31 | Liquidation hypothétique (VNI) | **+1 150 €** (Entrée) |
+    | 2 | 31 | Liquidation hypothétique (NAV) | **+1 150 €** (Entrée) |
     
     Now, nous déployons ces transactions dans la sommation de la VAN :
     
@@ -76,7 +76,7 @@ $$
 * $CF_i$ = Flux de trésorerie du point de vue de l'investisseur :
     * **Flux de trésorerie négatifs ($CF_i < 0$) :** Capital engagé dans le portefeuille (dépôts, achats). Cela représente l'argent sortant du portefeuille personnel de l'investisseur pour être investi.
     * **Flux de trésorerie positifs ($CF_i > 0$) :** Capital restitué à l'investisseur (retraits, dividendes). Cela représente l'argent retournant dans le portefeuille de l'investisseur.
-    * **Valorisation finale ($CF_n > 0$) :** Le Net Asset Value (NAV) ou valeur nette finale (VNI) du portefeuille à la fin de la période, traité comme un afflux positif (une liquidation hypothétique où l'ensemble du portefeuille est converti en liquidités revenant à l'investisseur).
+    * **Valorisation finale ($CF_n > 0$) :** La valeur nette d'inventaire (NAV) finale du portefeuille à la fin de la période, traité comme un afflux positif (une liquidation hypothétique où l'ensemble du portefeuille est converti en liquidités revenant à l'investisseur).
 * $t_i$ = Jours écoulés depuis le début de la période ($t_0 = 0$).
 
 **Concepts clés :**
@@ -120,7 +120,7 @@ Voyons un scénario sur 10 ans pour comprendre l'impact du timing sur la perform
 
 * **Année 0 :** Vous déposez **10 000 €**.
 * **Année 5 :** Vous déposez **90 000 €** supplémentaires.
-* **Année 10 :** Votre valeur nette finale (VNI) est de **200 000 €**.
+* **Année 10 :** Votre valeur nette d'inventaire (NAV) finale est de **200 000 €**.
 
 ### 📉 avec le ROI Simple
 Le ROI simple est calculé uniquement sur les contributions nettes totales :

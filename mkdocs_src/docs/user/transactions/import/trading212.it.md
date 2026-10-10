@@ -26,7 +26,7 @@ Per esportare il tuo estratto conto delle transazioni da Trading212:
 
 ## 📝 Note
 
-- Supporta acquisti e vendite di azioni/ETF, dividendi, interesse sulla liquidità, depositi, prelievi e commissioni di conversione valutaria.
+- Supporta acquisti e vendite di azioni/ETF, dividendi, interesse sulla liquidità, depositi, prelievi e commissioni di conversione di valuta.
 - Sono supportati gli account multi-valuta.
 
 ## 🔗 Riferimento per Sviluppatori

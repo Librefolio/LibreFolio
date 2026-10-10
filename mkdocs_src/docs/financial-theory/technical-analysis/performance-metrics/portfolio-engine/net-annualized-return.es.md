@@ -68,7 +68,7 @@ Esto incluye sucesiones en especie, transferencias de bróker y posiciones inici
 Para la contribución por activo en un período:
 
 $$
-\mathrm{PyG}_{periodo} =
+\mathrm{PnL}_{periodo} =
 \Delta \mathrm{PlusvalíaNoReal}
 + \mathrm{PlusvalíaRealizada}
 + \mathrm{Ingresos}
@@ -78,15 +78,15 @@ $$
 El porcentaje del período mostrado sigue siendo:
 
 $$
-r_{\mathrm{periodo}} = \frac{\mathrm{PyG}_{periodo}}{|\mathrm{ValorInicial}|}
+r_{\mathrm{periodo}} = \frac{\mathrm{PnL}_{periodo}}{|\mathrm{StartValue}|}
 $$
 
-cuando `ValorInicial` es distinto de cero. La anualización puede recurrir a la base de costo final para activos abiertos a mitad del período:
+cuando `StartValue` es distinto de cero. La anualización puede recurrir al coste base final para activos abiertos a mitad del período:
 
 $$
 \mathrm{base\_anual}=
 \begin{cases}
-|\mathrm{ValorInicial}|, & |\mathrm{ValorInicial}|>0\\
+|\mathrm{StartValue}|, & |\mathrm{StartValue}|>0\\
 \mathrm{BaseDeCosto}_{final}, & \text{de lo contrario}
 \end{cases}
 $$
@@ -101,7 +101,7 @@ Entonces:
 
 $$
 r_{\mathrm{ann}} =
-\operatorname{anualizar}\left(\frac{\mathrm{PyG}_{periodo}}{\mathrm{base\_anual}},\ t_{\mathrm{final}}-t_{\mathrm{inicio}}\right)
+\operatorname{anualizar}\left(\frac{\mathrm{PnL}_{periodo}}{\mathrm{base\_anual}},\ t_{\mathrm{final}}-t_{\mathrm{inicio}}\right)
 $$
 
 ## 🧬 Lotes FIFO
@@ -109,9 +109,9 @@ $$
 El rendimiento anualizado del lote FIFO es neto de ingresos, comisiones e impuestos asignados:
 
 $$
-\mathrm{PyGTotalNeto}_i =
-\mathrm{PyGMercado}_i
-+ \mathrm{PyGRealizada}_i
+\mathrm{PnLTotalNeto}_i =
+\mathrm{PnLMercado}_i
++ \mathrm{PnLRealizada}_i
 + \mathrm{Ingresos}_i
 - \mathrm{Comisiones}_i
 - \mathrm{Impuestos}_i
@@ -119,10 +119,10 @@ $$
 
 $$
 \mathrm{RetornoTotalNeto}_i =
-\frac{\mathrm{PyGTotalNeto}_i}{\mathrm{ValorApertura}_i}
+\frac{\mathrm{PnLTotalNeto}_i}{\mathrm{ValorApertura}_i}
 $$
 
-El valor anualizado usa `retorno_total_neto`, no el `retorno_total` bruto:
+El valor anualizado usa `net_total_return`, no el `total_return` bruto:
 
 $$
 r_{\mathrm{ann},i} =
@@ -139,6 +139,6 @@ donde $t_{\mathrm{fin\ lote}}$ es la fecha de cierre para lotes completamente ce
 
 - 🧭 [Resolución de Precios](price-resolution.md) — fuente de valoraciones de mercado y de origen de operaciones
 - 📉 [ROI Simple](roi.md) — contexto de rendimiento del titular y a nivel de posición
-- 📊 [PyG del Período](period-pnl.md) — descomposición del período
+- 📊 [P&L del período](period-pnl.md) — descomposición del período
 - 🔬 [Análisis de Lotes FIFO](../fifo-engine/fifo-lot-analysis.md) — métricas netas por lote
 - ⚙️ [Portfolio Engine](index.md) — modelo matemático completo

@@ -31,12 +31,14 @@ Voici un résumé des opérations et outils disponibles directement sur la page 
 | **Suppression et Actions groupées** | Faites un clic droit sur une ligne pour ouvrir le menu contextuel et accéder aux actions rapides. La suppression d'une seule ligne et la sélection de plusieurs lignes pour une suppression groupée ouvrent toutes deux le même **espace de travail groupé**, où les lignes sont préparées pour suppression avant confirmation ; un partenaire lié (opération FX ou jambe de transfert) est automatiquement préparé avec la ligne choisie. | |
 
 La duplication fonctionne de la même manière : **Cloner** depuis le menu contextuel prépare une copie dans l'espace de travail groupé — en conservant la **date d'origine** (le clonage est la façon dont une ligne historique mal classée est corrigée, donc la date doit survivre) — où vous l'ajustez et l'enregistrez.
+{: #bulk-workspace }
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
 </div>
 
 | **Transactions Composites et Promotion** | Liez des opérations individuelles dans une **Transaction Composite** via une **Promotion** pour permettre un suivi et des analyses plus sophistiqués, ou divisez à nouveau une transaction composite en opérations individuelles. | [Formulaire de transaction](form.md#composite-transactions) |
+{: #link-pairs }
 
 ---
 

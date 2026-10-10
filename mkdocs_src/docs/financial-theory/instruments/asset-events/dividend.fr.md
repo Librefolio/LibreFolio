@@ -83,6 +83,6 @@ Pour les **actifs dont le prix est indexé sur le marché** (Yahoo Finance, just
 
 ## 🔗 Related
 
-- 📅 **[Aperçu des événements d'actifs](index.md)** — Tous les types d'événements
+- 📅 **[Vue d'ensemble des événements d'actifs](index.md)** — Tous les types d'événements
 - 💸 **[Types de transactions](../transaction-types/index.md)** — Comment les dividendes apparaissent dans les transactions du portefeuille
 - 📈 **[Rendements et taux de croissance](../../fundamentals/returns.md)** — Rendement total incluant les dividendes

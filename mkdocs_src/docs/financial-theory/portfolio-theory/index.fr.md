@@ -4,7 +4,7 @@ La théorie du portefeuille fournit le cadre mathématique pour construire des p
 
 ---
 
-## 📖 Aperçu
+## 📖 Vue d'ensemble
 
 ### 🏛️ Théorie Moderne du Portefeuille (MPT)
 
@@ -48,7 +48,7 @@ Mesures quantitatives du risque de portefeuille. De l'écart-type au ratio de Sh
 
 - **[Ratio de Sharpe](../technical-analysis/risk-metrics/sharpe-ratio.md)** — Rendement ajusté au risque (volatilité totale)
 - **[Ratio de Sortino](../technical-analysis/risk-metrics/sortino-ratio.md)** — Rendement ajusté au risque (risque de baisse uniquement)
-- **[Maximum Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — La pire baisse du sommet au creux
+- **[Perte maximale](../technical-analysis/risk-metrics/max-drawdown.md)** — La pire baisse du sommet au creux
 - **[Volatilité](../technical-analysis/risk-metrics/volatility.md)** — Écart-type des rendements
 
 ---
@@ -62,7 +62,7 @@ Mesures quantitatives du risque de portefeuille. De l'écart-type au ratio de Sh
     1. **Des investisseurs rationnels** qui cherchent à maximiser leur utilité
     2. **Une distribution normale** des rendements (en pratique, les rendements présentent des queues épaisses)
     3. Des rendements attendus, des volatilités et des corrélations **connus** (en pratique, ceux-ci sont sujets à des erreurs d'estimation)
-    4. **Des marchés sans friction** — pas de taxes, pas de frais de transaction (LibreFolio vous aide à les suivre !)
+    4. **Des marchés sans friction** — pas d'impôts, pas de frais de transaction (LibreFolio vous aide à les suivre !)
 
 Malgré ces limitations, la MPT reste le fondement de la gestion de portefeuille institutionnelle et fournit le vocabulaire utilisé par l'ensemble de l'industrie de l'investissement.
 

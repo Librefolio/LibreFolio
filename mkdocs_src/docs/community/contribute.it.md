@@ -14,6 +14,8 @@ Se LibreFolio ti aiuta a gestire meglio i tuoi investimenti, considera di suppor
 
 Ogni donazione — non importa quanto piccola — aiuta a coprire gli strumenti di sviluppo, l'infrastruttura di test e motiva il miglioramento continuo.
 
+Dentro LibreFolio, lo stesso link del caffè si trova accanto ai pulsanti che condividono il progetto su X, Reddit, Facebook, Instagram e TikTok con un messaggio già pronto: li trovi in **Impostazioni → Informazioni**, nella scheda **Supporta LibreFolio**, e nel popup delle donazioni che compare di tanto in tanto dopo l'accesso. Vedi [Supporta LibreFolio nell'app](../user/settings/about.md#support-librefolio) per come funziona la condivisione — nulla viene mai pubblicato al posto tuo.
+
 ---
 
 ## :rocket: Contributi ad alto impatto

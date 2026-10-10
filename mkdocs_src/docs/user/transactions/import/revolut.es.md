@@ -26,7 +26,7 @@ Para exportar su historial de transacciones de acciones y criptomonedas desde Re
 
 ## 📝 Notas
 
-- Soporta operaciones con acciones, compras de criptomonedas, dividendos pagados, comisiones de custodia y transferencias de efectivo.
+- Soporta operaciones con acciones, compras de criptomonedas, dividendos pagados, comisiones de custodia y transferencias de fondos.
 - Gestiona automáticamente montos en múltiples divisas dentro del mismo archivo.
 
 ## 🔗 Referencia para Desarrolladores

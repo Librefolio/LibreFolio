@@ -30,7 +30,7 @@ Cuando compras un activo, se crea un **lote** con:
 - **Cantidad**: Número de acciones/unidades compradas
 - **Precio unitario**: Precio por acción en el momento de la compra
 - **Comisiones**: Cualquier comisión de transacción (corretaje, diferencial, etc.)
-- **Costo total**: `cantidad × precio_unitario + comisiones`
+- **Costo total**: `quantity × unit_price + fees`
 
 ### 💰 Venta
 
@@ -50,7 +50,7 @@ $$
 
 ## 🔗 Relacionado
 
-- 📊 **[Precio Medio Ponderado (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo promedio por unidad entre múltiples compras
+- 📊 **[Precio Medio de Compra (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo promedio por unidad entre múltiples compras
 - 🔬 **[Análisis de Lotes FIFO](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Desglose por lote del emparejamiento FIFO presentado anteriormente
 - 💰 **[Impuestos](../../fundamentals/taxation.md)** — Plusvalías, métodos de emparejamiento, arrastre de pérdidas
 - 📈 **[Rendimientos](../../fundamentals/returns.md)** — Medición del rendimiento de inversiones

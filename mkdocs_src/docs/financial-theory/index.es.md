@@ -2,7 +2,7 @@
 
 Esta sección documenta los modelos financieros, convenciones y definiciones utilizados en todo LibreFolio.
 
-## 📖 Descripción general
+## 📖 Resumen
 
 Los cálculos financieros precisos son fundamentales para un rastreador de carteras. LibreFolio implementa convenciones financieras estándar para garantizar la coherencia con los informes de los brókers y los datos del mundo real. Esta sección está organizada en cuatro áreas temáticas.
 
@@ -14,7 +14,7 @@ Los bloques básicos de cualquier cartera:
 
 - **[Tipos de Activos](instruments/asset-types/index.md)** — Acciones, ETF, Bonos, Cripto, Bienes raíces, Índices
 - **[Tipos de Transacciones](instruments/transaction-types/index.md)** — Compra/Venta, Depósito/Retiro, Dividendo, Comisión, Interés, Transferencia
-- **[Eventos de Activos](instruments/asset-events/index.md)** — Dividendo, Interés, Split (Desdoblamiento), Ajuste de Precio, Liquidación al Vencimiento
+- **[Eventos de Activos](instruments/asset-events/index.md)** — Dividendo, Interés, Desdoblamiento, Ajuste de Precio, Liquidación al Vencimiento
 
 ### 📊 [Análisis Técnico](technical-analysis/index.md)
 
@@ -37,4 +37,4 @@ Teoría Moderna de Carteras y gestión de riesgos:
 
 - **[Diversificación](portfolio-theory/diversification.md)** — Correlación, riesgo sistemático vs idiosincrásico
 - **[Asignación de Activos](portfolio-theory/asset-allocation.md)** — Estratégica, táctica, trayectorias de deslizamiento (glide paths), rebalanceo
-- **[Métricas de Riesgo](technical-analysis/risk-metrics/index.md)** — Sharpe, Sortino, Máxima Caída (Max Drawdown), Volatilidad
+- **[Métricas de Riesgo](technical-analysis/risk-metrics/index.md)** — Sharpe, Sortino, Caída máxima (Max Drawdown), Volatilidad

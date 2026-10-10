@@ -16,7 +16,7 @@ Ogni operazione finanziaria che modifica il tuo portafoglio: acquisti, vendite, 
 
 ### 📅 [Eventi dell'Asset](asset-events/index.md)
 
-Azioni societarie e occorrenze programmate che influenzano un asset a livello **globale** — dividendi dichiarati, stock split, aggiustamenti di prezzo, pagamenti di interessi e regolamenti a scadenza. Gli eventi sono distinti dalle transazioni: accadono all'asset, non al tuo portafoglio.
+Azioni societarie e occorrenze programmate che influenzano un asset a livello **globale** — dividendi dichiarati, stock split, rettifiche di prezzo, pagamenti di interessi e regolamenti a scadenza. Gli eventi sono distinti dalle transazioni: accadono all'asset, non al tuo portafoglio.
 
 ---
 

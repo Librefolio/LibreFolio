@@ -268,6 +268,15 @@ def utils_translation_code_blocks(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Translation code-block tests", verbose=verbose)
 
 
+def utils_translation_cache(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the translation hash cache counts a language as done only for the EN version it was translated from (Aphra pipeline)."""
+    print_section("Utils: Translation Cache")
+    print_info("Testing: mkdocs_src/aphra-pipeline/translate_docs.py (run_translate, run_stamp, the hash cache transitions)")
+    print_info("Tests: failed, --lang-skipped and interrupted languages after an EN edit (parallel and sequential), an EN edit saved during the analysis (LF/CRLF), failed --force retry, stamp, plain success, the five transitions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_cache.py", test_names)
+    return run_command(cmd, "Translation cache tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -463,6 +472,16 @@ Tests for utility modules and helper functions:
         desc="Aphra cleanup never collapses whitespace inside fenced code; translated blocks get the EN indentation back before the write; translate-validate raises code-block-indent; every up-to-date translation keeps the EN indentation",
         # Pure functions over strings, plus a read-only pass over mkdocs_src/docs and
         # the translation hash cache: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-cache",
+        utils_translation_cache,
+        name="Translation Cache",
+        desc="A language counts as done only for the EN version it was translated or stamped from: after an EN edit, a language that fails (parallel and sequential paths), is left out by --lang or is cut short by an interruption is offered again by the next run, and its failure keeps the last translated_at; a failed --force retry of an unchanged page stays done; translate-stamp of a changed EN reopens the languages it does not stamp and clears the failure records of those it does; an EN edit saved while the analysis runs is offered again too, the md5 recorded being the one of the bytes translated (LF and CRLF)",
+        # run_translate and run_stamp on a docs tree and a cache under tmp_path, the
+        # LLM seams faked: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

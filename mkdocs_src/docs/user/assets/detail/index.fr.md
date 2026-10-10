@@ -1,58 +1,69 @@
-# 🔍 Page de Détails de l'Actif
+# 🔍 Page de détail d'un actif
 
-Cliquez sur n'importe quel actif depuis la [Liste des Actifs](../index.md) pour ouvrir sa page de détails. Ici, vous pouvez visualiser, analyser et gérer les données de prix pour cet actif spécifique.
+Cliquez sur un actif dans la [page Actifs](../index.md) pour ouvrir sa propre page : son historique de prix, les outils pour l'analyser et les données qui le sous-tendent.
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Page de Détails de l'Actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Page de détail d'un actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La page de détails est organisée en deux onglets : **Vue d'ensemble** (toutes les fonctionnalités ci-dessous) et **Risque et scénarios**.
+La page comporte deux onglets : **Vue d'ensemble**, décrit ci-dessous, et **Risques & Scénarios**.
 
-!!! info "Beta"
+!!! info "Bêta"
 
-    L'onglet **Risque et scénarios** appartient au sous-système d'Analyse de Risque, actuellement en **beta**. Il n'est pas encore couvert par cette documentation — les sections ci-dessous décrivent l'onglet Vue d'ensemble.
+    L'onglet **Risques & Scénarios** est encore en bêta : il s'ouvre avec la mention *L'analyse des risques est en bêta.* et n'est pas encore couvert par cette documentation.
 
 ---
 
-## 🧭 Fonctionnalités
+## 🧭 Ce que montre la Vue d'ensemble
 
-### 📈 [Graphique Interactif](chart.md)
-
-La vue principale — un graphique complet propulsé par ECharts avec zoom, panoramique, filtrage par plage de dates et conversion de devises. Les marqueurs d'événements (dividendes, fractionnements, intérêts) sont superposés directement sur la courbe des prix.
+De haut en bas :
 
 ### 📊 [Signaux](signals.md)
 
-Superposez sur le graphique l'un quelconque des **22 indicateurs techniques du backend** (familles de tendance, momentum, volatilité, volume et risque), des séries de comparaison et des courbes de référence synthétiques. Chaque signal est calculé par le backend à partir de l'historique des prix enregistré et peut être configuré et commuté indépendamment.
+Tracez n'importe lequel des **22 indicateurs techniques**, un autre actif ou une paire de devises, ou une courbe de référence sur le graphique.
+
+### 📈 [Graphique interactif](chart.md)
+
+L'historique des prix, ou le **[Rendement glissant](chart.md#rolling-return)** sur une fenêtre de votre choix (1S, 1M, 3M, 1A ou une durée personnalisée). Zoomez, déplacez et convertissez-le dans une autre devise.
+
+### ✏️ [Éditeur de données](data-editor.md)
+
+Ajoutez, corrigez ou supprimez des prix et des événements, un par un ou à partir d'un fichier CSV.
 
 ### 📐 [Mesures](measures.md)
 
-Outil de mesure par clic. Sélectionnez deux points sur le graphique pour voir le delta, la variation en pourcentage et le rendement annualisé entre eux.
+Cliquez sur deux points du graphique pour lire la variation entre eux.
 
 ### 🗂️ [Classification](classification.md)
 
-Graphique sectoriel, carte mondiale géographique et répartition par pays — lorsque les données de classification sont configurées pour l'actif.
-
-### ✏️ [Éditeur de Données](data-editor.md)
-
-Visualisez, ajoutez, modifiez ou supprimez des points de données de prix individuels directement sur le graphique.
+La répartition par secteur et par pays, dans le panneau **Métadonnées & Classification**.
 
 ### 📅 [Événements](events.md)
 
-Événements au niveau de l'actif (dividendes, intérêts, fractionnements, ajustements de prix) affichés sous forme de marqueurs sur le graphique.
+Dividendes, divisions, intérêts et autres événements de l'actif, représentés par des marqueurs sur le graphique.
 
 ---
 
-## 🔧 En-tête & Contrôles
+## 🔧 En-tête et barre d'outils
 
-- **Bouton de retour ←** : revenir à la liste des actifs (ou à la page précédente)
-- **Infos Actif** : nom, badge de type, devise, prix actuel
-- **Modifier** (✏️) : ouvrir la fenêtre modale d'édition pour modifier les propriétés de l'actif
-- **Synchroniser** (🔄) : récupérer les dernières données de prix depuis le fournisseur
-- **Actualiser** (↻) : recharger les données depuis la base de données
+- **←** revient à la liste, ou à la page d'où vous venez, en une seule étape, même après avoir navigué avec les flèches.
+- **L'actif** — un point (vert actif, rouge archivé), son nom, son type et sa devise, un lien **Transactions (N)** lorsqu'il en possède, son fournisseur (ou **✏️ Manuel**), et un lien vers sa page web : celle que vous avez définie sur l'actif, ou sinon celle du fournisseur.
+- **‹ n/N ›** — l'actif précédent ou suivant, en conservant les mêmes dates (voir le panneau ci-dessous).
+- **Plage de dates** et **Convertir en** — la période et la devise du [graphique](chart.md).
+- **Export IA** — copie les données de l'actif pour un assistant IA ([Export IA d'un actif](../../ai-export/asset.md)).
+- **Modifier** (✏️) — ouvre le formulaire de l'actif ([Créer & Modifier](../create-edit.md)).
+- **Synchroniser** (🔄) — télécharge les derniers prix, avec ceux des actifs comparés et les taux de change dont le graphique a besoin ; il affiche **Recalculer** pour un Investissement programmé. Non disponible pour un actif sans fournisseur ou archivé.
+- **Recharger** (↻) — recharge les données de la page à partir de ce que LibreFolio a stocké.
+
+??? info "🧭 Quel ordre suivent les flèches ‹ ›"
+
+    - **Ouvert depuis la page Actifs** : la liste telle que vous l'avez laissée — sa recherche, ses filtres, sa vue grille ou tableau et, dans le tableau, son tri et ses filtres de colonnes.
+    - **Ouvert de toute autre manière** (un lien ou un favori, un rechargement, le tableau de bord, Transactions…), ou pour un actif que cette liste n'affiche pas : tous les actifs dans l'ordre par défaut de la page Actifs, les actifs archivés uniquement lorsque l'actif que vous avez ouvert est archivé.
+    - Le compteur (par exemple 3/12) indique où vous êtes. Les flèches s'arrêtent aux deux extrémités et disparaissent lorsqu'il n'y a qu'un seul actif à parcourir.
 
 ---
 
-## 🔗 Liens Associés
+## 🔗 Voir aussi
 
-- ➕ **[Créer & Modifier](../create-edit.md)** — Création et configuration des actifs
-- 📋 **[Liste des actifs](../index.md)** — Retour à la page de liste des actifs
+- ➕ **[Créer & Modifier](../create-edit.md)** — Créer et configurer des actifs
+- 📋 **[Vue d'ensemble des actifs](../index.md)** — Retour à la page de la liste des actifs

@@ -1,67 +1,65 @@
-# ✏️ Éditeur de données & Import CSV
+# ✏️ Éditeur de données et import CSV
 
-L'Éditeur de données vous permet de **consulter, ajouter, modifier et supprimer** des points de données de taux de change individuels. Pour le chargement massif, il inclut un outil d'**Import CSV** intégré.
+L'éditeur de données vous permet d'ajouter, de modifier et de supprimer les taux enregistrés d'une paire un par un, ou d'en charger plusieurs d'un coup à partir d'un fichier CSV. Rien n'est enregistré tant que vous n'avez pas cliqué sur **Enregistrer**.
 
 ---
 
-## 📝 Éditeur de données
+## 📝 Ouvrir l'éditeur
 
-Cliquez sur le bouton **Modifier** (✏️) dans la barre d'outils du graphique pour ouvrir le panneau de l'éditeur de données :
+Cliquez sur ✏️ (**Modifier les taux**) sur le graphique. L'éditeur s'ouvre sous le graphique et les autres panneaux se replient pendant que vous modifiez.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Éditeur de données FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Éditeur de données FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### 👀 Consulter les données
+Il liste les taux de la période sélectionnée avec leur **Date**, leur **Taux** et leur **Statut** (**Original**, **Modifié**, **Supprimé** ou **Nouveau**).
 
-L'éditeur affiche un tableau défilable de tous les points de données pour cette paire de devises, triés par date (la plus récente en premier) :
+- Une date marquée d'un ⚠️ et d'un nombre de jours n'a pas de taux propre (un week-end ou un jour férié) et répète le précédent. L'interrupteur ⚠️ en haut masque ces jours.
+- Double-cliquez sur un point du graphique (appui long sur mobile) pour accéder à sa date dans l'éditeur.
 
-- 📅 **Date** — La date d'observation
-- 💱 **Taux** — La valeur du taux de change
-- 🏛️ **Source** — L'origine des données (nom du fournisseur, import CSV ou manuel)
+---
 
-### ➕ Ajouter un point de données
+## ✍️ Modifier les taux
 
-1. Cliquez sur **"Ajouter"** en haut de l'éditeur
-2. Sélectionnez la **date** via le sélecteur de date
-3. Saisissez la valeur du **taux**
-4. Cliquez sur **Enregistrer** — le point est immédiatement ajouté et le graphique est mis à jour
+### ➕ Ajouter un taux
 
-### ✏️ Modifier un point de données
+Cliquez sur **Ajouter une ligne** : une ligne apparaît le jour suivant la dernière ligne, jamais plus tard qu'aujourd'hui. Modifiez sa date avec le sélecteur de date si nécessaire, puis saisissez le taux.
 
-1. Cliquez sur l'**icône crayon** à côté de n'importe quelle ligne
-2. Modifiez la valeur du taux
-3. Cliquez sur **Enregistrer** pour confirmer
+### ✏️ Modifier un taux
 
-### 🗑️ Supprimer un point de données
+Cliquez sur un taux et saisissez la nouvelle valeur.
 
-1. Cliquez sur l'**icône corbeille** à côté de n'importe quelle ligne
-2. Confirmez la suppression
+### 🗑️ Supprimer des taux
+
+Cliquez sur 🗑️ sur une ligne, ou sélectionnez des lignes et cliquez sur la corbeille en haut. **Annuler** rétablit une ligne jusqu'à l'enregistrement.
+
+### 💾 Enregistrer vos modifications
+
+Vos modifications apparaissent sur le graphique sous forme de ligne **Aperçu** violette. **Enregistrer (N)** les écrit toutes ; **Abandonner** les abandonne. Un taux doit être supérieur à zéro : un taux nul, négatif ou vide est ignoré.
 
 !!! warning "Les données synchronisées écrasent les modifications manuelles"
 
-    Si vous modifiez ou ajoutez manuellement un point de données pour une date qui est ultérieurement couverte par une synchronisation, la valeur du fournisseur **écrasera** votre modification manuelle — le fournisseur est toujours considéré comme la source faisant autorité. Pour les paires pour lesquelles vous souhaitez un contrôle manuel total, utilisez le fournisseur MANUAL (aucune source de données automatique) — voir [Configuration du fournisseur](provider.md).
+    Une synchronisation ultérieure des mêmes dates remplace vos valeurs par celles du fournisseur. Pour un contrôle entièrement manuel, utilisez une paire sans fournisseur — voir [Configuration du fournisseur](provider.md).
 
 ---
 
 ## 📥 Import CSV
 
-Pour le chargement massif de données de taux historiques, utilisez l'outil d'Import CSV.
+### 🔓 Ouvrir la fenêtre d'import
 
-### 🔓 Comment y accéder
+1. Dans l'éditeur, cliquez sur **Importer un CSV**.
+2. Dans **Importer des données CSV**, déposez un fichier `.csv` ou `.txt`, ou collez le texte dans la zone.
+3. Vérifiez le sens en haut, puis cliquez sur **Importer (N)**.
 
-1. Ouvrez l'Éditeur de données (icône crayon ✏️)
-2. Cliquez sur **"Importer CSV"** pour ouvrir la fenêtre modale d'importation
+Les lignes rejoignent l'éditeur : vérifiez-les, puis cliquez sur **Enregistrer**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Fenêtre modale d'import CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Fenêtre d'import CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
----
+### 📄 Format du fichier
 
-### 📄 Format du fichier CSV
-
-Le fichier CSV doit comporter **exactement 2 colonnes** avec une **ligne d'en-tête** spécifiant la direction :
+Deux colonnes, avec une ligne d'en-tête qui définit le sens :
 
 ```csv
 date;EUR>USD
@@ -70,93 +68,49 @@ date;EUR>USD
 2024-01-04;1.0911
 ```
 
-### 📏 Règles
-
 | Règle | Détails |
 |------|---------|
 | **Séparateur** | Point-virgule (`;`) |
-| **Format de date** | `YYYY-MM-DD` |
-| **Valeurs de taux** | Nombres décimaux positifs |
-| **En-tête** | Requis — doit contenir la direction (ex: `EUR>USD`) |
-| **Flèche de direction** | Utilisez `>` ou `<` (les deux sont supportés) |
+| **En-tête** | `date` et le sens, par ex. `EUR>USD` |
+| **Dates** | `YYYY-MM-DD` |
+| **Taux** | Nombres positifs ; `.` ou `,` comme séparateur décimal, `_` facultatif pour les milliers (`1_000.50`) |
 
-### ↔️ Direction dans l'en-tête
+### ↔️ Sens
 
-L'en-tête indique à LibreFolio dans quelle direction les taux sont exprimés :
+- `EUR>USD` signifie **1 EUR = X USD** ; `EUR<USD` est l'inverse, **1 USD = X EUR**.
+- L'en-tête doit nommer les deux devises de cette paire, dans n'importe quel ordre.
+- La barre en haut indique comment les taux sont lus (*Taux interprétés comme : 1 EUR = X USD*) ; ⇄ inverse le sens et réécrit l'en-tête.
+- Un fichier dans le sens opposé à la page est inversé pour vous : chaque taux $r$ devient $1/r$.
 
-- ➡️ `date;EUR>USD` signifie : **1 EUR = X USD** (les taux sont EUR→USD)
-- ⬅️ `date;USD>EUR` signifie : **1 USD = X EUR** (les taux sont USD→EUR)
+??? example "📋 Exemples — les mêmes taux écrits dans les deux sens"
 
-Si vous êtes sur la page EUR/USD et que votre CSV contient des taux `USD>EUR`, LibreFolio inversera automatiquement les valeurs.
+    ```csv
+    date;EUR>USD
+    2024-01-02;1.1045
+    2024-01-03;1.0982
+    ```
 
----
+    ```csv
+    date;USD>EUR
+    2024-01-02;0.9053
+    2024-01-03;0.9106
+    ```
 
-### 🔀 Direction & Permutation
-
-La fenêtre modale d'importation affiche une **barre de direction** indiquant comment vos données seront interprétées :
-
-- ➡️ **Devise de gauche** → **Devise de droite** : le taux vous indique combien d'unités de la devise de droite vous obtenez pour 1 unité de la devise de gauche
-- 🔄 Utilisez le **bouton de permutation (⇄)** pour changer la direction si vos données sont dans le format opposé
-
-L'en-tête de votre CSV détermine la direction automatiquement. Si l'en-tête indique `EUR>USD`, la fenêtre modale définit la direction sur EUR→USD.
-
----
-
-### 📋 Exemples
-
-#### ✅ Fichier minimal valide
-
-```csv
-date;EUR>USD
-2024-01-02;1.1045
-2024-01-03;1.0982
-```
-
-#### ✅ Direction inversée
-
-```csv
-date;USD>EUR
-2024-01-02;0.9053
-2024-01-03;0.9106
-```
-
-Ceci est équivalent au premier exemple — LibreFolio inverse `0.9053` en `1/0.9053 ≈ 1.1045`.
-
-#### ❌ Fichier invalide
-
-```csv
-date;GBP>JPY
-2024-01-02;188.45
-```
-
-Ceci échouera si vous êtes sur la page EUR/USD — les devises de l'en-tête doivent correspondre à la paire de la page.
-
----
+    Sur la page EUR/USD, les deux fichiers donnent les mêmes taux : `0.9053` devient $1/0.9053 \approx 1.1046$.
 
 ### ⚠️ Erreurs courantes
 
-| Erreur | Cause | Solution |
-|-------|-------|-----|
-| **"Header currencies don't match"** | L'en-tête contient des devises qui ne sont pas sur cette page | Vérifiez la paire et corrigez l'en-tête |
-| **"Missing or invalid header"** | Pas de ligne d'en-tête, ou format incorrect | Ajoutez un en-tête comme `date;EUR>USD` |
-| **"Duplicate dates"** | La même date apparaît plusieurs fois | Supprimez les doublons |
-| **"Invalid rate"** | Valeur non numérique ou négative | Assurez-vous que tous les taux sont des nombres positifs |
-| **"Invalid date format"** | Date non conforme au format `YYYY-MM-DD` | Corrigez le formatage de la date |
+La fenêtre d'import signale chaque ligne incorrecte ; seules les lignes valides sont importées.
 
----
+| Message | Cause | Correction |
+|---------|-------|-----|
+| **Les devises de l'en-tête ne correspondent pas** | D'autres devises dans l'en-tête, par ex. `GBP>JPY` sur la page EUR/USD | Utilisez les devises de cette paire |
+| **En-tête attendu** ou **Colonnes obligatoires manquantes** | Pas de ligne d'en-tête, ou une colonne manque | Commencez par une ligne telle que `date;EUR>USD` |
+| **Format de date invalide** | La date n'est pas au format `YYYY-MM-DD` | Corrigez la date |
+| **Nombre invalide** | Le taux n'est pas un nombre | Corrigez la valeur |
+| **Date en double** | La même date apparaît deux fois | Conservez une seule ligne par date |
 
-### 🔀 Comportement de fusion
+??? info "🔀 Comment les lignes importées fusionnent — lorsque l'éditeur contient déjà certaines dates"
 
-Lors de l'importation via CSV ou de l'ajout de points manuellement dans l'éditeur :
-
-- Les modifications sont d'abord appliquées au **cache client local** (visibles immédiatement dans le graphique)
-- Les modifications ne sont **pas enregistrées** dans la base de données tant que vous ne cliquez pas sur **Enregistrer**
-- 🔄 Les **points de données existants** dans la base de données seront **écrasés** par les valeurs importées lors de l'enregistrement
-- 🆕 Les **nouvelles dates** sont ajoutées
-- ✅ Les **dates absentes de l'importation** restent inchangées
-
-Cela vous permet de mettre à jour sélectivement des plages de dates spécifiques sans affecter le reste de vos données.
-
-!!! tip "Idéal pour les paires MANUAL"
-
-    L'éditeur de données est particulièrement utile pour les paires configurées avec le fournisseur MANUAL (aucune source de données automatique). Pour les paires liées à un fournisseur, les modifications manuelles seront écrasées lors de la prochaine synchronisation.
+    - Une date déjà présente dans l'éditeur prend le taux importé (**Modifié**) ; une nouvelle date est ajoutée (**Nouveau**). Les dates absentes du fichier restent telles quelles.
+    - Les dates situées hors de la période sélectionnée sont également enregistrées, en remplaçant tout taux stocké ces jours-là ; après l'enregistrement, la période s'élargit pour les afficher.

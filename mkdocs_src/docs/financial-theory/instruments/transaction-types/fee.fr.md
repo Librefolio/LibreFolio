@@ -1,12 +1,12 @@
-# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Frais & Taxes ![](../../../static/icons/transactions/tax.png){: width="32" style="vertical-align: middle;" }
+# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Frais & impôts ![](../../../static/icons/transactions/tax.png){: width="32" style="vertical-align: middle;" }
 
-Les **frais** et les **taxes** représentent des coûts qui réduisent la valeur de votre portefeuille. Ce sont des types de transactions distincts pour différencier les frais facturés par le courtier des obligations imposées par le gouvernement.
+Les **frais** et les **impôts** représentent des coûts qui réduisent la valeur de votre portefeuille. Ce sont des types de transactions distincts pour différencier les frais facturés par le courtier des obligations imposées par le gouvernement.
 
 ---
 
 ## 🔑 Propriétés Clés
 
-| Propriété | Frais | Taxe |
+| Propriété | Frais | Impôt |
 |----------|-----|-----|
 | **Code** | `FEE` | `TAX` |
 | **Effet sur le cash** | ⬇️ Diminue le solde | ⬇️ Diminue le solde |
@@ -23,24 +23,24 @@ Les **frais** et les **taxes** représentent des coûts qui réduisent la valeur
 | **Frais de garde** | Frais de tenue de compte | Mensuel/Trimestriel |
 | **Spread** | Différence entre le prix d'achat et le prix de vente | Implicite par transaction |
 | **Frais de conversion de devise** | Coût du change de devises | Par conversion |
-| **Frais de gestion (TER)** | Frais annuels d'un ETF/Fonds | Déduit de la VNI |
+| **Frais de gestion (TER)** | Frais annuels d'un ETF/Fonds | Déduit du NAV |
 
 ---
 
-## 💰 Types de Taxes
+## 💰 Types d'impôts
 
-| Type de taxe | Description | Moment du prélèvement |
+| Type d'impôt | Description | Moment du prélèvement |
 |----------|-------------|-------------|
-| **Impôt sur les plus-values** | Taxe sur le profit réalisé lors d'une vente | À la vente |
-| **Retenue à la source** | Taxe déduite à la source (dividendes, intérêts) | Au paiement |
-| **Droit de timbre** | Taxe sur les transactions (ex: stamp duty au Royaume-Uni) | À l'achat |
-| **Taxe sur les transactions financières** | Taxe sur les transactions (ex: taxe Tobin en Italie) | À la transaction |
+| **Impôt sur les plus-values** | Impôt sur le profit réalisé lors d'une vente | À la vente |
+| **Retenue à la source** | Impôt déduit à la source (dividendes, intérêts) | Au paiement |
+| **Droit de timbre** | Impôt sur les transactions (ex: stamp duty au Royaume-Uni) | À l'achat |
+| **Taxe sur les transactions financières** | Impôt sur les transactions (ex: taxe Tobin en Italie) | À la transaction |
 
 ---
 
 ## 📐 Impact sur les Rendements
 
-Les frais et les taxes réduisent directement votre rendement net. La relation entre la performance brute et nette est la suivante :
+Les frais et les impôts réduisent directement votre rendement net. La relation entre la performance brute et nette est la suivante :
 
 $$
 R_{net} = R_{gross} - \frac{\text{Fees} + \text{Taxes}}{V_{start}}
@@ -52,7 +52,7 @@ Où :
 - $R_{net}$ = rendement après frais (ce que vous conservez réellement)
 - $V_{start}$ = valeur du portefeuille au début de la période
 
-!!! note "Comment LibreFolio attribue les frais et taxes"
+!!! note "Comment LibreFolio attribue les frais et impôts"
 
     Un `FEE` / `TAX` **lié à un actif** est alloué aux lots spécifiques auxquels il se rapporte et détermine le
     **P&L net / rendement net** de ce lot (voir

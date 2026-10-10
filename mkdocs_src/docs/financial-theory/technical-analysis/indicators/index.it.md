@@ -2,6 +2,8 @@
 
 LibreFolio espone **22 indicatori tecnici calcolati dal backend**, raggruppati per la proprietà di mercato che misurano. Gli stessi contratti matematici alimentano i grafici degli Asset, i grafici FX compatibili, le annotazioni e i consumatori analitici come AI Export.
 
+Gli indicatori contano le **sedute**, non i giorni di calendario: una seduta è un giorno in cui la serie ha una quotazione propria — un prezzo per un Asset, un tasso pubblicato per una coppia FX. Un giorno che la serie riempie con l'ultimo valore noto — un weekend, una festività di mercato, qualsiasi giorno senza quotazione — non è una seduta, e non lo è nemmeno un prezzo memorizzato con la data di un weekend o di una festività di mercato che ripete solo la chiusura precedente (un [carry memorizzato](../risk-metrics/data-quality.md#stored-carries)). Periodi, warm-up e storico minimo si contano tutti in sedute, quindi la SMA 200 fa la media delle ultime 200 sedute, circa 290 giorni di calendario. Il grafico mantiene le sue date di calendario: un indicatore ha valori solo nelle sedute, e la sua linea attraversa i giorni di chiusura intermedi. L'unica eccezione con finestra di calendario è il rendimento rolling su giorni di calendario alla base della [modalità Rendimento rolling](../../../user/assets/detail/chart.md#primary-modes) del grafico, che confronta ogni data con la chiusura risolta esattamente $N$ giorni di calendario prima.
+
 !!! info "I campi dei prezzi sono importanti"
 
     Non tutti gli indicatori possono essere applicati a ogni serie. **9 dei 22**

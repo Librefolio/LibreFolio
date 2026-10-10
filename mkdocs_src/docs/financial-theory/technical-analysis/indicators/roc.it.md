@@ -24,7 +24,7 @@ Questo è semplicemente un rendimento percentuale su $N$ periodi, riespresso com
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 12 | Numero di giorni indietro usato come prezzo di riferimento. |
+| Periodo ($N$) | `period` | 12 | Numero di sedute indietro usato come prezzo di riferimento. |
 
 ---
 

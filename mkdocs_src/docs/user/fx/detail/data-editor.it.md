@@ -1,67 +1,66 @@
-# ✏️ Editor Dati e Importazione CSV
+# ✏️ Editor dati e importazione CSV
 
-L'Editor Dati ti permette di **visualizzare, aggiungere, modificare ed eliminare** singoli punti dati del tasso di cambio. Per il caricamento massivo, include uno strumento integrato di **Importazione CSV**.
+L'editor dati ti consente di aggiungere, modificare ed eliminare i tassi memorizzati di una coppia uno per uno, oppure di caricarne molti in una volta da un file CSV. Niente viene salvato finché non fai clic su **Salva**.
 
 ---
 
-## 📝 Editor Dati
+## 📝 Apri l'editor
 
-Fai clic sul pulsante **Modifica** (✏️) nella barra degli strumenti del grafico per aprire il pannello dell'editor dati:
+Fai clic su ✏️ (**Modifica tassi**) sul grafico. L'editor si apre sotto il grafico e gli altri pannelli si ripiegano mentre modifichi.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="FX Data Editor" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Editor dei dati FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### 👀 Visualizzazione Dati
+Elenca i tassi del periodo selezionato con la loro **Data**, **Tasso** e **Stato** (**Originale**, **Modificato**, **Eliminato** o **Nuovo**).
 
-L'editor mostra una tabella scorrevole di tutti i punti dati per questa coppia di valute, ordinati per data (dal più recente):
+- Una data contrassegnata con ⚠️ e con un numero di giorni non ha un tasso proprio (un fine settimana o un giorno festivo) e
+  ripete quello precedente. L'interruttore ⚠️ in alto nasconde questi giorni.
+- Fai doppio clic su un punto del grafico (pressione prolungata su mobile) per passare alla sua data nell'editor.
 
-- 📅 **Data** — La data di osservazione
-- 💱 **Tasso** — Il valore del tasso di cambio
-- 🏛️ **Fonte** — L'origine dei dati (nome del provider, importazione CSV o manuale)
+---
 
-### ➕ Aggiungere un Punto Dato
+## ✍️ Modifica i tassi
 
-1. Fai clic su **"Aggiungi"** nella parte superiore dell'editor
-2. Seleziona la **data** dal selettore di date
-3. Inserisci il valore del **tasso**
-4. Fai clic su **Salva** — il punto viene aggiunto immediatamente e il grafico si aggiorna
+### ➕ Aggiungi un tasso
 
-### ✏️ Modificare un Punto Dato
+Fai clic su **Aggiungi riga**: viene visualizzata una riga il giorno successivo all'ultimo, mai oltre oggi. Se necessario, cambia la sua data con il selettore data, poi digita il tasso.
 
-1. Fai clic sull'**icona della matita** accanto a qualsiasi riga
-2. Modifica il valore del tasso
-3. Fai clic su **Salva** per confermare
+### ✏️ Modifica un tasso
 
-### 🗑️ Eliminare un Punto Dato
+Fai clic su un tasso e digita il nuovo valore.
 
-1. Fai clic sull'**icona del cestino** accanto a qualsiasi riga
-2. Conferma l'eliminazione
+### 🗑️ Elimina i tassi
+
+Fai clic sull'icona 🗑️ di una riga, oppure seleziona le righe e fai clic sul cestino in alto. **Ripristina** fa riapparire una riga finché non salvi.
+
+### 💾 Salva le modifiche
+
+Le modifiche vengono mostrate sul grafico come una linea **Anteprima** viola. **Salva (N)** le scrive tutte; **Annulla** le scarta. Un tasso deve essere maggiore di zero: uno pari a zero, negativo o vuoto viene ignorato.
 
 !!! warning "I dati sincronizzati sovrascrivono le modifiche manuali"
 
-    Se modifichi o aggiungi manualmente un punto dato per una data che viene successivamente coperta da una sincronizzazione, il valore del provider **sovrascriverà** la tua modifica manuale — il provider è sempre considerato la fonte autorevole. Per le coppie per le quali desideri un controllo manuale completo, utilizza il provider MANUAL (nessuna fonte dati automatica) — vedi [Provider Config](provider.md).
+    Una successiva sincronizzazione delle stesse date sostituisce i tuoi valori con quelli del provider. Per avere il pieno controllo manuale, usa una coppia senza provider — vedi [Configurazione provider](provider.md).
 
 ---
 
 ## 📥 Importazione CSV
 
-Per il caricamento massivo di dati storici dei tassi, utilizza lo strumento di Importazione CSV.
+### 🔓 Apri la finestra di importazione
 
-### 🔓 Come Accedere
+1. Nell'editor, fai clic su **Importa CSV**.
+2. In **Dati di importazione CSV**, trascina un file `.csv` o `.txt`, oppure incolla il testo nella casella.
+3. Controlla la direzione in alto, poi fai clic su **Importa (N)**.
 
-1. Apri l'Editor Dati (icona matita ✏️)
-2. Fai clic su **"Importa CSV"** per aprire la finestra modale di importazione
+Le righe vengono aggiunte all'editor: esaminale, poi fai clic su **Salva**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="CSV Import Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Finestra di importazione CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
----
+### 📄 Formato del file
 
-### 📄 Formato File CSV
-
-Il file CSV deve avere **esattamente 2 colonne** con una **riga di intestazione** che specifichi la direzione:
+Due colonne, con una riga di intestazione che imposta la direzione:
 
 ```csv
 date;EUR>USD
@@ -70,93 +69,51 @@ date;EUR>USD
 2024-01-04;1.0911
 ```
 
-### 📏 Regole
-
 | Regola | Dettagli |
 |------|---------|
 | **Separatore** | Punto e virgola (`;`) |
-| **Formato data** | `YYYY-MM-DD` |
-| **Valori tasso** | Numeri decimali positivi |
-| **Intestazione** | Obbligatoria — deve contenere la direzione (es. `EUR>USD`) |
-| **Freccia direzione** | Usa `>` o `<` (entrambe sono supportate) |
+| **Intestazione** | `date` e la direzione, ad es. `EUR>USD` |
+| **Date** | `YYYY-MM-DD` |
+| **Tassi** | Numeri positivi; `.` o `,` come separatore decimale, `_` opzionale per le migliaia (`1_000.50`) |
 
-### ↔️ Direzione nell'Intestazione
+### ↔️ Direzione
 
-L'intestazione indica a LibreFolio in quale direzione sono espressi i tassi:
+- `EUR>USD` significa **1 EUR = X USD**; `EUR<USD` è il contrario, **1 USD = X EUR**.
+- L'intestazione deve indicare le due valute di questa coppia, in qualsiasi ordine.
+- La barra in alto mostra come vengono letti i tassi (*Tassi interpretati come: 1 EUR = X USD*); ⇄ inverte la direzione e riscrive l'intestazione.
+- Un file nella direzione opposta a quella della pagina viene invertito automaticamente: ogni tasso $r$ diventa $1/r$.
 
-- ➡️ `date;EUR>USD` significa: **1 EUR = X USD** (i tassi sono EUR→USD)
-- ⬅️ `date;USD>EUR` significa: **1 USD = X EUR** (i tassi sono USD→EUR)
+??? example "📋 Esempi — gli stessi tassi scritti in entrambe le direzioni"
 
-Se ti trovi nella pagina EUR/USD e il tuo CSV ha tassi `USD>EUR`, LibreFolio invertirà automaticamente i valori.
+    ```csv
+    date;EUR>USD
+    2024-01-02;1.1045
+    2024-01-03;1.0982
+    ```
 
----
+    ```csv
+    date;USD>EUR
+    2024-01-02;0.9053
+    2024-01-03;0.9106
+    ```
 
-### 🔀 Direzione e Swap
+    Nella pagina EUR/USD entrambi i file danno gli stessi tassi: `0.9053` diventa $1/0.9053 \approx 1.1046$.
 
-La finestra modale di importazione mostra una **barra della direzione** che indica come verranno interpretati i tuoi dati:
+### ⚠️ Errori comuni
 
-- ➡️ **Valuta sinistra** → **Valuta destra**: il tasso indica la quantità di valuta di destra ottenibile per 1 unità della valuta di sinistra
-- 🔄 Usa il **pulsante di swap (⇄)** per invertire la direzione se i tuoi dati sono nel formato opposto
+La finestra di importazione contrassegna ogni riga errata; vengono importate solo le righe valide.
 
-L'intestazione nel tuo CSV determina la direzione automaticamente. Se l'intestazione riporta `EUR>USD`, la modale imposta la direzione su EUR→USD.
+| Messaggio | Causa | Correzione |
+|---------|-------|-----|
+| **Le valute dell'intestazione non corrispondono** | Altre valute nell'intestazione, ad es. `GBP>JPY` nella pagina EUR/USD | Usa le valute di questa coppia |
+| **Intestazione prevista** o **Colonne obbligatorie mancanti** | Nessuna riga di intestazione, o una colonna mancante | Inizia con una riga come `date;EUR>USD` |
+| **Formato data non valido** | La data non è `YYYY-MM-DD` | Correggi la data |
+| **Numero non valido** | Il tasso non è un numero | Correggi il valore |
+| **Data duplicata** | La stessa data compare due volte | Mantieni una riga per data |
 
----
+??? info "🔀 Come si uniscono le righe importate — quando l'editor ha già alcune delle date"
 
-### 📋 Esempi
-
-#### ✅ File Valido Minimo
-
-```csv
-date;EUR>USD
-2024-01-02;1.1045
-2024-01-03;1.0982
-```
-
-#### ✅ Direzione Invertita
-
-```csv
-date;USD>EUR
-2024-01-02;0.9053
-2024-01-03;0.9106
-```
-
-Questo è equivalente al primo esempio — LibreFolio inverte `0.9053` in `1/0.9053 ≈ 1.1045`.
-
-#### ❌ File Non Valido
-
-```csv
-date;GBP>JPY
-2024-01-02;188.45
-```
-
-Questo fallirà se ti trovi nella pagina EUR/USD — le valute nell'intestazione devono corrispondere alla coppia della pagina.
-
----
-
-### ⚠️ Errori Comuni
-
-| Errore | Causa | Soluzione |
-|-------|-------|-----|
-| **"Header currencies don't match"** | L'intestazione ha valute non presenti in questa pagina | Verifica la coppia di valute e correggi l'intestazione |
-| **"Missing or invalid header"** | Manca la riga di intestazione o il formato è errato | Aggiungi un'intestazione come `date;EUR>USD` |
-| **"Duplicate dates"** | La stessa data appare più volte | Rimuovi i duplicati |
-| **"Invalid rate"** | Valore non numerico o negativo | Assicurati che tutti i tassi siano numeri positivi |
-| **"Invalid date format"** | Data non nel formato `YYYY-MM-DD` | Correggi la formattazione della data |
-
----
-
-### 🔀 Comportamento di Merge
-
-Quando importi tramite CSV o aggiungi punti manualmente nell'editor:
-
-- Le modifiche vengono prima applicate alla **cache locale del client** (visibili immediatamente nel grafico)
-- Le modifiche **non vengono salvate** nel database finché non fai clic su **Salva**
-- 🔄 I **punti dati esistenti** nel database verranno **sovrascritti** con i valori importati al momento del salvataggio
-- 🆕 Le **nuove date** vengono aggiunte
-- ✅ Le **date non presenti nell'importazione** rimangono invariate
-
-Ciò ti consente di aggiornare selettivamente intervalli di date specifici senza influire sul resto dei tuoi dati.
-
-!!! tip "Ideale per coppie MANUAL"
-
-    L'editor dati è più utile per le coppie configurate con il provider MANUAL (nessuna fonte dati automatica). Per le coppie basate su un provider, le modifiche manuali verranno sovrascritte alla successiva sincronizzazione.
+    - Una data già presente nell'editor assume il tasso importato (**Modificato**); una nuova data viene aggiunta
+      (**Nuovo**). Le date mancanti dal file restano come sono.
+    - Anche le date al di fuori del periodo selezionato vengono salvate, sostituendo qualsiasi tasso memorizzato in quei giorni;
+      dopo il salvataggio, il periodo si amplia per mostrarle.

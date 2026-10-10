@@ -7,7 +7,7 @@ Una **Convención de Conteo de Días** determina cómo se devengan los intereses
 
 ## 🔧 Uso en LibreFolio
 
-Las convenciones de conteo de días son utilizadas activamente por el proveedor de fuentes de activos de **Inversión Programada** (`backend/app/services/asset_source_providers/scheduled_investment.py`) para cálculos de rendimiento sintético. La función `calculate_day_count_fraction()` en `backend/app/utils/financial_math.py` implementa las cuatro convenciones y devuelve una fracción de tiempo `Decimal` utilizada en los cálculos de devengo de intereses.
+Las convenciones de conteo de días son utilizadas activamente por el proveedor de fuentes de activos de **Inversión Programada** para cálculos de rendimiento sintético. La función `calculate_day_count_fraction()` se encuentra en el propio módulo del proveedor (`backend/app/services/asset_source_providers/scheduled_investment.py`), implementa las cuatro convenciones y devuelve una fracción de tiempo `Decimal` utilizada en los cálculos de devengo de intereses.
 
 La convención por defecto es **ACT/365**.
 

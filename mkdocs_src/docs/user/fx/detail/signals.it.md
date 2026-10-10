@@ -1,20 +1,28 @@
 # 📈 Segnali
 
-Il pannello Segnali consente di sovrapporre **indicatori tecnici**, **serie di confronto** e **curve di benchmark** sul grafico FX. Gli indicatori vengono calcolati lato server dalla **piattaforma di plugin per segnali** del backend di LibreFolio a partire dalla cronologia dei tassi memorizzata per la coppia — il browser si limita a renderizzare i risultati.
+Il pannello **Segnali** disegna indicatori tecnici, serie di confronto e curve di benchmark sul grafico FX. LibreFolio calcola gli indicatori dai tassi memorizzati della coppia.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="FX Signals Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Pannello Segnali FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🧮 Segnali disponibili
+## 🛠️ Aggiungere un segnale
 
-I segnali sono organizzati in **tre categorie**, ciascuna con il proprio menu a tendina nella parte superiore del pannello: **Indicatori Tecnici**, **Confronto Dati** e **Benchmark Sintetici**.
+1. Fai clic sulla barra **Segnali** sopra il grafico per aprire il pannello.
+2. Scegli un segnale da uno dei tre menu a tendina: **Indicatori tecnici**, **Confronto dati** o
+   **Benchmark sintetici**.
+3. Regola i suoi parametri sulla sua scheda: il grafico si aggiorna.
+4. Trascina le schede per riordinarle; 🗑️ ne rimuove una.
 
-### 📉 Indicatori tecnici — 9 plugin compatibili con FX
+I segnali che aggiungi vengono mantenuti con le [impostazioni grafico](../chart-settings.md) di questa coppia.
 
-Dei 22 plugin per indicatori del backend, **9 operano sui tassi di chiusura FX**. La matematica di ciascun indicatore è trattata nella sezione Teoria Finanziaria — segui i link qui sotto, oppure clicca l'icona 📖 su qualsiasi scheda segnale per passare direttamente alla relativa pagina di teoria.
+---
+
+## 🧮 Indicatori tecnici — 9 per FX
+
+Nove indicatori funzionano sui tassi FX. Segui i link qui sotto, o fai clic su 📖 in una scheda, per la matematica alla base di ciascuno.
 
 | Famiglia | Indicatori |
 |---|---|
@@ -22,78 +30,58 @@ Dei 22 plugin per indicatori del backend, **9 operano sui tassi di chiusura FX**
 | ⚡ **Momentum** (5) | [RSI](../../../financial-theory/technical-analysis/indicators/rsi.md) · [MACD](../../../financial-theory/technical-analysis/indicators/macd.md) · [ROC](../../../financial-theory/technical-analysis/indicators/roc.md) · [RSI Stocastico](../../../financial-theory/technical-analysis/indicators/stochastic-rsi.md) · [PPO](../../../financial-theory/technical-analysis/indicators/ppo.md) |
 | 🌊 **Volatilità** (1) | [Bande di Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md) |
 
-!!! info "Perché solo 9?"
+??? info "🤔 Perché solo 9? — gli altri indicatori richiedono più di un tasso giornaliero"
 
-    I tassi FX hanno un solo valore al giorno — non esiste massimo, minimo o volume. I
-    restanti 13 plugin richiedono questi campi aggiuntivi (oppure calcolano metriche di
-    rischio in stile portafoglio) e sono invece disponibili sui [grafici degli asset](../../assets/detail/signals.md).
-    L'inventario completo è disponibile in
-    [Indicatori Tecnici — Teoria Finanziaria](../../../financial-theory/technical-analysis/indicators/index.md).
+    I tassi FX hanno un solo valore al giorno, senza massimo, minimo o volume. Gli altri indicatori richiedono quei
+    campi, o misurano il rischio in stile portafoglio, quindi sono disponibili solo sui
+    [grafici degli asset](../../assets/detail/signals.md). L'elenco completo è in
+    [Indicatori tecnici — Teoria finanziaria](../../../financial-theory/technical-analysis/indicators/index.md).
 
-### 💱 Confronto dati
+### 🔍 Trovare un indicatore
 
-Sovrapposizioni calcolate dal browser che normalizzano un'altra serie sullo stesso grafico:
+Il menu a tendina **Indicatori tecnici** è un albero raggruppato per famiglia (trend, momentum, volatilità), con
+una casella di ricerca in alto: digita per filtrare tutte le famiglie contemporaneamente. Funzionano anche i tasti freccia e `Enter`.
 
-- 💱 **Coppia FX** — sovrapponi un'altra coppia configurata (ad es. confronta EUR/USD con GBP/USD); le coppie già selezionate da un altro segnale sono contrassegnate con 📌, mentre la coppia della pagina corrente porta una 👑
-- ↔️ **Confronto asset** — sovrapponi la performance di un asset accanto al tasso di cambio
-
-### 📐 Benchmark sintetici
-
-**Curve di riferimento matematiche** calcolate dal browser, generate esclusivamente dai parametri — nessun dato di mercato necessario: [Crescita Lineare](../../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Crescita Composta](../../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) e [Onda Sinusoidale](../../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
+*Screenshot in arrivo: l'albero raggruppato degli indicatori aperto sul pannello Segnali FX.*
 
 ---
 
-## 🔍 Trovare un indicatore
+## 💱 Confronto dati
 
-Il menu a tendina degli indicatori è un **albero comprimibile raggruppato per famiglia** (trend, momentum, volatilità), con una casella di ricerca in alto — digita per filtrare su tutte le famiglie contemporaneamente; le frecce, `→`/`←` e `Enter` consentono di navigare nell'albero.
+- 💱 **Coppia FX** — un'altra delle tue coppie, ad es. GBP/USD accanto a EUR/USD. Nell'elenco, 👑 contrassegna la
+  coppia di questa pagina e 📌 una coppia già usata da un altro segnale.
+- ↔️ **Confronto asset** — il prezzo di un asset accanto al tasso.
 
-*Screenshot in arrivo: l'albero degli indicatori raggruppati aperto sul pannello Segnali FX.*
+Una scheda di confronto ha pulsanti per sincronizzare la coppia o l'asset confrontato e per aprire la sua pagina. Nella vista in %
+entrambe le curve partono da 0 %, quindi i loro movimenti sono direttamente confrontabili.
 
----
+## 📐 Benchmark sintetici
 
-## 🎛️ Schede segnale
-
-Ogni segnale aggiunto diventa una scheda che mostra:
-
-- 📖 Un'**icona della documentazione** che rimanda alla pagina di Teoria Finanziaria dell'indicatore
-- 🎚️ **Parametri inline** (periodo, periodo del segnale, …) — alcuni suggerimenti contengono formule LaTeX renderizzate con KaTeX
-- 🏷️ Un **badge dati** con il numero di punti del tasso (📈) caricati
-- 🗑️ Pulsante di rimozione; trascina le schede per riordinare le sovrapposizioni
-
-Un piccolo **spinner** appare su ogni scheda mentre la richiesta al backend è in corso. Dopo il caricamento, un'icona colorata riporta le **diagnostiche** per singolo segnale — passa il mouse sopra per i dettagli: ℹ️ avviso (grigio) e ⚠️ avvertimento (ambra) quando il segnale è stato calcolato con riserve (lacune nei dati, riscaldamento incompleto, dati che iniziano dopo l'intervallo del grafico), 🔴 errore (rosso) quando non è stato possibile calcolarlo affatto (cronologia insufficiente, campi mancanti). Se una scheda segnala dati mancanti, la sincronizzazione della coppia di solito colma la lacuna.
+Curve di riferimento costruite solo da parametri, senza dati di mercato:
+[Crescita Lineare](../../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
+[Crescita Composta](../../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) e
+[Onda Sinusoidale](../../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
 
 ---
 
-## 🛠️ Come usarlo
+## 🎛️ Leggere una scheda segnale
 
-1. Fai clic sull'interruttore **Segnali** (📈) nella barra degli strumenti del grafico
-2. Il pannello Segnali si apre sotto il grafico
-3. Aggiungi segnali dai tre menu a tendina delle categorie (Indicatori Tecnici, Confronto Dati, Benchmark Sintetici)
-4. Regola i parametri di ciascun segnale direttamente sulla sua scheda
-5. I segnali vengono renderizzati come sovrapposizioni direttamente sul grafico
+- 📖 apre la pagina teorica dell'indicatore; passa il mouse su un parametro per visualizzare l'aiuto.
+- Un badge conta i punti dati caricati per il segnale.
+- Uno spinner gira mentre il segnale viene calcolato. Poi un'icona può segnalare un problema — passa il mouse sopra per
+  i dettagli:
+    - grigio ℹ️ — una piccola avvertenza;
+    - ambra ⚠️ — calcolato con avvertenze, come gap, un breve warm-up o dati che iniziano dopo il
+      periodo;
+    - rosso ⚠️ — non calcolato, ad esempio perché la cronologia è troppo breve.
 
----
-
-## 🧠 Esportazione AI
-
-Il pulsante **Esportazione AI** (:material-brain:) nella barra degli strumenti della pagina offre due attività FX:
-
-- **Analisi Coppia FX**
-- **Impatto dell'Esposizione FX**
-
-Lo snapshot del backend utilizza la coppia di valute canonica della pagina, l'intervallo selezionato, la valuta obiettivo, la cronologia dei tassi e i risultati condivisi dei segnali tecnici. Per l'Impatto dell'Esposizione FX, l'esposizione è limitata alle valute di cassa e alle valute di negoziazione o di valutazione delle posizioni direttamente collegabili alla coppia; **non** esamina fondi o emittenti per dedurre un'esposizione valutaria nascosta. Vedi [Esportazione AI FX](../../ai-export/fx.md) o la [panoramica sull'Esportazione AI](../../ai-export/index.md).
+Se una scheda segnala dati mancanti, sincronizzare la coppia di solito colma la lacuna.
 
 ---
 
 ## 📚 Approfondimento: teoria finanziaria
 
-Per un trattamento matematico completo di ciascun indicatore — incluse formule, equivalenti nell'elaborazione dei segnali e interpretazione pratica:
+La formula di ogni indicatore, la sua prospettiva di elaborazione dei segnali (EMA come filtro IIR, SMA come filtro FIR)
+e come leggere i suoi incroci:
 
-:material-book-open-variant: **[Indicatori Tecnici — Teoria Finanziaria](../../../financial-theory/technical-analysis/indicators/index.md)**
-
-Questa pagina di riferimento copre:
-
-- 🔢 Le **formule matematiche** alla base di ciascun indicatore
-- 🎛️ Gli equivalenti nell'**elaborazione dei segnali** (EMA = filtro IIR, SMA = filtro FIR, ecc.)
-- ⚡ L'intuizione **"veloce vs lento"** in termini di frequenze di taglio del filtro
-- 📈 **Esempi pratici** di rilevamento degli incroci e identificazione dei trend
+:material-book-open-variant: **[Indicatori tecnici — Teoria finanziaria](../../../financial-theory/technical-analysis/indicators/index.md)**

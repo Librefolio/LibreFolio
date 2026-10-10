@@ -104,4 +104,4 @@ $$
 - 📅 **[Panoramica Eventi Asset](index.md)** — Tutti i tipi di eventi
 - 📈 **[Interessi](interest.md)** — Pagamenti periodici di cedole prima della scadenza
 - 📆 **[Convenzioni di Conteggio dei Giorni](../../fundamentals/day-count.md)** — Come viene calcolato il maturato tra le date di cedola
-- 📊 **[Aggiustamento Prezzo](price-adjustment.md)** — Variazioni di valore non monetarie prima della scadenza
+- 📊 **[Rettifica prezzo](price-adjustment.md)** — Variazioni di valore non monetarie prima della scadenza

@@ -1,14 +1,14 @@
 # 🔬 Analyse des lots FIFO
 
-L'analyse des lots FIFO est le complément **par lot** du [prix moyen pondéré (PMP)](../weighted-average-cost.md).
+L'analyse des lots FIFO est le complément **par lot** du [prix de revient unitaire (PRU)](../weighted-average-cost.md).
 
-Le PMP répond à la question : _« Quel est mon prix moyen pondéré pour cette position ? »_ L'analyse des lots FIFO répond à une question différente : _« Comment chaque lot d'achat individuel se comporte-t-il dans le temps ? »_
+Le PRU répond à la question : _« Quel est mon prix de revient unitaire pour cette position ? »_ L'analyse des lots FIFO répond à une question différente : _« Comment chaque lot d'achat individuel se comporte-t-il dans le temps ? »_
 
 Au lieu de fusionner toutes les acquisitions dans un seul pool, LibreFolio suit chaque lot à travers son propre cycle de vie — **ouvert**, **partiellement clos**, **entièrement clos** — et fait correspondre les ventes dans l'ordre **FIFO** (premier entré, premier sorti).
 
 !!! info "Complément, pas remplacement"
 
-    Le PMP est agrégé et au niveau de la position. L'analyse des lots FIFO est granulaire et au niveau du lot. Les deux vues sont utiles : l'une pour le coût de base moyen, l'autre pour l'attribution économique lot par lot.
+    Le PRU est agrégé et au niveau de la position. L'analyse des lots FIFO est granulaire et au niveau du lot. Les deux vues sont utiles : l'une pour le coût de base moyen, l'autre pour l'attribution économique lot par lot.
 
 ---
 
@@ -57,10 +57,10 @@ Cette métrique exclut les dividendes, les intérêts et les produits de vente r
     Le fallback est $\text{OpeningUnitPrice}\times qbq$. Pour `qbq = 100`, une obligation achetée à `0.992` est comparée à l'axe de cotation du marché comme `99.20`, et non `0.992`.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="Graphique PMP / prix de marché — une bulle par lot, colorée par courtier d'ouverture, dimensionnée par la valeur d'ouverture, tracée par rapport à la ligne du prix de marché">
+ <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="Graphique PRU / prix de marché — une bulle par lot, colorée par courtier d'ouverture, dimensionnée par la valeur d'ouverture, tracée par rapport à la ligne du prix de marché">
 </div>
 
-Le graphique **PMP / Prix du marché** trace chaque lot comme une bulle par rapport à la ligne du prix de marché : la couleur de la bulle marque le courtier où le lot a été ouvert, la taille de la bulle est fonction de la valeur d'ouverture du lot. Un lot valorisé uniquement au coût (sans prix de marché en direct) est dessiné avec un contour en pointillés.
+Le graphique **PRU / Prix du marché** trace chaque lot comme une bulle par rapport à la ligne du prix de marché : la couleur de la bulle marque le courtier où le lot a été ouvert, la taille de la bulle est fonction de la valeur d'ouverture du lot. Un lot valorisé uniquement au coût (sans prix de marché en direct) est dessiné avec un contour en pointillés.
 
 ---
 
@@ -277,10 +277,10 @@ avec $d_i$ de la date d'ouverture à la date de clôture pour les lots clos, ou 
 
 !!! example "Chiffres canoniques"
 
-    ACHAT 10×100, VENTE 4×120, prix actuel 110, dividende 50, frais 8, taxes 5 :
+    ACHAT 10×100, VENTE 4×120, prix actuel 110, dividende 50, frais 8, impôts 5 :
     P&L total brut $= 60 + 80 + 50 = 190$ ; P&L total net $= 190 - 13 = 177$ ; sur une valeur d'ouverture de 1 000, cela donne un rendement total **19 %** brut vs **17,7 %** net.
 
-Les coûts avec `asset_id = null` ne font **pas** partie de cette vue au niveau du lot — ils sont au niveau du portefeuille et sont traités par le [moteur de portefeuille](../portfolio-engine/roi.md). Voir [Frais et taxes](../../../instruments/transaction-types/fee.md) pour la théorie au niveau de l'instrument.
+Les coûts avec `asset_id = null` ne font **pas** partie de cette vue au niveau du lot — ils sont au niveau du portefeuille et sont traités par le [moteur de portefeuille](../portfolio-engine/roi.md). Voir [Frais et impôts](../../../instruments/transaction-types/fee.md) pour la théorie au niveau de l'instrument.
 
 ---
 
@@ -393,8 +393,8 @@ Le **Tableau unifié des lots** liste exactement les lignes par lot $i$ que les 
 
 ## 🔗 Liens connexes
 
-- 📊 **[Prix moyen pondéré (PMP)](../weighted-average-cost.md)** — vue du coût de base moyen
-- 🔁 **[Achat et Vente](../../../instruments/transaction-types/buy-sell.md#fifo-matching)** — aperçu concis de la correspondance FIFO
+- 📊 **[Prix de revient unitaire (PRU)](../weighted-average-cost.md)** — vue du coût de base moyen
+- 🔁 **[Achat et Vente](../../../instruments/transaction-types/buy-sell.md#fifo-matching)** — vue d'ensemble concise de la correspondance FIFO
 - 💸 **[Dividende et Intérêts](../../../instruments/transaction-types/dividend-interest.md)** — source des événements de revenus liés à l'actif
 - 💰 **[Fiscalité](../../../fundamentals/taxation.md)** — contexte des plus-values et de la correspondance des lots
 - ⚙️ **[Service d'analyse des lots](../../../../developer/backend/transactions/lots_analysis_service.md)** — plongée approfondie dans l'implémentation pour développeurs

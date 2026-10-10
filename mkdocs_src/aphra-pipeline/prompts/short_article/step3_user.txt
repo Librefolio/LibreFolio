@@ -13,7 +13,7 @@ Follow these rules strictly:
 2. PRESERVE EXACTLY as-is, without any modification:
    - All URLs and file paths inside links: `[text](url)` — translate "text", keep "url" unchanged
    - All image references: `![alt](path)` — translate "alt", keep "path" unchanged
-   - All HTML tags, attributes, inline styles, and CSS classes — copy character-for-character
+   - All HTML tags, attribute names, inline styles, CSS classes and technical attribute values (`src`, `href`, `class`, `id`, `style`, `data-*`) — copy character-for-character; the human-readable values of `alt`, `title` and `aria-label` are prose: translate them
    - All fenced code blocks (``` ... ```) and inline code (`...`) — do NOT translate code content
    - All MkDocs admonition type keywords: `!!! tip`, `??? example`, `!!! warning` — keep the keyword in English, translate only the quoted title and the 4-space-indented body
    - Emoji characters — copy exactly as they appear (e.g., 🎯, ⚠️, 📊, 🏦)

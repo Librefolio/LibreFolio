@@ -22,7 +22,7 @@ I trader spesso abbinano l'ADX a un sistema di trend-following (incroci di medie
     -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{se} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ altrimenti } 0
     $$
 
-2. **True Range** $TR_t$ (vedi [ATR](atr.md)), lisciata su $N$ periodi, normalizza i movimenti direzionali in **+DI** / **-DI**:
+2. **True Range** $TR_t$ (vedi [ATR](atr.md)), lisciata su $N$ sedute, normalizza i movimenti direzionali in **+DI** / **-DI**:
 
     $$
     +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
@@ -42,7 +42,7 @@ I trader spesso abbinano l'ADX a un sistema di trend-following (incroci di medie
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di lisciatura per +DM, -DM, TR e DX. |
+| Periodo ($N$) | `period` | 14 | Finestra di lisciatura per +DM, -DM, TR e DX, in sedute. |
 
 ---
 

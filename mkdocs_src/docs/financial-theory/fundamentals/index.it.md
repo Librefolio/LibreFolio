@@ -1,6 +1,6 @@
 # 📐 Fondamenti
 
-Questa sezione copre i **concetti finanziari principali** che sostengono ogni analisi degli investimenti: come vengono misurati i rendimenti, come il tempo influisce sul calcolo degli interessi e come le tasse impattano la crescita del portafoglio.
+Questa sezione copre i **concetti finanziari principali** che sostengono ogni analisi degli investimenti: come vengono misurati i rendimenti, come il tempo influisce sul calcolo degli interessi e come le imposte impattano la crescita del portafoglio.
 
 ---
 

@@ -12,8 +12,10 @@ Un **ETF** est un panier de titres (actions, obligations, matières premières o
 | **Prix** | Prix de bourse en temps réel, comme les actions |
 | **Devise** | Libellé dans la devise de la bourse de cotation |
 | **Dividendes** | Peuvent être distribués (Dist) ou réinvestis en interne (Acc) |
-| **TER** | Total Expense Ratio — frais de gestion annuels déduits de la VNI |
+| **TER** | Total Expense Ratio — frais de gestion annuels déduits du NAV |
 | **Fournisseurs typiques** | Yahoo Finance, justETF, CSS Scraper |
+
+Dans LibreFolio, `ETF` est le code d'un fonds au contenu mixte ou non précisé ; un fonds qui détient une seule classe d'actifs prend l'un des six sous-types (`ETF_STOCK`, `ETF_BOND`, `ETF_COMMODITY`, `ETF_REAL_ESTATE`, `ETF_CRYPTO`, `ETF_MONETARY`), répertoriés dans le tableau de la [famille ETF](index.md#etf-family) avec leurs icônes composites et la classe à laquelle chacun se rattache.
 
 ---
 
@@ -30,28 +32,28 @@ L'[avantage du report d'imposition](../../fundamentals/taxation.md#tax-deferral-
 
 ---
 
-## 📈 VNI vs Prix de Marché
+## 📈 NAV vs Prix de Marché
 
-- **VNI** (Valeur Liquidative / Net Asset Value) : La valeur réelle des positions sous-jacentes ÷ actions en circulation. Calculée quotidiennement.
-- **Prix de Marché** : Le prix auquel l'ETF s'échange réellement en bourse. Peut dévier légèrement de la VNI.
-- **Prime/Décote** : Lorsque le prix de marché > VNI, l'ETF s'échange avec une prime ; lorsqu'il est < VNI, avec une décote.
+- **NAV** (Net Asset Value, valeur liquidative) : La valeur réelle des positions sous-jacentes ÷ actions en circulation. Calculée quotidiennement.
+- **Prix de Marché** : Le prix auquel l'ETF s'échange réellement en bourse. Peut dévier légèrement du NAV.
+- **Prime/Décote** : Lorsque le prix de marché > NAV, l'ETF s'échange avec une prime ; lorsqu'il est < NAV, avec une décote.
 
 ---
 
-## 🔍 Suivi de Benchmark
+## 🔍 Suivi de l'indice de référence
 
-La plupart des ETFs suivent un benchmark (ex: S&P 500, MSCI World). L'**erreur de suivi** (tracking error) mesure à quel point le rendement de l'ETF s'écarte de celui du benchmark :
+La plupart des ETFs suivent un indice de référence (ex: S&P 500, MSCI World). L'**erreur de suivi** (tracking error) mesure à quel point le rendement de l'ETF s'écarte de celui de l'indice de référence :
 
 $$
 TE = \sigma(R_{ETF} - R_{index})
 $$
 
-Une erreur de suivi plus faible = une meilleure réplication du benchmark.
+Une erreur de suivi plus faible = une meilleure réplication de l'indice de référence.
 
 ---
 
 ## 🔗 Liens connexes
 
 - 💰 **[Événements de Dividendes](../asset-events/dividend.md)** — Distributions provenant des positions de l'ETF
-- 📈 **[Indice & Benchmark](index-benchmark.md)** — Fonctionnement des benchmarks
+- 📈 **[Indices et indices de référence](index-benchmark.md)** — Fonctionnement des indices de référence
 - 💰 **[Fiscalité](../../fundamentals/taxation.md)** — Implications fiscales Acc vs Dist

@@ -36,7 +36,11 @@ Il s'agit de l'indicateur derrière le légendaire système de "breakout Turtle 
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 20 | Fenêtre de rétrospection pour le max/min glissant. |
+| Période ($N$) | `period` | 20 | Fenêtre de rétrospection pour le max/min glissant, en séances. |
+
+!!! note "Tracés aussi sur les jours de fermeture"
+
+    Les canaux n'ont de valeur que les jours de séance, alors que l'axe des dates du graphique parcourt chaque jour du calendrier. Un week-end ou un jour férié, le canal ombré est tracé en ligne droite de la dernière séance précédente à la première suivante, comme la ligne médiane, de sorte qu'il ne s'interrompt pas : le tronçon de raccord ne fait que donner forme au remplissage et ne porte aucune valeur propre.
 
 ---
 

@@ -24,7 +24,7 @@ Il s'agit simplement d'un rendement en pourcentage sur $N$ périodes, réexprim�
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 12 | Nombre de jours en arrière utilisé comme prix de référence. |
+| Période ($N$) | `period` | 12 | Nombre de séances en arrière utilisé comme prix de référence. |
 
 ---
 

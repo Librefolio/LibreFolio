@@ -212,6 +212,78 @@ def _file_md5(filepath: Path) -> str:
     return hashlib.md5(filepath.read_bytes()).hexdigest()
 
 
+def _read_source(filepath: Path) -> tuple[str, str]:
+    """Return ``(text, md5)`` of one single read, so the md5 recorded is the version that was translated.
+
+    Hashing the file again after the analysis (which can take hours on a batch queue) recorded an edit saved in the
+    meantime as already translated. ``text`` matches ``read_text``: universal newlines, like text mode.
+    """
+    data = filepath.read_bytes()
+    text = data.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return text, hashlib.md5(data).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Hash cache transitions
+# ---------------------------------------------------------------------------
+# An entry's ``md5`` is the version of the EN source its ``langs_done`` were translated (or stamped) from. Every write
+# goes through these functions, so a language counts as done only for the source text it was actually translated from.
+# Before them, an analysis moved ``md5`` to the new source and kept ``langs_done``: a language that then failed, or was
+# never reached (interrupted run, ``--lang`` subset), stayed «done» and its stale translation was never offered again.
+
+def _needs_translation(entry: dict | None, source_md5: str, lang: str, force: bool = False) -> bool:
+    """Whether ``lang`` must be (re)translated: forced, never done, or done from another version of the source."""
+    if force or not entry:
+        return True
+    return entry.get("md5") != source_md5 or lang not in entry.get("langs_done", [])
+
+
+def _cache_mark_analyzed(hashes: dict, cache_key: str, source_md5: str, analysis: str, analysis_model: str) -> dict:
+    """Record the analysis of ``source_md5``. A source that changed leaves no language done: each one is done again only
+    when its translation of this version succeeds, or when it is stamped."""
+    entry = hashes.setdefault(cache_key, {"md5": source_md5, "langs_done": [], "last_translated": ""})
+    if entry.get("md5") != source_md5:
+        entry["langs_done"] = []
+    entry["md5"] = source_md5
+    entry["analysis"] = analysis
+    entry["analysis_model"] = analysis_model
+    entry.setdefault("langs", {})
+    return entry
+
+
+def _cache_mark_translated(hashes: dict, cache_key: str, lang: str, info: dict, now: str) -> None:
+    """Record ``lang`` as translated from the analyzed version (the entry's ``md5``, set by the analysis)."""
+    entry = hashes[cache_key]
+    if lang not in entry.setdefault("langs_done", []):
+        entry["langs_done"].append(lang)
+    entry["last_translated"] = now
+    entry.setdefault("langs", {})[lang] = {"translated_at": now, **info}
+
+
+def _cache_mark_failed(hashes: dict, cache_key: str, lang: str, reason: str, models: dict, now: str) -> None:
+    """Record a failed attempt. It never makes ``lang`` done, and keeps ``translated_at``: the translation on disk is
+    still the one written then (a translation is written only once it succeeds)."""
+    lang_entry = hashes[cache_key].setdefault("langs", {}).setdefault(lang, {})
+    lang_entry.update({"failed": True, "failed_at": now, "failure_reason": reason, "failed_models": models})
+
+
+def _cache_stamp(entry: dict, source_md5: str, langs: list[str], now: str) -> dict:
+    """The entry after stamping ``langs`` as done for ``source_md5``. Languages done for another version stay pending."""
+    stamped = dict(entry)
+    kept = set(stamped.get("langs_done", [])) if stamped.get("md5") == source_md5 else set()
+    stamped["md5"] = source_md5
+    stamped["langs_done"] = sorted(kept | set(langs))
+    stamped["last_translated"] = stamped.get("last_translated", now)
+    stamped["langs"] = {k: dict(v) for k, v in stamped.get("langs", {}).items()}
+    for lang in langs:
+        lang_entry = stamped["langs"].setdefault(lang, {})
+        lang_entry["stamped_at"] = now
+        lang_entry["stamped_by"] = "translate-stamp"
+        for key in ("failed", "failed_at", "failure_reason", "failed_models"):
+            lang_entry.pop(key, None)
+    return stamped
+
+
 # ---------------------------------------------------------------------------
 # Aphra config.toml generation
 # ---------------------------------------------------------------------------
@@ -572,6 +644,10 @@ def _extract_md_structure(text: str) -> dict:
         "table_row_count": len(table_rows),
         "bold_count": bold_count,
         "line_count": len(lines),
+        # Blank-line-separated blocks: what the LINE_COUNT check compares. Unlike raw lines, they do not change when the
+        # translation wraps a paragraph differently (the EN is often wrapped at ~80 columns, a translation one paragraph per
+        # line), while a dropped or truncated section still removes blocks.
+        "block_count": len([b for b in re.split(r"\n[ \t]*\n", text) if b.strip()]),
     }
 
 
@@ -903,13 +979,13 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
             f"{detail_str}"
         )
 
-    # ── 12. Line count delta (info, not necessarily an issue) ──
-    delta_lines = trn["line_count"] - src["line_count"]
-    if abs(delta_lines) > max(3, src["line_count"] * 0.15):
+    # ── 12. Block count delta: content dropped or truncated (wrap-insensitive, see "block_count") ──
+    delta_blocks = trn["block_count"] - src["block_count"]
+    if abs(delta_blocks) > max(3, src["block_count"] * 0.15):
         issues.append(
-            f"LINE_COUNT: source={src['line_count']}, "
-            f"translated={trn['line_count']} "
-            f"(Δ{delta_lines:+d}, >{15}% difference)"
+            f"LINE_COUNT: source={src['block_count']} blocks ({src['line_count']} lines), "
+            f"translated={trn['block_count']} blocks ({trn['line_count']} lines) "
+            f"(Δ{delta_blocks:+d} blocks, >{15}% difference)"
         )
 
     # ── 13. LaTeX formulas — count + syntax validation ──
@@ -1850,7 +1926,7 @@ def _pipeline_analyze(
         print(f"  📝 {short_name} analyzing...", flush=True)
 
     t0 = time.time()
-    source_text = source_path.read_text(encoding="utf-8")
+    source_text, source_md5 = _read_source(source_path)
     workflow, workflow_config, analysis = _analyze_source(source_text, model_client, models)
     elapsed = time.time() - t0
 
@@ -1862,6 +1938,7 @@ def _pipeline_analyze(
         "workflow_config": workflow_config,
         "analysis": analysis,
         "source_text": source_text,
+        "source_md5": source_md5,
     }
 
 
@@ -2005,12 +2082,10 @@ def run_translate(args) -> int:
             continue
 
         current_md5 = _file_md5(source_path)
-        cached = hashes.get(cache_key, {})
-        cached_md5 = cached.get("md5", "")
-        cached_langs = set(cached.get("langs_done", []))
+        cached = hashes.get(cache_key)
 
         for lang in target_langs:
-            if not force and current_md5 == cached_md5 and lang in cached_langs:
+            if not _needs_translation(cached, current_md5, lang, force):
                 continue  # Skip — unchanged and already translated
             plan.append((cache_key, source_path, lang))
 
@@ -2185,19 +2260,12 @@ def run_translate(args) -> int:
                             continue
 
                         # ── Analyze succeeded → save to cache & spawn translate tasks ──
-                        current_md5 = _file_md5(source_path)
-                        if cache_key not in hashes:
-                            hashes[cache_key] = {"md5": current_md5, "langs_done": [], "last_translated": ""}
-                        hashes[cache_key]["md5"] = current_md5
                         try:
                             analysis_serialized = json.dumps(analyze_result["analysis"], ensure_ascii=False) \
                                 if not isinstance(analyze_result["analysis"], str) else analyze_result["analysis"]
                         except (TypeError, ValueError):
                             analysis_serialized = str(analyze_result["analysis"])
-                        hashes[cache_key]["analysis"] = analysis_serialized
-                        hashes[cache_key]["analysis_model"] = models["analyzer"]
-                        if "langs" not in hashes[cache_key]:
-                            hashes[cache_key]["langs"] = {}
+                        _cache_mark_analyzed(hashes, cache_key, analyze_result["source_md5"], analysis_serialized, models["analyzer"])
                         _save_hashes(hashes)
 
                         # Spawn translate tasks (children of this analyze)
@@ -2268,34 +2336,20 @@ def run_translate(args) -> int:
                                     success_count += 1
                                     completed_translations.append((cache_key, src_path, output_path, lang_p))
 
-                                    current_md5 = _file_md5(src_path)
-                                    hashes[cache_key]["md5"] = current_md5
-                                    if lang_p not in hashes[cache_key].get("langs_done", []):
-                                        hashes[cache_key].setdefault("langs_done", []).append(lang_p)
-                                    hashes[cache_key]["last_translated"] = datetime.now(timezone.utc).isoformat()
-                                    if "langs" not in hashes[cache_key]:
-                                        hashes[cache_key]["langs"] = {}
-                                    hashes[cache_key]["langs"][lang_p] = {
-                                        "translated_at": datetime.now(timezone.utc).isoformat(),
+                                    _cache_mark_translated(hashes, cache_key, lang_p, {
                                         "models": r.get("models", {}),
                                         "critique": r.get("critique", ""),
                                         "structural_diff": r.get("structural_diff", ""),
                                         "structural_issues": r.get("structural_issues", 0),
                                         "elapsed_s": elapsed_s,
-                                    }
+                                    }, datetime.now(timezone.utc).isoformat())
                                 else:
                                     fail_count += 1
                                     reason = r.get("failure_reason", "Unknown")
                                     block.append(f"  │  ❌ Failed: {reason}")
                                     failed_translations.append((cache_key, lang_p, reason))
-                                    if "langs" not in hashes[cache_key]:
-                                        hashes[cache_key]["langs"] = {}
-                                    hashes[cache_key]["langs"][lang_p] = {
-                                        "translated_at": datetime.now(timezone.utc).isoformat(),
-                                        "models": r.get("models", {}),
-                                        "failed": True,
-                                        "failure_reason": reason,
-                                    }
+                                    _cache_mark_failed(hashes, cache_key, lang_p, reason, r.get("models", {}),
+                                                       datetime.now(timezone.utc).isoformat())
 
                             block.append(f"  └─")
                             _save_hashes(hashes)
@@ -2316,7 +2370,7 @@ def run_translate(args) -> int:
             rate_limited = False
 
             for file_idx, ((cache_key, source_path), langs) in enumerate(file_groups.items(), 1):
-                source_text = source_path.read_text(encoding="utf-8")
+                source_text, source_md5 = _read_source(source_path)
                 langs_label = ", ".join(langs)
                 print(f"  📄 [{_now()}] [{file_idx}/{len(file_groups)}] {cache_key} → {langs_label}")
 
@@ -2343,18 +2397,11 @@ def run_translate(args) -> int:
                     continue
 
                 # Save analysis in hash cache
-                current_md5 = _file_md5(source_path)
-                if cache_key not in hashes:
-                    hashes[cache_key] = {"md5": current_md5, "langs_done": [], "last_translated": ""}
-                hashes[cache_key]["md5"] = current_md5
                 try:
                     analysis_serialized = json.dumps(analysis, ensure_ascii=False) if not isinstance(analysis, str) else analysis
                 except (TypeError, ValueError):
                     analysis_serialized = str(analysis)
-                hashes[cache_key]["analysis"] = analysis_serialized
-                hashes[cache_key]["analysis_model"] = models["analyzer"]
-                if "langs" not in hashes[cache_key]:
-                    hashes[cache_key]["langs"] = {}
+                _cache_mark_analyzed(hashes, cache_key, source_md5, analysis_serialized, models["analyzer"])
                 _save_hashes(hashes)
 
                 for lang in langs:
@@ -2395,40 +2442,21 @@ def run_translate(args) -> int:
                         success_count += 1
                         completed_translations.append((cache_key, source_path, output_path, lang))
 
-                        current_md5 = _file_md5(source_path)
-                        hashes[cache_key]["md5"] = current_md5
-                        if lang not in hashes[cache_key].get("langs_done", []):
-                            hashes[cache_key].setdefault("langs_done", []).append(lang)
-                        hashes[cache_key]["last_translated"] = datetime.now(timezone.utc).isoformat()
-
-                        if "langs" not in hashes[cache_key]:
-                            hashes[cache_key]["langs"] = {}
-                        hashes[cache_key]["langs"][lang] = {
-                            "translated_at": datetime.now(timezone.utc).isoformat(),
+                        _cache_mark_translated(hashes, cache_key, lang, {
                             "models": result.get("models", {}),
                             "critique": result.get("critique", ""),
                             "structural_diff": result.get("structural_diff", ""),
                             "structural_issues": result.get("structural_issues", 0),
                             "elapsed_s": round(elapsed, 1),
-                        }
+                        }, datetime.now(timezone.utc).isoformat())
                         _save_hashes(hashes)
                     else:
                         fail_count += 1
                         reason = result.get("failure_reason", "Unknown")
                         print(f"     ❌ Failed: {reason}")
                         failed_translations.append((cache_key, lang, reason))
-
-                        if "langs" not in hashes[cache_key]:
-                            hashes[cache_key]["langs"] = {}
-                        hashes[cache_key]["langs"][lang] = {
-                            "translated_at": datetime.now(timezone.utc).isoformat(),
-                            "models": result.get("models", {}),
-                            "critique": result.get("critique", ""),
-                            "structural_diff": result.get("structural_diff", ""),
-                            "structural_issues": result.get("structural_issues", 0),
-                            "failed": True,
-                            "failure_reason": reason,
-                        }
+                        _cache_mark_failed(hashes, cache_key, lang, reason, result.get("models", {}),
+                                           datetime.now(timezone.utc).isoformat())
                         _save_hashes(hashes)
 
                 if rate_limited:
@@ -3107,10 +3135,11 @@ def run_stamp(args) -> int:
         cached = hashes.get(cache_key, {})
         old_md5 = cached.get("md5", "<none>")
         already_done = set(cached.get("langs_done", []))
-        new_langs = sorted(set(target_langs) | already_done)
 
         md5_changed = current_md5 != old_md5
         langs_changed = set(target_langs) - already_done
+        # Done for another version of the source: no longer done once the stamp moves the entry to this one.
+        reopened = sorted(already_done - set(target_langs)) if md5_changed else []
 
         if not md5_changed and not langs_changed:
             print(f"  ✅ Already stamped, skipping: {cache_key}")
@@ -3121,20 +3150,13 @@ def run_stamp(args) -> int:
             tag_parts.append(f"MD5 {old_md5[:8]}→{current_md5[:8]}")
         if langs_changed:
             tag_parts.append(f"new langs: {', '.join(sorted(langs_changed))}")
+        if reopened:
+            tag_parts.append(f"pending again: {', '.join(reopened)}")
 
         print(f"  {'🔍' if dry_run else '📌'} {cache_key}  ({'; '.join(tag_parts)})")
 
         if not dry_run:
-            entry = dict(cached)  # preserve existing keys (analysis, critique, etc.)
-            entry["md5"] = current_md5
-            entry["langs_done"] = new_langs
-            entry["last_translated"] = entry.get("last_translated", now_ts)
-            entry.setdefault("langs", {})
-            for lang in target_langs:
-                entry["langs"].setdefault(lang, {})
-                entry["langs"][lang]["stamped_at"] = now_ts
-                entry["langs"][lang]["stamped_by"] = "translate-stamp"
-            hashes[cache_key] = entry
+            hashes[cache_key] = _cache_stamp(cached, current_md5, list(target_langs), now_ts)
         stamped += 1
 
     if dry_run:

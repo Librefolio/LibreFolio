@@ -21,7 +21,7 @@ Gestire le tue transazioni è semplice:
 
 ## 🛠️ Funzionalità della Pagina
 
-إcco un riepilogo delle operazioni e degli strumenti disponibili direttamente all'interno della pagina delle transazioni:
+Ecco un riepilogo delle operazioni e degli strumenti disponibili direttamente all'interno della pagina delle transazioni:
 
 | Funzionalità | Descrizione | Riferimento |
 |---------|-------------|-----------|
@@ -31,12 +31,14 @@ Gestire le tue transazioni è semplice:
 | **Eliminazione e Azioni in blocco** | Clicca con il tasto destro su qualsiasi riga per aprire il Menu Contestuale per azioni rapide. L'eliminazione di una singola riga e la selezione di più righe per l'eliminazione multipla aprono entrambe lo stesso **workspace di blocco**, dove le righe vengono preparate per l'eliminazione prima della conferma; un partner collegato (operazione FX o gamba di trasferimento) viene preparato automaticamente insieme alla riga scelta. | |
 
 La duplicazione funziona allo stesso modo: **Clona** dal menu contestuale prepara una copia nel workspace di blocco — mantenendo la **data originale** (la clonazione è il modo in cui una riga storica mal classificata viene corretta, quindi la data deve sopravvivere) — dove la modifichi e la salvi.
+{: #bulk-workspace }
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
 </div>
 
 | **Transazioni Composte e Promozione** | Collega due operazioni singole in una **Transazione Composta** tramite la **Promozione** per consentire tracciamenti e analisi più sofisticate, o suddividi (split) una transazione composta in operazioni singole. | [Modulo Transazione](form.md#composite-transactions) |
+{: #link-pairs }
 
 ---
 

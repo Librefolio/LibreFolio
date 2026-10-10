@@ -1,68 +1,63 @@
 # 🔌 Configuración de Proveedores
 
-Cada par de divisas en LibreFolio está respaldado por uno o más **proveedores de datos** — bancos centrales que suministran los datos del tipo de cambio. La Configuración de Proveedores le permite ver y modificar qué proveedores se utilizan para un par específico.
+Cada par de divisas obtiene sus tipos de cambio de una o más **rutas**: un banco central que cotiza el par
+directamente, o una cadena de conversiones. Aquí ves y cambias las rutas del par que estás
+viendo.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configuración del proveedor" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
 ## 🔓 Cómo Acceder
 
-Haga clic en el botón de **Proveedor** (⚙️) en la barra de herramientas del gráfico en la página de Detalles del Par. Esto abrirá el modal de configuración de proveedores mostrando la configuración de ruta actual.
+En la página de detalle del par, haz clic en **Proveedores** (🔧) en la barra de herramientas, junto a **Sincronizar**. Se abre la ventana **Editar Proveedores del Par**.
 
 ---
 
-## 📋 Qué puede ver
+## 📋 Qué Ves
 
-El modal muestra:
+Bajo **Rutas de Conversión**, cada fila es una ruta, en orden de prioridad:
 
-- 🛤️ **Ruta(s) Actual(es)** — La(s) fuente(s) de datos activa(s) para este par, en orden de prioridad
-- 🔀 **Tipo de Ruta** — Si es una ruta **Directa** (proveedor único) o una ruta de **Cadena** (salto múltiple a través de una divisa intermedia)
-- 🏛️ **Detalles del Proveedor** — Nombre, icono y divisa base de cada proveedor en la ruta
+- las divisas, con el proveedor de cada paso entre ellas — pasa el cursor sobre el icono de un proveedor para ver su
+  nombre y descripción;
+- la insignia de prioridad: **#1** se usa primero;
+- ⚠️ cuando un proveedor tiene una advertencia de datos, como los tipos de cambio mensuales del SNB;
+- 🗑️ para eliminar la ruta.
 
 ---
 
 ## 🔧 Cambiar Proveedores
 
-Puede configurar **uno o más** proveedores de datos para cada par. Múltiples proveedores actúan como una **cadena de fallback** — si la fuente primaria falla, el sistema intenta automáticamente la siguiente.
+1. Haz clic en **Añadir ruta de conversión** y elige una ruta bajo **Conversión directa (1 paso)** o
+   **Conversión en cadena**. Escribe en el cuadro de búsqueda para filtrar por proveedor, divisa o país.
+2. Arrastra las filas para establecer su prioridad (en un teléfono, usa las flechas arriba y abajo).
+3. Haz clic en **Guardar Configuración**: la siguiente sincronización usa las nuevas rutas.
 
-Para cambiar o añadir proveedores:
+??? note "🔗 También crear pares intermedios — cuando eliges una ruta en cadena"
 
-1. Abra el modal de Configuración de Proveedores
-2. **Elimine** la ruta actual si es necesario
-3. **Añada una nueva ruta** — el sistema descubrirá las rutas disponibles (al igual que al [añadir un nuevo par](../add-pair.md))
-4. **Reordene** las rutas para establecer prioridades (arrastrar y soltar o botones de flecha)
-5. Haga clic en **Guardar** — la siguiente sincronización obtendrá los datos del proveedor disponible con mayor prioridad
+    Márcalo para guardar cada paso de la cadena como un par propio, con su proveedor, para que puedas
+    sincronizarlo y verlo por sí solo.
+
+??? note "✍️ Sin rutas restantes — cuando las eliminas todas"
+
+    El par se vuelve manual: **Sincronizar** se deshabilita, e introduces los tipos de cambio tú mismo en el
+    [editor de datos](data-editor.md).
 
 ---
 
-## 🔢 Prioridad y Fallback
+## 🔢 Prioridad y fallback
 
-Cuando se configuran múltiples rutas para un par:
-
-- Las rutas se intentan **en orden de prioridad** (superior = prioridad más alta)
-- Si el proveedor primario falla (tiempo de espera agotado, error de API), el sistema vuelve automáticamente a la siguiente ruta
-- Puede **reordenar** las rutas para cambiar las prioridades
-
-!!! example "Fallback Example"
-
-    EUR/USD configurado con:
-
-    1. **ECB** (primario) — Banco Central Europeo
-    2. **FED** (fallback) — Reserva Federal
-
-    Si la API del ECB no está disponible durante la sincronización, el sistema utiliza automáticamente la FED en su lugar.
+Una sincronización prueba las rutas en orden de prioridad. Si una falla — por ejemplo, su banco central no
+responde — pasa a la siguiente; el par solo falla cuando fallan todas las rutas. Con EUR/USD configurado como
+**#1** ECB y **#2** FED, una sincronización que no puede acceder al ECB usa el tipo de cambio del FED en su lugar.
 
 ---
 
 ## 📚 Relacionado
 
-- ➕ **[Añadir un Par](../add-pair.md)** — Descubrimiento completo de rutas (rutas directas + de cadena)
-- 🔄 **[Sincronización](../sync.md)** — Cómo utiliza la sincronización los proveedores configurados
+- ➕ **[Añadir un Par](../add-pair.md)** — Descubrimiento completo de rutas (rutas directas + en cadena)
+- 🔄 **[Sincronización](../sync.md)** — Cómo la sincronización usa los proveedores configurados
 - 🔌 **[Proveedores FX](../providers/index.md)** — Guía de usuario y detalles sobre cada proveedor (ECB, FED, BOE, SNB)
-
-!!! tip "🔗 How chain routes are calculated"
-
-    Para conocer el algoritmo matemático detrás de las cadenas de conversión de salto múltiple, consulte [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md).
+- 🧮 **Para desarrolladores: [Algoritmo de Cadena FX](../../../developer/frontend/fx-chain-algorithm.md)** — Cómo se encuentran y calculan las rutas en cadena

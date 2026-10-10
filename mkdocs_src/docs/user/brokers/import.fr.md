@@ -1,54 +1,56 @@
 # 📥 Transactions du courtier
 
-L'onglet **Transactions** est le centre de contrôle pour modifier le registre du courtier. Il répertorie toutes les opérations financières enregistrées (achats, ventes, dividendes, dépôts, retraits, transferts et conversions FX) rattachées à ce courtier.
+L'onglet **Transactions** d'un courtier liste toutes ses transactions, de la plus récente à la plus ancienne. Il affiche toujours tout l'historique du courtier : la plage de dates dans la barre d'outils ne le filtre pas.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
+    <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Onglet Transactions du courtier">
 </div>
 
-Depuis cet onglet, vous pouvez enregistrer des transactions manuellement ou lancer des importations groupées de relevés.
+Au-dessus de la liste, vous trouvez **Rapports téléversés**, **Voir dans Transactions** et le sélecteur de colonnes. Les Propriétaires et les Éditeurs ont également accès à **Importer** et **Ajouter une transaction**.
 
 ---
 
-## ➕ Transactions manuelles
+## ➕ Ajouter une transaction
 
-Cliquez sur le bouton **Ajouter une transaction** (icône `Plus`) pour ouvrir l'assistant modal de transaction unique. Cela vous permet d'enregistrer manuellement :
+1. Cliquez sur **Ajouter une transaction**. L'espace de travail des transactions s'ouvre sur un formulaire **Nouvelle transaction**, avec ce courtier déjà sélectionné.
+2. Choisissez le **Type** et remplissez les champs obligatoires — voir [Formulaire de transaction](../transactions/form.md).
+3. Cliquez sur **Appliquer** pour placer la ligne dans l'espace de travail, puis sur **Tout enregistrer** pour l'enregistrer.
 
-- **Achat / Vente** : Négocier des actifs, en précisant la date, le prix, la quantité et la devise.
-- **Dividende / Revenu** : Revenus perçus sur les actifs détenus.
-- **Dépôt / Retrait** : Entrées ou sorties externes de liquidités vers ou depuis le solde de trésorerie du courtier.
-- **Transfert** : Transfert de liquidités ou d'actifs entre courtiers (par exemple, approvisionner le compte depuis un courtier bancaire).
-- **Conversion FX** : Échanges de devises dans le compte du courtier.
-
-Pour une explication détaillée des champs de transaction et des règles de validation, consultez le guide **[Formulaire de transaction](../transactions/form.md)**.
+Rien n'est enregistré avant **Tout enregistrer** : jusque-là, vous pouvez ajouter d'autres lignes, les modifier ou annuler (voir [L'espace de travail groupé](../transactions/index.md#bulk-workspace)).
 
 ---
 
-## 🧙 Import groupé (BRIM)
+## 🔎 Ouvrir, modifier ou supprimer des transactions
 
-Le bouton **Importer** (icône `Upload`) lance l'assistant **BRIM** (Broker Report Import Module), qui importe en masse les relevés exportés de votre courtier : il analyse les fichiers, valide chaque ligne, unifie les titres trouvés, détecte les doublons et vous permet de tout passer en revue avant que quoi que ce soit ne soit écrit. Les lignes approuvées arrivent dans l'**éditeur groupé**, où un **Tout enregistrer** final les consigne dans le registre.
-
-Le même assistant est également disponible depuis la page globale **[Transactions](../transactions/index.md)**. Pour la procédure complète, consultez les guides dédiés :
-
-- 📥 **[Import depuis le courtier (BRIM)](../transactions/import/index.md)** — courtiers pris en charge, formats et notes par plugin.
-- 🧙 **[Comment importer des transactions](../transactions/import/how-to.md)** — l'assistant, étape par étape.
+- **Double-cliquez** sur une ligne pour l'ouvrir en lecture seule.
+- Pour modifier, cloner ou supprimer des lignes, cliquez sur **Voir dans Transactions** : la page [Transactions](../transactions/index.md) s'ouvre, filtrée sur ce courtier et sur les filtres de colonnes que vous avez définis ici.
 
 ---
 
-## 🧩 Votre courtier est introuvable ?
+## 🧙 Importer un relevé
 
-Si votre courtier n'a pas encore de plugin d'importation, vous pouvez aider :
+**Importer** ouvre l'espace de travail avec l'**Assistant d'importation** (BRIM, le module d'importation des rapports de courtier). L'assistant d'importation lit les fichiers exportés par votre courtier, vous permet de vérifier chaque ligne et transmet le résultat à l'espace de travail : rien n'est enregistré avant **Tout enregistrer**.
 
-- **Demander un plugin** — ouvrez une [demande de plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) sur GitHub, en joignant un échantillon anonymisé du fichier d'exportation du courtier afin que le format puisse être compris. (L'étape Corrections de l'assistant comporte également une bannière « ouvrir une issue » pour signaler les lignes qui semblent incorrectes.)
-- **Écrire un plugin** — le [Guide des plugins BRIM](../../developer/architecture/patterns/brim_plugin_guide.md) guide les développeurs à travers le contrat de fournisseur ; consultez [Contribuer](../../community/contribute.md) pour la démarche générale.
+- 📥 **[Importer depuis un courtier](../transactions/import/index.md)** — courtiers et formats pris en charge.
+- 🧙 **[Comment importer des transactions](../transactions/import/how-to.md)** — l'assistant d'importation, étape par étape.
+
+Le même assistant d'importation s'ouvre depuis **Importer** sur la page [Transactions](../transactions/index.md).
+
+??? tip "🧩 Votre courtier n'est pas encore pris en charge — ce que vous pouvez faire"
+
+    - **Demander un plugin** : ouvrez une [demande de plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) sur GitHub et joignez un échantillon anonymisé de l'export du courtier.
+    - **Écrire un plugin** : le [Guide des plugins BRIM](../../developer/architecture/patterns/brim_plugin_guide.md) explique le contrat de plugin, et [Contribuer](../../community/contribute.md) le flux de travail.
+    - Si les lignes importées semblent toujours erronées, l'étape **Corrections** de l'assistant d'importation renvoie vers GitHub pour signaler un éventuel bug d'importation.
 
 ---
 
 ## 🗂️ Rapports téléversés
 
-Cliquez sur le bouton **Rapports téléversés** (icône `FileText`) pour gérer les fichiers de rapports BRIM stockés pour ce courtier. La fenêtre modale vous permet de :
+**Rapports téléversés** ouvre les fichiers de rapports stockés pour ce courtier :
 
-- Examiner les rapports téléversés (nom, date de téléversement, taille, statut), avec un **aperçu** rapide du contenu de chaque fichier.
-- **Téléverser** de nouveaux rapports directement — ils sont automatiquement attribués à ce courtier et deviennent disponibles à l'étape Sélection des fichiers de l'assistant.
-- **Supprimer** les rapports dont vous n'avez plus besoin.
-- Accéder à la page complète **[Fichiers et téléversements](../files/index.md#broker-reports)**, pré-filtrée sur ce courtier.
+- **Téléverser** des fichiers CSV ou Excel : ils sont associés à ce courtier et listés à l'étape **Sélectionner les fichiers** de l'assistant d'importation. Les fichiers que vous téléversez ensemble forment un lot — c'est ainsi que sont importées les banques qui répartissent un compte sur plusieurs exports, comme Danske Bank.
+- **Prévisualiser** ou **Supprimer** un fichier. La suppression d'un rapport ne supprime jamais les transactions importées depuis celui-ci.
+- Vérifiez les badges **Statut** et **Lot de rapports** de chaque fichier — voir [Lots de rapports](../files/index.md#report-sets).
+- **Gérer tous les fichiers** ouvre la page [Fichiers et téléversements](../files/index.md#broker-reports), filtrée sur ce courtier.
+
+Le téléversement et la suppression de rapports nécessitent un accès Propriétaire ou Éditeur au courtier.

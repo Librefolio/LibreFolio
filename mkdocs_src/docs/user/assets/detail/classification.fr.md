@@ -3,7 +3,7 @@
 Le panneau de Classification affiche la répartition **sectorielle** et **géographique** de l'actif, lorsque ces données ont été configurées pour l'actif (manuellement ou récupérées via un fournisseur).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Classification Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Panneau de classification de l'actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---

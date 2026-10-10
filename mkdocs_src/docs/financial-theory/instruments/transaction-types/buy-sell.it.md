@@ -30,7 +30,7 @@ Quando acquisti un asset, viene creato un **lotto** con:
 - **Quantità**: Numero di azioni/unità acquistate
 - **Prezzo unitario**: Prezzo per azione al momento dell'acquisto
 - **Commissioni**: Eventuali commissioni di transazione (commissione, spread, ecc.)
-- **Costo totale**: `quantità × prezzo_unitario + commissioni`
+- **Costo totale**: `quantity × unit_price + fees`
 
 ### 💰 Vendita
 

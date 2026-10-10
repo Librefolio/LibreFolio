@@ -1,14 +1,14 @@
 # 🧬 Motor FIFO — Ciclo de Vida de Lotes y Modelo de Emparejamiento
 
-## 💡 Descripción General
+## 💡 Resumen
 
-Mientras que el [Precio Medio Ponderado (PMP)](../weighted-average-cost.md) fusiona cada adquisición de una posición en un promedio continuo, el motor FIFO de LibreFolio realiza un seguimiento de **lotes individuales** — uno por lote de adquisición — a lo largo de todo su ciclo de vida: apertura, cierres parciales, transferencias entre brókeres, divisiones y cierre total final.
+Mientras que el [Precio Medio de Compra (PMC)](../weighted-average-cost.md) fusiona cada adquisición de una posición en un promedio continuo, el motor FIFO de LibreFolio realiza un seguimiento de **lotes individuales** — uno por lote de adquisición — a lo largo de todo su ciclo de vida: apertura, cierres parciales, transferencias entre brókeres, desdoblamientos y cierre total final.
 
 Esta página describe la **mecánica** de ese motor: cómo se crean, emparejan y cierran los lotes. El motor FIFO es independiente del feed de precios. Reproduce cantidades, lotes, fragmentos, transferencias y cierres realizados. Los niveles de valoración actuales residen fuera de él: [Resolución de Precios](../portfolio-engine/price-resolution.md) y `LotsAnalysisService` suministran las marcas de referencia/actuales y el comportamiento al coste estimado. Para las **métricas** derivadas de este motor (Retorno Abierto/Total, escalado qbq, asignación de ingresos, un ejemplo práctico), consulte [Análisis de Lotes FIFO](fifo-lot-analysis.md).
 
 !!! info "Dos motores, dos preguntas"
 
-    [Motor de Cartera](../index.md) (basado en PMP) responde: _"¿Cuál es mi precio medio ponderado para esta posición?"_
+    [Motor de Cartera](../index.md) (basado en PMC) responde: _"¿Cuál es mi precio medio de compra para esta posición?"_
 
     El motor FIFO responde una pregunta estructuralmente diferente: _"¿Qué lote específico de unidades estoy vendiendo y cómo se desempeñó exactamente ese lote?"_
 
@@ -22,10 +22,10 @@ Un **lote** es un lote de adquisición económica para un activo: una sola COMPR
 |-----------|-------------|
 | Dirección | `LONG` (comprado primero) o `SHORT` (vendido primero, solo donde el bróker permita ventas en corto) |
 | Fecha y bróker de apertura | Dónde y cuándo se creó el lote |
-| Cantidad y costo originales | Fijados en la apertura, posteriormente reescalados solo por divisiones — nunca por transferencias |
+| Cantidad y costo originales | Fijados en la apertura, posteriormente reescalados solo por desdoblamientos — nunca por transferencias |
 | Cantidad abierta | Cuánto del lote **no** ha sido emparejado aún por una transacción opuesta |
 | Custodia | Qué bróker (o brókeres, a lo largo del tiempo) posee actualmente la cantidad abierta |
-| Precio de referencia | `reference_unit_price` más `reference_price_source` (`exact`, `fallback`, `none`) |
+| Precio de referencia | `reference_unit_price` más `reference_price_source` (`exact`, `fallback`, `unavailable`) |
 
 ---
 
@@ -54,12 +54,12 @@ LibreFolio reproduce cada transacción de un activo **en orden cronológico**, c
 | COMPRA | Primero cierra cualquier lote SHORT abierto en ese bróker; cualquier remanente abre un nuevo lote LONG |
 | VENTA | Cierra lotes LONG abiertos en orden FIFO en ese bróker; cualquier remanente abre un nuevo lote SHORT solo donde el bróker permita ventas en corto |
 | Ajuste de entrada/salida | Misma lógica de emparejamiento que COMPRA/VENTA, a costo cero |
-| DIVISIÓN | Reescala la cantidad y el costo unitario de cada lote abierto del activo |
+| DESDOBLAMIENTO | Reescala la cantidad y el costo unitario de cada lote abierto del activo |
 | Transferencia (salida/llegada) | Mueve la custodia de la cantidad abierta de un lote de un bróker a otro |
 
 !!! info "Orden del mismo día"
 
-    Cuando varios eventos ocurren en la misma fecha, LibreFolio siempre los procesa en un orden fijo — salidas de transferencia, luego llegadas de transferencia, luego divisiones, luego compras/ventas/ajustes ordinarios — para que las transferencias y divisiones del mismo día siempre vean un estado de custodia consistente.
+    Cuando varios eventos ocurren en la misma fecha, LibreFolio siempre los procesa en un orden fijo — salidas de transferencia, luego llegadas de transferencia, luego desdoblamientos, luego compras/ventas/ajustes ordinarios — para que las transferencias y desdoblamientos del mismo día siempre vean un estado de custodia consistente.
 
 ---
 
@@ -85,9 +85,9 @@ Esta es la razón por la que dos lotes del mismo activo, comprados en diferentes
 
 ---
 
-## ✂️ Divisiones — Reescalado de Cantidad/Precio
+## ✂️ Desdoblamientos — Reescalado de Cantidad/Precio
 
-Una división de acciones (o contra-división) con proporción $r$ reescala cada **fragmento actualmente abierto** de cada lote afectado:
+Un desdoblamiento de acciones (o desdoblamiento inverso) con proporción $r$ reescala cada **fragmento actualmente abierto** de cada lote afectado:
 
 $$
 \text{NuevaCantidad} = \text{Cantidad} \times r
@@ -95,7 +95,7 @@ $$
 \text{NuevoCostoUnitario} = \frac{\text{CostoUnitario}}{r}
 $$
 
-El costo económico de la posición es invariante a través de una división — solo la cantidad y el costo por unidad se mueven, en direcciones opuestas, por lo que $\text{Cantidad} \times \text{CostoUnitario}$ permanece constante para cada lote.
+El costo económico de la posición es invariante a través de un desdoblamiento — solo la cantidad y el costo por unidad se mueven, en direcciones opuestas, por lo que $\text{Cantidad} \times \text{CostoUnitario}$ permanece constante para cada lote.
 
 ---
 
@@ -125,7 +125,7 @@ El resultado general se marca entonces como **completo** o **degradado** en su c
 
 - 🔬 **[Análisis de Lotes FIFO](fifo-lot-analysis.md)** — Métricas derivadas de este motor: Retorno Abierto/Total por lote, escalado qbq, asignación de ingresos, ejemplo práctico
 - 🧭 **[Resolución de Precios](../portfolio-engine/price-resolution.md)** — Niveles de valoración usados por el servicio de lotes
-- ⚙️ **[Motor de Cartera](../index.md)** — El motor agregado/complementario basado en PMP, y cómo se relacionan ambos
-- 📊 **[Precio Medio Ponderado (PMP)](../weighted-average-cost.md)** — Costo base combinado a nivel de posición
+- ⚙️ **[Motor de Cartera](../index.md)** — El motor agregado/complementario basado en PMC, y cómo se relacionan ambos
+- 📊 **[Precio Medio de Compra (PMC)](../weighted-average-cost.md)** — Costo base combinado a nivel de posición
 - 🧬 **[Motor de Lotes FIFO (Manual del Desarrollador)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Inmersión profunda en la implementación: clases, despacho de eventos, restricciones a nivel de código
-- 📈 **[Descripción General de Métricas de Rendimiento](../index.md)** — Todas las métricas de rendimiento de un vistazo
+- 📈 **[Resumen de las métricas de rendimiento](../index.md)** — Todas las métricas de rendimiento de un vistazo

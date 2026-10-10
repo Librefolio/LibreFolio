@@ -17,23 +17,24 @@ Estos dos actores pueden tener rendimientos muy diferentes. Puede que elijas una
 
 ## 📚 Temas de este capítulo
 
-Las métricas de rendimiento de LibreFolio se organizan en torno a tres motores de cálculo. Cada uno tiene su propia página de descripción general con el modelo matemático completo.
+Las métricas de rendimiento de LibreFolio se organizan en torno a tres motores de cálculo. Cada uno tiene su propia página de resumen con el modelo matemático completo.
 
 ### ⚙️ Motor de cartera
 
-Contabilidad agregada basada en PMP para toda la cartera (o cualquier ámbito de bróker/activo).
+Contabilidad agregada basada en PMC para toda la cartera (o cualquier ámbito de bróker/activo).
 
 | Métrica / Concepto | Descripción |
 |------------------|-------------|
-| **[Descripción general del motor de cartera](portfolio-engine/index.md)** | Modelo matemático completo: resolvedor de precios unificado, PMP, agregación, modelo de 3 grupos, contribución, arquitectura pre-frame/frame. |
+| **[Resumen del motor de cartera](portfolio-engine/index.md)** | Modelo matemático completo: resolvedor de precios unificado, PMC, agregación, modelo de 3 grupos, contribución, arquitectura pre-frame/frame. |
 | **[Resolución de precios](portfolio-engine/price-resolution.md)** | Niveles del resolvedor unificado: MARKET → TRADE_AVG → CARRIED → MISSING, con marcas nativas y FX por fecha. |
 | **[Valor liquidativo (NAV)](portfolio-engine/nav.md)** | Valoración total de mercado de la cartera (activos + efectivo + en tránsito), utilizando el resolvedor unificado. |
-| **[Valor contable](portfolio-engine/book-value.md)** | Coste contable histórico de las posiciones abiertas (PMP × cantidad) más el efectivo. La diferencia con el NAV = P&L no realizado. |
+| **[Valor contable](portfolio-engine/book-value.md)** | Coste contable histórico de las posiciones abiertas (PMC × cantidad) más el efectivo. La diferencia con el NAV = P&L no realizado. |
 | **[P&L del período](portfolio-engine/period-pnl.md)** | Beneficio/pérdida monetarios ajustados por flujo de caja en un período. Se descompone en: delta no realizada + realizada + ingresos − comisiones. Incluye la atribución de la contribución por activo. |
 | **[Capital depositado y P&L total](portfolio-engine/deposited-capital.md)** | Capital externo neto desde el inicio. Documenta el modelo de descomposición del efectivo **de 3 grupos dirigido por eventos** (K, R, W) con reglas formales de actualización a nivel de transacción. |
 | **[Efecto de sincronización](portfolio-engine/timing-effect.md)** | Diferencia entre la MWRR acumulada y la TWRR acumulada — cuantifica el impacto de la sincronización de los flujos de caja en las rentabilidades. |
 | **[ROI simple](portfolio-engine/roi.md)** | Rentabilidad porcentual en relación con el capital neto invertido. Sencillo, pero sujeto a la dilución por los flujos de caja. |
 | **[Rentabilidad neta anualizada](portfolio-engine/net-annualized-return.md)** | Definiciones de CAGR neto para posiciones, contribución del período y lotes FIFO, con una ventana mínima de 30 días. |
+| **[Rendimiento sobre coste](portfolio-engine/yield-on-cost.md)** | Dividendos/intereses brutos no negativos de los últimos 365 días por unidad histórica elegible, divididos por el precio medio de compra (PMC) de cada par activo/bróker. |
 | **[TWRR](portfolio-engine/twrr.md)** | Tasa de rentabilidad ponderada en el tiempo. Rendimiento puro de activos/estrategia, neutralizando la sincronización de depósitos/retiros. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Tasa de rentabilidad ponderada por dinero. Rendimiento personal del inversor que tiene en cuenta la sincronización de los flujos de caja. Formas anualizada y acumulada. |
 
@@ -43,14 +44,14 @@ Contabilidad por lote: realiza un seguimiento de cada lote de adquisición a lo 
 
 | Métrica / Concepto | Descripción |
 |------------------|-------------|
-| **[Descripción general del motor FIFO](fifo-engine/index.md)** | Estados del ciclo de vida del lote, procesamiento cronológico de eventos, emparejamiento FIFO, divisiones y transferencias entre brókers. |
-| **[Análisis de lotes FIFO](fifo-engine/fifo-lot-analysis.md)** | Complemento por lote del PMP: realiza un seguimiento de cada lote de adquisición a lo largo de su propio ciclo de vida, empareja las ventas en orden FIFO y calcula la rentabilidad abierta/total por lote. |
+| **[Resumen del motor FIFO](fifo-engine/index.md)** | Estados del ciclo de vida del lote, procesamiento cronológico de eventos, emparejamiento FIFO, desdoblamientos y transferencias entre brókers. |
+| **[Análisis de lotes FIFO](fifo-engine/fifo-lot-analysis.md)** | Complemento por lote del PMC: realiza un seguimiento de cada lote de adquisición a lo largo de su propio ciclo de vida, empareja las ventas en orden FIFO y calcula la rentabilidad abierta/total por lote. |
 
-### 📊 Precio medio ponderado (PMP)
+### 📊 Precio medio de compra (PMC)
 
 | Métrica / Concepto | Descripción |
 |------------------|-------------|
-| **[Precio medio ponderado (PMP)](weighted-average-cost.md)** | PMP iterativo que tiene en cuenta el inventario por posición (bróker, activo). Se calcula directamente durante el bucle diario del motor. |
+| **[Precio medio de compra (PMC)](weighted-average-cost.md)** | PMC iterativo que tiene en cuenta el inventario por posición (bróker, activo), cada adquisición al tipo de cambio de su propia fecha. Se calcula una vez por informe y luego se reproduce en el bucle diario del motor. |
 
 ---
 
@@ -65,7 +66,7 @@ Para ayudarte a elegir la métrica adecuada para tu análisis, utiliza esta guí
 
 ### 📖 2. [Valor contable](portfolio-engine/book-value.md)
 * **Pregunta clave:** «¿Cuánto me costó construir mi cartera actual?»
-* **Concepto de la fórmula:** $\text{Open Cost Basis} + \text{Cash} + \text{In Transit Book Value}$ utilizando el precio medio ponderado (PMP).
+* **Concepto de la fórmula:** $\text{Open Cost Basis} + \text{Cash} + \text{In Transit Book Value}$ utilizando el precio medio de compra (PMC).
 * **Mejor caso de uso:** Evaluar los costes de adquisición y compararlos con el valor de mercado actual (NAV) para encontrar ganancias latentes.
 
 ### 📊 3. [P&L del período](portfolio-engine/period-pnl.md)
@@ -86,7 +87,7 @@ Para ayudarte a elegir la métrica adecuada para tu análisis, utiliza esta guí
 ### ⏱️ 6. [TWRR (Tasa de rentabilidad ponderada en el tiempo)](portfolio-engine/twrr.md)
 * **Pregunta clave:** «¿Cómo se comportó la asignación de activos/estrategia que elegí, ignorando la sincronización de mi efectivo?»
 * **Concepto de la fórmula:** Divide la línea temporal en cada flujo de caja, calcula las rentabilidades de los subperíodos y las multiplica.
-* **Mejor caso de uso:** Comparar tu rendimiento con benchmarks externos (como el S&P 500) o evaluar el rendimiento puro de los activos.
+* **Mejor caso de uso:** Comparar tu rendimiento con índices de referencia externos (como el S&P 500) o evaluar el rendimiento puro de los activos.
 
 ### 📈 7. [MWRR anualizada (Tasa de rentabilidad ponderada por dinero)](portfolio-engine/mwrr.md#annualized-mwrr)
 * **Pregunta clave:** «¿A qué tasa anual compuesta creció mi capital real, considerando mis depósitos y retiros?»
@@ -96,7 +97,12 @@ Para ayudarte a elegir la métrica adecuada para tu análisis, utiliza esta guí
 ### 📊 8. [MWRR acumulada](portfolio-engine/mwrr.md#cumulative-mwrr)
 * **Pregunta clave:** «¿Cuál es la rentabilidad acumulada equivalente ponderada por dinero en esta ventana de tiempo seleccionada?»
 * **Concepto de la fórmula:** Compone la MWRR anualizada durante el número real de días transcurridos.
-* **Mejor caso de uso:** Gráficos de series temporales y widgets del panel de control para comparar visualmente las tendencias de rendimiento en paralelo con TWRR y ROI.
+* **Mejor caso de uso:** Gráficos de series temporales y widgets del Panel para comparar visualmente las tendencias de rendimiento en paralelo con TWRR y ROI.
+
+### 💸 9. [Rendimiento sobre coste](portfolio-engine/yield-on-cost.md)
+* **Pregunta clave:** «¿Cuántos ingresos brutos por dividendos e intereses produjo cada unidad actual en los últimos 365 días naturales en relación con su precio medio de compra?»
+* **Concepto de la fórmula:** Suma los ingresos no negativos, convertidos al tipo de la fecha de la transacción, por cada unidad larga elegible del día anterior, ajusta por los desdoblamientos vinculados y luego divide entre el precio medio de compra (PMC) en la fecha final del informe.
+* **Mejor caso de uso:** Comparar la productividad de ingresos registrada de las posiciones abiertas activo/bróker sin confundirla con la rentabilidad por dividendo del mercado, la CAGR o la rentabilidad al vencimiento (YTM) de un bono.
 
 ---
 
@@ -154,18 +160,18 @@ Esto representa la velocidad anualizada de pérdida de capital en esta ventana e
 
 ## ⚖️ Por qué LibreFolio muestra ambas una al lado de la otra
 
-Al colocar TWRR y MWRR una al lado de la otra en tu panel de control, LibreFolio te ofrece un diagnóstico de comportamiento inmediato:
+Al colocar TWRR y MWRR una al lado de la otra en tu Panel, LibreFolio te ofrece un diagnóstico de comportamiento inmediato:
 
 * **TWRR > MWRR:** *«Estás eligiendo buenas inversiones, pero tu sincronización es mala. Es probable que estés comprando en los máximos (FOMO) y lastrando tus rentabilidades personales.»*
 * **MWRR > TWRR:** *«¡Tienes una sincronización excelente! Estás comprando activos con descuento cuando el mercado cae, impulsando tus rentabilidades personales por encima de la media del mercado.»*
 
 ---
 
-## 🔗 Integración de UI y enlaces de ayuda del panel de control
+## 🔗 Integración de UI y enlaces de ayuda del Panel
 
-Para facilitar la navegación, las tres tarjetas KPI del panel de control de LibreFolio — **P&L del período**, **Rentabilidad** y **Patrimonio neto** — tienen cada una un icono de ayuda. El camino hacia estos capítulos de teoría consta de dos pasos:
+Para facilitar la navegación, las tres tarjetas KPI del Panel de LibreFolio — **P&L del período**, **Rentabilidad** y **Patrimonio neto** — tienen cada una un icono de ayuda. El camino hacia estos capítulos de teoría consta de dos pasos:
 
 1. El icono de ayuda abre la sección correspondiente de la página [Tarjetas KPI](../../../user/dashboard/kpi-cards.md) de la guía de usuario ([Tarjeta 1](../../../user/dashboard/kpi-cards.md#card-1-period-pl), [Tarjeta 2](../../../user/dashboard/kpi-cards.md#card-2-returns), [Tarjeta 3](../../../user/dashboard/kpi-cards.md#card-3-net-worth)).
 2. Desde allí, cada métrica enlaza con su capítulo de teoría financiera: [P&L del período](portfolio-engine/period-pnl.md), [Valor contable](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Efecto de sincronización](portfolio-engine/timing-effect.md), [NAV / Patrimonio neto](portfolio-engine/nav.md), [Capital depositado y P&L total](portfolio-engine/deposited-capital.md).
 
-En el resto de la aplicación, la vista previa del PMP en el formulario de transacciones enlaza directamente con el capítulo [Precio medio ponderado (PMP)](weighted-average-cost.md), y cada señal/indicador de los gráficos enlaza con su propia página de teoría.
+En el resto de la aplicación, la vista previa del PMC en el formulario de transacciones enlaza directamente con el capítulo [Precio medio de compra (PMC)](weighted-average-cost.md), la tabla de posiciones enlaza su columna YOC con [Rendimiento sobre coste](portfolio-engine/yield-on-cost.md), y cada señal/indicador de los gráficos enlaza con su propia página de teoría.

@@ -1,65 +1,93 @@
-# ⚙️ Configuración de gráficos
+# ⚙️ Ajustes del gráfico
 
-El modal de **Configuración de gráficos** personaliza la apariencia de los gráficos y las señales superpuestas. El mismo modal se utiliza tanto en la página de [Lista FX](index.md) como en la de [Activos](../assets/index.md), con **configuración independiente por ámbito** — cambiar los valores predeterminados de FX nunca afecta a los gráficos de activos, y viceversa.
+La ventana **Ajustes del gráfico** cambia el aspecto de los gráficos y qué superposiciones dibujan. Sirve tanto
+para la [lista de FX](index.md) como para la [lista de activos](../assets/index.md), y cada lista mantiene su propia
+configuración: cambiar los gráficos de FX nunca afecta a los gráficos de activos.
 
 ---
 
-## 🔓 Acceso a la configuración de gráficos
+## 🔓 Abrir los ajustes del gráfico
 
-El modal se abre desde las páginas de lista, en dos variantes:
+- 🌐 **Para todos los gráficos** — haz clic en **Configuración** (⚙️) en la barra de herramientas de la lista. La ventana se titula
+  **Ajustes del gráfico**. Aplicarlos reemplaza la configuración personalizada de cada gráfico de la lista, incluidas las páginas
+  de detalle, y la ventana te avisa de ello.
+- 🎯 **Para un gráfico** — haz clic en ⚙️ en una tarjeta. La ventana se titula **Ajustes del gráfico (Local)**, y
+  sus ajustes se aplican solo a ese gráfico.
 
-- 🌐 **Global** — el botón de configuración (⚙️) de la barra de herramientas de la página de lista. Esta configuración se convierte en la predeterminada para todos los gráficos del ámbito; aplicarla reemplaza todas las personalizaciones por tarjeta (el modal te advierte de ello).
-- 🎯 **Local** — el botón de configuración (⚙️) de cualquier tarjeta de par o activo. Esta configuración solo anula la global para esa tarjeta.
+!!! note "Las páginas de detalle usan paneles en línea"
 
-!!! note "Las páginas de detalle usan paneles en línea en su lugar"
-
-    En la [página de Detalle del Par](detail/index.md) (y en las páginas de detalle de activos), el botón ⚙️
-    alterna un **panel de estética** en línea y el botón 📈 alterna el
-    **panel de señales** en línea: la misma configuración, el mismo almacenamiento por elemento, sin modal.
+    En una [página de detalle de par](detail/index.md) (y en una página de detalle de activo), ⚙️ en el gráfico abre
+    los mismos ajustes de apariencia en un panel, y el panel **Señales** situado encima del gráfico contiene las
+    superposiciones. Son los mismos ajustes que los locales de la tarjeta.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Modal de ajustes del gráfico" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 👀 Vista previa en vivo
+## 👀 Vista previa antes de aplicar
 
-El modal siempre muestra un **gráfico de vista previa** con un interruptor Abs/%, para que veas el efecto de cada cambio antes de aplicarlo:
+La ventana muestra un gráfico de vista previa con su propio interruptor **Abs** / **%**. Tus gráficos solo cambian cuando
+haces clic en **Aplicar**; **Cancelar** pregunta antes de descartar tus cambios.
 
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Chart settings modal with the live preview">
+    <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Modal de ajustes del gráfico con la vista previa en vivo">
 </div>
 
-- 🌐 **Modo global** — la vista previa dibuja una curva de demostración sintética. Los indicadores del backend no pueden ejecutarse en el navegador, por lo que el modal pide al servidor que los calcule en vivo sobre esa curva: lo que ves coincide con lo que mostrarán los gráficos reales.
-- 🎯 **Modo local** — la vista previa usa los **datos reales de precio** de la tarjeta. Los indicadores del backend muestran la última configuración aplicada; un banner te recuerda que pulses Aplicar para actualizarlos.
+- 🌐 **Para todos los gráficos**, la vista previa dibuja una curva de demostración. El servidor calcula los indicadores sobre ella,
+  por lo que se ven exactamente como se verán en tus gráficos reales.
+- 🎯 **Para un gráfico**, la vista previa usa los datos reales de ese gráfico. Los indicadores muestran la última configuración
+  aplicada hasta que haces clic en **Aplicar**, y un banner te lo recuerda.
 
 ---
 
-## 🎛️ Configuración disponible
+## 🎨 Apariencia
 
-### 🎨 Apariencia
+| Configuración | Qué hace |
+|---------|--------------|
+| **Colores de línea base** | Verde por encima, rojo por debajo del inicio del periodo |
+| **Relleno de área** | Degradado bajo la línea |
+| **Líneas de cuadrícula** | Cuadrícula discontinua horizontal |
+| **Degradado obsoleto** | Atenúa los días sin un valor nuevo, que repiten uno anterior |
 
-| Configuración | Descripción |
-|---------|-------------|
-| **Colores de línea base** | Colorea la línea de verde por encima / rojo por debajo de la línea base |
-| **Relleno de área** | Relleno degradado bajo la línea |
-| **Líneas de cuadrícula** | Cuadrícula horizontal discontinua |
-| **Degradado de datos obsoletos** | Desvanece los datos obsoletos hacia el fondo |
-| **Escala del eje Y** | Automática, Incluir 0, o un rango mínimo/máximo personalizado |
+### 📏 Rangos de ejes
 
-### 📈 Señales superpuestas
+La **Escala del eje Y** tiene una fila para cada eje del gráfico: el eje principal (el tipo de cambio, o el porcentaje
+en la vista %) y una para cada escala de indicador, como el **eje RSI**. Los indicadores que comparten una
+escala comparten una fila.
 
-El modal gestiona las mismas señales superpuestas que el [panel de Señales](detail/signals.md) de la página de detalle, añadidas desde tres menús desplegables por categoría:
+- **Auto** ajusta los datos en ese eje.
+- **Incluir 0** ajusta los datos y también muestra el cero.
+- **Personalizado** usa los valores **Mín.** y **Máx.** que escribas.
 
-- 🧮 **Indicadores técnicos** — el catálogo de plugins del backend para el ámbito actual: **9 indicadores compatibles con FX** aquí, 22 en el ámbito de Activos. El menú desplegable es un árbol con buscador agrupado por familia (tendencia, impulso, volatilidad, …). Las matemáticas que hay detrás de cada indicador se explican en [Indicadores técnicos — Teoría financiera](../../financial-theory/technical-analysis/indicators/index.md).
-- ↔️ **Comparación de datos** — superponer otro par FX configurado o un activo en el mismo gráfico.
-- 📐 **Benchmarks sintéticos** — curvas de referencia generadas por parámetros ([Lineal](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Compuesta](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md), [Onda senoidal](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md)). Son matemáticas puras — no cestas personalizadas ni datos de mercado.
-
-Cada señal configurada se convierte en una tarjeta con parámetros integrados, un enlace 📖 a su página de teoría y diagnósticos por señal una vez que se ha calculado.
+Las vistas **Abs** y **%** mantienen rangos separados: cambia la vista previa a **%** para ajustar el
+del porcentaje.
 
 ---
 
-## 💾 Persistencia
+## 📈 Señales superpuestas
 
-La configuración de gráficos se guarda localmente en el `localStorage` de tu navegador, por separado para los ámbitos de FX y Activos, con anulaciones por tarjeta sobre la configuración predeterminada del ámbito. Sobreviven entre sesiones — incluso después de cerrar y volver a abrir el navegador — y solo se perderán si borras la caché o el almacenamiento del navegador, o si el almacenamiento caduca (depende del navegador; normalmente de meses a años).
+Añade superposiciones desde tres menús desplegables, igual que en el [panel Señales](detail/signals.md) de la página de detalle:
+
+- 🧮 **Indicadores técnicos** — 9 indicadores funcionan con tipos de cambio FX (los gráficos de activos ofrecen más), agrupados por
+  familia con un cuadro de búsqueda. Las matemáticas están en
+  [Indicadores técnicos — Teoría financiera](../../financial-theory/technical-analysis/indicators/index.md).
+- ↔️ **Comparación de datos** — otro par FX o un activo en el mismo gráfico.
+- 📐 **Benchmarks sintéticos** — curvas de referencia construidas solo a partir de parámetros, no de datos de mercado:
+  [Lineal](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
+  [Compuesto](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) y
+  [Onda senoidal](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
+
+Cada señal se convierte en una tarjeta con sus parámetros, un enlace 📖 a su página de teoría y, una vez calculada, un
+icono de diagnóstico.
+
+---
+
+## 💾 Dónde se guardan los ajustes
+
+- Los ajustes del gráfico se guardan en **este navegador**, para tu usuario, por separado para las listas de FX y de activos.
+  Los ajustes propios de un gráfico se superponen a los ajustes de su lista.
+- No se almacenan en el servidor: otro navegador o dispositivo comienza con los valores predeterminados, y
+  borrar los datos de navegación de este sitio los restablece.
+- El periodo seleccionado no es un ajuste del gráfico: las páginas de la misma pestaña del navegador lo comparten.

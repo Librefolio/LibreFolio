@@ -1,68 +1,63 @@
-# 🔌 Configurazione del Provider
+# 🔌 Configurazione dei provider
 
-Ogni coppia di valute in LibreFolio è supportata da uno o più **provider di dati** — banche centrali che forniscono i dati sui tassi di cambio. La Configurazione del Provider consente di visualizzare e modificare quali provider vengono utilizzati per una coppia specifica.
+Ogni coppia di valute ottiene i suoi tassi da uno o più **percorsi di conversione**: una banca centrale che quota la coppia
+direttamente, oppure una catena di conversioni. Qui vedi e modifichi i percorsi della coppia che stai
+visualizzando.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Configurazione del provider" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔓 Come Accedere
+## 🔓 Come accedere
 
-Fai clic sul pulsante **Provider** (⚙️) nella barra degli strumenti del grafico nella pagina dei Dettagli della Coppia. Questo aprirà la finestra modale di configurazione del provider che mostra l'attuale impostazione del percorso.
-
----
-
-## 📋 Cosa Visualizzi
-
-La finestra modale mostra:
-
-- 🛤️ **Percorso/i Attuale/i** — La sorgente o le sorgenti di dati attive per questa coppia, in ordine di priorità
-- 🔀 **Tipo di Percorso** — Se si tratta di un percorso **Direct** (provider singolo) o di un percorso **Chain** (multi-hop tramite una valuta intermedia)
-- 🏛️ **Dettagli del Provider** — Nome, icona e valuta base di ogni provider nel percorso
+Nella pagina di dettaglio della coppia, clicca su **Provider** (🔧) nella barra degli strumenti, accanto a **Sincronizza**. Si apre la
+finestra **Modifica provider della coppia**.
 
 ---
 
-## 🔧 Cambiare i Provider
+## 📋 Cosa vedi
 
-È possibile configurare **uno o più** provider di dati per ogni coppia. Più provider agiscono come una **catena di fallback**: se la sorgente primaria fallisce, il sistema prova automaticamente la successiva.
+Sotto **Percorsi di conversione**, ogni riga è un percorso, in ordine di priorità:
 
-Per cambiare o aggiungere provider:
-
-1. Apri la finestra modale di Configurazione del Provider
-2. **Rimuovi** il percorso attuale, se necessario
-3. **Aggiungi un nuovo percorso** — il sistema scoprirà i percorsi disponibili (come quando si [aggiunge una nuova coppia](../add-pair.md))
-4. **Riordina** i percorsi per impostare le priorità (tramite drag & drop o pulsanti con le frecce)
-5. Fai clic su **Salva** — la sincronizzazione successiva recupererà i dati dal provider disponibile con la priorità più alta
+- le valute, con il provider di ogni passaggio tra esse — passa il mouse sull'icona di un provider per vederne
+  nome e descrizione;
+- il badge di priorità: **#1** viene usato per primo;
+- ⚠️ quando un provider presenta un avviso sui dati, come i tassi mensili della SNB;
+- 🗑️ per rimuovere il percorso.
 
 ---
 
-## 🔢 Priorità e Fallback
+## 🔧 Modificare i provider
 
-Quando sono configurati più percorsi per una coppia:
+1. Clicca su **Aggiungi percorso di conversione** e scegli un percorso sotto **Conversione diretta (1 passaggio)** oppure
+   **Conversione a catena**. Digita nella casella di ricerca per filtrare per provider, valuta o paese.
+2. Trascina le righe per impostarne la priorità (su un telefono, usa le frecce su e giù).
+3. Clicca su **Salva configurazione**: la prossima sincronizzazione userà i nuovi percorsi.
 
-- I percorsi vengono provati **in ordine di priorità** (in alto = priorità massima)
-- Se il provider primario fallisce (timeout, errore API), il sistema passa automaticamente al percorso successivo
-- Puoi **riordinare** i percorsi per cambiare le priorità
+??? note "🔗 Crea anche coppie intermedie — quando scegli un percorso a catena"
 
-!!! example "Esempio di Fallback"
+    Seleziona questa opzione per salvare ogni passaggio della catena come coppia a sé stante, con il suo provider, così da poterla
+    sincronizzare e visualizzare da sola.
 
-    EUR/USD configurato con:
+??? note "✍️ Nessun percorso rimasto — quando li rimuovi tutti"
 
-    1. **ECB** (primario) — Banca Centrale Europea
-    2. **FED** (fallback) — Federal Reserve
-
-    Se l'API di ECB non è raggiungibile durante la sincronizzazione, il sistema utilizzerà automaticamente FED.
+    La coppia diventa manuale: **Sincronizza** è disabilitato e inserisci i tassi tu stesso nell'[editor dati](data-editor.md).
 
 ---
 
-## 📚 Correlati
+## 🔢 Priorità e fallback
 
-- ➕ **[Aggiungere una Coppia](../add-pair.md)** — Scoperta completa dei percorsi (direct + chain)
+Una sincronizzazione prova i percorsi dall'alto. Se uno fallisce — per esempio, la sua banca centrale non
+risponde — si passa al successivo; la coppia fallisce solo quando falliscono tutti i percorsi. Con EUR/USD impostata su
+**#1** ECB e **#2** FED, una sincronizzazione che non riesce a contattare l'ECB usa invece il tasso della FED.
+
+---
+
+## 📚 Voci correlate
+
+- ➕ **[Aggiunta di una coppia](../add-pair.md)** — Scoperta completa dei percorsi (percorsi diretti + a catena)
 - 🔄 **[Sincronizzazione](../sync.md)** — Come la sincronizzazione utilizza i provider configurati
-- 🔌 **[Provider FX](../providers/index.md)** — Guida utente e dettagli su ogni provider (ECB, FED, BOE, SNB)
-
-!!! tip "🔗 Come vengono calcolati i percorsi chain"
-
-    Per l'algoritmo matematico alla base delle catene di conversione multi-hop, consulta [FX Chain Algorithm](../../../developer/frontend/fx-chain-algorithm.md).
+- 🔌 **[Provider FX](../providers/index.md)** — Guida utente e dettagli su ciascun provider (ECB, FED, BOE, SNB)
+- 🧮 **Per gli sviluppatori: [Algoritmo della catena FX](../../../developer/frontend/fx-chain-algorithm.md)** — Come vengono trovati e calcolati i percorsi a catena

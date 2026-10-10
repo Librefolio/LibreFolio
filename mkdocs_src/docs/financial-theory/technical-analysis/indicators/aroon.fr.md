@@ -38,7 +38,7 @@ Aroon Up monte à 100 dès que le prix établit un nouveau plus haut sur $N$ pé
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre d'observation pour localiser le plus haut/plus bas extrême. |
+| Période ($N$) | `period` | 14 | Fenêtre d'observation pour localiser le plus haut/plus bas extrême, en séances. |
 
 ---
 

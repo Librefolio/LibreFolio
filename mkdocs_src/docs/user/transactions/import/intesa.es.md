@@ -2,63 +2,79 @@
 
 !!! info "Beta"
 
-    Este complemento está en **Beta** — probado con archivos de muestra, pero pueden existir casos límite.
+    Este plugin está en **Beta** — probado con archivos de ejemplo, pero pueden existir casos límite.
 
-## 📥 Cómo Exportar
+LibreFolio lee dos exportaciones de Intesa Sanpaolo, en **CSV** o **Excel (XLSX)**, tal como las descargas:
 
-LibreFolio lee exportaciones de Intesa Sanpaolo en formato **CSV** *o* **XLSX** — no es necesario
-convertir el archivo, simplemente impórtelo tal como se descarga. Se admiten dos informes diferentes que
-cubren dos situaciones distintas:
+- la **lista de movimientos** — los cupones, dividendos, comisiones e impuestos de un período;
+- la **instantánea de cartera** (*patrimonio*) — tus posiciones a su coste fiscal, y tu saldo de efectivo.
 
-- La **lista de movimientos** (*lista movimenti*) — la actividad de la cuenta durante un período.
-- La **instantánea de cartera** (*patrimonio*) — las tenencias actuales con su
- base de costo fiscal y el saldo en efectivo.
+## 🧭 ¿Qué archivos debo importar?
 
-Desde su banca en línea de Intesa Sanpaolo, descargue la lista de movimientos del período que desee
-y, si también necesita sembrar posiciones históricas, la instantánea de cartera de su
-*Deposito Amministrato*.
+=== "Cuenta completamente nueva"
 
-## 🧭 ¿Qué archivos debería importar?
-
-=== "Cuenta nueva"
-
- Si la cuenta se **abrió recientemente** y cada compra está dentro del período
- exportado, importar solo la **lista de movimientos** es suficiente — no hay historial previo que
- reconstruir.
+    Importa la **lista de movimientos**: trae los cupones, dividendos, comisiones e impuestos. LibreFolio
+    no extrae compras ni ventas de ella, así que añade tus compras a mano con el
+    [formulario de transacción](../form.md), o con un archivo [CSV Genérico](generic-csv.md).
 
 === "Cuenta con historial (recomendado)"
 
- Intesa solo exporta aproximadamente **un año** de movimientos y **no** incluye
- las transacciones de compra originales. Para representar posiciones compradas antes, primero importe
- la **instantánea de cartera**: esta siembra la cuenta con
+    Intesa exporta aproximadamente **un año** de movimientos, y LibreFolio no extrae compras ni ventas de
+    ellos. En su lugar, empieza por la instantánea de cartera:
 
- - un **depósito en efectivo** por la liquidez reportada (cuando la instantánea contiene un saldo en efectivo distinto de cero), y
- - un **ajuste de base de costo por posición** (cantidad de la instantánea, con el
- costo fiscal almacenado como una anulación de base de costo **por unidad**),
+    1. Importa la **instantánea de cartera**. Añade un **Depósito** por tu saldo de efectivo y un
+       **Ajuste** por cada posición, a su coste fiscal, todos con fecha de la instantánea: la última
+       fecha de cotización del informe.
+    2. Establece la fecha de **Apertura de Cuenta** del bróker a ese día. Los movimientos anteriores ya están contabilizados
+       en la instantánea: el asistente los marca como **Antes de la apertura** y los omite
+       ([cómo funciona](how-to.md#opening-date)).
+    3. A partir de entonces, importa la **lista de movimientos** para los nuevos cupones, dividendos, comisiones e impuestos.
 
- todo fechado en la fecha de la instantánea. Luego importe la **lista de movimientos** para agregar los
- cupones y comisiones recientes.
+## 📥 Cómo exportar
 
-## 📝 Notas
+### 🔍 Paso 1 — Abre la búsqueda avanzada
 
-- **Lista de movimientos** — el analizador asigna etiquetas de operación por palabra clave: *Cedole* → interés,
- *Dividend...* → dividendo, *Commission...* → comisión, y *Ritenut...* / *Imposta...* /
- *Bollo...* → impuesto. Las operaciones diarias de cuenta corriente que puedan aparecer en la misma exportación
- (transferencias, pagos con tarjeta, nómina, etc.) **no se reconocen como actividad de valores y
- se omiten**, con una advertencia — la importación nunca falla por su causa.
-- **Sin ISIN en la lista de movimientos** — el valor se toma del campo de texto libre *Dettagli*,
- por lo que los activos se emparejan **por nombre**. La instantánea de cartera *sí* lleva el ISIN.
- Debido a que los dos informes identifican el mismo valor de manera diferente (nombre vs ISIN),
- LibreFolio no los fusionará automáticamente — confirme el activo en el **Paso 4** del asistente.
-- **Siembra de instantánea** — cada ajuste almacena `cost_basis_override` como el costo fiscal **por unidad**. Intesa reporta *Controvalore di carico fiscale €* como un valor total de la posición, por lo que LibreFolio lo divide por la cantidad de tenencia antes de almacenarlo. El motor luego multiplica el valor por unidad por la cantidad para reconstruir el costo base total. La fecha de la instantánea es la fecha de cotización más reciente en el informe.
-- **Avisos de vencimiento** — si las filas analizadas de Intesa contienen indicios de vencimiento/reembolso, el diálogo de creación de activos puede mostrar un aviso informativo de color ámbar advirtiendo que el valor puede estar vencido o excluido de cotización.
-- **Los importes se importan textualmente** en EUR, exactamente como aparecen en el informe. No se realiza
- ninguna conversión de divisa.
+En la página de inicio de tu banca online, haz clic en **RICERCA AVANZATA**, junto a **Ultime Operazioni**.
 
-## ⛔ Antes de la fecha de apertura del bróker
+![Intesa Sanpaolo — página de inicio, RICERCA AVANZATA junto a Ultime Operazioni](../../../static/broker-guides/IntesaSanPaolo/01_ISP_RicercaAvanzata.jpg){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-Cuando su bróker tiene una **fecha de apertura** establecida, los movimientos fechados **estrictamente antes** de esa fecha se marcan en el asistente como **"Antes de la apertura"** y no se pueden importar (su casilla de verificación está deshabilitada). El día de apertura en sí es válido: la verificación implementada es `txDate < info.openedAt`, no `<=`. Esto evita duplicar posiciones que ya están representadas por la siembra de la instantánea. Si una fila se marca incorrectamente, use la acción en línea **Editar fecha del bróker**, luego vuelva a verificar/actualizar para que el asistente evalúe la fecha del bróker actualizada.
+### 🗓️ Paso 2 — Filtra y descarga los movimientos
+
+Establece **Tipologia Operazione** en **Operazioni titoli**, elige el período en **Da** y **A**, haz clic en **APPLICA**, luego en **SCARICA EXCEL**.
+
+![Intesa Sanpaolo — Tipologia Operazione establecida en Operazioni titoli, período, APPLICA y SCARICA EXCEL](../../../static/broker-guides/IntesaSanPaolo/02_ISP_FiltraExport.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+
+### 📊 Paso 3 — Descarga la instantánea de cartera
+
+Para una cuenta con historial, abre **Patrimonio** desde la página de inicio y descarga las posiciones de
+tu *Deposito Amministrato*.
+
+## 🔄 Qué se importa
+
+| En la lista de movimientos (**Operazione**) | Se importa como |
+|:---------------------------------------|:------------|
+| *Cedole* (cupones) | **Interés**, vinculado al valor mencionado en **Dettagli** |
+| *Dividend…* | **Dividendo**, vinculado de la misma forma |
+| *Commission…* | **Comisión** |
+| *Ritenut…*, *Imposta…*, *Bollo…* | **Impuesto** |
+
+Cualquier otra operación —compras, ventas y movimientos bancarios cotidianos como pagos con tarjeta o transferencias
+incluidos— se omite con una advertencia: la importación nunca falla por ello.
+
+De la **instantánea de cartera**: un **Ajuste** por cada posición (su cantidad, a su coste fiscal)
+y un **Depósito** por el saldo de efectivo cuando no es cero, todos en la fecha de la instantánea.
+
+## ⚠️ Conviene saber
+
+- **Filtra por Operazioni titoli.** Sin ese filtro, cada pago con tarjeta o transferencia del
+  período aparece en las advertencias como una fila omitida.
+- **El mismo valor, dos nombres.** La lista de movimientos menciona un valor solo en texto libre, mientras que
+  la instantánea proporciona su ISIN. Vincula ambos al mismo activo en el panel **Resolve Assets** de
+  [Revisión](how-to.md#review).
+- **Importes tal como están escritos.** Los movimientos conservan la divisa de su columna **Valuta**, y la instantánea
+  está en euros: nada se convierte.
+- **Mensajes en italiano.** Las advertencias de importación están en italiano, al igual que el informe.
 
 ## 🔗 Referencia para desarrolladores
 
-→ [Proveedores BRIM — Detalles de implementación](../../../developer/backend/brim/providers_list.md)
+→ [Arquitectura BRIM — notas de Intesa Sanpaolo](../../../developer/backend/brim/architecture.md#plugin-intesa)

@@ -30,7 +30,7 @@ Lorsque vous achetez un actif, un **lot fiscal** est créé avec :
 - **Quantité** : Nombre d'actions/unités achetées
 - **Prix unitaire** : Prix par action au moment de l'achat
 - **Frais** : Tous les frais de transaction (commission, spread, etc.)
-- **Coût total** : `quantité × prix_unitaire + frais`
+- **Coût total** : `quantity × unit_price + fees`
 
 ### 💰 Vente
 
@@ -50,7 +50,7 @@ $$
 
 ## 🔗 Liens connexes
 
-- 📊 **[Coût moyen pondéré (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Coût moyen par unité sur plusieurs achats
+- 📊 **[Prix de revient unitaire (PRU)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Coût moyen par unité sur plusieurs achats
 - 🔬 **[Analyse des lots FIFO](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Analyse détaillée par lot fiscal de l'appariement FIFO présenté ci-dessus
 - 💰 **[Fiscalité](../../fundamentals/taxation.md)** — Plus-values, méthodes d'appariement, report de pertes
 - 📈 **[Performance](../../fundamentals/returns.md)** — Mesure de la performance des investissements

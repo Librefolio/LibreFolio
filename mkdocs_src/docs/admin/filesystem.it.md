@@ -1,26 +1,31 @@
-# 📂 Struttura del Filesystem
+# 📂 Struttura del filesystem
 
-LibreFolio memorizza tutti i dati persistenti in una directory strutturata sotto `backend/data/`. Comprendere questa struttura è importante per il backup, il debugging e la manutenzione.
+LibreFolio conserva tutto ciò che memorizza in un'unica **directory dati**: il database, i file caricati, i report del broker e i log. La sua struttura è tutto ciò che devi conoscere per backup e manutenzione.
+
+| Installazione | Directory dati |
+| --- | --- |
+| Host (Pipenv) | `backend/data/prod/` nella cartella del progetto, o il percorso in `LIBREFOLIO_DATA_DIR` |
+| Docker Compose | `LibreFolio-data/` accanto a `docker-compose.yml` (`/app/backend/data/prod-docker` all'interno del container) |
 
 ---
 
-## 🗂️ Layout delle Directory
+## 🗂️ Struttura delle directory
 
-```
+```text
 backend/data/
-├── 📂 prod/                          # Production data (default)
+├── 📂 prod/                          # Dati di produzione (predefinito)
 │   ├── 🗃️ sqlite/
-│   │   └── 📄 app.db                 # Main SQLite database (WAL mode)
-│   ├── 🖼️ custom-uploads/            # User-uploaded files
-│   │   ├── 📄 {uuid}.{ext}          # Binary file (image, document, etc.)
-│   │   └── 📋 {uuid}.json           # Metadata sidecar (uploader, date, MIME type)
+│   │   └── 📄 app.db                 # Database SQLite principale (modalità WAL)
+│   ├── 🖼️ custom-uploads/            # File caricati nell'app
 │   ├── 📊 broker_reports/
-│   │   ├── 📥 uploaded/              # Reports waiting to be parsed
-│   │   ├── ✅ parsed/               # Successfully parsed reports
-│   │   └── ❌ failed/               # Reports that failed parsing
-│   └── 📝 logs/                      # Application log files
+│   │   ├── 📥 uploaded/              # Report in attesa di essere letti
+│   │   ├── ✅ parsed/                # Report letti con successo
+│   │   └── ❌ failed/                # Report che non è stato possibile leggere
+│   ├── 📝 logs/                      # File di log dell'applicazione
+│   ├── 🎭 scenario_catalog/          # Opzionale: i tuoi scenari di stress
+│   └── 📋 scheduler_state.json       # Ultima esecuzione delle sincronizzazioni programmate
 │
-└── 🧪 test/                          # Test data (completely isolated)
+└── 🧪 test/                          # Dati di test (completamente isolati)
     ├── 🗃️ sqlite/app.db
     ├── 🖼️ custom-uploads/
     ├── 📊 broker_reports/
@@ -29,103 +34,102 @@ backend/data/
 
 ---
 
-## 📖 Cosa contiene ogni Directory
+## 📖 Cosa contiene ciascuna directory
 
-### 🗃️ `sqlite/app.db`
+### 🗃️ `sqlite/`
 
-Il database SQLite principale. Contiene tutti i dati dell'applicazione: utenti, broker, transazioni, tassi di cambio, impostazioni, ecc.
-
-- 📝 Utilizza la modalità di journaling **WAL (Write-Ahead Logging)** per un migliore accesso concorrente
-- 📎 I file `.db-wal` e `.db-shm` sono file WAL temporanei — sono previsti e gestiti da SQLite
-
-:material-arrow-right: **Approfondimento per sviluppatori**: [Database Schema](../developer/architecture/database/index.md)
+- 📄 `app.db` contiene tutti i dati strutturati: utenti, broker, transazioni, asset, prezzi, tassi di cambio e impostazioni.
+- 📎 `app.db-wal` e `app.db-shm` sono i file di lavoro di SQLite (modalità WAL), previsti mentre il server è in esecuzione: non copiare mai `app.db` da solo mentre il server è attivo.
+- 🔒 `app.db.post-migration.lock` è un file vuoto usato all'avvio: lascialo al suo posto. Un file chiamato `app.db.pre-<fix>-<UTC time>.bak` è una copia conservata dopo una [correzione post-migrazione](cli_tools.md#post-migration-fixes) non riuscita: eliminalo una volta che non ti serve più.
 
 ### 🖼️ `custom-uploads/`
 
-File caricati dagli utenti tramite la pagina Files. Ogni caricamento crea due file:
-
-- 📄 `{uuid}.{ext}` — Il file binario effettivo (es. `a1b2c3d4.png`)
-- 📋 `{uuid}.json` — Metadata inclusi: nome file originale, tipo MIME, dimensione file, data di caricamento, ID dell'utente che ha effettuato il caricamento
-
-:material-arrow-right: **Approfondimento per sviluppatori**: [File Upload Component](../developer/frontend/components/core-ui/file-upload.md)
+File caricati nell'app, come quelli della pagina **Files**, e gli avatar predefiniti. Ogni file ha un nome casuale e un file `.json` accanto che lo descrive: mantieni le coppie insieme.
 
 ### 📊 `broker_reports/`
 
-File dei report dei broker per il sistema BRIM (Broker Report Import Manager):
+I report del broker caricati per l'importazione, in una cartella `broker_<id>/` per broker:
 
-- **📥 `uploaded/`** — File grezzi così come caricati dagli utenti (CSV, Excel)
-- **✅ `parsed/`** — File che sono stati elaborati con successo (transazioni estratte)
-- **❌ `failed/`** — File per i quali l'analisi è fallita (conservati per il debugging — controllare i log per i dettagli)
+- **📥 `uploaded/`** — in attesa di essere letti
+- **✅ `parsed/`** — letti con successo
+- **❌ `failed/`** — non è stato possibile leggerli, conservati per poter controllare il motivo
 
-:material-arrow-right: **Approfondimento per sviluppatori**: [BRIM Architecture](../developer/backend/brim/architecture.md)
+Un report si sposta da `uploaded/` a `parsed/` o `failed/`, quindi il suo file originale è sempre in una delle tre cartelle.
 
 ### 📝 `logs/`
 
-Log dell'applicazione in formato JSON strutturato (via `structlog`). I file di log ruotano settimanalmente e vengono conservati per 1 anno (compressi con gzip).
+- 📄 `librefolio.log` contiene un record JSON per riga; il server stampa il log anche sulla sua console.
+- 🗓️ Ogni lunedì (UTC) il file viene archiviato e compresso (`.gz`); vengono conservati gli ultimi 52 archivi, un anno.
+- 🎚️ `LOG_LEVEL` in `.env` imposta quanto viene scritto (predefinito `INFO`).
 
-La verbosità è controllata dalla variabile d'ambiente `LOG_LEVEL`.
+??? info "📶 Livelli di log — cosa registra ciascuno"
 
-**Cosa cattura ogni livello** — ogni riga mostra quali livelli di log sono visibili:
+    Ogni livello registra anche tutti quelli più gravi.
 
-| LOG_LEVEL | 🔬 TRACE (5) | 🐛 DEBUG (10) | ℹ️ INFO (20) | ⚠️ WARNING (30) | ❌ ERROR (40) | 💀 CRITICAL (50) |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| 🔬`TRACE` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 🐛`DEBUG` | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| ℹ️ **`INFO`** *(default)* | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| ⚠️ `WARNING` | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| ❌`ERROR` | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| 💀`CRITICAL` | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-
-**Significato di ogni livello:**
-
-| Livello | Cosa cattura |
-|-------|-----------------|
-| 🔬`TRACE` | Dati granulari ad alta frequenza: singoli tassi di cambio analizzati, punti di prezzo per asset |
-| 🐛`DEBUG` | Internali operativi: quale provider è stato utilizzato, risultati intermedi, decisioni algoritmiche |
-| ℹ️`INFO` | Operazioni utente significative: sincronizzazione completata, importazione, login, creazione/eliminazione di risorse |
-| ⚠️`WARNING` | Anomalie recuperabili: fallback attivato, dati opzionali mancanti, modalità degradata |
-| ❌`ERROR` | Errori gestiti: operazioni fallite, corruzione dei dati, provider irraggiungibile |
-| 💀`CRITICAL` | Errori fatali che interrompono il processo |
-
-!!! tip "Impostazioni consigliate"
+    | Livello | Cosa registra |
+    |-------|-----------------|
+    | 🔬 `TRACE` | Dati granulari ad alta frequenza: singoli tassi di cambio analizzati, punti di prezzo per asset |
+    | 🐛 `DEBUG` | Dettagli operativi interni: quale provider è stato usato, risultati intermedi, decisioni algoritmiche |
+    | ℹ️ `INFO` *(predefinito)* | Operazioni significative dell'utente: sincronizzazione completata, importazione, login, risorsa creata/eliminata |
+    | ⚠️ `WARNING` | Anomalie recuperabili: fallback attivato, dati opzionali mancanti, modalità degradata |
+    | ❌ `ERROR` | Errori gestiti: operazioni fallite, corruzione dei dati, provider non raggiungibile |
+    | 💀 `CRITICAL` | Errori fatali che arrestano il processo |
 
     - **Produzione**: `LOG_LEVEL=INFO` — segnale pulito, senza rumore
-    - **Risoluzione problemi**: `LOG_LEVEL=DEBUG` — per vedere cosa sta decidendo il sistema
-    - **Debugging profondo tassi di cambio/prezzi**: `LOG_LEVEL=TRACE` — per vedere ogni singolo punto dato
+    - **Risoluzione dei problemi**: `LOG_LEVEL=DEBUG` — vedi cosa sta decidendo il sistema
+    - **Debug approfondito FX/prezzi**: `LOG_LEVEL=TRACE` — vedi ogni singolo punto dati
+
+🔗 Per gli sviluppatori: [Directory dati su disco](../developer/architecture/database/index.md#data-directory) — ogni file, il suo formato e il codice che lo scrive, incluso `scenario_catalog/`.
 
 ---
 
-## 🌍 Variabili d'Ambiente
+## 🌍 Variabili d'ambiente
 
-I percorsi di memorizzazione e i comportamenti a runtime del filesystem sono controllati da variabili d'ambiente (come `LIBREFOLIO_DATA_DIR` e `LIBREFOLIO_TEST_MODE`). Per un elenco completo di tutte le variabili d'ambiente supportate e su come configurarle tramite il file `.env`, consulta la pagina di [Configurazione](configuration.md).
+- `LIBREFOLIO_DATA_DIR` sposta la directory dati di produzione, e `LIBREFOLIO_TEST_DATA_DIR` quella di test. Un percorso relativo parte dalla cartella del progetto.
+- Con Docker Compose il percorso all'interno del container è fisso: per conservare i dati altrove sull'host, modifica il lato sinistro del volume `./LibreFolio-data:/app/backend/data/prod-docker` in `docker-compose.yml`.
+
+Le altre variabili, e il file `.env`, sono descritte in [Configurazione](configuration.md).
 
 ---
 
 ## 💾 Backup
 
-### 📦 Backup Semplice
+### 📦 Backup semplice
 
-Il modo più semplice per eseguire il backup di LibreFolio è copiare l'intera directory dei dati:
+Il modo più semplice per eseguire il backup di LibreFolio è copiare l'intera directory dati:
 
 ```bash
-# Stop the server first (to ensure database consistency)
+# Arresta prima il server (per garantire la coerenza del database)
 cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 ```
 
 ### 🐳 Backup Docker
 
-Se si esegue LibreFolio tramite Docker Compose (il metodo di installazione standard), la directory dei dati di produzione è montata direttamente tramite bind-mount nella directory `./LibreFolio-data` sulla macchina host (e mappata su `/app/backend/data/prod-docker` all'interno del container).
+Con Docker Compose, la directory dati è la cartella `LibreFolio-data/` sull'host, quindi non serve alcun comando di copia Docker. Arresta il container per una copia coerente:
 
-Di conseguenza, non sono necessari comandi speciali di copia Docker; esegui il backup della cartella `./LibreFolio-data` sulla macchina host. Per un backup consistente, ferma prima il container. `sqlite/app.db` contiene i dati strutturati, mentre `custom-uploads/` e `broker_reports/uploaded/` sono necessari per preservare i file caricati.
+```bash
+docker compose stop librefolio
+cp -r ./LibreFolio-data/ /path/to/backup/librefolio-$(date +%Y%m%d)/
+docker compose start librefolio
+```
 
-### ✅ Cosa salvare nel backup
+??? tip "🔄 Esegui il backup del database senza arrestare il server"
 
-Al minimo, eseguire il backup di:
+    Il backup online di SQLite crea una copia coerente mentre il server è in esecuzione. Richiede lo strumento `sqlite3`:
+
+    ```bash
+    sqlite3 backend/data/prod/sqlite/app.db ".backup '/path/to/backup/app.db'"
+    ```
+
+    Con Docker, il database è `./LibreFolio-data/sqlite/app.db`. Questo comando copia solo il database: copia le cartelle sottostanti come al solito.
+
+### ✅ Cosa includere nel backup
+
+Come minimo, esegui il backup di:
 
 1. **`sqlite/app.db`** — Tutti i tuoi dati (utenti, transazioni, impostazioni, tassi di cambio)
-2. **`custom-uploads/`** — File caricati dagli utenti (avatar, documenti)
-3. **`broker_reports/uploaded/`** — Report originali dei broker (nel caso fosse necessario ri-analizzarli)
+2. **`custom-uploads/`** — File caricati dall'utente (avatar, documenti)
+3. **`broker_reports/`** — I report originali del broker, nel caso in cui tu debba importarli di nuovo
+4. **`scenario_catalog/`** — I tuoi scenari di stress, se ne hai aggiunti
 
-!!! tip "Backup solo del database"
-
-    Se lo spazio di archiviazione è limitato, il backup di solo `sqlite/app.db` preserva tutti i dati strutturati. I file possono essere sempre ricaricati.
+Se lo spazio è limitato, `sqlite/app.db` da solo conserva tutti i dati strutturati: i file e i report possono essere caricati di nuovo se li hai ancora.

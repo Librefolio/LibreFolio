@@ -1,43 +1,66 @@
-# ⚙️ Configuration du courtier et export IA
+# ⚙️ Configuration et informations du courtier
 
-L'onglet **Info** regroupe la configuration des métadonnées, les contrôles de sécurité, l'outil d'export IA ciblé et le panneau de configuration du partage.
+L'onglet **Info** d'un courtier affiche les détails du compte à gauche et les personnes qui peuvent y accéder à droite.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vue des informations et du partage du courtier">
+    <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vue des informations et du partage du courtier">
 </div>
 
 ---
 
-## ⚙️ Métadonnées et paramètres
+## 📋 Détails du compte
 
-La colonne de gauche de l'onglet Info affiche les propriétés clés et les règles de validation de ce courtier :
+La carte **Détails** liste :
 
-- **Statut du courtier** : Indique si le compte est actuellement `Active`. Les courtiers inactifs sont masqués dans les menus déroulants, mais leurs valeurs historiques sont conservées dans les graphiques.
-- **Dates** : Affiche la date d'ouverture du compte et la date de création dans LibreFolio.
-- **Devise de base** : La devise de base du compte (toutes les transactions et valorisations sont converties en interne vers cette devise à l'aide des taux de change historiques pour le reporting local).
-- **Autoriser le découvert de trésorerie** : Un interrupteur permettant de contourner les erreurs de solde négatif. Lorsqu'il est désactivé, LibreFolio bloque les transactions (comme les achats ou les retraits) qui entraîneraient un solde de trésorerie négatif.
-- **Autoriser les positions courtes** : Un interrupteur permettant d'autoriser des quantités d'actifs négatives. Lorsqu'il est désactivé, toute vente au-delà de la taille de votre position ouverte actuelle est bloquée.
+- **Compte actif** — **✓ Actif**, ou **✗ Clôturé** pour un compte que vous n'utilisez plus. Un courtier clôturé conserve son historique dans vos graphiques.
+- **Compte ouvert** — la date à laquelle vous avez ouvert le compte, si vous l'avez renseignée.
+- **Autoriser l'achat à effet de levier** et **Autoriser la vente à découvert** — les deux options de trading, expliquées ci-dessous.
+- **Créé dans le système** — la date à laquelle le courtier a été ajouté à LibreFolio.
 
----
-
-## 🧠 Export IA ciblé
-
-En haut à droite de la barre d'outils du courtier, **Export IA** (:material-brain:) ouvre trois tâches dédiées au courtier—et non des prompts de portefeuille filtrés :
-
-- **Examen du courtier**
-- **Performance du courtier et moteurs du marché**
-- **Stratégies de compensation des pertes en capital**
-
-L'instantané côté serveur est limité au courtier sélectionné et peut inclure ses liquidités, ses positions, son activité, ses performances, ses coûts, sa concentration et ses lots FIFO selon la tâche sélectionnée. Des contrôles d'accès côté serveur empêchent d'exporter un courtier auquel l'utilisateur actuel ne peut pas accéder. LibreFolio copie uniquement le résultat dans le presse-papiers ; examinez les données financières sensibles avant de les partager. Voir [Export IA du courtier](../ai-export/broker.md) ou l'[aperçu de l'export IA](../ai-export/index.md).
+Pour les modifier, cliquez sur **Modifier** dans la barre d'outils du courtier (Propriétaires et Éditeurs).
 
 ---
 
-## 🤝 Panneau de partage d'accès
+## 🛡️ Options de trading {: #trading-options }
 
-La colonne de droite de l'onglet Info héberge le gestionnaire intégré **Partage du courtier**. Vous pouvez y :
+Les deux options sont désactivées pour un nouveau courtier, et LibreFolio vous protège alors contre les soldes impossibles :
 
-- Inviter d'autres utilisateurs par leur adresse e-mail ou leur nom d'utilisateur.
-- Définir leur niveau d'autorisation (Propriétaire, Éditeur, Lecteur).
-- Configurer les pourcentages de propriété.
+- avec **Autoriser l'achat à effet de levier** désactivée, une sauvegarde est refusée si elle devait faire passer la trésorerie d'une devise sous zéro ;
+- avec **Autoriser la vente à découvert** désactivée, une sauvegarde est refusée si elle devait faire passer la quantité d'un actif sous zéro.
 
-Pour une explication détaillée des règles de partage, des rôles et de la logique des pourcentages, veuillez vous référer à la page dédiée **[Partage du courtier](sharing.md)**.
+Activez une option pour un compte sur marge, ou pour enregistrer des ventes à découvert.
+
+??? note "📅 Comment les soldes sont vérifiés — quand une sauvegarde est refusée"
+
+    Pour chaque devise $c$ et chaque actif $i$ du courtier, LibreFolio examine le solde à la **fin de chaque journée** $d$, après toutes les transactions de cette journée :
+
+    $$
+    C_c(d) = \sum_{\text{date}_t \le d} a_t \ge 0 \qquad\qquad Q_i(d) = \sum_{\text{date}_t \le d} q_t \ge 0
+    $$
+
+    Ici, $a_t$ est le montant en espèces de chaque transaction $t$ dans la devise $c$, et $q_t$ la quantité de chaque transaction de l'actif $i$. Les entrées et sorties d'argent du même jour se compensent, mais un dépôt effectué plus tard ne corrige pas une journée déjà clôturée sous zéro.
+
+    Une sauvegarde refusée apparaît dans l'espace de travail sous *Cette configuration provoque des incohérences de données*, avec la devise ou l'actif, la date et des liens vers les lignes concernées de l'espace de travail.
+
+---
+
+## 🤝 Partager le courtier
+
+La colonne de droite contient le panneau **Partager le courtier** ; **Partager le courtier** dans la barre d'outils vous amène également ici. Seul un Propriétaire peut le modifier : tous les autres le voient en lecture seule.
+
+Pour donner accès à quelqu'un :
+
+1. Cliquez sur **+** (**Ajouter un utilisateur**) sous le graphique de répartition de propriété et trouvez la personne **par son nom d'utilisateur**.
+2. Choisissez le **Rôle** — **Lecteur** par défaut, **Éditeur** ou **Propriétaire** — et, pour un Propriétaire, le **% de propriété**. Cliquez ensuite sur **Ajouter un utilisateur**.
+3. Cliquez sur **Enregistrer la configuration** : rien ne change avant cela.
+
+Enregistrez avant de changer d'onglet : dans l'onglet Info, les modifications non enregistrées sont abandonnées sans confirmation.
+
+Sous **Votre accès**, vous pouvez aussi **Quitter le courtier**, ou **Passer en lecteur** si vous êtes Éditeur. Les rôles et les parts de propriété sont expliqués dans [Partage du courtier](sharing.md).
+
+---
+
+## 🔗 Voir aussi
+
+- 🧠 **[Export IA du courtier](../ai-export/broker.md)** — **export IA** se trouve dans la barre d'outils du courtier et fonctionne depuis chaque onglet.
+- 🏦 **[Courtiers](index.md)** — créer un courtier et ses champs facultatifs.

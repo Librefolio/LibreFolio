@@ -1198,11 +1198,10 @@ def _mkdocs_anchor_slugs(md_file) -> set:
 #
 # ⚠️ THIS LIST MUST ONLY EVER SHRINK. A new broken anchor is a regression and must
 # turn the gate red; silencing it by adding a line here defeats the check entirely.
-MKDOCS_ANCHOR_EXCEPTIONS = {
-    "user/assets/create-edit#importing-a-distribution-csv": ("it", "fr", "es"),
-    "user/assets/providers/scheduled-investment#how-value-is-calculated": ("it", "fr", "es"),
-    "user/assets/providers/scheduled-investment#interest-schedule-editor": ("fr", "es"),
-}
+#
+# Emptied 10 Oct 2026 (1.2 translation round): the three recorded anchors now exist in
+# it/fr/es as shared explicit ids, so every link resolves in all four languages.
+MKDOCS_ANCHOR_EXCEPTIONS: dict[str, tuple[str, ...]] = {}
 
 
 def _mkdocs_check_anchor(en_file, anchor: str, path: str, origin: str, docs_root):

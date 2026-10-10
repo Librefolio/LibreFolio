@@ -1,44 +1,36 @@
 # <img src="https://www.interactivebrokers.com/favicon.ico" alt=""> Interactive Brokers (IBKR)
 
-!!! info "Beta"
+!!! info "Bêta"
 
-    Ce plugin est en **Beta** — testé avec des fichiers d'échantillons, mais des cas particuliers peuvent exister.
+    Ce plugin est en **Bêta** — testé avec des fichiers d'exemple, mais des cas limites peuvent exister.
 
 ## 📥 Comment exporter
 
-Pour exporter vos transactions depuis Interactive Brokers, suivez ces étapes :
+LibreFolio lit les transactions d'une **Requête Flex d'activité** exportée au format CSV. Le
+**Relevé d'activité** standard n'est pas pris en charge.
 
-1. Connectez-vous au [Portail Client Interactive Brokers](https://www.interactivebrokers.com).
-2. Accédez à **Reports** (Rapports) dans le menu supérieur, puis sélectionnez **Statements** (Relevés).
-3. Sous la section **Activity** (Activité), cliquez sur la carte **Activity Statement** (Relevé d'activité).
-4. Sélectionnez la **Date Range** (Plage de dates) souhaitée (ex: Year to Date, Custom) et choisissez **CSV** comme format.
-5. Cliquez sur **Run** (Exécuter) ou téléchargez le rapport CSV généré sur votre ordinateur.
-
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <!-- [Screenshot Placeholder: Interactive Brokers Portal - Statements & Reports menu] -->
-</div>
-
-### ⚙️ Utilisation des Flex Queries (Recommandé)
-
-Pour des portefeuilles plus avancés, vous pouvez configurer une **Flex Query** (requête Flex) pour exporter des données spécifiques :
-
-1. Sous **Reports**, allez dans **Flex Queries** et cliquez sur le bouton **+ (Create)**.
-2. Sélectionnez **Activity Flex Query**.
-3. Ajoutez **Trades** (Transactions), **Cash Transactions** (Transactions de trésorerie, pour les dividendes et les frais), et **Corporate Actions** (Opérations sur titres) à la requête.
-4. Réglez le format sur **CSV** et enregistrez la requête. Vous pouvez exécuter cette requête personnalisée à tout moment.
+1. Connectez-vous au [Portail client Interactive Brokers](https://www.interactivebrokers.com) et ouvrez
+   **Requêtes Flex**, dans le menu des rapports.
+2. Créez une **Requête Flex d'activité** avec uniquement la section **Transactions**, et sélectionnez les champs qui
+   donnent ces colonnes : `Buy/Sell`, `TradeDate`, `ISIN`, `Quantity`, `TradeMoney`,
+   `CurrencyPrimary`, `IBCommission`, `IBCommissionCurrency`.
+3. Choisissez **CSV** comme format et `yyyyMMdd` comme format de date (par exemple `20240315`), puis
+   enregistrez la requête.
+4. Exécutez-la pour la période souhaitée et téléchargez le fichier.
 
 ## ⚠️ Pièges courants
 
-!!! warning "Format de fichier"
+- **La première ligne doit être constituée des noms de colonnes.** LibreFolio reconnaît le fichier grâce aux
+  en-têtes `Buy/Sell`, `TradeDate`, `ISIN` et `IBCommission` entre guillemets sur sa première ligne : laissez l'option
+  d'en-têtes de colonnes activée, et désactivez les enregistrements d'en-tête et de pied de page ainsi que les codes de section.
+- **CSV uniquement** : les exports PDF et XML ne sont pas lus.
 
-    Assurez-vous d'exporter au format **CSV**. Les relevés PDF ne sont pas pris en charge par l'analyseur et l'importation échouera.
+## 📝 Ce qui est importé
 
-!!! warning "Paramètres de langue"
-
-    L'analyseur est conçu pour des en-têtes CSV en anglais. Assurez-vous que la langue de votre Portail Client IBKR est réglée sur l'anglais avant de lancer l'exportation.
-
-## 📝 Notes
-
-- Prend en charge les rapports d'activité standard d'IBKR (transactions, dividendes, retenues fiscales, frais, dépôts, retraits).
-- Les comptes multi-devises sont pris en charge.
-- Les opérations sur titres (divisions, fusions) peuvent nécessiter des ajustements manuels dans la grille de staging.
+- **Achats et ventes** d'instruments avec un ISIN, dans la devise de la transaction (`CurrencyPrimary` ;
+  USD lorsque la colonne est vide).
+- **Commissions**, chacune comme des **Frais** distincts sur le même actif et à la même date, dans
+  `IBCommissionCurrency` (ou la devise de la transaction lorsque cette colonne est vide).
+- **Non importés** : dividendes, intérêts, impôts, dépôts et retraits, conversions de devise
+  (les lignes sans ISIN sont ignorées avec un avertissement) et opérations sociétaires. Ajoutez-les manuellement, ou
+  avec un fichier [CSV générique](generic-csv.md).

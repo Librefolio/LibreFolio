@@ -1,6 +1,6 @@
-# ![](../../../static/icons/asset-types/index.png){: width="32" style="vertical-align: middle;" } Índice y Benchmark
+# ![](../../../static/icons/asset-types/index.png){: width="32" style="vertical-align: middle;" } Índices e índices de referencia
 
-Un **índice** es una medida estadística de una sección del mercado financiero. Rastrea el rendimiento de un grupo de activos y sirve como un **benchmark** contra el cual los inversores miden el rendimiento de su propia cartera.
+Un **índice** es una medida estadística de una sección del mercado financiero. Rastrea el rendimiento de un grupo de activos y sirve como **índice de referencia** contra el cual los inversores miden el rendimiento de su propia cartera.
 
 ---
 
@@ -35,7 +35,7 @@ Los índices se reequilibran periódicamente: se añaden, eliminan o reponderan 
 
 LibreFolio ofrece dos tipos de benchmarks:
 
-### 📊 Benchmarks Reales (Comparación de Activos)
+### 📊 Índices de referencia reales (comparación de activos)
 
 Compare el gráfico de su activo frente a otro activo real (por ejemplo, compare su acción frente al ETF del S&P 500). Esto utiliza la superposición de señales de **Comparación de Activos**.
 
@@ -53,4 +53,4 @@ Curvas de referencia matemáticas que responden a "¿qué pasaría si mi activo 
 
 - 📊 **[ETFs](etfs.md)** — Instrumentos que rastrean índices
 - 🎯 **[Benchmarks Sintéticos](../../technical-analysis/synthetic-benchmarks/index.md)** — Curvas de referencia matemáticas
-- 📈 **[Retornos y Tasas de Crecimiento](../../fundamentals/returns.md)** — Medición del rendimiento frente al benchmark
+- 📈 **[Retornos y Tasas de Crecimiento](../../fundamentals/returns.md)** — Medición del rendimiento frente al índice de referencia

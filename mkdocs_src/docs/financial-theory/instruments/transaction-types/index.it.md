@@ -11,7 +11,7 @@ Queste operano indipendentemente su un singolo conto broker.
 | ![](../../../static/icons/transactions/buy.png){: width="32" } ![](../../../static/icons/transactions/sell.png){: width="32" } | **Acquisto / Vendita** | `BUY` / `SELL` | Acquisto o vendita di un asset. | ⬇️⬆️ | ⬆️⬇️ | [📖](buy-sell.md) |
 | ![](../../../static/icons/transactions/deposit.png){: width="32" } ![](../../../static/icons/transactions/withdrawal.png){: width="32" } | **Deposito / Prelievo** | `DEPOSIT` / `WITHDRAWAL` | Aggiunta o rimozione di liquidità da un conto broker. | ⬆️⬇️ | — | [📖](deposit-withdrawal.md) |
 | ![](../../../static/icons/transactions/dividend.png){: width="32" } ![](../../../static/icons/transactions/interest.png){: width="32" } | **Dividendo / Interesse** | `DIVIDEND` / `INTEREST` | Rendimento ricevuto da asset azionari o a reddito fisso. | ⬆️ | — | [📖](dividend-interest.md) |
-| ![](../../../static/icons/transactions/fee.png){: width="32" } ![](../../../static/icons/transactions/tax.png){: width="32" } | **Commissione / Tassa** | `FEE` / `TAX` | Costi associati alle operazioni, manutenzione del conto o tasse. | ⬇️ | — | [📖](fee.md) |
+| ![](../../../static/icons/transactions/fee.png){: width="32" } ![](../../../static/icons/transactions/tax.png){: width="32" } | **Commissione / Imposta** | `FEE` / `TAX` | Costi associati alle operazioni, manutenzione del conto o imposte. | ⬇️ | — | [📖](fee.md) |
 | ![](../../../static/icons/transactions/adjustment.png){: width="32" } | **Rettifica** | `ADJUSTMENT` | Correzione manuale dei saldi. | ± | ± | [📖](adjustment.md) |
 
 ## 🔀 Transazioni Composte
@@ -21,8 +21,8 @@ Queste rappresentano movimenti **tra** conti o valute. Producono due voci colleg
 | | Tipo | Codice | Descrizione | Liquidità | Asset | |
 |:---:|:---|:---|---|:---:|:---:|:---:|
 | ![](../../../static/icons/transactions/transfer.png){: width="32" } | **Trasferimento Asset** | `TRANSFER` | Spostamento di titoli tra broker. | — | ⬆️⬇️ | [📖](transfer.md) |
-| ![](../../../static/icons/transactions/cash-transfer.png){: width="32" } | **Trasferimento Liquidità** | `CASH_TRANSFER` | Bonifico tra broker. | ⬆️⬇️ | — | [📖](cash-transfer.md) |
-| ![](../../../static/icons/transactions/fx-conversion.png){: width="32" } | **Conversione Valutaria** | `FX_CONVERSION` | Cambio valuta all'interno di un broker. | ⬆️⬇️ | — | [📖](fx-conversion.md) |
+| ![](../../../static/icons/transactions/cash-transfer.png){: width="32" } | **Giroconto** | `CASH_TRANSFER` | Bonifico tra broker. | ⬆️⬇️ | — | [📖](cash-transfer.md) |
+| ![](../../../static/icons/transactions/fx-conversion.png){: width="32" } | **Conversione di valuta** | `FX_CONVERSION` | Cambio valuta all'interno di un broker. | ⬆️⬇️ | — | [📖](fx-conversion.md) |
 
 ---
 

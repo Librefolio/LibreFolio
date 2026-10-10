@@ -1,43 +1,66 @@
-# ⚙️ Configurazione Broker & Esportazione AI
+# ⚙️ Configurazione e informazioni del broker
 
-La scheda **Info** contiene la configurazione dei metadati, i controlli di sicurezza, lo strumento di Esportazione AI circoscritto e il pannello di configurazione della condivisione.
+La scheda **Info** di un broker mostra i dettagli dell'account a sinistra e chi può accedervi a destra.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vista Info e Condivisione del Broker">
+    <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vista delle informazioni e della condivisione del broker">
 </div>
 
 ---
 
-## ⚙️ Metadati & Impostazioni
+## 📋 Dettagli dell'account
 
-La colonna sinistra della scheda Info mostra le proprietà chiave e le regole di validazione per questo broker:
+La scheda **Dettagli** elenca:
 
-- **Stato Broker**: Mostra se l'account è attualmente `Active`. I broker inattivi sono nascosti dai menu a tendina degli elenchi, ma i loro valori storici vengono conservati nei grafici.
-- **Date**: Mostra quando l'account è stato aperto e quando è stato creato in LibreFolio.
-- **Valuta Base**: La valuta base dell'account (tutte le transazioni e le valutazioni vengono internamente convertite utilizzando i tassi di cambio storici in questa valuta per il reporting locale).
-- **Consenti Scoperto di Liquidità**: Un interruttore per bypassare gli errori di saldo negativo. Quando disattivato, LibreFolio blocca le transazioni (come acquisti o prelievi) che comporterebbero un saldo di liquidità negativo.
-- **Consenti Posizioni Short**: Un interruttore per autorizzare quantità negative di asset. Quando disattivato, viene bloccata la vendita di una quantità superiore alla dimensione della posizione aperta in essere.
+- **Account attivo** — **✓ Attivo**, oppure **✗ Chiuso** per un account che non usi più. Un broker chiuso conserva la sua cronologia nei tuoi grafici.
+- **Account aperto** — quando hai aperto l'account, se lo hai impostato.
+- **Consenti acquisto con leva** e **Consenti vendita allo scoperto** — le due opzioni di trading, spiegate di seguito.
+- **Creato nel sistema** — quando il broker è stato aggiunto a LibreFolio.
 
----
-
-## 🧠 Esportazione AI Circoscritta
-
-Nella parte superiore destra della barra degli strumenti del broker, **Esportazione AI** (:material-brain:) apre tre task dedicati del Broker—non prompt di Portfolio filtrati:
-
-- **Revisione Broker**
-- **Performance del Broker & Driver di Mercato**
-- **Strategie di Compensazione delle Minusvalenze**
-
-Lo snapshot del backend è limitato al broker selezionato e può includere la sua liquidità, le posizioni, l'attività, la performance, i costi, la concentrazione e i lotti FIFO in base al task selezionato. I controlli di accesso lato server impediscono l'esportazione di un broker a cui l'utente corrente non può accedere. LibreFolio copia solo il risultato negli appunti; rivedi i dati finanziari sensibili prima di condividerli. Vedi [Esportazione AI Broker](../ai-export/broker.md) o la [panoramica Esportazione AI](../ai-export/index.md).
+Per modificarli, fai clic su **Modifica** nella barra degli strumenti del broker (proprietari ed editor).
 
 ---
 
-## 🤝 Pannello di Condivisione dell'Accesso
+## 🛡️ Opzioni di trading {: #trading-options }
 
-La colonna destra della scheda Info contiene il gestore **Condivisione Broker** integrato. Qui puoi:
+Entrambe le opzioni sono disattivate per un nuovo broker e LibreFolio ti protegge da saldi impossibili:
 
-- Invitare altri utenti tramite il loro indirizzo email o nome utente.
-- Definire il loro permesso di ruolo (Proprietario, Editor, Visualizzatore).
-- Configurare le percentuali di proprietà.
+- con **Consenti acquisto con leva** disattivato, un salvataggio viene rifiutato se lascerebbe la liquidità di una valuta sotto zero;
+- con **Consenti vendita allo scoperto** disattivato, un salvataggio viene rifiutato se lascerebbe la quantità di un asset sotto zero.
 
-Per una spiegazione dettagliata delle regole di condivisione, dei ruoli e della logica delle percentuali, fai riferimento alla pagina dedicata **[Condivisione Broker](sharing.md)**.
+Attiva un'opzione per un conto a margine, oppure per registrare vendite allo scoperto.
+
+??? note "📅 Come vengono controllati i saldi — quando un salvataggio viene rifiutato"
+
+    Per ogni valuta $c$ e ogni asset $i$ del broker, LibreFolio controlla il saldo alla **fine di ogni giorno** $d$, dopo tutte le transazioni di quel giorno:
+
+    $$
+    C_c(d) = \sum_{\text{date}_t \le d} a_t \ge 0 \qquad\qquad Q_i(d) = \sum_{\text{date}_t \le d} q_t \ge 0
+    $$
+
+    Qui $a_t$ è l'importo di cassa di ogni transazione $t$ nella valuta $c$, e $q_t$ la quantità di ogni transazione dell'asset $i$. La liquidità in entrata e in uscita nello stesso giorno si compensa, ma un deposito effettuato successivamente non corregge un giorno che si è già chiuso sotto zero.
+
+    Un salvataggio rifiutato viene mostrato nel workspace sotto *Questa configurazione causa incoerenze nei dati*, con la valuta o l'asset, la data e i link alle righe del workspace coinvolte.
+
+---
+
+## 🤝 Condividi il broker
+
+La colonna di destra contiene il pannello **Condividi broker**; anche **Condividi broker** nella barra degli strumenti ti porta qui. Solo un proprietario può modificarlo: tutti gli altri lo vedono in sola lettura.
+
+Per concedere l'accesso a qualcuno:
+
+1. Fai clic su **+** (**Aggiungi utente**) sotto il grafico di proprietà e trova la persona **tramite nome utente**.
+2. Scegli il **Ruolo** — **visualizzatore** per impostazione predefinita, **editor** o **proprietario** — e, per un proprietario, la **Quota di proprietà %**. Poi fai clic su **Aggiungi utente**.
+3. Fai clic su **Salva configurazione**: nulla cambia prima che tu lo faccia.
+
+Salva prima di cambiare scheda: nella scheda Info, le modifiche non salvate vengono perse senza chiedere.
+
+Sotto **Il tuo accesso** puoi anche **Abbandona broker**, oppure **Passa a visualizzatore** se sei un editor. I ruoli e le quote di proprietà sono spiegati in [Condivisione del broker](sharing.md).
+
+---
+
+## 🔗 Correlati
+
+- 🧠 **[AI Export del broker](../ai-export/broker.md)** — **AI Export** si trova nella barra degli strumenti del broker e funziona da ogni scheda.
+- 🏦 **[Broker](index.md)** — creazione di un broker e dei suoi campi opzionali.

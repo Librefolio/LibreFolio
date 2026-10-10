@@ -1,65 +1,68 @@
-# 📉 Graphique Interactif
+# 📉 Graphique interactif
 
-Le cœur de la page Détails de la Paire — un graphique complet **propulsé par ECharts** qui vous permet de visualiser l'historique des taux de change grâce à de puissants outils interactifs.
+Le cœur de la page de détail d'une paire : l'historique du taux de la paire sur la période sélectionnée.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Graphique Détails FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Graphique de détail FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔀 Modes d'Affichage
+## 🔀 Vue Abs ou en %
 
-Basculez entre deux modes d'affichage à l'aide de la barre d'outils :
+Basculez avec **Abs** / **%** dans le coin supérieur gauche du graphique ; la page s'ouvre en vue %.
 
-- 📈 **Absolu** — Affiche les valeurs brutes du taux de change (ex: 1 EUR = 1,0845 USD). Idéal pour voir les niveaux de taux réels.
-- 📊 **Pourcentage (%)** — Affiche la variation en pourcentage depuis le premier point de données visible. Idéal pour comparer les mouvements relatifs et superposer plusieurs signaux.
-
-Lors du passage au mode %, tous les signaux superposés sont également recalculés en pourcentages à partir de leurs points de départ respectifs.
+- 📊 **%** — la variation depuis le premier jour de la période. Les superpositions partent elles aussi
+  de 0 %, ce qui permet de comparer leurs évolutions d'un coup d'œil.
+- 📈 **Abs** — le taux lui-même, par ex. 1 EUR = 1.0845 USD.
 
 ---
 
-## 🔍 Navigation & Zoom
+## 🔍 Zoom, déplacement et période
 
-| Action | Bureau | Mobile |
+| Action | Ordinateur | Mobile |
 |--------|---------|--------|
-| **Déplacement** | Clic + glisser | Toucher + glisser |
-| **Zoom avant** | Molette haut | Pincer vers l'extérieur |
-| **Zoom arrière** | Molette bas | Pincer vers l'intérieur |
-| **Réinitialiser le zoom** | Double-clic | Double-appui |
+| **Zoom** | Molette de la souris | Pincement |
+| **Déplacement** | Cliquer et glisser | Glisser avec deux doigts (un doigt fait défiler la page) |
 
-Vous pouvez également utiliser les **préréglages de plage temporelle** (1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX) ou sélectionner une plage de dates **Personnalisée** pour accéder rapidement à des périodes spécifiques. Lorsque la barre d'outils a de l'espace libre, des **préréglages de remplissage** supplémentaires apparaissent pour l'occuper — 3Y, 5Y, 10Y aux côtés des préréglages de durée, et WTD, MTD, QTD aux côtés de YTD.
+- **Période** : les préréglages **1W** à **2Y**, **YTD** et **Tout**, ou **Personnalisé** (un nombre
+  de jours, de semaines, de mois ou d'années en arrière à partir d'aujourd'hui) ; cliquez sur les dates pour
+  les choisir dans un calendrier. D'autres préréglages apparaissent lorsque la barre d'outils dispose
+  de suffisamment de place. Les pages d'un même onglet de navigateur partagent la période.
+- Sur une période longue, le graphique regroupe les taux par semaine ou par mois et affiche un badge
+  **Hebdomadaire** ou **Mensuel** : zoomez pour obtenir les taux quotidiens.
+- Sur un écran étroit, l'axe affiche moins de dates, et des dates plus courtes ; la première et la dernière
+  restent toujours visibles.
 
-!!! info "Disponibilité des données"
+??? info "📅 Historique plus court que la période — quand le graphique commence plus tard"
 
-    Si la plage temporelle sélectionnée dépasse les données disponibles, LibreFolio affiche tout ce qui est accessible. Utilisez **Sync** pour tenter de récupérer des données plus anciennes auprès du fournisseur — mais notez que certains fournisseurs ont une couverture historique limitée.
+    Une bannière indique la date à partir de laquelle les données sont disponibles. **Sync** peut
+    récupérer des taux plus anciens, si le fournisseur les publie ; sinon, saisissez-les dans
+    l'[éditeur de données](data-editor.md).
 
 ---
 
 ## 💬 Infobulle
 
-Survolez n'importe quel point du graphique pour voir :
+Survolez le graphique, ou touchez-le sur mobile, pour voir :
 
-- 📅 La **date**
-- 💱 Le **taux de change** avec une précision complète
-- 📊 La **variation en pourcentage** par rapport au point de données précédent
-
----
-
-## 🧰 Barre d'Outils
-
-La barre d'outils du graphique permet un accès rapide à :
-
-- 📊 **Interrupteur du mode d'affichage** — Absolu / Pourcentage
-- ⏱️ **Plage temporelle** — 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX, Personnalisée (plus les préréglages de remplissage 3Y/5Y/10Y et WTD/MTD/QTD quand la barre d'outils a de la place)
-- 📈 **[Signaux](signals.md)** — Activer/désactiver les superpositions d'indicateurs techniques
-- 📏 **[Mesures](measures.md)** — Outil de mesure par clics successifs
-- ✏️ **[Éditeur de données](data-editor.md)** — Modifier des points de données individuels
-- ⚙️ **[Paramètres du graphique](../chart-settings.md)** — Personnalisation visuelle
+- 📅 la **date** (ou la semaine ou le mois, lorsque le graphique regroupe les taux) ;
+- 💱 le **taux** et la valeur de chaque superposition ;
+- 📊 la **variation depuis le début de la période** : Δ et % en vue Abs, % en vue % ;
+- ⚠️ **Obsolète : N jour(s) d'ancienneté** les jours sans nouveau taux, comme les week-ends et les jours fériés.
 
 ---
 
-## 🔗 Liens connexes
+## 🧰 Boutons du graphique
 
-- ⚙️ **[Paramètres du graphique](../chart-settings.md)** — Personnaliser les couleurs, la largeur des lignes, le remplissage de zone, la grille
-- 📈 **[Signaux](signals.md)** — Superposer des indicateurs techniques sur le graphique
+- 📏 **Mesure** — voir [Mesures](measures.md).
+- ✏️ **Modifier les taux** — voir [éditeur de données](data-editor.md).
+- ⚙️ **Esthétique** — couleurs, remplissage, grille et plages d'axes, comme dans [paramètres du graphique](../chart-settings.md).
+- 📊 Le panneau **Signaux** au-dessus du graphique — voir [Signaux](signals.md).
+
+---
+
+## 🔗 Voir aussi
+
+- ⚙️ **[paramètres du graphique](../chart-settings.md)** — Apparence du graphique et signaux de superposition
+- 📈 **[Signaux](signals.md)** — Indicateurs techniques sur le graphique

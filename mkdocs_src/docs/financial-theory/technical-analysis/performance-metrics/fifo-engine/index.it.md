@@ -2,7 +2,7 @@
 
 ## 💡 Panoramica
 
-Mentre il [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md) fonde ogni acquisizione di una posizione in un'unica media mobile, il motore FIFO di LibreFolio tiene traccia dei **lotti individuali** — uno per lotto di acquisizione — attraverso il loro intero ciclo di vita: apertura, chiusure parziali, trasferimenti tra broker, frazionamenti ed eventuale chiusura totale.
+Mentre il [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md) fonde ogni acquisizione di una posizione in un'unica media mobile, il motore FIFO di LibreFolio tiene traccia dei **lotti individuali** — uno per lotto di acquisizione — attraverso il loro intero ciclo di vita: apertura, chiusure parziali, trasferimenti tra broker, split ed eventuale chiusura totale.
 
 Questa pagina descrive il **funzionamento** di quel motore: come i lotti vengono creati, abbinati e chiusi. Per le **metriche** derivate da questo motore (Rendimento Aperto/Totale, ridimensionamento qbq, allocazione del reddito, un esempio pratico), consulta [Analisi dei Lotti FIFO](fifo-lot-analysis.md).
 
@@ -18,16 +18,16 @@ Il motore FIFO è indipendente dal feed dei prezzi. Ricostruisce quantità, lott
 
 ## 🧱 Cos'è un Lotto?
 
-Un **lotto** è un singolo lotto di acquisizione economica per un asset: un singolo ACQUISTO, il residuo aperto di una rettifica di inventario, o un trasferimento in entrata che preserva la sua base di costo originale. Un lotto mantiene la propria identità per tutta la sua vita, anche quando si sposta tra broker o si divide in pezzi.
+Un **lotto** è un singolo lotto di acquisizione economica per un asset: un singolo ACQUISTO, il residuo aperto di una rettifica di inventario, o un trasferimento in entrata che preserva il suo costo di carico originale. Un lotto mantiene la propria identità per tutta la sua vita, anche quando si sposta tra broker o si divide in pezzi.
 
 | Proprietà | Significato |
 |----------|-------------|
 | Direzione | `LONG` (acquistato prima) o `SHORT` (venduto prima, solo dove il broker consente lo short) |
 | Data e broker di apertura | Dove e quando il lotto è stato creato |
-| Quantità e costo originali | Fissati all'apertura, successivamente ridimensionati solo da frazionamenti — mai da trasferimenti |
+| Quantità e costo originali | Fissati all'apertura, successivamente ridimensionati solo dagli split — mai da trasferimenti |
 | Quantità aperta | Quanto del lotto **non** è stato ancora abbinato da una transazione opposta |
 | Custodia | Quale broker (o broker, nel tempo) detiene attualmente la quantità aperta |
-| Prezzo di riferimento | `reference_unit_price` più `reference_price_source` (`exact`, `fallback`, `none`) |
+| Prezzo di riferimento | `reference_unit_price` più `reference_price_source` (`exact`, `fallback`, `unavailable`) |
 
 ---
 
@@ -56,12 +56,12 @@ LibreFolio riproduce ogni transazione per un asset **in ordine cronologico**, cl
 | ACQUISTO | Prima chiude eventuali lotti SHORT aperti su quel broker; eventuale residuo apre un nuovo lotto LONG |
 | VENDITA | Chiude i lotti LONG aperti in ordine FIFO su quel broker; eventuale residuo apre un nuovo lotto SHORT solo dove il broker consente lo short |
 | Rettifica in / out | Stessa logica di abbinamento di ACQUISTO/VENDITA, a costo zero |
-| FRAZIONAMENTO | Ridimensiona quantità e costo unitario per ogni lotto aperto dell'asset |
+| SPLIT | Ridimensiona quantità e costo unitario per ogni lotto aperto dell'asset |
 | Trasferimento (partenza / arrivo) | Sposta la custodia della quantità aperta di un lotto da un broker all'altro |
 
 !!! info "Ordinamento dello stesso giorno"
 
-    Quando più eventi cadono nella stessa data, LibreFolio li elabora sempre in un ordine fisso — partenze di trasferimenti, poi arrivi di trasferimenti, poi frazionamenti, poi acquisti/vendite/rettifiche ordinarie — in modo che i trasferimenti e i frazionamenti dello stesso giorno vedano sempre uno stato di custodia coerente.
+    Quando più eventi cadono nella stessa data, LibreFolio li elabora sempre in un ordine fisso — partenze di trasferimenti, poi arrivi di trasferimenti, poi split, poi acquisti/vendite/rettifiche ordinarie — in modo che i trasferimenti e gli split dello stesso giorno vedano sempre uno stato di custodia coerente.
 
 ---
 
@@ -87,9 +87,9 @@ Ecco perché due lotti dello stesso asset, acquistati a tempi e prezzi diversi, 
 
 ---
 
-## ✂️ Frazionamenti — Ridimensionamento Quantità/Prezzo
+## ✂️ Split — Ridimensionamento Quantità/Prezzo
 
-Un frazionamento azionario (o raggruppamento) con rapporto $r$ ridimensiona ogni **frammento attualmente aperto** di ogni lotto interessato:
+Uno split azionario (o raggruppamento) con rapporto $r$ ridimensiona ogni **frammento attualmente aperto** di ogni lotto interessato:
 
 $$
 \text{NuovaQuantità} = \text{Quantità} \times r
@@ -97,7 +97,7 @@ $$
 \text{NuovoCostoUnitario} = \frac{\text{CostoUnitario}}{r}
 $$
 
-Il costo economico della posizione è invariante attraverso un frazionamento — solo la quantità e il costo per unità si muovono, in direzioni opposte, quindi $\text{Quantità} \times \text{CostoUnitario}$ rimane costante per ogni lotto.
+Il costo economico della posizione è invariante attraverso uno split — solo la quantità e il costo per unità si muovono, in direzioni opposte, quindi $\text{Quantità} \times \text{CostoUnitario}$ rimane costante per ogni lotto.
 
 ---
 
@@ -128,6 +128,6 @@ Il risultato complessivo viene quindi contrassegnato come **completo** o **degra
 - 🔬 **[Analisi dei Lotti FIFO](fifo-lot-analysis.md)** — Metriche derivate da questo motore: Rendimento Aperto/Totale per lotto, ridimensionamento qbq, allocazione del reddito, esempio pratico
 - 🧭 **[Risoluzione Prezzi](../portfolio-engine/price-resolution.md)** — Livelli di valutazione usati dal servizio lotti
 - ⚙️ **[Motore di Portafoglio](../index.md)** — Il motore complementare aggregato/basato su PMC e come i due si relazionano
-- 📊 **[Prezzo Medio di Carico (PMC)](../weighted-average-cost.md)** — Base di costo mista a livello di posizione
+- 📊 **[Prezzo Medio di Carico (PMC)](../weighted-average-cost.md)** — Costo di carico misto a livello di posizione
 - 🧬 **[Motore Lotti FIFO (Manuale dello Sviluppatore)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Approfondimento implementativo: classi, dispatch degli eventi, vincoli a livello di codice
 - 📈 **[Panoramica delle Metriche di Performance](../index.md)** — Tutte le metriche di performance a colpo d'occhio

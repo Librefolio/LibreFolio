@@ -27,7 +27,7 @@ La documentación multilingüe (italiano, francés, español) se generó automá
 
 ## 📜 Aspectos Legales y Licencia
 
-LibreFolio es software open-source licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+LibreFolio es software de código abierto licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
 ### 📋 Qué significa esto para ti
 

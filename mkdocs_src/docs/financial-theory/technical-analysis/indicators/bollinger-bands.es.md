@@ -39,8 +39,12 @@ Con $k = 2$, si los rendimientos estuvieran distribuidos normalmente, el precio 
 
 | Parámetro | Clave | Predeterminado | Descripción |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 20 | Ventana de SMA para el valor esperado. |
+| Periodo ($N$) | `period` | 20 | Ventana de SMA para el valor esperado, en sesiones. |
 | Multiplicador ($k$) | `multiplier` | 2 | Número de desviaciones estándar. |
+
+!!! note "Trazadas también en los días de cierre"
+
+    Las bandas solo tienen valor en las sesiones, mientras que el eje de fechas del gráfico recorre todos los días del calendario. En un fin de semana o un festivo, la banda sombreada se traza en línea recta desde la última sesión anterior hasta la primera posterior, igual que la banda media, de modo que no se interrumpe: el tramo de unión solo da forma al relleno y no tiene ningún valor propio.
 
 ---
 

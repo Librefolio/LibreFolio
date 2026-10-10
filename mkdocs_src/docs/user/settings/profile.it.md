@@ -18,6 +18,13 @@ Passa il mouse sull'avatar (mentre la scheda è sbloccata) e fai clic sull'overl
 
 L'avatar viene salvato immediatamente e viene utilizzato in tutta l'app ovunque venga mostrata la tua identità: barra laterale, condivisione dei broker ed elenchi dei collaboratori.
 
+!!! note "Si può impostare anche dalla pagina di Benvenuto"
+
+    I nuovi account possono scegliere la stessa immagine una volta, durante la **[configurazione
+    iniziale al primo accesso](../getting-started.md#welcome-setup)**: è lo
+    stesso selettore, solo raggiunto da un'altra schermata. Se salti quel passaggio, come avatar
+    restano le tue iniziali; puoi sempre aggiungere o cambiare l'immagine più tardi da qui.
+
 ## ✏️ Nome utente, Email e Account creato
 
 - **Nome utente** e **Email** sono modificabili (è necessario sbloccare la scheda). Le modifiche vengono applicate subito alle tue credenziali di accesso.
@@ -41,11 +48,18 @@ Dopo la conferma, la tua sessione rimane attiva: non devi accedere di nuovo.
 
 ### 🗑️ Elimina account
 
-Il pulsante **Elimina account** rimuove definitivamente il tuo utente e tutto ciò che possiede. Per confermare, devi digitare il tuo **nome utente** nella finestra di dialogo. L'eliminazione è immediata: vieni disconnesso e riportato alla pagina di accesso.
+Il pulsante **Elimina account** rimuove definitivamente il tuo account e le sue impostazioni. Per confermare, devi digitare il tuo **nome utente** nella finestra di dialogo. L'eliminazione è immediata: vieni disconnesso e riportato alla pagina di accesso.
+
+I tuoi broker seguono la stessa regola dell'[abbandono di un broker condiviso](../brokers/sharing.md):
+
+- un broker di cui sei l'**unico Proprietario** viene eliminato, con tutte le sue transazioni e i file dei report importati — anche per gli utenti con cui lo hai condiviso;
+- ogni altro broker resta ai suoi altri utenti: viene rimosso solo il tuo accesso.
+
+Se l'eliminazione non riesce per un motivo tecnico, non viene eliminato nulla.
 
 !!! warning "Irreversibile"
 
-    L'eliminazione dell'account non può essere annullata: i tuoi broker, le transazioni e le impostazioni vengono rimossi insieme all'account. Se sei l'**unico amministratore** dell'istanza, l'eliminazione viene rifiutata: promuovi prima un altro utente.
+    L'eliminazione dell'account non può essere annullata. Se sei l'**unico amministratore** dell'istanza, l'eliminazione viene rifiutata: promuovi prima un altro utente.
 
 ---
 
