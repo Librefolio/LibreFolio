@@ -1,12 +1,12 @@
 # Piano — fase 00, 37: i plugin BRIM di Scalable Capital (broker e conto deposito)
 
-> **Stato**: 🚧 in esecuzione dal 2026-10-09. Avanzamento in §18.
+> **Stato**: ✅ chiuso il 2026-10-10. Integrato in `dev_release2` col treno 30 (merge `262339501`; `dev_release2` = `d59762e0a`). Avanzamento e chiusura in §18. La cartella si archivia dopo il secondo giro di traduzioni di M.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), con le decisioni del developer (§1) e l'autorizzazione testuale (§0).
 > - **Workstream S**. Ramo `e-alfy-s-export-scalable-via-chrome`, base `3cceb4f90` (treno 24b, fast-forward del developer, verificata pulita il 2026-10-09). L'analisi è stata fatta su `1ead733f2` (treno 23).
 > - **Corsia**: `--test-port 6163 --data-dir /tmp/librefolio-r2-s`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`; un comando alla volta. Mai le porte 6040, 6041 e 6150.
 > - **Riepilogo della fase dell'esportatore**: [`recap-phase00ScalableExporter.md`](recap-phase00ScalableExporter.md), controllato dal coordinatore.
-> - **Repo esterno**: `Librefolio/librefolio-exporter`, estensione Chrome MV3; v1.0.0 rilasciata, 1.0.1 in questo piano (§5).
+> - **Repo esterno**: `Librefolio/librefolio-exporter`, estensione Chrome MV3; v1.0.0 e v1.0.1 rilasciate; la 1.0.1 viene da questo piano (§5; §18, passo 2).
 > - **Rilascio**: 1.2.0, se tutto è integrato entro martedì 13/10 (decisione del developer).
 
 ## 0. Autorizzazione (2026-10-09)
@@ -734,3 +734,81 @@ Altre superfici:
 ### Passo 12e — Spazi non divisibili in francese ✅ (2026-10-10)
 
 > **Note implementazione**: come in spagnolo, U+00A0 tra un numero o un segnaposto e «%», in 24 valori di `fr.json` via `dev.py i18n update` (le 3 voci già corrette usavano lo stesso carattere). Restano le 9 etichette come «P&L %», con lo stesso criterio dello spagnolo.
+
+### Integrazione — treno 30 ✅ (2026-10-10)
+
+> **Commit**:
+> - Il CP5 è `d5c649e9f` (icone), `1a4fe32a4` (coppie di titoli, spec del lotto 40, journal) e `3efa748cd` (`fr.json`), con i messaggi proposti.
+> - Il merge `262339501` («merge(s): S into dev_release2 for train 30», genitori `e32f47133` e `3efa748cd`) porta in `dev_release2` **tutto il ramo S, dal CP1 al CP5**: nessun checkpoint era entrato prima.
+> - Seguono due commit del coordinatore: `13de4e401` (backlog 38 e indice) e `d59762e0a` (CHANGELOG del treno 30).
+> - La worktree è avanzata a `d59762e0a`, pulita.
+>
+> **Verifiche in sola lettura**:
+> - A `3efa748cd` i 20 blob del CP5 coincidono con il manifest consegnato.
+> - In `d5c649e9f` coincide la fotografia intermedia del runner.
+> - I percorsi di ogni commit coincidono con le liste C1, C2 e C3.
+>
+> **Cosa è cambiato dopo la validazione del CP5**: fra `3efa748cd` e `d59762e0a` cambiano 507 file.
+> - Sono il treno 29 di M (traduzioni in `mkdocs_src/`, pipeline aphra), più `dev.py`, `scripts/test_runner/_backend_utils.py` e `test_translation_cache.py`.
+> - Nessun file del frontend né di `backend/app`: le suite del CP5 valgono anche per la revisione combinata.
+> - Delle mie superfici, il treno 29 tocca solo `mkdocs.yml` (unito da git) e le traduzioni di `user/brokers/index`.
+>
+> **Revisione combinata `d59762e0a`**:
+> - `dev.py mkdocs build` strict verde.
+> - `dev.py mkdocs check-links`: 95 link validi, nessuno rotto. Il `#rolling-return` mancante in it/fr/es, segnalato al passo 12b, non c'è più.
+> - Worktree pulita dopo i giri.
+
+### Passo 13 e chiusura ✅ (2026-10-10)
+
+> **Checkpoint**, tutti entrati col treno 30:
+>
+> | Checkpoint | Contenuto | Commit |
+> |---|---|---|
+> | CP1 | passi 1 e 3–10: piano, campioni, contratto ed endpoint, plugin, duplicati, test API, icone, documentazione, modale e traduzioni | `305b80202` |
+> | CP2 | passo 11: suggerimenti nuova + salvata nell'editor in blocco | `94271713b` |
+> | CP3 | passo 13, voci del coordinatore: coppie del Bulk nella guida, descrizione di eToro, avviso del costo | `4347f8962` |
+> | CP4 | passi 12b e 12c: correzioni dalla prova umana, glossario | `2046b7419`, `cd0b404d2`; treno 28 nel ramo con `29fa65366` |
+> | CP5 | passi 12d, 12e e 12f: ordine delle icone, spazi in francese, coppie di titoli e spec del lotto 40 | `d5c649e9f`, `1a4fe32a4`, `3efa748cd` |
+>
+> Fuori dal monorepo: l'esportatore 1.0.1 (`6672084`, tag `v1.0.1`, commit e tag del developer).
+>
+> **Definition of done (§16)**: tutta ✅, senza tagli (§14).
+> - Esportatore 1.0.1 rilasciato; export reale verificato al passo 12.
+> - Plugin: due plugin per tre formati, che si rifiutano a vicenda con un codice. Suite generica, `brim-scalable` e R13 verdi; tre campioni.
+> - Core: `cannot_parse_detail` ed endpoint `plugin-check`; duplicati dei trasferimenti uniti; test API dell'unione e del broker unico.
+> - Modale ed editor in blocco: Vitest ed E2E.
+> - Interfaccia nelle 4 lingue, audit pulito. Icone con `--check` verde.
+> - Documentazione inglese completa.
+>   - CHANGELOG scritto dal coordinatore col treno 30.
+>   - Build strict e `check-links` puliti su `d59762e0a`.
+>   - `translate-validate` eseguito al passo 9.
+> - Prova umana 7/7. Porta 6163 libera.
+>
+> **Ancora aperti, con chi li ha**:
+> - **Traduzioni della documentazione**: M, secondo giro. Riguardano la pagina Scalable, la card dell'indice e la riga «Portal URL» di `user/brokers/index`, che in it/fr/es ha ancora la frase vecchia.
+> - **Archivio della cartella 37**: il coordinatore, dopo il secondo giro di M.
+> - **Note per la devWiki**: il coordinatore le porta all'historian; S non scrive nella devWiki.
+> - **P**:
+>   - `cashAmountsCancel` con la tolleranza di `Number` (lotto 42);
+>   - il nucleo delle coppie incrociate: `transactionTypeStore.ts:352-357`, `_validate_linked_pair` per due righe nuove, `asset_event_id` in `apply_promotes`;
+>   - `fieldEq('cost_basis_override')` in `txPayloadHelpers.ts:204-205`.
+> - **Backlog 38**: il parametro selettore dell'icona del broker; dopo la 1.2.0, la divisione dei cataloghi per namespace.
+> - **P&L per broker** nel grafico Crescita (passo 12): in pausa, per decisione del developer.
+> - **`SearchSelect`**, scelta sbagliata dopo una ricerca: non riprodotto; sospeso dal developer finché non ricapita.
+>
+> **Argomenti per la devWiki**:
+> 1. Un broker con due conti:
+>    - due plugin che si rifiutano a vicenda con un codice;
+>    - il plugin predefinito del broker indica il conto;
+>    - la modale del broker sbagliato vale per tutti i broker.
+> 2. Il CSV Prime: lordo nelle operazioni, netto più tasse nei proventi. L'id della transazione va nella descrizione.
+> 3. Editor in blocco:
+>    - suggerimenti nuova + salvata;
+>    - promemoria al salvataggio;
+>    - «Unisci tutti»;
+>    - duplicati di un trasferimento già unito.
+> 4. Ordine delle icone dei broker: la soglia dei plugin di ripiego è una costante sola, vincolata da un test del backend.
+> 5. Le coppie si confrontano in decimali esatti, come fa il backend.
+> 6. Nomi, descrizioni, avvisi e commenti dei plugin si traducono per codice.
+>
+> **Stato**: FROZEN.
