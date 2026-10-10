@@ -44,6 +44,7 @@ from backend.app.services.pac_allocator.normalize import (
     normalize_rebalancer_plan,
 )
 from backend.app.services.pac_allocator.numeric import ExactRatio
+from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, fx_conversion_request
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
 PAC_FIXTURE = "pac_plan_request.min.v2.json"
@@ -866,8 +867,10 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 76
-    assert len(set(schema_codes)) == 76
+    assert len(schema_codes) == 77
+    assert len(set(schema_codes)) == 77
+    # FX conversion fix: an incoherent cross rate is a closed code of its own.
+    assert "allocation.fx_rate_inconsistent" in schema_codes
     # Contract compaction: the planner reads neither a quote date nor a freshness any more.
     assert not {"allocation.price_date_missing", "allocation.stale_age_negative", "allocation.stale_observation_not_accepted"} & set(schema_codes)
     assert set(W1_NORMALIZER_ISSUE_DEFINITIONS) < set(schema_codes)
@@ -1926,3 +1929,210 @@ def test_defaults_omitted_dump_normalizes_exactly_like_the_explicit_request(
     assert compact != validated.model_dump(mode="json")
 
     assert _normalize_payload(product, compact) == _normalize_payload(product, explicit)
+
+
+# ---------------------------------------------------------------------------
+# FX coherence (FX conversion fix). A declared cross rate that, net of the
+# spread, beats the triangle through the valuation currency is an FX arbitrage:
+# converting c→q and valuing the credit at q→V would be worth more V than c→V
+# directly. The evaluator used to meet it deep in the replay, as a negative
+# spread loss, and raise. The normalizer now refuses it up front with
+# `allocation.fx_rate_inconsistent`.
+# The rule: for every BUY route quoted in q, and every cash-pool currency c ≠ q
+# of its Broker (existing cash, funding routes, SELL-route quote currencies),
+# skip when c or q is the valuation currency V or a needed rate is missing;
+# otherwise it is a violation iff rate(c→q)·(1−spread)·rate(q→V) > rate(c→V),
+# beyond the ten-decimal coherence band pinned further down.
+# The comparison is strict, so the implied rate itself is coherent. The issue
+# is reported once per pair, however many routes reach it.
+# The planner-level cases, and the rounding-residual defect, live in
+# test_pac_planner_planner.py.
+# ---------------------------------------------------------------------------
+
+FX_RATE_INCONSISTENT_CODE: PlannerIssueCode = "allocation.fx_rate_inconsistent"
+# The one issue an incoherent CHF/USD raises (valuation EUR); its params are sorted by name.
+CHF_USD_INCONSISTENT_ISSUE: JsonObject = {
+    "code": FX_RATE_INCONSISTENT_CODE,
+    "severity": "error",
+    "kind": "invalid",
+    "path": _field_wire_path("fx", "fx_rate", "CHF/USD", "rate"),
+    "message_key": FX_RATE_INCONSISTENT_CODE,
+    "params": [
+        {"kind": "currency", "name": "destination_currency", "value": "USD"},
+        {"kind": "id", "name": "pair", "value": "CHF/USD"},
+        {"kind": "currency", "name": "source_currency", "value": "CHF"},
+        {"kind": "currency", "name": "valuation_currency", "value": "EUR"},
+    ],
+}
+
+
+def _issue_dumps(result: PlannerV2NormalizationResult) -> list[JsonObject]:
+    return [issue.model_dump(mode="json") for issue in result.issues]
+
+
+@pytest.mark.parametrize(
+    ("funding_currency", "assets", "cross_rate", "spread"),
+    (
+        # The implied rate itself, 1.06 × 1.085: equality is coherent.
+        pytest.param("CHF", [("USD", "10.00")], "1.1501", "0", id="implied-rate"),
+        # 1.437625 × 0.8 = 1.1501 exactly: the spread brings the cross back onto the triangle.
+        pytest.param("CHF", [("USD", "10.00")], "1.437625", "0.2", id="spread-boundary"),
+        # The quote currency is the valuation currency: CHF→EUR is the direct rate, so there is no triangle.
+        pytest.param("CHF", [("EUR", "10.00")], "1.16", "0", id="quote-is-valuation"),
+        # An incoherent CHF/USD that no conversion of this plan uses is not reported.
+        pytest.param("EUR", [("EUR", "10.00")], "1.1502", "0", id="unused-cross-rate"),
+    ),
+)
+def test_coherent_or_unused_cross_rate_is_ready(
+    funding_currency: str,
+    assets: list[tuple[str, str]],
+    cross_rate: str,
+    spread: str,
+) -> None:
+    payload = fx_conversion_request(
+        f"coherent-{funding_currency}-{cross_rate}-{spread}",
+        funding_currency=funding_currency,
+        assets=assets,
+        fx_rates={**FX_TRIANGLE, "CHF/USD": cross_rate},
+        fx_spread_rate=spread,
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "ready"
+    assert result.issues == ()
+
+
+def test_cross_rate_just_beyond_the_spread_is_one_typed_invalid_issue() -> None:
+    # One millionth above the boundary: 1.437626 × 0.8 / 1.085 > 1.06.
+    payload = fx_conversion_request(
+        "beyond-the-spread",
+        funding_currency="CHF",
+        assets=[("USD", "10.00")],
+        fx_rates={**FX_TRIANGLE, "CHF/USD": "1.437626"},
+        fx_spread_rate="0.2",
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "invalid"
+    assert result.normalized is None
+    assert _issue_dumps(result) == [CHF_USD_INCONSISTENT_ISSUE]
+
+
+# The coherence band. A stored rate carries ten decimals, so a cross rate cannot
+# always hit the triangle exactly: a cross just above it, within half a unit of
+# the tenth decimal on each of the three stored rates, is coherent, and the
+# conversion then plans at the triangle (the evaluator suite pins that rate).
+# RON→USD through EUR: 1.085 / 4.97 = 31/142 = 0.21830985915…
+RON_USD_INCONSISTENT_ISSUE: JsonObject = {
+    "code": FX_RATE_INCONSISTENT_CODE,
+    "severity": "error",
+    "kind": "invalid",
+    "path": _field_wire_path("fx", "fx_rate", "RON/USD", "rate"),
+    "message_key": FX_RATE_INCONSISTENT_CODE,
+    "params": [
+        {"kind": "currency", "name": "destination_currency", "value": "USD"},
+        {"kind": "id", "name": "pair", "value": "RON/USD"},
+        {"kind": "currency", "name": "source_currency", "value": "RON"},
+        {"kind": "currency", "name": "valuation_currency", "value": "EUR"},
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("cross_rate", "availability", "issues"),
+    (
+        # The triangle rounded at the tenth decimal: relatively 2.1e-10 above it, inside the 2.9e-10 band.
+        pytest.param("0.2183098592", "ready", [], id="above-triangle-inside-band"),
+        # One unit of the tenth decimal more: relatively 6.6e-10 above the triangle, beyond the band.
+        pytest.param("0.2183098593", "invalid", [RON_USD_INCONSISTENT_ISSUE], id="above-triangle-beyond-band"),
+        # The triangle truncated at the tenth decimal: below it, coherent with or without the band.
+        pytest.param("0.2183098591", "ready", [], id="below-triangle"),
+    ),
+)
+def test_cross_rate_within_the_ten_decimal_band_of_the_triangle_is_coherent(
+    cross_rate: str,
+    availability: str,
+    issues: list[JsonObject],
+) -> None:
+    payload = fx_conversion_request(
+        f"ron-usd-band-{cross_rate}",
+        funding_currency="RON",
+        assets=[("USD", "21.83")],
+        fx_rates={"EUR/RON": "4.97", "EUR/USD": "1.085", "RON/USD": cross_rate},
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == availability
+    assert _issue_dumps(result) == issues
+    assert (result.normalized is None) == (availability == "invalid")
+
+
+def test_missing_cross_rate_is_reported_missing_and_not_also_inconsistent() -> None:
+    payload = fx_conversion_request(
+        "missing-cross-rate",
+        funding_currency="CHF",
+        assets=[("USD", "10.00")],
+        fx_rates=dict(FX_TRIANGLE),
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert result.availability == "needs_input"
+    assert tuple(issue.code for issue in result.issues) == ("allocation.fx_rate_missing",)
+
+
+def test_incoherent_cross_rate_is_reported_once_for_its_pair() -> None:
+    # Two USD-quoted Assets, two BUY routes reaching the same CHF→USD conversion: one issue.
+    payload = fx_conversion_request(
+        "two-routes-one-pair",
+        funding_currency="CHF",
+        assets=[("USD", "10.00"), ("USD", "20.00")],
+        fx_rates={**FX_TRIANGLE, "CHF/USD": "1.1502"},
+    )
+
+    result = _normalize_payload("pac", payload)
+
+    assert _single_issue(result, FX_RATE_INCONSISTENT_CODE).model_dump(mode="json") == CHF_USD_INCONSISTENT_ISSUE
+
+
+def _rebalancer_payload_funded_in_chf(cross_rate: str) -> JsonObject:
+    payload = _ready_rebalancer_payload()
+    for contribution in payload["contributions"]:
+        contribution["amount"]["currency"] = "CHF"
+    for route in payload["funding_routes"]:
+        route["currency"] = "CHF"
+        if route.get("transfer_cap") is not None:
+            route["transfer_cap"]["currency"] = "CHF"
+    payload["fx_rates"] = {**FX_TRIANGLE, "CHF/USD": cross_rate}
+    return payload
+
+
+def test_rebalancer_incoherent_cross_rate_is_one_invalid_issue() -> None:
+    # The violating route is route-c-beta-buy: broker-beta, funded in CHF, buys the USD-quoted asset-c.
+    result = _normalize_payload("rebalancer", _rebalancer_payload_funded_in_chf("1.1502"))
+
+    issue = _single_issue(result, FX_RATE_INCONSISTENT_CODE)
+    assert result.availability == "invalid"
+    assert result.normalized is None
+    assert _issue_wire_path(issue)["entity_id"] == "CHF/USD"
+    assert issue.model_dump(mode="json") == CHF_USD_INCONSISTENT_ISSUE
+
+
+def test_rebalancer_coherent_cross_rate_is_ready() -> None:
+    result = _normalize_payload("rebalancer", _rebalancer_payload_funded_in_chf("1.1501"))
+
+    assert result.availability == "ready"
+    assert result.issues == ()
+
+
+def test_fx_rate_inconsistent_has_an_explicit_w1_definition() -> None:
+    # Resolved inside the test, never at import: an unknown code must fail this test, not collection.
+    definition = normalizer_issue_definition(FX_RATE_INCONSISTENT_CODE)
+
+    assert definition.code == FX_RATE_INCONSISTENT_CODE
+    assert definition.kind == "invalid"
+    assert definition.severity == "error"
+    assert definition.producer == "w1_normalizer"

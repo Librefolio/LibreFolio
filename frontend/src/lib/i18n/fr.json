@@ -434,7 +434,11 @@
     "serverUnreachable": {
       "title": "Le serveur ne répond pas",
       "body": "Cette page reste ouverte et votre session n'a pas été fermée. Réessayez dans un instant."
-    }
+    },
+    "invalidCredentials": "Nom d'utilisateur ou mot de passe incorrect",
+    "invalidInput": "Données non valides",
+    "loginFailed": "La connexion a échoué",
+    "accountDisabled": "Ce compte est désactivé : demandez à un administrateur de le réactiver."
   },
   "importWizard": {
     "title": "Importer des Transactions",
@@ -467,7 +471,7 @@
     "allConfigured": "Tous les fichiers configurés",
     "selectPlugin": "Choisir un plugin…",
     "extensionError": "Type de fichier non supporté : {ext}. Acceptés : .csv, .xlsx, .xls",
-    "unresolvedCount": "{n} actifs non résolus",
+    "unresolvedCount": "{n, plural, one {# actif non résolu} other {# actifs non résolus}}",
     "warningsCount": "{n} avertissements",
     "importedCount": "{n} transactions importées dans l'éditeur",
     "resolveAssets": "Résoudre les actifs",
@@ -2053,7 +2057,8 @@
       "scheduler_current_price_frequency_minutes": "Fréquence de Mise à Jour des Prix",
       "scheduler_history_sync_times": "Horaires de Synchronisation Historique",
       "scheduler_history_sync_days": "Jours de Synchronisation Historique",
-      "scheduler_history_sync_horizon_days": "Horizon de Récupération"
+      "scheduler_history_sync_horizon_days": "Horizon de Récupération",
+      "scheduler_enabled": "Planificateur Activé"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Durée de validité d'une session utilisateur avant reconnexion",
@@ -2065,7 +2070,7 @@
       "default_theme": "Thème par défaut pour les nouveaux utilisateurs",
       "scheduler_enabled": "Activer ou désactiver le planificateur automatique de données de marché",
       "scheduler_current_price_frequency_minutes": "Fréquence de mise à jour des prix actuels (en minutes)",
-      "scheduler_history_sync_times": "Heures auxquelles les données historiques sont synchronisées (heure du serveur)",
+      "scheduler_history_sync_times": "Heures auxquelles les données historiques sont synchronisées (dans le fuseau horaire du planificateur)",
       "scheduler_history_sync_days": "Jours de la semaine pendant lesquels les données historiques sont synchronisées",
       "scheduler_history_sync_horizon_days": "Nombre de jours en arrière pour chercher les données historiques manquantes"
     },
@@ -2094,7 +2099,7 @@
         "currentPriceFreqHint": "Fréquence de mise à jour des prix (1–1440 minutes)",
         "currentPriceFreqSuffix": "minutes",
         "historyTimesLabel": "Heures de synchronisation",
-        "historyTimesHint": "Heures auxquelles la synchronisation quotidienne s'exécute (heure du serveur)",
+        "historyTimesHint": "Heures auxquelles la synchronisation quotidienne s'exécute (dans le fuseau horaire du planificateur)",
         "historyTimesAdd": "Ajouter un horaire",
         "historyDaysLabel": "Jours de synchronisation",
         "historyDaysHint": "Jours de la semaine pendant lesquels la synchronisation s'exécute",
@@ -4270,7 +4275,8 @@
             "valuation_currency_missing": "La devise de valorisation est manquante.",
             "wac_fx_missing": "Le taux de change nécessaire au coût moyen est manquant.",
             "wac_missing": "Le coût moyen est manquant.",
-            "zero_selected_funding": "Les liquidités sélectionnées sont nulles."
+            "zero_selected_funding": "Les liquidités sélectionnées sont nulles.",
+            "fx_rate_inconsistent": "Ce taux de change ne concorde pas avec les taux de {source_currency} et {destination_currency} par rapport à {valuation_currency} : convertir {source_currency} en {destination_currency} créerait de la valeur. Alignez les taux ou définissez un spread de conversion."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Cet outil n’accepte pas de positions existantes.",
@@ -5416,5 +5422,22 @@
     "deselectVisible": "Désélectionner les visibles",
     "confirm": "Ajouter {count}",
     "allSelected": "Tous les actifs sont déjà dans la sélection."
+  },
+  "connectionSecurity": {
+    "level": {
+      "secure": "Connexion : sécurisée",
+      "local": "Connexion : réseau local",
+      "insecure": "Connexion : non sécurisée"
+    },
+    "reason": {
+      "https": "Chiffrée en HTTPS : votre navigateur considère cette connexion comme sécurisée.",
+      "localhost": "Vous êtes sur le serveur lui-même : le trafic ne quitte pas cet ordinateur.",
+      "vpn": "Chiffrée par le VPN (Tailscale) entre votre appareil et le serveur.",
+      "lan": "Réseau local sans chiffrement : toute personne sur le même réseau, par exemple le Wi-Fi, peut lire le trafic. Pour une sécurité maximale, utilisez l'adresse HTTPS aussi à la maison.",
+      "uncertain": "Incertaine : l'adresse que vous avez ouverte et la source que voit le serveur ne concordent pas, par exemple un nom public atteint par un DNS split ou un proxy local. Le trafic n'est pas chiffré : utilisez l'adresse HTTPS.",
+      "internet": "Non chiffrée sur Internet : les mots de passe et les données circulent en clair."
+    },
+    "cookieWarning": "Votre navigateur utilise HTTPS, mais le cookie de session n'est pas marqué Secure. Faites envoyer X-Forwarded-Proto par le reverse proxy (Nginx : proxy_set_header X-Forwarded-Proto $scheme;), ou remettez SESSION_COOKIE_SECURE sur auto s'il vaut never.",
+    "learnMore": "Comment se connecter en toute sécurité"
   }
 }

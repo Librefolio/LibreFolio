@@ -42,8 +42,8 @@ database. All data is synthetic. Amounts and quantities are compared as numbers,
 never as strings, and the proposals of a checkpoint as a multiset: the interface
 fixes neither their order nor the scale of their decimals.
 
-Design: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.6, §11.3 (scenario 8), D-S24
-Plan: LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A3
+Design: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.6, §11.3 (scenario 8), D-S24
+Plan: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A3
 """
 
 from __future__ import annotations

@@ -144,8 +144,7 @@ RUN chmod +x /entrypoint.sh
 ENV HOST=0.0.0.0 \
     PORT=6040 \
     LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker \
-    LOG_LEVEL=INFO \
-    PORTFOLIO_BASE_CURRENCY=EUR
+    LOG_LEVEL=INFO
 
 EXPOSE 6040 6041
 

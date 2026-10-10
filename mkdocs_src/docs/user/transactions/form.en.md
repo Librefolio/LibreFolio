@@ -36,7 +36,7 @@ A few rules keep entries quick:
     - **Auto** — LibreFolio computes it as a [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md); press **⚡ Validate now** to see it.
     - **Manual** — you type it.
 
-    An Adjustment without a cost basis creates its lot at zero cost, and the form warns you: right for a split or a gift, wrong for shares bought elsewhere. If an exchange rate is missing, the **Sync FX rates** link fetches it.
+    In **Auto**, the average is taken at the sending broker of a transfer, or at the adjustment's own broker. If that broker has no other transaction in the asset up to the date the units come in, there is nothing to average, and the cost is 0 by design: if those units did cost something, open the transaction later and type their cost in **Manual**. In **Manual**, the field cannot stay empty: LibreFolio flags the row and saves nothing until you fill it in or switch to **Auto**. For units that cost nothing, such as a gift, type 0. If an exchange rate is missing, the **Sync FX rates** link fetches it.
 
 ---
 

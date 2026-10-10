@@ -22,8 +22,8 @@ Environment Variables (see .env):
     PORT: Production server port (default: 6040)
     TEST_PORT: Test server port (default: 6041)
     LOG_LEVEL: Logging level (default: INFO)
-    PORTFOLIO_BASE_CURRENCY: Base currency ISO 4217 (default: EUR)
     PREVIEW_CACHE_MAX_MB: Image preview cache size in MB (default: 50)
+    SESSION_COOKIE_SECURE: Secure attribute of the session cookie: auto | always | never (default: auto)
     RISK_SIMULATION_WORKERS: Spawned simulation workers (default: 1)
     RISK_OPTIMIZATION_WORKERS: Spawned optimization workers (default: 1)
     RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600)
@@ -32,8 +32,9 @@ Environment Variables (see .env):
 
 import os
 from pathlib import Path
+from typing import Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
 # =============================================================================
@@ -106,11 +107,17 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
-    # Portfolio
-    PORTFOLIO_BASE_CURRENCY: str = "EUR"
-
     # Image Preview Cache
     PREVIEW_CACHE_MAX_MB: int = 50
+
+    # Session cookie Secure attribute: "auto" (on HTTPS, seen directly or as the first
+    # X-Forwarded-Proto value of a reverse proxy), "always", or "never" (the only way off over HTTPS)
+    SESSION_COOKIE_SECURE: Literal["auto", "always", "never"] = "auto"
+
+    @field_validator("SESSION_COOKIE_SECURE", mode="before")
+    @classmethod
+    def _cookie_secure_mode(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
     # Native quantitative engines
     RISK_SIMULATION_WORKERS: int = Field(1, ge=1, le=8)

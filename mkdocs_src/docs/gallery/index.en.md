@@ -22,6 +22,7 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
 !!! tip "What You'll See"
 
     - **Authentication**: Secure login with password strength meter
+    - **Security**: Connection security indicator in the sidebar, open on its level and the reason for it
     - **Onboarding**: First-run welcome setup, guided Core tour and contextual guides, replayable from Settings
     - **Dashboard**: Quick overview of your portfolio
     - **Brokers**: Manage multiple brokerage accounts

@@ -26,6 +26,16 @@
  *     projection. Over valid, invalid and absent values, with privacy off and on, the count is the
  *     count of the shown text: the twin property.
  *
+ * G3, below the minor unit. A nonzero amount whose rounding at the minor unit would give zero is
+ * never shown as zero (`0`, `≈0.00`, `≈-0.00`): it keeps about two significant digits instead,
+ * rounded half away from zero at one place past its first nonzero fraction digit (at most twenty
+ * places), with `≈` only when that rounding changed the value. A ledger rounding residual of
+ * -47/21700 EUR reads `≈-0.0022`, a residual of exactly -0.0021 reads `-0.0021`. A true zero,
+ * `-0.00` included, is an exact `0`, and an amount whose rounding at the minor unit is not zero is
+ * shown as before. The rule belongs to `exactMoneyDisplay` and the money formatters built on it.
+ * An L2 distance and a raw solver number are not adaptive: `0.004` there is still `≈0`, and two
+ * guards pin that.
+ *
  * Expectations. The host locale decides digits, separators and grouping, so an expected amount
  * is never a literal. It is the output of the shared `formatCurrencyAmountPlain/Html` for the
  * rounded value, called with the options the adapter must pass (personal, with the currency's
@@ -181,7 +191,7 @@ describe('exactMoneyDisplay — the text at the minor unit, and whether the roun
         expect(exactMoneyDisplay(finite('1.005'), 2), 'half away from zero, not the float 1.00').toEqual({text: '1.01', approx: true});
         expect(exactMoneyDisplay(finite('10.5'), 2)).toEqual({text: '10.5', approx: false});
         expect(exactMoneyDisplay(finite('10.50'), 2), 'dropping trailing zeros is not a rounding').toEqual({text: '10.5', approx: false});
-        expect(exactMoneyDisplay(finite('-0.004'), 2), 'never -0').toEqual({text: '0', approx: true});
+        expect(exactMoneyDisplay(finite('-0.004'), 2), 'a nonzero amount below the minor unit keeps its digits').toEqual({text: '-0.004', approx: false});
         expect(exactMoneyDisplay(finite('1234.5'), 0), 'no minor unit, as JPY').toEqual({text: '1235', approx: true});
         expect(exactMoneyDisplay(finite('1234'), 0)).toEqual({text: '1234', approx: false});
     });
@@ -210,6 +220,28 @@ describe('exactMoneyDisplay — the text at the minor unit, and whether the roun
         expect(exactMoneyDisplay(finite('1e3'), 2)).toEqual({text: '1e3', approx: false});
         expect(formatExactMoneyPlain(money(finite('1e3')), {digits})).toBe(EMPTY);
         expect(formatExactMoneyPlain(money(ratio('x', '3', 'abc')), {digits}), 'no ≈ on an empty cell').toBe(EMPTY);
+    });
+
+    // G3. A PAC funded in another currency posts a rounding residual of a fraction of a cent: at the
+    // minor unit it read ≈0.00, a nonzero amount shown as zero. Every amount below would round to
+    // zero at `places`, so it keeps one place past its first nonzero fraction digit instead.
+    it('G3: keeps about two significant digits of a nonzero amount that would round to zero at the minor unit', () => {
+        expect(exactMoneyDisplay(ratio('-47', '21700', '-0.002166'), 2), 'a ledger rounding residual, -0.0021658…').toEqual({text: '-0.0022', approx: true});
+        expect(exactMoneyDisplay(finite('0.00176'), 2), 'half away from zero at the fourth place').toEqual({text: '0.0018', approx: true});
+        expect(exactMoneyDisplay(finite('-0.003365'), 2), 'half away from zero, on the negative side').toEqual({text: '-0.0034', approx: true});
+        expect(exactMoneyDisplay(finite('-0.0021'), 2), 'already two significant digits: shown as it is').toEqual({text: '-0.0021', approx: false});
+        expect(exactMoneyDisplay(finite('0.00095'), 2), 'the first nonzero digit is the fourth, so five places').toEqual({text: '0.00095', approx: false});
+        expect(exactMoneyDisplay(finite('0.000951'), 2), 'a third significant digit is rounded away').toEqual({text: '0.00095', approx: true});
+        expect(exactMoneyDisplay(ratio('1', '3000', '0.000333'), 2), 'an exact ratio is rounded itself').toEqual({text: '0.00033', approx: true});
+        expect(exactMoneyDisplay(finite('0.4'), 0), 'no minor unit, as JPY: the same rule').toEqual({text: '0.4', approx: false});
+        expect(exactMoneyDisplay(ratio('x', '3', '-0.0021659', 7), 2), 'the fallback on an unreadable ratio follows the rule, and stays approximate').toEqual({text: '-0.0022', approx: true});
+    });
+
+    it('G3 control: a true zero is an exact 0, and an amount that does not round to zero keeps the minor unit', () => {
+        expect(exactMoneyDisplay(finite('0'), 2)).toEqual({text: '0', approx: false});
+        expect(exactMoneyDisplay(finite('-0.00'), 2), 'a negative zero is a true zero, never -0').toEqual({text: '0', approx: false});
+        expect(exactMoneyDisplay(finite('0.005'), 2), 'rounds to the minor unit, not to zero: the rule does not apply').toEqual({text: '0.01', approx: true});
+        expect(exactMoneyDisplay(finite('0.01'), 2)).toEqual({text: '0.01', approx: false});
     });
 });
 
@@ -249,7 +281,7 @@ describe('formatExactMoneyPlain / formatExactMoneyHtml — privacy off', () => {
         expect(exact).not.toContain('≈');
     });
 
-    it('puts ≈ before the sign, and never shows a negative zero', () => {
+    it('puts ≈ before the sign, and shows a nonzero amount below the minor unit with its own digits, never as zero', () => {
         const up = formatExactMoneyPlain(money(finite('2.345')), {digits, signed: true});
         expect(up).toBe('≈' + shared(2.35, 'EUR', 2, 2, true));
         expect(up.startsWith('≈+')).toBe(true);
@@ -258,9 +290,25 @@ describe('formatExactMoneyPlain / formatExactMoneyHtml — privacy off', () => {
         expect(down).toBe('≈' + shared(-1234.57, 'EUR', 2, 2, true));
         expect(down.startsWith('≈-')).toBe(true);
 
-        const zero = formatExactMoneyPlain(money(finite('-0.004')), {digits, signed: true});
-        expect(zero).toBe('≈' + shared(0, 'EUR', 2, 2, true));
+        // G3: -0.004 EUR is exact at three places, so it is shown as it is: signed, no ≈.
+        const small = formatExactMoneyPlain(money(finite('-0.004')), {digits, signed: true});
+        expect(small).toBe(shared(-0.004, 'EUR', 2, 3, true));
+        expect(small.startsWith('-'), 'a nonzero amount keeps its sign').toBe(true);
+        expect(small).not.toContain('≈');
+        expect(digitsOf(small), 'the third fraction digit is shown, not rounded away').toBe('0004');
+
+        // G3: a rounding residual of -47/21700 EUR, two significant digits, approximate.
+        const residual = formatExactMoneyPlain(money(ratio('-47', '21700', '-0.002166')), {digits, signed: true});
+        expect(residual).toBe('≈' + shared(-0.0022, 'EUR', 2, 4, true));
+        expect(residual.startsWith('≈-')).toBe(true);
+        expect(digitsOf(residual)).toBe('00022');
+
+        // A true zero stays an exact zero: no ≈, and never a negative zero.
+        const zero = formatExactMoneyPlain(money(finite('0')), {digits, signed: true});
+        expect(zero).toBe(shared(0, 'EUR', 2, 2, true));
+        expect(zero).not.toContain('≈');
         expect(zero).not.toContain('-');
+        expect(formatExactMoneyPlain(money(finite('-0.00')), {digits, signed: true}), 'a negative zero is a true zero').toBe(zero);
     });
 
     it("applies the same rule to markup: ≈ in front of the shared formatter's HTML, only when the rounding changed the value", () => {
@@ -286,6 +334,14 @@ describe('formatExactMoneyPlain / formatExactMoneyHtml — privacy on', () => {
         expect(formatExactMoneyPlain(money(finite('1234.5'), 'JPY'), {digits})).toBe(`≈${P} ¥ 🇯🇵 JPY`);
         expect(formatExactMoneyPlain(money(finite('-1234.5678')), {digits, signed: true})).toBe(`≈-${P} € 🇪🇺 EUR`);
         expect(formatExactMoneyPlain(money(finite('2.345')), {digits, signed: true})).toBe(`≈+${P} € 🇪🇺 EUR`);
+    });
+
+    it('G3: masks a nonzero amount below the minor unit with its sign, not as an unsigned zero', () => {
+        privacy(true);
+        // Control: in the same state a true zero masks with no sign, so the sign below comes from the value.
+        expect(formatExactMoneyPlain(money(finite('0')), {digits, signed: true})).toBe(`${P} € 🇪🇺 EUR`);
+
+        expect(formatExactMoneyPlain(money(ratio('-47', '21700', '-0.002166')), {digits, signed: true})).toBe(`≈-${P} € 🇪🇺 EUR`);
     });
 
     it('leaks no digit and no magnitude: amounts four orders of magnitude apart mask to one string', () => {
@@ -367,6 +423,11 @@ describe('formatSolverNumber — a raw solver number, by the unit of its stage',
         privacy(true);
         expect(formatSolverNumber('1234.5678', EUR_MONEY, digits)).toBe(`≈${P} € 🇪🇺 EUR`);
         expect(formatSolverNumber('1234.5', EUR_MONEY, digits)).toBe(`${P} € 🇪🇺 EUR`);
+    });
+
+    it('rounds solver money below the minor unit to zero as before: G3 is not for solver floats, so 0.004 EUR is ≈0', () => {
+        expect(formatSolverNumber('0.004', EUR_MONEY, digits)).toBe('≈' + shared(0, 'EUR', 2));
+        expect(formatSolverNumber('-0.004', EUR_MONEY, digits), 'and never a negative zero').toBe('≈' + shared(0, 'EUR', 2));
     });
 
     it.each([
@@ -466,6 +527,10 @@ describe('formatPlannerL2 — an L2 distance in squared valuation money', () => 
         expect(text).toBe('≈' + plainNumber(12.35) + ' EUR²');
         expect(text).toBe(formatPlannerL2(finite('12.345'), 'EUR'));
         expect(formatSolverNumber('12.5', EUR_SQUARED), 'nothing was rounded').toBe(plainNumber(12.5) + ' EUR²');
+    });
+
+    it('keeps two decimals for a distance below 0.01 too: G3 is not for squared money, so 0.004 EUR² is ≈0', () => {
+        expect(formatPlannerL2(finite('0.004'), 'EUR')).toBe('≈' + plainNumber(0) + ' EUR²');
     });
 
     it('masks the digits with privacy on, keeping ≈ and the squared unit outside', () => {

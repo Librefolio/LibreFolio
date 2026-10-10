@@ -195,13 +195,31 @@ then keeps only this row's issues plus the global ones.
 
 The cost-basis editor is `WacPreviewSection`
 (`frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte`). The form shows it where
-a cost basis applies: on the receiving side of a paired `TRANSFER`, and on an `ADJUSTMENT` — with a
-warning when a positive quantity has neither Auto mode nor a manual value, since the lot would be
-created at zero cost. BUY and SELL do not show it.
+a cost basis applies: on the receiving side of a paired `TRANSFER`, and on an `ADJUSTMENT`. BUY and
+SELL do not show it.
 
 - `costBasisMode` is `'auto'` (the backend computes the weighted average cost) or `'manual'` (the
   user's `cost_basis_override`). In Auto mode the item is sent with `cost_basis_mode: 'auto'` and,
-  when the user picked a WAC currency, the hint `{code, amount: '0'}` as override.
+  once `wacCurrencyHint` holds a currency (the user's pick, the first WAC result's, or the one in
+  the row's sentinel), the hint `{code, amount: '0'}` as override.
+- In Auto mode the backend writes the WAC into `cost_basis_override`
+  (`TransactionService._compute_wac_for_auto_items()` → `compute_wac_iterative()`, as of the row's
+  date): the WAC of the linked partner's broker for a create carrying `link_uuid` (a new `TRANSFER`
+  pair), otherwise of the row's own broker, without the row. When that broker has no other row of
+  the asset up to that date — the transfer's own outgoing leg aside — the WAC is `0`, and the row
+  is saved with a zero cost basis. That is by design (developer decision of 2026-10-09): the user
+  corrects that transaction later if needed. Auto rows skip the required-cost-basis check
+  (`_auto_mode_indices()`); split-linked adjustments and missing FX are covered in
+  [WAC & Cost Basis](../../../backend/transactions/wac.md).
+- In Manual mode, a `TRANSFER` or `ADJUSTMENT` with a positive quantity and no
+  `cost_basis_override` (`TransactionService._requires_cost_basis()`) gets a `costBasisRequired`
+  issue (`validate_cost_basis()`, which skips only the creates that a promote consumes in the same
+  batch). Like any issue, it makes the batch `committed=False`, and `POST /transactions/commit`
+  rolls the whole batch back: the row is not saved. A free acquisition is entered as `0`.
+- Known mismatch: for an `ADJUSTMENT` with a positive quantity, not in Auto mode and with an empty
+  manual field, the form shows `transactions.costBasisOverride.warningAdjustment`
+  (`tx-form-cost-basis-warning`), which says the lot will be created with zero cost. The backend
+  does not create it: it rejects that row with `costBasisRequired`.
 - For validation, `upgradeAutoToDetail()` turns `'auto'` into `'auto-detail'`, so the response's
   `wac_results` carries the WAC with its qualifying transactions. Standalone, the form keeps that
   result in `formWacResult`; inside the bulk workspace it first reads the workspace's own result

@@ -83,7 +83,7 @@
  * that unticks the set must leave its checkbox unticked — Svelte keeps the last `checked` it wrote, and from 'some' to
  * 'none' that value does not change, so the browser's own toggle stays on screen.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0, §14 G.2 and §17.5;
+ * Plan: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F2.0, §14 G.2 and §17.5;
  * step 7: `plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md`, §2 and §4.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';

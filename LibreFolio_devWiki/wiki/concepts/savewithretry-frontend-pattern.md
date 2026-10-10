@@ -15,7 +15,7 @@ others showed inline banners, and several had no error handling at all for edge 
 
 ## Solution
 
-`saveWithRetry(fn, opts)` — a unified helper in `frontend/src/lib/utils/saveWithRetry.ts`.
+`saveWithRetry(fn, opts)` — a unified helper in `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`).
 
 ```typescript
 type SaveResult = { status: 'success'; data: any } | { status: 'error'; message: string };
@@ -95,6 +95,6 @@ This modal has 3 call sites, each wrapped differently:
 
 | Role | Path |
 |------|------|
-| Helper | `frontend/src/lib/utils/saveWithRetry.ts` |
+| Helper | `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`) |
 | AssetModal (complex case) | `frontend/src/lib/components/assets/AssetModal.svelte` |
 | BrokerImportFilesModal (3 call sites) | `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte` |

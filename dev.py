@@ -97,10 +97,9 @@ def check_port_in_use(port: int) -> list:
                     except Exception:
                         processes.append((pid, "unknown"))
         elif platform.system() == "Linux":
-            result = subprocess.run(
-                ["fuser", f"{port}/tcp"],
-                capture_output=True, text=True, stderr=subprocess.DEVNULL
-                )
+            # fuser prints the PIDs on stdout and the "port/tcp:" label on stderr. `capture_output`
+            # cannot be combined with `stderr=`: Python raises ValueError before running anything.
+            result = subprocess.run(["fuser", f"{port}/tcp"], stdout=subprocess.PIPE, text=True, stderr=subprocess.DEVNULL)
             if result.stdout.strip():
                 pids = [int(p) for p in result.stdout.strip().split() if p]
                 for pid in pids:
@@ -152,6 +151,17 @@ def _resolve_server_workers(value) -> int:
     if workers < 0:
         raise ValueError("--workers must be a positive integer, 0, or auto")
     return workers
+
+
+def _ensure_shared_jwt_secret(env: dict) -> None:
+    """Give every uvicorn worker the same JWT secret: a fresh one when ``env`` has none.
+
+    An empty or blank value counts as none: ``JWT_SECRET=`` in .env reaches the environment as ''
+    through pipenv, and each worker would then make its own secret (auth_service), logging users
+    out whenever a request lands on another worker.
+    """
+    if not env.get("JWT_SECRET", "").strip():
+        env["JWT_SECRET"] = secrets.token_urlsafe(64)
 
 
 def cmd_server(args):
@@ -301,7 +311,7 @@ def cmd_server(args):
     # On macOS, Python uses 'spawn' (not fork) for multiprocessing, so each
     # uvicorn worker is a fresh process. Without a shared env var, each worker
     # would generate its own random secret → tokens invalid across workers.
-    env.setdefault("JWT_SECRET", secrets.token_urlsafe(64))
+    _ensure_shared_jwt_secret(env)
 
     # uvicorn closes idle keep-alive connections after 5 s by default. A test
     # client that reuses a socket the server has just closed gets ECONNRESET on
@@ -432,70 +442,110 @@ def cmd_server(args):
 # Backend Commands: Database
 # =============================================================================
 
+def _named_db_file(args) -> tuple[Optional[Path], bool]:
+    """The database file named on the command line, absolute: ``(None, True)`` when none was named.
+
+    A relative path starts at the project root, like ``--data-dir`` (``dev.py`` runs from there).
+    Returns ``(None, False)`` after printing why the path cannot be used.
+    """
+    raw = getattr(args, "path", None)
+    if not raw:
+        return None, True
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    path = path.resolve()
+    # '%' breaks Alembic's config interpolation; '?' and '#' would end the path part of the SQLite URL.
+    if any(char in str(path) for char in "%?#"):
+        print_error(f"Database path cannot contain '%', '?' or '#': {path}")
+        return None, False
+    if path.is_dir():
+        print_error(f"Database path is a directory: {path}")
+        return None, False
+    return path, True
+
+
+def _existing_db_file(args) -> tuple[Optional[Path], bool]:
+    """``_named_db_file``, refusing a file that does not exist: only ``db upgrade`` creates one."""
+    db_file, ok = _named_db_file(args)
+    if ok and db_file is not None and not db_file.is_file():
+        print_error(f"Database not found: {db_file}")
+        return None, False
+    return db_file, ok
+
+
+def _alembic(db_file: Optional[Path], *alembic_args: str) -> list:
+    """``alembic`` on ``db_file`` when one was named, otherwise on the configured database.
+
+    The file reaches ``backend/alembic/env.py`` as ``-x sqlalchemy.url``. An environment variable
+    cannot do it: ``get_settings()`` computes ``DATABASE_URL`` from the data directory and overwrites it.
+    """
+    cmd = [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini"]
+    if db_file is not None:
+        cmd += ["-x", f"sqlalchemy.url=sqlite:///{db_file}"]
+    return [*cmd, *alembic_args]
+
+
 def cmd_db_check(args):
     """Verify CHECK constraints in database."""
-    db_path = args.path or get_database_path()
-    print(Colors.success(f"Checking database constraints: {db_path}"))
-    return run_pipenv(["python", "backend/test_scripts/verify_db_check_constraints.py", db_path])
+    db_file, ok = _existing_db_file(args)
+    if not ok:
+        return 1
+    print(Colors.success(f"Checking database constraints: {db_file or get_database_path()}"))
+    env = {"ALEMBIC_DATABASE_URL": f"sqlite:///{db_file}"} if db_file else None
+    return run_pipenv(["python", "-m", "backend.alembic.check_constraints_hook"], env=env)
 
 
 def cmd_db_current(args):
     """Show current database migration."""
-    db_path = args.path or get_database_path()
-    print(Colors.success(f"Current migration for: {db_path}"))
-
-    env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
-    return run_command_live(
-        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "current"],
-        env=env
-        )
+    db_file, ok = _existing_db_file(args)
+    if not ok:
+        return 1
+    print(Colors.success(f"Current migration for: {db_file or get_database_path()}"))
+    return run_command_live(_alembic(db_file, "current"))
 
 
 def cmd_db_migrate(args):
     """Create a new migration."""
-    db_path = args.path or get_database_path()
+    db_file, ok = _existing_db_file(args)
+    if not ok:
+        return 1
+    db_path = str(db_file or get_database_path())
     if not check_server_running("creating migrations", strict=True, port=get_server_port_for_db(db_path)):
         return 1
 
     message = args.message
 
     print(Colors.success(f"Creating migration: {message}"))
-
-    env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
-    return run_command_live(
-        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "revision", "--autogenerate", "-m", message],
-        env=env
-        )
+    return run_command_live(_alembic(db_file, "revision", "--autogenerate", "-m", message))
 
 
 def cmd_db_upgrade(args):
-    """Apply pending migrations."""
-    db_path = args.path or get_database_path()
+    """Apply pending migrations; a named database file that does not exist yet is created."""
+    db_file, ok = _named_db_file(args)
+    if not ok:
+        return 1
+    db_path = str(db_file or get_database_path())
     if not check_server_running("applying migrations", strict=True, port=get_server_port_for_db(db_path)):
         return 1
 
     print(Colors.success(f"Upgrading database: {db_path}"))
-
-    env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
-    return run_command_live(
-        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
-        env=env
-        )
+    if db_file is not None:
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+    return run_command_live(_alembic(db_file, "upgrade", "head"))
 
 
 def cmd_db_downgrade(args):
     """Rollback one migration."""
-    db_path = args.path or get_database_path()
+    db_file, ok = _existing_db_file(args)
+    if not ok:
+        return 1
+    db_path = str(db_file or get_database_path())
     if not check_server_running("rolling back migrations", strict=True, port=get_server_port_for_db(db_path)):
         return 1
 
     print(Colors.success(f"Downgrading database: {db_path}"))
-
-    env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
-    return run_command_live(
-        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "downgrade", "-1"],
-        env=env
-        )
+    return run_command_live(_alembic(db_file, "downgrade", "-1"))
 
 
 def cmd_db_create_clean(args):
@@ -1727,19 +1777,23 @@ def cmd_docker_status(args):
 def cmd_docker_exec(args):
     """Execute a dev.py command inside the running Docker container.
 
+    The image ships the application, not the development tree: `user`, `db` and
+    `info` work; `test` answers "not available", and `server --test` cannot
+    rebuild the frontend there. `db upgrade` refuses while the server runs, and
+    the server applies the migrations itself at every start.
+
     Examples:
-        ./dev.py docker exec server --test
         ./dev.py docker exec user list
         ./dev.py docker exec user create admin admin@test.com Pass123!
-        ./dev.py docker exec db upgrade
+        ./dev.py docker exec db current
     """
     extra = getattr(args, 'cmd_args', [])
     if not extra:
         print_error("No command specified. Usage: ./dev.py docker exec <command> [args...]")
         print(Colors.info("Examples:"))
-        print(f"  ./dev.py docker exec server --test")
         print(f"  ./dev.py docker exec user list")
         print(f"  ./dev.py docker exec user create admin admin@test.com Pass123!")
+        print(f"  ./dev.py docker exec db current")
         return 1
 
     cmd = ["docker", "compose", "exec", "librefolio", "python", "dev.py"] + extra
@@ -2349,24 +2403,24 @@ Examples:
     db_sub = p.add_subparsers(dest="db_cmd", metavar="action")
 
     db_p = db_sub.add_parser("check", help="Verify CHECK constraints")
-    db_p.add_argument("path", nargs="?", help="Database path (default: app.db)")
+    db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
     db_p.set_defaults(func=cmd_db_check)
 
     db_p = db_sub.add_parser("current", help="Show current migration")
-    db_p.add_argument("path", nargs="?", help="Database path")
+    db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
     db_p.set_defaults(func=cmd_db_current)
 
     db_p = db_sub.add_parser("migrate", help="Create new migration")
     db_p.add_argument("message", help="Migration message")
-    db_p.add_argument("path", nargs="?", help="Database path")
+    db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
     db_p.set_defaults(func=cmd_db_migrate)
 
     db_p = db_sub.add_parser("upgrade", help="Apply pending migrations")
-    db_p.add_argument("path", nargs="?", help="Database path")
+    db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root); created when missing")
     db_p.set_defaults(func=cmd_db_upgrade)
 
     db_p = db_sub.add_parser("downgrade", help="Rollback one migration")
-    db_p.add_argument("path", nargs="?", help="Database path")
+    db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
     db_p.set_defaults(func=cmd_db_downgrade)
 
     db_p = db_sub.add_parser("create-clean", help="Delete DB and recreate with latest migration")
@@ -2564,7 +2618,7 @@ Examples:
     docker_p.set_defaults(func=cmd_docker_status)
 
     docker_p = docker_sub.add_parser("exec", help="Run a dev.py command inside the container")
-    docker_p.add_argument("cmd_args", nargs=argparse.REMAINDER, help="Command and arguments (e.g. server --test)")
+    docker_p.add_argument("cmd_args", nargs=argparse.REMAINDER, help="Command and arguments (e.g. user list)")
     docker_p.set_defaults(func=cmd_docker_exec)
 
     # Format & Lint
