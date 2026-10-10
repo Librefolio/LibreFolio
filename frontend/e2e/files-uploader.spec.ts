@@ -7,6 +7,8 @@
  */
 import {test as base, expect} from './fixtures/playwright';
 import type {Locator, Page} from './fixtures/playwright';
+import {setLanguage} from './fixtures/auth-helpers';
+import {t} from './fixtures/i18n-data';
 import {schemas} from '../src/lib/api/generated';
 import type {BrimFile, UploadedFile} from '../src/lib/types/files';
 
@@ -96,6 +98,17 @@ function everyFlowCompleted() {
     return body;
 }
 
+/**
+ * The sidebar's connection-security line asks GET /api/v1/system/connection on every app
+ * page (plan 36): the answer the lane's plain-HTTP loopback gets. Checked against the
+ * generated schema, so a contract that moves fails here, by name.
+ */
+function loopbackConnection() {
+    const body = {client_class: 'loopback', cookie_secure: false} as const;
+    schemas.ConnectionSecurityResponse.parse(body);
+    return body;
+}
+
 type GetResponse = {
     body: unknown;
     requiredQuery?: Record<string, string>;
@@ -140,6 +153,7 @@ const test = base.extend<{uploaderPage: Page}>({
             ['/api/v1/settings/user', {body: {language: 'en', base_currency: 'EUR', theme: 'light', avatar_url: null}}],
             ['/api/v1/settings/global', {body: {items: []}}],
             ['/api/v1/settings/onboarding', {body: everyFlowCompleted()}],
+            ['/api/v1/system/connection', {body: loopbackConnection()}],
             // The Files page's contracts.
             ['/api/v1/brokers/import/plugins', {body: []}],
             [
@@ -440,4 +454,58 @@ test('uploader avatars load, fall back after real image errors, and retain circu
     // with FilesTable's size:20 and makes the clipping box elliptical (32×20).
     // Do not bless that source defect by asserting only border-radius:50%.
     await expect(clip).toHaveCSS('width', '20px');
+});
+
+type MarkedWindow = Window & {__lfGridSizeNode?: Element};
+
+/**
+ * FileGrid renders a size through formatBytes(), whose unit is a catalogue string
+ * (common.bytes, common.kilobytes, …). The app language is client state: the header
+ * selector only calls currentLanguage.set(), with no request and no reload, so a size
+ * already on screen must be redrawn in the new language. French is the language whose
+ * units differ (o/Ko/Mo/Go against B/KB/MB/GB); every expected string is read from the
+ * catalogues when the test runs, never written here.
+ */
+test('grid file sizes follow an in-app language switch, redrawn in place', async ({uploaderPage: page}) => {
+    const file = FILES.atlas;
+    const sizeIn = (lang: string) => `${file.size_bytes} ${t(lang, 'common.bytes')}`;
+    // Discriminating power, checked rather than assumed: with equal strings (or a key
+    // missing from both catalogues) this test could not see what it exists for.
+    expect(sizeIn('fr'), 'common.bytes must differ between FR and EN').not.toBe(sizeIn('en'));
+    expect(t('fr', 'common.preview'), 'common.preview must differ between FR and EN').not.toBe(t('en', 'common.preview'));
+
+    await page.goto('/files?tab=static');
+    await settledTable(page, 'static');
+    await page.getByTestId('view-mode-grid').click();
+    await expectGrid(page, Object.values(FILES));
+
+    const html = page.locator('html');
+    const root = page.getByTestId('files-page');
+    const size = root.getByTestId(`file-grid-size-${file.id}`);
+    // Same card, same component, its title read from the catalogue through $t: once it
+    // reads French, the new language has reached this very card, and a size still in
+    // English is the only stale string left in it.
+    const preview = root.getByTestId(`file-grid-preview-${file.id}`);
+
+    // Precondition, read back: the app speaks English. A fresh context stores no choice
+    // and Playwright's default locale is en-US; the grid was drawn in this language.
+    await expect(html).toHaveAttribute('lang', 'en');
+    await expect(html).toHaveAttribute('data-i18n-ready', 'true');
+    await expect(preview).toHaveAttribute('title', t('en', 'common.preview'));
+    await expect(size).toHaveText(sizeIn('en'));
+    await size.evaluate((el) => {
+        (window as MarkedWindow).__lfGridSizeNode = el;
+    });
+
+    // The header's selector, on desktop and mobile alike. It changes client state only:
+    // no API request (an undeclared one would fail this spec at teardown); the French
+    // catalogue is a same-origin static chunk, which the fixture lets through. Returns
+    // once <html lang> is 'fr' and the French dictionary is in (data-i18n-ready).
+    await setLanguage(page, 'fr');
+    await expect(preview).toHaveAttribute('title', t('fr', 'common.preview'));
+
+    // No reload, no navigation, no list-grid toggle: the same element must now read French.
+    await expect(size).toHaveText(sizeIn('fr'));
+    await expect(size).not.toHaveText(sizeIn('en'));
+    expect(await size.evaluate((el) => el === (window as MarkedWindow).__lfGridSizeNode), 'redrawn in place: the very node that read the English unit, in the same document (no reload, no remount)').toBe(true);
 });

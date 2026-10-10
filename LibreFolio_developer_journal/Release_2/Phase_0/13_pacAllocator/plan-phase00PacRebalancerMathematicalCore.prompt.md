@@ -42,6 +42,46 @@ review indipendente della suite incorporati il 2026-09-16.
 >
 > Sezioni toccate: §2.1 (prove autorevoli), §6.2 (ledger), §15.3 (gate SELL), §19, §20 e §22.
 
+> **⚠️ Aggiornamento del 2026-10-09: prevale sul testo sotto, e sulla nota del 2026-09-25, dove sono
+> in conflitto.**
+> Riga 16 del [bundle](implementation/README.md), col via del developer all'arrotondamento
+> «peggiorativo» e, sul n. 15, alla scelta B1. Decisioni e prove nel
+> [piano della riga 16](implementation/plan-phase00PacRoundingDirectionFix.prompt.md), §2.
+>
+> - **Ogni posting arrotonda contro il piano (regola (a)).**
+>   - I crediti (`fx_credit`, `gross_sell_credit`) per difetto, i debiti (`buy_debit`, `buy_fee`,
+>     `sell_fee`, `broker_withheld_tax`, `self_reserved_tax`) per eccesso, alla minor unit della
+>     propria valuta. `initial_selected`, `funding_in`, `funding_out` e `fx_debit` restano esatti.
+>     `ROUND_HALF_UP` resta soltanto nella visualizzazione.
+>   - $\sum_j\lfloor x_j\rfloor_\mu\le\lfloor\sum_jx_j\rfloor_\mu$ e
+>     $\sum_j\lceil x_j\rceil_\mu\ge\lceil\sum_jx_j\rceil_\mu$: spezzare una conversione o un ordine
+>     non conviene mai.
+>   - L'unico arrotondamento economico è alla minor unit, sempre contro il piano. Modello SCIP e
+>     replay arrotondano allo stesso modo: il piano resta `optimal_proven` quando SCIP chiude ogni
+>     stage.
+>   - SCIP modella `fx_credit`, `buy_debit` e `buy_fee`; le altre famiglie falliscono chiuse prima
+>     del modello, come prima.
+> - **«Arrotondare solo alla fine».** Ogni movimento reale si arrotonda una volta sola, sul suo
+>   importo esatto finale: è ciò che il broker esegue. I calcoli intermedi restano esatti e si
+>   arrotondano solo per mostrarli («≈»).
+> - **Bound e banda (§13).** Col segno del §13.2 ogni termine sta in $[0,\mu_{c_j})$, quindi
+>   $0\le A_{round}<\sum_j\mu_{c_j}\rho_{c_j\to v}$. L'arrotondamento non crea mai valore: il
+>   «surplus da rounding» del §13.3 non esiste più. `rounding_bound` passa da mezza a una minor unit
+>   per posting, valutata in $v$; il controllo stretto resta per posting, nel ledger.
+> - **QX1-b (§6.2).** A un multiplo esatto il modello compilato può contare un'unità di debito in
+>   più, o di credito in meno, del ledger: è prudente. I top-up restano come rete di sicurezza, con
+>   lo stesso limite $N_{bc}\,\mu_c$.
+> - **C-FXPOS.** Una conversione attiva deve postare un credito positivo: riga viva nel modello,
+>   come nel replay.
+> - **Tassi quasi coerenti (§7.1, §7.3, scelta B1).** La verifica del triangolo della riga 15
+>   tollera uno scarto relativo $\beta=5\cdot10^{-11}\sum_i1/R_i$ sui tre tassi salvati: l'errore dei
+>   dieci decimali di `Numeric(24, 10)`. Il tasso di pianificazione è
+>   $\min\bigl(\rho_{c\to d}(1-s_j),\ \rho_{c\to v}/\rho_{d\to v}\bigr)$: coincide col tasso
+>   effettivo di prima, salvo dentro la banda, dove vale il triangolo attraverso $v$. Lo spot
+>   pubblicato resta quello salvato; il contratto resta 1.0.0.
+>
+> Sezioni toccate: §2.2, §6.2 (nota QX1-b), §7.1, §7.3, §12.2 ($A_{round}\ge0$) e §13.
+
 ---
 
 ## 1. Problema matematico

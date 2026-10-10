@@ -59,6 +59,7 @@
         createBulkDateComparator,
         isBulkBalanceIssue,
         resolveBulkIssueRows,
+        serializeOps,
         settleBulkIssueSnapshot,
         type BulkBatchResult,
         type BulkIssueRow,
@@ -411,14 +412,24 @@
                 // T3 (02/09): the original date is PRESERVED on clone — duplication is
                 // how users fix a misclassified historical row, and resetting to
                 // today destroyed exactly the field they needed to keep.
-                // Generate shared link_uuid for paired clones
-                const sharedLinkUuid = resolved.length === 2 && resolved[0].type === resolved[1].type ? generateUUID() : null;
+                // A pair of the ledger is cloned as a pair: one fresh link_uuid for each pair whose two halves are
+                // both selected. A single row gets none, whatever the type of the rows beside it.
+                const selectedIds = new Set(resolved.map((r) => r.id));
+                const cloneLinks = new Map<number, string>();
+                for (const r of resolved) {
+                    const partnerId = r.related_transaction_id;
+                    if (partnerId == null || !selectedIds.has(partnerId) || cloneLinks.has(r.id)) continue;
+                    const link = generateUUID();
+                    cloneLinks.set(r.id, link);
+                    cloneLinks.set(partnerId, link);
+                }
                 const cloned = resolved.map((r) => {
                     const c = {...r, id: 0, related_transaction_id: null} as TXReadItem;
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
                     const rule = getTypeRule(r.type);
                     if (rule.quantityRule === 'zero') c.quantity = '0';
-                    if (sharedLinkUuid) (c as any).link_uuid = sharedLinkUuid;
+                    const link = cloneLinks.get(r.id);
+                    if (link) (c as any).link_uuid = link;
                     return c;
                 });
                 return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
@@ -481,7 +492,9 @@
                 // Slow path: keep ops empty so DataTable doesn't render
                 // with FALLBACK_RULE. Ops will be assigned after Promise.all.
                 ops = [];
-                initialOpsKey = '';
+                // The snapshot of what is on screen: no rows. Without initial rows it is never taken again, and an
+                // empty key would make an untouched editor ask to discard.
+                initialOpsKey = serializeOps(ops);
                 if (rows.length === 0 && intent?.action !== 'import') {
                     queueMicrotask(() => {
                         formOpen = true;
@@ -539,19 +552,6 @@
                 importWizardOpen = true;
             });
         }
-    }
-
-    /** Stable, comparison-friendly serialization of the drafts array (drops
-     *  the volatile `tempId` and `createdSeq` so newly seeded or reset rows
-     *  compare equal to the original snapshot). */
-    function serializeOps(rows: PendingOp[]): string {
-        return JSON.stringify(
-            rows.map((d) => {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const {tempId: _tempId, createdSeq: _createdSeq, ...rest} = d;
-                return rest;
-            }),
-        );
     }
 
     function hasUnsavedChanges(): boolean {
@@ -898,8 +898,11 @@
     }
 
     function resetRow(tempId: string) {
+        // A saved pair is one row on screen: its hidden half is reset with it, in place, or an edit made through the
+        // pair's form would stay on it. A W4b placeholder has nothing to reset: its half is not in the store.
+        const partnerTempId = getPartnerOp(tempId)?.tempId;
         ops = ops.map((d) => {
-            if (d.tempId !== tempId || d.op !== 'edit') return d;
+            if ((d.tempId !== tempId && d.tempId !== partnerTempId) || d.op !== 'edit' || d.inaccessible) return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
             return reset;
         });

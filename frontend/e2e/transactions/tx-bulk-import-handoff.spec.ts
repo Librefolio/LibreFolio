@@ -41,8 +41,8 @@
  * deletes the BRIM files uploaded to the broker since the test created it, the broker (force) and
  * the CSVs it wrote.
  *
- * Plan: `LibreFolio_developer_journal/Release_2/Phase_0/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D4, D5);
- * `LibreFolio_developer_journal/Release_2/Phase_0/29_i18nAudit/plan-phase00I18nAudit.prompt.md`, S18-S19 (A, B).
+ * Plan: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md`, F.0 (F1 · D4, D5);
+ * `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md`, S18-S19 (A, B).
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';

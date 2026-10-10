@@ -4,6 +4,17 @@
 > il contratto `release-coordinator` richiede: se il contesto si azzera, è da qui che si
 > riprende.
 
+> ## Esito finale — allineamento del 09/10/2026
+>
+> Le tabelle di §1 e §3 sono istantanee del 17/09 e restano come erano. Lo stato finale:
+> - **A, B, C, D, E, F, G, H, I, N: tutti `FROZEN`** (tabella dello stato al 18/09, più sotto);
+> - **J non è mai stato creato**: il secondo giro ne ha preso il posto
+>   ([`../implementation_2/00-proposta-organizzazione.md`](../implementation_2/00-proposta-organizzazione.md),
+>   [`../implementation_2/REGISTRO.md`](../implementation_2/REGISTRO.md)), e la 1.2.0 è uscita a treni. Delle sue
+>   caselle ne resta aperta una, la voce di CHANGELOG di M2 e A9 (vedi il README della cartella, buchi);
+> - **K1–K8 consegnati** (`contracts/K*.md`), **K9 superato** (vedi [`contracts/K9.md`](./contracts/K9.md));
+> - dei debiti di §7, l'8, il 13 e il 5 sono chiusi nel codice (righe aggiornate più sotto); il 6 resta aperto.
+
 **Baseline della campagna**: `cc33120ebfbc61efe4c6178218ff8d64dd4adf47`
 *(«docs(journal): plan risk execution as 11 mandates», 17 Set 2026)*
 
@@ -694,7 +705,7 @@ concessa a un mandato.
 | **H** | Monte Carlo | ✅ **FROZEN** | `risk-simulation` 29 · `risk-all` 148 · delta 15+2 |
 | **I** | documentazione | ✅ **FROZEN — nulla resta suo** | **19/22 piene** (82-135 righe) · **3 stub bloccati su N** · corpus: **0 href rotti su 27 708** in 4 lingue · `validation.anchors` acceso, **9 → 0** warning |
 | **N** | acquisizioni | ✅ **FROZEN** | `risk-all` **166** · `api risk` 10 · `acquired.py` 246 righe a **`1aaea6949`** |
-| **J** | chiusura | ⏳ **non creato** — per ultimo (D46) | brief con le cifre reali di M2, A9 e la regola dell'intero |
+| **J** | chiusura | ↪ **mai creato** — superato dal secondo giro (allineamento 09/10) | brief con le cifre reali di M2, A9 e la regola dell'intero |
 
 ### 18.1 Misura del coordinatore — l'unica corsa di questa sessione
 
@@ -1589,15 +1600,15 @@ done
 | 2 | baseline non conforme al proprio formattatore | 🟢 **misurato** — `black --diff` = 72 righe identiche |
 | 3 | 42 ancore solo-inglesi | 🟢 **misurato** da I sull'HTML costruito |
 | 4 | 48 `$$` non renderizzati | 🟢 **misurato** da I, per lingua |
-| 5 | `correlation` chiesta e non resa | 🟢 **misurato** da E + proprietario identificato |
-| 6 | `fresh_quote_coverage` calcolato e non letto | 🟢 **misurato** da A **e** da I, indipendentemente |
+| 5 | `correlation` chiesta e non resa | ✅ **chiuso** — resa in L2 (`RiskLevelsPanel.svelte` → `L2Diversification.svelte`), allineamento 09/10 |
+| 6 | `fresh_quote_coverage` calcolato e non letto | ⏳ **ancora aperto** al 09/10: pubblicato (`schemas/risk.py`), nessun lettore nel frontend |
 | 7 | due PNG estranei | 🟢 **misurato** su 9 worktree su 10 |
-| 8 | `verbose` di `SharedBackend` inerte | 🟡 **letto** — `_server.py:161,269-270`, non eseguito |
+| 8 | `verbose` di `SharedBackend` inerte | ✅ **chiuso** — `scripts/test_runner/_server.py` lo usa per stdout e stderr (allineamento 09/10) |
 | 9 | `percentage_contribution` porta una frazione | 🟢 **misurato** da E, e il raggio da me |
 | 10 | `risk-asset-add-button` rimosso | 🟢 **misurato** da F, verificato da me sulla baseline |
 | ~~11~~ | ~~i `partial` spariscono~~ | 🔴 **FALSO — ritirato (D338)** |
 | 12 | `warnings` non resi | 🟢 **chiuso**, provato per mutazione |
-| 13 | `if (!var_bin_edge)` | 🟡 **letto** — il caso è raggiungibile, non osservato |
+| 13 | `if (!var_bin_edge)` | ✅ **chiuso** — `levels/l1/l1Helpers.ts` legge `finite(output.var_bin_edge)` (allineamento 09/10) |
 | 14 | divieto d'import di `SemiDeviation` | 🟢 **misurato** — unico altro import è il worker |
 | 15 | 24 stringhe i18n orfane | 🟢 **misurato** — 6 chiavi × 4 lingue, zero consumatori |
 | 16 | nessuna pagina developer del rischio | 🟢 **misurato** — `find` vuoto |

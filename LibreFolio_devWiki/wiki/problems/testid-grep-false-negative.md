@@ -3,7 +3,7 @@ title: "Grepping for a testid can return zero when the testid exists"
 category: problem
 status: recurs
 date: 2026-09-18
-updated: 2026-09-23
+updated: 2026-10-09
 tags: [frontend, testing, e2e, selectors, ui-primitives, method]
 related:
   - problems/front-check-does-not-check-what-you-think
@@ -93,6 +93,13 @@ say 'absent': it says 'my pattern found nothing'."* For the presence of a litera
 The `AssetSelect` gap described above is closed at `f1047f766`: the wrapper forwards `testId={testid}`
 to `SearchSelect` and no longer carries its own id — the fix this page prescribed (`00d8c735b`, 18/09).
 
+## A second prop — `TreeSelect` (2026-09-24, workstream K)
+
+`TreeSelect` composes its ids from **two** props: the trigger is `${testId}-button`, but rows and groups come from
+`testIdPrefix` — `{testIdPrefix}-option-{value}` and `{testIdPrefix}-group-{key}` — fixed by each wrapper
+(`asset-type-tree` in `AssetTypeSelect`, `signal-tree` in `SignalTreeSelect`). A search for `{testId}-` finds the
+trigger and misses every row; search for `-option-` / `-group-` or for the prop name.
+
 ## Source files
 
 | Role | Path |
@@ -104,6 +111,7 @@ to `SearchSelect` and no longer carries its own id — the fix this page prescri
 | Specs bound to the wrapper id | `frontend/e2e/transactions/tx-import-resolution.spec.ts` |
 | Composes `{testId}-health`, `-reasons`, `-errors`, `-metadata`, `-toggle`, `-body`, … | `frontend/src/lib/components/risk/levels/RiskLevelSection.svelte` |
 | Composes `{testId}-row`, `-bar`, `-value` | `frontend/src/lib/components/risk/levels/l4/TornadoChart.svelte` |
+| Composes from `testIdPrefix` (rows, groups) | `frontend/src/lib/components/ui/select/TreeSelect.svelte` |
 | Literal `risk-asset-set-l1-row` | `frontend/src/lib/components/risk/AssetSetLossComparisonSection.svelte` |
 | The spec probed on 23/09 | `frontend/e2e/portfolio/risk-lab.spec.ts` |
 | F's recon (§3) and the missed `wiki-search` (F-5) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-laboratorio-postmerge.md` |

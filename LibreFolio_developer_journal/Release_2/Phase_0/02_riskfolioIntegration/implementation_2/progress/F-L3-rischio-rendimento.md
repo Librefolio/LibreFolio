@@ -87,7 +87,7 @@
 | L3-4 | cancelli, mutanti sugli E2E nuovi | ✅ 2026-09-30 (E2E rossi veri sul codice vecchio, niente mutanti) |
 | L3-5 | review del developer sulla 6164: giro 1 (tabella prima del grafico), giro 2 (selezione collegata, via la nota del benchmark), giro 3 (approvato; richieste del giro 4) | ✅ 2026-10-01 |
 | L3-6 | checkpoint a Risk dei giri 1–3 (G1–G6; rifatto senza la voce di `TODO_FUTURI.md`, 13:0x) | ✅ 2026-10-01: `c66757dcc`…`b69df5c96`, fusione `2130bc42e` validata |
-| L3-7 | giro 4: tooltip sui trattini (L1° e L3°), nota del periodo, guida; poi il selettore del benchmark (variante B) dalla primitiva `BenchmarkSelect` di Risk, quando arriva nel mio ramo | ⏳ in corso: vedi «Giro 4» (L4-0…L4-7) |
+| L3-7 | giro 4: tooltip sui trattini (L1° e L3°), nota del periodo, guida; poi il selettore del benchmark (variante B) dalla primitiva `BenchmarkSelect` di Risk, quando arriva nel mio ramo | ✅ chiuso con i giri 4 e 5, checkpoint del 01–02/10 (allineamento 09/10) |
 
 ## Esecuzione
 
@@ -485,9 +485,9 @@ Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Ris
 | L4-2 | i18n via `dev.py i18n`: `risk.assetSet.levels.l3.period.{window,narrowed,annualized}` × 4 | ✅ 2026-10-01 |
 | L4-3 | codice: `assetSetCalculationWindow` (`assetSetLevels.ts`), tooltip del trattino condiviso (`assetSetTable.ts`), sezioni L1° e L3°, `dateStart`/`dateEnd` passati a L3° | ✅ 2026-10-01 |
 | L4-4 | guida (docs-writer, solo EN): `:110-118`, `:128`, ordinamento, selezione collegata, trattino, nota del periodo; `:124` e `:122` aspettano | ✅ 2026-10-01 (da riverificare dopo il codice: due frasi descrivono comportamenti nuovi) |
-| L4-5 | cancelli, uno per volta | ⏳ |
-| L4-6 | review del developer sulla 6164, poi checkpoint a Risk | ⏳ |
-| L4-7 | fusione vera della punta di Risk con `BenchmarkSelect`, poi il selettore sopra L1° e L3° (e `:124` della guida) | ⏳ |
+| L4-5 | cancelli, uno per volta | ✅ più sotto, «L4-5 · cancelli» (allineamento 09/10) |
+| L4-6 | review del developer sulla 6164, poi checkpoint a Risk | ✅ più sotto, «L4-6 · review del developer» (allineamento 09/10) |
+| L4-7 | fusione vera della punta di Risk con `BenchmarkSelect`, poi il selettore sopra L1° e L3° (e `:124` della guida) | ✅ più sotto, «Giro 5 · il selettore del benchmark (L4-7)» (allineamento 09/10) |
 
 ### L4-2 · i18n ✅ 2026-10-01 (script `/tmp/libreFolio_f4/l4_i18n_add.sh`, 3 `dev.py i18n add`)
 
@@ -741,8 +741,8 @@ Il selettore (variante B) arriva dopo, con la primitiva `BenchmarkSelect` di Ris
 | L5-1 | i18n: `risk.assetSet.benchmark.measuredHint` (la frase del ⚠) e `risk.assetSet.benchmark.help` (l'ⓘ) × 4 | ✅ 2026-10-01 (`/tmp/libreFolio_f4/l5_i18n_add.sh`; spazio normale prima dei due punti in FR, come 248 stringhe su 255) |
 | L5-2 | test rossi (test-author): helper `labBenchmarkId`, E2E del selettore | ✅ 2026-10-01 |
 | L5-3 | codice: helper, selettore nel pannello con l'ⓘ, livelli dopo la risoluzione, docblock del pannello | ✅ 2026-10-01 |
-| L5-4 | guida `:124` (docs-writer) | ⏳ |
-| L5-5 | cancelli e mutanti, review sulla 6164, checkpoint | ⏳ |
+| L5-4 | guida `:124` (docs-writer) | ✅ più sotto, «L5-4 · la guida» (allineamento 09/10) |
+| L5-5 | cancelli e mutanti, review sulla 6164, checkpoint | ✅ più sotto, «L5-5 · cancelli e mutanti» (allineamento 09/10) |
 
 ### L5-2 · test rossi prima ✅ 2026-10-01 (test-author `l5-unit` e `l5-e2e`, file disgiunti)
 
@@ -978,10 +978,10 @@ tantum, solo per questa divisione:
 
 | # | passo | stato |
 |---|---|---|
-| L6-1 | test rossi (test-author): flag del helper e pin byte per byte, passaggio delle opzioni nel controller, due controller nei livelli; E2E riletti per le richieste divise | ⏳ |
-| L6-2 | codice: helper e controller (concessi), due controller in `AssetSetComparisonLevels` | ⏳ |
-| L6-3 | guida `:168/171` (docs-writer) | ⏳ |
-| L6-4 | cancelli; poi il banner (L6-5…) | ⏳ |
+| L6-1 | test rossi (test-author): flag del helper e pin byte per byte, passaggio delle opzioni nel controller, due controller nei livelli; E2E riletti per le richieste divise | ✅ più sotto, «L6-1 · test rossi prima» (allineamento 09/10) |
+| L6-2 | codice: helper e controller (concessi), due controller in `AssetSetComparisonLevels` | ✅ più sotto, «L6-2 · il codice» (allineamento 09/10) |
+| L6-3 | guida `:168/171` (docs-writer) | ✅ più sotto, «L6-3 · guida» (allineamento 09/10) |
+| L6-4 | cancelli; poi il banner (L6-5…) | ✅ più sotto, «L6-4 · cancelli» (allineamento 09/10) |
 
 > **In arrivo da Risk (11:4x): D371, l'asset selezionato come benchmark.** La scelta del developer, riportata da Risk,
 > testuale: «per le metriche che si calcolano con il benchmark e l'asset stesso è il benckmar, mettici un trattino e un
@@ -1388,7 +1388,7 @@ Proposta mia, in attesa di conferma: deduplicare le quattro fonti (correlazione,
 |---|---|---|
 | L8-1 | A: test rossi (test-author): unitari delle due sezioni, E2E (b), (c), (d) e la posizione della nota | ✅ 2026-10-05, rimessi dopo la fusione `19b99e8ae` |
 | L8-2 | A: codice | ✅ 2026-10-05 (più la guardia e il perché della correlazione) |
-| L8-3 | B: rossi e codice sui mock, dopo la conferma di Risk sulla regola dell'unione | ⏳ |
+| L8-3 | B: rossi e codice sui mock, dopo la conferma di Risk sulla regola dell'unione | ✅ più sotto, «Giro 8b» (L8b-1, L8b-2, 05/10) (allineamento 09/10) |
 | L8-1b | la guida: la nota di Risk su §What If…? (F3, D372), via docs-writer | ✅ 2026-10-05, più l'allineamento ad A |
 | L8-4 | cancelli; poi la tappa 1 del pannello; poi la review unica (con la punta di Risk) | ✅ cancelli del giro 8a; la tappa 1 e la review dopo B |
 
@@ -3361,3 +3361,14 @@ insieme di asset `data_quality.issues` arriva una per categoria, `code + group_k
 >   misurare nel periodo.
 > - Il reperto per il triage (ogni sezione chiede due volte all'apertura) resta aperto.
 > - Stato dopo l'invio: **FROZEN** fino al commit.
+
+---
+
+## Chiusura — allineamento 09/10/2026 (scritta da Risk, proprietario della famiglia)
+
+- **Giro 15 committato**: `b417d9e15` (`feat(risk): lab never tries a ruled-out benchmark`) · `773003c35`
+  (`docs(assets): a ruled-out benchmark is not used`) · `717e0e417` (`docs(journal): lab round 15`); in `dev_release2`,
+  verificato in `3cceb4f90`.
+- **«Adding and Removing Assets» precedente al «+»**: ✅ `mkdocs_src/docs/user/assets/correlation.en.md` copre il «+».
+- **Il reperto per il triage** — all'apertura ogni sezione chiede due volte, perché solo L3° aspetta i verdetti
+  (`AssetSetRiskPanel.svelte`): ⏳ **aperto** → README della cartella, aperti.

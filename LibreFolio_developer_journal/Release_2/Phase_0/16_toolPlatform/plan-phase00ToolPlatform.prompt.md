@@ -1,7 +1,11 @@
 # Piano — Piattaforma Tool atomica
 
-**Stato:** ✅ BASE C COMPLETA · HANDOFF D PRONTO · CHECKPOINT FINALE DA COMMITTARE
-**Data aggiornamento:** 2026-09-10
+**Stato:** ✅ BASE C COMPLETA E COMMITTATA (`1656aff69`, merge `bb0cdc334`, hardening `8e7259ecc`) · PILOT PAC CHIUSO DA D (renderer del planner v2 registrato, `0210f9848`) · HANDOFF D: §1–§7 storici, §0 contratto vivo di D
+**Data aggiornamento:** 2026-09-10 · allineato il 2026-10-09 (Q, base `3cceb4f90`)
+
+> **Cosa resta aperto** (verifica Q del 2026-10-09, base `3cceb4f90`):
+> - **Niente di C.** I passi 1–6 sono chiusi o passati a D. Il §3 è superato dal round di capacità di D. Le traduzioni utente sono rinviate al giro di traduzioni (`32_docsEnglish12`).
+> - **La cartella resta in `Phase_0/`** perché la §0 di [handoff-pac-D.md](handoff-pac-D.md) è il contratto vivo del PAC: D la mantiene in `13_pacAllocator`, ancora attiva (Rebalancer non implementato), che ci punta con più di 20 link. Si archivia insieme a `13_pacAllocator`, intera.
 **Owner:** C — Piattaforma Tool
 **Branch/worktree al checkpoint:** `e-alfy-tool-platform-c-r2` /
 `e-alfy-turbo-fortnight`
@@ -105,6 +109,8 @@ Creati client tipizzato, compatibilita' descriptor/codec, registry renderer comp
 hub, host, route `/tools`, metriche e pannelli About/diagnostica. L'allowlist renderer
 resta vuota: nessun PAC fittizio viene dichiarato disponibile.
 
+> **Nota successiva** (verifica Q del 2026-10-09, base `3cceb4f90`): l'allowlist ora contiene il renderer reale del planner PAC v2 di D (`frontend/src/lib/features/tools/registry.ts:241-245`, `0210f9848` del 25/09).
+
 > **Note implementazione**: account generation osservata anche alla prima risoluzione;
 > richieste e mount vengono abortiti/rimossi al cambio account. Parametri originali
 > vengono inviati dopo validazione strutturale, non il risultato default-expanded
@@ -155,7 +161,7 @@ le traduzioni MkDocs utente IT/FR/ES non sono state avviate.
 > **Limite**: backend unit/lifecycle verificato; API HTTP, codec TypeScript,
 > UI e pilot PAC non sono validati.
 
-### ↗️ Passo 6 — Primo pilot PAC reale, trasferito a D
+### ✅ Passo 6 — Primo pilot PAC reale, trasferito a D e chiuso da D
 
 Dipende dall'handoff D dei modelli/core/thin plugin e dal renderer PAC approvato:
 
@@ -174,6 +180,8 @@ PacPlannerRequest reale (2.0.0, plan)
 > (21/09, *«drop P1 prototype, wire planner v2»*), per decisione del developer. Il contratto
 > reale è `PacPlannerRequest` (`backend/app/schemas/pac_allocator.py`). Questo passo si chiude
 > quando D registra il renderer PAC v2 del Round 5. La riga qui sotto resta vera.
+>
+> **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): la condizione di chiusura è soddisfatta. Il renderer del planner PAC v2 è registrato (`registry.ts:241-245`, `0210f9848`), e D lo verifica in `13_pacAllocator/implementation/plan-phase00PacP1FinalRemoval.prompt.md:469`. Il planner PAC 1.0.0 è integrato (`13_pacAllocator/implementation/README.md`, stato al 05/10). La review operativa e il Rebalancer restano a D.
 
 Nessuna registry vuota o demo plugin puo' chiudere questo passo.
 Il contratto esatto e i selector sono in [handoff-pac-D.md](handoff-pac-D.md).
@@ -193,6 +201,8 @@ Il contratto esatto e i selector sono in [handoff-pac-D.md](handoff-pac-D.md).
 
 Sono limiti di ammissione, non benchmark/SLA o garanzia RAM globale. Con piu' worker
 ASGI la capacita' e' per-processo.
+
+> **⚠️ Superato** (verifica Q del 2026-10-09, base `3cceb4f90`): i limiti sono stati ridefiniti dal round di capacità di D (`13_pacAllocator/implementation/plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md`: budget per operazione, limite di memoria per l'albero dei processi, `backend/app/services/tools/resources.py`). Il budget di oggi è descritto in `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md`.
 
 ## 4. Merge di `dev_release2/916f12bd`
 
@@ -245,18 +255,27 @@ corretti. Regressioni backend e frontend sono verdi.
 
 - [x] Merge semantico con `916f12bd` risolto senza perdere runtime isolation,
       container registry o registrazioni Tool; merge commit manuale ancora atteso.
+  > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): merge committato in `bb0cdc334` (2026-09-10).
 - [x] Contratto handoff D per modelli/core/plugin/renderer P1 pubblicato.
+  > **⚠️ Superato**: il contratto P1 è stato rimosso in `b82e59ffa` (21/09); vale la §0 di `handoff-pac-D.md`.
 - [x] Export/codegen base reale + conformance Unicode/defaults/fingerprint.
-- [ ] Rigenerazione con il vero plugin D.
+- [x] Rigenerazione con il vero plugin D. ✅ (D)
+  > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): registrata da D in `13_pacAllocator/implementation/plan-phase00PacContractCompaction.prompt.md:844`. Plugin `backend/app/services/tool_plugins/pac_allocator.py`, renderer `registry.ts:241-245`.
 - [x] Test registry, wire e lifecycle esclusivi.
 - [x] API auth/bulk/diagnostics su server integrato.
 - [x] Type-check, Vitest client e build frontend C.
 - [x] Mount About sul file E definitivo e applicazione i18n via CLI.
-- [ ] MkDocs traduzioni utente richieste; nav/build/check-links completati.
-- [ ] Pilot reale e review operativa desktop/mobile/errori.
-- [ ] Aggiornamento CHANGELOG per le superfici osservabili.
+- [x] MkDocs traduzioni utente richieste; nav/build/check-links completati.
+  > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): nav, build strict e `check-links` sono verdi. Le pagine utente Tools sono solo EN (`mkdocs_src/docs/user/tools/index.en.md`, `user/tools/pac-allocator/index.en.md`), come stabilito in `09_feedbackJobs/05_pac_allocation_tool.md:103-104`. Le traduzioni sono rinviate al giro deciso dal developer, tracciato in `32_docsEnglish12`.
+- [x] Pilot reale e review operativa desktop/mobile/errori. ↗️ trasferito a D
+  > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): il pilot è integrato (planner PAC 1.0.0). La review operativa e l'approvazione separata di PAC e Rebalancer sono tracciate da D (`13_pacAllocator/implementation/plan-phase00PacRebalancerImplementation.prompt.md:381`).
+- [x] Aggiornamento CHANGELOG per le superfici osservabili. ✅
+  > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): `CHANGELOG.md:17-18`, Tools e PAC allocator nella 1.2.0.
 - [ ] Debug finale, stato integrato e solo allora archiviazione sotto
       `Release_2/phases/16_toolPlatform/`.
+  > **Nota** (verifica Q del 2026-10-09, base `3cceb4f90`): lo stato integrato è verificato. L'archiviazione aspetta la chiusura di `13_pacAllocator`, perché la §0 di `handoff-pac-D.md` è il contratto vivo di D.
 
 Questo piano C e' **base completa e validata**, pronta per il commit manuale e
 la fusione nel branch D. Il pilot PAC resta esplicitamente fuori da C.
+
+> **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): committata in `1656aff69`, fusa nel ramo D con `570beb386` e nel target con `bb0cdc334`.

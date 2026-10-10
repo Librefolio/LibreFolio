@@ -17,7 +17,9 @@ Each block below follows one pattern: what it answers, a screenshot, its tools a
 
 The card at the top answers *which assets are compared?* Each chip is one selected asset, and the tab remembers your selection in this browser.
 
-<!-- [Screenshot Placeholder: risk/lab-asset-picker — the + panel open over the selection card: search box, Type and Currency filters, ticked rows with Add N, and the read-only "Cannot be analysed in the period" part with its reasons] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-asset-picker" alt="The + panel open over the selection card: search, Type and Currency filters, two assets ticked with Add 2, and, read-only, the assets that cannot be analysed in the period, each with its reason" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -36,7 +38,9 @@ The card at the top answers *which assets are compared?* Each chip is one select
 
 This section answers *which of these move together?* — to spot the assets that are really the same bet, and any that cushion the others.
 
-<!-- [Screenshot Placeholder: risk/lab-correlation — the Correlation section with at least four assets: the triangular matrix with its legend and order buttons, and beside it the two lists "The most alike" and "The ones that offset"] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-correlation" alt="The Correlation section with five assets: the triangular matrix with its legend, order buttons and sector and region badges; The most alike pairs RE Loan Roma with RE Loan Milano at 0.94, near-identical, and The ones that offset is empty" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -56,7 +60,9 @@ This section answers *which of these move together?* — to spot the assets that
 
 This section puts every asset on the same scale of harm: its worst losses in the period, and how far it still stands below its peak.
 
-<!-- [Screenshot Placeholder: risk/lab-hurt-table — the "How much did each of these hurt?" table: one row per asset with Bad day, Bad month, Worst fall with its "lasted N d" line, Below peak now and Rise to peak] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-hurt-table" alt="The How much did each of these hurt? table: one row per asset with Bad day, Bad month, Worst fall and how long it lasted, Below peak now and Rise to peak" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -78,7 +84,9 @@ This section puts every asset on the same scale of harm: its worst losses in the
 
 This section sets risk against reward — how much each asset swung, and what it returned on average per year — in a table and a chart. With a benchmark chosen under *Compared with*, it also shows how each asset moved with it.
 
-<!-- [Screenshot Placeholder: risk/lab-risk-return — "What did each of these pay for its risk?" with a benchmark chosen: the table opened by the benchmark's tinted row, the period line under it, and the chart with the asset circles, the benchmark's diamond and the dashed line through it] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-risk-return" alt="What did each of these pay for its risk? with S&P 500 as the benchmark: its tinted row opening the table, the period line, and the chart with the asset circles, the benchmark's diamond and the dashed line" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -102,7 +110,9 @@ This section sets risk against reward — how much each asset swung, and what it
 
 ### 🎯 Choosing the Benchmark {: #choosing-the-benchmark }
 
-<!-- [Screenshot Placeholder: risk/lab-benchmark-picker — the "Compared with" picker open at the top of the section, with the read-only "Not usable over this period" part at the bottom of its list and each asset's reason] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-benchmark-picker" alt="The Compared with picker open: search, Type and Currency filters, the usable assets, then, read-only, those not usable over this period, each with its reason" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 - **One benchmark for every risk page**: your choice under *Compared with* also applies to the Dashboard, broker and asset risk pages, so that they stay comparable.
 - **Its row opens the table**, with a dash under **Beta** and **Correlation**: the benchmark is not compared with itself. It may also be one of your selected assets.
@@ -114,7 +124,9 @@ This section sets risk against reward — how much each asset swung, and what it
 
 This section answers *how did each of these come through a real past episode?* — a built-in crisis or a period you choose, replayed with real returns. Click its title to open it. Only the historical replay is offered: a hypothetical shock or a simulation would need weights.
 
-<!-- [Screenshot Placeholder: risk/lab-replay — What if…? on the Correlation tab after Run replay over a period that cuts an asset short: the box of assets left out, as badges grouped by reason, with the "Replay from … to …" button, above the Return and Effect table] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-replay" alt="What if…? after Run replay: the box of assets left out, grouped by reason, with the button that replays the shorter period, above the table with Return and Effect" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -132,7 +144,9 @@ This section answers *how did each of these come through a real past episode?* �
 
 When something is wrong with the data, the tab says so once, right below the selection card, and names the results it affects.
 
-<!-- [Screenshot Placeholder: risk/lab-notice — the top of the Correlation tab with a stale or excluded asset: the folded data-quality banner, the notice with its causes and the "Measurements affected" badges, and below it a section's amber banner naming a measurement that did not come back] -->
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="risk" data-name="lab-notice" alt="Top of the Correlation tab: the folded data-quality banner, the notice Some results are partial with its Measurements affected badges, and the Correlation section's amber banner Unavailable for the selected data" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 **Tools shown**
 
@@ -150,7 +164,7 @@ When something is wrong with the data, the tab says so once, right below the sel
 ## 🔎 Good to Know {: #reading-the-numbers }
 
 - **One period for all the assets.** Every figure covers the same days for every selected asset, so the rows can be compared. An asset with a shorter history shortens that period for all of them, and their figures change: this is expected → [Data Quality](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#alignment-what-missing-data-actually-costs)
-- **One currency.** Returns are measured in the instance's default currency, set in [Global Settings](../../admin/settings.md), exchange-rate moves included.
+- **One currency.** Returns are measured in your **Default Currency**, set in [Preferences](../settings/preferences.md) (the instance's default if you never chose one), exchange-rate moves included.
 - **A dash is not a zero.** The figure could not be measured for that asset over this period; hover or tap it to read why.
 - **Another page, another figure.** Another page or another selection measures over different days: compare figures only when they cover the same period.
 

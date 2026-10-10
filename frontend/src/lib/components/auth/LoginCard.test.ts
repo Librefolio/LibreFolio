@@ -42,25 +42,65 @@
  *
  * On not asserting translated text. `$lib/i18n` is mocked with an identity
  * translator, so `$_('auth.usernameOrEmail')` renders as that literal key; the
- * label assertions name keys, stable in EN/IT/FR/ES, never a sentence.
+ * label assertions name keys, stable in EN/IT/FR/ES, never a sentence. The
+ * sign-in error cases at the bottom swap it for a translator that marks what
+ * it translated: the identity cannot tell a key that went through `$_` from one
+ * printed as it is.
+ *
+ * The second describe ties «Register here» to the instance setting (K, step
+ * 22). Once an admin closes registration (`enable_registration` = 'false') the
+ * backend refuses `POST /auth/register` with a 403, yet the card kept offering
+ * the link, so the refusal came only after a filled-in form. The contract: on
+ * mount the card asks `globalSettings.load()` once (a public read), and draws
+ * the register block, the `auth.noAccount` text and `goto-register`, unless the
+ * store says closed; open, or the key missing as in an older cache, leaves it.
+ * The store is a writable the test holds, reset to open before every test, and
+ * `load` is a spy, so every other test mounts the card as on an open instance.
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
-import {readable} from 'svelte/store';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {tick} from 'svelte';
+import {readable, writable} from 'svelte/store';
+import type {AuthError, AuthErrorKey} from '$lib/types';
 import {cleanup, render, screen} from '$test/component';
 
 // The identity translator: components render i18n keys verbatim, so the tests
-// can name the text that was chosen without naming any one language.
-vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
+// can name the text that was chosen without naming any one language. Lazy, like
+// `authError` below, so the sign-in error cases can swap it.
+vi.mock('$lib/i18n', () => ({_: {subscribe: (run: (value: unknown) => void) => translator.subscribe(run)}}));
 // The auth store at rest — nothing loading, no error — so the form renders as a
 // user first sees it. Signing in is not the subject here: `login` only has to exist.
+// `authError` is a lazy `subscribe`, as in `PasswordChangeModal.test.ts`: the
+// factory runs while the component is being imported, before `signInError` below
+// exists, so it must not touch the store until the component subscribes to it.
 vi.mock('$lib/stores/app/auth', () => ({
     auth: {login: vi.fn()},
-    authError: readable(null),
+    authError: {subscribe: (run: (value: unknown) => void) => signInError.subscribe(run)},
     isAuthLoading: readable(false),
 }));
 vi.mock('$app/navigation', () => ({goto: vi.fn()}));
+// `$globalSettings` held by the test: the two parts of the store the card is
+// meant to use, a subscription and `load()`. Open by default, like the store's
+// own default; `load` resolves at once and changes nothing, so what the card
+// shows is whatever the test put in the store.
+const settingsMock = await vi.hoisted(async () => {
+    const {writable} = await import('svelte/store');
+    return {
+        store: writable<Record<string, unknown>>({enable_registration: true}),
+        load: vi.fn<() => Promise<void>>().mockResolvedValue(undefined).mockName('globalSettings.load'),
+    };
+});
+vi.mock('$lib/stores/app/globalSettings', () => ({
+    globalSettings: {subscribe: settingsMock.store.subscribe, load: settingsMock.load},
+}));
 
 import LoginCard from './LoginCard.svelte';
+
+/** Every key comes back as itself. */
+const identity = (key: string): string => key;
+/** The translator the card reads: the identity, unless a case swaps it. */
+const translator = writable<(key: string) => string>(identity);
+/** What `authError` holds: no error, as a user first sees the card, unless a case sets one. */
+const signInError = writable<AuthError | null>(null);
 
 /** Mounts the card and returns the element everything it rendered lives in. */
 function mount(): HTMLElement {
@@ -96,7 +136,41 @@ function duplicateIds(root: Element): string[] {
     return [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 }
 
+/** `$globalSettings` on an instance open to registration: the backend's default, and the store's. */
+const REGISTRATION_OPEN = {enable_registration: true};
+/** ...once an admin closed it: `load()` reads the server's `'false'` as `false`. */
+const REGISTRATION_CLOSED = {enable_registration: false};
+/** An object cached before the store knew the field: other settings, no `enable_registration` at all. */
+const CACHED_WITHOUT_THE_KEY = {default_language: 'en', default_currency: 'EUR', default_theme: 'auto'};
+
+type RegisterOffer = Record<'goto-register' | 'auth.noAccount', boolean>;
+const OFFERED: RegisterOffer = {'goto-register': true, 'auth.noAccount': true};
+const WITHDRAWN: RegisterOffer = {'goto-register': false, 'auth.noAccount': false};
+
+/**
+ * What the card offers a visitor without an account: the `goto-register` link
+ * and the `auth.noAccount` text in front of it. Read together, so that a red
+ * names each of the two.
+ */
+function registerOffer(): RegisterOffer {
+    return {
+        'goto-register': screen.queryByTestId('goto-register') !== null,
+        'auth.noAccount': screen.queryByText('auth.noAccount') !== null,
+    };
+}
+
+beforeEach(() => {
+    // Every test starts on an open instance, with no read of the settings asked yet.
+    settingsMock.store.set({...REGISTRATION_OPEN});
+    settingsMock.load.mockClear();
+});
+
 afterEach(cleanup);
+// Back to the card at rest, for whichever case comes next.
+afterEach(() => {
+    signInError.set(null);
+    translator.set(identity);
+});
 
 describe("LoginCard — the markup Chrome's password manager reads", () => {
     it('names the username field, so Chrome can pair it with a saved account', () => {
@@ -161,5 +235,128 @@ describe("LoginCard — the markup Chrome's password manager reads", () => {
 
         expect(field('login-username').form).toBe(form);
         expect(field('login-password').form).toBe(form);
+    });
+});
+
+describe('LoginCard — «Register here» follows the instance setting', () => {
+    it('offers no registration once an admin closed it', async () => {
+        settingsMock.store.set(REGISTRATION_CLOSED);
+        mount();
+        await tick();
+
+        // The card is there: only the way to an account the backend would refuse goes.
+        expect(screen.getByTestId('login-form')).toBeInTheDocument();
+        expect(screen.getByTestId('goto-forgot')).toBeInTheDocument();
+        expect(registerOffer()).toEqual(WITHDRAWN);
+    });
+
+    it('offers registration while it is open', async () => {
+        settingsMock.store.set(REGISTRATION_OPEN);
+        mount();
+        await tick();
+
+        expect(registerOffer()).toEqual(OFFERED);
+    });
+
+    it('still offers registration when the setting is missing, as in a cache written before the field existed', async () => {
+        // Open in case of doubt: the link goes only when the server said «closed».
+        // The backend still refuses a registration it does not allow.
+        settingsMock.store.set(CACHED_WITHOUT_THE_KEY);
+        mount();
+        await tick();
+
+        expect(registerOffer()).toEqual(OFFERED);
+    });
+
+    it('withdraws the offer as soon as the store says closed, without a remount', async () => {
+        mount();
+        await tick();
+        expect(registerOffer(), 'open at mount: the default, or a cache from an open instance').toEqual(OFFERED);
+
+        // What a fresh `load()` brings when an admin closed registration since the cache was written.
+        settingsMock.store.set(REGISTRATION_CLOSED);
+        await tick();
+
+        expect(screen.getByTestId('goto-forgot')).toBeInTheDocument();
+        expect(registerOffer()).toEqual(WITHDRAWN);
+    });
+
+    it('asks the server for fresh settings once, on mount', async () => {
+        // The cache may predate the admin's decision, and `GET /settings/global`
+        // is public: a signed-out visitor can ask.
+        mount();
+        await tick();
+
+        expect(settingsMock.load).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * The sign-in error (O, step 21, finding 5).
+ *
+ * The card printed `{$authError}` as it was, and the store put an English
+ * sentence there, so the error read in English in every language. The approved
+ * contract: `authError` holds an `AuthError` (`$lib/types`) or `null`, and the
+ * card draws it in `login-error`:
+ *   - `{key}`, a catalogue key, through the translator (`$_(key)`): translated
+ *     when it is drawn, not when the sign-in failed, so it also follows a
+ *     language change while it is on screen;
+ *   - `{message}`, the transport's own words, verbatim — never through `$_`;
+ *   - `null`: no error box at all.
+ *
+ * These cases swap the identity for a translator that marks what it translated,
+ * `⟦key⟧`: a key must come out marked, a message unmarked. Today the box prints
+ * the object itself, "[object Object]"; the `null` case is green, and stays so.
+ */
+describe('LoginCard — the sign-in error: a key is translated, a message is shown as it came', () => {
+    const KEYS: AuthErrorKey[] = ['auth.invalidCredentials', 'auth.invalidInput', 'auth.loginFailed'];
+    const marked = (key: string): string => `⟦${key}⟧`;
+    const errorBox = () => screen.queryByTestId('login-error');
+    /** What the box reads, whitespace collapsed: the markup around the text is the card's business. */
+    const shown = (box: HTMLElement | null): string | undefined => box?.textContent?.replace(/\s+/g, ' ').trim();
+
+    it.each(KEYS)('draws {key: %s} through the translator', (key) => {
+        translator.set(marked);
+        signInError.set({key});
+
+        mount();
+
+        expect(errorBox(), 'premise: an error draws the box').not.toBeNull();
+        expect(shown(errorBox()), 'a {key} error is drawn through the translator, in the language of the page').toBe(marked(key));
+    });
+
+    it.each(['Request failed with status code 500', 'Network Error'])('draws {message: "%s"} as it came, never through the translator', (message) => {
+        translator.set(marked);
+        signInError.set({message});
+
+        mount();
+
+        expect(errorBox(), 'premise: an error draws the box').not.toBeNull();
+        expect(shown(errorBox()), 'a {message} error is the transport’s own words, drawn verbatim').toBe(message);
+    });
+
+    it('follows a language change while the error is on screen', async () => {
+        translator.set((key) => `first:${key}`);
+        signInError.set({key: 'auth.invalidCredentials'});
+        mount();
+        expect(shown(errorBox()), 'a {key} error is drawn through the translator of the moment').toBe('first:auth.invalidCredentials');
+
+        translator.set((key) => `second:${key}`);
+        await tick();
+
+        expect(shown(errorBox()), 'the key is translated when the card draws it, so the error follows the language').toBe('second:auth.invalidCredentials');
+    });
+
+    it('draws no box while there is no error, and takes it away when the error clears', async () => {
+        mount();
+        expect(errorBox(), 'no error, no box').toBeNull();
+
+        signInError.set({key: 'auth.invalidCredentials'});
+        await tick();
+        expect(errorBox(), 'premise: an error draws the box').not.toBeNull();
+
+        signInError.set(null);
+        await tick();
+        expect(errorBox(), 'a cleared error takes the box away').toBeNull();
     });
 });

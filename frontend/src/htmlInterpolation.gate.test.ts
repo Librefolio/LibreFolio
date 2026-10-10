@@ -26,6 +26,9 @@
  * interpolation, and a template nested inside another one is seen. A file that does not parse fails
  * the gate: a file it cannot read is a file it cannot vouch for.
  *
+ * It reads the UI catalogs too, every `*.json` in `src/lib/i18n`, as JSON: the text of a translation
+ * is checked where it is written, not where it is used — see "Translations", below.
+ *
  * ## The rule, as this file checks it
  *
  * An interpolation `${expr}` is in an **HTML context** when it belongs to a template literal that is
@@ -62,7 +65,8 @@
  * is, wherever the call stands: `pnlRow(broker.brokerName, …)` is the finding `${broker.brokerName}`
  * would be. Translations stay allowed there as everywhere: an i18n call, and a property of a label
  * bundle (`labels.*`, `pnlLabels.*`, `eurLabels.*` — `LABEL_BUNDLE`), which holds a translated label
- * whatever the property is called, in a helper's argument and in a template alike.
+ * whatever the property is called, in a helper's argument and in a template alike. That allowance rests
+ * on a check of the catalogs, not on trust in their texts: see "Translations", below.
  *
  * "Reaches its value" is decided on the syntax tree, by rules that are mechanical, not judgements:
  *   - the test of `a ? b : c`, the left side of `a && b`, the operands of a comparison, of arithmetic
@@ -84,6 +88,20 @@
  * whitespace-collapsed expression — never by line, so an unrelated edit above a site cannot turn the
  * gate red. It starts EMPTY. An entry needs a reason a reviewer can check; an entry that no longer
  * matches a violation is stale and fails the gate, so the list cannot rot into one nobody trusts.
+ *
+ * ## Translations
+ *
+ * A translation reaches hand-built HTML unescaped wherever the rule above allows it, and its text comes
+ * from the catalogs whatever path it takes — `$t`, an alias, a label bundle, a local with any name. So
+ * the catalogs are checked instead of the sites, by the last `describe` of this file: every value must
+ * read as plain text once parsed as HTML, which is all escaping it would change there. No "<" anywhere,
+ * and no "&" that the parser decodes (`&lt;`, `&#60;`, `&amp;`, or a legacy name without ";" such as
+ * `&copy`); a lone "&", as in "P&L", reads the same raw or escaped. The parser is jsdom's, with the
+ * browser's own rules, not a pattern. A translation that carries markup on purpose is listed, with its
+ * reason, in `SANITIZED_MARKUP_KEYS`, and reaches the page only through `sanitizeHtml`; an entry that no
+ * catalog marks up any more is stale and fails, as an allow-list entry does. What a message
+ * interpolates — the arguments after its key — is not the catalog's: the rule above checks it, within
+ * the limits stated next.
  *
  * ## Completeness, stated honestly
  *
@@ -108,7 +126,15 @@
  *     that takes HTML, until it is added to the list;
  *   - an escape that is right for text but wrong for its place: `escapeHtml` escapes quotes, so it is
  *     right in both, but a hand-rolled chain of `.replace()` calls is not recognised as an escape at
- *     all — it is reported, and replacing it with `escapeHtml` is the fix.
+ *     all — it is reported, and replacing it with `escapeHtml` is the fix;
+ *   - a translation inside an attribute value (`title="${$t(…)}"`): the catalog check reads a value as
+ *     text content, where a '"' changes nothing, while in an attribute a '"' ends the value. Catalog
+ *     values do hold '"', but neither translation interpolated into a `title` today does: keep it so,
+ *     or escape the site;
+ *   - the fallback of `translateOr(translate, key, fallback)`: a literal of the code, in no catalog, so
+ *     the catalog check never reads it;
+ *   - a label bundle is known by its name, not by its content: a `…Labels` object that also carried
+ *     user text would be let through — keep bundles to translations.
  * When the rule grows, grow the forms in the same change.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
@@ -116,6 +142,7 @@
 
 import {describe, expect, it} from 'vitest';
 import {readdirSync, readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
 import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
@@ -869,5 +896,175 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
         const stale = REVIEWED_EXCEPTIONS.filter((entry) => !found.has(key(entry))).map((entry) => `${entry.file}  ${entry.expr}`);
         expect(stale, ['', 'Reviewed exceptions that no longer match a violation — delete them:', '', ...stale, ''].join('\n  ')).toEqual([]);
         expect(REVIEWED_EXCEPTIONS.filter((entry) => entry.why.trim().length < 20).map((entry) => `${entry.file}  ${entry.expr}`)).toEqual([]);
+    });
+});
+
+/*
+ * Item 10: the catalog check behind the i18n allowance.
+ *
+ * The gate above lets translations into hand-built HTML unescaped: an i18n call, whose interpolated
+ * arguments it still checks, and a property of a label bundle. The text of a translation comes from the
+ * catalogs, and chart tooltips, among other sites, interpolate it raw. That is sound only while every
+ * catalog value reads as plain text once parsed as HTML: in text content, escaping changes what is shown
+ * only where a "<" opens markup or an "&" starts a character reference. So the catalogs are checked
+ * instead of the sites: no "<" anywhere — stricter than the parser, which shows `a < b` as text, so that
+ * the rule stays simple — and no "&" the parser decodes, with or without ";". A lone "&", as in "P&L",
+ * reads the same raw or escaped. A key that carries markup on purpose is listed, with its reason, in
+ * `SANITIZED_MARKUP_KEYS`. The check reads a value as text content, not as an attribute value, where a
+ * '"' would matter too.
+ */
+
+interface ReviewedMarkup {
+    /** Dotted catalog key, as the catalog check prints it. */
+    key: string;
+    why: string;
+}
+
+/**
+ * Translations that carry markup on purpose (item 10). All three are validation errors produced only by
+ * `resolveIssueMessage()` in `src/lib/utils/transactions/resolveValidationMessage.ts`, as
+ * `transactions.errors.<code>`, and every caller of `resolveIssueMessage` renders its result through
+ * `{@html sanitizeHtml(…)}`: TransactionFormModal, TransactionBulkModal, ParseDetailModal. Never in a
+ * tooltip. Add a key only with such a consumer.
+ */
+const SANITIZED_MARKUP_KEYS: readonly ReviewedMarkup[] = [
+    {key: 'transactions.errors.balanceAssetNegative', why: '<strong> highlights the asset, the negative holding and the broker of a validation error rendered through sanitizeHtml.'},
+    {key: 'transactions.errors.balanceCashNegative', why: '<strong> highlights the currency, the negative cash balance and the broker of a validation error rendered through sanitizeHtml.'},
+    {key: 'transactions.errors.costBasisRequired', why: '<b> highlights the transaction type and the Auto and manual cost-basis modes of a validation error rendered through sanitizeHtml.'},
+];
+
+const CATALOG_DIR = join(SRC, 'lib', 'i18n');
+
+/**
+ * The UI catalogs by file name, in name order: every `*.json` in `src/lib/i18n`. Read inside the tests,
+ * so a broken catalog fails these tests and not the collection of the whole gate.
+ */
+function readCatalogs(): Record<string, unknown> {
+    return Object.fromEntries(
+        readdirSync(CATALOG_DIR)
+            .filter((name) => name.endsWith('.json'))
+            .sort()
+            .map((name) => [name, JSON.parse(readFileSync(join(CATALOG_DIR, name), 'utf8')) as unknown]),
+    );
+}
+
+let htmlReader: HTMLElement | undefined;
+
+/**
+ * The text a browser shows for `html` set as the content of an element: the HTML parser of jsdom, with
+ * the full table of named references and the legacy names that need no ";". Loaded on first use, so the
+ * code gate above never pays for it.
+ */
+function textOfHtml(html: string): string {
+    if (htmlReader === undefined) {
+        // jsdom ships no type declarations, and @types/jsdom is not a dependency: type the one constructor used.
+        const {JSDOM} = createRequire(import.meta.url)('jsdom') as {JSDOM: new () => {window: Window}};
+        htmlReader = new JSDOM().window.document.createElement('div');
+    }
+    htmlReader.innerHTML = html;
+    return htmlReader.textContent ?? '';
+}
+
+/**
+ * Why a translation would not read as plain text once interpolated into HTML, or null when it would: the
+ * reason is `contains "<"` for any "<", or `renders as «…»` with the text the HTML parser makes of it.
+ */
+function translationMarkup(value: string): string | null {
+    if (value.includes('<')) return 'contains "<"';
+    // In text content only "<" and "&" make the parser read anything but text, and "<" is already out.
+    if (!value.includes('&')) return null;
+    const text = textOfHtml(value);
+    return text === value ? null : `renders as «${text}»`;
+}
+
+/**
+ * Walks every string of the catalogs. `offenders`: each value `translationMarkup` flags whose dotted key
+ * is not reviewed, as `${file}  ${key}  ${reason}`, in catalog order then document order. `stale`: the
+ * reviewed keys that no catalog flags, in set order.
+ */
+function catalogMarkupFindings(catalogs: Readonly<Record<string, unknown>>, reviewed: ReadonlySet<string>): {offenders: string[]; stale: string[]} {
+    const offenders: string[] = [];
+    const marked = new Set<string>();
+    const visit = (file: string, node: unknown, key: string): void => {
+        if (typeof node === 'string') {
+            const reason = translationMarkup(node);
+            if (reason === null) return;
+            if (reviewed.has(key)) marked.add(key);
+            else offenders.push(`${file}  ${key}  ${reason}`);
+        } else if (typeof node === 'object' && node !== null) {
+            for (const [name, child] of Object.entries(node)) visit(file, child, key === '' ? name : `${key}.${name}`);
+        }
+    };
+    for (const [file, catalog] of Object.entries(catalogs)) visit(file, catalog, '');
+    return {offenders, stale: [...reviewed].filter((key) => !marked.has(key))};
+}
+
+describe('Translations interpolated into HTML read as plain text (item 10: the catalog check behind the i18n allowance)', () => {
+    it('flags any "<" in a translation, even one the parser would show as text', () => {
+        // `a < b` would show as text: the rule is stricter than the parser, so that it stays simple.
+        expect(translationMarkup('Totale <b>P&L</b>')).toBe('contains "<"');
+        expect(translationMarkup('a < b')).toBe('contains "<"');
+    });
+
+    it('flags every character reference the parser decodes, with or without ";"', () => {
+        const decoded: [string, string][] = [
+            ['1 &lt; 2', 'renders as «1 < 2»'],
+            ['&#60;b&#62;', 'renders as «<b>»'],
+            ['&#x3C;', 'renders as «<»'],
+            ['Profit &amp; loss', 'renders as «Profit & loss»'],
+            ['&eacute;t&eacute;', 'renders as «été»'],
+            ['&copy 2026', 'renders as «© 2026»'], // a legacy name needs no ";"…
+            ['R&notes', 'renders as «R¬es»'], // …and decodes even inside a word…
+            ['P&LT', 'renders as «P<»'], // …so P&L is fine, but P&LT is not
+        ];
+        for (const [input, expected] of decoded) expect(translationMarkup(input), input).toBe(expected);
+    });
+
+    it('lets a lone "&" through: P&L stays P&L', () => {
+        // None of these "&" starts a reference the parser decodes, and ">" and quotes read the same raw or escaped.
+        for (const value of ['P&L', 'P&L, R&D, M&A, AT&T', 'S&P500', 'P&L; Q&A', '&#', '&;', 'a > b', `l'utile "netto"`, 'Plain text', '']) expect(translationMarkup(value), value).toBeNull();
+    });
+
+    it('walks every string of nested catalogs by dotted key, arrays included, in catalog order then document order', () => {
+        // `n: 3` is not a string, so not a translation: the walk skips it.
+        expect(catalogMarkupFindings({'en.json': {a: {b: 'x <y>', c: 'P&L'}, d: '1 &lt; 2', list: ['ok', 'R&notes'], n: 3}, 'it.json': {a: {b: 'ok', c: {d: {e: '&not'}}}, d: 'P&L;'}}, new Set())).toEqual({
+            offenders: ['en.json  a.b  contains "<"', 'en.json  d  renders as «1 < 2»', 'en.json  list.1  renders as «R¬es»', 'it.json  a.c.d.e  renders as «¬»'],
+            stale: [],
+        });
+    });
+
+    it('keeps a reviewed key while any language marks it up, and reports a reviewed key nobody marks up as stale', () => {
+        const catalogs = {'en.json': {e: {r: 'Balance <strong>negative</strong>'}, s: 'plain'}, 'it.json': {e: {r: 'Saldo negativo'}, s: 'semplice'}};
+        // Markup in one language keeps the review needed; without the review, that markup is an offender…
+        expect(catalogMarkupFindings(catalogs, new Set(['e.r']))).toEqual({offenders: [], stale: []});
+        expect(catalogMarkupFindings(catalogs, new Set())).toEqual({offenders: ['en.json  e.r  contains "<"'], stale: []});
+        // …and a reviewed key that no language marks up, or that no catalog has, is stale.
+        expect(catalogMarkupFindings(catalogs, new Set(['e.r', 's', 'gone']))).toEqual({offenders: [], stale: ['s', 'gone']});
+    });
+
+    it('reads every UI catalog: en, it, fr and es', () => {
+        const catalogs = readCatalogs();
+        const names = ['en.json', 'it.json', 'fr.json', 'es.json'];
+        expect(Object.keys(catalogs)).toEqual(expect.arrayContaining(names));
+        for (const name of names) {
+            expect(typeof catalogs[name], name).toBe('object');
+            expect(catalogs[name], name).not.toBeNull();
+        }
+    });
+
+    it('finds no markup in any translation outside the reviewed sanitized keys', () => {
+        // An empty walk is green here too: the next test is the positive control on these same catalogs,
+        // since the walk must still find the three reviewed keys there, or they read as stale.
+        const {offenders} = catalogMarkupFindings(readCatalogs(), new Set(SANITIZED_MARKUP_KEYS.map((entry) => entry.key)));
+        const rule =
+            'Translations are interpolated into hand-built HTML without escapeHtml — the allowance of the gate above — so every catalog value must read as plain text: no "<" anywhere, and no "&" that starts a character reference ("&lt;", "&#60;", "&amp;", or a legacy name without ";" such as "&copy"). A lone "&", as in "P&L", is fine. A translation that needs markup must be rendered only through sanitizeHtml() and listed in SANITIZED_MARKUP_KEYS — item 10.';
+
+        expect(offenders, ['', rule, `${offenders.length} translation(s) with markup:`, '', ...offenders, ''].join('\n  ')).toEqual([]);
+    });
+
+    it('keeps the reviewed sanitized keys current and explained', () => {
+        const {stale} = catalogMarkupFindings(readCatalogs(), new Set(SANITIZED_MARKUP_KEYS.map((entry) => entry.key)));
+        expect(stale, ['', 'Reviewed sanitized keys that no catalog marks up any more — delete them:', '', ...stale, ''].join('\n  ')).toEqual([]);
+        expect(SANITIZED_MARKUP_KEYS.filter((entry) => entry.why.trim().length < 20).map((entry) => entry.key)).toEqual([]);
     });
 });

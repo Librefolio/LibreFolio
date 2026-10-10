@@ -3,13 +3,14 @@
 **Data:** 2026-09-08. **Origine:** nuovo feedback utente, successivo alla prima analisi.
 **Stato:** ✅ completato dal **Gruppo E - Import e UX urgenti** e applicato al
 checkout target `dev_release2` il 2026-09-09; commit/SHA manuale pendente.
+**Al 2026-10-09:** committato in `ef722b552` (2026-09-09) e nel target.
 **Baseline:** branch locale `dev_release2`, commit `4a73f5f6`.
 
 Questo report apre una corsia urgente prima del restante backlog. Non dichiara gia
 riprodotti o risolti i sintomi: cause, prove e avanzamento per-step appartengono al
-[piano esecutivo E](../14_feedbackImportUrgent/plan-phase00FeedbackImportUrgent.prompt.md),
+[piano esecutivo E](../../phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgent.prompt.md),
 pubblicato e completato attraverso cinque round. Manifest:
-[integrazione E](../14_feedbackImportUrgent/manifest-integrazione-E.md).
+[integrazione E](../../phases/14_feedbackImportUrgent/manifest-integrazione-E.md).
 
 Rimandi: [piano generale](06_piano_sprint.md), [UX](01_ux_dashboard.md),
 [BRIM/import](04_brim_import.md), [futuro deliberato](../../../../TODO_FUTURI.md).
@@ -31,8 +32,9 @@ Rimandi: [piano generale](06_piano_sprint.md), [UX](01_ux_dashboard.md),
 **Chiusura 2026-09-09:** tutti gli ID E1-E9 sono implementati e verificati; il
 dev ha completato la review operativa delle superfici richieste. La review
 indipendente ha inoltre rilevato e fatto correggere il challenge pubblico GHCR
-di E9 nel [Round 5](../14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md).
+di E9 nel [Round 5](../../phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md).
 Il pacchetto e' nel checkout principale; non e' ancora committato o archiviato.
+**Al 2026-10-09:** committato in `ef722b552`; il piano di E è in `14_feedbackImportUrgent/`.
 
 **Integrazione 2026-09-08:** E7/E8 ricevuti e presi in carico nel piano14 come task
 distinti da E3. E9 aggiunto nella stessa data per il controllo aggiornamenti. Prima

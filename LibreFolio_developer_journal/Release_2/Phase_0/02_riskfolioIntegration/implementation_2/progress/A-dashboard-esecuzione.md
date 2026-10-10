@@ -28,16 +28,16 @@ non mio passa **prima** da Risk. Il via per il codice lo dà il developer.
 
 | # | voce | stato |
 |---:|---|---|
-| V1 | **l'avviso unico dei parziali**: tono per causa, badge degli asset, niente lista dei nomi tecnici | 🔶 tono ✅ · «causa → effetto» ✅ (passo 6) · **badge e frase breve** aspettano `AssetChip` di F |
+| V1 | **l'avviso unico dei parziali**: tono per causa, badge degli asset, niente lista dei nomi tecnici | 🔶 tono ✅ · «causa → effetto» ✅ · **badge e frase breve: ⏳ mai fatti**, anche se `AssetChip` ora esiste (`components/risk/AssetChip.svelte`) → README della cartella, buchi (allineamento 09/10) |
 | V1b | **la frase sotto lo scatter di L3** che chiama «liquidità» gli asset senza prezzo | ✅ (passi 1 e 4) |
-| V2 | tooltip vero sulle barre dell'istogramma di L1 | ⏳ |
-| V3 | aspetto delle card L1–L3: niente troncamenti, `Tooltip` al posto del `title` nativo | ⏳ |
-| V4 | ordinamenti per tipo/settore/area nella matrice di L2 | ⏳ aspetta il helper condiviso di F |
+| V2 | tooltip vero sulle barre dell'istogramma di L1 | ⏳ **mai fatto**: `levels/l1/ReturnHistogram.svelte` usa ancora il `title` nativo → README della cartella, buchi (allineamento 09/10) |
+| V3 | aspetto delle card L1–L3: niente troncamenti, `Tooltip` al posto del `title` nativo | ✅ `line-clamp-2` in `ui/display/RiskMetricCard.svelte` (allineamento 09/10) |
+| V4 | ordinamenti per tipo/settore/area nella matrice di L2 | ✅ `CorrelationHeatmap.svelte`, montata in `L2Diversification.svelte` (allineamento 09/10) |
 | V5 | icone del manuale su L1–L4, come nel lab | ✅ (passo 3) |
-| V6 | spazio vuoto a sinistra dello scatter (`scatterChartHelpers.ts:208`) | ⏳ |
+| V6 | spazio vuoto a sinistra dello scatter (`scatterChartHelpers.ts:208`) | ✅ `charts/scatterChartHelpers.ts` (allineamento 09/10) |
 | F2b | L3 dichiara i risultati `current_composition` che legge | ✅ (passo 6) |
 | M16 | la scheda «non misurato» di L2 non ha un test che ne fissi l'assenza | ✅ T2 (passo 5) |
-| — | didascalia di L2 con `.unpriced` e `.cash`, e l'icona `#excluded-weight` sulla scheda | ⏳ proposta di forma al developer |
+| — | didascalia di L2 con `.unpriced` e `.cash`, e l'icona `#excluded-weight` sulla scheda | ✅ `L2Diversification.svelte`: liquidità e senza prezzo, icona `#excluded-weight` (allineamento 09/10) |
 | — | dove stanno gli avvisi di L4 | **replay**: deciso il 02/10 (sotto) e scritto da Risk · shock e simulazione invariati |
 
 ---
@@ -3466,3 +3466,13 @@ commit del checkpoint 1.
 >    di Q e il passo 30.
 >
 > **Stato: FROZEN.**
+
+---
+
+## Chiusura — allineamento 09/10/2026 (scritta da Risk, proprietario della famiglia)
+
+- **Checkpoint 14 committato**: `889bc1434` (`fix(risk): shock bucket weight is its scope share`) · `371046e8d`
+  (`docs(journal): A, Q check and shock weight`). Entrato in `dev_release2` col treno 9 (`f8a419245`); verificato in
+  `3cceb4f90`.
+- **Resta aperto da questo piano**: V1 (i badge e la frase breve dell'avviso) e V2 (il tooltip dell'istogramma), nel
+  README della cartella fra i buchi.

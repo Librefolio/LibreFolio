@@ -45,6 +45,13 @@ and "save all" cannot diverge in behaviour.
 > A batch operation that stops at the first error converts a per-field problem
 > into an all-or-nothing one, and then does not even deliver "nothing".
 
+**Server side, 2026-10-09.** The global settings bulk endpoint (`PATCH
+/settings/global/bulk`) used to store unvalidated values and apply part of a refused
+batch. It now validates **every** item and names **every** refusal (422), then writes
+all or nothing — so "never stop at the first refusal" holds for the report, and a
+partially applied batch can no longer happen there:
+[[problems/global-settings-bulk-saved-unvalidated-values]].
+
 ## C5 — unclaimed keys go to «Altro»
 
 Settings keys that no tab claims were simply not rendered: invisible, uneditable,

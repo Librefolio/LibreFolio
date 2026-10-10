@@ -1,1 +1,1 @@
-/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/mkdocs_src/docs/user/misc/image-crop.en.md
+../../../../../../mkdocs_src/docs/user/misc/image-crop.en.md

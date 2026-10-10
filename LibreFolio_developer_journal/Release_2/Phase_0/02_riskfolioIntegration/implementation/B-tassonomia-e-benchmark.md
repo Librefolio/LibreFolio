@@ -372,17 +372,29 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc \
 
 ## 11. Definizione di finito
 
-- [ ] Una sola migrazione Alembic, incrementale, che gira su DB fresco **e** su uno
+- [x] Una sola migrazione Alembic, incrementale, che gira su DB fresco **e** su uno
       popolato;
-- [ ] backfill `INDEX → benchmark` verificato;
-- [ ] docstring `valuation_model` corretto;
-- [ ] `api sync` eseguito;
-- [ ] **il test enum ↔ tabelle esiste e passa** (cancello G-B);
-- [ ] i due YAML riscritti, con gli shock differenziati per sottotipo;
-- [ ] `SignalTreeSelect` generalizzato **senza** cambiare il comportamento per i segnali;
-- [ ] benchmark in cima al selettore, con degrado a stato vuoto;
-- [ ] **il segnale beta mostra i nomi, non gli id** (D73) — `SignalAssetParamControl`
+  ↳ *allineamento 09/10*: ✅ `backend/alembic/versions/004_release_1_2_0_schema.py` (la 003 di B è confluita nella 004)
+- [x] backfill `INDEX → benchmark` verificato;
+  ↳ *allineamento 09/10*: ✅ stessa migrazione (`is_benchmark` e il riempimento da `INDEX`)
+- [x] docstring `valuation_model` corretto;
+  ↳ *allineamento 09/10*: ✅ `progress/B-esecuzione.md`, passo 2
+- [x] `api sync` eseguito;
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato
+- [x] **il test enum ↔ tabelle esiste e passa** (cancello G-B);
+  ↳ *allineamento 09/10*: ✅ `progress/B-esecuzione.md`; `asset-unit` verde al `FROZEN`
+- [x] i due YAML riscritti, con gli shock differenziati per sottotipo;
+  ↳ *allineamento 09/10*: ✅ `backend/app/services/risk/scenario_catalog/built_in/hypothetical/equity_crash.yml` e `global_risk_off.yml`
+- [x] `SignalTreeSelect` generalizzato **senza** cambiare il comportamento per i segnali;
+  ↳ *allineamento 09/10*: ↪ superato: il passo 10 è stato annullato, scelte le sezioni su `SimpleSelect` (`progress/B-esecuzione.md`; D62 corretta)
+- [x] benchmark in cima al selettore, con degrado a stato vuoto;
+  ↳ *allineamento 09/10*: ✅ `frontend/src/lib/components/ui/select/AssetSelect.svelte` (`sections`, `restLabel`)
+- [x] **il segnale beta mostra i nomi, non gli id** (D73) — `SignalAssetParamControl`
       appoggiato ad `AssetSelect`, esclusione espressa via `filter`;
-- [ ] la ricerca non restituisce più l'intero elenco digitando `eur` o `etf` (D74);
-- [ ] **K2 e K3 consegnati e comunicati**;
-- [ ] nessun processo in ascolto su `6241`.
+  ↳ *allineamento 09/10*: ✅ D369
+- [x] la ricerca non restituisce più l'intero elenco digitando `eur` o `etf` (D74);
+  ↳ *allineamento 09/10*: ✅ `AssetSelect.svelte` (termini di ricerca)
+- [x] **K2 e K3 consegnati e comunicati**;
+  ↳ *allineamento 09/10*: ✅ `progress/B-esecuzione.md`
+- [x] nessun processo in ascolto su `6241`.
+  ↳ *allineamento 09/10*: verde al `FROZEN` del mandato

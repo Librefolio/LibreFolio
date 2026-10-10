@@ -555,6 +555,8 @@ class TestBatchPromote:
                             "date": "2026-02-10",
                             "quantity": "3",
                             "link_uuid": uuid_b,
+                            # Promoted into the incoming TRANSFER leg, the +3 needs a cost basis like any receiver
+                            "cost_basis_override": {"code": "USD", "amount": "50"},
                         },
                     ],
                     "promotes": [{"link_uuid_a": uuid_a, "link_uuid_b": uuid_b}],
@@ -793,6 +795,306 @@ class TestBatchPromote:
             assert data["committed"] is False
             assert any(i["code"] == "noPromoteRule" for i in data["issues"]), f"Expected noPromoteRule: {data['issues']}"
             print_success("Promote same-broker W+D → noPromoteRule ✓")
+
+    async def test_adjustment_without_cost_basis_is_rejected(self):
+        """Control: positive ADJUSTMENT with no cost basis and no mode → costBasisRequired, not committed."""
+        print_section("B2.8 — Positive ADJUSTMENT without cost basis → costBasisRequired")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_b = await create_broker(client, "CbReqB")
+            asset_id = await get_or_create_asset(client)
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "5",
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert data["committed"] is False, f"Positive ADJUSTMENT without cost basis was committed: {data}"
+            assert any(i.get("code") == "costBasisRequired" and i.get("field") == "cost_basis_override" and i.get("operation") == "create" and i.get("index") == 0 for i in data["issues"]), f"Expected costBasisRequired on cost_basis_override for create 0: {data['issues']}"
+            print_success("Positive ADJUSTMENT without cost basis → costBasisRequired ✓")
+
+    async def test_promote_saved_saved_clearing_cost_basis_is_rejected(self):
+        """Promote saved ADJUSTMENT(-5) + saved ADJUSTMENT(+5) resolving cost_basis_override to null → costBasisRequired, not committed."""
+        print_section("B2.9 — Promote saved+saved clearing the receiver cost basis → costBasisRequired")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PromClrCbA")
+            broker_b = await create_broker(client, "PromClrCbB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), then the outgoing -5
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+            id_minus = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="-5",
+                tx_date="2026-03-02",
+            )
+            # B: the incoming +5, saved with a manual cost basis
+            id_plus = await create_standalone_tx(
+                client,
+                broker_b,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="5",
+                tx_date="2026-03-02",
+                cost_basis_override={"code": "EUR", "amount": "10"},
+            )
+
+            # API-only path: the promote resolves the receiver's cost basis to null
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "promotes": [
+                        {
+                            "id_a": id_minus,
+                            "id_b": id_plus,
+                            "resolved_fields": {"cost_basis_override": None},
+                        }
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            if data["committed"]:
+                rows_resp = await client.get(
+                    f"{API_BASE}/transactions",
+                    params={"ids": [id_plus]},
+                    timeout=TIMEOUT,
+                )
+                assert rows_resp.status_code == 200, rows_resp.text
+                receiver = {tx["id"]: tx for tx in rows_resp.json()}.get(id_plus, {})
+                pytest.fail(
+                    f"Promote of saved ADJUSTMENT(-5) id={id_minus} + saved ADJUSTMENT(+5) id={id_plus} with resolved cost_basis_override=null was committed "
+                    f"(issues={data['issues']}): receiver {id_plus} is now type={receiver.get('type')} cost_basis_override={receiver.get('cost_basis_override')}; "
+                    f"expected committed=false with a costBasisRequired issue"
+                )
+            assert any(i.get("code") == "costBasisRequired" for i in data["issues"]), f"Expected costBasisRequired: {data['issues']}"
+            print_success("Promote saved+saved clearing the receiver cost basis → costBasisRequired ✓")
+
+    async def test_promote_saved_new_without_cost_basis_is_rejected(self):
+        """Promote saved ADJUSTMENT(-5) + new ADJUSTMENT(+5) without cost basis → costBasisRequired for the create, not committed."""
+        print_section("B2.10 — Promote saved+new, new receiver without cost basis → costBasisRequired")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PromNoCbA")
+            broker_b = await create_broker(client, "PromNoCbB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), then the outgoing -5
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+            id_minus = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="-5",
+                tx_date="2026-03-02",
+            )
+
+            # UI-reachable: bulk editor, new row + saved row → Promote pair.
+            # The new receiver carries no cost basis and no cost_basis_mode.
+            new_uuid = str(uuid.uuid4())
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "5",
+                            "link_uuid": new_uuid,
+                        },
+                    ],
+                    "promotes": [{"id_a": id_minus, "link_uuid_b": new_uuid}],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            if data["committed"]:
+                new_ids = [tx_id for r in data["results"] if r["operation"] == "create" and r["index"] == 0 for tx_id in r["ids"]]
+                assert new_ids, f"Committed without a create result for index 0: {data}"
+                rows_resp = await client.get(
+                    f"{API_BASE}/transactions",
+                    params={"ids": new_ids},
+                    timeout=TIMEOUT,
+                )
+                assert rows_resp.status_code == 200, rows_resp.text
+                receivers = "; ".join(f"id={tx['id']} type={tx['type']} cost_basis_override={tx['cost_basis_override']}" for tx in rows_resp.json())
+                pytest.fail(f"Promote of saved ADJUSTMENT(-5) id={id_minus} + new ADJUSTMENT(+5) without cost basis was committed (issues={data['issues']}): new receiver {receivers}; expected committed=false with a costBasisRequired issue for create 0")
+            assert any(i.get("code") == "costBasisRequired" and i.get("operation") == "create" and i.get("index") == 0 for i in data["issues"]), f"Expected costBasisRequired for create 0: {data['issues']}"
+            print_success("Promote saved+new without cost basis → costBasisRequired ✓")
+
+    async def test_promote_saved_saved_adjustments_keep_receiver_cost(self):
+        """Control: promote saved ADJUSTMENT(-5) + saved ADJUSTMENT(+5) with a cost basis, no resolved_fields → committed, receiver keeps its cost."""
+        print_section("B2.11 — Promote saved+saved, receiver keeps its cost basis → committed")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PromKeepCbA")
+            broker_b = await create_broker(client, "PromKeepCbB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), then the outgoing -5
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+            id_minus = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="-5",
+                tx_date="2026-03-02",
+            )
+            # B: the incoming +5, saved with a manual cost basis
+            id_plus = await create_standalone_tx(
+                client,
+                broker_b,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="5",
+                tx_date="2026-03-02",
+                cost_basis_override={"code": "EUR", "amount": "10"},
+            )
+
+            # No resolved_fields: the promote leaves the receiver's saved cost basis untouched
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"promotes": [{"id_a": id_minus, "id_b": id_plus}]},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert data["committed"] is True, f"Promote of saved ADJUSTMENT(-5) id={id_minus} + saved ADJUSTMENT(+5) id={id_plus} with cost EUR 10 was not committed: {data}"
+            assert data["issues"] == [], f"Unexpected issues: {data['issues']}"
+
+            rows_resp = await client.get(
+                f"{API_BASE}/transactions",
+                params={"ids": [id_minus, id_plus]},
+                timeout=TIMEOUT,
+            )
+            assert rows_resp.status_code == 200, rows_resp.text
+            by_id = {tx["id"]: tx for tx in rows_resp.json()}
+            assert set(by_id) == {id_minus, id_plus}, f"Expected rows {id_minus} and {id_plus}, got {sorted(by_id)}"
+            assert by_id[id_minus]["type"] == "TRANSFER", f"Sender {id_minus}: expected TRANSFER, got {by_id[id_minus]['type']}"
+            assert by_id[id_plus]["type"] == "TRANSFER", f"Receiver {id_plus}: expected TRANSFER, got {by_id[id_plus]['type']}"
+            assert by_id[id_minus]["related_transaction_id"] == id_plus, f"Sender {id_minus}: expected related_transaction_id={id_plus}, got {by_id[id_minus]['related_transaction_id']}"
+            assert by_id[id_plus]["related_transaction_id"] == id_minus, f"Receiver {id_plus}: expected related_transaction_id={id_minus}, got {by_id[id_plus]['related_transaction_id']}"
+            receiver_cost = by_id[id_plus]["cost_basis_override"]
+            assert receiver_cost is not None, f"Receiver {id_plus} lost its cost basis: {by_id[id_plus]}"
+            assert receiver_cost["code"] == "EUR", f"Receiver {id_plus}: expected cost basis in EUR, got {receiver_cost}"
+            assert Decimal(receiver_cost["amount"]) == Decimal("10"), f"Receiver {id_plus}: expected cost basis EUR 10, got {receiver_cost}"
+            print_success("Promote saved+saved keeps the receiver cost basis → committed ✓")
+
+    async def test_promote_saved_new_with_cost_basis_commits(self):
+        """Control: promote saved ADJUSTMENT(-5) + new ADJUSTMENT(+5) carrying a cost basis → committed, new row is the linked TRANSFER receiver."""
+        print_section("B2.12 — Promote saved+new, new receiver with cost basis → committed")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PromNewCbA")
+            broker_b = await create_broker(client, "PromNewCbB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), then the outgoing -5
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+            id_minus = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="-5",
+                tx_date="2026-03-02",
+            )
+
+            # Bulk editor, new row + saved row → Promote pair. The new receiver carries its cost basis.
+            new_uuid = str(uuid.uuid4())
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "5",
+                            "link_uuid": new_uuid,
+                            "cost_basis_override": {"code": "EUR", "amount": "10"},
+                        },
+                    ],
+                    "promotes": [{"id_a": id_minus, "link_uuid_b": new_uuid}],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert data["committed"] is True, f"Promote of saved ADJUSTMENT(-5) id={id_minus} + new ADJUSTMENT(+5) with cost EUR 10 was not committed: {data}"
+            assert data["issues"] == [], f"Unexpected issues: {data['issues']}"
+            new_ids = [tx_id for r in data["results"] if r["operation"] == "create" and r["index"] == 0 for tx_id in r["ids"]]
+            assert len(new_ids) == 1, f"Expected one id for create 0, got {new_ids}: {data['results']}"
+            new_id = new_ids[0]
+
+            rows_resp = await client.get(
+                f"{API_BASE}/transactions",
+                params={"ids": [id_minus, new_id]},
+                timeout=TIMEOUT,
+            )
+            assert rows_resp.status_code == 200, rows_resp.text
+            by_id = {tx["id"]: tx for tx in rows_resp.json()}
+            assert set(by_id) == {id_minus, new_id}, f"Expected rows {id_minus} and {new_id}, got {sorted(by_id)}"
+            assert by_id[new_id]["type"] == "TRANSFER", f"New receiver {new_id}: expected TRANSFER, got {by_id[new_id]['type']}"
+            assert by_id[id_minus]["type"] == "TRANSFER", f"Saved sender {id_minus}: expected TRANSFER, got {by_id[id_minus]['type']}"
+            assert by_id[new_id]["related_transaction_id"] == id_minus, f"New receiver {new_id}: expected related_transaction_id={id_minus}, got {by_id[new_id]['related_transaction_id']}"
+            assert by_id[id_minus]["related_transaction_id"] == new_id, f"Saved sender {id_minus}: expected related_transaction_id={new_id}, got {by_id[id_minus]['related_transaction_id']}"
+            new_cost = by_id[new_id]["cost_basis_override"]
+            assert new_cost is not None, f"New receiver {new_id} stored no cost basis: {by_id[new_id]}"
+            assert new_cost["code"] == "EUR", f"New receiver {new_id}: expected cost basis in EUR, got {new_cost}"
+            assert Decimal(new_cost["amount"]) == Decimal("10"), f"New receiver {new_id}: expected cost basis EUR 10, got {new_cost}"
+            print_success("Promote saved+new with cost basis → linked TRANSFER pair ✓")
 
 
 # ============================================================================

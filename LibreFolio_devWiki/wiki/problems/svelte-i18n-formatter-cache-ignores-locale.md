@@ -65,4 +65,4 @@ rules. Read selections through formatters built with an explicit locale (the run
 | i18n initialisation | `frontend/src/lib/i18n/index.ts` |
 | Catalogue gate and latch | `frontend/src/lib/i18n/catalogIcuLocale.test.ts` |
 | Explicit-locale selection precedent | `frontend/src/lib/features/tools/pac-allocator/planner/result/text.test.ts` |
-| Plan (§4) | `LibreFolio_developer_journal/Release_2/Phase_0/29_i18nAudit/plan-phase00I18nAudit.prompt.md` |
+| Plan (§4) | `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md` |

@@ -26,6 +26,8 @@ schedule.
   Hover the message to read it in full, and click the row's ↻ button to try that pair again.
 - The summary at the bottom shows how many pairs synced and the totals. **Retry N failed** runs
   every failed pair again.
+- A long history can need more time: if the window reports *Request timed out*, raise its
+  **Timeout**, then click **Retry N failed**.
 
 ---
 

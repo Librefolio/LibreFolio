@@ -55,4 +55,4 @@ This is the complete v5 redesign of the BRIM Import Wizard, superseding the v4 "
 | BRIM providers dir | `backend/app/services/brim_providers/` |
 | Schwab plugin | `backend/app/services/brim_providers/broker_schwab.py` |
 | Coinbase plugin (fixed) | `backend/app/services/brim_providers/broker_coinbase.py` |
-| BRIM API | `backend/app/api/v1/brim.py` |
+| BRIM API (`brim_router`, mounted under `/brokers/import`) | `backend/app/api/v1/brokers.py` |

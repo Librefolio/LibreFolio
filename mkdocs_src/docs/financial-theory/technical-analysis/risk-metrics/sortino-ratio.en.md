@@ -18,13 +18,13 @@ where:
 
 !!! info "How the threshold enters the calculation"
 
-    The threshold — the minimum acceptable return — is supplied as an **effective annual** rate and converted to an **effective daily** rate through the same conversion the Sharpe ratio uses:
+    The threshold — the minimum acceptable return — is supplied as an **effective annual** rate and converted to an **effective per-period** rate through the same conversion the Sharpe ratio uses:
 
     $$
-    r_{daily} = (1 + r_{annual})^{1/365} - 1
+    r_{period} = (1 + r_{annual})^{1/f} - 1
     $$
 
-    That daily threshold is then subtracted from each daily return, both in the excess returns and inside the downside deviation below, so a single definition of "acceptable" governs the numerator and the denominator alike.
+    where $f$ is the same annualization factor that scales the downside deviation, measured from the observed data — see [Observed Annualization](observed-annualization.md). That per-period threshold is then subtracted from each period return, both in the excess returns and inside the downside deviation below, so a single definition of "acceptable" governs the numerator and the denominator alike.
 
 ### 📐 Downside Deviation {: #downside-deviation }
 
