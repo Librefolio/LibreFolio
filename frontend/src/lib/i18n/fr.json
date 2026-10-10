@@ -1002,7 +1002,7 @@
     "updateFailed": "Échec de la mise à jour du courtier",
     "assets": "{n} actif(s)",
     "currencies": "{n} devise(s)",
-    "nav": "VNI",
+    "nav": "NAV",
     "gainLoss": "Gain/Perte",
     "otherExisting": "Autres Courtiers Existants",
     "overview": "Vue d'ensemble",
@@ -1583,12 +1583,12 @@
     "assetsAtCostTooltip": "Coût des actifs",
     "cashFromContributedCapital": "Capital",
     "cashFromGeneratedReturns": "Rendement",
-    "pnlFormulaHint": "P&L = VNI − Capital versé",
+    "pnlFormulaHint": "P&L = NAV − Capital versé",
     "returns": "Rendements",
     "unrealizedDelta": "Variation non réalisée",
     "unrealizedDeltaTooltip": "Variation du gain/perte latent sur les positions encore ouvertes.",
     "realizedSales": "Ventes",
-    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, calculé par rapport au coût moyen d'acquisition.",
+    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, calculé par rapport au prix de revient unitaire.",
     "income": "Dividendes et intérêts",
     "incomeTooltip": "Revenus perçus sur la période via dividendes, intérêts ou coupons.",
     "feesAndTaxes": "Frais et taxes",
@@ -2310,7 +2310,7 @@
       "INTEREST": "Intérêts",
       "SELL": "Vente",
       "TAX": "Impôt",
-      "TRANSFER": "Transfert de Titres",
+      "TRANSFER": "Transfert d'Actif",
       "WITHDRAWAL": "Retrait",
       "CASH_TRANSFER": "Virement"
     },
@@ -2393,7 +2393,7 @@
       "serverError": "Sauvegarde impossible — erreur serveur"
     },
     "costBasisOverride": {
-      "tooltip": "Override du coût moyen pondéré. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
+      "tooltip": "Override du prix de revient unitaire. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
       "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Si ces parts n’ont rien coûté (un fractionnement ou un don), saisissez 0."
     },
     "wacPreview": {
@@ -2401,33 +2401,33 @@
       "unitModeLabel": "Afficher comme :",
       "unitModeTotal": "Total",
       "unitModePerUnit": "Par unité",
-      "suggested": "CMP suggéré",
+      "suggested": "PRU suggéré",
       "txsUsed": "transactions utilisées",
-      "missingFx": "Impossible de calculer le CMP : taux FX manquant",
-      "docsTooltip": "Découvrez comment le CMP (Coût Moyen Pondéré) est calculé",
+      "missingFx": "Impossible de calculer le PRU : taux FX manquant",
+      "docsTooltip": "Découvrez comment le PRU (prix de revient unitaire) est calculé",
       "toggleAuto": "Auto",
       "toggleManual": "Manuel",
       "placeholderAuto": "auto (⚡️Valider maintenant)",
       "currencyChanged": "Devise modifiée — recalcul en cours…",
       "unitCost": "Coût unitaire",
       "effectLabel": "Effet",
-      "columnWac": "CMP",
+      "columnWac": "PRU",
       "effect": {
         "add": "Pondérée",
         "reduce": "Quantité réduite",
         "addZeroCost": "Dilution",
-        "addAtWac": "Auto CMP"
+        "addAtWac": "Auto PRU"
       },
       "pendingCreate": "Transaction en attente (nouvelle, pas encore enregistrée)",
       "pendingEdit": "Transaction en attente (modifiée, pas encore enregistrée)",
-      "validateHint": "Complétez les champs et validez pour calculer le CMP",
+      "validateHint": "Complétez les champs et validez pour calculer le PRU",
       "validateToRecalculate": "⚡ Validez maintenant pour recalculer le tableau"
     },
     "wac": {
       "syncSuccess": "Taux FX synchronisés avec succès",
       "syncFailed": "Échec de la synchronisation FX",
       "fxStaleBannerTitle": "Conversions FX avec taux périmés",
-      "fxDisclaimer": "Le taux FX utilisé peut différer de celui appliqué par votre courtier. Vérifiez le coût moyen avec votre courtier.",
+      "fxDisclaimer": "Le taux FX utilisé peut différer de celui appliqué par votre courtier. Vérifiez le prix de revient unitaire avec votre courtier.",
       "fxTooltipStale": "Taux non à jour",
       "fxTooltipSameDay": "même jour",
       "fxTooltipDaysBefore": "jours avant",
@@ -2491,10 +2491,10 @@
       "promoteRefNotFound": "Transaction référencée pour la promotion non trouvée",
       "alreadyPaired": "La transaction est déjà liée à une autre transaction",
       "noPromoteRule": "Aucune règle de promotion ne correspond à ces deux types de transaction",
-      "wacFxUnavailable": "❌ Calcul CMP échoué.",
+      "wacFxUnavailable": "❌ Calcul PRU échoué.",
       "wacFxUnavailableSyncLink": "Synchroniser les taux FX",
       "wacFxUnavailableOrManual": "ou passez en mode manuel.",
-      "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (CMP) ou saisissez une valeur <b>manuelle</b>.",
+      "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (PRU) ou saisissez une valeur <b>manuelle</b>.",
       "pairDeleteIncomplete": "Transaction liée : supprimer cette ligne exige aussi la suppression de sa contrepartie (transaction n°{partnerId}). Si elle appartient à un broker que vous ne pouvez pas modifier, demandez à son propriétaire de la supprimer."
     },
     "pydantic": {
@@ -2675,7 +2675,7 @@
       "riskWindow": "Nombre d’observations préparées des rendements quotidiens dans chaque fenêtre glissante.",
       "riskFreeAnnualRate": "Taux annuel effectif sans risque utilisé uniquement pour calculer le Sharpe.",
       "comparisonAsset": "Actif enregistré utilisé comme série de comparaison réelle pour le bêta.",
-      "riskFullHistory": "Mesure le drawdown par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
+      "riskFullHistory": "Mesure le repli par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
     },
     "units": {
       "days": "jours",
@@ -2827,10 +2827,10 @@
       "loadError": "Impossible de charger les actifs."
     },
     "riskDrawdown": {
-      "name": "Drawdown depuis le sommet",
-      "description": "Suit la baisse en pourcentage depuis chaque sommet progressif du prix.",
-      "output": "Drawdown",
-      "outputDescription": "Baisse du prix depuis le sommet progressif, hors flux ; jamais supérieure à zéro.",
+      "name": "Repli depuis le sommet",
+      "description": "Suit le repli en pourcentage depuis chaque sommet progressif du prix.",
+      "output": "Repli",
+      "outputDescription": "Repli du prix depuis le sommet progressif, hors flux ; jamais supérieur à zéro.",
       "referencePeak": "Sommet"
     },
     "riskRollingVolatility": {
@@ -2945,7 +2945,7 @@
         },
         "market_analysis": {
           "display": "Analyse de l'actif",
-          "description": "Analyse l'historique des prix, les rendements, la tendance, le momentum, la volatilité, le drawdown, les événements et la couverture."
+          "description": "Analyse l'historique des prix, les rendements, la tendance, le momentum, la volatilité, le repli, les événements et la couverture."
         }
       },
       "fx": {
@@ -2998,7 +2998,7 @@
       "portfolio": {
         "overview_and_history": {
           "display": "Portefeuille et évolution",
-          "description": "Composition, positions, liquidités, performance, flux, revenus, coûts enregistrés, synthèse FIFO économique, contexte de marché compact par actif, drawdown et provenance."
+          "description": "Composition, positions, liquidités, performance, flux, revenus, coûts enregistrés, synthèse FIFO économique, contexte de marché compact par actif, repli et provenance."
         },
         "asset_history": {
           "display": "Historique des actifs du portefeuille",
@@ -3048,7 +3048,7 @@
       "broker": {
         "overview_and_history": {
           "display": "Courtier et évolution",
-          "description": "Positions, liquidités, concentration, performance, flux, coûts, synthèse FIFO économique, contexte de marché compact par actif, drawdown et provenance du courtier."
+          "description": "Positions, liquidités, concentration, performance, flux, coûts, synthèse FIFO économique, contexte de marché compact par actif, repli et provenance du courtier."
         },
         "asset_history": {
           "display": "Historique des actifs du courtier",
@@ -3098,11 +3098,11 @@
       "asset": {
         "position_and_history": {
           "display": "Position et historique (complet)",
-          "description": "Vos positions sur cet actif — coût, valeur, P&L, performance, lots économiques — plus contexte de marché compact, drawdown et provenance. L'export complet."
+          "description": "Vos positions sur cet actif — coût, valeur, P&L, performance, lots économiques — plus contexte de marché compact, repli et provenance. L'export complet."
         },
         "market_history": {
           "display": "Historique de marché uniquement (sans positions)",
-          "description": "Prix, rendements, indicateurs, états, événements, drawdown, couverture et provenance — données de marché uniquement, sans positions. L'export léger."
+          "description": "Prix, rendements, indicateurs, états, événements, repli, couverture et provenance — données de marché uniquement, sans positions. L'export léger."
         },
         "overview": {
           "display": "Vue d’ensemble de l’actif",
@@ -3210,14 +3210,14 @@
       },
       "assetSetKpi": {
         "name": "Indicateurs de risque par actif",
-        "description": "Volatilité, pire baisse et ratios ajustés du risque, mesurés pour chaque actif sélectionné sur une même fenêtre."
+        "description": "Volatilité, pire repli et ratios ajustés du risque, mesurés pour chaque actif sélectionné sur une même fenêtre."
       },
       "assetSetVar": {
         "name": "Risque de queue par actif",
         "description": "La perte atteinte par chaque actif sélectionné dans ses pires cas, estimée sur son propre historique."
       },
       "assetSetDrawdown": {
-        "name": "Baisses par actif",
+        "name": "Replis par actif",
         "description": "De combien chaque actif sélectionné a chuté depuis son sommet, pendant combien de temps, et s'il s'en est remis."
       },
       "assetSetRiskReturn": {
@@ -3338,19 +3338,19 @@
         "blankNote": "Un tiret signifie que la mesure n'a pas pu être faite pour cet actif sur cette fenêtre — cela ne signifie pas zéro.",
         "l1": {
           "title": "Combien chacun a-t-il fait mal ?",
-          "description": "Pour chaque actif sélectionné, ce qu'il a perdu aux pires moments de la période : la mauvaise journée, le mauvais mois, la baisse la plus profonde et à quelle distance il se trouve encore de son sommet.",
+          "description": "Pour chaque actif sélectionné, ce qu'il a perdu aux pires moments de la période : la mauvaise journée, le mauvais mois, le repli le plus profond et à quelle distance il se trouve encore de son sommet.",
           "lastedDays": "durée {days} j",
           "columns": {
             "badDay": "Mauvaise journée",
             "badMonth": "Mauvais mois",
-            "worstFall": "Pire baisse",
+            "worstFall": "Pire repli",
             "currentFall": "Sous le sommet",
             "toPeak": "Hausse jusqu'au sommet"
           },
           "columnHelp": {
             "badDay": "La perte moyenne sur les 5 % des pires jours de la fenêtre (CVaR historique à 95 %).",
             "badMonth": "Comme la mauvaise journée, mais sur une plus longue suite de jours consécutifs : la perte moyenne sur les 5 % des pires de ces périodes (CVaR historique à 95 %).",
-            "worstFall": "La baisse la plus profonde d'un sommet jusqu'au point le plus bas qui a suivi dans la fenêtre, et sa durée.",
+            "worstFall": "Le repli le plus profond d'un sommet jusqu'au point le plus bas qui a suivi dans la fenêtre, et sa durée.",
             "currentFall": "À quelle distance de son sommet de la fenêtre l'actif se trouve le dernier jour.",
             "toPeak": "De combien il doit monter pour retrouver ce sommet : après une baisse de 20 %, il faut +25 %."
           }
@@ -3621,13 +3621,13 @@
         "rows": {
           "day": "Une mauvaise journée (pires 5%)",
           "month": "Un mauvais mois (pires 5%)",
-          "worst": "La pire baisse (réellement vécue)"
+          "worst": "Le pire repli (réellement vécu)"
         },
         "technical": {
           "day": "CVaR · 1 jour",
           "month": "CVaR · 1 mois",
           "worst": "Perte maximale",
-          "current": "Baisse actuelle"
+          "current": "Repli actuel"
         },
         "durationDays": "durée {days} jours",
         "requiredRecovery": "reprise nécessaire {percent}",
@@ -3636,7 +3636,7 @@
         "tails": {
           "worstRealization": "La pire journée réellement vue",
           "worstRealizationOn": "le {date}",
-          "drawdownAtRisk": "Baisse à risque ({confidence})",
+          "drawdownAtRisk": "Repli à risque ({confidence})",
           "conditionalDrawdownAtRisk": "Moyenne au-delà de ce seuil",
           "ulcerIndex": "Indice d'Ulcer {value}",
           "ulcerIndexHint": "profondeur quadratique moyenne sous le sommet : plus bas, plus calme"
@@ -4334,8 +4334,8 @@
             "target_weight_out_of_range": "Une cible doit être comprise entre 0 et 100 %.",
             "tax_netting_unsupported": "La compensation fiscale n’est pas prise en charge.",
             "valuation_currency_missing": "La devise de valorisation est manquante.",
-            "wac_fx_missing": "Le taux de change nécessaire au coût moyen est manquant.",
-            "wac_missing": "Le coût moyen est manquant.",
+            "wac_fx_missing": "Le taux de change nécessaire au prix de revient unitaire est manquant.",
+            "wac_missing": "Le prix de revient unitaire est manquant.",
             "zero_selected_funding": "Les liquidités sélectionnées sont nulles.",
             "fx_rate_inconsistent": "Ce taux de change ne concorde pas avec les taux de {source_currency} et {destination_currency} par rapport à {valuation_currency} : convertir {source_currency} en {destination_currency} créerait de la valeur. Alignez les taux ou définissez un spread de conversion."
           },
