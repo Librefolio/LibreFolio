@@ -28,7 +28,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-38 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-41 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -503,7 +503,7 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
   rossi, tutti già nella v1.1.0; ✅ **corretti il 09/10 (treno 28)** per decisione del developer («Correggere 1 e 2 nel
   backend con una sola cura, e 3 facendo chiedere il costo anche col promote»; data d'uscita: «Alla data in cui le quote
-  escono dal broker d'origine»), piano `Phase_0/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
+  escono dal broker d'origine»), piano `phases/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
   svuota il pool prima della media (`transaction_service.py:976`, `average_cost.py:407-423`); (2) un transfer esistente
   modificato in Auto farebbe la media sul broker che riceve (gli update non hanno `link_uuid`,
   `schemas/transactions.py:533-585`); (3) il promote salta il controllo del costo (`transaction_batch_stages.py:845-866`,
@@ -526,6 +526,20 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   azioni, ma `thead.sticky-header th` è più specifica di `.th-actions`, quindi l'intestazione resta sticky a `right: 0`
   mentre il ⋮ delle righe esce dallo schermo. Riguarda ogni tabella con azioni; nel PAC spiega F e la tabella Targets
   (backlog della 13). Componente condiviso: la cura va concordata con chi lo possiede.
+- **C-39 · Cataloghi i18n divisi per namespace** — dopo la 1.2, per decisione del developer (09/10, su proposta di
+  S): «Chiavi brimPlugins ora per tutti i 33 plugin, divisione dopo la 1.2.0 (Consigliato)». I quattro cataloghi
+  `frontend/src/lib/i18n/{en,it,fr,es}.json` hanno oltre 4.200 chiavi ciascuno, testi dei plugin (`brimPlugins.*`)
+  compresi: dividerli per namespace, cominciando da `brimPlugins`, riduce i conflitti fra flussi paralleli e ciò che
+  ogni pagina carica.
+- **C-40 · Un parametro per scegliere l'icona del broker** — dopo la 1.2, idea del developer (10/10): «in futuro
+  potremmo pensare di aggiungere un parametro selettore». Per la 1.2 l'ordine è personalizzata → plugin dedicato →
+  favicon del portale → plugin di ripiego → valigetta; i plugin di ripiego sono quelli con `detection_priority` sotto
+  `FALLBACK_PLUGIN_PRIORITY_LIMIT` (50, `frontend/src/lib/utils/brim/pluginKind.ts`, workstream S). Un selettore,
+  sul plugin o sul broker, sostituirebbe la soglia.
+- **C-41 · Gli scatti dell'AI Export** — dopo la 1.2, per decisione del developer (10/10): «sull'ai export mettiamolo
+  nel backlog i suoi scatti, ora non è una priorità». Le 5 pagine `user/ai-export/*` non hanno scatti, e
+  `frontend/e2e/gallery.spec.ts` non ne prevede: servono la spec (desktop e mobile), le immagini nelle pagine utente e
+  le voci delle due gallery, con le traduzioni.
 
 ## Tracciate altrove
 
