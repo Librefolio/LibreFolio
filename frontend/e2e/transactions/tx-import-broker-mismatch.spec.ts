@@ -16,24 +16,28 @@
  *
  *   M1 the overnight account's file assigned to the broker account, on an account that also has a
  *      broker importing with the generic CSV — which reads the file too: Continue is disabled while
- *      the prompt shows the reason and one target, the overnight account (the generic-CSV broker is
- *      dropped). Move uploads the same file there, in the same step-1 batch, and deletes the copy on
- *      the broker account; the wizard goes on to step 2, where the file is listed — selected — under
- *      the overnight account and nowhere else, as the server says too.
+ *      the prompt shows where the file is (the broker account, `-from`), the reason and one target, the
+ *      overnight account (the generic-CSV broker is dropped). Move uploads the same file there, in the
+ *      same step-1 batch, and deletes the copy on the broker account; the wizard goes on to step 2,
+ *      where the file is listed — selected — under the overnight account and nowhere else, as the
+ *      server says too.
  *   M2 the same file assigned to the overnight account, whose default plugin reads it: no plugin is
  *      asked anything, no prompt, straight on to step 2.
  *   M3 Remove, with Continue disabled while the prompt is open: the file is deleted on the server and
  *      leaves the step-1 list; the review over, Continue is enabled again, and with no file left the
  *      wizard stays on the upload step, its drop zone open again.
+ *   M4 the same file assigned to the broker account on an account with TWO overnight accounts: both are
+ *      offered as a choice (`-targets`, one radio each, the first one chosen), the user picks the other
+ *      one, and Move uploads the file there — not to the first one offered — and deletes the copy.
  *
- * Why M1 runs on a disposable account. The fallback rule drops the generic-CSV brokers once a broker
- * of a specific plugin is offered, but *every* broker whose specific default plugin reads the file is
- * still a target. On the shared E2E user that includes M2's own overnight account whenever the two
- * tests run at once — and the brokers of any spec that imports Scalable files one day — so "one
- * target" would depend on the schedule. The account is registered by the test
+ * Why M1 and M4 run on a disposable account. The fallback rule drops the generic-CSV brokers once a
+ * broker of a specific plugin is offered, but *every* broker whose specific default plugin reads the file
+ * is still a target. On the shared E2E user that includes M2's own overnight account whenever the tests
+ * run at once — and the brokers of any spec that imports Scalable files one day — so "one target" (or
+ * "two") would depend on the schedule. The account is registered by the test
  * (fixtures/onboarding-accounts.ts, every onboarding flow skipped over the API so no guide covers the
- * wizard), owns exactly the three brokers it creates — read back before the walk — and is deleted
- * with them. M2 and M3 assert nothing about the targets, so they run on the shared E2E user.
+ * wizard), owns exactly the brokers it creates — read back before the walk — and is deleted with them.
+ * M2 and M3 assert nothing about the targets, so they run on the shared E2E user.
  *
  * Data. Every test creates its own brokers (unique names: `brokers.name` is uniquely indexed) before
  * the page loads, since the wizard reads the broker list once per session, and uploads a copy of
@@ -44,7 +48,8 @@
  * Key data-testids: tx-import-button · import-wizard-stepper [aria-current="step"][data-step-id] ·
  * import-wizard-step1 / file-uploader / file-input / import-wizard-step1-broker-select /
  * search-select-option-<brokerId> / import-wizard-next [disabled] · import-broker-mismatch-modal / -intro /
- * -reason / -target / -targets / -no-target / -no-reader / -counter / -move / -remove ·
+ * -from / -reason / -target / -targets / -target-<brokerId> (a radio inside) / -no-target / -no-reader /
+ * -counter / -move / -remove ·
  * import-wizard-step2 [data-busy] / import-wizard-broker-files-<brokerId> /
  * import-wizard-broker-toggle-<brokerId> / dt-row-checkbox-<fileId> [data-state].
  */
@@ -289,9 +294,13 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
         expect(check, 'broker_scalable refuses the overnight account’s file, with a code the UI translates').toMatchObject({plugin_code: SCALABLE_BROKER, can_parse: false, refusal: {code: DEPOSIT_FILE_REFUSAL}});
 
         await expect(modal.getByTestId('import-broker-mismatch-intro')).toBeVisible();
+        const from = modal.getByTestId('import-broker-mismatch-from');
+        await expect(from, 'the prompt shows where the file is: the broker it was uploaded to').toBeVisible();
+        await expect(from, 'the source card names the broker account — data of this test, not a translation').toContainText(brokerAccount.name);
         await expect(page.getByTestId('import-wizard-next'), 'Continue waits for the answer: a second click would skip the review').toBeDisabled();
         await expect(modal.getByTestId('import-broker-mismatch-reason'), 'the refusal comes with its reason').toBeVisible();
         await expect(modal.getByTestId('import-broker-mismatch-target'), 'one broker of a specific plugin reads the file: a single target, the generic-CSV broker dropped').toBeVisible();
+        await expect(modal.getByTestId('import-broker-mismatch-target'), 'the single target is the overnight account').toContainText(overnightAccount.name);
         // The other branches of the same block, absent while the single target is on screen.
         await expect(modal.getByTestId('import-broker-mismatch-targets')).toHaveCount(0);
         await expect(modal.getByTestId('import-broker-mismatch-no-target')).toHaveCount(0);
@@ -394,6 +403,88 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
         await expect(page.getByTestId('import-wizard-step2')).toHaveCount(0);
 
         expect((await page.request.get(`${FILES_PATH}/${uploaded.file_id}`)).status(), 'the file is gone from the server').toBe(404);
+        expect(await filesOn(page, brokerAccount.id), 'the broker account holds nothing').toEqual([]);
+    });
+
+    test('M4: two brokers whose default plugin reads the file are offered as a choice, and Move takes the file to the one the user picks', async ({page, request}, testInfo) => {
+        test.setTimeout(120_000);
+        owned.user = await registerDisposableUser(request, `bm4_${testInfo.project.name}`);
+        await prepareOnboardingAccount(page, owned.user, []);
+        const [brokerAccount, overnightA, overnightB] = await createOwnedBrokers(page, owned, [
+            {tag: 'broker account', defaultPlugin: SCALABLE_BROKER},
+            {tag: 'overnight account A', defaultPlugin: SCALABLE_DEPOSIT},
+            {tag: 'overnight account B', defaultPlugin: SCALABLE_DEPOSIT},
+        ]);
+        // The premise of "two targets": the account sees no broker but these three. Read back, not inferred.
+        const listed = await jsonFrom<{items: Array<{id: number}>}>(await page.request.get(BROKERS_PATH), 'list the account’s brokers');
+        expect(listed.items.map((item) => item.id).sort(byNumber), 'premise: the account sees exactly the three brokers this test created').toEqual([brokerAccount.id, overnightA.id, overnightB.id].sort(byNumber));
+
+        // A full load once the brokers exist: the wizard reads the broker list once per session.
+        await goToTransactions(page);
+        const step1 = await openImportWizard(page);
+        const fileName = `scalable-deposit-export-${uniqueSuffix()}.csv`;
+        await stageDepositFile(page, step1, fileName, brokerAccount.id);
+
+        // ① Continue uploads the file to the broker account, whose default plugin does not read it.
+        const uploaded = await continueAndUpload(page, fileName, brokerAccount.id);
+        expect(uploaded.compatible_plugins ?? [], 'premise: the overnight accounts’ plugin reads the file').toContain(SCALABLE_DEPOSIT);
+        expect(uploaded.compatible_plugins ?? [], 'premise: the broker account’s plugin does not').not.toContain(SCALABLE_BROKER);
+
+        // ② The prompt: where the file is, and the two overnight accounts as a choice — no single-target card.
+        const modal = page.getByTestId('import-broker-mismatch-modal');
+        await expect(modal, 'a file its broker’s default plugin refuses is questioned').toBeVisible({timeout: STEP_TIMEOUT});
+        await expect(modal.getByTestId('import-broker-mismatch-from'), 'the source card names the broker account').toContainText(brokerAccount.name);
+        const choice = modal.getByTestId('import-broker-mismatch-targets');
+        await expect(choice, 'two brokers read the file by default: the user chooses between them').toBeVisible();
+        await expect(choice).toHaveAttribute('role', 'radiogroup');
+        await expect(modal.getByTestId('import-broker-mismatch-target'), 'no single-target card beside the choice').toHaveCount(0);
+        const entries = choice.locator('[data-testid^="import-broker-mismatch-target-"]');
+        await expect(entries, 'one entry per overnight account').toHaveCount(2);
+        // Their order is the wizard's (the broker list's): read from the page, never assumed.
+        const offeredIds = (await entries.evaluateAll((labels) => labels.map((label) => label.getAttribute('data-testid') ?? ''))).map((testId) => Number(testId.slice('import-broker-mismatch-target-'.length)));
+        expect([...offeredIds].sort(byNumber), 'the two overnight accounts are offered, and only they').toEqual([overnightA.id, overnightB.id].sort(byNumber));
+
+        // ③ The first entry is chosen until the user picks another: the user picks the second one.
+        const [firstOfferedId, pickedId] = offeredIds;
+        const picked = [overnightA, overnightB].find((broker) => broker.id === pickedId);
+        if (!picked) throw new Error(`The broker offered second (${pickedId}) is neither overnight account`);
+        const firstRadio = choice.getByTestId(`import-broker-mismatch-target-${firstOfferedId}`).getByRole('radio');
+        const pickedRadio = choice.getByTestId(`import-broker-mismatch-target-${pickedId}`).getByRole('radio');
+        await expect(firstRadio, 'the broker offered first is chosen at first').toBeChecked();
+        await expect(pickedRadio).not.toBeChecked();
+        await pickedRadio.check();
+        await expect(pickedRadio).toBeChecked();
+        await expect(firstRadio, 'one target at a time').not.toBeChecked();
+        const move = modal.getByTestId('import-broker-mismatch-move');
+        await expect(move, 'Move names the broker picked — data of this test, not a translation').toContainText(picked.name);
+        await expect(move).toBeEnabled();
+
+        // ④ Move: the same file uploaded to the broker picked, in the same batch, then the copy on the broker account deleted.
+        const [moveResponse, deleteResponse] = await Promise.all([responseTo(page, 'POST', UPLOAD_PATH, 'Move uploads the file to the broker picked'), responseTo(page, 'DELETE', `${FILES_PATH}/${uploaded.file_id}`, 'Move deletes the copy on the broker account'), move.click()]);
+        const moved = await jsonFrom<UploadedInfo>(moveResponse, `move ${fileName}`);
+        expect(moved, 'the file goes to the broker picked — not to the one offered first — under the same name, in the step-1 batch').toMatchObject({filename: fileName, target_broker_id: pickedId, batch_id: uploaded.batch_id});
+        expect(moved.file_id, 'a new file on the target, not the old one').not.toBe(uploaded.file_id);
+        expect(await jsonFrom<DeleteResult>(deleteResponse, 'delete the copy on the broker account'), 'the copy on the broker account is deleted').toMatchObject({success: true, file_id: uploaded.file_id});
+
+        // ⑤ The prompt is answered and the wizard goes on: the file is listed, selected, under the broker picked only.
+        await expect(modal, 'Move answers the question').toHaveCount(0, {timeout: UI_TIMEOUT});
+        await expect(currentStep(page), 'the wizard goes on to the file selection').toHaveAttribute('data-step-id', 'select', {timeout: STEP_TIMEOUT});
+        const step2 = page.getByTestId('import-wizard-step2');
+        await expect(step2).toBeVisible({timeout: UI_TIMEOUT});
+        await waitForSettled(step2, STEP_TIMEOUT);
+        const pickedPanel = step2.getByTestId(`import-wizard-broker-files-${pickedId}`);
+        await expect(pickedPanel.getByTestId(`import-wizard-broker-toggle-${pickedId}`), 'the panel of the broker holding the upload opens by itself').toHaveAttribute('aria-expanded', 'true', {timeout: UI_TIMEOUT});
+        await expect(pickedPanel.getByTestId(`dt-row-checkbox-${moved.file_id}`), 'the moved file is listed under the broker picked, selected').toHaveAttribute('data-state', 'checked', {timeout: UI_TIMEOUT});
+        await expect(step2.getByTestId(`import-wizard-broker-files-${firstOfferedId}`), 'nothing went to the broker offered first').toHaveCount(0);
+        await expect(step2.getByTestId(`import-wizard-broker-files-${brokerAccount.id}`), 'the broker account holds no file any more').toHaveCount(0);
+
+        // ⑥ The server agrees.
+        expect((await page.request.get(`${FILES_PATH}/${uploaded.file_id}`)).status(), 'the copy on the broker account is gone').toBe(404);
+        expect(
+            (await filesOn(page, pickedId)).map((file) => file.file_id),
+            'the broker picked holds the moved file',
+        ).toEqual([moved.file_id]);
+        expect(await filesOn(page, firstOfferedId), 'the broker offered first holds nothing').toEqual([]);
         expect(await filesOn(page, brokerAccount.id), 'the broker account holds nothing').toEqual([]);
     });
 });

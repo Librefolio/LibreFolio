@@ -59,9 +59,9 @@ The workspace is a grid of draft rows — marked **new**, **edit** or **del** �
 
 - **Add Row**, **Import** and **Reset All** sit above the grid. Ticking rows adds **Reset selected**, **Delete selected** and, for a matching pair, **🔗 Promote pair**.
 - Rows are checked as you work: problems appear at the top under *Validation errors were found*, and a click takes you to the row. With many rows, automatic checking pauses — press **⚡ Validate now** before saving.
-- When two rows look like the two halves of one transfer or exchange, a green banner offers to **Merge** them — two new rows, two saved ones, or one of each.
+- When two rows look like the two halves of one transfer or exchange, a green banner offers to **Merge** them — two new rows, two saved ones, or one of each. When it proposes more than one pair, **Merge all (N)** merges them in one go. Where the two rows of a pair have a different description or different tags, one choice applies to every pair: **All left** keeps the description and tags of the first row, as the banner lists it; **All right**, those of the second row; **Combine**, the default, keeps both descriptions and the tags of both rows.
 - When the other half is already saved but not in the workspace — a transfer whose first side you imported last month, say — the 💡 button, above the grid and in the row's menu, offers to add it: once it is in, the banner offers the pair.
-- **Save All** writes everything at once. **Cancel** closes the workspace, asking first if you have unsaved changes.
+- **Save All** writes everything at once. If there are merge suggestions you have not looked at — the 💡 never opened, the green banner never clicked — it asks first (*Suggestions you have not looked at*): **Show the suggestions** opens the 💡 list, or brings the banner into view; **Save anyway** goes on. Once you have looked, it does not ask again until you close the workspace. **Cancel** closes the workspace, asking first if you have unsaved changes.
 
 ??? warning "🚦 Banners after an import — when they appear"
 

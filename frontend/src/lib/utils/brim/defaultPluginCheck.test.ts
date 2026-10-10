@@ -14,6 +14,8 @@
  * (`GET /brokers/import/files/{file_id}/plugin-check`) into the sentence the prompt shows: the
  * translation of `importWizard.parseRefusal.<code>` with the refusal's context, or else the
  * plugin's own English sentence — written lowercase and without a final period — made a sentence.
+ * A plugin the context names by `plugin_code` is named in the UI language: its `plugin_name` value
+ * becomes `brimPlugins.<code>.name` when the catalogue has it (`pluginText.ts`).
  *
  * The data mirrors the Scalable Capital pair that motivated the check: `broker_scalable` refuses the
  * overnight account's file, which `broker_scalable_deposit` and the generic CSV read. The browser
@@ -229,8 +231,47 @@ describe('resolveParseRefusalMessage — a refusal with a code', () => {
     it('is translated as importWizard.parseRefusal.<code>, its context as the values', () => {
         const t = makeT({[DEPOSIT_FILE_KEY]: DEPOSIT_FILE_TEMPLATE});
         expect(resolveParseRefusalMessage(DEPOSIT_FILE_REFUSAL, t)).toBe('This is the export of the Scalable overnight account: read it with the Scalable Capital overnight account plugin.');
-        expect(t).toHaveBeenCalledTimes(1);
-        expect(t).toHaveBeenCalledWith(DEPOSIT_FILE_KEY, {values: DEPOSIT_PLUGIN_CONTEXT});
+        // The context names a plugin by code, so its name is looked up too (brimPlugins.<code>.name): this
+        // fake catalogue has none, and plugin_name reaches the refusal as the plugin wrote it.
+        const refusalLookups = t.mock.calls.filter(([key]) => key.startsWith('importWizard.parseRefusal.'));
+        expect(refusalLookups, 'the refusal is translated once, the context as its values').toEqual([[DEPOSIT_FILE_KEY, {values: DEPOSIT_PLUGIN_CONTEXT}]]);
+        expect(
+            t.mock.calls.map(([key]) => key),
+            'besides the refusal, only the name of the plugin it names is looked up',
+        ).toEqual([`brimPlugins.${DEPOSIT}.name`, DEPOSIT_FILE_KEY]);
+    });
+
+    it('names the plugin of its context in the UI language: the catalogue’s brimPlugins.<code>.name is interpolated', () => {
+        const localised = 'Overnight account, in the UI language';
+        const t = makeT({[DEPOSIT_FILE_KEY]: DEPOSIT_FILE_TEMPLATE, [`brimPlugins.${DEPOSIT}.name`]: localised});
+        // Frozen: the values are a copy, the refusal stays as the API returned it.
+        const refusal: ParseRefusal = Object.freeze({...DEPOSIT_FILE_REFUSAL, context: Object.freeze({...DEPOSIT_PLUGIN_CONTEXT})});
+        expect(resolveParseRefusalMessage(refusal, t)).toBe(`This is the export of the Scalable overnight account: read it with the ${localised} plugin.`);
+        expect(t).toHaveBeenCalledWith(DEPOSIT_FILE_KEY, {values: {plugin_code: DEPOSIT, plugin_name: localised}});
+        expect(refusal.context, 'the refusal’s own context is left as the plugin wrote it').toEqual(DEPOSIT_PLUGIN_CONTEXT);
+    });
+
+    it('names a plugin its context gives by code alone: the catalogue’s name, or else the code', () => {
+        const refusal: ParseRefusal = {code: 'scalable_deposit_file', message: 'fallback', context: {plugin_code: DEPOSIT}};
+        const localised = 'Overnight account, in the UI language';
+        expect(resolveParseRefusalMessage(refusal, makeT({[DEPOSIT_FILE_KEY]: DEPOSIT_FILE_TEMPLATE, [`brimPlugins.${DEPOSIT}.name`]: localised}))).toBe(`This is the export of the Scalable overnight account: read it with the ${localised} plugin.`);
+        expect(resolveParseRefusalMessage(refusal, makeT({[DEPOSIT_FILE_KEY]: DEPOSIT_FILE_TEMPLATE})), 'never the raw key: the code names the plugin').toBe(`This is the export of the Scalable overnight account: read it with the ${DEPOSIT} plugin.`);
+    });
+
+    it.each([
+        ['has no plugin_code', {plugin_name: 'As the plugin wrote it'}],
+        ['has a null plugin_code', {plugin_code: null, plugin_name: 'As the plugin wrote it'}],
+        ['has a plugin_code that is not a string', {plugin_code: 7, plugin_name: 'As the plugin wrote it'}],
+    ])('leaves plugin_name untouched when its context %s — and looks no plugin name up', (_label, context) => {
+        const key = 'importWizard.parseRefusal.scalable_mixed_file';
+        // The catalogue knows a plugin name: were plugin_name replaced, the sentence would show it.
+        const t = makeT({[key]: 'Read it with {plugin_name}.', [`brimPlugins.${DEPOSIT}.name`]: 'never shown', 'brimPlugins.7.name': 'never shown', 'brimPlugins.null.name': 'never shown'});
+        expect(resolveParseRefusalMessage({code: 'scalable_mixed_file', message: 'fallback', context}, t)).toBe('Read it with As the plugin wrote it.');
+        expect(t).toHaveBeenCalledWith(key, {values: context});
+        expect(
+            t.mock.calls.map(([called]) => called),
+            'the refusal is the only lookup',
+        ).toEqual([key]);
     });
 
     it('gets the translation as written: no capital letter, no period added', () => {

@@ -130,7 +130,8 @@ _NOTICES: Dict[str, Tuple[str, str, str]] = {
         "The sign of amount decided between deposit and withdrawal.",
     ),
 }
-_EVIDENCE_TITLE = "Source rows"
+# No caption of our own: an empty title lets the import wizard show its translated default one.
+_EVIDENCE_TITLE = ""
 
 
 # =============================================================================

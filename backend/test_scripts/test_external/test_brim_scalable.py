@@ -19,7 +19,9 @@ What is pinned:
 - D. the rules on synthetic files: statuses and reversals, trades with their FEE and TAX legs, the fee inside the
   amount of exporter 1.0.0, tax refunds, dividends and interest gross or net, cash rows by their sign, rows not
   imported or unreadable, several overnight accounts in one file, an export without rows, descriptions, assets
-  without an ISIN.
+  without an ISIN;
+- E. what the wizard words in the UI language: every notice and the comment under its evidence table have their key
+  in the four catalogues, and the evidence tables carry no title of their own, so the wizard captions them.
 
 Every input is a sample of ``sample_reports/`` or is written in ``tmp_path``; every value of the synthetic files is
 invented (the ISINs are public securities). No server and no database: this module is pure. The endpoint that asks a
@@ -32,7 +34,9 @@ Plan: LibreFolio_developer_journal/Release_2/Phase_0/37_brimScalable/plan-phase0
 from __future__ import annotations
 
 import csv
+import importlib
 import io
+import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -426,8 +430,11 @@ def _row_notices(out: BRIMParseOutput) -> Dict[str, List[int]]:
 
 
 def _evidence_problems(evidence: BRIMEvidence, header: Sequence[str], raw: Dict[int, List[str]]) -> List[str]:
-    """Where an evidence table breaks the brief: a title and a comment, the file's header, one row per line number, each row the cells of its line."""
-    problems = [f"evidence without a {part}" for part, text in (("title", evidence.title), ("comment", evidence.comment)) if not (text or "").strip()]
+    """Where an evidence table breaks the brief: no title of its own (an empty one, so the wizard captions the table in the UI language,
+    ``importWizard.evidenceRowsTitle``), a comment, the file's header, one row per line number, each row the cells of its line."""
+    problems = [] if evidence.title == "" else [f"evidence titled {evidence.title!r}: the wizard shows its translated caption only for an empty title"]
+    if not (evidence.comment or "").strip():
+        problems.append("evidence without a comment")
     if [name.strip() for name in evidence.headers] != [name.strip() for name in header]:
         problems.append(f"evidence headers {evidence.headers}, not the file's {list(header)}")
     if not evidence.row_numbers or len(evidence.rows) != len(evidence.row_numbers):
@@ -983,7 +990,8 @@ class TestSamples:
 
     @pytest.mark.parametrize("spec", SAMPLE_SPECS)
     def test_every_notice_keeps_the_contract(self, spec: SampleSpec):
-        """The severity of its code, an English message, one evidence table with a title and a comment, the file's header, each listed line's cells."""
+        """The severity of its code, an English message, one evidence table with no title of its own and a comment, the file's header, each listed
+        line's cells."""
         out = _parse(spec.code, spec.path)
         assert sorted(notice.code for notice in out.warnings) == sorted(spec.notices), f"presence barrier: {spec.path.name} gives the notices {[notice.code for notice in out.warnings]}"
 
@@ -1306,3 +1314,76 @@ class TestDescriptionsAndAssets:
         out = _run(tmp_path, BROKER_EXPORT, cases)
 
         assert {fake_id: info.extracted_isin for fake_id, info in out.extracted_assets.items()} == {FAKE_ASSET_ID_BASE: MSCI_WORLD, FAKE_ASSET_ID_BASE - 1: ALL_WORLD_ACC}
+
+
+# =============================================================================
+# E — WHAT THE WIZARD WORDS IN THE UI LANGUAGE
+# =============================================================================
+
+UI_LANGUAGES = ("en", "it", "fr", "es")
+# The catalogues of the checkout this file belongs to, found from the file itself.
+I18N_DIR = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "i18n"
+EVIDENCE_CAPTION_KEY = "importWizard.evidenceRowsTitle"
+
+
+def _catalogue(language: str) -> Dict[str, Any]:
+    """One UI catalogue, as the frontend bundles it."""
+    return json.loads((I18N_DIR / f"{language}.json").read_text(encoding="utf-8"))
+
+
+def _entry(catalogue: Dict[str, Any], key: str) -> Any:
+    """The entry at a dotted i18n key, or None when a part of the path is missing."""
+    node: Any = catalogue
+    for part in key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def _is_worded(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _notice_codes() -> List[str]:
+    """The notice codes of the two plugins, from the module they share (``_NOTICES``) — imported inside the test, like the plugins themselves."""
+    return list(importlib.import_module("backend.app.services.brim_providers._scalable")._NOTICES)
+
+
+class TestWhatTheWizardWords:
+    """E — the plugins write English; the wizard shows each notice (``importWizard.brimNotice.<code>``) and the comment under its evidence table
+    (``importWizard.brimEvidence.<code>``, ``resolveBrimEvidenceComment``) in the UI language, with the notice's context as values, and falls back
+    to the plugin's English when a key is missing. It captions an evidence table itself (``importWizard.evidenceRowsTitle``) only when the
+    plugin leaves the title empty — which is why the Scalable tables carry none."""
+
+    def test_the_notices_read_from_the_module_are_the_twelve_of_the_plan(self):
+        """Positive control for the catalogue checks below: the codes they walk are read from ``_scalable._NOTICES``, and they are this file's."""
+        assert sorted(_notice_codes()) == sorted(SEVERITY), f"_scalable._NOTICES has {sorted(_notice_codes())}, this file knows {sorted(SEVERITY)}"
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_every_notice_and_its_evidence_comment_have_a_wording(self, language: str):
+        """``importWizard.brimNotice.<code>`` and ``importWizard.brimEvidence.<code>``, non-empty, for every notice code."""
+        catalogue = _catalogue(language)
+        keys = [f"importWizard.{family}.{code}" for code in _notice_codes() for family in ("brimNotice", "brimEvidence")]
+        assert keys, "presence barrier: no notice code to look up"
+
+        missing = [key for key in keys if not _is_worded(_entry(catalogue, key))]
+
+        assert not missing, f"{language}.json: {len(missing)} of {len(keys)} key(s) missing or empty — the wizard would show the plugin's English: {missing}"
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_the_catalogue_captions_an_evidence_table_that_has_no_title(self, language: str):
+        """The caption the wizard shows in place of an empty title."""
+        assert _is_worded(_entry(_catalogue(language), EVIDENCE_CAPTION_KEY)), f"{language}.json has no {EVIDENCE_CAPTION_KEY}: the Scalable evidence tables would have no caption"
+
+    @pytest.mark.parametrize("spec", SAMPLE_SPECS)
+    def test_the_evidence_tables_leave_their_caption_to_the_wizard(self, spec: SampleSpec):
+        """Every evidence table of the sample's notices has an empty title: the caption is the wizard's, in the UI language."""
+        out = _parse(spec.code, spec.path)
+        tables = [(notice.code, table) for notice in out.warnings for table in notice.evidence]
+        assert len(tables) == len(spec.notices), f"presence barrier: {spec.path.name} gives {len(tables)} evidence table(s) for its {len(spec.notices)} notice(s)"
+
+        titled = [(code, table.title) for code, table in tables if table.title != ""]
+
+        assert not titled, f"{spec.path.name}: evidence tables with a title of their own, shown instead of the wizard's translated caption: {titled}"
+        assert all(_is_worded(table.comment) for _, table in tables), f"{spec.path.name}: the comment explains the rows: {[(code, table.comment) for code, table in tables]}"

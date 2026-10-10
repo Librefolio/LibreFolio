@@ -928,8 +928,7 @@
       "title": "This file may belong to another broker",
       "counter": "File {current} of {total}",
       "intro": "“{file}” is assigned to {broker}, whose default import plugin, {plugin}, cannot read it.",
-      "reasonTitle": "Reason given by {plugin}",
-      "targetOne": "It is read by {plugin}, the default import plugin of {broker}.",
+      "reasonTitle": "Notes from the plugin",
       "targetMany": "The default import plugins of these brokers read it: choose where to move it.",
       "noTarget": "It is read by {plugins}, but none of your brokers uses it as its default import plugin.",
       "noReader": "No import plugin can read it.",
@@ -937,13 +936,31 @@
       "keep": "Keep it here",
       "remove": "Remove the file",
       "moveFailed": "The file could not be moved",
-      "removeFailed": "The file could not be removed"
+      "removeFailed": "The file could not be removed",
+      "fromLabel": "Assigned to",
+      "toLabel": "Move it to",
+      "cannotRead": "cannot read it",
+      "canRead": "can read it"
     },
     "parseRefusal": {
       "scalable_deposit_file": "This is the export of the Scalable overnight account: read it with the {plugin_name} plugin.",
       "scalable_broker_file": "This is the export of the Scalable broker account: read it with the {plugin_name} plugin.",
       "scalable_prime_file": "This is Scalable's own export of the broker account: read it with the {plugin_name} plugin.",
       "scalable_mixed_file": "The file mixes the broker account and the overnight account: export the two accounts separately."
+    },
+    "brimEvidence": {
+      "scalable_unreadable_rows": "On these rows a date, an amount, a currency, the shares or the security is missing or cannot be read.",
+      "scalable_fee_in_amount": "Here the amount column is shares × price with the fee and the tax already added (or taken away, for a sale).",
+      "scalable_fees_unknown": "The fee and tax columns are empty on these rows: unknown, not zero.",
+      "scalable_open_partial": "The shares column is what was executed so far; lf_ordered_shares is what was ordered.",
+      "scalable_reversal": "These rows are reversals: their lf_is_cancellation column is true.",
+      "scalable_not_imported": "The type column says what these rows are.",
+      "scalable_several_overnight_accounts": "The first row of each overnight account; the lf_account_index column tells them apart.",
+      "scalable_not_executed": "The status column says why these rows were not executed.",
+      "scalable_internal_transfers": "These rows move money between your two Scalable accounts (lf_subtype CASH_TRANSFER_IN or CASH_TRANSFER_OUT): each one has its twin in the other account's file.",
+      "scalable_dividends_net": "The tax column is empty on these rows: the amount is what reached the account.",
+      "scalable_tax_refund": "A positive amount in the tax column is money given back.",
+      "scalable_cash_by_sign": "The sign of the amount column decided between deposit and withdrawal."
     }
   },
   "brokers": {
@@ -1696,7 +1713,7 @@
     "headerErrors": "{errors} error(s)",
     "headerWarnings": "{warnings} warning(s)",
     "missingPrice": "{count} asset(s) have no market price — excluded from NAV",
-    "transactionImplied": "{count} asset(s) still valued at cost — no market price available for over 2 weeks (as of {as_of_date})",
+    "transactionImplied": "{count} asset(s) valued at their last transaction price — no market price available for over 2 weeks (as of {as_of_date})",
     "currentPriceAssumedAtCost": "Current price unavailable — open value estimated at cost, market P&L excluded",
     "currentPriceAssumedAtCostRange": "No market price available between {date_from} and {date_to} — open value estimated at cost, market P&L excluded",
     "affectedLots": "Affected lots:",
@@ -2273,7 +2290,15 @@
       "bannerMore": "and {n} more...",
       "merge": "Merge",
       "deltaLabel": "Max Δ days",
-      "rowRef": "Row #{n}"
+      "rowRef": "Row #{n}",
+      "mergeAll": "Merge all ({n})",
+      "mergeAllTitle": "Merge all the suggested pairs",
+      "mergeAllIntro": "{n} pairs become linked transactions. Where the two rows of a pair have a different description or different tags, keep:",
+      "mergeAllLeftHint": "the description and tags of the first row of each pair, as the banner lists it",
+      "mergeAllRightHint": "the description and tags of the second row of each pair",
+      "mergeAllCombine": "Combine",
+      "mergeAllCombineHint": "both descriptions, and the tags of both rows",
+      "mergeAllConfirm": "Merge {n} pairs"
     },
     "types": {
       "BUY": "Buy",
@@ -2359,7 +2384,10 @@
       "dateSortHint": "Date is primary. Pairs stay together, ordered by earliest leg date, then latest leg date and stable row ID.",
       "balanceGroupOutsideWorkspace": "No contributing rows from this workspace match this group. Check the broker's history.",
       "workspaceRowHint": "Position in the current sort. a/b are paired sides, not transaction IDs.",
-      "issueRowsHidden": "The affected rows are hidden by the table filters."
+      "issueRowsHidden": "The affected rows are hidden by the table filters.",
+      "unseenSuggestionsTitle": "Suggestions you have not looked at",
+      "unseenSuggestionsMessage": "{n, plural, one {# suggestion to merge two transactions has} other {# suggestions to merge two transactions have}} not been looked at yet. Merging the two halves of a transfer keeps them from counting as a separate deposit and withdrawal. Save anyway?",
+      "unseenSuggestionsReview": "Show the suggestions"
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -5472,5 +5500,139 @@
     },
     "cookieWarning": "Your browser uses HTTPS, but the session cookie is not marked Secure. Make the reverse proxy send X-Forwarded-Proto (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), or set SESSION_COOKIE_SECURE back to auto if it is never.",
     "learnMore": "How to connect securely"
+  },
+  "brimPlugins": {
+    "broker_generic_csv": {
+      "name": "Generic CSV",
+      "description": "Import transactions from a generic CSV file. Auto-detects columns based on header names. Supports various date and number formats."
+    },
+    "broker_scalable": {
+      "name": "Scalable Capital broker",
+      "description": "Import the Scalable Capital broker account from Scalable's own CSV export (PRIME) or from the LibreFolio exporter's broker file: trades with their fees and taxes, savings plans, dividends, interest, deposits, withdrawals and transfers to the overnight account."
+    },
+    "broker_scalable_deposit": {
+      "name": "Scalable Capital overnight account",
+      "description": "Import the Scalable Capital overnight account (Tagesgeld) from the LibreFolio exporter's file: interest with the tax withheld, deposits, withdrawals and transfers to the broker account."
+    },
+    "broker_avanza": {
+      "description": "Import transactions from Avanza CSV export. Supports trades, cash movements, dividends, interest, taxes, and fees.",
+      "name": "Avanza"
+    },
+    "broker_bitvavo": {
+      "description": "Import transactions from Bitvavo CSV export. Supports crypto buys, sells, staking rewards, cash deposits/withdrawals, and crypto balance adjustments.",
+      "name": "Bitvavo"
+    },
+    "broker_bux": {
+      "description": "Import transactions from BUX CSV export. Supports trades, SEPA deposits/withdrawals, dividends, and fees.",
+      "name": "BUX"
+    },
+    "broker_coinbase": {
+      "description": "Import transactions from Coinbase CSV export. Supports crypto buys, sells, and staking rewards.",
+      "name": "Coinbase"
+    },
+    "broker_cointracking": {
+      "description": "Import transactions from CoinTracking CSV exports. Supports fiat-backed crypto trades, transfers, staking rewards, and fiat fees.",
+      "name": "CoinTracking"
+    },
+    "broker_credit_agricole": {
+      "description": "Import from Crédit Agricole exports (CSV or XLSX): the 'Lista Movimenti Deposito Titoli' securities movements (coupons, purchases, redemptions, maturities, succession transfers; balanced with automatic cash counter-entries) and the 'Lista Movimenti Conto' account movements (liquidity, fees, taxes and income as deposits/withdrawals). Assets are identified by name only (no ISIN).",
+      "name": "Crédit Agricole"
+    },
+    "broker_cryptocom": {
+      "description": "Best-effort Crypto.com CSV import. Imports clear buys, sells, and rewards; skips internal transfers, swaps, lockups, and ambiguous rows with warnings.",
+      "name": "Crypto.com"
+    },
+    "broker_danske_bank": {
+      "description": "Import a Danske Bank (Finland) equity savings account: the custody transactions (XLSX) and the cash statement (CSV), uploaded together and combined into one import.",
+      "name": "Danske Bank"
+    },
+    "broker_degiro": {
+      "description": "Import DEGIRO's Account Statement (CSV) in any language: trades, fees, dividends, taxes, interest, deposits, withdrawals and currency conversions, each in its own currency.",
+      "name": "DEGIRO"
+    },
+    "broker_delta": {
+      "description": "Import transactions from Delta CSV exports. Best-effort support for fiat-backed trades, crypto transfers, dividends, and crypto-to-crypto adjustments.",
+      "name": "Delta"
+    },
+    "broker_directa": {
+      "description": "Import transactions from Directa SIM export (CSV or XLSX). Supports all Italian transaction types including ETF dividends, bond coupons, taxes, and trading operations.",
+      "name": "Directa SIM"
+    },
+    "broker_disnat": {
+      "description": "Import transactions from Disnat CSV export. Supports trades, dividends, taxes, cash movements, fees, and interest.",
+      "name": "Disnat"
+    },
+    "broker_etoro": {
+      "description": "Import eToro's account activity CSV: positions opened and closed (a CFD is read like any other position), dividends, interest, deposits, withdrawals, and withdrawal and conversion fees.",
+      "name": "eToro"
+    },
+    "broker_fineco": {
+      "description": "Import transactions from FinecoBank 'Movimenti Dossier Titoli' CSV export. Supports both export layouts (with and without commissions), buys, sells, dividends, bond coupons, redemptions and capital increases. Amounts are imported verbatim in the currency reported by the broker (no FX conversion).",
+      "name": "Fineco"
+    },
+    "broker_finpension": {
+      "description": "Import transactions from Finpension CSV export. Supports Swiss pension fund investments.",
+      "name": "Finpension"
+    },
+    "broker_freetrade": {
+      "description": "Import transactions from Freetrade CSV export. Supports UK stocks, ETFs, dividends, and interest.",
+      "name": "Freetrade"
+    },
+    "broker_ibkr": {
+      "description": "Import trades from Interactive Brokers CSV export. Supports stocks, ETFs, and FX trades with commissions.",
+      "name": "Interactive Brokers"
+    },
+    "broker_intesa": {
+      "description": "Import from Intesa Sanpaolo exports (CSV or XLSX). Handles the movements list (bond coupons and custody fees; unrecognised everyday-banking rows are skipped) and the portfolio snapshot (patrimonio), which is imported as a cash deposit plus one cost-basis adjustment per holding to seed an account with history.",
+      "name": "Intesa Sanpaolo"
+    },
+    "broker_investengine": {
+      "description": "Import transactions from InvestEngine CSV export. Supports buys, sells, and dividends in GBP.",
+      "name": "InvestEngine"
+    },
+    "broker_investimental": {
+      "description": "Import final executed transactions from Investimental CSV order-update logs. Cancellations, rejected requests, and unexecuted orders are skipped.",
+      "name": "Investimental"
+    },
+    "broker_parqet": {
+      "description": "Import transactions from Parqet CSV export. Parqet is an aggregator; underlying broker names are kept in transaction descriptions.",
+      "name": "Parqet"
+    },
+    "broker_rabobank": {
+      "description": "Import transactions from Rabobank Dutch CSV export. Supports funds, dividends, deposits, withdrawals, fees, and interest.",
+      "name": "Rabobank"
+    },
+    "broker_relai": {
+      "description": "Import Bitcoin buys and sells from Relai CSV export, including separate fee transactions.",
+      "name": "Relai"
+    },
+    "broker_revolut": {
+      "description": "Import transactions from Revolut CSV exports. Supports investments, crypto, dividends, and cash movements.",
+      "name": "Revolut"
+    },
+    "broker_saxo": {
+      "description": "Import Saxo CSV exports: equity trades, dividends, cash deposits/withdrawals and custody fees.",
+      "name": "Saxo"
+    },
+    "broker_schwab": {
+      "description": "Import transactions from Charles Schwab CSV export. Supports stocks, ETFs, dividends, and interest.",
+      "name": "Charles Schwab"
+    },
+    "broker_swissquote": {
+      "description": "Import Swissquote CSV exports for trades, dividends, cash movements, fees, taxes, and interest. Forex legs are skipped.",
+      "name": "Swissquote"
+    },
+    "broker_traderepublic": {
+      "description": "Import transactions from Trade Republic CSV export. Supports trades, dividends, interest, cash movements, fees, and taxes in EUR.",
+      "name": "Trade Republic"
+    },
+    "broker_trading212": {
+      "description": "Import transactions from Trading212 CSV export. Supports stocks, ETFs, dividends, and interest.",
+      "name": "Trading212"
+    },
+    "broker_xtb": {
+      "description": "Import transactions from XTB CSV export. Supports stocks, ETFs, dividends, cash movements, taxes, fees, and interest.",
+      "name": "XTB"
+    }
   }
 }

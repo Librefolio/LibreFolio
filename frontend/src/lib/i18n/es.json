@@ -928,8 +928,7 @@
       "title": "Este archivo puede pertenecer a otro bróker",
       "counter": "Archivo {current} de {total}",
       "intro": "«{file}» está asignado a {broker}, cuyo plugin de importación predeterminado, {plugin}, no puede leerlo.",
-      "reasonTitle": "El motivo de {plugin}",
-      "targetOne": "Lo lee {plugin}, el plugin de importación predeterminado de {broker}.",
+      "reasonTitle": "Notas del plugin",
       "targetMany": "Lo leen los plugins de importación predeterminados de estos brókers: elige adónde moverlo.",
       "noTarget": "Lo lee {plugins}, pero ninguno de tus brókers lo usa como plugin de importación predeterminado.",
       "noReader": "Ningún plugin de importación puede leerlo.",
@@ -937,13 +936,31 @@
       "keep": "Dejarlo aquí",
       "remove": "Quitar el archivo",
       "moveFailed": "No se pudo mover el archivo",
-      "removeFailed": "No se pudo quitar el archivo"
+      "removeFailed": "No se pudo quitar el archivo",
+      "fromLabel": "Asignado a",
+      "toLabel": "Moverlo a",
+      "cannotRead": "no sabe leerlo",
+      "canRead": "sabe leerlo"
     },
     "parseRefusal": {
       "scalable_deposit_file": "Es la exportación de la cuenta remunerada de Scalable: léela con el plugin {plugin_name}.",
       "scalable_broker_file": "Es la exportación de la cuenta de valores de Scalable: léela con el plugin {plugin_name}.",
       "scalable_prime_file": "Es la exportación propia de Scalable de la cuenta de valores: léela con el plugin {plugin_name}.",
       "scalable_mixed_file": "El archivo mezcla la cuenta de valores y la cuenta remunerada: exporta las dos cuentas por separado."
+    },
+    "brimEvidence": {
+      "scalable_unreadable_rows": "En estas filas falta, o no se puede leer, una fecha, un importe, una divisa, las participaciones o el valor.",
+      "scalable_fee_in_amount": "Aquí la columna amount es participaciones × precio, con la comisión y el impuesto ya sumados (o restados, en una venta).",
+      "scalable_fees_unknown": "Las columnas fee y tax están vacías en estas filas: valores desconocidos, no cero.",
+      "scalable_open_partial": "La columna shares es lo ejecutado hasta ahora; lf_ordered_shares es lo ordenado.",
+      "scalable_reversal": "Estas filas son anulaciones: su columna lf_is_cancellation vale true.",
+      "scalable_not_imported": "La columna type indica qué son estas filas.",
+      "scalable_several_overnight_accounts": "La primera fila de cada cuenta remunerada; la columna lf_account_index las distingue.",
+      "scalable_not_executed": "La columna status indica por qué estas filas no se ejecutaron.",
+      "scalable_internal_transfers": "Estas filas mueven dinero entre tus dos cuentas de Scalable (lf_subtype CASH_TRANSFER_IN o CASH_TRANSFER_OUT): cada una tiene su gemela en el archivo de la otra cuenta.",
+      "scalable_dividends_net": "La columna tax está vacía en estas filas: el importe es lo que llegó a la cuenta.",
+      "scalable_tax_refund": "Un importe positivo en la columna tax es dinero devuelto.",
+      "scalable_cash_by_sign": "El signo de la columna amount decidió entre depósito y retirada."
     }
   },
   "brokers": {
@@ -1696,7 +1713,7 @@
     "headerErrors": "{errors} error(es)",
     "headerWarnings": "{warnings} aviso(s)",
     "missingPrice": "{count} activo(s) sin precio de mercado — excluidos del NAV",
-    "transactionImplied": "{count} activo(s) aún valorizado(s) al costo — sin precio de mercado disponible desde hace más de 2 semanas (a fecha {as_of_date})",
+    "transactionImplied": "{count} activo(s) valorizado(s) al último precio de transacción — sin precio de mercado disponible desde hace más de 2 semanas (a fecha {as_of_date})",
     "currentPriceAssumedAtCost": "Precio actual no disponible — valor abierto estimado al coste, P&L de mercado excluido",
     "currentPriceAssumedAtCostRange": "Ningún precio de mercado disponible entre {date_from} y {date_to} — valor abierto estimado al coste, P&L de mercado excluido",
     "affectedLots": "Lotes afectados:",
@@ -2266,7 +2283,15 @@
       "bannerMore": "y {n} más...",
       "merge": "Combinar",
       "deltaLabel": "Máx Δ días",
-      "rowRef": "Fila #{n}"
+      "rowRef": "Fila #{n}",
+      "mergeAll": "Unir todos ({n})",
+      "mergeAllTitle": "Unir todos los pares sugeridos",
+      "mergeAllIntro": "{n} pares se convierten en transacciones vinculadas. Donde las dos filas de un par tienen una descripción o etiquetas distintas, conservar:",
+      "mergeAllLeftHint": "la descripción y las etiquetas de la primera fila de cada par, como en el aviso",
+      "mergeAllRightHint": "la descripción y las etiquetas de la segunda fila de cada par",
+      "mergeAllCombine": "Combinar",
+      "mergeAllCombineHint": "las dos descripciones y las etiquetas de ambas filas",
+      "mergeAllConfirm": "Unir {n} pares"
     },
     "empty": "Sin transacciones",
     "table": {
@@ -2359,7 +2384,10 @@
       "dateSortHint": "La fecha es el criterio principal. Los pares se mantienen unidos: primero la fecha más antigua de las dos operaciones, después la más reciente y el ID estable de la fila.",
       "balanceGroupOutsideWorkspace": "Ninguna fila de este espacio de trabajo contribuye a este grupo. Consulta el historial del bróker.",
       "workspaceRowHint": "Posición en el orden actual. a/b son los dos lados de un par, no identificadores de transacción.",
-      "issueRowsHidden": "Las filas afectadas están ocultas por los filtros de la tabla."
+      "issueRowsHidden": "Las filas afectadas están ocultas por los filtros de la tabla.",
+      "unseenSuggestionsTitle": "Sugerencias aún sin revisar",
+      "unseenSuggestionsMessage": "{n, plural, one {# sugerencia de unión aún no se ha revisado} other {# sugerencias de unión aún no se han revisado}}. Unir las dos mitades de una transferencia evita que cuenten como un depósito y una retirada por separado. ¿Guardar de todos modos?",
+      "unseenSuggestionsReview": "Mostrar las sugerencias"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -3320,11 +3348,11 @@
             "toPeak": "Subida al máximo"
           },
           "columnHelp": {
-            "badDay": "La pérdida media en el 5 % de los peores días de la ventana (CVaR histórico al 95 %).",
-            "badMonth": "Como el mal día, pero en un tramo más largo de días consecutivos: la pérdida media en el 5 % de los peores tramos (CVaR histórico al 95 %).",
+            "badDay": "La pérdida media en el 5 % de los peores días de la ventana (CVaR histórico al 95 %).",
+            "badMonth": "Como el mal día, pero en un tramo más largo de días consecutivos: la pérdida media en el 5 % de los peores tramos (CVaR histórico al 95 %).",
             "worstFall": "La caída más profunda desde un máximo hasta el punto más bajo que la siguió dentro de la ventana, y cuánto duró.",
             "currentFall": "Cuánto está el activo por debajo de su máximo de la ventana el último día.",
-            "toPeak": "Cuánto debe subir para volver a ese máximo: tras una caída del 20 % hace falta un +25 %."
+            "toPeak": "Cuánto debe subir para volver a ese máximo: tras una caída del 20 % hace falta un +25 %."
           }
         },
         "l3": {
@@ -3433,7 +3461,7 @@
         "geography": "Geografía"
       },
       "auditTitle": "Auditoría de exposiciones aplicadas",
-      "missingMetadataOther": "No había datos de sector o geografía disponibles para este activo. Se trató como Other al 100 %.",
+      "missingMetadataOther": "No había datos de sector o geografía disponibles para este activo. Se trató como Other al 100 %.",
       "exposureBucket": "Grupo de exposición",
       "exposure": "Exposición",
       "appliedBucket": "Grupo aplicado",
@@ -3466,15 +3494,15 @@
         },
         "calm": {
           "label": "Mercado tranquilo",
-          "hypothesis": "Hipótesis: tus oscilaciones reales, reducidas un 30 %. Las correlaciones y la dirección siguen siendo las de tu historial."
+          "hypothesis": "Hipótesis: tus oscilaciones reales, reducidas un 30 %. Las correlaciones y la dirección siguen siendo las de tu historial."
         },
         "prolonged_crisis": {
           "label": "Crisis prolongada",
-          "hypothesis": "Hipótesis: oscilaciones ×2,5 y rendimiento −20 % anual durante 14 meses. Las correlaciones siguen siendo las de tu historial."
+          "hypothesis": "Hipótesis: oscilaciones ×2,5 y rendimiento −20 % anual durante 14 meses. Las correlaciones siguen siendo las de tu historial."
         },
         "shock_recovery": {
           "label": "Shock y recuperación",
-          "hypothesis": "Hipótesis: una caída del 35 % aplicada a tu historial en 2 meses, y luego tu historial real continúa."
+          "hypothesis": "Hipótesis: una caída del 35 % aplicada a tu historial en 2 meses, y luego tu historial real continúa."
         },
         "gbm": {
           "label": "Curva normal (MBG)",
@@ -3531,7 +3559,7 @@
       "sortino_undefined_assets": "Sortino no definido para {names}: la desviación bajista es cero.",
       "worst_realization_undefined_assets": "Ninguna observación con pérdidas en el periodo para {names}.",
       "worst_realization_undefined": "Ninguna observación con pérdidas en el periodo.",
-      "hypothetical_metadata_other_fallback": "{names}: faltan datos de {dimension, select, sector {sector} other {geografía}} — tratado como «Otro» al 100 %.",
+      "hypothetical_metadata_other_fallback": "{names}: faltan datos de {dimension, select, sector {sector} other {geografía}} — tratado como «Otro» al 100 %.",
       "historical_replay_proxies_used": "La repetición usó una serie sustituta para: {names}.",
       "historical_replay_excluded_manual": "Exclusión manual: {names} — {treatment, select, zero_return_residual {peso contado como liquidez con rendimiento cero} other {fuera de la repetición}}.",
       "historical_replay_excluded_no_prices": "Sin precios en la ventana de la repetición: {names} — {treatment, select, zero_return_residual {peso contado como liquidez con rendimiento cero} other {fuera de la repetición}}.",
@@ -4035,8 +4063,8 @@
           "ticker": "Ticker / ISIN",
           "typeHelp": "El tipo de instrumento, como en la página del activo. Aparece en el resultado y no cambia las órdenes.",
           "pickCategory": "{dimension, select, asset_type {Elegir un tipo} sector {Elegir un sector} other {Elegir un país}}",
-          "weightsHelp": "Para cada dimensión, indica las proporciones en porcentaje. Pueden sumar menos del 100 %; por encima del 100 %, el cálculo rechaza los datos.",
-          "totalOver": "{dimension}: las proporciones superan el 100 %. Reduce una antes de aplicar.",
+          "weightsHelp": "Para cada dimensión, indica las proporciones en porcentaje. Pueden sumar menos del 100 %; por encima del 100 %, el cálculo rechaza los datos.",
+          "totalOver": "{dimension}: las proporciones superan el 100 %. Reduce una antes de aplicar.",
           "tickerHelp": "Opcional: un ticker, un ISIN o cualquier código que te ayude a reconocer el activo en el resultado. No vincula el activo con LibreFolio, y dos activos manuales nunca se unen por nombre ni por código."
         },
         "assets": {
@@ -4094,7 +4122,7 @@
           "pickCurrency": "Divisa del nuevo bloque",
           "priorityHelp": "Solo cuenta entre planes que se acercan igual al objetivo: entonces el plan usa primero las fuentes con el número más bajo. 0 = preferida.",
           "feeFixedHelp": "Se paga en cada compra, sea cual sea el importe, además de la parte porcentual. 0 = ninguna.",
-          "feeRateHelp": "La parte del importe comprado, en porcentaje: 0,19 significa 0,19 %. El mínimo y el máximo limitan solo esta parte.",
+          "feeRateHelp": "La parte del importe comprado, en porcentaje: 0,19 significa 0,19 %. El mínimo y el máximo limitan solo esta parte.",
           "conversionManual": "Conviertes tú antes de comprar",
           "conversionAutomatic": "El bróker convierte al comprar",
           "addedFor": "Modo {currency} añadido para comprar {asset}, con valores iniciales: revisa el tipo de orden, el incremento y las comisiones, y luego aplica.",
@@ -4112,7 +4140,7 @@
           "conversionHelp": "Cuando una compra necesita una divisa que aquí no tienes, el dinero se convierte a la tasa y con el spread del paso Cambio. Si conviertes tú, el plan indica la conversión como paso numerado antes de las órdenes; si el bróker convierte al comprar, el plan la muestra junto a sus órdenes. El cálculo es el mismo en ambos casos.",
           "conversionLabel": "Conversión de divisa",
           "conversionValue": "Conviertes antes de comprar, a la tasa del paso Cambio menos el spread.",
-          "feeHelp": "Lo que el bróker cobra en cada compra: el porcentaje del importe, mantenido entre el mínimo y el máximo, más la parte fija. Sin compra, no hay comisión. Se paga con tu liquidez y no se invierte.\n\nEjemplos, en la divisa de la compra:\n• 0,19 %, mínimo 1,50, máximo 18: sobre 500 pagas 1,50, sobre 2000 pagas 3,80, sobre 20.000 pagas 18.\n• Solo una parte fija de 2,95: 2,95 en cualquier compra.\n• Parte fija 1 más 0,10 %: sobre 1000 pagas 2.\n• Todo a 0: sin comisión.",
+          "feeHelp": "Lo que el bróker cobra en cada compra: el porcentaje del importe, mantenido entre el mínimo y el máximo, más la parte fija. Sin compra, no hay comisión. Se paga con tu liquidez y no se invierte.\n\nEjemplos, en la divisa de la compra:\n• 0,19 %, mínimo 1,50, máximo 18: sobre 500 pagas 1,50, sobre 2000 pagas 3,80, sobre 20.000 pagas 18.\n• Solo una parte fija de 2,95: 2,95 en cualquier compra.\n• Parte fija 1 más 0,10 %: sobre 1000 pagas 2.\n• Todo a 0: sin comisión.",
           "feeMax": "máx. {amount}",
           "feeMin": "mín. {amount}",
           "fundingHelp": "El dinero que el plan puede usar para comprar en este bróker: su propia liquidez, más las aportaciones y la liquidez de otras cuentas que permites en Editar. Al principio todo está permitido; en Editar, haz clic en una fuente para excluirla.",
@@ -4208,7 +4236,7 @@
           "title": "Copiar la distribución actual",
           "valuation": "Valoración",
           "weight": "Peso",
-          "subtitle": "Cuánto pesa hoy cada uno de estos activos en los brókeres marcados, contando solo estos activos: juntos suman el 100 %. El efectivo y los demás activos que tienes no cuentan.",
+          "subtitle": "Cuánto pesa hoy cada uno de estos activos en los brókeres marcados, contando solo estos activos: juntos suman el 100 %. El efectivo y los demás activos que tienes no cuentan.",
           "changeColumn": "Objetivo",
           "confirmApply": "Reemplazar"
         },
@@ -4258,10 +4286,10 @@
             "deployment_omitted": "La vista del despliegue no se ha calculado.",
             "duplicate_id": "El mismo identificador se usa dos veces.",
             "dynamic_fee_unsupported": "Este esquema de comisiones no es compatible.",
-            "economic_share_out_of_range": "La participación económica debe estar entre 0 y 100 %.",
+            "economic_share_out_of_range": "La participación económica debe estar entre 0 y 100 %.",
             "execution_margin_missing": "Falta el margen de ejecución.",
             "execution_margin_rate_out_of_range": "El margen de ejecución está fuera de rango.",
-            "exposure_total_exceeds_one": "Las exposiciones de una dimensión suman más del 100 %.",
+            "exposure_total_exceeds_one": "Las exposiciones de una dimensión suman más del 100 %.",
             "exposure_weight_out_of_range": "Un peso de exposición está fuera de rango.",
             "fee_floor_exceeds_cap": "La comisión mínima es mayor que la máxima.",
             "fee_rate_out_of_range": "El porcentaje de la comisión está fuera de rango.",
@@ -4301,9 +4329,9 @@
             "saved_fx_invalid": "La tasa de cambio guardada no es válida.",
             "saved_fx_missing": "Falta la tasa de cambio guardada.",
             "solver_limit_no_incumbent": "El solver alcanzó su límite antes de encontrar un plan.",
-            "target_total_not_one": "Los objetivos no suman el 100 %.",
+            "target_total_not_one": "Los objetivos no suman el 100 %.",
             "target_weight_missing": "Falta un objetivo.",
-            "target_weight_out_of_range": "Un objetivo debe estar entre 0 y 100 %.",
+            "target_weight_out_of_range": "Un objetivo debe estar entre 0 y 100 %.",
             "tax_netting_unsupported": "No se admite la compensación fiscal.",
             "valuation_currency_missing": "Falta la divisa de valoración.",
             "wac_fx_missing": "Falta la tasa de cambio necesaria para el coste medio.",
@@ -4347,7 +4375,7 @@
           "manualHint": "Un saldo que ya tienes en una cuenta no registrada en LibreFolio, por ejemplo en el banco. Declaras cuánto hay y cuánto usar."
         },
         "liquidityCopy": {
-          "allYours": "100 % tuya",
+          "allYours": "100 % tuya",
           "apply": "{count, plural, one {Copiar # fila} other {Copiar # filas}}",
           "custody": "custodia {amount}",
           "noCash": "Sin saldo de efectivo en esta fecha.",
@@ -4438,7 +4466,7 @@
           "selectedMissing": "«Importe a usar» está vacío.",
           "structureInvalid": "Un campo no cumple el contrato del planificador: {path}.",
           "targetInvalid": "El objetivo no es un número desde 0.",
-          "targetTotalNotHundred": "El total de los objetivos es {total} %, debe ser 100 % (control).",
+          "targetTotalNotHundred": "El total de los objetivos es {total} %, debe ser 100 % (control).",
           "valuationCurrencyMissing": "Falta la divisa de valoración."
         },
         "removal": {
@@ -4523,7 +4551,7 @@
           },
           "expandAll": "Expandir todo",
           "exposures": {
-            "nothingDeclared": "Ninguna clasificación declarada · 100 % sin clasificar",
+            "nothingDeclared": "Ninguna clasificación declarada · 100 % sin clasificar",
             "uncategorised": "Sin clasificar",
             "uncategorisedHint": "«Sin clasificar» es la parte sin clasificación declarada.",
             "above": "Por encima del ideal",
@@ -4849,7 +4877,7 @@
           "requiredHelp": "El plan compra aquí al menos esto, pase lo que pase. Si los recursos no bastan, el plan se vuelve imposible. Vacío = sin obligación.",
           "capHelp": "Lo máximo que el plan puede comprar de este activo en este bróker. Vacío = sin límite propio: el plan nunca compra más que la liquidez que puede llegar a este bróker. Rellénalo para detener las compras aquí a partir de cierto tamaño.",
           "priorityHelp": "Solo cuenta entre planes que se acercan igual al objetivo: entre ellos, se prefiere comprar en los brókeres con el número más bajo. Pesa más que las comisiones: para que decida el coste, déjalos todos en 0. Todos en 0 = sin preferencia.",
-          "marginHelp": "Cada compra se calcula a precio × (1 + margen), para cubrir un precio que sube antes de la orden. Ejemplo: 0,5 % sobre 100 → 100,50. La diferencia es una reserva para la subida: no cuenta como invertida.",
+          "marginHelp": "Cada compra se calcula a precio × (1 + margen), para cubrir un precio que sube antes de la orden. Ejemplo: 0,5 % sobre 100 → 100,50. La diferencia es una reserva para la subida: no cuenta como invertida.",
           "capNone": "sin límite",
           "modeMissing": "{broker} aún no tiene un modo de orden en {currency}",
           "modeMissingHelp": "El modo de orden indica cómo {broker} acepta una orden en {currency}: por unidades o por importe, con qué incremento y qué comisiones. El plan lo necesita para dimensionar la compra de este activo, que cotiza en {currency}. No es la conversión: si pagas con otra divisa, el plan añade la conversión tal como la configuraste en el bróker. Añade el modo, o excluye el activo en este bróker.",
@@ -4947,12 +4975,12 @@
           "target": "Objetivo %",
           "total": "Total",
           "wire": "La parte del dinero que inviertes ahora que va a este activo, en porcentaje. Se admiten decimales.",
-          "copyHelp": "Lee cuánto pesa hoy cada uno de estos activos en los brókeres que marques, contando solo estos activos y no el efectivo, y lleva las proporciones al 100 %. Los activos introducidos a mano valen 0. Ves los pesos antes de usarlos, y un objetivo que hayas cambiado solo se sustituye después de que confirmes.",
+          "copyHelp": "Lee cuánto pesa hoy cada uno de estos activos en los brókeres que marques, contando solo estos activos y no el efectivo, y lleva las proporciones al 100 %. Los activos introducidos a mano valen 0. Ves los pesos antes de usarlos, y un objetivo que hayas cambiado solo se sustituye después de que confirmes.",
           "excess": "+{value} de más",
-          "balance": "Equilibrar al 100 %",
-          "totalHelp": "Los objetivos reparten entre los activos el dinero que inviertes ahora, efectivo y aportaciones incluidos: para calcular deben sumar exactamente el 100 %. «Equilibrar todo» reescala todos los objetivos manteniendo sus proporciones (partes iguales si todos están a 0). Marca algunas filas para reescalar solo esas, con «Equilibrar las filas seleccionadas al 100 %». «Equilibrar al 100 %» en una fila da a ese activo lo que falta, o quita el exceso.",
+          "balance": "Equilibrar al 100 %",
+          "totalHelp": "Los objetivos reparten entre los activos el dinero que inviertes ahora, efectivo y aportaciones incluidos: para calcular deben sumar exactamente el 100 %. «Equilibrar todo» reescala todos los objetivos manteniendo sus proporciones (partes iguales si todos están a 0). Marca algunas filas para reescalar solo esas, con «Equilibrar las filas seleccionadas al 100 %». «Equilibrar al 100 %» en una fila da a ese activo lo que falta, o quita el exceso.",
           "balanceAll": "Equilibrar todo",
-          "balanceSelected": "Equilibrar las filas seleccionadas al 100 %"
+          "balanceSelected": "Equilibrar las filas seleccionadas al 100 %"
         },
         "toolErrors": {
           "cleanup_failed": "El cálculo terminó, pero la plataforma no pudo limpiar después.",
@@ -5472,5 +5500,139 @@
     },
     "cookieWarning": "Tu navegador usa HTTPS, pero la cookie de sesión no está marcada como Secure. Haz que el proxy inverso envíe X-Forwarded-Proto (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), o vuelve a poner SESSION_COOKIE_SECURE en auto si está en never.",
     "learnMore": "Cómo conectarse de forma segura"
+  },
+  "brimPlugins": {
+    "broker_generic_csv": {
+      "name": "CSV genérico",
+      "description": "Importa las transacciones de un archivo CSV genérico. Detecta las columnas a partir de los nombres del encabezado. Admite varios formatos de fecha y de número."
+    },
+    "broker_scalable": {
+      "name": "Scalable Capital cuenta de valores",
+      "description": "Importa la cuenta de valores de Scalable Capital desde la exportación CSV de Scalable (PRIME) o desde el archivo de bróker del exportador de LibreFolio: compraventas con sus comisiones e impuestos, planes de ahorro, dividendos, intereses, depósitos, retiradas y transferencias a la cuenta remunerada."
+    },
+    "broker_scalable_deposit": {
+      "name": "Scalable Capital cuenta remunerada",
+      "description": "Importa la cuenta remunerada de Scalable Capital (Tagesgeld) desde el archivo del exportador de LibreFolio: intereses con la retención, depósitos, retiradas y transferencias a la cuenta de valores."
+    },
+    "broker_avanza": {
+      "description": "Importa las transacciones de la exportación CSV de Avanza. Admite operaciones de compraventa, movimientos de efectivo, dividendos, intereses, impuestos y comisiones.",
+      "name": "Avanza"
+    },
+    "broker_bitvavo": {
+      "description": "Importa las transacciones de la exportación CSV de Bitvavo. Admite compras y ventas de cripto, recompensas de staking, depósitos y retiradas de efectivo y ajustes de saldos cripto.",
+      "name": "Bitvavo"
+    },
+    "broker_bux": {
+      "description": "Importa las transacciones de la exportación CSV de BUX. Admite operaciones de compraventa, depósitos y retiradas SEPA, dividendos y comisiones.",
+      "name": "BUX"
+    },
+    "broker_coinbase": {
+      "description": "Importa las transacciones de la exportación CSV de Coinbase. Admite compras y ventas de cripto y recompensas de staking.",
+      "name": "Coinbase"
+    },
+    "broker_cointracking": {
+      "description": "Importa las transacciones de las exportaciones CSV de CoinTracking. Admite compraventas de cripto contra moneda fiat, transferencias, recompensas de staking y comisiones en moneda fiat.",
+      "name": "CoinTracking"
+    },
+    "broker_credit_agricole": {
+      "description": "Importa las exportaciones de Crédit Agricole (CSV o XLSX): los movimientos de valores de la «Lista Movimenti Deposito Titoli» (cupones, compras, amortizaciones, vencimientos, transferencias por sucesión, equilibrados con contrapartidas de efectivo automáticas) y los movimientos de cuenta de la «Lista Movimenti Conto» (liquidez, comisiones, impuestos e ingresos como depósitos y retiradas). Los activos se identifican solo por su nombre (sin ISIN).",
+      "name": "Crédit Agricole"
+    },
+    "broker_cryptocom": {
+      "description": "Importación CSV de Crypto.com en la medida de lo posible. Importa compras, ventas y recompensas claras; omite con un aviso las transferencias internas, los swaps, los bloqueos (lockups) y las filas ambiguas.",
+      "name": "Crypto.com"
+    },
+    "broker_danske_bank": {
+      "description": "Importa una cuenta de ahorro en acciones de Danske Bank (Finlandia): las transacciones de custodia (XLSX) y el extracto de efectivo (CSV), subidos juntos y combinados en una sola importación.",
+      "name": "Danske Bank"
+    },
+    "broker_degiro": {
+      "description": "Importa el estado de cuenta de DEGIRO (CSV) en cualquier idioma: operaciones de compraventa, comisiones, dividendos, impuestos, intereses, depósitos, retiradas y conversiones de divisas, cada uno en su propia divisa.",
+      "name": "DEGIRO"
+    },
+    "broker_delta": {
+      "description": "Importa las transacciones de las exportaciones CSV de Delta. Soporte en la medida de lo posible para compraventas contra moneda fiat, transferencias de cripto, dividendos y ajustes de cripto a cripto.",
+      "name": "Delta"
+    },
+    "broker_directa": {
+      "description": "Importa las transacciones de la exportación de Directa SIM (CSV o XLSX). Admite todos los tipos de transacción italianos, incluidos dividendos de ETF, cupones de bonos, impuestos y operaciones de compraventa.",
+      "name": "Directa SIM"
+    },
+    "broker_disnat": {
+      "description": "Importa las transacciones de la exportación CSV de Disnat. Admite operaciones de compraventa, dividendos, impuestos, movimientos de efectivo, comisiones e intereses.",
+      "name": "Disnat"
+    },
+    "broker_etoro": {
+      "description": "Importa el CSV de actividad de la cuenta de eToro: posiciones abiertas y cerradas (un CFD se lee como cualquier otra posición), dividendos, intereses, depósitos, retiradas y comisiones de retirada y de conversión.",
+      "name": "eToro"
+    },
+    "broker_fineco": {
+      "description": "Importa las transacciones de la exportación CSV «Movimenti Dossier Titoli» de FinecoBank. Admite ambos formatos de exportación (con y sin comisiones), compras, ventas, dividendos, cupones de bonos, amortizaciones y ampliaciones de capital. Los importes se importan tal cual, en la divisa indicada por el bróker (sin conversión de divisas).",
+      "name": "Fineco"
+    },
+    "broker_finpension": {
+      "description": "Importa las transacciones de la exportación CSV de Finpension. Admite las inversiones de los fondos de pensiones suizos.",
+      "name": "Finpension"
+    },
+    "broker_freetrade": {
+      "description": "Importa las transacciones de la exportación CSV de Freetrade. Admite acciones británicas, ETF, dividendos e intereses.",
+      "name": "Freetrade"
+    },
+    "broker_ibkr": {
+      "description": "Importa las operaciones de la exportación CSV de Interactive Brokers. Admite acciones, ETF y operaciones de divisas, con sus comisiones.",
+      "name": "Interactive Brokers"
+    },
+    "broker_intesa": {
+      "description": "Importa las exportaciones de Intesa Sanpaolo (CSV o XLSX). Trata la lista de movimientos (cupones de bonos y comisiones de custodia; las filas de banca cotidiana no reconocidas se omiten) y la instantánea de la cartera (patrimonio), que se importa como un depósito de efectivo más un ajuste del coste por posición, para iniciar una cuenta con su historial.",
+      "name": "Intesa Sanpaolo"
+    },
+    "broker_investengine": {
+      "description": "Importa las transacciones de la exportación CSV de InvestEngine. Admite compras, ventas y dividendos en GBP.",
+      "name": "InvestEngine"
+    },
+    "broker_investimental": {
+      "description": "Importa las transacciones ejecutadas definitivas de los registros CSV de actualización de órdenes de Investimental. Se omiten las cancelaciones, las solicitudes rechazadas y las órdenes no ejecutadas.",
+      "name": "Investimental"
+    },
+    "broker_parqet": {
+      "description": "Importa las transacciones de la exportación CSV de Parqet. Parqet es un agregador: los nombres de los brókers subyacentes se conservan en las descripciones de las transacciones.",
+      "name": "Parqet"
+    },
+    "broker_rabobank": {
+      "description": "Importa las transacciones de la exportación CSV neerlandesa de Rabobank. Admite fondos, dividendos, depósitos, retiradas, comisiones e intereses.",
+      "name": "Rabobank"
+    },
+    "broker_relai": {
+      "description": "Importa las compras y ventas de Bitcoin de la exportación CSV de Relai, incluidas las comisiones como transacciones separadas.",
+      "name": "Relai"
+    },
+    "broker_revolut": {
+      "description": "Importa las transacciones de las exportaciones CSV de Revolut. Admite inversiones, cripto, dividendos y movimientos de efectivo.",
+      "name": "Revolut"
+    },
+    "broker_saxo": {
+      "description": "Importa las exportaciones CSV de Saxo: compraventas de acciones, dividendos, depósitos y retiradas de efectivo y comisiones de custodia.",
+      "name": "Saxo"
+    },
+    "broker_schwab": {
+      "description": "Importa las transacciones de la exportación CSV de Charles Schwab. Admite acciones, ETF, dividendos e intereses.",
+      "name": "Charles Schwab"
+    },
+    "broker_swissquote": {
+      "description": "Importa las exportaciones CSV de Swissquote: operaciones de compraventa, dividendos, movimientos de efectivo, comisiones, impuestos e intereses. Las operaciones de cambio de divisas se omiten.",
+      "name": "Swissquote"
+    },
+    "broker_traderepublic": {
+      "description": "Importa las transacciones de la exportación CSV de Trade Republic. Admite operaciones de compraventa, dividendos, intereses, movimientos de efectivo, comisiones e impuestos en EUR.",
+      "name": "Trade Republic"
+    },
+    "broker_trading212": {
+      "description": "Importa las transacciones de la exportación CSV de Trading212. Admite acciones, ETF, dividendos e intereses.",
+      "name": "Trading212"
+    },
+    "broker_xtb": {
+      "description": "Importa las transacciones de la exportación CSV de XTB. Admite acciones, ETF, dividendos, movimientos de efectivo, impuestos, comisiones e intereses.",
+      "name": "XTB"
+    }
   }
 }
