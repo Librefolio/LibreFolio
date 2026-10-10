@@ -22,7 +22,7 @@
     "eventType": {
       "DIVIDEND": "Dividendo",
       "INTEREST": "Interesse",
-      "PRICE_ADJUSTMENT": "Aggiustamento Prezzo",
+      "PRICE_ADJUSTMENT": "Rettifica prezzo",
       "MATURITY_SETTLEMENT": "Scadenza",
       "SPLIT": "Split"
     },
@@ -253,7 +253,7 @@
       "noEvents": "Nessun evento asset configurato",
       "eventType": {
         "INTEREST": "Interesse",
-        "PRICE_ADJUSTMENT": "Aggiustamento Prezzo",
+        "PRICE_ADJUSTMENT": "Rettifica prezzo",
         "MATURITY_SETTLEMENT": "Liquidazione a Scadenza"
       },
       "interestType": "Tipo di Interesse",
@@ -636,15 +636,15 @@
       "corporate_action": "Manca il costo unitario ereditato (PMC): inserisci il costo di una singola unità, non il totale, per importare questa riga.",
       "scalable_unreadable_rows": "{count, plural, one {# riga non è stata letta e non è stata importata} other {# righe non sono state lette e non sono state importate}}: manca la data, l’importo, la valuta, la quantità o il titolo.",
       "scalable_fee_in_amount": "{count, plural, one {# operazione ha} other {# operazioni hanno}} la commissione dentro l’importo, come la scriveva l’esportatore LibreFolio 1.0.0: l’importo resta quello del file, senza una commissione separata. Esporta di nuovo con l’esportatore 1.0.1 o successivo per vedere le commissioni a parte.",
-      "scalable_fees_unknown": "{count, plural, one {# riga è arrivata} other {# righe sono arrivate}} senza i dettagli di commissioni e tasse: l’importo è quello che mostra Scalable, senza commissioni o tasse separate. Esporta di nuovo con l’opzione che include commissioni e tasse per averle.",
+      "scalable_fees_unknown": "{count, plural, one {# riga è arrivata} other {# righe sono arrivate}} senza i dettagli di commissioni e imposte: l’importo è quello che mostra Scalable, senza commissioni o imposte separate. Esporta di nuovo con l’opzione che include commissioni e imposte per averle.",
       "scalable_open_partial": "{count, plural, one {# ordine è eseguito in parte e ancora aperto: non è ancora importato e arriverà eseguito con un export successivo.} other {# ordini sono eseguiti in parte e ancora aperti: non sono ancora importati e arriveranno eseguiti con un export successivo.}}",
       "scalable_reversal": "{count, plural, one {# riga storna un movimento già registrato e non è stata importata.} other {# righe stornano movimenti già registrati e non sono state importate.}} Controlla i movimenti stornati e correggili a mano.",
       "scalable_not_imported": "{count, plural, one {# riga non è stata importata} other {# righe non sono state importate}}: trasferimenti di titoli, operazioni societarie e tipi che LibreFolio non legge ancora. Aggiungile a mano se spostano titoli o liquidità.",
       "scalable_several_overnight_accounts": "Il file contiene {count} conti deposito: tutte le loro righe vanno in questo broker, il cui saldo è la loro somma.",
       "scalable_not_executed": "{count, plural, one {# riga non è stata eseguita (in attesa, annullata, scaduta o rifiutata) e non è stata importata.} other {# righe non sono state eseguite (in attesa, annullate, scadute o rifiutate) e non sono state importate.}} Un ordine eseguito più tardi arriva con l’export successivo.",
-      "scalable_internal_transfers": "{count, plural, one {# trasferimento} other {# trasferimenti}} tra il conto broker e il conto deposito: importa il file dell’altro conto nel suo broker, poi unisci ogni coppia in un «Bonifico» nell’editor bulk.",
+      "scalable_internal_transfers": "{count, plural, one {# trasferimento} other {# trasferimenti}} tra il conto broker e il conto deposito: importa il file dell’altro conto nel suo broker, poi unisci ogni coppia in un «Giroconto» nell’editor bulk.",
       "scalable_dividends_net": "{count, plural, one {# dividendo è stato importato come accreditato} other {# dividendi sono stati importati come accreditati}}, al netto della ritenuta: il file non riporta l’imposta.",
-      "scalable_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come deposito} other {# rimborsi d’imposta sono stati importati come depositi}}: in LibreFolio una tassa toglie sempre denaro.",
+      "scalable_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come deposito} other {# rimborsi d’imposta sono stati importati come depositi}}: in LibreFolio un’imposta toglie sempre denaro.",
       "scalable_cash_by_sign": "{count, plural, one {# riga di liquidità ha un tipo che LibreFolio non conosce, o un segno inatteso: è stata registrata come deposito o prelievo} other {# righe di liquidità hanno un tipo che LibreFolio non conosce, o un segno inatteso: sono state registrate come depositi o prelievi}}, secondo il segno dell’importo."
     },
     "evidenceRowsTitle": "Righe del file",
@@ -950,7 +950,7 @@
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "In queste righe manca, o non si legge, una data, un importo, una valuta, le quote o il titolo.",
-      "scalable_fee_in_amount": "Qui la colonna amount è quote × prezzo, con commissione e tassa già sommate (o sottratte, per una vendita).",
+      "scalable_fee_in_amount": "Qui la colonna amount è quote × prezzo, con commissione e imposta già sommate (o sottratte, per una vendita).",
       "scalable_fees_unknown": "Le colonne fee e tax sono vuote in queste righe: valori sconosciuti, non zero.",
       "scalable_open_partial": "La colonna shares è quanto eseguito finora; lf_ordered_shares è quanto ordinato.",
       "scalable_reversal": "Queste righe sono storni: la colonna lf_is_cancellation è true.",
@@ -1591,10 +1591,10 @@
     "realizedSalesTooltip": "Guadagno o perdita realizzata dalle vendite nel periodo, calcolata rispetto al costo medio di carico.",
     "income": "Dividendi e interessi",
     "incomeTooltip": "Proventi incassati nel periodo da dividendi, interessi o cedole.",
-    "feesAndTaxes": "Costi e tasse",
+    "feesAndTaxes": "Costi e imposte",
     "feesLabel": "Commissioni",
-    "taxesLabel": "Tasse",
-    "feesAndTaxesTooltip": "Commissioni e imposte registrate come transazioni separate.\n\n🏦 Commissioni: {fees}\n🏛️ Tasse: {taxes}",
+    "taxesLabel": "Imposte",
+    "feesAndTaxesTooltip": "Commissioni e imposte registrate come transazioni separate.\n\n🏦 Commissioni: {fees}\n🏛️ Imposte: {taxes}",
     "marketValue": "Valore di Mercato",
     "marketValueTooltip": "Valore di mercato attuale del portafoglio a fine periodo.",
     "bookValueTooltip": "Costo medio di carico delle posizioni aperte (PMC × quantità). Esclusa la liquidità.",
@@ -2301,7 +2301,7 @@
       "links": "Link"
     },
     "types": {
-      "ADJUSTMENT": "Aggiustamento",
+      "ADJUSTMENT": "Rettifica",
       "BUY": "Acquisto",
       "DEPOSIT": "Deposito",
       "DIVIDEND": "Dividendo",
@@ -2309,10 +2309,10 @@
       "FX_CONVERSION": "Cambio Valuta",
       "INTEREST": "Interesse",
       "SELL": "Vendita",
-      "TAX": "Tassa",
-      "TRANSFER": "Trasferimento Titoli",
+      "TAX": "Imposta",
+      "TRANSFER": "Trasferimento Asset",
       "WITHDRAWAL": "Prelievo",
-      "CASH_TRANSFER": "Bonifico"
+      "CASH_TRANSFER": "Giroconto"
     },
     "refresh": "Ricarica dal server",
     "noAsset": "(Senza asset)",
@@ -2345,7 +2345,7 @@
       "saveFailed": "Impossibile salvare la transazione",
       "fxTitle": "Cambio Valuta",
       "transferAssetTitle": "Trasferimento Asset",
-      "transferCashTitle": "Bonifico",
+      "transferCashTitle": "Giroconto",
       "sameCurrencyError": "Le valute devono essere diverse",
       "sameBrokerError": "I broker devono essere diversi",
       "loadingPartner": "Caricamento transazione collegata…",
@@ -3010,7 +3010,7 @@
         },
         "performance_flows": {
           "display": "Performance e flussi portafoglio",
-          "description": "Performance, contributori, flussi, redditi, commissioni, tasse e riconciliazione."
+          "description": "Performance, contributori, flussi, redditi, commissioni, imposte e riconciliazione."
         },
         "technical_summary": {
           "display": "Sintesi tecnica portafoglio",
@@ -3217,7 +3217,7 @@
         "description": "La perdita che ogni asset selezionato ha raggiunto nei suoi esiti peggiori, stimata sulla sua storia."
       },
       "assetSetDrawdown": {
-        "name": "Discese per asset",
+        "name": "Drawdown per asset",
         "description": "Quanto ogni asset selezionato è sceso dal proprio massimo, quanto è durata e se è rientrata."
       },
       "assetSetRiskReturn": {
@@ -3636,7 +3636,7 @@
         "tails": {
           "worstRealization": "Il giorno peggiore davvero visto",
           "worstRealizationOn": "il {date}",
-          "drawdownAtRisk": "Discesa a rischio ({confidence})",
+          "drawdownAtRisk": "Drawdown a rischio ({confidence})",
           "conditionalDrawdownAtRisk": "Media oltre quella soglia",
           "ulcerIndex": "Indice di Ulcer {value}",
           "ulcerIndexHint": "profondità quadratica media sotto il picco: più basso, più tranquillo"
@@ -5508,14 +5508,14 @@
     },
     "broker_scalable": {
       "name": "Scalable Capital conto broker",
-      "description": "Importa il conto broker di Scalable Capital dall’export CSV di Scalable (PRIME) o dal file broker dell’esportatore LibreFolio: compravendite con commissioni e tasse, piani di accumulo, dividendi, interessi, depositi, prelievi e trasferimenti verso il conto deposito."
+      "description": "Importa il conto broker di Scalable Capital dall’export CSV di Scalable (PRIME) o dal file broker dell’esportatore LibreFolio: compravendite con commissioni e imposte, piani di accumulo, dividendi, interessi, depositi, prelievi e trasferimenti verso il conto deposito."
     },
     "broker_scalable_deposit": {
       "name": "Scalable Capital conto deposito",
       "description": "Importa il conto deposito di Scalable Capital (Tagesgeld) dal file dell’esportatore LibreFolio: interessi con la ritenuta, depositi, prelievi e trasferimenti verso il conto broker."
     },
     "broker_avanza": {
-      "description": "Importa le transazioni dall’export CSV di Avanza. Supporta compravendite, movimenti di cassa, dividendi, interessi, tasse e commissioni.",
+      "description": "Importa le transazioni dall’export CSV di Avanza. Supporta compravendite, movimenti di cassa, dividendi, interessi, imposte e commissioni.",
       "name": "Avanza"
     },
     "broker_bitvavo": {
@@ -5535,7 +5535,7 @@
       "name": "CoinTracking"
     },
     "broker_credit_agricole": {
-      "description": "Importa dagli export di Crédit Agricole (CSV o XLSX): i movimenti titoli della «Lista Movimenti Deposito Titoli» (cedole, acquisti, rimborsi, scadenze, trasferimenti per successione, bilanciati con contropartite di cassa automatiche) e i movimenti di conto della «Lista Movimenti Conto» (liquidità, commissioni, tasse e proventi come depositi e prelievi). I titoli si riconoscono solo dal nome (senza ISIN).",
+      "description": "Importa dagli export di Crédit Agricole (CSV o XLSX): i movimenti titoli della «Lista Movimenti Deposito Titoli» (cedole, acquisti, rimborsi, scadenze, trasferimenti per successione, bilanciati con contropartite di cassa automatiche) e i movimenti di conto della «Lista Movimenti Conto» (liquidità, commissioni, imposte e proventi come depositi e prelievi). I titoli si riconoscono solo dal nome (senza ISIN).",
       "name": "Crédit Agricole"
     },
     "broker_cryptocom": {
@@ -5547,7 +5547,7 @@
       "name": "Danske Bank"
     },
     "broker_degiro": {
-      "description": "Importa l’Estratto conto di DEGIRO (CSV) in qualsiasi lingua: compravendite, commissioni, dividendi, tasse, interessi, depositi, prelievi e conversioni di valuta, ognuno nella sua valuta.",
+      "description": "Importa l’Estratto conto di DEGIRO (CSV) in qualsiasi lingua: compravendite, commissioni, dividendi, imposte, interessi, depositi, prelievi e conversioni di valuta, ognuno nella sua valuta.",
       "name": "DEGIRO"
     },
     "broker_delta": {
@@ -5555,11 +5555,11 @@
       "name": "Delta"
     },
     "broker_directa": {
-      "description": "Importa le transazioni dall’export di Directa SIM (CSV o XLSX). Supporta tutti i tipi di transazione italiani, compresi dividendi di ETF, cedole obbligazionarie, tasse e operazioni di compravendita.",
+      "description": "Importa le transazioni dall’export di Directa SIM (CSV o XLSX). Supporta tutti i tipi di transazione italiani, compresi dividendi di ETF, cedole obbligazionarie, imposte e operazioni di compravendita.",
       "name": "Directa SIM"
     },
     "broker_disnat": {
-      "description": "Importa le transazioni dall’export CSV di Disnat. Supporta compravendite, dividendi, tasse, movimenti di cassa, commissioni e interessi.",
+      "description": "Importa le transazioni dall’export CSV di Disnat. Supporta compravendite, dividendi, imposte, movimenti di cassa, commissioni e interessi.",
       "name": "Disnat"
     },
     "broker_etoro": {
@@ -5619,11 +5619,11 @@
       "name": "Charles Schwab"
     },
     "broker_swissquote": {
-      "description": "Importa gli export CSV di Swissquote: compravendite, dividendi, movimenti di cassa, commissioni, tasse e interessi. Le gambe di cambio valuta vengono saltate.",
+      "description": "Importa gli export CSV di Swissquote: compravendite, dividendi, movimenti di cassa, commissioni, imposte e interessi. Le gambe di cambio valuta vengono saltate.",
       "name": "Swissquote"
     },
     "broker_traderepublic": {
-      "description": "Importa le transazioni dall’export CSV di Trade Republic. Supporta compravendite, dividendi, interessi, movimenti di cassa, commissioni e tasse in EUR.",
+      "description": "Importa le transazioni dall’export CSV di Trade Republic. Supporta compravendite, dividendi, interessi, movimenti di cassa, commissioni e imposte in EUR.",
       "name": "Trade Republic"
     },
     "broker_trading212": {
@@ -5631,7 +5631,7 @@
       "name": "Trading212"
     },
     "broker_xtb": {
-      "description": "Importa le transazioni dall’export CSV di XTB. Supporta azioni, ETF, dividendi, movimenti di cassa, tasse, commissioni e interessi.",
+      "description": "Importa le transazioni dall’export CSV di XTB. Supporta azioni, ETF, dividendi, movimenti di cassa, imposte, commissioni e interessi.",
       "name": "XTB"
     }
   }
