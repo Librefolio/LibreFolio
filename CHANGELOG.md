@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Align with the bank.** A first import summarises the older history in a starting point instead of replaying it, and later imports skip what LibreFolio already holds: at review those rows are hidden and counted (*N already in LibreFolio (hidden)*). After the review, a new step compares what LibreFolio will hold with the bank's balance and with the positions the files prove: one card per point — the starting point, and a point after each gap between exports — and one table of the proposed deposits and adjustments, selected by default and tagged `gap_fix`. An end-of-period check compares the cash with the statement's last balance and is never corrected automatically. The Import guide covers the new step.
   - **You choose how a set is read.** The card's *Read as* menu shows how the set is read — the plugin that recognised it, another set plugin that reads every file, or *Read the files one by one* — and each file's menu offers *Read alone with…* (when another plugin reads that file) and *Remove from the set*. A note says when the broker's default plugin, or another set plugin, could also read a file of the set. While the files are only uploaded your choice lasts until you close the wizard; after an analysis LibreFolio remembers how each file was read, and the Files page follows it. None of these commands ticks or unticks a file: reading the files one by one, reading one alone or taking it out of the set only changes how it is read, and a file left without a plugin waits for you to choose one. A set ticked only in part waits: **Parse** stays disabled until you tick the whole set or untick it. The set's timeline shows each export's name in full.
   - **Alpha.** Built from the exports of a single account, shared in [issue #26](https://github.com/Librefolio/LibreFolio/issues/26): if your files look different, or a row is imported in a way that looks wrong, please tell us there.
+- **Scalable Capital importers, alpha.** Two importers read the CSV files of the [LibreFolio exporter for Scalable Capital](https://github.com/Librefolio/librefolio-exporter), each into its own LibreFolio broker: the broker account (its PRIME export too) and the overnight account. Trades come in at their gross amount, with fees and taxes as separate rows, income comes with its tax, and the transaction id goes into the description; each importer refuses the other's file. Each has its own icon: Scalable's logo with a blue chart badge (broker account) or an orange piggy-bank badge (overnight account).
+- **A file uploaded to the wrong broker is caught.** Right after upload, a file that the broker's import plugin cannot read opens a dialog that says why, with the broker and plugin icons and the plugin's notes, and offers to move it to a broker that can read it, to keep it or to remove it.
+- **Import plugin names and descriptions follow the interface language**, in the plugin picker, the import wizard and Settings → About.
+- **The bulk editor merges transfers more safely.**
+  - **A transfer imported in two sessions becomes one pair.** A new row is suggested as the other half of a transfer already saved.
+  - **Merge all** merges every suggested pair at once, with one choice for differing descriptions and tags: the left row, the right row, or both combined.
+  - **Saving asks first** when there are merge suggestions you never opened, so the two halves of a transfer are not saved by mistake as a separate deposit and withdrawal.
 - **Todo banners lead to their rows.** In the bulk editor, each entry of the banners that list the fields to complete or to verify pages to its row and highlights it.
 - **Asset Global's Correlation tab becomes a workbench.**
   - **Build the selection you compare.** On the Correlation tab, a **+** opens a searchable picker with type and currency filters, which lists apart, with the reason, the assets the risk engine cannot analyse over the period. A broker's holdings can be preloaded in one step, and when some selected assets lack prices at the edges of the period, the tab offers the period in which all of them have prices.
@@ -107,6 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The analysis detail of an import shows each field to complete as readable facts — the file row, the amounts, the importer's suggestions and the source rows — instead of raw JSON.
 - The import wizard's unresolved-assets badge no longer repeats its number (*1 1 assets unresolved*) and uses the singular for one asset.
 - **DEGIRO statements are read correctly, in any language.** The importer reads the Account Statement by column position, so English and other-language exports are recognised. Each movement keeps its own amount and currency (amounts came from the balance, and every currency was EUR), sales and dividend taxes get their own types, numbers with a decimal comma and more than two decimals are no longer read as thousands, promotional credits become interest, and rows it cannot classify are listed in a warning instead of being dropped. Currency conversions become linked FX conversions: the review step shows each one as a single row, From/To with the rate the two amounts imply, and ticks both legs together. The Transactions export is recognised and points you to the Account Statement ([#35](https://github.com/Librefolio/LibreFolio/issues/35)).
+- Import notices: the explanation under a notice's source rows, and their caption, are in the interface language.
+- In the bulk editor, an asset transfer is suggested for merging only when the asset is the same and the two quantities cancel exactly: crossed pairs such as −3 and +5 were suggested, then refused on save.
+- Merging two new rows into a cash transfer or a currency exchange no longer saves the outgoing side as a positive amount.
+- The warning for an empty manual cost basis no longer promises a lot at zero cost: such a row is refused on save, and the warning now says so.
 
 #### 🧩 Asset providers and feedback
 
@@ -166,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the Risk tab, a failed refresh now keeps the figures on screen and tells you so, like the rest of the Dashboard; figures for a period or currency you just switched to are not kept.
 - **The Dashboard's Performance table and lots panel show only the brokers you own**, also when you come back to them. Coming back to the Positions tab used to include brokers shared with you as viewer or editor.
 - **The Dashboard's Risk tab now counts only the brokers you own**, like the rest of the Dashboard: brokers shared with you as viewer or editor are no longer part of its figures. It still covers every broker you own, whatever the broker filter.
+- The data-quality warning for assets with no recent market price says they are valued at their last transaction price; it said they were valued at cost.
 
 #### ⚡ Faster reports
 
@@ -195,6 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The top toolbars of the Assets, asset detail, Dashboard, broker detail and FX pages no longer push buttons out of the bar at intermediate widths, in every interface language.
 - With a single broker selected, a long broker name in the Dashboard's broker filter is shortened with an ellipsis instead of sticking out of the bar on narrow screens.
 - Saving a preference (language, base currency or theme) no longer makes your avatar disappear from the sidebar.
+- In Spanish and French, a percentage no longer wraps between the number and the % sign.
 
 #### 🐳 Docker and self-hosting
 
@@ -221,6 +234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- **Italian, French and Spanish use the same financial terms in the app and in the documentation.** PRU in French and PMC in Spanish for the average purchase cost; *Giroconto*, *Imposte*, *Rettifica* and *Trasferimento Asset* in Italian; NAV in every language, where Spanish said *VAN* (net present value) and French *VNI*; and drawdown is named the same way across the risk pages.
+- **Broker icons: the default import plugin's icon now comes before the portal's favicon.** Only a generic plugin's icon, such as Generic CSV, still comes after the favicon, and a custom icon always comes first.
 - **Existing databases are converted once, at the first start after the upgrade.** So that ids are never reused, the server rebuilds six tables of an existing database: a backup copy is made first and deleted once the conversion is verified — kept, with the database left as it was, if anything fails — leftover report folders of brokers deleted earlier are removed, and the server starts either way. The first start can take a little longer on a large database. `python -m backend.app.db.post_migration` (`--dry-run` to preview) runs the same step with the server stopped.
 - **Pages download less data.** The server compresses its responses (gzip): a first visit downloads about 2.8 MB instead of 7.5 MB, and a typical session about 0.9 MB instead of 5.5 MB, which helps on slow or metered connections.
 - `PORTFOLIO_BASE_CURRENCY` is gone from `.env.example` and from the Docker image: it never had an effect, and a value left in an older `.env` is ignored.
