@@ -730,6 +730,15 @@ La comparación entre el activo y los datos del proveedor tras la elección del 
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Comparación de datos del proveedor">
 </div>
 
+### 🗺️ Distribución sectorial y geográfica
+
+El modal Editar Activo en la sección Clasificación: Distribución sectorial y Distribución geográfica, dos tablas cuyas filas llevan una barra de peso, el peso en porcentaje y un menú Acciones, con encima los enlaces para importar un CSV, agregar un sector o un país y consultar al proveedor, y debajo el Total al 100%.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-desktop-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribución sectorial" alt="Editor de distribución sectorial en el modal del activo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribución geográfica" alt="Editor de distribución geográfica en el modal del activo">
+</div>
+
 ### 🌳 Búsqueda de indicadores agrupados
 
 El selector de señales agrupa los 22 indicadores por familia con recuentos, búsqueda y navegación por teclado.
