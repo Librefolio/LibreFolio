@@ -179,10 +179,141 @@
 >   - `profile` is partial;
 >   - `import/directa`, freed from S's area, joins the 25.
 
-### 3. ⏳ Phase 3: the launch (the developer)
+### 3. ✅ Phase 3: the launch (the developer) — 2026-10-10
+
+> **Note implementazione**: checkpoint A committed by the developer (batch 24): `8f30a7f03` (26 translations), `c9cf30edc` (glossary), `416bdccac` (`.env.example`), `01c6f1ae4` (journal).
+> - **Run** 01:53–02:08, launched by the developer with 400 workers instead of 3: 299 done, 4 failed for network (`runs/b11_pipeline_run.log`).
+> - **Retry** at 09:43 by the coordinator: 4 of 4, no structure warning (`runs/b11_pipeline_retry.log`). Before it, the coordinator removed the failed language from `langs_done` in those 4 entries (`/tmp/libreFolio_b11_retry.sh`): the cache bug of step 4.1.
+> - **Result:** 231 translations modified, 72 new, the cache; the dry run on the list says «up-to-date».
 
 > - **Files:** `release-pipeline/runs/b11_pipeline_files.txt`, 101 EN pages. Excluded: the 25 stamped, the 4 deferred, S's 3.
 > - **Dry run:** 101 × 3 = **303 translations, about 8.37 M tokens** (6.45 M in, 1.92 M out).
 > - **Configuration:** the worktree's `mkdocs_src/aphra-pipeline/.env` (Doubleword, `deepseek-ai/DeepSeek-V4.1-Flash`, key present, web search off). Model check and `translate-check` green.
 > - **Command** (from the worktree, with the shared venv; `--file` is mandatory: without it the pipeline would also take the deferred pages and S's):
 >   - `cd /Users/ea_enel/Documents/00_My/LibreFolio-worktrees/e-alfy-upgraded-telegram && PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs translate --workers 3 --file $(cat /Users/ea_enel/Documents/00_My/LibreFolio-cloud-sizing/release-pipeline/runs/b11_pipeline_files.txt) 2>&1 | tee /Users/ea_enel/Documents/00_My/LibreFolio-cloud-sizing/release-pipeline/runs/b11_pipeline_run.log`
+
+### 4. ✅ Phase 4: after the pipeline — 2026-10-10 (checkpoint B)
+
+> Coordinator brief at 10:01. Developer, verbatim: «ricorda ad M di fare comunque tutti i check che abbiamo sviluppato, build della doc compresa alla fine, e di guardare con occhio critico, se i check non sono corretti, danno falsi positivi o negativi, etc... vanno corretti, mentre al contrario bisogna correggere la doc».
+
+**4.1 ✅ The cache bug** (`mkdocs_src/aphra-pipeline/translate_docs.py`)
+> **Note implementazione**: an entry's `md5` is now the EN version its `langs_done` were translated or stamped from, and every write goes through 5 pure helpers placed after `_file_md5`:
+> - `_needs_translation` (the plan);
+> - `_cache_mark_analyzed`: resets `langs_done` when the md5 changes — the bug: a language that then failed, was cut by an interruption or left out by `--lang` stayed «done»;
+> - `_cache_mark_translated`;
+> - `_cache_mark_failed`: keeps the last `translated_at`, adds `failed*`, never marks the language done (before, a failure wrote `translated_at = now`);
+> - `_cache_stamp`: keeps the other languages only for an unchanged md5 and clears `failed*` on the stamped ones; `run_stamp` prints «pending again».
+> - Used by the plan, the parallel and sequential analyze/success/failure sites and `run_stamp`. The success sites no longer re-hash the file.
+>
+> **⚠️ Fuori pista**: the test-author found a second, older race — the md5 was read from disk only *after* the analysis (hours on the flex queue), so an EN edit saved meanwhile was recorded as translated. Fixed with `_read_source(path) -> (text, md5)`: one read, md5 of those bytes, text decoded from the same bytes with universal newlines. `_pipeline_analyze` returns `source_md5`; the sequential loop reads it before the analysis.
+
+**4.2 ✅ Regression tests** (test-author)
+> **Note implementazione**: `backend/test_scripts/test_utilities/test_translation_cache.py`, **38 ids**, and the runner action `utils translation-cache` (`scripts/test_runner/_backend_utils.py`, `isolation="pure"`). They drive the real `run_translate`/`run_stamp`, with the four LLM seams faked, on a docs tree under `tmp_path`, and include a barrier on the fakes' contract.
+> - RED vs HEAD `01c6f1ae4`: 13 failed, 9 passed, 16 errors (transitions missing).
+> - RED vs the first fix (no `_read_source`): 5 failed — the 4 edit-during-analysis ids (LF/CRLF × parallel/sequential) and the barrier.
+> - GREEN on lane 6158: `utils translation-cache` 38 passed; `utils translation-code-blocks` 80 passed; `test check-orphans` clean; `--workers 4 utils all` 1320 passed (first round).
+> - Logs: `runs/b11_cache_*`, `runs/b11_cache_v2_*`.
+
+**4.3 ✅ Masked pairs in older rounds** (`release-pipeline/scripts/b11_masked_scan.py`, `runs/b11_masked_scan.json`)
+> **Note implementazione**: rule — the EN version at the translation file's last commit must equal the cached md5, plus the `failed` flags. Result: 593 pairs OK.
+> - 4 stale `failed` flags (`cash-transfer` it/fr/es, `revolut` es, June): the translations are verified aligned with the current EN; the flags stay (a stamp skips unchanged entries).
+> - 3 stale pairs: `fundamentals/day-count` it/fr/es said the function lives in `backend/app/utils/financial_math.py`; fixed by hand (the EN says the provider module). No stamp needed.
+>
+> **⚠️ Fuori pista**: 2 bugs in my scan script — the porcelain `strip()` mangled the first dirty path; entries whose md5 ≠ current EN must be skipped.
+
+**4.4 ✅ The 16 structure warnings of the run** (`release-pipeline/scripts/b11_struct_fixes.py`, 19 edits on 14 files)
+> **Note implementazione**:
+> - extra bold on glossary terms removed (signals it, faq es, brokers/index fr, kpi-cards es ×7, danske-bank fr, dashboard/index it, sharing fr, etoro fr);
+> - missing bold added (image-crop it, correlation es, risk-contribution it);
+> - pac-allocator es: the continuation paragraph turned into a bullet, restored;
+> - portfolio-engine/index fr: `$> 0.01$` lost its delimiters, restored;
+> - CDaR es: 2 links restored.
+> - The 3 `LINE_COUNT` were false positives (4.5).
+
+**4.5 ✅ The checks, corrected where they were wrong**
+> **Note implementazione**:
+> - **`LINE_COUNT` false positive** (`translate_docs.py` `_structural_diff`): the EN wraps at ~80 columns, the translation writes one line per paragraph. The fingerprint now has `block_count` (blank-line separated) and check 12 compares blocks (threshold max(3, 15%)). The 3 cases are clean; a half-truncated page is still flagged.
+> - **`html-attr-missing` false positive** (`validate_translations.py`): 201 warnings, all on `user/fx/detail/data-editor`, because inline code `` `EUR<USD` `` was read as a `<usd>` tag. `_strip_code_blocks` is now fence-aware (`code_line_mask`: tilde, indented, info strings), and `_strip_code` also removes inline code for the 3 HTML checks. Old vs new validator on all 621 pairs: only those 201 warnings change.
+> - **False negative — English alt texts:** the validator skipped `alt`/`title`/`aria-label` (translation expected) but never checked they were translated. New check `text-untranslated` (WARN, ≥ 3 words, identical to a source value, «Buy Me a Coffee» allowed). It found **141** outside S's pages.
+> - **Root cause in the pipeline prompts:** `step3_user.txt:16`, `step4_user.txt:28`, `step5_user.txt:27-28` told the model to copy «HTML attributes» verbatim / not translate them. They now separate technical attributes (`src`, `href`, `class`, `id`, `style`, `data-*`) from the human text of `alt`, `title`, `aria-label`, which is translated. Placeholders unchanged.
+> - **False negative — anchors:** no validator checked that `page.md#anchor` lands on an anchor of the *translated* target; `mkdocs build --strict` stops at the first language. New check `anchor-missing` (ERROR): resolves `page.<lang>.md` with EN fallback, Python-Markdown's default slug, explicit ids, HTML ids, one issue per page and URL. Cross-checked with a non-strict build into `/tmp`: same 51 links (and, with the 13 new ids removed in memory, the same 18 of family B).
+
+**4.6 ✅ The 4 deferred pages** (`release-pipeline/scripts/b11_deferred_pages.py`)
+> **Note implementazione**: the anchors they need now exist in it/fr/es (`welcome-setup`, `support-librefolio`, `etf-family`, `stored-carries`, `primary-modes`). Written by hand from their EN diffs: the profile Welcome note, the contribute paragraph, the ETF subtypes paragraph, the indicators «sessions» paragraph (glossary «seduta/séance/sesión»). Then `translate-stamp --file` for the 4; `translate --dry-run` lists only S's 3 pages.
+
+**4.7 ✅ Alt texts translated** (`release-pipeline/scripts/b11_alt_apply.py`)
+> **Note implementazione**: 170 replacements in 54 page×language files (≥ 3-word ones plus the 2-word ones in the same tags), labels from the UI catalogues and the glossary; every mapping used at least once. `text-untranslated` outside S's pages: 141 → 0. Plus UI labels the pages had wrong: es «Copiar y abrir» (about, gallery desktop/mobile), es «Diagnóstico de plugins», it «Diagnostica plugin».
+
+**4.8 ✅ Glossary alignment of the pages the run did not re-translate** (`release-pipeline/scripts/b11_glossary_scan.py`, `b11_glossary_align.py`)
+> **Note implementazione**: **327 replacements in 109 files**, exact literals with expected counts, sense-aware:
+> - WAC FR PMP → PRU, ES → PMC;
+> - NAV (FR VNI → NAV, «le NAV» as the UI);
+> - benchmark (market sense) → indice de référence / índice de referencia, synthetic benchmark unchanged;
+> - overview → vue d'ensemble / resumen (FR «aperçu» = preview stays);
+> - dashboard ES → Panel;
+> - open-source ES → código abierto;
+> - cost basis → coût de base / costo di carico;
+> - currency conversion → conversione di valuta / conversion de devise;
+> - cash transfer → giroconto / virement / transferencia de fondos (a real bank wire stays «bonifico / transferencia bancaria»);
+> - split (corporate action) → IT split, ES desdoblamiento (the ES `split` page rewritten term by term, «Forward Forward» headings fixed); the unlink action → UI «Scollega coppia / Séparer la paire / Separar par»;
+> - tax IT tassa → imposta, FR taxe → impôt (proper names «taxe Tobin», «Taxe sur les transactions financières» and Coinbase's «Taxes» menu stay; ES «tasa» = rate stays);
+> - IT adeguamento/aggiustamento → rettifica (prezzo);
+> - drawdown: risk indicator names from the UI, «perte maximale» / «caída máxima» for the max;
+> - AI Export FR/ES → export IA / exportación IA;
+> - tooltip FR/ES → infobulle / información emergente; card IT → scheda.
+> - Residual scan hits are all intentional (preview, rate, wire, synthetic benchmark, UI names, parentheticals, CSS classes, HTML comments).
+>
+> **⚠️ Fuori pista**: the scanner masked link targets, so the first dry run had 15 literal mismatches (`**[text](url)**`), fixed; a duplicate dict key wiped the `adjustment.es` entry, caught by the re-scan and re-applied; the script is now idempotent («already applied» is not an error).
+
+**4.9 ✅ Explicit heading ids for links into translated pages** (`release-pipeline/scripts/b11_anchor_ids.py`)
+> **Note implementazione**: 13 headings, translation side only (EN untouched; the id equals the EN auto slug): `docker_advanced` `#test-mode` (it/fr/es), `filesystem` `#backup` (fr/es), `cli_tools` `#reset-a-password-or-lock-an-account` (it/fr/es), `dashboard/index` `#data-quality-banner` (it/fr/es), `danske-bank` `#end-of-period-check` (it/es) — 18 build warnings closed.
+
+**4.10 ✅ `MKDOCS_ANCHOR_EXCEPTIONS`** (`dev.py`): the 3 entries removed, the dict is empty; the 3 anchors exist in all 4 languages.
+
+**4.11 ✅ Links into S's stale pages** (`release-pipeline/scripts/b11_s_page_ids.py`; coordinator decision (a))
+> **Note implementazione**: the 33 remaining strict-build warnings were links from pages re-translated in this round into S's 2 stale pages. Ids in the it/fr/es translations of S's pages (they are translations, so mine; S's branch touches only the EN):
+> - **faithful, 21 links:** `#review` (the «Step 4» heading), `#opening-date` (the «broker's opening date» heading), `#only-when-needed` (the paragraph that introduces the steps that appear only when needed);
+> - **⚠️ PROVISIONAL, 12 links — the second round, after S is integrated, must replace them:**
+>   - `user/transactions/import/how-to.{it,fr,es}.md` — `{: #guided-first-import }` on the «step-by-step guide» H2 (no equivalent: the EN «Guided First Import» section is newer than the translation);
+>   - `user/transactions/index.{it,fr,es}.md` — `{: #bulk-workspace }` on the paragraph about the clone/bulk workspace;
+>   - `user/transactions/index.{it,fr,es}.md` — `{: #link-pairs }` on the «composite transactions / promotion» row.
+> - Also fixed in `transactions/index.it`: «إcco» → «Ecco» (a stray Arabic letter; a scan for foreign scripts in all translations found only this one).
+
+**4.12 ✅ `nav_translations`** (`mkdocs_src/mkdocs.yml`, only that section; coordinator: M is the writer, the nav is not touched — S adds the scalable line in his branch)
+> **Note implementazione**: 25 labels aligned to the glossary and the page titles (`release-pipeline/scripts/b11_nav_labels.py`), e.g. it Split / Giroconto / Commissioni & Imposte / Drawdown Massimo / Prezzo Medio di Carico / AI Export; fr Vue d'ensemble / Division / Frais & Impôts / Perte Maximale / Choix de l'Indice de Référence / Prix de Revient Unitaire; es Brókeres / Panel / Transferencia de Fondos / Caída Máxima / Precio Medio de Compra / Exportación IA. YAML reloads; the only remaining «benchmark» labels are the synthetic ones (glossary).
+>
+> **⚠️ Fuori pista**: «Overview Providers» and «Split & Promote» stay English. My report to the coordinator listed them as untranslated, but the file says «kept in English per dev-manual policy»: they are Developer Manual entries, like «Service Architecture». Reported as my error in checkpoint B.
+
+**4.13 ✅ Round 2: what the first pass could not see** (`release-pipeline/scripts/b11_glossary_align2.py`, 160 replacements in 46 files)
+> **Note implementazione**:
+> - **Capitalised forms** (titles, type rows) missed by the case-sensitive scan (`Trasferimento di Liquidità`, `Conversione Valutaria`, `Transferencia de Efectivo`, `Descripción General`, `Transfert de fonds`…), plus the UI action labels Promuovi / Promouvoir / Promocionar, and ES «base de costo» → «coste base».
+> - **Stale translations hidden by old stamps** — `b11_stamp_audit.py`: 160 (page, lang) pairs on 54 pages had an EN change after their last translation and then a stamp; `b11_stamp_port_check.py` (inline code, link URLs, numbers added to the EN must be in the translation) and a manual read of the larger EN diffs found the unported ones:
+>   - `transaction-types/adjustment` it/fr/es (stamped 2026-08-04): cashless `ADJUSTMENT`, succession holdings, imported examples, seeds and in-kind capital — ported;
+>   - `portfolio-engine/deposited-capital` it/fr/es: Capital Baseline, `InKindCapital` paragraph, `asset_event_id` row, `CapitalBaseline` formula — ported;
+>   - `fifo-engine/index` it/fr/es: reference price source `unavailable`;
+>   - `fifo-engine/fifo-lot-analysis` it: the price-lookup paragraph (`LotsAnalysisService`), a stale pointer removed.
+>   - Every other stamp was verified ported (transfer, fee, deposit-withdrawal, credits-legal, dividend, maturity-settlement, …). S's 2 pages are on the list too and are left to S's round.
+> - **Identifiers the model had translated**, restored verbatim: `price-resolution` es (`MARKET_PRICE`, `TRADE_AVG`, `CARRIED`, `MISSING`, `LAST_TRADE_PRICE`, the Mermaid node labels included); `net-annualized-return` it/fr/es (`StartValue`, `net_total_return`, `total_return`; es `PyG` → `PnL`); `obv` fr `period`; `trend` fr `+DM`/`-DM`; `buy-sell` it/fr/es; `fifo-lot-analysis` it `reference_unit_price`.
+> - `nav` fr H1 «Valeur Netative Inventaire» fixed.
+> - 30 trailing-whitespace lines that the run had copied from the EN into `index` and `admin/service_exposure` (it/fr/es) stripped: `git diff --check` clean.
+>
+> **⚠️ Fuori pista**: the round-2 engine re-counted insertions as pending (the old text survives inside the new one): a second `--apply` would have duplicated 4 paragraphs. Caught on the dry run, fixed in both scripts, single insertions verified.
+
+**4.14 ✅ One more false negative of the checks: inline code** (`validate_translations.py`)
+> **Note implementazione**: new check `inline-code-missing` (WARN): every inline code span of the source must appear verbatim in the translation, digit grouping ignored (`1,000.50` = `1.000,50`). It found the identifiers of 4.13; now 0 outside S's pages. Lint: 2 new `B905` on my `zip()` calls fixed with `strict=True`; ruff counts equal to or below HEAD; black was not clean at HEAD on these files and is not reformatted.
+
+**4.15 ✅ Final gates** (2026-10-10 ~11:05, load 6–17 on the shared machine)
+> **Note implementazione**:
+> - `translate-validate --hide-localized`: 84 errors and 144 warnings, **all on S's 3 pages** (0 outside); `anchor-missing` 0; `text-untranslated` 0 outside S.
+> - `translate-diff --issues-only`: 9 pairs with issues, all S's 3 pages.
+> - `translate-check`: green (224/224 cached, Doubleword OK).
+> - `mkdocs build` strict: exit 0, **0 WARNING/ERROR**.
+> - `check-links`: 94 valid, no known exception left, `#rolling-return` ✅.
+> - Lane 6158: `utils translation-cache` 38 passed, `utils translation-code-blocks` 80 passed, `check-orphans` clean.
+> - `git diff --check` clean. No server started; ports 6158/6168 free.
+> - Logs: `runs/b11_final_*`.
+
+**4.16 Proposed follow-ups (not done: EN or shared)**
+> - `mkdocs_src/docs/developer/docs/translation-pipeline.md` (EN, Developer Manual): document the cache semantics (md5 = version translated/stamped from; failures never done; stamp keeps other languages only for the same md5), the 3 new validator checks and the prompts' alt/title policy.
+> - devWiki: file «stamps hide stale translations», with the audit method.
+> - A stamp audit after every round (`b11_stamp_audit.py` + `b11_stamp_port_check.py`) could become a `translate-validate` option.
