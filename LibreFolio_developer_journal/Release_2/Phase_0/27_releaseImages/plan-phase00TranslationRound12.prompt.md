@@ -317,3 +317,35 @@
 > - `mkdocs_src/docs/developer/docs/translation-pipeline.md` (EN, Developer Manual): document the cache semantics (md5 = version translated/stamped from; failures never done; stamp keeps other languages only for the same md5), the 3 new validator checks and the prompts' alt/title policy.
 > - devWiki: file «stamps hide stale translations», with the audit method.
 > - A stamp audit after every round (`b11_stamp_audit.py` + `b11_stamp_port_check.py`) could become a `translate-validate` option.
+> - Batch 12 (2026-10-10): the developer page is assigned to M (docs-writer); the devWiki entry goes to the historian through the coordinator.
+
+### 5. ⏳ Second round — prepared 2026-10-10 (batch 12), to run after train 30 (S integrated)
+
+> Coordinator, batch 12: «prepara l'elenco … ma eseguilo dopo il treno 30, quando S è dentro. Le pagine EN del lotto 41 di I arriveranno dopo.» Nothing below has been run.
+
+**5.1 Pipeline** (large drift; the developer launches it, as for phase 3). S's three pages plus his new one, 3 languages each:
+
+| Page (`user/transactions/…`) | Why | Today (base `e32f47133`) |
+|---|---|---|
+| `import/how-to` | S rewrote the EN (guided first import, steps that appear only when needed, review, opening date) | translations of 2026-09-04; 84 validate errors and 144 warnings are all on these three pages |
+| `import/index` | S's EN (report sets, the plugin list) | stamped 2026-10-05 over an EN change of +195/−41 lines (stamp audit) |
+| `index` | S's EN: bulk workspace, link pairs, «Save all», «Merge all» | translations of 2026-06-19, the table split by an untranslated paragraph |
+| `import/scalable` | new page (S adds it, with its nav line) | absent from the target |
+
+> - Dry run today: `transactions/index` ~18.4K, `import/index` ~58.7K, `import/how-to` ~47.6K tokens per language, so ~374K for the three existing pages, before S's changes and without `scalable`. Re-estimate with `translate --dry-run` on the integrated tree.
+> - The prompts now translate `alt`/`title` (batch 11): the 54 English alt texts on these pages go with the run.
+
+**5.2 By hand, then `translate-stamp`** (small drift):
+> - `user/brokers/index.{it,fr,es}.md:34`, the «Portal URL» line: port S's EN rewrite (icon order: custom → plugin → favicon → briefcase), then `translate-stamp --file user/brokers/index.en.md`.
+> - `user/dashboard/charts`: only if the P&L-per-broker change (paused) alters its table of lines.
+
+**5.3 Ids to supersede.** Batch 11 put 18 ids into S's stale translations so that links from the pages re-translated in round 1 resolve. The pipeline's output must replace all of them; then `anchor-missing` must stay at 0:
+> - faithful (9): `#review`, `#opening-date`, `#only-when-needed` in `import/how-to.{it,fr,es}.md` (it 49/225/279, fr 60/231/288, es 46/232/279);
+> - **provisional (9), the ones that must not survive:** `#guided-first-import` on the «step-by-step guide» H2 of `import/how-to.{it,fr,es}.md` (it 14, fr 15, es 14); `#bulk-workspace` and `#link-pairs` as paragraph ids in `transactions/index.{it,fr,es}.md` (34 and 41). They serve 12 links: getting-started ×3 → `#guided-first-import`; brokers/import ×3 and transactions/form ×3 → `#bulk-workspace`; transactions/form ×3 → `#link-pairs`.
+
+**5.4 Checks after S's catalogues.** S changes UI labels in the catalogues before 1.2 (rettifica, imposta, giroconto, desdoblamiento…). Re-run the glossary scan and the UI lookup on the integrated tree, and align any page whose quoted label no longer matches the app (by hand, no stamp when only the translation changes).
+
+**5.5 Gates** as in phase 4: `translate-validate --hide-localized` (target: 0 errors, 0 warnings), `translate-diff --issues-only` (0), `translate-check`, `utils translation-cache`, `utils translation-code-blocks`, `check-orphans`, strict `mkdocs build` (0 WARNING/ERROR), `check-links`, `translate --dry-run` (nothing pending), `git diff --check`; plus the stamp audit (`b11_stamp_audit.py`, `b11_stamp_port_check.py`) on the stamped pages.
+
+> **Sequence** (coordinator, 11:49): train 30 is in (`dev_release2` = `d59762e0a`, S integrated: `import/how-to`, `import/index`, `transactions/index`, the new `import/scalable`, the «Portal URL» line). M closes batch 12 first; the developer merges the target into M's branch; the second round runs on that base.
+> I's batch-41 EN pages (`user/dashboard/charts.en.md`, `portfolio-engine/deposited-capital.en.md`) join this round if they are in by then, otherwise a small third round. `deposited-capital` was ported by hand in batch 11 (Capital Baseline, `InKindCapital`): classify I's diff from the git log, not from the counts.
