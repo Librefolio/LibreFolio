@@ -51,6 +51,7 @@
     import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/components/transactions/modals/ImportBrokerMismatchModal.svelte';
     import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/utils/brim/defaultPluginCheck';
     import {brimPluginName} from '$lib/utils/brim/pluginText';
+    import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
@@ -3329,7 +3330,7 @@ ${arrow}<span>${label}</span></span>`,
         };
         const options = {
             reportSetPlugins: new Set(plugins.filter((p) => (p.report_roles ?? []).length > 0).map((p) => p.code)),
-            fallbackPlugins: new Set(plugins.filter((p) => (p.detection_priority ?? 100) < 50).map((p) => p.code)),
+            fallbackPlugins: new Set(plugins.filter(isFallbackPlugin).map((p) => p.code)),
         };
         const found = pendingFiles.flatMap((entry) => {
             if (!entryIds.has(entry.id) || entry.status !== 'uploaded' || !entry.serverFileId || entry.brokerId === null) return [];
