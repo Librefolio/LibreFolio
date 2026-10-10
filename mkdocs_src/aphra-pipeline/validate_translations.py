@@ -990,7 +990,7 @@ def check_html_attrs(
 # Untranslated alt/title text (the counterpart of check_html_attrs)
 # ---------------------------------------------------------------------------
 
-_TEXT_ATTR = re.compile(r"""\b(alt|title|aria-label)\s*=\s*"([^"]*)\"""")
+_TEXT_ATTR = re.compile(r"""(?<![\w-])(alt|title|aria-label|data-title)\s*=\s*"([^"]*)\"""")
 _MD_IMAGE_ALT = re.compile(r"!\[([^\]]+)\]\(")
 # Names that stay in the source language on purpose (brand names, product names).
 _UNTRANSLATED_TEXT_OK = frozenset({"Buy Me a Coffee"})
@@ -1000,7 +1000,7 @@ def check_untranslated_text_attrs(
     source: str, translated: str, cache_key: str, lang: str,
 ) -> list[Issue]:
     """
-    Flag image alt text, `title` and `aria-label` values copied verbatim from the source.
+    Flag image alt text, `title`, `aria-label` and `data-title` (carousel caption) values copied verbatim from the source.
 
     check_html_attrs skips these attributes because translating them is expected; nothing checked that they were.
     A value of three words or more that appears unchanged among the source's own values is reported — shorter
