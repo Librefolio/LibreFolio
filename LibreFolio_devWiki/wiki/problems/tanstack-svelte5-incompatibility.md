@@ -32,7 +32,7 @@ Before adopting a UI library adapter, verify it explicitly supports the target f
 
 | Role | Path |
 |------|------|
-| Custom Svelte 5 adapter (workaround) | **removed** — was `frontend/src/lib/tanstack-table/` |
+| Custom Svelte 5 adapter (workaround) | **removed** — was frontend/src/lib/tanstack-table/ |
 | DataTable component | `frontend/src/lib/components/table/DataTable.svelte` |
 
 > **Path note (2026-09-01)**: `frontend/src/lib/tanstack-table/` no longer exists,

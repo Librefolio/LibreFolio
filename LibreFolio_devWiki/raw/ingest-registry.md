@@ -21,6 +21,33 @@
 >
 > For untracked files (external articles, PDFs in raw/): hash = `untracked`, no drift check possible.
 
+## 2026-10-09 — lint: most recorded hashes are no longer in the repository, and many sources moved
+
+**Unreachable hashes.** Of the 181 rows below dated up to 2026-08-31, **158 carry a commit hash that does not exist in
+this repository's history** (`git cat-file -t {hash}` fails; only 2 commit hashes resolve). The history was rewritten
+after those ingests, so `git diff {hash} HEAD -- {path}` cannot measure their drift. Until a deliberate re-baseline,
+treat those rows as *date + path* records: to judge drift, read the source at HEAD against the wiki page, or compare
+with `git log --follow -- {current path}` from the ingest date. The 14 `(blob)` rows still work: their content hashes
+match the files today (`git hash-object`), although the files moved.
+
+**Moved sources.** 64 rows name a path that moved since ingest, 7 name Plan D files that were renamed when archived,
+and 2 carry a batch label instead of a path. Content is unchanged where it can be checked (the `(blob)` rows);
+elsewhere it cannot (see above). Map:
+
+| Path at ingest | Path at `586a4f0ea` |
+|---|---|
+| `Release_2/Phase_0/01_signalMigration/…`, `06_betaTestingReportAndFixing/…`, `07_coverageAndConsolidationCampaign/…` | `Release_2/phases/<same folder>/…` |
+| `RoadmapV4_UI/phase-09-subplan/…` | `RoadmapV4_UI/phases/phase-09-subplan/…` |
+| `RoadmapV4_UI/plan-phase07-transaction-Part{1,2,3,3_1_Closure,3_1_Closure_2}…` | `RoadmapV4_UI/phases/phase-07-subplan/Parte{1,2,3}/…` |
+| `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanD…` (7 files) | `RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/` (`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`, `PlanD-D1D2/…`, `PlanD-D1D2/Bugfix/plan-bugfix{1..4}_….prompt.md`) |
+| `RoadmapV4_UI/PlanD_SplitPromoteFullStack/…` | `RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/…` |
+| `RoadmapV4_UI/plan-independent-…`, `plan-pwa-mobile-optimizations…` | `RoadmapV4_UI/phases/phase-{05,06,10}-subplan/…`, `phases/phase-07-subplan/Standalone/…` |
+| `RoadmapV4_UI/wiki_audit_2026_06_18/…` | `RoadmapV4_UI/phases/phase-final-subplan/wiki_audit_2026_06_18/…` |
+| `frontend/src/lib/stores/TimeSeriesStore.ts` | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
+
+All prefixes above start with `LibreFolio_developer_journal/` except the last row. The nineteen folders archived
+today had **no** rows here before this date; their rows are at the end of the file, with the archive commit.
+
 ## 2026-09-01 — the 14 session-state sources were brought into the repository
 
 The 2026-08-31 consolidation ingest read 14 plan/history files that lived only in
@@ -233,3 +260,97 @@ Their rows below now carry repository paths and `(blob)` content hashes.
 | `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/INDEX.md` | `6eac0225` | 2026-08-31 | [[sources/beta-testing-2026-08-05]] |
 | `.github/agents/test-author.agent.md` (§ "When a test fails", ~538-552) | `d1622ee5` | 2026-08-31 | [[concepts/load-only-red-is-a-product-defect]] |
 | `.github/skills/devpy-tools/testing-frontend/SKILL.md` (~313) | `d1622ee5` | 2026-08-31 | [[concepts/load-only-red-is-a-product-defect]] |
+
+## 2026-10-09 — Release 2 archive: the nineteen folders moved to `Release_2/phases/` (commit `586a4f0ea`)
+
+Ingested from their archived paths on the day they moved (train 25). The hash is the archive commit, so
+`git diff 586a4f0ea HEAD -- {path}` works for all of them. Every claim taken from these plans was checked against the
+code at that commit; see the six "Release 2 archive" entries of 2026-10-09 in `log.md`.
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunes.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-contracts-runes-2026-09]], [[features/F-016]] |
+| `LibreFolio_developer_journal/Release_2/phases/11_feedbackContractsRunes/plan-phase00FeedbackContractsRunesBugfixRound1.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-contracts-runes-2026-09]], [[features/F-016]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/checklist-review-E.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/manifest-integrazione-E.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgent.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound1-Review.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound2-Share.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound3-SocialFeedback.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] |
+| `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-feedback-import-urgent-2026-09]], [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]], [[problems/ghcr-browser-cors-auth-flow]] |
+| `LibreFolio_developer_journal/Release_2/phases/15_parallelRuntimeIsolation/plan-phase00ParallelRuntimeIsolation.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-parallel-runtime-isolation-2026-09]], [[concepts/runtime-lanes]] |
+| `LibreFolio_developer_journal/Release_2/phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-asset-data-operations-2026-09]], [[features/F-095]] |
+| `LibreFolio_developer_journal/Release_2/phases/18_brimTargeted/plan-phase00BrimTargeted.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-targeted-2026-09]], [[features/F-013]] |
+| `LibreFolio_developer_journal/Release_2/phases/19_yieldOnCost/README.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-yield-on-cost-2026-09]], [[decisions/yield-on-cost-definition]], [[features/F-100]] |
+| `LibreFolio_developer_journal/Release_2/phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-yield-on-cost-2026-09]], [[decisions/yield-on-cost-definition]], [[features/F-100]] |
+| `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/README.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-performance-charts-2026-09]], [[decisions/portfolio-pnl-series-contracts]], [[concepts/echarts-chart-gotchas]] |
+| `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-performance-charts-2026-09]], [[decisions/portfolio-pnl-series-contracts]], [[concepts/echarts-chart-gotchas]], [[features/F-088]], [[features/F-055]] |
+| `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-performance-charts-2026-09]], [[decisions/portfolio-pnl-series-contracts]], [[concepts/echarts-chart-gotchas]], [[problems/asset-event-edit-delete-reinsert]] |
+| `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-performance-charts-2026-09]], [[decisions/portfolio-pnl-series-contracts]], [[concepts/echarts-chart-gotchas]], [[concepts/discard-the-answer-not-the-question]] |
+| `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-performance-charts-2026-09]], [[decisions/portfolio-pnl-series-contracts]], [[concepts/echarts-chart-gotchas]] |
+| `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-performance-charts-2026-09]], [[decisions/portfolio-pnl-series-contracts]], [[concepts/echarts-chart-gotchas]] |
+| `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-performance-charts-2026-09]], [[decisions/portfolio-pnl-series-contracts]], [[concepts/echarts-chart-gotchas]] |
+| `LibreFolio_developer_journal/Release_2/phases/22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-asset-pricing-refactor-2026-09]], [[entities/asset-sources-package]] |
+| `LibreFolio_developer_journal/Release_2/phases/23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-transaction-batch-refactor-2026-09]], [[entities/transaction-batch-pipeline]] |
+| `LibreFolio_developer_journal/Release_2/phases/24_privacyGlobal/README.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-privacy-global-2026-09]], [[decisions/privacy-mask-at-the-formatter]], [[features/F-101]] |
+| `LibreFolio_developer_journal/Release_2/phases/24_privacyGlobal/analysis-phase00PrivacyGlobal.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-privacy-global-2026-09]], [[decisions/privacy-mask-at-the-formatter]], [[features/F-101]], [[concepts/premise-gate-keyed-by-content]] |
+| `LibreFolio_developer_journal/Release_2/phases/24_privacyGlobal/plan-phase00PrivacyGlobalRound1-MaskingCore.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-privacy-global-2026-09]], [[decisions/privacy-mask-at-the-formatter]], [[features/F-101]] |
+| `LibreFolio_developer_journal/Release_2/phases/24_privacyGlobal/plan-phase00PrivacyGlobalRound2-PostReview.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-privacy-global-2026-09]], [[decisions/privacy-mask-at-the-formatter]], [[features/F-101]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/analysis-phase00BrimDanskeBank.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/issue26-reply.en.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBank.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]], [[problems/brim-text-exports-hardcoded-utf8]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep5PluginRedetection.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]], [[problems/brim-compatible-plugins-frozen-at-upload]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep6UploadRobustness.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep7ButtonAndR6.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep8MobileCard.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]] |
+| `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-danske-bank-2026-10]], [[decisions/brim-report-sets]], [[features/F-103]], [[problems/stale-frontend-after-update-html-cached]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/README.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00CoverageCombineRace.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]], [[problems/coverage-combine-race-renamed-part]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00DataQualityBannersNavCount.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00DbPathArgument.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]], [[problems/db-path-argument-ignored-by-alembic]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00DefaultDisplayCurrency.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00FxAddPairNavigationWait.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00FxDashboardSync.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]], [[problems/fx-backward-fill-unbounded-stale-rates]], [[features/F-016]] |
+| `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00FxDashboardSyncStep2PageCache.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-fx-dashboard-sync-2026-10]], [[concepts/stale-while-revalidate-page-cache]] |
+| `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-i18n-audit-2026-10]], [[problems/i18n-audit-false-dead-and-false-used]], [[problems/svelte-i18n-formatter-cache-ignores-locale]], [[problems/i18n-loading-gate-remounts-app]] |
+| `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00SettingsBulkValidation.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-wac-unification-2026-10]], [[problems/global-settings-bulk-saved-unvalidated-values]] |
+| `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00WacUnification.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-wac-unification-2026-10]], [[decisions/financial-math-single-average-cost]], [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]] |
+| `LibreFolio_developer_journal/Release_2/phases/31_brimDegiro/plan-phase00BrimDegiro.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-brim-degiro-2026-10]], [[features/F-013]] |
+| `LibreFolio_developer_journal/Release_2/phases/33_e2eImportInfra/plan-phase00E2eImportInfra.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-e2e-import-infra-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-account-and-id-reuse-2026-10]], [[problems/account-deletion-orphaned-brokers]], [[problems/reused-ids-after-delete]] |
+| `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuseStep2LastAdmin.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-account-and-id-reuse-2026-10]], [[problems/account-deletion-orphaned-brokers]], [[problems/reused-ids-after-delete]] |
+| `LibreFolio_developer_journal/Release_2/phases/35_devCliImage/plan-phase00DevCliImage.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-dev-cli-image-2026-10]], [[problems/devpy-unusable-in-docker-image]] |
+| `LibreFolio_developer_journal/Release_2/phases/36_connectionSecurity/plan-phase00ConnectionSecurity.prompt.md` | `586a4f0ea` | 2026-10-09 | [[sources/phase00-connection-security-2026-10]], [[decisions/connection-security-server-never-upgrades]], [[problems/login-account-enumeration-before-password]], [[features/F-102]] |
+
+## 2026-10-09 — second pass: folders 25 and 39, PAC rounding (commit `083ed26dc`, train 26)
+
+Folders 25 (workstream K) and 39 (P-1) archived to `Release_2/phases/`; the PAC rounding plan of the still-active
+folder 13 read for its decision only (merge `b81b92fd1`). Paths are relative to the repository root.
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/README.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/analysis-phase00TaxonomySelect.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[decisions/asset-type-two-level-taxonomy]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelect.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[decisions/asset-type-two-level-taxonomy]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep9ImportDuplicates.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[entities/import-wizard-modal]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep10BrokerRequestBurst.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[problems/broker-icon-fields-request-loop]], [[concepts/entity-store-pattern]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep11BulkCreationOrder.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[features/F-048]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep12ReviewFollowups.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[problems/flag-emoji-windows]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[decisions/html-escape-at-the-source]], [[problems/stale-price-banner-never-emitted]], [[concepts/responsive-4mode-layout]], [[features/F-098]], [[features/F-099]], [[features/F-032]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[problems/svelte5-teardown-reads-stale-state-timers]], [[problems/fixture-skip-hid-api-test]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep15ToolbarSweepGutter.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[concepts/responsive-4mode-layout]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep16AssetDetailUx.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[features/F-033]], [[concepts/echarts-chart-gotchas]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep16Round1-TreeSelectTeardown.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[problems/svelte5-teardown-reads-stale-state-timers]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep17DeviceNotes.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[decisions/asset-type-two-level-taxonomy]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep18CoverageTriage.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[problems/modal-layers-escape-and-backdrop]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep19AppStartAuth.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[features/F-001]], [[problems/modal-layers-escape-and-backdrop]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep20SimpleSelectEscape.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[problems/modal-layers-escape-and-backdrop]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep21PureDefects.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[features/F-008]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep22RegisterLinkProfileDate.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[features/F-001]] |
+| `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-taxonomy-select-2026-10]], [[features/F-048]] |
+| `LibreFolio_developer_journal/Release_2/phases/39_autoCostNoPosition/plan-phase00AutoCostNoPosition.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-auto-cost-no-position-2026-10]], [[decisions/auto-cost-basis-zero-without-position]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRoundingDirectionFix.prompt.md` | `083ed26dc` | 2026-10-09 | [[decisions/pac-rounding-against-the-plan]] — partial: folder 13 is still active; re-check before archiving |
+| `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerMathematicalCore.prompt.md` | `083ed26dc` | 2026-10-09 | [[decisions/pac-rounding-against-the-plan]] — §7.3 only (the no-arbitrage principle) |

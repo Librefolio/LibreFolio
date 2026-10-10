@@ -85,6 +85,9 @@ from backend.app.services.pac_allocator.numeric import (
 # Shared by v2: these were defined inside the P1 block removed on 2026-09-21.
 type _PlannerV2Request = PacPlannerRequest | RebalancerInvestOnlyRequest | RebalancerInvestAndSellRequest
 _RATIO_WIRE_INTEGER_CHARS = 192
+# Half a unit of the tenth decimal: the rounding error of an FX rate stored as
+# Numeric(24, 10) (``backend/app/db/models.py``, ``FxRate.rate``).
+_FX_STORED_RATE_HALF_UNIT = ExactRatio(1, 2 * 10**10)
 
 
 @dataclass(frozen=True, slots=True)
@@ -608,6 +611,11 @@ class _PlannerV2Normalizer:
     def _fx_pair_key(first: str, second: str) -> str:
         return "/".join(sorted((first, second)))
 
+    @staticmethod
+    def _stored_fx_rate(rate: ExactRatio, source: str, destination: str) -> ExactRatio:
+        """Return the stored value behind ``rate`` (source → destination): the key "A/B" with A < B stores B per A."""
+        return rate if source < destination else ExactRatio(1) / rate
+
     def fx_rate(self, source: str, destination: str) -> ExactRatio | None:
         if source == destination:
             return ExactRatio(1)
@@ -663,11 +671,17 @@ class _PlannerV2Normalizer:
 
         A BUY conversion from pool currency c into quote currency q is worth
         ``rate(c→q)·(1−spread)·rate(q→V)`` in the valuation currency V; above
-        ``rate(c→V)`` it would create value, which the evaluator meets as a
-        negative spread loss. Equality is coherent. The checked conversions are
-        exactly those ``validate_fx_pair_closure`` requires; a conversion from
-        or into V never forms a triangle. A missing or nonpositive rate and an
-        out-of-range spread are reported elsewhere and skip the check.
+        ``rate(c→V)`` it would create value. Rates are stored with ten
+        decimals, so three coherent rates can miss the triangle by their
+        storage error: the check tolerates the first-order relative error of
+        the product, ``β = h·(1/R₁ + 1/R₂ + 1/R₃)`` over the three stored
+        values, with h half a unit of the tenth decimal. Inside that band the
+        evaluator plans the conversion at the triangle
+        (``calculate_planning_fx_rate``), so it creates no value either. The
+        checked conversions are exactly those ``validate_fx_pair_closure``
+        requires; a conversion from or into V never forms a triangle. A
+        missing or nonpositive rate and an out-of-range spread are reported
+        elsewhere and skip the check.
         """
         valuation = self.request.valuation_currency
         spread = ExactRatio.from_decimal(Decimal(self.request.fx_spread_rate))
@@ -691,7 +705,18 @@ class _PlannerV2Normalizer:
                 direct = self.fx_rate(pool_currency, valuation)
                 if cross is None or to_valuation is None or direct is None:
                     continue
-                if cross * kept * to_valuation > direct:
+                band = _FX_STORED_RATE_HALF_UNIT * sum(
+                    (
+                        ExactRatio(1) / self._stored_fx_rate(rate, source, destination)
+                        for rate, source, destination in (
+                            (cross, pool_currency, quote_currency),
+                            (to_valuation, quote_currency, valuation),
+                            (direct, pool_currency, valuation),
+                        )
+                    ),
+                    ExactRatio(0),
+                )
+                if cross * kept * to_valuation > direct * (ExactRatio(1) + band):
                     self.reported_fx_rate_inconsistent.add(pair)
                     self.issue(
                         "allocation.fx_rate_inconsistent",

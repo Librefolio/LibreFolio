@@ -33,6 +33,6 @@ LiveTicker is placed **only in page-level components** where it mounts/unmounts 
 
 | Role | Path |
 |------|------|
-| LiveTicker component | `frontend/src/lib/components/layout/LiveTicker.svelte` |
+| LiveTicker component | *removed 2026-08-05* — pages poll prices themselves; see `mkdocs_src/docs/developer/frontend/components/features/live-ticker.md` |
 | Header component | `frontend/src/lib/components/layout/Header.svelte` |
 | Navigation store | `frontend/src/lib/stores/app/navigationStore.ts` |

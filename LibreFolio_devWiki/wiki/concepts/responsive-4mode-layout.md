@@ -1,203 +1,103 @@
 ---
-title: "Responsive Layout 4-Mode Pattern"
+title: "Responsive page toolbars: four tiers per page, thresholds measured, not guessed"
 category: concept
-tags: [frontend, responsive, layout, breakpoints, ux]
-related_features: [F-021, F-032]
+tags: [frontend, responsive, layout, breakpoints, toolbar, ux, i18n, e2e, calibration]
+related_features: [F-021, F-032, F-033, F-054]
+related: [concepts/dual-view-pattern, sources/phase00-taxonomy-select-2026-10, sources/phase06-bugfix-migration]
 ---
 
-# Concept: Responsive Layout 4-Mode Pattern
+# Concept: responsive page toolbars
+
+> **Rewritten 2026-10-09 (checked at `083ed26dc`).** Until then this page described the April 2026 pattern — four
+> modes `wide`/`tablet`/`tablet-s`/`mobile` at fixed breakpoints 1100/770/500 px, each page with its own
+> `ResizeObserver`, and it recommended "extracting `responsiveLayout.svelte.ts`". That extraction happened long ago;
+> the model below replaced the fixed breakpoints, and its thresholds were **calibrated by measurement** on
+> 2026-10-01 (workstream K, step 13 — backlog K-25 asked for this page). The old model is summarised under *History*.
 
 ## Definition
 
-LibreFolio's list pages with filter bars (Assets, FX) use a **4-breakpoint responsive layout system** instead of the traditional 3 (desktop/tablet/mobile). The addition of `tablet-s` (small tablet) provides better adaptation to intermediate screen widths where neither `tablet` nor `mobile` layouts work well.
+Five page toolbars — Assets list, Asset detail, Dashboard, Broker detail, FX list — are built on one component,
+`PageToolbar.svelte`, driven by `createResponsiveLayout()` (`responsiveLayout.svelte.ts`). The bar has three blocks
+(the DateRangePicker, a centre of filters, a 2×2 grid of actions) and **four tiers**, chosen from the bar's own width
+(`ResizeObserver`) against **per-page thresholds**:
 
-## Breakpoint Modes
+| Tier (`LayoutMode`) | Below threshold… | Layout |
+|---|---|---|
+| `oneRow` | — (widest) | picker on one row, centre and actions beside it |
+| `denseRow` | `oneRow` | same structure, denser: the picker goes to two internal rows; a page may reflow its own centre |
+| `stackFilters` | `denseRow` | the centre moves **below** the picker; the actions stay beside that column |
+| `oneColumn` | `stackFilters` | picker, centre and actions stack in one column (actions keep their labels) |
 
-| Mode | Width Range | Layout Strategy |
-|------|-------------|----------------|
-| `wide` | ≥1100px | All filters and action buttons in single horizontal row |
-| `tablet` | 770-1100px | Filters on 2 rows, action buttons in 2×2 grid on right |
-| `tablet-s` | 500-770px | Filters stacked below datepicker, action buttons in vertical column (icon-only) |
-| `mobile` | <500px | Everything stacked vertically and centered, icon-only buttons |
+Labels are an independent axis: `labelHideActions` and `labelHideTabs` hide the text of action buttons and tabs
+below their own widths (labels first shrink via `labelShrink.ts`); `noExtraLabel` lets a page shed a decorative label
+(the Dashboard's "Currency:" prefix). The `oneColumn` number is deliberately inert — nothing narrower exists yet.
 
-## Rationale for `tablet-s`
+## Calibration — measure the content, in every language (2026-10-01)
 
-**Problem**: The 500-770px range is problematic:
-- **Too narrow for `tablet` layout**: Filters and buttons don't fit in row, causing wrapping or overflow
-- **Too wide for `mobile` layout**: Stacking everything wastes horizontal space, poor UX on landscape phones/small tablets
+**Symptom.** At intermediate widths buttons spilled out of the bars: the thresholds, set by eye in English, were
+10–30 px too low.
 
-**Solution**: Intermediate `tablet-s` layout:
-- Datepicker and filters aligned left, stacked vertically (2 rows)
-- Action buttons in a right-aligned vertical column
-- Buttons show icon-only (no text labels) to save horizontal space
-- Clean left-right split utilizes available width efficiently
+**Method.**
+- For each bar, tier and language, a probe on a copy of real data measured the minimum width the content needs (bar
+  width + overflow) while the viewport narrowed from 1920 to 320 px.
+- The profile language had to be changed **in the database copy**: the saved user language overrides
+  `localStorage` at login.
+- Each threshold = **max over the four languages + 16 px, rounded to the nearest ten**. Spanish was usually the
+  longest — not French, as first assumed.
+- Values were tried live through `window.__lfLayouts.<name>.thresholds` (`registerLayoutDebug`), which recompute the
+  tier without a resize.
 
-## Implementation Pattern
+**Result** (before → after, verified in the pages at `083ed26dc`):
 
-### 1. State Variable
+| Bar (`layoutDebugName`) | `denseRow` | `stackFilters` | `labelHideTabs` |
+|---|---|---|---|
+| assetsList | 850 → **1020** | 440 → **520** | — |
+| assetDetail | 780 → **850** | 400 → **510** | — |
+| dashboard | 810 → **950** | 430 → **510** | 370 → **460** |
+| brokerDetail | 800 → **840** | 470 → **530** | 370 → **660** |
+| fxList | 930 → **1030** | 440 → **560** | — |
 
-```typescript
-let layoutMode: 'wide' | 'tablet' | 'tablet-s' | 'mobile' = $state('wide');
-```
+Also: the asset-list filters became `flex-1 min-w-0` in `oneColumn`, and the asset-detail header containers got
+`min-w-0` after red bands at 330→320 and 1060→1030 px.
 
-### 2. ResizeObserver
+## The gate and its measuring rule
 
-```typescript
-onMount(() => {
-  const observer = new ResizeObserver((entries) => {
-    const width = entries[0].contentRect.width;
-    if (width >= 1100) layoutMode = 'wide';
-    else if (width >= 770) layoutMode = 'tablet';
-    else if (width >= 500) layoutMode = 'tablet-s';  // ← the key addition
-    else layoutMode = 'mobile';
-  });
-  observer.observe(filterBarRef);
-  return () => observer.disconnect();
-});
-```
+`frontend/e2e/layout/toolbar-width-sweep.spec.ts` sweeps every bar in FR/IT/ES from 1700 px down to 320 + g px in
+10 px steps and fails on any overflow of the bar or of the page, named by testid.
 
-### 3. Conditional CSS Classes
+- **The gutter.** `app.css` sets `html { scrollbar-gutter: stable }`; on a host with classic scrollbars the gutter
+  takes ~15 px even headless. Measure it as `innerWidth − document.documentElement.getBoundingClientRect().width` —
+  **not** `innerWidth − clientWidth`, which reads 0 headless — sweep down to `320 + g`, and check page overflow
+  against the layout box, with a positive control (step 15, 2026-10-02/05). Injecting CSS to hide the scrollbar was
+  rejected: it changes the layout under test.
+- **Long names truncate.** A 31-character broker name overflowed the Dashboard's broker filter on a phone: the
+  button now truncates with an ellipsis (`min-w-0` on the wrapper, `max-w-full`, `truncate`), pinned by
+  `dashboard-broker-filter-label.spec.ts`. Wrapping was rejected.
 
-```svelte
-<!-- Container -->
-<div class:layout-wide={layoutMode === 'wide'}
-     class:layout-tablet={layoutMode === 'tablet'}
-     class:layout-tablet-s={layoutMode === 'tablet-s'}
-     class:layout-mobile={layoutMode === 'mobile'}>
-  
-  <!-- Filters block -->
-  <div class="filters"
-       class:flex-row={layoutMode === 'wide'}
-       class:flex-col={layoutMode === 'tablet' || layoutMode === 'tablet-s'}
-       class:items-center={layoutMode === 'mobile'}>
-    <!-- DateRangePicker, search, type/currency filters, reset -->
-  </div>
-  
-  <!-- Actions block -->
-  <div class="actions"
-       class:flex-row={layoutMode === 'wide'}
-       class:grid-cols-2={layoutMode === 'tablet'}
-       class:flex-col={layoutMode === 'tablet-s'}
-       class:items-center={layoutMode === 'mobile'}>
-    <!-- Settings, Sync, Refresh, etc. -->
-  </div>
-</div>
-```
+**Rule for a new toolbar or a new label:** give it `PageToolbar` thresholds measured the same way (four languages,
++16 px, rounded) and add it to the sweep; a threshold guessed in one language will be wrong in another.
 
-### 4. Action Button Labels
+## History — the April 2026 model
 
-```typescript
-// Show labels in wide/tablet, hide in tablet-s/mobile
-let showActionLabels = $derived(layoutMode === 'wide' || layoutMode === 'tablet');
-```
-
-```svelte
-<button>
-  <Icon class="lucide" />
-  {#if showActionLabels}<span>{$t('common.sync')}</span>{/if}
-</button>
-```
-
-## Visual Layout Examples
-
-### Wide (≥1100px)
-```
-┌──────────────────────────────────────────────────────────────┐
-│  📅 [datepicker]  🔍[search] [active] [▾type] [▾cur] [×]    │
-│                   [Abs/%] [⚙ Settings] [⟳ Sync] [↻ Refresh] │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Tablet (770-1100px)
-```
-┌──────────────────────────────────────────────────────────────┐
-│  📅 [datepicker]  🔍[search]  [active]  │  [Abs/%] [⚙ Set]  │
-│                   [▾type] [▾cur] [×]    │  [⟳ Sync] [↻ Ref] │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Tablet-S (500-770px) ← The Key Addition
-```
-┌──────────────────────────────────────────────────────────────┐
-│  📅 [datepicker]                        │  [Abs/%]           │
-│  🔍 [search]  [active]  [▾ type]  [×]  │  [⚙]              │
-│                  [▾ currency]           │  [⟳]              │
-│                                          │  [↻]              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Mobile (<500px)
-```
-┌──────────────────────────────────────────────────────────────┐
-│                  📅 [datepicker]                             │
-│                  🔍 [search...]                              │
-│                  [active]  [▾ type]  [×]                     │
-│                  [▾ currency]                                 │
-│                  [Abs/%]  [⚙]  [⟳]  [↻]                    │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## Filter Bar Behavior Refinement
-
-**Issue**: In `tablet` mode, if filters block used `flex-row flex-wrap`, filters would return to single row when space allowed → inconsistent with the 2-row design.
-
-**Fix**: Force 2-row layout in `tablet` and `tablet-s` modes:
-- Datepicker always on first row
-- Search, type, currency filters always on second row
-- Only `wide` mode uses flexible single-row with wrapping
-
-**CSS**:
-```svelte
-<!-- Filters container -->
-<div class:flex-row={layoutMode === 'wide'}
-     class:flex-col={layoutMode === 'tablet' || layoutMode === 'tablet-s'}>
-  
-  <!-- Inner filters (search, type, currency) -->
-  <div class:flex-row={layoutMode === 'wide'}
-       class:flex-col={layoutMode === 'tablet' || layoutMode === 'tablet-s'}>
-```
-
-## Where Applied
-
-| Page | Implementation File | Notes |
-|------|---------------------|-------|
-| Assets List | `frontend/src/routes/(app)/assets/+page.svelte` | Full 4-mode support with type filter counts |
-| FX List | `frontend/src/routes/(app)/fx/+page.svelte` | Full 4-mode support with currency selectors |
-
-## Benefits
-
-1. **Better UX**: No awkward wrapping or overflow in intermediate widths
-2. **Efficient space use**: `tablet-s` layout uses left-right split effectively
-3. **Consistent pattern**: Same 4-mode logic across all list pages with filter bars
-4. **Graceful degradation**: Each breakpoint optimized for its range
-
-## Trade-offs
-
-1. **More code**: 4 modes instead of 3 → more conditional logic
-2. **Testing complexity**: Must verify layout at 4+ widths manually
-3. **Additional breakpoint to maintain**: If design changes, 4 modes to update instead of 3
-
-## Future Use
-
-**Recommendation**: Use this 4-mode pattern for any new list page with:
-- Datepicker + multiple filter controls
-- 3+ action buttons
-- Expectation of use on tablets and large phones
-
-**Helper**: Consider extracting `responsiveLayout.svelte.ts` (already created in Step 2c) into a reusable Runes-based store for consistent breakpoint detection.
-
-## Related
-
-- [[features/F-021]] — FX List View (uses 4-mode)
-- [[features/F-032]] — Asset List View (uses 4-mode)
-- [[concepts/dual-view-pattern]] — Grid/table toggle pattern (works with any layout mode)
-- Source: [[sources/phase06-bugfix-migration]]
+The first version (Phase 6, `responsiveLayout` born in Step 2c) used four global modes at fixed widths: `wide`
+≥ 1100 px, `tablet` 770–1100, `tablet-s` 500–770 (icon-only actions in a right column — the addition that gave the
+pattern its name), `mobile` < 500, on the Assets and FX lists only. Rounds 11–14 renamed the tiers, removed the
+icon-only tier, split the label axes and moved the thresholds into each page; K's calibration replaced the guessed
+values.
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Assets page | `frontend/src/routes/(app)/assets/+page.svelte` |
-| FX page | `frontend/src/routes/(app)/fx/+page.svelte` |
-| Responsive helper | `frontend/src/lib/utils/layout/responsiveLayout.svelte.ts` |
-| Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step1/plan-phase06BugfixMigration-part2.md` |
+| Tier logic, thresholds, `__lfLayouts` live tuning | `frontend/src/lib/utils/layout/responsiveLayout.svelte.ts` |
+| Toolbar component | `frontend/src/lib/components/ui/toolbar/PageToolbar.svelte` |
+| Assets list thresholds | `frontend/src/routes/(app)/assets/+page.svelte` |
+| Asset detail thresholds | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
+| Dashboard thresholds | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Broker detail thresholds | `frontend/src/routes/(app)/brokers/[id]/+page.svelte` |
+| FX list thresholds | `frontend/src/routes/(app)/fx/+page.svelte` |
+| Scrollbar gutter | `frontend/src/app.css` |
+| Width sweep gate | `frontend/e2e/layout/toolbar-width-sweep.spec.ts` |
+| Long broker label | `frontend/e2e/portfolio/dashboard-broker-filter-label.spec.ts` |
+| Calibration (step 13 §5) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md` |
+| Gutter (step 15) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep15ToolbarSweepGutter.prompt.md` |
