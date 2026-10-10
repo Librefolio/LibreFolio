@@ -27,11 +27,13 @@ Usage (via dev.py):
 import argparse
 import re
 import sys
+import unicodedata
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
-from code_blocks import FencedBlock, code_indent_issues
+from code_blocks import FencedBlock, code_indent_issues, code_line_mask
 
 # Import shared infrastructure from translate_docs
 from translate_docs import (
@@ -115,6 +117,120 @@ def _extract_links(text: str) -> list[tuple[str, str]]:
     Returns list of (display_text, url).
     """
     return re.findall(r'\[([^\]]*)\]\(([^)]+)\)', text)
+
+
+_HEADING_LINE = re.compile(r"^[ ]{0,8}#{1,6}[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+_EXPLICIT_ID = re.compile(r"\{:?[^}]*?#([A-Za-z0-9_-]+)[^}]*\}")
+
+
+def _toc_slug(heading: str) -> str:
+    """The id Python-Markdown's toc gives a heading (default slugify: NFKD, ASCII only, lowercase, dashes)."""
+    text = re.sub(r"\s*\{:?[^}]*\}\s*$", "", heading)
+    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"<[^>]+>", "", text).replace("`", "").replace("*", "")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^\w\s-]", "", text).strip().lower()
+    return re.sub(r"[-\s]+", "-", text)
+
+
+def _page_anchors(text: str) -> set[str]:
+    """Anchors a rendered page offers: explicit attr_list ids, heading slugs (duplicates get _1, _2), HTML ids."""
+    clean = _strip_code_blocks(text)
+    anchors = set(_EXPLICIT_ID.findall(clean)) | set(re.findall(r'\bid="([^"]+)"', clean))
+    seen: dict[str, int] = {}
+    for heading in _HEADING_LINE.findall(clean):
+        slug = _toc_slug(heading)
+        if slug in seen:
+            seen[slug] += 1
+            anchors.add(f"{slug}_{seen[slug]}")
+        else:
+            seen[slug] = 0
+            anchors.add(slug)
+    return anchors
+
+
+_INLINE_CODE_SPAN = re.compile(r"(`+)(?!`)(.+?)(?<!`)\1(?!`)")
+_DIGIT_GROUPING = re.compile(r"(?<=\d)[.,\u00a0\u202f ](?=\d)")
+
+
+def _inline_code_spans(text: str) -> Counter:
+    """Inline code spans outside fenced blocks; digit grouping ignored, so `1,000.50` matches the localized `1.000,50`."""
+    lines = [line for line, in_code in zip(text.split("\n"), code_line_mask(text), strict=True) if not in_code]
+    return Counter(
+        _DIGIT_GROUPING.sub("", m.group(2).strip()) for line in lines for m in _INLINE_CODE_SPAN.finditer(line)
+    )
+
+
+def check_inline_code(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Every inline code span of the source must appear verbatim in the translation.
+
+    Inline code holds identifiers — enum values, API fields, parameters (`MARKET_PRICE`, `total_return`, `period`).
+    Nothing compared them: translations had turned them into `PRECIO_MERCADO`, `rendimento_totale`, `période`, or
+    kept a span the source had since renamed (`asset_id` for `asset_event_id`).
+    """
+    missing = _inline_code_spans(source) - _inline_code_spans(translated)
+    return [
+        Issue(
+            severity=Severity.WARN,
+            file=cache_key, lang=lang,
+            check="inline-code-missing",
+            message=f"`{span}`{f' ×{n}' if n > 1 else ''} missing or changed in the translation",
+        )
+        for span, n in sorted(missing.items())
+    ]
+
+
+def check_link_anchors(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Every `page.md#anchor` link of a translation must land on an anchor of the page it opens.
+
+    A translated page links the translated target (mkdocs-static-i18n serves `page.<lang>.md`, falling back to EN),
+    whose headings slug differently from the EN ones. `check_links` only compares URLs with the source, and
+    `mkdocs build --strict` stops at the first language with a warning, so such links surfaced one language at a time.
+    """
+    issues = []
+    page = DOCS_DIR / cache_key
+    anchors_of: dict[Path, set[str]] = {}
+    reported: set[str] = set()
+    for _text, url in _extract_links(_strip_code(translated)):
+        url = url.strip().split()[0] if url.strip() else ""
+        if "#" not in url or re.match(r"^[a-zA-Z][\w+.-]*:", url) or url in reported:
+            continue
+        target, anchor = url.split("#", 1)
+        if not anchor:
+            continue
+        if target:
+            stem = page.parent / target
+            if target.endswith("/"):
+                stem = stem / "index.md"
+            if stem.suffix != ".md":
+                continue
+            stem = stem.with_suffix("")
+            localized = stem.parent / f"{stem.name}.{lang}.md"
+            target_file = localized if localized.exists() else stem.parent / f"{stem.name}.en.md"
+            if not target_file.exists():
+                continue  # a missing page is the links check's and the build's business
+            if target_file not in anchors_of:
+                anchors_of[target_file] = _page_anchors(target_file.read_text(encoding="utf-8"))
+            anchors = anchors_of[target_file]
+            where = target_file.resolve().relative_to(DOCS_DIR.resolve()).as_posix()
+        else:
+            anchors = anchors_of.setdefault(page, _page_anchors(translated))
+            where = "this page"
+        if anchor not in anchors:
+            reported.add(url)
+            issues.append(Issue(
+                severity=Severity.ERROR,
+                file=cache_key, lang=lang,
+                check="anchor-missing",
+                message=f"#{anchor} not found in {where} (link {url})",
+            ))
+    return issues
 
 
 def _extract_code_blocks(text: str) -> list[str]:
@@ -703,8 +819,26 @@ def check_admonitions(
 
 
 def _strip_code_blocks(text: str) -> str:
-    """Remove fenced code blocks from text (for checks that should ignore code)."""
-    return re.sub(r'```\w*\n.*?```', '', text, flags=re.DOTALL)
+    """Remove fenced code blocks from text (for checks that should ignore code).
+
+    Fence-aware (``code_blocks.parse_fenced_blocks``): backtick or tilde fences, at any indentation (lists, admonitions,
+    content tabs), with any info string. The former regex needed the language word to end the line, so a fence with a
+    title or a space left its code in the text.
+    """
+    lines = text.split("\n")
+    return "\n".join(line for line, in_code in zip(lines, code_line_mask(text), strict=True) if not in_code)
+
+
+_INLINE_CODE = re.compile(r"(`+)(?!`).+?(?<!`)\1(?!`)")
+
+
+def _strip_code(text: str) -> str:
+    """Remove fenced code blocks and inline code spans: for the HTML checks, which must read only rendered HTML.
+
+    Inline code such as `EUR<USD` or `<username>` is shown as text, not parsed as a tag; read as HTML it became a
+    ``<usd>`` tag whose "attributes" were the words of the following lines (user/fx/detail/data-editor: 201 warnings).
+    """
+    return _INLINE_CODE.sub("", _strip_code_blocks(text))
 
 
 def check_html_blocks(
@@ -717,9 +851,9 @@ def check_html_blocks(
     """
     issues = []
 
-    # Strip code blocks first to avoid false positives from e.g. <username>
-    src_clean = _strip_code_blocks(source)
-    tr_clean = _strip_code_blocks(translated)
+    # Strip code (fenced and inline) first to avoid false positives from e.g. <username>
+    src_clean = _strip_code(source)
+    tr_clean = _strip_code(translated)
 
     # Extract HTML tags (just opening/closing tag names)
     src_tags = re.findall(r'<(/?\w+)[^>]*>', src_clean)
@@ -808,8 +942,8 @@ def check_html_attrs(
         return tr_val == "../" + src_val
 
     issues = []
-    src_clean = _strip_code_blocks(source)
-    tr_clean = _strip_code_blocks(translated)
+    src_clean = _strip_code(source)
+    tr_clean = _strip_code(translated)
 
     src_tags = _extract_tag_attrs(src_clean)
     tr_tags = _extract_tag_attrs(tr_clean)
@@ -849,6 +983,45 @@ def check_html_attrs(
                     ),
                 ))
 
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Untranslated alt/title text (the counterpart of check_html_attrs)
+# ---------------------------------------------------------------------------
+
+_TEXT_ATTR = re.compile(r"""\b(alt|title|aria-label)\s*=\s*"([^"]*)\"""")
+_MD_IMAGE_ALT = re.compile(r"!\[([^\]]+)\]\(")
+# Names that stay in the source language on purpose (brand names, product names).
+_UNTRANSLATED_TEXT_OK = frozenset({"Buy Me a Coffee"})
+
+
+def check_untranslated_text_attrs(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Flag image alt text, `title` and `aria-label` values copied verbatim from the source.
+
+    check_html_attrs skips these attributes because translating them is expected; nothing checked that they were.
+    A value of three words or more that appears unchanged among the source's own values is reported — shorter
+    values are mostly names (ETF, Buy, Revolut) that legitimately stay as they are.
+    """
+    def _values(text: str) -> list[str]:
+        clean = _strip_code(text)
+        found = [m.group(2).strip() for m in _TEXT_ATTR.finditer(clean)]
+        found += [m.group(1).strip() for m in _MD_IMAGE_ALT.finditer(clean)]
+        return [v for v in found if len(re.findall(r"[^\W\d_]{2,}", v)) >= 3 and v not in _UNTRANSLATED_TEXT_OK]
+
+    source_values = set(_values(source))
+    issues = []
+    for value in _values(translated):
+        if value in source_values:
+            issues.append(Issue(
+                severity=Severity.WARN,
+                file=cache_key, lang=lang,
+                check="text-untranslated",
+                message=f"alt/title text left in the source language: {value[:90]!r}",
+            ))
     return issues
 
 
@@ -1158,12 +1331,15 @@ def check_math_indentation(
 ALL_CHECKS = [
     ("heading-structure", check_heading_structure, True),   # needs source + translated
     ("links", check_links, True),
+    ("link-anchors", check_link_anchors, True),
     ("code-blocks", check_code_blocks, True),
     ("code-block-indent", check_code_block_indent, True),   # pairs blocks by content, not position
+    ("inline-code", check_inline_code, True),
     ("list-structure", check_list_structure, True),
     ("admonitions", check_admonitions, True),
     ("html-blocks", check_html_blocks, True),
     ("html-attrs", check_html_attrs, True),
+    ("text-untranslated", check_untranslated_text_attrs, True),
     ("html-relative-src", check_html_relative_src, True),
     ("front-matter", check_front_matter, True),
     ("latex", check_latex, True),
