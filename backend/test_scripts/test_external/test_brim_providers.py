@@ -24,6 +24,7 @@ import ast
 import atexit
 import csv
 import io
+import json
 import re
 import shutil
 import tempfile
@@ -2731,7 +2732,9 @@ class TestPluginFrontendContract:
             assert notice.code and notice.code.strip(), "notice with no code"
             assert notice.message and notice.message.strip(), f"{notice.code}: empty message"
             for ev in notice.evidence:
-                assert ev.title and ev.title.strip(), f"{notice.code}: evidence with no title"
+                # An empty title leaves the caption to the wizard, which shows its translated one (importWizard.evidenceRowsTitle):
+                # the Scalable plugins do so. A title of blanks is neither a caption nor that signal.
+                assert ev.title == "" or ev.title.strip(), f"{notice.code}: evidence title {ev.title!r} is blank"
                 assert ev.comment and ev.comment.strip(), f"{notice.code}: evidence table with no comment"
                 assert all(len(row) == len(ev.headers) for row in ev.rows), f"{notice.code}: evidence row width does not match headers"
                 assert not ev.row_numbers or len(ev.row_numbers) == len(ev.rows), f"{notice.code}: row_numbers must be empty or aligned with rows"
@@ -5962,6 +5965,73 @@ class TestWindows1252Invariance:
             "Windows-1252 or Latin-1 (for example re-saved with Excel on Windows). Read the file with self._open_text(file_path), "
             'or BRIMProvider._open_text(file_path, newline="") where the csv module needs the line endings verbatim:\n' + "\n".join(f"  {offender}" for offender in offenders)
         )
+
+
+# =============================================================================
+# THE PLUGINS' NAME AND DESCRIPTION IN THE FOUR UI CATALOGUES
+# =============================================================================
+
+# The checkout this test file belongs to, found from the file itself: the catalogues are read next to it.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_I18N_DIR = _REPO_ROOT / "frontend" / "src" / "lib" / "i18n"
+_TRANSLATED_LANGUAGES = ("it", "fr", "es")
+_UI_LANGUAGES = ("en", *_TRANSLATED_LANGUAGES)
+_PLUGIN_TEXT_FIELDS = ("name", "description")
+
+
+def _brim_plugin_texts(language: str) -> dict:
+    """The ``brimPlugins`` section of one UI catalogue: plugin code → ``{"name": …, "description": …}``."""
+    path = _I18N_DIR / f"{language}.json"
+    section = json.loads(path.read_text(encoding="utf-8")).get("brimPlugins")
+    assert isinstance(section, dict) and section, f"{path.relative_to(_REPO_ROOT)} has no brimPlugins section: every plugin would be shown in English"
+    return section
+
+
+def _plugin_text(texts: dict, code: str, field: str) -> Any:
+    """``brimPlugins.<code>.<field>`` of one catalogue, or None when the plugin or the field is missing."""
+    entry = texts.get(code)
+    return entry.get(field) if isinstance(entry, dict) else None
+
+
+class TestPluginTextCatalogues:
+    """A plugin's name and description in the UI language (``frontend/src/lib/utils/brim/pluginText.ts``).
+
+    The plugin select, the import wizard, the report-set card and the About page show ``brimPlugins.<code>.name`` and
+    ``brimPlugins.<code>.description`` from the catalogue of the UI language, and the plugin's own English text when the
+    catalogue has none. So the catalogues follow the registry: the English one *is* each plugin's ``name`` and
+    ``description``, verbatim — a plugin that rewords itself turns this red until its four entries follow — the Italian,
+    French and Spanish ones name and describe every plugin, and no catalogue keeps a plugin that is no longer registered.
+    """
+
+    @staticmethod
+    def _plugins() -> List[BRIMPluginInfo]:
+        """Every registered plugin, as ``GET /brokers/import/plugins`` lists it. Never empty: the checks would pass on nothing."""
+        plugins = BRIMProviderRegistry.list_plugin_info()
+        assert plugins, "No BRIM plugin is registered: the catalogue checks would pass on nothing"
+        return plugins
+
+    def test_the_english_catalogue_is_each_plugin_s_own_name_and_description(self):
+        texts = _brim_plugin_texts("en")
+
+        mismatches = [f"{info.code}.{field}: en.json {_plugin_text(texts, info.code, field)!r}, the plugin {getattr(info, field)!r}" for info in self._plugins() for field in _PLUGIN_TEXT_FIELDS if _plugin_text(texts, info.code, field) != getattr(info, field)]
+
+        assert not mismatches, f"{len(mismatches)} difference(s) between en.json brimPlugins and the registered plugins:\n" + "\n".join(f"  {mismatch}" for mismatch in mismatches)
+
+    @pytest.mark.parametrize("language", _TRANSLATED_LANGUAGES)
+    def test_the_translated_catalogue_names_and_describes_every_plugin(self, language: str):
+        texts = _brim_plugin_texts(language)
+
+        missing = [f"{info.code}.{field}" for info in self._plugins() for field in _PLUGIN_TEXT_FIELDS if not (isinstance(value := _plugin_text(texts, info.code, field), str) and value.strip())]
+
+        assert not missing, f"{language}.json: {len(missing)} plugin text(s) missing or empty, shown in English instead: {missing}"
+
+    @pytest.mark.parametrize("language", _UI_LANGUAGES)
+    def test_the_catalogue_holds_no_plugin_that_is_not_registered(self, language: str):
+        registered = {info.code for info in self._plugins()}
+
+        stale = sorted(set(_brim_plugin_texts(language)) - registered)
+
+        assert not stale, f"{language}.json has brimPlugins entries for {len(stale)} code(s) no registered plugin has: {stale}"
 
 
 if __name__ == "__main__":

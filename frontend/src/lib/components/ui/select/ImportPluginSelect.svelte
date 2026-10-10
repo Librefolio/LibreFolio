@@ -27,6 +27,7 @@
     import {zodiosApi} from '$lib/api';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import {brimPluginDescription, brimPluginName} from '$lib/utils/brim/pluginText';
 
     interface Props {
         value?: string;
@@ -58,12 +59,12 @@
         return ordered;
     });
 
-    // Convert plugins to SelectOption format with icon_url in data
+    // Convert plugins to SelectOption format with icon_url in data; name and description in the UI language
     let pluginOptions: SelectOption[] = $derived(
         filteredPlugins.map((p) => ({
             value: p.code,
-            label: p.name,
-            searchText: p.description,
+            label: brimPluginName(p, $_),
+            searchText: brimPluginDescription(p, $_),
             icon: (p.icon_url as string | null | undefined) || undefined,
             data: p,
         })),
@@ -71,6 +72,7 @@
 
     // Get selected plugin info
     let selectedPlugin = $derived(plugins.find((p) => p.code === value));
+    let selectedDescription = $derived(selectedPlugin ? brimPluginDescription(selectedPlugin, $_) : '');
 
     // Load plugins on component initialization — sync path for cache hits
     $effect(() => {
@@ -103,7 +105,7 @@
     }
 
     function getDescription(option: SelectOption): string | undefined {
-        return (option.data as BrimPlugin | undefined)?.description;
+        return option.searchText || undefined;
     }
 
     function handleChange(newValue: string) {
@@ -138,8 +140,8 @@
             <p class="text-xs text-gray-400 mt-1">{$_('common.loading')}</p>
         {:else if error}
             <p class="text-xs text-red-500 mt-1">{error}</p>
-        {:else if selectedPlugin?.description}
-            <p class="text-xs text-gray-500 mt-1">{selectedPlugin.description}</p>
+        {:else if selectedDescription}
+            <p class="text-xs text-gray-500 mt-1">{selectedDescription}</p>
         {/if}
     {/if}
 </div>

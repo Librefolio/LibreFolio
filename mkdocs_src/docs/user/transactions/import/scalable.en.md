@@ -87,8 +87,8 @@ Create two [brokers](../../brokers/index.md), one per account — for example *S
 
 | Broker for | Default Import Plugin | Icon |
 |:--|:--|:--:|
-| the broker account | **Scalable Capital broker** | ![Scalable's logo with a stock badge, the icon of the Scalable Capital broker importer](../../../static/icons/brokers/scalable-broker.png){: width="48" } |
-| the overnight account | **Scalable Capital overnight account** | ![Scalable's logo with a cash badge, the icon of the Scalable Capital overnight account importer](../../../static/icons/brokers/scalable-deposit.png){: width="48" } |
+| the broker account | **Scalable Capital broker** | ![Scalable's logo with a blue chart badge, the icon of the Scalable Capital broker importer](../../../static/icons/brokers/scalable-broker.png){: width="48" } |
+| the overnight account | **Scalable Capital overnight account** | ![Scalable's logo with an orange piggy-bank badge, the icon of the Scalable Capital overnight account importer](../../../static/icons/brokers/scalable-deposit.png){: width="48" } |
 
 The broker then shows the importer's icon by itself: a broker without an icon of its own shows the icon of its default import plugin, so leave **Custom Icon URL** empty.
 
@@ -102,14 +102,14 @@ If a file lands in the wrong broker, the wizard says so right after the upload. 
 
 ### 🔁 Transfers between your two accounts {: #transfers }
 
-Money you move between the broker account and the overnight account appears in both files: a **Withdrawal** in one broker and a **Deposit** in the other, on the same day and for the same amount. Merge each pair into one **Cash Transfer**: the bulk workspace of the [Transactions](../index.md) page suggests the pairs.
+Money you move between the broker account and the overnight account appears in both files: a **Withdrawal** in one broker and a **Deposit** in the other, on the same day and for the same amount. Merge each pair into one **Cash Transfer**: the bulk workspace of the [Transactions](../index.md) page suggests the pairs, and asks before **Save All** if you have not looked at them.
 
-- **Files imported together**: the two halves meet in the workspace, where a green banner, *Complementary transactions detected*, offers to **Merge** each pair.
+- **Files imported together**: the two halves meet in the workspace, where a green banner, *Complementary transactions detected*, offers to **Merge** each pair — or all of them at once, with **Merge all (N)**.
 - **Files imported at different times**: when you import the second file, the workspace finds the halves already saved and shows the 💡 button: click it to add them, then **Merge** each pair from the banner. For transfers saved long ago, you can also tick the transfer rows of both brokers on the **Transactions** page and click **Edit**: the banner appears in the workspace.
 
 You can also link a pair by hand: tick its two rows on the **Transactions** page and click **🔗 Promote pair**.
 
-The two halves have different descriptions, since each carries its own transaction id: keep the joined description that the merge proposes. An export that overlaps a merged transfer then brings its halves back as likely duplicates, unticked.
+The two halves have different descriptions, since each carries its own transaction id: keep the joined description that the merge proposes (in **Merge all**, the default choice: **Combine**). An export that overlaps a merged transfer then brings its halves back as likely duplicates, unticked.
 
 ### 🤔 One broker only? {: #one-broker-only }
 

@@ -24,6 +24,14 @@
  *      💡 shows in the toolbar and in the menu of those two rows only; opened from the 2026-06-01 row it offers the
  *      two saved sides, one is added, the banner proposes the new + saved pair; merged with the joined text and saved,
  *      the saved leg and the new leg are CASH_TRANSFER, linked to each other.
+ *   S3 the save gate, on S1's editor (both exports, the banner proposing the two transfers, nothing saved so no 💡):
+ *      Save with the banner never touched asks about the suggestions (`tx-bulk-unseen-suggestions`) and sends
+ *      nothing; «Show the suggestions» closes the question and leaves the editor, its rows and its proposals as they
+ *      were; the next Save saves without asking — the transfers as imported, a withdrawal and a deposit each.
+ *   S4 «Merge all», on S1's editor: the banner's `promote-suggest-merge-all` opens `promote-all-modal`, combining both
+ *      texts chosen by default; the left row's text (the row the banner lists first) is picked and confirmed: every
+ *      proposed transfer becomes one paired row, the banner goes, and once saved both transfers are CASH_TRANSFER
+ *      pairs, linked to each other, each leg with the text of the row the banner listed first.
  *
  * Why a disposable account. The database search and the picker see every broker the user can access, and the
  * banner's proposals depend on what the editor holds: on the shared E2E user the transfers of a neighbouring test
@@ -48,10 +56,12 @@
  * context-menu-action-suggest / context-menu-action-mark-delete / tx-bulk-suggest-import / tx-picker-modal /
  * dt-row-checkbox-tx-<id> / tx-picker-add / promote-suggest-banner / promote-suggest-item-<n> /
  * promote-suggest-link-<n> / promote-merge-desc-input / promote-merge-confirm / tx-bulk-todo-blockers /
- * tx-bulk-todo-warnings / tx-bulk-commit / tx-bulk-modal.
+ * tx-bulk-todo-warnings / tx-bulk-commit / tx-bulk-modal · tx-bulk-unseen-suggestions (the header of its
+ * ConfirmModal) / confirm-modal-cancel · promote-suggest-merge-all / promote-all-modal / promote-all-choice-<left|merge|right>
+ * / promote-all-confirm.
  */
 
-import {expect, test, type APIRequestContext, type Locator, type Page, type Response} from '../fixtures/playwright';
+import {expect, test, type APIRequestContext, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {continueToStep, type ParseResponse} from '../fixtures/import-wizard';
@@ -547,6 +557,56 @@ async function saveAll(page: Page): Promise<{payload: CommitPayload; result: Com
     return {payload: request.postDataJSON() as CommitPayload, result};
 }
 
+/** The commit of the editor's batch, as it leaves the page. */
+function isCommitRequest(sent: Request): boolean {
+    return sent.method() === 'POST' && new URL(sent.url()).pathname === COMMIT_PATH;
+}
+
+/**
+ * S1's first half, for the tests that start from its editor: a disposable account with its two brokers, both exports
+ * staged on their own brokers in one wizard run, parsed with their brokers' plugins, only their cash rows handed to the
+ * editor. Returns once the editor holds them, the database has proposed nothing (nothing is saved) and the banner
+ * proposes the two internal transfers, whose legs stand apart.
+ */
+async function importBothExportsToEditor(page: Page, request: APIRequestContext, owned: Owned, tag: string): Promise<{brokers: Brokers; parsed: Record<Account, ParseBody>; transfers: Transfer[]; cashCount: number}> {
+    const brokers = await startOnOwnAccount(page, request, owned, tag);
+    await goToTransactions(page);
+    const step1 = await openImportWizard(page);
+    const files: Record<Account, SampleFile> = {broker: sampleFile('broker'), overnight: sampleFile('overnight')};
+    const staged: string[] = [];
+    await stageFile(page, step1, files.broker, brokers.broker.id, staged);
+    await stageFile(page, step1, files.overnight, brokers.overnight.id, staged);
+    const uploads = await continueToSelection(page, 2);
+    const upload: Record<Account, UploadedInfo> = {
+        broker: uploadOf(uploads, files.broker, brokers.broker.id, ACCOUNTS.broker.plugin),
+        overnight: uploadOf(uploads, files.overnight, brokers.overnight.id, ACCOUNTS.overnight.plugin),
+    };
+    const parses = await parseUploads(page, uploads);
+    const parsed = {} as Record<Account, ParseBody>;
+    for (const account of Object.keys(ACCOUNTS) as Account[]) {
+        const entry = parses.get(upload[account].file_id);
+        expect(entry?.request, `${files[account].name} is parsed with ${ACCOUNTS[account].plugin}, for its broker`).toMatchObject({plugin_code: ACCOUNTS[account].plugin, broker_id: brokers[account].id});
+        parsed[account] = entry!.body;
+    }
+    const transfers = transfersIn(parsed);
+    const cashCount = cashRows(parsed.broker).length + cashRows(parsed.overnight).length;
+
+    const step4 = await continueToStep(page, [parsed.broker, parsed.overnight], 'review');
+    await selectOnlyCashRows(page, step4, cashCount);
+    const allLegs = transfers.flatMap((transfer) => [transfer.out, transfer.in]).map((leg) => ({brokerId: brokers[leg.account].id, date: leg.day, type: leg.type}));
+    const suggestAnswer = promoteSuggestAsking(page, allLegs);
+    await importToEditor(page);
+
+    await expect(editorRows(page), `the editor holds the ${cashCount} rows handed over`).toHaveCount(cashCount, {timeout: UI_TIMEOUT});
+    for (const transfer of transfers) {
+        await expect(dateCells(page, transfer.day, ''), `the two legs of the ${transfer.day} transfer are two standalone rows`).toHaveCount(2);
+    }
+    const answer = await jsonFrom<SuggestAnswer>(await suggestAnswer, 'the database search for the new rows');
+    expect(Object.values(answer.results).flat(), 'nothing of the account is saved yet: the database proposes nothing').toEqual([]);
+    await expect(bannerItems(page), 'the banner proposes exactly the two internal transfers').toHaveCount(2, {timeout: UI_TIMEOUT});
+    return {brokers, parsed, transfers, cashCount};
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -821,5 +881,148 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
             onOvernight.filter((tx) => tx.date === april.fresh.day).map((tx) => savedFacts(tx)),
             'the new April leg is saved as imported, unlinked',
         ).toEqual([{type: april.fresh.type, related: null, amount: april.fresh.amount, description: april.fresh.description}]);
+    });
+
+    test('S3: Save with the banner never touched asks about the suggestions first — «Show the suggestions» closes the question, and the next Save saves', async ({page, request}, testInfo) => {
+        test.setTimeout(180_000);
+        const {brokers, parsed, transfers, cashCount} = await importBothExportsToEditor(page, request, owned, `scs3_${testInfo.project.name}`);
+        const root = page.getByTestId('tx-bulk-modal-root');
+        await expect(page.getByTestId('tx-bulk-suggest-import'), 'nothing saved to propose: the banner is the only suggestion, and nobody has touched it').toHaveCount(0);
+
+        // The save gate is a ConfirmModal: its test id sits on the header, its answers are the shared confirm-modal-* buttons.
+        const question = page.getByRole('dialog').filter({has: page.getByTestId('tx-bulk-unseen-suggestions')});
+        // Armed before the first Save: a commit is an edge, and none may leave while the question is open.
+        const commitsSent: string[] = [];
+        const onRequest = (sent: Request) => {
+            if (isCommitRequest(sent)) commitsSent.push(sent.url());
+        };
+        page.on('request', onRequest);
+        try {
+            // ① Save: the editor asks about the two proposals nobody looked at, instead of saving.
+            await waitForSettled(root, STEP_TIMEOUT);
+            await expect(root.getByTestId('tx-bulk-todo-blockers'), 'premise: no import todo holds the save').toHaveCount(0);
+            await expect(root.getByTestId('tx-bulk-todo-warnings'), 'premise: no import todo asks for a confirmation').toHaveCount(0);
+            const commit = root.getByTestId('tx-bulk-commit');
+            await expect(commit).toBeEnabled({timeout: UI_TIMEOUT});
+            await commit.click();
+            await expect(question, 'Save stops on the suggestions nobody looked at').toBeVisible({timeout: UI_TIMEOUT});
+            expect(commitsSent, 'nothing is saved while the question is open').toEqual([]);
+
+            // ② «Show the suggestions»: the question closes; the editor, its rows and its proposals stay as they were.
+            await question.getByTestId('confirm-modal-cancel').click();
+            await expect(page.getByTestId('tx-bulk-unseen-suggestions'), '«Show the suggestions» closes the question').toHaveCount(0, {timeout: UI_TIMEOUT});
+            await expect(page.getByTestId('tx-bulk-modal'), 'the editor stays open').toBeVisible();
+            await expect(bannerItems(page), 'the two proposals are still there: showing them merges nothing').toHaveCount(2);
+            await expect(editorRows(page), 'every row is still its own').toHaveCount(cashCount);
+            await expect(page.getByTestId('tx-picker-modal'), 'nothing saved to pick from: the banner is what is shown, no picker').toHaveCount(0);
+            expect(commitsSent, '«Show the suggestions» saves nothing').toEqual([]);
+        } finally {
+            page.off('request', onRequest);
+        }
+
+        // ③ Save again: the proposals have been shown, so the commit leaves at once — a question asked again would hold
+        // it, and saveAll would wait in vain for the request.
+        const {payload} = await saveAll(page);
+        const creates = payload.creates ?? [];
+        expect(creates, `the ${cashCount} rows are created`).toHaveLength(cashCount);
+        expect(
+            creates.filter((create) => create.type === 'CASH_TRANSFER'),
+            'shown, not merged: no Cash Transfer',
+        ).toEqual([]);
+        expect(payload.promotes ?? [], 'nothing to promote').toEqual([]);
+
+        // ④ The API: every cash row saved on its broker, each transfer as imported — a withdrawal and a deposit, unlinked.
+        const saved: Record<Account, SavedTx[]> = {broker: await transactionsOn(page, brokers.broker.id), overnight: await transactionsOn(page, brokers.overnight.id)};
+        for (const account of Object.keys(ACCOUNTS) as Account[]) {
+            expect(saved[account], `every cash row of the ${ACCOUNTS[account].label} is saved on its broker`).toHaveLength(cashRows(parsed[account]).length);
+        }
+        for (const transfer of transfers) {
+            const legs = [...saved[transfer.out.account].filter((tx) => tx.date === transfer.day), ...saved[transfer.in.account].filter((tx) => tx.date === transfer.day)];
+            expect(legs.map((tx) => [tx.type, tx.related_transaction_id ?? null]).sort(), `the ${transfer.day} transfer is saved as imported: a withdrawal and a deposit, unlinked`).toEqual([
+                ['DEPOSIT', null],
+                ['WITHDRAWAL', null],
+            ]);
+        }
+    });
+
+    test('S4: «Merge all» with the left row’s text merges every proposed transfer, saved as linked Cash Transfers', async ({page, request}, testInfo) => {
+        test.setTimeout(180_000);
+        const {brokers, parsed, transfers, cashCount} = await importBothExportsToEditor(page, request, owned, `scs4_${testInfo.project.name}`);
+
+        // ① The left text of each proposal, read from the app: a proposal's merge dialog joins the texts of its two rows
+        // in the banner's order, one per line — the left row's first. (The banner and «Merge all» put the paying row
+        // first only when the editor holds signed amounts; it shows imported amounts as magnitudes, so both follow the
+        // proposal's own order, as the dialog does.) The dialog is cancelled: nothing is merged yet.
+        const leftTextOf = new Map<string, string>();
+        for (const index of [0, 1]) {
+            const joined = await openMergeOf(page, index);
+            const transfer = transferJoinedBy(transfers, joined);
+            leftTextOf.set(transfer.day, joined.split('\n')[0]);
+            // Pressed inside the dialog, as S1 does: an Escape that reached the editor underneath would ask to discard it.
+            await page.getByTestId('promote-merge-desc-input').press('Escape');
+            await expect(page.getByTestId('promote-merge-confirm'), 'the merge dialog is cancelled').toBeHidden({timeout: UI_TIMEOUT});
+        }
+        expect([...leftTextOf.keys()].sort(), 'the two proposals are the two internal transfers').toEqual(TRANSFERS.map((transfer) => transfer.day).sort());
+        await expect(bannerItems(page), 'cancelled dialogs merge nothing').toHaveCount(2);
+        await expect(editorRows(page)).toHaveCount(cashCount);
+
+        // ② «Merge all»: offered because the banner proposes more than one pair; combining both texts is the default.
+        const mergeAll = page.getByTestId('promote-suggest-merge-all');
+        await expect(mergeAll, 'two proposals: the banner offers to merge them all').toBeVisible();
+        await mergeAll.click();
+        const dialog = page.getByTestId('promote-all-modal');
+        await expect(dialog).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(dialog.getByTestId('promote-all-choice-merge').getByRole('radio'), 'combining both texts is chosen by default, as in a single merge').toBeChecked();
+        const left = dialog.getByTestId('promote-all-choice-left').getByRole('radio');
+        await left.check();
+        await expect(left).toBeChecked();
+        await dialog.getByTestId('promote-all-confirm').click();
+        await expect(dialog, 'the dialog closes on confirm').toHaveCount(0, {timeout: UI_TIMEOUT});
+
+        // ③ Every proposal merged: the two legs of each transfer are one paired row, and nothing is left to propose.
+        for (const transfer of transfers) {
+            await expect(dateCells(page, transfer.day, transfer.day), `the ${transfer.day} legs are paired`).toHaveCount(1, {timeout: UI_TIMEOUT});
+        }
+        await expect(editorRows(page), 'the two legs of each transfer are one row').toHaveCount(cashCount - transfers.length);
+        await expect(page.getByTestId('promote-suggest-banner'), 'every proposal is merged: the banner is gone').toHaveCount(0);
+
+        // ④ Save: each transfer goes as two CASH_TRANSFER legs under one link, both with the left row's text.
+        const {payload} = await saveAll(page);
+        const creates = payload.creates ?? [];
+        expect(creates, `the ${cashCount} rows are created`).toHaveLength(cashCount);
+        expect(payload.promotes ?? [], 'new rows are merged in the editor itself: no promote').toEqual([]);
+        expect(
+            creates.filter((create) => create.type === 'CASH_TRANSFER'),
+            'the legs of the two transfers, and nothing else, are Cash Transfers',
+        ).toHaveLength(2 * transfers.length);
+        const sortLegs = <T extends {broker_id?: number}>(legs: T[]) => [...legs].sort((a, b) => (a.broker_id ?? 0) - (b.broker_id ?? 0));
+        const links = new Set<string>();
+        for (const transfer of transfers) {
+            const text = leftTextOf.get(transfer.day);
+            const pair = creates.filter((create) => create.type === 'CASH_TRANSFER' && create.date === transfer.day);
+            expect(
+                sortLegs(pair).map((create) => ({broker_id: create.broker_id, amount: amountOf(create.cash), description: create.description})),
+                `the ${transfer.day} transfer goes as two CASH_TRANSFER legs, each on its own broker with its own amount, both with the left row's text`,
+            ).toEqual(sortLegs([transfer.out, transfer.in].map((leg) => ({broker_id: brokers[leg.account].id, amount: leg.amount, description: text}))));
+            expect(pair[0].link_uuid, `the ${transfer.day} legs share one link`).toBeTruthy();
+            expect(pair[1].link_uuid).toBe(pair[0].link_uuid);
+            links.add(pair[0].link_uuid ?? '');
+        }
+        expect(links.size, 'one link per transfer').toBe(transfers.length);
+
+        // ⑤ The API: both transfers are CASH_TRANSFER pairs, each leg linked to the other, with the left row's text.
+        const saved: Record<Account, SavedTx[]> = {broker: await transactionsOn(page, brokers.broker.id), overnight: await transactionsOn(page, brokers.overnight.id)};
+        for (const account of Object.keys(ACCOUNTS) as Account[]) {
+            expect(saved[account], `every cash row of the ${ACCOUNTS[account].label} is saved on its broker`).toHaveLength(cashRows(parsed[account]).length);
+        }
+        for (const transfer of transfers) {
+            const outLegs = saved[transfer.out.account].filter((tx) => tx.date === transfer.day);
+            const inLegs = saved[transfer.in.account].filter((tx) => tx.date === transfer.day);
+            expect(outLegs, `one transaction on ${transfer.day} on the paying broker`).toHaveLength(1);
+            expect(inLegs, `one transaction on ${transfer.day} on the receiving broker`).toHaveLength(1);
+            const text = leftTextOf.get(transfer.day);
+            expect(savedFacts(outLegs[0]), `the ${transfer.day} paying leg: a CASH_TRANSFER linked to the receiving one`).toEqual({type: 'CASH_TRANSFER', related: inLegs[0].id, amount: -transfer.amount, description: text});
+            expect(savedFacts(inLegs[0]), `the ${transfer.day} receiving leg: a CASH_TRANSFER linked to the paying one`).toEqual({type: 'CASH_TRANSFER', related: outLegs[0].id, amount: transfer.amount, description: text});
+        }
     });
 });

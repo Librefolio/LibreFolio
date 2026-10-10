@@ -400,7 +400,7 @@ Altre superfici:
 ## 14. Passi e linea di taglio
 
 1. ✅ (2026-10-09) **Piano nel journal**, dopo la conferma della baseline `3cceb4f90`; il riepilogo va nella stessa cartella.
-2. 🚧 **Esportatore 1.0.1** (§5) e prova del developer. Codice e test fatti, in stage nel repo dell'esportatore; mancano commit, prova sul conto vero e tag del developer.
+2. ✅ (2026-10-09) **Esportatore 1.0.1** (§5) e prova del developer: commit, tag `v1.0.1` e release fatti dal developer; export dei due conti veri.
 3. ✅ (2026-10-09) **Campioni sintetici** (§4.6).
 4. ✅ (2026-10-09) **Contratto `cannot_parse_detail`**, schemi, endpoint, `api sync` e test (§7.1).
 5. ✅ (2026-10-09) **I due plugin e il modulo comune** (§4), con `test_brim_scalable.py` e la registrazione nel runner.
@@ -410,7 +410,7 @@ Altre superfici:
 9. ✅ (2026-10-09, inglese) **Documentazione** (§11): pagina inglese prima del 14/10, card in `index.en.md`, navigazione, elenco dei provider, guida BRIM, pagine dell'assistente; righe di CHANGELOG proposte al coordinatore. Pagina, card, nav, elenco, guida BRIM, pagine dell'assistente e deduplica in `architecture.md` fatti.
 10. ✅ (2026-10-09) **Modale dell'assistente** (§7.2) e traduzioni (§10): `npm ci` dal lock, util, Vitest, E2E (a).
 11. ✅ (2026-10-09) **Editor in blocco per gli import separati** (§8): util, Vitest, E2E (b, c). Partito dopo il treno 25 (step 23 di K) e il merge `5eb01e2ea`.
-12. **Prova umana** del developer e correzioni.
+12. ✅ (2026-10-10) **Prova umana** del developer: 7/7, e **correzioni dalla prova** (passo 12b), con l'allineamento al glossario (passo 12c).
 13. **Controlli finali**: lint e format, tutte le suite, mkdocs, porte libere; handoff. Le note per la devWiki vanno nell'handoff: il coordinatore ha chiesto di non scrivere in `LibreFolio_devWiki/` (niente `wiki-file`) finché non lo dice lui.
 
 **Ritmo.** I passi 2, 3, 4 e 8 sono indipendenti. `test-author` e `docs-writer` lavorano in parallelo su file distinti.
@@ -633,3 +633,61 @@ Altre superfici:
 > - `broker_etoro.py`, `description` (da owner BRIM): ora dice cosa legge davvero, cioè il CSV dell'attività del conto, con posizioni aperte e chiuse (un CFD letto come le altre), dividendi, interessi, depositi, prelievi, commissioni di prelievo e di cambio. Prima diceva «Supports stocks, CFDs». R13 (`front-utility core-unit`) **3654 passed**; `external brim-providers` **694 passed, 1 skipped**.
 > - `user/transactions/index.en.md`, «The bulk workspace»: il banner unisce due righe nuove, due salvate o una di ciascun tipo; il 💡, nella barra e nel menu della riga, aggiunge la metà già salvata. È l'unica pagina utente generale che parla del banner.
 > - `dev.py mkdocs build` strict verde; ruff, black e Prettier puliti; `git diff --check` pulito.
+
+### Passo 2 — Esportatore 1.0.1 ✅ (2026-10-09)
+
+> **Note implementazione**: commit `6672084`, tag `v1.0.1` e release (ZIP e `.sha256`) pubblicati dal developer; export completo dei due conti veri, file fuori dal repo.
+
+### Passo 12 — Prova umana del developer ✅ (2026-10-09/10)
+
+> **Server di review**: corsia 6163 su `127.0.0.1` (l'host predefinito di `dev.py server` è `0.0.0.0`, cioè la rete locale: con dati veri non va bene), cartella dati nuova `/tmp/librefolio-r2-s-review`, commit `4347f8962` (checkpoint 3), utente di prova creato con `dev.py user --test-db create` e `LIBREFOLIO_TEST_DATA_DIR` puntato alla cartella. A fine prova, su decisione del developer: server fermato, porta libera (`lsof` vuoto), cancellati cartella dati, log e script temporanei.
+>
+> **Controllo automatico dei CSV v2** (solo conteggi e booleani, script fuori dal repo): file broker con 23 colonne, conto deposito con 19; ogni acquisto eseguito al lordo (importo = quote × prezzo), commissione a parte; ciascun plugin rifiuta il file dell'altro col codice giusto; 0 issue; parsing ripetibile; la cassa importata torna con la formula del saldo; 5 trasferimenti, tutti con la controparte nell'altro file.
+>
+> **Esito: 7/7.**
+> 1. Esportatore 1.0.1 ✅.
+> 2. Icone ✅, dopo il ridisegno del passo 12b.
+> 3. Modale del broker sbagliato ✅, ma «scarna»: correzioni nel passo 12b.
+> 4. Import insieme ✅, con due richieste (passo 12b). Un difetto segnalato nella select con ricerca (`SearchSelect`: dopo una ricerca, il clic sul 2° risultato avrebbe scelto un'altra opzione, una volta sola) **non si riproduce**: 9 prove Playwright headless, con broker nuovo e in modifica, ricerche «scal», «ba» e «in», battitura lenta e veloce, finestra 877×1002. Sospeso finché non ricapita, per decisione del developer.
+> 5. Import separato ✅: da qui l'idea del promemoria al salvataggio.
+> 6. «Dall'ultima» e nuovo import ✅, pieno successo.
+> 7. Interfaccia in italiano ✅, salvo il commento delle righe di prova, in inglese tecnico.
+>
+> **⚠️ Fuori pista — P&L per broker.** Nel grafico Crescita, modalità P&L, le linee per broker saltano dell'importo di ogni trasferimento unito tra i due conti. Le linee sono `broker_contributions` (G1a, `portfolio_engine.py`): NAV del broker meno i suoi flussi esterni; un `CASH_TRANSFER` con entrambe le gambe nell'ambito è `linked_internal` e non genera flussi. Il piano `20_performanceCharts` §3.2 lo accettava («Individual lines may jump»). Il totale è giusto, e lo è anche la pagina del singolo broker, dove la gamba è esterna. Proposta al coordinatore: un flusso per broker alla data d'arrivo, uscita dal mittente ed entrata nel destinatario, che si annullano nella somma. **In pausa** per decisione del developer; `portfolio_engine.py` non è mio.
+
+### Passo 12b — Correzioni dalla prova ✅ (2026-10-10)
+
+> **Note implementazione**:
+> - **Icone**: la pastiglia contiene i glifi Phosphor dell'esportatore, bianchi sul colore del conto come nelle sue tessere (`chart-line-fill` su blu `#3a63a8` per il broker, `piggy-bank-fill` su arancione `#e8781e` per il conto deposito). Diametro 0,52 del lato, sulla diagonale e dentro il cerchio in cui `BrokerIcon` ritaglia l'icona: la pastiglia d'angolo di prima veniva tagliata. Sorgenti SVG, maschere a 512 px (`rsvg-convert`) e licenza MIT in `scripts/assets/brokers/glyphs/`; paragrafo Phosphor in `THIRD_PARTY_LICENSES.md`, che va nell'immagine Docker (file assegnato dal coordinatore). `compose_broker_icons.py --check` verde.
+> - **Nomi e descrizioni dei plugin tradotti** (decisione del developer: chiavi per tutti i 33 plugin; la divisione dei cataloghi per namespace va nel 38, dopo la 1.2.0): `brimPlugins.<code>.name` e `.description` nelle 4 lingue, 66 chiavi, i marchi uguali in tutte; util `utils/brim/pluginText.ts` sopra `translateOr`, usata da `ImportPluginSelect`, `ReportSetCard`, `AboutTab` (solo l'elenco visibile) e `ImportWizardModal`. Il `plugin_name` del contesto di un rifiuto si traduce da `plugin_code`. `FilesTable` non mostra nomi di plugin: invariato. Una chiave per ogni plugin anche per i marchi, perché svelte-i18n avvisa in console a ogni chiave mancante.
+> - **Modale del broker sbagliato**: scheda «Assegnato a» con l'icona del broker e il suo plugin che «non sa leggerlo»; «Note dal plugin» al posto di «Il motivo di …»; destinazioni come schede con icone, a pulsanti radio quando sono più di una; icona nel pulsante «Sposta». `data-testid` dell'E2E invariati, nuovo `-from`. Chiavi `fromLabel`, `toLabel`, `cannotRead`, `canRead`; `reasonTitle` aggiornata; `targetOne` rimossa.
+> - **Editor in blocco**: promemoria al salvataggio quando ci sono suggerimenti mai guardati (la lampadina mai aperta, il banner mai toccato), con «Mostra i suggerimenti» e «Salva comunque»; «Unisci tutti» nel banner, oltre una coppia, con la nuova `PromoteAllModal`: una scelta per tutte le coppie (tutti sinistra, tutti destra, combina).
+> - **Commenti delle righe di prova tradotti**: `importWizard.brimEvidence.<code>` sul contratto degli avvisi (`resolveBrimEvidenceComment` in `resolveBrimNotice.ts`, usata da `BrimNoticeList`; file concessi dal coordinatore); 12 chiavi Scalable. In `_scalable.py` la didascalia è vuota, così compare quella tradotta («Righe del file»).
+> - **Voci del coordinatore**: `dataQuality.transactionImplied` allineata al motore (ultimo prezzo di transazione) nelle 4 lingue; spazio non divisibile prima di «%» in 25 valori di `es.json`, solo dopo un numero o un segnaposto. In `fr.json` 33 valori hanno lo stesso spazio normale: segnalato, non toccato.
+> - **Verifiche statiche**: `svelte-check` 0/0; audit i18n 4336 chiavi, tutte complete, nessuna morta.
+>
+> **Avviso del coordinatore per l'integrazione**: il lotto 40 di P fa controllare il costo anche ai promote. Dopo la fusione del target nel mio ramo va verificato che il rifiuto arrivi sulla riga giusta del Bulk, col ricevente nuovo e con quello salvato, anche per «Unisci tutti».
+>
+> **Test** (scritti da `test-author`, eseguiti da me nella corsia 6163):
+> - Vitest nuovi: `pluginText.test.ts`, `ImportBrokerMismatchModal.test.ts`, `PromoteAllModal.test.ts`, registrati in `tx-unit`; estesi `defaultPluginCheck.test.ts` e `resolveBrimNotice.test.ts`.
+> - pytest: `TestPluginTextCatalogues` in `test_brim_providers.py` (ogni plugin registrato ha nome e descrizione nei 4 cataloghi, l'inglese identico al plugin, nessun codice orfano); `TestWhatTheWizardWords` in `test_brim_scalable.py` (chiavi degli avvisi e dei commenti nei 4 cataloghi, didascalia vuota sui tre campioni).
+> - E2E: M1 esteso e nuovo M4 (due conti deposito: scelta a pulsanti radio, «Sposta» sul broker scelto) in `tx-import-broker-mismatch.spec.ts`; S3 (promemoria al salvataggio) e S4 («Unisci tutti» con «tutti sinistra») in `tx-import-scalable-transfers.spec.ts`.
+> - **Esiti**: `front-transaction all` con 4 worker **317 + 34 passed**, Vitest **805 passed**; `front-utility core-unit` (R13) **3666 passed**; `external brim-providers` **702 passed, 1 skipped**; `external brim-scalable` **145 passed**; `api brim-scalable` **2 passed**; `utils gate-i18n-usage` **195 passed**; `svelte-check` 0/0; Prettier, ruff e black puliti; `compose_broker_icons.py --check` verde; `mkdocs build` strict verde; `git diff --check` pulito.
+>
+> **⚠️ Fuori pista**:
+> - **Promemoria e suggerimenti fantasma.** Il primo giro di `front-transaction` ha fermato PE1 e PE2 (`tx-bulk-promote-exec`) sul promemoria: subito dopo un promote edit+edit il 💡 offriva ancora la metà appena unita. Causa preesistente: una risposta di promote-suggest partita prima dell'unione arrivava dopo e ripopolava i risultati. Ora una risposta superata da una domanda più nuova si scarta (`suggestAskedKey`), e il 💡 conta solo le righe ancora interrogabili (`isSuggestable`). PE1-PE9 verdi.
+> - **Didascalia vuota.** 26 test esistenti chiedevano un titolo non vuoto alle righe di prova: aggiornati da `test-author` alla regola nuova (vuoto = didascalia tradotta dell'interfaccia). `BrimNoticeList` passa la didascalia tradotta anche al dettaglio del parsing, dove prima non ne compariva nessuna.
+> - **«Unisci tutti» esatto.** Il numero sul pulsante contava anche coppie con una riga in comune (segnalato da `docs-writer`): ora conta e unisce solo coppie senza righe condivise, nell'ordine del banner.
+> - **Link rotto non mio**: `check-links` trova `user/assets/detail/chart/#rolling-return` mancante in it/fr/es (da `assets/[id]/+page.svelte:3012`). Segnalato al coordinatore.
+> - **Rischio per altre spec**: sull'utente E2E condiviso, una spec che salva il Bulk con un suggerimento mai guardato ora si ferma sul promemoria. Nel giro completo nessun'altra spec ne risente.
+
+### Passo 12c — Glossario delle traduzioni ✅ (2026-10-10)
+
+> **Assegnato dal coordinatore** (decisione del developer: «PRU in francese e PMC in spagnolo, ovunque», «Applica tutte le correzioni della tabella»). Solo valori, via `dev.py i18n update`, nessuna chiave nuova né inglese; in un commit separato.
+>
+> **Note implementazione**: 88 valori su 70 chiavi (IT 26, FR 34, ES 28), ognuno sostituito solo dopo aver verificato il testo vecchio.
+> - FR: CMP → PRU, forma estesa «prix de revient unitaire»; VNI → NAV; «Transfert d'Actif»; drawdown → «repli» nelle chiavi indicate e nella stessa famiglia (segnali, export AI, descrizioni del rischio). Restano «baisse» per il prezzo che scende e «Perte maximale».
+> - ES: CMP → PMC, forma estesa «precio medio de compra»; VAN → NAV; «autoalojado»; split → «Desdoblamiento» (anche marcatori, rapporto, badge, avviso del costo); «Transferencia de fondos»; «Configuración» solo per la pagina Impostazioni.
+> - IT: «Rettifica», «Rettifica prezzo»; tasse → imposte (anche le mie 9 descrizioni dei plugin e i testi Scalable); «Giroconto» (anche nella mia nota Scalable, che cita il tipo per nome); «Trasferimento Asset»; «Drawdown a rischio», «Drawdown per asset».
+> - Lasciate e segnalate: le righe in linguaggio semplice del pannello L1 italiano («Peggior discesa», «la discesa più profonda»), che il coordinatore non ha elencato; `transactions.split.*`, che è lo scollegamento di una coppia e non un frazionamento; `sharedResource.settings` in spagnolo.
+> - Fotografia dei cataloghi prima del glossario in `/tmp/libreFolio_s_cp4_catalogs/`, per i due commit dello stesso file.

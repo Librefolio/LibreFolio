@@ -928,8 +928,7 @@
       "title": "Questo file potrebbe appartenere a un altro broker",
       "counter": "File {current} di {total}",
       "intro": "«{file}» è assegnato a {broker}, il cui plugin di import predefinito, {plugin}, non sa leggerlo.",
-      "reasonTitle": "Il motivo di {plugin}",
-      "targetOne": "Lo legge {plugin}, il plugin di import predefinito di {broker}.",
+      "reasonTitle": "Note dal plugin",
       "targetMany": "Lo leggono i plugin di import predefiniti di questi broker: scegli dove spostarlo.",
       "noTarget": "Lo legge {plugins}, ma nessuno dei tuoi broker lo usa come plugin di import predefinito.",
       "noReader": "Nessun plugin di import sa leggerlo.",
@@ -937,13 +936,31 @@
       "keep": "Tienilo qui",
       "remove": "Rimuovi il file",
       "moveFailed": "Non è stato possibile spostare il file",
-      "removeFailed": "Non è stato possibile rimuovere il file"
+      "removeFailed": "Non è stato possibile rimuovere il file",
+      "fromLabel": "Assegnato a",
+      "toLabel": "Spostalo in",
+      "cannotRead": "non sa leggerlo",
+      "canRead": "sa leggerlo"
     },
     "parseRefusal": {
       "scalable_deposit_file": "Questo è l’export del conto deposito di Scalable: va letto con il plugin {plugin_name}.",
       "scalable_broker_file": "Questo è l’export del conto broker di Scalable: va letto con il plugin {plugin_name}.",
       "scalable_prime_file": "Questo è l’export di Scalable del conto broker: va letto con il plugin {plugin_name}.",
       "scalable_mixed_file": "Il file mescola il conto broker e il conto deposito: esporta i due conti separatamente."
+    },
+    "brimEvidence": {
+      "scalable_unreadable_rows": "In queste righe manca, o non si legge, una data, un importo, una valuta, le quote o il titolo.",
+      "scalable_fee_in_amount": "Qui la colonna amount è quote × prezzo, con commissione e tassa già sommate (o sottratte, per una vendita).",
+      "scalable_fees_unknown": "Le colonne fee e tax sono vuote in queste righe: valori sconosciuti, non zero.",
+      "scalable_open_partial": "La colonna shares è quanto eseguito finora; lf_ordered_shares è quanto ordinato.",
+      "scalable_reversal": "Queste righe sono storni: la colonna lf_is_cancellation è true.",
+      "scalable_not_imported": "La colonna type dice che cosa sono queste righe.",
+      "scalable_several_overnight_accounts": "La prima riga di ogni conto deposito; la colonna lf_account_index li distingue.",
+      "scalable_not_executed": "La colonna status dice perché queste righe non sono state eseguite.",
+      "scalable_internal_transfers": "Queste righe spostano denaro tra i tuoi due conti Scalable (lf_subtype CASH_TRANSFER_IN o CASH_TRANSFER_OUT): ognuna ha la sua gemella nel file dell’altro conto.",
+      "scalable_dividends_net": "La colonna tax è vuota in queste righe: l’importo è quanto arrivato sul conto.",
+      "scalable_tax_refund": "Un importo positivo nella colonna tax è denaro restituito.",
+      "scalable_cash_by_sign": "Il segno della colonna amount ha deciso tra deposito e prelievo."
     }
   },
   "brokers": {
@@ -1696,7 +1713,7 @@
     "headerErrors": "{errors} errore/i",
     "headerWarnings": "{warnings} avviso/i",
     "missingPrice": "{count} asset senza prezzo di mercato — esclusi dal NAV",
-    "transactionImplied": "{count} asset valorizzati ancora al costo — nessun prezzo di mercato disponibile da oltre 2 settimane (al {as_of_date})",
+    "transactionImplied": "{count} asset valorizzati all’ultimo prezzo di transazione — nessun prezzo di mercato disponibile da oltre 2 settimane (al {as_of_date})",
     "currentPriceAssumedAtCost": "Prezzo corrente non disponibile — valore aperto stimato al costo, P&L di mercato escluso",
     "currentPriceAssumedAtCostRange": "Nessun prezzo di mercato disponibile tra {date_from} e {date_to} — valore aperto stimato al costo, P&L di mercato escluso",
     "affectedLots": "Lotti interessati:",
@@ -2266,7 +2283,15 @@
       "bannerMore": "e altri {n}...",
       "merge": "Unisci",
       "deltaLabel": "Max Δ giorni",
-      "rowRef": "Riga #{n}"
+      "rowRef": "Riga #{n}",
+      "mergeAll": "Unisci tutti ({n})",
+      "mergeAllTitle": "Unisci tutte le coppie suggerite",
+      "mergeAllIntro": "{n} coppie diventano transazioni collegate. Dove le due righe di una coppia hanno descrizione o etichette diverse, tieni:",
+      "mergeAllLeftHint": "descrizione ed etichette della prima riga di ogni coppia, come nel banner",
+      "mergeAllRightHint": "descrizione ed etichette della seconda riga di ogni coppia",
+      "mergeAllCombine": "Combina",
+      "mergeAllCombineHint": "le due descrizioni e le etichette di entrambe le righe",
+      "mergeAllConfirm": "Unisci {n} coppie"
     },
     "empty": "Nessuna transazione",
     "table": {
@@ -2359,7 +2384,10 @@
       "dateSortHint": "La data è il criterio principale. Le coppie restano unite: prima la data più remota delle due operazioni, poi quella più recente e l’ID stabile della riga.",
       "balanceGroupOutsideWorkspace": "Nessuna riga di quest’area di lavoro contribuisce a questo gruppo. Controlla lo storico del broker.",
       "workspaceRowHint": "Posizione nell'ordinamento corrente. a/b sono le due parti di una coppia, non ID di transazioni.",
-      "issueRowsHidden": "Le righe coinvolte sono nascoste dai filtri della tabella."
+      "issueRowsHidden": "Le righe coinvolte sono nascoste dai filtri della tabella.",
+      "unseenSuggestionsTitle": "Suggerimenti non ancora visti",
+      "unseenSuggestionsMessage": "{n, plural, one {# suggerimento di unione non è ancora stato visto} other {# suggerimenti di unione non sono ancora stati visti}}. Unire le due metà di un trasferimento evita che contino come un deposito e un prelievo separati. Salvare comunque?",
+      "unseenSuggestionsReview": "Mostra i suggerimenti"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -5472,5 +5500,139 @@
     },
     "cookieWarning": "Il browser usa HTTPS, ma il cookie di sessione non è marcato Secure. Fai mandare X-Forwarded-Proto al reverse proxy (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), oppure riporta SESSION_COOKIE_SECURE ad auto se è never.",
     "learnMore": "Come connettersi in sicurezza"
+  },
+  "brimPlugins": {
+    "broker_generic_csv": {
+      "name": "CSV generico",
+      "description": "Importa le transazioni da un file CSV generico. Riconosce le colonne dai nomi dell’intestazione. Supporta vari formati di data e di numero."
+    },
+    "broker_scalable": {
+      "name": "Scalable Capital conto broker",
+      "description": "Importa il conto broker di Scalable Capital dall’export CSV di Scalable (PRIME) o dal file broker dell’esportatore LibreFolio: compravendite con commissioni e tasse, piani di accumulo, dividendi, interessi, depositi, prelievi e trasferimenti verso il conto deposito."
+    },
+    "broker_scalable_deposit": {
+      "name": "Scalable Capital conto deposito",
+      "description": "Importa il conto deposito di Scalable Capital (Tagesgeld) dal file dell’esportatore LibreFolio: interessi con la ritenuta, depositi, prelievi e trasferimenti verso il conto broker."
+    },
+    "broker_avanza": {
+      "description": "Importa le transazioni dall’export CSV di Avanza. Supporta compravendite, movimenti di cassa, dividendi, interessi, tasse e commissioni.",
+      "name": "Avanza"
+    },
+    "broker_bitvavo": {
+      "description": "Importa le transazioni dall’export CSV di Bitvavo. Supporta acquisti e vendite di cripto, ricompense di staking, depositi e prelievi di liquidità e rettifiche dei saldi cripto.",
+      "name": "Bitvavo"
+    },
+    "broker_bux": {
+      "description": "Importa le transazioni dall’export CSV di BUX. Supporta compravendite, depositi e prelievi SEPA, dividendi e commissioni.",
+      "name": "BUX"
+    },
+    "broker_coinbase": {
+      "description": "Importa le transazioni dall’export CSV di Coinbase. Supporta acquisti e vendite di cripto e ricompense di staking.",
+      "name": "Coinbase"
+    },
+    "broker_cointracking": {
+      "description": "Importa le transazioni dagli export CSV di CoinTracking. Supporta compravendite di cripto in valuta fiat, trasferimenti, ricompense di staking e commissioni in valuta fiat.",
+      "name": "CoinTracking"
+    },
+    "broker_credit_agricole": {
+      "description": "Importa dagli export di Crédit Agricole (CSV o XLSX): i movimenti titoli della «Lista Movimenti Deposito Titoli» (cedole, acquisti, rimborsi, scadenze, trasferimenti per successione, bilanciati con contropartite di cassa automatiche) e i movimenti di conto della «Lista Movimenti Conto» (liquidità, commissioni, tasse e proventi come depositi e prelievi). I titoli si riconoscono solo dal nome (senza ISIN).",
+      "name": "Crédit Agricole"
+    },
+    "broker_cryptocom": {
+      "description": "Import CSV di Crypto.com al meglio delle possibilità. Importa acquisti, vendite e ricompense chiari; salta con un avviso trasferimenti interni, swap, vincoli (lockup) e righe ambigue.",
+      "name": "Crypto.com"
+    },
+    "broker_danske_bank": {
+      "description": "Importa un conto di risparmio azionario di Danske Bank (Finlandia): le transazioni del deposito titoli (XLSX) e l’estratto conto di liquidità (CSV), caricati insieme e uniti in un solo import.",
+      "name": "Danske Bank"
+    },
+    "broker_degiro": {
+      "description": "Importa l’Estratto conto di DEGIRO (CSV) in qualsiasi lingua: compravendite, commissioni, dividendi, tasse, interessi, depositi, prelievi e conversioni di valuta, ognuno nella sua valuta.",
+      "name": "DEGIRO"
+    },
+    "broker_delta": {
+      "description": "Importa le transazioni dagli export CSV di Delta. Supporto al meglio delle possibilità per compravendite in valuta fiat, trasferimenti di cripto, dividendi e rettifiche da cripto a cripto.",
+      "name": "Delta"
+    },
+    "broker_directa": {
+      "description": "Importa le transazioni dall’export di Directa SIM (CSV o XLSX). Supporta tutti i tipi di transazione italiani, compresi dividendi di ETF, cedole obbligazionarie, tasse e operazioni di compravendita.",
+      "name": "Directa SIM"
+    },
+    "broker_disnat": {
+      "description": "Importa le transazioni dall’export CSV di Disnat. Supporta compravendite, dividendi, tasse, movimenti di cassa, commissioni e interessi.",
+      "name": "Disnat"
+    },
+    "broker_etoro": {
+      "description": "Importa il CSV dell’attività del conto di eToro: posizioni aperte e chiuse (un CFD si legge come ogni altra posizione), dividendi, interessi, depositi, prelievi e commissioni di prelievo e di conversione.",
+      "name": "eToro"
+    },
+    "broker_fineco": {
+      "description": "Importa le transazioni dall’export CSV «Movimenti Dossier Titoli» di FinecoBank. Supporta entrambi i formati di export (con e senza commissioni), acquisti, vendite, dividendi, cedole, rimborsi e aumenti di capitale. Gli importi sono importati tali e quali, nella valuta indicata dal broker (senza conversione di cambio).",
+      "name": "Fineco"
+    },
+    "broker_finpension": {
+      "description": "Importa le transazioni dall’export CSV di Finpension. Supporta gli investimenti dei fondi pensione svizzeri.",
+      "name": "Finpension"
+    },
+    "broker_freetrade": {
+      "description": "Importa le transazioni dall’export CSV di Freetrade. Supporta azioni britanniche, ETF, dividendi e interessi.",
+      "name": "Freetrade"
+    },
+    "broker_ibkr": {
+      "description": "Importa le compravendite dall’export CSV di Interactive Brokers. Supporta azioni, ETF e operazioni in valuta, con le commissioni.",
+      "name": "Interactive Brokers"
+    },
+    "broker_intesa": {
+      "description": "Importa dagli export di Intesa Sanpaolo (CSV o XLSX). Gestisce la lista movimenti (cedole e commissioni di custodia; le righe di operatività bancaria non riconosciute vengono saltate) e la fotografia del portafoglio (patrimonio), importata come un deposito di liquidità più una rettifica del costo per ogni posizione, per avviare un conto con la sua storia.",
+      "name": "Intesa Sanpaolo"
+    },
+    "broker_investengine": {
+      "description": "Importa le transazioni dall’export CSV di InvestEngine. Supporta acquisti, vendite e dividendi in GBP.",
+      "name": "InvestEngine"
+    },
+    "broker_investimental": {
+      "description": "Importa le transazioni eseguite definitive dai log CSV degli aggiornamenti degli ordini di Investimental. Annullamenti, richieste rifiutate e ordini non eseguiti vengono saltati.",
+      "name": "Investimental"
+    },
+    "broker_parqet": {
+      "description": "Importa le transazioni dall’export CSV di Parqet. Parqet è un aggregatore: i nomi dei broker sottostanti restano nelle descrizioni delle transazioni.",
+      "name": "Parqet"
+    },
+    "broker_rabobank": {
+      "description": "Importa le transazioni dall’export CSV olandese di Rabobank. Supporta fondi, dividendi, depositi, prelievi, commissioni e interessi.",
+      "name": "Rabobank"
+    },
+    "broker_relai": {
+      "description": "Importa acquisti e vendite di Bitcoin dall’export CSV di Relai, comprese le commissioni come transazioni separate.",
+      "name": "Relai"
+    },
+    "broker_revolut": {
+      "description": "Importa le transazioni dagli export CSV di Revolut. Supporta investimenti, cripto, dividendi e movimenti di cassa.",
+      "name": "Revolut"
+    },
+    "broker_saxo": {
+      "description": "Importa gli export CSV di Saxo: compravendite di azioni, dividendi, depositi e prelievi di liquidità e commissioni di custodia.",
+      "name": "Saxo"
+    },
+    "broker_schwab": {
+      "description": "Importa le transazioni dall’export CSV di Charles Schwab. Supporta azioni, ETF, dividendi e interessi.",
+      "name": "Charles Schwab"
+    },
+    "broker_swissquote": {
+      "description": "Importa gli export CSV di Swissquote: compravendite, dividendi, movimenti di cassa, commissioni, tasse e interessi. Le gambe di cambio valuta vengono saltate.",
+      "name": "Swissquote"
+    },
+    "broker_traderepublic": {
+      "description": "Importa le transazioni dall’export CSV di Trade Republic. Supporta compravendite, dividendi, interessi, movimenti di cassa, commissioni e tasse in EUR.",
+      "name": "Trade Republic"
+    },
+    "broker_trading212": {
+      "description": "Importa le transazioni dall’export CSV di Trading212. Supporta azioni, ETF, dividendi e interessi.",
+      "name": "Trading212"
+    },
+    "broker_xtb": {
+      "description": "Importa le transazioni dall’export CSV di XTB. Supporta azioni, ETF, dividendi, movimenti di cassa, tasse, commissioni e interessi.",
+      "name": "XTB"
+    }
   }
 }
