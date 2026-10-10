@@ -3,7 +3,7 @@
 Aggiungi uno strumento che possiedi o segui, collegalo a un provider di prezzi e mantieni corretti i suoi dettagli.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-create" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Modulo di creazione manuale" alt="Finestra di creazione manuale">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Modulo di creazione manuale" alt="Modale di creazione manuale">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Modulo di creazione automatica dalla procedura guidata di importazione" alt="Creazione dell'asset dalla procedura guidata">
 </div>
 
@@ -159,8 +159,8 @@ Nel modulo dell'asset, espandi **Più informazioni**: sotto **Classificazione**,
 **Distribuzione geografica** elencano una riga per settore o paese, con il relativo peso in percentuale.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribuzione settoriale" alt="Editor della distribuzione settoriale nella finestra dell'asset">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribuzione geografica" alt="Editor della distribuzione geografica nella finestra dell'asset">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribuzione settoriale" alt="Editor della distribuzione settoriale nella modale dell'asset">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribuzione geografica" alt="Editor della distribuzione geografica nella modale dell'asset">
 </div>
 
 - **Aggiungi settore** / **Aggiungi paese** aggiunge una riga: scegli la voce, poi digita il suo peso.

@@ -111,13 +111,13 @@ El **modal del registro de cambios** integrado en la aplicación renderiza el ar
 - Un **índice de versiones** con chips en la parte superior: al hacer clic en una versión se despliega y se desplaza directamente hasta ella.
 - Un **cuadro de búsqueda** que desciende por los pliegues: las secciones coincidentes se abren automáticamente, y los chips de resultados en los que se puede hacer clic saltan al punto exacto.
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="Búsqueda en la ventana Registro de cambios, que abre las secciones correspondientes">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="Búsqueda en el modal Registro de cambios, que abre las secciones correspondientes">
 </div>
 
 - Botones de **Expandir todo / Contraer todo**, y un enlace al archivo del registro de cambios en GitHub.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="changelog-modal" alt="Ventana Registro de cambios con versiones plegables y búsqueda">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal" alt="Modal Registro de cambios con versiones plegables y búsqueda">
 </div>
 
 ### 🔄 Buscar actualizaciones

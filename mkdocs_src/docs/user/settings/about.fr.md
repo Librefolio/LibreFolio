@@ -110,13 +110,13 @@ La **modale du journal des modifications** intégrée à l'application affiche l
 - Un **index des versions** sous forme de pastilles en haut : cliquer sur une version la déplie et fait défiler directement jusqu'à elle.
 - Une **zone de recherche** qui descend dans les replis : les sections correspondantes s'ouvrent automatiquement, et les pastilles de résultat cliquables sautent à l'endroit exact.
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="Recherche dans la fenêtre Journal des modifications, qui ouvre les sections correspondantes">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="Recherche dans la modale Journal des modifications, qui ouvre les sections correspondantes">
 </div>
 
 - Des boutons **Tout déplier / tout replier**, et un lien vers le fichier du journal des modifications sur GitHub.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="changelog-modal" alt="Fenêtre Journal des modifications avec versions repliables et recherche">
+    <img class="gallery-img" data-category="settings" data-name="changelog-modal" alt="Modale Journal des modifications avec versions repliables et recherche">
 </div>
 
 ### 🔄 Recherche de mises à jour
