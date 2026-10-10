@@ -28,7 +28,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-41 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-42 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -310,7 +310,7 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
   Dashboard (`portfolio_engine.py:2072-2077`, via `portfolio_service.py:561`) e nei lotti
   (`lots_analysis_service.py:855`). Lo fissa `test_portfolio_wac.py:521-588`. Origine: 39, §1.6.
 - **P-11 · Tre testi promettono un lotto a costo zero col costo vuoto** — doc EN chiusa da Q (S23, treno 27); la chiave e
-  il ripiego inline li ha corretti S (checkpoint 2 e 3), e si chiude quando S entra. Restano IT/FR/ES di `form` in I-08. La chiave `transactions.costBasisOverride.warningAdjustment` («No cost basis set — lot will
+  il ripiego inline li ha corretti S (checkpoint 2 e 3); ✅ **chiusa nel treno 30**, con l'ingresso di S. Le versioni IT/FR/ES di `form` le ha portate il lotto 11 di M (treno 29). La chiave `transactions.costBasisOverride.warningAdjustment` («No cost basis set — lot will
   be created with zero cost…», `TransactionFormModal.svelte:1947-1950`), la doc utente `user/transactions/form.en.md:39`
   (più IT, FR, ES) e `developer/frontend/components/features/transaction-form.md:198-199`; il backend invece, in Manuale
   col campo vuoto, rifiuta la riga con `COST_BASIS_REQUIRED` (`transaction_service.py:157-165`,
@@ -394,8 +394,8 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-6 · eToro: dividendi `KER/EUR` etichettati EUR** — basso, serve un export reale. L'importo è nella valuta del
   conto, mentre la valuta viene dal ticker `SYMBOL/CURRENCY` (`broker_etoro.py:143`; Q, 08/10). La voce eToro di
   [04_brim_import.md](../09_feedbackJobs/04_brim_import.md) chiede lo stesso export.
-- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `94271713b`); si chiude quando S entra in
-  `dev_release2`. Era: basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
+- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `94271713b`); ✅ **chiusa nel treno 30**, con l'ingresso di
+  S in `dev_release2`. Era: basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
   Fineco sono in inglese (`broker_fineco.py:279-297`), e sbaglia anche la docstring del modulo (`:7-8`); la riga eToro
   di `providers_list.md:9` è da precisare (Q, 08/10).
 - **C-8 · Docstring e commenti superati** — basso.
@@ -540,6 +540,11 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   nel backlog i suoi scatti, ora non è una priorità». Le 5 pagine `user/ai-export/*` non hanno scatti, e
   `frontend/e2e/gallery.spec.ts` non ne prevede: servono la spec (desktop e mobile), le immagini nelle pagine utente e
   le voci delle due gallery, con le traduzioni.
+- **C-42 · I vincoli delle coppie anche per contante e cambio** — dopo la 1.2 (decisione D1 del coordinatore sul lotto 42 di
+  P, 10/10). Il lotto 42 fa controllare a `_validate_linked_pair` asset e quantità delle coppie TRANSFER; gli altri
+  `pair_field_constraints` dei metadati (importo e valuta del CASH_TRANSFER, valute e broker dell'FX_CONVERSION,
+  `backend/app/schemas/transactions.py:1217-1221`) li rispettano il modulo e l'import, ma un client dell'API può ancora
+  salvare una coppia sbilanciata.
 
 ## Tracciate altrove
 
