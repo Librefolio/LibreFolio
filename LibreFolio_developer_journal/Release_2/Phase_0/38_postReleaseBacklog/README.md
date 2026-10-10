@@ -28,7 +28,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-42 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-44 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -336,6 +336,11 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   progetto: mai `npx` per gli strumenti del frontend.
 - **I-07 · `tsc` degli E2E, 2 errori** — basso. `tsc -p tsconfig.e2e.json` segnala `onboarding-tour.spec.ts:863` e
   `types/files.ts:9` (mancano i `paths`).
+  - Riverificata il 10/10 (M, lotto 12; il coordinatore nel checkout principale): sempre gli stessi 2 errori. Il
+    TS2322 di `:863` c'è dal 14/09 (`580bd504f`): `placement` riceve `unknown`. Il TS2307 di `files.ts:9` resta anche
+    col client generato presente, quindi non dipende dalla worktree: sono proprio i `paths`. Nessun gate li vede,
+    perché Playwright non controlla i tipi e `front check` non guarda `e2e/`. Con la cura, il controllo dei tipi
+    degli E2E va fra i gate.
 - **I-08 · debito di traduzione MkDocs** — medio, giro Aphra: «quando arriva il momento lo faremo» (developer,
   09/10). Il conto esatto lo dà `./dev.py mkdocs translate-validate`. Le pagine note il 09/10:
   - di I: `yield-on-cost.en.md` senza it/fr/es; `user/dashboard/charts`, `user/dashboard/index`,
@@ -343,7 +348,8 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   - l'àncora `#rolling-return`, che c'è solo in inglese (D28; l'allineamento è nella 27);
   - dal treno 25: `admin/cli_tools` (N-7), `user/files/index` (anteprima PDF), `user/connection-security`, la gallery
     e il suo indice con la sezione Security (M, lotto 8); Sharpe e Sortino, la cui formula del tasso privo di rischio
-    esiste solo in inglese (Q);
+    esiste solo in inglese (Q) — ✅ chiusa: in it/fr/es la formula porta `^{1/f}` da `647475999` (lotto 11 di M,
+    treno 29), verificato il 10/10 (Risk e coordinatore);
   - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D); `user/transactions/form`
     e `user/dashboard/index` (Q, S23); `developer/dev_workflow` (N);
   - dal treno 26: le otto pagine EN riscritte da K senza IT/FR/ES (`financial-theory/instruments/asset-types/{index,etfs,real-estate}`,
@@ -545,6 +551,22 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   `pair_field_constraints` dei metadati (importo e valuta del CASH_TRANSFER, valute e broker dell'FX_CONVERSION,
   `backend/app/schemas/transactions.py:1217-1221`) li rispettano il modulo e l'import, ma un client dell'API può ancora
   salvare una coppia sbilanciata.
+- **C-43 · Gli 8 scatti dei portali dei broker** — basso (Q, 10/10). Le pagine di import di eToro, Freetrade, DEGIRO,
+  Coinbase, Trading212, Finpension, Charles Schwab e Revolut hanno ciascuna un segnaposto nascosto
+  `<!-- [Screenshot Placeholder: …] -->`
+  (`mkdocs_src/docs/user/transactions/import/{etoro,freetrade,degiro,coinbase,trading212,finpension,schwab,revolut}.en.md`)
+  dove andrebbe la schermata del portale del broker da cui si scarica il report. La gallery non può generarle: servono
+  schermate vere dei portali. Restano TODO nascosti finché non si possono ottenere (decisione del developer, 08/10;
+  piano [DocsEnglish12](../32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md), S18).
+- **C-44 · Gli aiuti della gallery per ridimensionare e inquadrare, in un posto solo** — basso, dopo la 1.2 (M, lotto
+  12, 10/10). Il lotto 12 ha messo in `frontend/e2e/fixtures/galleryRiskLab.ts` `resizeViewport` (finisce quando la
+  pagina ha gestito il `resize`) e `renderedFrames`, e `frameFromTop` scende solo dopo due frame resi in cima. Restano
+  copie e aggiramenti locali, oggi verdi: `galleryPac.ts` (`fitScreenToPacProof`, con barriera e frame suoi, ora
+  ridondanti, e una copia privata di `renderedFrames`), `galleryTallShots.ts` (`resizeScreen` e `renderedFrames`
+  duplicati, timeout di 10 s), `galleryProviderCompare.ts` (ridimensiona senza aspettare: sicuro finché il dialogo
+  blocca l'header) e `frameGrowthChart` in `gallery.spec.ts` (legge `visible` come «ha visto la cima»: sicuro solo su
+  una pagina appena caricata). Portarli sugli aiuti condivisi, con un giro della gallery come prova. Il triage è nel
+  piano [ReleaseGallery](../27_releaseImages/plan-phase00ReleaseGallery.prompt.md), passo 25.
 
 ## Tracciate altrove
 
@@ -554,7 +576,8 @@ Voci del backlog del coordinatore che una cartella attiva tiene già: non sono d
 - La doc developer precedente alla 1.1 (l'esempio JSON di `api/overview`, `-v` in `external.md`, «11 categories»,
   le opzioni del runner e i moduli mancanti): [DocsEnglish12](../32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md),
   S9. Alcune voci di quell'elenco sono chiuse: vedi sotto.
-- La fase 3 di Risk, i buchi B1–B6 e le questioni aperte: [README della 02](../02_riskfolioIntegration/README.md).
+- La fase 3 di Risk, i buchi B1–B3 e B6–B8, A6 (riaperta il 10/10) e le questioni aperte, con la guida «Ripartire
+  da qui» per una chat nuova: [README della 02](../02_riskfolioIntegration/README.md).
 
 ## Chiuse alla verifica del 09/10
 
@@ -563,7 +586,7 @@ Voci del backlog del coordinatore che il codice del treno 25 ha già chiuso.
 | Voce | Chiusa da |
 |---|---|
 | Id dei broker riusati e file BRIM ereditati da un broker nuovo (⚠️ del 07/10) | `AUTOINCREMENT` (`db/models.py:535`) e `delete_files_for_brokers` (`brim_provider.py:1203-1222`), piano 34 |
-| `portfolio_optimization` oltre 100 titoli risponde `invalid_parameters` | `RESOURCE_LIMIT` (`portfolio_optimization.py:189-196`) |
+| `portfolio_optimization` oltre 100 titoli risponde `invalid_parameters` | ~~`RESOURCE_LIMIT` (`portfolio_optimization.py:189-196`)~~ ❌ **riaperta il 10/10** (Risk, verificato dal coordinatore): la `ValidationError` di `OptimizationEngineRequest` (`risk/quant/optimization_models.py:21`, `max_length=100`) nasce dentro il `try` e finisce in `except ValueError` (`risk_plugins/portfolio_optimization.py:221`), quindi il ramo di `:189` non si raggiunge. Aperta come A6 nel [README della 02](../02_riskfolioIntegration/README.md) |
 | Docstring di `AssetType` e del budget in `pac_allocator` | `db/models.py:147-184`; `planner.py:145-160` e `solver.py:99-111` coerenti |
 | `mkdocs gallery --no-populate` che ripopola a ogni giro | `dev.py:1074`, `global-setup.ts:34` |
 | `ai_export_snapshot.md` senza il 422 `selection_not_applicable` | `ai_export_snapshot.md:121` |
