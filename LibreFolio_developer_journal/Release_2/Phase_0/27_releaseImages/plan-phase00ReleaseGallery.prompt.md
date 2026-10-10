@@ -1818,6 +1818,74 @@
 
 ## Batch 11 — the 1.2 translation round
 
-### 24. ⏳ Triage, small fixes, glossary and pipeline launch — 2026-10-10
+### 24. ✅ Triage, small fixes, glossary, pipeline launch and review — 2026-10-10 (A: `8f30a7f03…01c6f1ae4`; B: `647475999…ac6ddd452`, train 29 `84e0bddac`)
 
 > Tracked in its own plan: [plan-phase00TranslationRound12.prompt.md](plan-phase00TranslationRound12.prompt.md).
+
+## Batch 12 — base `e32f47133` (train 29, tree `6e38ae5b74ea`)
+
+> Coordinator brief (2026-10-10 ~11:25), in this order:
+> 1. the CI red that passed on retry, `[desktop] gallery.spec.ts:6403` «dashboard risk what-if crisis replay (injected window)» — fix the root cause, not the timeout (a tag tolerates no red);
+> 2. the gallery: the distribution editors are missing from `gallery/desktop` and `mobile`; `auth/02-register-empty` is generated on mobile and used nowhere (add it or stop generating it, M decides);
+> 3. `developer/docs/translation-pipeline.md`: cache semantics, the 3 new checks, the alt/title rule (docs-writer);
+> 4. the translation second round: prepare the list now, run it after train 30 (S integrated).
+> The devWiki entry «stamps hide stale translations» goes to the historian through the coordinator: its text travels in the checkpoint.
+
+### 25. ✅ The red that passed on retry: the header and the resize — 2026-10-10
+
+> **Triage** (test-triage skill, evidence first: the CI log, not a re-run):
+> - Run 38037339522 (Nightly, `dev` `5340cfcc4`): attempt #126 failed in 18.7 s, retry #128 passed. Log in `release-pipeline/runs/b12/ci_run_38037339522.log`.
+> - Failure: `galleryRiskLab.ts:271` `headerOutOfShot` — `data-scroll-state` stayed `visible` (10 polls, 3 s) — inside `frameFromTop` ← `fitScreenToRiskBlock` (`gallery.spec.ts:6203`).
+> - It died in the **first** combination (desktop/en/light), right after `📐 … Risk block 892 px → screen 1280×908`; the retry printed the same sizes. Only the first combination resizes: `forEachLanguageAndTheme` never resets the screen, and `fitViewportToBlock` resizes only when the height differs (720 → 908, then 908 = 908).
+> - **Mechanism:** `Header.svelte` handles `resize` with `syncScrollContext()` — it cancels the pending scroll frame, puts the scroll baseline where the page stands and forces `visible`. `fitViewportToBlock` returned as soon as `setViewportSize` resolved, without waiting for the page to handle the resize; `frameFromTop` then took «header `visible`» after `scrollTo(0)` as proof that the header had seen the top. After a resize that proof is void: (A) the header is already `visible`, so the scroll to the top and the scroll down can fall in one frame, and the header sees no movement; (B) a `resize` dispatched after the scroll down resets the baseline at the target. Either way the header stays.
+> - The coordinator's hypothesis (the page too short, the scroll clamped under the threshold) does not hold here: the What-if block sits far below the header, and every frame starts from the top.
+> - Precedent: `galleryPac.ts` `fitScreenToPacProof` documents the same mechanism and works around it locally (resize barrier, then the top and two rendered frames); the shared helpers never got it.
+> - **Verdict: assumption** (a wait for the wrong condition) — not a product defect: showing the header after a resize is intended.
+> - **Repair** delegated to test-author: `fitViewportToBlock` returns only once the page has handled the resize; `frameFromTop` scrolls down only after the header has rendered the top. Proof: a deterministic probe of both interleavings (old vs new), then the gallery runs of every test that resizes or frames (lane 6158).
+>
+> **Note implementazione** (test-author; `frontend/e2e/fixtures/galleryRiskLab.ts` only, +38/−4; no product code, no timeout raised):
+> - new `resizeViewport(page, size)`: arms a one-shot `resize` listener, `setViewportSize`, ends once that listener ran at the new height; a no-op at the same size. `fitViewportToBlock` resizes through it;
+> - new `renderedFrames(page)` (two animation frames); `frameFromTop` = `scrollTo(0)` → two rendered frames → header `visible` → scroll to the target → header hidden. The frames are in `frameFromTop`, not in `scrollBackToHeader`: its other callers only need the header's controls on screen.
+> - **RED, deterministic probe** on the real Dashboard Risk tab (the old helpers copied verbatim): `setViewportSize` returned before the page handled the resize in 7/10 tries; (A) resize handled, then the way up and down in one evaluate → `visible` for 3000 ms, the header never saw 0; (B) a `resize` after the scroll down → `visible` for 3000 ms (a real `setViewportSize` there: hidden, then shown again over the shot). New sequence: 12/12 `hidden`. Unforced, the old sequence failed 0/12 locally: the race needs CI's timing, the forced cases are the proof.
+> - **GREEN**, lane 6158, `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-m … mkdocs gallery --test-port 6158 --workers 2`: desktop Dashboard Risk 4/4; desktop risk lab + simulation + PAC result 6/6; mobile what-if 1/1; desktop PAC steps 1/1; mobile PAC, onboarding replay, risk lab, simulation, Dashboard Risk 12/12 — **24/24 at the first attempt** (load 87 → 20). Images checked: no header over the block (`desktop/en/light/dashboard/risk-whatif` 1280×908 — the CI combination —, `risk-hurt`, `tools/pac-result-proof`, `risk/lab-correlation`, `mobile/en/light/dashboard/risk-whatif`).
+> - Static: prettier clean (from `frontend/`), `git diff --check` clean; `tsc -p tsconfig.e2e.json` shows 2 errors outside the change and already there: `src/lib/types/files.ts:9` (`$lib/api/generated`, the ignored generated client, absent from a fresh worktree) and `e2e/onboarding-tour.spec.ts:863` (TS2322, a real type error, to route).
+> - Logs: `release-pipeline/runs/b12/b12_probe_header_resize.log`, `b12_green_g1…g5_*.log`, `b12_tsc_e2e_final.log`; the probe's source kept outside the repo, the spec deleted.
+> - **Follow-ups** (not touched): `galleryPac.ts` `fitScreenToPacProof` keeps its own barrier and frames, now redundant (still correct: green), with private copies of the helpers; `galleryTallShots.ts` `resizeScreen`/`renderedFrames` duplicate them (10 s timeout); `galleryProviderCompare.ts` resizes without waiting (safe today: the dialog pins the header); `frameGrowthChart` (`gallery.spec.ts` ~841) still reads `visible` as «seen the top» (safe on a fresh load).
+
+### 26. ✅ Gallery: the distribution editors and the mobile registration — 2026-10-10
+
+> - The shots exist on both projects (`assets/distribution-editor-{sector,geographic}`, `gallery.spec.ts` ~5560-5578; 32 images) and `user/assets/create-edit` uses them, but neither gallery page shows them.
+> - Mobile shows `03-register-filled` under the alt «Register Modal»; `02-register-empty` is generated and used nowhere. **Decision (M):** show it, as desktop does — two entries, «Empty Form» and «With Password Strength». Cheaper than changing the spec, and the two pages match.
+> - Images reviewed (desktop/en/light editors, mobile/en/light register): test users and the gallery dataset only.
+> - EN by docs-writer; it/fr/es by M, reusing the `create-edit` translations of the alt texts and titles; then `translate-stamp` on both pages.
+
+> - EN by docs-writer: `gallery/desktop.en.md` and `mobile.en.md`, «🗺️ Sector & Geographic Distribution» after Provider Data Comparison (carousels `carousel-{desktop,mobile}-distribution-editors`, titles and alts as in `create-edit`); mobile Registration split into «Empty Form» and «With Password Strength». `gallery/index` states no count, nothing false there.
+>
+> **Note implementazione**: it/fr/es by hand (`release-pipeline/scripts/b12_gallery_translations.py`, 6 files, idempotent), then `translate-stamp` on both EN pages; `translate-diff`/`translate-validate` show no gallery issue, `translate --dry-run` lists only S's 3 pages. The descriptions do not quote the «Weight %» header nor the «100.00%» total: in the localized shots both are still English/unlocalized.
+>
+> **⚠️ Fuori pista**:
+> - the glossary maps «modal» to it/fr «modale», es «modal», but batch 11's alt pass had written «finestra/fenêtre/ventana» in 10 alt texts (`fx/detail/data-editor` it/fr/es, `assets/create-edit` it ×3, `settings/about` fr/es ×2): aligned (`b12_modal_alts.py`), no stamp (the EN did not change). «Finestra di dialogo» (a dialog), «fenêtre/ventana 1Y» (a time window) and «ventana emergente» (a popup) are other terms and stay;
+> - product defects seen in the shots, verified in the code, to route: `DistributionEditor.svelte:377` `header: 'Weight %'` is a literal, untranslated; `:527` (and 532/534) `totalPercent.toFixed(2)}%`, never localized; `es.json:338` `"addCountry": "Agregar pais"` without the accent.
+
+### 27. ✅ `developer/docs/translation-pipeline.md` — 2026-10-10
+
+> Developer Manual, English only (no translations, no stamp). By docs-writer: the cache semantics (`_needs_translation`, the four `_cache_*` transitions, `_read_source`), the checks `text-untranslated`, `anchor-missing`, `inline-code-missing`, the HTML checks reading rendered HTML only, the block-based line count, the prompts' alt/title rule, the `utils translation-cache` tests.
+
+> **Note implementazione** (docs-writer, every statement checked against the code): the missing H1 restored (a leading space made it a paragraph); the file tree with `.translate-hashes.json`, `glossaries/`, `prompts/short_article/`; new «💬 7. Prompt overrides»; «Caching» rewritten (field table, skip rule, the four transitions, `_read_source`, the tests); new «🔎 Validation Checks» `{: #validation-checks }`.
+>
+> **⚠️ Fuori pista** — the docs-writer found that the batch-11 prompts listed `data-*` among the attributes to copy, `data-title` (the carousel caption) included, while the translations translate it and `check_html_attrs` treats it as translatable: followed literally, the second round would have left the captions in English. Fixed in `step3/4/5_user.txt` (`data-*` other than `data-title`; `data-title` among the translated values, its inner HTML unchanged; placeholders unchanged) and made explicit in `validate_translations.py` (`_TEXT_ATTR` names `data-title`; it already matched through `\btitle`: old and new patterns give identical matches on all 943 pages). The page says the new rule.
+> Also found, not fixed (follow-ups): no unit test covers `text-untranslated`, `anchor-missing`, `inline-code-missing`, `_strip_code` or the block line count; 29 cache entries carry a `pending_langs` field no code reads (hand-added in `5831879a4`); the page's older headings have no emoji.
+
+### 28. ✅ The translation second round, prepared — 2026-10-10
+
+> **Note implementazione**: the list is step 5 of [plan-phase00TranslationRound12.prompt.md](plan-phase00TranslationRound12.prompt.md): S's three pages and `import/scalable` through the pipeline; the «Portal URL» line of `user/brokers/index` by hand with a stamp; the 18 ids put into S's stale translations, of which 9 provisional must disappear; the labels after S's catalogues; the gates. It runs after train 30.
+> - The devWiki entry for the historian (through the coordinator): `release-pipeline/b12_devwiki_stamps_hide_stale_translations.md`, with the correction of two lines of `concepts/mkdocs-suffix-i18n`.
+
+### 29. ✅ Gates and checkpoint — 2026-10-10 ~12:13 (load 15–24)
+
+> **Note implementazione** (logs `release-pipeline/runs/b12/b12_final_*`):
+> - `translate-validate --hide-localized`: 84 errors and 144 warnings, all on S's 3 pages (0 outside), as before; `translate-diff --issues-only`: 9 pairs, all S's; `translate-check` green; `translate --dry-run`: only S's 3 pages pending.
+> - `mkdocs build` strict: exit 0, **0 WARNING/ERROR**; `check-links`: 94 valid.
+> - Lane 6158: `utils translation-cache` 38 passed, `utils translation-code-blocks` 80 passed, `check-orphans` clean (all 248 backend, 103 e2e, 339 unit tests reachable).
+> - Prettier clean on the fixture; `git diff --check` clean; nothing listening on 6158/6168.
+> - 23 files, 6 proposed commits: `release-pipeline/commit_proposal_B12.txt`.
