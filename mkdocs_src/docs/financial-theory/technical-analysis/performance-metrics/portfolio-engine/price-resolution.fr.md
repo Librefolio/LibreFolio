@@ -2,7 +2,7 @@
 
 ## 💡 Objectif
 
-LibreFolio utilise un moteur de résolution unifié comme source d'évaluation principale pour les positions ouvertes, la VNI, l'évaluation des lots, les lignes de prix des graphiques et les indicateurs de qualité des données. Le résolveur répond à une question quotidienne :
+LibreFolio utilise un moteur de résolution unifié comme source d'évaluation principale pour les positions ouvertes, le NAV, l'évaluation des lots, les lignes de prix des graphiques et les indicateurs de qualité des données. Le résolveur répond à une question quotidienne :
 
 $$
 \operatorname{mark}(a,t)=\text{meilleur cours unitaire connu en devise native pour l'actif }a\text{ à la date }t
@@ -50,7 +50,7 @@ Le schéma public du moteur fait correspondre les marques du résolveur aux éti
 
 !!! warning "Absence de cascade héritée"
 
-    Le code actuellement fourni n'utilise **pas** un chemin d'évaluation séparé `marché → dernier ACHAT → coût initial`. Les marques issues de transactions sont des observations dans le résolveur unifié ; le PMP reste la base de coût, et non le prix d'évaluation.
+    Le code actuellement fourni n'utilise **pas** un chemin d'évaluation séparé `market → last BUY → seed cost`. Les marques issues de transactions sont des observations dans le résolveur unifié ; le PRU reste le coût de base, et non le prix d'évaluation.
 
 ## 🌍 Devise et Échelle
 
@@ -62,7 +62,7 @@ $$
 
 Ceci est important pour les marques reportées : une cotation ou transaction observée à $s<t$ est convertie en utilisant le taux de change à $t$, et non le taux de change à $s$.
 
-La base de coût utilise une temporalité différente. Le coût d'acquisition est lié à la date de transaction :
+Le coût de base utilise une temporalité différente. Le coût d'acquisition est lié à la date de transaction :
 
 $$
 \mathrm{Cost}_{C^*}(\tau)=\mathrm{Cost}_{native}(\tau)\cdot \mathrm{fx}\bigl(\mathrm{ccy}_{cost}, C^*, \tau\bigr)
@@ -100,7 +100,7 @@ Les avertissements du portefeuille sont évalués **à la date d'évaluation**. 
 
 ## 🔗 Liens connexes
 
-- 💼 [VNI](nav.md) — consomme les marques du résolveur pour la valeur de marché
-- 📖 [Valeur Comptable](book-value.md) — côté base de coût, indépendant des marques
+- 💼 [NAV](nav.md) — consomme les marques du résolveur pour la valeur de marché
+- 📖 [Valeur Comptable](book-value.md) — côté coût de base, indépendant des marques
 - 📈 [Rendement Annualisé Net](net-annualized-return.md) — annualise les rendements basés sur les évaluations du résolveur
 - ⚙️ [Moteur de Portefeuille](index.md) — modèle complet

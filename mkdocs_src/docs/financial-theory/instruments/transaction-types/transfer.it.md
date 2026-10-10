@@ -1,7 +1,7 @@
 # 🔄 ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Trasferimento di Asset
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Modulo della transazione — TRANSFER">
 </div>
 
 I **trasferimenti di asset** spostano i titoli tra conti di broker **senza una vendita**. La posizione lascia un broker e arriva a un altro: non c'è scambio di contanti e, nella maggior parte delle giurisdizioni, questo non costituisce un evento imponibile.
@@ -44,8 +44,8 @@ Sotto il cofano, un Trasferimento è composto da due voci di Rettifica. LibreFol
 
 | Operazione | Risultato |
 |-----------|--------|
-| **Frazionamento** (scollega) | Trasferimento → due Rettifiche indipendenti |
-| **Promote** (collega) | Due Rettifiche → Trasferimento |
+| **Scollega coppia** | Trasferimento → due Rettifiche indipendenti |
+| **Promuovi** (collega) | Due Rettifiche → Trasferimento |
 
 **Vincoli di promozione**: stesso asset, broker diversi, quantità opposte.
 
@@ -60,6 +60,6 @@ Un vero `TRANSFER` richiede due broker in LibreFolio: origine e destinazione. Se
 ## 🔗 Correlati
 
 - 📊 **[Costo Medio Ponderato](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Come viene calcolato il costo di acquisizione sui trasferimenti
-- 🏦 **[Trasferimento di Liquidità](cash-transfer.md)** — Bonifici bancari (contanti, non asset)
-- 💱 **[Conversione Valutaria](fx-conversion.md)** — Cambio valuta
+- 🏦 **[Giroconto](cash-transfer.md)** — Bonifici bancari (liquidità, non asset)
+- 💱 **[Conversione di valuta](fx-conversion.md)** — Cambio valuta
 - 📊 **[Rettifica](adjustment.md)** — Correzioni manuali

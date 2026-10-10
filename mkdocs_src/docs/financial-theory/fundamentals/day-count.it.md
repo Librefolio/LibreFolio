@@ -7,7 +7,7 @@ Una **Convenzione di Calcolo dei Giorni** (Day Count Convention) determina come 
 
 ## 🔧 Utilizzo in LibreFolio
 
-Le convenzioni di calcolo dei giorni sono attivamente utilizzate dal provider della sorgente degli asset **Scheduled Investment** (`backend/app/services/asset_source_providers/scheduled_investment.py`) per i calcoli dei rendimenti sintetici. La funzione `calculate_day_count_fraction()` in `backend/app/utils/financial_math.py` implementa tutte e quattro le convenzioni e restituisce una frazione temporale `Decimal` utilizzata nei calcoli di maturazione degli interessi.
+Le convenzioni di calcolo dei giorni sono attivamente utilizzate dal provider della sorgente degli asset **Scheduled Investment** per i calcoli dei rendimenti sintetici. La funzione `calculate_day_count_fraction()` si trova nel modulo stesso del provider (`backend/app/services/asset_source_providers/scheduled_investment.py`), implementa tutte e quattro le convenzioni e restituisce una frazione temporale `Decimal` utilizzata nei calcoli di maturazione degli interessi.
 
 La convenzione predefinita è **ACT/365**.
 

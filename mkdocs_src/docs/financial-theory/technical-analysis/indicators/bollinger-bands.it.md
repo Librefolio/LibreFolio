@@ -39,8 +39,12 @@ Con $k = 2$, se i rendimenti fossero distribuiti normalmente, il prezzo rimarreb
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 20 | Finestra SMA per il valore atteso. |
+| Periodo ($N$) | `period` | 20 | Finestra SMA per il valore atteso, in sedute. |
 | Moltiplicatore ($k$) | `multiplier` | 2 | Numero di deviazioni standard. |
+
+!!! note "Tracciate anche sui giorni di chiusura"
+
+    Le bande hanno un valore solo nelle sedute, mentre l'asse delle date del grafico attraversa ogni giorno del calendario. In un fine settimana o in un giorno festivo, la banda ombreggiata è tracciata in linea retta dall'ultima seduta precedente alla prima successiva, come la banda centrale, così non si interrompe: il tratto di raccordo dà forma solo al riempimento e non ha alcun valore proprio.
 
 ---
 

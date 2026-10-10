@@ -1,100 +1,180 @@
-# 🚀 Pour commencer
+# 🚀 Premiers pas
 
-Bienvenue sur LibreFolio ! Ce guide vous accompagne pas à pas dans la création d'un compte, la connexion et l'importation de votre premier relevé de courtier afin d'alimenter instantanément votre tableau de bord.
+Bienvenue sur LibreFolio ! En quelques étapes, vous créez votre compte, faites un rapide tour d'horizon et importez votre
+premier relevé de courtier — et votre tableau de bord se remplit tout seul.
 
 ---
 
 ## 📝 1. Créer votre compte
 
-Accédez à l'URL LibreFolio (par exemple, `http://localhost:6040`) et vous verrez la page de connexion. Cliquez sur **S'inscrire** pour créer un nouveau compte.
+Ouvrez votre adresse LibreFolio (par exemple `http://localhost:6040`) : la page de connexion s'affiche. Cliquez sur
+**S'inscrire ici** pour créer un compte.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Registration Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Formulaire d'inscription" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 Renseignez vos informations :
 
-- 👤 **Nom d'utilisateur** : votre nom d'affichage (unique dans le système)
-- 📧 **E-mail** : une adresse e-mail valide
-- 🔑 **Mot de passe** : un mot de passe robuste (l'indicateur de robustesse vous aide)
+- 👤 **Nom d'utilisateur** — unique : c'est avec lui que vous vous connectez.
+- 📧 **E-mail** — une adresse valide ; elle sert aussi à la connexion.
+- 🔑 **Mot de passe** et **Confirmer le mot de passe** — l'indicateur de robustesse vous indique quand le mot de passe est
+  suffisamment fort.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registration with Password Strength" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Inscription avec indicateur de robustesse du mot de passe" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 !!! info "Premier utilisateur = Administrateur"
 
-    Le tout premier utilisateur à s'inscrire devient automatiquement **l'administrateur système** (superutilisateur). Cet utilisateur peut gérer les paramètres globaux, promouvoir d'autres utilisateurs et accéder à toutes les fonctionnalités d'administration.
+    Le tout premier compte à s'inscrire devient l'**administrateur** : il gère les
+    **[Paramètres globaux](../admin/settings.md)** de l'instance et toutes les fonctionnalités d'administration.
 
 ---
 
 ## 🔐 2. Se connecter
 
-Après l'inscription, vous serez redirigé vers la page de connexion. Saisissez vos identifiants pour accéder à votre tableau de bord.
+Après votre inscription, vous revenez sur la page de connexion. Connectez-vous avec votre nom d'utilisateur (ou votre e-mail) et votre
+mot de passe.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="auth" data-name="01-login" alt="Page de connexion" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🏦 3. Importer votre premier relevé (créer le courtier et les actifs à la volée)
+## 🎉 3. Configuration d'accueil et visite rapide {: #welcome-setup }
 
-Lors de votre première connexion, vous serez accueilli par un tableau de bord vide, sans aucune donnée.
+La première fois que vous vous connectez, LibreFolio ouvre une page de **Bienvenue** avant le tableau de bord :
 
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Empty Dashboard" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+- 🌍 Vérifiez la **Langue** et la **Devise par défaut** : elles reprennent les valeurs par défaut de votre administrateur.
+- 🖼️ Ajoutez une **photo de profil** si vous le souhaitez — sinon, vos initiales sont affichées.
+- ✅ Cliquez sur **Continuer** pour enregistrer, ou sur **Ignorer définitivement la configuration** pour conserver les paramètres actuels.
+- 🚪 Besoin de partir ? La fonction **Se déconnecter** se trouve en haut à droite.
+
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La page de bienvenue au premier lancement : le bloc photo de profil avec l'avatar en initiales et Choisir une photo, la Langue et la Devise par défaut pré-remplies, la note indiquant que votre préférence de thème reste inchangée, ainsi que Ignorer définitivement la configuration et Continuer" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Dans LibreFolio, le moyen le plus rapide de commencer est d'importer directement votre historique de transactions. Pas besoin de configurer les courtiers ou les actifs au préalable : le système les crée automatiquement pour vous pendant le processus d'importation !
+Une courte animation de bienvenue suit, puis la **Visite rapide** démarre d'elle-même — cliquez sur **Démarrer la visite**
+pour commencer immédiatement, ou sur **✕** pour l'ignorer. La visite montre où se trouvent les choses : le bouton de menu, puis
+**Tableau de bord**, **Transactions**, **Courtiers**, **FX**, **Actifs**, **Outils** et **Paramètres**. Elle
+ne fait qu'indiquer : elle n'ouvre jamais de formulaire et ne crée aucune donnée.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="core-tour-step" alt="La visite rapide sur le tableau de bord à l'étape 5 sur 8, Taux FX : un cadre et un curseur sur l'entrée Taux FX de la barre latérale, ainsi que le panneau de message avec Précédent et Suivant" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+??? note "👋 Vous utilisez déjà LibreFolio ? — les comptes antérieurs aux guides"
+
+    Si votre compte existait avant l'ajout des guides, LibreFolio ne vous les propose pas :
+    la configuration d'accueil est considérée comme **Terminée**, la visite et tous les guides comme **Ignorés**. Vous pouvez toutefois
+    les relancer depuis
+    **[Paramètres → Préférences → Prise en main et guides](settings/preferences.md#onboarding-and-guides)**.
+
+??? warning "⚠️ La configuration ne se charge pas — que faire"
+
+    Si vos paramètres ou votre progression dans les guides ne peuvent pas être chargés, une page **Nous n'avons pas pu charger la prise en main**
+    propose **Réessayer** et **Se déconnecter**. Si votre configuration d'accueil est déjà effectuée, vous verrez peut-être le
+    tableau de bord à la place, avec une bannière **Réessayer** en haut.
+
+### 🧭 Guides contextuels
+
+Plus tard, de courts guides démarrent la première fois que vous arrivez à un endroit où ils sont utiles :
+
+| Zone | Guides contextuels |
+|---|---|
+| **Transactions** | Vue d'ensemble de la page, formulaire Ajouter une transaction, espace de travail groupé et Assistant d'importation |
+| **Courtiers** | Page Courtiers, formulaire Ajouter un courtier et détails du courtier |
+| **FX** | Page FX, formulaire Ajouter une paire et détails de la paire |
+| **Actifs** | Page Actifs, formulaire Ajouter un actif et détails de l'actif |
+
+- Ils pointent vers de vrais contrôles et ne cliquent, ne téléversent, ne modifient ni n'enregistrent jamais à votre place.
+- Un cadre pulsant marque la zone dont parle une étape ; un petit curseur marque un bouton que vous pouvez essayer.
+  Cliquer dessus effectue son action normale et fait avancer le guide.
+- Le panneau de message s'estompe un peu après un moment, pour que vous puissiez voir la page derrière ; survolez-le pour
+  le faire réapparaître.
+- Quittez une page au milieu d'un guide et son guide reprend à la même étape lorsque vous revenez ; fermer un formulaire
+  redémarre le guide de ce formulaire.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="contextual-guide" alt="Le guide de la page FX à l'étape 2 sur 4, sur le filtrage des dates, devises et vues : un cadre autour des filtres de devises, ainsi que le panneau de message avec Précédent et Suivant" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+Vous pouvez relancer n'importe quel guide depuis
+**[Paramètres → Préférences → Prise en main et guides](settings/preferences.md#onboarding-and-guides)**.
+
+---
+
+## 🏦 4. Importer votre premier relevé (créer un courtier et des actifs à la volée)
+
+Votre tableau de bord est encore vide — que vous y arriviez directement ou après les écrans de bienvenue ci-dessus.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Tableau de bord vide" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+La façon la plus rapide de le remplir est d'importer votre historique de transactions. Vous n'avez pas besoin de configurer des courtiers
+ni des actifs au préalable : l'Assistant d'importation les crée au fur et à mesure.
 
 ### 📋 Étapes
 
-1. **Ouvrir l'assistant d'importation** : accédez à la page **[Transactions](transactions/index.md)** depuis le menu de la barre latérale et cliquez sur le bouton **« Importer »** (:material-file-upload:). Vous pouvez également démarrer depuis la page de détail d'un courtier — dans ce cas, le courtier est présélectionné.
+1. **Ouvrir l'Assistant d'importation** : sur la page **[Transactions](transactions/index.md)**, cliquez sur **Importer** (:material-file-upload:). La page de détails d'un courtier propose le même bouton, avec ce courtier déjà sélectionné.
 
-2. **Téléverser votre relevé** : déposez le fichier de relevé de votre courtier (`.csv`, `.xlsx` ou `.xls`) dans la première étape de l'assistant — le glisser-déposer fonctionne ici — et associez-le à un courtier, en créant le courtier **à la volée** s'il est nouveau. Cette étape est facultative : les relevés téléversés lors de sessions précédentes sont déjà stockés, et l'étape suivante les répertorie.
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Upload Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
+2. **Téléverser votre relevé** : déposez le rapport de votre courtier (`.csv`, `.xlsx` ou `.xls`) dans l'assistant et assignez-le à son courtier — choisissez **Créer nouveau** s'il n'existe pas encore. Chaque rapport que vous téléversez est conservé (vous le retrouvez dans **[Fichiers et téléversements](files/index.md#broker-reports)**) : la prochaine fois, sautez cette étape et cochez le rapport à l'étape suivante.
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Étape de téléversement de l'assistant" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
 
-3. **Sélectionner les fichiers et analyser** : choisissez précisément quels relevés stockés importer. Chaque fichier reçoit son analyseur présélectionné à partir du plugin d'importation par défaut du courtier (modifiable par fichier — utilisez **Generic CSV** pour un format inconnu), puis LibreFolio lit et valide chaque ligne. Un résumé consolidé indique ce qui sera réellement importé : transactions, titres distincts, problèmes de validation, tâches à faire, avertissements et doublons probables.
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Parse Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
+3. **Sélectionner les fichiers et analyser** : cochez les rapports à importer. Chacun reçoit le parseur de son courtier — modifiez-le fichier par fichier si nécessaire, **CSV générique** pour une structure inconnue. LibreFolio lit ensuite chaque ligne et récapitule ce qu'il a trouvé : transactions, titres, problèmes et doublons probables. Certains fichiers nécessitent alors une ou deux étapes supplémentaires (voir le panneau ci-dessous).
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Étape d'analyse de l'assistant" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
 
-4. **Étapes supplémentaires, uniquement si nécessaire** : selon le contenu de vos fichiers, jusqu'à trois étapes supplémentaires apparaissent — **Unifier les actifs** (le même titre trouvé sous des noms ou codes différents), **Corrections** (les lignes que l'analyseur n'a pas pu lire entièrement) et **Doublons** (le même mouvement présent dans deux fichiers importés ensemble). Un relevé propre à fichier unique les ignore toutes.
+4. **Vérifier et importer** : associez chaque titre à votre bibliothèque d'actifs, ou créez-le **à la volée** avec les informations lues dans le relevé. Les doublons probables arrivent décochés, et les lignes antérieures à la date d'ouverture du courtier sont écartées. Plus d'informations dans **[Mappage des actifs](transactions/import/index.md#asset-mapping)**.
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Étape de vérification de l'assistant : résolution des actifs" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
 
-5. **Vérifier et importer** : associez chaque instrument à votre bibliothèque d'actifs — ou créez-le **à la volée** avec des détails préremplis à partir du relevé — et vérifiez les indicateurs par ligne : les doublons (par rapport à votre comptabilité existante, ou les copies exactes en attente dans cette importation) arrivent décochés, et les lignes datées avant la date d'ouverture du courtier sont exclues automatiquement. Pour plus d'informations, consultez le guide **[Importation depuis un courtier - Correspondance des actifs](transactions/import/index.md#asset-mapping)**.
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Review Step: Asset Resolution" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
+5. **Enregistrer depuis l'éditeur groupé** : **Importer N transactions** déplace les lignes cochées dans l'éditeur groupé — rien n'est encore enregistré. Jetez-y un dernier coup d'œil, puis cliquez sur **Tout enregistrer**.
 
-6. **Enregistrer à partir de l'éditeur en masse** : cliquer sur **Importer N transactions** transfère les lignes sélectionnées vers l'éditeur en masse sous forme de nouvelles lignes — rien n'est encore écrit. Jetez-y un dernier coup d'œil, puis cliquez sur **Tout enregistrer** pour les intégrer à votre portefeuille.
+??? note "🧩 Étapes supplémentaires — uniquement si vos fichiers en ont besoin"
 
-!!! tip "Pas besoin de téléverser à nouveau"
+    L'assistant ajoute une étape uniquement lorsque vos fichiers le nécessitent ; un rapport unique et propre les saute
+    toutes :
 
-    Les relevés téléversés lors de sessions précédentes sont déjà répertoriés dans l'étape **Sélectionner les fichiers** de l'assistant — il suffit de les re-cocher. Vous pouvez également prévisualiser ou supprimer les relevés stockés depuis la page **[Fichiers et téléversements](files/index.md#broker-reports)**.
+    - **Unifier les actifs** — le même titre apparaît sous différents noms ou codes.
+    - **Corrections** — certaines lignes n'ont pas pu être entièrement lues.
+    - **Doublons** — le même mouvement figure dans deux fichiers que vous importez ensemble.
+    - **Aligner avec la banque** — après **Vérifier**, pour un lot de rapports tel que Danske Bank, lorsque les
+      chiffres de la banque diffèrent de ceux de LibreFolio.
 
-Pour le guide complet, consultez **[Comment importer des transactions](transactions/import/how-to.md)** ; pour les courtiers et formats de fichiers pris en charge, consultez **[Importation depuis un courtier](transactions/import/index.md)**.
+    Voir **[Étapes qui n'apparaissent qu'en cas de besoin](transactions/import/how-to.md#only-when-needed)**.
+
+La première fois que vous ouvrez l'assistant, un guide vous accompagne à travers les étapes nécessaires à vos fichiers ; il ne
+clique ni n'enregistre jamais à votre place (voir **[Première importation guidée](transactions/import/how-to.md#guided-first-import)**).
+Pour la procédure complète, voir **[Comment importer des transactions](transactions/import/how-to.md)** ; pour les
+courtiers et formats de fichiers pris en charge, voir **[Importer depuis un courtier](transactions/import/index.md)**.
 
 ---
 
-## 📈 4. Retour au tableau de bord
+## 📈 5. Retour au tableau de bord
 
-Après avoir importé votre relevé avec succès, revenez au **Tableau de bord**.
-
-LibreFolio calcule en temps réel les indicateurs de votre portefeuille, l'allocation d'actifs (par type, secteur, géographie) et l'historique des performances. Vous pouvez désormais voir l'ensemble de votre situation financière magnifiquement représentée !
+Revenez au **Tableau de bord** : la valeur de votre portefeuille, votre allocation (par type, secteur et zone géographique)
+et votre historique de performance sont désormais renseignés.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard Main View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Vue principale du tableau de bord" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔮 5. Et ensuite ?
+## 🔮 6. Et ensuite ?
 
-Maintenant que votre portefeuille est alimenté, vous pouvez :
+Maintenant que votre portefeuille est renseigné, vous pouvez :
 
-- 🤝 **[Partager votre courtier](brokers/sharing.md)** — Donner accès à des membres de la famille ou à des conseillers.
-- 💱 **[Configurer les taux de change](fx/index.md)** — Configurer la conversion de devise pour les portefeuilles multi-devises.
-- ⚙️ **[Personnaliser les paramètres](../admin/settings.md)** — Ajuster la langue, le thème et les préférences système.
+- 🤝 **[Partager votre courtier](brokers/sharing.md)** — Donnez accès à des membres de votre famille ou à des conseillers.
+- 💱 **[Configurer les taux de change](fx/index.md)** — Configurez la conversion de devise pour les portefeuilles multidevises.
+- ⚙️ **[Personnaliser vos préférences](settings/preferences.md)** — Ajustez votre langue, votre devise par défaut et votre thème. Les administrateurs gèrent également les **[Paramètres globaux](../admin/settings.md)** à l'échelle du système.
+- 🧭 **[Relancer la configuration d'accueil ou les visites guidées](settings/preferences.md#onboarding-and-guides)** — Revenez à tout moment sur l'écran de bienvenue, la visite rapide ou le guide d'importation depuis Paramètres → Préférences.
+- 📱 **[Installer LibreFolio comme application](pwa.md)** — Placez-le sur l'écran d'accueil de votre téléphone ou dans sa propre fenêtre de bureau.

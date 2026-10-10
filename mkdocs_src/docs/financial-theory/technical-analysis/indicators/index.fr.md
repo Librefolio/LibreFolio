@@ -1,6 +1,8 @@
 # 📉 Indicateurs techniques
 
-LibreFolio expose **22 indicateurs techniques calculés côté backend**, groupés par la caractéristique de marché qu'ils mesurent. Les mêmes formules mathématiques alimentent les graphiques d'actifs, les graphiques FX compatibles, les annotations et les consommateurs analytiques tels que AI Export.
+LibreFolio expose **22 indicateurs techniques calculés côté backend**, groupés par la caractéristique de marché qu'ils mesurent. Les mêmes formules mathématiques alimentent les graphiques d'actifs, les graphiques FX compatibles, les annotations et les consommateurs analytiques tels que l'export IA.
+
+Les indicateurs comptent des **séances**, pas des jours calendaires : une séance est un jour où la série a sa propre cotation — un prix pour un actif, un taux publié pour une paire FX. Un jour que la série comble avec la dernière valeur connue — un week-end, un jour férié de marché, tout jour sans cotation — n'est pas une séance, pas plus qu'un prix stocké daté d'un week-end ou d'un jour férié de marché qui ne fait que répéter la clôture précédente (un [report stocké](../risk-metrics/data-quality.md#stored-carries)). Les périodes, le préchauffage et l'historique minimum se comptent tous en séances : la SMA 200 fait donc la moyenne des 200 dernières séances, soit environ 290 jours calendaires. Le graphique conserve ses dates calendaires : un indicateur n'a de valeurs que les jours de séance, et sa ligne enjambe les jours de fermeture intermédiaires. La seule exception à fenêtre calendaire est le rendement glissant calendaire derrière le [mode Rendement glissant](../../../user/assets/detail/chart.md#primary-modes) du graphique, qui compare chaque date à la clôture résolue exactement $N$ jours calendaires plus tôt.
 
 !!! info "Les champs de prix comptent"
 
@@ -26,7 +28,7 @@ Les indicateurs de tendance lissent le cours ou déterminent si un mouvement dir
 | **ADX** | Quelle est la force de la tendance ? | Haut, Bas, Clôture | [📖](adx.md) |
 | **Aroon** | À quand remontent les nouveaux extrêmes ? | Haut, Bas | [📖](aroon.md) |
 
-➡️ [Aperçu du groupe Tendance](trend.md)
+➡️ [Vue d'ensemble du groupe Tendance](trend.md)
 
 ---
 
@@ -43,7 +45,7 @@ Les indicateurs de momentum mesurent la vitesse, la pression directionnelle et l
 | **PPO** | Quel est le momentum des moyennes mobiles en pourcentage ? | Clôture | [📖](ppo.md) |
 | **CCI** | À quelle distance le prix se situe-t-il de sa moyenne statistique récente ? | Haut, Bas, Clôture | [📖](cci.md) |
 
-➡️ [Aperçu du groupe Momentum](momentum.md)
+➡️ [Vue d'ensemble du groupe Momentum](momentum.md)
 
 ---
 
@@ -58,7 +60,7 @@ Les indicateurs de volatilité mesurent l'amplitude, la dispersion et la largeur
 | **NATR** | Quelle est l'ampleur de la volatilité par rapport au prix ? | Haut, Bas, Clôture | [📖](natr.md) |
 | **Canaux de Donchian** | Quels sont le plus haut et le plus bas de la période ? | Haut, Bas | [📖](donchian-channels.md) |
 
-➡️ [Aperçu du groupe Volatilité](volatility.md)
+➡️ [Vue d'ensemble du groupe Volatilité](volatility.md)
 
 ---
 
@@ -71,7 +73,7 @@ Les indicateurs de volume combinent la direction du prix avec l'activité de né
 | **OBV** | Le volume signé indique-t-il une accumulation ou une distribution ? | Clôture, Volume | [📖](obv.md) |
 | **MFI** | Le flux monétaire indique-t-il une pression acheteuse ou vendeuse ? | Haut, Bas, Clôture, Volume | [📖](mfi.md) |
 
-➡️ [Aperçu du groupe Volume](volume.md)
+➡️ [Vue d'ensemble du groupe Volume](volume.md)
 
 ---
 
@@ -81,13 +83,13 @@ Les indicateurs de risque transforment la série de prix elle-même en une mesur
 
 | Indicateur | Question principale | Données | Détails |
 |---|---|---|---|
-| **Drawdown sous-marin** | De combien le prix est-il inférieur à son plus haut cumulé ? | Clôture | [📖](../risk-metrics/max-drawdown.md) |
+| **Drawdown depuis le sommet** | De combien le prix est-il inférieur à son plus haut cumulé ? | Clôture | [📖](../risk-metrics/max-drawdown.md) |
 | **Rendement glissant** | À combien s'élève le rendement composé de la dernière fenêtre ? | Clôture | [📖](../../fundamentals/returns.md) |
 | **Volatilité glissante** | Quelle est la dispersion des rendements récents ? | Clôture | [📖](../risk-metrics/volatility.md) |
 | **Ratio de Sharpe glissant** | Le rendement excédentaire compense-t-il le risque pris ? | Clôture | [📖](../risk-metrics/sharpe-ratio.md) |
 | **Bêta glissant** | Quelle est la sensibilité de l'actif à un actif de comparaison ? | Clôture + actif de comparaison | — |
 
-➡️ [Aperçu des métriques de risque](../risk-metrics/index.md)
+➡️ [Vue d'ensemble des métriques de risque](../risk-metrics/index.md)
 
 ---
 

@@ -1809,3 +1809,15 @@
 >   - `dev_release2` still `9f060ef6e`.
 > - Triage: the original defect is an **assumption** (the fixture took for granted that `fill` leaves the table at rest), fixed in the fixture.
 > - **Step 23 closed.** CHECKPOINT READY sent; M FROZEN.
+>
+> **Batch 10 committed and integrated:** `0771eaaaf` (test gallery), merge `49212b6df`, train 28 (`dev_release2` = `fbb57eb41`, tree `eb2090da4488`).
+>
+> **Coordinator's decisions on batch 10** (21:59):
+> - the mobile compromise (the Target % inputs past the right edge, «Distributio» cut) is **accepted**: it is the table layout, in row 13's backlog and in 38 as **C-38**;
+> - removing the focus ring on desktop (shared fixture) is accepted too.
+
+## Batch 11 — the 1.2 translation round
+
+### 24. ⏳ Triage, small fixes, glossary and pipeline launch — 2026-10-10
+
+> Tracked in its own plan: [plan-phase00TranslationRound12.prompt.md](plan-phase00TranslationRound12.prompt.md).

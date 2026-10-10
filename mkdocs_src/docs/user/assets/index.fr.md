@@ -1,83 +1,101 @@
 # 💼 Actifs
 
-Les actifs sont le cœur de LibreFolio. Ils représentent tout instrument financier que vous possédez ou suivez : actions, ETF, obligations, crypto-monnaies ou instruments personnalisés comme des comptes d'épargne avec intérêts programmés.
+Les actifs sont les instruments que vous détenez ou que vous suivez : actions, ETF, obligations, crypto, ou un compte d’épargne à intérêts programmés. La page **Actifs** les liste tous, chacun avec un petit graphique de prix, et ouvre la page de détail de n’importe lequel d’entre eux.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-list" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Vue Grille de Cartes" alt="Page Liste des Actifs (Grille)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Vue Tableau de Données" alt="Page Liste des Actifs (Tableau)">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Vue grille" alt="Page de la liste des actifs (grille)">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Vue tableau" alt="Page de la liste des actifs (tableau)">
 </div>
 
-## 📌 Qu'est-ce qu'un Actif ?
+## 📌 Qu’est-ce qu’un actif ?
 
-Un actif dans LibreFolio est un instrument financier comprenant :
+Chaque actif possède :
 
-- **Identité** : nom, ISIN, ticker ou autres identifiants
-- **Catégorie** : action, ETF, obligation, crypto, matière première, etc.
-- **Devise** : la devise dans laquelle l'actif est libellé
-- **Fournisseur** : un fournisseur de prix optionnel qui récupère automatiquement les cours actuels et l'historique
-- **Classification** : secteur et répartition géographique (graphiques en secteurs + carte du monde)
-- **Transactions** : opérations d'achat, de vente, de dividendes et d'intérêts liées à un portefeuille
+- **un nom et des identifiants** — ISIN, ticker ou autres codes ;
+- **un type** — action, ETF, obligation, crypto, matière première… ([types d’actifs](../../financial-theory/instruments/asset-types/index.md)) ;
+- **une devise** — celle dans laquelle ses prix sont cotés ;
+- **un fournisseur de prix**, facultatif — il télécharge pour vous le prix actuel et l’historique ([Fournisseurs](providers/index.md)) ;
+- **une distribution sectorielle et géographique**, facultative ;
+- **des événements** — dividendes, divisions, intérêts… ([Événements d’un actif](detail/events.md)).
 
-## 📋 Liste des Actifs
+Les actifs sont partagés par toutes les personnes de ce LibreFolio : vos transactions déterminent lesquels sont les vôtres.
 
-Accédez à **Assets** dans la barre latérale pour voir tous vos actifs. La page de liste propose :
+## 📋 Parcourir la liste
 
-- 🔀 **Mises en page Grille / Tableau** : Choisissez entre une grille visuelle basée sur des cartes ou un tableau de données dense et triable. Votre préférence de mise en page est automatiquement conservée dans le `localStorage` de votre navigateur et sera chargée lors des sessions futures.
-- 🔎 **Recherche Intelligente** : Filtrez les actifs en temps réel en saisissant un nom, un ISIN, un ticker ou le nom d'un courtier.
-- 🏷️ **Filtres par Type** : Filtrez la liste pour n'afficher que des classes spécifiques (ex. ETF, Actions, Obligations, Crypto).
-- 🗃️ **Actifs Archivés** : Basculez entre les positions actives et les actifs archivés pour garder votre liste propre.
-- ⏱️ **Sélecteur de Delta Temporel** : Modifiez la période utilisée pour calculer les variations de prix (ex. `1D`, `1W`, `1M`, `YTD`, `ALL`).
-- 🔄 **Synchronisation & Rafraîchissement** : Synchronisez les données de prix en temps réel pour tous les fournisseurs configurés ou rafraîchissez manuellement la liste.
-- 🖱️ **Menu Contextuel** : Faites un clic droit sur n'importe quelle ligne dans la mise en page en tableau pour des actions rapides (**Synchroniser**, **Actualiser**, **Fusionner**, **Supprimer**). Synchroniser est désactivé pour les actifs sans fournisseur de prix et pour les actifs archivés ; Fusionner replie un actif en double dans un autre — transactions, prix et événements convergent vers la cible et l'actif source est supprimé.
+Ouvrez **Actifs** dans la barre latérale, puis :
 
-Cliquez sur n'importe quelle carte d'actif pour naviguer vers sa **[page de détail](detail/index.md)**.
+- **Choisissez une disposition** — les deux boutons à côté de **Ajouter un actif** basculent entre des cartes avec un petit graphique (**Vue grille**) et un tableau triable (**Vue tableau**). Votre choix est mémorisé dans ce navigateur.
+- **Choisissez la période** — la plage de dates définit la période des graphiques des cartes et de la variation qu’elles affichent. Dans le tableau, les colonnes **Δ** donnent la variation sur un jour et sur chaque période, de 1W à 5Y, qui tient dans la plage.
+- **Filtrer** — saisissez dans **Rechercher des actifs...** pour filtrer par nom, et choisissez une ou plusieurs devises et types dans les deux menus ; le ✕ efface la recherche et les deux menus.
+- **Afficher les actifs archivés** — au départ, la liste n’affiche que les actifs **Actif** : activez **Inactif** pour ajouter les archivés, ou désactivez **Actif** pour ne voir que ceux-là.
+
+Cliquez sur une carte ou une ligne pour ouvrir la **[page de détail](detail/index.md)** de l’actif. Là, les flèches **‹ ›** parcourent les actifs dans l’ordre où cette liste les affiche, filtres et tri compris.
+
+??? note "📉 Abs ou % sur les cartes — vue grille uniquement"
+
+    **Abs / %** dans la barre d’outils fait basculer chaque carte, son graphique et sa variation, entre prix et pourcentages ; le bouton **%** d’une carte ne change que cette carte, jusqu’à ce que vous modifiiez à nouveau la barre d’outils. La page s’ouvre toujours sur **%**.
+
+??? note "⚙️ L’apparence des graphiques des cartes"
+
+    **Paramètres** dans la barre d’outils définit en une fois l’apparence et les superpositions de tous les graphiques des actifs, et son application remplace les paramètres propres à chaque actif, pages de détail incluses. Le ⚙️ d’une carte ne modifie que cette carte. Voir [Paramètres du graphique](../fx/chart-settings.md).
+
+### 🗂️ Vos actifs, les actifs des autres utilisateurs, suivis
+
+Les deux dispositions divisent la liste en trois panneaux au maximum, chacun avec son nombre ; un panneau vide n’est pas affiché.
+
+| Panneau | Ce qu’il contient |
+|---|---|
+| **Vos actifs** | Actifs détenus actuellement dans un courtier que vous possédez |
+| **Actifs des autres utilisateurs** | Actifs détenus actuellement uniquement par d’autres utilisateurs — dans des courtiers que vous ne possédez pas |
+| **Suivis** | Actifs que personne ne détient actuellement — jamais achetés ou déjà vendus, gardés à l’œil |
+
+Ce qui compte, c’est la position **aujourd’hui** : lorsque vous vendez toute votre position, l’actif passe dans *Actifs des autres utilisateurs* si quelqu’un d’autre le détient encore, et dans *Suivis* sinon. Les courtiers partagés avec vous en tant qu’**Éditeur** ou **Lecteur** comptent comme des courtiers d’autres utilisateurs, et une position réduite à un reliquat négligeable compte comme non détenue.
+
+Dans la vue tableau, chaque panneau est un tableau avec ses propres pages ; redimensionner, déplacer ou masquer une colonne : ces opérations s’appliquent aux trois.
+
+## 🔄 Garder les prix à jour
+
+- **Tout synchroniser** ouvre une fenêtre où **Démarrer la synchronisation** télécharge les derniers prix de chaque actif doté d’un fournisseur ; **Tout recharger** recharge la liste à partir de ce que LibreFolio a stocké. Dans l’onglet **[Corrélation](correlation.md)**, ils deviennent **Synchroniser la sélection**, qui télécharge aussi les taux de change servant à convertir les actifs sélectionnés, et **Tout recharger**, qui recalcule toutes les analyses.
+- **Prix live** — tant que cette page ou la page d’un actif est ouverte et que la plage de dates se termine aujourd’hui, les prix se rafraîchissent d’eux-mêmes de temps à autre. Un prix passe au vert lorsqu’il a augmenté depuis le rafraîchissement précédent, au rouge lorsqu’il a baissé ; quand le marché est fermé, vous voyez la dernière clôture, sans couleur.
+- **En arrière-plan**, le serveur rafraîchit les prix selon un calendrier défini par votre administrateur ([Planificateur de données de marché](../../admin/settings.md#market-data-scheduler)). Le tableau de bord affiche les prix stockés.
+
+## 🖱️ Agir sur un actif
+
+Chaque carte a ses propres boutons ; dans le tableau, le **⋮** en fin de ligne, ou un clic droit, ouvre les mêmes actions :
+
+- **Synchroniser** — télécharge les prix de l’actif pour la période sélectionnée. Cela nécessite un fournisseur, et le tableau bloque également cette action pour un actif archivé.
+- **Recharger** — recharge ses prix à partir de ce que LibreFolio a stocké.
+- **Fusionner avec…** — fusionne un doublon dans un autre actif, qui conserve tout ([Créer et modifier](create-edit.md)).
+- **Supprimer** — supprime un actif qu’aucune transaction n’utilise.
+
+Dans le tableau, cochez plusieurs lignes pour les **Synchroniser**, les **Recharger** ou les **Supprimer** ensemble.
+
+??? warning "🗑️ Quand un actif ne peut pas être supprimé"
+
+    Un actif n’est pas supprimé tant que **la moindre** transaction l’utilise, même une transaction dans un courtier que vous ne pouvez pas voir. Le résultat indique combien de transactions l’utilisent, avec un lien **Transactions** filtré sur cet actif. Cette page n’affiche que les courtiers auxquels vous avez accès, elle peut donc lister moins de transactions que le nombre affiché.
 
 ## 🧭 Fonctionnalités
 
-### ➕ [Créer & Modifier](create-edit.md)
+### ➕ [Créer et modifier](create-edit.md)
 
-Guide étape par étape pour créer de nouveaux actifs, configurer les fournisseurs et modifier des actifs existants.
+Créez un actif, connectez-le à un fournisseur de prix et gardez ses détails exacts.
 
-### 📊 [Page de Détail de l'Actif](detail/index.md)
+### 🧪 [Onglet Corrélation](correlation.md)
 
-Le cœur de l'analyse d'actif — graphique interactif, signaux techniques, mesures, classification et éditeur de données.
+Comparez une sélection d’actifs côte à côte — matrice de corrélation, pertes, risque par rapport au rendement, et rejeu historique, en pourcentages uniquement.
+
+### 📊 [Page de détail d’un actif](detail/index.md)
+
+Le graphique de prix avec ses signaux, ses mesures et ses événements, l’éditeur de données, et la classification.
 
 ### 🔌 [Fournisseurs](providers/index.md)
 
-Récupération automatique des prix depuis Yahoo Finance, justETF, CSS Scraper ou le moteur d'investissement programmé.
+Des prix automatiques depuis Yahoo Finance, justETF, Borsa Italiana, le CSS Scraper, ou le moteur d’investissement programmé.
 
 ---
 
-## 📡 Prix en temps réel & Ticker en temps réel
+## 🔗 Voir aussi
 
-Pour vous tenir informé des mouvements du marché sans forcer des rafraîchissements constants de la page, LibreFolio affiche des badges de prix compacts et en direct sur la **liste des Actifs** et les pages de **Détail d'actif**.
-
-### ⏱️ Interrogation Automatique (Polling)
-
-Lorsque vous consultez ces pages, votre navigateur interroge le backend toutes les **30 secondes** pour obtenir les prix actuels des actifs. Ce processus s'exécute silencieusement en arrière-plan et n'est absolument pas bloquant (l'interface utilisateur est prête instantanément, et les prix se chargent à leur arrivée). Le tableau de bord n'interroge pas le backend : il affiche les derniers prix enregistrés.
-
-### 🎨 Indicateurs Visuels
-
-Les badges changent de couleur dynamiquement pour indiquer les mouvements de prix récents par rapport à la dernière interrogation :
-
-* 🟢 **Vert (Hausse)** : Le prix de l'actif a augmenté.
-* 🔴 **Rouge (Baisse)** : Le prix de l'actif a diminué.
-* ⚪ **Gris (Neutre)** : Le prix est inchangé, en cours de chargement, ou le marché est actuellement fermé.
-
-!!! note "Fermeture du Marché & Fallbacks"
-
-    Pendant les week-ends ou les fermetures de marché, le ticker en temps réel affichera le dernier prix de clôture disponible dans un badge gris neutre.
-
-### 🔌 Mise en cache & Planificateur d'arrière-plan
-
-Pour garantir des temps de chargement rapides et éviter que votre instance ne soit limitée en débit ou bloquée par des fournisseurs externes (tels que Yahoo Finance), LibreFolio utilise une stratégie à double couche :
-
-1. **Planificateur d'arrière-plan** : Un démon d'arrière-plan sur le serveur rafraîchit les cours de tous les actifs actifs à intervalle régulier (par défaut : toutes les 10 minutes, configurable par les administrateurs dans les Paramètres Globaux). Cela maintient la base de données et le cache de prix local à jour.
-2. **Cache d'interrogation à la demande** : Lorsque le frontend interroge le backend, il lit ce cache local. Si le cache est froid, le fournisseur récupère le prix et le stocke avec un TTL (Time-To-Live) de 120 secondes. Les rafraîchissements de page ultérieurs ou les vues du tableau de bord d'autres utilisateurs accèdent directement au cache local.
-
----
-
-## 🔗 Liens connexes
-
-- 📚 **[Théorie Financière — Types d'Actifs](../../financial-theory/instruments/asset-types/index.md)** — Actions, ETF, Obligations, Crypto, etc.
-- 💱 **[Taux FX](../fx/index.md)** — Taux de change utilisés pour la conversion entre devises
+- 📚 **[Théorie financière — Types d’actifs](../../financial-theory/instruments/asset-types/index.md)** — Action, ETF, Obligation, Crypto, etc.
+- 💱 **[Taux de change](../fx/index.md)** — Taux utilisés pour la conversion entre devises
+- 🛠️ **[Prix live](../../developer/frontend/components/features/live-ticker.md)** — Pour les développeurs : comment les pages interrogent les prix live

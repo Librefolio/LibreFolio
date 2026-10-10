@@ -1,54 +1,56 @@
-# 📥 Transazioni del Broker
+# 📥 Transazioni del broker
 
-La scheda **Transazioni** è il centro di controllo per modificare il libro mastro del broker. Elenca tutte le operazioni finanziarie registrate (acquisti, vendite, dividendi, depositi, prelievi, trasferimenti e conversioni FX) relative a questo broker.
+La scheda **Transazioni** di un broker elenca tutte le sue transazioni, dalla più recente alla più vecchia. Mostra sempre l'intera cronologia del broker: l'intervallo di date nella barra degli strumenti non la filtra.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Scheda Transazioni del Broker">
+    <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Scheda Transazioni del broker">
 </div>
 
-Da questa scheda puoi registrare transazioni manualmente o avviare importazioni in blocco di estratti conto.
+Sopra l'elenco trovi **Report caricati**, **Visualizza in Transazioni** e il selettore di colonne. I proprietari e gli editor hanno anche **Importa** e **Aggiungi transazione**.
 
 ---
 
-## ➕ Transazioni Manuali
+## ➕ Aggiungi una transazione
 
-Fai clic sul pulsante **Aggiungi Transazione** (icona `Plus`) per aprire la procedura guidata modale per la singola transazione. Questa ti consente di registrare manualmente:
+1. Fai clic su **Aggiungi transazione**. Il workspace delle transazioni si apre su un modulo **Nuova transazione**, con questo broker già selezionato.
+2. Scegli il **Tipo** e compila i campi obbligatori — vedi [Modulo transazione](../transactions/form.md).
+3. Fai clic su **Applica** per inserire la riga nel workspace, poi su **Salva tutto** per salvarla.
 
-- **Acquisto / Vendita**: scambia asset, specificando data, prezzo, quantità e valuta.
-- **Dividendo / Reddito**: reddito ricevuto dagli asset in portafoglio.
-- **Deposito / Prelievo**: flussi di cassa esterni in entrata o in uscita dal saldo di cassa del broker.
-- **Trasferimento**: trasferimento di liquidità o asset tra broker (ad esempio, finanziando il conto tramite un broker bancario).
-- **Conversione FX**: cambi di valuta all'interno del conto del broker.
-
-Per una spiegazione dettagliata dei campi delle transazioni e delle regole di validazione, consulta la guida **[Modulo di Transazione](../transactions/form.md)**.
+Nulla viene salvato prima di **Salva tutto**: fino ad allora puoi aggiungere altre righe, modificarle o annullare (vedi [Il workspace bulk](../transactions/index.md#bulk-workspace)).
 
 ---
 
-## 🧙 Importazione in Blocco (BRIM)
+## 🔎 Aprire, modificare o eliminare transazioni
 
-Il pulsante **Importa** (icona `Upload`) avvia la procedura guidata **BRIM** (Broker Report Import Module), che importa in blocco gli estratti conto esportati dal tuo broker: analizza i file, valida ogni riga, uniforma i titoli trovati, verifica la presenza di duplicati e ti consente di rivedere tutto prima che qualsiasi dato venga scritto. Le righe approvate finiscono nell'**editor in blocco**, dove un **Salva tutto** finale le registra nel libro mastro.
-
-La stessa procedura guidata è disponibile anche dalla pagina globale **[Transazioni](../transactions/index.md)**. Per la procedura completa, consulta le guide dedicate:
-
-- 📥 **[Importazione dal Broker (BRIM)](../transactions/import/index.md)** — broker supportati, formati e note specifiche per plugin.
-- 🧙 **[Come Importare le Transazioni](../transactions/import/how-to.md)** — la procedura guidata, passo dopo passo.
+- **Fai doppio clic** su una riga per aprirla in sola lettura.
+- Per modificare, clonare o eliminare righe, fai clic su **Visualizza in Transazioni**: si apre la pagina [Transazioni](../transactions/index.md), filtrata su questo broker e sui filtri di colonna che hai impostato qui.
 
 ---
 
-## 🧩 Il tuo broker non è supportato?
+## 🧙 Importa un estratto conto
 
-Se il tuo broker non ha ancora un plugin di importazione, puoi aiutare:
+**Importa** apre il workspace insieme alla **Procedura guidata di importazione** (BRIM, il modulo di importazione dei report del broker). La procedura guidata legge i file esportati dal tuo broker, ti consente di controllare ogni riga e passa il risultato al workspace: nulla viene scritto fino a **Salva tutto**.
 
-- **Richiedi un plugin** — apri una [richiesta di plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) su GitHub, allegando un campione anonimizzato del file esportato dal broker in modo che il formato possa essere compreso. (Il passaggio Corrections della procedura guidata include anche un banner "apri una segnalazione" per segnalare le righe che sembrano errate.)
-- **Scrivi un plugin** — la [Guida ai plugin BRIM](../../developer/architecture/patterns/brim_plugin_guide.md) guida gli sviluppatori attraverso il contratto del provider; consulta [Contribuire](../../community/contribute.md) per il flusso di lavoro generale.
+- 📥 **[Importazione da broker](../transactions/import/index.md)** — broker e formati supportati.
+- 🧙 **[Come importare le transazioni](../transactions/import/how-to.md)** — la procedura guidata, passo dopo passo.
+
+La stessa procedura guidata si apre dalla voce **Importa** nella pagina [Transazioni](../transactions/index.md).
+
+??? tip "🧩 Il tuo broker non è ancora supportato — cosa puoi fare"
+
+    - **Richiedi un plugin**: apri una [richiesta di plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml) su GitHub e allega un campione anonimizzato dell'esportazione del broker.
+    - **Scrivi un plugin**: la [Guida ai plugin BRIM](../../developer/architecture/patterns/brim_plugin_guide.md) spiega il contratto del plugin, e [Contribuisci](../../community/contribute.md) spiega il flusso di lavoro.
+    - Se le righe importate continuano a sembrare errate, il passo **Correzioni** della procedura guidata rimanda a GitHub così puoi segnalare un possibile bug dell'importatore.
 
 ---
 
-## 🗂️ Report Caricati
+## 🗂️ Report caricati
 
-Fai clic sul pulsante **Report Caricati** (icona `FileText`) per gestire i file di report BRIM archiviati per questo broker. La finestra modale ti consente di:
+**Report caricati** apre i file dei report memorizzati per questo broker:
 
-- Rivedere i report caricati (nome, data di caricamento, dimensione, stato), con un'**anteprima** rapida del contenuto di ciascun file.
-- **Caricare** nuovi report direttamente — vengono assegnati automaticamente a questo broker e diventano disponibili nel passaggio Select Files della procedura guidata.
-- **Eliminare** i report che non ti servono più.
-- Passare alla pagina completa **[File e Caricamenti](../files/index.md#broker-reports)**, pre-filtrata su questo broker.
+- **Carica** file CSV o Excel: vengono assegnati a questo broker ed elencati nel passo **Seleziona file** della procedura guidata. I file che carichi insieme formano un unico set — è così che vengono importate le banche che dividono un conto su più esportazioni, come Danske Bank.
+- **Anteprima** o **Elimina** un file. L'eliminazione di un report non elimina mai le transazioni importate da esso.
+- Controlla i badge **Stato** e **Set di report** di ciascun file — vedi [Set di report](../files/index.md#report-sets).
+- **Gestisci tutti i file** apre la pagina [File e caricamenti](../files/index.md#broker-reports), filtrata su questo broker.
+
+Caricare ed eliminare report richiede l'accesso al broker come Proprietario o Editor.

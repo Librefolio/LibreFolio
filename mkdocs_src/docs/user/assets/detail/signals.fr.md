@@ -1,140 +1,125 @@
 # 📊 Signaux
 
-Le panneau Signaux permet de superposer des **indicateurs techniques**, des **séries de comparaison** et des **courbes de benchmark** sur le graphique de prix. Les indicateurs sont calculés côté serveur par la **plateforme de plugins de signaux** du backend de LibreFolio à partir de l'historique de prix stocké de l'actif — le navigateur ne fait que restituer les résultats, si bien que le graphique, les diagnostics et les instantanés de l'export IA affichent tous les mêmes chiffres.
+Les signaux sont des lignes tracées sur le graphique des prix : **indicateurs techniques** que LibreFolio calcule à partir des prix stockés, **un autre actif ou une paire de devises** avec lequel comparer, et **courbes de référence** telles qu'une croissance régulière. Utilisez-les pour lire la tendance, le momentum, la volatilité et le risque en un coup d'œil.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Panneau de signaux d'un actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Panneau des signaux d'actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🧮 Signaux disponibles
+## 🛠️ Ajouter un signal
 
-Les signaux sont organisés en **trois catégories**, chacune avec son propre menu déroulant en haut du panneau.
+1. Ouvrez le panneau **Signaux** au-dessus du graphique.
+2. Choisissez un signal dans l'un de ses trois menus : **Indicateurs techniques**, **Comparaison de données** ou **Benchmarks synthétiques**. Dans le menu des indicateurs, tapez pour rechercher par nom, description ou les données utilisées par un indicateur.
+3. Définissez ses paramètres sur la carte qui apparaît ; le graphique suit.
+4. Faites glisser une carte par sa poignée (flèches sur téléphone) pour changer l'ordre, ou supprimez-la avec 🗑️.
 
-### 📉 Indicateurs techniques — 22 plugins backend
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-tree" alt="Recherche d'indicateurs groupés sur le panneau des signaux d'actif">
+</div>
 
-Les graphiques d'actifs peuvent exécuter **22 plugins d'indicateurs**, regroupés par la propriété de marché qu'ils mesurent. Les mathématiques de chaque indicateur figurent dans la section Théorie financière — suivez les liens ci-dessous, ou cliquez sur l'icône 📖 de n'importe quelle carte de signal pour accéder directement à sa page de théorie.
+Chaque ligne d'une carte, et chaque zone d'indicateurs tels que le RSI, a sa propre couleur et son propre style de ligne. Vos signaux sont mémorisés pour cet actif, dans ce navigateur.
 
-| Famille | Indicateurs |
-|---|---|
-| 📈 **Tendance** (5) | [EMA](../../../financial-theory/technical-analysis/indicators/ema.md) · [SMA](../../../financial-theory/technical-analysis/indicators/sma.md) · [KAMA](../../../financial-theory/technical-analysis/indicators/kama.md) · [ADX](../../../financial-theory/technical-analysis/indicators/adx.md) · [Aroon](../../../financial-theory/technical-analysis/indicators/aroon.md) |
-| ⚡ **Momentum** (6) | [RSI](../../../financial-theory/technical-analysis/indicators/rsi.md) · [MACD](../../../financial-theory/technical-analysis/indicators/macd.md) · [ROC](../../../financial-theory/technical-analysis/indicators/roc.md) · [RSI stochastique](../../../financial-theory/technical-analysis/indicators/stochastic-rsi.md) · [PPO](../../../financial-theory/technical-analysis/indicators/ppo.md) · [CCI](../../../financial-theory/technical-analysis/indicators/cci.md) |
-| 🌊 **Volatilité** (4) | [Bandes de Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md) · [ATR](../../../financial-theory/technical-analysis/indicators/atr.md) · [NATR](../../../financial-theory/technical-analysis/indicators/natr.md) · [Canaux de Donchian](../../../financial-theory/technical-analysis/indicators/donchian-channels.md) |
-| 📊 **Volume** (2) | [OBV](../../../financial-theory/technical-analysis/indicators/obv.md) · [MFI](../../../financial-theory/technical-analysis/indicators/mfi.md) |
-| ⚠️ **Risque** (5) | Drawdown sous-marin · Rendement glissant · Volatilité glissante · Ratio de Sharpe glissant · Bêta glissant |
+---
 
-Pour les concepts de la famille Risque, voir les pages de théorie [Métriques de risque](../../../financial-theory/technical-analysis/risk-metrics/index.md) ([Drawdown maximal](../../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md), [Volatilité](../../../financial-theory/technical-analysis/risk-metrics/volatility.md), [Ratio de Sharpe](../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)).
+## 📉 Indicateurs techniques {: #technical-indicators }
+
+**22 indicateurs**, regroupés selon ce qu'ils mesurent. Chaque nom renvoie à sa page théorique ; le **?** sur une carte ouvre la même page.
+
+### 📈 Tendance
+
+- [SMA](../../../financial-theory/technical-analysis/indicators/sma.md) — moyenne simple des prix de clôture
+- [EMA](../../../financial-theory/technical-analysis/indicators/ema.md) — moyenne qui accorde plus de poids aux prix récents
+- [KAMA](../../../financial-theory/technical-analysis/indicators/kama.md) — moyenne qui s'adapte au bruit du marché
+- [ADX](../../../financial-theory/technical-analysis/indicators/adx.md) — force de la tendance, avec +DI et −DI pour sa direction
+- [Aroon](../../../financial-theory/technical-analysis/indicators/aroon.md) — à quel point les derniers sommets et creux sont récents
+
+### ⚡ Momentum
+
+- [RSI](../../../financial-theory/technical-analysis/indicators/rsi.md) — pression d'achat et de vente, avec zones de surachat et de survente
+- [MACD](../../../financial-theory/technical-analysis/indicators/macd.md) — momentum entre deux moyennes mobiles, avec une ligne de signal et un histogramme
+- [PPO](../../../financial-theory/technical-analysis/indicators/ppo.md) — le même momentum, en pourcentage
+- [ROC](../../../financial-theory/technical-analysis/indicators/roc.md) — vitesse de variation du prix
+- [RSI stochastique](../../../financial-theory/technical-analysis/indicators/stochastic-rsi.md) — position du RSI dans sa plage récente
+- [CCI](../../../financial-theory/technical-analysis/indicators/cci.md) — distance par rapport au prix moyen
+
+### 🌊 Volatilité
+
+- [Bandes de Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md) — une bande autour d'une moyenne mobile qui s'élargit avec la volatilité
+- [ATR](../../../financial-theory/technical-analysis/indicators/atr.md) — volatilité en unités de prix
+- [NATR](../../../financial-theory/technical-analysis/indicators/natr.md) — volatilité en pourcentage du prix
+- [Canaux de Donchian](../../../financial-theory/technical-analysis/indicators/donchian-channels.md) — le plus haut des hauts et le plus bas des bas de la période
+
+### 📊 Volume
+
+- [OBV](../../../financial-theory/technical-analysis/indicators/obv.md) — pression du volume derrière les mouvements de prix
+- [MFI](../../../financial-theory/technical-analysis/indicators/mfi.md) — momentum pondéré par le volume
+
+### ⚠️ Risque
+
+- [Repli sous le sommet](../../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md) — l'écart du prix sous son plus haut courant ([historique complet](#drawdown-full-history))
+- [Rendement glissant](../../../financial-theory/fundamentals/returns.md#rolling-return-sessions) — rendement basé uniquement sur le prix, sur une fenêtre glissante
+- [Volatilité glissante](../../../financial-theory/technical-analysis/risk-metrics/volatility.md) — volatilité annualisée sur une fenêtre glissante
+- [Ratio de Sharpe glissant](../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md) — rendement excédentaire par unité de volatilité sur une fenêtre glissante
+- [Bêta glissant](../../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md) — la force avec laquelle l'actif suit un actif de comparaison de votre choix
+
+Les périodes comptent des **séances**, les jours où l'actif a été coté : une SMA 200 couvre 200 séances, environ 290 jours calendaires ([pourquoi](../../../financial-theory/technical-analysis/indicators/index.md)). La **Fenêtre** des quatre signaux de risque glissants compte aussi les jours avec une cotation ; pour le Bêta glissant, les jours où les deux actifs ont été cotés.
 
 !!! info "Tous les indicateurs ne peuvent pas s'exécuter sur tous les actifs"
 
-    Les indicateurs qui nécessitent des prix **haut/bas** (ADX, Aroon, ATR, NATR, CCI,
-    canaux de Donchian) ou du **volume** (OBV, MFI) ne deviennent disponibles que
-    lorsque votre historique de prix inclut ces champs — la carte de signal vous
-    indique quel champ manque. **Bêta glissant** vous demande en outre de choisir
-    un actif de comparaison.
+    ADX, Aroon, ATR, NATR, CCI, canaux de Donchian et MFI ont besoin des prix **haut** et **bas** ; OBV et MFI ont besoin du **volume**. Sans eux, la carte vous indique quelles données manquent.
 
-### 💱 Comparaison de données
-
-Des superpositions calculées par le navigateur qui normalisent une autre série sur le même graphique :
-
-- ↔️ **Comparaison d'actifs** — superpose la performance d'un autre actif, normalisée à la même échelle (par exemple, une action par rapport à son benchmark)
-- 💱 **Paire de devises** — superpose le taux d'une paire de devises configurée
-
-### 📐 Benchmarks synthétiques
-
-Des **courbes de référence mathématiques** calculées par le navigateur, générées uniquement à partir de paramètres — aucune donnée de marché nécessaire : [Croissance linéaire](../../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Croissance composée](../../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md), et [Onde sinusoïdale](../../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
-
----
-
-## 🔍 Trouver un indicateur
-
-Le menu déroulant des indicateurs est une **arborescence repliable regroupée par famille** (tendance, momentum, volatilité, volume, risque), avec une zone de recherche en haut :
-
-- ⌨️ Tapez pour filtrer dans toutes les familles — la recherche correspond aux noms, aux descriptions et même aux champs de données qu'utilise un indicateur
-- 📁 Chaque famille affiche un badge de compteur et se déplie et se replie indépendamment
-- 🖱️ Prise en charge complète du clavier : les flèches déplacent le curseur, `→`/`←` déplient et replient une famille, `Entrée` sélectionne
+### 📉 Repli sur l'historique complet {: #drawdown-full-history }
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="detail-signals-tree" alt="Recherche groupée d'indicateurs dans le panneau de signaux d'un actif">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="Carte de signal Repli avec l'interrupteur d'historique complet">
 </div>
 
----
-
-## 🎛️ Cartes de signal
-
-Chaque signal ajouté devient une carte affichant :
-
-- 📖 Une **icône de documentation** renvoyant à la page de théorie financière de l'indicateur
-- 🎚️ **Paramètres en ligne** (nombres, menus déroulants, cases à cocher) — certaines infobulles contiennent des formules LaTeX rendues avec KaTeX
-- 🏷️ Un **badge de données** avec le nombre de points de prix (📈) chargés
-- 🗑️ Bouton de suppression ; faites glisser les cartes pour réorganiser les superpositions
-
-### ⏳ Pendant que le backend calcule
-
-Un petit **spinner** apparaît sur chaque carte pendant que la requête backend est en cours. Cet état transitoire est délibéré : les cartes n'affichent jamais d'erreur rouge « pas de données » simplement parce que la réponse n'est pas encore arrivée.
-
-### 🩺 Diagnostics par signal
-
-Après le chargement, une icône colorée indique comment le calcul s'est déroulé — survolez-la pour l'explication complète :
-
-- ℹ️ **Avis** (gris) / ⚠️ **Avertissement** (ambre) — le signal a été calculé mais avec des réserves : des lacunes dans les données, une période de chauffe incomplète ou une plage qui commence avant vos données
-- 🔴 **Erreur** (rouge) — le signal n'a pas pu être calculé : champs OHLCV manquants, historique insuffisant pour les paramètres choisis ou échec du calcul
+La carte **Repli sous le sommet** a une case à cocher **Historique complet**, activée par défaut : la baisse est mesurée depuis le prix le plus haut de tout l'historique de l'actif, même des années avant les dates affichées. Décochez-la pour une vue plus rapide, mesurée depuis le prix le plus haut dans les dates affichées.
 
 ---
 
-## 🧩 Données incomplètes : segments partiels
+## 💱 Comparer avec un actif ou une paire de devises {: #data-comparison }
 
-Les indicateurs qui tolèrent les lacunes (ADX, Aroon, ATR, NATR, CCI, Donchian, MFI, OBV) n'échouent pas sur un historique de prix lacunaire : le backend sélectionne le **segment contigu complet** le plus récent, y calcule l'indicateur, et signale le résultat comme *partiel* — l'infobulle vous indique quel segment a été utilisé et combien de points ont été exclus. Tous les autres indicateurs exigent des données sans lacune et expliquent pourquoi ils ne peuvent pas s'exécuter au lieu de tracer une ligne trompeuse.
+Le menu **Comparaison de données** ajoute :
 
----
+- **Comparaison d'actif** — un autre actif sur le même graphique, comme une action face à son ETF indiciel. En vue **%**, les deux lignes commencent à 0 %.
+- **Paire FX** — le taux de l'une de vos paires de devises.
 
-## 📉 Drawdown : interrupteur d'historique complet
+**Synchroniser** (🔄) sur une carte de comparaison d'actif télécharge les prix de cet actif pour les dates du graphique, ainsi que les taux de change qui le convertissent, pour les paires qui existent. Lorsque la paire est manquante, un ⚠️ orange sur la carte la crée ; lorsque ses taux sont manquants, un 🔄 orange les synchronise.
 
-La carte **Drawdown sous-marin** comporte une case à cocher **Historique complet** (activée par défaut) : la baisse est mesurée par rapport au pic courant de la *totalité* de l'historique disponible, puis découpée à la fenêtre visible — un pic datant de plusieurs années compte toujours. Désactivez-la pour une vue plus rapide, relative à la fenêtre. Les instantanés de l'export IA utilisent toujours le comportement sur tout l'historique, indépendamment de ce paramètre du graphique.
-
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="Carte de signal de drawdown avec l'interrupteur d'historique complet">
-</div>
+En mode [Rendement glissant](chart.md#rolling-return), seule la comparaison d'actif reste : chaque actif comparé devient un rendement glissant, avec la même fenêtre et la même devise. Les autres signaux sont masqués, non supprimés, et réapparaissent en mode **Prix**.
 
 ---
 
-## 🛠️ Mode d'emploi
+## 📐 Benchmarks synthétiques
 
-1. Cliquez sur l'interrupteur **Signaux** (📈) dans la barre d'outils
-2. Le panneau Signaux s'ouvre sous la barre d'outils
-3. Ajoutez des signaux à partir des trois menus déroulants de catégories (**Indicateurs techniques**, **Comparaison de données**, **Benchmarks synthétiques**)
-4. Ajustez les paramètres de chaque signal en ligne sur sa carte
-5. Les signaux sont affichés sous forme de superpositions directement sur le graphique
+Courbes de référence tracées à partir de leurs seuls paramètres, sans données de marché :
 
----
-
-## 🧠 Export IA
-
-Le bouton **Export IA** (:material-brain:) de la barre d'outils de la page propose deux
-tâches liées à l'actif :
-
-- **Revue de position**
-- **Analyse de marché de l'actif**
-
-Le backend construit l'instantané à partir de l'identité et de la valorisation de l'actif,
-de l'historique de prix normalisé, du contexte de la position de portefeuille et des
-résultats techniques issus du service de signaux partagé. Le navigateur ne recalcule pas
-les indicateurs. Les tâches n'apparaissent que lorsqu'elles s'appliquent à l'actif et aux
-données disponibles — par exemple, la Revue de position nécessite une position ouverte.
-Voir [Export IA de l'actif](../../ai-export/asset.md) ou l'[aperçu de l'export IA](../../ai-export/index.md).
+- [Croissance linéaire](../../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md) — $y(t) = y_0\,(1 + r\,t)$
+- [Croissance composée](../../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) — $y(t) = y_0\,(1 + r)^t$
+- [Onde sinusoïdale](../../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md) — $y(t) = A \sin(2\pi t / T) + y_0$
 
 ---
 
-## 📚 Pour aller plus loin : Théorie financière
+## 🩺 Lire une carte de signal
 
-Pour un traitement mathématique complet de chaque indicateur — formules, équivalents en traitement du signal et interprétation pratique :
+- Un **spinner** tourne pendant que le signal est calculé.
+- **📈 N** est le nombre de points de prix chargés.
+- Un **ℹ** gris — calculé, avec une petite réserve : un court écart ou un préchauffage presque terminé. Survolez l'icône pour les détails.
+- Un **⚠** orange — calculé, avec une réserve à examiner : des écarts plus importants, un préchauffage incomplet ou des données qui commencent après la première date affichée. La carte devient orange elle aussi.
+- Un **⚠** rouge — non calculé : un champ de prix manquant, un historique trop court pour les paramètres, aucune donnée, ou une erreur de calcul. La carte devient rouge.
 
-:material-book-open-variant: **[Indicateurs techniques — Théorie financière](../../../financial-theory/technical-analysis/indicators/index.md)**
+??? note "🧩 Historique de prix discontinu — lorsqu'un signal est partiel"
 
-Cette page de référence couvre :
+    ADX, Aroon, ATR, NATR, CCI, canaux de Donchian, MFI et OBV peuvent s'exécuter sur un historique discontinu : ils utilisent la portion la plus récente sans écarts qui soit suffisamment longue, et l'infobulle nomme cette portion et le nombre de points omis. Les autres indicateurs nécessitent un historique sans écarts, et expliquent pourquoi ils ne peuvent pas s'exécuter plutôt que de tracer une ligne trompeuse. Un week-end ou un jour férié de marché ne constitue pas un écart.
 
-- 🔢 Les **formules mathématiques** derrière chaque indicateur
-- 🎛️ Les équivalents en **traitement du signal** (EMA = filtre IIR, SMA = filtre FIR, etc.)
-- ⚡ L'intuition **« rapide vs lent »** en termes de fréquences de coupure des filtres
-- 📈 Des **exemples pratiques** de détection de croisement et d'identification de tendance
+---
+
+## 🔗 Voir aussi
+
+- 📚 **[Indicateurs techniques](../../../financial-theory/technical-analysis/indicators/index.md)** — La formule de chaque indicateur et comment le lire
+- ⚠️ **[Métriques de risque](../../../financial-theory/technical-analysis/risk-metrics/index.md)** — Les métriques derrière les signaux de risque
+- 🧠 **[Export IA d'actif](../../ai-export/asset.md)** — Indicateurs techniques calculés par le même backend, exportés pour un assistant IA
+- 🛠️ **[Guide des plugins de signaux](../../../developer/architecture/patterns/signal_plugin_guide.md)** — Pour les développeurs : comment les indicateurs sont calculés, vérifiés et ajoutés

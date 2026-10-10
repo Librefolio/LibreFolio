@@ -1,104 +1,105 @@
 # 📥 <img src="https://www.credit-agricole.it/favicon.ico" alt=""> Crédit Agricole
 
-Crédit Agricole è **banca e broker** insieme: sullo stesso conto tieni sia la tua **liquidità** (stipendio o pensione, bonifici, utenze, tasse) sia i tuoi **titoli**. Per questo l'import da fare è la **Lista Movimenti Conto**: è l'estratto conto completo e porta in LibreFolio la **liquidità reale** — bonifici, utenze, pensione, **tasse**, **commissioni** e le **cedole e dividendi** effettivamente accreditati. Scarichi il file, lo importi così com'è e il plugin riconosce il tracciato da solo.
+Crédit Agricole è sia la tua **banca che il tuo broker**. L'importazione principale è la **Lista movimenti** del conto: gli ultimi **due anni** di liquidità reale — stipendio o pensione, bonifici, bollette, imposte, commissioni, cedole e dividendi.
 
-L'estratto conto copre gli **ultimi 2 anni**. Se il tuo conto titoli è **più vecchio** e vuoi recuperarne lo **storico**, apri il pannello qui sotto **prima** di procedere.
+## 💳 Esporta i movimenti del conto
 
-??? note "📦 Conto titoli più vecchio di 2 anni? Recupera lo storico (opzionale)"
+### 📄 Passaggio 1 — Apri la lista movimenti
 
-    L'estratto conto si ferma a **2 anni**. Se il dossier titoli è più vecchio, aggiungi un secondo export — la **Lista Movimenti Deposito Titoli** — che va indietro molto più in là e recupera almeno lo **storico dei titoli** (quantità, prezzi, cedole, scadenze) **antecedente** a quella finestra. È **solo titoli**: **non** porta la liquidità del conto corrente (bonifici, utenze, tasse…), che resta quella della Lista Movimenti Conto. La cassa di questo export viene **auto-bilanciata** per non falsare i saldi.
+Nell'home banking, apri **Conti** nel menu in alto e scegli **Lista movimenti**. Se hai più conti, seleziona il tuo in **Seleziona rapporto**.
 
-    **Come combinarli senza doppioni.** Esporta prima la **Lista Movimenti Conto** e annota la sua data di inizio (**"Data dal"**). Poi esporta la **Lista Movimenti Deposito Titoli** **troncata** così che finisca il giorno **prima** dell'inizio dei movimenti conto: i due file **non si sovrappongono** e la stessa operazione non viene contata due volte.
+![Crédit Agricole — home, sezione movimenti conto corrente](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/01C_CA_HomeContiMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-    #### 📂 Passo 1 — Apri il dossier titoli
+### 🗓️ Passaggio 2 — Scegli il periodo
 
-    Dall'internet banking, apri la sezione del **Deposito Titoli** e vai alla lista movimenti.
+Clicca su **Ricerca avanzata**, imposta **Data contabile (Dal)** e **Data contabile (Al)** sulla finestra più ampia consentita dalla banca (due anni), poi clicca su **CERCA**.
 
-    ![Crédit Agricole — home, selezione della sezione Deposito Titoli](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/01_CA_HOME_selezionePagina.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+![Crédit Agricole — lista movimenti conto](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/02C_CA_ListaMovimentiConti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-    #### 🗓️ Passo 2 — Seleziona il periodo
+### 💾 Passaggio 3 — Scarica il file
 
-    Vai il più indietro possibile, poi tronca all'inizio dei movimenti conto (vedi il suggerimento sopra).
+Sotto la lista, clicca su **SCARICA EXCEL** o **SCARICA CSV**, e importa il file senza aprirlo o modificarlo.
 
-    ![Crédit Agricole — lista movimenti titoli con selettore del periodo](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/02_CA_ListaMobimentiPeriodo.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+![Crédit Agricole — esportazione movimenti conto con avviso sul periodo](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/03C_CA_ExportMovimentiContiConWarning.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-    #### 💾 Passo 3 — Esporta
+??? warning "✂️ Esportazione a blocchi — quando la banca mostra solo i primi risultati"
 
-    Esporta e importa il file in LibreFolio senza aprirlo o modificarlo.
+    Quando la lista dice **Stai visualizzando i primi … risultati**, è stata tagliata e i movimenti più vecchi mancano. Esporta il periodo a blocchi:
 
-    ![Crédit Agricole — area di esportazione dei movimenti titoli](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/03_CA_ExportZone.jpeg){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+    1. Scarica il blocco così com'è.
+    2. Annota la data del suo movimento **più vecchio**.
+    3. Imposta **Data contabile (Al)** su quella data, clicca su **CERCA** e scarica di nuovo.
+    4. Ripeti finché un blocco raggiunge l'inizio del tuo periodo.
 
-    #### 💰 Passo 4 — Saldo iniziale (deposito manuale)
+    Importa tutti i blocchi insieme. Il giorno in cui due blocchi si incontrano è presente in entrambi i file: il passaggio **Duplicati** della procedura guidata ne conserva una copia ([come funziona](how-to.md#only-when-needed)).
 
-    Serve per avere i **totali di liquidità corretti**: nessuno dei due export riporta la giacenza di partenza come movimento, quindi senza questo passo la cassa assoluta parte da zero all'inizio della finestra esportata e resta sfalsata.
+### 💰 Passaggio 4 — Aggiungi il saldo iniziale
 
-    **Come si ottiene.** Il **Saldo Iniziale** si legge in due punti equivalenti (è lo stesso valore): in cima al **file Excel** della *Lista Movimenti Conto* e anche **all'inizio dell'export sulla pagina web** — la stessa pagina da cui esporti i movimenti conto. È il valore (es. `2984,99 EUR`) alla data **"Data dal"** (es. `01/07/2024`).
+L'esportazione elenca i movimenti, non la liquidità che già possedevi, quindi la liquidità del broker partirebbe da zero. Leggi **Saldo Iniziale** e **Data dal** in cima all'esportazione Excel, e aggiungi un **Deposito** di quell'importo in quella data con il [modulo transazione](../form.md).
 
-    Il plugin **non** lo crea da solo: al momento dell'import **crea a mano una transazione di deposito di liquidità** pari a quel **Saldo Iniziale**, con **data** uguale alla **"Data dal"**. Così la cassa assoluta resta corretta anche se l'export copre solo una finestra.
+![Crédit Agricole — riga "Saldo Iniziale" e "Data dal" in cima all'esportazione](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/04C_CA_SaldoInizialeExportMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-    ![Crédit Agricole — riga "Saldo Iniziale" e "Data dal" in cima all'export](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/04C_CA_SaldoInizialeExportMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+## 🕰️ Storico titoli più vecchio di due anni
 
-    **Come vengono mappate le operazioni titoli.** Il report riporta solo il **nome** del titolo (`Nome`), non l'ISIN: gli asset sono abbinati per nome — conferma l'asset nello **Step 4** del wizard se non è riconosciuto.
+Il tuo conto titoli ha più di due anni? Una seconda esportazione, la **Lista movimenti deposito titoli**, recupera le operazioni precedenti, le cedole e le scadenze — solo titoli, senza liquidità bancaria.
 
-    | Causale | Importata come |
-    |:--------|:---------------|
-    | `CEDOLA` | **Cedola** obbligazionaria → interesse (il nominale nella colonna quantità è ignorato) |
-    | `ACQ.CONT.SU MERC.`, `SICAV: SOTTOSCR` | **Acquisto** con **deposito** automatico di pari importo |
-    | `FONDI: RIMBORSO` | **Vendita** (rimborso fondo) con **prelievo** automatico di pari importo |
-    | `TITOLI SCADUTI` | **Scadenza** obbligazionaria: **vendita alla pari (100)** + una gamba **interesse** per l'eventuale importo sopra la pari |
-    | `GIRO ALTRO DOSSIER`, `VERS.TITOLI` | **Trasferimento in ingresso** da successione → **rettifica** senza cassa con prezzo di carico per unità |
+??? note "📦 Aggiungi lo storico titoli — quando il tuo conto titoli ha più di due anni"
 
-    Gli importi sono importati **alla lettera** nella valuta riportata: nessuna conversione, la colonna *Cambio* è ignorata. La data usata è *Data operazione*.
+    Esportala **dopo** i movimenti del conto, e falla terminare il giorno **prima** della loro **Data dal**: i due file così non si sovrappongono mai, e nessuna operazione viene contata due volte.
 
-    **Modello di cassa (titoli).** Essendo un export solo titoli, LibreFolio mantiene il saldo cassa **neutro** con contropartite automatiche (tag `auto_cash`): ogni **acquisto** riceve un **deposito** di pari importo, ogni **vendita**/**cedola**/**interesse di scadenza** riceve un **prelievo** di pari importo. Così l'export titoli **non accumula liquidità fantasma** — la cassa vera arriva dalla Lista Movimenti Conto.
+    #### 📂 Passaggio 1 — Apri i movimenti titoli
 
-## 💳 Come importare — Lista Movimenti Conto
+    Apri **Portafoglio** nel menu in alto e scegli **Lista Movimenti**.
 
-È l'import **principale**: l'estratto conto con la **liquidità reale** (bonifici, utenze, pensione, tasse, commissioni, cedole e dividendi accreditati). Copre gli **ultimi 2 anni**.
+    ![Crédit Agricole — home, selezione della sezione Conto Titoli](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/01_CA_HOME_selezionePagina.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-### 📄 Passo 1 — Apri i movimenti del conto
+    #### 🗓️ Passaggio 2 — Scegli il periodo
 
-Dall'internet banking, apri la sezione del **conto corrente** e vai alla lista movimenti.
+    Imposta **Data Operazione (Dal)** il più indietro possibile consentito dalla banca, e **Data Operazione (Al)** al giorno prima della **Data dal** dei movimenti del conto.
 
-![Crédit Agricole — home, sezione movimenti del conto corrente](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/01C_CA_HomeContiMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+    ![Crédit Agricole — lista movimenti titoli con selettore periodo](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/02_CA_ListaMobimentiPeriodo.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-### 🗓️ Passo 2 — Seleziona il periodo
+    #### 💾 Passaggio 3 — Scarica il file
 
-Clicca su **Ricerca avanzata** per aprire i filtri per data, poi imposta la finestra più ampia consentita (l'export conto è limitato a **2 anni**).
+    Clicca su **CERCA**, poi su **SCARICA EXCEL** o **SCARICA CSV**, e importa il file così com'è.
 
-![Crédit Agricole — lista movimenti del conto](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/02C_CA_ListaMovimentiConti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+    ![Crédit Agricole — area di esportazione movimenti titoli](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/03_CA_ExportZone.jpeg){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-### 💾 Passo 3 — Esporta
+    #### 🔄 Cosa importa questo file
 
-Scarica la lista e importala in LibreFolio senza modificarla.
+    | Nel file (**Causale**) | Importato come |
+    |:--------------------------|:------------|
+    | `CEDOLA` | **Interesse** (cedola obbligazionaria) |
+    | `ACQ.CONT.SU MERC.`, `SICAV: SOTTOSCR` | **Acquisto** |
+    | `FONDI: RIMBORSO` | **Vendita** (rimborso fondo) |
+    | `TITOLI SCADUTI` | **Vendita** alla pari (100), più **Interesse** per qualsiasi importo pagato sopra la pari |
+    | `GIRO ALTRO DOSSIER`, `VERS.TITOLI` | **Rettifica**: titoli trasferiti da un altro dossier, come un'eredità, al loro valore contabile e senza liquidità |
 
-![Crédit Agricole — esportazione dei movimenti conto con avviso sul periodo](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/03C_CA_ExportMovimentiContiConWarning.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+    Qualsiasi altra causale viene saltata con un avviso. Ogni acquisto riceve un **Deposito** corrispondente, e ogni vendita, cedola o premio un **Prelievo** corrispondente: questo file non aggiunge liquidità propria, e la liquidità reale proviene dai movimenti del conto.
 
-!!! warning "Se compare l'avviso sul periodo massimo"
+## 🔄 Cosa viene importato
 
-    Crédit Agricole limita quante righe/mesi puoi esportare in una volta. Se appare l'avviso, **spezza l'export in più sotto-blocchi** finché copri tutti i mesi mancanti:
+| Nei movimenti del conto | Importato come |
+|:-------------------------|:------------|
+| Stipendio o pensione, pagamenti con carta, bollette, prelievi di contante, bonifici | **Deposito** o **Prelievo**, in base al segno dell'importo |
+| Cedole e dividendi | **Interesse** o **Dividendo**, collegato al titolo quando la riga fornisce il suo ISIN; una ritenuta dichiarata (`RITENUTA`) diventa un'**Imposta** separata |
+| Interessi sul conto e canone mensile (`INTERESSI/COMPETENZE`) | **Interesse** quando accreditato, **Commissione** quando addebitata |
+| Commissioni e oneri | **Commissione**, oppure **Imposta** per l'imposta sulle plusvalenze, imposta di bollo e ritenute |
+| Acquisti e vendite di titoli e fondi | **Acquisto** o **Vendita** quando le cedole della stessa obbligazione forniscono la quantità; altrimenti una riga di liquidità da completare |
+| Obbligazioni scadute o estratte | **Vendita** alla pari (100), più **Interesse** per qualsiasi premio; senza il nominale dell'obbligazione nel file, una **Vendita** dell'intero importo, con un avviso |
+| Un rimborso di fondo pagato tramite bonifico | Un **Deposito** da completare: la banca indica il denaro, non le quote vendute |
+| Qualsiasi altra operazione | **Deposito** o **Prelievo** in base al segno, elencato in un avviso per consentirti di verificarlo |
 
-    1. Esporta il blocco così com'è mostrato.
-    2. Guarda l'**ultima (più vecchia)** transazione del blocco appena scaricato e annotane la data.
-    3. Torna al selettore periodo e imposta come **data di fine ("al")** la data di quell'ultima transazione.
-    4. Esporta il nuovo blocco e **ripeti** dal punto 2 finché arrivi al periodo desiderato.
-    5. Importa in LibreFolio **tutti** i file esportati.
+## ⚠️ Da sapere
 
-### 📝 Come vengono mappate le operazioni conto
-
-Le **causali** del conto sono classificate così:
-
-| Tipo di causale | Importata come |
-|:----------------|:---------------|
-| Cedole / dividendi accreditati | **Interesse** (cedola) o **Dividendo** se la descrizione identifica un titolo con **ISIN**; altrimenti **interesse** |
-| Interessi/competenze a credito | **Interesse** (importo positivo) |
-| Canone, commissioni, spese di gestione, spese stacco cedola | **Commissione** (cassa in uscita) |
-| Capital gain, imposta di bollo, ritenuta, D.Lgs 461 | **Tassa** (cassa in uscita) |
-| Compravendita titoli/fondi | **Acquisto/Vendita** quando descrizione e segno concordano e la quantità è ricavabile; altrimenti **deposito/prelievo** con **segnalazione bloccante** da completare nello step di correzione |
-| Titoli scaduti o estratti | **Vendita alla pari** che chiude la posizione |
-| Bonifico in entrata che rimborsa un fondo | **Deposito** + **segnalazione bloccante**: il fondo dichiara il controvalore, non le quote, quindi scegli tu il fondo e inserisci la quantità |
-| Pensione/emolumenti, POS, utenze, prelievi, altri giroconti | **Deposito** (importo > 0) / **Prelievo** (importo < 0) per segno |
+- **Alcune righe richiedono il tuo aiuto** nel passaggio **Correzioni** della procedura guidata ([come funziona](how-to.md#only-when-needed)):
+    - operazioni senza quantità, e rimborsi di fondi: scegli il tipo, il titolo e la quantità;
+    - operazioni il cui importo può includere interessi maturati e commissioni: aggiungili sotto **Separare il prezzo dagli oneri?**, dalla tua nota informativa;
+    - oneri che non nominano alcun titolo: assegnateli, o tienili sul conto.
+- **I titoli sono abbinati per nome.** L'esportazione dei titoli non fornisce l'ISIN: abbina ogni titolo nel pannello **Risolvi asset** di [Riepilogo](how-to.md#review).
+- **Importi come scritti**, nella valuta di ciascuna riga, senza conversione. Le date sono le date dell'operazione.
+- **Messaggi in italiano.** La maggior parte degli avvisi dell'importatore su questi file è in italiano, come il report.
 
 ## 🔗 Riferimento per sviluppatori
 
-→ [BRIM Providers — Dettagli di implementazione](../../../developer/backend/brim/providers_list.md)
+→ [Importatore Crédit Agricole — Dettagli di implementazione](../../../developer/backend/brim/credit_agricole.md)

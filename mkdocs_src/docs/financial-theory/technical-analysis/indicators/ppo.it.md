@@ -36,9 +36,9 @@ Una lettura MACD di â‚¬2 significa qualcosa di molto diverso per un'azione da â‚
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Periodo Veloce | `fastPeriod` | 12 | Finestra EMA a breve termine (giorni). |
-| Periodo Lento | `slowPeriod` | 26 | Finestra EMA a lungo termine (giorni), anche denominatore di normalizzazione del PPO. |
-| Periodo Segnale | `signalPeriod` | 9 | Livellamento EMA applicato alla linea PPO. |
+| Periodo Veloce | `fastPeriod` | 12 | Finestra EMA a breve termine (sedute). |
+| Periodo Lento | `slowPeriod` | 26 | Finestra EMA a lungo termine (sedute), anche denominatore di normalizzazione del PPO. |
+| Periodo Segnale | `signalPeriod` | 9 | Livellamento EMA applicato alla linea PPO (sedute). |
 
 ---
 

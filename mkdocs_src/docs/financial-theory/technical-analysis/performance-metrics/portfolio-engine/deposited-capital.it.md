@@ -1,8 +1,8 @@
-# 💸 Capitale Depositato, PnL Totale e Pool di Liquidità
+# 💸 Capitale Versato, PnL Totale e Pool di Liquidità
 
 ## 💡 Panoramica del Concetto
 
-**Capitale Depositato** = capitale esterno netto cumulativo versato dall'inizio:
+**Baseline di capitale** = capitale economico cumulativo apportato dall'inizio:
 
 $$
 \mathrm{CapitalBaseline}(t) =
@@ -13,20 +13,22 @@ $$
 **PnL Totale** = tutto il valore generato oltre i contributi esterni:
 
 $$
-\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{DepCap}(t)}
+\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{CapitalBaseline}(t)}
 $$
+
+`InKindCapital` comprende le righe ADJUSTMENT / TRANSFER valorizzate che portano un `cost_basis_override` senza `asset_event_id` (escluse le righe di split). Queste righe immettono valore contabile senza cassa, quindi devono aumentare il capitale investito.
 
 ---
 
 ## 🎯 Cosa viene conteggiato
 
-| Transazione | Effetto su DepCap |
+| Transazione | Effetto sulla baseline di capitale |
 |------------|-----------------|
 | DEPOSITO / PRELIEVO (non collegati) | ✅ Sì |
-| TRASFERIMENTO DI LIQUIDITÀ collegato-esterno | ✅ Sì |
-| TRASFERIMENTO DI LIQUIDITÀ collegato-interno | ❌ No |
-| RETTIFICA / TRASFERIMENTO con `cost_basis_override`, senza `asset_id` | ✅ Sì, rettifica del capitale esterno |
-| RETTIFICA collegata a FRAZIONAMENTO | ❌ No, solo ridimensionamento quantità |
+| GIROCONTO collegato-esterno | ✅ Sì |
+| GIROCONTO collegato-interno | ❌ No |
+| RETTIFICA / TRASFERIMENTO con `cost_basis_override`, senza `asset_event_id` | ✅ Sì, capitale in natura |
+| RETTIFICA collegata a SPLIT | ❌ No, solo ridimensionamento quantità |
 | ACQUISTO, VENDITA, DIVIDENDO, INTERESSE, COMMISSIONE, IMPOSTA | ❌ No |
 
 ---
@@ -47,9 +49,9 @@ $$
 
 !!! info "Proprietà chiave"
 
-    - $\mathrm{DepCap}$ = somma storica di tutti i flussi. $\sum K_b$ = quanta della liquidità corrente è capitale esterno. I due valori divergono dopo un ACQUISTO/VENDITA.
+    - $\mathrm{CapitalBaseline}$ = somma storica dei flussi di cassa e del capitale in natura. $\sum K_b$ = quanta della liquidità corrente è capitale esterno. I due valori divergono dopo un ACQUISTO/VENDITA.
     - Un ACQUISTO sul broker $b_1$ consuma solo $R_{b_1}$, mai $R_{b_2}$.
-    - I trasferimenti di liquidità tra broker spostano $R$ e $K$ dalla sorgente alla destinazione senza toccare $W$.
+    - I giroconti tra broker spostano $R$ e $K$ dalla sorgente alla destinazione senza toccare $W$.
 
 🔗 Regole complete di aggiornamento per broker: **[Portfolio Engine — §6 Modello Cash a Tre Pool](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
@@ -94,9 +96,8 @@ Il capitale ritorna correttamente in $K$; solo il guadagno di €5 va in $R$. **
 
 Il modello a 3 pool gira in un **unico loop per transazione** (event-driven, non delta giornaliero):
 
-1. Lettura del PMC prima della modifica della pool
-2. Aggiornamento di K/R/W secondo le regole del tipo di transazione
-3. Riduzione del pool PMC (per le VENDITE)
+1. Lettura della variazione che la transazione produce nel pool a costo medio della sua posizione, calcolata prima della riesecuzione — per una VENDITA, il costo che rimuove ($C$ = PMC prima della vendita × quantità venduta, ai tassi storici)
+2. Aggiornamento di K/R/W secondo le regole del tipo di transazione, con quel $C$ per una VENDITA
 
 
 La serie di input ROI/TWRR/MWRR è derivata dalle variazioni giorno per giorno del `cumulative_external_cash_flow`, il capital baseline. Non è derivata dal campo `external_cash_flow` (solo liquidità).

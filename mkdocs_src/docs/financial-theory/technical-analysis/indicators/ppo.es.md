@@ -36,9 +36,9 @@ Una lectura MACD de €2 significa algo muy diferente para una acción de €10 
 
 | Parámetro | Clave | Valor por Defecto | Descripción |
 |---|---|---|---|
-| Período Rápido | `fastPeriod` | 12 | Ventana EMA a corto plazo (días). |
-| Período Lento | `slowPeriod` | 26 | Ventana EMA a largo plazo (días), también el denominador normalizador del PPO. |
-| Período de Señal | `signalPeriod` | 9 | Suavizado EMA aplicado a la línea PPO. |
+| Período Rápido | `fastPeriod` | 12 | Ventana EMA a corto plazo (sesiones). |
+| Período Lento | `slowPeriod` | 26 | Ventana EMA a largo plazo (sesiones), también el denominador normalizador del PPO. |
+| Período de Señal | `signalPeriod` | 9 | Suavizado EMA aplicado a la línea PPO (sesiones). |
 
 ---
 

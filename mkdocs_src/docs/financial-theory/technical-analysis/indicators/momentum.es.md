@@ -16,7 +16,7 @@ Matemáticamente, la mayoría de los indicadores de momento son derivadas discre
 |-----------|----------|-----------|----------|
 | **RSI** | Equilibrio ganancias/pérdidas reciente | Sobrecompra/sobreventa, reversión a la media | [📖](rsi.md) |
 | **MACD** | Aceleración de la tendencia | Cruces alcistas/bajistas | [📖](macd.md) |
-| **ROC** | Cambio porcentual del precio en $N$ días | Momento puro, detección de divergencias | [📖](roc.md) |
+| **ROC** | Cambio porcentual del precio en $N$ sesiones | Momento puro, detección de divergencias | [📖](roc.md) |
 | **Stochastic RSI** | Extremos de sobrecompra/sobreventa del propio RSI | Señales de reversión más rápidas y sensibles | [📖](stochastic-rsi.md) |
 | **PPO** | MACD, normalizado por el precio | Comparar momento entre activos de diferentes niveles de precio | [📖](ppo.md) |
 | **CCI** | Desviación del promedio de precio típico | Puntos de giro cíclicos | [📖](cci.md) |

@@ -18,6 +18,13 @@ Pasa el cursor sobre tu avatar (con la pestaña desbloqueada) y haz clic en la s
 
 El avatar se guarda inmediatamente y se utiliza en toda la aplicación allí donde se muestra tu identidad — barra lateral, uso compartido de brókeres y listas de colaboradores.
 
+!!! note "También desde la página de Bienvenida"
+
+    Las cuentas nuevas pueden elegir la misma imagen una sola vez, durante la **[configuración de
+    bienvenida del primer inicio de sesión](../getting-started.md#welcome-setup)**: es el
+    mismo selector, solo que abierto desde otra pantalla. Si omites ese paso, tus iniciales quedan
+    como avatar; siempre puedes añadir o cambiar una imagen más tarde desde aquí.
+
 ## ✏️ Nombre de usuario, Correo electrónico, Cuenta creada
 
 - **Nombre de usuario** y **Correo electrónico** son editables (se requiere la pestaña desbloqueada). Los cambios se aplican de inmediato a tus credenciales de inicio de sesión.
@@ -41,17 +48,24 @@ Después de la confirmación, tu sesión permanece activa — no necesitas volve
 
 ### 🗑️ Eliminar cuenta
 
-El botón **Eliminar cuenta** elimina permanentemente tu usuario y todo lo que le pertenece. Para confirmar, debes escribir tu **nombre de usuario** en el diálogo. La eliminación es inmediata: se cierra tu sesión y vuelves a la página de inicio de sesión.
+El botón **Eliminar cuenta** elimina permanentemente tu cuenta y su configuración. Para confirmar, debes escribir tu **nombre de usuario** en el diálogo. La eliminación es inmediata: se cierra tu sesión y vuelves a la página de inicio de sesión.
+
+Tus brókeres siguen la misma regla que [salir de un bróker compartido](../brokers/sharing.md):
+
+- un bróker del que eres el **único Propietario** se elimina, con todas sus transacciones y los archivos de informes importados — también para los usuarios con los que lo compartiste;
+- cualquier otro bróker se mantiene para sus demás usuarios: solo se elimina tu acceso.
+
+Si la eliminación falla por un motivo técnico, no se elimina nada.
 
 !!! warning "Irreversible"
 
-    Eliminar tu cuenta no se puede deshacer: tus brókeres, transacciones y configuración se eliminan con ella. Si eres el **único administrador** de la instancia, se rechaza la eliminación — promueve primero a otro usuario.
+    Eliminar tu cuenta no se puede deshacer. Si eres el **único administrador** de la instancia, se rechaza la eliminación — promueve primero a otro usuario.
 
 ---
 
 ## 🔗 Relacionados
 
 - 🎛️ **[Preferencias de usuario](preferences.md)** — Idioma, moneda base y tema
-- ⚙️ **[Descripción general de Configuración](index.md)** — Resumen general de la configuración
+- ⚙️ **[Resumen de configuración](index.md)** — Resumen general de la configuración
 - ℹ️ **[Acerca de](about.md)** — Información de versión, plugins y changelog
 - 🛡️ **[Configuración global](../../admin/settings.md)** — Opciones de toda la instancia (admin)

@@ -6,7 +6,7 @@ La SMA è il modo più letterale per definire un "trend": la media non ponderata
 
 ## 💡 Significato Finanziario
 
-Poiché ogni osservazione nella finestra conta allo stesso modo, la SMA reagisce ai nuovi dati più lentamente di un'EMA della stessa lunghezza, ma ha anche **distorsione di fase zero** rispetto alla sua finestra — non è "sbilanciata" verso i prezzi recenti o passati. I trader utilizzano gli incroci delle SMA (ad esempio il "golden cross" 50/200 giorni) come segnale di trend di lungo periodo da manuale.
+Poiché ogni osservazione nella finestra conta allo stesso modo, la SMA reagisce ai nuovi dati più lentamente di un'EMA della stessa lunghezza, ma ha anche **distorsione di fase zero** rispetto alla sua finestra — non è "sbilanciata" verso i prezzi recenti o passati. I trader utilizzano gli incroci delle SMA (ad esempio il "golden cross" 50/200 giorni, dove un "giorno" è una seduta di borsa) come segnale di trend di lungo periodo da manuale.
 
 ---
 
@@ -30,7 +30,7 @@ che mostra come la SMA sia un filtro a **memoria finita**: il campione più vecc
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 20 | Finestra di osservazione in giorni. Più alto → più liscio, più lento. |
+| Periodo ($N$) | `period` | 20 | Finestra di osservazione in sedute. Più alto → più liscio, più lento. |
 
 ---
 

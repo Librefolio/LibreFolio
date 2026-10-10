@@ -1,66 +1,90 @@
 # ⚙️ Paramètres du graphique
 
-La fenêtre modale **Paramètres du graphique** personnalise l'apparence des graphiques et les signaux de superposition. Cette même fenêtre modale est utilisée pour les pages [Liste FX](index.md) et [Actifs](../assets/index.md), avec des **paramètres indépendants par périmètre** — modifier les valeurs par défaut FX n'affecte jamais les graphiques d'actifs, et inversement.
+La fenêtre **Paramètres du graphique** modifie l'apparence des graphiques et les superpositions qu'ils dessinent. Elle sert à la fois à la [liste FX](index.md) et à la [liste des actifs](../assets/index.md), et chaque liste conserve ses propres paramètres : modifier les graphiques FX n'affecte jamais les graphiques des actifs.
 
 ---
 
-## 🔓 Accéder aux paramètres du graphique
+## 🔓 Ouvrir les paramètres du graphique
 
-La fenêtre modale s'ouvre depuis les pages de liste, en deux variantes :
-
-- 🌐 **Global** — le bouton de paramètres (⚙️) dans la barre d'outils de la page de liste. Ces paramètres deviennent la valeur par défaut pour chaque graphique du périmètre ; les appliquer remplace toutes les personnalisations par carte (la fenêtre modale vous en avertit).
-- 🎯 **Local** — le bouton de paramètres (⚙️) sur n'importe quelle carte de paire ou d'actif. Ces paramètres remplacent les paramètres globaux uniquement pour cette carte.
+- 🌐 **Pour tous les graphiques** — cliquez sur **Paramètres** (⚙️) dans la barre d'outils de la liste. La fenêtre s'intitule
+  **Paramètres du graphique**. Son application remplace les paramètres personnalisés de chaque graphique de la liste, pages
+  de détail incluses, et la fenêtre vous en avertit.
+- 🎯 **Pour un seul graphique** — cliquez sur le ⚙️ d'une carte. La fenêtre s'intitule **Paramètres du graphique (locaux)**, et
+  ses paramètres ne s'appliquent qu'à ce graphique.
 
 !!! note "Les pages de détail utilisent des panneaux intégrés"
 
-    Sur la [page de détail de la paire](detail/index.md) (et sur les pages de détail
-    des actifs), le bouton ⚙️ active un **panneau d'apparence** intégré et le
-    bouton 📈 active le **panneau de signaux** intégré — mêmes paramètres,
-    même stockage par élément, pas de fenêtre modale.
+    Sur une [page de détail d'une paire](detail/index.md) (et sur une page de détail d'un actif), ⚙️ sur le graphique ouvre
+    les mêmes paramètres d'apparence dans un panneau, et le panneau **Signaux** au-dessus du graphique contient les
+    superpositions. Ce sont les paramètres locaux de la carte.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Fenêtre modale des paramètres du graphique" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 👀 Aperçu en direct
+## 👀 Aperçu avant d'appliquer
 
-La fenêtre modale affiche toujours un **graphique d'aperçu** avec un interrupteur Abs/%, afin que vous voyiez l'effet de chaque modification avant de l'appliquer :
+La fenêtre affiche un graphique d'aperçu avec son propre interrupteur **Abs** / **%**. Vos graphiques ne changent que lorsque
+vous cliquez sur **Appliquer** ; **Annuler** demande confirmation avant d'abandonner vos modifications.
 
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Chart settings modal with the live preview">
+    <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Fenêtre modale des paramètres du graphique avec l'aperçu en direct">
 </div>
 
-- 🌐 **Mode global** — l'aperçu dessine une courbe de démonstration synthétique. Les indicateurs backend ne peuvent pas s'exécuter dans le navigateur ; la fenêtre modale demande donc au serveur de les calculer en direct sur cette courbe : ce que vous voyez correspond à ce que les graphiques réels afficheront.
-- 🎯 **Mode local** — l'aperçu utilise les **données de prix réelles** de la carte. Les indicateurs backend affichent la dernière configuration appliquée ; une bannière vous rappelle de cliquer sur Appliquer pour les actualiser.
+- 🌐 **Pour tous les graphiques**, l'aperçu dessine une courbe de démonstration. Le serveur calcule les indicateurs sur celle-ci,
+  afin qu'ils s'affichent exactement comme ils apparaîtront sur vos graphiques réels.
+- 🎯 **Pour un seul graphique**, l'aperçu utilise les données réelles de ce graphique. Les indicateurs affichent les derniers
+  paramètres appliqués jusqu'à ce que vous cliquiez sur **Appliquer**, et une bannière vous le rappelle.
 
 ---
 
-## 🎛️ Paramètres disponibles
+## 🎨 Apparence
 
-### 🎨 Apparence
-
-| Paramètre | Description |
-|---------|-------------|
-| **Couleurs de la ligne de base** | Colore la ligne en vert au-dessus / rouge en dessous de la ligne de base |
-| **Remplissage de zone** | Remplissage en dégradé sous la ligne |
+| Paramètre | Ce qu'il fait |
+|---------|--------------|
+| **Couleurs de la ligne de base** | Vert au-dessus, rouge en dessous du début de la période |
+| **Remplissage de la zone** | Dégradé sous la ligne |
 | **Lignes de grille** | Grille horizontale en pointillés |
-| **Dégradé des données obsolètes** | Estompe les données anciennes vers l'arrière-plan |
-| **Échelle de l'axe Y** | Auto, Inclure 0, ou une plage min/max personnalisée |
+| **Dégradé obsolète** | Estompe les jours sans nouvelle valeur, qui répètent une valeur antérieure |
 
-### 📈 Signaux de superposition
+### 📏 Plages d'axes
 
-La fenêtre modale gère les mêmes signaux de superposition que le [panneau Signaux](detail/signals.md) de la page de détail, ajoutés à partir de trois menus déroulants de catégories :
+**Échelle de l'axe Y** a une ligne pour chaque axe du graphique : l'axe principal (le taux, ou le pourcentage
+en vue %) et une pour chaque échelle d'indicateur, telle que l'**axe RSI**. Les indicateurs qui partagent une
+échelle partagent une ligne.
 
-- 🧮 **Indicateurs techniques** — le catalogue de plugins backend du périmètre actuel : **9 indicateurs compatibles FX** ici, 22 sur le périmètre Actifs. Le menu déroulant est une arborescence avec recherche, groupée par famille (tendance, momentum, volatilité, …). Les mathématiques derrière chaque indicateur sont décrites dans [Indicateurs techniques — Théorie financière](../../financial-theory/technical-analysis/indicators/index.md).
-- ↔️ **Comparaison de données** — superposer une autre paire FX configurée ou un actif sur le même graphique.
-- 📐 **Benchmarks synthétiques** — des courbes de référence générées par paramètres ([Linéaire](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Composé](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md), [Onde sinusoïdale](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md)). Elles sont de pures mathématiques — ni paniers personnalisés, ni données de marché.
+- **Auto** adapte les données sur cet axe.
+- **Inclure 0** adapte les données et affiche également zéro.
+- **Personnalisé** utilise les **Min** et **Max** que vous saisissez.
 
-Chaque signal configuré devient une carte avec des paramètres intégrés, un lien 📖 vers sa page de théorie, et des diagnostics par signal une fois qu'il a été calculé.
+Les vues **Abs** et **%** conservent des plages distinctes : basculez l'aperçu sur **%** pour définir
+celle du pourcentage.
 
 ---
 
-## 💾 Persistance
+## 📈 Signaux de superposition
 
-Les paramètres des graphiques sont stockés localement dans le `localStorage` de votre navigateur, séparément pour les périmètres FX et Actifs, avec des personnalisations par carte qui priment sur les valeurs par défaut du périmètre. Ils persistent entre les sessions — même après avoir fermé et rouvert le navigateur — et ne seront perdus que si vous videz le cache/stockage de votre navigateur ou si le stockage expire (selon le navigateur, généralement de quelques mois à quelques années).
+Ajoutez des superpositions à partir de trois menus déroulants, comme dans le [panneau Signaux](detail/signals.md) de la page de détail :
+
+- 🧮 **Indicateurs techniques** — 9 indicateurs fonctionnent sur les taux FX (les graphiques d'actifs en proposent davantage), regroupés par
+  famille avec une zone de recherche. Les mathématiques se trouvent dans
+  [Indicateurs techniques — Théorie financière](../../financial-theory/technical-analysis/indicators/index.md).
+- ↔️ **Comparaison de données** — une autre paire FX ou un actif sur le même graphique.
+- 📐 **Benchmarks synthétiques** — benchmarks synthétiques construits à partir de paramètres seuls, et non de données de marché :
+  [Linéaire](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
+  [Composé](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) et
+  [Onde sinusoïdale](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
+
+Chaque signal devient une carte avec ses paramètres, un lien 📖 vers sa page théorique et, une fois calculé, une
+icône de diagnostics.
+
+---
+
+## 💾 Où les paramètres sont enregistrés
+
+- Les paramètres du graphique sont enregistrés dans **ce navigateur**, pour votre utilisateur, séparément pour les listes FX et d'actifs. Les paramètres propres à un graphique se superposent à ceux de sa liste.
+- Ils ne sont pas stockés sur le serveur : un autre navigateur ou appareil démarre avec les valeurs par défaut, et
+  l'effacement des données de navigation de ce site les réinitialise.
+- La période sélectionnée n'est pas un paramètre de graphique : les pages du même onglet de navigateur la partagent.

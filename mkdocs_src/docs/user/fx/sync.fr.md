@@ -1,62 +1,77 @@
 # 🔄 Synchronisation FX
 
-Une fois qu'une paire de devises est configurée avec un fournisseur de données, LibreFolio peut **synchroniser automatiquement** les taux de change à partir de sources officielles de banques centrales.
+Les paires associées à un fournisseur obtiennent leurs taux auprès de sources officielles de banques centrales. LibreFolio les télécharge
+lorsque vous ajoutez une paire, chaque fois que vous le demandez et — si votre administrateur l'a activé — selon un
+calendrier.
 
 ---
 
-## 🔄 Tout synchroniser
+## 🔄 Synchroniser toutes les paires
 
-Depuis la page de liste FX, utilisez le bouton **Tout synchroniser** pour synchroniser toutes les paires configurées en une seule fois :
+1. Sur la [page FX](index.md), choisissez la période dans le sélecteur de date. Sélectionnez **Tout** pour tout
+   l'historique.
+2. Cliquez sur **Tout synchroniser**. La fenêtre **Synchroniser les taux FX** liste chaque paire avec un fournisseur : les paires qui n'ont que des taux manuels n'ont rien à télécharger.
+3. Cliquez sur **Lancer la synchronisation**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Progression de la synchronisation" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Progression de la synchronisation" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La fenêtre modale de synchronisation affiche :
+### 📊 Lire les résultats
 
-- 📊 La **progression** pour chaque paire en cours de synchronisation
-- ✅ Les indicateurs de **statut** (succès, erreur, ignoré)
-- 🆕 Le nombre de **nouveaux points de données** pour chaque paire
-
----
-
-## 🎯 Synchronisation d'une paire individuelle
-
-Vous pouvez également synchroniser une seule paire depuis sa [page de détails](detail/index.md) en utilisant le bouton de synchronisation. Ceci est utile lorsque vous souhaitez mettre à jour une seule paire spécifique.
-
----
-
-## ⚙️ Fonctionnement de la synchronisation
-
-Le processus de synchronisation :
-
-1. Récupère les taux via l'API du fournisseur configuré (ECB, FED, BOE, SNB, etc.)
-2. **Écrase** les points de données existants dans la plage de dates téléchargée par les valeurs du fournisseur — le fournisseur est considéré comme la source faisant autorité
-3. Ajoute de nouveaux points de données pour les dates qui ne sont pas encore présentes dans la base de données
-4. Si le fournisseur principal est indisponible, le système bascule automatiquement vers le fournisseur suivant configuré
-
-Après la synchronisation, vous verrez le nombre de **points téléchargés** et combien étaient **réellement nouveaux** (non présents précédemment dans la base de données).
-
-!!! warning "Le fournisseur fait autorité"
-
-    La resynchronisation d'une paire écrasera toute modification manuelle dans la plage de dates synchronisée. Si vous devez préserver des modifications manuelles, envisagez d'utiliser une paire configurée avec le fournisseur MANUAL (aucune source de données automatique).
-
-!!! info "Précision de la conversion en chaîne"
-
-    Lors de l'utilisation de routes en chaîne (ex: RON → EUR → JPY), chaque conversion intermédiaire introduit une erreur d'arrondi minimale. Bien que négligeable pour la plupart des usages, sachez que les taux convertis en chaîne peuvent différer légèrement des cotations directes du marché.
+- Chaque ligne affiche une paire, le fournisseur qui a répondu, **↓** les taux téléchargés et **Δ** les taux
+  qui sont nouveaux ou modifiés.
+- Une ligne ambrée signifie que le fournisseur n'a envoyé aucun taux pour la période ; une ligne rouge signifie que la synchronisation a échoué.
+  Survolez le message pour le lire en entier, et cliquez sur le bouton ↻ de la ligne pour réessayer cette paire.
+- Le résumé en bas indique combien de paires ont été synchronisées et les totaux. **Réessayer les N échecs** relance
+  chaque paire en échec.
+- Un historique long peut nécessiter plus de temps : si la fenêtre indique *La requête a expiré*, augmentez son
+  **Délai d'attente**, puis cliquez sur **Réessayer les N échecs**.
 
 ---
 
-## 🌐 Chaînes d'approvisionnement de données
+## 🎯 Synchroniser une paire
 
-Pour les utilisateurs avancés : LibreFolio utilise un **système de routage** sophistiqué pour les données FX. Chaque paire de devises peut avoir plusieurs fournisseurs configurés avec des priorités et des chaînes de fallback.
+- Sur la page FX, le bouton **Synchroniser** de la carte d'une paire, ou d'une ligne de tableau, télécharge les taux de cette paire
+  pour la période sélectionnée. Un message indique le résultat.
+- Sur la [page de détail](detail/index.md) de la paire, **Synchroniser** ouvre la fenêtre de synchronisation pour la paire et pour
+  toute paire ou actif avec lequel vous la comparez sur le graphique.
 
-Cela signifie que :
+**Synchroniser** est grisé pour les paires qui n'ont que des taux manuels.
 
-- 🔄 Si votre fournisseur principal (ex: ECB) est indisponible, le système bascule vers le fournisseur suivant (ex: FED)
-- 🔀 Les paires exotiques utilisent des chaînes multi-étapes via des devises intermédiaires (ex: RON → EUR → JPY)
-- ⚙️ Vous pouvez personnaliser le fournisseur à utiliser pour chaque paire
+---
 
-Pour la liste des fournisseurs pris en charge, consultez la page [Fournisseurs FX](providers/index.md).
+## ⚠️ Ce qu'une synchronisation modifie
 
-Pour les détails techniques sur l'algorithme de routage et la configuration, consultez la documentation développeur : [Configuration & Routage FX](../../developer/backend/fx/configuration.md).
+- Les dates de la période déjà enregistrées prennent la valeur du fournisseur ; les dates manquantes sont ajoutées.
+- Les dates en dehors de la période restent inchangées.
+- Si la première route d'une paire échoue, LibreFolio essaie la suivante : voir
+  [Configuration du fournisseur](detail/provider.md).
+
+!!! warning "Le fournisseur a le dernier mot"
+
+    Une synchronisation écrase les taux que vous avez modifiés à la main sur sa période. Pour conserver vos propres taux, utilisez une
+    paire sans fournisseur (taux manuels uniquement).
+
+??? tip "🕰️ Historique plus ancien manquant — quand le graphique d'une paire commence plus tard que prévu"
+
+    Une paire que vous ajoutez avec un fournisseur télécharge automatiquement tout son historique. Si le graphique d'une paire plus ancienne
+    commence plus tard que l'historique du fournisseur, réglez la période sur la page FX sur **Tout** et cliquez sur
+    **Tout synchroniser** une fois : LibreFolio télécharge tout ce que les fournisseurs publient, jusqu'à aujourd'hui.
+
+---
+
+## 🕐 Synchronisation automatique
+
+Lorsque votre administrateur active le planificateur en arrière-plan, LibreFolio actualise de lui-même les taux récents de
+chaque paire avec un fournisseur, aux heures que celui-ci choisit : voir
+[Planificateur de données de marché](../../admin/settings.md#market-data-scheduler).
+
+---
+
+## 🔗 Liens associés
+
+- ➕ **[Ajouter une paire](add-pair.md)** — Routes directes et en chaîne
+- 🔌 **[Fournisseurs FX](providers/index.md)** — Les banques centrales auprès desquelles LibreFolio lit les taux
+- ⚙️ **[Configuration du fournisseur](detail/provider.md)** — Routes, priorités et fallbacks d'une paire
+- 🧑‍💻 Pour les développeurs : **[Configuration et routage FX](../../developer/backend/fx/configuration.md)**
