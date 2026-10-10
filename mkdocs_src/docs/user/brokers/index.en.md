@@ -31,7 +31,7 @@ The **Brokers** page shows one card per broker, with its value (**NAV**) in the 
 
     - **Description** — your own notes.
     - **Default Import Plugin** — the importer that the [Import Wizard](../transactions/import/index.md) proposes for this broker's files.
-    - **Portal URL** — the broker's website, opened from the broker page. Its icon is used when you set no **Custom Icon URL**.
+    - **Portal URL** — the broker's website, opened from the broker page. The broker's icon is, in this order: your **Custom Icon URL**; the icon of the **Default Import Plugin**, when that importer is made for this broker; the website's icon; the icon of a generic importer such as the Generic CSV; otherwise a briefcase.
     - **Account Opened** and **Account Active** — when the account was opened, and whether it is still open. A closed broker shows dimmed in the list.
     - **Trading Options** — **Allow Leveraged Buying** and **Allow Short Selling**, explained in [Trading options](info.md#trading-options).
     - **Initial Balances** (only when creating) — your starting cash. LibreFolio records one **Deposit** per currency, **dated today**: if the money was there earlier, change the date of those deposits on the [Transactions](../transactions/index.md) page.

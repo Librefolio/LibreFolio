@@ -1452,7 +1452,16 @@ the [Implementation Example](#implementation-example):
 
 Set `icon_url` to the broker's favicon (`https://<domain>/favicon.ico`). It is rendered both in
 the app **Settings → Import** UI and on the mkdocs import page, so it must be embeddable
-**cross-origin**. Two failure modes to check for:
+**cross-origin**.
+
+It is also the icon of every broker that uses the plugin as its default import plugin and has no
+custom icon: it comes before the favicon of the broker's **Portal URL**. A generic fallback plugin —
+`detection_priority` below 50, like the Generic CSV — comes after that favicon instead, because its
+icon is the same for every broker (`FALLBACK_PLUGIN_PRIORITY_LIMIT` in
+`frontend/src/lib/utils/brim/pluginKind.ts`, used by `brokerIconChain.svelte.ts` and
+`getBrokerIconCandidates`).
+
+Two failure modes to check for:
 
 - **Cloudflare / bot block** — the domain returns `403`/`404` to non-browser requests but the
   icon still loads in a real browser. `curl -sI` is *not* conclusive here; if it renders in the

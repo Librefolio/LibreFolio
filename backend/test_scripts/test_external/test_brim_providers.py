@@ -6034,5 +6034,76 @@ class TestPluginTextCatalogues:
         assert not stale, f"{language}.json has brimPlugins entries for {len(stale)} code(s) no registered plugin has: {stale}"
 
 
+# =============================================================================
+# GENERIC FALLBACK PLUGINS: THE PRIORITY LIMIT THE FRONTEND SHARES
+# =============================================================================
+
+# The frontend's one definition of a generic fallback plugin: ``isFallbackPlugin``, a detection_priority below this limit.
+_PLUGIN_KIND_TS = _REPO_ROOT / "frontend" / "src" / "lib" / "utils" / "brim" / "pluginKind.ts"
+_FALLBACK_LIMIT_DECLARATION = re.compile(r"^\s*export\s+const\s+FALLBACK_PLUGIN_PRIORITY_LIMIT\b[^=\n]*=\s*(\d+)\s*;", re.MULTILINE)
+# The plugins made for no broker in particular. A new generic plugin is a decision, and it is written down here.
+_GENERIC_FALLBACK_PLUGINS = frozenset({GENERIC_CSV_CODE})
+
+
+def _frontend_fallback_priority_limit() -> int:
+    """``FALLBACK_PLUGIN_PRIORITY_LIMIT`` as ``frontend/src/lib/utils/brim/pluginKind.ts`` declares it, read as text."""
+    declared = _FALLBACK_LIMIT_DECLARATION.findall(_PLUGIN_KIND_TS.read_text(encoding="utf-8"))
+    assert len(declared) == 1, f"{_PLUGIN_KIND_TS.relative_to(_REPO_ROOT)} should declare `export const FALLBACK_PLUGIN_PRIORITY_LIMIT = <n>;` once, found {declared}: the frontend's limit cannot be compared with the plugins' priorities"
+    return int(declared[0])
+
+
+class TestFallbackPluginPriorityLimit:
+    """The frontend tells a generic fallback plugin from one made for a broker by ``detection_priority`` alone.
+
+    ``isFallbackPlugin`` (``frontend/src/lib/utils/brim/pluginKind.ts``) calls a plugin a generic fallback when its
+    ``detection_priority``, as ``GET /brokers/import/plugins`` lists it, is below ``FALLBACK_PLUGIN_PRIORITY_LIMIT``: the
+    0-49 range ``BRIMProvider.detection_priority`` documents for generic fallbacks. The broker icon chain puts such a
+    plugin's icon after the portal's favicon — the generic CSV's icon is the same for every broker — while the icon of a
+    plugin made for the broker comes before it; the import wizard's wrong-broker check proposes the brokers of a generic
+    plugin only when no broker of a specific one reads the file.
+
+    So the registered priorities and the frontend's limit must agree: the plugins below the limit are exactly the generic
+    ones — today only the generic CSV — and every other plugin is at or above it. The limit is read from the frontend's
+    source, so moving it, or a plugin's priority, on one side only turns this red.
+    """
+
+    @staticmethod
+    def _priorities() -> dict:
+        """Plugin code → ``detection_priority``, as ``GET /brokers/import/plugins`` lists them. Never empty."""
+        plugins = BRIMProviderRegistry.list_plugin_info()
+        assert plugins, "No BRIM plugin is registered: the checks would pass on nothing"
+        return {info.code: info.detection_priority for info in plugins}
+
+    def test_the_frontend_limit_is_the_boundary_of_the_documented_generic_range(self):
+        limit = _frontend_fallback_priority_limit()
+
+        assert limit == 50, f"pluginKind.ts sets FALLBACK_PLUGIN_PRIORITY_LIMIT = {limit}; BRIMProvider.detection_priority documents 0-49 as generic fallbacks, 50-99 semi-generic, 100+ broker-specific: move both, or neither"
+        default = BRIMPluginInfo.model_fields["detection_priority"].default
+        assert default >= limit, f"BRIMPluginInfo.detection_priority defaults to {default}, below the limit {limit}: a plugin that does not rank itself would be a generic fallback, while the frontend reads a missing priority as 100"
+
+    def test_the_generic_plugins_are_below_the_limit(self):
+        limit = _frontend_fallback_priority_limit()
+        priorities = self._priorities()
+
+        unregistered = sorted(_GENERIC_FALLBACK_PLUGINS - priorities.keys())
+        assert not unregistered, f"Generic plugin(s) not registered: {unregistered}. Remove them from _GENERIC_FALLBACK_PLUGINS if they are gone for good."
+        ranked_as_specific = {code: priorities[code] for code in sorted(_GENERIC_FALLBACK_PLUGINS) if priorities[code] >= limit}
+        assert not ranked_as_specific, (
+            f"Generic plugin(s) at or above the frontend's limit {limit}: {ranked_as_specific}. The frontend takes them for plugins made for a broker — "
+            "their icon would come before the portal's favicon of every broker using them, and the wrong-broker check would rank their brokers with the specific plugins'"
+        )
+
+    def test_every_other_plugin_is_at_or_above_the_limit(self):
+        limit = _frontend_fallback_priority_limit()
+        priorities = self._priorities()
+
+        ranked_as_generic = {code: priority for code, priority in sorted(priorities.items()) if code not in _GENERIC_FALLBACK_PLUGINS and priority < limit}
+        assert not ranked_as_generic, (
+            f"Plugin(s) below the frontend's limit {limit} that are not generic: {ranked_as_generic}. The frontend takes them for generic fallbacks — "
+            "their icon would come after the portal's favicon, and the wrong-broker check would propose their brokers only when no specific plugin's broker reads the file. "
+            f"Rank them {limit} or more, or, if they really are made for no broker in particular, add them to _GENERIC_FALLBACK_PLUGINS"
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

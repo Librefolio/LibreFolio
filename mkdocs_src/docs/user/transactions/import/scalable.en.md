@@ -90,7 +90,7 @@ Create two [brokers](../../brokers/index.md), one per account — for example *S
 | the broker account | **Scalable Capital broker** | ![Scalable's logo with a blue chart badge, the icon of the Scalable Capital broker importer](../../../static/icons/brokers/scalable-broker.png){: width="48" } |
 | the overnight account | **Scalable Capital overnight account** | ![Scalable's logo with an orange piggy-bank badge, the icon of the Scalable Capital overnight account importer](../../../static/icons/brokers/scalable-deposit.png){: width="48" } |
 
-The broker then shows the importer's icon by itself: a broker without an icon of its own shows the icon of its default import plugin, so leave **Custom Icon URL** empty.
+The broker then shows the importer's icon by itself: a broker without an icon of its own shows the icon of its default import plugin, before the website's icon of its **Portal URL**, so leave **Custom Icon URL** empty.
 
 ---
 
