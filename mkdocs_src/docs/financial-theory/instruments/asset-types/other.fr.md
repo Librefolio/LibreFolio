@@ -41,6 +41,6 @@ Pour les actifs sans flux de prix public :
 
 ## 🔗 Articles connexes
 
-- 📊 **[Aperçu des types d'actifs](index.md)** — Toutes les classes d'actifs supportées
+- 📊 **[Vue d'ensemble des types d'actifs](index.md)** — Toutes les classes d'actifs supportées
 - ✏️ **[Éditeur de données](../../../user/assets/detail/data-editor.md)** — Saisie manuelle des prix
 - 🌐 **[CSS Scraper](../../../user/assets/providers/css-scraper.md)** — Extraire les prix de n'importe quelle page web

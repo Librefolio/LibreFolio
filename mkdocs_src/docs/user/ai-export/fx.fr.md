@@ -1,75 +1,38 @@
 # 🧠 Export IA FX
 
-L'export IA des détails FX prépare un instantané du presse-papiers ou une invite d'analyse ciblée pour
-la paire de devises canonique actuellement ouverte. LibreFolio ne l'envoie jamais à un service
-d'IA.
+Exportez une paire FX, avec ses taux, sa tendance et votre exposition directe à celle-ci, afin de poser des questions à une IA sur cette paire ou sur ce que cela implique pour vos avoirs. Les options et la manière de coller le contenu figurent dans la [vue d'ensemble de l'export IA](index.md).
 
-## 📍 Emplacement
+---
 
-Ouvrez une page de détails FX. Dans la **barre d'outils de la page**, sélectionnez **Export IA**. Votre
-brouillon reste disponible pendant 10 minutes dans la session de connexion actuelle et se réinitialise
-après la déconnexion ou une nouvelle connexion.
+## 📍 Où le trouver
 
-## 🎯 Analyses FX
+Sur la page de détail d'une paire, sélectionnez **Export IA** dans la barre d'outils de la page. Il s'ouvre par défaut sur **FX Pair Analysis**.
 
-| Tâche | Objectif |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| **Analyse de paire FX** | Direction de la paire, rendements, volatilité, preuves techniques, couverture et contexte macro daté. |
-| **Impact de l'exposition FX** | Liquidités directes, devise de transaction et devise de valorisation liées à la paire. |
+L'export porte sur la paire ouverte sur la page, la date d'export correspondant au dernier jour de la plage de dates de la page. Votre exposition prend en compte chaque courtier que vous pouvez ouvrir.
 
-## 🗂️ Portée et données
+Si LibreFolio ne dispose de taux que pour une partie de la période que vous choisissez, l'export utilise ceux-ci et indique les dates qu'il couvre : il n'utilise jamais de taux futurs.
 
-L'export utilise la paire canonique de la page, la plage de dates sélectionnée, la devise cible,
-l'historique des taux, le contexte du fournisseur et les résultats techniques calculés par le backend.
+---
 
-## 📤 Export des données et demande d'analyse
+## 📤 Données exportées
 
-- **Export des données** copie un seul ensemble de données FX factuel.
-- **Demande d'analyse** ajoute des instructions spécifiques à la tâche, un contrat de réponse et
- les ensembles de données déclarés pour l'Analyse.
- La langue de réponse demandée suit la langue actuelle de l'interface LibreFolio.
-- Les notes facultatives sont incluses uniquement lorsque l'Analyse sélectionnée les prend en charge.
+| Choix | Ce que vous obtenez |
+| :--- | :--- |
+| **FX Market & Exposure** | Le taux actuel, un contexte compact de marché et de timing, ainsi que votre exposition directe à la paire |
+| **FX Market History** | Taux détaillés, rendements, volatilité, indicateurs, états et événements, avec couverture |
 
-Deux exports publics de données sont disponibles :
+---
 
-- **Marché FX et exposition** — taux actuel (devise de cotation par devise de base), 8/16/30 points de trajectoire
- observés, tendance/momentum/volatilité ciblés, rendements sur 30 jours et 91 jours, position dans la fourchette,
- couverture des sources, entrées utilisateur manquantes et exposition directe ;
-- **Historique du marché FX** — compartiments de taux plus denses, rendements, indicateurs, états, événements
- et couverture.
+## 🎯 Analyses
 
-## 📉 Historique partiel
+| Analyse | Ce que fait l'IA |
+| :--- | :--- |
+| **FX Pair Analysis** | Analyse la direction de la paire, ses rendements, sa tendance, son momentum, sa volatilité et les événements, avec un contexte macroéconomique daté |
+| **FX Exposure Impact** | Décrit comment votre trésorerie et vos positions sont directement liées à la paire, sans examiner le contenu des fonds ; cette analyse nécessite au moins un tel lien |
 
-Lorsque la période IA demandée commence avant l'historique des taux enregistré, LibreFolio exporte
-l'historique réel qu'il peut utiliser et signale :
+---
 
-- les dates demandées et disponibles ;
-- la couverture ;
-- les décomptes observés et complétés rétroactivement ;
-- le Signal partiel ;
-- le Signal omis et les raisons ;
-- les avertissements d'historique insuffisant.
+## 🔗 Voir aussi
 
-Aucun taux futur n'est utilisé. Un Signal partiel n'est pas présenté comme équivalent à un historique
-complet.
-
-## 📏 Détail et échantillonnage
-
-| Détail | Échantillonnage exact |
-| ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| **Compact** | Export général : jusqu'à 8 points de taux observés uniformément répartis. Export détaillé : jusqu'à 5 lignes d'indicateurs non vides par Signal. |
-| **Standard** | Export général : jusqu'à 16 points. Export détaillé : jusqu'à 10 lignes d'indicateurs. |
-| **Complet** | Export général : jusqu'à 30 points. Export détaillé : chaque compartiment d'indicateurs non vide ; peut être volumineux. |
-
-Un ensemble de données ou une Analyse peut omettre les sections facultatives indisponibles ou non applicables.
-La **période IA** se termine à la date de l'instantané.
-
-## 🔒 Applicabilité, erreurs et confidentialité
-
-Des analyses ou des choix de détail peuvent être désactivés lorsque les données requises sont absentes. Les discordances
-entre le catalogue et le contrat de réponse échouent en mode fermé. Les erreurs typées signalent des problèmes
-d'applicabilité, de source, d'entité ou de contrat.
-
-Le presse-papiers peut contenir des données sensibles de devises et d'exposition de portefeuille. Vérifiez-le
-avant de le partager. Voir l'[aperçu de l'export IA](index.md) pour
-le flux de travail inter-domaines et le modèle de sécurité.
+- 🧠 **[Vue d'ensemble de l'export IA](index.md)** — options, collage et confidentialité
+- 🔍 **[Page de détail d'une paire](../fx/detail/index.md)** — le point de départ de l'export

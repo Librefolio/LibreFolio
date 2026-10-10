@@ -1,87 +1,79 @@
-# <img src="../../../../../static/cssscraper.png" alt=""> CSS Scraper
+# <img src="../../../../static/cssscraper.png" alt=""> Scraper CSS
 
-Le fournisseur CSS Scraper vous permet d'extraire des données de prix de n'importe quelle page web en utilisant des sélecteurs CSS. Ceci est particulièrement utile pour les instruments non couverts par d'autres fournisseurs, tels que les obligations d'État italiennes (BTP) sur Borsa Italiana.
+Le Scraper CSS lit le prix d'un actif depuis n'importe quelle page web publique, à l'aide d'un sélecteur CSS qui pointe
+vers le nombre. Utilisez-le lorsqu'aucun autre fournisseur ne couvre l'instrument. Dans la liste **Fournisseur**, il est
+appelé **CSS Web Scraper**.
 
-## 📊 Capacités
+## 🔍 Ce qu'il propose
 
-- ✅ **Prix actuel** : Extrait le prix d'une page web
-- ❌ **Historique** : Non supporté (⚠️ avertissement, pas une erreur)
-- ❌ **Recherche** : Non supporté
+- ✅ **Prix actuel** : lu depuis la page à chaque synchronisation, dans la devise de votre choix.
+- ❌ **Historique** : aucun. Chaque synchronisation enregistre le prix du jour, l'historique s'enrichit donc à partir du jour où vous
+  commencez.
+- ❌ **Recherche** et **détails** : aucun — vous saisissez vous-même l'adresse de la page et les paramètres.
 
-## 🔧 Configuration
+## 🧩 Configuration
 
-- **Identifiant** : L'URL complète de la page à scraper
-- **Type d'identifiant** : `OTHER`
-- **Paramètres** :
+### 1️⃣ Copier le sélecteur CSS du prix
 
-| Paramètre | Requis | Description | Exemple |
-|-----------|:---:|---|---|
-| `current_css_selector` | ✅ | Sélecteur CSS pour l'élément du prix | `.summary-value strong` |
-| `currency` | ✅ | Code devise ISO 4217 | `EUR` |
-| `decimal_format` | ❌ | `us` (1,234.56) ou `eu` (1.234,56) | `eu` |
-| `timeout` | ❌ | Timeout HTTP en secondes (par défaut : 30) | `30` |
-| `user_agent` | ❌ | En-tête User-Agent personnalisé | `LibreFolio/1.0` |
+Le sélecteur indique à LibreFolio quel élément de la page contient le prix.
 
-## 🔎 Comment trouver le sélecteur CSS
+=== "Chrome"
 
-### Step par étape (Chrome)
+    1. Ouvrez la page et faites un clic droit sur le prix.
+    2. Choisissez **Inspecter** (ou appuyez sur `F12`) : DevTools met en surbrillance l'élément du prix.
+    3. Faites un clic droit sur l'élément mis en surbrillance, puis **Copier** → **Copier le sélecteur**.
 
-1. Ouvrez la page contenant le prix dans Chrome
-2. Faites un **clic droit** sur la valeur du prix
-3. Sélectionnez **Inspecter** (ou appuyez sur `F12`)
-4. Dans le panneau Éléments des DevTools, l'élément du prix sera mis en évidence
-5. Faites un **clic droit** sur l'élément mis en évidence dans les DevTools
-6. Sélectionnez **Copier** → **Copier le sélecteur**
-7. Collez-le dans le champ `current_css_selector`
+=== "Firefox"
 
-### Step par étape (Firefox)
+    1. Ouvrez la page et faites un clic droit sur le prix.
+    2. Choisissez **Inspecter** (ou appuyez sur `F12`) : l'Inspecteur met en surbrillance l'élément du prix.
+    3. Faites un clic droit sur l'élément mis en surbrillance, puis **Copier** → **Sélecteur CSS**.
 
-1. Ouvrez la page contenant le prix dans Firefox
-2. Faites un **clic droit** sur la valeur du prix
-3. Sélectionnez **Inspecter l'élément** (ou appuyez sur `F12`)
-4. Dans l'Inspecteur, faites un **clic droit** sur l'élément mis en évidence
-5. Sélectionnez **Copier** → **Sélecteur CSS**
-6. Collez-le dans le champ `current_css_selector`
+### 2️⃣ Remplir les paramètres du fournisseur
 
-### 💡 Exemple : Borsa Italiana BTP
+Dans **Affectation du fournisseur**, choisissez **CSS Web Scraper** et collez l'adresse de la page dans **URL**. Les
+paramètres apparaissent sous leurs noms techniques :
 
-Pour un BTP sur Borsa Italiana (ex: `IT0005634800`) :
+| Paramètre | Requis | Valeur à saisir |
+|---|:---:|---|
+| `current_css_selector` | ✅ | Le sélecteur que vous avez copié, par ex. `.summary-value strong` |
+| `currency` | ✅ | La devise du prix, par ex. `EUR` |
+| `decimal_format` | — | `us` pour `1,234.56` (par défaut) ou `eu` pour `1.234,56` |
+| `timeout` | — | Secondes d'attente pour la page (par défaut `30`) |
+| `user_agent` | — | Comment LibreFolio se présente au site (par défaut `LibreFolio/1.0`) |
 
-**URL** (version anglaise) :
-```
-https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en
-```
+### 3️⃣ Tester
 
-**Sélecteur CSS** :
-```
-.summary-value strong
-```
+Cliquez sur **Tester la configuration** : **Prix actuel** doit afficher le nombre que vous voyez sur la page. Le ⚠️ sur
+**Historique** est attendu, car ce fournisseur n'en propose pas.
 
-**Configuration** :
-- Identifiant : `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en`
-- `current_css_selector` : `.summary-value strong`
-- `currency` : `EUR`
-- `decimal_format` : `us` (la page anglaise utilise le format US : 100.39)
+!!! example "Un BTP sur Borsa Italiana"
 
-Pour la version italienne, utilisez `decimal_format` : `eu` (la page italienne utilise le format EU : 100,39).
+    - **URL** : `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda/IT0005634800.html?lang=en`
+    - `current_css_selector` : `.summary-value strong`
+    - `currency` : `EUR`
+    - `decimal_format` : `us` — la page anglaise affiche `100.39`. La page italienne (`lang=it`)
+      affiche `100,39`, donc utilisez `eu` ici.
 
-## 🔢 Format décimal
-
-| Format | Exemple | Quand l'utiliser |
-|--------|---------|-------------|
-| `us` | 1,234.56 | Pages en anglais/US (point comme séparateur décimal) |
-| `eu` | 1.234,56 | Pages en italien, allemand ou français (virgule comme séparateur décimal) |
+    Pour les instruments cotés sur Borsa Italiana, le fournisseur [Borsa Italiana](borsa-italiana.md)
+    fournit aussi leur historique.
 
 ## 🛠️ Dépannage
 
-### "Selector not found"
-Le sélecteur CSS ne correspond à aucun élément sur la page. La structure de la page a peut-être changé — inspectez à nouveau et copiez un nouveau sélecteur.
+| Ce que vous voyez | Ce qu'il faut faire |
+|---|---|
+| **Élément de prix introuvable** | La mise en page a peut-être changé : copiez à nouveau le sélecteur. |
+| **Échec de l'analyse syntaxique du prix** | Vérifiez `decimal_format`. L'élément doit contenir uniquement le nombre : les espaces, €, $, £, ¥ et % sont ignorés, les lettres telles que `EUR` ne le sont pas. |
+| **Erreur HTTP** ou **Échec de la requête** | Vérifiez l'URL ; augmentez `timeout` pour un site lent. L'erreur 403 signifie que le site refuse les visites automatisées. |
+| Un nombre incorrect | Le sélecteur correspond à un autre élément (LibreFolio utilise la première correspondance) : rendez-le plus spécifique. |
 
-### "Connection timeout"
-La page a mis trop de temps à répondre. Essayez d'augmenter le paramètre `timeout` ou vérifiez si l'URL est correcte.
+## ⚠️ Limites
 
-### "Parse error"
-Le texte du prix n'a pas pu être analysé comme un nombre. Vérifiez le paramètre `decimal_format` — si la page affiche `100,39`, utilisez `eu` ; si elle affiche `100.39`, utilisez `us`.
+- LibreFolio lit la page telle que le site l'envoie, sans exécuter ses scripts : un prix renseigné
+  par JavaScript ne peut pas être lu, pas plus que les pages protégées par une connexion.
+- Lorsque le site change sa mise en page, le sélecteur peut cesser de correspondre : testez à nouveau et copiez-en un nouveau.
 
-### Price prix affiche 0 ou une valeur erronée
-Le sélecteur correspond peut-être à un autre élément. Essayez un sélecteur plus spécifique. Utilisez les DevTools pour vérifier exactement quel élément votre sélecteur cible.
+## 🔗 Voir aussi
+
+- ✏️ **[Éditeur de données](../detail/data-editor.md)** — Saisir ou corriger les prix à la main
+- 🛠️ **Pour les développeurs : [Fournisseur Scraper CSS](../../../developer/backend/assets/provider_cssscraper.md)** — Requête, analyse syntaxique et codes d'erreur

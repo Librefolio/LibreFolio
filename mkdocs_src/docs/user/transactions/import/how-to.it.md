@@ -11,7 +11,7 @@ Scopri come usare il Broker Report Import Module (BRIM) per importare le tue tra
 
 ---
 
-## 🚀 Guida passo-passo
+## 🚀 Guida passo-passo {: #guided-first-import }
 
 1. Esporta un report delle transazioni dal tuo broker (di solito un file CSV — controlla il centro assistenza del tuo broker).
 2. In LibreFolio, vai alla pagina **[Transazioni](../index.md)**.
@@ -46,6 +46,7 @@ La procedura guidata ha **quattro passaggi che vedi sempre** e **tre che compaio
 ne hanno davvero bisogno**. La barra di avanzamento mostra solo i passaggi pertinenti alla tua importazione, quindi un
 report pulito con un singolo file rimane un flusso breve, mentre uno disordinato con più file riceve esattamente le domande
 extra che merita — e nessun'altra.
+{: #only-when-needed }
 
 | Passaggio | Sempre mostrato? | Compare quando |
 | :--- | :--- | :--- |
@@ -221,7 +222,7 @@ Al termine dell'analisi, la tabella mostra un riepilogo dell'elaborazione per ci
     Ogni gruppo è etichettato **Totale** (i file concordano su ogni dettaglio — una sovrapposizione pura) o
     **Parziale** (qualcosa differisce, quindi merita un'occhiata).
 
-### 📦 Passaggio 4: Revisione e importazione
+### 📦 Passaggio 4: Revisione e importazione {: #review }
 
 La revisione finale mostra ogni transazione da importare in una griglia simile a un foglio di calcolo, ed è qui
 che ogni strumento viene finalmente associato alla tua libreria.
@@ -275,7 +276,7 @@ per fondere l'uno nell'altro.
 
        Il valore del provider è preselezionato, perché è l'unico ad avere un feed di prezzi alle spalle.
 
-#### ⛔ Data di apertura del broker
+#### ⛔ Data di apertura del broker {: #opening-date }
 
 Se il broker di destinazione ha una data di apertura, la procedura guidata contrassegna con lo stato `Before opening` le righe la cui data è **strettamente precedente**
 a tale data. Quelle righe vengono deselezionate e non possono essere importate; una riga nel

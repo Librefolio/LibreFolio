@@ -41,6 +41,6 @@ Para activos sin un flujo de precios público:
 
 ## 🔗 Relacionado
 
-- 📊 **[Descripción General de Tipos de Activos](index.md)** — Todas las clases de activos compatibles
+- 📊 **[Resumen de los tipos de activos](index.md)** — Todas las clases de activos compatibles
 - ✏️ **[Editor de Datos](../../../user/assets/detail/data-editor.md)** — Ingreso manual de precios
 - 🌐 **[CSS Scraper](../../../user/assets/providers/css-scraper.md)** — Extraer precios de cualquier página web

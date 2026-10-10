@@ -1,116 +1,63 @@
-# 🧠 Esportazione AI del portafoglio
+# 🧠 AI Export del portafoglio
 
-L'Esportazione AI del portafoglio prepara un'istantanea negli appunti limitata alla dashboard
-o un prompt di analisi mirato. LibreFolio non invia mai l'esportazione a un servizio AI.
+Esporta l'intero portafoglio, così come lo mostra la dashboard, per chiedere a un'AI informazioni sulla sua struttura, sulla sua
+performance, su un piano di investimento ricorrente o sulle tue minusvalenze fiscali. Le opzioni e come incollare sono nella
+[Panoramica di AI Export](index.md).
 
-## 📍 Posizione
+---
 
-Apri **Dashboard** e seleziona **AI Export** nella barra degli strumenti superiore,
-accanto a **Aggiorna**. La bozza rimane disponibile per 10 minuti nella sessione
-di accesso corrente e viene azzerata dopo il logout o un nuovo accesso.
+## 📍 Dove trovarlo
 
-## 🎯 Analisi del portafoglio
+Nella **Dashboard**, seleziona **AI Export** nella barra degli strumenti, accanto a **Aggiorna**. Si apre inizialmente su
+**Piano di investimento ricorrente**.
 
-| Attività | Focus |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Piano di investimento ricorrente** | Struttura del portafoglio, flussi di cassa, vincoli e contesto dell'investimento ricorrente. |
-| **Ribilanciamento del portafoglio** | Allocazione attuale, concentrazione, diversificazione e contesto dell'allocazione obiettivo. |
-| **Performance del portafoglio e driver di mercato** | Riconciliazione della performance unitamente a ricerca datata a orizzonte breve e lungo per ogni asset detenuto. |
-| **Strategie di compensazione delle minusvalenze** | Modalità condizionali per utilizzare perdite fiscali disponibili o in scadenza contro plusvalenze potenzialmente idonee, utilizzando evidenze FIFO economiche e l'inventario ufficiale delle perdite fiscali dell'utente. |
+L'esportazione segue la [Dashboard](../dashboard/index.md):
 
-## 🗂️ Ambito e dati
+- i broker che **possiedi** con una quota superiore allo 0%, ristretti dal filtro broker quando è attivo;
+  i broker condivisi con te come editor o visualizzatore sono esclusi;
+- la valuta della dashboard, con l'ultimo giorno del suo intervallo di date come data di esportazione.
 
-L'esportazione segue il filtro broker attivo, l'intervallo di date e la valuta obiettivo.
-A seconda della selezione, può includere totali del portafoglio, contante, posizioni,
-allocazioni, performance, contributi, redditi, contesto di qualità dei dati e
-risultati tecnici calcolati dal backend.
+Il pulsante si attiva una volta che la dashboard ha caricato i tuoi broker, e resta disattivato se non ne possiedi nessuno
+con una quota superiore allo 0%.
 
-Il prompt distingue:
+---
 
-- broker inclusi nell'ambito di calcolo;
-- broker con posizioni aperte correnti;
-- broker rappresentati da contributori di performance nel periodo AI.
+## 📤 Dati esportati
 
-Un broker incluso nell'ambito di calcolo può non avere posizioni correnti. I riferimenti B# restano coerenti con
-l'Entity Directory.
+| Scelta | Cosa ottieni |
+| :--- | :--- |
+| **Panoramica e storico del portafoglio** | Posizioni, liquidità, allocazioni, performance, flussi, reddito, costi registrati, un riepilogo FIFO economico, un contesto di mercato compatto per asset e drawdown |
+| **Storico degli asset del portafoglio** | Prezzi dettagliati, rendimenti, indicatori, stati ed eventi per ogni asset che possiedi, con copertura |
 
-!!! note "Il FIFO economico non è un trattamento fiscale legale"
+---
 
-    L'esportazione generale contiene un riepilogo FIFO economico compatto per asset.
-    **Strategie di compensazione delle minusvalenze** riceve inoltre ogni lotto applicabile.
-    Prima di confrontare i percorsi di non azione, realizzazione di plusvalenze, scaglionamento o raccolta di perdite,
-    il prompt chiede residenza fiscale, regime, tipo di conto, inventario ufficiale delle perdite fiscali
-    (ad esempio il `cassetto fiscale` italiano), categoria legale,
-    importi rimanenti e utilizzati, date di origine/scadenza, regole di compensazione e vincoli.
+## 🎯 Analisi
 
-## 📤 Export Data e Request Analysis
+| Analisi | Cosa fa l'AI |
+| :--- | :--- |
+| **Piano di investimento ricorrente** | Pianifica investimenti ricorrenti condizionali a partire dai tuoi dati, chiedendo solo ciò che manca |
+| **Ribilanciamento del portafoglio** | Confronta la tua allocazione con gli obiettivi che fornisci e delinea percorsi di ribilanciamento condizionali |
+| **Performance del portafoglio e driver di mercato** | Spiega il tuo risultato e ricerca driver di mercato con riferimenti temporali per ogni asset che possiedi: usa un'AI in grado di cercare sul web |
+| **Strategie di compensazione delle minusvalenze** | Esplora come le minusvalenze fiscali disponibili o in scadenza potrebbero compensare le plusvalenze, usando i tuoi lotti FIFO |
 
-- **Export Data** copia un dataset fattuale del portafoglio senza istruzioni di analisi
- o contratto di risposta.
-- **Request Analysis** aggiunge istruzioni specifiche per l'attività, un contratto di risposta e
- i dataset dichiarati per l'Analisi selezionata.
- La lingua della risposta richiesta segue sempre la lingua corrente dell'interfaccia
- LibreFolio.
-- Le note opzionali sono incluse solo per le analisi che le supportano.
+??? note "📅 Piano di investimento ricorrente — cosa ti chiederà l'AI"
 
-Sono disponibili due esportazioni di dati pubbliche:
+    L'AI parte dai tuoi dati e chiede solo ciò che cambia il piano: quanto puoi investire e
+    con quale frequenza, il tuo obiettivo e orizzonte temporale, quanto calo puoi sopportare, e limiti pratici come
+    liquidità, broker, ordini minimi o asset da evitare. Non indovina mai queste risposte, può
+    abbozzare scenari condizionali nel frattempo, e confronta l'investire subito con l'investire
+    per fasi.
 
-- **Portfolio Overview & History** — posizioni, contante, allocazioni, concentrazione,
- percorso di performance, flussi, redditi, costi, riconciliazione, riepilogo FIFO economico,
- storia compatta per asset, Drawdown, copertura e provenienza;
-- **Portfolio Asset History** — bucket più densi di prezzi di chiusura osservati, indicatori,
- stati, eventi, copertura e ampiezza per l'universo di asset idonei.
+??? note "🧾 Strategie di compensazione delle minusvalenze — tieni a portata di mano i tuoi dati fiscali"
 
-## 📅 Piano di investimento ricorrente
+    I lotti FIFO sono il calcolo economico di LibreFolio, non la tua posizione fiscale legale. Prima di confrontare
+    i percorsi, l'AI chiede la tua residenza fiscale e il regime fiscale, il tipo di conto e il tuo inventario
+    ufficiale delle minusvalenze fiscali (per esempio il *cassetto fiscale* italiano) con importi, categorie e
+    date di scadenza. Non suggerisce mai un'operazione solo per motivi fiscali.
 
-L'Analisi utilizza prima i fatti forniti e chiede solo le preferenze mancanti che
-modificano sostanzialmente il piano. Le domande sono raggruppate in:
+---
 
-- capitale e frequenza dei contributi;
-- obiettivi e orizzonte;
-- preferenze di rischio, inclusa la volatilità accettabile o il Drawdown temporaneo;
-- vincoli operativi come liquidità, broker, ordini minimi, esclusioni
- o se le vendite sono consentite.
+## 🔗 Correlati
 
-Il prompt distingue le risposte indispensabili dai perfezionamenti opzionali e può
-comunque offrire scenari condizionali. Non inventa mai budget, obiettivi o tolleranza
-al rischio.
-
-Confronta il dispiegamento immediato e quello scaglionato. L'attesa condizionale appare solo
-quando esistono evidenze di declino ampie e persistenti nell'intero portafoglio, mai
-da un singolo asset o un singolo indicatore.
-
-Il Drawdown del portafoglio e un confronto compatto del Drawdown per asset sono solo contesto
-storico. Non sono previsioni né segnali d'acquisto a sé stanti e non viene aggiunta alcuna
-storia di Drawdown per asset.
-
-## 📰 Performance e driver di mercato
-
-All'AI ricevente viene richiesto di coprire ogni asset detenuto, citare fonti datate,
-valutare la qualità delle fonti, fornire tesi a orizzonte breve e lungo, distinguere
-cronologia/correlazione dalla causalità ed etichettare i collegamenti come supportati,
-plausibili, inferiti, speculativi o inspiegati.
-
-## 📏 Dettaglio e campionamento
-
-| Dettaglio | Campionamento esatto |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Compatto** | Esportazione generale: 8 punti del percorso del portafoglio e fino a 6 punti per asset idoneo. Esportazione dettagliata: fino a 5 righe di indicatori non vuote per asset/segnale. |
-| **Standard** | Esportazione generale: 16 punti del percorso del portafoglio e fino a 12 punti per asset idoneo. Esportazione dettagliata: fino a 10 righe di indicatori. |
-| **Completo** | Esportazione generale: 30 punti del percorso del portafoglio e fino a 24 punti per asset idoneo. Esportazione dettagliata: ogni bucket non vuoto di indicatori; può essere molto grande. |
-
-Un dataset o un'Analisi può omettere sezioni opzionali non disponibili o non applicabili.
-Il **periodo AI** utilizza 3M, 6M, 1Y o Personalizzato quando offerto e termina sempre alla
-data dell'istantanea. Le righe temporali completamente vuote vengono omesse, mentre i metadati
-di periodo/copertura e i valori zero osservati rimangono.
-
-## 🔒 Applicabilità, errori e privacy
-
-Le attività o le scelte di dettaglio non disponibili restano disabilitate. AI Export adotta
-inoltre un comportamento fail-closed quando i cataloghi del browser e del server o i contratti
-di risposta non corrispondono. Gli errori tipizzati spiegano l'applicabilità mancante, le entità
-inaccessibili, i fallimenti delle fonti o i problemi di contratto senza esporre dettagli interni.
-
-Gli appunti possono contenere dati finanziari sensibili. Rivedili prima di incollarli
-in un servizio di terze parti. Consulta la [panoramica AI Export](index.md)
-per il flusso di lavoro cross-domain e il modello di sicurezza.
+- 🧠 **[Panoramica di AI Export](index.md)** — opzioni, come incollare e privacy
+- 📊 **[Dashboard](../dashboard/index.md)** — l'ambito che questa esportazione segue

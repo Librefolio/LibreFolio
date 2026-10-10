@@ -1,76 +1,155 @@
 # 📝 Configuración
 
-LibreFolio utiliza un archivo `.env` para la configuración, impulsado por `BaseSettings` de Pydantic. Esto permite una gestión sencilla de las variables de entorno tanto para el desarrollo local como para implementaciones en Docker.
+Las opciones de inicio residen en un archivo `.env`: puertos, la carpeta de datos, registro, sesiones de inicio de sesión y algunas
+funciones opcionales. Se encuentra en la raíz del proyecto, o junto a `docker-compose.yml` con
+Docker. Las opciones que cambias desde dentro de la aplicación se encuentran en [Configuración global](settings.md).
 
-## 🔧 Inicio Rápido: Inicializar la Configuración
+---
 
-El archivo `.env` se encuentra en la raíz del proyecto. Se proporciona un archivo de ejemplo, `.env.example`. Para comenzar, simplemente cópielo:
+## 🔧 Crear el archivo `.env`
+
+En la carpeta del proyecto, copia el archivo de ejemplo y edita los valores que necesites:
 
 ```bash
 cp .env.example .env
 ```
 
-## ✏️ Opciones de Configuración (Archivo `.env`)
+Con la imagen Docker precompilada, la guía de [instalación de Docker](../user/installation.md) descarga
+el mismo ejemplo como `.env`.
 
-Estas variables le permiten personalizar el comportamiento de LibreFolio dentro del archivo `.env`. Son las mismas variables cargadas por defecto por Docker Compose.
+- LibreFolio lee `.env` cuando se inicia: reinícialo después de un cambio. Con Docker Compose, ejecuta
+  `docker compose up -d`, porque `docker compose restart` conserva los valores antiguos.
+- Los nombres distinguen mayúsculas de minúsculas. En las opciones principales y la configuración de riesgo a continuación, un valor de
+  tipo incorrecto o fuera de rango detiene el servidor al iniciarse con un error.
 
-| Variable | Predeterminado | Descripción |
+---
+
+## ✏️ Opciones principales
+
+| Variable | Predeterminado | Qué hace |
 | --- | --- | --- |
-| `PORT` | `6040` | El puerto en el que se ejecutará el servidor FastAPI de producción. |
-| `TEST_PORT` | `6041` | El puerto en el que se ejecutará el servidor de prueba cuando el modo de prueba esté activado. |
-| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | La ruta del directorio raíz donde se almacenan los datos persistentes (base de datos SQLite, cargas, registros, etc.). Resuelto a nivel de sistema: las rutas relativas se resuelven a absolutas respecto a la raíz del proyecto, mientras que en Docker se anula y se fuerza a `/app/backend/data/prod-docker` a través de mapeos de volumen de Compose. |
-| `LOG_LEVEL` | `INFO` | El nivel de registro principal para la aplicación. Opciones: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
-| `PORTFOLIO_BASE_CURRENCY` | `EUR` | La moneda base predeterminada para los cálculos de cartera (código ISO 4217). |
-| `PREVIEW_CACHE_MAX_MB` | `50` | Tamaño máximo (en MB) para la caché de vista previa de imágenes en memoria. Las entradas expiran tras 1 hora (TTL); cuando se alcanza el límite, se expulsan primero las más antiguas. |
+| `PORT` | `6040` | Puerto del servidor web. Con Docker Compose, el puerto que se abre en el host (el contenedor siempre escucha en `6040`). |
+| `TEST_PORT` | `6041` | Puerto del servidor de prueba (`./dev.py server --test`). |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Carpeta de la base de datos, subidas, informes del bróker y registros; una ruta relativa parte de la carpeta del proyecto. Docker la fija en `/app/backend/data/prod-docker`: para mover los datos en el host, cambia el lado izquierdo del volumen `./LibreFolio-data` en `docker-compose.yml`. |
+| `LOG_LEVEL` | `INFO` | Cuánto registra el servidor: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR` o `CRITICAL`. |
+| `JWT_SECRET` | _no establecido_ | Clave que firma las sesiones de inicio de sesión. No establecida: se genera una nueva clave en cada inicio, así que todos vuelven a iniciar sesión tras un reinicio. Consulta [Mantener a los usuarios conectados](index.md#session-persistence). |
+| `SESSION_COOKIE_SECURE` | `auto` | Cuándo se envía la cookie de sesión de inicio de sesión solo por HTTPS: `auto` (si el navegador usa HTTPS), `always` o `never`. Consulta [HTTPS y proxies inversos](#session-cookie-secure). |
+| `PREVIEW_CACHE_MAX_MB` | `50` | Memoria, en MB, de la caché de vistas previas de imágenes en cada proceso del servidor. |
 
-## 💻 Parámetros del Sistema (Variables de Entorno)
+Los archivos `.env` antiguos aún pueden contener `PORTFOLIO_BASE_CURRENCY`: LibreFolio lo ignora, y los nuevos
+usuarios parten de la **Divisa predeterminada** en [Configuración global](settings.md).
 
-Estas variables manejan la integración de bajo nivel entre los módulos de la aplicación, el aislamiento de pruebas y los scripts CLI de desarrollo. Por lo general, el usuario no necesita modificarlas directamente, ya que el sistema (Docker Compose o el script `dev.py`) las asigna o gestiona automáticamente.
+??? info "🔒 HTTPS y proxies inversos — la cookie de sesión"
 
-| Variable | Predeterminado | Descripción |
+    `SESSION_COOKIE_SECURE` decide cuándo la cookie que mantiene a los usuarios conectados es `Secure`: el
+    navegador entonces la envía solo por HTTPS, así que la sesión nunca viaja por una conexión sin cifrar. El uso de mayúsculas y minúsculas y los espacios alrededor del valor no importan; cualquier otro valor detiene el servidor al
+    iniciarse con un error.
+    {: #session-cookie-secure }
+
+    - **`auto`** (predeterminado): `Secure` cuando el navegador llegó a LibreFolio por HTTPS. LibreFolio
+      en sí sirve HTTP sin cifrar, así que HTTPS proviene de un proxy inverso delante de él, que lo indica
+      con la cabecera `X-Forwarded-Proto: https`; solo cuenta su primer valor. No hay una lista de
+      proxies de confianza que configurar: la cabecera solo puede activar `Secure`, nunca desactivarlo. Por HTTP sin cifrar,
+      como `http://localhost:6040`, una IP de LAN o la IP de Tailscale de los niveles 1 y 2 en
+      [Exponer de forma segura](service_exposure.md), la cookie no es `Secure`, así que iniciar sesión sigue
+      funcionando.
+    - **`always`**: siempre `Secure`, para una instalación a la que se accede solo por HTTPS. Por HTTP sin cifrar, el
+      navegador descarta la cookie, así que el inicio de sesión no persiste: la siguiente página devuelve al usuario
+      a la página de inicio de sesión.
+    - **`never`**: nunca `Secure`. Es la salida cuando un proxy envía `X-Forwarded-Proto: https`
+      a un navegador que en realidad usa HTTP sin cifrar, como Nginx con un
+      `proxy_set_header X-Forwarded-Proto https;` codificado de forma fija en un bloque `server` de HTTP sin cifrar: en `auto`, ese
+      navegador sería devuelto a la página de inicio de sesión tras cada inicio de sesión. Es mejor arreglar el proxy
+      (`$scheme` en lugar de `https`); `never` es el fallback.
+
+    Detrás de un proxy inverso HTTPS, `auto` se basa en su cabecera `X-Forwarded-Proto`:
+
+    - **Tailscale Serve and Funnel** (niveles 3 y 4 en [Exponer de forma segura](service_exposure.md)),
+      **Caddy** y **Traefik** la envían por su cuenta: nada que configurar.
+    - **Nginx** no lo hace: añade `proxy_set_header X-Forwarded-Proto $scheme;` al `location` que
+      hace de proxy para LibreFolio.
+    - **Cualquier otro proxy**: haz que envíe la cabecera o, si solo se puede acceder a LibreFolio a través de él,
+      establece `SESSION_COOKIE_SECURE=always`.
+
+??? info "🧮 Trabajadores del motor de riesgo — ajuste avanzado"
+
+    Las simulaciones de riesgo y las optimizaciones de cartera se ejecutan en procesos trabajadores separados, que se inician en
+    el primer uso. Los valores predeterminados son adecuados para la mayoría de las instalaciones: añade una variable a `.env` solo para cambiarla.
+
+    | Variable | Predeterminado | Qué hace |
+    | --- | --- | --- |
+    | `RISK_SIMULATION_WORKERS`, `RISK_OPTIMIZATION_WORKERS` | `1` (1–8) | Procesos trabajadores por tipo de trabajo: más procesos ejecutan más trabajos a la vez. |
+    | `RISK_SIMULATION_QUEUE_CAPACITY`, `RISK_OPTIMIZATION_QUEUE_CAPACITY` | `2` (0–64) | Trabajos que pueden esperar a un trabajador; más allá de eso, las nuevas solicitudes se rechazan. |
+    | `RISK_SIMULATION_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_TIMEOUT_SECONDS` | `120` / `60` | Límite de tiempo de un trabajo, en segundos. |
+    | `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | `600` | Los trabajadores inactivos se detienen tras esta cantidad de segundos y se reinician con el siguiente trabajo; `0` los mantiene en ejecución. |
+
+---
+
+## 💻 Parámetros establecidos por las herramientas
+
+`./dev.py` y Docker Compose los establecen por ti: cámbialos solo si sabes por qué.
+
+| Variable | Predeterminado | Qué hace |
 | --- | --- | --- |
-| `HOST` | `0.0.0.0` | La dirección de enlace de red para el servidor web FastAPI, inyectada automáticamente en Docker y comandos CLI. |
-| `JWT_SECRET` | _auto-generated_ | La clave secreta utilizada para firmar y descifrar las sesiones de usuario (JSON Web Tokens). Esta variable **no** forma parte de la validación `Settings` de Pydantic y se lee en tiempo de ejecución directamente desde el entorno del sistema operativo. Si se deja vacía, la aplicación asigna automáticamente una clave aleatoria segura al iniciar (`secrets.token_urlsafe(64)`). Al iniciar el servidor localmente a través de `./dev.py server`, el script genera e inyecta automáticamente un secreto compartido para garantizar la persistencia de las sesiones. |
-| `LIBREFOLIO_TEST_MODE` | — | Una bandera para indicar si la aplicación se está ejecutando en modo de prueba. Cuando se establece en `1` o `true`, fuerza a la aplicación a aislarse por completo redirigiendo el directorio de datos a `backend/data/test/`. Esto es gestionado automáticamente por los ejecutores de pruebas. |
-| `LIBREFOLIO_LOG_LEVEL` | — | Anulación de alta prioridad para el nivel de registro. Si se establece, tiene precedencia absoluta y anula la propiedad `LOG_LEVEL` cargada por Pydantic en tiempo de ejecución (utilizado por `./dev.py server --debug`). |
+| `HOST` | `0.0.0.0` | Dirección en la que escucha `./dev.py server`; `127.0.0.1` acepta solo conexiones locales. Docker Compose siempre usa `0.0.0.0`. |
+| `LIBREFOLIO_LOG_LEVEL` | — | Reemplaza a `LOG_LEVEL` cuando se establece; `./dev.py server --debug` lo establece en `DEBUG`. |
+| `LIBREFOLIO_TEST_MODE` | — | `1`, `true` o `yes` cambia a la carpeta de datos de prueba. Lo establecen `./dev.py server --test` y los ejecutores de pruebas. |
+| `LIBREFOLIO_TEST_DATA_DIR` | `./backend/data/test` | Carpeta de los datos de prueba; no puede solaparse con la de producción. |
 
-## 🔎 Búsqueda de Activos — Buscador de Enlaces Web (Opcional)
+---
 
-Estas variables ajustan la **metabúsqueda externa de último recurso** utilizada *solo* durante la búsqueda interactiva de activos (Crear activo y asistente "crear activo" dentro de la importación del bróker) cuando la búsqueda interna de un proveedor devuelve cero resultados. **Nunca** se utilizan en la obtención automática de precios. El transporte es la biblioteca de metabúsqueda [`ddgs`](https://pypi.org/project/ddgs/). **Todas son opcionales y vienen con valores predeterminados seguros** — solo necesita tocarlas para ajustar, diagnosticar o desactivar la función. Consulte la guía para desarrolladores [Búsqueda de activos y buscador de enlaces](../developer/backend/assets/search_link_finder.md) para el diseño completo.
+## 🔎 Opcional: búsqueda web para nuevos activos
 
-| Variable | Predeterminado | Descripción |
+Cuando creas un activo, también desde el asistente de importación del bróker, y la búsqueda propia de un proveedor no encuentra
+nada, LibreFolio puede encontrar la página del activo con una búsqueda web a través de la
+biblioteca [`ddgs`](https://pypi.org/project/ddgs/). Está activada de forma predeterminada y nunca se usa para
+actualizaciones de precios. Todas estas variables son opcionales: descomenta una línea de `.env.example` para cambiar una.
+
+| Variable | Predeterminado | Qué hace |
 | --- | --- | --- |
-| `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` | `1` | Interruptor maestro encendido/apagado. Establecer en `0` para desactivar por completo el recurso externo; la búsqueda interna del proveedor sigue funcionando. |
-| `LIBREFOLIO_WEB_LINK_FINDER_ENGINE` | `ddgs` | Transporte de búsqueda. Opciones: `ddgs`, `apikey`. `ddgs` es el agregador de metabúsqueda sin configuración. `apikey` está reservado para un motor con clave (requiere `..._API_KEY`); `searxng` está reservado para una futura fase autoalojada. |
-| `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | Sugerencia de región `ddgs`. `wt-wt` (todo el mundo) evita un sesgo de EE. UU. para que las páginas localizadas (por ejemplo, Borsa Italiana) no bajen de rango. Ejemplos: `es-es`, `us-en`. |
-| `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | Qué motor(es) subyacente(s) consulta `ddgs`. `auto` rota a través de muchos motores por llamada (máxima cobertura, pero la **calidad de los resultados varía de una llamada a otra**). Fije un subconjunto separado por comas (por ejemplo, `google,bing,duckduckgo`) para obtener resultados **más deterministas** a costa de la cobertura. |
-| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Tiempo de espera por solicitud, en segundos. |
-| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Número máximo de URL candidatas devueltas por búsqueda. |
-| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | _vacío_ | Clave API, utilizada solo cuando `ENGINE=apikey`. |
+| `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` | `1` | `0` desactiva la búsqueda web; la búsqueda propia de los proveedores sigue funcionando. |
+| `LIBREFOLIO_WEB_LINK_FINDER_ENGINE` | `ddgs` | `ddgs` no necesita configuración. `apikey` está reservado para un servicio de búsqueda de pago y aún no devuelve resultados. |
+| `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | Región de búsqueda. `wt-wt` (mundial) evita que sitios nacionales como Borsa Italiana sean relegados. Ejemplos: `it-it`, `us-en`. |
+| `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | Motores que consulta `ddgs`: `auto` los rota para la mayor cobertura; una lista como `google,bing,duckduckgo` da resultados más estables. |
+| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Límite de tiempo de una búsqueda, en segundos. |
+| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Máximo de enlaces devueltos por una búsqueda. |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | _vacío_ | Clave para el motor `apikey`. |
 
-!!! tip "Resultados no deterministas con `auto`"
+??? tip "🔁 Los resultados cambian entre intentos — cuando un activo conocido a veces no se encuentra"
 
-    Con el valor predeterminado `DDGS_BACKEND=auto`, la misma consulta puede devolver resultados de diferente calidad en llamadas consecutivas, porque `ddgs` rota los motores. Si una búsqueda interactiva ocasionalmente no devuelve nada para un instrumento que sabe que está indexado, vuelva a intentarlo una vez, o fije `DDGS_BACKEND` en un subconjunto estable como `google,bing,duckduckgo`.
+    Con `auto`, cada búsqueda puede llegar a motores diferentes, así que la misma consulta puede ir mejor o peor
+    de un intento a otro. Reinténtalo una vez o establece
+    `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND=google,bing,duckduckgo`.
 
-## 🔝 Prioridad de Resolución
+---
 
-Al resolver las variables de configuración, LibreFolio respeta un orden de precedencia desde el más bajo (valores predeterminados en el código) hasta el más alto (anulaciones de Docker Compose). Para obtener un mapa de prioridades y un diagrama detallados, consulte la [Sección de Prioridad de Resolución de Docker](docker_advanced.md#resolution-priority).
+## 🔝 Qué valor prevalece
 
-## 📂 Separación de Datos
+De mayor a menor prioridad:
 
-LibreFolio utiliza directorios de datos separados para producción y prueba:
+1. Las opciones `--host`, `--port` y `--data-dir` de `./dev.py server`.
+2. Variables establecidas en el shell.
+3. El archivo `.env`.
+4. Los valores predeterminados enumerados en esta página.
 
-- **Producción**: `backend/data/prod/` (sqlite, custom-uploads, broker_reports, logs)
-- **Test**: `backend/data/test/` (misma estructura, completamente aislado)
+Con Docker Compose, el bloque `environment:` de `docker-compose.yml` prevalece sobre `.env`: fija
+`HOST` y `LIBREFOLIO_DATA_DIR`. Consulta [Docker avanzado](docker_advanced.md#resolution-priority).
 
-La función `get_data_dir()` en `config.py` selecciona automáticamente la ruta correcta basándose en `LIBREFOLIO_TEST_MODE`.
+---
 
-## ⚙️ Cómo Funciona
+## 📂 Dónde van los datos
 
-La configuración se carga en una clase Pydantic `Settings` ubicada en `backend/app/config.py`. Esta clase lee automáticamente las variables del archivo `.env` y valida sus tipos.
+- **Producción**: `backend/data/prod/`, o `LIBREFOLIO_DATA_DIR`. Contiene la base de datos
+  (`sqlite/app.db`), `custom-uploads/`, `broker_reports/` y `logs/`.
+- **Prueba**: `backend/data/test/`, o `LIBREFOLIO_TEST_DATA_DIR`. Misma estructura, mantenida aparte.
 
-Este enfoque proporciona:
+[Estructura del sistema de archivos](filesystem.md) detalla cada carpeta y cómo hacer una copia de seguridad.
 
-- **Seguridad de Tipos**: La configuración se valida al iniciar la aplicación.
-- **Configuración Centralizada**: Toda la configuración se define en un solo lugar.
-- **Flexibilidad**: La configuración se puede proporcionar a través de un archivo `.env` o como variables de entorno reales, lo que facilita su configuración en diferentes entornos (local, Docker, etc.).
+---
+
+## 🔗 Relacionado
+
+- ⚙️ **[Configuración global](settings.md)** — Opciones que se cambian desde dentro de la aplicación
+- 🐳 **[Docker avanzado](docker_advanced.md)** — Archivo Compose, volúmenes, IDs de usuario y grupo
+- 🧑‍💻 Para desarrolladores: **[Sistema de configuración](../developer/architecture/settings.md)** — Cómo se cargan estos
+  valores

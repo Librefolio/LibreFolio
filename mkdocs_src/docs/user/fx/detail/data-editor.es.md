@@ -1,67 +1,73 @@
-# ✏️ Editor de Datos e Importación de CSV
+# ✏️ Editor de datos e importación CSV
 
-El Editor de Datos le permite **ver, añadir, editar y eliminar** puntos de datos individuales de tipos de cambio. Para la carga masiva, incluye una herramienta integrada de **Importación de CSV**.
+El editor de datos te permite añadir, cambiar y eliminar los tipos de cambio almacenados de un par uno a uno, o cargar muchos
+a la vez desde un archivo CSV. Nada se guarda hasta que hagas clic en **Guardar**.
 
 ---
 
-## 📝 Editor de Datos
+## 📝 Abrir el editor
 
-Haga clic en el botón **Editar** (✏️) en la barra de herramientas del gráfico para abrir el panel del editor de datos:
+Haz clic en ✏️ (**Editar tipos de cambio**) en el gráfico. El editor se abre debajo del gráfico y los demás paneles se pliegan
+mientras editas.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="FX Data Editor" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Editor de datos FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### 👀 Visualización de Datos
+Muestra los tipos de cambio del periodo seleccionado con su **Fecha**, **Tipo de cambio** y **Estado** (**Original**,
+**Editado**, **Eliminado** o **Nuevo**).
 
-El editor muestra una tabla desplazable con todos los puntos de datos para este par de divisas, ordenados por fecha (la más reciente primero):
+- Una fecha marcada con ⚠️ y un número de días no tiene tipo de cambio propio (un fin de semana o un festivo bancario) y
+  repite el anterior. El interruptor ⚠️ en la parte superior oculta estos días.
+- Haz doble clic en un punto del gráfico (mantén pulsado en móvil) para saltar a su fecha en el editor.
 
-- 📅 **Fecha** — La fecha de observación
-- 💱 **Tipo de cambio** — El valor del tipo de cambio
-- 🏛️ **Fuente** — De dónde provienen los datos (nombre del proveedor, importación de CSV o manual)
+---
 
-### ➕ Añadir un Punto de Datos
+## ✍️ Cambiar tipos de cambio
 
-1. Haga clic en **"Añadir"** en la parte superior del editor
-2. Seleccione la **fecha** en el selector de fecha
-3. Introduzca el valor del **tipo de cambio**
-4. Haga clic en **Guardar** — el punto se añade inmediatamente y el gráfico se actualiza
+### ➕ Añadir un tipo de cambio
 
-### ✏️ Editar un Punto de Datos
+Haz clic en **Añadir fila**: aparece una fila en el día siguiente al último, nunca más tarde que hoy. Cambia su
+fecha con el selector de fecha si es necesario y luego escribe el tipo de cambio.
 
-1. Haga clic en el **icono del lápiz** junto a cualquier fila
-2. Modifique el valor del tipo de cambio
-3. Haga clic en **Guardar** para confirmar
+### ✏️ Editar un tipo de cambio
 
-### 🗑️ Eliminar un Punto de Datos
+Haz clic en un tipo de cambio y escribe el nuevo valor.
 
-1. Haga clic en el **icono de la papelera** junto a cualquier fila
-2. Confirme la eliminación
+### 🗑️ Eliminar tipos de cambio
+
+Haz clic en 🗑️ en una fila, o selecciona filas y haz clic en la papelera de la parte superior. **Deshacer** recupera una fila hasta que
+guardes.
+
+### 💾 Guardar tus cambios
+
+Tus cambios se muestran en el gráfico como una línea **Vista previa** morada. **Guardar (N)** los guarda todos;
+**Cancelar** los descarta. Un tipo de cambio debe ser mayor que cero: uno con valor cero, negativo o vacío se omite.
 
 !!! warning "Los datos sincronizados sobrescriben las ediciones manuales"
 
-    Si edita o añade manualmente un punto de datos para una fecha que posteriormente sea cubierta por una sincronización, el valor del proveedor **sobrescribirá** su edición manual; el proveedor siempre se considera la fuente autorizada. Para pares donde desee un control manual total, utilice el proveedor MANUAL (sin fuente de datos automática); consulte [Provider Config](provider.md).
+    Una sincronización posterior de las mismas fechas reemplaza tus valores con los del proveedor. Para tener control
+    manual completo, usa un par sin proveedor — consulta [Configuración del proveedor](provider.md).
 
 ---
 
-## 📥 Importación de CSV
+## 📥 Importación CSV
 
-Para la carga masiva de datos históricos de tipos de cambio, utilice la herramienta de Importación de CSV.
+### 🔓 Abrir la ventana de importación
 
-### 🔓 Cómo Acceder
+1. En el editor, haz clic en **Importar CSV**.
+2. En **Importar datos CSV**, suelta un archivo `.csv` o `.txt`, o pega el texto en el cuadro.
+3. Comprueba la dirección en la parte superior y luego haz clic en **Importar (N)**.
 
-1. Abra el Editor de Datos (icono del lápiz ✏️)
-2. Haga clic en **"Import CSV"** para abrir el modal de importación
+Las filas se añaden al editor: revísalas y luego haz clic en **Guardar**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="CSV Import Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Ventana de importación CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
----
+### 📄 Formato de archivo
 
-### 📄 Formato del Archivo CSV
-
-El archivo CSV debe tener **exactamente 2 columnas** con una **fila de encabezado** que especifique la dirección:
+Dos columnas, con una fila de encabezado que establece la dirección:
 
 ```csv
 date;EUR>USD
@@ -70,93 +76,52 @@ date;EUR>USD
 2024-01-04;1.0911
 ```
 
-### 📏 Reglas
-
 | Regla | Detalles |
 |------|---------|
 | **Separador** | Punto y coma (`;`) |
-| **Formato de fecha** | `YYYY-MM-DD` |
-| **Valores de tipo de cambio** | Números decimales positivos |
-| **Encabezado** | Obligatorio — debe contener la dirección (ej., `EUR>USD`) |
-| **Flecha de dirección** | Use `>` o `<` (ambos son compatibles) |
+| **Encabezado** | `date` y la dirección, p. ej. `EUR>USD` |
+| **Fechas** | `YYYY-MM-DD` |
+| **Tipos de cambio** | Números positivos; `.` o `,` como separador decimal, `_` opcional para separar miles (`1_000.50`) |
 
-### ↔️ Dirección en el Encabezado
+### ↔️ Dirección
 
-El encabezado indica a LibreFolio en qué dirección se expresan los tipos de cambio:
+- `EUR>USD` significa **1 EUR = X USD**; `EUR<USD` es al revés, **1 USD = X EUR**.
+- El encabezado debe nombrar las dos divisas de este par, en cualquier orden.
+- La barra de la parte superior muestra cómo se leen los tipos de cambio (*Tipos de cambio interpretados como: 1 EUR = X USD*); ⇄ invierte la dirección
+  y reescribe el encabezado.
+- Un archivo en la dirección opuesta a la de la página se invierte automáticamente: cada tipo de cambio $r$ se convierte en $1/r$.
 
-- ➡️ `date;EUR>USD` significa: **1 EUR = X USD** (los tipos de cambio son EUR→USD)
-- ⬅️ `date;USD>EUR` significa: **1 USD = X EUR** (los tipos de cambio son USD→EUR)
+??? example "📋 Ejemplos — los mismos tipos de cambio escritos en ambas direcciones"
 
-Si está en la página de EUR/USD y su CSV tiene tipos de cambio `USD>EUR`, LibreFolio invertirá automáticamente los valores.
+    ```csv
+    date;EUR>USD
+    2024-01-02;1.1045
+    2024-01-03;1.0982
+    ```
 
----
+    ```csv
+    date;USD>EUR
+    2024-01-02;0.9053
+    2024-01-03;0.9106
+    ```
 
-### 🔀 Dirección e Intercambio
+    En la página EUR/USD ambos archivos dan los mismos tipos de cambio: `0.9053` se convierte en $1/0.9053 \approx 1.1046$.
 
-El modal de importación muestra una **barra de dirección** que indica cómo se interpretarán sus datos:
+### ⚠️ Errores comunes
 
-- ➡️ **Divisa izquierda** → **Divisa derecha**: el tipo de cambio indica cuánta divisa de la derecha obtiene por 1 unidad de la divisa de la izquierda
-- 🔄 Use el **botón de intercambio (⇄)** para invertir la dirección si sus datos están en el formato opuesto
+La ventana de importación marca cada línea incorrecta; solo se importan las líneas válidas.
 
-El encabezado en su CSV determina la dirección automáticamente. Si el encabezado dice `EUR>USD`, el modal establece la dirección a EUR→USD.
+| Mensaje | Causa | Solución |
+|---------|-------|-----|
+| **Las divisas del encabezado no coinciden** | Otras divisas en el encabezado, p. ej. `GBP>JPY` en la página EUR/USD | Usa las divisas de este par |
+| **Encabezado esperado** o **Faltan columnas obligatorias** | Sin fila de encabezado, o falta una columna | Empieza con una línea como `date;EUR>USD` |
+| **Formato de fecha no válido** | La fecha no es `YYYY-MM-DD` | Corrige la fecha |
+| **Número no válido** | El tipo de cambio no es un número | Corrige el valor |
+| **Fecha duplicada** | La misma fecha aparece dos veces | Mantén una línea por fecha |
 
----
+??? info "🔀 Cómo se fusionan las filas importadas — cuando el editor ya tiene algunas de las fechas"
 
-### 📋 Ejemplos
-
-#### ✅ Archivo Válido Mínimo
-
-```csv
-date;EUR>USD
-2024-01-02;1.1045
-2024-01-03;1.0982
-```
-
-#### ✅ Dirección Invertida
-
-```csv
-date;USD>EUR
-2024-01-02;0.9053
-2024-01-03;0.9106
-```
-
-Esto es equivalente al primer ejemplo: LibreFolio invierte `0.9053` a `1/0.9053 ≈ 1.1045`.
-
-#### ❌ Archivo Inválido
-
-```csv
-date;GBP>JPY
-2024-01-02;188.45
-```
-
-Esto fallará si está en la página de EUR/USD; las divisas del encabezado deben coincidir con el par de la página.
-
----
-
-### ⚠️ Errores Comunes
-
-| Error | Causa | Solución |
-|-------|-------|-----|
-| **"Header currencies don't match"** | El encabezado tiene divisas que no están en esta página | Verifique el par y corrija el encabezado |
-| **"Missing or invalid header"** | No hay fila de encabezado o el formato es incorrecto | Añada un encabezado como `date;EUR>USD` |
-| **"Duplicate dates"** | La misma fecha aparece varias veces | Elimine los duplicados |
-| **"Invalid rate"** | Valor no numérico o negativo | Asegúrese de que todos los tipos de cambio sean números positivos |
-| **"Invalid date format"** | La fecha no está en formato `YYYY-MM-DD` | Corrija el formato de la fecha |
-
----
-
-### 🔀 Comportamiento de Fusión (Merge)
-
-Al importar vía CSV o añadir puntos manualmente en el editor:
-
-- Los cambios se aplican primero al **caché local del cliente** (visibles inmediatamente en el gráfico)
-- Los cambios **no se persisten** en la base de datos hasta que haga clic en **Guardar**
-- 🔄 Los **puntos de datos existentes** en la base de datos serán **sobrescritos** con los valores importados al guardar
-- 🆕 Se añaden **nuevas fechas**
-- ✅ Las **fechas que no están en la importación** permanecen intactas
-
-Esto le permite actualizar selectivamente rangos de fechas específicos sin afectar el resto de sus datos.
-
-!!! tip "Ideal para pares MANUAL"
-
-    El editor de datos es más útil para pares configurados con el proveedor MANUAL (sin fuente de datos automática). Para pares respaldados por un proveedor, las ediciones manuales serán sobrescritas en la siguiente sincronización.
+    - Una fecha que ya está en el editor toma el tipo de cambio importado (estado **Editado**); una fecha nueva se añade
+      (estado **Nuevo**). Las fechas que faltan en el archivo permanecen como están.
+    - Las fechas fuera del periodo seleccionado también se guardan, reemplazando cualquier tipo de cambio almacenado en esos días;
+      después de guardar, el periodo se amplía para mostrarlas.

@@ -11,7 +11,7 @@ Aprende a usar el Módulo de Importación de Informes de Bróker (BRIM) para imp
 
 ---
 
-## 🚀 Guía paso a paso
+## 🚀 Guía paso a paso {: #guided-first-import }
 
 1. Exporta un informe de transacciones de tu bróker (normalmente un archivo CSV — consulta el centro de ayuda de tu bróker).
 2. En LibreFolio, navega a la página de **[Transacciones](../index.md)**.
@@ -43,6 +43,7 @@ Aprende a usar el Módulo de Importación de Informes de Bróker (BRIM) para imp
 ## 🧙 Pasos del asistente de importación
 
 El asistente tiene **cuatro pasos que ves siempre** y **tres que aparecen solo cuando tus archivos realmente los necesitan**. La barra de progreso muestra únicamente los pasos que corresponden a tu importación, de modo que un informe limpio de un solo archivo se mantiene como un flujo breve, mientras que uno desordenado de varios archivos recibe exactamente las preguntas adicionales que merece — y ninguna más.
+{: #only-when-needed }
 
 | Paso | ¿Se muestra siempre? | Aparece cuando |
 | :--- | :--- | :--- |
@@ -228,7 +229,7 @@ Al final del procesamiento, la tabla muestra un resumen del procesamiento de cad
     Cada grupo se etiqueta como **Total** (los archivos coinciden en todos los detalles — un
     solapamiento puro) o **Parcial** (algo difiere, por lo que merece un vistazo).
 
-### 📦 Paso 4: Revisión e importación
+### 📦 Paso 4: Revisión e importación {: #review }
 
 La revisión final muestra cada transacción que se va a importar en una cuadrícula tipo hoja de cálculo, y es donde cada instrumento se empareja por fin con tu biblioteca.
 
@@ -275,7 +276,7 @@ El lápiz ✏️ junto a un instrumento emparejado abre el editor completo de ac
        El valor del proveedor viene preseleccionado, porque es el único que tiene un feed de precios
        detrás.
 
-#### ⛔ Fecha de apertura del bróker
+#### ⛔ Fecha de apertura del bróker {: #opening-date }
 
 Si el bróker de destino tiene una fecha de apertura, el asistente marca las filas cuya fecha sea **estrictamente anterior** a ella con el estado `Before opening`. Esas filas se deseleccionan y no se pueden importar; una fila que esté en el día de apertura sigue siendo válida. Si la fecha es incorrecta, un banner por bróker te permite **Editar fecha del bróker** manualmente o **corregirla automáticamente** con la fecha de transacción más antigua encontrada; a continuación, vuelve a comprobar o actualiza para que el asistente reevalúe cada fila con la fecha actualizada.
 

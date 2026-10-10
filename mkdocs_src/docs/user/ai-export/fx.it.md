@@ -1,80 +1,40 @@
 # 🧠 FX AI Export
 
-FX Detail AI Export prepara un'istantanea per gli appunti o un prompt di analisi
-mirata per la coppia di valute canonica attualmente aperta. LibreFolio non invia
-mai questi dati a un servizio di intelligenza artificiale.
+Esporta una coppia FX, con i suoi tassi, il suo trend e la tua esposizione diretta alla coppia, per chiedere a un'IA informazioni sulla coppia o su cosa significa per ciò che possiedi. Le opzioni e come incollare sono nella
+[Panoramica AI Export](index.md).
 
-## 📍 Posizione
+---
 
-Apri una pagina di dettaglio FX. Nella **barra degli strumenti della pagina**, seleziona
-**AI Export**. La bozza rimane disponibile per 10 minuti nella sessione di
-accesso corrente e viene azzerata dopo il logout o un nuovo accesso.
+## 📍 Dove trovarlo
 
-## 🎯 Analisi FX
+Nella pagina di dettaglio di una coppia, seleziona **AI Export** nella barra degli strumenti della pagina. Si apre inizialmente su
+**Analisi della coppia FX**.
 
-| Attività | Focus |
-| --- | --- |
-| **FX Pair Analysis** | Direzione della coppia, rendimenti, volatilità, evidenze tecniche, copertura e contesto macro con data. |
-| **FX Exposure Impact** | Collegamenti diretti alla coppia da cassa, valuta di negoziazione e valuta di valutazione. |
+L'esportazione copre la coppia aperta nella pagina, con l'ultimo giorno dell'intervallo di date della pagina come data di esportazione. La tua esposizione include ogni broker che puoi aprire.
 
-## 🗂️ Ambito e dati
+Se LibreFolio dispone di tassi solo per una parte del periodo scelto, l'esportazione usa quelli e indica quali date copre: non usa mai tassi futuri.
 
-L'esportazione utilizza la coppia canonica della pagina, l'intervallo di date
-selezionato, la valuta di destinazione, la cronologia dei tassi, il contesto del
-provider e i risultati tecnici calcolati dal backend.
+---
 
-## 📤 Export Data e Request Analysis
+## 📤 Dati esportati
 
-- **Export Data** copia solo un set di dati FX fattuale.
-- **Request Analysis** aggiunge istruzioni specifiche per l'attività, un contratto
- di risposta e i set di dati dichiarati per l'Analisi.
- La lingua della risposta richiesta segue la lingua corrente dell'interfaccia di
- LibreFolio.
-- Le note opzionali sono incluse solo quando supportate dall'Analisi selezionata.
+| Scelta | Cosa ottieni |
+| :--- | :--- |
+| **Mercato FX ed esposizione** | Il tasso corrente, un contesto compatto di mercato e tempistiche, e la tua esposizione diretta alla coppia |
+| **Storico del mercato FX** | Tassi dettagliati, rendimenti, volatilità, indicatori, stati ed eventi, con copertura |
 
-Sono disponibili due esportazioni pubbliche di dati:
+---
 
-- **FX Market & Exposure** — tasso corrente quote-per-base, 8/16/30 punti
- osservati del percorso, trend/momentum/volatilità mirati, rendimenti a 30 e 91
- giorni, posizione nel range, copertura delle fonti, input utente mancanti ed
- esposizione diretta;
-- **FX Market History** — bucket di tassi più fitti, rendimenti, indicatori,
- stati, eventi e copertura.
+## 🎯 Analisi
 
-## 📉 Cronologia parziale
+| Analisi | Cosa fa l'IA |
+| :--- | :--- |
+| **Analisi della coppia FX** | Analizza la direzione, i rendimenti, il trend, il momentum, la volatilità e gli eventi della coppia, con un contesto macro datato |
+| **Impatto dell'esposizione FX** | Descrive come la tua liquidità e le tue posizioni sono direttamente collegate alla coppia, senza guardare all'interno dei fondi; richiede almeno un collegamento di questo tipo |
 
-Quando il periodo AI richiesto inizia prima della cronologia dei tassi
-memorizzata, LibreFolio esporta la cronologia effettiva che può utilizzare e
-riporta:
+---
 
-- date richieste e disponibili;
-- copertura;
-- conteggi osservati e riempiti a ritroso;
-- segnale parziale;
-- segnale omesso e relative motivazioni;
-- avvisi di cronologia insufficiente.
+## 🔗 Correlati
 
-Non viene utilizzato alcun tasso futuro. Un segnale parziale non viene presentato
-come equivalente a una cronologia completa.
-
-## 📏 Dettaglio e campionamento
-
-| Dettaglio | Campionamento esatto |
-| --- | --- |
-| **Compatto** | Esportazione generale: fino a 8 punti di tasso osservati in modo uniforme. Esportazione dettagliata: fino a 5 righe di indicatori non vuote per segnale. |
-| **Standard** | Esportazione generale: fino a 16 punti. Esportazione dettagliata: fino a 10 righe di indicatori. |
-| **Completo** | Esportazione generale: fino a 30 punti. Esportazione dettagliata: include ogni bucket di indicatori non vuoto e può essere di grandi dimensioni. |
-
-Un set di dati o un'Analisi può omettere sezioni opzionali non disponibili o non
-applicabili. Il **periodo AI** termina alla data dell'istantanea.
-
-## 🔒 Applicabilità, errori e privacy
-
-Le Analisi o le scelte di dettaglio possono essere disabilitate quando i dati
-richiesti sono assenti. Le discrepanze tra catalogo e contratto di risposta
-falliscono in modalità chiusa. Gli errori tipizzati segnalano problemi di
-applicabilità, origine, entità o contratto.
-
-Gli appunti possono contenere dati sensibili relativi all'esposizione valutaria
-e di portafoglio. Rivedili prima di condividerli. Consulta la [panoramica di AI
-Export](index.md) per il flusso di lavoro cross-domain e il modello di sicurezza.
+- 🧠 **[Panoramica AI Export](index.md)** — opzioni, come incollare e privacy
+- 🔍 **[Pagina di dettaglio della coppia](../fx/detail/index.md)** — dove inizia l'esportazione

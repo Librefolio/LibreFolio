@@ -34,7 +34,7 @@ Scénarios courants :
 
     Lors du transfert d'actifs, le **prix de revient original** doit être préservé. Le transfert lui-même n'est pas un événement imposable dans la plupart des juridictions (bien que les règles varient). LibreFolio permet une **dérogation optionnelle au prix de revient** du côté du destinataire.
 
-    Consultez **[📊 Coût Moyen Pondéré (CMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** pour savoir comment le prix de revient automatique est calculé.
+    Consultez **[📊 Prix de Revient Unitaire (PRU)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** pour savoir comment le prix de revient automatique est calculé.
 
 ---
 
@@ -44,7 +44,7 @@ En arrière-plan, un Transfert est composé de deux écritures d'Ajustement. Lib
 
 | Opération | Résultat |
 |-----------|--------|
-| **Division** (délier) | Transfert → deux Ajustements indépendants |
+| **Séparer la paire** (délier) | Transfert → deux Ajustements indépendants |
 | **Promouvoir** (lier) | Deux Ajustements → Transfert |
 
 **Contraintes de promotion** : même actif, courtiers différents, quantités opposées.
@@ -59,7 +59,7 @@ Un vrai `TRANSFER` nécessite deux courtiers dans LibreFolio : source et destina
 
 ## 🔗 Liens connexes
 
-- 📊 **[Coût Moyen Pondéré](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Comment le prix de revient est calculé lors des transferts
-- 🏦 **[Transfert de fonds](cash-transfer.md)** — Virements bancaires (cash, pas d'actifs)
+- 📊 **[Prix de Revient Unitaire](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Comment le prix de revient est calculé lors des transferts
+- 🏦 **[Virement](cash-transfer.md)** — Virements bancaires (cash, pas d'actifs)
 - 💱 **[Conversion de devise](fx-conversion.md)** — Change de devises
 - 📊 **[Ajustement](adjustment.md)** — Corrections manuelles
