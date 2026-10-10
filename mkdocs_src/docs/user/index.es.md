@@ -3,7 +3,7 @@
 Bienvenido al Manual de Usuario de LibreFolio. Esta sección proporciona guías sobre cómo utilizar las funciones de la aplicación.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="dashboard" data-name="main" alt="Panel de Control de LibreFolio" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="dashboard" data-name="main" alt="Panel de LibreFolio" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 !!! tip "Un encabezado que deja espacio"

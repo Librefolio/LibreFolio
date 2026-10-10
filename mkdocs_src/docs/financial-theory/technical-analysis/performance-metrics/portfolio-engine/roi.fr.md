@@ -23,7 +23,7 @@ $$
 ## 🎯 Quand l'utiliser
 
 - Pour lire le gain/la perte global du portefeuille par rapport au capital économique contribué.
-- Pour comparer la VNI actuelle à la base de capital actuelle.
+- Pour comparer le NAV actuel à la base de capital actuelle.
 - Pour vérifier la performance ajustée des flux de trésorerie avant d'examiner le TWRR/MWRR.
 
 ## 📈 Rendement annualisé net d'une position

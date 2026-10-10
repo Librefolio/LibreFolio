@@ -1,8 +1,8 @@
-# 💸 Capital Déposé, PnL Total et Pools de Cash
+# 💸 Capital Versé, PnL Total et Pools de Cash
 
-## 💡 Aperçu du Concept
+## 💡 Vue d'ensemble du concept
 
-**Capital Déposé** = capital externe net cumulé apporté depuis le début :
+**Base de capital** = capital économique cumulé apporté depuis le début :
 
 $$
 \mathrm{CapitalBaseline}(t) =
@@ -13,21 +13,23 @@ $$
 **PnL Total** = toute la valeur générée au-delà des contributions externes :
 
 $$
-\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{DepCap}(t)}
+\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{CapitalBaseline}(t)}
 $$
+
+`InKindCapital` couvre les lignes ADJUSTMENT / TRANSFER valorisées qui portent un `cost_basis_override` sans `asset_event_id` (hors lignes de division). Ces lignes injectent une valeur comptable sans trésorerie : elles doivent donc augmenter le capital investi.
 
 ---
 
 ## 🎯 Ce qui est comptabilisé
 
-| Transaction | Effet sur DepCap |
+| Transaction | Effet sur la base de capital |
 |------------|-----------------|
 | DÉPÔT / RETRAIT (non lié) | ✅ Oui |
-| TRANSFERT DE LIQUIDITÉS connecté-externe | ✅ Oui |
-| TRANSFERT DE LIQUIDITÉS connecté-interne | ❌ Non |
-| AJUSTEMENT / TRANSFERT avec `cost_basis_override`, sans `asset_id` | ✅ Oui, ajustement du capital externe |
-| AJUSTEMENT lié à FRACTIONNEMENT | ❌ Non, redimensionnement de quantité uniquement |
-| ACHAT, VENTE, DIVIDENDE, INTÉRÊT, FRAIS, TAXE | ❌ Non |
+| VIREMENT connecté-externe | ✅ Oui |
+| VIREMENT connecté-interne | ❌ Non |
+| AJUSTEMENT / TRANSFERT avec `cost_basis_override`, sans `asset_event_id` | ✅ Oui, capital en nature |
+| AJUSTEMENT lié à DIVISION | ❌ Non, redimensionnement de quantité uniquement |
+| ACHAT, VENTE, DIVIDENDE, INTÉRÊT, FRAIS, IMPÔT | ❌ Non |
 
 ---
 
@@ -47,7 +49,7 @@ $$
 
 !!! info "Propriétés clés"
 
-    - $\mathrm{DepCap}$ = somme historique de tous les flux. $\sum K_b$ = quelle part du cash actuel est du capital externe. Ils divergent après un ACHAT/VENTE.
+    - $\mathrm{CapitalBaseline}$ = somme historique des flux de trésorerie et du capital en nature. $\sum K_b$ = quelle part du cash actuel est du capital externe. Ils divergent après un ACHAT/VENTE.
     - Un ACHAT sur le courtier $b_1$ ne consomme que $R_{b_1}$, jamais $R_{b_2}$.
     - Les transferts de cash entre courtiers déplacent $R$ et $K$ de la source vers la destination sans toucher à $W$.
 
@@ -109,4 +111,4 @@ La série d'entrées ROI/TWRR/MWRR est dérivée des variations jour après jour
 - 💼 [NAV](nav.md) — l'autre terme du PnL Total
 - 📊 [Period PnL](period-pnl.md) — version par fenêtre
 - ⚙️ [Portfolio Engine](index.md) — modèle mathématique complet
-- 📈 [Aperçu des Métriques de Performance](../index.md) — toutes les métriques de performance en un coup d'œil
+- 📈 [Vue d'ensemble des métriques de performance](../index.md) — toutes les métriques de performance en un coup d'œil

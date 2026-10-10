@@ -1,57 +1,88 @@
 # ➕ Ajouter une paire de devises
 
-Pour ajouter une nouvelle paire de devises à votre tableau de bord FX :
+Une paire indique à LibreFolio d'où provient le taux de change entre deux devises : un fournisseur
+de banque centrale, une chaîne de fournisseurs, ou des taux que vous saisissez vous-même.
 
-1. Cliquez sur **"Add Pair"** sur la page de la liste FX
-2. Sélectionnez les **deux devises** à l'aide du menu déroulant de recherche
-3. Le système découvre automatiquement les **routes de données** disponibles — tant les routes directes que les routes en chaîne
-4. Sélectionnez la route que vous préférez et cliquez sur **Confirm** — la paire est créée et la synchronisation des données commence automatiquement
+Cliquez sur **Ajouter une paire** sur la [page FX](index.md). La même fenêtre s'ouvre depuis le
+tableau de bord, depuis une page d'actif et depuis l'étape Change de l'allocateur PAC.
 
 ---
 
-## 🛤️ Routes de conversion (Directes et en Chaîne)
+## 🧭 Ajouter une paire étape par étape
 
-Lorsque vous sélectionnez une devise de base et une devise de cotation, LibreFolio interroge tous les fournisseurs installés pour découvrir les meilleures routes de taux de change disponibles.
+### 💱 Étape 1 : Choisir les deux devises
+
+Dans **Ajouter une nouvelle paire de devises**, choisissez la **Devise de base** et la **Devise de
+cotation**. Chaque liste masque les devises déjà appariées avec l'autre, afin qu'une paire ne puisse
+pas être ajoutée deux fois.
+
+### 🛤️ Étape 2 : Choisir une route
+
+Cliquez sur **Ajouter une route de conversion** pour voir toutes les façons dont les fournisseurs
+peuvent produire ce taux :
+
+- 🔗 **Conversion directe (1 étape)** — un fournisseur publie la paire ;
+- 🔀 **Conversion en chaîne** — passe par d'autres devises, regroupées par nombre d'étapes ;
+- 🚫 **Non utilisable** — fournisseurs qui ne peuvent pas atteindre cette paire.
+
+Filtrez avec la zone de recherche (fournisseur, devise ou pays), puis cliquez sur une route pour
+l'ajouter.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fx-routes" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="add-pair-routes" data-title="🔗 Routes Directes" alt="Ajouter une paire — Routes Directes">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="add-pair-chain" data-title="🔀 Routes en Chaîne (Multi-étapes)" alt="Ajouter une paire — Routes en Chaîne">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="add-pair-routes" data-title="🔗 Routes directes" alt="Ajouter Paire — Routes directes">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="add-pair-chain" data-title="🔀 Routes en chaîne (plusieurs étapes)" alt="Ajouter Paire — Routes en chaîne">
 </div>
 
-### 🔗 Routes Directes
-Si un fournisseur prend directement en charge les taux de change entre les deux devises (par exemple, la BCE fournissant les taux pour EUR 🇪🇺 / USD 🇺🇸), le système l'affiche comme une option de route directe.
+??? tip "🛟 Routes de secours — lorsque vous en ajoutez plusieurs"
 
-### 🔀 Routes en Chaîne
-Pour les paires exotiques (par exemple, RON 🇷🇴 / JPY 🇯🇵) pour lesquelles aucune banque centrale ne publie directement de taux, le système construit automatiquement des **chaînes de conversion** — des chemins multi-étapes via des devises intermédiaires (généralement EUR 🇪🇺 ou USD 🇺🇸).
+    LibreFolio utilise d'abord la route **#1** et essaie la **#2** si elle échoue lors d'une
+    synchronisation, et ainsi de suite. Faites glisser les routes pour les réordonner ; 🗑️ en
+    supprime une, et ⚠️ affiche une note de son fournisseur.
 
-!!! example "Exemple de Chaîne"
+??? note "🔀 Créer aussi les paires intermédiaires — lorsque vous choisissez une route en chaîne"
 
-    **RON 🇷🇴 → JPY 🇯🇵** via la BCE :
+    Cochez **Créer aussi les paires intermédiaires** pour enregistrer chaque étape comme une paire à
+    part entière. Vous pouvez alors synchroniser chaque étape séparément et convertir également vers
+    la devise intermédiaire : une chaîne ne stocke que le taux de sa propre paire.
 
-    1. RON 🇷🇴 → EUR 🇪🇺 (la BCE fournit RON 🇷🇴 / EUR 🇪🇺)
-    2. EUR 🇪🇺 → JPY 🇯🇵 (la BCE fournit EUR 🇪🇺 / JPY 🇯🇵)
+??? note "✏️ Aucune route — taux manuels uniquement"
 
-    Le taux final est calculé en multipliant les taux intermédiaires.
+    Vous pouvez enregistrer sans route, puis saisir vous-même les taux dans l'[éditeur de
+    données](detail/data-editor.md) de la paire.
+
+### 💾 Étape 3 : Enregistrer
+
+Cliquez sur **Enregistrer la configuration** ; la fenêtre se ferme immédiatement.
+
+- **Avec un fournisseur**, LibreFolio télécharge **tout l'historique** de la paire jusqu'à
+  aujourd'hui, quelle que soit la période affichée par la page, paires intermédiaires comprises. Un
+  message indique le résultat, en vert uniquement si tout a fonctionné.
+- **Sans fournisseur**, un message confirme que la paire a été créée.
+
+Cliquez sur le nom de la paire dans le message pour ouvrir sa page.
 
 ---
 
-## 🧭 Fonctionnement de la découverte de routes
+## 🛤️ Routes directes et en chaîne
 
-Lorsque vous sélectionnez deux devises, LibreFolio interroge tous les fournisseurs installés pour trouver :
+Une **route directe** utilise un seul fournisseur qui publie les deux devises, comme la BCE pour
+EUR 🇪🇺 / USD 🇺🇸. Lorsqu'aucune banque centrale ne publie la paire, une **route en chaîne**
+multiplie les taux de ses étapes. RON 🇷🇴 / USD 🇺🇸, par exemple, passe par RON → EUR → USD, les deux
+étapes provenant de la BCE, qui publie EUR/RON et EUR/USD :
 
-- 🔗 **Routes directes** : un seul fournisseur qui couvre les deux devises
-- 🔀 **Routes en chaîne** : deux fournisseurs ou plus qui, ensemble, peuvent connecter les devises via une devise intermédiaire (par exemple, EUR 🇪🇺)
+$$
+r_{\text{RON}\to\text{USD}} = r_{\text{RON}\to\text{EUR}} \times r_{\text{EUR}\to\text{USD}}
+$$
 
-Chaque route affiche :
+- Une chaîne n'a de taux que les jours où **chaque étape** en a un.
+- Si une étape échoue lors d'une synchronisation, toute la chaîne échoue : les chaînes plus courtes
+  sont plus fiables.
+- Le taux d'une chaîne peut légèrement différer d'une cotation directe du marché.
 
-- 🏛️ Le nom et l'icône du **fournisseur**
-- ➡️ La **direction** (base → cotation)
-- 🔢 Pour les chaînes : la **devise intermédiaire** et le **nombre d'étapes**
+---
 
-Vous pouvez choisir n'importe quelle route disponible en fonction de votre préférence pour la source de données, la période de couverture ou la fréquence de mise à jour.
+## 🔗 Voir aussi
 
-!!! info "Pour les Curieux : En coulisses"
-
-    Si vous êtes intéressé par les détails mathématiques de la manière dont les chaînes de conversion multi-étapes sont calculées et routées, vous pouvez consulter la documentation pour les développeurs : [FX Configuration & Routing](../../developer/backend/fx/configuration.md) et [FX Chain Algorithm](../../developer/frontend/fx-chain-algorithm.md). 
- 
-    *Note : Cette documentation technique est destinée uniquement aux développeurs et n'est pas requise pour utiliser cette fonctionnalité.*
+- 🔄 **[Synchronisation](sync.md)** — Télécharger à nouveau les taux plus tard
+- 🔌 **[Configuration du fournisseur](detail/provider.md)** — Modifier les routes d'une paire après sa création
+- 🧑‍💻 Pour les développeurs : **[Configuration & routage FX](../../developer/backend/fx/configuration.md)** et **[Algorithme de chaîne FX](../../developer/frontend/fx-chain-algorithm.md)**

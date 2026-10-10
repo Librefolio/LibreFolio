@@ -74,8 +74,8 @@ Internamente, una Conversión de divisa se compone de un Retiro (moneda de orige
 
 | Operación | Resultado |
 |-----------|--------|
-| **División** (desvincular) | Conversión de divisa → Retiro + Depósito independientes |
-| **Promover** (vincular) | Retiro + Depósito → Conversión de divisa |
+| **Separar par** (desvincular) | Conversión de divisa → Retiro + Depósito independientes |
+| **Promocionar** (vincular) | Retiro + Depósito → Conversión de divisa |
 
 **Restricciones de Promover**: monedas diferentes, mismo bróker.
 
@@ -85,7 +85,7 @@ Internamente, una Conversión de divisa se compone de un Retiro (moneda de orige
 
 - 💵 **[Depósito y Retiro](deposit-withdrawal.md)** — Movimientos de efectivo unilaterales
 - 🔄 **[Transferencia de Activos](transfer.md)** — Movimiento de valores entre brókers
-- 🏦 **[Transferencia de Efectivo](cash-transfer.md)** — Transferencias bancarias entre brókers
+- 🏦 **[Transferencia de fondos](cash-transfer.md)** — Transferencias bancarias entre brókers
 
 ---
 

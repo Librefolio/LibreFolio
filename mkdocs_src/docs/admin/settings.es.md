@@ -1,135 +1,153 @@
 # ⚙️ Configuración global
 
-LibreFolio dispone de un conjunto de **opciones de configuración de todo el sistema** que afectan a todos los usuarios. Están gestionadas por los administradores y se almacenan en la base de datos.
+La configuración global se aplica a toda la instancia y a todos los usuarios. Se almacena en la base de datos:
+todos pueden leerla, solo los administradores pueden cambiarla.
 
 ---
 
-## 👁️ Ver y editar la configuración
+## ✏️ Cambiar una configuración
 
-### 🖥️ Desde la interfaz de usuario
+### 🔓 1. Desbloquear la pestaña
 
-1. Ve a **Configuración** (icono de engranaje en la barra lateral)
-2. Haz clic en la pestaña **Configuración global** (visible para todos los usuarios; solo el administrador/superusuario puede editar)
-3. Haz clic en el **icono del candado** junto a un valor de configuración para desbloquearlo y editarlo
-4. Modifica el valor y el cambio se guarda automáticamente
+Abre **Configuración** (icono de engranaje en la barra lateral), luego la pestaña **Administración**: su panel **Configuración global**
+agrupa la configuración por categoría. Haz clic en el **icono de candado** (🔒) en el encabezado para desbloquearla.
+Solo los administradores (superusuarios) tienen el candado; todos los demás obtienen una vista de solo lectura.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración global" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! warning "Solo administradores"
+### 💾 2. Editar y guardar
 
-    Solo los usuarios con privilegios de **superusuario** pueden modificar la configuración global. Los usuarios normales ven una vista de solo lectura.
+- No se guarda nada hasta que hagas clic en **Guardar** junto a una configuración, o en **Guardar todo** en el encabezado.
+  **Deshacer** y **Deshacer todo** restauran los valores guardados.
+- **Restablecer a predeterminado** y **Restablecer todo a predeterminados** rellenan los valores predeterminados, listos para guardar.
+- Los valores guardados se aplican de inmediato, sin reiniciar.
 
-### 💻 Desde la CLI
+??? note "🔒 Bloquear con cambios sin guardar — cuando aparece un diálogo para preguntar primero"
 
-Para inicializar la configuración por defecto (solo crea los valores que faltan):
+    Al hacer clic en el candado con cambios sin guardar, se pregunta si quieres descartarlos. **Cancelar** conserva tus
+    ediciones; **Descartar** restaura los valores guardados y bloquea la pestaña.
 
-```bash
-./dev.py user init-settings
-```
+??? tip "💻 Configuraciones faltantes — recréalas desde la línea de comandos"
+
+    Cada inicio del servidor recrea cualquier configuración faltante con su valor predeterminado. Para hacerlo sin
+    reiniciar, ejecuta la [herramienta de línea de comandos](cli_tools.md):
+
+    ```bash
+    pipenv run ./dev.py user init-settings
+    ```
+
+    Los valores que cambiaste se conservan.
 
 ---
 
-## 🕐 Sesión
+## 📋 Qué hace cada configuración
 
-| Clave | Tipo | Por defecto | Descripción |
-|-----|------|---------|-------------|
-| `session_ttl_hours` | int | `24` | Tiempo de expiración del token JWT en horas. Después de este período, los usuarios deben iniciar sesión de nuevo. |
+| Categoría | Configuración | Predeterminado | Qué hace — cuándo cambiarla |
+|---|---|---|---|
+| ⏳ Sesión | **Duración de la sesión** | 24 horas | Cuánto tiempo permanecen los usuarios con la sesión iniciada. Redúcela en dispositivos compartidos; un nuevo valor se aplica a partir del siguiente inicio de sesión de cada usuario. |
+| 🛡️ Seguridad | **Habilitar registro** | Activado | Permite que se registren nuevas personas. Desactívalo cuando todos tengan una cuenta, sobre todo si se puede acceder a la instancia desde internet. La primera cuenta de una instancia nueva siempre se puede crear. |
+| 🛡️ Seguridad | **Requerir verificación por correo electrónico** | Desactivado | Aún no está activo: el envío de correos es una función planificada, por lo que el interruptor es de solo lectura y está marcado como **Próximamente**. |
+| 🔄 Tarea de actualización | **Planificador habilitado** | Activado | Activa o desactiva las actualizaciones automáticas de precios y tipos de cambio: consulta [Planificador de datos de mercado](#market-data-scheduler). |
+| 🧠 Memoria | **Tamaño máximo de archivo subido** | 10 MB | El archivo más grande que los usuarios pueden subir, incluidos los informes del bróker. Auméntalo si se rechaza una exportación grande. |
+| 🌍 Predeterminados | **Moneda predeterminada** | `EUR` | La moneda en la que informan los nuevos usuarios. |
+| 🌍 Predeterminados | **Idioma predeterminado** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` o 🇪🇸 `es`. |
+| 🌍 Predeterminados | **Tema predeterminado** | `auto` | ☀️ `light`, 🌙 `dark`, o 🖥️ `auto`, que sigue al dispositivo. |
 
-## 🛡️ Seguridad
-
-| Clave | Tipo | Por defecto | Descripción |
-|-----|------|---------|-------------|
-| `enable_registration` | bool | `true` | Indica si se permite el registro de nuevos usuarios. Establécelo en `false` para impedir nuevos registros. |
-| `require_email_verification` | bool | `false` | **Marcador de posición — aún no se aplica.** Indica si los nuevos usuarios deben verificar su correo electrónico antes de acceder al sistema. El envío de correos electrónicos (SMTP) es una funcionalidad prevista, por lo que en la interfaz este valor de configuración es de solo lectura y lleva una insignia de «próximamente». |
-
-## 🔄 Trabajo de actualización
-
-| Clave | Tipo | Por defecto | Descripción |
-|-----|------|---------|-------------|
-| `scheduler_enabled` | bool | `true` | Activa o desactiva el demonio de sincronización automática en segundo plano para tipos de cambio y precios históricos/en tiempo real. |
-
-Los parámetros restantes del programador no se muestran como campos individuales: se editan conjuntamente desde la ventana modal **Configurar** de la fila del Programador — consulta [Programador de datos de mercado](#market-data-scheduler) más abajo.
-
-| Clave | Tipo | Por defecto | Descripción |
-|-----|------|---------|-------------|
-| `scheduler_current_price_frequency_minutes` | int | `10` | Frecuencia (en minutos) con la que el demonio actualiza los precios actuales en tiempo real (1-1440). |
-| `scheduler_history_sync_times` | str | `06:00,23:00` | Horas HH:MM separadas por comas para la sincronización histórica diaria, expresadas **en la `scheduler_timezone` configurada**. Las horas se almacenan tal como se introducen (hora de reloj local); el demonio convierte cada franja local en un instante UTC solo cuando decide si un trabajo debe ejecutarse. |
-| `scheduler_history_sync_days` | str | `mon,tue,wed,thu,fri,sat` | Días concretos de la semana (separados por comas) para ejecutar la sincronización histórica. |
-| `scheduler_history_sync_horizon_days` | int | `14` | Ventana móvil de análisis retrospectivo (en días) utilizada para comprobar si faltan precios históricos. |
-| `scheduler_timezone` | str | `UTC` | Zona horaria IANA utilizada para **almacenar y evaluar** los días y horas de sincronización histórica del programador. Las horas/días que configures son locales a esta zona; los valores no válidos se restablecen a UTC. |
-
-## 🧠 Memoria
-
-| Clave | Tipo | Por defecto | Descripción |
-|-----|------|---------|-------------|
-| `max_file_upload_mb` | int | `10` | Tamaño máximo de subida de archivos en megabytes. Se aplica a todas las subidas (recursos estáticos e informes de bróker). |
-
-La categoría Memoria también aloja el panel **Cachés del servidor** — consulta [Cachés del servidor](#server-caches) más abajo.
-
-## 🌍 Valores por defecto
-
-| Clave | Tipo | Por defecto | Descripción |
-|-----|------|---------|-------------|
-| `default_currency` | str | `EUR` | Moneda de visualización por defecto para los nuevos usuarios registrados. Los usuarios pueden modificarla en su configuración personal. |
-| `default_language` | str | `en` | Idioma por defecto para los nuevos usuarios registrados. Idiomas compatibles: 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr`, 🇪🇸 `es`. |
-| `default_theme` | str | `auto` | Tema por defecto para los nuevos usuarios registrados: ☀️ `light`, 🌙 `dark`, 🖥️ `auto`. |
+Los nuevos usuarios parten de los tres valores predeterminados: la [configuración de bienvenida](../user/getting-started.md#welcome-setup)
+muestra su idioma y su moneda ya rellenados. Cambiar un valor predeterminado más adelante no afecta a las
+[Preferencias](../user/settings/preferences.md) de los usuarios existentes.
 
 ---
 
-## 🕐 Programador de datos de mercado {: #market-data-scheduler }
+## 🕐 Planificador de datos de mercado {: #market-data-scheduler }
 
-Cuando el programador en segundo plano está activado, los administradores pueden configurar los parámetros de sincronización e inspeccionar los registros de ejecución en segundo plano directamente desde la interfaz de usuario.
+El planificador mantiene actualizados por sí solo los precios y los tipos de cambio, incluso cuando no hay nadie con la sesión iniciada:
 
-### ⚙️ Configurar el programador
+- 💰 **Actualización del precio actual** — cada pocos minutos, el último precio de cada activo que tenga
+  un proveedor de precios.
+- 📊 **Sincronización del historial** — en los días y horas que elijas, los precios diarios de esos activos y los
+  tipos de cada par FX con un proveedor, durante el **Horizonte de retrospectiva**, para rellenar cualquier hueco. Los pares
+  que solo tienen tipos manuales se omiten.
 
-Haz clic en el botón **Configurar** de la fila del Programador para personalizar las frecuencias y los parámetros de ejecución:
+### ⚙️ Configurar la programación
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Scheduler Configuration Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-* **Frecuencia de precio actual**: la frecuencia (en minutos) con la que el demonio obtiene cotizaciones en tiempo real para mantener actualizada la caché del panel de control (por defecto: 10m).
-* **Horas de sincronización histórica**: horas diarias concretas (separadas por comas, p. ej., `06:00,23:00`) para ejecutar las actualizaciones de cierre diario histórico. Se trata de horas de reloj local **en la zona horaria del programador configurada**.
-* **Días de sincronización histórica**: días concretos de la semana en los que se realiza la sincronización histórica (normalmente de lunes a sábado), evaluados también en la zona horaria del programador.
-* **Horizonte histórico**: la ventana de análisis (en días) para comprobar si faltan puntos de precio históricos (por defecto: 14 días).
-* **Zona horaria**: la zona horaria IANA (`scheduler_timezone`) en la que se almacenan y evalúan las horas y los días anteriores. La ventana modal muestra el reloj UTC del servidor junto a la zona horaria, para que puedas calcular el desfase; el backend convierte cada franja local en un instante UTC solo cuando decide si un trabajo debe ejecutarse. Los valores no válidos se restablecen a UTC.
-
-### 📜 Registros del programador
-
-Haz clic en **Ver registros** para abrir el inspector de registros. Esta ventana modal muestra una lista de las ejecuciones recientes del programador:
+Desbloquea la pestaña, abre **Tarea de actualización** y haz clic en **Configurar…** en la fila **Configuración de la programación**.
+El diálogo tiene su propio botón **Guardar**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Scheduler Log Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Modal de configuración del planificador" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-El registro informa de la marca de tiempo de la ejecución, el nombre del trabajo, el estado (éxito/error), la duración de la ejecución y los detalles estructurados de los activos procesados, las fuentes de precios y cualquier traza de error.
+| Campo | Predeterminado | Qué establece |
+|---|---|---|
+| **Zona horaria** | `UTC` | La zona horaria de las horas y los días siguientes; el reloj UTC del servidor se muestra junto a ella. |
+| **Actualizar cada** | 10 minutos | Con qué frecuencia se actualizan los precios actuales, de 1 a 1440 minutos. |
+| **Horas de sincronización** | `06:00`, `23:00` | Cuándo se ejecuta la sincronización del historial; **Añadir hora** añade una franja. |
+| **Días de sincronización** | Lun a Sáb | Los días de la sincronización del historial. |
+| **Horizonte de retrospectiva** | 14 días | Cuántos días pasados comprueba cada sincronización del historial, de 1 a 365. |
+
+Mantén al menos una hora y un día. Consejo: una sincronización del historial después del cierre de los mercados (por ejemplo,
+`22:00`) obtiene los datos más completos.
+
+??? warning "🌍 Cambiar la zona horaria — las tareas se desplazan en el tiempo"
+
+    Las horas y los días conservan sus valores, pero cuentan en la nueva zona horaria, por lo que las tareas se ejecutan en otro
+    momento. También siguen su horario de verano: `06:00` en `Europe/Rome` se ejecuta a las 05:00 UTC
+    en invierno y a las 04:00 UTC en verano.
+
+### 📜 Leer el registro del planificador
+
+La fila **Estado del planificador** muestra la última actualización del precio actual, con un punto para su resultado.
+Haz clic en la fila (o en **Detalles…**) para abrir el **Registro de ejecución del planificador**. Solo los administradores pueden
+leer el estado y el registro.
+
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Modal del registro del planificador" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+- Cada entrada es una ejecución: tarea, hora, duración y cuántos elementos se completaron correctamente. 🟢 **OK**: todos,
+  o nada que hacer; 🟡 **Parcial**: algunos fallaron; 🔴 **Error**: ninguno se completó correctamente.
+- Haz clic en una entrada para ver cada activo o par FX, su proveedor y los precios modificados (**Delta**).
+  Pasa el cursor sobre un error para leerlo completo; haz doble clic en él (mantén pulsado en un teléfono) para copiarlo.
+- Filtra por tarea, estado o periodo, desde la última hora hasta los últimos 30 días. Solo se conservan las ejecuciones
+  más recientes.
 
 ---
 
 ## 🗄️ Cachés del servidor {: #server-caches }
 
-LibreFolio mantiene varias **cachés en memoria** en el backend (obtención de precios, resultados de búsqueda, cálculos de cartera, respuestas de proveedores, entre otras) para que las solicitudes repetidas no consulten a los proveedores de datos externos en cada ocasión. La pestaña **Configuración global** termina con un **panel de caché** (categoría Memoria) que enumera cada caché registrada por nombre, con sus columnas de **tamaño actual / tamaño máximo** y **TTL** (tiempo de vida) — se puede hacer clic en cada cabecera de columna para ordenar por nombre, tamaño o TTL; un botón **Actualizar** vuelve a leer las estadísticas en vivo.
+Para mantenerse rápido, LibreFolio guarda en memoria las respuestas recientes de los proveedores y los resultados calculados. El
+panel **Estado de la caché**, al final de la categoría **Memoria**, enumera cada caché con su
+**Tamaño / Máx.** y su **TTL** (cuánto tiempo se conserva una entrada). Haz clic en el encabezado de una columna para ordenar;
+**Actualizar** refresca los números.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Server caches panel in Global Settings (Memory category)">
+    <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Panel de cachés del servidor en Configuración global (categoría Memoria)">
 </div>
 
-**Quién puede hacer qué:**
-
-- 👁️ **Leer el estado** está disponible para **cualquier usuario autenticado** (`GET /api/v1/settings/cache/status`).
-- 🧹 **Vaciar** es **solo para administradores y requiere que la página esté desbloqueada** (los botones aparecen solo para superusuarios en modo edición): cada fila tiene su propio botón **Vaciar** (`POST /api/v1/settings/cache/clear/{name}`), y el encabezado del panel tiene un botón **Vaciar todo** (`POST /api/v1/settings/cache/clear-all`).
+Todos pueden ver el panel. Un administrador, con la pestaña desbloqueada, puede vaciar una caché con
+**Borrar** o todas con **Borrar todo**, para forzar datos actualizados sin reiniciar. Reiniciar
+también vacía todas las cachés.
 
 !!! warning "Vaciar una caché ralentiza la siguiente consulta"
 
-    Ambas acciones de vaciado piden confirmación, y con razón: después de un vaciado, la siguiente solicitud de esos datos **vuelve a consultar a los proveedores externos**, por lo que cabe esperar una ralentización comparable a un reinicio del servidor mientras las cachés se rellenan. Las cachés también se vacían en cada reinicio del servidor; vaciarlas solo sirve para forzar datos nuevos sin reiniciar.
+    Ambas acciones piden confirmación primero. Después de vaciar, la siguiente solicitud de esos datos vuelve
+    a los proveedores, así que espera una ralentización similar a la de reiniciar el servidor mientras las cachés se vuelven
+    a llenar.
+
+??? note "🧵 Varios workers — cuando el servidor se ejecuta con `--workers`"
+
+    Cada proceso worker tiene sus propias cachés. El panel muestra y vacía las del worker que
+    respondió; reinicia el servidor para vaciarlas todas.
 
 ---
 
-## 🔧 Notas técnicas
+## 🔗 Relacionado
 
-- 🗃️ La configuración se almacena como **pares clave-valor** en la tabla `global_settings`
-- 🔀 Los valores se almacenan como cadenas y se convierten al tipo adecuado (`int`, `bool`, `str`) al leerlos
-- 🔒 En el arranque con varios trabajadores, la configuración se inicializa con `INSERT ... ON CONFLICT DO NOTHING` para evitar condiciones de carrera
-- ⚡ Los cambios surten efecto **de inmediato** — no se requiere reiniciar el servidor
+- 📝 **[Variables de entorno](configuration.md)** — La configuración que reside en `.env` en su lugar
+- 👤 **[Preferencias de usuario](../user/settings/preferences.md)** — Lo que cada usuario puede cambiar por sí mismo
+- 🧑‍💻 Para desarrolladores: **[Sistema de configuración](../developer/architecture/settings.md)**,
+  **[Registro de cachés](../developer/architecture/settings_cache.md)** y
+  **[Planificador de datos de mercado](../developer/backend/scheduler.md)**

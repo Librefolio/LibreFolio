@@ -1,60 +1,45 @@
 # <img src="https://www.justetf.com/android-chrome-144x144.png?v2" alt=""> justETF
 
-justETF fornisce dati dettagliati per gli ETF europei, inclusi i prezzi attuali e i dati storici con supporto multi-valuta.
+justETF fornisce i prezzi degli ETF europei tramite il loro ISIN, in euro, dollari statunitensi, franchi svizzeri o sterline britanniche.
+Include anche la descrizione di ciascun fondo e le sue distribuzioni geografiche e settoriali.
 
-## 📊 Capacità
+## 🔍 Cosa offre
 
-- ✅ **Prezzo Attuale**: quotazioni gettex in tempo reale (solo EUR)
-- ✅ **Storico**: dati storici dei prezzi in EUR, USD, CHF o GBP
-- ✅ **Eventi**: può emettere eventi `DIVIDEND` dai dati del grafico quando sono presenti serie di dividendi
-- ✅ **Ricerca**: ricerca full-text tra oltre 3000 ETF europei
+- **Prezzo attuale**: in EUR, il prezzo live dalla borsa gettex; quando non è disponibile — e
+  sempre in USD, CHF e GBP — l'ultimo prezzo giornaliero.
+- **Storico**: prezzi di chiusura giornalieri nella valuta scelta.
+- **Dividendi**: le distribuzioni mostrate nel grafico del fondo diventano eventi di dividendo.
+- **Ricerca**: per nome, ticker, WKN o ISIN, tra gli ETF elencati su justETF.
+- **Dettagli**: una descrizione con il TER e la politica di distribuzione, le distribuzioni geografiche e settoriali,
+  l'ISIN e il ticker.
 
-## 💱 Selezione della Valuta
+## ✏️ Configuralo
 
-justETF supporta il recupero dei prezzi in **4 valute**: EUR, USD, CHF, GBP.
+**Ricerca online** lo configura per te. Manualmente, in **Assegnazione provider**:
 
-Quando cerchi un ETF, i risultati appaiono con le bandiere delle valute:
+1. Scegli **JustETF** come **Provider**.
+2. Digita l'**ISIN** del fondo, per esempio `IE00B4L5Y983` (iShares Core MSCI World).
+3. In `currency`, scegli `EUR` (predefinita), `USD`, `CHF` o `GBP`: ogni prezzo dell'asset viene
+   memorizzato in quella valuta.
 
-| Bandiera | Significato |
-|------|---------|
-| 🇪🇺 | prezzi in Euro |
-| 🇺🇸 | prezzi in Dollari USA |
-| 🇨🇭 | prezzi in Franchi Svizzeri |
-| 🇬🇧 | prezzi in Sterline Britanniche |
-| 👑 | valuta NAV nativa del fondo (mostrata accanto alla bandiera) |
+### 💱 Scegli la valuta nella ricerca
 
-!!! note "Conversione Valutaria"
+Ogni ETF compare quattro volte nei risultati, una per valuta: 🇪🇺 EUR, 🇺🇸 USD, 🇨🇭 CHF e
+🇬🇧 GBP. 👑 contrassegna la valuta propria del fondo, quella in cui viene calcolato il suo NAV — non necessariamente quella
+in cui fai trading.
 
-    JustETF esegue la conversione lato server utilizzando i propri tassi di cambio.
-    Per le valute non presenti nell'elenco supportato (JPY, SEK, ecc.), utilizza il sistema di conversione valutaria integrato di LibreFolio.
+justETF converte i prezzi in USD, CHF e GBP con i propri tassi di cambio. La tua valuta di
+rendicontazione è un'altra? Scegli una qualsiasi delle quattro: LibreFolio converte con i propri
+[tassi di cambio](../../fx/index.md).
 
-## ⚠️ Limitazioni
+## ⚠️ Limiti
 
-!!! warning "Fallback del Prezzo Attuale"
+- Solo ISIN: per un ticker, usa [Yahoo Finance](yahoo-finance.md).
+- Solo il prezzo in EUR è live.
+- LibreFolio legge il sito web di justETF: una modifica da parte loro può interrompere i prezzi finché LibreFolio
+  non viene aggiornato.
 
-    Il valore attuale prova prima la quotazione gettex in tempo reale in **EUR**.
+## 🔗 Correlati
 
-    Se la quotazione live non è disponibile, LibreFolio ripiega sul `latestQuote` giornaliero dell'API del grafico di performance per **EUR, USD, CHF e GBP**.
-
-    I dati storici restano disponibili per tutte le valute supportate.
-
-## 🔧 Configurazione
-
-- **Identifier**: codice ISIN (es. `IE00BK5BQT80`)
-- **Identifier Type**: `ISIN`
-- **Parameters**:
- - `currency`: valuta del prezzo — EUR (default), USD, CHF o GBP
-
-## 💡 Esempi
-
-| Asset | ISIN | Valuta Suggerita |
-|-------|------|--------------------|
-| Vanguard FTSE All-World | `IE00BK5BQT80` | EUR o USD 👑 |
-| iShares Core MSCI World | `IE00B4L5Y983` | EUR o USD 👑 |
-| Xtrackers MSCI Emerging Markets | `IE00BTJRMP35` | EUR o USD 👑 |
-
-## 📝 Note
-
-- Più indicato per gli ETF con domicilio europeo quotati su justETF
-- Utilizza l'ISIN come identificatore primario
-- La 👑 nei risultati di ricerca indica la denominazione NAV nativa del fondo — questa è la valuta che il gestore del fondo utilizza internamente, non necessariamente la valuta in cui effettui il trading
+- 🔌 **[Provider asset](index.md)** — Confronta i provider
+- 🛠️ **Per sviluppatori: [Provider JustETF](../../../developer/backend/assets/provider_justetf.md)** — Quotazioni live, grafici e caching

@@ -6,13 +6,13 @@ Comprender los eventos de activos es esencial para un análisis de precios preci
 
 ---
 
-## 📊 Descripción General de Tipos de Eventos
+## 📊 Resumen de los tipos de eventos
 
 | Tipo | Emoji | Impacto en el Precio | Activos Típicos | Detalles |
 |------|-------|----------------|----------------|---------|
 | **Dividendo** | 💰 | El precio cae según el monto del dividendo (ex-date) | Acciones, ETF | [📖](dividend.md) |
 | **Interés** | 📈 | El devengo reduce el rendimiento restante | Bonos, Préstamos, Renta fija | [📖](interest.md) |
-| **Split** | ✂️ | El precio se divide, la cantidad se multiplica | Acciones, ETF | [📖](split.md) |
+| **Desdoblamiento** | ✂️ | El precio se divide, la cantidad se multiplica | Acciones, ETF | [📖](split.md) |
 | **Ajuste de Precio** | 📊 | Cambio algebraico (+/−) al valor razonable | Bonos, Activos ilíquidos | [📖](price-adjustment.md) |
 | **Liquidación por Vencimiento** | 🏁 | Retorno final de capital, sin valoraciones posteriores | Bonos, Depósitos a plazo | [📖](maturity-settlement.md) |
 

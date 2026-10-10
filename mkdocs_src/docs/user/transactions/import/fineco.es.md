@@ -1,42 +1,47 @@
-# <img src="https://finecobank.com/favicon.ico" alt=""> Fineco
+# 📥 <img src="https://finecobank.com/favicon.ico" alt=""> Fineco
 
 !!! info "Beta"
 
-    Este plugin está en **Beta** — probado con archivos de muestra, pero pueden existir casos excepcionales.
+    Este plugin está en **Beta** — probado con archivos de ejemplo, pero pueden existir casos límite.
 
-## 📥 Cómo Exportar
+LibreFolio importa el informe **Movimenti Dossier Titoli** de FinecoBank —los movimientos de tu
+cartera de valores— guardado como CSV.
 
-LibreFolio importa el informe **"Movimenti Dossier Titoli"** (movimientos del dossier de valores)
-exportado desde FinecoBank.
+## 📥 Cómo exportar
 
-1. Inicie sesión en su cuenta de **FinecoBank** (web o app).
-2. Abra la sección **Dossier Titoli** y seleccione la cuenta/periodo que desee.
-3. Exporte la lista de movimientos. Fineco ofrece el informe como archivo Excel.
-4. Si el archivo es `.xls`/`.xlsx`, ábralo y **guárdelo como CSV** antes de importarlo; el
- plugin lee el formato **CSV**.
+1. Inicia sesión en tu cuenta de **FinecoBank** (web o app).
+2. Abre los movimientos de **Dossier Titoli** y elige la cuenta y el periodo que quieras.
+3. Exporta la lista: Fineco te da un archivo Excel.
+4. Ábrelo y **guárdalo como CSV**. Conserva las líneas anteriores a la tabla (**Dossier:**,
+   **Intestatario:**) y los nombres de las columnas: LibreFolio reconoce el informe por ellos.
 
-## 📝 Notas
+## 🔄 Qué se importa
 
-- **Las advertencias de importación se muestran en italiano.** La única exportación compatible hoy es el *Movimenti Dossier Titoli* italiano de FinecoBank, por lo que cualquier advertencia generada durante el análisis aparece en italiano para coincidir con el informe. FinecoBank también opera en el Reino Unido; si se añade posteriormente un formato de exportación del Reino Unido (u otro), sus advertencias seguirán el idioma de ese formato.
-- Se admiten automáticamente dos formatos de exportación:
- - **sin comisiones** (11 columnas), y
- - **con comisiones** (15 columnas). Las columnas de comisiones se importan como transacciones
- separadas de **comisiones**.
-- Operaciones admitidas: compras y ventas (*Compravendita titoli*), dividendos
- (*Dividendo*), cupones de bonos (*Stacco Cedole*), reembolsos/vencimientos (*Rimborso*),
- y aumentos de capital (*Aumento capitale*, importados como un **ajuste** de cantidad
- sin movimiento de efectivo).
-- **Bonos reembolsados sobre la par** — cuando una fila de *Rimborso* corresponde a un bono con precio **sobre la par (100)**,
- el monto acreditado sobre la par (un *premio fedeltà* / revaluación por inflación) se contabiliza como una
- parte separada de **interés** y la **venta** se registra a la par 100. Esto refleja cómo se tratan los cupones
- (*reddito di capitale*) y mantiene la plusvalía realizada basada únicamente en precio versus costo.
- Los bonos reembolsados a la par o por debajo de la par, y los reembolsos de acciones, se importan como una venta única.
-- **Los montos se importan textualmente** en la moneda informada por Fineco: la columna *Divisa*
- de cada fila determina la moneda de las cifras de esa fila. No se realiza ninguna
- conversión de moneda y se ignora la columna *Cambio* (tipo de cambio); los números
- aparecen en LibreFolio exactamente como aparecen en el informe.
-- La *Data valuta* (fecha valor) se utiliza como fecha de liquidación de la transacción.
+| En el informe (**Descrizione**) | Se importa como |
+|:--------------------------------|:------------|
+| *Compravendita titoli*, con **Segno** `A` o `V` | **Compra** o **Venta** |
+| *Dividendo* | **Dividendo** |
+| *Stacco Cedole* | **Interés** (cupón de bono) |
+| *Rimborso* | **Venta** (amortización o vencimiento) |
+| *Aumento capitale* | **Ajuste** de la cantidad, sin efectivo |
+| Columnas de comisiones, cuando el informe las tiene | Una **Comisión** separada por fila, en euros |
 
-## 🔗 Referencia para Desarrolladores
+Cualquier otra operación se omite con una advertencia.
 
-→ [BRIM Providers — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)
+**Bonos amortizados por encima de la par.** Cuando un bono se amortiza por encima de la par (100) —un *premio fedeltà* o una
+revalorización por inflación— la venta se registra a la par y el importe por encima de esta como un
+**Interés** separado, como un cupón, de modo que tu ganancia refleje solo el precio. LibreFolio reconoce los bonos por
+su nombre (BTP, BOT, CCT…). Los bonos amortizados a la par o por debajo de la par, y otros reembolsos, permanecen como una única
+**Venta**.
+
+## ⚠️ Para tener en cuenta
+
+- **Las dos disposiciones funcionan**, con o sin las columnas de comisiones: LibreFolio los distingue por
+  sí mismo.
+- **Importes tal como están escritos.** Cada fila conserva su propia divisa (**Divisa**), sin conversión; la
+  columna **Cambio** se ignora.
+- **Fechas.** LibreFolio usa la fecha valor (**Data valuta**) o la fecha de negociación cuando falta.
+
+## 🔗 Referencia para desarrolladores
+
+→ [Arquitectura BRIM — notas de Fineco](../../../developer/backend/brim/architecture.md#plugin-fineco)

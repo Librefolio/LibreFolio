@@ -1,83 +1,101 @@
 # 💼 Asset
 
-Gli asset sono il cuore di LibreFolio. Rappresentano qualsiasi strumento finanziario posseduto o monitorato: azioni, ETF, obbligazioni, criptovalute o strumenti personalizzati come conti di risparmio con interessi programmati.
+Gli asset sono gli strumenti che detieni o segui: azioni, ETF, obbligazioni, criptovalute o un conto di risparmio con interessi programmati. La pagina **Asset** li elenca tutti, ciascuno con un piccolo grafico dei prezzi, e apre la pagina di dettaglio di ognuno di essi.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-list" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Vista Griglia a Schede" alt="Asset List Page (Grid)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Vista Tabella Dati" alt="Asset List Page (Table)">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Vista griglia" alt="Pagina dell'elenco asset (griglia)">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Vista tabella" alt="Pagina dell'elenco asset (tabella)">
 </div>
 
-## 📌 Cos'è un Asset?
+## 📌 Che cos'è un asset?
 
-Un asset in LibreFolio è uno strumento finanziario caratterizzato da:
+Ogni asset ha:
 
-- **Identità**: nome, ISIN, ticker o altri identificativi
-- **Categoria**: azione, ETF, obbligazione, crypto, commodity, ecc.
-- **Valuta**: la valuta in cui l'asset è denominato
-- **Provider**: un provider di prezzi opzionale che recupera automaticamente i prezzi attuali e lo storico
-- **Classificazione**: settore e distribuzione geografica (grafici a torta + mappa del mondo)
-- **Transazioni**: operazioni di acquisto, vendita, dividendo, interesse collegate a un portafoglio
+- **un nome e degli identificatori** — ISIN, ticker o altri codici;
+- **un tipo** — azione, ETF, obbligazione, criptovaluta, commodity… ([tipi di asset](../../financial-theory/instruments/asset-types/index.md));
+- **una valuta** — quella in cui sono quotati i suoi prezzi;
+- **un provider di prezzi**, opzionale — scarica per te il prezzo corrente e lo storico ([Provider](providers/index.md));
+- **una distribuzione settoriale e geografica**, opzionale;
+- **eventi** — dividendi, split, interessi… ([Eventi degli asset](detail/events.md)).
 
-## 📋 Lista Asset
+Gli asset sono condivisi da tutti su questo LibreFolio: sono le tue transazioni a decidere quali sono tuoi.
 
-Naviga verso **Assets** nella barra laterale per vedere tutti i tuoi asset. La pagina della lista offre:
+## 📋 Sfogliare l'elenco
 
-- 🔀 **Layout Griglia / Tabella**: Scegli tra una griglia visiva basata su schede o una tabella dati densa e ordinabile. La tua preferenza di layout viene salvata automaticamente nel `localStorage` del browser e verrà caricata nelle sessioni future.
-- 🔎 **Ricerca Intelligente**: Filtra gli asset in tempo reale inserendo un nome, ISIN, ticker o il nome del broker.
-- 🏷️ **Filtri per Tipo**: Filtra la lista per visualizzare solo classi specifiche (es. ETF, Azioni, Obbligazioni, Crypto).
-- 🗃️ **Asset Archiviati**: Usa l'interruttore per passare dalle posizioni attive agli asset archiviati per mantenere pulita la tua lista.
-- ⏱️ **Selettore Delta Temporale**: Cambia l'intervallo di tempo utilizzato per calcolare le variazioni di prezzo (es. `1D`, `1W`, `1M`, `YTD`, `ALL`).
-- 🔄 **Sincronizzazione e Aggiornamento**: Sincronizza i dati dei prezzi in tempo reale per tutti i provider configurati o aggiorna manualmente la lista.
-- 🖱️ **Menu Contestuale**: Fai clic con il tasto destro su qualsiasi riga nel layout a tabella per azioni rapide (**Sincronizza**, **Aggiorna**, **Unisci**, **Elimina**). Sincronizza è disabilitata per gli asset senza provider di prezzi e per gli asset archiviati; Unisci incorpora un asset duplicato in un altro — transazioni, prezzi ed eventi convergono sulla destinazione e l'asset di origine viene eliminato.
+Apri **Asset** nella barra laterale, poi:
 
-Clicca su qualsiasi scheda asset per navigare verso la sua **[pagina di dettaglio](detail/index.md)**.
+- **Scegli un layout** — i due pulsanti accanto a **Aggiungi asset** consentono di alternare tra schede con un piccolo grafico (**Vista griglia**) e una tabella ordinabile (**Vista tabella**). La tua scelta viene ricordata in questo browser.
+- **Scegli il periodo** — l'intervallo di date imposta il periodo dei grafici delle schede e della variazione che mostrano. Nella tabella, le colonne **Δ** indicano la variazione su un giorno e su ciascun periodo, da 1W a 5Y, che rientra nell'intervallo.
+- **Filtra** — digita in **Cerca asset...** per filtrare per nome e scegli una o più valute e tipi nei due menu; la ✕ cancella la ricerca ed entrambi i menu.
+- **Mostra asset archiviati** — l'elenco parte con i soli asset **Attivi**: attiva **Inattivi** per aggiungere quelli archiviati, oppure disattiva **Attivi** per vedere solo quelli.
+
+Clicca una scheda o una riga per aprire la **[pagina di dettaglio](detail/index.md)** dell'asset. Lì, le frecce **‹ ›** permettono di scorrere gli asset nell'ordine in cui li mostra questo elenco, filtri e ordinamento inclusi.
+
+??? note "📉 Abs o % sulle schede — solo nella vista griglia"
+
+    **Abs / %** nella barra degli strumenti alterna ogni scheda, il suo grafico e la sua variazione, tra prezzi e percentuali; il pulsante **%** su una scheda alterna solo quella scheda, finché non modifichi di nuovo la barra degli strumenti. La pagina si apre sempre su **%**.
+
+??? note "⚙️ L'aspetto dei grafici delle schede"
+
+    **Impostazioni** nella barra degli strumenti imposta l'aspetto e le sovrapposizioni di tutti i grafici degli asset in una volta, e applicarle sostituisce le impostazioni proprie di ogni asset, pagine di dettaglio incluse. Il ⚙️ su una scheda modifica solo quella scheda. Vedi [Impostazioni grafico](../fx/chart-settings.md).
+
+### 🗂️ I tuoi asset, gli asset di altri utenti, osservati
+
+Entrambi i layout dividono l'elenco in un massimo di tre pannelli, ciascuno con il suo conteggio; un pannello vuoto non viene mostrato.
+
+| Pannello | Che cosa contiene |
+|---|---|
+| **I tuoi asset** | Asset detenuti attualmente in un broker di tua proprietà |
+| **Asset di altri utenti** | Asset detenuti attualmente solo da altri utenti — in broker che non possiedi |
+| **Osservati** | Asset che attualmente non sono detenuti da nessuno — mai acquistati o già venduti, tenuti sotto osservazione |
+
+Ciò che conta è la posizione **oggi**: quando vendi tutta la tua posizione, l'asset passa a *Asset di altri utenti* se qualcun altro lo detiene ancora, e a *Osservati* altrimenti. I broker condivisi con te come **Editor** o **Visualizzatore** contano come broker di altri utenti, e una posizione ridotta a un residuo trascurabile conta come non detenuta.
+
+Nella vista tabella ogni pannello è una tabella con le proprie pagine; ridimensionare, spostare o nascondere una colonna vale per tutte e tre.
+
+## 🔄 Mantenere i prezzi aggiornati
+
+- **Sincronizza tutto** apre una finestra in cui **Avvia sincronizzazione** scarica gli ultimi prezzi di ogni asset che ha un provider; **Ricarica tutto** ricarica l'elenco da ciò che LibreFolio ha memorizzato. Nella scheda **[Correlazione](correlation.md)** diventano **Sincronizza selezione**, che scarica anche i tassi di cambio che convertono gli asset selezionati, e **Ricarica tutto**, che ricalcola ogni analisi.
+- **Prezzi live** — mentre questa pagina o la pagina di un asset è aperta e l'intervallo di date termina oggi, i prezzi si aggiornano da soli ogni tanto. Un prezzo diventa verde quando è salito rispetto all'aggiornamento precedente, rosso quando è sceso; quando il mercato è chiuso vedi l'ultima chiusura, senza colore.
+- **In background**, il server aggiorna i prezzi secondo una pianificazione impostata dal tuo amministratore ([Scheduler dei dati di mercato](../../admin/settings.md#market-data-scheduler)). La dashboard mostra i prezzi memorizzati.
+
+## 🖱️ Agire su un singolo asset
+
+Ogni scheda ha i propri pulsanti; nella tabella, il **⋮** alla fine di una riga, o un clic destro, apre le stesse azioni:
+
+- **Sincronizza** — scarica i prezzi dell'asset per il periodo selezionato. Richiede un provider, e nella tabella blocca questa azione anche per un asset archiviato.
+- **Ricarica** — ricarica i suoi prezzi da ciò che LibreFolio ha memorizzato.
+- **Unisci con…** — fonde un duplicato in un altro asset, che mantiene tutto ([Crea e modifica](create-edit.md)).
+- **Elimina** — rimuove un asset che nessuna transazione utilizza.
+
+Nella tabella, spunta più righe per **Sincronizza**, **Ricarica** o **Elimina** insieme.
+
+??? warning "🗑️ Quando un asset non può essere eliminato"
+
+    Un asset non viene eliminato finché **una qualsiasi** transazione lo utilizza, anche una in un broker che non puoi vedere. Il risultato mostra quante transazioni lo utilizzano, con un link **Transazioni** filtrato su quell'asset. Quella pagina mostra solo i broker a cui puoi accedere, quindi potrebbe elencare meno transazioni rispetto al conteggio.
 
 ## 🧭 Funzionalità
 
-### ➕ [Creazione e Modifica](create-edit.md)
+### ➕ [Crea e modifica](create-edit.md)
 
-Guida passo-passo per creare nuovi asset, configurare i provider e modificare asset esistenti.
+Crea un asset, collegalo a un provider di prezzi e mantieni corretti i suoi dettagli.
 
-### 📊 [Pagina di Dettaglio Asset](detail/index.md)
+### 🧪 [Scheda Correlazione](correlation.md)
 
-Il cuore dell'analisi dell'asset: grafico interattivo, segnali tecnici, misure, classificazione ed editor dati.
+Confronta una selezione di asset fianco a fianco — matrice di correlazione, perdite, rischio rispetto al rendimento e replay storico, solo in percentuale.
+
+### 📊 [Pagina di dettaglio asset](detail/index.md)
+
+Il grafico dei prezzi con i suoi segnali, misure ed eventi, l'editor dati e la classificazione.
 
 ### 🔌 [Provider](providers/index.md)
 
-Recupero automatico dei prezzi da Yahoo Finance, justETF, CSS Scraper o dal motore di investimento programmato.
-
----
-
-## 📡 Prezzi in Tempo Reale e Ticker in Tempo Reale
-
-Per tenerti aggiornato sui movimenti di mercato senza costringerti a continui aggiornamenti della pagina, LibreFolio mostra badge di prezzo live e compatti nelle pagine **Lista Asset** e **Dettaglio Asset**.
-
-### ⏱️ Polling Automatico
-
-Durante la visualizzazione di queste pagine, il browser interroga il backend ogni **30 secondi** per i prezzi correnti degli asset. Questo processo avviene silenziosamente in background ed è completamente non bloccante (l'interfaccia utente è pronta istantaneamente e i prezzi vengono caricati man mano che arrivano). La Dashboard non esegue polling: mostra gli ultimi prezzi memorizzati.
-
-### 🎨 Indicatori Visivi
-
-I badge cambiano colore dinamicamente per indicare i recenti movimenti di prezzo rispetto all'ultimo polling:
-
-* 🟢 **Verde (Su)**: Il prezzo dell'asset è aumentato.
-* 🔴 **Rosso (Giù)**: Il prezzo dell'asset è diminuito.
-* ⚪ **Grigio (Neutro)**: Il prezzo è invariato, in fase di caricamento o il mercato è attualmente chiuso.
-
-!!! note "Market Closure & Fallbacks"
-
-    Durante i fine settimana o le chiusure del mercato, il ticker in tempo reale mostrerà l'ultimo prezzo di chiusura disponibile in un badge grigio neutro come fallback.
-
-### 🔌 Caching e Scheduler in Background
-
-Per garantire tempi di caricamento rapidi ed evitare che la tua istanza venga limitata o bloccata dai provider esterni (come Yahoo Finance), LibreFolio utilizza una strategia a due livelli:
-
-1. **Scheduler in Background**: Un demone in background sul server aggiorna tutti i prezzi degli asset attivi a intervalli regolari (default: ogni 10 minuti, configurabile dagli amministratori nelle impostazioni Globali). Questo mantiene aggiornati il database e la cache locale dei prezzi.
-2. **Cache di Polling On-Demand**: Quando il frontend interroga il backend, legge da questa cache locale aggiornata. Se la cache è fredda, il provider recupera il prezzo e lo memorizza con un TTL (Time-To-Live) di 120 secondi. I successivi aggiornamenti della pagina o le visualizzazioni della dashboard da parte di altri utenti interpellano direttamente la cache locale.
+Prezzi automatici da Yahoo Finance, justETF, Borsa Italiana, il CSS Scraper o il motore di investimento programmato.
 
 ---
 
 ## 🔗 Correlati
 
-- 📚 **[Teoria Finanziaria — Tipi di Asset](../../financial-theory/instruments/asset-types/index.md)** — Azioni, ETF, Obbligazioni, Crypto, ecc.
-- 💱 **[Tassi FX](../fx/index.md)** — Tassi di cambio valutario utilizzati per la conversione valutaria
+- 📚 **[Teoria finanziaria — Tipi di asset](../../financial-theory/instruments/asset-types/index.md)** — Azioni, ETF, Obbligazioni, Criptovalute, ecc.
+- 💱 **[Tassi di cambio](../fx/index.md)** — Tassi di cambio usati per la conversione tra valute
+- 🛠️ **[Prezzi live](../../developer/frontend/components/features/live-ticker.md)** — Per gli sviluppatori: come le pagine effettuano il polling dei prezzi live

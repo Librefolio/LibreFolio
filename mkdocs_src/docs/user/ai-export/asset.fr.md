@@ -1,65 +1,41 @@
-# 🧠 Export IA d'actif
+# 🧠 Export IA d’actif
 
-L'export IA de détail d'actif prépare un instantané dans le presse-papiers ou une invite d'analyse ciblée
-pour l'actif actuellement ouvert. LibreFolio ne l'envoie jamais à un service d'IA.
+Exportez un actif, avec son historique de marché et, si vous le détenez, votre position, afin
+d’interroger une IA sur l’actif ou sur votre position dans celui-ci. Les options et la façon de
+coller se trouvent dans la [Vue d’ensemble de l’export IA](index.md).
 
-## 📍 Emplacement
+---
 
-Ouvrez une page de détail d'actif. Dans la **barre d'outils de la page**, sélectionnez **Export IA**. Votre
-brouillon reste disponible pendant 10 minutes dans la session de connexion actuelle et se réinitialise
-après une déconnexion ou une nouvelle connexion.
+## 📍 Où le trouver
 
-## 🎯 Analyses d'actifs
+Sur la page de détail d’un actif, sélectionnez **Export IA** dans la barre d’outils de la page.
+L’export s’ouvre d’abord sur **Analyse du marché de l’actif**.
 
-| Tâche | Focus |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Examen de position** | Taille de position, base de coût, performance, revenus et concentration. |
-| **Analyse de marché d'actif** | Historique des clôtures observées, rendements, tendance, momentum, volatilité, Drawdown, états, événements et couverture. |
+L’export couvre l’actif ouvert sur la page, dans la devise affichée par la page, avec le dernier
+jour de la plage de dates de la page comme date d’export. Votre position prend en compte chaque
+courtier auquel vous avez accès.
 
-## 🗂️ Portée et données
+---
 
-L'export utilise l'actif actuel, la plage de dates sélectionnée, la devise d'affichage/cible,
-et le périmètre de courtier accessible à l'utilisateur lorsqu'un contexte de portefeuille est requis.
-Selon la sélection, il peut inclure des identifiants, des prix, des rendements, une valorisation,
-des faits de position et FIFO, des revenus, des événements d'entreprise et des résultats techniques
-calculés par le backend. Le navigateur ne recalcule pas les indicateurs.
+## 📤 Données exportées
 
-## 📤 Export de données et demande d'analyse
+| Choix | Ce que vous obtenez |
+| :--- | :--- |
+| **Position et historique de marché (complet)** | Vos positions dans l’actif (coût, valeur, P&L, performance, lots FIFO), un contexte de marché compact et le repli |
+| **Historique de marché uniquement (sans positions)** | Prix, rendements, indicateurs, états, événements et repli, sans vos positions |
 
-- **Exporter les données** copie un ensemble de données d'actif factuel sélectionné sans instructions
- d'analyse ni interprétation.
-- **Demander une analyse** utilise les faits pertinents et ajoute des instructions spécifiques à la tâche
- ainsi qu'un contrat de réponse pour que l'IA réceptrice puisse les interpréter. La langue de réponse
- demandée suit la langue d'interface actuelle de LibreFolio.
-- Des notes facultatives sont incluses uniquement lorsqu'elles sont prises en charge par l'Analyse sélectionnée.
+---
 
-Deux exports de données publics sont disponibles :
+## 🎯 Analyses
 
-- **Position et historique de marché (complet)** — positions par courtier, coût, valeur, P&L,
- sémantique des périodes à zéro enregistré, lots économiques avec frais/taxes alloués, historique
- de marché compact, Drawdown et provenance ;
-- **Historique de marché uniquement (sans positions)** — compartiments de clôtures observées, rendements, indicateurs, états,
- événements, Drawdown et couverture.
+| Analyse | Ce que fait l’IA |
+| :--- | :--- |
+| **Revue de position** | Passe en revue la valeur, le coût, le P&L, les courtiers et les lots de votre position, avec le contexte de marché ; nécessite une position dans l’actif |
+| **Analyse du marché de l’actif** | Analyse l’historique des prix, les rendements, la tendance, le momentum, la volatilité, le repli et les événements |
 
-## 📏 Détail et échantillonnage
+---
 
-| Détail | Échantillonnage exact |
-| ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| **Compact** | Export de position : jusqu'à 8 points uniformes d'historique observé. Export de marché : jusqu'à 5 lignes d'indicateurs non vides par Signal. |
-| **Standard** | Export de position : jusqu'à 16 points. Export de marché : jusqu'à 10 lignes d'indicateurs. |
-| **Complet** | Export de position : jusqu'à 30 points. Export de marché : tous les compartiments d'indicateurs non vides ; l'export peut être volumineux. |
+## 🔗 Voir aussi
 
-Un ensemble de données ou une Analyse peut omettre les sections facultatives indisponibles ou non applicables.
-La **période IA** se termine à la date de l'instantané. Les dates disponibles, la couverture, le Signal
-partiel et les raisons d'omission restent explicites.
-
-## 🔒 Applicabilité, erreurs et confidentialité
-
-L'examen de position nécessite un contexte de position. D'autres tâches peuvent être désactivées lorsque
-les faits requis sont absents. Les incompatibilités de catalogue et de contrat de réponse échouent en mode fermé.
-Les erreurs typées signalent l'applicabilité, les entités manquantes, les échecs de source ou les
-problèmes de contrat.
-
-Le presse-papiers peut contenir des données sensibles de positions et de performance. Examinez-les avant
-de les partager. Consultez l'[aperçu de l'export IA](index.md) pour
-le flux de travail inter-domaines et le modèle de sécurité.
+- 🧠 **[Vue d’ensemble de l’export IA](index.md)** — options, collage et confidentialité
+- 🔍 **[Page de détail d’un actif](../assets/detail/index.md)** — où commence l’export

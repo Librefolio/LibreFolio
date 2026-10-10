@@ -14,7 +14,7 @@ Superposiciones de gráficos que extraen información de tendencia, momentum, vo
 - ⚡ **[Momentum](indicators/momentum.md)** — RSI, MACD, ROC, Stochastic RSI, PPO, CCI
 - 🌊 **[Volatilidad](indicators/volatility.md)** — Bandas de Bollinger, ATR, NATR, Canales de Donchian
 - 📊 **[Volumen](indicators/volume.md)** — OBV, MFI
-- ⚠️ **Riesgo** — Underwater Drawdown, Rolling Return, Rolling Volatility, Rolling Sharpe Ratio, Rolling Beta (solo Asset; conceptos en [Métricas de Riesgo](risk-metrics/index.md))
+- ⚠️ **Riesgo** — Drawdown desde el máximo, Rendimiento móvil, Volatilidad móvil, Ratio de Sharpe móvil, Beta móvil (solo Asset; conceptos en [Métricas de Riesgo](risk-metrics/index.md))
 
 ### 🎯 [Benchmarks Sintéticos](synthetic-benchmarks/index.md)
 

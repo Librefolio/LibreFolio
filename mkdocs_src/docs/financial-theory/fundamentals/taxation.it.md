@@ -1,6 +1,6 @@
 # 💰 Tassazione ed Efficienza Fiscale
 
-Comprendere la tassazione è essenziale per massimizzare i rendimenti degli investimenti a lungo termine. Questa pagina copre le basi teoriche — **non le regole specifiche di una singola giurisdizione** — di come le tasse interagiscono con la crescita del portafoglio.
+Comprendere la tassazione è essenziale per massimizzare i rendimenti degli investimenti a lungo termine. Questa pagina copre le basi teoriche — **non le regole specifiche di una singola giurisdizione** — di come le imposte interagiscono con la crescita del portafoglio.
 
 !!! warning "Non è un consiglio finanziario"
 
@@ -102,7 +102,7 @@ Questo vantaggio del differimento si manifesta direttamente nella scelta tra vei
 
 - I dividendi sono **reinvestiti internamente** dal fondo
 - **Nessun evento tassabile** fino alla vendita delle quote del fondo
-- Pieno beneficio della [crescita composta](../technical-analysis/synthetic-benchmarks/compound.md) sull'importo pre-tasse
+- Pieno beneficio della [crescita composta](../technical-analysis/synthetic-benchmarks/compound.md) sull'importo al lordo delle imposte
 - Ideale per investitori a lungo termine che cercano la massima crescita
 
 ### 💵 Distribuzione (es. ETF Dist)

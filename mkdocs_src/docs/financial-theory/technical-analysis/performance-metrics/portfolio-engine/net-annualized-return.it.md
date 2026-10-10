@@ -78,15 +78,15 @@ $$
 La percentuale di periodo visualizzata rimane:
 
 $$
-r_{\mathrm{periodo}} = \frac{\mathrm{PnL}_{periodo}}{|\mathrm{ValoreIniziale}|}
+r_{\mathrm{periodo}} = \frac{\mathrm{PnL}_{periodo}}{|\mathrm{StartValue}|}
 $$
 
-quando `ValoreIniziale` è diverso da zero. L'annualizzazione può ripiegare sulla base di costo finale per gli asset aperti a metà periodo:
+quando `StartValue` è diverso da zero. L'annualizzazione può ripiegare sul costo di carico finale per gli asset aperti a metà periodo:
 
 $$
 \mathrm{base\_ann}=
 \begin{cases}
-|\mathrm{ValoreIniziale}|, & |\mathrm{ValoreIniziale}|>0\\
+|\mathrm{StartValue}|, & |\mathrm{StartValue}|>0\\
 \mathrm{BaseDiCosto}_{fine}, & \text{altrimenti}
 \end{cases}
 $$
@@ -122,7 +122,7 @@ $$
 \frac{\mathrm{PnLNettoTotale}_i}{\mathrm{ValoreDiApertura}_i}
 $$
 
-Il valore annualizzato utilizza `rendimento_netto_totale`, non il `rendimento_totale` lordo:
+Il valore annualizzato utilizza `net_total_return`, non il `total_return` lordo:
 
 $$
 r_{\mathrm{ann},i} =

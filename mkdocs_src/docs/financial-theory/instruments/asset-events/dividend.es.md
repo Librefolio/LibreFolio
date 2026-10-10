@@ -83,6 +83,6 @@ Para los **activos con precio de mercado** (Yahoo Finance, justETF), los eventos
 
 ## 🔗 Relacionado
 
-- 📅 **[Descripción general de eventos de activos](index.md)** — Todos los tipos de eventos
+- 📅 **[Resumen de eventos de activos](index.md)** — Todos los tipos de eventos
 - 💸 **[Tipos de transacciones](../transaction-types/index.md)** — Cómo aparecen los dividendos en las transacciones de la cartera
 - 📈 **[Retornos y Tasas de Crecimiento](../../fundamentals/returns.md)** — Retorno total incluyendo dividendos

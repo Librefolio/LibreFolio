@@ -1,177 +1,114 @@
 # 🧠 Export IA
 
-L'Export IA transforme le contexte LibreFolio actuel en texte structuré que vous
-pouvez coller dans un assistant IA ou conserver comme instantané portable.
+L'export IA copie vos données LibreFolio sous forme de texte prêt à coller, avec une question ciblée si vous le souhaitez, afin que vous puissiez interroger l'assistant IA de votre choix sur votre portefeuille, un courtier, un actif ou une paire FX. LibreFolio lui-même ne contacte jamais un service IA.
 
-!!! important "Export vers le presse-papiers uniquement"
+---
 
-    LibreFolio ne contacte **pas** un service d'IA. Il génère l'instantané
-    financier et technique sur votre serveur, l'affiche dans votre navigateur et
-    le copie dans le presse-papiers. Vous choisissez si et où le coller.
+## 🎯 À quoi cela sert
 
-## 📋 Ce qu'il fait
+- **Examiner avec des chiffres réels** : un courtier, une position, une paire FX et votre exposition à celle-ci.
+- **Planifier** : investissements récurrents, un rééquilibrage, ou comment les moins-values fiscales arrivant à expiration pourraient compenser les plus-values.
+- **Expliquer** : ce qui a motivé votre performance, actif par actif, avec des sources datées.
+- **Conserver un instantané** : juste les faits, prêt pour votre propre question.
 
-L'Export IA est disponible depuis :
+Ce que vous copiez est un contexte factuel, pas un conseil en investissement.
 
-- la barre d'outils du Tableau de bord pour les tâches de portefeuille ;
-- la barre d'outils du Courtier pour les tâches de courtier ;
-- la barre d'outils de la page sur les pages de détail Actif et FX.
+---
 
-Le backend fournit les valorisations, la performance, les allocations, les
-données économiques FIFO, l'exposition FX et les indicateurs techniques. Le
-catalogue public n'expose volontairement que **huit choix autonomes d'Export de
-données** et **onze Analyses orientées vers les tâches**. Les jeux de données
-backend plus petits restent des blocs de composition internes.
+## 🚀 Ouvrir
 
-**Export de données** copie un instantané factuel sélectionné sans instructions
-d'analyse. **Demande d'analyse** ajoute un objectif et un contrat de réponse à
-un instantané autonome, ainsi qu'une suggestion d'export public complémentaire
-lorsque cela est utile. Les notes facultatives et la langue de réponse demandée
-ne s'appliquent qu'aux analyses.
+Sélectionnez **Export IA** (:material-brain:) dans la barre d'outils de l'une de ces pages :
 
-## 🚀 Comment l'utiliser
+| Page | Ce que couvre l'export | Guide |
+| :--- | :--- | :--- |
+| **Tableau de bord** | Votre portefeuille, tel que le montre le Tableau de bord | [Portefeuille](portfolio.md) |
+| Une page de détail d'un **courtier** | Ce courtier uniquement | [Courtier](broker.md) |
+| Une page de détail d'un **actif** | Cet actif et, si vous le détenez, votre position | [Actif](asset.md) |
+| Une page de détail **FX** | Cette paire FX et votre exposition directe à celle-ci | [FX](fx.md) |
 
-1. Ouvrez la page Portefeuille, Courtier, Actif ou FX concernée.
-2. Sélectionnez **Export IA** (:material-brain:).
-3. Choisissez **Export de données** ou **Demande d'analyse**, puis sélectionnez
- un jeu de données ou une Analyse.
-4. Choisissez la période IA et le niveau de détail.
-5. Pour une analyse, ajoutez des notes facultatives lorsque l'Analyse les prend
- en charge.
-6. Sélectionnez **Copier l'export IA**, puis collez le résultat dans l'outil de
- votre choix.
+L'export est daté au **dernier jour de la plage de dates de la page** : déplacez cette date pour exporter un moment antérieur.
 
-## 🎛️ Options d'export
+---
 
-| Option | Description |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Type d'export** | **Export de données** crée un prompt contenant un jeu de données factuel. **Demande d'analyse** ajoute l'objectif de l'Analyse, les instructions de vérification, le contrat de réponse et les jeux de données pertinents. |
-| **Jeu de données ou analyse** | Les choix disponibles proviennent du catalogue runtime LibreFolio actuel pour la page/le domaine. |
-| **Période IA** | **3M**, **6M**, **1Y** ou Personnalisée lorsque proposée. La période se termine à la date de l'instantané. L'historique source partiel reste explicite. |
-| **Niveau de détail** | **Compact**, **Standard** et **Complet** conservent le même univers d'entités. Les instantanés généraux utilisent des mini-histoires uniformes de plus en plus denses ; les exports de marché détaillés utilisent la politique d'échantillonnage technique complète. Complet peut être volumineux et n'est pas toujours nécessaire. |
-| **Notes pour l'IA** | Disponible pour les analyses prises en charge. Ajoute un contexte utilisateur facultatif sous forme de bloc de données sérialisé en toute sécurité. |
+## 🧭 Choisir quoi exporter
 
-Le brouillon d'export (type d'export, sélection, détail, période IA et notes)
-reste en mémoire du navigateur pendant 10 minutes par contexte de page. Fermer
-le panneau ou naviguer ailleurs le conserve dans cette fenêtre. L'expiration du
-délai, la déconnexion ou toute nouvelle connexion réinitialise chaque panneau
-d'Export IA à ses valeurs par défaut ; les brouillons ne sont pas persistés
-dans `localStorage`.
+Le panneau s'ouvre sur un choix prêt à l'emploi : modifiez uniquement ce dont vous avez besoin.
 
-## 📤 Données d'export disponibles
+### 📤 Étape 1 : Choisir le type d'export
 
-| Page | Instantané général | Historique de marché détaillé |
-| --------------- | ---------------------------------------- | --------------------------------- |
-| Tableau de bord | **Aperçu et historique du portefeuille** | **Historique des actifs du portefeuille** |
-| Courtier | **Aperçu et historique du courtier** | **Historique des actifs du courtier** |
-| Actif | **Position et historique de marché (complet)** | **Historique de marché uniquement (sans positions)** |
-| FX | **Marché FX et exposition** | **Historique du marché FX** |
+Sous **Type d'export** :
 
-Les instantanés généraux combinent les données économiques actuelles avec une
-trajectoire historique compacte et un contexte de marché ciblé. Les historiques
-de marché détaillés contiennent des prix ou taux observés plus denses, des
-indicateurs, des états, des événements et une couverture.
+- **Exporter les données** copie uniquement les faits : conservez un instantané ou posez votre propre question.
+- **Demander une analyse** ajoute une question ciblée, des règles pour vérifier les chiffres et la structure de la réponse attendue.
 
-## 🗂️ Analyses disponibles
+### 🗂️ Étape 2 : Choisir un jeu de données ou une analyse
 
-### 📊 Portefeuille
+Ouvrez **Jeu de données ou analyse** : chaque entrée a une description en une ligne. Chaque page propose un export général des données, un historique de marché détaillé et deux à quatre analyses, listées dans les guides ci-dessus.
 
-| Tâche | Objectif |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Plan d'investissement récurrent | Examiner la structure du portefeuille, les flux de trésorerie et les contraintes pour les investissements récurrents. |
-| Rééquilibrage du portefeuille | Comparer l'allocation actuelle avec le contexte de diversification et d'allocation cible. |
-| Performance du portefeuille et facteurs de marché | Rapprocher la performance, puis rechercher les facteurs datés à court et à long horizon pour chaque actif détenu sans exagérer la causalité. |
-| Stratégies de compensation des pertes en capital | Explorer comment les pertes fiscales disponibles ou arrivant à expiration pourraient compenser les gains éligibles à l'aide des données économiques FIFO et d'un inventaire officiel explicite des pertes fiscales. |
+### 🔍 Étape 3 : Définir le niveau de détail
 
-### 🏦 Courtier
+Choisissez **Compact**, **Standard** (par défaut) ou **Complet**. Les trois couvrent les mêmes actifs, indicateurs et période ; ils ne conservent qu'une quantité d'historique plus ou moins importante. **Complet** peut être très long.
 
-| Tâche | Objectif |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Revue du courtier | Résumer les positions, la trésorerie, l'activité, la performance et la couverture des données pour un courtier. |
-| Performance du courtier et facteurs de marché | Rapprocher la performance du courtier sélectionné et rechercher les facteurs datés pour chaque actif détenu. |
-| Stratégies de compensation des pertes en capital | Explorer les pistes de compensation des pertes fiscales à l'aide des données économiques FIFO du courtier sélectionné et de l'inventaire officiel des pertes fiscales de l'utilisateur. |
+### 📅 Étape 4 : Définir la période IA
 
-### 📈 Actif
+Choisissez **3M** (par défaut), **6M**, **1A** ou **Personnalisé** (jours, semaines, mois ou années), se terminant à la date d'export. Si LibreFolio dispose de moins d'historique, l'export le signale comme partiel : il n'invente jamais de prix et n'utilise pas de prix futurs.
 
-| Tâche | Objectif |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Revue de position | Examiner la taille, le prix de revient, la performance, les revenus et le contexte de concentration. |
-| Analyse de marché de l'actif | Examiner l'historique des clôtures observées, les rendements, la tendance, le momentum, la volatilité, le Drawdown, les états, les événements et la couverture. |
+### 📝 Étape 5 : Ajouter des notes (analyses uniquement)
 
-### 💱 FX
+Avec **Demander une analyse**, ajoutez du contexte ou des questions dans **Notes pour l'IA** : un budget mensuel, une allocation cible, ce qui vous préoccupe. L'IA les lit comme des informations, et non comme de nouvelles règles.
 
-| Tâche | Objectif |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Analyse de paire FX | Examiner la direction de la paire, les rendements, la volatilité, les éléments techniques, la couverture et le contexte macroéconomique daté. |
-| Impact de l'exposition FX | Examiner les liens directs de trésorerie, de devise de négociation et de devise de valorisation avec la paire. |
+### 📋 Étape 6 : Copier
 
-Les analyses qui comparent des trajectoires futures utilisent une **Thèse de
-scénario** : éléments probants fournis, hypothèses, horizon, compromis,
-conditions de déclenchement, conditions d'invalidation et décisions utilisateur
-manquantes. Elle est obligatoire pour les scénarios PAC, de rééquilibrage et de
-compensation des pertes en capital.
+Sélectionnez **Copier l'export IA**. Après **Préparation de l'export…**, un message confirme la copie avec sa taille estimée.
 
-## 🧩 Historique partiel et données supplémentaires
+??? warning "📏 Prompt volumineux — lorsque le texte est long"
 
-LibreFolio peut exporter l'historique réellement disponible lorsqu'il est plus
-court que la période IA demandée. Le prompt affiche les dates
-demandées/disponibles, la couverture, les avertissements et tout Signal partiel
-ou omis. Il n'utilise jamais de prix ou de taux futurs.
+    Le panneau affiche d'abord la **Taille finale du prompt** avec un avertissement. Choisissez
+    **Utiliser Compact** pour un texte plus court (non affiché en Compact), ou **Copier quand
+    même** : les mêmes paramètres copient alors sans demander pendant un moment.
 
-Une Analyse peut recommander des **Données LibreFolio supplémentaires**
-lorsqu'un autre export améliorerait sensiblement la réponse. Le prompt indique
-le nom public de l'export, le chemin dans l'interface, la période/le détail
-recommandés, la raison et si ces données sont requises ou facultatives.
+LibreFolio se souvient de vos derniers choix sur chaque page pendant quelques minutes ; la déconnexion les réinitialise.
 
-!!! info "Le Drawdown porte toujours sur tout l'historique"
+---
 
-    Partout où une section Drawdown apparaît dans un export, elle est calculée sur
-    **tout l'historique disponible** — depuis le premier prix enregistré pour un
-    Actif, ou depuis la première transaction pour un Portefeuille ou un Courtier —
-    jamais par rapport à la période IA sélectionnée. Une courte fenêtre d'export
-    contient tout de même le véritable sommet-creux historique.
+## 🤖 Collez-le dans votre assistant IA
 
-## 🔗 Références locales
+Vous copiez du texte brut : un court en-tête (ce qui a été exporté, la date, la période, la devise et le niveau de détail) et vos données dans des tableaux compacts. **Demander une analyse** ajoute la question et la structure de réponse attendue autour de celles-ci.
 
-Le prompt utilise des références locales pour relier les tableaux compacts :
+1. Ouvrez une nouvelle conversation dans un assistant IA à qui vous confiez des données financières.
+2. Collez le texte et envoyez-le. Avec **Demander une analyse**, la question y figure déjà.
+3. Répondez aux questions de l'IA : il lui est demandé de ne poser que des questions sur ce qui change le résultat (un budget, un objectif, votre situation fiscale) et de ne jamais le deviner.
 
-- A# pour les actifs ;
-- B# pour les courtiers ;
-- F# pour les paires FX ;
-- L# pour les lots FIFO.
+Bon à savoir :
 
-Le Répertoire d'entités résout les références A#, B# et F#. Les lots L# sont
-différents : ce sont des **lignes intégrées** dans les tableaux FIFO de l'export
-lui-même, pas des entrées du répertoire — le modèle les lit sur place. Le modèle
-destinataire doit utiliser des noms lisibles dans sa réponse ; les identifiants de
-base de données ne sont pas nécessaires.
+- Avec **Demander une analyse**, il est demandé à l'IA de répondre dans la langue de votre interface LibreFolio et de garder vos chiffres séparés de son interprétation.
+- Les analyses **Performance et moteurs de marché** nécessitent un assistant capable de faire des recherches sur le web ; sans cela, la réponse le dit au lieu d'inventer des sources.
+- Les actifs, courtiers, paires FX et lots apparaissent sous forme de codes courts (A1, B1, F1, L1) expliqués dans le texte ; il est demandé à l'IA de répondre avec les noms réels.
+- Une analyse peut suggérer un export supplémentaire sous **Données LibreFolio supplémentaires**, avec l'endroit où le trouver. Si l'IA le demande, copiez aussi cet export et collez-le dans la même conversation.
 
-## 🔒 Portée et confidentialité
+---
 
-- Les exports de portefeuille suivent le filtre de courtier actif, la plage de
- dates et la devise cible.
-- Les exports de courtier ne contiennent que le courtier sélectionné et
- nécessitent d'y avoir accès.
-- Les exports d'actif et de FX utilisent l'entité actuelle, la plage
- sélectionnée, la devise cible et le périmètre de courtiers accessible à
- l'utilisateur lorsque le contexte de portefeuille est nécessaire.
-- Le texte du presse-papiers peut contenir des données financières sensibles.
- Examinez-le avant de le partager ou de le coller dans un service tiers.
+## 🔒 Confidentialité
 
-## ⚠️ Disponibilité et sécurité
+- LibreFolio n'envoie l'export nulle part : il l'écrit uniquement dans votre presse-papiers.
+- Le texte contient vos **chiffres réels** ainsi que les noms de vos courtiers et de vos actifs, même lorsque le mode confidentialité est activé.
+- Chaque page n'exporte que son propre périmètre :
+    - **Tableau de bord** : les courtiers que vous détenez avec une part supérieure à 0 %, filtrés par le filtre de courtier ;
+    - **Courtier** : ce courtier uniquement ;
+    - **Actif** et **FX** : tous les courtiers que vous pouvez ouvrir, y compris les courtiers partagés avec vous.
+- Relisez le texte avant de le coller où que ce soit ; un rappel apparaît après chaque copie.
 
-L'Export IA échoue en se fermant par défaut si les catalogues ou les contrats de
-réponse du navigateur et du serveur ne correspondent pas. Une option peut
-également être indisponible lorsque ses données ne s'appliquent pas — par
-exemple, une Revue de position sans position ouverte ou un Impact de l'exposition
-FX sans exposition liée directe.
+---
 
-L'export fournit un contexte factuel, et non des conseils en investissement ou
-des instructions de trading automatisé.
+## 🛠️ En cas de problème
 
-## 🔗 Pages associées
+- **Export IA est grisé** : la page est encore en cours de chargement ou, sur le Tableau de bord, vous ne détenez aucun courtier avec une part supérieure à 0 %.
+- *Cette sélection n'est pas applicable aux données actuelles.* : choisissez une autre analyse. **Revue de position** nécessite une position sur l'actif ; **Impact d'exposition FX** nécessite des liquidités ou une position liée à la paire.
+- Un message se terminant par *Actualisez et réessayez.* : rechargez la page.
+- *L'accès au presse-papiers n'est pas disponible. Vérifiez les autorisations du navigateur.* : autorisez l'accès au presse-papiers pour LibreFolio dans votre navigateur.
 
-- [Export IA du portefeuille](portfolio.md)
-- [Export IA du courtier](broker.md)
-- [Export IA de l'actif](asset.md)
-- [Export IA FX](fx.md)
+---
+
+## 🔗 Voir aussi
+
+- 🛠️ **[Comment fonctionne l'export IA](../../developer/architecture/patterns/ai_export_snapshot.md)** — pour les développeurs

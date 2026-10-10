@@ -1,161 +1,153 @@
 # 💰 Tarjetas KPI
 
-Las tres tarjetas KPI en la parte superior del panel de control te brindan un diagnóstico rápido de tu cartera. Todos los valores respetan el **rango de tiempo y el ámbito del bróker** seleccionados en la parte superior de la página.
+Las tres tarjetas en la parte superior del panel responden tres preguntas de un vistazo: **cuánto gané en este periodo**, **qué tan bien trabajó mi dinero**, y **cuánto vale mi cartera**. Siguen el rango temporal y el filtro de bróker en la parte superior de la página, y la página de un bróker muestra las mismas tarjetas solo para ese bróker. El icono **?** en la esquina de una tarjeta abre su sección a continuación.
 
-!!! note "La compartición afecta a estos números"
+- 📉 **[Tarjeta 1 — P&L período](#card-1-period-pl)** — el dinero que generaron tus inversiones en el periodo
+- 📈 **[Tarjeta 2 — Rentabilidades](#card-2-returns)** — tus rentabilidades en porcentaje, y lo que tu timing hizo con ellas
+- 💰 **[Tarjeta 3 — Patrimonio neto](#card-3-net-worth)** — lo que posees, y tu ganancia desde el inicio
 
-    Todos los importes se agregan sobre los brókers a los que tienes acceso, y cada bróker en copropiedad contribuye en proporción a tu **cuota de propiedad** (ej. un Owner al 50 % ve la mitad del valor y del P&L de ese bróker). Editors y Viewers, cuya cuota es siempre 0 % por regla, ven los importes completos del bróker. Consulta [Compartir bróker](../brokers/sharing.md).
+!!! note "Los brókeres compartidos cuentan según tu participación"
+
+    El panel suma los brókeres que **posees** con una participación superior al 0%, cada uno en proporción a esa participación: un propietario del 50% ve la mitad del valor y del P&L del bróker. Los brókeres en los que eres Editor o Lector no se cuentan aquí; su propia página los muestra, con sus importes completos. Consulta [Compartir brókeres](../brokers/sharing.md).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Vista general de las tarjetas KPI">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Resumen de las tarjetas KPI">
 </div>
 
 ---
 
-## 📉 Tarjeta 1 — P&L del Período {: #card-1-period-pl }
+## 📉 Tarjeta 1 — P&L período {: #card-1-period-pl }
+
+¿Cuánto dinero generaron tus inversiones en el periodo seleccionado? La tarjeta **P&L período** responde, dejando fuera el dinero que moviste tú mismo hacia dentro o hacia fuera.
 
 <div class="kpi-card-crop-container card-period-pnl">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Tarjeta de P&L del Período">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Tarjeta P&L Período">
 </div>
 
-La tarjeta **P&L del Período** muestra cuánto dinero *ganó* realmente tu cartera en la ventana seleccionada — después de eliminar el efecto de tus propios depósitos y retiros.
+**Métricas mostradas**
 
-El número principal se calcula utilizando la siguiente fórmula:
+- **P&L período** — el número grande: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, siendo los flujos netos el capital que moviste hacia dentro o hacia fuera → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **La línea debajo** — por ejemplo `+91.31 € (+16.36%)`: cuánto se movió tu P&L Total desde ayer (panel a continuación)
+- **Variación no realizada** — cómo se movió la ganancia o pérdida no realizada de tus posiciones durante el periodo, incluido el efecto del tipo de cambio → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Ventas** — la ganancia o pérdida realizada de las ventas del periodo, frente al coste medio de las unidades vendidas → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **Dividendos e intereses** — dividendos, cupones e intereses P2P recibidos → [Dividendo e interés](../../financial-theory/instruments/transaction-types/dividend-interest.md)
+- **Comisiones e impuestos** — comisiones e impuestos registrados como transacciones; pasa el cursor sobre la fila para ver el desglose → [Comisión e impuesto](../../financial-theory/instruments/transaction-types/fee.md)
 
-\[\text{P&L del Período} = \text{VNA}_{\text{final}} - \text{VNA}_{\text{inicio}} - \text{Flujos Netos}_{\text{período}}\]
+**Cómo interpretarlo**
 
-Un número positivo significa que ganaste dinero gracias a la actividad de inversión. Un número negativo significa que perdiste dinero, neto de los movimientos de capital.
+- **Verde es ganancia, rojo es pérdida** — y un depósito o un retiro no es ninguna de las dos.
+- **Las cuatro filas explican el número grande.** Lo que no pueden ver, como activos que se mueven entre dos de tus brókeres el primer o el último día, va al **Otros / residual de conciliación** de la [vista Rendimiento](positions.md#performance).
+- **La barra más larga** es la fila que más movió tu resultado.
 
-### El número debajo del valor principal
+??? info "📏 La línea bajo el número grande — cómo se calcula"
 
-Justo debajo del valor de P&L del Período, una línea más pequeña muestra algo como `+45.20 (+3.10%)`.
+    Es el cambio de tu P&L Total —tu ganancia o pérdida desde el inicio— desde ayer hasta hoy, siendo *hoy* la fecha final del periodo. El porcentaje lo compara con el P&L Total de ayer, tomado sin su signo:
 
-- La cantidad es el cambio **día a día** (hoy vs. ayer) en tu **P&L Total** — tu ganancia/pérdida acumulada de todos los tiempos, no solo del período seleccionado.
-- El porcentaje lo expresa como una proporción del **P&L Total** de ayer — te indica cuánto "pesó" el movimiento de hoy respecto a tu resultado acumulado histórico.
+    $$
+    \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
+    $$
 
-\[\text{Cambio diario} = \text{P&L Total}_{\text{hoy}} - \text{P&L Total}_{\text{ayer}}\]
+    - **El signo y el color siguen el cambio**, incluso mientras el P&L Total es una pérdida: de `-558.10 €` a `-466.79 €`, la línea muestra `+91.31 € (+16.36%)` — tu pérdida se redujo en un 16.36%.
+    - **Necesita dos días de historial**; el porcentaje se omite cuando el P&L Total de ayer es exactamente cero, y un día sin cambios muestra `0.00%`.
 
-Esta línea solo aparece una vez que el historial tiene al menos dos puntos diarios.
+### 💱 Variación no realizada por divisa {: #unrealized-change-by-currency }
 
-### Las filas de desglose
+Pasa el cursor sobre **Variación no realizada** para desglosarla por la divisa en la que están valorados tus activos —aquí con el euro como divisa de visualización:
 
-| Fila | Qué mide |
-|-----|-----------------|
-| **Cambio no realizado** | Cuánto cambió la [ganancia/pérdida no realizada](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) de tus posiciones abiertas durante el período |
-| **Ventas** | Ganancia o pérdida realizada de posiciones cerradas durante el período (precio de venta − costo promedio) |
-| **Dividendos e intereses** | Ingresos en efectivo por dividendos, cupones de bonos e intereses P2P |
-| **Comisiones e impuestos** | Comisiones e impuestos registrados como transacciones |
+| Fila | Qué muestra |
+|-----|---------------|
+| 📈 **Activos en USD** | Qué hicieron tus activos en dólares *en dólares* —su propio cambio de precio— contabilizados al tipo de cambio del día |
+| 💱 **Tipo USD → EUR** | Qué hizo el tipo de cambio con lo que pagaste por ellos |
+| ❔ **USD, sin desglosar** | Solo cuando, en el primer o el último día, algunos de esos activos no tenían precio, ni tipo de cambio, o tenían un coste de compra incompleto: su variación, en una sola pieza |
 
-!!! tip "Verificación de identidad"
+Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada divisa distinta de tu divisa de visualización; en conjunto, las filas suman **exactamente** la Variación no realizada.
 
-    Las cuatro filas suman el número principal de P&L del Período (± pequeños residuales por redondeo de FX).
+??? example "Un ETF estadounidense en un panel en euros"
 
-🔗 **Teoría**: [P&L del Período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) · [Valor en Libros / PMP](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+    Durante el periodo compraste 10 unidades por €400, cuando valían 500 USD. Al final del periodo valen 550 USD, y 1 USD = €0.75. La información emergente muestra:
+
+    - 📈 **Activos en USD**: (550 − 500) × 0.75 = **+€37.50** — tu ETF ganó un 10% en dólares;
+    - 💱 **Tipo USD → EUR**: 500 × 0.75 − 400 = **−€25.00** — el dólar perdió valor frente al euro;
+    - en conjunto, la **Variación no realizada**: 550 × 0.75 − 400 = **+€12.50**.
+
+🔗 **Teoría**: [Variación no realizada por divisa](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#unrealized-change-by-currency) — las fórmulas detrás de cada fila
 
 ---
 
-## 📈 Tarjeta 2 — Rendimientos {: #card-2-returns }
+## 📈 Tarjeta 2 — Rentabilidades {: #card-2-returns }
+
+¿Qué tan bien trabajó tu dinero, independientemente del tamaño de tu cartera? La tarjeta **Rentabilidades** responde en porcentajes, y su número grande te dice si tu timing ayudó.
 
 <div class="kpi-card-crop-container card-returns">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Tarjeta de Rendimientos">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Tarjeta Rendimientos">
 </div>
 
-La tarjeta **Rendimientos** muestra métricas de *tasa de rendimiento* — porcentajes que te permiten comparar el rendimiento independientemente del tamaño de la cartera.
+**Métricas mostradas**
 
-### Efecto de la Oportunidad
+- **Efecto timing** — el número grande, en puntos porcentuales (pp): $\text{MWRR}_{\text{cumulative}} - \text{TWRR}$ → [Efecto timing](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)
+- **El porcentaje debajo** — por ejemplo `+0.35%`: el cambio de hoy en tu P&L Total, frente al patrimonio neto de ayer (panel a continuación)
+- **ROI** — la ganancia del periodo frente al capital invertido → [ROI simple](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)
+- **TWRR** — cómo rindieron tus elecciones de activos, independientemente del timing de tus depósitos → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
+- **MWRR acumulado** y **MWRR anualizado** — tu rentabilidad personal, incluido el timing de los depósitos, durante el periodo y como tasa anual → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
 
-El **Efecto de la Oportunidad** en la parte superior de la tarjeta mide si tus decisiones de depósito/retiro *añadieron* o *restaron* valor en comparación con una estrategia pasiva de comprar y mantener:
+**Cómo interpretarlo**
 
-\[\text{Efecto de la Oportunidad} = \text{MWRR}_{\text{acumulado}} - \text{TWRR}_{\text{acumulado}}\]
+- **Timing favorable** (verde): tendiste a depositar antes de que subieran los precios. **Timing desfavorable** (rojo): tendiste a depositar en los picos. Cerca de cero se lee **Timing neutral**, y cuanto más fuerte es el color, mayor es el efecto.
+- **El TWRR juzga la estrategia, el MWRR tu resultado personal** — como para un gestor de fondos y un inversor.
+- **Las cuatro filas cubren todo el periodo**; el porcentaje pequeño cubre solo hoy.
+- **`—` significa sin valor**: una rentabilidad que LibreFolio no puede calcular para el periodo muestra `—` en lugar de un número. El efecto timing necesita tanto el TWRR como el MWRR: cuando falta uno, muestra un `—` gris, sin etiqueta de timing.
 
-- **Favorable (positivo)** ✅: tendiste a depositar cuando los precios estaban bajos, aumentando tu rendimiento personal por encima de lo que ganaron los activos por sí solos.
-- **Desfavorable (negativo)** ❌: tendiste a depositar en picos o te perdiste las caídas, reduciendo tu rendimiento por debajo del rendimiento puro de los activos.
+??? info "📏 El porcentaje bajo el efecto timing — cómo se calcula"
 
-### El número debajo del Efecto de la Oportunidad
+    El mismo cambio de tu P&L Total que en la [Tarjeta 1](#card-1-period-pl), dividido por el patrimonio neto de ayer tomado sin su signo:
 
-Debajo del Efecto de la Oportunidad verás un pequeño porcentaje (ej. `+0.35%`) — es el cambio en tu **P&L Total** de **ayer a hoy**, expresado como una proporción del patrimonio neto de ayer:
+    $$
+    \text{percentage} = \frac{\text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100
+    $$
 
-\[\text{%Cambio diario} = \frac{\text{P&L Total}_{\text{hoy}} - \text{P&L Total}_{\text{ayer}}}{\text{Patrimonio Neto}_{\text{ayer}}} \times 100\]
-
-Es una estimación aproximada del rendimiento de **hoy** — una comprobación rápida del estado. No es el ROI, TWRR o MWRR que se muestran en las filas siguientes, que permanecen ancladas al período completo seleccionado.
-
-### Las cuatro métricas de rendimiento
-
-| Métrica | Pregunta que responde |
-|--------|---------------------|
-| **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | ¿Cuánto gané en relación con mi capital neto invertido? |
-| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | ¿Cómo se desempeñaron mis selecciones de activos, independientemente de cuándo deposité? |
-| **[MWRR acumulado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | ¿Cuál es el rendimiento ponderado por dinero acumulado para mis flujos de efectivo reales? |
-| **[MWRR anualizado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | ¿A qué tasa compuesta anual creció realmente mi capital? |
-
-!!! note "TWRR vs. MWRR"
-
-    - **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** mide la **estrategia de activos** — igual que como se evalúa a un gestor de fondos.
-    - **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** mide **tu resultado personal** — incluyendo el momento de tus depósitos.
-    - La brecha entre ellos es el [Efecto de la Oportunidad](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md).
+    Su signo y color siguen el cambio, como en la Tarjeta 1. Necesita dos días de historial y se oculta cuando el patrimonio neto de ayer era exactamente cero.
 
 ---
 
-## 💰 Tarjeta 3 — Patrimonio Neto {: #card-3-net-worth }
+## 💰 Tarjeta 3 — Patrimonio neto {: #card-3-net-worth }
+
+¿Cuánto vale tu cartera al final del periodo, y cuánto ha ganado desde que empezaste? La tarjeta **Patrimonio neto** responde, incluyendo el efectivo.
 
 <div class="kpi-card-crop-container card-net-worth">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Tarjeta de Patrimonio Neto">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Tarjeta Patrimonio Neto">
 </div>
 
-La tarjeta **Patrimonio Neto** muestra el valor absoluto de tu cartera al final del período seleccionado.
+**Métricas mostradas**
 
-!!! note "El Patrimonio Neto incluye la liquidez"
+- **Patrimonio neto** — el número grande: valores a precio de mercado, más efectivo, más cualquier importe en tránsito entre tus brókeres → [NAV / Patrimonio neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
+- **La línea debajo** — por ejemplo `+12,450.30 (+24.85%)`: tu **P&L Total** desde el inicio y, entre paréntesis, tu **ROI desde el inicio** → [Capital depositado y P&L Total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **Valor de mercado** — cuánto valen los activos que posees a precios de mercado → [NAV / Patrimonio neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
+- **Coste de compra** — cuánto te costaron las posiciones que aún mantienes, cada compra al tipo de cambio de su propia fecha → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Efectivo** — el efectivo en tus brókeres; pasa el cursor para desglosar el capital que depositaste y las rentabilidades que obtuviste → [Grupos de efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
+- **Capital depositado (Periodo)** — depósitos menos retiros en el periodo, verde a la derecha y rojo a la izquierda; pasa el cursor para ver los totales → [Capital depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
-    La cifra es **valores a precio de mercado + saldo líquido** (+ cualquier valor en tránsito entre brókers). Como incluye la liquidez, **no es comparable** con el «contravalor de valores» de un extracto bancario, que excluye el efectivo — la liquidez del banco se muestra por separado.
+$$
+\text{Total P}\&\text{L} = \text{Net Worth} - \text{Capital put in since the start}
+$$
 
-### El número debajo del Patrimonio Neto
+Ese capital es cada depósito menos cada retiro, más el coste de compra de los valores que aportaste sin efectivo, como una posición inicial; el ROI entre paréntesis divide el P&L Total entre él.
 
-Debajo del valor del Patrimonio Neto encontrarás tu **P&L Total**, con tu rendimiento absoluto entre paréntesis — ej. `+12,450.30 (+24.85%)`.
+**Cómo interpretarlo**
 
-- La cantidad es tu **P&L Total** — la ganancia o pérdida acumulada desde el inicio, en todo el historial de este ámbito (no solo el período actual).
-- El porcentaje entre paréntesis es el **ROI absoluto (desde el inicio)**: P&L Total ÷ capital neto invertido desde el inicio. *No* es un cambio día a día — para ese control de pulso diario, consulta las líneas pequeñas de la [Tarjeta 1](#card-1-period-pl) y la [Tarjeta 2](#card-2-returns).
-
-\[\text{P&L Total} = \text{Patrimonio Neto} - \text{Capital Neto Invertido Desde el Inicio}\]
-
-Nota: "Capital Neto Invertido Desde el Inicio" aquí es la suma de **todos** los depósitos menos **todos** los retiros desde que empezaste a usar este ámbito — una cifra diferente y más grande que la fila "Capital Depositado" a continuación, que solo cuenta los movimientos dentro del período seleccionado.
-
-🔗 **Teoría**: [Capital Depositado, P&L Total y Fondos de Efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
-
-### Qué significan las filas
-
-| Fila | Definición |
-|-----|-----------|
-| **[Valor de Mercado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Precio de mercado actual × cantidad de todos los activos mantenidos |
-| **[Valor en Libros](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)** | Lo que pagaste por tus posiciones abiertas (costo promedio × cantidad) |
-| **Efectivo** | Saldo líquido mantenido en cuentas de bróker |
-| **[Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Capital externo neto aportado a este ámbito |
-
-### La barra de Capital Depositado
-
-La barra horizontal debajo de las filas visualiza:
-
-- 🟢 **Total depositado** — todos los depósitos en el período
-- 🔴 **Total retirado** — todos los retiros en el período
-
-El número principal muestra el saldo neto (depositado − retirado).
-
-!!! info "Punto en el tiempo vs. período"
-
-    El Valor de Mercado, el Valor en Libros y el Efectivo son **instantáneas** al final — son independientes de la fecha de inicio.
-    El Capital Depositado tiene **ámbito de período** — cuenta los depósitos y retiros entre el inicio y el final del rango seleccionado.
+- **¿Fecha final o periodo?** El número grande y las tres primeras filas son valores en la fecha final; Capital depositado (Periodo) cuenta solo los movimientos entre el inicio y el final.
+- **El pequeño caret** en una barra marca su valor al inicio del periodo (pasa el cursor sobre ella); el Valor de mercado se vuelve rojo cuando termina por debajo de él.
+- **El Patrimonio neto incluye el efectivo**, a diferencia del "valor de los títulos" de un extracto bancario.
+- **El P&L Total no es un cambio diario**: para el pulso de hoy, consulta las líneas pequeñas de la Tarjeta 1 y la Tarjeta 2.
 
 ---
 
 ## 🔗 Relacionado
 
-- 💼 **[VNA / Patrimonio Neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
-- 📚 **[Valor en Libros](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)**
-- 📊 **[P&L del Período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)**
-- 💸 **[Capital Depositado y P&L Total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
-- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)**
-- 📈 **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)**
-- ⏱️ **[Efecto de la Oportunidad](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+- 🔍 **[Posiciones y análisis](positions.md)** — los mismos resultados, posición por posición
+- 📊 **[Gráficos](charts.md)** — la vista **P&L** del gráfico Growth sigue tu P&L Total a lo largo del tiempo
+- 📐 **[Resumen de métricas de rendimiento](../../financial-theory/technical-analysis/performance-metrics/index.md)** — cada métrica de estas tarjetas, con su fórmula
+- 🛠️ **[Detalles técnicos](../../developer/frontend/pages/index.md#dashboard)** — para desarrolladores: de dónde vienen las cifras de las tarjetas
 
 ---
 
-*[⬅️ Volver a la Descripción General del Panel de Control](index.md)*
+*[⬅️ Volver al resumen del panel](index.md)*

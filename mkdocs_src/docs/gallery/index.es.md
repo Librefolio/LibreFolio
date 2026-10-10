@@ -24,7 +24,7 @@
     - **Autenticación**: Inicio de sesión seguro con medidor de fuerza de contraseña
     - **Seguridad**: Indicador de seguridad de la conexión en la barra lateral, abierto en su nivel y su motivo
     - **Introducción**: Configuración de bienvenida en el primer inicio, recorrido principal guiado y guías contextuales, repetibles desde Configuración
-    - **Panel de Control**: Descripción general de tu cartera
+    - **Panel**: Resumen de tu cartera
     - **Brókers**: Gestión de múltiples cuentas de bróker
     - **Archivos**: Carga y gestión de informes de brókers con vistas de cuadrícula y tabla
     - **Configuración**: Personaliza tu experiencia en 4 idiomas

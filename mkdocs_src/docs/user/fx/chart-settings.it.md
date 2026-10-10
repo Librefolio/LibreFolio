@@ -1,65 +1,100 @@
-# ⚙️ Impostazioni del Grafico
+# ⚙️ Impostazioni grafico
 
-La finestra modale **Impostazioni del Grafico** personalizza l'aspetto del grafico e i segnali di sovrapposizione. La stessa finestra serve sia la pagina [Elenco FX](index.md) sia quella [Assets](../assets/index.md), con **impostazioni indipendenti per ambito** — la modifica delle impostazioni predefinite FX non tocca mai i grafici degli asset, e viceversa.
+La finestra **Impostazioni grafico** modifica l'aspetto dei grafici e le sovrapposizioni che
+disegnano. Serve sia la [lista FX](index.md) sia la [lista Asset](../assets/index.md), e ciascuna
+lista mantiene le proprie impostazioni: modificare i grafici FX non tocca mai i grafici degli asset.
 
 ---
 
-## 🔓 Accesso alle Impostazioni del Grafico
+## 🔓 Aprire le impostazioni grafico
 
-La finestra modale si apre dalle pagine di elenco, in due varianti:
+- 🌐 **Per tutti i grafici** — fai clic su **Impostazioni** (⚙️) nella barra degli strumenti della
+  lista. La finestra si intitola **Impostazioni grafico**. Applicandola si sostituiscono le
+  impostazioni personalizzate di ogni grafico della lista, comprese le pagine di dettaglio, e la
+  finestra te lo segnala.
+- 🎯 **Per un singolo grafico** — fai clic su ⚙️ su una scheda. La finestra si intitola
+  **Impostazioni grafico (Locali)**, e le sue impostazioni si applicano solo a quel grafico.
 
-- 🌐 **Globale** — il pulsante delle impostazioni (⚙️) nella barra degli strumenti della pagina di elenco. Queste impostazioni diventano le impostazioni predefinite per ogni grafico dell'ambito; applicarle sostituisce tutte le personalizzazioni per singola card (la finestra modale ti avvisa di questo).
-- 🎯 **Locale** — il pulsante delle impostazioni (⚙️) su qualsiasi card di coppia o asset. Queste impostazioni prevalgono su quelle globali solo per quella card.
+!!! note "Le pagine di dettaglio usano pannelli inline"
 
-!!! note "Le pagine di dettaglio usano invece pannelli in linea"
-
-    Nella [pagina di dettaglio della coppia](detail/index.md) (e nelle pagine di dettaglio degli asset) il pulsante ⚙️
-    attiva/disattiva un **pannello estetico** in linea e il pulsante 📈 attiva/disattiva
-    il **pannello dei segnali** in linea — stesse impostazioni, stessa archiviazione per singolo elemento, nessuna finestra modale.
+    In una [pagina di dettaglio di una coppia](detail/index.md) (e in una pagina di dettaglio di un
+    asset), ⚙️ sul grafico apre le stesse impostazioni di aspetto in un pannello, e il pannello
+    **Segnali** sopra il grafico contiene le sovrapposizioni. Sono le stesse impostazioni di quelle
+    locali della scheda.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Finestra modale Impostazioni del Grafico" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Modale delle impostazioni grafico" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 👀 Anteprima in Tempo Reale
+## 👀 Anteprima prima di applicare
 
-La finestra modale mostra sempre un **grafico di anteprima** con un interruttore Abs/%, così vedi l'effetto di ogni modifica prima di applicarla:
+La finestra mostra un grafico di anteprima con il proprio interruttore **Abs** / **%**. I tuoi
+grafici cambiano solo quando fai clic su **Applica**; **Annulla** chiede conferma prima di scartare
+le modifiche.
 
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Finestra modale delle impostazioni del grafico con anteprima in tempo reale">
+    <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Modale delle impostazioni grafico con l'anteprima dal vivo">
 </div>
 
-- 🌐 **Modalità globale** — l'anteprima disegna una curva demo sintetica. Gli indicatori backend non possono essere eseguiti nel browser, quindi la finestra modale chiede al server di calcolarli in tempo reale su quella curva: ciò che vedi corrisponde a ciò che i grafici reali visualizzeranno.
-- 🎯 **Modalità locale** — l'anteprima usa i **dati di prezzo reali** della card. Gli indicatori backend mostrano l'ultima configurazione applicata; un banner ti ricorda di fare clic su Apply per aggiornarli.
+- 🌐 **Per tutti i grafici**, l'anteprima disegna una curva dimostrativa. Il server calcola su di
+  essa gli indicatori, così appaiono esattamente come appariranno sui tuoi grafici reali.
+- 🎯 **Per un singolo grafico**, l'anteprima usa i dati reali di quel grafico. Gli indicatori
+  mostrano le ultime impostazioni applicate finché non fai clic su **Applica**, e un banner te lo
+  ricorda.
 
 ---
 
-## 🎛️ Impostazioni Disponibili
+## 🎨 Aspetto
 
-### 🎨 Aspetto
+| Impostazione | Cosa fa |
+|---------|--------------|
+| **Colori della linea di base** | Verde sopra, rosso sotto l'inizio del periodo |
+| **Riempimento dell'area** | Gradiente sotto la linea |
+| **Linee della griglia** | Griglia orizzontale tratteggiata |
+| **Gradiente obsoleto** | Atenua i giorni senza un nuovo valore, che ripetono uno precedente |
 
-| Impostazione | Descrizione |
-|---------|-------------|
-| **Colori della Linea di Base** | Colora la linea di verde sopra / di rosso sotto la linea di base |
-| **Riempimento Area** | Riempimento sfumato sotto la linea |
-| **Linee della Griglia** | Griglia orizzontale tratteggiata |
-| **Sfumatura dei Dati Obsoleti** | Sfuma i dati più vecchi verso lo sfondo |
-| **Scala dell'Asse Y** | Automatica, Includi 0, o un intervallo min/max personalizzato |
+### 📏 Intervalli degli assi
 
-### 📈 Segnali di Sovrapposizione
+**Scala dell'asse Y** ha una riga per ogni asse del grafico: l'asse principale (il tasso, o la
+percentuale nella vista %) e una per ogni scala di indicatore, come l'**asse RSI**. Gli indicatori
+che condividono una scala condividono una riga.
 
-La finestra modale gestisce gli stessi segnali di sovrapposizione del [pannello Segnali](detail/signals.md) della pagina di dettaglio, aggiunti da tre menu a tendina di categoria:
+- **Auto** adatta i dati su quell'asse.
+- **Includi 0** adatta i dati e mostra anche lo zero.
+- **Personalizzato** usa i valori **Min** e **Max** che digiti.
 
-- 🧮 **Indicatori Tecnici** — il catalogo dei plugin backend per l'ambito corrente: **9 indicatori compatibili con FX** qui, 22 nell'ambito Assets. Il menu a tendina è un albero con ricerca raggruppato per famiglia (trend, momentum, volatilità, …). La matematica alla base di ogni indicatore è descritta in [Indicatori Tecnici — Teoria Finanziaria](../../financial-theory/technical-analysis/indicators/index.md).
-- ↔️ **Confronto Dati** — sovrapponi un'altra coppia FX configurata o un asset sullo stesso grafico.
-- 📐 **Benchmark Sintetici** — curve di riferimento generate da parametri ([Lineare](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Composta](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md), [Onda Sinusoidale](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md)). Sono pura matematica — non panieri personalizzati e non dati di mercato.
-
-Ogni segnale configurato diventa una card con parametri in linea, un link 📖 alla sua pagina di teoria e diagnostica per singolo segnale una volta calcolato.
+Le viste **Abs** e **%** mantengono intervalli separati: passa l'anteprima a **%** per impostare
+quello percentuale.
 
 ---
 
-## 💾 Persistenza
+## 📈 Segnali di sovrapposizione
 
-Le impostazioni del grafico vengono salvate localmente nel `localStorage` del tuo browser, separatamente per gli ambiti FX e Assets, con sovrascritture per singola card applicate sopra le impostazioni predefinite dell'ambito. Persistono tra le sessioni — anche dopo aver chiuso e riaperto il browser — e andranno perse solo se svuoti la cache/l'archiviazione del browser o se l'archiviazione scade (dipende dal browser, in genere da mesi ad anni).
+Aggiungi sovrapposizioni da tre menu a tendina, come nel [pannello Segnali](detail/signals.md) della
+pagina di dettaglio:
+
+- 🧮 **Indicatori tecnici** — 9 indicatori funzionano sui tassi FX (i grafici degli asset ne offrono
+  di più), raggruppati per famiglia con una casella di ricerca. La matematica è in
+  [Indicatori tecnici — Teoria finanziaria](../../financial-theory/technical-analysis/indicators/index.md).
+- ↔️ **Confronto dati** — un'altra coppia FX o un asset sullo stesso grafico.
+- 📐 **Benchmark sintetici** — curve di riferimento costruite solo da parametri, non da dati di
+  mercato: [Lineare](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
+  [Composto](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) e
+  [Onda sinusoidale](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
+
+Ogni segnale diventa una scheda con i suoi parametri, un link 📖 alla sua pagina teorica e, una
+volta calcolato, un'icona di diagnostica.
+
+---
+
+## 💾 Dove vengono salvate le impostazioni
+
+- Le impostazioni grafico sono salvate in **questo browser**, per il tuo utente, separatamente per
+  le liste FX e asset. Le impostazioni proprie di un grafico si sovrappongono a quelle della sua
+  lista.
+- Non sono memorizzate sul server: un altro browser o dispositivo parte dai valori predefiniti, e
+  cancellare i dati del browser di questo sito le ripristina.
+- Il periodo selezionato non è un'impostazione del grafico: le pagine della stessa scheda del
+  browser lo condividono.

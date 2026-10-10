@@ -31,12 +31,14 @@ Aquí tiene un resumen de las operaciones y herramientas disponibles directament
 | **Eliminación y Acciones Masivas** | Haga clic derecho en cualquier fila para abrir el Menú Contextual para acciones rápidas. Eliminar una sola fila y marcar varias filas para eliminación masiva abren ambos el mismo **espacio de trabajo masivo**, donde las filas se preparan para su eliminación antes de confirmar; un socio vinculado (operación FX o tramo de transferencia) se prepara automáticamente junto con la fila elegida. | |
 
 La duplicación funciona del mismo modo: **Clonar** desde el menú contextual prepara una copia en el espacio de trabajo masivo — manteniendo la **fecha original** (la clonación es la forma en que una fila histórica mal clasificada se corrige, por lo que la fecha debe sobrevivir) — donde la ajusta y la guarda.
+{: #bulk-workspace }
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
 </div>
 
 | **Transacciones Compuestas y Promoción** | Vincule operaciones individuales en una **Transacción Compuesta** mediante **Promoción** para permitir un seguimiento y análisis más sofisticados, o divida una transacción compuesta de nuevo en operaciones individuales. | [Formulario de Transacción](form.md#composite-transactions) |
+{: #link-pairs }
 
 ---
 
