@@ -1,7 +1,10 @@
 # Piano — 40: costo dei transfer in Auto e dei promote
 
-> Workstream **P**, lotto per la 1.2. Coordinator: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`. Entra nel
-> **treno 28**.
+> **Stato: ✅ completato e integrato** nel **treno 28**: commit `d7c148564` (`fix(transactions): transfer auto cost
+> and promote`), merge `2a5c15c3c`, `dev_release2` = `fbb57eb41`. Archiviato il 10/10 in
+> `Release_2/phases/40_transferCostBasis/` (§7).
+>
+> Workstream **P**, lotto per la 1.2. Coordinator: sessione `c8328a01-f208-4ade-a352-0486d1f14de2`.
 >
 > **Origine.** Tre difetti del costo medio segnalati da Q, che li aveva letti nel codice senza provarli. Il 09/10 P li
 > ha verificati con dei rossi; il rapporto è riassunto in §1.
@@ -246,3 +249,13 @@ C'era già nella v1.1.0.
   cambia.
 - Un promote che lascia senza costo un TRANSFER in entrata riceve `costBasisRequired` e non si salva.
 - Rossi verdi; regressioni verdi; doc allineata; righe del CHANGELOG pronte; porta 6161 libera; FROZEN.
+
+## 7. Integrazione e archivio (10/10)
+
+- **Integrazione**: il checkpoint (manifest di 10 percorsi) è entrato nel treno 28 come commit `d7c148564`, merge
+  `2a5c15c3c`; la punta di `dev_release2` è `fbb57eb41`. Il CHANGELOG `[1.2.0]` l'ha scritto il coordinator nel treno.
+- **Debito di traduzione** (unico residuo): `financial-theory/technical-analysis/performance-metrics/weighted-average-cost`
+  è cambiata solo in inglese (riga 114: per un transfer, la data d'uscita prima della gamba in uscita), senza stamp.
+  Le versioni IT/FR/ES vanno aggiornate nel **lotto 11 di M** (le traduzioni).
+- **Esito**: FINITA, archiviata intera in `Release_2/phases/40_transferCostBasis/`. I due link in ingresso
+  (`Phase_0/38_postReleaseBacklog/README.md:506` e `phases/00-index.md:48`) sono del coordinator.
