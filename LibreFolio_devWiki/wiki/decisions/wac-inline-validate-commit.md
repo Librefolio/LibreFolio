@@ -57,7 +57,9 @@ POST /commit → execute_batch(dry_run=False)
 After flush, all batch items exist in the DB session (not committed to disk yet). `compute_wac_iterative` does normal DB queries on the same session → sees everything. No adapter needed to convert batch items to pending_txs.
 
 ### `cost_basis_mode` semantics
-- `'auto'` — backend computes WAC and applies it
+- `'auto'` — backend computes WAC and applies it. When the source pool is empty at the row's date the computed WAC is
+  **0 and is written as 0 — by decision** (2026-10-09, backlog P-1 closed without code): the user corrects that
+  transaction in Manual if the true cost differs — [[decisions/auto-cost-basis-zero-without-position]]
 - `'manual'` — user's `cost_basis_override` value used as-is
 - `'auto-detail'` — same as auto, but frontend shows expanded qualifying table
 - Mode is NOT persisted to DB. After commit, the TX has only `cost_basis_override` (the computed value). On re-edit, frontend shows 'manual' if value exists.

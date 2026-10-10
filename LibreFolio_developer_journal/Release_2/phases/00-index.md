@@ -33,6 +33,8 @@
 | `34_accountAndIdReuse/` | Cancellazione dell'account, id che si riusano, ultimo admin | ✅ treni 12 e 22; residuo → 38 (L12) — archiviata il 09/10 |
 | `35_devCliImage/` | `dev.py` dentro l'immagine Docker | ✅ merge `cdde3bc4d` (treno 19) — archiviata il 09/10 |
 | `36_connectionSecurity/` | Indicatore di sicurezza della connessione e login senza enumerazione degli account | ✅ merge `01da03047` (treno 24) — archiviata il 09/10 |
+| `25_taxonomySelect/` | K: tassonomia degli asset, select, Esc nelle modali, Bulk e correzioni (step 1–23) | ✅ step 1–23 integrati, l'ultimo nel treno 25; residui → 38 (K-1…K-26) — archiviata il 09/10 |
+| `39_autoCostNoPosition/` | P-1 (P): il costo Auto salvato a 0 quando il broker d'origine non ha quote — analisi | ✅ chiusa senza codice per decisione del developer (09/10): lo 0 è il ripiego voluto di Auto, l'utente corregge la transazione; P-10, P-11 → 38 |
 
 **Not archived (still active / paused):**
 - `../Phase_0/02_riskfolioIntegration/` — Risk Analysis: resta in `Phase_0` per decisione del developer (D382, 09/10); il suo README elenca il lavoro aperto (A1–A7, B1–B6).
@@ -40,8 +42,8 @@
 - `../Phase_0/13_pacAllocator/` — allocatore PAC (workstream D), in chiusura per la 1.2.
 - `../Phase_0/16_toolPlatform/` — piattaforma dei Tool, insieme alla 13.
 - `../Phase_0/21_onboarding/` — onboarding: aspetta la review manuale C7 del developer.
-- `../Phase_0/25_taxonomySelect/` — tassonomia e select (workstream K).
 - `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M).
 - `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q).
 - `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): in corso, entra con il suo checkpoint.
+- `../Phase_0/40_transferCostBasis/` — costo dei trasferimenti in Auto e controllo dei promote (P): integrato nel treno 28, da archiviare.
 - `../Phase_0/38_postReleaseBacklog/` — backlog dopo la 1.2: i residui delle cartelle archiviate il 09/10 e il backlog del coordinatore.

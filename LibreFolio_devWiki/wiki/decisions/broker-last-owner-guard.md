@@ -51,6 +51,16 @@ Exit (2) is the existing role-change call, ordered.
 "fixed" by accident in a direction the user did not choose. Closing this means
 building the dialogue, not tightening the guard.
 
+**2026-10-09 — the rule has a second caller.** Deleting an account now applies the
+last-owner rule to every broker of the account through the same service function,
+`BrokerService.leave_broker()` (one function for "leave a broker" and "delete my
+account", by the developer's mandate): a broker whose last OWNER leaves is deleted with
+its transactions and report files, all or nothing —
+[[problems/account-deletion-orphaned-brokers]]. Release 2 group B (R1-02) also pinned
+with tests that when the last OWNER leaves a broker that still has an EDITOR and a
+VIEWER, the broker and its grants are physically deleted (`ON DELETE CASCADE`). The
+role-change asymmetry this page is about is unchanged.
+
 ## Why it is recorded as a decision and not a bug
 
 Because the obvious repair is the wrong one. A future reader finding the

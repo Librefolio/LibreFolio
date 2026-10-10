@@ -54,8 +54,11 @@ system falls back to Segoe UI Emoji, which prints the two letters.
   flag in `.emoji-flag`.
 - **Known limit:** ECharts bypasses the global stacks — its canvas draws with its own `fontFamily` (default
   `sans-serif`), and its HTML tooltips carry an inline `font: … sans-serif`. Flags there (signal legends, the
-  geography map, allocation history) are not covered yet (backlog, chart owners); a tooltip flag wrapped in
-  `.emoji-flag` is.
+  geography map, allocation history) are not covered yet — backlog **K-13** (a global `textStyle.fontFamily` plus
+  `document.fonts.load` before drawing); a tooltip flag wrapped in `.emoji-flag` is.
+- **Known gaps (K-14)**: a few hand-written monospace stacks still lack `'LF Flags'` (e.g. `CompactCashCell`,
+  `DataTable`, `FilePreviewModal`), and `lf-flags.css` points at a generated file name
+  (`noto-color-emoji.0.woff2`).
 - **Verifying without Windows:** `frontend/e2e/fx/fx-flag-font.spec.ts` reads the font that actually draws each
   node through CDP `CSS.getPlatformFontsForNode`; a probe face whose `local()` source cannot resolve exercises the
   Noto (Windows) path on any OS. Real-device checks (iPhone, Mac, Windows) remain manual.
@@ -66,7 +69,7 @@ with Noto first; `9ab32912c` reordered it Apple-first for iOS. Both are supersed
 
 ## Source
 `LibreFolio_developer_journal/knowledge_base/05_project_conventions.md` — "Emoji Bandiera (Windows Fix)" section;
-`LibreFolio_developer_journal/Release_2/Phase_0/25_taxonomySelect/plan-phase00TaxonomySelectStep12ReviewFollowups.prompt.md`.
+`LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep12ReviewFollowups.prompt.md`.
 
 ## Source files
 

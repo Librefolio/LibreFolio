@@ -2030,14 +2030,7 @@ def test_input_schema_defaults_exactly_the_compaction_fields(adapter: TypeAdapte
         objects[schema["title"]] = schema
 
     # Pydantic omits `required` altogether when every field of a model has a default.
-    observed = {
-        name: {
-            field: node["properties"][field].get("default", _NO_SCHEMA_DEFAULT)
-            for field in node["properties"]
-            if field not in node.get("required", [])
-        }
-        for name, node in objects.items()
-    }
+    observed = {name: {field: node["properties"][field].get("default", _NO_SCHEMA_DEFAULT) for field in node["properties"] if field not in node.get("required", [])} for name, node in objects.items()}
     assert {name: fields for name, fields in observed.items() if fields} == expected
 
 
@@ -2920,9 +2913,10 @@ def _top_up_row(amount: str, *, rounded_postings: int = 1, valuation: JsonObject
 def _pac_top_up_result(deficit: str = "0.01", *, rounded_postings: int = 1) -> JsonObject:
     """The €5 PAC incumbent bought with ``deficit`` less cash, published with the top-up that covers it.
 
-    This is the shape the exact replay produces when HALF_UP posting leaves a
-    pool a few minor units short (QX1-b): the plan stands, the pool goes
-    negative, and the top-up tells the user what to add.  Every field that
+    This is the shape the exact replay publishes when a candidate, rounded
+    against the plan, leaves a pool a few minor units short (QX1-b, the top-up
+    safety net): the plan stands, the pool goes negative, and the top-up tells
+    the user what to add.  Every field that
     reports the selected cash moves with it - the scenario basis and the
     accounting (selected, reachable, fixed reference ``5 - deficit``; shortfall
     and free cash ``-deficit``), the Asset's fixed-reference target and
@@ -3838,18 +3832,18 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
-# FX conversion fix: recomputed for the ``ExactNumber`` ledger ``rounding_delta`` and the new ``allocation.fx_rate_inconsistent`` issue code.
+# Rounding direction fix: recomputed for description-only changes (``PlannerRoundingTopUp`` docstring, ``rounding_top_ups`` description, new ``rounding_bound`` description).
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "a999932e80a10819b8dc1455629d8721a973e2ecefb59800d88288357460cbad",
+        "cd7e7ef70cc5df5141299eb4be6489d83b80e9df8533509bfe9e3896c2e2c365",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "a1daf5130b4e4c965ddd8b625c18b630ad3c6905b0fcf8926b0458e482727822",
+        "9440a5e6986846e30c4b96225f0701a84fd4edac093c5664ba9b5089110debba",
         id="rebalancer",
     ),
 )
@@ -3926,13 +3920,7 @@ def _open_map_property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
 
 def _property_schema_node_ids(schema: JsonObject) -> frozenset[int]:
     """Node identities of every property schema: the only place a `default` may be published."""
-    return frozenset(
-        id(value)
-        for node in walk_schema(schema)
-        if isinstance(node.get("properties"), dict)
-        for value in node["properties"].values()
-        if isinstance(value, dict)
-    )
+    return frozenset(id(value) for node in walk_schema(schema) if isinstance(node.get("properties"), dict) for value in node["properties"].values() if isinstance(value, dict))
 
 
 @pytest.mark.parametrize("_label,adapter,mode,expected_roots,_root_discriminator", PLANNER_SCHEMA_CASES)

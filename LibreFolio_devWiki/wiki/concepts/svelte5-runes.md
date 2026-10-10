@@ -31,6 +31,13 @@ $: console.log('count changed:', count);
 - `.svelte.ts` stores use runes (e.g. `chartSettingsStore.svelte.ts`, `toastStore.svelte.ts`)
 - Older components (Phase 0–4) may still use Svelte 4 syntax — acceptable, no forced migration
 
+## Known traps (filed problems)
+- An `$effect` that reads and writes the same state loops: [[problems/svelte5-effect-read-write-loop]].
+- Props are getters, so an effect re-runs whenever the object it reads them from is rebuilt — with a store that
+  bumps its version on every merge this became a request loop: [[problems/broker-icon-fields-request-loop]].
+- A teardown reads `$state` as it was before its last write, so timer handles belong in plain variables:
+  [[problems/svelte5-teardown-reads-stale-state-timers]].
+
 ## Tailwind v4 parallel convention
 Tailwind CSS 4 config lives in `app.css` via `@theme {}` — **not** `tailwind.config.ts`:
 ```css
