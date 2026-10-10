@@ -25,7 +25,7 @@ Please follow these steps to complete your critique:
    a. Semantic accuracy: Does the translation convey the same meaning as the original?
    b. Grammar and syntax: Is the {target_language} grammatically correct and natural-sounding?
    c. Markdown structure preservation: Are all headings, links, code blocks, HTML blocks, admonitions, lists, tables, and emoji preserved exactly as in the source?
-   d. Non-translatable elements: Are URLs, file paths, code content, technical HTML attributes (`src`, `href`, `class`, `id`, `style`, `data-*`), brand names, and acronyms left unchanged? Is the human-readable text of `alt`, `title` and `aria-label` translated, not left in {source_language}?
+   d. Non-translatable elements: Are URLs, file paths, code content, technical HTML attributes (`src`, `href`, `class`, `id`, `style`, `data-*` other than `data-title`), brand names, and acronyms left unchanged? Is the human-readable text of `alt`, `title`, `aria-label` and `data-title` translated, not left in {source_language}?
    e. Terminology consistency: Is specialized vocabulary translated consistently using the glossary mappings?
 
 5. Do NOT suggest adding translator's notes, footnotes, or any content not present in the source. The project explicitly forbids them.

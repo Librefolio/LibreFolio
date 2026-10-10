@@ -23,12 +23,20 @@ Accesso semplice e accessibile su dispositivi mobili.
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Pagina di login">
 </div>
 
-### 📝 Registrazione
+### 📝 Registrazione - Modulo vuoto
 
-Creazione account semplice con feedback sulla robustezza della password.
+I nuovi utenti possono creare un account dal telefono: nome utente, email, password e conferma.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Modale di registrazione">
+    <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Modale di registrazione">
+</div>
+
+### 🔒 Registrazione - Con robustezza password
+
+Il feedback in tempo reale sulla robustezza della password e l'elenco dei requisiti, a misura dello schermo del telefono, aiutano gli utenti a creare password sicure.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registrazione con robustezza password">
 </div>
 
 ### ⬆️ Aggiornamento disponibile
@@ -732,6 +740,15 @@ Il confronto tra l'asset e i dati del provider dopo la scelta dell'ISIN: quale T
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Confronto dati provider">
+</div>
+
+### 🗺️ Distribuzione settoriale e geografica
+
+La modale Modifica Asset alla sezione Classificazione su un telefono: Distribuzione settoriale e Distribuzione geografica con le barre del peso e il Totale al 100%, e i link per importare un CSV, aggiungere e chiedere al provider ridotti a icone.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribuzione settoriale" alt="Editor della distribuzione settoriale nella modale dell'asset">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribuzione geografica" alt="Editor della distribuzione geografica nella modale dell'asset">
 </div>
 
 ### 🌳 Ricerca indicatori raggruppati

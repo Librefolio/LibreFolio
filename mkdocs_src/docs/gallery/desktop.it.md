@@ -730,6 +730,15 @@ Il confronto tra l'asset e i dati del provider dopo la scelta dell'ISIN.
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Confronto dati provider">
 </div>
 
+### 🗺️ Distribuzione settoriale e geografica
+
+La modale Modifica Asset alla sezione Classificazione: Distribuzione settoriale e Distribuzione geografica, due tabelle le cui righe hanno una barra del peso, il peso in percentuale e un menu Azioni, con sopra i link per importare un CSV, aggiungere un settore o un paese e chiedere al provider, e sotto il Totale al 100%.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-desktop-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribuzione settoriale" alt="Editor della distribuzione settoriale nella modale dell'asset">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribuzione geografica" alt="Editor della distribuzione geografica nella modale dell'asset">
+</div>
+
 ### 🌳 Ricerca indicatori raggruppati
 
 Il selettore dei segnali raggruppa i 22 indicatori per famiglia con conteggi, ricerca e navigazione da tastiera.

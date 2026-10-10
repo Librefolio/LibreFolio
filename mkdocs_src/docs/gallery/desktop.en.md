@@ -736,6 +736,15 @@ The comparison between the asset and the provider's data after the ISIN choice.
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Provider Data Comparison">
 </div>
 
+### 🗺️ Sector & Geographic Distribution
+
+The Edit Asset modal at Classification: Sector Distribution and Geographic Distribution, each a table whose rows carry a weight bar, a Weight % value and an Actions menu, with the Import CSV, Add sector / Add country and Ask Provider links above and the Total at 100.00% below.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-desktop-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Sector Distribution" alt="Sector distribution editor in the asset modal">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Geographic Distribution" alt="Geographic distribution editor in the asset modal">
+</div>
+
 ### 🌳 Grouped Indicator Search
 
 The signal picker groups the 22 indicators by family with counts, search and keyboard navigation.

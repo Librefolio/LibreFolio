@@ -25,7 +25,7 @@ Follow these steps carefully to produce the final, improved translation:
    b. Fix ALL structural issues from the STRUCTURAL DIFF REPORT (if present in the glossary) — these are objective, programmatically verified errors.
    c. Use the term mappings from the TERMINOLOGY GLOSSARY consistently — these are mandatory.
    d. Preserve ALL markdown formatting exactly as in the source: headings, code blocks, inline code, admonitions (keep type keyword in English), links (keep URLs unchanged), images (keep paths unchanged), HTML tags and technical attributes, tables, lists, emoji characters.
-   e. Do NOT translate content inside code blocks, inline code, URLs, file paths, technical HTML attributes (`src`, `href`, `class`, `id`, `style`, `data-*`), brand names, or acronyms. DO translate the human-readable text of `alt`, `title` and `aria-label` attributes.
+   e. Do NOT translate content inside code blocks, inline code, URLs, file paths, technical HTML attributes (`src`, `href`, `class`, `id`, `style`, `data-*` other than `data-title`), brand names, or acronyms. DO translate the human-readable text of `alt`, `title`, `aria-label` and `data-title` attributes (keep any HTML inside a `data-title` unchanged).
 
 6. Do NOT add any content not present in the source document:
    - No translator's notes or footnotes of any kind

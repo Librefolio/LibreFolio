@@ -62,7 +62,7 @@ Tus cambios se muestran en el gráfico como una línea **Vista previa** morada. 
 Las filas se añaden al editor: revísalas y luego haz clic en **Guardar**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Ventana de importación CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Modal de importación CSV" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ### 📄 Formato de archivo

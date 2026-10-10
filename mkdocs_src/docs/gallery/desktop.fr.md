@@ -730,6 +730,15 @@ La comparaison entre l'actif et les données du fournisseur après le choix de l
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Comparaison des données du fournisseur">
 </div>
 
+### 🗺️ Distribution sectorielle et géographique
+
+La modale Modifier l'Actif à la section Classification : Distribution sectorielle et Distribution géographique, deux tableaux dont les lignes portent une barre de poids, le poids en pourcentage et un menu Actions, avec au-dessus les liens pour importer un CSV, ajouter un secteur ou un pays et demander au fournisseur, et en dessous le Total à 100 %.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-desktop-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Distribution sectorielle" alt="Éditeur de distribution sectorielle dans la modale de l'actif">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribution géographique" alt="Éditeur de distribution géographique dans la modale de l'actif">
+</div>
+
 ### 🌳 Recherche d'indicateurs groupés
 
 Le sélecteur de signaux regroupe les 22 indicateurs par famille avec des compteurs, la recherche et la navigation au clavier.
