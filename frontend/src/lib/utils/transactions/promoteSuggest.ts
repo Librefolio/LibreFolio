@@ -9,6 +9,9 @@
  * side when it is not there yet.
  */
 
+import {applySign, exactDecimalEqual, exactDecimalSign} from './txPayloadHelpers';
+import type {TypeRuleResolver} from './promoteHelpers';
+
 /**
  * The id a new row is asked under: negative, so it never collides with a transaction id. The backend
  * keeps the input ids out of the candidates only when they are positive, i.e. real transactions.
@@ -77,4 +80,30 @@ export function importableSuggestions(results: ReadonlyMap<number, readonly Sugg
         if (missing.length > 0) importable.push({key, tempId, candidates: missing});
     }
     return importable;
+}
+
+/** What `assetQuantitiesCancel` reads of a row: its type, which gives a magnitude its sign, its quantity and its asset. */
+export interface QuantityCancelable {
+    fields: {type: string; quantity?: string | number | null; asset_id?: number | null};
+}
+
+/**
+ * True only when two rows move the same asset by exactly opposite quantities: the backend's promote
+ * rule for an asset TRANSFER (same asset, `quantity == -partner.quantity`). The banner asks it of every
+ * asset pair, as `cashAmountsCancel` does for cash, so neither the banner nor «Merge all» proposes a
+ * pair the backend refuses — a saved −3 with a new +5 — or, between two new rows, would save as it is.
+ * Both quantities go through the type's sign rule first: the editor shows a magnitude where the type
+ * carries the sign, and keeps the typed sign where the type is free (an ADJUSTMENT). The comparison is
+ * exact decimal arithmetic, as the backend's is: a floating-point tolerance would let two legs rounded
+ * differently on the 6th decimal through, and the save would then be refused.
+ */
+export function assetQuantitiesCancel(a: QuantityCancelable, b: QuantityCancelable, resolveRule: TypeRuleResolver): boolean {
+    if (a.fields.asset_id == null || a.fields.asset_id !== b.fields.asset_id) return false;
+    const signed = (row: QuantityCancelable) => applySign(String(row.fields.quantity ?? ''), resolveRule(row.fields.type).quantityRule);
+    const qA = signed(a);
+    const qB = signed(b);
+    const signA = exactDecimalSign(qA);
+    const signB = exactDecimalSign(qB);
+    if (signA === null || signB === null || signA === 0 || signA !== -signB) return false;
+    return exactDecimalEqual(applySign(qA, 'positive'), applySign(qB, 'positive'));
 }

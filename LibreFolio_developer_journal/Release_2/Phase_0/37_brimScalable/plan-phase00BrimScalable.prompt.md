@@ -691,3 +691,46 @@ Altre superfici:
 > - IT: «Rettifica», «Rettifica prezzo»; tasse → imposte (anche le mie 9 descrizioni dei plugin e i testi Scalable); «Giroconto» (anche nella mia nota Scalable, che cita il tipo per nome); «Trasferimento Asset»; «Drawdown a rischio», «Drawdown per asset».
 > - Lasciate e segnalate: le righe in linguaggio semplice del pannello L1 italiano («Peggior discesa», «la discesa più profonda»), che il coordinatore non ha elencato; `transactions.split.*`, che è lo scollegamento di una coppia e non un frazionamento; `sharedResource.settings` in spagnolo.
 > - Fotografia dei cataloghi prima del glossario in `/tmp/libreFolio_s_cp4_catalogs/`, per i due commit dello stesso file.
+
+### Checkpoint 4 e revisione combinata col treno 28 ✅ (2026-10-10)
+
+> **Commit del developer (batch 25)**: C1 `2046b7419` (correzioni dalla prova), C2 `cd0b404d2` (glossario; soggetto corretto dal coordinatore in `fix(i18n): …`), merge `29fa65366` del treno 28 (`fbb57eb41`), albero `b8f9a7980781` come nella simulazione.
+>
+> **Validazione sulla corsia 6163** (dopo `api sync`): `front-transaction all` con 4 worker **317 + 34 passed**, Vitest **805**; `front-utility core-unit` **3666**; `external brim-providers` **702 passed, 1 skipped**; `external brim-scalable` **145**; `api brim-scalable` **2**; `utils gate-i18n-usage` **195**; `svelte-check` 0/0; `mkdocs build` strict verde; worktree pulita dopo i giri.
+>
+> **Lotto 40 di P (costo sui promote)**: nuova spec `tx-bulk-promote-cost-basis.spec.ts` di `test-author`. **PC1** (ricevente nuovo in Manuale senza costo → issue `create` sul suo indice, il salto evidenzia la riga della coppia) ✅; **PC3** («Unisci tutti» su una coppia di titoli e una di contante → l'issue punta alla coppia di titoli) ✅; **PC2** (ricevente salvato) ✘ al primo giro: l'editor manda il ricevente salvato anche come aggiornamento, con un costo calcolato in automatico, quindi la strada «ricevente salvato senza costo» non è quella dell'interfaccia. In analisi con `test-author`.
+>
+> **Segnalazioni di `test-author`, preesistenti e non mie**: l'editor propone di unire due ADJUSTMENT con quantità di segno opposto senza controllare che si annullino (`transactionTypeStore.ts:352-357`), mentre il backend esige opposti esatti; due righe nuove −3/+5 passerebbero perché `_validate_linked_pair` non controlla quantità e asset. «Unisci tutti» rende il caso più facile. Inoltre `apply_promotes` non azzera `asset_event_id`, quindi un ADJUSTMENT legato a uno SPLIT diventerebbe un TRANSFER legato a uno SPLIT.
+
+### Passo 12d — Ordine delle icone dei broker ✅ (2026-10-10)
+
+> **Decisione del developer**, testuale: «sicuro di questo ordine, anche nella guida e nelle prove che feci mi parse fosse personalizzata>plugin>favicon portale>valigetta. Se non è più così o non lo è mai stato, ripristinalo per favore». Eccezione approvata: «come idea mi intriga ma lascia spazio a dubbi visto che i plugin hanno una priorità. per ora ci sono solo 2 livelli quindi facciamo così, ma in futuro potremmo pensare di aggiungere un parametro selettore» (il selettore va nel 38).
+>
+> **Storia**: la favicon prima del plugin c'era almeno dal 26/06 (`ddffb5273`, «correct priority order restored (favicon before plugin icon)», senza un motivo scritto).
+>
+> **Note implementazione**: ordine personalizzata → plugin dedicato → favicon del portale → plugin di ripiego → valigetta. La soglia è una costante sola, `FALLBACK_PLUGIN_PRIORITY_LIMIT = 50` con `isFallbackPlugin` in `utils/brim/pluginKind.ts`, sulle fasce documentate in `BRIMProvider.detection_priority` (0-49 ripiego); la usano la cache delle icone (`brokerHelpers.ts`: `_fallbackPluginCodes`, `isFallbackPluginCode`, `getBrokerIconCandidates`), la catena reattiva (`brokerIconChain.svelte.ts`) e il controllo del broker sbagliato (`ImportWizardModal`, prima con il 50 scritto a mano). Commenti in testa e docstring di `BrokerIcon` aggiornati. Doc EN: riga «Portal URL» di `user/brokers/index.en.md` (assegnata, M avvisato dal coordinatore), frase della pagina Scalable, paragrafo nella sezione «Favicons» della guida BRIM. `svelte-check` 0/0, Prettier pulito.
+>
+> **Test** (`test-author`): `pluginKind.test.ts` nuovo (9: 49 ripiego, 50 dedicato, priorità assente = dedicato); `brokerHelpers.test.ts` da 13 a 35, con la tabella degli ordini e le due asserzioni del vecchio ordine riscritte (il loro `broker_generic_csv` finto non aveva priorità); `brokerIconChain.test.ts` nuovo (5, jsdom: la catena reattiva con la cache già pronta e ancora vuota); `TestFallbackPluginPriorityLimit` in `test_brim_providers.py` (3: la costante dichiarata una volta e uguale a 50, il default 100 sopra la soglia, solo il CSV generico sotto). Ogni test è andato rosso contro una copia rotta del codice. Registrazione: `pluginKind` in `tx-unit`, `brokerIconChain` in `broker-unit` (docstring e `desc` aggiornati).
+
+### Passo 12f — Coppie di titoli che non si annullano, e la spec del lotto 40 ✅ (2026-10-10)
+
+> **Decisione del coordinatore**: «il banner, e quindi «Unisci tutti», propone una coppia di titoli solo se le quantità si annullano e l'asset è lo stesso, come `cashAmountsCancel` per il contante». Il nucleo (`transactionTypeStore.ts:352-357`, `_validate_linked_pair` per le coppie di due righe nuove, `asset_event_id` in `apply_promotes`) è di P.
+>
+> **Note implementazione**: `assetQuantitiesCancel` in `promoteSuggest.ts`: stesso asset, quantità passate dalla regola del segno del tipo, segni opposti e non nulli, moduli uguali in **aritmetica decimale esatta** (`exactDecimalSign`, `exactDecimalEqual` di `txPayloadHelpers`), come il backend (`transaction_service.py:777`). `TransactionBulkModal.svelte` la richiede per `TRANSFER` nei tre punti dove nasce una coppia: le coppie nuova + nuova di `localSuggestions`, il giro modifica + modifica e l'abbinamento misto. `test-author`: 34 casi Vitest nuovi in `promoteSuggest.test.ts` e **PC4** in `tx-bulk-promote-cost-basis.spec.ts`: un +5 nuovo accanto a un −3 e a un −5 salvati dello stesso asset; il banner offre solo l'unione con il −5, senza «Unisci tutti», e il −3 resta da solo.
+>
+> **PC2, la strada giusta**: dall'API pubblica l'unico ricevente salvato senza costo è un ADJUSTMENT legato a uno SPLIT e salvato in Auto (il costo lo ricavano i motori dal rapporto dello split). PC2 lo crea così, ne verifica la precondizione e lo unisce a un ADJUSTMENT nuovo in uscita dal link del banner: il rifiuto è un'issue `promote` con il `ref_id` della riga salvata, e il salto evidenzia la riga della coppia. Nell'editor quella riga resta la metà nascosta della coppia e viaggia solo nel promote, mai come aggiornamento.
+>
+> **⚠️ Fuori pista**:
+> - La prima versione confrontava con `Number` e una tolleranza relativa di 1e-9, come `cashAmountsCancel`: due casi di `test-author` (lati diversi oltre la precisione del double) passavano, e il backend li avrebbe rifiutati al salvataggio. Ora il confronto è esatto: **54/54** in `promoteSuggest.test.ts`.
+> - `cashAmountsCancel` (`promoteHelpers.ts`, non mio, da giugno) ha la stessa tolleranza: oltre circa 10 milioni un centesimo di differenza passa, e il backend rifiuta. Segnalato al coordinatore, non toccato.
+> - Il primo giro di PC2 ha trovato un difetto preesistente: `fieldEq('cost_basis_override')` in `txPayloadHelpers.ts:204-205` confronta oggetti come stringhe da `7f1a6ed396` (5 maggio). Segnalato; è di P.
+
+### Checkpoint 5 — validazione sulla corsia 6163 ✅ (2026-10-10)
+
+> **Comandi** (in sequenza, `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6163 --data-dir /tmp/librefolio-r2-s …`): `check-orphans` pulito (106 spec, 346 unit, 249 backend); `--fresh-run --workers 4 front-transaction tx-bulk-promote-cost-basis` **4 passed**; `--workers 4 front-transaction all` **321 + 34 passed**, 32 saltati come al CP4 (progetto mobile), Vitest **848**; `front-broker broker-unit` **53**; `front-portfolio broker-icons` **1**; `front-utility core-unit` **3666**; `external brim-providers` **705 passed, 1 skipped**; `external brim-scalable` **145**; `utils gate-i18n-usage` **195**; `front check` 0/0; `mkdocs build` strict verde. Fuori corsia: Vitest di `promoteSuggest.test.ts` **54/54**; Prettier, ruff e black puliti sui file toccati (i 9 rilievi ruff e il black dei due file del runner sono identici alla HEAD); `git diff --check` pulito.
+>
+> **Proposta di commit**: C1 icone, C2 coppie di titoli + spec PC + journal, C3 `fr.json`. `_frontend_transaction.py` è in C1 e C2: per C1 una fotografia intermedia con la sola riga di `pluginKind`.
+
+### Passo 12e — Spazi non divisibili in francese ✅ (2026-10-10)
+
+> **Note implementazione**: come in spagnolo, U+00A0 tra un numero o un segnaposto e «%», in 24 valori di `fr.json` via `dev.py i18n update` (le 3 voci già corrette usavano lo stesso carattere). Restano le 9 etichette come «P&L %», con lo stesso criterio dello spagnolo.
