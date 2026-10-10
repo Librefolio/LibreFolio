@@ -1946,7 +1946,7 @@
                             />
                             {#if (exactDecimalSign(draft.quantity) ?? 0) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
-                                    {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
+                                    {$t('transactions.costBasisOverride.warningAdjustment') || 'The manual cost basis is empty: the transaction cannot be saved without it. If these shares cost nothing (a stock split or a gift), enter 0.'}
                                 </p>
                             {/if}
                         </div>

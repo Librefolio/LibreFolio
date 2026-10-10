@@ -192,7 +192,7 @@ Before final import, BRIM compares each parsed transaction against the database 
 |-------|--------------|
 | `broker_id` | ✅ |
 | `date` | ✅ |
-| `type` | ✅ |
+| `type` | ✅ — a `DEPOSIT` or `WITHDRAWAL` also meets saved transfer and exchange legs ([below](#dedup-merged-legs)) |
 | `quantity` | ✅ |
 | `amount` | ✅ |
 | `description` | Used for confidence upgrade |
@@ -206,6 +206,24 @@ Confidence levels:
 | `LIKELY` | Key fields + description match |
 | `POSSIBLE_WITH_ASSET` | Key fields + asset resolved |
 | `LIKELY_WITH_ASSET` | Key fields + description + asset all match |
+
+### 🔗 Merged transfers and exchanges {: #dedup-merged-legs }
+
+An incoming `DEPOSIT` or `WITHDRAWAL` is also compared with the saved legs of `CASH_TRANSFER` and
+`FX_CONVERSION` pairs (`_MERGED_LEG_TYPES`, read by `detect_tx_duplicates` in
+`backend/app/services/brim_provider.py`): same broker, date and quantity, same amount — sign
+included — and currency. A deposit thus meets the leg that received the money, a withdrawal the
+leg that sent it.
+
+On such a merged leg, the description matches when it **contains** the incoming one (both
+normalised by `_description_key`: whitespace removed, upper case), since merging a pair joins the
+descriptions of its two sides with a newline. The row is then a `LIKELY` duplicate, so it arrives
+unticked.
+
+Why: an export "since the last one" — the Scalable exporter's, for one — starts on the last day it
+covered, so it delivers that day again. Matched on its own type only, a transfer already merged
+would come back as new; matched without the containment, as a `POSSIBLE` duplicate, which is ticked
+by default. Either way, its cash would count twice.
 
 ---
 

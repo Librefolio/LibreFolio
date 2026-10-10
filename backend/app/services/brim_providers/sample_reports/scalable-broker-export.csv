@@ -1,0 +1,20 @@
+date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency;lf_account;lf_id;lf_subtype;lf_is_cancellation;lf_ordered_shares;lf_transaction_fee;lf_venue_fee;lf_crypto_spread_fee;lf_trading_venue
+2026-06-30;12:15:02;Pending;"SCALEXPORT00013";"iShares Core MSCI World UCITS ETF USD (Acc)";Security;Buy;IE00B4L5Y983;4;98,5;-394;0;0;EUR;broker;synthB0000000000000016;SINGLE;;10;;;;SEIX
+2026-06-29;10:03:44;Cancelled;"";"Vanguard FTSE All-World UCITS ETF (Dist)";Security;Buy;IE00B3RBWM25;0;;0;;;EUR;broker;synthB0000000000000015;SINGLE;;3;;;;
+2026-06-15;09:30:12;Executed;"SCALEXPORT00012";"Apple Inc.";Security;Sell;US0378331005;5;180,4;902;0,99;24,57;EUR;broker;synthB0000000000000014;SINGLE;;;0.99;;;SEIX
+2026-06-10;02:00:00;Executed;"";"Deutsche Telekom AG";Cash;Distribution;DE0005557508;;;63,26;;;EUR;broker;SYNTHC0000000000000013;DISTRIBUTION;;;;;;
+2026-06-03;11:47:20;Executed;"SCALEXPORT00011";"Apple Inc.";Security;Buy;US0378331005;5;150,1;-750,5;0,99;0;EUR;broker;synthB0000000000000012;SINGLE;true;;0.99;;;SEIX
+2026-06-02;14:05:31;Executed;"SCALEXPORT00010";"Apple Inc.";Security;Buy;US0378331005;5;150,1;-750,5;0,99;0;EUR;broker;synthB0000000000000011;SINGLE;;;0.99;;;SEIX
+2026-06-01;02:00:00;Executed;"";"Interner Übertrag";Cash;Deposit;;;;300;;;EUR;broker;SYNTHC0000000000000010;CASH_TRANSFER_IN;;;;;;
+2026-05-20;14:22:05;Executed;"SCALEXPORT00009";"iShares Core MSCI World UCITS ETF USD (Acc)";Security;Buy;IE00B4L5Y983;12;98,45;-1181,4;1,49;0;EUR;broker;synthB0000000000000009;SINGLE;;;0.99;0.5;;XETR
+2026-05-04;13:30:56;Executed;"SCALEXPORT00008";"Vanguard FTSE All-World UCITS ETF (USD) Accumulating";Security;Savings plan;IE00BK5BQT80;3,69249;135,41;-500;0;0;EUR;broker;synthB0000000000000008;SAVINGS_PLAN;;;;;;SEIX
+2026-05-04;02:00:00;Executed;"";"Scalable Capital Broker Sparplan";Cash;Deposit;;;;500;;;EUR;broker;SYNTHC0000000000000007;DEPOSIT;;;;;;
+2026-04-15;02:00:00;Executed;"";"Überweisung an DE89 3704 0044 0532 0130 00";Cash;Withdrawal;;;;-200;;;EUR;broker;SYNTHC0000000000000006;WITHDRAWAL;;;;;;
+2026-04-02;02:00:00;Executed;"";"Interner Übertrag";Cash;Withdrawal;;;;-1000;;;EUR;broker;SYNTHC0000000000000005;CASH_TRANSFER_OUT;;;;;;
+2026-04-01;02:00:00;Executed;"";"Einzahlung von DE89 3704 0044 0532 0130 00";Cash;Deposit;;;;5000;;;EUR;broker;SYNTHC0000000000000004;DEPOSIT;;;;;;
+2026-03-31;02:00:00;Executed;"";"PRIME+ Abonnement";Cash;Fee;;;;-4,99;;;EUR;broker;SYNTHC0000000000000003;FEE;;;;;;
+2026-03-20;02:00:00;Executed;"";"Steuererstattung";Cash;Taxes;;;;12,5;;;EUR;broker;SYNTHC0000000000000002;TAX_RETURN;;;;;;
+2026-03-10;02:00:00;Executed;"";"Kapitalertragsteuer";Cash;Taxes;;;;-8,4;;;EUR;broker;SYNTHC0000000000000001;TAX;;;;;;
+2026-03-05;02:00:00;Executed;"";"Prämie Neukunden";Cash;BONUS;;;;25;;;EUR;broker;SYNTHC0000000000000000;BONUS;;;;;;
+2026-02-27;10:00:00;Executed;"";"Vanguard FTSE All-World UCITS ETF (Dist)";Security;Security transfer;IE00B3RBWM25;7;;0;;;EUR;broker;synthB0000000000000002;SECURITY_TRANSFER_IN;;;;;;
+2026-02-10;11:00:00;Executed;"";"Vanguard FTSE All-World UCITS ETF (Dist)";Security;Buy;IE00B3RBWM25;7;;-840;;;EUR;broker;synthB0000000000000001;SINGLE;;;;;;

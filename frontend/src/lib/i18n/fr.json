@@ -633,7 +633,19 @@
     "parseErrorsTitle": "{n} fichier(s) n'ont pas pu être analysés",
     "brimNotice": {
       "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :",
-      "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne."
+      "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne.",
+      "scalable_unreadable_rows": "{count, plural, one {# ligne n’a pas pu être lue et n’a pas été importée} other {# lignes n’ont pas pu être lues et n’ont pas été importées}} : il manque la date, le montant, la devise, la quantité ou le titre.",
+      "scalable_fee_in_amount": "{count, plural, one {# opération contient} other {# opérations contiennent}} les frais dans le montant, comme l’écrivait l’exportateur LibreFolio 1.0.0 : le montant reste celui du fichier, sans frais séparés. Exportez à nouveau avec l’exportateur 1.0.1 ou ultérieur pour voir les frais à part.",
+      "scalable_fees_unknown": "{count, plural, one {# ligne est arrivée} other {# lignes sont arrivées}} sans le détail des frais et des taxes : le montant est celui qu’affiche Scalable, sans frais ni taxes séparés. Exportez à nouveau avec l’option qui inclut les frais et les taxes pour les obtenir.",
+      "scalable_open_partial": "{count, plural, one {# ordre est exécuté en partie et encore ouvert : il n’est pas encore importé et arrivera exécuté avec un export ultérieur.} other {# ordres sont exécutés en partie et encore ouverts : ils ne sont pas encore importés et arriveront exécutés avec un export ultérieur.}}",
+      "scalable_reversal": "{count, plural, one {# ligne annule une opération déjà enregistrée et n’a pas été importée.} other {# lignes annulent des opérations déjà enregistrées et n’ont pas été importées.}} Vérifiez les opérations annulées et corrigez-les à la main.",
+      "scalable_not_imported": "{count, plural, one {# ligne n’a pas été importée} other {# lignes n’ont pas été importées}} : transferts de titres, opérations sur titres et types que LibreFolio ne lit pas encore. Ajoutez-les à la main si elles déplacent des titres ou des espèces.",
+      "scalable_several_overnight_accounts": "Le fichier contient {count} comptes rémunérés : toutes leurs lignes vont dans ce courtier, dont le solde est leur somme.",
+      "scalable_not_executed": "{count, plural, one {# ligne n’a pas été exécutée (en attente, annulée, expirée ou rejetée) et n’a pas été importée.} other {# lignes n’ont pas été exécutées (en attente, annulées, expirées ou rejetées) et n’ont pas été importées.}} Un ordre exécuté plus tard arrive avec l’export suivant.",
+      "scalable_internal_transfers": "{count, plural, one {# transfert} other {# transferts}} entre le compte-titres et le compte rémunéré : importez le fichier de l’autre compte dans son propre courtier, puis fusionnez chaque paire en un « Virement » dans l’éditeur groupé.",
+      "scalable_dividends_net": "{count, plural, one {# dividende a été importé tel que crédité} other {# dividendes ont été importés tels que crédités}}, après la retenue à la source : le fichier n’indique pas l’impôt.",
+      "scalable_tax_refund": "{count, plural, one {# remboursement d’impôt a été importé comme dépôt} other {# remboursements d’impôt ont été importés comme dépôts}} : dans LibreFolio, une taxe retire toujours de l’argent.",
+      "scalable_cash_by_sign": "{count, plural, one {# ligne d’espèces a un type que LibreFolio ne connaît pas, ou un signe inattendu : elle a été enregistrée comme dépôt ou retrait} other {# lignes d’espèces ont un type que LibreFolio ne connaît pas, ou un signe inattendu : elles ont été enregistrées comme dépôts ou retraits}}, selon le signe du montant."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -911,7 +923,45 @@
       "suggestions": "Ce que l'importateur a trouvé",
       "technical": "Détails techniques"
     },
-    "todoGoto": "Aller à la ligne"
+    "todoGoto": "Aller à la ligne",
+    "brokerMismatch": {
+      "title": "Ce fichier appartient peut-être à un autre courtier",
+      "counter": "Fichier {current} sur {total}",
+      "intro": "« {file} » est attribué à {broker}, dont le plugin d’import par défaut, {plugin}, ne sait pas le lire.",
+      "reasonTitle": "Notes du plugin",
+      "targetMany": "Les plugins d’import par défaut de ces courtiers savent le lire : choisissez où le déplacer.",
+      "noTarget": "{plugins} sait le lire, mais aucun de vos courtiers ne l’utilise comme plugin d’import par défaut.",
+      "noReader": "Aucun plugin d’import ne sait le lire.",
+      "move": "Déplacer vers {broker}",
+      "keep": "Le garder ici",
+      "remove": "Retirer le fichier",
+      "moveFailed": "Impossible de déplacer le fichier",
+      "removeFailed": "Impossible de retirer le fichier",
+      "fromLabel": "Assigné à",
+      "toLabel": "Le déplacer vers",
+      "cannotRead": "ne sait pas le lire",
+      "canRead": "sait le lire"
+    },
+    "parseRefusal": {
+      "scalable_deposit_file": "C’est l’export du compte rémunéré Scalable : lisez-le avec le plugin {plugin_name}.",
+      "scalable_broker_file": "C’est l’export du compte-titres Scalable : lisez-le avec le plugin {plugin_name}.",
+      "scalable_prime_file": "C’est l’export de Scalable pour le compte-titres : lisez-le avec le plugin {plugin_name}.",
+      "scalable_mixed_file": "Le fichier mélange le compte-titres et le compte rémunéré : exportez les deux comptes séparément."
+    },
+    "brimEvidence": {
+      "scalable_unreadable_rows": "Sur ces lignes, une date, un montant, une devise, les parts ou le titre manque ou est illisible.",
+      "scalable_fee_in_amount": "Ici, la colonne amount vaut parts × prix, avec les frais et l’impôt déjà ajoutés (ou retranchés, pour une vente).",
+      "scalable_fees_unknown": "Les colonnes fee et tax sont vides sur ces lignes : valeurs inconnues, pas nulles.",
+      "scalable_open_partial": "La colonne shares indique ce qui a été exécuté jusqu’ici ; lf_ordered_shares ce qui a été commandé.",
+      "scalable_reversal": "Ces lignes sont des annulations : leur colonne lf_is_cancellation vaut true.",
+      "scalable_not_imported": "La colonne type indique ce que sont ces lignes.",
+      "scalable_several_overnight_accounts": "La première ligne de chaque compte rémunéré ; la colonne lf_account_index les distingue.",
+      "scalable_not_executed": "La colonne status indique pourquoi ces lignes n’ont pas été exécutées.",
+      "scalable_internal_transfers": "Ces lignes déplacent de l’argent entre vos deux comptes Scalable (lf_subtype CASH_TRANSFER_IN ou CASH_TRANSFER_OUT) : chacune a sa jumelle dans le fichier de l’autre compte.",
+      "scalable_dividends_net": "La colonne tax est vide sur ces lignes : le montant est ce qui est arrivé sur le compte.",
+      "scalable_tax_refund": "Un montant positif dans la colonne tax est de l’argent rendu.",
+      "scalable_cash_by_sign": "Le signe de la colonne amount a décidé entre dépôt et retrait."
+    }
   },
   "brokers": {
     "title": "Courtiers",
@@ -952,7 +1002,7 @@
     "updateFailed": "Échec de la mise à jour du courtier",
     "assets": "{n} actif(s)",
     "currencies": "{n} devise(s)",
-    "nav": "VNI",
+    "nav": "NAV",
     "gainLoss": "Gain/Perte",
     "otherExisting": "Autres Courtiers Existants",
     "overview": "Vue d'ensemble",
@@ -1336,14 +1386,14 @@
       "incompleteInputCoverage": "Les champs de prix requis sont incomplets : {fields}. Points utilisables : {available}/{requested}.",
       "insufficientHistory": "Historique exploitable insuffisant pour ces paramètres : {available} points disponibles, {required} nécessaires.",
       "incompleteWarmup": "Le signal est exploitable mais pas entièrement stabilisé : {used}/{required} points de préchauffage disponibles.",
-      "dataGaps": "L'historique requis contient des lacunes : {missing} points sur {requested} sont manquants (couverture {coverage} %).",
+      "dataGaps": "L'historique requis contient des lacunes : {missing} points sur {requested} sont manquants (couverture {coverage} %).",
       "missingEvents": "Événements requis manquants : {events}.",
       "incompatibleDomain": "Cet indicateur n'est pas compatible avec ce graphique.",
       "calculationFailed": "Échec du calcul du signal : {message}",
       "resultMissing": "Le backend n'a renvoyé aucun résultat pour ce signal. Relancez la requête des signaux.",
       "partialResult": "Ce signal n'est que partiellement disponible avec les données actuelles.",
       "unavailable": "Ce signal ne peut pas être calculé avec les données disponibles.",
-      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
+      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
     },
     "axes": {
       "exchangeRate": "Axe du taux de change ({pair})",
@@ -1533,12 +1583,12 @@
     "assetsAtCostTooltip": "Coût des actifs",
     "cashFromContributedCapital": "Capital",
     "cashFromGeneratedReturns": "Rendement",
-    "pnlFormulaHint": "P&L = VNI − Capital versé",
+    "pnlFormulaHint": "P&L = NAV − Capital versé",
     "returns": "Rendements",
     "unrealizedDelta": "Variation non réalisée",
     "unrealizedDeltaTooltip": "Variation du gain/perte latent sur les positions encore ouvertes.",
     "realizedSales": "Ventes",
-    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, calculé par rapport au coût moyen d'acquisition.",
+    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, calculé par rapport au prix de revient unitaire.",
     "income": "Dividendes et intérêts",
     "incomeTooltip": "Revenus perçus sur la période via dividendes, intérêts ou coupons.",
     "feesAndTaxes": "Frais et taxes",
@@ -1663,7 +1713,7 @@
     "headerErrors": "{errors} erreur(s)",
     "headerWarnings": "{warnings} avertissement(s)",
     "missingPrice": "{count} actif(s) sans prix de marché — exclus du NAV",
-    "transactionImplied": "{count} actif(s) toujours valorisé(s) au coût — aucun prix de marché disponible depuis plus de 2 semaines (au {as_of_date})",
+    "transactionImplied": "{count} actif(s) valorisé(s) au dernier prix de transaction — aucun prix de marché disponible depuis plus de 2 semaines (au {as_of_date})",
     "currentPriceAssumedAtCost": "Prix actuel indisponible — valeur ouverte estimée au coût, P&L de marché exclu",
     "currentPriceAssumedAtCostRange": "Aucun prix de marché disponible entre {date_from} et {date_to} — valeur ouverte estimée au coût, P&L de marché exclu",
     "affectedLots": "Lots concernés :",
@@ -2233,7 +2283,15 @@
       "bannerMore": "et {n} de plus...",
       "merge": "Fusionner",
       "deltaLabel": "Max Δ jours",
-      "rowRef": "Ligne #{n}"
+      "rowRef": "Ligne #{n}",
+      "mergeAll": "Tout fusionner ({n})",
+      "mergeAllTitle": "Fusionner toutes les paires suggérées",
+      "mergeAllIntro": "{n} paires deviennent des transactions liées. Là où les deux lignes d’une paire ont une description ou des étiquettes différentes, garder :",
+      "mergeAllLeftHint": "la description et les étiquettes de la première ligne de chaque paire, comme dans le bandeau",
+      "mergeAllRightHint": "la description et les étiquettes de la seconde ligne de chaque paire",
+      "mergeAllCombine": "Combiner",
+      "mergeAllCombineHint": "les deux descriptions et les étiquettes des deux lignes",
+      "mergeAllConfirm": "Fusionner {n} paires"
     },
     "empty": "Aucune transaction",
     "table": {
@@ -2252,7 +2310,7 @@
       "INTEREST": "Intérêts",
       "SELL": "Vente",
       "TAX": "Impôt",
-      "TRANSFER": "Transfert de Titres",
+      "TRANSFER": "Transfert d'Actif",
       "WITHDRAWAL": "Retrait",
       "CASH_TRANSFER": "Virement"
     },
@@ -2326,47 +2384,50 @@
       "dateSortHint": "La date est le critère principal. Les paires restent groupées : date de l’opération la plus ancienne, puis la plus récente et identifiant stable de la ligne.",
       "balanceGroupOutsideWorkspace": "Aucune ligne de cet espace de travail ne contribue à ce groupe. Consultez l’historique du courtier.",
       "workspaceRowHint": "Position dans le tri actuel. a/b désignent les deux côtés d'une paire, pas des identifiants de transaction.",
-      "issueRowsHidden": "Les lignes concernées sont masquées par les filtres du tableau."
+      "issueRowsHidden": "Les lignes concernées sont masquées par les filtres du tableau.",
+      "unseenSuggestionsTitle": "Suggestions pas encore consultées",
+      "unseenSuggestionsMessage": "{n, plural, one {# suggestion de fusion n’a pas encore été consultée} other {# suggestions de fusion n’ont pas encore été consultées}}. Fusionner les deux moitiés d’un transfert évite qu’elles comptent comme un dépôt et un retrait séparés. Enregistrer quand même ?",
+      "unseenSuggestionsReview": "Afficher les suggestions"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
     },
     "costBasisOverride": {
-      "tooltip": "Override du coût moyen pondéré. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
-      "warningAdjustment": "Aucun coût de base défini — le lot sera créé avec un coût nul. Définissez une valeur s'il ne s'agit pas d'un fractionnement ou d'un don."
+      "tooltip": "Override du prix de revient unitaire. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
+      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Si ces parts n’ont rien coûté (un fractionnement ou un don), saisissez 0."
     },
     "wacPreview": {
       "calculating": "Calcul en cours...",
       "unitModeLabel": "Afficher comme :",
       "unitModeTotal": "Total",
       "unitModePerUnit": "Par unité",
-      "suggested": "CMP suggéré",
+      "suggested": "PRU suggéré",
       "txsUsed": "transactions utilisées",
-      "missingFx": "Impossible de calculer le CMP : taux FX manquant",
-      "docsTooltip": "Découvrez comment le CMP (Coût Moyen Pondéré) est calculé",
+      "missingFx": "Impossible de calculer le PRU : taux FX manquant",
+      "docsTooltip": "Découvrez comment le PRU (prix de revient unitaire) est calculé",
       "toggleAuto": "Auto",
       "toggleManual": "Manuel",
       "placeholderAuto": "auto (⚡️Valider maintenant)",
       "currencyChanged": "Devise modifiée — recalcul en cours…",
       "unitCost": "Coût unitaire",
       "effectLabel": "Effet",
-      "columnWac": "CMP",
+      "columnWac": "PRU",
       "effect": {
         "add": "Pondérée",
         "reduce": "Quantité réduite",
         "addZeroCost": "Dilution",
-        "addAtWac": "Auto CMP"
+        "addAtWac": "Auto PRU"
       },
       "pendingCreate": "Transaction en attente (nouvelle, pas encore enregistrée)",
       "pendingEdit": "Transaction en attente (modifiée, pas encore enregistrée)",
-      "validateHint": "Complétez les champs et validez pour calculer le CMP",
+      "validateHint": "Complétez les champs et validez pour calculer le PRU",
       "validateToRecalculate": "⚡ Validez maintenant pour recalculer le tableau"
     },
     "wac": {
       "syncSuccess": "Taux FX synchronisés avec succès",
       "syncFailed": "Échec de la synchronisation FX",
       "fxStaleBannerTitle": "Conversions FX avec taux périmés",
-      "fxDisclaimer": "Le taux FX utilisé peut différer de celui appliqué par votre courtier. Vérifiez le coût moyen avec votre courtier.",
+      "fxDisclaimer": "Le taux FX utilisé peut différer de celui appliqué par votre courtier. Vérifiez le prix de revient unitaire avec votre courtier.",
       "fxTooltipStale": "Taux non à jour",
       "fxTooltipSameDay": "même jour",
       "fxTooltipDaysBefore": "jours avant",
@@ -2430,10 +2491,10 @@
       "promoteRefNotFound": "Transaction référencée pour la promotion non trouvée",
       "alreadyPaired": "La transaction est déjà liée à une autre transaction",
       "noPromoteRule": "Aucune règle de promotion ne correspond à ces deux types de transaction",
-      "wacFxUnavailable": "❌ Calcul CMP échoué.",
+      "wacFxUnavailable": "❌ Calcul PRU échoué.",
       "wacFxUnavailableSyncLink": "Synchroniser les taux FX",
       "wacFxUnavailableOrManual": "ou passez en mode manuel.",
-      "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (CMP) ou saisissez une valeur <b>manuelle</b>.",
+      "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (PRU) ou saisissez une valeur <b>manuelle</b>.",
       "pairDeleteIncomplete": "Transaction liée : supprimer cette ligne exige aussi la suppression de sa contrepartie (transaction n°{partnerId}). Si elle appartient à un broker que vous ne pouvez pas modifier, demandez à son propriétaire de la supprimer."
     },
     "pydantic": {
@@ -2614,7 +2675,7 @@
       "riskWindow": "Nombre d’observations préparées des rendements quotidiens dans chaque fenêtre glissante.",
       "riskFreeAnnualRate": "Taux annuel effectif sans risque utilisé uniquement pour calculer le Sharpe.",
       "comparisonAsset": "Actif enregistré utilisé comme série de comparaison réelle pour le bêta.",
-      "riskFullHistory": "Mesure le drawdown par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
+      "riskFullHistory": "Mesure le repli par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
     },
     "units": {
       "days": "jours",
@@ -2766,10 +2827,10 @@
       "loadError": "Impossible de charger les actifs."
     },
     "riskDrawdown": {
-      "name": "Drawdown depuis le sommet",
-      "description": "Suit la baisse en pourcentage depuis chaque sommet progressif du prix.",
-      "output": "Drawdown",
-      "outputDescription": "Baisse du prix depuis le sommet progressif, hors flux ; jamais supérieure à zéro.",
+      "name": "Repli depuis le sommet",
+      "description": "Suit le repli en pourcentage depuis chaque sommet progressif du prix.",
+      "output": "Repli",
+      "outputDescription": "Repli du prix depuis le sommet progressif, hors flux ; jamais supérieur à zéro.",
       "referencePeak": "Sommet"
     },
     "riskRollingVolatility": {
@@ -2884,7 +2945,7 @@
         },
         "market_analysis": {
           "display": "Analyse de l'actif",
-          "description": "Analyse l'historique des prix, les rendements, la tendance, le momentum, la volatilité, le drawdown, les événements et la couverture."
+          "description": "Analyse l'historique des prix, les rendements, la tendance, le momentum, la volatilité, le repli, les événements et la couverture."
         }
       },
       "fx": {
@@ -2937,7 +2998,7 @@
       "portfolio": {
         "overview_and_history": {
           "display": "Portefeuille et évolution",
-          "description": "Composition, positions, liquidités, performance, flux, revenus, coûts enregistrés, synthèse FIFO économique, contexte de marché compact par actif, drawdown et provenance."
+          "description": "Composition, positions, liquidités, performance, flux, revenus, coûts enregistrés, synthèse FIFO économique, contexte de marché compact par actif, repli et provenance."
         },
         "asset_history": {
           "display": "Historique des actifs du portefeuille",
@@ -2987,7 +3048,7 @@
       "broker": {
         "overview_and_history": {
           "display": "Courtier et évolution",
-          "description": "Positions, liquidités, concentration, performance, flux, coûts, synthèse FIFO économique, contexte de marché compact par actif, drawdown et provenance du courtier."
+          "description": "Positions, liquidités, concentration, performance, flux, coûts, synthèse FIFO économique, contexte de marché compact par actif, repli et provenance du courtier."
         },
         "asset_history": {
           "display": "Historique des actifs du courtier",
@@ -3037,11 +3098,11 @@
       "asset": {
         "position_and_history": {
           "display": "Position et historique (complet)",
-          "description": "Vos positions sur cet actif — coût, valeur, P&L, performance, lots économiques — plus contexte de marché compact, drawdown et provenance. L'export complet."
+          "description": "Vos positions sur cet actif — coût, valeur, P&L, performance, lots économiques — plus contexte de marché compact, repli et provenance. L'export complet."
         },
         "market_history": {
           "display": "Historique de marché uniquement (sans positions)",
-          "description": "Prix, rendements, indicateurs, états, événements, drawdown, couverture et provenance — données de marché uniquement, sans positions. L'export léger."
+          "description": "Prix, rendements, indicateurs, états, événements, repli, couverture et provenance — données de marché uniquement, sans positions. L'export léger."
         },
         "overview": {
           "display": "Vue d’ensemble de l’actif",
@@ -3149,14 +3210,14 @@
       },
       "assetSetKpi": {
         "name": "Indicateurs de risque par actif",
-        "description": "Volatilité, pire baisse et ratios ajustés du risque, mesurés pour chaque actif sélectionné sur une même fenêtre."
+        "description": "Volatilité, pire repli et ratios ajustés du risque, mesurés pour chaque actif sélectionné sur une même fenêtre."
       },
       "assetSetVar": {
         "name": "Risque de queue par actif",
         "description": "La perte atteinte par chaque actif sélectionné dans ses pires cas, estimée sur son propre historique."
       },
       "assetSetDrawdown": {
-        "name": "Baisses par actif",
+        "name": "Replis par actif",
         "description": "De combien chaque actif sélectionné a chuté depuis son sommet, pendant combien de temps, et s'il s'en est remis."
       },
       "assetSetRiskReturn": {
@@ -3277,21 +3338,21 @@
         "blankNote": "Un tiret signifie que la mesure n'a pas pu être faite pour cet actif sur cette fenêtre — cela ne signifie pas zéro.",
         "l1": {
           "title": "Combien chacun a-t-il fait mal ?",
-          "description": "Pour chaque actif sélectionné, ce qu'il a perdu aux pires moments de la période : la mauvaise journée, le mauvais mois, la baisse la plus profonde et à quelle distance il se trouve encore de son sommet.",
+          "description": "Pour chaque actif sélectionné, ce qu'il a perdu aux pires moments de la période : la mauvaise journée, le mauvais mois, le repli le plus profond et à quelle distance il se trouve encore de son sommet.",
           "lastedDays": "durée {days} j",
           "columns": {
             "badDay": "Mauvaise journée",
             "badMonth": "Mauvais mois",
-            "worstFall": "Pire baisse",
+            "worstFall": "Pire repli",
             "currentFall": "Sous le sommet",
             "toPeak": "Hausse jusqu'au sommet"
           },
           "columnHelp": {
-            "badDay": "La perte moyenne sur les 5 % des pires jours de la fenêtre (CVaR historique à 95 %).",
-            "badMonth": "Comme la mauvaise journée, mais sur une plus longue suite de jours consécutifs : la perte moyenne sur les 5 % des pires de ces périodes (CVaR historique à 95 %).",
-            "worstFall": "La baisse la plus profonde d'un sommet jusqu'au point le plus bas qui a suivi dans la fenêtre, et sa durée.",
+            "badDay": "La perte moyenne sur les 5 % des pires jours de la fenêtre (CVaR historique à 95 %).",
+            "badMonth": "Comme la mauvaise journée, mais sur une plus longue suite de jours consécutifs : la perte moyenne sur les 5 % des pires de ces périodes (CVaR historique à 95 %).",
+            "worstFall": "Le repli le plus profond d'un sommet jusqu'au point le plus bas qui a suivi dans la fenêtre, et sa durée.",
             "currentFall": "À quelle distance de son sommet de la fenêtre l'actif se trouve le dernier jour.",
-            "toPeak": "De combien il doit monter pour retrouver ce sommet : après une baisse de 20 %, il faut +25 %."
+            "toPeak": "De combien il doit monter pour retrouver ce sommet : après une baisse de 20 %, il faut +25 %."
           }
         },
         "l3": {
@@ -3400,7 +3461,7 @@
         "geography": "Géographie"
       },
       "auditTitle": "Audit des expositions appliquées",
-      "missingMetadataOther": "Les données de secteur ou de géographie étaient indisponibles pour cet actif. Il a été traité comme Other à 100 %.",
+      "missingMetadataOther": "Les données de secteur ou de géographie étaient indisponibles pour cet actif. Il a été traité comme Other à 100 %.",
       "exposureBucket": "Catégorie d'exposition",
       "exposure": "Exposition",
       "appliedBucket": "Catégorie appliquée",
@@ -3498,7 +3559,7 @@
       "sortino_undefined_assets": "Sortino indéfini pour {names} : l'écart baissier est nul.",
       "worst_realization_undefined_assets": "Aucune observation en perte sur la période pour {names}.",
       "worst_realization_undefined": "Aucune observation en perte sur la période.",
-      "hypothetical_metadata_other_fallback": "{names} : données de {dimension, select, sector {secteur} other {géographie}} manquantes — traité comme « Autre » à 100 %.",
+      "hypothetical_metadata_other_fallback": "{names} : données de {dimension, select, sector {secteur} other {géographie}} manquantes — traité comme « Autre » à 100 %.",
       "historical_replay_proxies_used": "Le rejeu a utilisé une série de substitution pour : {names}.",
       "historical_replay_excluded_manual": "Exclusion manuelle : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_excluded_no_prices": "Aucun prix dans la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
@@ -3560,13 +3621,13 @@
         "rows": {
           "day": "Une mauvaise journée (pires 5%)",
           "month": "Un mauvais mois (pires 5%)",
-          "worst": "La pire baisse (réellement vécue)"
+          "worst": "Le pire repli (réellement vécu)"
         },
         "technical": {
           "day": "CVaR · 1 jour",
           "month": "CVaR · 1 mois",
           "worst": "Perte maximale",
-          "current": "Baisse actuelle"
+          "current": "Repli actuel"
         },
         "durationDays": "durée {days} jours",
         "requiredRecovery": "reprise nécessaire {percent}",
@@ -3575,7 +3636,7 @@
         "tails": {
           "worstRealization": "La pire journée réellement vue",
           "worstRealizationOn": "le {date}",
-          "drawdownAtRisk": "Baisse à risque ({confidence})",
+          "drawdownAtRisk": "Repli à risque ({confidence})",
           "conditionalDrawdownAtRisk": "Moyenne au-delà de ce seuil",
           "ulcerIndex": "Indice d'Ulcer {value}",
           "ulcerIndexHint": "profondeur quadratique moyenne sous le sommet : plus bas, plus calme"
@@ -4002,8 +4063,8 @@
           "ticker": "Ticker / ISIN",
           "typeHelp": "Le type d’instrument, comme sur la page de l’actif. Il apparaît dans le résultat et ne change pas les ordres.",
           "pickCategory": "{dimension, select, asset_type {Choisir un type} sector {Choisir un secteur} other {Choisir un pays}}",
-          "weightsHelp": "Pour chaque dimension, indiquez les parts en pourcentage. Elles peuvent totaliser moins de 100 % ; au-delà de 100 %, le calcul refuse les données.",
-          "totalOver": "{dimension} : les parts dépassent 100 %. Réduisez-en une avant d’appliquer.",
+          "weightsHelp": "Pour chaque dimension, indiquez les parts en pourcentage. Elles peuvent totaliser moins de 100 % ; au-delà de 100 %, le calcul refuse les données.",
+          "totalOver": "{dimension} : les parts dépassent 100 %. Réduisez-en une avant d’appliquer.",
           "tickerHelp": "Facultatif : un ticker, un ISIN ou tout code qui vous aide à reconnaître l’actif dans le résultat. Il ne relie pas l’actif à LibreFolio, et deux actifs manuels ne sont jamais fusionnés par nom ou par code."
         },
         "assets": {
@@ -4061,7 +4122,7 @@
           "pickCurrency": "Devise du nouveau bloc",
           "priorityHelp": "Elle ne compte qu’entre des plans qui se rapprochent autant de la cible : le plan utilise alors d’abord les sources au numéro le plus bas. 0 = préférée.",
           "feeFixedHelp": "Payée sur chaque achat, quel que soit le montant, en plus de la partie en pourcentage. 0 = aucune.",
-          "feeRateHelp": "La part du montant acheté, en pourcentage : 0,19 signifie 0,19 %. Le minimum et le maximum ne limitent que cette partie.",
+          "feeRateHelp": "La part du montant acheté, en pourcentage : 0,19 signifie 0,19 %. Le minimum et le maximum ne limitent que cette partie.",
           "conversionManual": "Vous convertissez avant d’acheter",
           "conversionAutomatic": "Le courtier convertit à l’achat",
           "addedFor": "Mode {currency} ajouté pour acheter {asset}, avec des valeurs de départ : vérifiez le type d’ordre, l’incrément et les frais, puis appliquez.",
@@ -4079,7 +4140,7 @@
           "conversionHelp": "Quand un achat demande une devise que vous ne détenez pas ici, l’argent est converti au taux et avec le spread de l’étape Change. Si vous convertissez vous-même, le plan donne la conversion comme étape numérotée avant les ordres ; si le courtier convertit à l’achat, le plan l’affiche à côté de ses ordres. Le calcul est le même dans les deux cas.",
           "conversionLabel": "Conversion de devise",
           "conversionValue": "Vous convertissez avant d’acheter, au taux de l’étape Change moins le spread.",
-          "feeHelp": "Ce que le courtier facture sur chaque achat : le pourcentage du montant, maintenu entre le minimum et le maximum, plus la partie fixe. Pas d’achat, pas de frais. Ils sont payés avec vos liquidités et ne sont pas investis.\n\nExemples, dans la devise de l’achat :\n• 0,19 %, minimum 1,50, maximum 18 : sur 500 vous payez 1,50, sur 2 000 vous payez 3,80, sur 20 000 vous payez 18.\n• Seulement une partie fixe de 2,95 : 2,95 sur n’importe quel achat.\n• Partie fixe 1 plus 0,10 % : sur 1 000 vous payez 2.\n• Tout à 0 : pas de frais.",
+          "feeHelp": "Ce que le courtier facture sur chaque achat : le pourcentage du montant, maintenu entre le minimum et le maximum, plus la partie fixe. Pas d’achat, pas de frais. Ils sont payés avec vos liquidités et ne sont pas investis.\n\nExemples, dans la devise de l’achat :\n• 0,19 %, minimum 1,50, maximum 18 : sur 500 vous payez 1,50, sur 2 000 vous payez 3,80, sur 20 000 vous payez 18.\n• Seulement une partie fixe de 2,95 : 2,95 sur n’importe quel achat.\n• Partie fixe 1 plus 0,10 % : sur 1 000 vous payez 2.\n• Tout à 0 : pas de frais.",
           "feeMax": "max {amount}",
           "feeMin": "min {amount}",
           "fundingHelp": "L’argent que le plan peut utiliser pour acheter chez ce courtier : ses propres liquidités, plus les versements et les liquidités d’autres comptes que vous autorisez dans Modifier. Au départ, tout est autorisé ; dans Modifier, cliquez sur une source pour l’exclure.",
@@ -4175,7 +4236,7 @@
           "title": "Copier la répartition actuelle",
           "valuation": "Valorisation",
           "weight": "Poids",
-          "subtitle": "Combien pèse aujourd’hui chacun de ces actifs chez les courtiers cochés, en ne comptant que ces actifs : ensemble, ils font 100 %. Les liquidités et les autres actifs que vous détenez ne comptent pas.",
+          "subtitle": "Combien pèse aujourd’hui chacun de ces actifs chez les courtiers cochés, en ne comptant que ces actifs : ensemble, ils font 100 %. Les liquidités et les autres actifs que vous détenez ne comptent pas.",
           "changeColumn": "Cible",
           "confirmApply": "Remplacer"
         },
@@ -4225,10 +4286,10 @@
             "deployment_omitted": "La vue du déploiement n’a pas été calculée.",
             "duplicate_id": "Le même identifiant est utilisé deux fois.",
             "dynamic_fee_unsupported": "Ce barème de frais n’est pas pris en charge.",
-            "economic_share_out_of_range": "La part économique doit être comprise entre 0 et 100 %.",
+            "economic_share_out_of_range": "La part économique doit être comprise entre 0 et 100 %.",
             "execution_margin_missing": "La marge d’exécution est manquante.",
             "execution_margin_rate_out_of_range": "La marge d’exécution est hors plage.",
-            "exposure_total_exceeds_one": "Les expositions d’une dimension totalisent plus de 100 %.",
+            "exposure_total_exceeds_one": "Les expositions d’une dimension totalisent plus de 100 %.",
             "exposure_weight_out_of_range": "Un poids d’exposition est hors plage.",
             "fee_floor_exceeds_cap": "Les frais minimums sont supérieurs aux frais maximums.",
             "fee_rate_out_of_range": "Le taux des frais est hors plage.",
@@ -4268,13 +4329,13 @@
             "saved_fx_invalid": "Le taux de change enregistré n’est pas valide.",
             "saved_fx_missing": "Le taux de change enregistré est manquant.",
             "solver_limit_no_incumbent": "Le solveur a atteint sa limite avant de trouver un plan.",
-            "target_total_not_one": "Les cibles ne totalisent pas 100 %.",
+            "target_total_not_one": "Les cibles ne totalisent pas 100 %.",
             "target_weight_missing": "Une cible est manquante.",
-            "target_weight_out_of_range": "Une cible doit être comprise entre 0 et 100 %.",
+            "target_weight_out_of_range": "Une cible doit être comprise entre 0 et 100 %.",
             "tax_netting_unsupported": "La compensation fiscale n’est pas prise en charge.",
             "valuation_currency_missing": "La devise de valorisation est manquante.",
-            "wac_fx_missing": "Le taux de change nécessaire au coût moyen est manquant.",
-            "wac_missing": "Le coût moyen est manquant.",
+            "wac_fx_missing": "Le taux de change nécessaire au prix de revient unitaire est manquant.",
+            "wac_missing": "Le prix de revient unitaire est manquant.",
             "zero_selected_funding": "Les liquidités sélectionnées sont nulles.",
             "fx_rate_inconsistent": "Ce taux de change ne concorde pas avec les taux de {source_currency} et {destination_currency} par rapport à {valuation_currency} : convertir {source_currency} en {destination_currency} créerait de la valeur. Alignez les taux ou définissez un spread de conversion."
           },
@@ -4314,7 +4375,7 @@
           "manualHint": "Un solde que vous avez déjà sur un compte non enregistré dans LibreFolio, par exemple à la banque. Vous déclarez combien il contient et combien en utiliser."
         },
         "liquidityCopy": {
-          "allYours": "100 % à vous",
+          "allYours": "100 % à vous",
           "apply": "{count, plural, one {Copier # ligne} other {Copier # lignes}}",
           "custody": "conservation {amount}",
           "noCash": "Aucun solde de liquidités à cette date.",
@@ -4405,7 +4466,7 @@
           "selectedMissing": "« Montant à utiliser » est vide.",
           "structureInvalid": "Un champ ne respecte pas le contrat du planificateur : {path}.",
           "targetInvalid": "La cible n’est pas un nombre à partir de 0.",
-          "targetTotalNotHundred": "Le total des cibles est de {total} %, il doit être de 100 % (contrôle).",
+          "targetTotalNotHundred": "Le total des cibles est de {total} %, il doit être de 100 % (contrôle).",
           "valuationCurrencyMissing": "La devise de valorisation est manquante."
         },
         "removal": {
@@ -4490,7 +4551,7 @@
           },
           "expandAll": "Tout développer",
           "exposures": {
-            "nothingDeclared": "Aucune classification déclarée · 100 % non classé",
+            "nothingDeclared": "Aucune classification déclarée · 100 % non classé",
             "uncategorised": "Non classé",
             "uncategorisedHint": "« Non classé » est la part sans classification déclarée.",
             "above": "Au-dessus de l’idéal",
@@ -4816,7 +4877,7 @@
           "requiredHelp": "Le plan achète ici au moins cette quantité, quoi qu’il arrive. Si les ressources ne suffisent pas, le plan devient impossible. Vide = aucune obligation.",
           "capHelp": "Le maximum que le plan peut acheter de cet actif chez ce courtier. Vide = aucune limite propre : le plan n’achète jamais plus que les liquidités qui peuvent atteindre ce courtier. Remplissez-le pour arrêter les achats ici au-delà d’une certaine taille.",
           "priorityHelp": "Elle ne compte qu’entre des plans qui se rapprochent autant de la cible : parmi eux, on préfère acheter chez les courtiers au numéro le plus bas. Elle pèse plus que les frais : pour laisser le coût décider, laissez-les tous à 0. Tous à 0 = aucune préférence.",
-          "marginHelp": "Chaque achat est compté au prix × (1 + marge), pour couvrir un prix qui monte avant l’ordre. Exemple : 0,5 % sur 100 → 100,50. La différence est une réserve pour la hausse : elle ne compte pas comme investie.",
+          "marginHelp": "Chaque achat est compté au prix × (1 + marge), pour couvrir un prix qui monte avant l’ordre. Exemple : 0,5 % sur 100 → 100,50. La différence est une réserve pour la hausse : elle ne compte pas comme investie.",
           "capNone": "aucune limite",
           "modeMissing": "{broker} n’a pas encore de mode d’ordre en {currency}",
           "modeMissingHelp": "Le mode d’ordre indique comment {broker} prend un ordre en {currency} : en unités ou en montant, avec quel incrément et quels frais. Le plan en a besoin pour dimensionner l’achat de cet actif, coté en {currency}. Ce n’est pas la conversion : si vous payez dans une autre devise, le plan ajoute la conversion telle que vous l’avez réglée sur le courtier. Ajoutez le mode, ou excluez l’actif chez ce courtier.",
@@ -4914,12 +4975,12 @@
           "target": "Cible %",
           "total": "Total",
           "wire": "La part de l’argent que vous investissez maintenant qui va à cet actif, en pourcentage. Les décimales sont admises.",
-          "copyHelp": "Lit combien pèse aujourd’hui chacun de ces actifs chez les courtiers que vous cochez, en ne comptant que ces actifs et pas les liquidités, et ramène les rapports à 100 %. Les actifs saisis à la main valent 0. Vous voyez les poids avant de les utiliser, et une cible que vous avez changée n’est remplacée qu’après votre confirmation.",
+          "copyHelp": "Lit combien pèse aujourd’hui chacun de ces actifs chez les courtiers que vous cochez, en ne comptant que ces actifs et pas les liquidités, et ramène les rapports à 100 %. Les actifs saisis à la main valent 0. Vous voyez les poids avant de les utiliser, et une cible que vous avez changée n’est remplacée qu’après votre confirmation.",
           "excess": "+{value} en trop",
-          "balance": "Équilibrer à 100 %",
-          "totalHelp": "Les cibles répartissent entre les actifs l’argent que vous investissez maintenant, liquidités et versements compris : pour calculer, leur somme doit faire exactement 100 %. « Tout équilibrer » redimensionne chaque cible en gardant leurs proportions (parts égales si elles sont toutes à 0). Cochez des lignes pour ne redimensionner que celles-ci, avec « Équilibrer les lignes sélectionnées à 100 % ». « Équilibrer à 100 % » sur une ligne donne à cet actif ce qui manque, ou retire l’excédent.",
+          "balance": "Équilibrer à 100 %",
+          "totalHelp": "Les cibles répartissent entre les actifs l’argent que vous investissez maintenant, liquidités et versements compris : pour calculer, leur somme doit faire exactement 100 %. « Tout équilibrer » redimensionne chaque cible en gardant leurs proportions (parts égales si elles sont toutes à 0). Cochez des lignes pour ne redimensionner que celles-ci, avec « Équilibrer les lignes sélectionnées à 100 % ». « Équilibrer à 100 % » sur une ligne donne à cet actif ce qui manque, ou retire l’excédent.",
           "balanceAll": "Tout équilibrer",
-          "balanceSelected": "Équilibrer les lignes sélectionnées à 100 %"
+          "balanceSelected": "Équilibrer les lignes sélectionnées à 100 %"
         },
         "toolErrors": {
           "cleanup_failed": "Le calcul est terminé, mais la plateforme n’a pas pu nettoyer après lui.",
@@ -5439,5 +5500,139 @@
     },
     "cookieWarning": "Votre navigateur utilise HTTPS, mais le cookie de session n'est pas marqué Secure. Faites envoyer X-Forwarded-Proto par le reverse proxy (Nginx : proxy_set_header X-Forwarded-Proto $scheme;), ou remettez SESSION_COOKIE_SECURE sur auto s'il vaut never.",
     "learnMore": "Comment se connecter en toute sécurité"
+  },
+  "brimPlugins": {
+    "broker_generic_csv": {
+      "name": "CSV générique",
+      "description": "Importe les transactions d’un fichier CSV générique. Détecte les colonnes à partir des noms de l’en-tête. Prend en charge divers formats de date et de nombre."
+    },
+    "broker_scalable": {
+      "name": "Scalable Capital compte-titres",
+      "description": "Importe le compte-titres Scalable Capital depuis l’export CSV de Scalable (PRIME) ou depuis le fichier courtier de l’exportateur LibreFolio : achats et ventes avec leurs frais et impôts, plans d’épargne, dividendes, intérêts, dépôts, retraits et transferts vers le compte rémunéré."
+    },
+    "broker_scalable_deposit": {
+      "name": "Scalable Capital compte rémunéré",
+      "description": "Importe le compte rémunéré Scalable Capital (Tagesgeld) depuis le fichier de l’exportateur LibreFolio : intérêts avec l’impôt retenu, dépôts, retraits et transferts vers le compte-titres."
+    },
+    "broker_avanza": {
+      "description": "Importe les transactions de l’export CSV d’Avanza. Prend en charge les achats et ventes, les mouvements de liquidités, les dividendes, les intérêts, les impôts et les frais.",
+      "name": "Avanza"
+    },
+    "broker_bitvavo": {
+      "description": "Importe les transactions de l’export CSV de Bitvavo. Prend en charge les achats et ventes de cryptos, les récompenses de staking, les dépôts et retraits d’espèces et les ajustements de soldes crypto.",
+      "name": "Bitvavo"
+    },
+    "broker_bux": {
+      "description": "Importe les transactions de l’export CSV de BUX. Prend en charge les achats et ventes, les dépôts et retraits SEPA, les dividendes et les frais.",
+      "name": "BUX"
+    },
+    "broker_coinbase": {
+      "description": "Importe les transactions de l’export CSV de Coinbase. Prend en charge les achats et ventes de cryptos et les récompenses de staking.",
+      "name": "Coinbase"
+    },
+    "broker_cointracking": {
+      "description": "Importe les transactions des exports CSV de CoinTracking. Prend en charge les achats et ventes de cryptos contre monnaie fiduciaire, les transferts, les récompenses de staking et les frais en monnaie fiduciaire.",
+      "name": "CoinTracking"
+    },
+    "broker_credit_agricole": {
+      "description": "Importe les exports du Crédit Agricole (CSV ou XLSX) : les mouvements de titres de la « Lista Movimenti Deposito Titoli » (coupons, achats, remboursements, échéances, transferts par succession, équilibrés par des contreparties en espèces automatiques) et les mouvements de compte de la « Lista Movimenti Conto » (liquidités, frais, impôts et revenus comme dépôts et retraits). Les titres ne sont identifiés que par leur nom (sans ISIN).",
+      "name": "Crédit Agricole"
+    },
+    "broker_cryptocom": {
+      "description": "Import CSV de Crypto.com au mieux. Importe les achats, ventes et récompenses sans ambiguïté ; ignore avec un avertissement les transferts internes, les swaps, les blocages (lockups) et les lignes ambiguës.",
+      "name": "Crypto.com"
+    },
+    "broker_danske_bank": {
+      "description": "Importe un compte d’épargne en actions de Danske Bank (Finlande) : les transactions du compte-titres (XLSX) et le relevé de liquidités (CSV), téléversés ensemble et réunis en un seul import.",
+      "name": "Danske Bank"
+    },
+    "broker_degiro": {
+      "description": "Importe le relevé de compte de DEGIRO (CSV) dans n’importe quelle langue : achats et ventes, frais, dividendes, impôts, intérêts, dépôts, retraits et conversions de devises, chacun dans sa propre devise.",
+      "name": "DEGIRO"
+    },
+    "broker_delta": {
+      "description": "Importe les transactions des exports CSV de Delta. Prise en charge au mieux des achats et ventes contre monnaie fiduciaire, des transferts de cryptos, des dividendes et des ajustements de crypto à crypto.",
+      "name": "Delta"
+    },
+    "broker_directa": {
+      "description": "Importe les transactions de l’export de Directa SIM (CSV ou XLSX). Prend en charge tous les types de transactions italiens, dont les dividendes d’ETF, les coupons obligataires, les impôts et les opérations de bourse.",
+      "name": "Directa SIM"
+    },
+    "broker_disnat": {
+      "description": "Importe les transactions de l’export CSV de Disnat. Prend en charge les achats et ventes, les dividendes, les impôts, les mouvements de liquidités, les frais et les intérêts.",
+      "name": "Disnat"
+    },
+    "broker_etoro": {
+      "description": "Importe le CSV d’activité du compte eToro : positions ouvertes et clôturées (un CFD se lit comme toute autre position), dividendes, intérêts, dépôts, retraits et frais de retrait et de conversion.",
+      "name": "eToro"
+    },
+    "broker_fineco": {
+      "description": "Importe les transactions de l’export CSV « Movimenti Dossier Titoli » de FinecoBank. Prend en charge les deux formats d’export (avec et sans commissions), les achats, ventes, dividendes, coupons obligataires, remboursements et augmentations de capital. Les montants sont importés tels quels, dans la devise indiquée par le courtier (sans conversion de change).",
+      "name": "Fineco"
+    },
+    "broker_finpension": {
+      "description": "Importe les transactions de l’export CSV de Finpension. Prend en charge les placements des fonds de prévoyance suisses.",
+      "name": "Finpension"
+    },
+    "broker_freetrade": {
+      "description": "Importe les transactions de l’export CSV de Freetrade. Prend en charge les actions britanniques, les ETF, les dividendes et les intérêts.",
+      "name": "Freetrade"
+    },
+    "broker_ibkr": {
+      "description": "Importe les opérations de l’export CSV d’Interactive Brokers. Prend en charge les actions, les ETF et les opérations de change, avec leurs commissions.",
+      "name": "Interactive Brokers"
+    },
+    "broker_intesa": {
+      "description": "Importe les exports d’Intesa Sanpaolo (CSV ou XLSX). Traite la liste des mouvements (coupons obligataires et droits de garde ; les lignes bancaires courantes non reconnues sont ignorées) et l’instantané du portefeuille (patrimonio), importé comme un dépôt d’espèces plus un ajustement du prix de revient par position, pour amorcer un compte avec son historique.",
+      "name": "Intesa Sanpaolo"
+    },
+    "broker_investengine": {
+      "description": "Importe les transactions de l’export CSV d’InvestEngine. Prend en charge les achats, les ventes et les dividendes en GBP.",
+      "name": "InvestEngine"
+    },
+    "broker_investimental": {
+      "description": "Importe les transactions exécutées définitives des journaux CSV de mise à jour des ordres d’Investimental. Les annulations, les demandes rejetées et les ordres non exécutés sont ignorés.",
+      "name": "Investimental"
+    },
+    "broker_parqet": {
+      "description": "Importe les transactions de l’export CSV de Parqet. Parqet est un agrégateur : les noms des courtiers sous-jacents sont conservés dans les descriptions des transactions.",
+      "name": "Parqet"
+    },
+    "broker_rabobank": {
+      "description": "Importe les transactions de l’export CSV néerlandais de Rabobank. Prend en charge les fonds, les dividendes, les dépôts, les retraits, les frais et les intérêts.",
+      "name": "Rabobank"
+    },
+    "broker_relai": {
+      "description": "Importe les achats et ventes de Bitcoin de l’export CSV de Relai, y compris les frais en transactions séparées.",
+      "name": "Relai"
+    },
+    "broker_revolut": {
+      "description": "Importe les transactions des exports CSV de Revolut. Prend en charge les placements, les cryptos, les dividendes et les mouvements de liquidités.",
+      "name": "Revolut"
+    },
+    "broker_saxo": {
+      "description": "Importe les exports CSV de Saxo : achats et ventes d’actions, dividendes, dépôts et retraits d’espèces et droits de garde.",
+      "name": "Saxo"
+    },
+    "broker_schwab": {
+      "description": "Importe les transactions de l’export CSV de Charles Schwab. Prend en charge les actions, les ETF, les dividendes et les intérêts.",
+      "name": "Charles Schwab"
+    },
+    "broker_swissquote": {
+      "description": "Importe les exports CSV de Swissquote : achats et ventes, dividendes, mouvements de liquidités, frais, impôts et intérêts. Les opérations de change sont ignorées.",
+      "name": "Swissquote"
+    },
+    "broker_traderepublic": {
+      "description": "Importe les transactions de l’export CSV de Trade Republic. Prend en charge les achats et ventes, les dividendes, les intérêts, les mouvements de liquidités, les frais et les impôts en EUR.",
+      "name": "Trade Republic"
+    },
+    "broker_trading212": {
+      "description": "Importe les transactions de l’export CSV de Trading212. Prend en charge les actions, les ETF, les dividendes et les intérêts.",
+      "name": "Trading212"
+    },
+    "broker_xtb": {
+      "description": "Importe les transactions de l’export CSV de XTB. Prend en charge les actions, les ETF, les dividendes, les mouvements de liquidités, les impôts, les frais et les intérêts.",
+      "name": "XTB"
+    }
   }
 }

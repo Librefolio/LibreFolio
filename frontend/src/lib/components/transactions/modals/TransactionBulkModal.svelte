@@ -50,6 +50,7 @@
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactions/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
+    import PromoteAllModal, {type PromoteAllStrategy} from './PromoteAllModal.svelte';
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
@@ -68,7 +69,8 @@
         type IdentifiedBulkOp,
     } from '$lib/utils/transactions/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {cashAmountsCancel} from '$lib/utils/transactions/promoteHelpers';
+    import {cashAmountsCancel, mergeStrings, mergeTagSets} from '$lib/utils/transactions/promoteHelpers';
+    import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/utils/transactions/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -331,6 +333,8 @@
     let suggestTimer: ReturnType<typeof setTimeout> | null = null;
     /** Last JSON key sent to promote-suggest — avoids redundant calls. */
     let lastSuggestKey = '';
+    /** The question the rows ask promote-suggest right now ('' when none): an answer to an older one is dropped. */
+    let suggestAskedKey = '';
 
     /** Snapshot of `ops` at modal-open time, used to detect unsaved changes
      *  for the close-confirmation guard (Bugfix-3 §C11). */
@@ -341,6 +345,16 @@
     let confirmEditDeleteRow = $state<PendingOp | null>(null);
     /** Gate: confirm Save when auto-derived "fields to verify" (warning todos) are still un-acknowledged. */
     let confirmWarningsOpen = $state(false);
+    /**
+     * Save gate for merge suggestions nobody looked at: the saved counterparts behind the lightbulb
+     * and the banner of complementary rows. Opening the lightbulb, or touching the banner, once is
+     * enough; «Save anyway» counts as a look too.
+     */
+    let suggestPickerSeen = $state(false);
+    let promoteBannerSeen = $state(false);
+    let confirmSuggestionsOpen = $state(false);
+    /** «Merge all» of the banner: one answer for every suggested pair. */
+    let promoteAllOpen = $state(false);
 
     // =========================================================================
     // WAC results — populated from validate response (Phase C: inline WAC)
@@ -459,6 +473,10 @@
             pendingPromotes = [];
             promoteMergeOpen = false;
             promoteMergeData = null;
+            promoteAllOpen = false;
+            suggestPickerSeen = false;
+            promoteBannerSeen = false;
+            confirmSuggestionsOpen = false;
             suggestFromDB = new Map();
             lastSuggestKey = '';
             if (suggestTimer) {
@@ -1459,6 +1477,15 @@
      * user is prompted to look (e.g. matured-bond nominal quantities) instead of silently saving.
      */
     function requestCommit() {
+        if (unseenSuggestionCount > 0) {
+            confirmSuggestionsOpen = true;
+            return;
+        }
+        requestCommitPastSuggestions();
+    }
+
+    /** The rest of the save gate, once the suggestions are seen or waived: the fields to verify, then the commit. */
+    function requestCommitPastSuggestions() {
         if (todoWarningRowCount > 0) {
             confirmWarningsOpen = true;
             return;
@@ -2036,11 +2063,10 @@
             label: () => $t('transactions.bulk.suggestLightbulb') || 'Import suggestion',
             onClick: (row: PendingOp) => {
                 // BUG-C7: open suggest picker filtered to this row's importable candidates
-                const txId = (row as any).txId as number;
-                const entry = importableSuggestions.find((s) => s.txId === txId);
+                const entry = importableSuggestions.find((s) => s.tempId === row.tempId);
                 if (entry && entry.candidates.length > 0) {
                     // Open picker filtered to just this row's candidates
-                    suggestPickerOpen = true;
+                    openSuggestPicker();
                 } else {
                     // Fallback: scroll to banner
                     const banner = document.querySelector('[data-testid="promote-suggest-banner"]');
@@ -2053,9 +2079,8 @@
             },
             visible: (row: PendingOp) => {
                 if (getPartnerOp(row.tempId)) return false;
-                const txId = (row as any).txId;
-                // Show if this row has importable DB candidates OR is in banner suggestions
-                return importableSuggestions.some((s) => s.txId === txId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
+                // Show if this row (saved or new) has importable DB candidates OR is in banner suggestions
+                return importableSuggestions.some((s) => s.tempId === row.tempId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
             },
         },
         {
@@ -2325,6 +2350,7 @@
     let suggestPickerOpen = $state(false);
     function openSuggestPicker() {
         suggestPickerOpen = true;
+        suggestPickerSeen = true;
     }
 
     function openPicker() {
@@ -2650,10 +2676,16 @@
         } else if (opA.op === 'create' && opB.op === 'create') {
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
-            opA.link_uuid = sharedUuid;
-            opB.link_uuid = sharedUuid;
-            opA.fields.type = match.targetType as TransactionTypeCode;
-            opB.fields.type = match.targetType as TransactionTypeCode;
+            for (const op of [opA, opB]) {
+                // The editor shows a magnitude and lets the type carry the sign (txCreateItemToPendingOp,
+                // the form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so the sign has
+                // to move into the amount before the type changes, or the withdrawal leaves as a deposit.
+                const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
+                op.fields.quantity = signedQty;
+                op.fields.cash = signedCash;
+                op.link_uuid = sharedUuid;
+                op.fields.type = match.targetType as TransactionTypeCode;
+            }
         } else {
             // 1 saved + 1 new (mixed)
             const savedOp = opA.op === 'edit' ? opA : opB;
@@ -2693,22 +2725,46 @@
     // C6 — Promote Suggest: DB candidates ($effect + debounce) + local candidates ($derived)
     // =========================================================================
 
+    /** The id a row is asked under in promote-suggest: its transaction id when saved, a negative id when new. */
+    function suggestKeyOf(op: PendingOp): number {
+        return op.op === 'edit' ? ((op as any).txId as number) : newRowSuggestId(op.createdSeq);
+    }
+
+    /**
+     * The rows the database search is asked about: standalone saved rows not marked for deletion, and
+     * new rows not linked to anything that can be compared (type, broker, date, and an amount or a
+     * quantity: without them the backend skips the "opposite amounts" check and every deposit or
+     * withdrawal of the window would come back). A new row's other side may already be saved — the
+     * overnight account imported a month after the broker account.
+     */
+    function isSuggestable(op: PendingOp): boolean {
+        if (op.pairedWith || getPartnerOp(op.tempId)) return false;
+        if (op.op === 'edit') return !(op as any).markedDelete;
+        const measured = Number(op.fields.cash?.amount ?? 0) !== 0 || Number(op.fields.quantity ?? 0) !== 0;
+        return !op.link_uuid && !!op.fields.type && Number(op.fields.broker_id) > 0 && !!op.fields.date && measured;
+    }
+
     /** Reactive effect: when ops change, debounce-call promote-suggest API for
-     *  standalone edit ops (saved rows without partner). */
+     *  standalone rows, saved and new. */
     $effect(() => {
         if (!open) return;
-        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).markedDelete);
-        if (editStandalone.length === 0) {
+        const asked = ops.filter(isSuggestable);
+        if (asked.length === 0) {
             untrack(() => {
+                suggestAskedKey = '';
+                if (suggestTimer) {
+                    clearTimeout(suggestTimer);
+                    suggestTimer = null;
+                }
                 suggestFromDB = new Map();
             });
             return;
         }
-        const inputs = editStandalone.map((o) => {
+        const inputs = asked.map((o) => {
             const rule = getTypeRule(o.fields.type);
             const {signedQty, signedCash} = applySignRules(o.fields.quantity, o.fields.cash, rule);
             return {
-                id: (o as any).txId as number,
+                id: suggestKeyOf(o),
                 type: o.fields.type,
                 broker_id: o.fields.broker_id,
                 date: o.fields.date,
@@ -2720,11 +2776,14 @@
         });
         const key = JSON.stringify(inputs);
         untrack(() => {
+            suggestAskedKey = key;
             if (key === lastSuggestKey) return;
             if (suggestTimer) clearTimeout(suggestTimer);
             suggestTimer = setTimeout(async () => {
                 try {
                     const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: maxDeltaDays}});
+                    // The rows changed while the request was out (a promote, an edit): this answer is stale.
+                    if (key !== suggestAskedKey) return;
                     const raw = (resp as any).results ?? {};
                     const result = new Map(Object.entries(raw).map(([k, v]) => [Number(k), v as Array<{id: number; broker_id: number; date: string; type: string}>]));
                     // BUG-C7 fix: do NOT filter here — bannerSuggestions and importableSuggestions
@@ -2836,7 +2895,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
+                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule)) && (match.targetType !== 'TRANSFER' || assetQuantitiesCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2871,8 +2930,9 @@
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
                 if (!match) continue;
-                // CASH_TRANSFER: amounts must cancel. FX_CONVERSION: different currencies, no cancel check.
+                // CASH_TRANSFER: amounts must cancel. TRANSFER: same asset, quantities must cancel. FX_CONVERSION: different currencies, no cancel check.
                 if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) continue;
+                if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);
@@ -2886,25 +2946,62 @@
             }
         }
 
+        // New + saved: a side imported now whose other side was saved earlier, both in the editor.
+        // The mixed branch of executePromote links the saved id to the new row's link_uuid.
+        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid);
+        const mixed = mixedPromotePairs(newStandalone, editStandalone, {
+            keyOf: (o) => o.tempId,
+            daysBetween: (a, b) => daysDiff(a.fields.date, b.fields.date),
+            maxDeltaDays,
+            match: (a, b) => {
+                const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
+                if (!match) return null;
+                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
+                if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) return null;
+                return match.targetType;
+            },
+        });
+        for (const pair of mixed) combined.push({tempIdA: pair.newTempId, tempIdB: pair.savedTempId, targetType: pair.targetType});
+
         return combined;
     });
 
-    /** Importable suggestions: DB candidates NOT yet in ops (for 💡 button) */
+    /** The pairs «Merge all» merges: the banner's, in its order, without a pair that shares a row with an earlier one. */
+    let mergeAllPairs = $derived.by(() => {
+        const used = new Set<string>();
+        return bannerSuggestions.filter((sug) => {
+            if (used.has(sug.tempIdA) || used.has(sug.tempIdB)) return false;
+            used.add(sug.tempIdA);
+            used.add(sug.tempIdB);
+            return true;
+        });
+    });
+
+    /**
+     * Importable suggestions: DB candidates NOT yet in ops, for saved and new rows (for 💡 button).
+     * Only rows that would still be asked count: a row merged meanwhile has no counterpart to import.
+     */
     let importableSuggestions = $derived.by(() => {
-        const result: Array<{txId: number; tempId: string; candidates: Array<{id: number; type: string; broker_id: number; date: string}>}> = [];
         const opsEditIds = new Set(ops.filter((o) => o.op === 'edit').map((o) => (o as any).txId as number));
-        for (const [txId, candidates] of suggestFromDB) {
-            const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
-            if (!op) continue;
-            const importable = candidates.filter((c) => !opsEditIds.has(c.id));
-            if (importable.length > 0) {
-                result.push({txId, tempId: op.tempId, candidates: importable});
-            }
-        }
-        return result;
+        const tempIdByKey = new Map(ops.filter(isSuggestable).map((o) => [suggestKeyOf(o), o.tempId]));
+        return importableFromResults(suggestFromDB, (key) => tempIdByKey.get(key), opsEditIds);
     });
 
     let suggestPickerIncludeIds = $derived(new Set(importableSuggestions.flatMap((s) => s.candidates.map((c) => c.id))));
+
+    /** Suggestions the save gate asks about: the lightbulb's candidates until it is opened, the banner's pairs until it is touched. */
+    let unseenSuggestionCount = $derived((suggestPickerSeen ? 0 : importableSuggestions.reduce((n, s) => n + s.candidates.length, 0)) + (promoteBannerSeen ? 0 : bannerSuggestions.length));
+
+    /** «Show the suggestions» of the save gate: the lightbulb's picker if it was never opened, the banner otherwise. */
+    function reviewSuggestions() {
+        confirmSuggestionsOpen = false;
+        if (!suggestPickerSeen && importableSuggestions.length > 0) {
+            openSuggestPicker();
+            return;
+        }
+        promoteBannerSeen = true;
+        document.querySelector('[data-testid="promote-suggest-banner"]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
 
     // =========================================================================
     // FX Implied Rate — reactive market cache for FX_CONVERSION suggestions
@@ -2952,70 +3049,91 @@
         tableRef?.navigateToRowId(tempIdOrDbRef);
     }
 
+    /** The two rows of a suggestion; a saved counterpart joins the grid first when it is not there yet. Null when a row is gone. */
+    function suggestionOps(sug: (typeof allSuggestions)[number]): {opA: PendingOp; opB: PendingOp} | null {
+        const opA = ops.find((o) => o.tempId === sug.tempIdA);
+        if (!opA) return null;
+        if (!sug.isDB) {
+            const opB = ops.find((o) => o.tempId === sug.tempIdB);
+            return opB ? {opA, opB} : null;
+        }
+        if (!sug.dbCandidateId) return null;
+        // DB suggestion: edit → DB candidate. Check if DB candidate is already in ops
+        let opB = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
+        if (!opB) {
+            // Add DB candidate to ops via picker
+            const tx = txStoreGet(sug.dbCandidateId);
+            if (!tx) return null; // TX not in store — can't proceed
+            opB = editOpFromTx(sug.dbCandidateId, {addedViaPicker: true});
+            ops = [...ops, opB];
+        }
+        return {opA, opB};
+    }
+
     /** Trigger promote from a suggestion line (auto-select both ops + invoke handler). */
     function triggerPromoteFromSuggestion(sug: (typeof allSuggestions)[number]) {
-        if (!sug.isDB) {
-            // Local new+new: find both ops by tempId, select them, then promote
-            const opA = ops.find((o) => o.tempId === sug.tempIdA);
-            const opB = ops.find((o) => o.tempId === sug.tempIdB);
-            if (!opA || !opB) return;
-            // Directly execute promote (no need to simulate DataTable selection)
-            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
-            if (!match) return;
-            // Check divergence
-            const descA = opA.fields.description,
-                descB = opB.fields.description;
-            const tagsA = opA.fields.tags,
-                tagsB = opB.fields.tags;
-            const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
-            if (diverges) {
-                const labelA = opA.fields.type;
-                const labelB = opB.fields.type;
-                promoteMergeData = {
-                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
-                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
-                    targetTypeLabel: match.targetLabel,
-                    opA,
-                    opB,
-                };
-                promoteMergeOpen = true;
-            } else {
-                executePromote(opA, opB, {});
-            }
+        const pair = suggestionOps(sug);
+        if (!pair) return;
+        const {opA, opB} = pair;
+        // Directly execute promote (no need to simulate DataTable selection)
+        const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
+        if (!match) return;
+        // Check divergence
+        const descA = opA.fields.description,
+            descB = opB.fields.description;
+        const tagsA = opA.fields.tags,
+            tagsB = opB.fields.tags;
+        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
+        if (diverges) {
+            const labelA = sug.isDB ? `#${(opA as any).txId ?? ''} ${opA.fields.type}` : opA.fields.type;
+            const labelB = sug.isDB ? `#${(opB as any).txId ?? ''} ${opB.fields.type}` : opB.fields.type;
+            promoteMergeData = {
+                txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
+                txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
+                targetTypeLabel: match.targetLabel,
+                opA,
+                opB,
+            };
+            promoteMergeOpen = true;
         } else {
-            // DB suggestion: edit → DB candidate
-            const opA = ops.find((o) => o.tempId === sug.tempIdA);
-            if (!opA || !sug.dbCandidateId) return;
-            // Check if DB candidate is already in ops
-            let opB = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
-            if (!opB) {
-                // Add DB candidate to ops via picker
-                const tx = txStoreGet(sug.dbCandidateId);
-                if (!tx) return; // TX not in store — can't proceed
-                opB = editOpFromTx(sug.dbCandidateId, {addedViaPicker: true});
-                ops = [...ops, opB];
-            }
-            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
-            if (!match) return;
-            const descA = opA.fields.description,
-                descB = opB.fields.description;
-            const tagsA = opA.fields.tags,
-                tagsB = opB.fields.tags;
-            const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
+            executePromote(opA, opB, {});
+        }
+    }
+
+    /** A row already merged with another: a second suggestion on it must not promote it again. */
+    function isPaired(op: PendingOp): boolean {
+        return !!op.pairedWith || !!getPartnerOp(op.tempId);
+    }
+
+    /**
+     * «Merge all» of the banner: every suggested pair at once. Where the two rows of a pair differ in
+     * description or tags, one answer settles all of them: the left row's (the one the banner lists
+     * first), the right row's, or both combined — PromoteMergeModal's default.
+     */
+    function mergeAllSuggestions(strategy: PromoteAllStrategy) {
+        promoteAllOpen = false;
+        for (const sug of [...mergeAllPairs]) {
+            const rawA = ops.find((o) => o.tempId === sug.tempIdA);
+            if (!rawA || isPaired(rawA)) continue;
+            const rawB = ops.find((o) => o.tempId === sug.tempIdB);
+            if (rawB && isPaired(rawB)) continue;
+            // The banner's own order: the negative-cash row first when both rows carry cash.
+            const swapped = !!(rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0);
+            const pair = suggestionOps(sug);
+            if (!pair || isPaired(pair.opB)) continue;
+            const {opA, opB} = pair;
+            if (!findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB))) continue;
+            const [left, right] = swapped ? [opB, opA] : [opA, opB];
+            const leftTags = left.fields.tags ?? [];
+            const rightTags = right.fields.tags ?? [];
+            const diverges = left.fields.description !== right.fields.description || JSON.stringify(leftTags) !== JSON.stringify(rightTags);
+            let resolved: Record<string, unknown> = {};
             if (diverges) {
-                const labelA = `#${(opA as any).txId ?? ''} ${opA.fields.type}`;
-                const labelB = `#${(opB as any).txId ?? ''} ${opB.fields.type}`;
-                promoteMergeData = {
-                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
-                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
-                    targetTypeLabel: match.targetLabel,
-                    opA,
-                    opB,
-                };
-                promoteMergeOpen = true;
-            } else {
-                executePromote(opA, opB, {});
+                if (strategy === 'left') resolved = {description: left.fields.description, tags: [...leftTags]};
+                else if (strategy === 'right') resolved = {description: right.fields.description, tags: [...rightTags]};
+                else resolved = {description: mergeStrings(left.fields.description ?? '', right.fields.description ?? ''), tags: mergeTagSets(leftTags, rightTags)};
             }
+            executePromote(opA, opB, resolved);
         }
     }
 
@@ -3210,8 +3328,16 @@
                 </InfoBanner>
             {/if}
             {#if bannerSuggestions.length > 0}
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner">
-                    <div class="font-medium text-green-800 dark:text-green-200 mb-1.5">{$t('transactions.promoteSuggest.detected')}</div>
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner" onclickcapture={() => (promoteBannerSeen = true)}>
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <span class="font-medium text-green-800 dark:text-green-200">{$t('transactions.promoteSuggest.detected')}</span>
+                        {#if mergeAllPairs.length > 1}
+                            <button type="button" class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded bg-libre-green text-white hover:bg-libre-green/90 font-medium" onclick={() => (promoteAllOpen = true)} data-testid="promote-suggest-merge-all">
+                                <Link2 size={12} />
+                                {$t('transactions.promoteSuggest.mergeAll', {values: {n: mergeAllPairs.length}})}
+                            </button>
+                        {/if}
+                    </div>
                     <ul class="space-y-1.5">
                         {#each bannerSuggestions.slice(0, 5) as sug, idx}
                             {@const rawA = ops.find((o) => o.tempId === sug.tempIdA)}
@@ -3503,6 +3629,29 @@
     onCancel={() => (confirmWarningsOpen = false)}
     zIndex={70}
 />
+
+<!-- Save gate: merge suggestions nobody looked at (the lightbulb never opened, the banner never
+     touched). «Save anyway» goes on to the fields to verify; the other answer shows them. -->
+<ConfirmModal
+    open={confirmSuggestionsOpen}
+    title={$t('transactions.bulk.unseenSuggestionsTitle')}
+    message={$t('transactions.bulk.unseenSuggestionsMessage', {values: {n: unseenSuggestionCount}})}
+    confirmText={$t('importWizard.todoWarningConfirmProceed')}
+    cancelText={$t('transactions.bulk.unseenSuggestionsReview')}
+    warning
+    testId="tx-bulk-unseen-suggestions"
+    onConfirm={() => {
+        confirmSuggestionsOpen = false;
+        suggestPickerSeen = true;
+        promoteBannerSeen = true;
+        requestCommitPastSuggestions();
+    }}
+    onCancel={reviewSuggestions}
+    zIndex={70}
+/>
+
+<!-- «Merge all» of the banner: one answer for every suggested pair. -->
+<PromoteAllModal open={promoteAllOpen} count={mergeAllPairs.length} onConfirm={mergeAllSuggestions} onCancel={() => (promoteAllOpen = false)} />
 
 <!-- Bugfix-3 §C11: confirm dialog when closing with unsaved changes. -->
 <ConfirmModal
