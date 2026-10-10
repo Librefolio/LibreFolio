@@ -1,17 +1,17 @@
-# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Commissioni e Tasse ![](../../../static/icons/transactions/tax.png){: width="32" style="vertical-align: middle;" }
+# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Commissioni e Imposte ![](../../../static/icons/transactions/tax.png){: width="32" style="vertical-align: middle;" }
 
-Le **commissioni** e le **tasse** rappresentano costi che riducono il valore del tuo portafoglio. Sono tipi di transazione separati per distinguere tra i costi addebitati dal broker e gli obblighi imposti dal governo.
+Le **commissioni** e le **imposte** rappresentano costi che riducono il valore del tuo portafoglio. Sono tipi di transazione separati per distinguere tra i costi addebitati dal broker e gli obblighi imposti dal governo.
 
 ---
 
 ## 🔑 Proprietà Chiave
 
-| Proprietà | Commissione | Tassa |
+| Proprietà | Commissione | Imposta |
 |----------|-----|-----|
 | **Codice** | `FEE` | `TAX` |
 | **Effetto cassa** | ⬇️ Diminuisce il saldo | ⬇️ Diminuisce il saldo |
 | **Effetto asset** | — | — |
-| **Esempi** | Commissione, costo di custodia, spread | Tassa sulle plusvalenze, ritenuta d'acconto, imposta di bollo |
+| **Esempi** | Commissione, costo di custodia, spread | Imposta sulle plusvalenze, ritenuta d'acconto, imposta di bollo |
 
 ---
 
@@ -22,25 +22,25 @@ Le **commissioni** e le **tasse** rappresentano costi che riducono il valore del
 | **Commissione di trading** | Costo per operazione addebitato dal broker | Per transazione |
 | **Costo di custodia** | Canone di mantenimento del conto | Mensile/Trimestrale |
 | **Spread** | Differenza tra prezzo bid e ask | Implicito per operazione |
-| **Commissione di conversione FX** | Costo della conversione valutaria | Per conversione |
+| **Commissione di conversione FX** | Costo della conversione di valuta | Per conversione |
 | **Commissione di gestione (TER)** | Spesa annuale di ETF/Fondo | Detratta dal NAV |
 
 ---
 
-## 💰 Tipi di Tasse
+## 💰 Tipi di imposte
 
-| Tipo di Tassa | Descrizione | Quando viene addebitata |
+| Tipo di imposta | Descrizione | Quando viene addebitata |
 |----------|-------------|-------------|
-| **Tassa sulle plusvalenze** | Tassa sul profitto realizzato dalla vendita | Alla vendita |
-| **Ritenuta d'acconto** | Tassa detratta alla fonte (dividendi, interessi) | Al pagamento |
-| **Imposta di bollo** | Tassa di transazione (es. stamp duty nel Regno Unito) | All'acquisto |
-| **Tassa sulle transazioni finanziarie** | Tassa sulle operazioni (es. Tobin tax italiana) | All'operazione |
+| **Imposta sulle plusvalenze** | Imposta sul profitto realizzato dalla vendita | Alla vendita |
+| **Ritenuta d'acconto** | Imposta trattenuta alla fonte (dividendi, interessi) | Al pagamento |
+| **Imposta di bollo** | Imposta sulle transazioni (es. stamp duty nel Regno Unito) | All'acquisto |
+| **Imposta sulle transazioni finanziarie** | Imposta sulle operazioni (es. Tobin tax italiana) | All'operazione |
 
 ---
 
 ## 📐 Impatto sui Rendimenti
 
-Commissioni e tasse riducono direttamente il tuo rendimento netto. La relazione tra performance lorda e netta è:
+Commissioni e imposte riducono direttamente il tuo rendimento netto. La relazione tra performance lorda e netta è:
 
 $$
 R_{net} = R_{gross} - \frac{\text{Commissioni} + \text{Tasse}}{V_{start}}
@@ -52,7 +52,7 @@ Dove:
 - $R_{net}$ = rendimento dopo i costi (ciò che effettivamente trattieni)
 - $V_{start}$ = valore del portafoglio all'inizio del periodo
 
-!!! note "Come LibreFolio attribuisce commissioni e tasse"
+!!! note "Come LibreFolio attribuisce commissioni e imposte"
 
     Una `FEE` / `TAX` **collegata a un asset** viene allocata ai lotti specifici a cui si riferisce e determina il
     **P&L netto / rendimento netto** di quel lotto (vedi
@@ -91,4 +91,4 @@ Dove:
 - 📈 **[Rendimenti e Tassi di Crescita](../../fundamentals/returns.md)** — Come vengono misurati i rendimenti (lordi vs netti)
 - 💰 **[Tassazione](../../fundamentals/taxation.md)** — Teoria completa della tassazione ed efficienza fiscale
 - 🛒 **[Acquisto e Vendita](buy-sell.md)** — Commissioni di trading associate alle transazioni
-- 💱 **[Conversione valutaria](fx-conversion.md)** — Spread FX nascosti come commissioni implicite
+- 💱 **[Conversione di valuta](fx-conversion.md)** — Spread FX nascosti come commissioni implicite

@@ -148,9 +148,9 @@ $$
 
 ---
 
-## 🖥️ Integración en la UI y uso en el panel de control
+## 🖥️ Integración en la UI y uso en el Panel
 
-LibreFolio muestra estas métricas de rendimiento en el panel de control:
+LibreFolio muestra estas métricas de rendimiento en el Panel:
 
 ### 📊 de porcentaje (`%`)
 Las series trazadas utilizan el **MWRR Acumulado**, el **TWRR Acumulado** y el **ROI Simple**. Esto permite una comparación visual directa, ya que las tres series comienzan en 0% y representan el progreso total a lo largo del período seleccionado.

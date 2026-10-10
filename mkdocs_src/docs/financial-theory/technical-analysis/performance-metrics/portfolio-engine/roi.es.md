@@ -46,4 +46,4 @@ La ventana comienza en la primera transacción que afecta al lote: COMPRA, VENTA
 
 ## ⚠️ La Limitación: Dilución por Flujo de Efectivo
 
-El ROI simple sigue siendo sensible a la cantidad y el momento del capital agregado. Si se agrega una contribución grande después de que ya ocurrieron ganancias, el ratio puede caer aunque el valor de mercado no lo haya hecho. Utilice [PyG del Período](period-pnl.md), [TWRR](twrr.md) y [MWRR](mwrr.md) para separar la ganancia absoluta, el rendimiento de la estrategia y el rendimiento del inversor ponderado por dinero.
+El ROI simple sigue siendo sensible a la cantidad y el momento del capital agregado. Si se agrega una contribución grande después de que ya ocurrieron ganancias, el ratio puede caer aunque el valor de mercado no lo haya hecho. Utilice [P&L del período](period-pnl.md), [TWRR](twrr.md) y [MWRR](mwrr.md) para separar la ganancia absoluta, el rendimiento de la estrategia y el rendimiento del inversor ponderado por dinero.

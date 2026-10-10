@@ -18,6 +18,13 @@ Pasa el cursor sobre tu avatar (con la pestaña desbloqueada) y haz clic en la s
 
 El avatar se guarda inmediatamente y se utiliza en toda la aplicación allí donde se muestra tu identidad — barra lateral, uso compartido de brókeres y listas de colaboradores.
 
+!!! note "También desde la página de Bienvenida"
+
+    Las cuentas nuevas pueden elegir la misma imagen una sola vez, durante la **[configuración de
+    bienvenida del primer inicio de sesión](../getting-started.md#welcome-setup)**: es el
+    mismo selector, solo que abierto desde otra pantalla. Si omites ese paso, tus iniciales quedan
+    como avatar; siempre puedes añadir o cambiar una imagen más tarde desde aquí.
+
 ## ✏️ Nombre de usuario, Correo electrónico, Cuenta creada
 
 - **Nombre de usuario** y **Correo electrónico** son editables (se requiere la pestaña desbloqueada). Los cambios se aplican de inmediato a tus credenciales de inicio de sesión.
@@ -59,6 +66,6 @@ Si la eliminación falla por un motivo técnico, no se elimina nada.
 ## 🔗 Relacionados
 
 - 🎛️ **[Preferencias de usuario](preferences.md)** — Idioma, moneda base y tema
-- ⚙️ **[Descripción general de Configuración](index.md)** — Resumen general de la configuración
+- ⚙️ **[Resumen de configuración](index.md)** — Resumen general de la configuración
 - ℹ️ **[Acerca de](about.md)** — Información de versión, plugins y changelog
 - 🛡️ **[Configuración global](../../admin/settings.md)** — Opciones de toda la instancia (admin)

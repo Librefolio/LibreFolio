@@ -69,5 +69,5 @@ Ciò accade perché le obbligazioni esistenti con cedole più basse diventano me
 
 - 📈 **[Eventi di Interesse](../asset-events/interest.md)** — Pagamenti delle cedole e maturazione
 - 🏁 **[Regolamento a Scadenza](../asset-events/maturity-settlement.md)** — Restituzione del capitale a fine vita
-- 📊 **[Aggiustamento del Prezzo](../asset-events/price-adjustment.md)** — Mark-to-market e svalutazioni
+- 📊 **[Rettifica prezzo](../asset-events/price-adjustment.md)** — Mark-to-market e svalutazioni
 - 📅 **[Convenzioni di Conteggio dei Giorni](../../fundamentals/day-count.md)** — Come viene calcolato l'interesse maturato

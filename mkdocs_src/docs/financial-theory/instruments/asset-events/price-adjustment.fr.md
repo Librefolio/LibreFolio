@@ -87,6 +87,6 @@ $$
 
 ## 🔗 Liens connexes
 
-- 📅 **[Aperçu des événements d'actifs](index.md)** — Tous les types d'événements
+- 📅 **[Vue d'ensemble des événements d'actifs](index.md)** — Tous les types d'événements
 - 📈 **[Intérêts](interest.md)** — Paiements d'intérêts périodiques
 - 🏁 **[Règlement à l'échéance](maturity-settlement.md)** — Retour final du capital

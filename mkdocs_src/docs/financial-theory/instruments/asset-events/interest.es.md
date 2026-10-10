@@ -151,7 +151,7 @@ Para los activos de proveedores de **inversión programada**, los eventos de int
 
 ## 🔗 Relacionado
 
-- 📅 **[Descripción general de eventos de activos](index.md)** — Todos los tipos de eventos
+- 📅 **[Resumen de eventos de activos](index.md)** — Todos los tipos de eventos
 - 📆 **[Convenciones de conteo de días](../../fundamentals/day-count.md)** — Cómo se calculan los períodos de devengo de intereses
 - 🏁 **[Liquidación al Vencimiento](maturity-settlement.md)** — Retorno final del principal al vencimiento del bono
 - 📈 **[Tasas de Retorno y Crecimiento](../../fundamentals/returns.md)** — Medición del retorno total

@@ -17,7 +17,7 @@ Ces deux acteurs peuvent avoir des performances très différentes. Vous pourrie
 
 ## 📚 Sujets de ce chapitre
 
-Les métriques de performance de LibreFolio sont organisées autour de trois moteurs de calcul. Chacun possède sa propre page d'aperçu avec le modèle mathématique complet.
+Les métriques de performance de LibreFolio sont organisées autour de trois moteurs de calcul. Chacun possède sa propre page de vue d'ensemble avec le modèle mathématique complet.
 
 ### ⚙️ Moteur de portefeuille
 
@@ -25,12 +25,12 @@ Comptabilité agrégée basée sur le PRU pour l'ensemble du portefeuille (ou to
 
 | Métrique / Concept | Description |
 |------------------|-------------|
-| **[Aperçu du moteur de portefeuille](portfolio-engine/index.md)** | Modèle mathématique complet : résolveur de prix unifié, PRU, agrégation, modèle à 3 pools, contribution, architecture pre-frame/frame. |
+| **[Vue d'ensemble du moteur de portefeuille](portfolio-engine/index.md)** | Modèle mathématique complet : résolveur de prix unifié, PRU, agrégation, modèle à 3 pools, contribution, architecture pre-frame/frame. |
 | **[Résolution des prix](portfolio-engine/price-resolution.md)** | Niveaux du résolveur unifié : MARKET → TRADE_AVG → CARRIED → MISSING, avec valorisations natives et FX par date. |
 | **[Valeur nette d'inventaire (NAV)](portfolio-engine/nav.md)** | Valorisation totale au prix du marché du portefeuille (actifs + liquidités + en transit), à l'aide du résolveur unifié. |
 | **[Valeur comptable](portfolio-engine/book-value.md)** | Coût comptable historique des positions ouvertes (PRU × quantité) plus les liquidités. La différence avec la NAV = P&L non réalisé. |
 | **[P&L de période](portfolio-engine/period-pnl.md)** | Profit/perte monétaire ajusté des flux de trésorerie sur une fenêtre. Se décompose en : delta non réalisé + réalisé + revenus − frais. Inclut l'attribution de contribution par actif. |
-| **[Capital déposé et P&L total](portfolio-engine/deposited-capital.md)** | Capital externe net depuis la création. Documente le modèle de décomposition de trésorerie **événementiel à 3 pools** (K, R, W) avec des règles de mise à jour formelles au niveau des transactions. |
+| **[Capital versé et P&L total](portfolio-engine/deposited-capital.md)** | Capital externe net depuis la création. Documente le modèle de décomposition de trésorerie **événementiel à 3 pools** (K, R, W) avec des règles de mise à jour formelles au niveau des transactions. |
 | **[Effet de timing](portfolio-engine/timing-effect.md)** | Différence entre le MWRR cumulé et le TWRR cumulé — quantifie l'impact du timing des flux de trésorerie sur les rendements. |
 | **[ROI simple](portfolio-engine/roi.md)** | Rendement en pourcentage par rapport au capital net investi. Simple mais sujet à la dilution des flux de trésorerie. |
 | **[Rendement net annualisé](portfolio-engine/net-annualized-return.md)** | Définitions du CAGR net pour les positions, la contribution de période et les lots FIFO, avec une fenêtre minimale de 30 jours. |
@@ -44,7 +44,7 @@ Comptabilité par lot : suit chaque lot d'acquisition à travers son propre cycl
 
 | Métrique / Concept | Description |
 |------------------|-------------|
-| **[Aperçu du moteur FIFO](fifo-engine/index.md)** | États du cycle de vie des lots, traitement chronologique des événements, appariement FIFO, divisions et transferts entre courtiers. |
+| **[Vue d'ensemble du moteur FIFO](fifo-engine/index.md)** | États du cycle de vie des lots, traitement chronologique des événements, appariement FIFO, divisions et transferts entre courtiers. |
 | **[Analyse des lots FIFO](fifo-engine/fifo-lot-analysis.md)** | Complément par lot au PRU : suit chaque lot d'acquisition à travers son propre cycle de vie, apparie les ventes dans l'ordre FIFO et calcule le rendement ouvert/total par lot. |
 
 ### 📊 Prix de revient unitaire (PRU)
@@ -87,7 +87,7 @@ Pour vous aider à choisir la métrique adaptée à votre analyse, utilisez ce g
 ### ⏱️ 6. [TWRR (Taux de rendement pondéré en fonction du temps)](portfolio-engine/twrr.md)
 * **Question Clé :** « Comment mon allocation d'actifs/stratégie choisie a-t-elle performé, en ignorant le timing de mes liquidités ? »
 * **Concept de Formule :** Découpe la chronologie à chaque flux de trésorerie, calcule les rendements de sous-périodes et les multiplie.
-* **Meilleur Cas d'Usage :** Comparer votre performance avec des benchmarks externes (comme le S&P 500) ou évaluer la performance pure des actifs.
+* **Meilleur Cas d'Usage :** Comparer votre performance avec des indices de référence externes (comme le S&P 500) ou évaluer la performance pure des actifs.
 
 ### 📈 7. [MWRR annualisé (Taux de rendement pondéré par les capitaux)](portfolio-engine/mwrr.md#annualized-mwrr)
 * **Question Clé :** « À quel taux annuel composé mon capital réel a-t-il augmenté, en tenant compte de mes dépôts et retraits ? »
@@ -172,6 +172,6 @@ En plaçant le TWRR et le MWRR côte à côte sur votre tableau de bord, LibreFo
 Pour faciliter la navigation, les trois cartes KPI du tableau de bord LibreFolio — **P&L de période**, **Rendements** et **Valeur nette** — comportent chacune une icône d'aide. L'accès à ces chapitres théoriques se fait en deux étapes :
 
 1. L'icône d'aide ouvre la section correspondante de la page [Cartes KPI](../../../user/dashboard/kpi-cards.md) du guide utilisateur ([Carte 1](../../../user/dashboard/kpi-cards.md#card-1-period-pl), [Carte 2](../../../user/dashboard/kpi-cards.md#card-2-returns), [Carte 3](../../../user/dashboard/kpi-cards.md#card-3-net-worth)).
-2. De là, chaque métrique renvoie à son chapitre de théorie financière : [P&L de période](portfolio-engine/period-pnl.md), [Valeur comptable](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Effet de timing](portfolio-engine/timing-effect.md), [NAV / Valeur nette](portfolio-engine/nav.md), [Capital déposé et P&L total](portfolio-engine/deposited-capital.md).
+2. De là, chaque métrique renvoie à son chapitre de théorie financière : [P&L de période](portfolio-engine/period-pnl.md), [Valeur comptable](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Effet de timing](portfolio-engine/timing-effect.md), [NAV / Valeur nette](portfolio-engine/nav.md), [Capital versé et P&L total](portfolio-engine/deposited-capital.md).
 
 Ailleurs dans l'application, l'aperçu du PRU dans le formulaire de transaction renvoie directement au chapitre [Prix de revient unitaire (PRU)](weighted-average-cost.md), le tableau des positions renvoie sa colonne YOC à [Rendement sur coût](portfolio-engine/yield-on-cost.md), et chaque signal/indicateur de graphique renvoie à sa propre page de théorie.

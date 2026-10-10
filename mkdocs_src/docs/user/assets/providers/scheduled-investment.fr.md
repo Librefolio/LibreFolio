@@ -1,71 +1,101 @@
-# <img src="../../../../../static/scheduled_investment.png" alt=""> Fournisseur d'Investissement à échéancier
+# <img src="../../../../static/scheduled_investment.png" alt=""> Investissement programmé
 
-Le fournisseur d'Investissement à échéancier (Scheduled Investment) est conçu pour les instruments à revenu fixe dont la valeur est calculée à partir d'un calendrier de taux d'intérêt plutôt que sur les prix du marché. Les exemples incluent les comptes d'épargne, les dépôts à terme et les obligations d'État avec des taux de coupon connus.
+Le fournisseur Investissement programmé calcule la valeur d'un actif à partir de son calendrier
+d'intérêts plutôt qu'en lisant un prix de marché. Utilisez-le pour les comptes d'épargne, les dépôts
+à terme, les prêts P2P ou de crowdfunding, et les obligations que vous suivez via leurs intérêts
+courus. Dans la liste **Fournisseur**, il s'appelle **Calculateur d'investissement programmé**.
 
-## 📊 Capacités
+## 🔍 Ce qu'il propose
 
-- ✅ **Prix actuel** : Calculé de manière déterministe à partir de la valeur initiale + calendrier d'intérêts + événements de l'actif
-- ✅ **Historique** : Courbe de valeur historique complète basée sur l'accumulation des intérêts
-- ✅ **Événements de l'actif** : Génère des événements INTEREST et PRICE_ADJUSTMENT
-- ❌ **Recherche** : Non applicable
+- ✅ **Prix actuel** et **historique**, calculés à partir de votre calendrier : aucun site web n'est
+  interrogé, et le même calendrier donne toujours les mêmes valeurs.
+- ✅ **Événements** : avec **Générer le coupon**, les versements d'intérêts et un règlement final à
+  l'échéance, plus les événements que vous ajoutez vous-même.
+- ❌ **Recherche** et **détails** : non applicables. Il n'y a pas non plus d'identifiant à saisir :
+  LibreFolio en crée un pour vous.
 
-## 🔧 Configuration
+## 📋 Éditeur de calendrier d'intérêts {: #interest-schedule-editor }
 
-- **Identifiant** : Auto-généré (aucun identifiant manuel requis)
-- **Type d'identifiant** : `AUTO_GENERATED`
-- **Paramètres** : Configurés via l'**Éditeur de calendrier d'intérêts** (composant UI personnalisé)
+Choisir le fournisseur dans **Affectation du fournisseur** ouvre l'éditeur **Calendrier
+d'intérêts**. Commencez par les paramètres valables pour l'ensemble du calendrier :
 
-### Champs Obligatoires
+- **Valeur initiale** et **Devise** : le montant investi, ou la valeur nominale — par ex. 10 000 EUR.
+- **Type d'intérêt** : **Simple** ou **Composé** — voir
+  [Comment la valeur est calculée](#how-value-is-calculated).
+- **Décompte des jours** : la façon dont les jours d'une année sont comptés — **ACT/365**,
+  **ACT/360**, **ACT/ACT** ou **30/360**. Voir
+  [Conventions de décompte des jours](../../../financial-theory/fundamentals/day-count.md).
 
-| Champ | Description |
-|-------|-------------|
-| **Valeur Initiale** | Le principal / la valeur nominale de l'investissement (ex: 10000) |
-| **Devise** | Code devise ISO 4217 (ex: EUR, USD) |
+Ajoutez ensuite les périodes avec **Ajouter la première période**, puis **Ajouter une période**
+pour les suivantes :
 
-## 📋 Éditeur de calendrier d'intérêts
+| Colonne | Ce qu'il faut saisir |
+|---|---|
+| **Période** | Date de début et date de fin, toutes deux incluses |
+| **Taux %** | Le taux annuel en pourcentage : `5.00` signifie 5 % par an |
+| **Fréquence** | La fréquence à laquelle les intérêts arrivent à échéance : Quotidienne, Hebdomadaire, Mensuelle, Trimestrielle, Semestrielle ou Annuelle |
+| **Générer le coupon** | Cochez cette case pour verser les intérêts courus à chaque date d'échéance |
 
-L'éditeur vous permet de définir plusieurs périodes de taux d'intérêt :
-
-| Champ | Description |
-|-------|-------------|
-| **Période** | Date de début et de fin (les deux incluses) |
-| **Taux %** | Taux d'intérêt annuel en pourcentage (ex: 5.00 = 5%) |
-| **Capitalisation** | Intérêts simples ou composés |
-| **Fréq. Cap.** | Fréquence de capitalisation (Annuelle, Semestrielle, Trimestrielle, Mensuelle, Quotidienne) |
-| **Comptage des jours** | Convention de comptage des jours (ACT/365, ACT/360, 30/360, ACT/ACT) |
+Les périodes doivent se suivre, sans lacunes ni chevauchements. **Scinder** coupe une période en
+deux ; sélectionnez des périodes voisines et cliquez sur **Fusionner** pour les réunir.
 
 ### ⚡ Intérêts de retard {: #late-interest }
 
-Vous pouvez activer les **Intérêts de retard** pour définir un taux de pénalité appliqué après la fin de la dernière période programmée. Un **délai de grâce** configurable (en jours) s'applique d'abord ; ensuite, les intérêts de retard commencent à courir.
+Pour un prêt remboursé en retard, activez **⚡ Intérêts de retard** sous les périodes : l'actif
+continue de croître après la fin de la dernière période. Une ligne de retard apparaît avec son
+propre **Taux %**, sa **Fréquence** et son **Générer le coupon**. Cliquez sur sa période pour
+définir les jours de grâce, et choisissez **Simple** ou **Composé** (par défaut) à côté de
+l'interrupteur.
 
-## 📋 Événements de l'actif
+- Pendant les jours de grâce, les intérêts continuent de courir au taux de la dernière période.
+- Passé ce délai, le taux de retard s'applique.
 
-Les événements de l'actif décrivent des éléments qui affectent l'actif globalement (et non des transactions au niveau du portefeuille) :
+### 📅 Événements de l'actif
 
-| Type d'événement | Effet sur le prix | Description |
-|-----------|----------------|-------------|
-| **INTEREST** | Le prix baisse de la valeur de l'événement | Versement d'intérêts — l'utilisateur a reçu des liquidités, donc la valeur de l'actif diminue |
-| **PRICE_ADJUSTMENT** | Changement algébrique | Dépréciation (négative) ou appréciation (positive) de la valeur de l'actif |
+Ajoutez des événements ponctuels avec **Ajouter un événement** : une **Date**, un **Type**, une
+**Valeur** et des **Notes** facultatives. Chaque événement est pris en compte à partir de sa date.
 
-Les événements sont configurés dans l'éditeur et affectent le prix calculé à partir de leur date.
+| Type | Effet sur la valeur |
+|---|---|
+| **Intérêt** | Un versement d'intérêts que vous avez reçu : la valeur diminue de ce montant |
+| **Ajustement de prix** | Une dépréciation (négative) ou une revalorisation (positive) |
 
-## 🧮 Comment la valeur est calculée
+## 🧮 Comment la valeur est calculée {: #how-value-is-calculated }
 
-1. Partez de `initial_value` comme principal de base
-2. Pour chaque période d'intérêt, calculez les intérêts courus en fonction du taux, du type de capitalisation et de la convention de comptage des jours
-3. Appliquez les événements de l'actif : les événements INTEREST réduisent le prix, les événements PRICE_ADJUSTMENT le modifient algébriquement
-4. La valeur actuelle = `initial_value` + intérêts courus - Σ(événements INTEREST) + Σ(événements PRICE_ADJUSTMENT)
+LibreFolio parcourt le calendrier jour par jour. Au jour $d$, la valeur est
 
-Si `late_interest` est configuré, le fournisseur continue au-delà de l'échéance en utilisant d'abord la branche du délai de grâce, puis la branche des intérêts de retard ; si `generate_interest` est activé, il émet également des événements `INTEREST` tardifs et un `MATURITY_SETTLEMENT` final, le cas échéant.
+$$
+V(d) = V_0 + I(d) - \sum \text{Événements d'intérêt} + \sum \text{Ajustements de prix}
+$$
 
-!!! note "Moteur Purement Déterministe"
+où $V_0$ est la **Valeur initiale**, $I(d)$ les intérêts courus jusqu'ici, et les sommes couvrent
+les événements jusqu'au jour $d$. Chaque jour ajoute des intérêts au taux annuel de la période $r$
+sur $\Delta t$, soit la part d'un jour dans l'année selon le **Décompte des jours** (par exemple
+$1/365$ avec ACT/365) :
 
-    Le fournisseur est complètement déterministe — pour une configuration identique, il produit toujours les mêmes prix. Il n'accède PAS à la base de données et ne lit pas les transactions. Toutes les entrées proviennent de `provider_params`.
+- **Simple** — les intérêts portent uniquement sur la valeur initiale : $\Delta I = V_0 \, r \, \Delta t$
+- **Composé** — les intérêts portent aussi sur les intérêts déjà courus : $\Delta I = (V_0 + I) \, r \, \Delta t$
 
-## 🎯 Cas d'utilisation
+Avec **Générer le coupon**, à chaque date d'échéance, le gain $V(d) - V_0$, lorsqu'il est positif,
+est versé sous forme d'événement d'intérêt : la valeur repart de $V_0$, et $I$ ainsi que les sommes
+repartent de zéro.
 
-- **Comptes d'épargne** avec taux d'intérêt fixes ou variables
-- **Dépôts à terme** (CD/Depositi vincolati)
-- **Obligations d'État** où vous souhaitez suivre les intérêts courus plutôt que le prix du marché
-- **Prêts de crowdfunding** (prêts P2P) avec calendriers d'intérêts connus
-- **Tout instrument** disposant d'un calendrier de taux d'intérêt connu
+- **Avant la première période**, la valeur est la Valeur initiale.
+- **Après la dernière période**, elle reste à son montant final, sauf si les intérêts de retard sont
+  activés. Avec **Générer le coupon** sur la dernière période et sans intérêts de retard, un
+  événement de règlement à l'échéance clôture l'actif à ce montant.
+- **Le graphique** reçoit un point à chaque date de **Fréquence** : choisissez **Quotidienne** pour
+  une courbe lissée.
+
+??? example "🧮 Un prêt de 10 000 € à 5 %, avec un coupon chaque mois"
+
+    Intérêts simples, ACT/365, une période commençant le 1er janvier, **Fréquence** Mensuelle,
+    **Générer le coupon** cochée. La première date d'échéance est le 1er février, 31 jours plus tard :
+    le prêt a rapporté environ 42,47 € ($10\,000 \times 0.05 \times 31/365$). Ce montant est versé
+    sous forme d'événement d'intérêt, et la valeur revient à 10 000 € pour croître à nouveau en
+    février.
+
+## 🔗 Voir aussi
+
+- 📅 **[Événements de l'actif](../detail/events.md)** — Comment les événements apparaissent sur le graphique de l'actif
+- 🛠️ **Pour les développeurs : [Fournisseur d'investissement programmé](../../../developer/backend/assets/provider_scheduled_investment.md)** — Moteur, événements et mise en cache

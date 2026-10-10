@@ -1,20 +1,20 @@
 # 🔬 Análisis de Lotes FIFO
 
-El análisis de lotes FIFO es el complemento **por lote** del [precio medio ponderado (PMP)](../weighted-average-cost.md).
+El análisis de lotes FIFO es el complemento **por lote** del [precio medio de compra (PMC)](../weighted-average-cost.md).
 
-El PMP responde: _"¿Cuál es mi precio medio ponderado para esta posición?"_ El análisis de lotes FIFO responde una pregunta diferente: _"¿Cómo se está desempeñando cada lote de compra individual a lo largo del tiempo?"_
+El PMC responde: _"¿Cuál es mi precio medio de compra para esta posición?"_ El análisis de lotes FIFO responde una pregunta diferente: _"¿Cómo se está desempeñando cada lote de compra individual a lo largo del tiempo?"_
 
 En lugar de fusionar todas las adquisiciones en un solo fondo común, LibreFolio rastrea cada lote a través de su propio ciclo de vida — **abierto**, **parcialmente cerrado**, **totalmente cerrado** — y empareja las ventas en orden **FIFO** (primero en entrar, primero en salir).
 
 !!! info "Complemento, no reemplazo"
 
-    El PMP es agregado y a nivel de posición. El análisis de lotes FIFO es granular y a nivel de lote. Ambas vistas son útiles: una para la base de costo combinada, otra para la atribución económica lote por lote.
+    El PMC es agregado y a nivel de posición. El análisis de lotes FIFO es granular y a nivel de lote. Ambas vistas son útiles: una para el coste base combinado, otra para la atribución económica lote por lote.
 
 ---
 
 ## 💡 ¿Qué es el Análisis de Lotes FIFO?
 
-Un **lote** es un lote de adquisición: por ejemplo, una COMPRA de 100 acciones, o una transferencia de entrada que conserva la base de costo histórica.
+Un **lote** es un lote de adquisición: por ejemplo, una COMPRA de 100 acciones, o una transferencia de entrada que conserva el coste base histórico.
 
 Cuando ocurre una VENTA, los lotes aún abiertos más antiguos se cierran primero. Esto crea un historial lote por lote:
 
@@ -57,10 +57,10 @@ Esta métrica excluye dividendos, intereses y producto de venta realizado. Respo
     El fallback es $\text{OpeningUnitPrice}\times qbq$. Para `qbq = 100`, un bono comprado a `0.992` se compara con el eje de cotización de mercado como `99.20`, no como `0.992`.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="Gráfico PMP / Precio de Mercado — una burbuja por lote, coloreada por el bróker de apertura, dimensionada por el valor de apertura, trazada contra la línea de precio de mercado">
+ <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-wac-chart" alt="Gráfico PMC / Precio de Mercado — una burbuja por lote, coloreada por el bróker de apertura, dimensionada por el valor de apertura, trazada contra la línea de precio de mercado">
 </div>
 
-El gráfico **PMP / Precio de Mercado** traza cada lote como una burbuja contra la línea de precio de mercado: el color de la burbuja marca el bróker donde se abrió el lote, el tamaño de la burbuja escala con el valor de apertura del lote. Un lote valorado solo al costo (sin precio de mercado en tiempo real) se dibuja con un contorno discontinuo.
+El gráfico **PMC / Precio de Mercado** traza cada lote como una burbuja contra la línea de precio de mercado: el color de la burbuja marca el bróker donde se abrió el lote, el tamaño de la burbuja escala con el valor de apertura del lote. Un lote valorado solo al costo (sin precio de mercado en tiempo real) se dibuja con un contorno discontinuo.
 
 ---
 
@@ -149,7 +149,7 @@ $$
     - cantidad del lote = `1.000`
     - valor de mercado = `(1.000 / 100) × 101,50 = 1.015,00`
 
-    Si se compara `101,50` directamente con una base de costo por unidad individual como `0,992`, se obtiene un resultado absurdo porque los dos números viven en escalas diferentes.
+    Si se compara `101,50` directamente con un coste base por unidad individual como `0,992`, se obtiene un resultado absurdo porque los dos números viven en escalas diferentes.
 
     La comparación correcta reescala el costo del lote al eje de cotización de mercado:
 
@@ -394,8 +394,8 @@ La **Tabla Unificada de Lotes** enumera exactamente las filas por lote $i$ sobre
 
 ## 🔗 Relacionados
 
-- 📊 **[Precio Medio Ponderado (PMP)](../weighted-average-cost.md)** — vista de base de costo combinada
-- 🔁 **[Compra y Venta](../../../instruments/transaction-types/buy-sell.md#fifo-matching)** — breve descripción general del emparejamiento FIFO
+- 📊 **[Precio Medio de Compra (PMC)](../weighted-average-cost.md)** — vista de coste base combinado
+- 🔁 **[Compra y Venta](../../../instruments/transaction-types/buy-sell.md#fifo-matching)** — breve resumen del emparejamiento FIFO
 - 💸 **[Dividendo e Interés](../../../instruments/transaction-types/dividend-interest.md)** — fuente de los eventos de ingresos vinculados al activo
 - 💰 **[Tributación](../../../fundamentals/taxation.md)** — contexto de plusvalías y emparejamiento de lotes
 - ⚙️ **[Servicio de Análisis de Lotes](../../../../developer/backend/transactions/lots_analysis_service.md)** — inmersión profunda en la implementación para desarrolladores

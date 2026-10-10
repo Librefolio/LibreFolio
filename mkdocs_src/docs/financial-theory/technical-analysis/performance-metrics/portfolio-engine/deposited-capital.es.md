@@ -1,8 +1,8 @@
 # 💸 Capital Depositado, PnL Total y Pools de Efectivo
 
-## 💡 Descripción General del Concepto
+## 💡 Resumen del concepto
 
-**Capital Depositado** = capital externo neto acumulado aportado desde el inicio:
+**Línea base de capital** = capital económico acumulado aportado desde el inicio:
 
 $$
 \mathrm{CapitalBaseline}(t) =
@@ -13,20 +13,22 @@ $$
 **PnL Total** = todo el valor generado por encima de las contribuciones externas:
 
 $$
-\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{DepCap}(t)}
+\boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{CapitalBaseline}(t)}
 $$
+
+`InKindCapital` cubre las filas ADJUSTMENT / TRANSFER valoradas que llevan un `cost_basis_override` sin `asset_event_id` (no las filas de desdoblamiento). Estas filas aportan valor contable sin efectivo, por lo que deben aumentar el capital invertido.
 
 ---
 
 ## 🎯 Qué se contabiliza
 
-| Transacción | Efecto en DepCap |
+| Transacción | Efecto en la línea base de capital |
 |------------|-----------------|
 | DEPÓSITO / RETIRO (sin vincular) | ✅ Sí |
-| TRANSFERENCIA DE EFECTIVO vinculado-externo | ✅ Sí |
-| TRANSFERENCIA DE EFECTIVO vinculado-interno | ❌ No |
-| AJUSTE / TRANSFERENCIA con `cost_basis_override`, sin `asset_id` | ✅ Sí, ajuste de capital externo |
-| AJUSTE vinculado a DIVISION | ❌ No, solo redimensionamiento de cantidad |
+| TRANSFERENCIA DE FONDOS vinculado-externo | ✅ Sí |
+| TRANSFERENCIA DE FONDOS vinculado-interno | ❌ No |
+| AJUSTE / TRANSFERENCIA con `cost_basis_override`, sin `asset_event_id` | ✅ Sí, capital en especie |
+| AJUSTE vinculado a DESDOBLAMIENTO | ❌ No, solo redimensionamiento de cantidad |
 | COMPRA, VENTA, DIVIDENDO, INTERÉS, COMISIÓN, IMPUESTO | ❌ No |
 
 ---
@@ -47,9 +49,9 @@ $$
 
 !!! info "Propiedades clave"
 
-    - $\mathrm{DepCap}$ = suma histórica de todos los flujos. $\sum K_b$ = cuánto del efectivo actual es capital externo. Ambos divergen después de una COMPRA/VENTA.
+    - $\mathrm{CapitalBaseline}$ = suma histórica de los flujos de efectivo y del capital en especie. $\sum K_b$ = cuánto del efectivo actual es capital externo. Ambos divergen después de una COMPRA/VENTA.
     - Una COMPRA en el bróker $b_1$ solo consume $R_{b_1}$, nunca $R_{b_2}$.
-    - Las transferencias de efectivo entre brókers mueven $R$ y $K$ desde el origen al destino sin afectar a $W$.
+    - Las transferencias de fondos entre brókers mueven $R$ y $K$ desde el origen al destino sin afectar a $W$.
 
 🔗 Reglas completas de actualización por bróker: **[Portfolio Engine — §6 Modelo de Efectivo de Tres Pools](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
@@ -109,4 +111,4 @@ La serie de entradas ROI/TWRR/MWRR se deriva de los cambios día a día en `cumu
 - 💼 [NAV](nav.md) — el otro término en el PnL Total
 - 📊 [Period PnL](period-pnl.md) — versión basada en ventanas temporales
 - ⚙️ [Portfolio Engine](index.md) — modelo matemático completo
-- 📈 [Descripción General de Métricas de Rendimiento](../index.md) — todas las métricas de rendimiento de un vistazo
+- 📈 [Resumen de las métricas de rendimiento](../index.md) — todas las métricas de rendimiento de un vistazo

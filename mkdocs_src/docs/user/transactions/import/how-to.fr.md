@@ -12,7 +12,7 @@ transactions étape par étape.
 
 ---
 
-## 🚀 Guide étape par étape
+## 🚀 Guide étape par étape {: #guided-first-import }
 
 1. Exportez un relevé de transactions depuis votre courtier (généralement un fichier CSV — consultez
 le centre d'aide de votre courtier).
@@ -57,6 +57,7 @@ lorsque vos fichiers en ont réellement besoin**. La barre de progression n'affi
 qui s'appliquent à votre importation, si bien qu'un relevé mono-fichier propre reste un parcours
 court, tandis qu'un relevé multi-fichiers en désordre reçoit exactement les questions
 supplémentaires qu'il mérite — et aucune autre.
+{: #only-when-needed }
 
 | Étape | Toujours affichée ? | Apparaît quand |
 | :--- | :--- | :--- |
@@ -227,7 +228,7 @@ colonnes statistiques suivantes marquées par des emojis :
     Chaque groupe est étiqueté **Total** (les fichiers s'accordent sur chaque détail — un pur
     chevauchement) ou **Partiel** (quelque chose diffère, donc il mérite un coup d'œil).
 
-### 📦 Étape 4 : Révision et importation
+### 📦 Étape 4 : Révision et importation {: #review }
 
 La révision finale affiche chaque transaction à importer dans une grille de type tableur, et c'est
 là que chaque instrument est finalement mis en correspondance avec votre bibliothèque.
@@ -284,7 +285,7 @@ détecte l'ambiguïté et propose une action de **fusion** pour intégrer l'un d
        La valeur du fournisseur est présélectionnée, car c'est la seule qui dispose d'un flux de
        cours derrière elle.
 
-#### ⛔ Date d'ouverture du courtier
+#### ⛔ Date d'ouverture du courtier {: #opening-date }
 
 Si le courtier cible a une date d'ouverture, l'assistant marque les lignes datées **strictement
 avant** celle-ci avec le statut `Before opening`. Ces lignes sont décochées et ne peuvent pas être

@@ -1,100 +1,180 @@
-# 🚀 Per iniziare
+# 🚀 Guida introduttiva
 
-Benvenuto in LibreFolio! Questa guida ti accompagna nella registrazione di un account, nell'accesso e nell'importazione del tuo primo estratto conto del broker per popolare immediatamente la tua dashboard.
+Benvenuto in LibreFolio! In pochi passaggi crei il tuo account, fai un rapido tour e importi il tuo
+primo estratto conto del broker — e la tua dashboard si popola da sola.
 
 ---
 
 ## 📝 1. Registra il tuo account
 
-Vai all'URL di LibreFolio (ad es., `http://localhost:6040`) e vedrai la pagina di accesso. Fai clic su **Registrati** per creare un nuovo account.
+Apri l'indirizzo di LibreFolio (ad esempio `http://localhost:6040`): appare la pagina di accesso. Clicca
+**Registrati qui** per creare un account.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Registration Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Modulo di registrazione" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Compila i tuoi dati:
+Inserisci i tuoi dati:
 
-- 👤 **Nome utente**: il tuo nome visualizzato (unico nell'intero sistema)
-- 📧 **Email**: un indirizzo email valido
-- 🔑 **Password**: una password robusta (l'indicatore di robustezza ti aiuta)
+- 👤 **Nome utente** — univoco: accedi con questo.
+- 📧 **Email** — un indirizzo valido; funziona anche per l'accesso.
+- 🔑 **Password** e **Conferma password** — l'indicatore di robustezza ti dice quando la password è
+  abbastanza sicura.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registration with Password Strength" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registrazione con robustezza password" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! info "Primo utente = amministratore"
+!!! info "Primo utente = Amministratore"
 
-    Il primo utente che si registra diventa automaticamente **amministratore di sistema** (superutente). Questo utente può gestire le impostazioni globali, promuovere altri utenti e accedere a tutte le funzionalità di amministrazione.
+    Il primissimo account a registrarsi diventa l'**amministratore**: gestisce le
+    **[Impostazioni globali](../admin/settings.md)** a livello di istanza e ogni funzionalità di amministrazione.
 
 ---
 
 ## 🔐 2. Accedi
 
-Dopo la registrazione, verrai reindirizzato alla pagina di accesso. Inserisci le tue credenziali per accedere alla tua dashboard.
+Dopo la registrazione, torni alla pagina di accesso. Accedi con il tuo nome utente (o email) e la tua
+password.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="auth" data-name="01-login" alt="Pagina di accesso" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🏦 3. Importa il tuo primo estratto conto (crea broker e asset al volo)
+## 🎉 3. Configurazione iniziale e tour rapido {: #welcome-setup }
 
-Al primo accesso, ti accoglierà una dashboard vuota, senza alcun dato.
+La prima volta che accedi, LibreFolio apre una pagina di **Benvenuto** prima della dashboard:
 
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Empty Dashboard" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+- 🌍 Controlla **Lingua** e **Valuta predefinita**: partono dai valori predefiniti del tuo amministratore.
+- 🖼️ Aggiungi un'**immagine del profilo** se vuoi — altrimenti vengono mostrate le tue iniziali.
+- ✅ Clicca **Continua** per salvare, oppure **Salta configurazione in modo permanente** per mantenere le impostazioni attuali.
+- 🚪 Devi uscire? **Esci** è in alto a destra.
+
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La pagina di Benvenuto al primo avvio: il blocco dell'immagine del profilo con l'avatar delle iniziali e Scegli immagine, Lingua e Valuta predefinita precompilate, la nota che la preferenza del tema resta invariata, e Salta configurazione in modo permanente e Continua" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-In LibreFolio, il modo più rapido per iniziare è importare direttamente la cronologia delle tue transazioni. Non è necessario configurare in anticipo broker o asset: il sistema li creerà automaticamente per te durante il processo di importazione!
+Segue una breve animazione di benvenuto, poi il **Tour rapido** inizia da solo — clicca **Avvia tour**
+per iniziare subito, oppure **✕** per saltarlo. Il tour mostra dove si trovano le cose: il pulsante del menu, poi
+**Dashboard**, **Transazioni**, **Broker**, **FX**, **Asset**, **Strumenti** e **Impostazioni**. Indica
+soltanto: non apre mai un modulo né crea dati.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="core-tour-step" alt="Il Tour rapido sulla Dashboard al passaggio 5 di 8, tassi FX: una cornice e un cursore sulla voce Tassi FX della barra laterale, e il pannello dei messaggi con Indietro e Avanti" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+??? note "👋 Usi già LibreFolio? — account precedenti alle guide"
+
+    Se il tuo account esisteva prima dell'aggiunta delle guide, LibreFolio non te le propone:
+    la configurazione iniziale risulta **Completata**, il tour e ogni guida risultano **Saltati**. Puoi comunque
+    ripetere qualsiasi guida da
+    **[Impostazioni → Preferenze → Primo utilizzo e guide](settings/preferences.md#onboarding-and-guides)**.
+
+??? warning "⚠️ La configurazione non si carica — cosa fare"
+
+    Se le tue impostazioni o i progressi delle guide non possono essere caricati, una pagina **Impossibile caricare i dati del primo utilizzo**
+    offre **Riprova** e **Esci**. Se la tua configurazione iniziale è già completata, potresti invece vedere la
+    Dashboard, con un banner **Riprova** in alto.
+
+### 🧭 Guide contestuali
+
+Successivamente, brevi guide si avviano la prima volta che raggiungi un punto in cui possono aiutare:
+
+| Area | Guide contestuali |
+|---|---|
+| **Transazioni** | Panoramica della pagina, modulo Aggiungi transazione, workspace bulk e Procedura guidata di importazione |
+| **Broker** | Pagina Broker, modulo Aggiungi broker e dettagli del broker |
+| **FX** | Pagina FX, modulo Aggiungi coppia e dettagli della coppia |
+| **Asset** | Pagina Asset, modulo Aggiungi asset e dettagli dell'asset |
+
+- Puntano a controlli reali e non cliccano, non eseguono l'upload, non modificano e non salvano mai per te.
+- Una cornice pulsante contrassegna l'area di cui parla un passaggio; un piccolo cursore contrassegna un pulsante che puoi provare.
+  Cliccarlo svolge la sua normale funzione e fa avanzare la guida.
+- Il pannello dei messaggi si attenua leggermente dopo un momento, così puoi vedere la pagina dietro; passaci sopra il mouse per
+  farlo riapparire.
+- Se lasci una pagina a metà guida, la sua guida riprende dallo stesso passaggio quando torni; chiudere un modulo
+  riavvia la guida di quel modulo.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="onboarding" data-name="contextual-guide" alt="La guida della pagina FX al passaggio 2 di 4, sul filtro di date, valute e viste: una cornice attorno ai filtri valuta, e il pannello dei messaggi con Indietro e Avanti" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+Puoi ripetere qualsiasi guida da
+**[Impostazioni → Preferenze → Primo utilizzo e guide](settings/preferences.md#onboarding-and-guides)**.
+
+---
+
+## 🏦 4. Importa il tuo primo estratto conto (Crea broker e asset al volo)
+
+La tua dashboard è ancora vuota — che tu ci arrivi direttamente o dopo le schermate di benvenuto qui sopra.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Dashboard vuota" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+Il modo più veloce per popolarla è importare la cronologia delle tue transazioni. Non devi configurare prima broker
+o asset: la Procedura guidata di importazione li crea man mano.
 
 ### 📋 Passaggi
 
-1. **Apri la procedura guidata di importazione**: vai alla pagina **[Transazioni](transactions/index.md)** dalla barra laterale e fai clic sul pulsante **"Importa"** (:material-file-upload:). Puoi anche partire dalla pagina di dettaglio di un broker — in tal caso il broker risulta già preselezionato.
+1. **Apri la Procedura guidata di importazione**: nella pagina **[Transazioni](transactions/index.md)**, clicca **Importa** (:material-file-upload:). La pagina di dettaglio di un broker ha lo stesso pulsante, con quel broker già selezionato.
 
-2. **Carica il tuo estratto conto**: trascina il file del report del tuo broker (`.csv`, `.xlsx` o `.xls`) nel primo passaggio della procedura — qui funziona il drag & drop — e assegalo a un broker, creando il broker **al volo** se è nuovo. Questo passaggio è facoltativo: i report caricati nelle sessioni precedenti sono già memorizzati e il passaggio successivo li elenca.
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Upload Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
+2. **Carica il tuo estratto conto**: trascina il report del tuo broker (`.csv`, `.xlsx` o `.xls`) nella procedura guidata e assegnalo al suo broker — scegli **Crea nuovo** se il broker non esiste ancora. Ogni report che carichi viene conservato (lo trovi in **[File e caricamenti](files/index.md#broker-reports)**): la prossima volta, salta questo passaggio e seleziona il report nel passaggio successivo.
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Passaggio di caricamento della procedura guidata" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
 
-3. **Seleziona i file e analizza**: scegli esattamente quali report memorizzati importare. Per ogni file il parser è preselezionato in base al plugin di importazione predefinito del broker (modificabile per file — usa **CSV generico** per un formato sconosciuto); LibreFolio quindi legge e valida ogni riga. Un riepilogo consolidato mostra ciò che verrà effettivamente importato: transazioni, titoli distinti, problemi di validazione, TODO, avvisi e probabili duplicati.
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Wizard Parse Step" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
+3. **Seleziona i file e analizza**: seleziona i report da importare. Ognuno riceve il parser del suo broker — cambialo per file se necessario, **CSV generico** per un formato sconosciuto. LibreFolio poi legge ogni riga e riassume ciò che ha trovato: transazioni, titoli, problemi e probabili duplicati. Alcuni file richiedono poi uno o due passaggi extra (vedi il pannello sotto).
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Passaggio di analisi della procedura guidata" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
 
-4. **Passaggi aggiuntivi, solo quando necessario**: a seconda di ciò che contengono i tuoi file, possono comparire fino a tre passaggi aggiuntivi — **Unifica asset** (lo stesso titolo trovato con nomi o codici diversi), **Correzioni** (righe che il parser non è riuscito a leggere completamente) e **Duplicati** (lo stesso movimento presente in due file importati insieme). Un report pulito composto da un solo file li salta tutti.
+4. **Rivedi e importa**: abbina ogni titolo alla tua libreria di asset, oppure crealo **al volo** con i dettagli letti dall'estratto conto. I probabili duplicati arrivano deselezionati, e le righe datate prima della data di apertura del broker vengono escluse. Maggiori informazioni in **[Mappatura asset](transactions/import/index.md#asset-mapping)**.
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Passaggio di revisione della procedura guidata: risoluzione asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
 
-5. **Revisiona e importa**: abbina ogni strumento alla tua libreria di asset — oppure crealo **al volo** con i dettagli precompilati dall'estratto conto — e controlla le flag per ogni riga: i duplicati (rispetto al tuo registro esistente, o copie esatte in sospeso in questa importazione) arrivano deselezionati e le righe antecedenti alla data di apertura del broker vengono escluse automaticamente. Per maggiori informazioni, consulta la guida **[Importa da broker - Mappatura asset](transactions/import/index.md#asset-mapping)**.
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Review Step: Asset Resolution" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
+5. **Salva dall'editor bulk**: **Importa N transazioni** sposta le righe selezionate nell'editor bulk — non è ancora salvato nulla. Dagli un'ultima occhiata, poi clicca **Salva tutto**.
 
-6. **Salva dall'editor in blocco**: facendo clic su **Importa N transazioni**, le righe selezionate vengono passate all'editor in blocco come nuove righe — non viene ancora scritto nulla. Dai loro un'ultima occhiata, poi fai clic su **Salva tutto** per inserirle nel tuo portafoglio.
+??? note "🧩 Passaggi extra — solo quando i tuoi file li richiedono"
 
-!!! tip "Non serve ricaricare"
+    La procedura guidata aggiunge un passaggio solo quando i tuoi file lo richiedono; un report singolo e pulito li salta
+    tutti:
 
-    I report caricati nelle sessioni precedenti sono già elencati nel passaggio **Seleziona file** della procedura — basta rispuntarli. Puoi anche visualizzare in anteprima o eliminare i report memorizzati dalla pagina **[File e upload](files/index.md#broker-reports)**.
+    - **Unifica asset** — lo stesso titolo appare con nomi o codici diversi.
+    - **Correzioni** — alcune righe non sono state lette completamente.
+    - **Duplicati** — lo stesso movimento è in due file che importi insieme.
+    - **Allinea con la banca** — dopo **Rivedi e importa**, per un set di report come Danske Bank, quando le
+      cifre della banca differiscono da quelle di LibreFolio.
 
-Per la guida completa, vedi **[Come importare le transazioni](transactions/import/how-to.md)**; per i broker e i formati di file supportati, vedi **[Importa da broker](transactions/import/index.md)**.
+    Vedi **[Passaggi che compaiono solo quando necessario](transactions/import/how-to.md#only-when-needed)**.
+
+La prima volta che apri la procedura guidata, una guida ti accompagna attraverso i passaggi richiesti dai tuoi file; non
+clicca né salva mai per te (vedi **[Prima importazione guidata](transactions/import/how-to.md#guided-first-import)**).
+Per la procedura completa vedi **[Come importare le transazioni](transactions/import/how-to.md)**; per i
+broker supportati e i formati di file vedi **[Importazione da broker](transactions/import/index.md)**.
 
 ---
 
-## 📈 4. Torna alla dashboard
+## 📈 5. Torna alla Dashboard
 
-Dopo aver importato correttamente il tuo estratto conto, torna alla **dashboard**.
-
-LibreFolio calcola le metriche del tuo portafoglio, l'allocazione degli asset (per tipo, settore, area geografica) e la cronologia delle performance in tempo reale. Ora puoi vedere l'intera tua situazione finanziaria splendidamente rappresentata in grafici!
+Torna alla **Dashboard**: il valore del tuo portafoglio, la tua allocazione (per tipo, settore e area geografica)
+e la cronologia delle tue performance ora sono compilati.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard Main View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Vista principale della Dashboard" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔮 5. Cosa fare dopo?
+## 🔮 6. E adesso?
 
 Ora che il tuo portafoglio è popolato, puoi:
 
-- 🤝 **[Condividi il tuo broker](brokers/sharing.md)** — concedi l'accesso a familiari o consulenti.
-- 💱 **[Configura i tassi di cambio](fx/index.md)** — configura la conversione valutaria per portafogli multi-valuta.
-- ⚙️ **[Personalizza le impostazioni](../admin/settings.md)** — regola lingua, tema e preferenze di sistema.
+- 🤝 **[Condividi il tuo broker](brokers/sharing.md)** — Concedi l'accesso a familiari o consulenti.
+- 💱 **[Configura i tassi FX](fx/index.md)** — Configura la conversione di valuta per portafogli multi-valuta.
+- ⚙️ **[Personalizza le tue preferenze](settings/preferences.md)** — Regola lingua, valuta predefinita e tema. Gli amministratori gestiscono anche le **[Impostazioni globali](../admin/settings.md)** a livello di sistema.
+- 🧭 **[Ripeti la configurazione iniziale o i tour guidati](settings/preferences.md#onboarding-and-guides)** — Rivedi la schermata di benvenuto, il tour rapido o la guida all'importazione in qualsiasi momento da Impostazioni → Preferenze.
+- 📱 **[Installa LibreFolio come app](pwa.md)** — Mettila nella schermata Home del tuo telefono o in una finestra dedicata sul desktop.

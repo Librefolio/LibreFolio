@@ -17,7 +17,7 @@ En la práctica, la diferencia entre el crecimiento lineal y el compuesto se amp
     Cuando se vende un activo por encima de su precio de compra, la diferencia es una **plusvalía**;
     si es por debajo, una **pérdida de capital**. Cada jurisdicción tiene sus propias reglas respecto a las tasas impositivas,
     los umbrales del período de tenencia, la duración del arrastre de pérdidas y los métodos de emparejamiento
-    (FIFO, LIFO, identificación específica). Para una descripción general teórica, consulte
+    (FIFO, LIFO, identificación específica). Para un resumen teórico, consulte
     [Tributación y Eficiencia Fiscal](../../fundamentals/taxation.md).
 
 ---

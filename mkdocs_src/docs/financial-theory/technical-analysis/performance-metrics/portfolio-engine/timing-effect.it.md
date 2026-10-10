@@ -22,7 +22,7 @@ Confrontando il [MWRR Cumulativo](mwrr.md#cumulative-mwrr) (che risente del timi
 - **Effetto Timing Negativo ($< 0$ pp):** I flussi di cassa sono avvenuti in momenti sfavorevoli (ad esempio, depositando ingenti somme ai massimi di mercato, subito prima di una correzione). Il tuo rendimento personale (MWRR) è inferiore a quello della strategia pura (TWRR).
 - **Effetto Timing vicino allo Zero ($\approx 0$ pp):** I flussi di cassa hanno avuto un impatto minimo sulla performance (ad esempio, in caso di versamenti molto piccoli o se il mercato è rimasto piatto durante le transazioni).
 
-Entrambi i lati usano lo stesso flusso NAV del motore di portafoglio e lo stesso modello di flussi della baseline di capitale. Gli aggiustamenti di capitale in natura influenzano quindi coerentemente entrambi i confini, MWRR e TWRR.
+Entrambi i lati usano lo stesso flusso NAV del motore di portafoglio e lo stesso modello di flussi della baseline di capitale. Le rettifiche di capitale in natura influenzano quindi coerentemente entrambi i confini, MWRR e TWRR.
 
 ---
 
@@ -60,13 +60,13 @@ $$
 ### 🚫 Non Cattura
 - **Profitto monetario assoluto:** Un Effetto Timing positivo di $+5$ pp può esistere anche se il portafoglio è in perdita (ad esempio, se il TWRR è al $-20\%$ e il MWRR al $-15\%$). Per valutare il guadagno in valuta, consulta il [P&L del Periodo](period-pnl.md).
 - **Rischio e volatilità:** Non fornisce indicazioni sul profilo di rischio o sulla volatilità degli asset.
-- **Impatto disaggregato di tasse e costi:** l'Effetto Timing non scompone tasse e costi; eventuali costi e tasse possono essere mostrati separatamente nel P&L del periodo.
+- **Impatto disaggregato di imposte e costi:** l'Effetto Timing non scompone imposte e costi; eventuali costi e imposte possono essere mostrati separatamente nel P&L del periodo.
 - **Qualità intrinseca della strategia:** Un Effetto Timing elevato può verificarsi anche su un asset scadente se lo si acquista subito prima di un rimbalzo temporaneo. Controlla sempre il [TWRR](twrr.md) per giudicare la bontà degli asset.
 
 ---
 
 ## 🖥️ Uso nella Dashboard
-LibreFolio mostra l'Effetto Timing all'interno della card **Rendimenti** della dashboard. Questa scheda riassume i principali indicatori delle performance del tuo portafoglio:
+LibreFolio mostra l'Effetto Timing all'interno della scheda **Rendimenti** della dashboard. Questa scheda riassume i principali indicatori delle performance del tuo portafoglio:
 
 - **Effetto Timing:** Differenza tra MWRR cumulativo e TWRR cumulativo, che mostra l'impatto del timing e della dimensione dei flussi.
 - **ROI Semplice:** rendimento percentuale intuitivo del periodo. È utile per leggere rapidamente il risultato, ma non considera il timing dei flussi con la stessa precisione del MWRR.

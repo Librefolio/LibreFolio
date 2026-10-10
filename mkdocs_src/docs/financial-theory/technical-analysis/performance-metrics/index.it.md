@@ -30,7 +30,7 @@ Contabilità aggregata basata su PMC per l'intero portafoglio (o qualsiasi ambit
 | **[Valore Patrimoniale Netto (NAV)](portfolio-engine/nav.md)** | Valutazione di mercato totale del portafoglio (asset + contante + in transito), utilizzando il resolver unificato. |
 | **[Valore Contabile](portfolio-engine/book-value.md)** | Costo contabile storico delle posizioni aperte (PMC × quantità) più contante. Differenza dal NAV = P&L non realizzato. |
 | **[P&L di Periodo](portfolio-engine/period-pnl.md)** | Profitto/perdita monetario rettificato per i flussi di cassa in un intervallo. Si scompone in: delta non realizzato + realizzato + reddito − commissioni. Include l'attribuzione del contributo per singolo asset. |
-| **[Capitale Depositato e P&L Totale](portfolio-engine/deposited-capital.md)** | Capitale esterno netto dall'avvio. Documenta il modello di scomposizione della cassa **a 3 pool guidato dagli eventi** (K, R, W) con regole formali di aggiornamento a livello di transazione. |
+| **[Capitale Versato e P&L Totale](portfolio-engine/deposited-capital.md)** | Capitale esterno netto dall'avvio. Documenta il modello di scomposizione della cassa **a 3 pool guidato dagli eventi** (K, R, W) con regole formali di aggiornamento a livello di transazione. |
 | **[Effetto di Tempismo](portfolio-engine/timing-effect.md)** | Differenza tra MWRR Cumulativo e TWRR Cumulativo — quantifica l'impatto del tempismo dei flussi di cassa sui rendimenti. |
 | **[ROI Semplice](portfolio-engine/roi.md)** | Rendimento percentuale rispetto al capitale investito netto. Semplice ma soggetto alla diluizione dei flussi di cassa. |
 | **[Rendimento Annualizzato Netto](portfolio-engine/net-annualized-return.md)** | Definizioni del CAGR netto per posizioni, contributo di periodo e lotti FIFO, con finestra minima di 30 giorni. |
@@ -44,7 +44,7 @@ Contabilità per lotto: tiene traccia di ogni lotto di acquisizione attraverso i
 
 | Metrica / Concetto | Descrizione |
 |------------------|-------------|
-| **[Panoramica del Motore FIFO](fifo-engine/index.md)** | Stati del ciclo di vita del lotto, elaborazione cronologica degli eventi, abbinamento FIFO, frazionamenti e trasferimenti tra broker. |
+| **[Panoramica del Motore FIFO](fifo-engine/index.md)** | Stati del ciclo di vita del lotto, elaborazione cronologica degli eventi, abbinamento FIFO, split e trasferimenti tra broker. |
 | **[Analisi dei Lotti FIFO](fifo-engine/fifo-lot-analysis.md)** | Complemento per lotto del PMC: tiene traccia di ogni lotto di acquisizione attraverso il proprio ciclo di vita, abbina le vendite in ordine FIFO e calcola il rendimento aperto/totale per lotto. |
 
 ### 📊 Prezzo Medio di Carico (PMC)
@@ -101,7 +101,7 @@ Per aiutarti a scegliere la metrica giusta per la tua analisi, utilizza questa g
 
 ### 💸 9. [Rendimento sul costo](portfolio-engine/yield-on-cost.md)
 * **Domanda Chiave:** "Quanto reddito lordo da dividendi e interessi ha prodotto ogni unità attuale negli ultimi 365 giorni di calendario rispetto al suo prezzo medio di carico?"
-* **Concetto della Formula:** Somma il reddito non negativo, convertito al cambio della data della transazione, per ogni unità long ammissibile del giorno precedente, rettifica per i frazionamenti collegati, poi divide per il prezzo medio di carico (PMC) alla data di fine del report.
+* **Concetto della Formula:** Somma il reddito non negativo, convertito al cambio della data della transazione, per ogni unità long ammissibile del giorno precedente, rettifica per gli split collegati, poi divide per il prezzo medio di carico (PMC) alla data di fine del report.
 * **Caso d'Uso Ideale:** Confrontare la produttività di reddito registrata delle posizioni aperte asset/broker senza confonderla con il dividend yield di mercato, il CAGR o il rendimento a scadenza (YTM) di un'obbligazione.
 
 ---
@@ -169,9 +169,9 @@ Collocando TWRR e MWRR fianco a fianco nella tua Dashboard, LibreFolio ti fornis
 
 ## 🔗 Integrazione UI e Collegamenti di Aiuto nella Dashboard
 
-Per facilitare la navigazione, le tre card KPI nella dashboard di LibreFolio — **P&L di Periodo**, **Rendimenti** e **Patrimonio Netto** — hanno ciascuna un'icona di aiuto. Il percorso verso questi capitoli teorici è composto da due passaggi:
+Per facilitare la navigazione, le tre schede KPI nella dashboard di LibreFolio — **P&L di Periodo**, **Rendimenti** e **Patrimonio Netto** — hanno ciascuna un'icona di aiuto. Il percorso verso questi capitoli teorici è composto da due passaggi:
 
-1. L'icona di aiuto apre la sezione corrispondente della pagina [KPI Cards](../../../user/dashboard/kpi-cards.md) della guida utente ([Card 1](../../../user/dashboard/kpi-cards.md#card-1-period-pl), [Card 2](../../../user/dashboard/kpi-cards.md#card-2-returns), [Card 3](../../../user/dashboard/kpi-cards.md#card-3-net-worth)).
-2. Da lì, ogni metrica collega al proprio capitolo di teoria finanziaria: [P&L di Periodo](portfolio-engine/period-pnl.md), [Valore Contabile](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Effetto di Tempismo](portfolio-engine/timing-effect.md), [NAV / Patrimonio Netto](portfolio-engine/nav.md), [Capitale Depositato e P&L Totale](portfolio-engine/deposited-capital.md).
+1. L'icona di aiuto apre la sezione corrispondente della pagina [Schede KPI](../../../user/dashboard/kpi-cards.md) della guida utente ([Scheda 1](../../../user/dashboard/kpi-cards.md#card-1-period-pl), [Scheda 2](../../../user/dashboard/kpi-cards.md#card-2-returns), [Scheda 3](../../../user/dashboard/kpi-cards.md#card-3-net-worth)).
+2. Da lì, ogni metrica collega al proprio capitolo di teoria finanziaria: [P&L di Periodo](portfolio-engine/period-pnl.md), [Valore Contabile](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Effetto di Tempismo](portfolio-engine/timing-effect.md), [NAV / Patrimonio Netto](portfolio-engine/nav.md), [Capitale Versato e P&L Totale](portfolio-engine/deposited-capital.md).
 
 Altrove nell'app, l'anteprima PMC nel modulo di transazione collega direttamente al capitolo [Prezzo Medio di Carico (PMC)](weighted-average-cost.md), la tabella delle posizioni collega la sua colonna YOC a [Rendimento sul costo](portfolio-engine/yield-on-cost.md), e ogni segnale/indicatore dei grafici collega alla propria pagina di teoria.

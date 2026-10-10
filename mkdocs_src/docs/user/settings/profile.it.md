@@ -18,6 +18,13 @@ Passa il mouse sull'avatar (mentre la scheda è sbloccata) e fai clic sull'overl
 
 L'avatar viene salvato immediatamente e viene utilizzato in tutta l'app ovunque venga mostrata la tua identità: barra laterale, condivisione dei broker ed elenchi dei collaboratori.
 
+!!! note "Si può impostare anche dalla pagina di Benvenuto"
+
+    I nuovi account possono scegliere la stessa immagine una volta, durante la **[configurazione
+    iniziale al primo accesso](../getting-started.md#welcome-setup)**: è lo
+    stesso selettore, solo raggiunto da un'altra schermata. Se salti quel passaggio, come avatar
+    restano le tue iniziali; puoi sempre aggiungere o cambiare l'immagine più tardi da qui.
+
 ## ✏️ Nome utente, Email e Account creato
 
 - **Nome utente** e **Email** sono modificabili (è necessario sbloccare la scheda). Le modifiche vengono applicate subito alle tue credenziali di accesso.

@@ -1,6 +1,6 @@
-# 📝 Formulario de Transacción
+# 📝 Formulario de transacción
 
-El Formulario de Transacción se abre cada vez que **creas** o **editas** una transacción. Se adapta dinámicamente al tipo de transacción seleccionado, mostrando únicamente los campos relevantes para esa operación.
+El formulario de transacción añade o edita una transacción — o un par vinculado — en el [espacio de trabajo masivo](index.md#bulk-workspace). También muestra una transacción en solo lectura cuando haces doble clic en ella en una lista. Solo aparecen los campos que necesita el tipo elegido.
 
 <div class="lf-screenshot-carousel" data-carousel="transactions" data-carousel-interval="3000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title='<img src="/LibreFolio/static/icons/transactions/buy.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> COMPRA' alt="Compra">
@@ -8,63 +8,71 @@ El Formulario de Transacción se abre cada vez que **creas** o **editas** una tr
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title='<img src="/LibreFolio/static/icons/transactions/dividend.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DIVIDENDO' alt="Dividendo">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title='<img src="/LibreFolio/static/icons/transactions/deposit.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DEPÓSITO' alt="Depósito">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title='<img src="/LibreFolio/static/icons/transactions/adjustment.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> AJUSTE' alt="Ajuste">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERENCIA' alt="Transferencia de Activos">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERENCIA DE ACTIVOS' alt="Transferencia de activos">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title='<img src="/LibreFolio/static/icons/transactions/fx-conversion.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> CONVERSIÓN FX' alt="Conversión FX">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/cash-transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERENCIA DE EFECTIVO' alt="Transferencia de Efectivo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/cash-transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERENCIA DE FONDOS' alt="Transferencia de fondos">
 </div>
 
 ---
 
-## 📋 La Interfaz del Formulario
+## ✍️ Rellena el formulario
 
-El formulario está diseñado para ser intuitivo y dinámico. Cuando selecciona un **Tipo de Transacción**, el formulario se ajusta automáticamente para mostrar solo los campos relevantes. 
+1. Elige el **Tipo**, luego el **Bróker** si aún no está establecido.
+2. Rellena la sección **Obligatorio**: la **Fecha**, el **Activo** y su cantidad cuando el tipo la tiene, y el importe en efectivo.
+3. Abre **Opcional** para **Etiquetas**, una **Descripción** o, en dividendos, interés y ajustes, un **Evento vinculado**.
+4. Haz clic en **Aplicar** para colocar la fila en el espacio de trabajo; **Guardar todo** en el espacio de trabajo la guarda.
 
-- **Detalles Básicos:** Fecha, Tipo, Moneda y Monto.
-- **Especificaciones del Activo:** Si la transacción involucra un activo (como COMPRA o VENTA), aparecerán campos para seleccionar el activo, ingresar la cantidad y establecer el precio unitario.
-- **Panel de Previsualización (PMP):** Para las operaciones que afectan su cartera, aparece una previsualización en tiempo real en la parte inferior. Muestra su base de costo actual, la nueva base de costo proyectada y cualquier ganancia/pérdida realizada.
+Algunas reglas hacen que las entradas sean rápidas:
 
-!!! note "Cálculos Automáticos"
+- **Los importes son totales** — escribe el total pagado o recibido, no el precio por acción (*Importe total (no por acción)*).
+- **Escribe números positivos** — el formulario añade el signo menos donde sale dinero o unidades: el pago de una compra, las unidades de una venta, un retiro, una comisión, un impuesto. Solo una cantidad de **Ajuste** lleva signo: positiva añade unidades, negativa las elimina.
+- **Comprobaciones sobre la marcha** — una vez rellenados los campos obligatorios, el formulario comprueba la entrada con tu libro mayor y las demás filas del espacio de trabajo, y enumera cualquier problema en la parte superior. **⚡ Validar ahora** comprueba al instante.
+- **¿Falta un bróker o un activo?** — **Crear nuevo** en la lista de brókers, o **Nuevo activo** en la lista de activos, lo crea sin salir del formulario.
 
-    El sistema gestiona automáticamente los cálculos estándar por usted (como multiplicar la cantidad por el precio unitario) para que no tenga que hacer las cuentas manualmente.
+??? info "💰 Coste base de las unidades entrantes — para Ajustes y Transferencias de activos"
+
+    Cuando un **Ajuste** añade unidades, o en el lado receptor de una **Transferencia de activos**, el formulario pregunta cuánto costaron esas unidades:
+
+    - **Auto** — LibreFolio lo calcula como un [precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md); pulsa **⚡ Validar ahora** para verlo.
+    - **Manual** — lo escribes tú.
+
+    En **Auto**, el PMC se toma en el bróker de origen de una transferencia, o en el bróker propio del ajuste. Si ese bróker no tiene otra transacción en el activo hasta la fecha en que entran las unidades, no hay nada que promediar, y el coste es 0 por diseño: si esas unidades sí costaron algo, vuelve a abrir la transacción después y escribe su coste en **Manual**. En **Manual**, el campo no puede quedar vacío: LibreFolio marca la fila y no guarda nada hasta que lo rellenes o cambies a **Auto**. Para unidades que no costaron nada, como un regalo, escribe 0. Si falta un tipo de cambio, el enlace **Sincronizar tipos de cambio** lo obtiene.
 
 ---
 
-## 🏷️ Tipos de Transacción
+## 🏷️ Tipos de transacción
 
-Para obtener una definición conceptual detallada de cada operación, consulta la [guía de Teoría Financiera](../../financial-theory/instruments/transaction-types/index.md).
+La [Guía de teoría financiera](../../financial-theory/instruments/transaction-types/index.md) explica cada tipo en profundidad.
 
-### Single Simples
+### 🧾 Transacciones simples
 
-Estas operan de forma independiente en una sola cuenta de bróker.
+| Tipo | Qué registra | Teoría |
+|------|-----------------|--------|
+| ![](../../static/icons/transactions/buy.png){: width="24" style="vertical-align: middle;" } **Compra** | Unidades de un activo compradas, y el total pagado | [📖 Leer](../../financial-theory/instruments/transaction-types/buy-sell.md) |
+| ![](../../static/icons/transactions/sell.png){: width="24" style="vertical-align: middle;" } **Venta** | Unidades de un activo vendidas, y el total recibido | [📖 Leer](../../financial-theory/instruments/transaction-types/buy-sell.md) |
+| ![](../../static/icons/transactions/dividend.png){: width="24" style="vertical-align: middle;" } **Dividendo** | Efectivo pagado por un activo que posees | [📖 Leer](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
+| ![](../../static/icons/transactions/interest.png){: width="24" style="vertical-align: middle;" } **Interés** | Intereses recibidos, con o sin un activo | [📖 Leer](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
+| ![](../../static/icons/transactions/deposit.png){: width="24" style="vertical-align: middle;" } **Depósito** | Efectivo que ingresas en el bróker | [📖 Leer](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
+| ![](../../static/icons/transactions/withdrawal.png){: width="24" style="vertical-align: middle;" } **Retiro** | Efectivo que sacas del bróker | [📖 Leer](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
+| ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **Comisión** | Una comisión u otro coste, opcionalmente vinculado a un activo | [📖 Leer](../../financial-theory/instruments/transaction-types/fee.md) |
+| ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } **Impuesto** | Un impuesto pagado, opcionalmente vinculado a un activo | [📖 Leer](../../financial-theory/instruments/transaction-types/fee.md) |
+| ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **Ajuste** | Unidades añadidas o eliminadas sin efectivo: un desdoblamiento, un regalo, una posición abierta en otro lugar | [📖 Leer](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
-| Tipo | Descripción | Guía Teórica |
-|------|-------------|--------------|
-| ![](../../static/icons/transactions/buy.png){: width="24" style="vertical-align: middle;" } **COMPRA / VENTA** ![](../../static/icons/transactions/sell.png){: width="24" style="vertical-align: middle;" } | Compra o venta de un activo | [📖 Leer](../../financial-theory/instruments/transaction-types/buy-sell.md) |
-| ![](../../static/icons/transactions/deposit.png){: width="24" style="vertical-align: middle;" } **DEPÓSITO / RETIRO** ![](../../static/icons/transactions/withdrawal.png){: width="24" style="vertical-align: middle;" } | Añadir o retirar efectivo de una cuenta de bróker | [📖 Leer](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
-| ![](../../static/icons/transactions/dividend.png){: width="24" style="vertical-align: middle;" } **DIVIDENDO / INTERÉS** ![](../../static/icons/transactions/interest.png){: width="24" style="vertical-align: middle;" } | Rendimiento de activos de renta variable o renta fija | [📖 Leer](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
-| ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **COMISIÓN / IMPUESTO** ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Costos como comisiones de bróker o impuestos | [📖 Leer](../../financial-theory/instruments/transaction-types/fee.md) |
-| ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **AJUSTE** | Corrección manual de saldos | [📖 Leer](../../financial-theory/instruments/transaction-types/adjustment.md) |
+### 🔗 Transacciones emparejadas {: #composite-transactions }
 
-### Composite Compuestas {: #composite-transactions }
+Una operación emparejada se registra como dos transacciones vinculadas, que el formulario muestra como una, con un lado **Desde** y un lado **Hasta**. Cada lado tiene su propia fecha, y la flecha **Intercambiar lados** invierte la dirección.
 
-Estas representan movimientos **entre** cuentas o monedas. Generan dos asientos vinculados que se equilibran entre sí.
+| Tipo | Qué registra | Teoría |
+|------|-----------------|--------|
+| ![](../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **Transferencia de activos** | Unidades de un activo movidas entre dos de tus brókers | [📖 Leer](../../financial-theory/instruments/transaction-types/transfer.md) |
+| ![](../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **Transferencia de fondos** | Efectivo movido entre dos de tus brókers, en una sola divisa | [📖 Leer](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
+| ![](../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **Cambio de divisas** | Una divisa convertida en otra, dentro de un mismo bróker | [📖 Leer](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
 
-| Tipo | Descripción | Guía Teórica |
-|------|-------------|--------------|
-| ![](../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **TRANSFERENCIA** | Movimiento de activos entre dos brókers | [📖 Leer](../../financial-theory/instruments/transaction-types/transfer.md) |
-| ![](../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **TRANSFERENCIA DE EFECTIVO** | Transferencia bancaria entre brókers | [📖 Leer](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
-| ![](../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **CONVERSIÓN FX** | Conversión de divisa dentro de un bróker | [📖 Leer](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
-
-Para mantener la integridad de los datos y permitir análisis avanzados, las transacciones compuestas agrupan múltiples asientos de efectivo y activos:
-
-* **Transferencia de Activos**: especifica un **bróker de origen** y un **bróker de destino**, además del activo y la cantidad.
-* **Conversión FX**: especifica el **monto de la moneda de origen** y el **monto de la moneda de destino** dentro del mismo bróker.
-
-Puede crear transacciones compuestas directamente desde el formulario, o mediante la **Promoción** de transacciones simples (por ejemplo, vinculando un depósito y un retiro compatibles) desde la tabla de transacciones. Si es necesario, una transacción compuesta puede ser **dividida** de nuevo en transacciones independientes individuales.
+Una transferencia necesita dos brókers diferentes; un cambio de divisas, dos divisas diferentes. También se pueden vincular dos filas simples para formar un par más adelante, y dividir un par de nuevo — consulta [Vincular o desvincular un par](index.md#link-pairs).
 
 ---
 
 ## 🔗 Relacionado
 
-- 📋 **[Tabla de Transacciones](index.md)** — Vista de lista, filtrado, operaciones masivas
-- 📥 **[Importar desde Bróker](import/index.md)** — Evite la entrada manual con la importación BRIM
+- 📋 **[Transacciones](index.md)** — la lista, los filtros y el espacio de trabajo masivo
+- 📥 **[Importar desde el bróker](import/index.md)** — omite la entrada manual con una importación BRIM

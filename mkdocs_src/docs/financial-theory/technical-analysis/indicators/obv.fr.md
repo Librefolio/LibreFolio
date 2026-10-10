@@ -27,7 +27,7 @@ où $V_t$ est le volume échangé au moment $t$. L'OBV est une pure **somme cumu
 
 ## ⚙️ Paramètres
 
-L'OBV ne prend **aucun paramètre**. Il n'a pas de `période`, de seuil ou de réglage de lissage à configurer.
+L'OBV ne prend **aucun paramètre**. Il n'a pas de `period`, de seuil ou de réglage de lissage à configurer.
 
 !!! note "Rebasé sur la plage du graphique"
 

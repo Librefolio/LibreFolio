@@ -101,7 +101,7 @@ plugins:
             Installation (Docker): Installazione (Docker)
             Install as App (PWA): Installa come App (PWA)
             Connection Security: Sicurezza della connessione
-            "🧠 AI Export": "🧠 Esportazione AI"
+            "🧠 AI Export": "🧠 AI Export"
             "🧰 Tools": "🧰 Strumenti"
             PAC allocator: Allocatore PAC
             "🏦 Brokers": "🏦 Broker"
@@ -191,7 +191,7 @@ plugins:
             "🔄 Transaction Types": "🔄 Tipi di Transazione"
             "📅 Asset Events": "📅 Eventi Asset"
             "Dividend & Interest": "Dividendo & Interesse"
-            Split: Frazionamento
+            Split: Split
             Price Adjustment: Rettifica Prezzo
             Maturity Settlement: Rimborso a Scadenza
             "🗃️ Instruments": "🗃️ Strumenti"
@@ -206,10 +206,10 @@ plugins:
             "Index & Benchmark": "Indici & Benchmark"
             "Buy & Sell": "Acquisto & Vendita"
             "Deposit & Withdrawal": "Deposito & Prelievo"
-            "Fee & Tax": "Commissioni & Tasse"
+            "Fee & Tax": "Commissioni & Imposte"
             Asset Transfer: Trasferimento Titoli
-            Cash Transfer: Bonifico
-            FX Conversion: Cambio Valuta
+            Cash Transfer: Giroconto
+            FX Conversion: Conversione di Valuta
             Adjustment: Rettifica
             Single: Singole
             "🔢 Composite": "🔢 Composite"
@@ -254,7 +254,7 @@ plugins:
             "📉 How Much Can It Hurt?": "📉 Quanto Può Fare Male?"
             Sharpe Ratio: Indice di Sharpe
             Sortino Ratio: Indice di Sortino
-            Max Drawdown: Massimo Drawdown
+            Max Drawdown: Drawdown Massimo
             Volatility: Volatilità
             Current Drawdown: Drawdown Corrente
             Worst Realization: Peggior Realizzazione
@@ -272,9 +272,9 @@ plugins:
             "🔧 Method": "🔧 Metodo"
             Observed Annualization: Annualizzazione Osservata
             Data Quality: Qualità dei Dati
-            Weighted Average Cost: Costo Medio Ponderato
+            Weighted Average Cost: Prezzo Medio di Carico
             FIFO Lot Analysis: Analisi Lotti FIFO
-            NAV / Net Worth: NAV / Net Worth
+            NAV / Net Worth: NAV / Patrimonio Netto
             Book Value: Valore Contabile
             Period P&L: P&L del Periodo
             Timing Effect: Effetto Timing
@@ -293,7 +293,7 @@ plugins:
             Home: Accueil
             FAQ: FAQ
             "📘 User Manual": "📘 Manuel Utilisateur"
-            Overview: Aperçu
+            Overview: "Vue d'ensemble"
             Getting Started: Premiers Pas
             Installation (Docker): Installation (Docker)
             Install as App (PWA): Installer comme App (PWA)
@@ -388,7 +388,7 @@ plugins:
             "🔄 Transaction Types": "🔄 Types de Transactions"
             "📅 Asset Events": "📅 Événements d'Actifs"
             "Dividend & Interest": "Dividende & Intérêt"
-            Split: Fractionnement
+            Split: Division
             Price Adjustment: Ajustement de Prix
             Maturity Settlement: Règlement à l'Échéance
             "🗃️ Instruments": "🗃️ Instruments"
@@ -403,10 +403,10 @@ plugins:
             "Index & Benchmark": "Indices & Référence"
             "Buy & Sell": "Achat & Vente"
             "Deposit & Withdrawal": "Dépôt & Retrait"
-            "Fee & Tax": "Frais & Taxes"
+            "Fee & Tax": "Frais & Impôts"
             Asset Transfer: Transfert de Titres
             Cash Transfer: Virement
-            FX Conversion: Conversion de Devises
+            FX Conversion: Conversion de Devise
             Adjustment: Ajustement
             Single: Simples
             "🔢 Composite": "🔢 Composites"
@@ -451,7 +451,7 @@ plugins:
             "📉 How Much Can It Hurt?": "📉 Jusqu'où Peut-on Perdre ?"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
-            Max Drawdown: Drawdown Maximum
+            Max Drawdown: Perte Maximale
             Volatility: Volatilité
             Current Drawdown: Drawdown Actuel
             Worst Realization: Pire Réalisation
@@ -461,7 +461,7 @@ plugins:
             Concentration: Concentration
             "⚖️ Am I Paid for the Risk?": "⚖️ Suis-je Payé pour le Risque ?"
             "Beta & Active Return": "Bêta & Rendement Actif"
-            Benchmark Selection: Choix du Benchmark
+            Benchmark Selection: "Choix de l'Indice de Référence"
             "🎲 What If…?": "🎲 Et Si… ?"
             Historical Replay: Rejeu Historique
             Hypothetical Shock: Choc Hypothétique
@@ -469,9 +469,9 @@ plugins:
             "🔧 Method": "🔧 Méthode"
             Observed Annualization: Annualisation Observée
             Data Quality: Qualité des Données
-            Weighted Average Cost: Coût Moyen Pondéré
+            Weighted Average Cost: Prix de Revient Unitaire
             FIFO Lot Analysis: Analyse des Lots FIFO
-            NAV / Net Worth: NAV / Net Worth
+            NAV / Net Worth: NAV / Valeur Nette
             Book Value: Valeur Comptable
             Period P&L: P&L de la Période
             Timing Effect: Effet de timing
@@ -495,10 +495,10 @@ plugins:
             Installation (Docker): Instalación (Docker)
             Install as App (PWA): Instalar como App (PWA)
             Connection Security: Seguridad de la conexión
-            "🧠 AI Export": "🧠 Exportación de IA"
+            "🧠 AI Export": "🧠 Exportación IA"
             "🧰 Tools": "🧰 Herramientas"
             PAC allocator: Asignador PAC
-            "🏦 Brokers": "🏦 Brokers"
+            "🏦 Brokers": "🏦 Brókeres"
             Broker Sharing: Compartir Broker
             Broker Transactions: Transacciones del bróker
             Configuration & Info: Configuración e Info
@@ -565,7 +565,7 @@ plugins:
             Finpension: Finpension
             Trading212: Trading212
             Generic CSV: CSV Genérico
-            "📊 Dashboard": "📊 Panel Principal"
+            "📊 Dashboard": "📊 Panel"
             Positions & Analysis: Posiciones y Análisis
             Risk: Riesgo
             "⚙️ Settings": "⚙️ Configuración"
@@ -602,8 +602,8 @@ plugins:
             "Deposit & Withdrawal": "Depósito & Retiro"
             "Fee & Tax": "Comisiones & Impuestos"
             Asset Transfer: Transferencia de Títulos
-            Cash Transfer: Transferencia Bancaria
-            FX Conversion: Conversión de Divisas
+            Cash Transfer: Transferencia de Fondos
+            FX Conversion: Conversión de Divisa
             Adjustment: Ajuste
             Single: Individuales
             "🔢 Composite": "🔢 Compuestas"
@@ -648,7 +648,7 @@ plugins:
             "📉 How Much Can It Hurt?": "📉 ¿Cuánto Puede Doler?"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
-            Max Drawdown: Drawdown Máximo
+            Max Drawdown: Caída Máxima
             Volatility: Volatilidad
             Current Drawdown: Drawdown Actual
             Worst Realization: Peor Realización
@@ -658,7 +658,7 @@ plugins:
             Concentration: Concentración
             "⚖️ Am I Paid for the Risk?": "⚖️ ¿Me Pagan por el Riesgo?"
             "Beta & Active Return": "Beta & Rentabilidad Activa"
-            Benchmark Selection: Elección del Benchmark
+            Benchmark Selection: Elección del Índice de Referencia
             "🎲 What If…?": "🎲 ¿Qué Pasa Si…?"
             Historical Replay: Repetición Histórica
             Hypothetical Shock: Choque Hipotético
@@ -666,9 +666,9 @@ plugins:
             "🔧 Method": "🔧 Método"
             Observed Annualization: Anualización Observada
             Data Quality: Calidad de los Datos
-            Weighted Average Cost: Coste Medio Ponderado
+            Weighted Average Cost: Precio Medio de Compra
             FIFO Lot Analysis: Análisis de Lotes FIFO
-            NAV / Net Worth: NAV / Net Worth
+            NAV / Net Worth: NAV / Patrimonio Neto
             Book Value: Valor Contable
             Period P&L: P&L del Periodo
             Timing Effect: Efecto timing

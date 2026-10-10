@@ -4,7 +4,7 @@ La teoría de carteras proporciona el marco matemático para construir carteras 
 
 ---
 
-## 📖 Descripción General
+## 📖 Resumen
 
 ### 🏛️ Teoría Moderna de Carteras (MPT)
 
@@ -48,7 +48,7 @@ Medidas cuantitativas del riesgo de la cartera. Desde la desviación estándar h
 
 - **[Ratio de Sharpe](../technical-analysis/risk-metrics/sharpe-ratio.md)** — Rendimiento ajustado al riesgo (volatilidad total)
 - **[Ratio de Sortino](../technical-analysis/risk-metrics/sortino-ratio.md)** — Rendimiento ajustado al riesgo (solo riesgo de caída)
-- **[Max Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — La mayor caída desde el punto máximo al punto más bajo
+- **[Caída máxima](../technical-analysis/risk-metrics/max-drawdown.md)** — La mayor caída desde el punto máximo al punto más bajo
 - **[Volatilidad](../technical-analysis/risk-metrics/volatility.md)** — Desviación estándar de los rendimientos
 
 ---

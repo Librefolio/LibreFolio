@@ -6,7 +6,7 @@ La compréhension des événements d'actifs est essentielle pour une analyse pr�
 
 ---
 
-## 📊 Aperçu des types d'événements
+## 📊 Vue d'ensemble des types d'événements
 
 | Type | Emoji | Impact sur le prix | Actifs typiques | Détails |
 |------|-------|-------------------|-----------------|---------|

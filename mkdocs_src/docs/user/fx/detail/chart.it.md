@@ -1,65 +1,65 @@
-# 📉 Grafico Interattivo
+# 📉 Grafico interattivo
 
-Il cuore della pagina Dettagli Coppia: un grafico completo **basato su ECharts** che consente di visualizzare lo storico dei tassi di cambio grazie a potenti strumenti interattivi.
+Il cuore della pagina di dettaglio della coppia: lo storico del tasso della coppia nel periodo selezionato.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Grafico Dettagli FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Grafico di dettaglio FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
-## 🔀 Modalità di Visualizzazione
+## 🔀 Vista Abs o %
 
-Passa da una modalità di visualizzazione all'altra utilizzando la barra degli strumenti:
+Cambia con **Abs** / **%** nell'angolo in alto a sinistra del grafico; la pagina si apre in vista %.
 
-- 📈 **Assoluta** — Mostra i valori grezzi del tasso di cambio (es. 1 EUR = 1.0845 USD). Ideale per vedere i livelli effettivi del tasso.
-- 📊 **Percentuale (%)** — Mostra la variazione percentuale rispetto al primo punto dati visibile. Ideale per confrontare i movimenti relativi e sovrapporre più segnali.
-
-Passando alla modalità %, tutti i segnali sovrapposti vengono ricalcolati come percentuali rispetto ai rispettivi punti di partenza.
+- 📊 **%** — la variazione dal primo giorno del periodo. Anche le sovrapposizioni partono da 0 %, così i loro
+  movimenti si confrontano a colpo d'occhio.
+- 📈 **Abs** — il tasso stesso, ad es. 1 EUR = 1,0845 USD.
 
 ---
 
-## 🔍 Navigazione e Zoom
+## 🔍 Zoom, pan e periodo
 
 | Azione | Desktop | Mobile |
 |--------|---------|--------|
-| **Sposta vista** | Clic + trascina | Touch + trascina |
-| **Zoom in** | Rotella mouse su | Pinch out |
-| **Zoom out** | Rotella mouse giù | Pinch in |
-| **Reset zoom** | Doppio clic | Doppio tocco |
+| **Zoom** | Rotella del mouse | Pinch |
+| **Pan** | Clicca e trascina | Trascina con due dita (un dito scorre la pagina) |
 
-Puoi anche utilizzare i **preset dell'intervallo temporale** (1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX) o selezionare un intervallo di date **Personalizzato** per saltare rapidamente a periodi specifici. Quando la barra degli strumenti ha spazio libero, compaiono **preset di riempimento** extra per occuparlo — 3Y, 5Y, 10Y insieme ai preset a durata, e WTD, MTD, QTD insieme a YTD.
+- **Periodo**: le preimpostazioni da **1W** a **2Y**, **YTD** e **Tutto**, oppure **Personalizzato** (un numero di giorni,
+  settimane, mesi o anni indietro da oggi); clicca sulle date per sceglierle su un calendario. Altre preimpostazioni
+  compaiono quando la barra degli strumenti ha spazio. Le pagine della stessa scheda del browser condividono il periodo.
+- Su un periodo lungo il grafico raggruppa i tassi per settimana o mese e mostra un badge **Settimanale** o
+  **Mensile**: ingrandisci per i tassi giornalieri.
+- Su uno schermo stretto l'asse mostra meno date, più corte; la prima e l'ultima restano sempre.
 
-!!! info "Disponibilità dei dati"
+??? info "📅 Storico più corto del periodo — quando il grafico inizia più tardi"
 
-    Se l'intervallo temporale selezionato supera i dati disponibili, LibreFolio visualizza tutto ciò che è disponibile. Usa **Sync** per provare a recuperare dati più vecchi dal provider — ma tieni presente che alcuni provider hanno una copertura storica limitata.
-
----
-
-## 💬 Suggerimento
-
-Passa il mouse su qualsiasi punto del grafico per vedere:
-
-- 📅 La **data**
-- 💱 Il **tasso di cambio** con precisione completa
-- 📊 La **variazione percentuale** rispetto al punto dati precedente
+    Un banner mostra la data da cui i dati sono disponibili. **Sync** può recuperare tassi più vecchi, se il
+    provider li pubblica; altrimenti inseriscili nell'[editor dati](data-editor.md).
 
 ---
 
-## 🧰 Barra degli Strumenti
+## 💬 Tooltip
 
-La barra degli strumenti del grafico fornisce un accesso rapido a:
+Passa il mouse sul grafico, o toccalo su mobile, per vedere:
 
-- 📊 **Interruttore modalità visualizzazione** — Assoluta / Percentuale
-- ⏱️ **Intervallo temporale** — 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX, Personalizzato (più i preset di riempimento 3Y/5Y/10Y e WTD/MTD/QTD quando la barra degli strumenti ha spazio)
-- 📈 **[Segnali](signals.md)** — Attiva/disattiva la sovrapposizione degli indicatori tecnici
-- 📏 **[Misure](measures.md)** — Strumento di misurazione punto-punto
-- ✏️ **[Editor Dati](data-editor.md)** — Modifica i singoli punti dati
-- ⚙️ **[Impostazioni Grafico](../chart-settings.md)** — Personalizzazione visiva
+- 📅 la **data** (o la settimana o il mese, quando il grafico raggruppa i tassi);
+- 💱 il **tasso** e il valore di ogni sovrapposizione;
+- 📊 la **variazione dall'inizio del periodo**: Δ e % in vista Abs, % in vista %;
+- ⚠️ **Obsoleto: N giorno/i di anzianità** nei giorni senza un nuovo tasso, come weekend e festivi.
+
+---
+
+## 🧰 Pulsanti del grafico
+
+- 📏 **Misura** — vedi [Misure](measures.md).
+- ✏️ **Modifica tassi** — vedi [editor dati](data-editor.md).
+- ⚙️ **Estetica** — colori, riempimento, griglia e intervalli degli assi, come in [Impostazioni grafico](../chart-settings.md).
+- 📊 Il pannello **Segnali** sopra il grafico — vedi [Segnali](signals.md).
 
 ---
 
 ## 🔗 Correlati
 
-- ⚙️ **[Impostazioni Grafico](../chart-settings.md)** — Personalizza colori, larghezza linea, riempimento area, griglia
-- 📈 **[Segnali](signals.md)** — Sovrapponi indicatori tecnici sul grafico
+- ⚙️ **[Impostazioni grafico](../chart-settings.md)** — Aspetto del grafico e segnali di sovrapposizione
+- 📈 **[Segnali](signals.md)** — Indicatori tecnici sul grafico

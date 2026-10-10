@@ -1,10 +1,10 @@
-# 📊 Precio Medio Ponderado (PMP)
+# 📊 Precio Medio de Compra (PMC)
 
-## 💡 ¿Qué es el PMP?
+## 💡 ¿Qué es el PMC?
 
-El **Precio Medio Ponderado** (PMP) es el coste unitario medio de un activo en una cartera, ponderado por la cantidad adquirida a cada precio.
+El **Precio Medio de Compra** (PMC) es el coste unitario promedio de un activo en una cartera, ponderado por la cantidad adquirida a cada precio.
 
-Responde a la pregunta: *"En promedio, ¿cuánto pagué por unidad de este activo?"*
+Responde a la pregunta: _"En promedio, ¿cuánto pagué por unidad por este activo?"_
 
 !!! info "Otros nombres"
 
@@ -14,169 +14,209 @@ Responde a la pregunta: *"En promedio, ¿cuánto pagué por unidad de este activ
 
 ## 🧮 Fórmula
 
-El PMP se calcula de forma **iterativa** a medida que cada transacción se procesa cronológicamente:
+El PMC se calcula **iterativamente** a medida que cada transacción se procesa cronológicamente:
 
 $$
-WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{pool} + Q_{tx}}
+PMC_{new} = \frac{PMC_{current} \times Q_{pool} + Coste_{unit} \times Q_{tx}}{Q_{pool} + Q_{tx}}
 $$
 
 Donde:
 
-- $WAC_{current}$ = coste medio ponderado actual antes de esta transacción
+- $PMC_{current}$ = precio medio de compra actual antes de esta transacción
 - $Q_{pool}$ = cantidad total mantenida en el pool antes de esta transacción
-- $Cost_{unit}$ = coste de adquisición por unidad de la nueva transacción
+- $Coste_{unit}$ = coste de adquisición por unidad de la nueva transacción — lo que realmente se pagó, en la moneda en que se mantiene el PMC, convertido al tipo de cambio de la fecha de la propia transacción (ver [Manejo de múltiples monedas](#multi-currency-handling))
 - $Q_{tx}$ = cantidad añadida por la nueva transacción
 
-## ⚙️ Cómo Calcula LibreFolio el PMP
+De manera equivalente, LibreFolio mantiene el coste total del pool $C_{pool}$ junto a su cantidad, con $PMC = C_{pool} / Q_{pool}$: una adquisición suma su coste, una reducción de $q$ unidades elimina $C_{pool} \cdot q / Q_{pool}$.
 
-LibreFolio utiliza un **algoritmo iterativo consciente del inventario** que procesa todas las transacciones que califican para un par (bróker, activo) determinado en orden cronológico.
+## ⚙️ Cómo calcula LibreFolio el PMC
 
-### 🏷️ Efectos de las Transacciones
+LibreFolio utiliza un **algoritmo iterativo que tiene en cuenta el inventario** que procesa todas las transacciones válidas para un par (bróker, activo) dado en orden cronológico. El mismo algoritmo sirve a todas las pantallas que muestran un coste promedio: el Panel, la tabla de Posiciones, el análisis de lotes y la vista previa de transacción.
 
-Cada transacción contribuye al cálculo del PMP de una de estas maneras:
+### 🏷️ Efectos de las transacciones
 
-| Efecto | Condición | Impacto en el PMP |
-|--------|-----------|---------------|
-| **Ponderado** | `qty > 0` y `unit_cost > 0` | El PMP se aproxima al nuevo coste de adquisición |
-| **Cantidad reducida** | `qty < 0` | Sale al PMP actual — El PMP no cambia, el pool se reduce |
-| **Dilución** | `qty > 0` pero `unit_cost = 0` | El pool crece, el numerador no cambia → el PMP **disminuye** |
-| **PMP automático** | `qty > 0`, `cost_basis_mode = "auto"` | El pool no cambia — las unidades entran al PMP actual |
+Cada transacción contribuye al cálculo del PMC de una de estas maneras:
 
-### 📅 Ordenamiento del Mismo Día
+| Efecto | Condición | Impacto en el PMC |
+|--------|-----------|-------------------|
+| **Ponderado** | `qty > 0` con un coste conocido mayor que cero | El PMC se mueve hacia el nuevo coste de adquisición |
+| **Cantidad reducida** | `qty < 0` | Sale al PMC actual — PMC sin cambios, el pool se reduce |
+| **Dilución** | `qty > 0` a coste cero | El pool crece, numerador sin cambios → PMC **disminuye** |
+| **Desdoblamiento** | Ajuste vinculado a un evento de desdoblamiento | Cantidad reescalada, coste total sin cambios → PMC dividido por la proporción del desdoblamiento |
+| **Coste desconocido** | `qty > 0` sin coste conocido: una transferencia o ajuste sin anulación del coste base | El pool crece sin coste — el PMC está **incompleto** (ver [Anulación del coste base](#cost-basis-override)) |
 
-Cuando ocurren múltiples transacciones en la misma fecha:
+### 📅 Ordenación en el mismo día
 
-1. **Primero las adiciones** (qty > 0) — se procesan antes que las reducciones
+Cuando múltiples transacciones ocurren en la misma fecha:
+
+1. **Primero las adiciones** (qty > 0) — procesadas antes que las reducciones
 2. **Segundo las reducciones** (qty < 0) — asegura que el pool no se vuelva transitoriamente negativo
 
-### 🔻 Agotamiento del Pool
+### 🔻 Agotamiento del pool
 
-- Cuando `new_qty = 0`: el PMP se reinicia a 0 (posición cerrada)
-- Cuando `new_qty < 0` (caso extremo de redondeo): se limita a 0
+- Cuando la cantidad llega a 0, la última reducción toma el **total** del coste restante, por lo que el coste total se conserva exactamente; el pool se reinicia desde cero, y una compra posterior abre un nuevo pool completo
+- Una reducción mayor que el pool se limita a la cantidad disponible
 
-## 📝 Ejemplos Prácticos
+## 📝 Ejemplos prácticos
 
-??? example "Ejemplo 1: Dos Compras — el PMP aumenta"
+??? example "Ejemplo 1: Dos compras — el PMC sube"
 
-    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
-    |------|------|-----|-----------|----------|-----|
-    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
-    | 15 Abr | BUY | 5 | $180 | 15 | $160.00 |
-
-    $$
-    WAC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
-    $$
-
-    La segunda compra a un precio más alto **eleva el PMP**.
-
-??? example "Ejemplo 2: Compra luego Venta — el PMP no cambia"
-
-    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
-    |------|------|-----|-----------|----------|-----|
-    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
-    | 15 Abr | SELL | -5 | (al PMP) | 5 | $150.00 |
-
-    La SELL elimina unidades al PMP actual ($150). El PMP permanece **sin cambios** — solo se reduce el pool.
-
-??? example "Ejemplo 3: Adquisición de Coste Cero — Dilución"
-
-    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
-    |------|------|-----|-----------|----------|-----|
-    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
-    | 1 May | ADJUSTMENT | +5 | $0 | 15 | $100.00 |
+    | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
+    |-------|------|-------|----------------|---------------|-----|
+    | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
+    | 15 abr | COMPRA | 5 | $180 | 15 | $160.00 |
 
     $$
-    WAC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
+    PMC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
     $$
 
-    El PMP se **diluye** porque 5 unidades entraron a coste cero (por ejemplo, split de acciones, airdrop, regalo).
+    La segunda compra a un precio más alto **hace subir el PMC**.
 
-## 🔄 Anulación de la Base de Coste
+??? example "Ejemplo 2: Compra y luego venta — el PMC no cambia"
 
-Para transferencias y ajustes, LibreFolio admite una **anulación de la base de coste**: un coste unitario especificado por el usuario que representa el coste histórico de las unidades transferidas.
+    | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
+    |-------|------|-------|----------------|---------------|-----|
+    | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
+    | 15 abr | VENTA | -5 | (al PMC) | 5 | $150.00 |
 
-**Cuando está establecido (modo manual):**
+    La VENTA elimina unidades al PMC actual ($150). El PMC permanece **sin cambios** — solo se reduce el pool.
 
-- La transacción entra en el cálculo del PMP como una adquisición ponderada normal
+??? example "Ejemplo 3: Adquisición a coste cero — Dilución"
+
+    | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
+    |-------|------|-------|----------------|---------------|-----|
+    | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
+    | 1 may | AJUSTE | +5 | $0 | 15 | $100.00 |
+
+    $$
+    PMC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
+    $$
+
+    El PMC se **diluye** porque 5 unidades entraron a coste cero — un ajuste cuya anulación del coste base es cero, como un airdrop. Un desdoblamiento 3 por 2 vinculado a su evento de desdoblamiento alcanza los mismos $100.00 sin ninguna adquisición: el pool mantiene sus $1,500 y los reparte entre 15 unidades.
+
+## 🔄 Anulación del coste base {: #cost-basis-override }
+
+Para transferencias y ajustes, LibreFolio admite una **anulación del coste base**: un coste unitario, en una moneda de su elección, que representa el coste histórico de las unidades que entran. Una transferencia o ajuste que añade cantidad necesita una: el formulario de transacción lo requiere.
+
+**Cuando se establece (modo manual):**
+
+- La transacción entra en el cálculo del PMC como una adquisición ponderada normal que cuesta $\text{anulación} \times Q_{tx}$, convertida en la fecha de la transacción como cualquier compra
 - Esto preserva la continuidad del coste entre brókers (por ejemplo, al transferir del bróker A al bróker B)
+- Una anulación de **cero** es una adquisición gratuita: la dilución del Ejemplo 3
 
-**Cuando no está establecido (sin modo especificado):**
+**Cuando falta:**
 
-- La transacción entra con `unit_cost = 0` (efecto de dilución)
-- Esto es apropiado para splits de acciones, regalos o airdrops donde no existe un precio de compra
+- El coste de esas unidades es **desconocido**, no cero: entran al pool sin ningún coste, y el PMC permanece incompleto hasta que se cierra la posición
+- El Panel muestra el coste promedio y el P&L no realizado de esa posición como no disponibles y advierte sobre el coste base faltante; la vista previa de la transacción cuenta las unidades a cero (dilución)
 
-**Cuando está en modo automático (`cost_basis_mode = "auto"`):**
+**En modo automático (`cost_basis_mode = "auto"`):**
 
-- La transacción entra al **PMP actual del pool** — el PMP permanece algebraicamente sin cambios
-- Esto es apropiado para transferencias o ajustes donde la base de coste debe heredarse del pool del bróker de origen
+- LibreFolio calcula el PMC de la posición de origen — para una transferencia, la posición del bróker emisor cuando las unidades salieron (la fecha de transferencia saliente), antes del tramo saliente; para un ajuste, la posición misma en la fecha de la transacción, sin esta transacción — y lo almacena como la anulación
+- A partir de entonces, la transacción es una adquisición ponderada ordinaria a ese coste unitario. Para un ajuste en la misma posición, el PMC permanece algebraicamente sin cambios, en la moneda en que se calculó:
 
 $$
-WAC_{new} = \frac{WAC \times Q_{pool} + WAC \times Q_{tx}}{Q_{pool} + Q_{tx}} = WAC
+PMC_{new} = \frac{PMC \times Q_{pool} + PMC \times Q_{tx}}{Q_{pool} + Q_{tx}} = PMC
 $$
 
-!!! tip "PMP Automático en la Interfaz de Usuario"
+!!! tip "Modo automático en la interfaz"
 
-    En el formulario de transacciones, el interruptor "Automático" utiliza este modo. La tabla de calificación muestra la insignia de efecto **PMP Automático** (o **Auto PMC** en italiano), indicando que las unidades entraron al coste actual del pool sin alterar el PMP.
+    En el formulario de transacción, el interruptor **Auto** calcula el valor cuando usted valida: la vista previa muestra el PMC sugerido y las transacciones de las que proviene, cada una con su efecto.
 
-??? example "Ejemplo 4: Transferencia en Modo Automático — el PMP no cambia"
+??? example "Ejemplo 4: Transferencia en modo automático — el coste sigue a las unidades"
 
-    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
-    |------|------|-----|-----------|----------|-----|
-    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
-    | 15 Abr | BUY | 5 | $180 | 15 | $160.00 |
-    | 1 May | TRANSFER (auto) | +3 | $160 (=PMP) | 18 | $160.00 |
+    El bróker A tiene el pool del Ejemplo 1 y envía 3 unidades al bróker B, que no tenía ninguna:
+
+    | Bróker | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
+    |--------|-------|------|-------|----------------|---------------|-----|
+    | A | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
+    | A | 15 abr | COMPRA | 5 | $180 | 15 | $160.00 |
+    | A | 1 may | TRANSFERENCIA saliente | −3 | (al PMC) | 12 | $160.00 |
+    | B | 1 may | TRANSFERENCIA entrante (auto) | +3 | $160 (PMC de A) | 3 | $160.00 |
+
+    En **modo automático**, el lado receptor toma el PMC del emisor como su anulación del coste base: el bróker B comienza con el promedio del bróker A, y los $480 de coste se mueven con las 3 unidades.
+
+## 🌍 Manejo de múltiples monedas {: #multi-currency-handling }
+
+El PMC se mantiene en una única moneda, la **moneda objetivo** $T$, y cada adquisición entra en él a su **coste histórico**: el importe realmente pagado, convertido al tipo de cambio de la fecha de la propia adquisición $d_i$:
+
+$$
+c_i^{T} = P_i \cdot \mathrm{fx}\bigl(\mathrm{ccy}(P_i),\, T,\, d_i\bigr), \qquad \mathrm{fx}(T, T, d) = 1
+$$
+
+Aquí $P_i$ es el efectivo pagado por una COMPRA, en su moneda de efectivo, o $\text{anulación} \times Q_{tx}$ en la moneda de la anulación para una transferencia o ajuste. Un importe que ya está en $T$ no necesita ningún tipo de cambio; de lo contrario, cuando la fecha exacta no tiene tipo de cambio, se usa el último tipo anterior a ella.
+
+El coste base de una posición es entonces
+
+$$
+\mathrm{CB}(a,b,t) = q(a,b,t) \times \mathrm{PMC}^{T}(a,b,t)
+$$
+
+sin **ningún tipo de cambio en $t$**: es lo que se pagó, y no se mueve cuando los tipos de cambio se mueven. Para un activo valorado en otra moneda, el efecto del tipo de cambio reside, por tanto, en el P&L no realizado — valor de mercado al tipo del día menos coste histórico — donde el Panel lo desglosa (ver [P&L período](portfolio-engine/period-pnl.md#unrealized-change-by-currency)).
+
+La moneda objetivo depende de dónde se muestra el PMC:
+
+| Dónde | Moneda objetivo $T$ |
+|-------|---------------------|
+| Panel, tabla de Posiciones, ventas realizadas, Rendimiento sobre coste | La moneda de visualización (informe) |
+| Líneas de PMC del análisis de lotes | La moneda del análisis |
+| Vista previa de transacción, coste base automático, series de PMC (`POST /portfolio/wac`) | La moneda seleccionada en la vista previa; de lo contrario, la moneda de la **última adquisición** |
+| Planificador PAC | La moneda del planificador |
+
+La moneda de la última adquisición es la moneda pagada por la transacción más reciente que añadió cantidad — una regla determinista; en caso de empate, gana la primera registrada. Un desdoblamiento, o una adquisición de coste desconocido, recurre a la moneda propia del activo.
+
+??? example "Ejemplo 5: Un activo en dólares comprado con euros, moneda de visualización EUR"
+
+    | Fecha | Tipo | Cant. | Pagado | Tipo de cambio USD→EUR | Coste en EUR |
+    |-------|------|-------|--------|--------------------------|--------------|
+    | 1 abr | COMPRA | 10 | €400 | — (pagado en EUR) | €400.00 |
+    | 1 may | COMPRA | 5 | 300 USD | 0.90 | €270.00 |
 
     $$
-    WAC = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160.00
+    PMC^{EUR} = \frac{400 + 270}{10 + 5} = \frac{670}{15} \approx 44.67 \text{ EUR}
     $$
 
-    El receptor de la transferencia en **modo automático** hereda el PMP actual como su coste unitario. El pool crece pero el PMP permanece **sin cambios**.
+    La primera compra no necesita tipo de cambio: su coste es exactamente los €400 pagados. El coste base de la posición permanece en €670 sin importar lo que haga el dólar después; un dólar más débil reduce el valor de mercado en euros y se refleja como una pérdida no realizada.
 
-## 🌍 Manejo de Múltiples Monedas
+!!! warning "Disponibilidad de tipos de cambio"
 
-Cuando una cartera contiene adquisiciones en diferentes monedas, LibreFolio:
+    Cuando no existe un tipo de cambio en la fecha de adquisición o antes, LibreFolio nunca cuenta ese coste como cero. Las unidades entran al pool sin su coste y el PMC se marca como incompleto: la vista previa de la transacción no muestra PMC y lista el par FX faltante con sus fechas, el Panel muestra el coste promedio y el P&L no realizado de la posición como no disponibles, y el análisis de lotes deja esos días fuera de sus líneas de PMC. La interfaz advierte sobre los pares FX faltantes y proporciona acciones rápidas para añadirlos o sincronizarlos.
 
-1. Determina la **moneda objetivo** a partir de la anulación de la solicitud cuando se proporciona; en caso contrario usa la moneda de la adquisición más reciente (determinístico), con respaldo en la moneda del activo
-2. Convierte todos los costes unitarios a la moneda objetivo utilizando tipos de cambio históricos
-3. Calcula el PMP en la moneda objetivo unificada
+## 🎯 Dónde se usa el PMC en LibreFolio
 
-!!! warning "Disponibilidad del Tipo de Cambio"
+- **Coste base**: $\text{CB}(a,b,t) = q(a,b,t) \times \text{PMC}^{T}(a,b,t)$, histórico, sin conversión en $t$
+- **P&L realizado en VENTA**: $\text{realizado} = P_{\text{venta}} - q_{\text{vendida}} \times \text{PMC}^{T}_{\text{pre-venta}}$, con los ingresos $P_{\text{venta}}$ convertidos en la fecha de venta y las unidades vendidas saliendo a su coste histórico
+- **Descomposición del pool de efectivo**: la VENTA devuelve $C = q_{\text{vendida}} \times \text{PMC}^{T}_{\text{pre-venta}}$ a Capital Pool
+- **Rendimiento sobre coste**: el precio de compra promedio del denominador de [Rendimiento sobre coste](portfolio-engine/yield-on-cost.md)
+- **Formulario de transferencia**: sugiere automáticamente el cost_basis_override del lado receptor a partir del PMC de la posición emisora
 
-    Si falta un tipo de cambio requerido, el cálculo del PMP puede estar incompleto. La interfaz de usuario advierte sobre pares de divisas faltantes y proporciona acciones rápidas para añadirlos o sincronizarlos.
+!!! warning "El PMC nunca se usa para la valoración de activos"
 
-## 🎯 Dónde se Utiliza el PMP en LibreFolio
+    El PMC es una construcción contable para el coste base. El valor de mercado utiliza los niveles del resolutor unificado: `MARKET → TRADE_AVG → CARRIED → MISSING`, expuestos a las filas de cartera como `MARKET_PRICE`, `LAST_TRADE_PRICE` o `MISSING`. Ver [Resolución de precios](portfolio-engine/price-resolution.md).
 
-- **Base de coste**: $\text{CB}(a,b,t) = q(a,b,t) \times \text{PMP}(a,b,t) \times \text{fx}(\cdot)$
-- **P&L realizado en SELL**: $\text{realized} = P_{\text{sell}} - q_{\text{sold}} \times \text{PMP}_{\text{pre-sell}}$
-- **Descomposición del pool de efectivo**: SELL devuelve $C = q_{\text{sold}} \times \text{PMP}$ al Pool de Capital
-- **Formulario de transferencia**: sugiere automáticamente la anulación de la base de coste para transferencias salientes
+## ⚙️ Implementación: alcance a nivel de posición
 
-!!! warning "El PMP nunca se utiliza para la valoración de activos"
-
-    El PMP es una construcción contable para la base de coste. La cadena de valoración para el valor de mercado utiliza: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. Consulta [Resolución de Precios](portfolio-engine/price-resolution.md).
-
-## ⚙️ Implementación: Alcance a Nivel de Posición
-
-El PMP se mantiene **por posición** $(a, b)$ — es decir, por par (activo, bróker). El mismo activo mantenido en dos brókers tiene dos pools de PMP independientes.
+El PMC se mantiene **por posición** $(a, b)$ — es decir, por par (activo, bróker). El mismo activo mantenido en dos brókers tiene dos pools de PMC independientes.
 
 $$
-\text{PMP}(a, b_1, t) \neq \text{PMP}(a, b_2, t) \quad \text{en general}
+\text{PMC}(a, b_1, t) \neq \text{PMC}(a, b_2, t) \quad \text{en general}
 $$
 
-El motor calcula el PMP en línea durante el bucle diario de transacciones — no se necesitan consultas separadas a la base de datos. Esto logra un coste amortizado O(1) por transacción en lugar del coste O(N) de volver a consultar todo el historial.
+El coste promedio de cada posición en un informe se calcula **una vez, antes de la reproducción diaria**, con todas las conversiones que necesita agrupadas en una sola solicitud al servicio de FX; la reproducción diaria luego sigue el pool de cada posición paso a paso en lugar de recalcularlo, y nunca convierte un coste por sí misma.
 
 ### 📅 Ordenación de transacciones del mismo día
 
 Dentro de la misma fecha, **las adiciones se procesan antes que las reducciones**:
 
 $$
-\text{BUY}_1, \text{BUY}_2, \ldots \quad \text{luego} \quad \text{SELL}_1, \text{SELL}_2, \ldots
+\text{COMPRA}_1, \text{COMPRA}_2, \ldots \quad \text{luego} \quad \text{VENTA}_1, \text{VENTA}_2, \ldots
 $$
 
-Esto evita cantidades negativas transitorias y asegura que SELL siempre lea el PMP correcto que incluye las BUY del mismo día.
+Esto evita cantidades negativas transitorias y asegura que la VENTA siempre lea el PMC correcto que incluye las COMPRAS del mismo día.
 
 ## 🔗 Relacionado
 
-- 🔬 **[Análisis de Lotes FIFO](fifo-engine/fifo-lot-analysis.md)** — Complemento por lote: rastrea cada lote de adquisición individualmente en lugar de combinarlos en un promedio
-- 🔁 **[Compra y Venta](../../instruments/transaction-types/buy-sell.md)** — Transacciones que alimentan el pool del PMP
-- 📈 **[NAV / Patrimonio Neto](portfolio-engine/nav.md)** — Cómo el valor contable basado en PMP difiere del NAV a precio de mercado
+- 🔬 **[Análisis de lotes FIFO](fifo-engine/fifo-lot-analysis.md)** — Complemento por lote: rastrea cada lote de adquisición individualmente en lugar de fusionarlos en un promedio
+- 🔁 **[Compra y venta](../../instruments/transaction-types/buy-sell.md)** — Transacciones que alimentan el pool del PMC
+- 📈 **[NAV / Patrimonio neto](portfolio-engine/nav.md)** — Cómo el valor contable basado en PMC difiere del NAV a precio de mercado
+- 📖 **[Valor contable](portfolio-engine/book-value.md)** — Coste base abierto: la suma de los costes históricos
+- ⚖️ **[PMC y coste base (Manual del desarrollador)](../../../developer/backend/transactions/wac.md)** — La implementación única del coste promedio y sus invocadores

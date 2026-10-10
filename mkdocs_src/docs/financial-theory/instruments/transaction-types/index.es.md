@@ -21,8 +21,8 @@ Estas representan movimientos **entre** cuentas o divisas. Generan dos asientos 
 | | Tipo | Código | Descripción | Efectivo | Activo | |
 |:---:|:---|:---|---|:---:|:---:|:---:|
 | ![](../../../static/icons/transactions/transfer.png){: width="32" } | **Transferencia de Activos** | `TRANSFER` | Traslado de valores entre brókeres. | — | ⬆️⬇️ | [📖](transfer.md) |
-| ![](../../../static/icons/transactions/cash-transfer.png){: width="32" } | **Transferencia de Efectivo** | `CASH_TRANSFER` | Transferencia bancaria entre brókeres. | ⬆️⬇️ | — | [📖](cash-transfer.md) |
-| ![](../../../static/icons/transactions/fx-conversion.png){: width="32" } | **Conversión de divisas** | `FX_CONVERSION` | Cambio de moneda dentro de un bróker. | ⬆️⬇️ | — | [📖](fx-conversion.md) |
+| ![](../../../static/icons/transactions/cash-transfer.png){: width="32" } | **Transferencia de fondos** | `CASH_TRANSFER` | Transferencia bancaria entre brókeres. | ⬆️⬇️ | — | [📖](cash-transfer.md) |
+| ![](../../../static/icons/transactions/fx-conversion.png){: width="32" } | **Conversión de divisa** | `FX_CONVERSION` | Cambio de moneda dentro de un bróker. | ⬆️⬇️ | — | [📖](fx-conversion.md) |
 
 ---
 

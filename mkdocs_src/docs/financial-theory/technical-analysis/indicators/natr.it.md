@@ -6,7 +6,7 @@ NATR è [ATR](atr.md) con una divisione in più: esprime la stessa misurazione d
 
 ## 💡 Significato Finanziario
 
-Un ATR di €3 è enorme per un'azione da €10 e trascurabile per un'azione da €1.000. NATR rimuove questa distorsione, quindi un confronto di volatilità su un intero portafoglio — "quale delle mie posizioni si muove di più, rispetto al proprio prezzo?" — diventa significativo. È anche più stabile nel tempo per un singolo asset che ha subito un frazionamento o una grande variazione di prezzo pluriennale.
+Un ATR di €3 è enorme per un'azione da €10 e trascurabile per un'azione da €1.000. NATR rimuove questa distorsione, quindi un confronto di volatilità su un intero portafoglio — "quale delle mie posizioni si muove di più, rispetto al proprio prezzo?" — diventa significativo. È anche più stabile nel tempo per un singolo asset che ha subito uno split o una grande variazione di prezzo pluriennale.
 
 ---
 

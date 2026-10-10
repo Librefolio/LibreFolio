@@ -1,142 +1,214 @@
-# 🔍 Positions & Analyse
+# 🔍 Positions et analyse
 
-L'onglet **Positions** du tableau de bord vous permet d'inspecter les positions ouvertes, d'analyser les performances et d'explorer les lots correspondants selon la méthode FIFO.
+L'onglet **Positions** montre ce que vous détenez, ce que chaque position a rapporté au cours de la période et, à un clic, les lots FIFO derrière chaque position. La page de chaque courtier possède le même onglet pour ce courtier uniquement, avec les mêmes paramètres de tableau.
+
+- 📋 **[Positions](#holdings)** — ce que vous possédez à la date de fin
+- 📈 **[Performance](#performance)** — ce que chaque position a rapporté au cours de la période
+- 🔬 **[Analyse des lots FIFO](#fifo-lots-analysis)** — les lots derrière une position
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Holdings (Table)" alt="Holdings Table View">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Holdings (Map / Treemap)" alt="Holdings Map View">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance (Table)" alt="Performance Table View">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance (Map / Chart)" alt="Performance Map View">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Positions (Tableau)" alt="Vue tableau des positions">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Positions (Carte / Treemap)" alt="Vue carte / treemap des positions">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance (Tableau)" alt="Vue tableau de la performance">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance (Carte / Graphique)" alt="Vue carte / graphique de la performance">
 </div>
 
 ---
 
-## 🔍 Onglet Positions
+## 🎛️ Choisir une vue
 
-L'onglet **Positions** a deux modes sémantiques : **Positions** et **Performance**.
+- **Portefeuille / Période** bascule entre [Positions](#holdings) et [Performance](#performance) ; **Tableau / Carte** (les deux icônes) entre un tableau et un graphique.
+- **L'icône en forme d'œil** (dans Tableau) affiche, masque ou réordonne les colonnes ; **Réinitialiser la disposition** les restaure. **Voir tout →** ouvre la page des actifs.
+- **Pour approfondir une position**, ouvrez son menu **⋮** dans un tableau, ou faites un clic droit dessus dans n'importe quelle vue : **Analyser les lots** ouvre l'[Analyse des lots FIFO](#fifo-lots-analysis) ci-dessous, **Voir l'actif** la page de l'actif.
 
-Utilisez le sélecteur de vue pour passer de l'un à l'autre, et le bascule tableau/carte pour changer la présentation visuelle.
-
-#### 📋 Vue Positions
-
-La vue **Positions** montre l'instantané des positions ouvertes. Le tableau comporte 13 colonnes :
-
-| Colonne | Description |
-|:---|:---|
-| **Actif** | Nom de l'actif avec l'icône du type — cliquez pour ouvrir la page de détail de l'actif. |
-| **Δ1** | Variation du P&L latent par rapport à hier, à quantité du jour constante. |
-| **Δ1%** | La même variation quotidienne en pourcentage de la valeur de marché de la position d'hier. |
-| **P&L latent** | Gain/perte ouvert : valeur actuelle moins le coût résiduel. |
-| **P&L %** | P&L latent en pourcentage du coût résiduel. |
-| **Annualisé** | Rendement net annualisé (CAGR) des lots encore ouverts, de la première transaction à aujourd'hui — pour comparer des positions détenues sur des durées différentes. |
-| **Valeur** | Valeur totale aux prix de marché courants (\(\text{Prix} \times \text{Quantité}\)). |
-| **Poids** | Part proportionnelle de cette position par rapport à la valeur totale du portefeuille. |
-| **Qté** | Actions, unités ou pièces actuellement détenues. |
-| **Courtiers** | Compte(s) courtier détenant la position. |
-| **Prix** *(masquée par défaut)* | Prix actuel de l'actif fourni par le fournisseur connecté. |
-| **Coût Moyen** *(masquée par défaut)* | Coût moyen par unité de la position actuellement ouverte (Prix Moyen de Revient). |
-| **Lot ouvert le plus ancien** *(masquée par défaut)* | Date d'ouverture du plus ancien lot FIFO encore ouvert pour cette position. |
-
-Utilisez l'**icône en forme d'œil** dans la barre d'outils du tableau pour afficher ou masquer des colonnes — vos choix sont mémorisés d'une session à l'autre.
-
-#### 📈 Vue Performance
-
-La vue **Performance** se charge à la demande et montre ensemble les positions ouvertes et clôturées. Dans le tableau/la carte, le **Statut** est filtrable à l'intérieur du composant, pas via un sélecteur de premier niveau.
-
-#### 🗺️ Style Visuel : Tableau vs. Carte
-
-| Mode Visuel | Fonctionnalités Principales | Cas d'Utilisation Optimal |
-|:---|:---|:---|
-| **📋 Vue Tableau** | • Grille triable<br>• Valeurs numériques précises<br>• Tri rapide des colonnes | Comptabilité standard, recherche de quantités d'actifs spécifiques ou comparaison des valeurs PMP. |
-| **🗺️ Vue Carte** | • Visualisation Treemap<br>• La taille indique le poids de l'actif<br>• L'intensité de la couleur indique la performance (vert = gain, rouge = perte) | Diagnostics visuels rapides, repérage de la sur-allocation ou identification des actifs sous-performants. |
+LibreFolio se souvient de vos choix.
 
 ---
 
-## 🔬 Analyse des Lots FIFO {: #fifo-lots-analysis }
+## 📋 Positions — ce que vous détenez {: #holdings }
 
-Lorsque vous cliquez sur une position dans la vue Tableau ou Carte, LibreFolio développe un panneau **Analyse des Lots FIFO** directement **en dessous** de la vue Positions. Il utilise une transition de diapositive verticale et défile automatiquement pour être visible — ce n'est **pas** un panneau coulissant sur le côté droit. Si nécessaire, une bannière de qualité des données apparaît en premier, puis les blocs d'analyse restent dans cet ordre : PMP / Cours de marché, Durée de vie & Conservation des lots, tableau unifié des lots, comparaison Valeur / Rendement, et la fenêtre modale de détail du lot. Par défaut, sans sélection explicite, **tous les lots actuellement visibles** sont inclus dans les graphiques liés.
+Que possédez-vous à la date de fin, et comment se porte chaque position ? **Portefeuille** liste une ligne par actif et par courtier, la valeur la plus élevée en premier.
+
+**Colonnes affichées**
+
+| Colonne | Ce qu'elle affiche |
+|:---|:---|
+| **Actif** | L'actif, avec son icône de type |
+| **Δ1** / **Δ1%** | Variation du jour du P&L latent à la quantité du jour, en montant et en % de la valeur de la veille |
+| **P&L latent** / **P&L %** | Valeur actuelle moins ce qu'a coûté la position ouverte, en montant et en % de ce coût → [Valeur comptable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) |
+| **Annualisé** | Rendement composé annuel depuis la première transaction, revenus et frais inclus → [Rendement annualisé net](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md) |
+| **YOC** | Les dividendes et intérêts de la dernière année par unité, rapportés à son prix moyen → [Rendement sur coût](#yield-on-cost-yoc) |
+| **Valeur** / **Poids** | Ce que vaut la position, et sa part de votre valeur nette, liquidités incluses |
+| **Qté** | Actions, unités ou pièces détenues |
+| **Prix** *(masqué)* | Le prix unitaire utilisé : le prix de marché, ou le prix de la dernière transaction lorsqu'il n'y a pas de cotation → [Résolution des prix](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
+| **PRU** *(masqué)* | Prix de revient unitaire, chaque achat au taux de change de sa propre date → [Prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
+| **Plus ancien lot ouvert** *(masqué)* | Date d'ouverture du plus ancien lot encore ouvert |
+| **Courtiers** | Le courtier détenant la position |
+
+**Comment l'interpréter**
+
+- **Le poids inclut les liquidités**, donc les lignes totalisent moins de 100 % lorsque vous détenez des liquidités.
+- **Le PRU conserve le taux de change de chaque achat**, tandis que la valeur utilise celui de la date de fin : le P&L latent inclut l'évolution du taux depuis.
+- **Dans la carte**, les tuiles sont regroupées par courtier et par type d'actif ; la taille représente la valeur, la couleur le P&L %. Faites défiler pour zoomer, faites glisser pour déplacer, et **Réinitialiser le zoom** (↺) réaffiche tout.
+
+??? info "➖ Cellules vides — quand une valeur manque"
+
+    - **`—` dans P&L latent, P&L % ou PRU** : l'actif n'a aucun prix, ou une partie de ce que vous avez payé est inconnue — un taux de change manquant à une date d'achat, ou un transfert ou ajustement sans coût de base. La [bannière de qualité des données](index.md#data-quality-banner) indique ce qu'il faut corriger.
+    - **Δ1** et **Δ1%** nécessitent un prix de marché ; **Annualisé** nécessite une position suffisamment ancienne pour qu'un taux annuel ait un sens.
+
+### 💸 Rendement sur coût (YOC) {: #yield-on-cost-yoc }
+
+Combien de revenu chaque unité vous verse-t-elle, par rapport à ce qu'elle a coûté ? Le **YOC** compare les dividendes et intérêts reçus par chaque unité sur les **365 derniers jours** à son prix d'achat moyen.
+
+**Comment l'interpréter**
+
+- **Une valeur par actif et par courtier**, sur l'année qui se termine à la date de fin : déplacer la date de début ne la change pas.
+- **Brut, pas après impôt** : les transactions distinctes d'impôts et de frais ne sont pas soustraites.
+- **Survolez une valeur** pour voir le revenu par unité, la période et les taux de change utilisés — chaque paiement au taux de sa propre date.
+- **`0.00%`** signifie un revenu enregistré à zéro ; un simple **`-`** signifie aucun revenu au cours de la dernière année.
+
+🔗 **Théorie** : [Rendement sur coût](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — les règles exactes, et en quoi le YOC diffère du rendement du dividende ou du CAGR
+
+??? info "🚦 Un tiret avec une icône ⓘ — quand le YOC n'est pas disponible"
+
+    LibreFolio n'affiche aucun YOC partiel. Lorsqu'une entrée échoue, survolez l'icône ⓘ ambre pour en connaître la raison : moins d'un an d'historique chez ce courtier et aucun revenu encore, un paiement sans unités détenues la veille, un historique d'achat, de vente, de transfert ou de division qui ne s'additionne pas, un taux de change manquant, ou un prix moyen inconnu. Une fois cela corrigé, le YOC est recalculé.
+
+---
+
+## 📈 Performance — ce que chaque position a rapporté {: #performance }
+
+Quelles positions ont gagné ou perdu de l'argent au cours de la période, et comment ? **Période** liste chaque position de la période, ouverte ou fermée depuis, les plus fortes variations en premier. LibreFolio le calcule la première fois que vous l'ouvrez, cela peut donc prendre un moment.
+
+**Métriques affichées**
+
+- **P&L période**, décomposé comme sur la [carte P&L période](kpi-cards.md#card-1-period-pl) en **Variation latente**, **Ventes**, **Dividendes et intérêts** et **Coûts** → [P&L période](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **Annualisé** — le résultat de la période en taux annuel, sur la durée pendant laquelle la position a été détenue dans la période → [Rendement annualisé net](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
+- **Δ1** / **Δ1%** pour les positions ouvertes et, masqués par défaut, **Valeur de début**, **Valeur de fin**, **Plus ancien lot ouvert** et **Statut**
+- **Autres effets de la période** — ce qui n'appartient à aucune position : **Revenus non alloués** et **Coûts non alloués**, enregistrés sans actif, et le **Résidu autre / de rapprochement**
+
+**Comment l'interpréter**
+
+- **Les positions fermées** sont en italique, ou portent un badge **Fermé** dans le graphique ; pour n'en lister qu'un type, affichez **Statut** et filtrez-le.
+- **Dans la carte**, les gains s'empilent à droite de zéro et les pertes à gauche, le résultat net fermant la ligne ; chaque pourcentage se compare à la valeur de début de la position.
+- **Le P&L période d'une position** peut différer de son gain depuis l'origine : seule la période compte.
+
+??? tip "🙈 Masquer les montants — ce que le graphique affiche encore"
+
+    Avec **Masquer les montants** activé (le bouton en forme d'œil dans la barre supérieure), les montants et l'axe du graphique deviennent `•••`, comme dans `+€•••`. Les signes, les devises, les pourcentages, les longueurs de barres et les couleurs restent, vous voyez donc toujours qui a gagné ou perdu, et combien par rapport aux autres. Voir le [mode confidentialité](../settings/preferences.md#privacy-mode).
+
+---
+
+## 🔬 Analyse des lots FIFO {: #fifo-lots-analysis }
+
+Quels achats composent une position, où sont-ils détenus, et comment chacun s'est-il comporté ? L'**Analyse des lots FIFO** répond lot par lot : chaque achat ouvre un *lot*, et chaque vente ferme d'abord les lots ouverts les **plus anciens** — Premier entré, premier sorti.
+
+Choisissez **Analyser les lots** sur une position et le panneau s'ouvre en dessous, pour les courtiers de la page : votre filtre de courtier sur le tableau de bord, le courtier lui-même sur sa propre page. **Voir l'actif** (↗) ouvre l'actif, **✕** ferme le panneau.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fifo-lots-analysis" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔍 Overview" alt="FIFO Lots Analysis Overview">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-wac-chart" data-title="📈 WAC / Market Price" alt="WAC and Market Price Chart">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-gantt-chart" data-title="🕒 Lot Life & Custody" alt="Lot Life and Custody Gantt Chart">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-table" data-title="📋 Unified Lots Table" alt="Unified Lots Table">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-comparison-chart" data-title="💰 Value Comparison" alt="Value Comparison Chart">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-comparison-chart-return" data-title="📊 Return Comparison" alt="Return Comparison Chart">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-custody-modal" data-title="🧾 Lot Detail Modal" alt="Lot Detail Modal">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔍 Vue d'ensemble" alt="Vue d'ensemble de l'analyse des lots FIFO">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-wac-chart" data-title="📈 PRU / Prix de marché" alt="Graphique PRU et prix de marché">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-gantt-chart" data-title="🕒 Durée de vie et conservation des lots" alt="Diagramme de Gantt de la durée de vie et de la conservation des lots">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-table" data-title="📋 Tableau unifié des lots" alt="Tableau unifié des lots">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-comparison-chart" data-title="💰 Comparaison de valeur" alt="Graphique de comparaison de valeur">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-comparison-chart-return" data-title="📊 Comparaison de rendement" alt="Graphique de comparaison de rendement">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-custody-modal" data-title="🧾 Modale de détail du lot" alt="Modale de détail du lot">
 </div>
 
-### 1. PMP / Cours de marché
+**Comment les blocs fonctionnent ensemble**
 
-Ce premier graphique compare le **Cours de marché** de l'actif avec les lignes **PMP** par courtier et la ligne PMP combinée pour la position sélectionnée.
+- **Une seule sélection** : cliquez sur les bulles, les barres ou les lignes du tableau pour choisir des lots ; si aucun n'est choisi, chaque lot visible compte. **Ouvert / Fermé**, sur la chronologie, filtre chaque bloc.
+- **Double-cliquez pour naviguer** : d'un marqueur de graphique vers les lots de cette transaction, d'une barre de chronologie vers sa ligne de tableau, et inversement.
+- **Montants complets du courtier** : chez un courtier que vous codétenez, votre part n'est pas appliquée ici, contrairement aux cartes KPI et aux Positions.
 
-- Utilisez l'interrupteur **ABS / %** pour basculer entre les prix absolus et l'évolution en pourcentage depuis le début de la période.
-- En mode **ABS**, basculez **Auto / À partir de 0** pour choisir si l'axe Y est ajusté automatiquement ou forcé à démarrer à zéro.
-- Les marqueurs d'événements et les bulles de performance des lots vous aident à relier les achats, ventes, transferts, divisions et événements de revenus à l'historique de la base de coût.
-- Cliquer sur les bulles de lots met à jour la sélection partagée de lots utilisée par les autres blocs.
-- **La couleur des bulles** correspond au **courtier d'ouverture** du lot — les mêmes couleurs utilisées par les barres de conservation dans le bloc 2 ci-dessous.
-- **La taille des bulles** reflète la **valeur d'ouverture** du lot (sa base de coût d'origine) : les bulles plus grosses correspondent à des investissements initiaux plus importants.
-- **Un bord de bulle en tirets** marque un lot actuellement affiché **au coût** car aucun cours de marché en direct n'est encore disponible pour celui-ci.
+🔗 **Théorie** : [Moteur FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md) · [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md) · [Appariement FIFO](../../financial-theory/instruments/transaction-types/buy-sell.md#fifo-matching) · [Fiscalité](../../financial-theory/fundamentals/taxation.md)
 
-🔗 **Théorie** : Reportez-vous à **[Prix Moyen Pondéré (PMP)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** pour les règles de base de coût, et à **[Chaîne de Prix d'Évaluation](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)** pour comprendre comment les cours de marché sont déterminés.
+### 💹 1. PRU / Prix de marché
 
-### 2. Durée de vie & Conservation des Lots
+Comment le prix se compare-t-il à ce que vous avez payé, et où en est chaque lot ?
 
-Le bloc **Durée de vie & Conservation des lots** est une chronologie de type Gantt montrant quand chaque lot était ouvert et où il était détenu au fil du temps.
+**Métriques affichées**
 
-- Utilisez le filtre **Ouvert / Fermé** pour afficher uniquement les lots ouverts, uniquement les lots fermés, ou les deux.
-- Chaque barre représente la durée de vie d'un lot ; les transferts créent des voies de conservation supplémentaires afin que vous puissiez voir les mouvements entre courtiers et les périodes de transit.
-- **La couleur de la barre** identifie le **courtier de conservation** détenant actuellement ce segment du lot — les badges de courtier correspondants sont listés dans la légende située sous le graphique. Un segment violet en tirets marque une période **en transit** entre les courtiers (transfert initié mais pas encore arrivé).
-- **L'épaisseur de la barre** est proportionnelle à la **quantité détenue** pendant ce segment exact — un lot qui a été partiellement vendu ou divisé montre des barres plus fines par la suite.
-- Cliquer sur une barre sélectionne ce lot dans l'analyse partagée ; un double-clic peut ramener à la ligne correspondante dans le tableau.
+- **Prix de marché** — en pointillés lorsque LibreFolio l'estime à partir de votre dernière transaction → [Chaîne de prix d'évaluation](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)
+- **PRU** — une ligne par courtier, et une ligne **Combiné** en pointillés lorsque l'actif est détenu chez plusieurs → [Prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **Bulles** — une par lot long, à son rendement total, parmi les marqueurs de vos transactions et paiements → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 
-🔗 **Théorie** : Voir **[Moteur FIFO — Cycle de vie des lots & Modèle d'appariement](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md)** pour comprendre comment les états des lots, les divisions et les transferts entre courtiers sont définis.
+**Comment l'interpréter**
 
-### 3. Tableau Unifié des Lots
+- **Abs / %** affiche les prix ou leur variation depuis le premier point ; **Auto / Depuis 0** définit le point de départ de l'axe.
+- **La couleur de la bulle** est le courtier d'ouverture, sa **taille** la quantité du lot (**Abs**) ou sa valeur d'ouverture (**%**) ; une **bordure en pointillés** signifie une évaluation au coût.
+- **Un trou dans une ligne de PRU** est un jour dont le PRU est inconnu : aucune moyenne erronée n'est tracée.
 
-v3 remplace les anciens tableaux séparés **Lots ouverts** et **Lots fermés** par un **tableau unifié**.
+### 🕒 2. Durée de vie et conservation des lots
 
-- Le tableau montre l'ensemble actuel des lots avec des colonnes telles que la date d'ouverture, le rendement total, la valeur actuelle, la conservation et le **Statut**.
-- Le filtrage partagé signifie que le tableau reflète toujours le même ensemble de lots visibles que les graphiques ci-dessus.
-- Le menu **Actions** de chaque ligne comprend :
- - **Voir le détail du lot**
- - **Aller au lot dans le Gantt**
- - **Aller à la transaction d'ouverture**
- - **Copier l'identifiant du lot**
+Quand chaque lot a-t-il été ouvert, et quel courtier le détenait ?
 
-### 4. Comparaison Valeur / Rendement
+**Métriques affichées**
 
-Ce graphique de comparaison se concentre sur les lots actuellement sélectionnés dans le panneau. Si vous n'avez pas sélectionné de lots spécifiques, il utilise **tous les lots visibles**.
+- **Barres** — une par lot, chacune colorée selon le courtier qui le détient et aussi épaisse que la quantité détenue ; violette en pointillés en transit, avec une voie par courtier après un transfert → [Moteur FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md)
 
-- Basculez entre **Valeur** et **Rendement** à l'aide de l'interrupteur de mode en haut à droite.
-- Le mode **Valeur** compare les lots sélectionnés en termes monétaires absolus et propose également le bouton à bascule **Auto / À partir de 0** pour l'axe Y.
-- Le mode **Rendement** compare le pourcentage de rendement de chaque lot depuis sa date d'ouverture sur le même ensemble de lots sélectionnés.
+**Comment l'interpréter**
 
-### 5. Fenêtre Modale Détail du Lot
+- **Ouvert / Fermé** ne conserve que les lots ouverts, uniquement les fermés, ou les deux.
+- **Une barre plus fine** a perdu une partie de sa quantité, par exemple à cause d'une vente partielle.
+- **Cliquez** sur une barre pour sélectionner son lot, **double-cliquez** dessus pour trouver sa ligne dans le tableau.
 
-Choisissez **Voir le détail du lot** dans les actions de la ligne du tableau pour ouvrir la fenêtre modale **Détail du Lot FIFO** pour un lot spécifique.
+### 📋 3. Tableau des lots
 
-- Le résumé comprend le **P&L total**, le **Rendement total**, les **Revenus de l'actif**, le **Rendement en cash**, le P&L FIFO, la valeur d'ouverture/actuelle et d'autres métriques au niveau du lot.
-- **Conservation actuelle** montre comment le lot est actuellement réparti entre les courtiers ou en tranches en transit.
-- **Historique** liste la chronologie complète de la conservation et du cycle de vie, y compris les transferts et autres événements de lot, avec une action directe **Aller à la transaction** pour la transaction concernée.
+Chaque lot avec ses chiffres, selon le filtre et la sélection du panneau.
 
-!!! info "Logique d'appariement FIFO"
+**Métriques affichées**
 
-    LibreFolio résout la clôture des lots strictement avec l'appariement **Premier Entré, Premier Sorti (FIFO)** : les quantités vendues consomment toujours le **lot ouvert éligible le plus ancien en premier** avant que les lots plus récents ne soient touchés.
+- **Date d'ouverture**, **P&L total**, **Rendement total**, **Annualisé**, **Valeur actuelle**, **Quantité ouverte** et **Conservation**, avec une ligne **Totaux** → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Revenus** lorsqu'un lot en a reçu, et **Frais**, **Impôts**, **P&L net** et **Rendement net** lorsqu'un lot supporte des coûts → [Coûts et métriques nettes](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
 
-    Pour une théorie et des formules plus approfondies, consultez :
+**Comment l'interpréter**
 
-    - **[Théorie de la Fiscalité](../../financial-theory/fundamentals/taxation.md)**
-    - **[Modèle de Transaction Achat/Vente](../../financial-theory/instruments/transaction-types/buy-sell.md#fifo-matching)**
-    - **[Analyse des Lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)**
+- **Cliquez** sur une ligne pour la sélectionner, **double-cliquez** pour la retrouver dans la chronologie ; la couleur de la ligne est celle du courtier d'ouverture.
+- **Le menu ⋮** propose **Voir le détail du lot**, **Aller au lot dans le Gantt**, **Aller à la transaction d'ouverture** et **Copier l'identifiant du lot** — une référence stable, pratique pour le support.
+- **D'autres colonnes**, comme **Valeur d'ouverture**, se cachent derrière l'icône en forme d'œil.
+
+### 💰 4. Comparaison valeur / rendement
+
+Que valent les lots sélectionnés, et qu'ont-ils rapporté depuis leur ouverture ? Si aucun n'est sélectionné, le graphique couvre chaque lot visible.
+
+**Métriques affichées**
+
+- **Valeur** — **Valeur résiduelle**, **Produit de cession** et **Revenus cumulés** empilés jusqu'à la **Valeur globale**, par rapport à la **Valeur d'ouverture** → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Rendement** — le résultat depuis l'ouverture, en montant (**Abs**) ou en pourcentage (**%**) : un **Rendement agrégé**, plus une ligne par lot lorsque vous en comparez plusieurs
+
+**Comment l'interpréter**
+
+- **Valeur globale supérieure à la valeur d'ouverture** : les lots ont gagné, ventes et revenus inclus.
+- **Une ligne en pointillés** dans **Valeur** est une valeur estimée au coût, sans prix de marché.
+
+### 🧾 5. Détail du lot
+
+Toute l'histoire d'un lot. Ouvrez-le avec **Voir le détail du lot** (⋮) ou en cliquant sur sa cellule **Conservation**.
+
+**Métriques affichées**
+
+- **Résumé** — valeur d'ouverture et valeur actuelle, produit de cession, **P&L FIFO**, **P&L total**, **Rendement total**, et **Rendement en liquidités** lorsque le lot a reçu des revenus → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Décomposition nette** — le P&L total moins les frais et impôts alloués au lot → [Coûts et métriques nettes](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
+- **Conservation actuelle** et **Historique** — où se trouve le lot maintenant, et chaque événement depuis son ouverture
+
+**Comment l'interpréter**
+
+- **Les quantités correspondent aux positions complètes du courtier**, comme l'indique l'icône ⓘ à côté.
+- **Aller à la transaction** ouvre la transaction de la ligne d'historique que vous avez choisie — par défaut, celle d'ouverture.
+
+??? warning "⚠️ Quand le panneau vous avertit"
+
+    - **Une bannière repliée** liste ce qui manque — un taux, un prix, un coût d'achat — avec une puce par lot concerné qui retrouve sa bulle. Corrigez-la comme pour la [bannière de qualité des données](index.md#data-quality-banner).
+    - **Un message rouge** signifie que les quantités ou les transferts ne s'additionnent pas : les chiffres peuvent être incomplets, vérifiez donc les transactions de l'actif.
+    - **Un lot évalué au coût** n'a pas de prix de marché : bordure de bulle en pointillés, aucune plus-value ou moins-value de marché.
 
 ---
 
-## 💸 Onglet Transactions
+## 🔗 Voir aussi
 
-L'onglet **Transactions** du tableau de bord affiche une liste complète et paginée de toutes les opérations enregistrées dans le périmètre du portefeuille actif (ordres d'achat/vente, paiements de dividendes, dépôts d'espèces, transferts, etc.).
-
-Pour une explication détaillée de la liste des transactions, des filtres et de la façon de lire les détails des transactions en lecture seule, veuillez vous référer à la page dédiée **[Aperçu des Transactions](../transactions/index.md)**.
+- 💰 **[Cartes KPI](kpi-cards.md)** — les mêmes résultats pour l'ensemble du portefeuille
+- 💸 **[Transactions](../transactions/index.md)** — l'onglet **Transactions** du tableau de bord liste les opérations de la plage et des courtiers sélectionnés
+- 🛠️ **[Détails techniques](../../developer/frontend/pages/index.md#dashboard)** — pour les développeurs : comment fonctionnent en interne l'onglet Positions et le panneau des lots
 
 ---
 

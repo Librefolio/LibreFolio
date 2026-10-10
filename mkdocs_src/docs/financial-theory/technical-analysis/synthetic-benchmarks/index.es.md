@@ -10,7 +10,7 @@ Son inestimables para:
 
 ---
 
-## 📋 Descripción General de Benchmarks
+## 📋 Resumen de los benchmarks
 
 | Benchmark | Modelo | Forma en Escala Lineal | Detalles |
 |-----------|-------|----------------------|---------|

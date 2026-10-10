@@ -9,7 +9,7 @@ Un **fonds commun de placement** est un véhicule d'investissement géré profes
 | Propriété | Détail |
 |----------|--------|
 | **Code dans LibreFolio** | `FUND` |
-| **Valorisation** | VNI (Valeur Liquidative) calculée une fois par jour, après la clôture du marché |
+| **Valorisation** | NAV (valeur liquidative) calculé une fois par jour, après la clôture du marché |
 | **Devise** | Libellé dans la devise de référence du fonds |
 | **Dividendes** | Peuvent être distribués (fonds de revenu) ou réinvestis (fonds de croissance) |
 | **Frais** | Frais de gestion (TER), commissions d'entrée/sortie |
@@ -21,18 +21,18 @@ Un **fonds commun de placement** est un véhicule d'investissement géré profes
 
 1. **Mise en commun** : Les investisseurs achètent des parts du fonds
 2. **Gestion** : Un gestionnaire de fonds professionnel sélectionne et gère les titres sous-jacents
-3. **Valorisation VNI** : La valeur du fonds est calculée quotidiennement comme suit : actifs totaux − passifs ÷ nombre de parts en circulation
+3. **Valorisation au NAV** : La valeur du fonds est calculée quotidiennement comme suit : actifs totaux − passifs ÷ nombre de parts en circulation
 4. **Distributions** : Les revenus (dividendes, intérêts) peuvent être distribués ou réinvestis
 
 ---
 
-## 📐 Calcul de la VNI
+## 📐 Calcul du NAV
 
 $$
 \text{VNI} = \frac{\text{Actifs Totaux} - \text{Passifs Totaux}}{\text{Nombre de parts en circulation}}
 $$
 
-Contrairement aux ETF, les fonds communs de placement ne s'échangent qu'à la VNI de fin de journée — vous ne pouvez pas acheter ou vendre aux prix intrajournaliers.
+Contrairement aux ETF, les fonds communs de placement ne s'échangent qu'au NAV de fin de journée — vous ne pouvez pas acheter ou vendre aux prix intrajournaliers.
 
 ---
 

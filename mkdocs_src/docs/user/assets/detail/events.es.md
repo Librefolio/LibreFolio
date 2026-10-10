@@ -1,56 +1,54 @@
 # 📅 Eventos de Activos
 
-Los eventos de activos representan sucesos que afectan al activo **globalmente**, no a nivel de cartera. Son distintos de las [transacciones](../../../financial-theory/instruments/transaction-types/index.md), que rastrean lo que sucede en la cartera de un usuario.
-
-Para un análisis profundo de cada tipo de evento —incluyendo el impacto en el mercado, fórmulas y ejemplos prácticos— consulte la sección **[Eventos de Activos (Teoría Financiera)](../../../financial-theory/instruments/asset-events/index.md)**.
+Los eventos de activos son cosas que le ocurren al activo en sí, para todos los que lo poseen: un dividendo, un desdoblamiento, un pago de intereses. No son tus [transacciones](../../../financial-theory/instruments/transaction-types/index.md), que registran lo que ocurre en tu cartera.
 
 ---
 
-## 📊 Tipos de Eventos
+## 📊 Tipos de eventos
 
-| Tipo | Icono | Efecto en el Precio | Descripción | Más Información |
-|------|------|----------------|-------------|-----------|
-| **Dividendo** | 💰 | El precio disminuye en el valor del evento (ex-date) | Distribución de efectivo de acciones o ETF | [📖](../../../financial-theory/instruments/asset-events/dividend.md) |
-| **Interés** | 📈 | El precio disminuye en el valor del evento | Pago de intereses de un instrumento de deuda o préstamo | [📖](../../../financial-theory/instruments/asset-events/interest.md) |
-| **Desdoblamiento** | ✂️ | Cambia la cantidad, no el valor total | División de acciones o unidades | [📖](../../../financial-theory/instruments/asset-events/split.md) |
-| **Ajuste de Precio** | 📊 | Cambio algebraico (+/-) | Cambio de valor no monetario: deterioro de valor, haircut, re-rating | [📖](../../../financial-theory/instruments/asset-events/price-adjustment.md) |
-| **Liquidación al Vencimiento** | 🏁 | Retorno final de capital | El activo alcanza su vencimiento — no hay más cálculos de precio | [📖](../../../financial-theory/instruments/asset-events/maturity-settlement.md) |
+Cada tipo, con su efecto sobre el precio y su página teórica:
 
-## 📈 Marcadores de Eventos en el Gráfico
+- 💰 **Dividendo** (`DIVIDEND`) — efectivo pagado por una acción o un ETF; el precio baja aproximadamente esa cantidad en la fecha ex-dividendo → [📖](../../../financial-theory/instruments/asset-events/dividend.md)
+- 📈 **Interés** (`INTEREST`) — interés pagado por un bono, un préstamo o un depósito; el valor baja por el importe pagado → [📖](../../../financial-theory/instruments/asset-events/interest.md)
+- ✂️ **Desdoblamiento** (`SPLIT`) — las unidades se dividen; su número cambia, no el valor total → [📖](../../../financial-theory/instruments/asset-events/split.md)
+- 📊 **Ajuste de Precio** (`PRICE_ADJUSTMENT`) — un cambio de valor sin efectivo, al alza o a la baja: una reducción de valor, un recorte, una revalorización → [📖](../../../financial-theory/instruments/asset-events/price-adjustment.md)
+- 🏁 **Liquidación al Vencimiento** (`MATURITY_SETTLEMENT`) — el activo alcanza el vencimiento y devuelve su capital; su valor deja de cambiar → [📖](../../../financial-theory/instruments/asset-events/maturity-settlement.md)
 
-Los eventos aparecen como **marcadores de colores** en el [gráfico de precios](chart.md). Cada tipo de evento tiene un color e icono distintos. Pase el cursor sobre un marcador para ver los detalles del evento (fecha, tipo, valor, moneda).
+Los códigos entre paréntesis son los que espera una [importación CSV](data-editor.md#import-from-csv).
+
+---
+
+## 📈 Eventos en el gráfico
+
+En modo **Precios**, los eventos aparecen como marcadores en el [gráfico de precios](chart.md), cada tipo con su propia forma: un triángulo para un dividendo, un rombo para el interés, un cuadrado para un ajuste de precio, un cuadrado redondeado para el vencimiento, una flecha para un desdoblamiento. Pasa el cursor sobre un marcador para ver su fecha, tipo, importe y notas.
+
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="assets" data-name="detail-events" alt="Gráfico del activo con un marcador de evento resaltado">
+    <img class="gallery-img" data-category="assets" data-name="detail-events" alt="Gráfico de activo con un marcador de evento bajo el cursor">
 </div>
 
-## ⚙️ Origen de los Eventos
-
-Los eventos pueden generarse de dos maneras:
-
-### 1. Generados por el proveedor (automático)
-
-Algunos proveedores producen eventos durante la sincronización:
-
-- **[Scheduled Investment](../providers/scheduled-investment.md)**: genera eventos `INTEREST` y `PRICE_ADJUSTMENT` a partir de la configuración del calendario de intereses.
-- **[Yahoo Finance](../providers/yahoo-finance.md)**: puede producir eventos `DIVIDEND` a partir de datos históricos.
-
-Los eventos generados por el proveedor tienen un `provider_assignment_id` y se actualizan automáticamente durante la sincronización (deduplicación DELETE + INSERT basada en `asset_id, date, type`).
-
-### 2. Creados por el usuario (manual)
-
-Los eventos también pueden añadirse manualmente a través del modal de edición del activo. Los eventos manuales no tienen `provider_assignment_id` y nunca se eliminan automáticamente durante la sincronización.
+- **En otra divisa**, el importe se convierte, con el importe original debajo; un evento que no se puede convertir se oculta.
+- **Activos comparados** también muestran sus eventos, en el color de su línea.
 
 ---
 
-## 🧮 Cómo Afectan los Eventos al Cálculo del Precio
+## ⚙️ De dónde vienen los eventos
 
-Para el proveedor **Scheduled Investment**, los eventos son integrales para el cálculo del precio:
+- **De un proveedor**, en cada sincronización: dividendos y desdoblamientos de [Yahoo Finance](../providers/yahoo-finance.md), dividendos de [justETF](../providers/justetf.md), y de [Inversión Programada](../providers/scheduled-investment.md) los pagos de intereses y la liquidación final al vencimiento de **Generar Cupón**, más los eventos listados en su calendario (**Añadir Evento** en el formulario del activo).
+- **De ti**: en la pestaña **Eventos** del [Editor de Datos](data-editor.md), uno a uno o desde un archivo CSV, o con **Nuevo evento** en el campo **Evento Vinculado** de una transacción.
 
-```
-price(d) = initial_value + accrued_interest − Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)
-```
+Una sincronización actualiza los eventos del proveedor y nunca toca los tuyos. Un evento de un proveedor es de solo lectura en el editor, y si lo eliminas, solo se mantiene así hasta que el proveedor lo vuelva a enviar: para cambiar los eventos de una Inversión Programada, edita su calendario.
 
-Para activos con precio de mercado (Yahoo Finance, justETF), los eventos son informativos: explican caídas repentinas de precio (fechas ex-dividendo) pero no modifican directamente el precio obtenido.
+---
+
+## 🧮 Eventos en una Inversión Programada
+
+Para una [Inversión Programada](../providers/scheduled-investment.md#how-value-is-calculated), los eventos son parte del propio precio:
+
+$$
+P(d) = V_0 + I(d) - \sum \text{Interés} + \sum \text{Ajustes de precio}
+$$
+
+con $V_0$ el valor inicial y $I(d)$ el interés acumulado hasta el momento. Para un activo con precio de mercado, los eventos solo explican movimientos en el precio, como la caída en una fecha ex-dividendo; no cambian los precios que envía el proveedor.
 
 ---
 
@@ -58,6 +56,7 @@ Para activos con precio de mercado (Yahoo Finance, justETF), los eventos son inf
 
 - 📈 **[Gráfico Interactivo](chart.md)** — Marcadores de eventos en el gráfico
 - ✏️ **[Editor de Datos](data-editor.md)** — Gestión manual de eventos con importación CSV
-- 🧮 **[Scheduled Investment](../providers/scheduled-investment.md)** — Proveedor que genera eventos a partir de calendarios de intereses
+- 🧮 **[Inversión Programada](../providers/scheduled-investment.md)** — Proveedor que genera eventos a partir de calendarios de intereses
 - 📚 **[Eventos de Activos (Teoría Financiera)](../../../financial-theory/instruments/asset-events/index.md)** — Análisis detallado de cada tipo de evento
-- 💸 **[Tipos de Transacciones (Teoría Financiera)](../../../financial-theory/instruments/transaction-types/index.md)** — Transacciones vs eventos
+- 💸 **[Tipos de Transacción (Teoría Financiera)](../../../financial-theory/instruments/transaction-types/index.md)** — Transacciones vs eventos
+- 🛠️ **[Eventos de Activos (desarrollador)](../../../developer/backend/assets/events.md)** — Para desarrolladores: cómo se almacenan y actualizan los eventos

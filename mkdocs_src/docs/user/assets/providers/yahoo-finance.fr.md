@@ -1,29 +1,34 @@
 # <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" alt=""> Yahoo Finance
 
-Yahoo Finance est le fournisseur par défaut pour les actions, les ETF et les fonds communs de placement. Il offre la couverture la plus large et prend en charge la recherche d'actifs.
+Yahoo Finance couvre les actions, les ETF, les fonds, les indices et les cryptomonnaies des bourses du monde entier, et vous pouvez y effectuer des recherches par nom ou par ticker.
 
-## 📊 Fonctionnalités
+## 🔍 Ce qu'il propose
 
-- ✅ **Prix actuel** : Cotations en temps réel ou différées
-- ✅ **Historique** : Données historiques complètes des prix
-- ✅ **Recherche** : Recherche d'actifs par nom ou par ticker
+- **Prix actuel** : le dernier prix rapporté par Yahoo pour le ticker — sur certaines bourses, il est différé.
+- **Historique** : ouverture, plus haut, plus bas, clôture et volume quotidiens, aussi loin que remonte Yahoo.
+- **Dividendes et divisions** : enregistrés en tant qu'événements d'actif.
+- **Recherche** : par nom ou par ticker.
+- **Détails** : type, devise, description, secteur, ticker et, lorsque Yahoo le fournit, l'ISIN.
 
-## 🔧 Configuration
+## ✏️ Configuration
 
-- **Identifiant** : Ticker Yahoo Finance (ex: `AAPL`, `VWCE.DE`, `BTC-USD`)
-- **Type d'identifiant** : `TICKER`
-- **Paramètres** : Aucun requis
-
-## 💡 Exemples
+**Recherche en ligne** le configure pour vous. Manuellement, dans **Affectation du fournisseur**, choisissez **Yahoo Finance**, définissez **Type d'identifiant** sur **TICKER** et saisissez le ticker comme **Identifiant**. Il n'y a rien d'autre à remplir.
 
 | Actif | Ticker |
 |-------|--------|
 | Apple Inc. | `AAPL` |
 | Vanguard FTSE All-World (Xetra) | `VWCE.DE` |
-| Bitcoin | `BTC-USD` |
 | iShares Core S&P 500 (Milan) | `CSSPX.MI` |
+| Bitcoin en dollars américains | `BTC-USD` |
 
-## 📝 Notes
+En dehors des États-Unis, ajoutez le suffixe de la bourse au ticker : `.DE` pour Xetra, `.MI` pour Milan, `.AS` pour Amsterdam.
 
-- Pour les ETF cotés en Europe, ajoutez le suffixe de la place boursière (ex: `.DE` pour Xetra, `.MI` pour Milan, `.AS` pour Amsterdam)
-- Les données de Yahoo Finance peuvent présenter un retard de 15 minutes pour certaines places boursières
+## ⚠️ Limites
+
+- **ISIN** fonctionne aussi comme **Type d'identifiant**, mais uniquement lorsque Yahoo peut l'associer à un ticker : privilégiez le ticker.
+- Yahoo peut limiter le débit des requêtes fréquentes, et il peut manquer des jours pour certains tickers.
+
+## 🔗 Voir aussi
+
+- 🔌 **[Fournisseurs d'actifs](index.md)** — Comparez les fournisseurs
+- 🛠️ **Pour les développeurs : [Fournisseur Yahoo Finance](../../../developer/backend/assets/provider_yahoo_finance.md)** — Requêtes, mise en cache et événements

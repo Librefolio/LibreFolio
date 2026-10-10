@@ -20,7 +20,7 @@ Salva il file e importalo in LibreFolio. Se scegli il CSV, non aprirlo né risal
 
 ## 📝 Note
 
-- Supporta operazioni su azioni, obbligazioni ed ETF, dividendi, tasse (ritenute fiscali) e commissioni di transazione.
+- Supporta operazioni su azioni, obbligazioni ed ETF, dividendi, imposte (ritenute fiscali) e commissioni di transazione.
 - Sono supportati sia il formato **CSV** sia **XLSX** (Excel) — non ods.
 - Le operazioni del conto sono denominate in EUR.
 - L'esportazione copre fino a 3.000 righe per file. Per storici più lunghi, esporta più periodi e importali in sequenza.

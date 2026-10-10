@@ -1,7 +1,7 @@
 # 💶 ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Depósitos y Retiros ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Transaction Form — DEPOSIT">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Formulario de transacción — DEPOSIT">
 </div>
 
 Los **depósitos** y **retiros** rastrean el movimiento de efectivo entrante y saliente de una cuenta de bróker. No involucran ningún activo; solo cambia el saldo de efectivo.

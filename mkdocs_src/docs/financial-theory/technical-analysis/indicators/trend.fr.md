@@ -27,7 +27,7 @@ Un indicateur de tendance estime la **moyenne locale** du processus de prix (ou,
 | Indicateur | Entrées | Remarques |
 |-----------|--------|-------|
 | EMA / SMA / KAMA | `close` | Filtres purs de lissage des prix |
-| ADX | `high`, `low`, `close` | Nécessite le mouvement directionnel (+DM/-DM) et la vraie amplitude |
+| ADX | `high`, `low`, `close` | Nécessite le mouvement directionnel (`+DM`/`-DM`) et la vraie amplitude |
 | Aroon | `high`, `low` | Utilise uniquement le *timing* des extrêmes, pas leur ampleur |
 
 ---

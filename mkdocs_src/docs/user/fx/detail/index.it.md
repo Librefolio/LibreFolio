@@ -1,36 +1,46 @@
-# 🔍 Dettagli della Coppia
+# 🔍 Pagina Dettaglio Coppia FX
 
-Clicca su qualsiasi coppia di valute dalla [Lista FX](../index.md) per aprire la relativa pagina di dettaglio. Qui puoi visualizzare, analizzare e gestire i dati del tasso di cambio per quella specifica coppia.
+Clicca su una coppia FX nella [lista FX](../index.md) per aprire la sua pagina: un grande grafico dei suoi tassi, con strumenti per analizzare, modificare e configurare la coppia.
 
-La pagina di dettaglio è organizzata in diverse funzionalità, ognuna accessibile dalla barra degli strumenti:
+---
+
+## 🗺️ La pagina in breve
+
+- **Intestazione** — ⇄ scambia la direzione della coppia e la scheda corrispondente nella lista si aggiorna di conseguenza (se ci sono modifiche non salvate nell'editor dei tassi, LibreFolio chiede prima conferma); ← torna alla lista.
+- **Barra degli strumenti** — il periodo, l'ultimo tasso con la relativa variazione e i pulsanti **AI Export**, **Providers**, **Sync** e **Reload**. **Reload** rilegge i tassi memorizzati; **Sync** scarica quelli nuovi, vedi [Sincronizzazione](../sync.md).
+- **Sotto** — il pannello **Segnali** compresso, il grafico, poi il pannello **Misure** compresso.
 
 ---
 
 ## 🧭 Funzionalità
 
-### 📈 [Grafico Interattivo](chart.md)
+### 📈 [Grafico interattivo](chart.md)
 
-La vista principale: un grafico completo basato su ECharts con zoom, pan, interruttore linea/candlestick e intervalli temporali configurabili. Qui puoi visualizzare a colpo d'occhio lo storico del tasso di cambio.
+La cronologia dei tassi, con zoom, pan, una vista **Abs** / **%** e preimpostazioni di periodo.
 
 ### 📊 [Segnali](signals.md)
 
-Sovrapponi indicatori tecnici al grafico — per le coppie FX sono disponibili 9 plugin calcolati dal backend (vedi [Segnali](signals.md) per l'elenco e i dettagli per segnale). Ogni segnale è calcolato a partire dai dati del tasso e può essere gestito tramite interruttore indipendentemente.
+Indicatori, confronti e curve di benchmark tracciati sul grafico; nove indicatori operano sui tassi FX.
 
 ### 📐 [Misure](measures.md)
 
-Strumento di misurazione click-to-click. Seleziona due punti sul grafico per vedere il delta, la variazione percentuale e il rendimento annualizzato tra di essi.
+La variazione, la variazione in % e il tasso annuale tra due punti del grafico.
 
-### ✏️ [Editor Dati](data-editor.md)
+### ✏️ [Editor dati](data-editor.md)
 
-Visualizza, aggiungi, modifica o elimina singoli punti dati. Include anche l'**Importazione CSV** per il caricamento in blocco di dati storici dei tassi da file.
+Aggiungi, modifica o elimina singoli tassi, oppure importane molti in una volta da un file CSV.
 
-### ⚙️ [Configurazione Provider](provider.md)
+### ⚙️ [Configurazione provider](provider.md)
 
-Cambia il provider di dati per questa coppia, aggiungi rotte di fallback o riconfigura la catena di conversione.
+**Providers** cambia da dove provengono i tassi: il provider, i percorsi di backup e le catene.
+
+### 🧠 AI Export
+
+**AI Export** prepara un'istantanea della coppia, oppure una richiesta **FX Pair Analysis** o **FX Exposure Impact**, da incollare in un assistente AI. FX Exposure Impact conta solo la liquidità e le posizioni detenute direttamente nelle valute della coppia: non guarda all'interno dei fondi. Vedi [FX AI Export](../../ai-export/fx.md).
 
 ---
 
 ## 🔗 Correlati
 
-- ⚙️ **[Impostazioni Grafico](../chart-settings.md)** — Personalizza l'aspetto del grafico, i colori e la configurazione della sovrapposizione dei segnali
+- ⚙️ **[Impostazioni grafico](../chart-settings.md)** — Aspetto del grafico e segnali sovrapposti
 - 📋 **[Panoramica FX](../index.md)** — Torna alla pagina della lista FX

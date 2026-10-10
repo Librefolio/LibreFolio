@@ -1,43 +1,66 @@
-# ⚙️ Configuración del bróker y Exportación IA
+# ⚙️ Configuración e información del bróker
 
-La pestaña **Info** alberga la configuración de metadatos, los controles de seguridad, la herramienta de Exportación IA acotada y el panel de configuración de uso compartido.
+La pestaña **Info** de un bróker muestra los detalles de la cuenta a la izquierda y quién puede acceder a él a la derecha.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vista de información y uso compartido del bróker">
+    <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vista de información y uso compartido del bróker">
 </div>
 
 ---
 
-## ⚙️ Metadatos y Configuración
+## 📋 Detalles de la cuenta
 
-La columna izquierda de la pestaña Info muestra las propiedades clave y las reglas de validación de este bróker:
+La tarjeta **Detalles** enumera:
 
-- **Estado del bróker**: Muestra si la cuenta está actualmente `Active`. Los brókeres inactivos se ocultan de los menús desplegables, pero sus valores históricos se conservan en los gráficos.
-- **Fechas**: Muestra cuándo se abrió la cuenta y cuándo se creó en LibreFolio.
-- **Moneda base**: La moneda base de la cuenta (todas las transacciones y valoraciones se convierten internamente a esta moneda utilizando tipos de cambio históricos para los informes locales).
-- **Permitir sobregiro de efectivo**: Un interruptor para omitir los errores de saldo negativo. Cuando está deshabilitado, LibreFolio bloquea las transacciones (como compras o retiros) que resultarían en un saldo de efectivo negativo.
-- **Permitir posiciones cortas**: Un interruptor para autorizar cantidades negativas de activos. Cuando está deshabilitado, se bloquea vender más del tamaño de su posición abierta actual.
+- **Cuenta activa** — **✓ Activa**, o **✗ Cerrada** para una cuenta que ya no usas. Un bróker cerrado conserva su historial en tus gráficos.
+- **Cuenta abierta** — cuándo abriste la cuenta, si introdujiste esa fecha.
+- **Permitir compra apalancada** y **Permitir ventas en corto** — las dos opciones de negociación, explicadas a continuación.
+- **Creado en el sistema** — cuándo se añadió el bróker a LibreFolio.
 
----
-
-## 🧠 Exportación IA Acotada
-
-En la parte superior derecha de la barra de herramientas del bróker, **Exportación IA** (:material-brain:) abre tres tareas dedicadas de bróker, no prompts de cartera filtrados:
-
-- **Revisión del bróker**
-- **Rendimiento del bróker y factores de mercado**
-- **Estrategias de Compensación de Pérdidas de Capital**
-
-La instantánea del backend se limita al bróker seleccionado y puede incluir su efectivo, posiciones, actividad, rendimiento, costos, concentración y lotes FIFO según la tarea seleccionada. Las comprobaciones de acceso del lado del servidor impiden exportar un bróker al que el usuario actual no puede acceder. LibreFolio solo copia el resultado al portapapeles; revise los datos financieros sensibles antes de compartirlos. Consulte [Exportación IA del bróker](../ai-export/broker.md) o la [Descripción general de la Exportación IA](../ai-export/index.md).
+Para cambiarlos, haz clic en **Editar** en la barra de herramientas del bróker (Propietarios y Editores).
 
 ---
 
-## 🤝 Panel de Uso Compartido de Acceso
+## 🛡️ Opciones de negociación {: #trading-options }
 
-La columna derecha de la pestaña Info alberga el gestor integrado de **uso compartido del bróker**. Aquí puede:
+Ambas opciones están desactivadas para un bróker nuevo, y en ese caso LibreFolio te protege contra saldos imposibles:
 
-- Invitar a otros usuarios por su correo electrónico o nombre de usuario.
-- Definir su permiso de rol (Propietario, Editor, Visor).
-- Configurar los porcentajes de propiedad.
+- con **Permitir compra apalancada** desactivada, se rechaza un guardado si dejaría el efectivo de una divisa por debajo de cero;
+- con **Permitir ventas en corto** desactivada, se rechaza un guardado si dejaría la cantidad de un activo por debajo de cero.
 
-Para una explicación detallada de las reglas de uso compartido, los roles y la lógica de porcentajes, consulte la página dedicada **[Broker Sharing](sharing.md)**.
+Activa una opción para una cuenta de margen, o para registrar ventas en corto.
+
+??? note "📅 Cómo se comprueban los saldos — cuándo se rechaza un guardado"
+
+    Para cada divisa $c$ y cada activo $i$ del bróker, LibreFolio examina el saldo al **final de cada día** $d$, después de todas las transacciones de ese día:
+
+    $$
+    C_c(d) = \sum_{\text{date}_t \le d} a_t \ge 0 \qquad\qquad Q_i(d) = \sum_{\text{date}_t \le d} q_t \ge 0
+    $$
+
+    Aquí $a_t$ es el importe en efectivo de cada transacción $t$ en la divisa $c$, y $q_t$ la cantidad de cada transacción del activo $i$. El dinero que entra y sale el mismo día se compensa, pero un depósito realizado más tarde no arregla un día que ya cerró por debajo de cero.
+
+    Un guardado rechazado aparece en el espacio de trabajo bajo *Esta configuración provoca inconsistencias en los datos*, con la divisa o el activo, la fecha y enlaces a las filas del espacio de trabajo implicadas.
+
+---
+
+## 🤝 Compartir el bróker
+
+La columna derecha contiene el panel **Compartir bróker**; **Compartir bróker** en la barra de herramientas también te trae aquí. Solo un Propietario puede cambiarlo: todos los demás lo ven en modo de solo lectura.
+
+Para dar acceso a alguien:
+
+1. Haz clic en **+** (**Añadir usuario**) bajo el gráfico de propietarios y busca a la persona **por nombre de usuario**.
+2. Elige el **Rol** — **Lector** por defecto, **Editor** o **Propietario** — y, para un Propietario, el **Porcentaje de propiedad**. Después haz clic en **Añadir usuario**.
+3. Haz clic en **Guardar configuración**: nada cambia antes de que lo hagas.
+
+Guarda antes de cambiar de pestaña: en la pestaña Info, los cambios sin guardar se descartan sin preguntar.
+
+En **Tu acceso** también puedes **Abandonar bróker**, o **Cambiar a lector** si eres un Editor. Los roles y las cuotas de propiedad se explican en [Uso compartido del bróker](sharing.md).
+
+---
+
+## 🔗 Relacionado
+
+- 🧠 **[Exportación IA del bróker](../ai-export/broker.md)** — **Exportación IA** se encuentra en la barra de herramientas del bróker y funciona desde todas las pestañas.
+- 🏦 **[Brókers](index.md)** — crear un bróker y sus campos opcionales.

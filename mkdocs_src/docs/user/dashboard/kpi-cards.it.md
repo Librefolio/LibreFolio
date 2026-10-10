@@ -1,161 +1,153 @@
 # 💰 Schede KPI
 
-Le tre schede KPI nella parte superiore della dashboard forniscono una rapida diagnosi del tuo portafoglio. Tutti i valori rispettano l'**intervallo di tempo e l'ambito del broker** selezionati nella parte superiore della pagina.
+Le tre schede in cima alla Dashboard rispondono a colpo d'occhio a tre domande: **quanto ho guadagnato in questo periodo**, **quanto bene ha lavorato il mio denaro** e **quanto vale il mio portafoglio**. Seguono l'intervallo temporale e il filtro broker in cima alla pagina, e la pagina di un broker mostra le stesse schede solo per quel broker. L'icona **?** nell'angolo di una scheda apre la sua sezione qui sotto.
 
-!!! note "La condivisione influisce su questi numeri"
+- 📉 **[Scheda 1 — P&L periodo](#card-1-period-pl)** — il denaro che i tuoi investimenti hanno prodotto nel periodo
+- 📈 **[Scheda 2 — Rendimenti](#card-2-returns)** — i tuoi rendimenti in percentuale, e cosa ha fatto il tuo timing
+- 💰 **[Scheda 3 — Patrimonio netto](#card-3-net-worth)** — quello che possiedi, e il tuo guadagno dall'inizio
 
-    Tutti gli importi sono aggregati sui broker a cui hai accesso, e ogni broker in comproprietà contribuisce in proporzione alla tua **quota di proprietà** (es. un Owner al 50% vede metà del valore e del P&L di quel broker). Editor e Viewer, la cui quota è sempre 0% per regola, vedono gli importi completi del broker. Vedi [Condivisione del Broker](../brokers/sharing.md).
+!!! note "I broker condivisi contano per la tua quota"
+
+    La Dashboard somma i broker che **possedi** con una quota superiore allo 0%, ciascuno in proporzione a quella quota: un proprietario al 50% vede metà del valore e del P&L del broker. I broker in cui sei editor o visualizzatore non sono conteggiati qui; la loro pagina li mostra, con i loro importi completi. Vedi [Condivisione dei broker](../brokers/sharing.md).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Panoramica Schede KPI">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Panoramica delle schede KPI">
 </div>
 
 ---
 
-## 📉 Scheda 1 — P&L del Periodo {: #card-1-period-pl }
+## 📉 Scheda 1 — P&L periodo {: #card-1-period-pl }
+
+Quanto denaro hanno prodotto i tuoi investimenti nel periodo selezionato? La scheda **P&L periodo** risponde, escludendo il denaro che hai spostato dentro o fuori tu stesso.
 
 <div class="kpi-card-crop-container card-period-pnl">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Scheda P&L del Periodo">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Scheda P&L periodo">
 </div>
 
-La scheda **P&L del Periodo** mostra quanto denaro il tuo portafoglio ha effettivamente *guadagnato* nella finestra selezionata — dopo aver rimosso l'effetto dei tuoi depositi e prelievi personali.
+**Metriche mostrate**
 
-Il valore principale viene calcolato utilizzando la seguente formula:
+- **P&L periodo** — il numero grande: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, dove i flussi netti sono il capitale che hai spostato dentro o fuori → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **La riga sotto di esso** — per esempio `+91,31 € (+16,36%)`: di quanto si è mosso il tuo P&L totale da ieri (pannello sottostante)
+- **Variazione latente** — come si è mossa, nel periodo, la plusvalenza o minusvalenza latente delle tue posizioni, incluso l'effetto del tasso di cambio → [Valore contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Vendite** — la plusvalenza o minusvalenza realizzata delle vendite del periodo, rispetto al prezzo medio di carico (PMC) delle unità vendute → [prezzo medio di carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **Dividendi e interessi** — dividendi, cedole e interessi P2P ricevuti → [Dividendo e interesse](../../financial-theory/instruments/transaction-types/dividend-interest.md)
+- **Commissioni e imposte** — commissioni e imposte registrate come transazioni; passa il cursore sulla riga per vedere la ripartizione → [Commissione e imposta](../../financial-theory/instruments/transaction-types/fee.md)
 
-\[\text{P&L del Periodo} = \text{NAV}_{\text{fine}} - \text{NAV}_{\text{inizio}} - \text{Flussi Netti}_{\text{periodo}}\]
+**Come leggerla**
 
-Un numero positivo significa che hai guadagnato denaro dall'attività di investimento. Un numero negativo significa che hai perso denaro al netto dei movimenti di capitale.
+- **Verde è un guadagno, rosso una perdita** — e un deposito o un prelievo non è né l'uno né l'altra.
+- **Le quattro righe spiegano il numero grande.** Ciò che non riescono a vedere, come asset che si spostano tra due tuoi broker nel primo o nell'ultimo giorno, finisce nel **Residuo Altro / di riconciliazione** della [vista Performance](positions.md#performance).
+- **La barra più lunga** è la riga che ha mosso di più il tuo risultato.
 
-### Il numero sotto il valore principale
+??? info "📏 La riga sotto il numero grande — come viene calcolata"
 
-Subito sotto il valore del P&L del Periodo, una riga più piccola mostra qualcosa come `+45.20 (+3.10%)`.
+    È la variazione del tuo P&L totale — il tuo guadagno o la tua perdita dall'inizio — da ieri a oggi, dove *oggi* è la data finale del periodo. La percentuale la confronta con il P&L totale di ieri, preso senza il suo segno:
 
-- L'importo è la variazione **giorno per giorno** (oggi rispetto a ieri) del tuo **P&L Totale** — il tuo guadagno/perdita accumulato da sempre, non solo del periodo selezionato.
-- La percentuale lo esprime come quota del **P&L Totale** di ieri — ti dice quanto il movimento di oggi ha "pesato" rispetto al tuo risultato accumulato da sempre.
+    $$
+    \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
+    $$
 
-\[\text{Variazione giornaliera} = \text{P&L Totale}_{\text{oggi}} - \text{P&L Totale}_{\text{ieri}}\]
+    - **Il segno e il colore seguono la variazione**, anche quando il P&L totale è una perdita: da `-558,10 €` a `-466,79 €`, la riga mostra `+91,31 € (+16,36%)` — la tua perdita si è ridotta del 16,36%.
+    - **Richiede due giorni di storico**; la percentuale è omessa quando il P&L totale di ieri è esattamente zero, e un giorno senza variazioni mostra `0,00%`.
 
-Questa riga appare solo quando la cronologia ha almeno due punti giornalieri.
+### 💱 Variazione latente per valuta {: #unrealized-change-by-currency }
 
-### Le righe di dettaglio
+Passa il cursore su **Variazione latente** per suddividerla per la valuta in cui sono quotati i tuoi asset — qui con l'euro come valuta di visualizzazione:
 
-| Riga | Cosa misura |
-|-----|-------------|
-| **Variazione non realizzata** | Quanto è cambiata la [plusvalenza/perdita non realizzata](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) delle tue posizioni aperte durante il periodo |
-| **Vendite** | Utile o perdita realizzata dalle posizioni chiuse durante il periodo (prezzo di vendita − costo medio) |
-| **Dividendi e interessi** | Reddito da cassa da dividendi, cedole obbligazionarie e interessi P2P |
-| **Commissioni e tasse** | Commissioni e tasse registrate come transazioni |
+| Riga | Cosa mostra |
+|-----|---------------|
+| 📈 **Asset in USD** | Cosa hanno fatto i tuoi asset in dollari *in dollari* — la loro variazione di prezzo — contati al tasso di cambio del giorno |
+| 💱 **Tasso USD → EUR** | Cosa ha fatto il tasso di cambio su quanto hai pagato per acquistarli |
+| ❔ **USD, non suddiviso** | Solo quando, nel primo o nell'ultimo giorno, alcuni di quegli asset non avevano prezzo, né tasso, o avevano un valore di acquisto incompleto: la loro variazione, in un unico blocco |
 
-!!! tip "Controllo identità"
+C'è una riga 📈 per ogni valuta, euro incluso, e una riga 💱 per ogni valuta diversa dalla tua valuta di visualizzazione; insieme, le righe sommano **esattamente** alla Variazione latente.
 
-    Tutte e quattro le righe sommate danno il valore principale del P&L del Periodo (± piccoli residui dall'arrotondamento FX).
+??? example "Un ETF statunitense su una dashboard in euro"
 
-🔗 **Teoria**: [P&L del Periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) · [Valore Contabile / PMC](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+    Durante il periodo hai acquistato 10 unità per 400 €, quando valevano 500 USD. Alla fine del periodo valgono 550 USD, e 1 USD = 0,75 €. Il tooltip mostra:
+
+    - 📈 **Asset in USD**: (550 − 500) × 0,75 = **+37,50 €** — il tuo ETF ha guadagnato il 10% in dollari;
+    - 💱 **Tasso USD → EUR**: 500 × 0,75 − 400 = **−25,00 €** — il dollaro ha perso valore rispetto all'euro;
+    - insieme, la **Variazione latente**: 550 × 0,75 − 400 = **+12,50 €**.
+
+🔗 **Teoria**: [Variazione latente per valuta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#unrealized-change-by-currency) — le formule dietro ogni riga
 
 ---
 
 ## 📈 Scheda 2 — Rendimenti {: #card-2-returns }
 
+Quanto bene ha lavorato il tuo denaro, qualunque sia la dimensione del tuo portafoglio? La scheda **Rendimenti** risponde in percentuale, e il suo numero grande ti dice se il tuo timing ha aiutato.
+
 <div class="kpi-card-crop-container card-returns">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Scheda Rendimenti">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Scheda Rendimenti">
 </div>
 
-La scheda **Rendimenti** mostra metriche di *tasso di rendimento* — percentuali che ti permettono di confrontare le prestazioni indipendentemente dalla dimensione del portafoglio.
+**Metriche mostrate**
 
-### Effetto Tempistica
+- **Effetto timing** — il numero grande, in punti percentuali (pp): $\text{MWRR}_{\text{cumulative}} - \text{TWRR}$ → [Effetto timing](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)
+- **La percentuale sotto di esso** — per esempio `+0,35%`: la variazione odierna del tuo P&L totale, rispetto al patrimonio netto di ieri (pannello sottostante)
+- **ROI** — il guadagno del periodo rispetto al capitale investito → [ROI semplice](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)
+- **TWRR** — come si sono comportate le tue scelte di asset, indipendentemente dal timing dei tuoi depositi → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
+- **MWRR cumulativo** e **MWRR annualizzato** — il tuo rendimento personale, incluso il timing dei depositi, sul periodo e come tasso annuo → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
 
-L'**Effetto Tempistica** nella parte superiore della scheda misura se le tue decisioni di deposito/prelievo hanno *aggiunto* o *sottratto* valore rispetto a una strategia passiva di buy-and-hold:
+**Come leggerla**
 
-\[\text{Effetto Tempistica} = \text{MWRR}_{\text{cumulativo}} - \text{TWRR}_{\text{cumulativo}}\]
+- **Timing favorevole** (verde): tendevi a depositare prima che i prezzi salissero. **Timing sfavorevole** (rosso): tendevi a depositare sui massimi. Vicino allo zero si legge **Timing neutro**, e più forte è il colore, maggiore è l'effetto.
+- **Il TWRR giudica la strategia, il MWRR il tuo risultato personale** — come per un gestore di fondi e un investitore.
+- **Le quattro righe coprono l'intero periodo**; la piccola percentuale copre solo oggi.
+- **`—` significa nessun valore**: un rendimento che LibreFolio non può calcolare per il periodo mostra `—` al posto di un numero. L'effetto timing richiede sia il TWRR sia il MWRR: quando ne manca uno, mostra un `—` grigio, senza etichetta di timing.
 
-- **Favorevole (positivo)** ✅: hai avuto la tendenza a depositare quando i prezzi erano bassi, aumentando il tuo rendimento personale al di sopra di quanto guadagnato dai soli asset.
-- **Sfavorevole (negativo)** ❌: hai avuto la tendenza a depositare ai picchi o hai perso i ribassi, abbassando il tuo rendimento al di sotto della pura performance degli asset.
+??? info "📏 La percentuale sotto l'effetto timing — come viene calcolata"
 
-### Il numero sotto l'Effetto Tempistica
+    La stessa variazione del tuo P&L totale della [Scheda 1](#card-1-period-pl), divisa per il patrimonio netto di ieri preso senza il suo segno:
 
-Sotto l'Effetto Tempistica vedrai una piccola percentuale (es. `+0.35%`) — è la variazione del tuo **P&L Totale** da **ieri a oggi**, espressa come quota del patrimonio netto di ieri:
+    $$
+    \text{percentage} = \frac{\text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100
+    $$
 
-\[\text{%Variazione giornaliera} = \frac{\text{P&L Totale}_{\text{oggi}} - \text{P&L Totale}_{\text{ieri}}}{\text{Patrimonio Netto}_{\text{ieri}}} \times 100\]
-
-È una stima approssimativa del rendimento di **oggi** — un rapido controllo del polso. Non è il ROI, TWRR o MWRR mostrati nelle righe sottostanti, che rimangono ancorati all'intero periodo selezionato.
-
-### Le quattro metriche di rendimento
-
-| Metrica | Domanda a cui risponde |
-|---------|------------------------|
-| **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | Quanto ho guadagnato rispetto al mio capitale investito netto? |
-| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | Come si sono comportate le mie scelte di asset, indipendentemente da quando ho depositato? |
-| **[MWRR cumulativo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | Qual è il rendimento ponderato per il denaro cumulativo per i miei flussi di cassa effettivi? |
-| **[MWRR annualizzato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | A quale tasso composto annuo è cresciuto effettivamente il mio capitale? |
-
-!!! note "TWRR vs. MWRR"
-
-    - **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** misura la **strategia degli asset** — come viene valutato un gestore di fondi.
-    - **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** misura **il tuo risultato personale** — inclusa la tempistica dei tuoi depositi.
-    - Il divario tra loro è l'[Effetto Tempistica](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md).
+    Il suo segno e il suo colore seguono la variazione, come nella Scheda 1. Richiede due giorni di storico ed è nascosta quando il patrimonio netto di ieri era esattamente zero.
 
 ---
 
-## 💰 Scheda 3 — Patrimonio Netto {: #card-3-net-worth }
+## 💰 Scheda 3 — Patrimonio netto {: #card-3-net-worth }
+
+Quanto vale il tuo portafoglio alla fine del periodo, e quanto ha guadagnato da quando hai iniziato? La scheda **Patrimonio netto** risponde, liquidità inclusa.
 
 <div class="kpi-card-crop-container card-net-worth">
- <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Scheda Patrimonio Netto">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Scheda Patrimonio netto">
 </div>
 
-La scheda **Patrimonio Netto** mostra il valore assoluto del tuo portafoglio alla fine del periodo selezionato.
+**Metriche mostrate**
 
-!!! note "Il Patrimonio Netto include la liquidità"
+- **Patrimonio netto** — il numero grande: titoli al valore di mercato, più liquidità, più tutto ciò che è in transito tra i tuoi broker → [NAV / Patrimonio netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
+- **La riga sotto di esso** — per esempio `+12.450,30 (+24,85%)`: il tuo **P&L totale** dall'inizio e, tra parentesi, il tuo **ROI dall'inizio** → [Capitale versato e P&L totale](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **Valore di mercato** — quanto valgono, ai prezzi di mercato, gli asset che detieni → [NAV / Patrimonio netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
+- **Valore di acquisto** — quanto ti sono costate le posizioni che detieni ancora, ogni acquisto al tasso di cambio della propria data → [Valore contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Liquidità** — la liquidità presso i tuoi broker; passa il cursore per separare il capitale versato dai rendimenti che hai ottenuto → [Pool di liquidità](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
+- **Capitale versato (Periodo)** — depositi meno prelievi nel periodo, verde a destra e rosso a sinistra; passa il cursore per vedere i totali → [Capitale versato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
-    La cifra è **titoli al valore di mercato + saldo liquido** (+ eventuale valore in transito tra broker). Poiché include la liquidità, **non è confrontabile** con il "controvalore titoli" di un estratto conto bancario, che esclude la cassa — la liquidità della banca è riportata separatamente.
+$$
+\text{Total P}\&\text{L} = \text{Net Worth} - \text{Capital put in since the start}
+$$
 
-### Il numero sotto il Patrimonio Netto
+Quel capitale è ogni deposito meno ogni prelievo, più il valore di acquisto dei titoli che hai conferito senza liquidità, come una posizione di apertura; il ROI tra parentesi divide per esso il P&L totale.
 
-Sotto il valore del Patrimonio Netto troverai il tuo **P&L Totale**, con il tuo rendimento assoluto tra parentesi — es. `+12.450,30 (+24,85%)`.
+**Come leggerla**
 
-- L'importo è il tuo **P&L Totale** — l'utile o la perdita accumulati dall'inizio, nell'intera cronologia di questo ambito (non solo il periodo corrente).
-- La percentuale tra parentesi è il **ROI assoluto (dall'inizio)**: P&L Totale ÷ capitale netto investito dall'inizio. *Non* è una variazione giorno per giorno — per quel controllo quotidiano del polso, vedi le righe piccole su [Scheda 1](#card-1-period-pl) e [Scheda 2](#card-2-returns).
-
-\[\text{P&L Totale} = \text{Patrimonio Netto} - \text{Capitale Netto Investito dall'Inizio}\]
-
-Nota: "Capitale Netto Investito dall'Inizio" qui è la somma di **tutti** i depositi meno **tutti** i prelievi da quando hai iniziato a utilizzare questo ambito — una cifra diversa e più grande rispetto alla riga "Capitale Depositato" sottostante, che conta solo i movimenti all'interno del periodo selezionato.
-
-🔗 **Teoria**: [Capitale Depositato, P&L Totale e Pool di Liquidità](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
-
-### Cosa significano le righe
-
-| Riga | Definizione |
-|------|-------------|
-| **[Valore di Mercato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Prezzo di mercato corrente × quantità per tutti gli asset detenuti |
-| **[Valore Contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)** | Quanto hai pagato per le tue posizioni aperte (costo medio × q.tà) |
-| **Cassa** | Saldo liquido detenuto nei conti del broker |
-| **[Capitale Depositato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Capitale esterno netto conferito a questo ambito |
-
-### La barra del Capitale Depositato
-
-La barra orizzontale sotto le righe visualizza:
-
-- 🟢 **Totale depositato** — tutti i depositi nel periodo
-- 🔴 **Totale prelevato** — tutti i prelievi nel periodo
-
-Il numero principale mostra il saldo netto (depositato − prelevato).
-
-!!! info "Puntuale vs. periodo"
-
-    Valore di Mercato, Valore Contabile e Cassa sono **istantanee** alla data di fine — sono indipendenti dalla data di inizio.
-    Il Capitale Depositato è **scoped al periodo** — conta i depositi e i prelievi tra l'inizio e la fine dell'intervallo selezionato.
+- **Data finale o periodo?** Il numero grande e le prime tre righe sono valori alla data finale; il Capitale versato (Periodo) conta solo i movimenti tra inizio e fine.
+- **Il piccolo caret** su una barra indica il suo valore all'inizio del periodo (passa il cursore); il Valore di mercato diventa rosso quando termina al di sotto di esso.
+- **Il Patrimonio netto include la liquidità**, a differenza del "valore dei titoli" di un estratto conto bancario.
+- **Il P&L totale non è una variazione giornaliera**: per il polso di oggi, vedi le piccole righe nelle schede 1 e 2.
 
 ---
 
 ## 🔗 Correlati
 
-- 💼 **[NAV / Patrimonio Netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
-- 📚 **[Valore Contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)**
-- 📊 **[P&L del Periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)**
-- 💸 **[Capitale Depositato e P&L Totale](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
-- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)**
-- 📈 **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)**
-- ⏱️ **[Effetto Tempistica](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**
+- 🔍 **[Posizioni e analisi](positions.md)** — gli stessi risultati, posizione per posizione
+- 📊 **[Grafici](charts.md)** — la vista **P&L** del grafico di crescita segue il tuo P&L totale nel tempo
+- 📐 **[Panoramica delle metriche di performance](../../financial-theory/technical-analysis/performance-metrics/index.md)** — ogni metrica di queste schede, con la sua formula
+- 🛠️ **[Dettagli tecnici](../../developer/frontend/pages/index.md#dashboard)** — per gli sviluppatori: da dove provengono i numeri delle schede
 
 ---
 
-*[⬅️ Torna alla Panoramica della Dashboard](index.md)*
+*[⬅️ Torna alla panoramica della Dashboard](index.md)*

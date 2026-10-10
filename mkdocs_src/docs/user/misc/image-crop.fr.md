@@ -1,89 +1,75 @@
 # ✂️ Outil de recadrage d'image
 
-LibreFolio inclut un outil d'édition d'image interactif et puissant qui vous permet de recadrer, faire pivoter et redimensionner vos images avant de les téléverser.
+Cadrez, faites pivoter et redimensionnez une image avant que LibreFolio ne l'enregistre.
 
 ---
 
 ## 🎯 Quand apparaît-il ?
 
-La fenêtre modale de recadrage d'image s'ouvre automatiquement chaque fois que vous téléversez un fichier image dans LibreFolio :
-
-- 📂 **Page Fichiers** → téléversement de n'importe quelle image (JPEG, PNG, WebP, GIF)
-- 👤 **[Paramètres du profil](../settings/profile.md)** → modification de votre avatar
-- 🏦 **Paramètres du courtier** → modification de l'icône d'un courtier
+- 👤 **Photo de profil** — dans **[Profil](../settings/profile.md)** ou sur la page d'accueil : dans le
+  sélecteur d'image, choisissez **Téléverser** et sélectionnez une image.
+- 🏦 **Icône de courtier** et 📈 **icône d'actif** — le même sélecteur, depuis le formulaire de courtier ou d'actif.
+- 📂 **Page Fichiers** — ajoutez des images à la liste de téléversement, puis cliquez sur le bouton ✏️ **Modifier** d'une image.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Fenêtre modale d'édition d'image" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Modale de modification d'image" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+---
+
+## ✂️ Cadrer l'image
+
+- 📏 **Faites glisser** un coin ou un côté de la zone de recadrage pour la redimensionner, l'intérieur pour la déplacer, l'extérieur
+  pour déplacer l'image. La zone de recadrage reste toujours à l'intérieur de l'image.
+- 🔍 **Zoomez** avec la molette de la souris ou **+ / −** — la zone de recadrage se resserre (ou s'élargit) d'abord, puis
+  l'image zoome — ou pincez sur un écran tactile.
+- 🔄 **Faites pivoter** par pas de 15° avec **↺ / ↻**, et 🪞 **retournez** avec ↔ / ↕.
+- 👁️ Le bouton œil à gauche bascule un **aperçu rond** : l'aspect de l'image dans un cercle, comme
+  votre avatar dans la barre latérale.
+- 🔁 **Tout réinitialiser** (en haut à droite) annule le recadrage, le zoom, la rotation et le retournement.
 
 ---
 
 ## 📐 Préréglages
 
-L'outil propose des préréglages pour les cas d'utilisation courants :
+| Préréglage | Taille de sortie | Forme |
+|--------|------|-------------|
+| **Avatar** | 200 × 200 px | Carré, aperçu rond activé |
+| **Icône** | 64 × 64 px | Carré, aperçu rond activé |
+| **Personnalisé** | Identique à la zone de recadrage | Libre, ou un ratio de votre choix : 1:1, 16:9, 4:3, 3:4 |
 
-| Préréglage | Taille | Rapport d'aspect | Cas d'utilisation |
-|--------|------|-------------|----------|
-| **Avatar** | 200 × 200 px | 1:1 (carré) | Photos de profil utilisateur |
-| **Icône Courtier** | 64 × 64 px | 1:1 (carré) | Logos de courtiers |
-| **Icône d'actif** | 256 × 256 px | 1:1 (carré) | Logos d'actifs |
-| **Personnalisé** | Libre | Libre | Toute taille et tout ratio |
-
-Le préréglage définit automatiquement la contrainte du rapport d'aspect et la taille de sortie.
-
-L'aperçu elliptique n'apparaît que pour les préréglages avatar et icône de courtier.
-
----
-
-## 🎛️ Commandes
-
-### ✂️ Zone de recadrage
-
-- 📏 **Faites glisser les coins** pour redimensionner la zone de recadrage
-- ↔️ **Faites glisser à l'intérieur** de la zone pour la déplacer
-- 🔒 La zone de recadrage est **restreinte aux limites de l'image** — vous ne pouvez pas sélectionner d'espace en dehors de l'image
-
-### 🔍 Zoom
-
-- 🖱️ **Molette de la souris** ou **pincement** (sur les appareils tactiles) pour zoomer/dézoomer
-- ➕ **Boutons de zoom** (+/−) pour un contrôle précis
-- 🎯 Le zoom se centre sur la sélection de recadrage
-
-### 🔄 Rotation
-
-- 🔄 **Boutons de rotation** (↺/↻) pour pivoter par paliers de 15°
-- 📍 La rotation s'effectue relativement au centre de la sélection
-
-### 🪞 Retournement
-
-- ↔️ **Retournement horizontal** (↔) — effet miroir gauche-droite
-- ↕️ **Retournement vertical** (↕) — effet miroir haut-bas
+Les photos de profil s'ouvrent avec **Avatar**, les icônes de courtier avec **Icône** et les images de la page Fichiers avec
+**Personnalisé** ; les icônes d'actif sont recadrées en carré à 256 × 256 px. Vous pouvez changer de préréglage à tout moment.
 
 ---
 
 ## ⚙️ Paramètres de sortie
 
-Avant de confirmer, vous pouvez ajuster :
-
-- 🎨 **Format de sortie** : PNG (sans perte, transparence), JPEG (plus léger, sans transparence), WebP (moderne, meilleure compression)
-- 📊 **Qualité** (JPEG/WebP uniquement) : Curseur de 10% à 100% — une qualité inférieure = un fichier plus petit
-- 📐 **Taille de sortie** : Largeur et hauteur en pixels (liées au préréglage, mais modifiables)
-
-!!! tip "Aperçu elliptique"
-
-    Pour les préréglages d'avatar et d'icône, une **superposition elliptique** circulaire est affichée sur la zone de recadrage. Cela vous aide à prévisualiser l'apparence de l'image dans un cadre circulaire (par exemple, les avatars d'utilisateurs dans la barre de navigation).
+- 🎨 **Format** — `.png` (sans perte, conserve la transparence), `.jpg` (plus petit, sans transparence) ou
+  `.webp` (meilleure compression), à côté du nom de fichier, que vous pouvez aussi modifier. Une image
+  `.jpg` ou `.webp` conserve son format ; tout autre format démarre en `.png`.
+- 📊 **Qualité** (`.jpg` et `.webp` uniquement) — **−** / **+** par pas de 10 %, de 10 % à 100 % : une qualité
+  inférieure signifie un fichier plus petit.
+- 📐 **Sortie** — largeur × hauteur en pixels, définies par le préréglage mais modifiables. La largeur et la hauteur restent
+  proportionnelles à la zone de recadrage, et vous ne pouvez pas leur attribuer des valeurs supérieures à celles de cette zone ; **Échelle** définit les deux en
+  même temps.
 
 ---
 
-## 🔄 Flux de travail
+## ✅ Confirmer ou annuler
 
-1. **Téléversez ou glissez-déposez** un fichier image
-2. La fenêtre de recadrage s'ouvre avec le préréglage approprié
-3. **Ajustez** la zone de recadrage, le zoom et la rotation selon vos besoins
-4. **Prévisualisez** le résultat en temps réel
-5. Cliquez sur **Téléverser** pour confirmer — l'image recadrée est enregistrée sur le serveur
-6. Cliquez sur **Annuler** ou fermez la fenêtre pour abandonner les modifications
+- **Recadrer et téléverser** enregistre l'image et l'utilise. Sur la page Fichiers, **Recadrer** l'ajoute plutôt à la liste de téléversement
+  (**Restaurer l'original** ↺ ramène l'original), et **Téléverser** envoie la liste.
+- **Annuler** ou **✕** ferme l'outil — après demande, si vous avez des modifications non enregistrées
+  (**Abandonner et fermer**). Depuis le sélecteur d'image, vous revenez au sélecteur.
 
-!!! info "Fichiers autres que des images"
+??? info "📄 Fichiers non image — sur la page Fichiers"
 
-    Si vous téléversez un fichier qui n'est pas une image (PDF, CSV, etc.), la fenêtre de recadrage est ignorée. À la place, une simple boîte de dialogue de renommage apparaît.
+    Un PDF, un CSV ou tout autre fichier non image n'a pas d'étape de recadrage : son bouton ✏️ ouvre une simple
+    boîte de dialogue **Renommer** à la place.
+
+---
+
+## 🔗 Voir aussi
+
+- 🛠️ **[Composants de téléversement de fichiers et de médias](../../developer/frontend/components/core-ui/file-upload.md)** — Comment l'outil est construit (pour les développeurs)

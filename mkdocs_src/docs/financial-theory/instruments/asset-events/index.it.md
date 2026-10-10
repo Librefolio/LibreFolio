@@ -13,7 +13,7 @@ Comprendere gli eventi dell'asset è essenziale per un'analisi accurata dei prez
 | **Dividendo** | 💰 | Il prezzo scende dell'importo del dividendo (ex-date) | Azioni, ETF | [📖](dividend.md) |
 | **Interesse** | 📈 | L'accumulo riduce il rendimento rimanente | Obbligazioni, Prestiti, Reddito fisso | [📖](interest.md) |
 | **Split** | ✂️ | Il prezzo si divide, la quantità si moltiplica | Azioni, ETF | [📖](split.md) |
-| **Adeguamento del prezzo** | 📊 | Variazione algebrica (+/−) del fair value | Obbligazioni, Asset illiquidi | [📖](price-adjustment.md) |
+| **Rettifica prezzo** | 📊 | Variazione algebrica (+/−) del fair value | Obbligazioni, Asset illiquidi | [📖](price-adjustment.md) |
 | **Liquidazione alla scadenza** | 🏁 | Restituzione finale del capitale, nessun ulteriore prezzo | Obbligazioni, Depositi a termine | [📖](maturity-settlement.md) |
 
 ---

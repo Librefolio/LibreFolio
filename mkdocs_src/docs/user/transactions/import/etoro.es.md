@@ -1,38 +1,54 @@
-# <img src="https://www.etoro.com/favicon.ico" alt=""> eToro
+# 📥 <img src="https://www.etoro.com/favicon.ico" alt=""> eToro
 
 !!! info "Beta"
 
-    Este plugin está en fase **Beta**: ha sido probado con archivos de muestra, pero podrían existir casos límite.
+    Este plugin está en **Beta** — se ha probado con archivos de muestra, pero pueden existir casos límite.
 
-## 📥 Cómo Exportar
+LibreFolio lee la hoja **Actividad de la cuenta** del extracto de cuenta de eToro que se guarda como CSV.
 
-Para exportar su historial de transacciones desde eToro:
+## 📥 Cómo exportar
 
-1. Inicie sesión en su [cuenta de eToro](https://www.etoro.com).
-2. Haga clic en **Cartera (Portfolio)** en la barra lateral izquierda y luego haga clic en el icono del reloj para abrir **Historial (History)**.
-3. Haga clic en el icono del engranaje de configuración en la parte superior derecha y seleccione **Estado de cuenta (Account Statement)**.
-4. Elija la fecha de inicio y fin para su estado de cuenta y luego haga clic en **Crear (Create)**.
-5. Seleccione la opción de exportación **CSV**. Guarde el archivo en su computadora.
+1. Inicia sesión en tu [cuenta de eToro](https://www.etoro.com).
+2. Abre **Cartera**, luego **Historial** (el icono del reloj).
+3. Haz clic en el icono de configuración de la esquina superior derecha y elige **Extracto de cuenta**.
+4. Elige las fechas de inicio y fin, y haz clic en **Crear**.
+5. Descarga el extracto con el icono **XLS**.
+6. Abre el archivo en una hoja de cálculo, ve a la hoja **Actividad de la cuenta** y guárdalo como **CSV**,
+   manteniendo los nombres de las columnas en la primera línea. LibreFolio no lee archivos PDF ni Excel.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <!-- [Screenshot Placeholder: eToro Portfolio History - Account Statement creation and export] -->
+    <!-- [Marcador de posición de captura de pantalla: Historial de cartera de eToro - Creación y exportación del extracto de cuenta] -->
 </div>
 
-## ⚠️ Problemas Comunes
+## 🔄 Qué se importa
 
-!!! warning "No utilice estados de cuenta en PDF"
+| En Actividad de la cuenta (**Tipo**) | Se importa como |
+|:-------------------------------|:------------|
+| Posición abierta | **Compra** |
+| Posición cerrada | **Venta** |
+| Dividendo | **Dividendo** |
+| Pago de intereses | **Interés** |
+| Depósito | **Depósito** |
+| Solicitud de retiro | **Retiro** |
+| Comisión de retiro, Comisión de conversión por retiro, Comisión de conversión | **Comisión**, cuando el importe no es cero |
 
-    eToro permite descargar los estados de cuenta como PDF o archivos Excel. Solo los archivos **CSV** pueden ser procesados por el importador BRIM. Asegúrese de seleccionar el formato CSV.
+El instrumento proviene de **Detalles** (por ejemplo `NKE/USD`) y la cantidad proviene de **Unidades**.
 
-!!! warning "CFD frente a Activos Reales"
+**No se importan**: **Comisión nocturna** y **Reembolso nocturno** (financiación de CFD) y **SDRT** (impuesto de timbre del Reino Unido) se omiten sin aviso, así que añádelos a mano si los registras. Cualquier otro tipo se omite con un aviso.
 
-    eToro admite tanto CFD (contratos por diferencias) como activos reales. El analizador importará las transacciones de CFD, pero debido a que los CFD no representan acciones subyacentes, la base de costo y la lógica PMP podrían requerir una validación manual en la cuadrícula de transacciones.
+## ⚠️ Errores comunes
 
-## 📝 Notas
+!!! warning "Comprueba la moneda de los instrumentos no cotizados en USD"
 
-- Admite operaciones con acciones, ETF, criptomonedas y CFD, dividendos pagados, depósitos, retiros y ajustes de comisiones.
-- Todos los valores en los archivos exportados de eToro están denominados en USD.
+    LibreFolio registra cada fila en la moneda que aparece después de la barra en **Detalles** (`KER/EUR` en euros),
+    y todas las demás filas en dólares estadounidenses. eToro expresa sus importes en la moneda de tu cuenta (normalmente
+    USD): comprueba las filas de instrumentos cotizados en otra moneda antes de guardarlas.
 
-## 🔗 Referencia para Desarrolladores
+- **Conserva las fechas de eToro**: día/mes/año, con o sin la hora. Una fila cuya fecha no se pueda leer
+  se omite con un aviso.
+- **Comisiones de conversión por retiro.** Una comisión distinta de cero se convierte en una **Comisión** aparte, junto a la **Solicitud de retiro** completa. Compara ambas con tu extracto: si la comisión ya se descontó del dinero retirado, desmarca esa comisión en [Revisión](how-to.md#review).
+- **Los CFD** se convierten en compras y ventas ordinarias del instrumento, como acciones reales, sin sus comisiones nocturnas: comprueba esas posiciones y sus costes.
 
-→ [eToro Provider — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)
+## 🔗 Referencia para desarrolladores
+
+→ [Arquitectura de BRIM — notas de eToro](../../../developer/backend/brim/architecture.md#plugin-etoro)

@@ -15,6 +15,8 @@ Un **ETF** es una cesta de valores (acciones, bonos, materias primas o una combi
 | **TER** | Ratio de Gastos Totales — comisión anual de gestión deducida del NAV |
 | **Proveedores típicos** | Yahoo Finance, justETF, CSS Scraper |
 
+En LibreFolio, `ETF` es el código de un fondo de contenido mixto o no especificado; un fondo que mantiene una sola clase de activo toma uno de los seis subtipos (`ETF_STOCK`, `ETF_BOND`, `ETF_COMMODITY`, `ETF_REAL_ESTATE`, `ETF_CRYPTO`, `ETF_MONETARY`), enumerados en la tabla de la [familia ETF](index.md#etf-family) con sus iconos compuestos y la clase en la que consolida cada uno.
+
 ---
 
 ## 📊 Acumulativos vs Distributivos
@@ -40,18 +42,18 @@ La [ventaja de diferimiento fiscal](../../fundamentals/taxation.md#tax-deferral-
 
 ## 🔍 Seguimiento del Índice
 
-La mayoría de los ETFs siguen un benchmark (p. ej., S&P 500, MSCI World). El **error de seguimiento** mide cuánto se desvía el rendimiento del ETF del índice:
+La mayoría de los ETFs siguen un índice de referencia (p. ej., S&P 500, MSCI World). El **error de seguimiento** mide cuánto se desvía el rendimiento del ETF del índice:
 
 $$
 TE = \sigma(R_{ETF} - R_{index})
 $$
 
-Un error de seguimiento más bajo = mejor replicación del benchmark.
+Un error de seguimiento más bajo = mejor replicación del índice de referencia.
 
 ---
 
 ## 🔗 Relacionados
 
 - 💰 **[Eventos de Dividendos](../asset-events/dividend.md)** — Distribuciones de las participaciones del ETF
-- 📈 **[Índice y Benchmark](index-benchmark.md)** — Cómo funcionan los benchmarks
+- 📈 **[Índices e índices de referencia](index-benchmark.md)** — Cómo funcionan los índices de referencia
 - 💰 **[Fiscalidad](../../fundamentals/taxation.md)** — Implicaciones fiscales de Acc vs Dist

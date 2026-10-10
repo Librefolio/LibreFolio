@@ -1,135 +1,153 @@
 # ⚙️ Paramètres globaux
 
-LibreFolio dispose d'un ensemble de **paramètres à l'échelle du système** qui affectent tous les utilisateurs. Ils sont gérés par les administrateurs et stockés dans la base de données.
+Les paramètres globaux s'appliquent à toute l'instance et à chaque utilisateur. Ils sont stockés dans la base de données :
+tout le monde peut les lire, seuls les administrateurs peuvent les modifier.
 
 ---
 
-## 👁️ Affichage et modification des paramètres
+## ✏️ Modifier un paramètre
 
-### 🖥️ Depuis l'interface
+### 🔓 1. Déverrouiller l'onglet
 
-1. Accédez à **Paramètres** (icône d'engrenage dans la barre latérale)
-2. Cliquez sur l'onglet **Paramètres globaux** (visible pour tous les utilisateurs ; seuls les administrateurs/superutilisateurs peuvent modifier)
-3. Cliquez sur l'**icône de cadenas** à côté d'un paramètre pour le déverrouiller et le modifier
-4. Modifiez la valeur : elle est enregistrée automatiquement
+Ouvrez **Paramètres** (icône d'engrenage dans la barre latérale), puis l'onglet **Admin** : son panneau
+**Paramètres globaux** regroupe les paramètres par catégorie. Cliquez sur l'**icône de cadenas** (🔒) dans l'en-tête pour le déverrouiller.
+Seuls les administrateurs (superusers) disposent du cadenas ; tous les autres obtiennent une vue en lecture seule.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Paramètres globaux" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! warning "Administrateurs uniquement"
+### 💾 2. Modifier et enregistrer
 
-    Seuls les utilisateurs disposant des privilèges **superutilisateur** peuvent modifier les paramètres globaux. Les utilisateurs ordinaires voient une vue en lecture seule.
+- Rien n'est écrit tant que vous ne cliquez pas sur **Enregistrer** à côté d'un paramètre, ou sur **Tout enregistrer** dans l'en-tête.
+  **Défaire** et **Tout défaire** rétablissent les valeurs enregistrées.
+- **Réinitialiser par défaut** et **Tout réinitialiser par défaut** remplissent les valeurs par défaut, prêtes à être enregistrées.
+- Les valeurs enregistrées s'appliquent immédiatement, sans redémarrage.
 
-### 💻 Depuis la CLI
+??? note "🔒 Verrouillage avec des modifications non enregistrées — quand une boîte de dialogue demande d'abord"
 
-Pour initialiser les paramètres par défaut (ne crée que ceux qui manquent) :
+    Cliquer sur le cadenas avec des modifications non enregistrées demande si vous souhaitez les abandonner. **Annuler** conserve vos
+    modifications ; **Abandonner** rétablit les valeurs enregistrées et verrouille l'onglet.
 
-```bash
-./dev.py user init-settings
-```
+??? tip "💻 Paramètres manquants — recréez-les depuis la ligne de commande"
 
----
+    Chaque démarrage du serveur recrée tout paramètre manquant avec sa valeur par défaut. Pour le faire sans
+    redémarrage, exécutez l'[outil en ligne de commande](cli_tools.md) :
 
-## 🕐 Session
+    ```bash
+    pipenv run ./dev.py user init-settings
+    ```
 
-| Clé | Type | Défaut | Description |
-|-----|------|--------|-------------|
-| `session_ttl_hours` | int | `24` | Temps d'expiration du jeton JWT en heures. Passé ce délai, les utilisateurs doivent se reconnecter. |
-
-## 🛡️ Sécurité
-
-| Clé | Type | Défaut | Description |
-|-----|------|--------|-------------|
-| `enable_registration` | bool | `true` | Indique si l'inscription de nouveaux utilisateurs est autorisée. Définissez sur `false` pour empêcher de nouvelles inscriptions. |
-| `require_email_verification` | bool | `false` | **Provisoire — pas encore appliqué.** Indique si les nouveaux utilisateurs doivent vérifier leur e-mail avant d'accéder au système. L'envoi d'e-mails (SMTP) est une fonctionnalité prévue ; dans l'interface, ce paramètre est donc en lecture seule et porte un badge « Bientôt disponible ». |
-
-## 🔄 Tâche de mise à jour
-
-| Clé | Type | Défaut | Description |
-|-----|------|--------|-------------|
-| `scheduler_enabled` | bool | `true` | Active ou désactive le démon de synchronisation automatique en arrière-plan pour les taux de change et les prix historiques/temps réel. |
-
-Les paramètres restants du planificateur ne sont pas affichés sous forme de champs individuels : ils sont modifiés ensemble depuis la fenêtre modale **Configurer** de la ligne du planificateur — voir [Planificateur des données de marché](#market-data-scheduler) ci-dessous.
-
-| Clé | Type | Défaut | Description |
-|-----|------|--------|-------------|
-| `scheduler_current_price_frequency_minutes` | int | `10` | Fréquence (en minutes) à laquelle le démon met à jour les prix actuels en temps réel (1-1440). |
-| `scheduler_history_sync_times` | str | `06:00,23:00` | Heures HH:MM séparées par des virgules pour la synchronisation quotidienne de l'historique, exprimées **dans le `scheduler_timezone` configuré**. Les heures sont stockées telles que saisies (heure locale) ; le démon ne convertit chaque créneau local en un instant UTC que lorsqu'il décide si une tâche est due. |
-| `scheduler_history_sync_days` | str | `mon,tue,wed,thu,fri,sat` | Jours spécifiques de la semaine (séparés par des virgules) pour exécuter la synchronisation historique. |
-| `scheduler_history_sync_horizon_days` | int | `14` | Fenêtre d'analyse rétrospective glissante (en jours) utilisée pour détecter les prix historiques manquants. |
-| `scheduler_timezone` | str | `UTC` | Fuseau horaire IANA utilisé pour **stocker et évaluer** les jours et heures de synchronisation de l'historique. Les heures/jours que vous configurez sont exprimés dans ce fuseau ; les valeurs invalides reviennent à UTC. |
-
-## 🧠 Mémoire
-
-| Clé | Type | Défaut | Description |
-|-----|------|--------|-------------|
-| `max_file_upload_mb` | int | `10` | Taille maximale de téléversement de fichiers en mégaoctets. S'applique à tous les téléversements (ressources statiques et rapports de courtier). |
-
-La catégorie Mémoire héberge également le panneau **Caches serveur** — voir [Caches serveur](#server-caches) ci-dessous.
-
-## 🌍 Valeurs par défaut
-
-| Clé | Type | Défaut | Description |
-|-----|------|--------|-------------|
-| `default_currency` | str | `EUR` | Devise d'affichage par défaut pour les nouveaux utilisateurs enregistrés. Les utilisateurs peuvent la remplacer dans leurs paramètres personnels. |
-| `default_language` | str | `en` | Langue par défaut pour les nouveaux utilisateurs enregistrés. Langues prises en charge : 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr`, 🇪🇸 `es`. |
-| `default_theme` | str | `auto` | Thème par défaut pour les nouveaux utilisateurs enregistrés : ☀️ `light`, 🌙 `dark`, 🖥️ `auto`. |
+    Les valeurs que vous avez modifiées sont conservées.
 
 ---
 
-## 🕐 Planificateur des données de marché {: #market-data-scheduler }
+## 📋 Ce que fait chaque paramètre
 
-Lorsque le planificateur en arrière-plan est activé, les administrateurs peuvent configurer les paramètres de synchronisation et inspecter les journaux d'exécution en arrière-plan directement depuis l'interface utilisateur.
+| Catégorie | Paramètre | Valeur par défaut | Ce qu'il fait — quand le modifier |
+|---|---|---|---|
+| ⏳ Session | **Durée de session** | 24 heures | Combien de temps les utilisateurs restent connectés. Raccourcissez-la sur les appareils partagés ; une nouvelle valeur s'applique à partir de la prochaine connexion de chaque utilisateur. |
+| 🛡️ Sécurité | **Activer l'inscription** | Activé | Permet à de nouvelles personnes de s'inscrire. Désactivez cet interrupteur une fois que tout le monde a un compte, surtout si l'instance est accessible depuis internet. Le premier compte d'une nouvelle instance peut toujours être créé. |
+| 🛡️ Sécurité | **Exiger la vérification par e-mail** | Désactivé | Pas encore actif : l'envoi d'e-mails est une fonctionnalité prévue, donc l'interrupteur est en lecture seule et marqué **Bientôt disponible**. |
+| 🔄 Tâche de mise à jour | **Planificateur activé** | Activé | Active ou désactive les mises à jour automatiques des prix et des taux de change : voir [Planificateur de données de marché](#market-data-scheduler). |
+| 🧠 Mémoire | **Taille maximale des fichiers téléversés** | 10 Mo | Le plus gros fichier que les utilisateurs peuvent téléverser, rapports de courtiers inclus. Augmentez-la si un gros export est refusé. |
+| 🌍 Valeurs par défaut | **Devise par défaut** | `EUR` | La devise dans laquelle les nouveaux utilisateurs déclarent leurs opérations. |
+| 🌍 Valeurs par défaut | **Langue par défaut** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` ou 🇪🇸 `es`. |
+| 🌍 Valeurs par défaut | **Thème par défaut** | `auto` | ☀️ `light`, 🌙 `dark`, ou 🖥️ `auto`, qui suit l'appareil. |
 
-### ⚙️ Configurer le planificateur
+Les nouveaux utilisateurs partent de ces trois valeurs par défaut : la [configuration d'accueil](../user/getting-started.md#welcome-setup)
+affiche leur langue et leur devise pré-remplies. Modifier une valeur par défaut plus tard laisse les
+[Préférences](../user/settings/preferences.md) des utilisateurs existants intactes.
 
-Cliquez sur le bouton **Configurer** dans la ligne du planificateur pour personnaliser les fréquences et les paramètres d'exécution :
+---
+
+## 🕐 Planificateur de données de marché {: #market-data-scheduler }
+
+Le planificateur maintient les prix et les taux de change à jour tout seul, même quand personne n'est connecté :
+
+- 💰 **Rafraîchissement du prix actuel** — toutes les quelques minutes, le dernier prix de chaque actif actif qui dispose
+  d'un fournisseur de prix.
+- 📊 **Synchronisation de l'historique** — aux jours et heures que vous choisissez, les prix quotidiens de ces actifs et les
+  taux de chaque paire FX disposant d'un fournisseur, sur l'**Horizon de rétrospection**, pour combler tout manque. Les paires
+  avec uniquement des taux manuels sont ignorées.
+
+### ⚙️ Configurer la planification
+
+Déverrouillez l'onglet, ouvrez **Tâche de mise à jour** et cliquez sur **Configurer…** dans la ligne **Configuration de la planification**.
+La boîte de dialogue possède son propre bouton **Enregistrer**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Scheduler Configuration Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Modale de configuration du planificateur" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-* **Fréquence des prix actuels** : la fréquence (en minutes) à laquelle le démon récupère les cotations en temps réel pour maintenir le cache du tableau de bord à jour (défaut : 10 min).
-* **Heures de synchronisation de l'historique** : heures quotidiennes spécifiques (séparées par des virgules, p. ex. `06:00,23:00`) pour exécuter les mises à jour quotidiennes des clôtures historiques. Les heures sont des heures locales **dans le fuseau horaire du planificateur configuré**.
-* **Jours de synchronisation de l'historique** : jours spécifiques de la semaine où la synchronisation historique est effectuée (généralement du lundi au samedi), également évalués dans le fuseau horaire du planificateur.
-* **Horizon de l'historique** : fenêtre d'analyse (en jours) pour détecter les points de prix historiques manquants (défaut : 14 jours).
-* **Fuseau horaire** : le fuseau horaire IANA (`scheduler_timezone`) dans lequel les heures et les jours ci-dessus sont stockés et évalués. La fenêtre modale affiche également l'horloge UTC du serveur, afin que vous puissiez apprécier le décalage ; le backend ne convertit chaque créneau local en un instant UTC que lorsqu'il décide si une tâche est due. Les valeurs invalides reviennent à UTC.
+| Champ | Valeur par défaut | Ce qu'il définit |
+|---|---|---|
+| **Fuseau horaire** | `UTC` | Le fuseau horaire des heures et des jours ci-dessous ; l'horloge UTC du serveur est affichée à côté. |
+| **Rafraîchir toutes les** | 10 minutes | La fréquence de rafraîchissement des prix actuels, de 1 à 1440 minutes. |
+| **Heures de synchronisation** | `06:00`, `23:00` | Quand la synchronisation de l'historique s'exécute ; **Ajouter une heure** ajoute un créneau. |
+| **Jours de synchronisation** | Lun au Sam | Les jours de la synchronisation de l'historique. |
+| **Horizon de rétrospection** | 14 jours | Combien de jours passés chaque synchronisation de l'historique vérifie, de 1 à 365. |
 
-### 📜 Journaux du planificateur
+Conservez au moins une heure et un jour. Astuce : une synchronisation de l'historique après la clôture des marchés (par exemple
+`22:00`) obtient les données les plus complètes.
 
-Cliquez sur **Voir les journaux** pour ouvrir l'inspecteur de journaux. Cette fenêtre modale affiche une liste des exécutions récentes du planificateur :
+??? warning "🌍 Changer le fuseau horaire — les tâches se déplacent dans le temps"
+
+    Les heures et les jours conservent leurs valeurs mais comptent dans le nouveau fuseau horaire, donc les tâches s'exécutent à un autre
+    moment. Elles suivent aussi son heure d'été : `06:00` dans `Europe/Rome` s'exécute à 05:00 UTC
+    en hiver et à 04:00 UTC en été.
+
+### 📜 Lire le journal du planificateur
+
+La ligne **État du planificateur** affiche le dernier rafraîchissement du prix actuel, avec un point pour son résultat.
+Cliquez sur la ligne (ou sur **Détails…**) pour ouvrir le **Journal d'exécution du planificateur**. Seuls les administrateurs peuvent
+lire l'état et le journal.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Scheduler Log Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Modale du journal du planificateur" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Le journal indique l'horodatage de l'exécution, le nom de la tâche, le statut (Succès/Erreur), la durée d'exécution et des détails structurés sur les actifs traités, les flux de prix et toute trace d'erreur.
+- Chaque entrée correspond à une exécution : tâche, heure, durée et combien d'éléments ont réussi. 🟢 **OK** : tous,
+  ou rien à faire ; 🟡 **Partiel** : certains ont échoué ; 🔴 **Erreur** : aucun n'a réussi.
+- Cliquez sur une entrée pour voir chaque actif ou paire FX, son fournisseur et les prix modifiés (**Delta**).
+  Survolez une erreur pour la lire en entier ; double-cliquez dessus (appui long sur un téléphone) pour la copier.
+- Filtrez par tâche, statut ou période, de la dernière heure aux 30 derniers jours. Seules les exécutions les plus récentes
+  sont conservées.
 
 ---
 
-## 🗄️ Caches serveur {: #server-caches }
+## 🗄️ Caches du serveur {: #server-caches }
 
-LibreFolio conserve plusieurs **caches en mémoire** côté backend (récupérations de prix, résultats de recherche, calculs de portefeuille, réponses des fournisseurs, etc.) afin que les demandes répétées ne sollicitent pas les fournisseurs de données externes à chaque fois. L'onglet **Paramètres globaux** se termine par un **panneau des caches** (catégorie Mémoire) qui répertorie chaque cache enregistré par nom, avec ses colonnes **taille actuelle / taille maximale** et **TTL** (durée de vie) — chaque en-tête de colonne est cliquable pour trier par nom, taille ou TTL ; un bouton **Actualiser** recharge les statistiques en direct.
+Pour rester rapide, LibreFolio garde en mémoire les réponses récentes des fournisseurs et les résultats calculés. Le
+panneau **État des caches**, à la fin de la catégorie **Mémoire**, liste chaque cache avec sa
+**Taille / Max** et son **TTL** (combien de temps une entrée est conservée). Cliquez sur un en-tête de colonne pour trier ;
+**Rafraîchir** met à jour les chiffres.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Server caches panel in Global Settings (Memory category)">
+    <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Panneau des caches du serveur dans les Paramètres globaux (catégorie Mémoire)">
 </div>
 
-**Qui peut faire quoi :**
-
-- 👁️ **La lecture de l'état** est disponible pour **tout utilisateur authentifié** (`GET /api/v1/settings/cache/status`).
-- 🧹 **Le vidage** est **réservé aux administrateurs et nécessite que la page soit déverrouillée** (les boutons n'apparaissent que pour les superutilisateurs en mode édition) : chaque ligne possède son propre bouton **Vider** (`POST /api/v1/settings/cache/clear/{name}`), et l'en-tête du panneau comporte un bouton **Tout vider** (`POST /api/v1/settings/cache/clear-all`).
+Tout le monde peut voir le panneau. Un administrateur, avec l'onglet déverrouillé, peut vider un cache avec
+**Vider** ou tous les vider avec **Tout vider**, pour forcer des données fraîches sans redémarrage. Un redémarrage
+vide aussi tous les caches.
 
 !!! warning "Vider un cache ralentit la prochaine récupération"
 
-    Les deux actions de vidage demandent une confirmation, et pour cause : après un vidage, la prochaine demande pour ces données **sollicite à nouveau les fournisseurs externes**, attendez-vous donc à un ralentissement comparable à un redémarrage du serveur pendant que les caches se remplissent. Les caches se vident également à chaque redémarrage du serveur — le vidage n'est utile que pour forcer l'obtention de données fraîches sans redémarrer.
+    Les deux actions demandent d'abord une confirmation. Après un vidage, la prochaine requête pour ces données est renvoyée aux
+    fournisseurs, donc attendez-vous à un ralentissement similaire à un redémarrage du serveur pendant que les caches se remplissent
+    à nouveau.
+
+??? note "🧵 Plusieurs workers — quand le serveur tourne avec `--workers`"
+
+    Chaque processus worker a ses propres caches. Le panneau affiche, et vide, ceux du worker qui
+    a répondu ; redémarrez le serveur pour tous les vider.
 
 ---
 
-## 🔧 Notes techniques
+## 🔗 Voir aussi
 
-- 🗃️ Les paramètres sont stockés sous forme de **paires clé-valeur** dans la table `global_settings`
-- 🔀 Les valeurs sont stockées sous forme de chaînes et converties au type approprié (`int`, `bool`, `str`) à la lecture
-- 🔒 Au démarrage multi-workers, les paramètres sont initialisés avec `INSERT ... ON CONFLICT DO NOTHING` pour éviter les conditions de concurrence
-- ⚡ Les modifications prennent effet **immédiatement** — aucun redémarrage du serveur n'est requis
+- 📝 **[Variables d'environnement](configuration.md)** — Les paramètres qui vivent dans `.env` à la place
+- 👤 **[Préférences utilisateur](../user/settings/preferences.md)** — Ce que chaque utilisateur peut modifier pour lui-même
+- 🧑‍💻 Pour les développeurs : **[Système de paramètres](../developer/architecture/settings.md)**,
+  **[Registre des caches](../developer/architecture/settings_cache.md)** et
+  **[Planificateur de données de marché](../developer/backend/scheduler.md)**
