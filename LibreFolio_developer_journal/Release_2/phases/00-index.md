@@ -45,5 +45,5 @@
 - `../Phase_0/21_onboarding/` — onboarding: aspetta la review manuale C7 del developer.
 - `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M).
 - `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q).
-- `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): in corso, entra con il suo checkpoint.
+- `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30; restano le traduzioni delle sue pagine (secondo giro di M), poi da archiviare.
 - `../Phase_0/38_postReleaseBacklog/` — backlog dopo la 1.2: i residui delle cartelle archiviate il 09/10 e il backlog del coordinatore.
