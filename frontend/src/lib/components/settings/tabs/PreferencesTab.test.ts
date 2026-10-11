@@ -147,7 +147,7 @@ vi.mock('$lib/stores/reference/fxRoutesStore', () => ({
 // would otherwise drag in the onboarding controller, guide and appBootstrap
 // singletons just to prove *placement*, so it is replaced with a one-testid
 // probe — see the harness file's own doc comment.
-vi.mock('$lib/components/onboarding/OnboardingReplaySection.svelte', async () => ({
+vi.mock('$lib/features/onboarding/components/OnboardingReplaySection.svelte', async () => ({
     default: (await import('$test/harness/OnboardingReplaySectionProbe.svelte')).default,
 }));
 
