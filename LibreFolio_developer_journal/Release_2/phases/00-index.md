@@ -51,3 +51,4 @@
 - `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30, piano chiuso nel treno 31; restano le traduzioni delle sue pagine (secondo giro di M).
 - `../Phase_0/38_postReleaseBacklog/` — backlog dopo la 1.2: i residui delle cartelle archiviate il 09/10 e il backlog del coordinatore.
 - `../Phase_0/41_brokerPnlFlows/` — P&L per broker senza salti ai trasferimenti (workstream I): l'engine è entrato nel treno 32; le card dei broker (H) e la rivalutazione della cassa in valuta (F) sono in corso per la 1.2.
+- `../Phase_0/42_promotePairChecks/` — i controlli delle coppie promosse (workstream P): chiuso, integrato nel treno 34; il compito a lato `DistributionEditor` nel treno 32; residui → 38 (C-46…C-48).
