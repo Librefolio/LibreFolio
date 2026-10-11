@@ -76,7 +76,16 @@ A second toggle, at the top-left of the plot, picks how to draw it (icons only o
   </div>
 </div>
 
-**Broker lines.** With two or more brokers in scope, each broker gets a dashed line and a tooltip row with its share of the total; the shares add up to the total every day. A share is not the broker's own performance: money in transit counts for the broker it left, so a broker line can jump on a transfer date. With one broker, or on a broker's page, only the total is drawn.
+**Broker lines.** With two or more brokers in scope, each broker gets a dashed line and a tooltip row with its share of the total; the shares add up to the total every day. A broker's line is the P&L made while the value was at that broker: moving money or securities between two of your brokers is neither a gain nor a loss, so no line jumps when a transfer arrives.
+
+- **In transit** — until the transfer arrives, the value and its price or exchange-rate moves stay with the broker it left.
+- **Different ownership shares** — when the two brokers have different [ownership shares](../brokers/sharing.md), the receiving line keeps a step on the arrival day: the same step the total shows.
+- **No value on the arrival day** — if the security has no price yet, or an exchange rate is missing, the jump stays: nothing is guessed.
+- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day, not as a gain or a loss; money counts as a deposit or a withdrawal. The same goes for the half left behind when the other broker of a transfer is deleted.
+
+With one broker, or on a broker's page, only the total is drawn.
+
+🔗 **Theory**: [Internal transfers in the broker lines](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 #### Candles — the swing inside the period {: #pnl-candles }
 
