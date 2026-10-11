@@ -125,34 +125,48 @@ Service converts:
 
 - lot opening cost and opening unit price
 - closure proceeds / realized P&L
+- Gantt fragment unit prices
 - native resolver marks from `build_asset_price_series()`
-- dividend / interest cash flows
+- dividend / interest and FEE / TAX amounts, and the BUY / SELL amounts that weight the FEE / TAX split (economic-stage inputs)
 - performance-history external flows
 
-**No native fallback.** Apart from the transitional amounts below, a figure that needs a missing rate is never computed from the unconverted amount — it is `None`, or it has no point:
+**No native fallback.** A figure that needs a missing rate is never computed from the unconverted amount — it is `None`, or it has no point:
 
 - **Daily valuation**: a mark whose rate is missing leaves that day unvalued, like a `MISSING` mark — `market_prices[date]` is `None` and the day has no price-history point. Only `estimated_mode` (an asset with no price at all) values an open lot at cost on such a day; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
-- **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a LONG lot's series stops the day before the first closure whose proceeds have no rate (`_closure_proceeds_prefix()` returns the converted prefix and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted.
+- **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a LONG lot's series stops the day before the first closure whose proceeds have no rate (`_closure_proceeds_prefix()` returns the converted prefix and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted. Within an emitted point, the income, fee and tax fields that a degraded economic pool withholds — and the figures read from them — are `None` instead (see [Economic events and degraded pools](#degraded-economic-pools)).
 - **Performance history**: a BUY amount, an ADJUSTMENT-in's money (`_adjustment_native_cost()` / `_adjustment_cash_flow_cost()`) or a SELL closure's proceeds without a rate set `invalid_external_flow_from`: ROI and TWRR are `None` from that date.
-- **Lot summary**: `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs has no rate (`_known_realized_pnl()`, `_known_cumulative_proceeds()`), and the estimated-at-cost branch values no lot without a converted cost.
-
-!!! warning "Transitional native fallback"
-
-    These amounts still take the native amount when their rate is missing; each such missing rate is recorded
-    and reported all the same:
-
-    - the four required `LotSummarySchema` fields `original_cost`, `opening_unit_price`, `realized_pnl` and
-      `cumulative_proceeds` (`_converted_realized_pnl()` / `_converted_cumulative_proceeds()`);
-    - `GanttSegmentSchema.unit_price`;
-    - the target amounts of the income / FEE / TAX economic events — from which `asset_income`, `allocated_fees`
-      and `allocated_taxes` derive — and the BUY / SELL target amounts that weight the FEE / TAX allocation
-      (`_converted_external_amount()`).
+- **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `realized_pnl` (`_known_realized_pnl()`) and `cumulative_proceeds` (`_known_cumulative_proceeds()`) are `None` when one closure's rate is missing — for a SHORT lot's proceeds, the opening-date rate. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
+- **Gantt topology**: `GanttSegmentSchema.unit_price` is `None` when the rate at the fragment's `start_date` is missing.
+- **Economic events** (income, FEE, TAX): a missing rate on an event degrades its pool, and one on a trade can degrade a FEE / TAX pool that the trade weights; the figures a degraded pool feeds are withheld — see [Economic events and degraded pools](#degraded-economic-pools).
 
 The misses are reported once, after every builder: `_report_gaps()` merges `missing_pairs()` with the WAC lines' gaps into `data_quality` (see [WAC Lines](#wac-lines)), and any of them turns a `COMPLETE` run `DEGRADED`. Only what is returned is converted, so the report holds no gap of a figure nobody reads: event rows (`_build_lot_event_rows()`) are built only when `CUSTODY_HISTORY` or `EVENT_HISTORY` is requested, and the daily valuation covers every history day only for the value, return, price and performance histories — a `LOT_SUMMARY` alone values just the last day, the only one it reads.
 
 The WAC lines do not go through `_FxRateResolver`: `compute_average_costs()` converts each acquisition itself, at its own date.
 
 **Known limit (pre-existing).** The engine's `_close_position_piece()` (`fifo_lot_engine.py`) computes a closure's realized P&L from the sale's unit price minus the lot's, and its proceeds from the sale's unit price, with no conversion: a lot opened in one currency and closed by a sale in another mixes the two currencies, and the service converts the closure with the lot's currency.
+
+#### 🧾 Economic events and degraded pools {: #degraded-economic-pools }
+
+An income / FEE / TAX event without a rate still enters the engine with its native amount, only as a placeholder: the engine then places it — pools it, matches it, lets a TAX follow the income it taxes — exactly as it would place a converted one. `_engine_target_amount()` hands that amount over, for the events and for the BUY / SELL amounts that weight the FEE / TAX split, and the resolver records the miss. `_unconvertible_ids()` collects the events (`unconvertible_event_ids`) and the trades (`unconvertible_trade_ids`) without a rate on their date, and `_withheld_economics()` finds the engine pools (`EconomicAllocationGroup`) they degrade:
+
+| Pool | Degraded when | Unknown |
+|------|---------------|---------|
+| **Amount-degraded** | One of its source events is in `unconvertible_event_ids` | Its target-currency amount, hence every target share of it |
+| **Split-degraded** | A trade-weighted FEE / TAX rule (`SAME_DAY_TRADES`, `SAME_DAY_MIXED_TRADES`, `PREVIOUS_DAY_TRADES`), with a weighting trade in `unconvertible_trade_ids` and weighting trades in more than one currency | Its split: every operation weight and every per-lot share |
+
+When every weighting trade is in one currency, the pool is not split-degraded: the trades share one date, hence one rate, and their native placeholders keep the exact ratios.
+
+`_WithheldEconomics` records, per lot, the date from which its income (`income_from`), fees (`fees_from`) and taxes (`taxes_from`) are unknown — the date of the earliest degraded pool of that kind that allocates to the lot — with the degraded pool indexes (`amount_degraded`, `split_degraded`), `unconvertible_event_ids` and the kinds whose orphan pool is degraded (`orphan_unknown`). The response withholds:
+
+- **Lot summary** (`_build_lot_summaries()`): on a lot a degraded pool reaches, that kind's `asset_income`, `allocated_fees` or `allocated_taxes` is `None`, and so is every figure that reads it — `total_pnl`, `cash_yield` and `total_return` read the income; `net_total_pnl`, `net_total_return` and `annualized_return` read all three. The lot's `net_metrics_status` is `"UNAVAILABLE"` (`withheld.reaches(lot_id)`).
+- **Value and return histories** (`_economics_on_date()`, `_known_prefix_on_date()`, `_lot_returns()`): each kind is `None` from its date on — the value history's `income`, `allocated_fees` and `allocated_taxes`, and its `net_pnl` with the fees or the taxes; the return history's `income`, its `total_return` with the income, and its `net_total_return` with any of the three. An earlier date sums only earlier pools, all of them known.
+- **Income events**: `LotIncomeEventSchema.amount` is `None` for an event in `unconvertible_event_ids`.
+- **Orphans**: `asset_orphan_income`, `asset_orphan_fees` or `asset_orphan_taxes` is `None` when an orphan pool of that kind is degraded.
+- **Audit** (`_map_economic_groups()`): an amount-degraded pool has `target_pool_total`, `target_orphan` and each lot allocation's `target_amount` set to `None`; a split-degraded pool has each operation `weight` and each lot allocation's `native_amount` and `target_amount` set to `None`. The native pool total, the native orphan and each lot's `weight` inside an operation — a quantity ratio — stay.
+
+**Orphan issues.** The engine builds an orphan pool's `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS` issue with the pool's `target_amount` and `target_currency` in its params. `_build_data_quality_report()` passes them through `_orphan_issue_params()`: for an amount-degraded orphan pool — matched by the issue's `transaction_id`, the pool's first source — the issue states the pool in its own currency, `target_amount` = `native_pool_total` and `target_currency` = `native_currency`, so the banner shows an orphan 70 VND dividend without a rate as "70 VND", never "70 EUR". The message keys keep their `target_` names: such an issue holds a native amount and currency under them, and summing `message_params.target_amount` across issues would mix currencies. A convertible orphan pool keeps its converted amount in the target currency.
+
+The native placeholder therefore never reaches the response.
 
 ### ⚠️ qbq Scaling Gotcha
 
@@ -229,11 +243,12 @@ The old duplicate map pattern (`_build_market_price_map` plus `_build_estimated_
 Since FIFO v5 the **allocation** of asset-linked income (`DIVIDEND` / `INTEREST`) and asset-linked cost
 (`FEE` / `TAX`) happens **inside the engine's economic stage** (see
 [FIFO Lot Engine](fifo_lot_engine.md)), not in the service. The service only **extracts** the already-computed
-per-lot accumulators and audit groups:
+per-lot accumulators and audit groups, withholding what a missing rate leaves unknown:
 
 - `_extract_income_outputs(engine_result, ...)` reads `engine_result.economic_accumulators_by_lot[*].gross_income`
 - `_extract_cost_outputs(engine_result, ...)` reads `.allocated_fees` / `.allocated_taxes`
 - `_map_economic_groups(...)` maps the 3-level audit into `economic_allocation_groups`
+- `_withheld_economics(...)` finds the pools a missing rate degrades, whose figures the response withholds (see [Economic events and degraded pools](#degraded-economic-pools))
 
 !!! warning "Allocation rule moved and changed"
 
@@ -266,17 +281,22 @@ counterpart minus costs.
 
 !!! note "`net_metrics_status`"
 
-    Every processed lot is emitted with `net_metrics_status = "AVAILABLE"`; `"UNAVAILABLE"` is reserved for a
-    lot in a degraded economic pool, and no path currently emits it. A missing FX rate is not reported through
-    this status: the net figures that need the rate are `None`, like every other figure that needs it, and the
-    pair goes to `data_quality` (see [FX Conversion](#fx-conversion), including its transitional exceptions).
+    A lot that a degraded economic pool reaches is emitted with `net_metrics_status = "UNAVAILABLE"`
+    (`withheld.reaches(lot_id)`): its income, fees or taxes are unknown, and so are its net figures (see
+    [Economic events and degraded pools](#degraded-economic-pools)). Every other lot is `"AVAILABLE"`. The status
+    speaks only for the economic pools: a net figure can also be `None` because its total P&L or its opening value
+    needs a missing rate, with the status still `"AVAILABLE"`; every missing pair goes to `data_quality` (see
+    [FX Conversion](#fx-conversion)).
 
 ### 🧺 Orphans & conservation
 
 When income or FEE/TAX has no eligible lot (e.g. a cost after the position is fully closed), the amount is
 **not dropped**: it is returned at asset level as `asset_orphan_income` / `asset_orphan_fees` /
 `asset_orphan_taxes` and surfaced as a `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS`
-data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == converted pool total`.
+data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == converted pool total`. For a pool
+whose amount has no rate, it conserves the native placeholder instead: the response withholds that pool's target
+figures and, for an orphan pool, the asset-level orphan total of its kind, and the orphan issue states the pool in
+its own currency (see [Economic events and degraded pools](#degraded-economic-pools)).
 
 !!! info "Costs without an asset"
 
