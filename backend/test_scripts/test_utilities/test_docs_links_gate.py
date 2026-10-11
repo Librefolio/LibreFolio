@@ -36,8 +36,27 @@ tree: 5 red, 3 green.
 * green (3): an anchor every language offers, kept by the translations as an explicit id (two cases); dev.py building
   its CLI without MkDocs, which HEAD did too.
 
+dev.py's check of the built site (R2 B14). A translated page is built one folder deeper than its English page
+(``site/<lang>/...``), and the language folders hold only pages. MkDocs rewrites the paths of Markdown images and
+links, not those of raw HTML, so a raw-HTML path copied unchanged from the English points under ``site/<lang>/``,
+where the file is not. The check run after ``mkdocs build`` looked only at ``static/icons`` and printed a warning:
+21 such images shipped broken. ``_check_asset_paths_in_built_site`` resolves every relative URL of a file
+(``<img>``/``<source>`` ``src``/``srcset``, ``<video>`` ``src``/``poster``, ``<audio>`` ``src``, ``<a href>`` to a
+file) from its page's folder as a browser does, inside the site, HTML comments left out, and ``cmd_mkdocs_build``
+exits 1 when one is broken. The cases build a site under ``tmp_path``; ``cmd_mkdocs_build`` runs in a child with
+``mkdocs build``, ``copy_docs_assets`` and the admonition check stubbed and ``PROJECT_ROOT`` pointing at a tree under
+``tmp_path``. Red phase, against the dev.py of c0d933abf (HEAD), run from a copy of the tree: 22 red, 1 green.
+
+* red on a missing function (20): every case of ``_check_asset_paths_in_built_site``;
+* red on behaviour (1): a broken image that is not an icon, with which HEAD's build returned 0;
+* red on output, its exit status right (1): a site whose URLs resolve, which HEAD's check did not count;
+* green (1): a failed MkDocs build keeps its exit code, and the check does not run.
+
+Against the first version of batch 14, which read the tags inside HTML comments, the comment case is red.
+
 PURE: every fixture is built under ``tmp_path``. The discovery tests read no repo files; the dev.py children read
-code and ``mkdocs_src/mkdocs.yml``, the site configuration ``page_anchors`` renders with, never the docs.
+code and ``mkdocs_src/mkdocs.yml``, the site configuration ``page_anchors`` renders with, never the docs nor the
+built site: the build cases build their own.
 """
 
 import json
@@ -99,6 +118,25 @@ DEV_WITHOUT_MKDOCS = textwrap.dedent("""\
     sys.modules["mkdocs"] = None
     sys.argv = sys.argv[1:]
     runpy.run_path(sys.argv[0], run_name="__main__")
+    """)
+
+#: A child's script: dev.py loaded as a module, ``PROJECT_ROOT`` pointed at argv[2] (a tree holding ``mkdocs_src/site``),
+#: the build's other steps stubbed (``mkdocs build`` exits with argv[3]), then ``cmd_mkdocs_build``. Its output comes
+#: first, then one JSON line: what it returned and the commands ``run_pipenv`` was given.
+BUILD_DEV = textwrap.dedent("""\
+    import importlib.util, json, sys
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("dev_under_test", sys.argv[1])
+    dev = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dev)
+    dev.PROJECT_ROOT = Path(sys.argv[2])
+    builds = []
+    dev.run_pipenv = lambda args, **kwargs: builds.append(args) or int(sys.argv[3])
+    dev.copy_docs_assets = lambda: None
+    dev._check_admonition_empty_lines = lambda: None
+    returned = dev.cmd_mkdocs_build(None)
+    print(json.dumps({"returned": returned, "builds": builds}))
     """)
 
 
@@ -374,3 +412,177 @@ class TestDevPyWithoutMkDocs:
         assert (status, "check-links needs MkDocs" in output, "Traceback" in output) == (1, True, False), output
         # Before checking anything: no verdict is printed for a link whose anchors it cannot read.
         assert "Checking cross-boundary links" not in output, output
+
+
+#: Files of the fake built site, under static/ at its root as the docs' images are. ``archive.v1`` is a folder with
+#: an index.html, ``archive.v2`` (made by the fixture) one without.
+SITE_FILES = ("static/a.png", "static/a b.png", "static/a&b.png", "static/report.pdf", "static/clip.mp4", "static/poster.jpg", "static/sound.mp3", "static/archive.v1/index.html")
+EN_PAGE = "user/x/index.html"  # the English page user/x.md, one folder below the root
+IT_PAGE = "it/user/x/index.html"  # its Italian build, one folder deeper; a language folder holds only pages
+EN_DEPTH = "../../static/"  # from EN_PAGE to static/: the path the English writes
+IT_DEPTH = "../../../static/"  # from IT_PAGE to static/: one more '../'
+
+
+def build_site(root: Path) -> Path:
+    """A built site at ``root`` holding SITE_FILES and no page yet."""
+    for rel in SITE_FILES:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\x00")
+    (root / "static" / "archive.v2").mkdir()
+    return root
+
+
+@pytest.fixture
+def site(tmp_path) -> Path:
+    return build_site(tmp_path / "site")
+
+
+@pytest.fixture
+def project(tmp_path) -> Path:
+    """A project root whose ``mkdocs_src/site`` is a built site, as ``cmd_mkdocs_build`` finds it."""
+    build_site(tmp_path / "project" / "mkdocs_src" / "site")
+    return tmp_path / "project"
+
+
+def write_page(site: Path, page: str, markup: str) -> None:
+    path = site / page
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"<!doctype html>\n<html><body>\n{markup}\n</body></html>\n", encoding="utf-8")
+
+
+def broken_assets(site: Path) -> list:
+    """``_check_asset_paths_in_built_site(site)``: the broken URLs as [page, tag, attribute, url]."""
+    (broken,) = call_dev(("_check_asset_paths_in_built_site", site))
+    return broken
+
+
+def build_docs(root: Path, mkdocs_exit: int) -> tuple[int, list, str]:
+    """``cmd_mkdocs_build`` on the site under ``root``, ``mkdocs build`` stubbed to exit with ``mkdocs_exit``: what it
+    returned, the commands it gave ``run_pipenv`` and its output, uncoloured."""
+    child = subprocess.run([sys.executable, "-c", BUILD_DEV, str(DEV_PY), str(root), str(mkdocs_exit)], stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace", timeout=CHILD_TIMEOUT, check=False)
+    status, stdout, stderr = child.returncode, ANSI.sub("", child.stdout), child.stderr
+    assert status == 0, f"the child exited {status}:\n{stdout}\n{stderr}"
+    *output, reply = stdout.strip().splitlines()
+    returned = json.loads(reply)
+    return returned["returned"], returned["builds"], "\n".join(output)
+
+
+class TestBuiltSiteAssets:
+    """Every relative URL of a file in the built site resolves from its page's folder, inside the site."""
+
+    def test_the_english_path_breaks_one_folder_deeper(self, site):
+        write_page(site, EN_PAGE, f'<img src="{EN_DEPTH}a.png">')
+        write_page(site, IT_PAGE, f'<img src="{EN_DEPTH}a.png">\n<img src="{IT_DEPTH}a.png">')
+        assert broken_assets(site) == [[IT_PAGE, "img", "src", f"{EN_DEPTH}a.png"]]
+
+    @pytest.mark.parametrize(
+        ("markup", "reported"),
+        [
+            pytest.param('<img srcset="{it}a.png 1x, {en}a.png 2x">', [("img", "srcset", "a.png")], id="img-srcset-the-broken-candidate"),
+            pytest.param('<picture><source srcset="{en}a.png"><img src="{it}a.png"></picture>', [("source", "srcset", "a.png")], id="source-srcset"),
+            pytest.param('<video><source src="{en}clip.mp4" type="video/mp4"><source src="{it}clip.mp4"></video>', [("source", "src", "clip.mp4")], id="source-src"),
+            pytest.param('<video src="{en}clip.mp4" poster="{it}poster.jpg"></video>', [("video", "src", "clip.mp4")], id="video-src"),
+            pytest.param('<video src="{it}clip.mp4" poster="{en}poster.jpg"></video>', [("video", "poster", "poster.jpg")], id="video-poster"),
+            pytest.param('<audio src="{en}sound.mp3"></audio> <audio src="{it}sound.mp3"></audio>', [("audio", "src", "sound.mp3")], id="audio-src"),
+            pytest.param('<a href="{en}report.pdf">PDF</a> <a href="{it}report.pdf">PDF</a>', [("a", "href", "report.pdf")], id="a-href-to-a-file"),
+        ],
+    )
+    def test_every_file_url_of_a_page_is_checked(self, site, markup, reported):
+        # In the Italian page, the English depth breaks and one more '../' resolves: only the first is reported.
+        write_page(site, IT_PAGE, markup.format(en=EN_DEPTH, it=IT_DEPTH))
+        assert broken_assets(site) == [[IT_PAGE, tag, attr, f"{EN_DEPTH}{name}"] for tag, attr, name in reported]
+
+    def test_a_link_to_a_page_or_a_folder_is_not_checked(self, site):
+        pages = '<a href="../other/">Other</a> <a href="../../user/">User</a> <a href="page.html">Page</a> <a href="page.htm">Page</a>'
+        write_page(site, IT_PAGE, f'{pages}\n<a href="{EN_DEPTH}report.pdf">PDF</a>')
+        assert broken_assets(site) == [[IT_PAGE, "a", "href", f"{EN_DEPTH}report.pdf"]]
+
+    @pytest.mark.parametrize(
+        ("written", "reported"),
+        [
+            pytest.param("a.png?v=2#top", "a.png?v=2#top", id="query-and-fragment-dropped"),
+            pytest.param("a%20b.png", "a%20b.png", id="percent-encoding-decoded"),
+            pytest.param("a&amp;b.png", "a&b.png", id="html-entity-unescaped"),
+        ],
+    )
+    def test_a_url_is_resolved_as_a_browser_reads_it(self, site, written, reported):
+        # One folder deeper the file is found (static/a.png, static/a b.png, static/a&b.png); at the English depth the
+        # URL is reported, as the page holds it but for its entities.
+        write_page(site, IT_PAGE, f'<img src="{IT_DEPTH}{written}">\n<img src="{EN_DEPTH}{written}">')
+        assert broken_assets(site) == [[IT_PAGE, "img", "src", f"{EN_DEPTH}{reported}"]]
+
+    @pytest.mark.parametrize(
+        "markup",
+        [
+            pytest.param("<img alt='A' src='{url}'>", id="single-quotes"),
+            pytest.param('<IMG ALT="A" SRC="{url}">', id="upper-case-tag-and-attribute"),
+            pytest.param('<img\n  class="shot"\n  src="{url}">', id="attributes-over-several-lines"),
+        ],
+    )
+    def test_any_spelling_of_the_tag_is_read(self, site, markup):
+        write_page(site, IT_PAGE, markup.format(url=f"{EN_DEPTH}a.png"))
+        assert broken_assets(site) == [[IT_PAGE, "img", "src", f"{EN_DEPTH}a.png"]]
+
+    def test_urls_that_are_not_relative_paths_of_a_file_are_ignored(self, site):
+        ignored = [
+            f'<img data-src="{EN_DEPTH}a.png">',
+            '<img src="https://example.com/a.png">',
+            '<img src="//cdn.example.com/a.png">',
+            '<img src="/static/a.png">',
+            '<img src="#x">',
+            '<img src="data:image/png;base64,iVBORw0KGgo=">',
+            '<img src="">',
+        ]
+        write_page(site, IT_PAGE, "\n".join([*ignored, f'<img src="{EN_DEPTH}a.png">']))
+        assert broken_assets(site) == [[IT_PAGE, "img", "src", f"{EN_DEPTH}a.png"]], "only the last image, which is read"
+
+    def test_a_path_out_of_the_site_is_broken_even_if_the_file_exists(self, site):
+        outside, url = site.parent / "outside.png", "../../../outside.png"
+        outside.write_bytes(b"\x00")
+        write_page(site, EN_PAGE, f'<img src="{url}">')
+        assert (site / EN_PAGE).parent.joinpath(url).resolve() == outside.resolve(), "barrier: the URL lands on an existing file"
+        assert broken_assets(site) == [[EN_PAGE, "img", "src", url]]
+
+    def test_a_folder_resolves_when_it_holds_an_index_html(self, site):
+        # A name that looks like a file can be a folder, served by its index.html.
+        write_page(site, EN_PAGE, f'<a href="{EN_DEPTH}archive.v1">v1</a> <a href="{EN_DEPTH}archive.v2">v2</a>')
+        assert broken_assets(site) == [[EN_PAGE, "a", "href", f"{EN_DEPTH}archive.v2"]]
+
+    def test_an_html_comment_is_not_read(self, site):
+        # A commented-out image is no image, on one line or over several: the same tag outside a comment is reported.
+        tag, other_page = f'<img src="{EN_DEPTH}a.png">', "it/user/y/index.html"
+        write_page(site, IT_PAGE, f"<!-- {tag} -->\n<!--\nFirst version:\n{tag}\n-->")
+        write_page(site, other_page, tag)
+        assert broken_assets(site) == [[other_page, "img", "src", f"{EN_DEPTH}a.png"]]
+
+    def test_a_site_not_built_has_nothing_to_check(self, tmp_path):
+        assert broken_assets(tmp_path / "site") == []
+
+
+class TestMkdocsBuild:
+    """``dev.py mkdocs build`` fails on a broken asset URL of its site; a failed MkDocs build keeps its own exit code."""
+
+    def test_a_broken_asset_url_fails_the_build(self, project):
+        site = project / "mkdocs_src" / "site"
+        write_page(site, EN_PAGE, f'<img src="{EN_DEPTH}a.png">')
+        write_page(site, IT_PAGE, f'<img src="{EN_DEPTH}a.png">')  # an image, not an icon: HEAD's check looked at static/icons only
+        returned, builds, output = build_docs(project, mkdocs_exit=0)
+        assert len(builds) == 1, "barrier: mkdocs build ran, stubbed"
+        assert returned == 1, output
+        assert "1 broken asset URL(s)" in output and IT_PAGE in output and f"{EN_DEPTH}a.png" in output, output
+        assert "one more '../'" in output and "html-asset-depth" in output, output
+
+    def test_a_site_whose_urls_resolve_builds(self, project):
+        site = project / "mkdocs_src" / "site"
+        write_page(site, EN_PAGE, f'<img src="{EN_DEPTH}a.png">')
+        write_page(site, IT_PAGE, f'<img src="{IT_DEPTH}a.png">')
+        returned, builds, output = build_docs(project, mkdocs_exit=0)
+        assert (len(builds), returned) == (1, 0), output
+        assert "All 2 relative asset URL(s) in the built site resolve" in output, output
+
+    def test_a_failed_mkdocs_build_keeps_its_exit_code_and_skips_the_check(self, project):
+        write_page(project / "mkdocs_src" / "site", IT_PAGE, f'<img src="{EN_DEPTH}a.png">')
+        returned, builds, output = build_docs(project, mkdocs_exit=2)
+        assert (len(builds), returned) == (1, 2), output
+        assert "asset URL" not in output, output

@@ -152,10 +152,10 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
 
 
 def utils_gate_docs_links(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts, anchors from the render)."""
+    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts, anchors from the render) and the built site's asset URLs."""
     print_section("Utils: Docs Link Gate")
-    print_info("Testing: scripts/docs_links.py, dev.py mkdocs check-links (_mkdocs_check_anchor, _mkdocs_page_anchors)")
-    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket, anchors from the page's MkDocs render in every language, dev.py without MkDocs")
+    print_info("Testing: scripts/docs_links.py, dev.py mkdocs check-links (_mkdocs_check_anchor, _mkdocs_page_anchors), dev.py mkdocs build (_check_asset_paths_in_built_site)")
+    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket, anchors from the page's MkDocs render in every language, dev.py without MkDocs, relative asset URLs of the built site")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_links_gate.py", test_names)
     return run_command(cmd, "Docs link discovery tests", verbose=verbose)
 
@@ -393,10 +393,11 @@ Tests for utility modules and helper functions:
         "gate-docs-links",
         utils_gate_docs_links,
         name="Docs Link Gate",
-        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped; a link's anchor must be an id of the page's own MkDocs render in English and in every translation, and dev.py builds its CLI without MkDocs while check-links says it needs it",
+        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped; a link's anchor must be an id of the page's own MkDocs render in English and in every translation, and dev.py builds its CLI without MkDocs while check-links says it needs it; after mkdocs build every relative file URL of the site (img/source/video/audio, links to files) must resolve, a translation being built one folder deeper, or the build exits 1",
         # Discovery on files under tmp_path; dev.py runs in child processes, on a docs tree
-        # under tmp_path for the anchor verdict and on the code alone for the runs without
-        # MkDocs. Reads mkdocs_src/mkdocs.yml (the site configuration the anchors are rendered with).
+        # under tmp_path for the anchor verdict, on a built site under tmp_path for the asset
+        # check, and on the code alone for the runs without MkDocs. Reads mkdocs_src/mkdocs.yml
+        # (the site configuration the anchors are rendered with).
         isolation="pure",
     )
     add_test(
