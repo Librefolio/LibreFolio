@@ -28,7 +28,7 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, displayFxDelta, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -190,11 +190,8 @@
                 break;
             }
         }
-        if (!refPoint || refPoint.rate === null || lastPoint.rate === null || refPoint.rate === 0 || lastPoint.rate === 0) return null;
-        const refVal = displayFxRate(refPoint.rate, inverted);
-        const lastVal = displayFxRate(lastPoint.rate, inverted);
-        if (refVal === null || lastVal === null) return null;
-        return ((lastVal - refVal) / refVal) * 100;
+        if (!refPoint) return null;
+        return displayFxDelta(refPoint.rate, lastPoint.rate, inverted)?.pct ?? null;
     }
 
     function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {

@@ -268,10 +268,11 @@ def _lot(
     )
 
 
-def _lots_response(scope: BuildScope, lots: list[LotSummarySchema]) -> LotsAnalysisResponse:
+def _lots_response(scope: BuildScope, lots: list[LotSummarySchema], *, quote_base_quantity: int = 1) -> LotsAnalysisResponse:
     return LotsAnalysisResponse(
         asset_id=ASSET_ID,
         target_currency=scope.target_currency,
+        quote_base_quantity=quote_base_quantity,
         calculation_status="COMPLETE",
         calculation_metadata=LotsAnalysisMetadata(requested_analyses=[LotAnalysisType.LOT_SUMMARY], generated_at=scope.snapshot_as_of),
         lots=list(lots),
@@ -848,6 +849,39 @@ class TestLotDetail:
         assert row["opening_reference_unit_price"] is None
         assert row["opening_reference_price_source"] is None
         assert row["opening_market_value"] is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "quote_base_quantity, original_quantity, reference_unit_price, expected_market_value",
+        [
+            # A bond quoted per 100 nominal: 1000 nominal at 98.5 is worth 1000 / 100 × 98.5 = 985.
+            pytest.param(100, 1000, "98.5", Decimal("985"), id="bond_quoted_per_100_nominal"),
+            # Quoted per 10 units: 1000 / 10 × 98.5 = 9850. A `/100` applied whenever the quote base
+            # is not 1 passes the bond case above but gives 985 here: the divisor is the asset's own field.
+            pytest.param(10, 1000, "98.5", Decimal("9850"), id="quoted_per_10_units"),
+            pytest.param(1, 10, "50", Decimal("500"), id="quoted_per_single_unit"),
+            pytest.param(100, 1000, None, None, id="bond_without_reference"),
+        ],
+    )
+    async def test_opening_market_value_normalizes_the_per_quote_reference_by_quote_base_quantity(self, monkeypatch, quote_base_quantity, original_quantity, reference_unit_price, expected_market_value):
+        """B2: `reference_unit_price` is quoted per `quote_base_quantity` units of the asset, so the
+        opening market value is original_quantity / quote_base_quantity × reference — the portfolio's
+        `compute_holding_value`, normalized through the asset's own field, never a hard-coded /100.
+        Multiplying the quote by the nominal gives 98 500 for the bond instead of 985. The reference
+        itself is exported as quoted."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        lots = [_lot(lot_id=1, closing_date=None, original_quantity=original_quantity, open_quantity=original_quantity, reference_unit_price=reference_unit_price, reference_price_source="exact" if reference_unit_price is not None else None)]
+        _patch_metadata(monkeypatch, _metadata(quote_base_quantity=quote_base_quantity))
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, lots, quote_base_quantity=quote_base_quantity))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.lot_detail", required=True)
+
+        (row,) = envelope.payload["lots"]
+        assert row["opening_reference_unit_price"] == reference_unit_price
+        market_value = row["opening_market_value"]
+        assert (Decimal(market_value) if market_value is not None else None) == expected_market_value
 
     @pytest.mark.asyncio
     async def test_lot_detail_component_is_versioned_v2_in_registry_and_placeholder(self):

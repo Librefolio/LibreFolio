@@ -80,6 +80,7 @@ from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
+from backend.app.utils.financial.valuation_utils import compute_holding_value
 
 # =============================================================================
 # Static methodology text for asset.provenance (never user/provider content)
@@ -542,10 +543,11 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         start=1,
     ):
         custody = tuple(AssetLotCustodyRow(broker_id=slice_.broker_id, custody_type=slice_.custody_type, quantity=slice_.quantity) for slice_ in lot.current_custody)
-        # F6: market value of the lot at its opening date = reference unit price
-        # (market quote at open, or the buy-price fallback used by the lots
-        # service) × the lot's original quantity. None when no reference exists.
-        opening_market_value = lot.reference_unit_price * lot.original_quantity if lot.reference_unit_price is not None else None
+        # F6: market value of the lot at its opening date. The reference unit price (market quote at
+        # open, or the buy-price fallback used by the lots service) is quoted per quote_base_quantity
+        # units, so the lot is valued like every holding: quantity / quote_base_quantity × price.
+        # None when no reference exists.
+        opening_market_value = compute_holding_value(lot.original_quantity, lot.reference_unit_price, lots_response.quote_base_quantity) if lot.reference_unit_price is not None else None
         rows.append(
             AssetLotDetailRow(
                 lot_ref=f"L{index}",

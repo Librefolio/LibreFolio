@@ -10,7 +10,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {ArrowLeftRight, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
-    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {isCardInverted, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -94,12 +94,7 @@
 
     let deltaPercent = $derived.by(() => {
         if (data.length < 2) return null;
-        const rawFirst = data[0].rate;
-        const rawLast = data[data.length - 1].rate;
-        if (rawFirst === null || rawLast === null || rawFirst === 0 || rawLast === 0) return null;
-        const first = inverted ? 1 / rawFirst : rawFirst;
-        const last = inverted ? 1 / rawLast : rawLast;
-        return ((last - first) / first) * 100;
+        return displayFxDelta(data[0].rate, data[data.length - 1].rate, inverted)?.pct ?? null;
     });
 
     let chartData = $derived.by((): LineDataPoint[] => {
