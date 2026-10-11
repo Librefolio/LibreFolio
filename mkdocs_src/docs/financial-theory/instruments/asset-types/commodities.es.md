@@ -13,7 +13,7 @@ Las **Materias Primas** son activos físicos —materias primas o bienes primari
 | **Moneda** | Generalmente cotizadas en USD (oro, petróleo), pero pueden expresarse en cualquier moneda |
 | **Dividendos** | Ninguno — las materias primas no generan ingresos |
 | **Almacenamiento** | Las materias primas físicas pueden incurrir en costes de almacenamiento/seguro |
-| **Proveedores típicos** | Yahoo Finance (ej. `GC=F` para futuros de oro), Manual |
+| **Proveedores típicos** | Yahoo Finance (ej. `GC=F` para futuros de oro), o precios introducidos a mano en el [Editor de datos](../../../user/assets/detail/data-editor.md) |
 
 ---
 

@@ -3,7 +3,7 @@
 La página **Archivos** guarda todo lo que se ha subido a LibreFolio, en dos pestañas:
 
 - **Recursos estáticos** — avatares, iconos de brókeres y otras imágenes o documentos, visibles para todos los usuarios;
-- **Informes de Broker** — los archivos de extractos desde los que importas transacciones, visibles solo para las personas con acceso a su bróker.
+- **Informes del bróker** — los archivos de extractos desde los que importas transacciones, visibles solo para las personas con acceso a su bróker.
 
 ---
 
@@ -51,8 +51,8 @@ La columna **Estado** te indica en qué situación está cada archivo:
 
 ### 📤 Subir un informe del bróker
 
-1. En **Informes de Broker**, haz clic en **Subir** y elige archivos CSV o Excel.
-2. En **Asignar Brokers**, elige el bróker de cada archivo, o uno para todos con **Asignar todos a**. **Crear nuevo** añade un bróker al momento; si solo puedes editar un bróker, ya está elegido.
+1. En **Informes del bróker**, haz clic en **Subir** y elige archivos CSV o Excel.
+2. En **Asignar brókeres**, elige el bróker de cada archivo, o uno para todos con **Asignar todos a**. **Crear nuevo** añade un bróker al momento; si solo puedes editar un bróker, ya está elegido.
 3. Haz clic en **Subir**. Los archivos se almacenan, pero **todavía no se importa nada**.
 
 Para importarlos, abre el [Asistente de importación](../transactions/import/index.md) (**Transacciones** → **Importar**): su paso **Seleccionar** enumera los informes que has subido.
@@ -98,7 +98,7 @@ El filtro también se aplica a la vista de cuadrícula de **Recursos estáticos*
 ## 🔒 Acceso y límites
 
 - 🌐 **Recursos estáticos** — cualquier usuario con sesión iniciada puede verlos.
-- 🔐 **Informes de Broker** — solo los usuarios con acceso al bróker pueden verlos; subir y eliminar requiere acceso de Propietario o Editor.
+- 🔐 **Informes del bróker** — solo los usuarios con acceso al bróker pueden verlos; subir y eliminar requiere acceso de Propietario o Editor.
 - 📏 **Tamaño** — hasta el límite que el administrador establece en [Configuración global](../../admin/settings.md): 10 MB salvo que se cambie.
 - 🚫 **Tipos de archivo** — los programas y scripts (como archivos `.exe`, `.sh` o `.py`) se rechazan como recursos estáticos; los informes del bróker deben ser archivos CSV o Excel.
 

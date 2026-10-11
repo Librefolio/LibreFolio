@@ -65,7 +65,7 @@ El indicador de seguridad de la conexión en la parte inferior de la barra later
 
 ### 👋 Configuración de bienvenida
 
-La página de Bienvenida que aparece la primera vez, donde un nuevo usuario confirma el idioma y la moneda predeterminada y puede añadir una foto de perfil antes de empezar.
+La página de Bienvenida que aparece la primera vez, donde un nuevo usuario confirma el idioma y la divisa predeterminada y puede añadir una foto de perfil antes de empezar.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="👋 Configuración de bienvenida">

@@ -76,7 +76,7 @@ LibreFolio utiliza la **convención del umbral con el divisor $N$** — la fórm
 | $1.0 - 2.0$ | De una a dos unidades de rendimiento en exceso por unidad de desviación a la baja |
 | $> 2.0$ | Más de dos unidades de rendimiento en exceso por unidad de desviación a la baja — poco común a lo largo de periodos largos, y mucho menos infrecuente en periodos cortos y favorables |
 
-!!! warning "Lea la escala antes de leer el número"
+!!! warning "Lee la escala antes de leer el número"
 
     Estos rangos se expresan en unidades de desviación **a la baja**, por lo que un Sortino y un Sharpe con el mismo valor numérico no son la misma afirmación sobre una cartera. Y como con cualquier ratio de esta familia, el valor depende de la ventana y de la clase de activo en que se midió: un tramo corto favorable y un ciclo de mercado completo no producen cifras comparables, incluso para la misma cartera. La tabla dice qué *es* el número, no si es bueno.
 
@@ -86,7 +86,7 @@ LibreFolio utiliza la **convención del umbral con el divisor $N$** — la fórm
 
     $$So = \frac{0.12 - 0.03}{0.10} = 0.90$$
 
-    Compárelo con Sharpe (si σ total = 15 %): $S = 0.60$. El Sortino es más alto porque se excluye la volatilidad al alza.
+    Compáralo con Sharpe (si σ total = 15 %): $S = 0.60$. El Sortino es más alto porque se excluye la volatilidad al alza.
 
 ---
 
