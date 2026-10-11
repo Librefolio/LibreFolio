@@ -274,6 +274,12 @@ For every completed plan step, require the child to update its plan immediately:
 Coordinator-owned records are updated only by the coordinator. Child plans contain
 implementation truth; the master plan contains cross-workstream state.
 
+The post-release backlog index, `Release_2/Phase_0/BACKLOG_POST_1.2.md`, has one section per
+workstream. Children append their own lines in their checkpoints; the coordinator owns the
+index table, the coordinator section and the reconciliation at every train (duplicates,
+closures, moves between sections, counts). A new workstream gets its section in the
+kickoff train.
+
 ## Testing and specialists
 
 - New or repaired tests are written by `test-author`.
