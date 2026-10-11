@@ -38,9 +38,9 @@ El sistema MACD produce tres series:
 
 | Parámetro | Clave | Predeterminado | Descripción |
 |---|---|---|---|
-| Periodo Rápido | `fastPeriod` | 12 | Ventana EMA a corto plazo (días). |
-| Periodo Lento | `slowPeriod` | 26 | Ventana EMA a largo plazo (días). |
-| Periodo de Señal | `signalPeriod` | 9 | Suavizado EMA aplicado a la línea MACD. |
+| Periodo Rápido | `fastPeriod` | 12 | Ventana EMA a corto plazo (sesiones). |
+| Periodo Lento | `slowPeriod` | 26 | Ventana EMA a largo plazo (sesiones). |
+| Periodo de Señal | `signalPeriod` | 9 | Suavizado EMA aplicado a la línea MACD (sesiones). |
 
 ---
 

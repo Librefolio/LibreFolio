@@ -39,7 +39,7 @@ Un aumento di prezzo su volumi elevati produce un flusso monetario positivo molt
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di accumulo per il flusso monetario positivo/negativo. |
+| Periodo ($N$) | `period` | 14 | Finestra di accumulo per il flusso monetario positivo/negativo, in sedute. |
 | Ipercomprato | `overbought` | 80 | Soglia per la zona di ipercomprato. |
 | Ipervenduto | `oversold` | 20 | Soglia per la zona di ipervenduto. |
 

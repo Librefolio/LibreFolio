@@ -57,7 +57,7 @@ Ceci est mathématiquement équivalent à la forme analytique $y_0(1+r)^t$ mais 
 !!! tip "Règle de 72"
 
     Un raccourci mental rapide : un investissement croissant à $r$% par an doublera
-    approximativement en $72 / r$ ans. À 7% → ~10,3 ans.
+    approximativement en $72 / r$ ans. À 7 % → ~10,3 ans.
 
 ---
 

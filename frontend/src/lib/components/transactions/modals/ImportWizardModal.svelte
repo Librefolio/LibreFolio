@@ -48,6 +48,10 @@
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
+    import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/components/transactions/modals/ImportBrokerMismatchModal.svelte';
+    import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/utils/brim/defaultPluginCheck';
+    import {brimPluginName} from '$lib/utils/brim/pluginText';
+    import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
@@ -2537,6 +2541,11 @@ ${arrow}<span>${label}</span></span>`,
         uploading = false;
         uploadError = null;
         dropZoneExpanded = true;
+        // A prompt left open by a closed wizard answers "keep": nothing is moved or removed behind the user's back.
+        answerMismatch({action: 'keep'});
+        mismatchPrompt = null;
+        mismatchBusy = false;
+        step1Continuing = false;
         selectedFiles = [];
         brokerFilesMap = new Map();
         brokerFilesLoading = false;
@@ -3110,20 +3119,32 @@ ${arrow}<span>${label}</span></span>`,
     function goNext() {
         if (candidatesRefreshing || duplicateRecheckRunning) return;
         if (currentStepId === 'upload') {
-            const uploadsNow = pendingFiles.some((f) => f.status === 'pending' && f.brokerId !== null);
-            void uploadAllPendingFiles().then(async () => {
-                // A set this upload left incomplete is announced here, where its missing export can
-                // still be dropped into the same set; a second Continue goes on regardless (§4.2).
-                const warnings = uploadsNow ? await collectStep1SetWarnings() : [];
-                if (!open || currentStepId !== 'upload') return;
-                step1SetWarnings = warnings;
-                if (warnings.length > 0) {
-                    dropZoneExpanded = true;
-                    return;
-                }
-                currentStepId = 'select';
-                loadBrokerFiles();
-            });
+            if (step1Continuing) return;
+            const uploadIds = new Set(pendingFiles.filter((f) => f.status === 'pending' && f.brokerId !== null).map((f) => f.id));
+            const uploadsNow = uploadIds.size > 0;
+            step1Continuing = true;
+            void uploadAllPendingFiles()
+                .then(async () => {
+                    // A file outside its broker's format is moved, kept or removed before anything reads it as a set.
+                    if (uploadsNow) await reviewDefaultPluginMismatches(uploadIds);
+                    if (!open || currentStepId !== 'upload') return;
+                    // Every file just uploaded was removed: stay here, where new files can be dropped.
+                    if (uploadsNow && pendingFiles.length === 0) return;
+                    // A set this upload left incomplete is announced here, where its missing export can
+                    // still be dropped into the same set; a second Continue goes on regardless (§4.2).
+                    const warnings = uploadsNow ? await collectStep1SetWarnings() : [];
+                    if (!open || currentStepId !== 'upload') return;
+                    step1SetWarnings = warnings;
+                    if (warnings.length > 0) {
+                        dropZoneExpanded = true;
+                        return;
+                    }
+                    currentStepId = 'select';
+                    loadBrokerFiles();
+                })
+                .finally(() => {
+                    step1Continuing = false;
+                });
         } else if (currentStepId === 'select') {
             currentStepId = 'analyze';
             // Init parse results and auto-start parsing
@@ -3241,6 +3262,129 @@ ${arrow}<span>${label}</span></span>`,
         });
 
         uploading = false;
+    }
+
+    // =========================================================================
+    // Step 1: a file its broker's default import plugin cannot read
+    // =========================================================================
+
+    type MismatchChoice = {action: 'move'; brokerId: number} | {action: 'keep'} | {action: 'remove'};
+
+    interface MismatchPrompt {
+        entryId: string;
+        fileName: string;
+        broker: BrokerMismatchBroker;
+        defaultPlugin: BrokerMismatchPlugin;
+        reason: string | null;
+        targets: BrokerMismatchTarget[];
+        readerNames: string[];
+        current: number;
+        total: number;
+    }
+
+    let mismatchPrompt = $state<MismatchPrompt | null>(null);
+    let mismatchBusy = $state(false);
+    /** Continue on step 1 is running — uploads, the default-plugin check, the report-set check: a second click waits, or it would skip them. */
+    let step1Continuing = $state(false);
+    let mismatchAnswer: ((choice: MismatchChoice) => void) | null = null;
+
+    function askMismatch(prompt: MismatchPrompt): Promise<MismatchChoice> {
+        return new Promise((resolve) => {
+            mismatchAnswer = resolve;
+            mismatchPrompt = prompt;
+        });
+    }
+
+    function answerMismatch(choice: MismatchChoice) {
+        const answer = mismatchAnswer;
+        mismatchAnswer = null;
+        answer?.(choice);
+    }
+
+    /** The default plugin's reason in the UI language; a reason that cannot be fetched is left out, the prompt still says where the file belongs. */
+    async function fetchRefusalReason(fileId: string, pluginCode: string): Promise<string | null> {
+        try {
+            const check = await zodiosApi.check_file_plugin_api_v1_brokers_import_files__file_id__plugin_check_get({params: {file_id: fileId}, queries: {plugin_code: pluginCode}});
+            // The generated TS type adds an impossible array branch to an optional object (anyOf + null); the zod schema has validated the real shape.
+            const refusal = check.refusal as ParseRefusal | null | undefined;
+            return refusal ? resolveParseRefusalMessage(refusal, $t) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Right after an upload, a file that its broker's default import plugin cannot read was
+     * probably assigned to the wrong broker: without this, `pickBestPlugin` would quietly import it
+     * there with another plugin. One prompt per such file, in upload order: move it to a broker
+     * whose default plugin reads it, keep it, or remove it. A broker without a default plugin is
+     * never questioned.
+     */
+    async function reviewDefaultPluginMismatches(entryIds: Set<string>): Promise<void> {
+        const plugins = await ensureImportPlugins();
+        const pluginName = (code: string) => brimPluginName({code, name: plugins.find((p) => p.code === code)?.name}, $t);
+        const pluginView = (code: string): BrokerMismatchPlugin => ({code, name: pluginName(code), iconUrl: (plugins.find((p) => p.code === code)?.icon_url as string | null | undefined) ?? null});
+        const brokerView = (id: number): BrokerMismatchBroker => {
+            const broker = brokers.find((b) => b.id === id);
+            return {id, name: broker?.name ?? String(id), iconUrl: broker?.icon_url ?? null, portalUrl: broker?.portal_url ?? null, pluginCode: broker?.default_import_plugin ?? null};
+        };
+        const options = {
+            reportSetPlugins: new Set(plugins.filter((p) => (p.report_roles ?? []).length > 0).map((p) => p.code)),
+            fallbackPlugins: new Set(plugins.filter(isFallbackPlugin).map((p) => p.code)),
+        };
+        const found = pendingFiles.flatMap((entry) => {
+            if (!entryIds.has(entry.id) || entry.status !== 'uploaded' || !entry.serverFileId || entry.brokerId === null) return [];
+            const mismatch = findDefaultPluginMismatch(entry.serverInfo?.compatible_plugins as string[] | undefined, entry.brokerId, brokers, options);
+            return mismatch ? [{entryId: entry.id, fileId: entry.serverFileId, fileName: entry.fileName, mismatch}] : [];
+        });
+        for (const [position, {entryId, fileId, fileName, mismatch}] of found.entries()) {
+            if (!open) break;
+            const reason = await fetchRefusalReason(fileId, mismatch.defaultPlugin);
+            const choice = await askMismatch({
+                entryId,
+                fileName,
+                broker: brokerView(mismatch.brokerId),
+                defaultPlugin: pluginView(mismatch.defaultPlugin),
+                reason,
+                targets: mismatch.targets.map((target) => ({...brokerView(target.id), name: target.name, plugin: pluginView(target.pluginCode)})),
+                readerNames: mismatch.readers.map(pluginName),
+                current: position + 1,
+                total: found.length,
+            });
+            mismatchBusy = true;
+            if (choice.action === 'move') await moveUploadedFile(entryId, choice.brokerId);
+            else if (choice.action === 'remove') await removeUploadedFile(entryId);
+            mismatchBusy = false;
+            mismatchPrompt = null;
+        }
+    }
+
+    /** Upload the same file to `brokerId`, in this session's batch, then delete the copy in the wrong broker. */
+    async function moveUploadedFile(entryId: string, brokerId: number): Promise<void> {
+        const entry = pendingFiles.find((f) => f.id === entryId);
+        if (!entry?.serverFileId) return;
+        const formData = new FormData();
+        formData.append('file', entry.file);
+        formData.append('broker_id', String(brokerId));
+        formData.append('batch_id', uploadBatchId);
+        if (entry.fileName !== entry.file.name) {
+            formData.append('custom_filename', entry.fileName);
+        }
+        const uploaded = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload`, formData), {fallback: $t('importWizard.brokerMismatch.moveFailed'), prefix: entry.fileName});
+        const serverInfo = uploaded.status === 'success' ? (uploaded.data?.data as BrimFile | undefined) : undefined;
+        if (!serverInfo?.file_id) return;
+        const oldFileId = entry.serverFileId;
+        // The entry follows the moved file even when the old copy cannot be deleted: the error says so, and Files can remove it.
+        pendingFiles = pendingFiles.map((f) => (f.id === entryId ? {...f, brokerId, serverFileId: serverInfo.file_id, serverInfo} : f));
+        await trySave(() => zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: oldFileId}}), {fallback: $t('importWizard.brokerMismatch.removeFailed'), prefix: entry.fileName});
+    }
+
+    async function removeUploadedFile(entryId: string): Promise<void> {
+        const entry = pendingFiles.find((f) => f.id === entryId);
+        if (!entry?.serverFileId) return;
+        const fileId = entry.serverFileId;
+        const removed = await trySave(() => zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}}), {fallback: $t('importWizard.brokerMismatch.removeFailed'), prefix: entry.fileName});
+        if (removed.status === 'success') removePendingFileById(entryId);
     }
 
     function clearAllPendingFiles() {
@@ -3734,7 +3878,7 @@ ${arrow}<span>${label}</span></span>`,
                 warnings.push({
                     key: `${set.key}:${missing.role}`,
                     pluginCode: set.pluginCode,
-                    pluginName: plugin?.name ?? set.pluginCode,
+                    pluginName: plugin ? brimPluginName(plugin, $t) : set.pluginCode,
                     docsUrl: plugin?.docs_url ?? null,
                     roleCode: missing.role,
                     roleLabel: translated === roleKey ? (role?.description ?? missing.role) : translated,
@@ -3852,12 +3996,8 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function getPluginName(pluginCode: string): string {
-        const cached = getCachedPlugins();
-        if (cached) {
-            const plugin = cached.find((p: {code: string; name: string}) => p.code === pluginCode);
-            if (plugin) return plugin.name;
-        }
-        return pluginCode;
+        const plugin = getCachedPlugins()?.find((p: {code: string; name: string}) => p.code === pluginCode);
+        return brimPluginName({code: pluginCode, name: plugin?.name}, $t);
     }
 
     function initParseResults() {
@@ -5235,11 +5375,11 @@ ${arrow}<span>${label}</span></span>`,
                     type="button"
                     class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     onclick={goNext}
-                    disabled={!step1CanProceed || uploading}
+                    disabled={!step1CanProceed || uploading || step1Continuing}
                     data-testid="import-wizard-next"
                     use:guideAnchor={'import.action.upload'}
                 >
-                    {#if uploading}
+                    {#if uploading || step1Continuing}
                         <LoadingSpinner size="sm" />
                     {:else if step1ValidCount > 0}
                         {$t('importWizard.next')} ({step1ValidCount}) ▶
@@ -5453,6 +5593,26 @@ ${arrow}<span>${label}</span></span>`,
 
 <!-- Unsaved guard -->
 <ConfirmModal open={confirmCloseOpen} title={$t('common.discardImport')} message={$t('common.discardChangesMessage')} confirmText={$t('common.discard')} warning zIndex={80} onConfirm={confirmDiscard} onCancel={() => (confirmCloseOpen = false)} />
+
+{#if mismatchPrompt}
+    <ImportBrokerMismatchModal
+        open={true}
+        fileKey={mismatchPrompt.entryId}
+        fileName={mismatchPrompt.fileName}
+        broker={mismatchPrompt.broker}
+        defaultPlugin={mismatchPrompt.defaultPlugin}
+        reason={mismatchPrompt.reason}
+        targets={mismatchPrompt.targets}
+        readerNames={mismatchPrompt.readerNames}
+        current={mismatchPrompt.current}
+        total={mismatchPrompt.total}
+        busy={mismatchBusy}
+        zIndex={70}
+        onMove={(brokerId) => answerMismatch({action: 'move', brokerId})}
+        onKeep={() => answerMismatch({action: 'keep'})}
+        onRemove={() => answerMismatch({action: 'remove'})}
+    />
+{/if}
 
 <!-- Step 2: delete-report (broker import file) confirmation -->
 <ConfirmModal

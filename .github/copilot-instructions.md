@@ -37,6 +37,7 @@ LibreFolio/
 7. **Data Separation prod/test** — completely isolated folders
 8. **Dual View** — card grid + DataTable for Assets and FX, toggle persisted in localStorage
 9. **AI Export Boundary** — backend owns deterministic versioned facts; frontend owns safe prompt rendering, localization, clipboard, and contextual draft memory
+10. **One home for financial math** — every financial calculation has one implementation, and its home is `backend/app/services/financial_math/` (where each one lives today: `backend.instructions.md`, «Financial Math — One Home»). Search there before writing a calculation, add new ones there, never keep a local or partial copy, and report any copy you find
 
 ## Fundamental Rules
 

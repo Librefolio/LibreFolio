@@ -21,7 +21,7 @@
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
-    import {resolveBrokerName, withAlpha} from './lotChartShared';
+    import {isUnknownOrNonZero, resolveBrokerName, withAlpha} from './lotChartShared';
     import {
         applySharedZoomWindow as sharedApplyZoomWindow,
         branchDepthForLaneKey,
@@ -97,7 +97,8 @@
         sourceBrokerId: number | null;
         destinationBrokerId: number | null;
         quantity: number;
-        unitPrice: number;
+        /** `null` when the price has no rate to the target currency (shown as «—»). */
+        unitPrice: number | null;
         startDate: string;
         endDate: string | null;
         startMs: number;
@@ -428,7 +429,7 @@
                 sourceBrokerId: safeNumber(segment.source_broker_id),
                 destinationBrokerId: safeNumber(segment.destination_broker_id),
                 quantity: Math.max(0, parseNumber(segment.quantity)),
-                unitPrice: parseNumber(segment.unit_price),
+                unitPrice: parseUnknownNumber(segment.unit_price),
                 startDate,
                 endDate,
                 startMs,
@@ -715,21 +716,24 @@
         } else {
             html += buildTooltipRow(escapeHtml(valueLabel), escapeHtml(formatMoneyField(valueField)));
         }
-        if (assetIncome != null && assetIncome !== 0) {
+        // An amount the API could not value (null) is shown as «—», never hidden as if it were zero.
+        if (lotDto != null && isUnknownOrNonZero(assetIncome)) {
             html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.assetIncome', 'Income')), signedColorField(assetIncome, formatSignedMoneyField, themeDark));
         }
-        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
+        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalPnl', 'Total P&L')), signedColorField(lotDto?.total_pnl, formatSignedMoneyField, themeDark));
         html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalReturn', 'Total return')), signedColorField(lotDto?.total_return, formatSignedPercentField, themeDark));
         const allocatedFees = parseUnknownNumber(lotDto?.allocated_fees);
         const allocatedTaxes = parseUnknownNumber(lotDto?.allocated_taxes);
-        const hasCosts = (allocatedFees != null && allocatedFees !== 0) || (allocatedTaxes != null && allocatedTaxes !== 0);
-        if (hasCosts) {
+        const showFees = lotDto != null && isUnknownOrNonZero(allocatedFees);
+        const showTaxes = lotDto != null && isUnknownOrNonZero(allocatedTaxes);
+        if (showFees || showTaxes) {
             const costColor = themeDark ? '#f87171' : '#dc2626';
-            if (allocatedFees != null && allocatedFees !== 0) {
-                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedFees', 'Fees')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedFees))}</span>`);
+            const costField = (amount: number | null): string => (amount == null ? escapeHtml('\u2014') : `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(amount))}</span>`);
+            if (showFees) {
+                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedFees', 'Fees')), costField(allocatedFees));
             }
-            if (allocatedTaxes != null && allocatedTaxes !== 0) {
-                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedTaxes', 'Taxes')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedTaxes))}</span>`);
+            if (showTaxes) {
+                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedTaxes', 'Taxes')), costField(allocatedTaxes));
             }
             const netUnavailable = safeUnknownString(lotDto?.net_metrics_status) === 'UNAVAILABLE';
             const netValue = netUnavailable ? escapeHtml('\u2014') : signedColorField(lotDto?.net_total_pnl, formatSignedMoneyField, themeDark);

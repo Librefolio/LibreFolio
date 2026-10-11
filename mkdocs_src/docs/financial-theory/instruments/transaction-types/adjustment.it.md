@@ -4,7 +4,7 @@
  <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Modulo Transazione — Rettifica">
 </div>
 
-Le **Rettifiche** sono un tipo di transazione generica per correzioni manuali dei saldi di cassa o di asset. A differenza dei tipi accoppiati (Trasferimento Asset, Trasferimento di Cassa, Conversione FX), le rettifiche sono **autonome**: ogni rettifica è una riga singola e indipendente.
+Le **Rettifiche** sono correzioni autonome della quantità di un asset. Nello schema delle transazioni non muovono cassa: cambia la quantità, la cassa no. A differenza dei tipi accoppiati (Trasferimento Asset, Giroconto, Conversione FX), ogni rettifica è una riga singola e indipendente.
 
 ---
 
@@ -13,7 +13,7 @@ Le **Rettifiche** sono un tipo di transazione generica per correzioni manuali de
 | Proprietà | Valore |
 |----------|-------|
 | **Codice** | `ADJUSTMENT` |
-| **Effetto cassa** | Opzionale (± qualsiasi importo) |
+| **Effetto cassa** | Nessuno — `ADJUSTMENT` non muove cassa |
 | **Effetto asset** | Obbligatorio (± qualsiasi quantità) |
 | **Evento fiscale** | No |
 
@@ -24,24 +24,28 @@ Le **Rettifiche** sono un tipo di transazione generica per correzioni manuali de
 Le rettifiche vengono utilizzate quando nessun altro tipo di transazione è adatto:
 
 - **Correzione di errori di importazione** — ad es., l'importazione dal broker ha omesso un'operazione societaria
-- **Frazionamento / frazionamento inverso** — regolazione della quantità senza movimento di cassa
+- **Split / split inverso** — regolazione della quantità senza movimento di cassa
 - **Regali** — ricezione o donazione di azioni
-- **Acquisizione gratuita** — airdrop, ricompense di staking, promozioni
+- **Eredità o successioni** — i titoli arrivano in natura, senza movimenti di cassa presso il broker
 - **Configurazione saldo iniziale** — avvio di un portafoglio partendo da uno snapshot
 - **Operazioni societarie** non coperte da altri tipi (spin-off, fusioni, ecc.)
 
+Esempi dalle importazioni: gli snapshot `patrimonio` di Intesa Sanpaolo usano `ADJUSTMENT` positivi per caricare le posizioni esistenti con un `cost_basis_override` per unità; anche le righe di successione di Crédit Agricole (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) sono modellate come `ADJUSTMENT` positivi senza cassa, non come coppie di `TRANSFER`, perché il dossier di origine è fuori da LibreFolio.
+
 !!! note "Promuovi a Trasferimento"
 
-    Due righe `ADJUSTMENT` con **quantità opposte**, **stesso asset** e **broker differenti** possono essere **promosse** a una coppia di Trasferimento Asset. Questo è utile quando inizialmente sono state registrate rettifiche separate e successivamente si desidera collegarle come un Trasferimento Asset.
+    Due righe `ADJUSTMENT` con **quantità opposte**, **stesso asset** e **broker differenti** possono essere **promosse** a una coppia di Trasferimento Asset. Questo è utile quando inizialmente sono state registrate rettifiche separate e successivamente si desidera collegarle come un Trasferimento Asset. Nessuna delle due righe può essere collegata a un evento dell'asset, per esempio uno split: un trasferimento non può portare quel collegamento, quindi LibreFolio non propone né accetta questa promozione.
 
 ---
 
 ## 📐 Impatto sul Costo di Carico
 
-Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO). Il costo di carico per i lotti creati tramite rettifica dipende dalla presenza di un **Cost Basis Override**:
+Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO). Il costo di carico per i lotti creati tramite rettifica dipende dalla presenza di un **Override costo medio**:
 
-- **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (PMC — Prezzo Medio di Carico)
-- **Senza override**: il lotto viene creato con costo zero (acquisizione gratuita — ad es. regali, airdrop)
+- **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (PMC — Prezzo Medio di Carico); un override pari a **zero** registra un'acquisizione gratuita, come un airdrop
+- **Senza override**: il lotto FIFO si apre a costo zero, ma il costo medio (PMC) considera il costo **sconosciuto**, non gratuito: le unità entrano nella posizione senza costo, il suo PMC resta incompleto finché la posizione non viene chiusa, la Dashboard mostra il suo costo medio e il P&L latente come non disponibili, e un avviso di qualità dei dati indica l'asset (vedi [Override del costo di carico](../../technical-analysis/performance-metrics/weighted-average-cost.md#cost-basis-override))
+
+Una rettifica positiva non può essere salvata senza un costo di carico: inseriscine uno, oppure scegli **Auto**, che registra il costo medio della posizione a cui si uniscono le unità (zero se non ne contiene ancora). Due tipi di righe possono comunque esserne prive: una rettifica collegata a uno **split**, che Auto salva senza costo di carico perché lo split mantiene il costo già detenuto e lo distribuisce sulla nuova quantità, e le righe salvate prima che il costo di carico diventasse obbligatorio.
 
 !!! info "Valore per unità"
 
@@ -50,10 +54,13 @@ Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO)
 
     $$\text{Costo totale} = \text{PMC} \times \text{quantità}$$
 
-### 🏦 Costo di Carico Automatico nei Trasferimenti
-Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente** il Cost Basis Override lato ricevente utilizzando il **Prezzo Medio di Carico (PMC)** della posizione del broker di origine.
+### 🏦 Costo di Carico Automatico nei Trasferimenti e nei Caricamenti Iniziali
+
+Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente** il Cost Basis Override lato ricevente utilizzando il **Prezzo Medio di Carico (PMC)** della posizione del broker di origine. I caricamenti iniziali da un'importazione broker possono invece impostarlo direttamente dal report di origine. Il valore è sempre **per unità**, non il valore totale della posizione: per uno snapshot con valore fiscale totale \(C\) e quantità \(q\), i plugin memorizzano:
 
 $$\text{Cost Basis Override} = \frac{C}{q}$$
+
+Questo registra capitale in natura, non P&L: la rettifica crea o modifica lotti, ma non genera un apporto di cassa né un guadagno realizzato.
 
 !!! tip "Scopri di più"
 
@@ -83,4 +90,4 @@ $$\text{Cost Basis Override} = \frac{C}{q}$$
 - 📊 **[Prezzo Medio di Carico (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Come viene calcolato il costo di carico automatico
 - 🔄 **[Trasferimento Asset](transfer.md)** — Due rettifiche collegate possono essere promosse a un Trasferimento Asset
 - 🛒 **[Acquisto e Vendita](buy-sell.md)** — Transazioni standard di asset con cassa
-- 💰 **[Commissioni e Tasse](fee.md)** — Correzioni di sola cassa (usare Commissioni/Tasse invece di Rettifica)
+- 💰 **[Commissioni e Imposte](fee.md)** — Correzioni di sola cassa (usare Commissioni/Imposte invece di Rettifica)

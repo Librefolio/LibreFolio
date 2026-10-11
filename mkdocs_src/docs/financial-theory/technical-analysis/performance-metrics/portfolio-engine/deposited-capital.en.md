@@ -16,7 +16,12 @@ $$
 \boxed{\mathrm{TotalPnL}(t) = \mathrm{NAV}(t) - \mathrm{CapitalBaseline}(t)}
 $$
 
-`InKindCapital` covers priced ADJUSTMENT / TRANSFER rows carrying `cost_basis_override` with no `asset_event_id` (not split rows). These rows inject book value without cash, so they must increase invested capital.
+`InKindCapital` covers the securities that enter or leave the scope without cash:
+
+- priced ADJUSTMENT rows carrying `cost_basis_override` (not linked to a split), **at cost**: the cost an incoming row adds to the position, or the average cost an outgoing row removes;
+- TRANSFER legs whose other leg is not in the scope — it sits at a broker outside the view, is missing, or was never linked — **at market value** on their own date: $+$ for securities received, $-$ for securities sent, nothing if the security cannot be valued that day.
+
+These rows move value without cash: they are capital, not profit or loss.
 
 ---
 
@@ -25,11 +30,139 @@ $$
 | Transaction | Effect on capital baseline |
 |------------|-----------------|
 | DEPOSIT / WITHDRAWAL (unlinked) | ✅ Yes |
-| CASH\_TRANSFER linked-external | ✅ Yes |
-| CASH\_TRANSFER linked-internal | ❌ No |
-| ADJUSTMENT / TRANSFER with `cost_basis_override`, no `asset_event_id` | ✅ Yes, in-kind capital |
+| CASH\_TRANSFER / FX\_CONVERSION whose other leg is outside the view, missing, or never linked (orphan) | ✅ Yes, at its amount, like a deposit or a withdrawal |
+| CASH\_TRANSFER / FX\_CONVERSION / TRANSFER with both legs in the view (internal pair) | ❌ No. Per broker, a pair across two brokers moves capital from the sender to the receiver on the arrival day, summing to zero ([Internal Transfers](#internal-transfers-broker-lines)) |
+| TRANSFER of securities whose other leg is outside the view, missing, or never linked (orphan) | ✅ Yes, in-kind capital at market value on its date |
+| ADJUSTMENT with `cost_basis_override`, not split-linked | ✅ Yes, in-kind capital at cost |
 | SPLIT-linked ADJUSTMENT | ❌ No, quantity rescale only |
 | BUY, SELL, DIVIDEND, INTEREST, FEE, TAX | ❌ No |
+
+---
+
+## 🔀 Internal Transfers in the Broker Lines {: #internal-transfers-broker-lines }
+
+With two or more brokers in scope, the [P&L chart](../../../../user/dashboard/charts.md#pnl-line) draws one line per broker. Each broker $b \in S$ has its own NAV, capital and PnL:
+
+$$
+\mathrm{PnL}_b(t) = \mathrm{NAV}_b(t) - C_b(t)
+$$
+
+$$
+\mathrm{NAV}_b(t) = \mathrm{MV}_b(t) + \mathrm{Cash}_b(t) + \mathrm{InTransit}_b(t)
+$$
+
+$$
+C_b(t) = \sum_{\tau \leq t}\mathrm{ExternalCashFlow}_b(\tau) + \sum_{\tau \leq t}\mathrm{InKindCapital}_b(\tau) + \sum_{\tau \leq t}\mathrm{Internal}_b(\tau)
+$$
+
+$\mathrm{InTransit}_b$ is the value in transit that left $b$, and $\mathrm{Internal}_b$ is $b$'s side of the internal transfers described below. Since $\sum_b \mathrm{NAV}_b = \mathrm{NAV}$ and the internal flows cancel out every day, the lines add up to the scope figures:
+
+$$
+\sum_{b \in S}\mathrm{Internal}_b(t) = 0
+\quad\Rightarrow\quad
+\sum_{b \in S} C_b(t) = \mathrm{CapitalBaseline}(t),
+\qquad
+\sum_{b \in S}\mathrm{PnL}_b(t) = \mathrm{TotalPnL}(t)
+$$
+
+A broker's line is therefore the PnL earned while the value was at that broker, or travelling from it. It is not the unrealized gain of the positions the broker holds.
+
+### 📐 The Internal Flow
+
+An **internal pair** is a linked CASH\_TRANSFER, FX\_CONVERSION or TRANSFER whose two legs are both in $S$, on two different brokers: the sender $A$ (the leg going out) and the receiver $B$ (the leg coming in). It produces one flow, on the **arrival day** $t_{arr}$, the date of the later leg:
+
+$$
+\mathrm{Internal}_A(t_{arr}) = -X,
+\qquad
+\mathrm{Internal}_B(t_{arr}) = +X,
+\qquad
+X = s_A \cdot V(t_{arr})
+$$
+
+$s_A$ is the sender's [ownership share](../../../../user/brokers/sharing.md) and $V(t_{arr})$ the full value the arrival brings to $B$ that day, valued exactly as the NAV values it:
+
+| Pair | $V(t_{arr})$ |
+|------|--------------|
+| CASH\_TRANSFER | The amount received, converted at $\mathrm{fx}(c, C^*, t_{arr})$ |
+| FX\_CONVERSION across brokers | The received leg, converted the same way: $-1{,}000$ USD at $A$ → $+900$ EUR at $B$ gives $V = 900$ EUR, and the conversion cost stays in $A$'s line |
+| TRANSFER of securities | $\mathrm{MV}$ of the quantity received at the [valuation price](index.md#2-valuation-price) of $t_{arr}$, the last known price carried forward if there is none that day |
+
+With equal shares, $X$ is exactly what the arrival adds to $\mathrm{NAV}_B$, so neither line jumps. The scope's $\mathrm{CapitalBaseline}$ is untouched, because an internal move is not external capital: NAV, CapitalBaseline, TotalPnL and its candles, ROI, TWRR, MWRR and cash are the same as without the flow. Only the split of the baseline among the brokers changes.
+
+### ✈️ Value in Transit
+
+When the legs fall on different days, the value travels from the departure day $t_{dep}$ to the day before $t_{arr}$. Meanwhile it is part of $\mathrm{InTransit}_A$, at the sender's share $s_A$, valued every day: cash at that day's exchange rate, securities at that day's valuation price (at the cost recorded on the transfer if the security has no price at all). No flow happens while the value travels, so its price and exchange-rate moves stay in $A$'s line, the arrival day's own move included; $B$'s line starts from the value received.
+
+For example, $A$ receives a deposit of 1,000 USD on day 0 at 0.90 EUR per USD ($C_A = 900$) and sends the dollars on day 1; $B$ receives them on day 4. With the rate at 0.90, 0.91, 0.92, 0.93 on days 1–4, $A$'s line reads 0, +10, +20, +30 and $B$'s stays at 0. On day 4, $X = 930$ and $C_A = 900 - 930 = -30$.
+
+### 🧩 Special Cases
+
+- **Different ownership shares.** $X$ uses $s_A$, like the value in transit, while the arrival adds $s_B \cdot V(t_{arr})$ to $\mathrm{NAV}_B$. $B$'s line keeps a residual step of $(s_B - s_A)\,V(t_{arr})$ on the arrival day, and TotalPnL shows the same step, with or without the flow.
+- **Value unknown on the arrival day.** If $V(t_{arr})$ cannot be computed — the security has no observation on or before $t_{arr}$ ($\operatorname{mark} = \varnothing$), or an exchange rate is missing — then $X = 0$, which is what the arrival adds to $\mathrm{NAV}_B$. Nothing is guessed: the jump stays, and a security's value appears in the line of the broker holding it from its first price.
+- **Fees.** They are not part of $X$. A FEE row of 5 recorded at the sender, or the same 5 as a gap between the legs ($-1{,}000$ sent, $+995$ received, so $X = 995$), stays in $A$'s line as a loss of 5.
+- **Same-broker pairs.** Two legs on the same broker, such as a currency conversion inside one account, need no flow: the value never leaves the line.
+- **ADJUSTMENT pairs.** They are not internal pairs: each leg stays in-kind capital at cost (see the table above). The sender's capital drops by the average cost removed and the receiver's rises by the cost added, so the receiving line takes over the gain accrued at the sender. With the setup of the example below and both legs on day 2 at a cost of 10, the lines read $A = 0$, $B = +20$; a TRANSFER pair gives $A = +20$, $B = 0$.
+
+### 🔍 Filtered Views
+
+In a view with only some brokers, a TRANSFER leg whose other leg is outside $S$ — or missing, or never linked — cannot form an internal pair. It is in-kind capital at market value on its own date: $+\mathrm{MV}$ for securities received, $-\mathrm{MV}$ for securities sent, at that broker's share, and nothing if the security cannot be valued that day. Unlike an internal flow, it moves the view's CapitalBaseline, so the view's TotalPnL, ROI, TWRR and MWRR treat it as capital, like an in-kind ADJUSTMENT. A CASH\_TRANSFER or FX\_CONVERSION leg in the same position is external cash at its amount, like a deposit or a withdrawal.
+
+A leg loses its link when the broker holding the other leg is deleted. Such an orphan follows the same rules in every view, the full one included.
+
+Comparing a broker's own view with the combined view:
+
+- **The receiver alone matches its combined line.** In $B$'s own view the received securities are capital at their market value on $t_{arr}$, which is the $X$ of the combined view. This holds with equal shares and a price that both views can see: a price that comes only from trades at $A$ is not visible in $B$'s own view.
+- **The sender alone loses the moves in transit.** In $A$'s own view its capital drops on the departure day by $s_A \cdot V(t_{dep})$, while in the combined view the value stays with $A$ until it arrives.
+
+Writing $\mathrm{PnL}_A^{(S)}$ for $A$'s line in the view of scope $S$, from the departure day on:
+
+$$
+\mathrm{PnL}_A^{(A)}(t) = \mathrm{PnL}_A^{(A,B)}(t) - s_A\bigl[V(\min(t, t_{arr})) - V(t_{dep})\bigr]
+$$
+
+### 📦 Example — Securities in Transit
+
+All amounts in EUR, shares 100%. $A$ receives a deposit of 100 and buys 10 units at 10 on day 0. The price is 10, 11, 12, 13, 14, 15 on days 0–5. $A$ sends the 10 units on day 1, and $B$ receives them on day 3.
+
+**Combined view** (both brokers in $S$):
+
+| Day | Price | $\mathrm{NAV}_A$ | $C_A$ | $\mathrm{PnL}_A$ | $\mathrm{NAV}_B$ | $C_B$ | $\mathrm{PnL}_B$ | TotalPnL |
+|-----|-------|------------------|-------|------------------|------------------|-------|------------------|----------|
+| 0 | 10 | 100 | 100 | 0 | 0 | 0 | 0 | 0 |
+| 1 | 11 | 110 (in transit) | 100 | +10 | 0 | 0 | 0 | +10 |
+| 2 | 12 | 120 (in transit) | 100 | +20 | 0 | 0 | 0 | +20 |
+| 3 | 13 | 0 | −30 | +30 | 130 | 130 | 0 | +30 |
+| 4 | 14 | 0 | −30 | +30 | 140 | 130 | +10 | +40 |
+| 5 | 15 | 0 | −30 | +30 | 150 | 130 | +20 | +50 |
+
+On day 3 the flow $X = 10 \times 13 = 130$ moves capital from $A$ to $B$. $A$ keeps the +30 earned while the units were at $A$ or travelling (10 → 13), and $B$ earns from 13 on. $C_A$ turns negative because $A$ passed on more value (130) than the capital it took in (100): the difference is its gain. TotalPnL is the same with or without the flow; without it, on day 3 $A$'s line would drop to $0 - 100 = -100$ and $B$'s would jump to $130 - 0 = +130$.
+
+**Single-broker views**:
+
+| Day | $B$ alone: $C_B$ | $B$ alone: $\mathrm{PnL}_B$ | $A$ alone: $C_A$ | $A$ alone: $\mathrm{PnL}_A$ |
+|-----|------------------|-----------------------------|------------------|-----------------------------|
+| 0 | — | — | 100 | 0 |
+| 1 | — | — | −10 | +10 |
+| 2 | — | — | −10 | +10 |
+| 3 | 130 | 0 | −10 | +10 |
+| 4 | 130 | +10 | −10 | +10 |
+| 5 | 130 | +20 | −10 | +10 |
+
+$B$'s own view starts at its first transaction and matches $B$ in the combined view. In $A$'s own view the units leave on day 1 at $10 \times 11 = 110$, so $C_A = 100 - 110 = -10$ and the line stays at +10: the move from 11 to 13 while travelling is not in it, and $+30 - (130 - 110) = +10$. Counted as a gain or a loss instead of capital, the same transfer would put $A$ alone at −100 from day 1 and $B$ alone at +130 on day 3.
+
+### 💶 Example — Cash Between Two Brokers
+
+$A$ receives a deposit of 5,000. Later, $A$ sends 1,000 to $B$, both legs on the same day.
+
+| Case | $\mathrm{NAV}_A$ | $C_A$ | $\mathrm{PnL}_A$ | $\mathrm{NAV}_B$ | $C_B$ | $\mathrm{PnL}_B$ | TotalPnL |
+|------|------------------|-------|------------------|------------------|-------|------------------|----------|
+| After the deposit | 5,000 | 5,000 | 0 | 0 | 0 | 0 | 0 |
+| After the transfer | 4,000 | 4,000 | 0 | 1,000 | 1,000 | 0 | 0 |
+| $B$ receives 995 (fee 5) | 4,000 | 4,005 | −5 | 995 | 995 | 0 | −5 |
+| $B$ owned at 50% | 4,000 | 4,000 | 0 | 500 | 1,000 | −500 | −500 |
+| Without the flow | 4,000 | 5,000 | −1,000 | 1,000 | 0 | +1,000 | 0 |
+
+The last row is the same transfer read without the internal flow: the move looks like a loss for $A$ and a gain for $B$. With $B$ owned at 50%, the step of −500 is the residual $(s_B - s_A)\,V = (0.5 - 1) \times 1{,}000$, and TotalPnL shows it too.
 
 ---
 

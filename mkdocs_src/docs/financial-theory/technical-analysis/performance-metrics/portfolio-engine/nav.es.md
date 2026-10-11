@@ -43,7 +43,7 @@ Las marcas permanecen en moneda nativa hasta la valoración; la conversión FX o
 
 | Componente | Monto |
 |------------|-------|
-| Valor de Mercado de Activos | €32,759 |
+| Valor de Mercado de Activos | €32.759 |
 | Saldo de Efectivo | €631 |
 | En Tránsito | €0 |
 

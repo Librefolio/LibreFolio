@@ -37,7 +37,7 @@ El CCI fue diseñado para señalar el inicio de nuevos ciclos: lecturas por enci
 
 | Parámetro | Clave | Valor Predeterminado | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana para el promedio del precio típico y la desviación media. |
+| Período ($N$) | `period` | 14 | Ventana para el promedio del precio típico y la desviación media, en sesiones. |
 
 ---
 

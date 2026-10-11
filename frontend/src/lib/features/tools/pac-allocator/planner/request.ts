@@ -16,20 +16,7 @@ import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFr
 import {PLANNER_OPERATION} from './defaults';
 import {priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
 import {toPlannerId, toPlannerTimestamp} from './source';
-import type {
-    PacPlannerRequest,
-    PacRequestAsset,
-    PacRequestBroker,
-    PacRequestCapability,
-    PacRequestCash,
-    PacRequestExposure,
-    PacRequestFeeSchedule,
-    PacRequestFundingRoute,
-    PacRequestOrderRoute,
-    PacRequestProvenance,
-    PacResolvedRequest,
-    PlannerStep,
-} from './types';
+import type {PacPlannerRequest, PacRequestAsset, PacRequestBroker, PacRequestCapability, PacRequestCash, PacRequestExposure, PacRequestFeeSchedule, PacRequestFundingRoute, PacRequestOrderRoute, PacRequestProvenance, PacResolvedRequest, PlannerStep} from './types';
 
 export interface LocalProblem {
     id: string;
@@ -413,17 +400,9 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
             if (!route?.enabled) continue;
             const mode = draft.modeFor(asset.key, broker.key) as DraftMode;
             const minimum = (value: string): NonNullable<PacRequestOrderRoute['required_minimum']> | null =>
-                value.trim() === ''
-                    ? null
-                    : mode.kind === 'whole_quantity'
-                      ? {kind: 'whole_quantity', quantity: wireDecimal(value) as string, unit: 'asset_unit'}
-                      : {kind: 'monetary_amount', amount: {amount: wireDecimal(value) as string, currency: mode.currency}};
+                value.trim() === '' ? null : mode.kind === 'whole_quantity' ? {kind: 'whole_quantity', quantity: wireDecimal(value) as string, unit: 'asset_unit'} : {kind: 'monetary_amount', amount: {amount: wireDecimal(value) as string, currency: mode.currency}};
             const cap: NonNullable<PacRequestOrderRoute['cap']> | null =
-                route.cap.trim() === ''
-                    ? null
-                    : mode.kind === 'whole_quantity'
-                      ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'}
-                      : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}};
+                route.cap.trim() === '' ? null : mode.kind === 'whole_quantity' ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'} : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}};
             const priority = wireInteger(route.priority) as number;
             const scheduleId = feeScheduleId(broker.key, mode);
             ids.routes.set(route.wireId, {assetKey: asset.key, brokerKey: broker.key});

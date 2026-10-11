@@ -1,6 +1,6 @@
 # 🧭 Indicatori di Tendenza
 
-Gli indicatori di tendenza rispondono alla domanda più basilare nell'analisi tecnica: *"in quale direzione sta andando effettivamente il prezzo, una volta filtrato il rumore quotidiano?"* Agiscono tutti come **filtri passa-basso** sulla serie dei prezzi, smussando le fluttuazioni a breve termine per rivelare la direzione sottostante.
+Gli indicatori di tendenza rispondono alla domanda più basilare nell'analisi tecnica: *"in quale direzione sta andando effettivamente il prezzo, una volta filtrato il rumore da una seduta all'altra?"* Agiscono tutti come **filtri passa-basso** sulla serie dei prezzi, smussando le fluttuazioni a breve termine per rivelare la direzione sottostante.
 
 ---
 

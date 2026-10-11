@@ -37,7 +37,7 @@ Le CCI a été conçu pour signaler le début de nouveaux cycles : des lectures 
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre pour la moyenne du prix typique et l'écart moyen. |
+| Période ($N$) | `period` | 14 | Fenêtre pour la moyenne du prix typique et l'écart moyen, en séances. |
 
 ---
 

@@ -65,8 +65,8 @@ $$
 
 ---
 
-## 🖥️ Uso en el Panel de Control
-LibreFolio muestra el Efecto Timing en la tarjeta de **Rendimientos** del panel de control. Esta tarjeta resume los indicadores clave de su rendimiento de inversión:
+## 🖥️ Uso en el Panel
+LibreFolio muestra el Efecto Timing en la tarjeta de **Rendimientos** del Panel. Esta tarjeta resume los indicadores clave de su rendimiento de inversión:
 
 - **Efecto Timing:** Diferencia entre el MWRR acumulado y el TWRR acumulado, que muestra cómo afectaron los flujos de efectivo a sus rendimientos.
 - **Simple ROI:** rendimiento porcentual intuitivo del periodo. Es útil para leer rápidamente el resultado, pero no considera el momento de los flujos con la misma precisión que el MWRR.
@@ -74,7 +74,7 @@ LibreFolio muestra el Efecto Timing en la tarjeta de **Rendimientos** del panel 
 - **MWRR Acumulado:** Rendimiento de su capital real, considerando los flujos de efectivo.
 - **MWRR Anualizado:** La tasa anual compuesta de crecimiento de su dinero.
 
-!!! note "Tooltip Informativo"
+!!! note "Información emergente"
 
     Diferencia entre el MWRR acumulado y el TWRR acumulado. Muestra cuánto afectaron el momento y el importe de sus flujos de efectivo a su rendimiento general.
 
@@ -87,4 +87,4 @@ LibreFolio muestra el Efecto Timing en la tarjeta de **Rendimientos** del panel 
 - **[TWRR](twrr.md):** Mide el rendimiento de la estrategia o activos subyacentes, ignorando el momento de los flujos de efectivo del inversor.
 - **[MWRR](mwrr.md):** Mide el rendimiento del capital del inversor, teniendo en cuenta tanto el rendimiento de los activos como el momento de los flujos de efectivo.
 - **[P&L del Periodo](period-pnl.md):** Mide el beneficio o pérdida monetaria absoluta generada por la cartera dentro del periodo de tiempo seleccionado.
-- **[Descripción General de Métricas de Rendimiento](../index.md):** Todas las métricas de rendimiento de un vistazo.
+- **[Resumen de las métricas de rendimiento](../index.md):** Todas las métricas de rendimiento de un vistazo.

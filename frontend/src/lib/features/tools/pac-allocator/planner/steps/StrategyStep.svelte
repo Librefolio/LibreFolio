@@ -47,15 +47,7 @@
             {@const objectives = POLICY_OBJECTIVES[policy] ?? []}
             <div class={CARD} data-testid="pac-planner-policy" data-policy={policy}>
                 <label for="{ids}-{policy}" class="flex cursor-pointer items-start gap-2">
-                    <input
-                        id="{ids}-{policy}"
-                        type="radio"
-                        name="{ids}-policy"
-                        value={policy}
-                        bind:group={draft.data.policy}
-                        class="mt-1 shrink-0 accent-libre-green"
-                        data-testid="pac-planner-policy-radio"
-                    />
+                    <input id="{ids}-{policy}" type="radio" name="{ids}-policy" value={policy} bind:group={draft.data.policy} class="mt-1 shrink-0 accent-libre-green" data-testid="pac-planner-policy-radio" />
                     <span class="min-w-0">
                         <span class="block font-medium text-gray-900 dark:text-gray-100">{$t(`${PLANNER_KEY}.policies.${policy}`, {default: POLICY_FALLBACKS[policy] ?? policy})}</span>
                         {#if POLICY_HELP_FALLBACKS[policy]}
@@ -85,13 +77,7 @@
                                         <div class="flex flex-wrap items-center gap-0.5 text-sm font-medium text-gray-900 dark:text-gray-100">
                                             <span>{objectiveName(objective)}</span>
                                             {#if tip}
-                                                <HelpTip
-                                                    label={objectiveName(objective)}
-                                                    help={$t(tip.key, {default: tip.fallback})}
-                                                    math={tip.math}
-                                                    spoken={tip.spoken ? $t(tip.spoken.key, {default: tip.spoken.fallback}) : undefined}
-                                                    testid="pac-planner-objective-help"
-                                                />
+                                                <HelpTip label={objectiveName(objective)} help={$t(tip.key, {default: tip.fallback})} math={tip.math} spoken={tip.spoken ? $t(tip.spoken.key, {default: tip.spoken.fallback}) : undefined} testid="pac-planner-objective-help" />
                                             {/if}
                                         </div>
                                         {#if OBJECTIVE_HELP_FALLBACKS[objective]}

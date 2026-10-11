@@ -28,26 +28,26 @@ Scénarios courants :
 
 - Déplacement d'actions d'un courtier à un autre
 - Héritage d'actifs
-- Contributions en nature vers un type de compte différent (ex: ISA, 401k)
+- Contributions en nature vers un type de compte différent (ex. : ISA, 401k)
 
 !!! info "Préservation du prix de revient"
 
     Lors du transfert d'actifs, le **prix de revient original** doit être préservé. Le transfert lui-même n'est pas un événement imposable dans la plupart des juridictions (bien que les règles varient). LibreFolio permet une **dérogation optionnelle au prix de revient** du côté du destinataire.
 
-    Consultez **[📊 Coût Moyen Pondéré (CMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** pour savoir comment le prix de revient automatique est calculé.
+    Consultez **[📊 Prix de Revient Unitaire (PRU)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** pour savoir comment le prix de revient automatique est calculé.
 
 ---
 
 ## 🔀 Relation avec les Ajustements
 
-En arrière-plan, un Transfert est composé de deux écritures d'Ajustement. LibreFolio supporte :
+Un Transfert est enregistré comme deux lignes `TRANSFER`, une par courtier, chacune liée à l'autre par `related_transaction_id`. Séparer la paire transforme les deux lignes en `ADJUSTMENT` indépendants, et promouvoir deux Ajustements les retransforme en Transfert :
 
 | Opération | Résultat |
 |-----------|--------|
-| **Division** (délier) | Transfert → deux Ajustements indépendants |
+| **Séparer la paire** (délier) | Transfert → deux Ajustements indépendants |
 | **Promouvoir** (lier) | Deux Ajustements → Transfert |
 
-**Contraintes de promotion** : même actif, courtiers différents, quantités opposées.
+**Contraintes de promotion** : même actif, courtiers différents, quantités opposées, et aucune des deux lignes liée à un événement d'actif (une division, par exemple), puisqu'un transfert ne peut pas porter ce lien.
 
 ---
 
@@ -59,7 +59,7 @@ Un vrai `TRANSFER` nécessite deux courtiers dans LibreFolio : source et destina
 
 ## 🔗 Liens connexes
 
-- 📊 **[Coût Moyen Pondéré](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Comment le prix de revient est calculé lors des transferts
-- 🏦 **[Transfert de fonds](cash-transfer.md)** — Virements bancaires (cash, pas d'actifs)
+- 📊 **[Prix de Revient Unitaire](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Comment le prix de revient est calculé lors des transferts
+- 🏦 **[Virement](cash-transfer.md)** — Virements bancaires (cash, pas d'actifs)
 - 💱 **[Conversion de devise](fx-conversion.md)** — Change de devises
 - 📊 **[Ajustement](adjustment.md)** — Corrections manuelles

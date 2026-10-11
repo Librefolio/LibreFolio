@@ -60,7 +60,7 @@ $$
 ### 🚫 qu'il Ne Capture Pas
 - **Gain monétaire absolu :** Un Effet de timing positif de $+5$ pp peut exister même si le portefeuille est en perte nette (par exemple, si le TWRR est de $-20\%$ et le MWRR de $-15\%$). Utilisez le [P&L de la Période](period-pnl.md) pour évaluer les gains monétaires absolus.
 - **Risque et volatilité :** Il n'indique pas le profil de risque ni la volatilité des actifs.
-- **Impact distinct des taxes/frais :** l'Effet de timing ne décompose pas les taxes et les coûts ; les coûts et taxes éventuels peuvent être affichés séparément dans le P&L de la période.
+- **Impact distinct des impôts/frais :** l'Effet de timing ne décompose pas les impôts et les coûts ; les coûts et impôts éventuels peuvent être affichés séparément dans le P&L de la période.
 - **Qualité intrinsèque des actifs :** Un Effet de timing élevé peut se produire sur un actif médiocre si vous l'achetez juste avant un rebond temporaire. Vérifiez toujours le [TWRR](twrr.md) pour juger de la qualité de vos actifs.
 
 ---
@@ -74,7 +74,7 @@ LibreFolio affiche l'Effet de timing dans la carte de **Rendements** du tableau 
 - **MWRR Cumulé :** Rendement de votre capital réel, prenant en compte les flux de trésorerie.
 - **MWRR Annualisé :** Le taux annuel composé de croissance de votre argent.
 
-!!! note "Aide Contextuelle (Tooltip)"
+!!! note "Aide contextuelle (infobulle)"
 
     Différence entre le MWRR cumulé et le TWRR cumulé. Indique à quel point le moment et le montant de vos flux de trésorerie ont influencé votre rendement global.
 
@@ -87,4 +87,4 @@ LibreFolio affiche l'Effet de timing dans la carte de **Rendements** du tableau 
 - **[TWRR](twrr.md) :** Mesure le rendement de la stratégie ou des actifs sous-jacents, en ignorant le moment des flux de trésorerie de l'investisseur.
 - **[MWRR](mwrr.md) :** Mesure le rendement du capital de l'investisseur, en tenant compte à la fois de la performance des actifs et du moment des flux de trésorerie.
 - **[P&L de la Période](period-pnl.md) :** Mesure le profit ou la perte monétaire absolue générée par le portefeuille au cours de la période sélectionnée.
-- **[Aperçu des Métriques de Performance](../index.md) :** Toutes les métriques de performance en un coup d'œil.
+- **[Vue d'ensemble des métriques de performance](../index.md) :** Toutes les métriques de performance en un coup d'œil.

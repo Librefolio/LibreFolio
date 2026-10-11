@@ -733,7 +733,6 @@ class PortfolioService:
         broker_cash_native: dict[int, dict[str, Decimal]] = {}
         broker_cash_base: dict[int, Decimal] = defaultdict(Decimal)
         broker_market_values: dict[int, Decimal] = defaultdict(Decimal)
-        broker_total_invested: dict[int, Decimal] = defaultdict(Decimal)
         first_position_dates: dict[tuple[int, int], date_type] = {}
         # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
         lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
@@ -757,23 +756,11 @@ class PortfolioService:
             broker_name = broker.name if broker else f"Broker {broker_id}"
             broker_names[broker_id] = broker_name
 
-            broker_txns = await self._get_transactions(broker_id, date_to=date_to)
+            # Same horizon as the engine: without date_to it stops at today, so a row dated
+            # later must not reach the card cash, the period totals or the lots either.
+            broker_txns = await self._get_transactions(broker_id, date_to=valuation_date)
             broker_cash = broker_cash_native.setdefault(broker_id, defaultdict(Decimal))
             for tx in broker_txns:
-                # In-kind ADJUSTMENT capital (opening equity / succession / transfer with
-                # no cash counterpart) injects book value that IS invested capital, not
-                # profit. Mirror the engine's capital-baseline routing at broker level so
-                # per-broker gain stays coherent with the aggregate headline (see
-                # PortfolioCalculationEngine._is_capital_adjustment). Handled before the
-                # cash guard below because these rows carry cost_basis_* but a NULL
-                # tx.currency. SPLIT-linked adjustments (asset_event_id set) redistribute
-                # existing cost and are excluded.
-                if tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity and tx.asset_event_id is None:
-                    inkind_ccy = tx.cost_basis_currency or base_currency
-                    inkind_base, inkind_missing = await self._convert_to_base(tx.cost_basis_override * tx.quantity, inkind_ccy, base_currency, tx.date)
-                    all_missing_pairs.extend(inkind_missing)
-                    if inkind_base is not None:
-                        broker_total_invested[broker_id] += inkind_base * share
                 if tx.amount is None or tx.currency is None:
                     continue
                 broker_cash[tx.currency] += tx.amount * share
@@ -799,8 +786,6 @@ class PortfolioService:
                 in_period = after_start and before_end
 
                 if tx.type in _CASH_FLOW_TYPES:
-                    total_invested += amount_base_signed * share
-                    broker_total_invested[broker_id] += amount_base_signed * share
                     if in_period:
                         if tx.type in _DEPOSIT_TYPES:
                             _total_deposited += abs(amount_base_signed) * share
@@ -1003,10 +988,17 @@ class PortfolioService:
 
         if include_breakdown:
             for broker_id, broker_name in broker_names.items():
-                broker_nav = broker_market_values.get(broker_id, Decimal("0")) + broker_cash_base.get(broker_id, Decimal("0"))
-                broker_invested = broker_total_invested.get(broker_id, Decimal("0"))
-                broker_gain = broker_nav - broker_invested
-                broker_gl_pct = (broker_gain / broker_invested) if broker_invested else Decimal("0")
+                # Capital and in-transit value come from the engine's per-broker slice, so an
+                # internal transfer moves capital on arrival instead of showing -X / +X, and
+                # the value in transit stays on the sender's card. Market value and cash keep
+                # their own valuation at valuation_date: the engine re-values a day only when
+                # something happens on it.
+                contribution = last_state.broker_contributions.get(broker_id) if last_state is not None else None
+                broker_in_transit = contribution.in_transit_contribution if contribution is not None else Decimal("0")
+                broker_capital = contribution.capital_contribution if contribution is not None else Decimal("0")
+                broker_nav = broker_market_values.get(broker_id, Decimal("0")) + broker_cash_base.get(broker_id, Decimal("0")) + broker_in_transit
+                broker_gain = broker_nav - broker_capital
+                broker_gl_pct = (broker_gain / broker_capital) if broker_capital > 0 else Decimal("0")
                 by_broker_list.append(
                     BrokerBreakdown(
                         broker_id=broker_id,

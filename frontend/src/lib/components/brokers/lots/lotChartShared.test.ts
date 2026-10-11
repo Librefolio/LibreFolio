@@ -4,10 +4,15 @@
  * These four helpers are shared verbatim by the three lot charts. Formatting is
  * asserted with an explicit locale so the expected strings are deterministic
  * regardless of the machine's locale.
+ *
+ * `isUnknownOrNonZero` and `addOrNull` carry the B3b rule for lot amounts that can
+ * be unknown (`null`: no FX rate to the target currency). An unknown amount is
+ * shown as «—», never hidden as if it were 0, and a sum with an unknown part is
+ * unknown.
  */
 import {describe, expect, it} from 'vitest';
 
-import {clamp, formatAxisNumber, normalizeZero, resolveBrokerName, withAlpha} from './lotChartShared';
+import {addOrNull, clamp, formatAxisNumber, isUnknownOrNonZero, normalizeZero, resolveBrokerName, withAlpha} from './lotChartShared';
 
 describe('normalizeZero', () => {
     it('collapses negative zero to a plain zero', () => {
@@ -121,5 +126,54 @@ describe('resolveBrokerName', () => {
 
     it('routes a custom unknown-fallback (the WAC chart shape)', () => {
         expect(resolveBrokerName(99, brokers, {unknown: (id) => `Broker ${id}`})).toBe('Broker 99');
+    });
+});
+
+describe('isUnknownOrNonZero', () => {
+    // Decides whether an amount row is shown. A row hidden because its amount is zero
+    // must not also swallow an amount that is unknown: that would read as a zero.
+
+    it('shows an unknown amount (null or undefined), which renders as «—»', () => {
+        expect(isUnknownOrNonZero(null)).toBe(true);
+        expect(isUnknownOrNonZero(undefined)).toBe(true);
+    });
+
+    it('shows any non-zero amount, positive or negative', () => {
+        expect(isUnknownOrNonZero(12.5)).toBe(true);
+        expect(isUnknownOrNonZero(-3)).toBe(true);
+        expect(isUnknownOrNonZero(0.01)).toBe(true);
+    });
+
+    it('hides a known zero, negative zero included', () => {
+        expect(isUnknownOrNonZero(0)).toBe(false);
+        expect(isUnknownOrNonZero(-0)).toBe(false);
+    });
+});
+
+describe('addOrNull', () => {
+    it('adds two known amounts', () => {
+        expect(addOrNull(2.5, 4)).toBe(6.5);
+        expect(addOrNull(-10, 4)).toBe(-6);
+    });
+
+    it('treats zero as a known amount, not as a missing one', () => {
+        expect(addOrNull(0, 5)).toBe(5);
+        expect(addOrNull(5, 0)).toBe(5);
+        expect(addOrNull(0, 0)).toBe(0);
+        expect(addOrNull(5, -0)).toBe(5);
+    });
+
+    it('is unknown when either side is unknown', () => {
+        // Control: the same amounts, both known, do add up.
+        expect(addOrNull(5, 5)).toBe(10);
+
+        expect(addOrNull(null, 5)).toBeNull();
+        expect(addOrNull(5, null)).toBeNull();
+        expect(addOrNull(null, null)).toBeNull();
+    });
+
+    it('does not let a known zero stand in for the unknown side', () => {
+        expect(addOrNull(0, null)).toBeNull();
+        expect(addOrNull(null, 0)).toBeNull();
     });
 });
