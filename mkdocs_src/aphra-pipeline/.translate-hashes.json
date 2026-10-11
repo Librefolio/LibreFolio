@@ -43,11 +43,6 @@
     },
     "analysis": "[{\"name\": \"Interactive Chart\", \"keywords\": [\"interactive chart UI\", \"financial chart component\", \"chart title translation\"]}, {\"name\": \"pair detail page\", \"keywords\": [\"currency pair detail page\", \"FX pair UI\", \"financial pair page\"]}, {\"name\": \"rate history\", \"keywords\": [\"exchange rate history\", \"financial rate chart\", \"historical rates\"]}, {\"name\": \"period\", \"keywords\": [\"chart period\", \"time range selection\", \"financial chart period\"]}, {\"name\": \"Abs / % view\", \"keywords\": [\"absolute vs percent chart view\", \"finance chart view\", \"Abs Percent toggle\"]}, {\"name\": \"Overlays\", \"keywords\": [\"chart overlay\", \"technical indicator overlay\", \"comparison overlay finance\"]}, {\"name\": \"rate\", \"keywords\": [\"exchange rate\", \"FX rate\", \"financial rate value\"]}, {\"name\": \"EUR\", \"keywords\": [\"euro currency code\", \"ISO currency code\", \"EUR USD\"]}, {\"name\": \"USD\", \"keywords\": [\"US dollar currency code\", \"ISO currency code\", \"EUR USD\"]}, {\"name\": \"Zoom\", \"keywords\": [\"chart zoom\", \"UI interaction\", \"mouse wheel zoom\"]}, {\"name\": \"pan\", \"keywords\": [\"chart pan\", \"drag navigation\", \"UI interaction\"]}, {\"name\": \"Pinch\", \"keywords\": [\"pinch zoom\", \"touch gesture\", \"mobile chart interaction\"]}, {\"name\": \"Mouse wheel\", \"keywords\": [\"mouse wheel zoom\", \"desktop chart interaction\"]}, {\"name\": \"Drag with two fingers\", \"keywords\": [\"two finger drag\", \"mobile pan gesture\", \"touch chart navigation\"]}, {\"name\": \"one finger scrolls the page\", \"keywords\": [\"mobile touch scroll\", \"page scroll gesture\", \"chart interaction\"]}, {\"name\": \"Period presets\", \"keywords\": [\"chart period presets\", \"1W 2Y YTD\", \"time range presets\"]}, {\"name\": \"1W\", \"keywords\": [\"one week period preset\", \"chart timeframe abbreviation\"]}, {\"name\": \"2Y\", \"keywords\": [\"two years period preset\", \"chart timeframe abbreviation\"]}, {\"name\": \"YTD\", \"keywords\": [\"year to date\", \"financial acronym YTD\", \"chart period preset\"]}, {\"name\": \"All\", \"keywords\": [\"all period preset\", \"chart time range all\"]}, {\"name\": \"Custom\", \"keywords\": [\"custom date range\", \"chart period UI\"]}, {\"name\": \"toolbar\", \"keywords\": [\"chart toolbar\", \"UI controls\", \"responsive toolbar\"]}, {\"name\": \"browser tab\", \"keywords\": [\"browser tab state\", \"shared period\", \"UI session\"]}, {\"name\": \"Weekly or Monthly badge\", \"keywords\": [\"weekly monthly badge\", \"chart aggregation UI\", \"data grouping badge\"]}, {\"name\": \"axis\", \"keywords\": [\"chart axis\", \"date axis\", \"UI labels\"]}, {\"name\": \"banner\", \"keywords\": [\"UI banner\", \"notification banner\", \"data availability message\"]}, {\"name\": \"Sync\", \"keywords\": [\"data sync\", \"fetch rates\", \"provider sync button\"]}, {\"name\": \"provider\", \"keywords\": [\"data provider\", \"API integration\", \"financial data source\"]}, {\"name\": \"Data Editor\", \"keywords\": [\"data editor UI\", \"manual rate entry\", \"financial data editor\"]}, {\"name\": \"Tooltip\", \"keywords\": [\"chart tooltip\", \"hover tooltip\", \"UI overlay\"]}, {\"name\": \"Hover\", \"keywords\": [\"hover interaction\", \"mouse hover\", \"chart UI\"]}, {\"name\": \"Stale: N day(s) old\", \"keywords\": [\"stale market data\", \"outdated rate\", \"financial data freshness\"]}, {\"name\": \"bank holidays\", \"keywords\": [\"bank holidays\", \"market holidays\", \"financial calendar\"]}, {\"name\": \"Measure\", \"keywords\": [\"chart measure tool\", \"measure distance\", \"chart UI tool\"]}, {\"name\": \"Edit Rates\", \"keywords\": [\"edit rates\", \"data editor action\", \"UI button\"]}, {\"name\": \"Aesthetics\", \"keywords\": [\"chart aesthetics\", \"chart appearance settings\", \"colors fill grid\"]}, {\"name\": \"fill\", \"keywords\": [\"chart fill\", \"area fill\", \"chart styling\"]}, {\"name\": \"grid\", \"keywords\": [\"chart grid\", \"grid lines\", \"chart styling\"]}, {\"name\": \"axis ranges\", \"keywords\": [\"axis ranges\", \"chart scaling\", \"chart settings\"]}, {\"name\": \"Signals\", \"keywords\": [\"technical analysis signals\", \"chart signals\", \"trading indicators\"]}, {\"name\": \"panel\", \"keywords\": [\"signals panel\", \"UI panel\", \"chart panel\"]}, {\"name\": \"Chart Settings\", \"keywords\": [\"chart settings page\", \"UI settings\", \"chart configuration\"]}, {\"name\": \"overlay signals\", \"keywords\": [\"overlay signals\", \"technical indicators\", \"chart overlays\"]}, {\"name\": \"Technical indicators\", \"keywords\": [\"technical indicators\", \"chart analysis\", \"trading indicators\"]}, {\"name\": \"the heart of\", \"keywords\": [\"idiom heart of\", \"central feature\", \"translation idiom\"]}, {\"name\": \"at a glance\", \"keywords\": [\"idiom at a glance\", \"quick comparison\", \"translation idiom\"]}, {\"name\": \"change since the first day of the period\", \"keywords\": [\"period change\", \"delta percent\", \"financial chart metric\"]}, {\"name\": \"Δ and %\", \"keywords\": [\"delta symbol\", \"percent change\", \"financial chart metric\"]}, {\"name\": \"History shorter than the period\", \"keywords\": [\"chart history shorter than period\", \"data availability banner\", \"chart start date\"]}, {\"name\": \"Daily rates\", \"keywords\": [\"daily exchange rates\", \"chart granularity\", \"rate frequency\"]}, {\"name\": \"narrow screen\", \"keywords\": [\"responsive narrow screen\", \"mobile chart layout\", \"UI breakpoint\"]}, {\"name\": \"first and last always stay\", \"keywords\": [\"axis label persistence\", \"first last date labels\", \"responsive chart\"]}, {\"name\": \"fetch older rates\", \"keywords\": [\"fetch historical rates\", \"provider API\", \"data sync\"]}, {\"name\": \"publishes them\", \"keywords\": [\"provider publishes rates\", \"data source availability\", \"financial data provider\"]}, {\"name\": \"enter them\", \"keywords\": [\"manual data entry\", \"data editor\", \"rate entry\"]}, {\"name\": \"value of each overlay\", \"keywords\": [\"overlay value\", \"chart comparison\", \"financial overlay\"]}, {\"name\": \"Chart look\", \"keywords\": [\"chart appearance\", \"UI look\", \"chart settings\"]}, {\"name\": \"colours\", \"keywords\": [\"colours\", \"chart colors\", \"UI localization\"]}, {\"name\": \"date the data is available from\", \"keywords\": [\"data availability date\", \"chart history start\", \"banner date\"]}, {\"name\": \"rate itself\", \"keywords\": [\"exchange rate absolute view\", \"Abs view\", \"rate value\"]}, {\"name\": \"FX\", \"keywords\": [\"FX foreign exchange\", \"currency pair\", \"financial acronym\"]}]",
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash",
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-09T23:59:32.229943+00:00"
   },
   "user/fx/detail/data-editor.en.md": {
@@ -232,11 +227,6 @@
     },
     "analysis": "[{\"name\": \"Provider Configuration\", \"keywords\": [\"provider configuration data source financial app UI heading LibreFolio FX\"]}, {\"name\": \"provider\", \"keywords\": [\"provider data source API integration financial market data software terminology\"]}, {\"name\": \"Providers\", \"keywords\": [\"Providers toolbar button UI label financial data source LibreFolio\"]}, {\"name\": \"currency pair\", \"keywords\": [\"currency pair forex exchange rate financial terminology\"]}, {\"name\": \"pair\", \"keywords\": [\"pair currency pair financial shorthand forex\"]}, {\"name\": \"routes\", \"keywords\": [\"routes conversion route FX rate provider financial software\"]}, {\"name\": \"conversion route\", \"keywords\": [\"conversion route currency conversion FX rate path financial app\"]}, {\"name\": \"chain of conversions\", \"keywords\": [\"chain of conversions currency conversion chain FX route financial terminology\"]}, {\"name\": \"Direct conversion (1 step)\", \"keywords\": [\"direct conversion one step currency conversion UI option FX\"]}, {\"name\": \"Chain conversion\", \"keywords\": [\"chain conversion multi-step currency conversion UI option FX\"]}, {\"name\": \"central bank\", \"keywords\": [\"central bank exchange rate provider financial institution FX\"]}, {\"name\": \"quotes (verb)\", \"keywords\": [\"quote currency pair central bank exchange rate financial verb\"]}, {\"name\": \"rates\", \"keywords\": [\"rates exchange rate currency rate financial market data\"]}, {\"name\": \"monthly rates\", \"keywords\": [\"monthly rates SNB central bank data warning financial\"]}, {\"name\": \"SNB, ECB, FED, BOE\", \"keywords\": [\"SNB ECB FED BOE central bank acronyms financial data providers\"]}, {\"name\": \"EUR/USD\", \"keywords\": [\"EUR USD currency pair notation forex exchange rate\"]}, {\"name\": \"FX\", \"keywords\": [\"FX foreign exchange acronym financial markets\"]}, {\"name\": \"Sync\", \"keywords\": [\"sync synchronization software action UI button financial data\"]}, {\"name\": \"Synchronization\", \"keywords\": [\"synchronization sync software process financial data providers\"]}, {\"name\": \"Edit Pair Providers\", \"keywords\": [\"Edit Pair Providers UI window dialog financial app currency pair\"]}, {\"name\": \"Conversion Routes\", \"keywords\": [\"Conversion Routes UI section heading currency conversion financial app\"]}, {\"name\": \"Add conversion route\", \"keywords\": [\"Add conversion route UI button currency conversion financial app\"]}, {\"name\": \"priority order\", \"keywords\": [\"priority order fallback route order UI financial software\"]}, {\"name\": \"priority badge\", \"keywords\": [\"priority badge UI element route priority financial app\"]}, {\"name\": \"data warning\", \"keywords\": [\"data warning provider warning financial data quality UI\"]}, {\"name\": \"manual\", \"keywords\": [\"manual mode manual rates data entry financial software\"]}, {\"name\": \"Data Editor\", \"keywords\": [\"Data Editor UI feature manual rate entry financial software\"]}, {\"name\": \"Priority &amp; Fallback\", \"keywords\": [\"priority fallback UI heading route order financial software\"]}, {\"name\": \"fallback\", \"keywords\": [\"fallback automatic backup software mechanism financial data providers\"]}, {\"name\": \"route discovery\", \"keywords\": [\"route discovery FX route finding direct chain financial app\"]}, {\"name\": \"intermediate pairs\", \"keywords\": [\"intermediate pairs currency pair chain route financial software\"]}, {\"name\": \"search box\", \"keywords\": [\"search box UI input filter financial software\"]}, {\"name\": \"filter\", \"keywords\": [\"filter search UI software provider currency country\"]}, {\"name\": \"Drag the rows\", \"keywords\": [\"drag rows UI interaction reorder priority financial software\"]}, {\"name\": \"hover\", \"keywords\": [\"hover mouseover UI interaction tooltip financial software\"]}, {\"name\": \"toolbar\", \"keywords\": [\"toolbar UI element buttons financial software\"]}, {\"name\": \"window\", \"keywords\": [\"window dialog UI software financial app\"]}, {\"name\": \"Tick it\", \"keywords\": [\"tick checkbox British English UI option financial software\"]}, {\"name\": \"up and down arrows\", \"keywords\": [\"up down arrows UI controls reorder mobile financial software\"]}, {\"name\": \"detail page\", \"keywords\": [\"detail page UI view financial software currency pair\"]}, {\"name\": \"routes from the top\", \"keywords\": [\"routes from top priority order fallback list financial software\"]}, {\"name\": \"pair fails only when every route does\", \"keywords\": [\"pair fails routes fallback elliptical verb financial software\"]}, {\"name\": \"uses the FED rate instead\", \"keywords\": [\"fallback FED rate alternative provider financial software\"]}, {\"name\": \"FX Providers\", \"keywords\": [\"FX Providers documentation title financial data sources ECB FED BOE SNB\"]}, {\"name\": \"FX Chain Algorithm\", \"keywords\": [\"FX Chain Algorithm developer documentation route calculation financial software\"]}, {\"name\": \"developer/frontend/fx-chain-algorithm.md\", \"keywords\": [\"developer frontend fx-chain-algorithm.md code identifier file path documentation\"]}, {\"name\": \"Save Configuration\", \"keywords\": [\"Save Configuration UI button settings financial software\"]}]",
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash",
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:01:51.869575+00:00"
   },
   "faq.en.md": {
@@ -424,11 +414,6 @@
         "elapsed_s": 348.0
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:04:31.303847+00:00"
   },
   "user/installation.en.md": {
@@ -571,11 +556,6 @@
         "elapsed_s": 196.5
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:07:20.711014+00:00"
   },
   "user/files/index.en.md": {
@@ -760,11 +740,6 @@
         "elapsed_s": 277.0
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:02:53.478422+00:00"
   },
   "user/fx/detail/signals.en.md": {
@@ -811,11 +786,6 @@
         "elapsed_s": 190.1
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:04:31.230804+00:00"
   },
   "user/fx/chart-settings.en.md": {
@@ -910,11 +880,6 @@
         "elapsed_s": 158.5
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:06:38.634108+00:00"
   },
   "admin/index.en.md": {
@@ -961,11 +926,6 @@
         "elapsed_s": 217.9
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:03:32.770989+00:00"
   },
   "admin/cli_tools.en.md": {
@@ -1150,11 +1110,6 @@
         "elapsed_s": 312.9
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:05:20.898708+00:00"
   },
   "financial-theory/index.en.md": {
@@ -1218,12 +1173,7 @@
     ],
     "analysis": "[{\"name\": \"Equity shares\", \"keywords\": [\"company ownership\", \"stock ownership\", \"shareholder rights\", \"common stock\", \"capital structure\"]}, {\"name\": \"Exchange Traded Funds (ETF)\", \"keywords\": [\"basket of securities\", \"fund structure\", \"exchange-traded\", \"liquidity\", \"passive investing\"]}, {\"name\": \"Baskets of securities\", \"keywords\": [\"portfolio of assets\", \"fund composition\", \"securities lending\", \"diversification strategy\"]}, {\"name\": \"Trade like stocks\", \"keywords\": [\"exchange trading\", \"intraday pricing\", \"market orders\", \"liquidity\", \"secondary market\"]}, {\"name\": \"Digital currencies and tokens\", \"keywords\": [\"cryptocurrency\", \"blockchain\", \"utility tokens\", \"security tokens\", \"digital assets\"]}, {\"name\": \"Fixed-income securities\", \"keywords\": [\"debt instrument\", \"coupon payment\", \"maturity date\", \"credit risk\", \"bond valuation\"]}, {\"name\": \"Loan to a borrower\", \"keywords\": [\"debt financing\", \"creditor relationship\", \"principal repayment\", \"interest accrual\", \"default risk\"]}, {\"name\": \"Peer-to-peer (P2P)\", \"keywords\": [\"P2P lending\", \"disintermediation\", \"credit platforms\", \"retail lending\", \"loan origination\"]}, {\"name\": \"Crowdfunding\", \"keywords\": [\"real estate crowdfunding\", \"equity crowdfunding\", \"platform-based investing\", \"retail investor access\"]}, {\"name\": \"Scheduled interest payments\", \"keywords\": [\"coupon schedule\", \"fixed payment dates\", \"amortization\", \"income stream\", \"debt servicing\"]}, {\"name\": \"Professionally managed\", \"keywords\": [\"fund manager\", \"active management\", \"expense ratio\", \"mutual fund structure\", \"investment mandate\"]}, {\"name\": \"Physical assets\", \"keywords\": [\"tangible assets\", \"hard assets\", \"store of value\", \"inflation hedge\", \"direct ownership\"]}, {\"name\": \"Held for long-term value\", \"keywords\": [\"buy and hold\", \"strategic allocation\", \"capital preservation\", \"passive investment horizon\"]}, {\"name\": \"Private Equity\", \"keywords\": [\"unlisted companies\", \"venture capital\", \"leveraged buyouts\", \"illiquid investment\", \"accredited investor\"]}, {\"name\": \"Public exchanges\", \"keywords\": [\"stock exchange\", \"regulated market\", \"listed securities\", \"trading venue\", \"market transparency\"]}, {\"name\": \"Asset class\", \"keywords\": [\"investment category\", \"risk profile\", \"correlation\", \"portfolio diversification\", \"asset allocation\"]}, {\"name\": \"Gold listed under multiple categories\", \"keywords\": [\"categorization error\", \"precious metals\", \"commodity vs. asset\", \"classification ambiguity\", \"data integrity\"]}]",
     "analysis_model": "stepfun/step-3.5-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/transaction-types.en.md": {
     "md5": "4d969aa9d0e1fa0e01c63a9061d2656d",
@@ -1234,12 +1184,7 @@
     ],
     "analysis": "[{\"name\": \"holdings\", \"keywords\": [\"investment holdings\", \"portfolio assets\", \"securities owned\"]}, {\"name\": \"P&L\", \"keywords\": [\"profit and loss\", \"financial performance\", \"gains losses\"]}, {\"name\": \"stock\", \"keywords\": [\"company shares\", \"equity securities\", \"public company ownership\"]}, {\"name\": \"ETF\", \"keywords\": [\"exchange-traded fund\", \"investment fund\", \"traded securities\"]}, {\"name\": \"bonds\", \"keywords\": [\"fixed income\", \"debt securities\", \"government corporate bonds\"]}, {\"name\": \"P2P loans\", \"keywords\": [\"peer-to-peer lending\", \"online lending platforms\", \"individual borrowing\"]}, {\"name\": \"broker\", \"keywords\": [\"financial intermediary\", \"brokerage firm\", \"securities dealer\"]}, {\"name\": \"trade\", \"keywords\": [\"financial transaction\", \"buy sell securities\", \"market execution\"]}, {\"name\": \"capital gains\", \"keywords\": [\"investment profit\", \"asset appreciation\", \"taxable gain\"]}, {\"name\": \"FX\", \"keywords\": [\"foreign exchange\", \"currency markets\", \"forex conversion\"]}, {\"name\": \"assets\", \"keywords\": [\"financial assets\", \"investments\", \"resources owned\"]}, {\"name\": \"portfolio\", \"keywords\": [\"investment portfolio\", \"collection of assets\", \"holdings grouping\"]}, {\"name\": \"balance\", \"keywords\": [\"account balance\", \"financial balance\", \"cash position\"]}, {\"name\": \"realizes (P&L)\", \"keywords\": [\"realize gains\", \"realize losses\", \"financial accounting term\"]}, {\"name\": \"sale (without a sale)\", \"keywords\": [\"asset disposal\", \"sell transaction\", \"transfer without selling\"]}, {\"name\": \"transfer (financial context)\", \"keywords\": [\"asset transfer\", \"portfolio transfer\", \"move between accounts\"]}]",
     "analysis_model": "stepfun/step-3.5-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/day-count.en.md": {
     "md5": "dcd31a9e4b8a649d346ca210c0c5c93d",
@@ -1250,12 +1195,7 @@
     ],
     "analysis": "[{\"name\": \"Day Count Convention\", \"keywords\": [\"financial mathematics\", \"interest calculation\", \"accrual method\", \"bond pricing\", \"loan interest\", \"time fraction\"]}, {\"name\": \"Scheduled Investment\", \"keywords\": [\"financial software feature\", \"recurring investment\", \"periodic purchase\", \"portfolio management\"]}, {\"name\": \"synthetic yield calculations\", \"keywords\": [\"finance\", \"backtesting\", \"portfolio simulation\", \"estimated returns\", \"hypothetical performance\"]}, {\"name\": \"calculate_day_count_fraction()\", \"keywords\": [\"programming function\", \"Python\", \"financial library\", \"time calculation utility\"]}, {\"name\": \"Decimal\", \"keywords\": [\"programming data type\", \"Python\", \"fixed-point arithmetic\", \"precision number\", \"financial calculation\"]}, {\"name\": \"ACT/365 (Actual/365)\", \"keywords\": [\"day count convention\", \"interest accrual method\", \"ACT/365\", \"actual days over 365\", \"UK money markets\"]}, {\"name\": \"ACT/360 (Actual/360)\", \"keywords\": [\"day count convention\", \"interest accrual method\", \"ACT/360\", \"actual days over 360\", \"US commercial loans\"]}, {\"name\": \"30/360 (Bond Basis)\", \"keywords\": [\"day count convention\", \"bond interest\", \"30/360\", \"US corporate bonds\", \"municipal bonds\", \"fixed month assumption\"]}, {\"name\": \"ACT/ACT (Actual/Actual)\", \"keywords\": [\"day count convention\", \"ACT/ACT\", \"US Treasury bonds\", \"leap year handling\", \"actual days over actual days\"]}, {\"name\": \"UK money markets\", \"keywords\": [\"financial markets\", \"United Kingdom\", \"short-term debt\", \"interbank lending\", \"sterling markets\"]}, {\"name\": \"US money markets\", \"keywords\": [\"financial markets\", \"United States\", \"short-term debt\", \"commercial paper\", \"LIBOR alternatives\"]}, {\"name\": \"US corporate bonds\", \"keywords\": [\"fixed income\", \"debt securities\", \"corporations\", \"credit instruments\", \"bond market\"]}, {\"name\": \"municipal bonds\", \"keywords\": [\"munis\", \"local government debt\", \"tax-exempt bonds\", \"US public finance\"]}, {\"name\": \"US Treasury bonds\", \"keywords\": [\"T-bonds\", \"government debt\", \"US federal securities\", \"long-term Treasury\", \"risk-free rate\"]}, {\"name\": \"large principals\", \"keywords\": [\"finance\", \"loan amount\", \"investment size\", \"principal sum\", \"high value transaction\"]}, {\"name\": \"long durations\", \"keywords\": [\"finance\", \"time horizon\", \"loan term\", \"bond maturity\", \"investment period\"]}, {\"name\": \"Wikipedia\", \"keywords\": [\"online encyclopedia\", \"free knowledge\", \"reference source\", \"crowdsourced information\"]}, {\"name\": \"backend/app/services/asset_source_providers/scheduled_investment.py\", \"keywords\": [\"file path\", \"Python module\", \"LibreFolio codebase\", \"asset source provider\", \"backend service\"]}, {\"name\": \"backend/app/utils/financial_math.py\", \"keywords\": [\"file path\", \"Python module\", \"LibreFolio codebase\", \"utility functions\", \"financial calculations\"]}, {\"name\": \"!!! info\", \"keywords\": [\"MkDocs admonition\", \"documentation syntax\", \"callout box\", \"note block\", \"Material theme\"]}, {\"name\": \":material-link:\", \"keywords\": [\"Material Design icon\", \"MkDocs-Material\", \"documentation icon\", \"external link indicator\"]}]",
     "analysis_model": "stepfun/step-3.5-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/returns.en.md": {
     "md5": "c9c6c82b7b2ef1d0e5daf818cb8b5491",
@@ -1266,12 +1206,7 @@
     ],
     "analysis": "[{\"name\": \"Simple Return\", \"keywords\": [\"simple return formula\", \"discrete return\", \"investment percentage change\", \"finance calculation\"]}, {\"name\": \"Logarithmic Return\", \"keywords\": [\"log return\", \"continuous return\", \"natural logarithm finance\", \"time series analysis\"]}, {\"name\": \"Natural Logarithm\", \"keywords\": [\"ln function\", \"mathematics\", \"log return calculation\", \"exponential inverse\"]}, {\"name\": \"Compound Annual Growth Rate (CAGR)\", \"keywords\": [\"CAGR\", \"annualized return\", \"investment growth metric\", \"finance\"]}, {\"name\": \"Annualization\", \"keywords\": [\"annualize return\", \"time-adjusted return\", \"finance\", \"CAGR conversion\"]}, {\"name\": \"Compounding\", \"keywords\": [\"compound interest\", \"multiplicative returns\", \"financial growth\", \"reinvestment\"]}, {\"name\": \"Day Count Conventions\", \"keywords\": [\"Actual/365\", \"Actual/360\", \"30/360\", \"interest calculation\", \"finance\"]}, {\"name\": \"Additive Property\", \"keywords\": [\"additive returns\", \"log return property\", \"time aggregation\", \"finance mathematics\"]}, {\"name\": \"Symmetric Property\", \"keywords\": [\"symmetric returns\", \"log return symmetry\", \"percentage change symmetry\", \"finance\"]}, {\"name\": \"FX (Foreign Exchange)\", \"keywords\": [\"forex\", \"currency trading\", \"foreign exchange market\", \"finance\"]}, {\"name\": \"Time Series\", \"keywords\": [\"time series data\", \"sequential analysis\", \"statistics\", \"finance modeling\"]}, {\"name\": \"Weighted Sum\", \"keywords\": [\"weighted average\", \"portfolio return calculation\", \"finance\", \"asset allocation\"]}, {\"name\": \"Continuous Compounding\", \"keywords\": [\"continuous compounding\", \"finance\", \"interest calculation\", \"exponential growth\"]}, {\"name\": \"Portfolio Returns\", \"keywords\": [\"portfolio return\", \"investment portfolio\", \"aggregate returns\", \"finance\"]}, {\"name\": \"Volatility Estimation\", \"keywords\": [\"volatility\", \"standard deviation\", \"risk measurement\", \"log returns\"]}]",
     "analysis_model": "stepfun/step-3.5-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/technical-indicators.en.md": {
     "md5": "51b133965666f67ee0f18c20f471cc8e",
@@ -1282,12 +1217,7 @@
     ],
     "analysis": "[{\"name\": \"golden cross / death cross\", \"keywords\": [\"financial chart pattern\", \"technical analysis\", \"moving average crossover\", \"bullish signal\", \"bearish signal\", \"chartist terminology\"]}, {\"name\": \"overbought / oversold\", \"keywords\": [\"RSI threshold\", \"market condition\", \"oscillator\", \"trading range\", \"70/30 levels\", \"mean reversion\"]}, {\"name\": \"Bollinger Squeeze\", \"keywords\": [\"volatility contraction\", \"technical analysis pattern\", \"low volatility breakout\", \"Bollinger Bands narrowing\"]}, {\"name\": \"Butterworth low-pass\", \"keywords\": [\"signal processing filter\", \"analog filter design\", \"maximally flat magnitude response\", \"Stephen Butterworth\"]}, {\"name\": \"running variance\", \"keywords\": [\"statistical calculation\", \"moving variance\", \"time-series analysis\", \"volatility estimator\"]}, {\"name\": \"time constant (τ)\", \"keywords\": [\"physics\", \"engineering\", \"filter response\", \"exponential decay\", \"first-order system\"]}, {\"name\": \"phase lag\", \"keywords\": [\"signal processing\", \"filter characteristic\", \"group delay\", \"time-domain response\"]}, {\"name\": \"cut-off frequency (f_c)\", \"keywords\": [\"filter specification\", \"frequency domain\", \"-3dB point\", \"bandwidth\"]}, {\"name\": \"IIR (Infinite Impulse Response)\", \"keywords\": [\"digital filter\", \"recursive filter\", \"signal processing\", \"pole\", \"feedback\"]}, {\"name\": \"FIR (Finite Impulse Response)\", \"keywords\": [\"digital filter\", \"non-recursive filter\", \"signal processing\", \"moving average\", \"linear phase\"]}, {\"name\": \"transfer function (H(z))\", \"keywords\": [\"z-transform\", \"control systems\", \"frequency response\", \"system analysis\"]}, {\"name\": \"pole location\", \"keywords\": [\"z-plane\", \"stability analysis\", \"filter design\", \"frequency response\", \"unit circle\"]}, {\"name\": \"band-pass filter\", \"keywords\": [\"signal processing\", \"frequency selectivity\", \"high-pass + low-pass\", \"momentum indicator\"]}, {\"name\": \"matched filter\", \"keywords\": [\"signal processing\", \"optimal filter\", \"noise reduction\", \"detection theory\", \"signal-to-noise ratio\"]}, {\"name\": \"duty cycle\", \"keywords\": [\"control systems\", \"pulse width modulation\", \"ratio of on-time\", \"RSI analogy\"]}, {\"name\": \"sigmoid (100 - 100/(1+RS))\", \"keywords\": [\"mathematical function\", \"S-shaped curve\", \"logistic function\", \"normalization\", \"mapping [0,∞) to [0,100)\"]}, {\"name\": \"fat tails / leptokurtosis\", \"keywords\": [\"financial statistics\", \"probability distribution\", \"excess kurtosis\", \"extreme events\", \"risk modeling\"]}, {\"name\": \"group delay\", \"keywords\": [\"signal processing\", \"phase delay\", \"linear phase\", \"filter characteristic\", \"(N-1)/2 samples\"]}, {\"name\": \"actuator (market)\", \"keywords\": [\"control theory\", \"system output\", \"physical metaphor\", \"market mechanism\"]}, {\"name\": \"restoring force\", \"keywords\": [\"physics metaphor\", \"control systems\", \"negative feedback\", \"mean reversion in markets\"]}, {\"name\": \"low-entropy / high-entropy\", \"keywords\": [\"information theory\", \"thermodynamics metaphor\", \"chaos\", \"predictability\", \"volatility regime\"]}, {\"name\": \"confidence interval\", \"keywords\": [\"statistics\", \"Bollinger Bands\", \"standard deviation bands\", \"normal distribution assumption\"]}, {\"name\": \"normalisation (of RSI)\", \"keywords\": [\"mathematical scaling\", \"bounded indicator\", \"0-100 scale\", \"percentage\"]}, {\"name\": \":material-link:\", \"keywords\": [\"Material for MkDocs icon\", \"documentation link\", \"UI component\", \"not standard Markdown\"]}, {\"name\": \"Fast (small N) vs Slow (large N)\", \"keywords\": [\"trading terminology\", \"moving average period\", \"filter responsiveness\", \"lag vs noise rejection\"]}]",
     "analysis_model": "stepfun/step-3.5-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/synthetic-benchmarks.en.md": {
     "md5": "a11ba1fdd78c5c670c707cac61c91830",
@@ -1298,12 +1228,7 @@
     ],
     "analysis": "[{\"name\": \"Synthetic benchmark\", \"keywords\": [\"finance\", \"charting\", \"technical analysis\", \"reference line\", \"hypothetical performance\"]}, {\"name\": \"Visual reference lines\", \"keywords\": [\"data visualization\", \"charting\", \"finance\", \"comparison tool\"]}, {\"name\": \"Simple interest\", \"keywords\": [\"finance\", \"mathematics\", \"interest calculation\", \"A=P(1+rt)\"]}, {\"name\": \"Day Count Convention\", \"keywords\": [\"finance\", \"bond markets\", \"accrual\", \"interest calculation\", \"ISDA\", \"time basis\"]}, {\"name\": \"Compound interest\", \"keywords\": [\"finance\", \"mathematics\", \"exponential growth\", \"A=P(1+r/n)^(nt)\"]}, {\"name\": \"Discounted cash flow (DCF) analysis\", \"keywords\": [\"corporate finance\", \"valuation\", \"investment analysis\", \"NPV\"]}, {\"name\": \"Logarithmic scale\", \"keywords\": [\"data visualization\", \"charting\", \"mathematics\", \"exponential growth\", \"log chart\"]}, {\"name\": \"Rule of 72\", \"keywords\": [\"finance\", \"mental math\", \"approximation\", \"doubling time\", \"investment rule\"]}, {\"name\": \"Seasonality\", \"keywords\": [\"economics\", \"time series analysis\", \"commodity markets\", \"periodic patterns\"]}, {\"name\": \"Cyclic patterns / spectral analysis\", \"keywords\": [\"time series\", \"Fourier analysis\", \"signal processing\", \"market cycles\"]}, {\"name\": \"Sine wave\", \"keywords\": [\"mathematics\", \"physics\", \"periodic function\", \"waveform\", \"oscillator\"]}, {\"name\": \"Amplitude (in context of finance)\", \"keywords\": [\"technical analysis\", \"oscillation\", \"measurement\", \"peak-to-peak\"]}, {\"name\": \"Offset (as a parameter)\", \"keywords\": [\"charting\", \"technical analysis\", \"adjustment\", \"baseline shift\"]}, {\"name\": \"Outperformance / underperformance\", \"keywords\": [\"finance\", \"portfolio management\", \"benchmark\", \"relative return\"]}, {\"name\": \"Iterative Computation (Daily Stepping)\", \"keywords\": [\"computer science\", \"finance\", \"algorithm\", \"performance optimization\", \"daily accrual\"]}, {\"name\": \"Continuous compounding\", \"keywords\": [\"finance\", \"mathematics\", \"calculus\", \"exponential function\", \"e^rt\"]}]",
     "analysis_model": "stepfun/step-3.5-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "gallery/index.en.md": {
     "md5": "b2925e5934b8069a5fefeec6d8926696",
@@ -1407,11 +1332,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T07:49:11.086759+00:00"
   },
   "gallery/mobile.en.md": {
@@ -1464,11 +1384,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:08:01.961209+00:00"
   },
   "credits-legal.en.md": {
@@ -2368,12 +2283,7 @@
     ],
     "analysis": "[{\"name\": \"bond\", \"keywords\": [\"bond definition fixed-income security financial instrument\"]}, {\"name\": \"fixed-income security\", \"keywords\": [\"fixed income security meaning financial investment\"]}, {\"name\": \"coupons\", \"keywords\": [\"bond coupon payment periodic interest fixed income\"]}, {\"name\": \"face value\", \"keywords\": [\"face value bond principal par value\"]}, {\"name\": \"principal\", \"keywords\": [\"principal bond amount borrowed repaid maturity\"]}, {\"name\": \"maturity\", \"keywords\": [\"bond maturity date end of term return principal\"]}, {\"name\": \"quoted as percentage of face value\", \"keywords\": [\"bond pricing percentage of par quotation\"]}, {\"name\": \"denominated in the issuance currency\", \"keywords\": [\"currency denomination bond issuance currency\"]}, {\"name\": \"fixed or floating rate\", \"keywords\": [\"fixed rate floating rate bond interest type\"]}, {\"name\": \"coupon rate\", \"keywords\": [\"coupon rate annual interest rate bond\"]}, {\"name\": \"yield to maturity\", \"keywords\": [\"yield to maturity YTM bond total return calculation\"]}, {\"name\": \"dirty price\", \"keywords\": [\"dirty price bond accrued interest inclusive price\"]}, {\"name\": \"clean price\", \"keywords\": [\"clean price bond quoted price excluding accrued interest\"]}, {\"name\": \"accrued interest\", \"keywords\": [\"accrued interest bond interest accumulated since last payment\"]}, {\"name\": \"day count convention\", \"keywords\": [\"day count convention financial calculation interest accrual\"]}, {\"name\": \"price–yield relationship\", \"keywords\": [\"bond price yield inverse relationship\"]}, {\"name\": \"Scheduled Investment\", \"keywords\": [\"Scheduled Investment LibreFolio provider data source\"]}, {\"name\": \"Mark-to-market\", \"keywords\": [\"mark to market valuation accounting adjustment\"]}, {\"name\": \"write-downs\", \"keywords\": [\"write-down asset reduction impairment bond\"]}, {\"name\": \"Interest Events\", \"keywords\": [\"Interest Events asset event coupon payment accrual LibreFolio\"]}, {\"name\": \"Maturity Settlement\", \"keywords\": [\"Maturity Settlement asset event capital return bond end\"]}, {\"name\": \"Price Adjustment\", \"keywords\": [\"Price Adjustment asset event mark to market revaluation\"]}, {\"name\": \"par\", \"keywords\": [\"par value bond face value 100%\"]}]",
     "analysis_model": "deepseek/deepseek-v4-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/instruments/asset-types/crypto.en.md": {
     "md5": "69a1fe152721c798cf36e53a8d071c86",
@@ -2398,11 +2308,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-06-30T15:11:29.707567+00:00"
   },
   "financial-theory/instruments/asset-types/mutual-fund.en.md": {
@@ -2414,12 +2319,7 @@
     ],
     "analysis": "[{\"name\": \"investment vehicle\", \"keywords\": [\"investment vehicle definition financial product pooled fund\"]}, {\"name\": \"Net Asset Value (NAV)\", \"keywords\": [\"NAV mutual fund calculation net asset value meaning\"]}, {\"name\": \"denominated\", \"keywords\": [\"denominated currency financial term base currency fund\"]}, {\"name\": \"income funds\", \"keywords\": [\"income fund mutual fund distribution vs growth fund\"]}, {\"name\": \"growth funds\", \"keywords\": [\"growth fund mutual fund reinvestment capital appreciation\"]}, {\"name\": \"Management fee (TER)\", \"keywords\": [\"TER total expense ratio management fee mutual fund\"]}, {\"name\": \"entry/exit loads\", \"keywords\": [\"entry load exit load mutual fund sales charge front-end load back-end load\"]}, {\"name\": \"providers\", \"keywords\": [\"data provider financial data source software integration Yahoo Finance\"]}, {\"name\": \"intraday prices\", \"keywords\": [\"intraday trading price during trading hours vs end-of-day NAV\"]}, {\"name\": \"distribution vs accumulation\", \"keywords\": [\"distribution fund accumulation fund tax implications reinvestment dividends\"]}]",
     "analysis_model": "deepseek/deepseek-v4-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/instruments/asset-types/commodities.en.md": {
     "md5": "9c1b07f98340868d44778c8e437c1cb6",
@@ -2444,11 +2344,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-06-30T15:11:29.707567+00:00"
   },
   "financial-theory/instruments/asset-types/real-estate.en.md": {
@@ -2495,11 +2390,6 @@
         "elapsed_s": 151.9
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:07:45.710283+00:00"
   },
   "financial-theory/instruments/asset-types/index-benchmark.en.md": {
@@ -2525,11 +2415,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-09-04T08:01:00.420943+00:00"
   },
   "financial-theory/instruments/asset-types/other.en.md": {
@@ -2541,12 +2426,7 @@
     ],
     "analysis": "[{\"name\": \"catch-all category\", \"keywords\": [\"catch-all meaning generic category\", \"miscellaneous\", \"all-encompassing classification\"]}, {\"name\": \"public price feed\", \"keywords\": [\"financial data feed\", \"market price stream\", \"real-time price data\"]}, {\"name\": \"Manual provider\", \"keywords\": [\"manual data source\", \"manual price entry provider\", \"manual input method\"]}, {\"name\": \"CSS Scraper\", \"keywords\": [\"CSS web scraper\", \"CSS selector scraper\", \"web scraping provider\"]}, {\"name\": \"broker imports\", \"keywords\": [\"brokerage data import\", \"broker transaction import\", \"trading platform import\"]}, {\"name\": \"ISO 4217 currency\", \"keywords\": [\"ISO currency codes\", \"standard currency codes\", \"international currency standard\"]}, {\"name\": \"Private Equity\", \"keywords\": [\"private equity definition\", \"non-public company investment\", \"private capital\"]}, {\"name\": \"Venture Capital\", \"keywords\": [\"venture capital definition\", \"early-stage investment\", \"startup funding\"]}, {\"name\": \"appraisals\", \"keywords\": [\"asset appraisal\", \"valuation\", \"professional assessment\"]}, {\"name\": \"Data Editor\", \"keywords\": [\"data editing tool\", \"manual data entry interface\", \"portfolio data editor\"]}]",
     "analysis_model": "deepseek/deepseek-v4-flash:free",
-    "langs": {},
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ]
+    "langs": {}
   },
   "financial-theory/instruments/asset-events/index.en.md": {
     "md5": "0c5328ab5b39c1b0b468c2f70bac92d7",
@@ -3821,11 +3701,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-09-03T14:13:42.471721+00:00"
   },
   "community/faq.en.md": {
@@ -3874,11 +3749,6 @@
         "final_structural_issues": 1
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-10-10T00:02:44.178061+00:00"
   },
   "financial-theory/portfolio-theory/weighted-average-cost.en.md": {
@@ -3925,11 +3795,6 @@
         "elapsed_s": 135.1
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-06-03T09:37:05.598952+00:00"
   },
   "community/contribute.en.md": {
@@ -3982,11 +3847,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-05-22T12:16:32.702652+00:00"
   },
   "community/credits-legal.en.md": {
@@ -4041,11 +3901,6 @@
         "stamped_by": "translate-stamp"
       }
     },
-    "pending_langs": [
-      "it",
-      "fr",
-      "es"
-    ],
     "last_translated": "2026-05-22T10:07:02.780597+00:00"
   },
   "financial-theory/instruments/transaction-types/index.en.md": {
