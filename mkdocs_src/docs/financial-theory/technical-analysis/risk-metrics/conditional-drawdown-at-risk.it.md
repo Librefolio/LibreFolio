@@ -36,12 +36,12 @@ La normalizzazione sopra è $\alpha T$: una quantità **fissa** determinata dal 
 
     | Osservazioni $T$ | $\alpha T$ al 95% | Numero intero? | Differenza relativa |
     |---|---|---|---|
-    | 740 | 37.00 | sì | **0.00000%** |
-    | 745 | 37.25 | no | $-0.03817\%$ |
-    | 750 | 37.50 | no | $-0.02528\%$ |
-    | 760 | 38.00 | sì | **0.00000%** |
-    | 800 | 40.00 | sì | **0.00000%** |
-    | 1000 | 50.00 | sì | **0.00000%** |
+    | 740 | 37,00 | sì | **0,00000%** |
+    | 745 | 37,25 | no | $-0.03817\%$ |
+    | 750 | 37,50 | no | $-0.02528\%$ |
+    | 760 | 38,00 | sì | **0,00000%** |
+    | 800 | 40,00 | sì | **0,00000%** |
+    | 1000 | 50,00 | sì | **0,00000%** |
 
     Gli scarti sono frazioni di un punto percentuale. È proprio questo che rende la scorciatoia duratura: una cifra sbagliata di tre centesimi di punto percentuale sembra un arrotondamento, non una formula diversa.
 

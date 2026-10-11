@@ -1,4 +1,4 @@
-# <img src="../../../../static/scheduled_investment.png" alt=""> Inversión programada
+# <img src="../../../../../static/scheduled_investment.png" alt=""> Inversión programada
 
 El proveedor Inversión programada calcula el valor de un activo a partir de su calendario de intereses en lugar
 de leer un precio de mercado. Úsalo para cuentas de ahorro, depósitos a plazo, préstamos P2P o de crowdfunding,

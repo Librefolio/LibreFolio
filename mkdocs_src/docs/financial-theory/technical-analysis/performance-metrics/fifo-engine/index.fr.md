@@ -1,4 +1,4 @@
-# 🧬 FIFO Engine — Lot Lifecycle & Matching Model
+# 🧬 Moteur FIFO — Cycle de vie des lots et modèle d'appariement
 
 ## 💡 Vue d'ensemble
 

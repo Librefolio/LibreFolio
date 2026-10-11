@@ -68,4 +68,4 @@ flowchart LR
     `-DI` au-dessus de `+DI` confirme une **tendance baissière**. L'ADX seul, sans vérifier quelle ligne DI
     est au-dessus, vous indique seulement qu'une tendance existe — jamais dans quelle direction elle pointe.
 
-:material-link: [Average Directional Index on Wikipedia](https://en.wikipedia.org/wiki/Average_directional_movement_index){ target="_blank" }
+:material-link: [Average Directional Index sur Wikipédia](https://en.wikipedia.org/wiki/Average_directional_movement_index){ target="_blank" }

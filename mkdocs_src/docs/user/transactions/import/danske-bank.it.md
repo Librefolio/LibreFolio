@@ -99,7 +99,7 @@ L'esportazione dei movimenti titoli va indietro solo di un anno, quindi importa 
 
 I file forniscono **un totale per operazione**, commissione inclusa, quindi il passaggio **Correzioni** chiede, per ogni acquisto e vendita:
 
-- **Separare il prezzo dalle spese?**, poi **Applica correzione** — per un titolo quotato in euro, LibreFolio suggerisce la commissione probabile; la cifra esatta è nella conferma dell'operazione in eBanking;
+- **Vuoi separare il prezzo dagli oneri?**, poi **Applica correzione** — per un titolo quotato in euro, LibreFolio suggerisce la commissione probabile; la cifra esatta è nella conferma dell'operazione in eBanking;
 - oppure **Mantieni come registrato**: l'operazione mantiene il suo importo totale (in entrambi i casi la tua liquidità è corretta).
 
 Ogni operazione richiede una scelta; **Mantieni le restanti N righe come lette** risolve il resto con un clic.

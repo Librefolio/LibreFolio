@@ -99,8 +99,8 @@ Queste cifre sono storia generale di mercato, non una misurazione di LibreFolio,
 
     | Perdita | Guadagno richiesto |
     |:----:|:-------------:|
-    | -10% | +11.1% |
-    | -25% | +33.3% |
+    | -10% | +11,1% |
+    | -25% | +33,3% |
     | -50% | +100% |
     | -75% | +300% |
 
