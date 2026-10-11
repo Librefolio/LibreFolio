@@ -463,7 +463,7 @@
     }
   },
   "user/brokers/index.en.md": {
-    "md5": "d8f70a33d4e092238bb8ebbee027adef",
+    "md5": "cd52fb5543735be6cbccb39280fbb902",
     "langs_done": [
       "es",
       "fr",
@@ -483,7 +483,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 237.3,
-        "stamped_at": "2026-10-10T11:10:52.389522+00:00",
+        "stamped_at": "2026-10-11T16:16:36.268293+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -498,7 +498,7 @@
         "elapsed_s": 222.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=69, translated=70 (Δ+1)\n  L109: src=1 trn=2\n    EN: The Brokers page, the **Add Broker** form and the broker page each have a short contextual guide: replay them from [Sett\n    TR: La page **Courtiers**, le formulaire **Ajouter un courtier** et la page du courtier disposent chacun d'un bref guide con\n\nSOURCE_OUTLINE (for reference):\n  # 🏦 Brokers\n    ## ➕ Create a broker\n    ## ✏️ Edit or delete a broker\n    ## 🗂️ Inside a broker\n    ## 📈 Overview tab\n    ## 🔍 Positions tab\n    ## 📑 In this section",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-10T11:10:52.389522+00:00",
+        "stamped_at": "2026-10-11T16:16:36.268293+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -511,7 +511,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.4,
-        "stamped_at": "2026-10-10T11:10:52.389522+00:00",
+        "stamped_at": "2026-10-11T16:16:36.268293+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -3993,7 +3993,7 @@
     }
   },
   "financial-theory/instruments/transaction-types/transfer.en.md": {
-    "md5": "ccb7f771d8de46d1d0cc582f40c77520",
+    "md5": "40f183ff5756a65e46c961d99f3ce696",
     "langs_done": [
       "es",
       "fr",
@@ -4013,7 +4013,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 76.5,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:42.302375+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4026,7 +4026,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.5,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:42.302375+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4039,13 +4039,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 97.0,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:42.302375+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "financial-theory/instruments/transaction-types/adjustment.en.md": {
-    "md5": "6fd611b6bf6d578861cc9b99d1754e54",
+    "md5": "120fa534deaffcd7d2900f36de8d9196",
     "langs_done": [
       "es",
       "fr",
@@ -4065,7 +4065,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.2,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4078,7 +4078,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 233.8,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4091,7 +4091,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 168.0,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -5294,7 +5294,7 @@
     }
   },
   "user/transactions/form.en.md": {
-    "md5": "7d33292dfe0a5a795d34e14cc24d929c",
+    "md5": "870a1968a59ef33983d13e8f274afa60",
     "langs_done": [
       "es",
       "fr",
@@ -5313,7 +5313,9 @@
         "critique": "<translation_critique>\n<improvements>\nNo structural issues were detected: headings, links, tables, admonition syntax, and the HTML carousel are preserved. The following fixes are required for mandatory glossary compliance and language accuracy.\n\n- **Mandatory glossary — bulk workspace**: The translation consistently renders “bulk workspace” as “area di lavoro multipla”. The glossary requires **workspace bulk**. Replace all occurrences:  \n  - “nell'[area di lavoro multipla](index.md#bulk-workspace)” → “nel [workspace bulk](index.md#bulk-workspace)”  \n  - “**Salva tutto** nell'area di lavoro” → “**Salva tutto** nel workspace bulk”  \n  - “alle altre righe dell'area di lavoro” → “alle altre righe del workspace bulk”  \n  - “l'area di lavoro multipla” in Related → “il workspace bulk”\n\n- **Mandatory glossary — weighted average cost**: “Costo Medio Ponderato” is not the required term. Replace with **prezzo medio di carico (PMC)**:  \n  “LibreFolio la calcola come [Costo Medio Ponderato](...)” → “LibreFolio la calcola come [prezzo medio di carico (PMC)](...)”.  \n  This also satisfies the WAC → PMC mapping.\n\n- **Mandatory glossary — tax**: Replace **Tassa** with **Imposta** in the single-transactions table. Also replace “una tassa” in the rules with “un'imposta”, and “Una tassa pagata” with “Un'imposta pagata”.\n\n- **Mandatory glossary — asset transfer**: Replace “Trasferimento di asset” / “Trasferimenti di asset” with **Trasferimento asset** / **Trasferimenti asset**. Occurrences:  \n  - admonition title: “per Rettifiche e Trasferimenti di asset” → “per Rettifiche e Trasferimenti asset”  \n  - admonition body: “di un **Trasferimento di asset**” → “di un **Trasferimento asset**”  \n  - table row: “**Trasferimento di asset**” → “**Trasferimento asset**”\n\n- **Mandatory glossary — cash transfer**: Replace **Trasferimento di liquidità** with **Giroconto**. The description may remain, but the type label must be “Giroconto”.\n\n- **Mandatory glossary — currency exchange**: Replace **Conversione di valuta** with **Cambio valuta**. Also adjust the following sentence, which currently says “una conversione due valute diverse”; it should refer to “cambio valuta”, e.g. “un cambio valuta richiede due valute diverse” or “un cambio valuta due valute diverse” if preserving the elliptical source style.\n\n- **Mandatory glossary — split (corporate action)**: Replace “un frazionamento” with **uno split** in the Adjustment description.\n\n- **Minor accuracy/naturalness**: “quando ci fai doppio clic in un elenco” is ambiguous and colloquial. Better: “quando fai doppio clic su di essa in un elenco”.\n\n- **Minor style**: “per collocare la riga” is unnatural; prefer “per inserire la riga”. Also “e una coppia separata di nuovo” could be clarified as “e una coppia può essere separata di nuovo”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 243.1
+        "elapsed_s": 243.1,
+        "stamped_at": "2026-10-11T16:16:38.279218+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:04:00.109915+00:00",
@@ -5324,7 +5326,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Carousel HTML labels and alt text (required):** The visible carousel labels in `data-title` and the `alt` attributes were left in English. Since `data-show-titles=\"true\"` and the alt text is user-facing, these must be translated using the glossary mappings. Keep `data-name`, `src`, `class`, `style`, and the image paths unchanged. Correct examples: `BUY` → `ACHAT` / `alt=\"Buy\"` → `alt=\"Achat\"`; `SELL` → `VENTE` / `alt=\"Sell\"` → `alt=\"Vente\"`; `DIVIDEND` → `DIVIDENDE`; `DEPOSIT` → `DÉPÔT`; `ADJUSTMENT` → `AJUSTEMENT`; `TRANSFER` → `TRANSFERT D'ACTIF` (or at minimum `TRANSFERT`); `FX CONVERSION` → `CONVERSION FX`; `CASH TRANSFER` → `VIREMENT`. For alt texts: `Asset Transfer` → `Transfert d'actif`, `FX Conversion` → `Conversion FX`, `Cash Transfer` → `Virement`.\n\n- **`tax` terminology (required):** The glossary mandates `tax → impôt`. Replace **Taxe** in the table with **Impôt**, and change `Une taxe payée` to `Un impôt payé`. Also in the bullet: `une taxe` should become `un impôt`.\n\n- **`asset transfer` terminology (required):** The glossary mandates `asset transfer → transfert d'actif`. Replace **Transfert d'actifs** in the table and `Transfert d'actifs` in the admonition with **Transfert d'actif** (or, when plural, **Transferts d'actif**). Do not use `d'actifs`.\n\n- **`cash transfer` terminology (required):** The glossary mandates `cash transfer → virement`. Replace **Transfert d'espèces** in the table with **Virement**. The carousel label `CASH TRANSFER` should likewise be **VIREMENT**, and `alt=\"Cash Transfer\"` should be `alt=\"Virement\"`.\n\n- **`currency exchange` terminology (required):** The glossary mandates `currency exchange → change de devises`. Replace **Échange de devises** in the table with **Change de devises**. Adjust the following sentence if needed: `un échange deux devises différentes` should refer to the same term, e.g. `un change de devises deux devises différentes` or `une opération de change de devises nécessite deux devises différentes`.\n\n- **`FX conversion` terminology (required):** The glossary mandates `FX conversion → conversion FX`. In the carousel, replace `FX CONVERSION` with **CONVERSION FX** and `alt=\"FX Conversion\"` with `alt=\"Conversion FX\"`.\n\n- **`weighted average cost` terminology (required):** The glossary mandates `weighted average cost → prix de revient unitaire (PRU)`. Replace `[Coût moyen pondéré]` with `[prix de revient unitaire (PRU)]` in the admonition. The sentence should read, for example: `LibreFolio le calcule comme un [prix de revient unitaire (PRU)]`.\n\n- **`split` terminology (required):** The glossary mandates `split (corporate action) → division`. In the Adjustment row, replace `un fractionnement` with `une division`.\n\n- **`exchange rate` terminology (minor):** The sentence `Si un taux de change est manquant` correctly uses `taux de change`. However, the link label **Synchroniser les taux FX** uses `taux FX`; if this is not a fixed UI label, prefer **Synchroniser les taux de change** to align with the glossary mapping `exchange rate → taux de change`.\n\n- **Natural French phrasing (minor):** `Ouvrez **Facultatif**` is understandable but slightly terse. A more natural phrasing would be `Ouvrez la section **Facultatif**`. Similarly, the Related heading `Lié` is a literal rendering; standard French documentation often uses **Voir aussi** or **Associé**.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 297.5
+        "elapsed_s": 297.5,
+        "stamped_at": "2026-10-11T16:16:38.279218+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:04:00.110063+00:00",
@@ -5335,7 +5339,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Glossary violation — weighted average cost / WAC:** The translation uses “Coste medio ponderado” and later “el promedio”. The glossary mandates `weighted average cost → precio medio de compra (PMC)` and `WAC → PMC`. Replace the link text `[Coste medio ponderado](...)` with `[precio medio de compra (PMC)](...)`, and change “En Auto, el promedio se toma…” to “En Auto, el PMC se toma…” or “En Auto, el precio medio de compra se toma…”.\n\n2. **Glossary violation — cost basis:** The admonition title says “Base de coste de las unidades entrantes”. The glossary mandates `cost basis → coste base`. Correct it to “**Coste base** de las unidades entrantes — para Ajustes y Transferencias de activos”.\n\n3. **Glossary violation — cash transfer:** The table and carousel use “Transferencia de efectivo” for **Cash Transfer**. The glossary mandates `cash transfer → transferencia de fondos`. Correct the type and alt text to **Transferencia de fondos**; e.g. `alt=\"Transferencia de fondos\"` and table label **Transferencia de fondos**.\n\n4. **Glossary violation — currency exchange:** The table type is “Cambio de divisa” (singular). The glossary mandates `currency exchange → cambio de divisas`. Correct it to **Cambio de divisas**. Also update the later sentence to use the full term: “un cambio de divisas necesita dos divisas diferentes” or at least “un cambio, dos divisas diferentes”.\n\n5. **Glossary violation — split:** In the Adjustment row, “un split” is left in English. The glossary mandates `split (corporate action) → desdoblamiento`. Correct it to “un desdoblamiento”.\n\n6. **Terminology consistency — interest:** In “en dividendos, intereses y ajustes”, the source has singular `interest`, matching the type label **Interest**. The glossary maps `interest → interés`. Use “en dividendos, interés y ajustes” to match the type name **Interés**.\n\n7. **Carousel title consistency:** The `data-title` attributes remain in English: `BUY`, `SELL`, `DIVIDEND`, `DEPOSIT`, `ADJUSTMENT`, `TRANSFER`, `FX CONVERSION`, `CASH TRANSFER`. If these titles are user-visible, localize them according to the glossary: `COMPRA`, `VENTA`, `DIVIDENDO`, `DEPÓSITO`, `AJUSTE`, `TRANSFERENCIA DE ACTIVOS` (or `TRANSFERENCIA`), `CONVERSIÓN FX`, `TRANSFERENCIA DE FONDOS`.\n\n8. **Naturalness / terminology — sending broker:** “el bróker emisor de una transferencia” is understandable, but `sending broker` is more naturally “el bróker de origen de una transferencia” or “el bróker remitente”. “Emisor” can suggest an issuing broker rather than the origin of a transfer.\n\n9. **Grammar — elliptical sentence:** “Una transferencia necesita dos brókers diferentes, un cambio dos divisas diferentes.” is missing a comma or verb. Correct to “Una transferencia necesita dos brókers diferentes; un cambio de divisas, dos divisas diferentes” or “un cambio de divisas necesita dos divisas diferentes”.\n\n10. **Minor naturalness — “later”:** “abre la transacción más tarde” can imply a later time of day. Since the source means afterwards/later on, consider “abre la transacción más adelante” or “vuelve a abrir la transacción después”.\n\n11. **Minor naturalness — linking into a pair:** “vincular dos filas simples en un par más tarde” is acceptable but stiff. Better: “vincular dos filas simples para formar un par más adelante”.\n\n12. **Minor accuracy — “writes it”:** “**Guardar todo** en el espacio de trabajo la escribe” is a literal rendering. In Spanish, better “la guarda” or “la registra”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 222.8
+        "elapsed_s": 222.8,
+        "stamped_at": "2026-10-11T16:16:38.279218+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
