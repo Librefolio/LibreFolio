@@ -332,6 +332,43 @@ class TestScenarioBInTransitShareFix:
             _assert_broker_contribution_invariant(states_by_date[d])
         _assert_invariant_every_day(result.daily_states)
 
+    def test_internal_transfer_moves_capital_on_arrival(self):
+        """Lot 41, case 2 (D1): the 1000 EUR sent by broker 10 on 2025-02-01 and credited
+        to broker 20 on 2025-02-05 is capital moving between brokers, not a loss and a
+        gain. On the arrival day one zero-sum per-broker capital flow moves
+        X = 1000 x s_10 from broker 10 to broker 20, so both P&L lines stay flat every
+        day; nothing moves during the transit and the aggregate is untouched
+        (C 5000, P 0). Today from 2025-02-05: P_10 -1000, P_20 +1000.
+        """
+        classification = _scenario_b_classify(broker_shares={10: Decimal("1"), 20: Decimal("1")})
+        result = _builder(
+            classified_txs=classification.classified,
+            in_transit_intervals=classification.in_transit_intervals,
+            external_cash_flows=classification.external_cash_flows,
+            price_map={100: [(date(2025, 1, 1), Decimal("100"), "EUR")]},
+            asset_currencies={100: "EUR"},
+            asset_types={100: "Stock"},
+            asset_classifications={100: None},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 2, 10),
+        ).build()
+        assert len(result.daily_states) == (date(2025, 2, 10) - date(2025, 1, 1)).days + 1
+
+        problems = []
+        for s in result.daily_states:
+            arrived = s.date >= date(2025, 2, 5)
+            expected = {
+                10: (Decimal("4000") if arrived else Decimal("5000"), Decimal("0")),
+                20: (Decimal("1000") if arrived else Decimal("0"), Decimal("0")),
+            }
+            actual = {bid: (bc.capital_contribution, bc.pnl_contribution) for bid, bc in s.broker_contributions.items()}
+            if actual != expected:
+                problems.append(f"{s.date}: (capital, pnl) by broker {actual}, expected {expected}")
+            if (s.cumulative_external_cash_flow, s.total_pnl) != (Decimal("5000"), Decimal("0")):
+                problems.append(f"{s.date}: aggregate (C, P) = ({s.cumulative_external_cash_flow}, {s.total_pnl}), expected (5000, 0)")
+        assert not problems, "\n".join(problems)
+        _assert_invariant_every_day(result.daily_states)
+
 
 # =============================================================================
 # In-kind ADJUSTMENT — broker-scoped capital routing (pre-frame + frame paths)
