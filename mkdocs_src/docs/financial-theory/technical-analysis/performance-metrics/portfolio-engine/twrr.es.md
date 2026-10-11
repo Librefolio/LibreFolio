@@ -1,7 +1,7 @@
 # ⏱️ TWRR (Tasa de Retorno Ponderada por el Tiempo)
 
 ## 💡 ¿Qué es?
-El TWRR (por sus siglas en inglés, *Time-Weighted Rate of Return*) mide el **rendimiento "puro"** de sus activos y su estrategia de inversión (El Mercado), ignorando por completo la temporalidad (timing) y el volumen de sus depósitos o retiros.
+El TWRR (por sus siglas en inglés, *Time-Weighted Rate of Return*) mide el **rendimiento "puro"** de tus activos y tu estrategia de inversión (El Mercado), ignorando por completo la temporalidad (timing) y el volumen de tus depósitos o retiros.
 
 Es la métrica estándar utilizada por los fondos de inversión y los ETF debido a que los gestores no tienen control sobre cuándo deciden los clientes depositar o retirar capital; por lo tanto, deben ser evaluados únicamente en función de las ganancias generadas por las inversiones subyacentes.
 
@@ -37,9 +37,9 @@ $$
 
     ### 1. El escenario
 
-    * **Día 0:** Inicia su cartera con un depósito inicial de **1.000 €**.
-    * **Día 10:** El mercado sube. Su cartera vale ahora **1.100 €**. Ese mismo día, realiza otro depósito de **500 €**.
-    * **Día 20:** El mercado baja. Su cartera termina con un valor final de **1.440 €**.
+    * **Día 0:** Inicias tu cartera con un depósito inicial de **1.000 €**.
+    * **Día 10:** El mercado sube. Tu cartera vale ahora **1.100 €**. Ese mismo día, realizas otro depósito de **500 €**.
+    * **Día 20:** El mercado baja. Tu cartera termina con un valor final de **1.440 €**.
     
     ### 2. Desglose de los subperíodos
     La línea de tiempo se divide en dos subperíodos debido al flujo de caja del Día 10:
@@ -77,7 +77,7 @@ $$
     \end{aligned}
     \]
     
-    Los activos que eligió subieron un 10% y luego bajaron un 10%, lo que da como resultado un retorno neto de la estrategia de **-1%**.
+    Los activos que elegiste subieron un 10% y luego bajaron un 10%, lo que da como resultado un retorno neto de la estrategia de **-1%**.
     
     ### 4. TWRR vs. ROI Simple
     Calculemos el **ROI Simple** para el mismo escenario para ver el contraste:
@@ -92,18 +92,18 @@ $$
     
     **¿Por qué son diferentes?**
 
-    * **El ROI Simple (-4%)** muestra el rendimiento real de su cartera. Se ve perjudicado porque depositó 500 € justo antes de una caída del -10%, lo que hizo que su pérdida fuera mayor en términos absolutos.
-    * **El TWRR (-1%)** aísla el rendimiento de la estrategia de los activos. Muestra lo que habría sucedido si simplemente hubiera invertido una suma única al principio y no la hubiera vuelto a tocar.
+    * **El ROI Simple (-4%)** muestra el rendimiento real de tu cartera. Se ve perjudicado porque depositaste 500 € justo antes de una caída del -10%, lo que hizo que tu pérdida fuera mayor en términos absolutos.
+    * **El TWRR (-1%)** aísla el rendimiento de la estrategia de los activos. Muestra lo que habría sucedido si simplemente hubieras invertido una suma única al principio y no la hubieras vuelto a tocar.
 
 ---
 
 ## 🎯 Cuándo utilizarlo
-* Para evaluar la calidad de los **activos y la estrategia que ha elegido**, independientemente de su ritmo de ahorro o de la temporalidad de sus depósitos.
-* Para comparar directamente el rendimiento de su cartera con índices de referencia externos (como el S&P 500 o un ETF de índice).
+* Para evaluar la calidad de los **activos y la estrategia que has elegido**, independientemente de tu ritmo de ahorro o de la temporalidad de tus depósitos.
+* Para comparar directamente el rendimiento de tu cartera con índices de referencia externos (como el S&P 500 o un ETF de índice).
 
 ---
 
 !!! tip "Analizar la Diferencia de Rendimiento"
 
-    Para comprender cómo sus flujos de efectivo personales hicieron que sus rendimientos reales se desviaran del rendimiento de la estrategia pura (TWRR), consulte la página del [Efecto Timing](timing-effect.md).
+    Para comprender cómo tus flujos de efectivo personales hicieron que tus rendimientos reales se desviaran del rendimiento de la estrategia pura (TWRR), consulta la página del [Efecto Timing](timing-effect.md).
 

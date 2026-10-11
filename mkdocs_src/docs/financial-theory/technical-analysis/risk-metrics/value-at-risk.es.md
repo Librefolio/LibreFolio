@@ -34,7 +34,7 @@ Esa es una elección deliberada frente a la alternativa más común, en la que s
 
 La ventaja se gana, no es gratuita, y el precio está en la misma página que el beneficio:
 
-!!! warning "No puede mostrarle una pérdida que nunca ha vivido"
+!!! warning "No puede mostrarte una pérdida que nunca has vivido"
 
     Un cuantil empírico está acotado por la muestra de la que se extrae. Un historial corto, o uno tranquilo, produce un Valor en Riesgo tranquilo — no porque la cartera sea segura, sino porque aún no se ha observado nada peor. La medida describe la ventana que se le dio, y una ventana que no contiene ninguna crisis no contiene pérdidas del tamaño de una crisis.
 
@@ -42,7 +42,7 @@ La ventaja se gana, no es gratuita, y el precio está en la misma página que el
 
 ## 💡 Interpretación {: #interpretation }
 
-Lea la cifra como *con qué frecuencia*, nunca como *cuánto en el peor caso*:
+Lee la cifra como *con qué frecuencia*, nunca como *cuánto en el peor caso*:
 
 - **Es un umbral, no una cota.** Las pérdidas más allá de él no están excluidas — por construcción, se espera que ocurran a la tasa indicada.
 - **No dice nada sobre la profundidad más allá.** Dos carteras pueden reportar el mismo VaR mientras una lo supera moderadamente y la otra catastróficamente. Esa diferencia es para lo que sirve el [VaR condicional](conditional-value-at-risk.md), y es la razón por la que esta sección comienza con esa cifra en lugar de esta.
@@ -127,7 +127,7 @@ Auméntelo y la tabla anterior se invierte. Con $h = 10$, una serie cotizada en 
 
 !!! warning "Silencioso más allá del umbral"
 
-    La medida se detiene en el límite de la cola. Si las pérdidas más allá son ligeramente peores o muchas veces peores es información que no aporta, y ningún nivel de confianza la recupera. Use el [VaR condicional](conditional-value-at-risk.md) para la profundidad.
+    La medida se detiene en el límite de la cola. Si las pérdidas más allá son ligeramente peores o muchas veces peores es información que no aporta, y ningún nivel de confianza la recupera. Usa el [VaR condicional](conditional-value-at-risk.md) para la profundidad.
 
 !!! warning "El nivel de confianza cambia la pregunta, no la precisión"
 

@@ -99,7 +99,7 @@ Eso es defendible — el efectivo es genuinamente una posición no concentrada, 
 
 ## 💡 Interpretación {: #interpretation }
 
-Lea las dos cifras como un par, en este orden:
+Lee las dos cifras como un par, en este orden:
 
 1. **Activos efectivos frente al número real de posiciones.** La dirección de la diferencia determina su significado: **por debajo** del recuento, las ponderaciones están desequilibradas y unas pocas posiciones sostienen la cartera sin importar cuántas filas tenga; **por encima**, el exceso es efectivo, y no dice nada sobre cómo se reparten las ponderaciones.
 2. **Ratio de diversificación.** Un valor cercano a 1 significa que las posiciones se mueven como una sola, y que el reparto aportó poco. Cuanto más por encima de 1, más se compensan unas posiciones con otras.
@@ -118,7 +118,7 @@ Ninguna de las dos cifras dice nada sobre **qué** posiciones impulsan el riesgo
 
 !!! warning "Tener en cuenta la correlación no significa mirar hacia adelante"
 
-    El ratio de diversificación depende de volatilidades y correlaciones estimadas sobre una ventana, y estas cambian — normalmente en la dirección menos conveniente, ya que las correlaciones tienden a subir en mercados de estrés. Un ratio cómodo medido durante un período tranquilo es una medición de ese período. Consulte [Calidad de datos](data-quality.md) para conocer la ventana sobre la que se calculó cada resultado.
+    El ratio de diversificación depende de volatilidades y correlaciones estimadas sobre una ventana, y estas cambian — normalmente en la dirección menos conveniente, ya que las correlaciones tienden a subir en mercados de estrés. Un ratio cómodo medido durante un período tranquilo es una medición de ese período. Consulta [Calidad de datos](data-quality.md) para conocer la ventana sobre la que se calculó cada resultado.
 
 !!! warning "La concentración no es automáticamente un defecto"
 
