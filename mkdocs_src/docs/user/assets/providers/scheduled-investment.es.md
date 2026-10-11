@@ -22,10 +22,10 @@ la configuración para todo el calendario:
 - **Valor inicial** y **Moneda**: el importe invertido, o el valor nominal — p. ej. 10.000 EUR.
 - **Tipo de interés**: **Simple** o **Compuesto** — consulta
   [Cómo se calcula el valor](#how-value-is-calculated).
-- **Recuento de días**: cómo se cuentan los días de un año — **ACT/365**, **ACT/360**, **ACT/ACT** o
+- **Cómputo Días**: cómo se cuentan los días de un año — **ACT/365**, **ACT/360**, **ACT/ACT** o
   **30/360**. Consulta [Convenciones de recuento de días](../../../financial-theory/fundamentals/day-count.md).
 
-Luego añade los periodos con **Añadir primer periodo**, y **Añadir periodo** para los siguientes:
+Luego añade los periodos con **Añadir Primer Período**, y **Añadir Período** para los siguientes:
 
 | Columna | Qué introducir |
 |---|---|
@@ -49,7 +49,7 @@ después de que termine el último periodo. Aparece una fila de demora con su pr
 
 ### 📅 Eventos del activo
 
-Añade eventos puntuales con **Añadir evento**: una **Fecha**, un **Tipo**, un **Valor** y **Notas** opcionales.
+Añade eventos puntuales con **Agregar Evento**: una **Fecha**, un **Tipo**, un **Valor** y **Notas** opcionales.
 Cada evento cuenta desde su fecha en adelante.
 
 | Tipo | Efecto sobre el valor |
@@ -67,7 +67,7 @@ $$
 
 donde $V_0$ es el **Valor inicial**, $I(d)$ el interés acumulado hasta ahora, y las sumas cubren los
 eventos hasta el día $d$. Cada día añade interés a la tasa anual del periodo $r$ durante $\Delta t$, la
-parte de un día del año según el **Recuento de días** (por ejemplo, $1/365$ con ACT/365):
+parte de un día del año según el **Cómputo Días** (por ejemplo, $1/365$ con ACT/365):
 
 - **Simple** — interés solo sobre el valor inicial: $\Delta I = V_0 \, r \, \Delta t$
 - **Compuesto** — interés también sobre el interés ya acumulado: $\Delta I = (V_0 + I) \, r \, \Delta t$

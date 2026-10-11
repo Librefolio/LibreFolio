@@ -8,18 +8,18 @@ La pestaña **Acerca de** muestra:
 
 - La **versión** actual de LibreFolio
 - La **licencia** (AGPL-3.0)
-- Enlaces al **repositorio de GitHub** y a la **documentación**
-- Una tarjeta **Apoya a LibreFolio** con el enlace del café y los botones para compartir — consulta [Apoya a LibreFolio](#support-librefolio) más abajo
+- Enlaces al **Repositorio GitHub** y a la **documentación**
+- Una tarjeta **Apoya LibreFolio** con el enlace del café y los botones para compartir — consulta [Apoya a LibreFolio](#support-librefolio) más abajo
 - Una cuadrícula de **información del sistema** (versión de Python, sistema operativo, modo de despliegue — Docker o local — navegador, viewport, tema e idioma) con un botón de **copiar para incidencia** que empaqueta estos detalles en un informe de error listo para pegar
-- Los **plugins instalados**: listas plegables de los proveedores de precios de activos, proveedores de tipos de cambio (FX), plugins de importación de brókers e indicadores de señales detectados al iniciar, seguidas de los **Diagnóstico de plugins**
+- Los **plugins instalados**: listas plegables de los proveedores de precios de activos, proveedores de tipos de cambio (FX), plugins de importación de brókeres e indicadores de señales detectados al iniciar, seguidas de los **Diagnóstico de plugins**
 
 ---
 
 ## ❤️ Apoya a LibreFolio {: #support-librefolio }
 
-La tarjeta **Apoya a LibreFolio** ofrece dos formas de ayudar al proyecto:
+La tarjeta **Apoya LibreFolio** ofrece dos formas de ayudar al proyecto:
 
-- **Buy Me a Coffee** abre la página de Buy Me a Coffee del proyecto en una nueva pestaña. El mismo enlace está en
+- **Invítame a un Café** abre la página de Buy Me a Coffee del proyecto en una nueva pestaña. El mismo enlace está en
   el encabezado de la página (el icono del café, con su etiqueta en pantallas más anchas) y en el
   menú **Ayuda y soporte**.
 - Bajo **O comparte**, un botón por red social: **X**, **Reddit**, **Facebook**,
@@ -63,11 +63,11 @@ proyecto, con el mismo enlace del café y los botones para compartir.
 
 ## 🧩 Diagnóstico de plugins
 
-El desplegable **Diagnóstico de plugins** informa del estado de los cuatro registros de plugins — **Asset**
-(proveedores de precios), **FX** (proveedores de tipos), **BRIM** (importadores de brókers) y **Signals**
+El desplegable **Diagnóstico de plugins** informa del estado de los cuatro registros de plugins — **Activos**
+(proveedores de precios), **FX** (proveedores de tipos), **BRIM** (importadores de brókeres) y **Señales**
 (indicadores) — y, debajo de ellos, del de las **Herramientas**.
 
-Cada registro o bien está marcado como **Todo cargado** (verde), o bien enumera los **plugins que no se pudieron importar** (rojo), con el nombre del archivo y el error subyacente. Si falta un proveedor, importador o indicador que esperabas en el resto de la aplicación, este panel te dice por qué: un plugin que no se carga al iniciar simplemente no se registra.
+Cada registro o bien está marcado como **Todos cargados** (verde), o bien enumera los **plugins que no se pudieron importar** (rojo), con el nombre del archivo y el error subyacente. Si falta un proveedor, importador o indicador que esperabas en el resto de la aplicación, este panel te dice por qué: un plugin que no se carga al iniciar simplemente no se registra.
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="Desplegable Diagnóstico de plugins en la pestaña Acerca de">
 </div>
@@ -84,10 +84,10 @@ cabecera de una herramienta abierta.
 
 Abre **Diagnósticos de herramientas** para cargar una instantánea del proceso del servidor que respondió:
 
-- el **Alcance de la instantánea** y el **identificador del proceso de la API**;
+- el **Ámbito de la instantánea** y el **Identificador del proceso API**;
 - la **Instantánea del grupo de ejecución**: si el grupo está disponible, los trabajos activos, en cola, pendientes,
   completados y fallidos, y los carriles degradados;
-- las **Herramientas cargadas en este proceso de la API**, cada una con su nombre, código y versión del contrato, y
+- las **Herramientas cargadas en este proceso API**, cada una con su nombre, código y versión del contrato, y
   los posibles **Fallos de descubrimiento**;
 - los **Límites efectivos de la plataforma**, en su propio desplegable.
 
@@ -142,7 +142,7 @@ Una comprobación iniciada aquí siempre te dice cómo ha ido:
   **Omitir esta versión** (la comprobación automática nunca vuelve a avisar de esa versión; una comprobación iniciada
   aquí todavía la muestra). Los administradores también reciben una comprobación automática al iniciar sesión — consulta
   [Notificaciones de actualización](../../admin/index.md#update-notifications) para el flujo del lado del administrador.
-- Si existe una versión más reciente y **no eres administrador**, el diálogo **Actualización disponible — contacta con un administrador** enumera los **administradores** de la instancia — con direcciones de correo electrónico cuando están disponibles, cada una con un enlace mailto y un botón de copiar — para que sepas a quién pedirle la actualización. Los no administradores nunca reciben una comprobación automática.
+- Si existe una versión más reciente y **no eres administrador**, el diálogo **Actualización disponible — contacta a un administrador** enumera los **administradores** de la instancia — con direcciones de correo electrónico cuando están disponibles, cada una con un enlace mailto y un botón de copiar — para que sepas a quién pedirle la actualización. Los no administradores nunca reciben una comprobación automática.
 
 ---
 

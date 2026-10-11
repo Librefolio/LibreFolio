@@ -12,7 +12,7 @@ Yahoo Finance couvre les actions, les ETF, les fonds, les indices et les cryptom
 
 ## ✏️ Configuration
 
-**Recherche en ligne** le configure pour vous. Manuellement, dans **Affectation du fournisseur**, choisissez **Yahoo Finance**, définissez **Type d'identifiant** sur **TICKER** et saisissez le ticker comme **Identifiant**. Il n'y a rien d'autre à remplir.
+**Rechercher en Ligne** le configure pour vous. Manuellement, dans **Attribution du Fournisseur**, choisissez **Yahoo Finance**, définissez **Type d'identifiant** sur **TICKER** et saisissez le ticker comme **Identifiant**. Il n'y a rien d'autre à remplir.
 
 | Actif | Ticker |
 |-------|--------|

@@ -12,7 +12,7 @@ Ogni tipo, con il suo effetto sul prezzo e la relativa pagina teorica:
 - 📈 **Interesse** (`INTEREST`) — interesse pagato da un'obbligazione, un prestito o un deposito; il valore scende dell'importo pagato → [📖](../../../financial-theory/instruments/asset-events/interest.md)
 - ✂️ **Split** (`SPLIT`) — le quote vengono frazionate; cambia il loro numero, non il valore totale → [📖](../../../financial-theory/instruments/asset-events/split.md)
 - 📊 **Rettifica prezzo** (`PRICE_ADJUSTMENT`) — una variazione di valore senza movimenti di cassa, in aumento o in diminuzione: una svalutazione, un haircut, un re-rating → [📖](../../../financial-theory/instruments/asset-events/price-adjustment.md)
-- 🏁 **Regolamento a scadenza** (`MATURITY_SETTLEMENT`) — l'asset raggiunge la scadenza e rimborsa il suo capitale; il suo valore smette di cambiare → [📖](../../../financial-theory/instruments/asset-events/maturity-settlement.md)
+- 🏁 **Liquidazione a Scadenza** (`MATURITY_SETTLEMENT`) — l'asset raggiunge la scadenza e rimborsa il suo capitale; il suo valore smette di cambiare → [📖](../../../financial-theory/instruments/asset-events/maturity-settlement.md)
 
 I codici tra parentesi sono quelli che si aspetta un [import CSV](data-editor.md#import-from-csv).
 
@@ -20,7 +20,7 @@ I codici tra parentesi sono quelli che si aspetta un [import CSV](data-editor.md
 
 ## 📈 Gli eventi sul grafico
 
-In modalità **Prices**, gli eventi compaiono come marcatori sul [grafico dei prezzi](chart.md), ognuno con la propria forma: un triangolo per un dividendo, un rombo per l'interesse, un quadrato per una rettifica prezzo, un quadrato arrotondato per la scadenza, una freccia per uno split. Passa il mouse su un marcatore per vederne data, tipo, importo e note.
+In modalità **Prezzi**, gli eventi compaiono come marcatori sul [grafico dei prezzi](chart.md), ognuno con la propria forma: un triangolo per un dividendo, un rombo per l'interesse, un quadrato per una rettifica prezzo, un quadrato arrotondato per la scadenza, una freccia per uno split. Passa il mouse su un marcatore per vederne data, tipo, importo e note.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-events" alt="Grafico dell'asset con un marcatore di evento evidenziato al passaggio del mouse">
@@ -33,7 +33,7 @@ In modalità **Prices**, gli eventi compaiono come marcatori sul [grafico dei pr
 
 ## ⚙️ Da dove provengono gli eventi
 
-- **Da un provider**, a ogni sincronizzazione: dividendi e split da [Yahoo Finance](../providers/yahoo-finance.md), dividendi da [justETF](../providers/justetf.md), e da [Investimento programmato](../providers/scheduled-investment.md) i pagamenti degli interessi e il regolamento finale a scadenza di **Generate Coupon**, più gli eventi elencati nel suo piano (**Aggiungi evento** nel modulo dell'asset).
+- **Da un provider**, a ogni sincronizzazione: dividendi e split da [Yahoo Finance](../providers/yahoo-finance.md), dividendi da [justETF](../providers/justetf.md), e da [Investimento programmato](../providers/scheduled-investment.md) i pagamenti degli interessi e il regolamento finale a scadenza di **Genera Cedola**, più gli eventi elencati nel suo piano (**Aggiungi evento** nel modulo dell'asset).
 - **Da te**: nella scheda **Eventi** dell'[Editor dati](data-editor.md), uno alla volta o da un file CSV, oppure con **Nuovo evento** nel campo **Evento collegato** di una transazione.
 
 Una sincronizzazione aggiorna gli eventi del provider e non tocca mai i tuoi. Un evento di un provider è di sola lettura nell'editor, e la sua cancellazione dura solo finché il provider non lo invia di nuovo: per modificare gli eventi di un investimento programmato, modifica il suo piano.

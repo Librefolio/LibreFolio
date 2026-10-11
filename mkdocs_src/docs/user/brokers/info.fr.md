@@ -1,6 +1,6 @@
 # ⚙️ Configuration et informations du courtier
 
-L'onglet **Info** d'un courtier affiche les détails du compte à gauche et les personnes qui peuvent y accéder à droite.
+L'onglet **Infos** d'un courtier affiche les détails du compte à gauche et les personnes qui peuvent y accéder à droite.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Vue des informations et du partage du courtier">
@@ -13,8 +13,8 @@ L'onglet **Info** d'un courtier affiche les détails du compte à gauche et les 
 La carte **Détails** liste :
 
 - **Compte actif** — **✓ Actif**, ou **✗ Clôturé** pour un compte que vous n'utilisez plus. Un courtier clôturé conserve son historique dans vos graphiques.
-- **Compte ouvert** — la date à laquelle vous avez ouvert le compte, si vous l'avez renseignée.
-- **Autoriser l'achat à effet de levier** et **Autoriser la vente à découvert** — les deux options de trading, expliquées ci-dessous.
+- **Date d'Ouverture du Compte** — la date à laquelle vous avez ouvert le compte, si vous l'avez renseignée.
+- **Autoriser l'Achat avec Levier** et **Autoriser la Vente à Découvert (Short)** — les deux options de trading, expliquées ci-dessous.
 - **Créé dans le système** — la date à laquelle le courtier a été ajouté à LibreFolio.
 
 Pour les modifier, cliquez sur **Modifier** dans la barre d'outils du courtier (Propriétaires et Éditeurs).
@@ -25,8 +25,8 @@ Pour les modifier, cliquez sur **Modifier** dans la barre d'outils du courtier (
 
 Les deux options sont désactivées pour un nouveau courtier, et LibreFolio vous protège alors contre les soldes impossibles :
 
-- avec **Autoriser l'achat à effet de levier** désactivée, une sauvegarde est refusée si elle devait faire passer la trésorerie d'une devise sous zéro ;
-- avec **Autoriser la vente à découvert** désactivée, une sauvegarde est refusée si elle devait faire passer la quantité d'un actif sous zéro.
+- avec **Autoriser l'Achat avec Levier** désactivée, une sauvegarde est refusée si elle devait faire passer la trésorerie d'une devise sous zéro ;
+- avec **Autoriser la Vente à Découvert (Short)** désactivée, une sauvegarde est refusée si elle devait faire passer la quantité d'un actif sous zéro.
 
 Activez une option pour un compte sur marge, ou pour enregistrer des ventes à découvert.
 
@@ -40,7 +40,7 @@ Activez une option pour un compte sur marge, ou pour enregistrer des ventes à d
 
     Ici, $a_t$ est le montant en espèces de chaque transaction $t$ dans la devise $c$, et $q_t$ la quantité de chaque transaction de l'actif $i$. Les entrées et sorties d'argent du même jour se compensent, mais un dépôt effectué plus tard ne corrige pas une journée déjà clôturée sous zéro.
 
-    Une sauvegarde refusée apparaît dans l'espace de travail sous *Cette configuration provoque des incohérences de données*, avec la devise ou l'actif, la date et des liens vers les lignes concernées de l'espace de travail.
+    Une sauvegarde refusée apparaît dans l'espace de travail sous *Cette configuration génère des données incohérentes*, avec la devise ou l'actif, la date et des liens vers les lignes concernées de l'espace de travail.
 
 ---
 
@@ -51,7 +51,7 @@ La colonne de droite contient le panneau **Partager le courtier** ; **Partager l
 Pour donner accès à quelqu'un :
 
 1. Cliquez sur **+** (**Ajouter un utilisateur**) sous le graphique de répartition de propriété et trouvez la personne **par son nom d'utilisateur**.
-2. Choisissez le **Rôle** — **Lecteur** par défaut, **Éditeur** ou **Propriétaire** — et, pour un Propriétaire, le **% de propriété**. Cliquez ensuite sur **Ajouter un utilisateur**.
+2. Choisissez le **Rôle** — **Lecteur** par défaut, **Éditeur** ou **Propriétaire** — et, pour un Propriétaire, le **% Propriété**. Cliquez ensuite sur **Ajouter un utilisateur**.
 3. Cliquez sur **Enregistrer la configuration** : rien ne change avant cela.
 
 Enregistrez avant de changer d'onglet : dans l'onglet Info, les modifications non enregistrées sont abandonnées sans confirmation.

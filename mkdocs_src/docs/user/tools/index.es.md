@@ -35,7 +35,7 @@ Abre **Herramientas** desde la barra lateral para ver el catálogo como una cuad
 Tanto el catálogo como una herramienta abierta muestran:
 
 - una acción **Documentación** que enlaza a la página de esa herramienta, con una etiqueta que aparece junto al icono en pantallas anchas y se reduce a un control solo con icono en pantallas estrechas;
-- una acción **Recargar** que recarga el catálogo (desde el hub) o la interfaz de la herramienta actual (desde una herramienta abierta), con el mismo comportamiento adaptativo de solo icono; recargar una herramienta abierta primero pide confirmación (**¿Recargar herramienta?**), porque sustituye la interfaz y descarta su borrador actual;
+- una acción **Recargar** que recarga el catálogo (desde el hub) o la interfaz de la herramienta actual (desde una herramienta abierta), con el mismo comportamiento adaptativo de solo icono; recargar una herramienta abierta primero pide confirmación (**¿Recargar la herramienta?**), porque sustituye la interfaz y descarta su borrador actual;
 - el par de compatibilidad de la herramienta, `Backend/API <contract_version> · UI <ui.version>`, sin ningún número de compilación o de implementación separado que se muestre junto a él.
 
 Cuando algunas entradas del catálogo o interfaces no están disponibles, el hub indica cuántas son y remite a **Configuración → Acerca de → Diagnóstico de plugins**.

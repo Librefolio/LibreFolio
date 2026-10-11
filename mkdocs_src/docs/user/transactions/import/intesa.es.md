@@ -25,7 +25,7 @@ LibreFolio lee dos exportaciones de Intesa Sanpaolo, en **CSV** o **Excel (XLSX)
     1. Importa la **instantánea de cartera**. Añade un **Depósito** por tu saldo de efectivo y un
        **Ajuste** por cada posición, a su coste fiscal, todos con fecha de la instantánea: la última
        fecha de cotización del informe.
-    2. Establece la fecha de **Apertura de Cuenta** del bróker a ese día. Los movimientos anteriores ya están contabilizados
+    2. Establece la **Fecha de Apertura de Cuenta** del bróker a ese día. Los movimientos anteriores ya están contabilizados
        en la instantánea: el asistente los marca como **Antes de la apertura** y los omite
        ([cómo funciona](how-to.md#opening-date)).
     3. A partir de entonces, importa la **lista de movimientos** para los nuevos cupones, dividendos, comisiones e impuestos.
@@ -69,7 +69,7 @@ y un **Depósito** por el saldo de efectivo cuando no es cero, todos en la fecha
 - **Filtra por Operazioni titoli.** Sin ese filtro, cada pago con tarjeta o transferencia del
   período aparece en las advertencias como una fila omitida.
 - **El mismo valor, dos nombres.** La lista de movimientos menciona un valor solo en texto libre, mientras que
-  la instantánea proporciona su ISIN. Vincula ambos al mismo activo en el panel **Resolve Assets** de
+  la instantánea proporciona su ISIN. Vincula ambos al mismo activo en el panel **Resolver Activos** de
   [Revisión](how-to.md#review).
 - **Importes tal como están escritos.** Los movimientos conservan la divisa de su columna **Valuta**, y la instantánea
   está en euros: nada se convierte.

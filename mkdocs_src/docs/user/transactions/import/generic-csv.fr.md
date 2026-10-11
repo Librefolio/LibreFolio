@@ -15,7 +15,7 @@ par leurs noms : il n'y a rien à mapper à la main.
 1. **Préparez le fichier.** Enregistrez-le au format `.csv` (depuis Excel, enregistrez une copie au format CSV). Sa première ligne nomme les
    colonnes, comme dans la [référence des colonnes](#column-reference) ; les autres colonnes sont ignorées.
 2. **Téléchargez-le** dans l'**[Assistant d'importation](how-to.md)** et affectez-le à son courtier.
-3. **Vérifiez le plugin** dans **Sélectionner les fichiers** : si **CSV générique** n'est pas déjà sélectionné, choisissez-le dans
+3. **Vérifiez le plugin** dans **Sélectionner** : si **CSV générique** n'est pas déjà sélectionné, choisissez-le dans
    la colonne **Plugin** du fichier.
 4. **Analyser et vérifier.** Chaque ligne devient une transaction.
 

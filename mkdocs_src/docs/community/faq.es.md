@@ -63,7 +63,7 @@ La recuperación por correo electrónico aún no está disponible: pídele a tu 
 
 Comprueba que:
 
-1. **Planificador habilitado** esté activado en la [Configuración global](../admin/settings.md#market-data-scheduler): ejecuta las actualizaciones automáticas
+1. **Planificador Activado** esté encendido en la [Configuración global](../admin/settings.md#market-data-scheduler): ejecuta las actualizaciones automáticas
 2. Tus activos tengan ISIN o símbolos válidos reconocidos por el **proveedor de datos** configurado (p. ej., [yfinance](https://pypi.org/project/yfinance/) para acciones y ETF)
 3. El servicio del proveedor esté disponible (revisa los registros del servidor en busca de errores)
 
@@ -71,7 +71,7 @@ Comprueba que:
 
 Comprueba que:
 
-1. **Planificador habilitado** esté activado en la [Configuración global](../admin/settings.md#market-data-scheduler)
+1. **Planificador Activado** esté encendido en la [Configuración global](../admin/settings.md#market-data-scheduler)
 2. El par FX tenga al menos un [proveedor de datos configurado](../user/fx/detail/provider.md)
 3. La API del proveedor sea accesible (ECB, FED, BOE, SNB)
 4. Hayas ejecutado una [sincronización](../user/fx/sync.md) para el rango de fechas deseado
@@ -80,7 +80,7 @@ Comprueba que:
 ### 🔐 No puedo iniciar sesión
 
 - Verifica tu nombre de usuario y contraseña
-- Con una contraseña incorrecta siempre obtienes el mismo mensaje *Usuario o contraseña no válidos*, exista o no la cuenta; con la contraseña correcta, si la cuenta está deshabilitada se te informa de ello: pide a tu administrador que la vuelva a habilitar
+- Con una contraseña incorrecta siempre obtienes el mismo mensaje *Nombre de usuario o contraseña no válidos*, exista o no la cuenta; con la contraseña correcta, si la cuenta está deshabilitada se te informa de ello: pide a tu administrador que la vuelva a habilitar
 - Borra las cookies del navegador e inténtalo de nuevo
 
 ### 📱 ¿Puedo usar LibreFolio como aplicación móvil?

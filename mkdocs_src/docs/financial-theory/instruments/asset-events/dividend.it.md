@@ -67,9 +67,9 @@ $$
 
 In LibreFolio, un evento `DIVIDEND` (e la corrispondente transazione di portafoglio) viene registrato con:
 
-- **Date**: La data ex-dividend
-- **Amount**: L'importo del pagamento in contanti per azione
-- **Currency**: La valuta del pagamento (es. USD, EUR)
+- **Data**: La data ex-dividend
+- **Importo**: L'importo del pagamento in contanti per azione
+- **Valuta**: La valuta del pagamento (es. USD, EUR)
 
 ### The Differenza Contabile: Dividendo vs Interesse
 È fondamentale distinguere tra una transazione di **Dividendo** e una di **Interesse** a livello di database:

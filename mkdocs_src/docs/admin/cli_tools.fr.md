@@ -60,7 +60,7 @@ pipenv run ./dev.py user create <username> <email> <password>
 pipenv run ./dev.py user list
 ```
 
-- 👑 Les comptes créés ici sont toujours des **administrateurs**. Pour un compte standard, laissez la personne s'inscrire avec **S’inscrire ici** sur la page de connexion (lorsque l'inscription est ouverte dans les [Paramètres globaux](settings.md)), ou utilisez `demote` sur le nouveau compte.
+- 👑 Les comptes créés ici sont toujours des **administrateurs**. Pour un compte standard, laissez la personne s'inscrire avec **Inscrivez-vous ici** sur la page de connexion (lorsque l'inscription est ouverte dans les [Paramètres globaux](settings.md)), ou utilisez `demote` sur le nouveau compte.
 - 🔒 Le mot de passe doit contenir au moins 8 caractères, avec une lettre majuscule, une lettre minuscule, un chiffre et un symbole.
 
 ### 🔑 Réinitialiser un mot de passe ou verrouiller un compte {: #reset-a-password-or-lock-an-account }

@@ -8,7 +8,7 @@ Hay cinco formas de fabricarlas. El resultado nombra la que usó, con su configu
 
 ## 🧭 Los cinco modos {: #the-five-modes }
 
-En la pestaña **Risk** del panel y de la página de un bróker, la simulación es la tercera herramienta de **What if…?**, después de la repetición histórica y del choque hipotético. Ofrece cinco modos, cada uno con su supuesto escrito bajo su nombre:
+En la pestaña **Riesgo** del panel y de la página de un bróker, la simulación es la tercera herramienta de **¿Qué pasa si…?**, después de la repetición histórica y del choque hipotético. Ofrece cinco modos, cada uno con su supuesto escrito bajo su nombre:
 
 | Modo | Cómo se crean las trayectorias | Supuesto añadido al historial |
 |---|---|---|
@@ -22,7 +22,7 @@ Los cuatro primeros extraen retornos reales de la ventana analizada y difieren s
 
 Junto al modo, el paso pide un **Horizonte (días)** — 365 por defecto, como máximo 3 650 — y un número de **Trayectorias de simulación** — 8 192 por defecto, de 256 a 100 000 — y, solo para la curva normal, una **Estrategia de muestreo**. Una **Semilla aleatoria** fija las extracciones — cuasi-Monte Carlo no necesita ninguna — de modo que las mismas entradas den siempre el mismo resultado. **Simular** la ejecuta. La respuesta da el **Retorno medio terminal**, la **Probabilidad de pérdida** — la proporción de trayectorias que terminan por debajo de donde empezaron — y el rango del percentil 5 al 95 en el último día, sobre un cono que dibuja los percentiles 5, 50 y 95 día a día.
 
-La pestaña **Risk & Scenarios** de la página de detalle de un activo sigue ejecutando solo la curva normal, con muestreo Monte Carlo o cuasi-Monte Carlo.
+La pestaña **Riesgo y escenarios** de la página de detalle de un activo sigue ejecutando solo la curva normal, con muestreo Monte Carlo o cuasi-Monte Carlo.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="El cuadro de simulación What if…? del panel: el aviso de beta y la advertencia del modelo, los cinco modos con Historial remezclado recomendado, horizonte, trayectorias y semilla, y tras Simular las cifras terminales, el cono y Lo que esta simulación asumió" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -74,7 +74,7 @@ $$
 
 Eso da 6 observaciones para un año de días bursátiles, y 9 para tres años: lo bastante larga para arrastrar el agrupamiento de volatilidad a lo largo de unos pocos días consecutivos, lo bastante corta para dejar muchos bloques distintos de los que extraer. El resultado informa la longitud que usó, convertida de vuelta a días de calendario, como *Longitud del bloque*.
 
-El análisis también acepta una longitud solicitada, `block_length_days`, de 1 a 5 000 días de calendario, convertida a observaciones a la misma frecuencia $f$. El paso **What if…?** no la ofrece y siempre usa la regla anterior, así que solo una petición enviada directamente al análisis puede fijarla — y solo tal petición puede encontrarse con el rechazo descrito en [Límites](#limits).
+El análisis también acepta una longitud solicitada, `block_length_days`, de 1 a 5 000 días de calendario, convertida a observaciones a la misma frecuencia $f$. El paso **¿Qué pasa si…?** no la ofrece y siempre usa la regla anterior, así que solo una petición enviada directamente al análisis puede fijarla — y solo tal petición puede encontrarse con el rechazo descrito en [Límites](#limits).
 
 ---
 
@@ -148,7 +148,7 @@ Lo que sí difiere es lo que cada uno necesita para ser reproducible, y lo que c
 | Número de trayectorias | sin requisito adicional | debe ser una **potencia de dos** |
 | Límite adicional | — | posiciones × días de horizonte como máximo 21 201 — véase [Límites](#limits) |
 
-Ambos son totalmente reproducibles: la misma semilla, o el mismo índice de inicio, regenera las mismas trayectorias. Ninguno acepta el parámetro del otro — una semilla y un índice de inicio de Sobol son mutuamente excluyentes. El panel no muestra ningún índice de inicio: siempre entra en la secuencia por 0. La pestaña **Risk & Scenarios** de la página del activo permite fijarlo.
+Ambos son totalmente reproducibles: la misma semilla, o el mismo índice de inicio, regenera las mismas trayectorias. Ninguno acepta el parámetro del otro — una semilla y un índice de inicio de Sobol son mutuamente excluyentes. El panel no muestra ningún índice de inicio: siempre entra en la secuencia por 0. La pestaña **Riesgo y escenarios** de la página del activo permite fijarlo.
 
 ---
 
@@ -190,7 +190,7 @@ El exponente crece con $H$ y solo se reduce con $\sqrt{n}$: duplicar el horizont
 
 ## 🚧 Límites {: #limits }
 
-Una simulación se rechaza, en lugar de ejecutarse mal, en los casos siguientes. El rechazo es en sí mismo el resultado — la simulación vuelve como no disponible — y el banner de **What if…?** dice por qué:
+Una simulación se rechaza, en lugar de ejecutarse mal, en los casos siguientes. El rechazo es en sí mismo el resultado — la simulación vuelve como no disponible — y el banner de **¿Qué pasa si…?** dice por qué:
 
 | Rechazo | Cuándo | En pantalla | Qué cambiar |
 |---|---|---|---|

@@ -2,7 +2,7 @@
 
 Una coppia indica a LibreFolio da dove proviene il tasso di cambio tra due valute: un provider di banca centrale, una catena di provider o tassi inseriti manualmente.
 
-Clicca su **Add Pair** nella [pagina FX](index.md). La stessa finestra si apre dalla dashboard, dalla pagina di un asset e dal passaggio FX dell'allocatore PAC.
+Clicca su **Aggiungi Coppia** nella [pagina FX](index.md). La stessa finestra si apre dalla dashboard, dalla pagina di un asset e dal passaggio FX dell'allocatore PAC.
 
 ---
 
@@ -10,15 +10,15 @@ Clicca su **Add Pair** nella [pagina FX](index.md). La stessa finestra si apre d
 
 ### 💱 Passaggio 1: scegli le due valute
 
-In **Add New Currency Pair**, scegli la **Base Currency** e la **Quote Currency**. Ogni elenco nasconde le valute già abbinate all'altra, quindi una coppia non può essere aggiunta due volte.
+In **Aggiungi Nuova Coppia FX**, scegli la **Valuta Base** e la **Valuta Quotata**. Ogni elenco nasconde le valute già abbinate all'altra, quindi una coppia non può essere aggiunta due volte.
 
 ### 🛤️ Passaggio 2: scegli un percorso
 
-Clicca su **Add conversion route** per vedere tutti i modi in cui i provider possono produrre questo tasso:
+Clicca su **Aggiungi percorso di conversione** per vedere tutti i modi in cui i provider possono produrre questo tasso:
 
-- 🔗 **Conversione diretta (1 passaggio)** — un provider pubblica la coppia;
+- 🔗 **Conversione diretta (1 passo)** — un provider pubblica la coppia;
 - 🔀 **Conversione a catena** — passa attraverso altre valute, raggruppate per numero di passaggi;
-- 🚫 **Non utilizzabile** — provider che non riescono a raggiungere questa coppia.
+- 🚫 **Non utilizzabili** — provider che non riescono a raggiungere questa coppia.
 
 Filtra con la casella di ricerca (provider, valuta o paese), poi clicca su un percorso per aggiungerlo.
 
@@ -33,7 +33,7 @@ Filtra con la casella di ricerca (provider, valuta o paese), poi clicca su un pe
 
 ??? note "🔀 Crea anche le coppie intermedie — quando scegli un percorso a catena"
 
-    Spunta **Also create intermediate pairs** per salvare ogni passaggio come coppia a sé stante. Puoi poi sincronizzare ogni passaggio separatamente e convertire anche nella valuta intermedia: una catena memorizza solo il tasso della propria coppia.
+    Spunta **Crea anche le coppie intermedie** per salvare ogni passaggio come coppia a sé stante. Puoi poi sincronizzare ogni passaggio separatamente e convertire anche nella valuta intermedia: una catena memorizza solo il tasso della propria coppia.
 
 ??? note "✏️ Nessun percorso — solo tassi manuali"
 
@@ -41,7 +41,7 @@ Filtra con la casella di ricerca (provider, valuta o paese), poi clicca su un pe
 
 ### 💾 Passaggio 3: salva
 
-Clicca su **Save Configuration**; la finestra si chiude subito.
+Clicca su **Salva Configurazione**; la finestra si chiude subito.
 
 - **Con un provider**, LibreFolio scarica l'**intera cronologia** della coppia fino a oggi, qualunque periodo mostri la pagina, comprese le coppie intermedie. Un messaggio riporta il risultato, in verde solo se tutto ha funzionato.
 - **Senza un provider**, un messaggio conferma che la coppia è stata creata.

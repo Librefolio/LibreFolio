@@ -9,7 +9,7 @@ La fenêtre **Paramètres du graphique** modifie l'apparence des graphiques et l
 - 🌐 **Pour tous les graphiques** — cliquez sur **Paramètres** (⚙️) dans la barre d'outils de la liste. La fenêtre s'intitule
   **Paramètres du graphique**. Son application remplace les paramètres personnalisés de chaque graphique de la liste, pages
   de détail incluses, et la fenêtre vous en avertit.
-- 🎯 **Pour un seul graphique** — cliquez sur le ⚙️ d'une carte. La fenêtre s'intitule **Paramètres du graphique (locaux)**, et
+- 🎯 **Pour un seul graphique** — cliquez sur le ⚙️ d'une carte. La fenêtre s'intitule **Paramètres du Graphique (Local)**, et
   ses paramètres ne s'appliquent qu'à ce graphique.
 
 !!! note "Les pages de détail utilisent des panneaux intégrés"
@@ -44,14 +44,14 @@ vous cliquez sur **Appliquer** ; **Annuler** demande confirmation avant d'abando
 
 | Paramètre | Ce qu'il fait |
 |---------|--------------|
-| **Couleurs de la ligne de base** | Vert au-dessus, rouge en dessous du début de la période |
-| **Remplissage de la zone** | Dégradé sous la ligne |
+| **Couleurs de Référence** | Vert au-dessus, rouge en dessous du début de la période |
+| **Remplissage** | Dégradé sous la ligne |
 | **Lignes de grille** | Grille horizontale en pointillés |
-| **Dégradé obsolète** | Estompe les jours sans nouvelle valeur, qui répètent une valeur antérieure |
+| **Dégradé Données Anciennes** | Estompe les jours sans nouvelle valeur, qui répètent une valeur antérieure |
 
 ### 📏 Plages d'axes
 
-**Échelle de l'axe Y** a une ligne pour chaque axe du graphique : l'axe principal (le taux, ou le pourcentage
+**Échelle Axe Y** a une ligne pour chaque axe du graphique : l'axe principal (le taux, ou le pourcentage
 en vue %) et une pour chaque échelle d'indicateur, telle que l'**axe RSI**. Les indicateurs qui partagent une
 échelle partagent une ligne.
 

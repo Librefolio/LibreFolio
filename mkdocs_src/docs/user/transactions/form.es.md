@@ -27,7 +27,7 @@ Algunas reglas hacen que las entradas sean rápidas:
 - **Los importes son totales** — escribe el total pagado o recibido, no el precio por acción (*Importe total (no por acción)*).
 - **Escribe números positivos** — el formulario añade el signo menos donde sale dinero o unidades: el pago de una compra, las unidades de una venta, un retiro, una comisión, un impuesto. Solo una cantidad de **Ajuste** lleva signo: positiva añade unidades, negativa las elimina.
 - **Comprobaciones sobre la marcha** — una vez rellenados los campos obligatorios, el formulario comprueba la entrada con tu libro mayor y las demás filas del espacio de trabajo, y enumera cualquier problema en la parte superior. **⚡ Validar ahora** comprueba al instante.
-- **¿Falta un bróker o un activo?** — **Crear nuevo** en la lista de brókers, o **Nuevo activo** en la lista de activos, lo crea sin salir del formulario.
+- **¿Falta un bróker o un activo?** — **Crear nuevo** en la lista de brókeres, o **Nuevo activo** en la lista de activos, lo crea sin salir del formulario.
 
 ??? info "💰 Coste base de las unidades entrantes — para Ajustes y Transferencias de activos"
 
@@ -36,7 +36,7 @@ Algunas reglas hacen que las entradas sean rápidas:
     - **Auto** — LibreFolio lo calcula como un [precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md); pulsa **⚡ Validar ahora** para verlo.
     - **Manual** — lo escribes tú.
 
-    En **Auto**, el PMC se toma en el bróker de origen de una transferencia, o en el bróker propio del ajuste. Si ese bróker no tiene otra transacción en el activo hasta la fecha en que entran las unidades, no hay nada que promediar, y el coste es 0 por diseño: si esas unidades sí costaron algo, vuelve a abrir la transacción después y escribe su coste en **Manual**. En **Manual**, el campo no puede quedar vacío: LibreFolio marca la fila y no guarda nada hasta que lo rellenes o cambies a **Auto**. Para unidades que no costaron nada, como un regalo, escribe 0. Si falta un tipo de cambio, el enlace **Sincronizar tipos de cambio** lo obtiene.
+    En **Auto**, el PMC se toma en el bróker de origen de una transferencia, o en el bróker propio del ajuste. Si ese bróker no tiene otra transacción en el activo hasta la fecha en que entran las unidades, no hay nada que promediar, y el coste es 0 por diseño: si esas unidades sí costaron algo, vuelve a abrir la transacción después y escribe su coste en **Manual**. En **Manual**, el campo no puede quedar vacío: LibreFolio marca la fila y no guarda nada hasta que lo rellenes o cambies a **Auto**. Escribe 0 solo para unidades que de verdad no costaron nada, como las nuevas acciones de un desdoblamiento; para un regalo, escribe el coste original del donante. Si falta un tipo de cambio, el enlace **Sincronizar tasas FX** lo obtiene.
 
 ---
 
@@ -60,15 +60,15 @@ La [Guía de teoría financiera](../../financial-theory/instruments/transaction-
 
 ### 🔗 Transacciones emparejadas {: #composite-transactions }
 
-Una operación emparejada se registra como dos transacciones vinculadas, que el formulario muestra como una, con un lado **Desde** y un lado **Hasta**. Cada lado tiene su propia fecha, y la flecha **Intercambiar lados** invierte la dirección.
+Una operación emparejada se registra como dos transacciones vinculadas, que el formulario muestra como una, con un lado **De** y un lado **A**. Cada lado tiene su propia fecha, y la flecha **Invertir lados** invierte la dirección.
 
 | Tipo | Qué registra | Teoría |
 |------|-----------------|--------|
-| ![](../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **Transferencia de activos** | Unidades de un activo movidas entre dos de tus brókers | [📖 Leer](../../financial-theory/instruments/transaction-types/transfer.md) |
-| ![](../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **Transferencia de fondos** | Efectivo movido entre dos de tus brókers, en una sola divisa | [📖 Leer](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
+| ![](../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **Transferencia de activos** | Unidades de un activo movidas entre dos de tus brókeres | [📖 Leer](../../financial-theory/instruments/transaction-types/transfer.md) |
+| ![](../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **Transferencia de fondos** | Efectivo movido entre dos de tus brókeres, en una sola divisa | [📖 Leer](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
 | ![](../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **Cambio de divisas** | Una divisa convertida en otra, dentro de un mismo bróker | [📖 Leer](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
 
-Una transferencia necesita dos brókers diferentes; un cambio de divisas, dos divisas diferentes. También se pueden vincular dos filas simples para formar un par más adelante, y dividir un par de nuevo — consulta [Vincular o desvincular un par](index.md#link-pairs).
+Una transferencia necesita dos brókeres diferentes; un cambio de divisas, dos divisas diferentes. También se pueden vincular dos filas simples para formar un par más adelante, y dividir un par de nuevo — consulta [Vincular o desvincular un par](index.md#link-pairs).
 
 ---
 

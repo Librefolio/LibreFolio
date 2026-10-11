@@ -257,7 +257,7 @@ Gli importatori senza etichetta sono ben testati e affidabili per i formati che 
 
 Ogni titolo nel tuo report deve essere associato a un asset della tua libreria. LibreFolio lo fa
 da solo quando esattamente un asset è adatto; per gli altri scegli l'asset — o crealo, compilato
-dal report — nel pannello **Risolvi gli asset** del passaggio [Revisione](how-to.md#review). Fino
+dal report — nel pannello **Risolvi Asset** del passaggio [Revisione](how-to.md#review). Fino
 ad allora la riga mostra **✗ Non risolto** e l'importazione attende.
 
 ---
@@ -267,8 +267,8 @@ ad allora la riga mostra **✗ Non risolto** e l'importazione attende.
 LibreFolio confronta ogni riga con le transazioni già salvate per lo stesso broker: stesso tipo,
 data, quantità e importo, ignorando piccole differenze di arrotondamento.
 
-- Se anche la descrizione corrisponde, la riga è un **⚠ Probabile duplicato** e arriva non spuntata.
-- Se la descrizione differisce, è un **ℹ Possibile duplicato** e rimane spuntata per un tuo controllo.
+- Se anche la descrizione corrisponde, la riga è un **⚠ Probabile dup** e arriva non spuntata.
+- Se la descrizione differisce, è un **ℹ Possibile dup** e rimane spuntata per un tuo controllo.
 
 Le copie tra i file che importi insieme sono gestite allo stesso modo, e il passaggio [Duplicati](how-to.md#only-when-needed) ti permette di scegliere quale copia mantenere. Puoi sempre spuntare o togliere la spunta a una riga da solo.
 

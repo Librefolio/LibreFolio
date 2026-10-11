@@ -31,12 +31,12 @@ Las tres tarjetas en la parte superior del panel responden tres preguntas de un 
 - **Variación no realizada** — cómo se movió la ganancia o pérdida no realizada de tus posiciones durante el periodo, incluido el efecto del tipo de cambio → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Ventas** — la ganancia o pérdida realizada de las ventas del periodo, frente al coste medio de las unidades vendidas → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendos e intereses** — dividendos, cupones e intereses P2P recibidos → [Dividendo e interés](../../financial-theory/instruments/transaction-types/dividend-interest.md)
-- **Comisiones e impuestos** — comisiones e impuestos registrados como transacciones; pasa el cursor sobre la fila para ver el desglose → [Comisión e impuesto](../../financial-theory/instruments/transaction-types/fee.md)
+- **Costes e impuestos** — comisiones e impuestos registrados como transacciones; pasa el cursor sobre la fila para ver el desglose → [Comisión e impuesto](../../financial-theory/instruments/transaction-types/fee.md)
 
 **Cómo interpretarlo**
 
 - **Verde es ganancia, rojo es pérdida** — y un depósito o un retiro no es ninguna de las dos.
-- **Las cuatro filas explican el número grande.** Lo que no pueden ver, como activos que se mueven entre dos de tus brókeres el primer o el último día, va al **Otros / residual de conciliación** de la [vista Rendimiento](positions.md#performance).
+- **Las cuatro filas explican el número grande.** Lo que no pueden ver, como activos que se mueven entre dos de tus brókeres el primer o el último día, va al **Otro / residuo de conciliación** de la [vista Rendimiento](positions.md#performance).
 - **La barra más larga** es la fila que más movió tu resultado.
 
 ??? info "📏 La línea bajo el número grande — cómo se calcula"
@@ -76,7 +76,7 @@ Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada 
 
 ## 📈 Tarjeta 2 — Rentabilidades {: #card-2-returns }
 
-¿Qué tan bien trabajó tu dinero, independientemente del tamaño de tu cartera? La tarjeta **Rentabilidades** responde en porcentajes, y su número grande te dice si tu timing ayudó.
+¿Qué tan bien trabajó tu dinero, independientemente del tamaño de tu cartera? La tarjeta **Rendimientos** responde en porcentajes, y su número grande te dice si tu timing ayudó.
 
 <div class="kpi-card-crop-container card-returns">
     <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="Tarjeta Rendimientos">
@@ -92,7 +92,7 @@ Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada 
 
 **Cómo interpretarlo**
 
-- **Timing favorable** (verde): tendiste a depositar antes de que subieran los precios. **Timing desfavorable** (rojo): tendiste a depositar en los picos. Cerca de cero se lee **Timing neutral**, y cuanto más fuerte es el color, mayor es el efecto.
+- **Timing favorable** (verde): tendiste a depositar antes de que subieran los precios. **Timing desfavorable** (rojo): tendiste a depositar en los picos. Cerca de cero se lee **Timing neutro**, y cuanto más fuerte es el color, mayor es el efecto.
 - **El TWRR juzga la estrategia, el MWRR tu resultado personal** — como para un gestor de fondos y un inversor.
 - **Las cuatro filas cubren todo el periodo**; el porcentaje pequeño cubre solo hoy.
 - **`—` significa sin valor**: una rentabilidad que LibreFolio no puede calcular para el periodo muestra `—` en lugar de un número. El efecto timing necesita tanto el TWRR como el MWRR: cuando falta uno, muestra un `—` gris, sin etiqueta de timing.
@@ -124,7 +124,7 @@ Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada 
 - **Valor de mercado** — cuánto valen los activos que posees a precios de mercado → [NAV / Patrimonio neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
 - **Coste de compra** — cuánto te costaron las posiciones que aún mantienes, cada compra al tipo de cambio de su propia fecha → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Efectivo** — el efectivo en tus brókeres; pasa el cursor para desglosar el capital que depositaste y las rentabilidades que obtuviste → [Grupos de efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
-- **Capital depositado (Periodo)** — depósitos menos retiros en el periodo, verde a la derecha y rojo a la izquierda; pasa el cursor para ver los totales → [Capital depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **Capital depositado en el período** — depósitos menos retiros en el periodo, verde a la derecha y rojo a la izquierda; pasa el cursor para ver los totales → [Capital depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
 $$
 \text{Total P}\&\text{L} = \text{Net Worth} - \text{Capital put in since the start}

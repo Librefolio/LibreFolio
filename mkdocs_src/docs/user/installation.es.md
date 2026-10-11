@@ -219,7 +219,7 @@ Para saber qué guardar y cómo, consulta la [sección de Copia de seguridad del
 
 ## 🔄 Actualizar LibreFolio {#updating}
 
-Las migraciones de la base de datos se ejecutan automáticamente cuando se inicia el contenedor y están diseñadas para conservar los datos existentes, mientras que algunas funciones, como la simulación de riesgo **What if…?**, están [aún en beta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) y pueden cambiar entre versiones. Haz una [copia de seguridad](#data-backup) antes de actualizar: es tu forma de volver atrás si algo sale mal.
+Las migraciones de la base de datos se ejecutan automáticamente cuando se inicia el contenedor y están diseñadas para conservar los datos existentes, mientras que algunas funciones, como la simulación de riesgo **¿Qué pasa si…?**, están [aún en beta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) y pueden cambiar entre versiones. Haz una [copia de seguridad](#data-backup) antes de actualizar: es tu forma de volver atrás si algo sale mal.
 
 - Con la etiqueta `latest` siempre obtienes la versión más reciente, junto con cualquier cambio que traiga.
 - Para actualizar solo cuando tú decidas, fija una versión en lugar de `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (variante completa) o `ghcr.io/librefolio/librefolio:1.1.0-light` (variante ligera). Consulta [Variantes de imagen](#image-variants-full-and-light).

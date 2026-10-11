@@ -24,18 +24,18 @@ Combien pourriez-vous perdre, et à quel point cela a-t-il déjà été grave ? 
 
 - **Un mauvais jour**, **Un mauvais mois** — votre perte moyenne sur les 5 % de jours les plus mauvais, ou sur des périodes d'un mois → [VaR conditionnelle](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Seuil de VaR** — sur la *Distribution des rendements quotidiens* : la perte quotidienne que seuls les 5 % de jours les plus mauvais ont dépassée → [Valeur à risque](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
-- **Pire jour réellement observé** — le seul pire jour de la période → [Pire réalisation](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
+- **La pire journée réellement vue** — le seul pire jour de la période → [Pire réalisation](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
 - **La pire chute** — la baisse la plus profonde d'un sommet à un creux ultérieur → [Perte maximale](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Repli à risque** — à quelle distance sous son pic le portefeuille se trouvait, en excluant ses 5 % de jours les plus mauvais → [Repli à risque](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Moyenne au-delà de ce seuil** — à quelle distance sous son pic il se trouvait, en moyenne, lors de ces pires jours → [Repli à risque conditionnel](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
-- **Actuellement en baisse depuis le pic** — à quelle distance sous son dernier sommet le portefeuille se situe aujourd'hui → [Repli actuel](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **indice d'Ulcer** — sous *Temps passé sous le pic* : la profondeur et la durée des chutes ; plus il est bas, plus c'est calme → [indice d'Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
+- **Actuellement sous le sommet** — à quelle distance sous son dernier sommet le portefeuille se situe aujourd'hui → [Repli actuel](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **indice d'Ulcer** — sous *Temps passé sous le sommet* : la profondeur et la durée des chutes ; plus il est bas, plus c'est calme → [indice d'Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Comment le lire**
 
 - **Des horizons différents** : les cartes vont d'un jour à un mois, puis à la pire chute, ne les additionnez donc jamais.
 - **Le montant** sous chaque pourcentage correspond à cette perte appliquée à votre valeur nette.
-- **Actuellement en baisse depuis le pic** n'apparaît que lorsque votre portefeuille est sous son dernier sommet.
+- **Actuellement sous le sommet** n'apparaît que lorsque votre portefeuille est sous son dernier sommet.
 - **Les icônes ? et ⓘ** à côté d'un chiffre ouvrent sa page théorique.
 
 ---
@@ -50,17 +50,17 @@ Posséder de nombreuses positions n'est pas la même chose qu'être diversifié.
 
 **Outils présentés**
 
-- **Combien de paris indépendants détiens-je réellement ?** — à quel point votre argent est réparti uniformément → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **Le fait de répartir l'argent a-t-il apporté quelque chose ?** — à quel point vos positions s'amortissent mutuellement → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **Quelle part de mon portefeuille n'est pas mesurée ici ?** — les liquidités, plus les positions sans prix exploitables → [Qualité des données](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
+- **Combien de paris indépendants ai-je réellement ?** — à quel point votre argent est réparti uniformément → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **Répartir l'argent a-t-il servi à quelque chose ?** — à quel point vos positions s'amortissent mutuellement → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **Quelle part de moi n'est pas mesurée ici ?** — les liquidités, plus les positions sans prix exploitables → [Qualité des données](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
 - **Poids** et **contribution au risque** — la part de chaque position dans votre argent, et dans votre risque → [Contribution au risque](../../financial-theory/technical-analysis/risk-metrics/risk-contribution.md)
-- **Lesquelles d'entre elles sont le même pari ?** — à quel point chaque paire de positions évolue ensemble → [Corrélation](../../financial-theory/technical-analysis/risk-metrics/correlation.md)
+- **Lesquelles de celles-ci sont le même pari ?** — à quel point chaque paire de positions évolue ensemble → [Corrélation](../../financial-theory/technical-analysis/risk-metrics/correlation.md)
 
 **Comment le lire**
 
 - **Une longue barre rouge** à droite signale une position qui porte plus de votre risque que ne le suggère son poids ; lorsqu'une se distingue, la phrase sous le titre la nomme.
 - **Dans la matrice**, les paires bleues évoluent ensemble, donc détenir les deux apporte peu ; les paires rouges évoluent en sens opposé et se compensent.
-- **Survolez un carré** pour obtenir sa valeur en mots. Les listes *Les plus similaires* et *Celles qui se compensent* font ressortir les paires qui méritent un coup d'œil.
+- **Survolez un carré** pour obtenir sa valeur en mots. Les listes *Les plus semblables* et *Ceux qui se compensent* font ressortir les paires qui méritent un coup d'œil.
 
 ---
 
@@ -75,7 +75,7 @@ Le risque ne vaut la peine d'être pris que s'il est rémunéré. Ce bloc confro
 **Outils présentés**
 
 - **Volatilité** — l'ampleur des variations des rendements sur une année → [Volatilité](../../financial-theory/technical-analysis/risk-metrics/volatility.md)
-- **Rendement ann.** — le rendement moyen, ramené à une année → [Annualisation observée](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
+- **Rend. annuel** — le rendement moyen, ramené à une année → [Annualisation observée](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
 - **Sortino** — le rendement obtenu pour chaque unité de variation à la baisse → [Ratio de Sortino](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md)
 - **Sharpe** — le rendement obtenu pour chaque unité de variation, à la hausse comme à la baisse → [Ratio de Sharpe](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
 - **Bêta** — l'ampleur du mouvement d'une position lorsque l'indice de référence bouge → [Bêta et rendement actif](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md)
@@ -109,7 +109,7 @@ Quel effet une crise passée, ou un choc que vous imaginez, aurait-il sur le por
 
 - **Ajoutez un outil** avec les boutons **Ajouter :** ; son **×** le ferme et supprime son résultat. Les outils que vous laissez ouverts réapparaîtront la prochaine fois, dans ce navigateur.
 - **Rejeu historique** : choisissez une crise dans **Préréglage**, ou votre propre **Période**, puis **Lancer le rejeu**. Les positions sans prix pour cette période sont exclues, et un bouton peut proposer une période durant laquelle elles ont toutes des prix.
-- **Choc hypothétique** : cliquez sur un scénario, comme *Krach boursier*, pour le lancer ; **Afficher le choc par catégorie d'exposition** vous permet de modifier ses hypothèses.
+- **Choc hypothétique** : cliquez sur un scénario, comme *Krach boursier*, pour le lancer ; **Afficher le choc par compartiment** vous permet de modifier ses hypothèses.
 - **Simulation** : choisissez un mode — *Historique remélangé* est recommandé — et un horizon, puis **Simuler**. Lisez le cône comme un éventail de possibilités, pas comme une prévision.
 
 !!! note "La simulation est encore en bêta"

@@ -31,7 +31,7 @@ Le sélecteur indique à LibreFolio quel élément de la page contient le prix.
 
 ### 2️⃣ Remplir les paramètres du fournisseur
 
-Dans **Affectation du fournisseur**, choisissez **CSS Web Scraper** et collez l'adresse de la page dans **URL**. Les
+Dans **Attribution du Fournisseur**, choisissez **CSS Web Scraper** et collez l'adresse de la page dans **URL**. Les
 paramètres apparaissent sous leurs noms techniques :
 
 | Paramètre | Requis | Valeur à saisir |

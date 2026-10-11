@@ -94,7 +94,7 @@ La exportación enumera movimientos, no el efectivo que ya tenías, así que el 
 
 - **Algunas filas piden tu ayuda** en el paso **Correcciones** del asistente ([cómo funciona](how-to.md#only-when-needed)):
     - operaciones sin cantidad, y reembolsos de fondos: elige el tipo, el valor y la cantidad;
-    - operaciones cuyo importe puede incluir intereses devengados y comisiones: añádelos en **¿Separar el precio de los cargos?**, a partir de tu nota de contrato (*nota informativa*);
+    - operaciones cuyo importe puede incluir intereses devengados y comisiones: añádelos en **¿Separar el precio de los gastos?**, a partir de tu nota de contrato (*nota informativa*);
     - cargos que no indican ningún valor: asígnalos, o mantenlos en la cuenta.
 - **Los valores se emparejan por nombre.** La exportación de valores no da ISIN: empareja cada valor en el panel **Resolver activos** de [Revisión](how-to.md#review).
 - **Importes tal como están escritos**, en la divisa de cada fila, sin conversión. Las fechas son las fechas de la operación.

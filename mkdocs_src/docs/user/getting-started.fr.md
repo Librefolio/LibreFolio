@@ -8,7 +8,7 @@ premier relevé de courtier — et votre tableau de bord se remplit tout seul.
 ## 📝 1. Créer votre compte
 
 Ouvrez votre adresse LibreFolio (par exemple `http://localhost:6040`) : la page de connexion s'affiche. Cliquez sur
-**S'inscrire ici** pour créer un compte.
+**Inscrivez-vous ici** pour créer un compte.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Formulaire d'inscription" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -17,7 +17,7 @@ Ouvrez votre adresse LibreFolio (par exemple `http://localhost:6040`) : la page 
 Renseignez vos informations :
 
 - 👤 **Nom d'utilisateur** — unique : c'est avec lui que vous vous connectez.
-- 📧 **E-mail** — une adresse valide ; elle sert aussi à la connexion.
+- 📧 **Email** — une adresse valide ; elle sert aussi à la connexion.
 - 🔑 **Mot de passe** et **Confirmer le mot de passe** — l'indicateur de robustesse vous indique quand le mot de passe est
   suffisamment fort.
 
@@ -56,7 +56,7 @@ La première fois que vous vous connectez, LibreFolio ouvre une page de **Bienve
     <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La page de bienvenue au premier lancement : le bloc photo de profil avec l'avatar en initiales et Choisir une photo, la Langue et la Devise par défaut pré-remplies, la note indiquant que votre préférence de thème reste inchangée, ainsi que Ignorer définitivement la configuration et Continuer" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Une courte animation de bienvenue suit, puis la **Visite rapide** démarre d'elle-même — cliquez sur **Démarrer la visite**
+Une courte animation de bienvenue suit, puis la **Visite rapide** démarre d'elle-même — cliquez sur **Commencer la visite**
 pour commencer immédiatement, ou sur **✕** pour l'ignorer. La visite montre où se trouvent les choses : le bouton de menu, puis
 **Tableau de bord**, **Transactions**, **Courtiers**, **FX**, **Actifs**, **Outils** et **Paramètres**. Elle
 ne fait qu'indiquer : elle n'ouvre jamais de formulaire et ne crée aucune donnée.
@@ -68,13 +68,13 @@ ne fait qu'indiquer : elle n'ouvre jamais de formulaire et ne crée aucune donn�
 ??? note "👋 Vous utilisez déjà LibreFolio ? — les comptes antérieurs aux guides"
 
     Si votre compte existait avant l'ajout des guides, LibreFolio ne vous les propose pas :
-    la configuration d'accueil est considérée comme **Terminée**, la visite et tous les guides comme **Ignorés**. Vous pouvez toutefois
+    la configuration d'accueil a le statut **Terminé**, la visite et tous les guides le statut **Ignoré**. Vous pouvez toutefois
     les relancer depuis
     **[Paramètres → Préférences → Prise en main et guides](settings/preferences.md#onboarding-and-guides)**.
 
 ??? warning "⚠️ La configuration ne se charge pas — que faire"
 
-    Si vos paramètres ou votre progression dans les guides ne peuvent pas être chargés, une page **Nous n'avons pas pu charger la prise en main**
+    Si vos paramètres ou votre progression dans les guides ne peuvent pas être chargés, une page **Impossible de charger la prise en main**
     propose **Réessayer** et **Se déconnecter**. Si votre configuration d'accueil est déjà effectuée, vous verrez peut-être le
     tableau de bord à la place, avec une bannière **Réessayer** en haut.
 
@@ -136,7 +136,7 @@ ni des actifs au préalable : l'Assistant d'importation les crée au fur et à m
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Étape de vérification de l'assistant : résolution des actifs" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>
 
-5. **Enregistrer depuis l'éditeur groupé** : **Importer N transactions** déplace les lignes cochées dans l'éditeur groupé — rien n'est encore enregistré. Jetez-y un dernier coup d'œil, puis cliquez sur **Tout enregistrer**.
+5. **Enregistrer depuis l'éditeur groupé** : **Importer N transactions** déplace les lignes cochées dans l'éditeur groupé — rien n'est encore enregistré. Jetez-y un dernier coup d'œil, puis cliquez sur **Enregistrer Tout**.
 
 ??? note "🧩 Étapes supplémentaires — uniquement si vos fichiers en ont besoin"
 

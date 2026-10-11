@@ -80,7 +80,7 @@ La dernière colonne est celle à lire en premier, car deux positions peuvent af
 
 | Règle | Quand une ligne la porte |
 |---|---|
-| **Direct** | La catégorie propre à la position est l'une de celles que vous avez configurées — le cas ordinaire en classe d'actifs et en secteur |
+| **Directe** | La catégorie propre à la position est l'une de celles que vous avez configurées — le cas ordinaire en classe d'actifs et en secteur |
 | **Pays** | Zone géographique, première étape : vous avez configuré **ce pays** lui-même |
 | **Groupe géographique** | Zone géographique, deuxième étape : pas le pays, mais un **groupe qui le contient**, tel qu'une catégorie régionale |
 | **Other** | Zone géographique, dernière étape — et l'équivalent sectoriel : rien de ce qui précède ne correspondait, la catégorie résiduelle obligatoire s'est donc appliquée |

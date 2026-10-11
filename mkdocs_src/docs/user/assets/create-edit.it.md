@@ -45,7 +45,7 @@ provider, la cronologia dei prezzi inizia a essere scaricata subito.
 
 Il campo **Tipo** apre un menu con ricerca tra i
 [tipi di asset](../../financial-theory/instruments/asset-types/index.md). **ETF** e
-**Crowdfunding** sono famiglie: aprine una per vedere prima il membro generico (**ETF**, **Crowdfund**),
+**Crowdfunding** sono famiglie: aprine una per vedere prima il membro generico (**ETF**, **Crowdfunding**),
 poi quelli specifici come **ETF azionario** o **Crowdfunding immobiliare**. Digita qualche lettera per
 cercare in entrambi i livelli, per nome o per codice (ad esempio `etf_bond`).
 
@@ -62,7 +62,7 @@ affinalo, ad esempio a **ETF azionario**: il suo badge e la sua icona mostrano a
 Scegliere un risultato di **Cerca online** collega automaticamente il suo provider. Per impostarne uno
 manualmente, espandi **Assegnazione provider** (deseleziona prima **Nessun provider** se è selezionato):
 
-1. Scegli il **Provider**, poi inserisci l'**Identificatore**, il suo **Tipo di identificatore** e tutte le impostazioni
+1. Scegli il **Provider**, poi inserisci l'**Identificativo**, il suo **Tipo Identificativo** e tutte le impostazioni
    richieste dal provider.
 2. Fai clic su **Testa configurazione**: LibreFolio recupera un **Prezzo attuale** e qualche giorno di
    **Cronologia**. ⚠️ significa che il provider non offre questi dati o non ne ha al momento (ad esempio, CSS Scraper
@@ -76,7 +76,7 @@ Un asset ha al massimo un provider; seleziona **Nessun provider** se inserirai t
 
 LibreFolio confronta i dettagli del provider con il tuo modulo dopo che scegli un risultato di **Cerca online**
 e quando fai clic su **Chiedi al provider**: in cima a **Dettagli asset** per confrontare l'intero asset, accanto
-agli **Identificatori**, oppure in un editor di distribuzione per confrontare solo quella parte. Richiede un provider e un
+agli **Identificativi**, oppure in un editor di distribuzione per confrontare solo quella parte. Richiede un provider e un
 identificatore.
 
 - I campi vuoti vengono compilati e i codici extra del provider si aggiungono agli **Altri identificatori**.
@@ -88,7 +88,7 @@ identificatore.
     <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="La finestra Confronto Dati Provider sopra il modulo Aggiungi Asset: la riga TICKER che chiede quale codice sia il principale, con il codice del provider scelto al posto di quello già salvato, che resta come alternativo; la riga Tipo con il valore attuale e quello del provider come badge con icona; la riga Distribuzione settoriale, attuale contro provider; e Seleziona tutto, Deseleziona tutto, Annulla e Applica Selezionati">
 </div>
 
-Ciascuna riga della finestra di dialogo mostra il tuo **Valore attuale** accanto al **Valore del provider** ed è
+Ciascuna riga della finestra di dialogo mostra il tuo **Valore attuale** accanto al **Valore Provider** ed è
 selezionata all'inizio:
 
 1. Deseleziona le righe in cui vuoi mantenere il tuo valore (**Seleziona tutto** e **Deseleziona tutto** aiutano).
@@ -119,9 +119,9 @@ offre un backup. Dopo **Elimina e cambia valuta**, i prezzi vengono scaricati di
 ## 🏷️ Modificare gli identificatori {: #one-instrument-several-codes }
 
 Un titolo può avere diversi codici. LibreFolio mantiene **un unico asset** con tutti i loro codici, sotto
-**Più informazioni** nel modulo dell'asset:
+**Ulteriori Info** nel modulo dell'asset:
 
-- **Identificatori**: i codici principali, uno per tipo (ISIN, ticker…). **Aggiungi identificatore** aggiunge una riga e
+- **Identificativi**: i codici principali, uno per tipo (ISIN, ticker…). **Aggiungi identificativo** aggiunge una riga e
   **Chiedi al provider** li recupera.
 - **Altri identificatori**: qualsiasi codice extra o etichetta del broker. Digitane uno e premi Invio, virgola, punto e virgola
   o Tab. Questi codici sono ricercabili e aiutano a riconoscere l'asset nelle importazioni successive.
@@ -155,7 +155,7 @@ codice deve guidare e mantiene l'altro sotto **Altri identificatori**.
 I provider compilano le distribuzioni settoriali e geografiche quando possono; per gli altri asset, impostale tu stesso.
 Alimentano i grafici di allocazione della dashboard e l'AI Export.
 
-Nel modulo dell'asset, espandi **Più informazioni**: sotto **Classificazione**, **Distribuzione settoriale** e
+Nel modulo dell'asset, espandi **Ulteriori Info**: sotto **Classificazione**, **Distribuzione settoriale** e
 **Distribuzione geografica** elencano una riga per settore o paese, con il relativo peso in percentuale.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
@@ -165,7 +165,7 @@ Nel modulo dell'asset, espandi **Più informazioni**: sotto **Classificazione**,
 
 - **Aggiungi settore** / **Aggiungi paese** aggiunge una riga: scegli la voce, poi digita il suo peso.
 - Il **Totale** diventa verde al 100%, ambra quando manca qualcosa, rosso quando superi.
-- **Bilancia al 100%**, un'azione di riga, trasferisce l'intero scarto in quella riga. **Bilancia le righe selezionate**
+- **Bilancia al 100%**, un'azione di riga, trasferisce l'intero scarto in quella riga. **Bilancia righe selezionate**
   lo distribuisce tra le righe selezionate, in proporzione ai loro pesi.
 - **Rimuovi** elimina una riga, **Chiedi al provider** recupera la distribuzione del provider e **Importa CSV**
   ne carica una da un file.

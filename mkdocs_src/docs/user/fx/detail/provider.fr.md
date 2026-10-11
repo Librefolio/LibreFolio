@@ -10,7 +10,7 @@ Chaque paire de devises obtient ses taux à partir d'une ou plusieurs **routes**
 
 ## 🔓 Comment y accéder
 
-Sur la page de détail de la paire, cliquez sur **Fournisseurs** (🔧) dans la barre d'outils, à côté de **Synchroniser**. La fenêtre **Modifier les fournisseurs de la paire** s'ouvre.
+Sur la page de détail de la paire, cliquez sur **Fournisseurs** (🔧) dans la barre d'outils, à côté de **Synchroniser**. La fenêtre **Modifier les Fournisseurs** s'ouvre.
 
 ---
 

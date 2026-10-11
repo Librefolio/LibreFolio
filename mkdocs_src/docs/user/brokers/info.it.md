@@ -12,9 +12,9 @@ La scheda **Info** di un broker mostra i dettagli dell'account a sinistra e chi 
 
 La scheda **Dettagli** elenca:
 
-- **Account attivo** — **✓ Attivo**, oppure **✗ Chiuso** per un account che non usi più. Un broker chiuso conserva la sua cronologia nei tuoi grafici.
-- **Account aperto** — quando hai aperto l'account, se lo hai impostato.
-- **Consenti acquisto con leva** e **Consenti vendita allo scoperto** — le due opzioni di trading, spiegate di seguito.
+- **Conto Attivo** — **✓ Attivo**, oppure **✗ Chiuso** per un account che non usi più. Un broker chiuso conserva la sua cronologia nei tuoi grafici.
+- **Data Apertura Conto** — quando hai aperto l'account, se l'hai impostata.
+- **Consenti acquisto con leva** e **Consenti Vendita allo Scoperto (Short)** — le due opzioni di trading, spiegate di seguito.
 - **Creato nel sistema** — quando il broker è stato aggiunto a LibreFolio.
 
 Per modificarli, fai clic su **Modifica** nella barra degli strumenti del broker (proprietari ed editor).
@@ -26,7 +26,7 @@ Per modificarli, fai clic su **Modifica** nella barra degli strumenti del broker
 Entrambe le opzioni sono disattivate per un nuovo broker e LibreFolio ti protegge da saldi impossibili:
 
 - con **Consenti acquisto con leva** disattivato, un salvataggio viene rifiutato se lascerebbe la liquidità di una valuta sotto zero;
-- con **Consenti vendita allo scoperto** disattivato, un salvataggio viene rifiutato se lascerebbe la quantità di un asset sotto zero.
+- con **Consenti Vendita allo Scoperto (Short)** disattivato, un salvataggio viene rifiutato se lascerebbe la quantità di un asset sotto zero.
 
 Attiva un'opzione per un conto a margine, oppure per registrare vendite allo scoperto.
 
@@ -40,7 +40,7 @@ Attiva un'opzione per un conto a margine, oppure per registrare vendite allo sco
 
     Qui $a_t$ è l'importo di cassa di ogni transazione $t$ nella valuta $c$, e $q_t$ la quantità di ogni transazione dell'asset $i$. La liquidità in entrata e in uscita nello stesso giorno si compensa, ma un deposito effettuato successivamente non corregge un giorno che si è già chiuso sotto zero.
 
-    Un salvataggio rifiutato viene mostrato nel workspace sotto *Questa configurazione causa incoerenze nei dati*, con la valuta o l'asset, la data e i link alle righe del workspace coinvolte.
+    Un salvataggio rifiutato viene mostrato nel workspace sotto *Questa configurazione genera dati inconsistenti*, con la valuta o l'asset, la data e i link alle righe del workspace coinvolte.
 
 ---
 
@@ -51,12 +51,12 @@ La colonna di destra contiene il pannello **Condividi broker**; anche **Condivid
 Per concedere l'accesso a qualcuno:
 
 1. Fai clic su **+** (**Aggiungi utente**) sotto il grafico di proprietà e trova la persona **tramite nome utente**.
-2. Scegli il **Ruolo** — **visualizzatore** per impostazione predefinita, **editor** o **proprietario** — e, per un proprietario, la **Quota di proprietà %**. Poi fai clic su **Aggiungi utente**.
+2. Scegli il **Ruolo** — **visualizzatore** per impostazione predefinita, **editor** o **proprietario** — e, per un proprietario, la **% Possesso**. Poi fai clic su **Aggiungi utente**.
 3. Fai clic su **Salva configurazione**: nulla cambia prima che tu lo faccia.
 
 Salva prima di cambiare scheda: nella scheda Info, le modifiche non salvate vengono perse senza chiedere.
 
-Sotto **Il tuo accesso** puoi anche **Abbandona broker**, oppure **Passa a visualizzatore** se sei un editor. I ruoli e le quote di proprietà sono spiegati in [Condivisione del broker](sharing.md).
+Sotto **Il tuo accesso** puoi anche **Abbandona il broker**, oppure **Passa a visualizzatore** se sei un editor. I ruoli e le quote di proprietà sono spiegati in [Condivisione del broker](sharing.md).
 
 ---
 
