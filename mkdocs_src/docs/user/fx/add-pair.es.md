@@ -12,7 +12,7 @@ página de activo y desde el paso Cambio del asignador PAC.
 
 ### 💱 Paso 1: Elige las dos divisas
 
-En **Añadir nuevo par de divisas**, elige la **Divisa base** y la **Divisa cotizada**. Cada lista
+En **Añadir Par de Divisas**, elige la **Divisa base** y la **Divisa cotizada**. Cada lista
 oculta las divisas que ya están emparejadas con la otra, por lo que un par no se puede añadir dos veces.
 
 ### 🛤️ Paso 2: Elige una ruta
@@ -21,7 +21,7 @@ Haz clic en **Añadir ruta de conversión** para ver todas las formas en que los
 
 - 🔗 **Conversión directa (1 paso)** — un proveedor publica el par;
 - 🔀 **Conversión en cadena** — pasa por otras divisas, agrupada por número de pasos;
-- 🚫 **No utilizable** — proveedores que no pueden alcanzar este par.
+- 🚫 **No utilizables** — proveedores que no pueden alcanzar este par.
 
 Filtra con el cuadro de búsqueda (proveedor, divisa o país) y luego haz clic en una ruta para añadirla.
 
@@ -37,7 +37,7 @@ Filtra con el cuadro de búsqueda (proveedor, divisa o país) y luego haz clic e
 
 ??? note "🔀 Crear también pares intermedios — cuando eliges una ruta en cadena"
 
-    Marca **Crear también pares intermedios** para guardar cada paso como un par propio. Luego puedes
+    Marca **Crear también los pares intermedios** para guardar cada paso como un par propio. Luego puedes
     sincronizar cada paso por separado y convertir también a la divisa intermedia: una cadena solo almacena
     el tipo de cambio de su propio par.
 

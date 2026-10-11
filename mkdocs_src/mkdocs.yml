@@ -1243,6 +1243,7 @@ nav:
 hooks:
   - hooks/absolute_hreflang.py
   - hooks/jsonld.py
+  - hooks/fr_typography.py
 
 extra_css:
   - static/extra.css

@@ -109,11 +109,11 @@ Questa linearità è uno dei principali vantaggi dei rendimenti logaritmici nell
 
 ## 🔁 Rendimento rolling {: #rolling-return }
 
-Un **rendimento rolling** è il rendimento semplice delle sezioni precedenti, misurato su una finestra mobile lungo la serie: un valore per data, ciascuno dei quali guarda indietro sullo stesso intervallo. Due funzionalità della pagina di un asset lo calcolano, e differiscono nel modo in cui viene contato l'intervallo — in sedute o in giorni di calendario. Il pulsante guida 📖 sulla scheda del segnale **Rolling Return** apre questa pagina.
+Un **rendimento rolling** è il rendimento semplice delle sezioni precedenti, misurato su una finestra mobile lungo la serie: un valore per data, ciascuno dei quali guarda indietro sullo stesso intervallo. Due funzionalità della pagina di un asset lo calcolano, e differiscono nel modo in cui viene contato l'intervallo — in sedute o in giorni di calendario. Il pulsante guida 📖 sulla scheda del segnale **Rendimento mobile** apre questa pagina.
 
 ### 📊 Su una finestra di sedute {: #rolling-return-sessions }
 
-Il segnale **Rolling Return** del pannello Segnali, nella famiglia di rischio, legge la serie preparata dei rendimenti dell'asset, nella valuta del grafico: un rendimento semplice per **seduta**, un giorno in cui l'asset ha una quotazione propria. Un prezzo memorizzato in un fine settimana o in un giorno festivo di mercato che ripete solo la chiusura precedente non è una seduta. Con $V_t$ il valore alla seduta $t$ e $r_t = V_t / V_{t-1} - 1$, il rendimento rolling su una finestra di $w$ sedute è
+Il segnale **Rendimento mobile** del pannello Segnali, nella famiglia di rischio, legge la serie preparata dei rendimenti dell'asset, nella valuta del grafico: un rendimento semplice per **seduta**, un giorno in cui l'asset ha una quotazione propria. Un prezzo memorizzato in un fine settimana o in un giorno festivo di mercato che ripete solo la chiusura precedente non è una seduta. Con $V_t$ il valore alla seduta $t$ e $r_t = V_t / V_{t-1} - 1$, il rendimento rolling su una finestra di $w$ sedute è
 
 $$
 R_t^{(w)} = \prod_{k=0}^{w-1} \left(1 + r_{t-k}\right) - 1 = \frac{V_t}{V_{t-w}} - 1
@@ -123,7 +123,7 @@ calcolato tramite logaritmi, $R_t^{(w)} = \exp\left(\sum_{k=0}^{w-1} \ln(1 + r_{
 
 ### 🗓️ Su una finestra di giorni di calendario {: #rolling-return-calendar }
 
-La modalità **Rolling Return** del grafico misura ogni data rispetto alla chiusura esattamente $N$ giorni di calendario prima. Con $\hat{P}(d)$ la chiusura determinata del giorno di calendario $d$ — l'ultima chiusura disponibile a o prima di $d$, convertita nella valuta del grafico, in modo che un fine settimana o un giorno festivo legga la seduta precedente — il rendimento nel giorno $d$ è
+La modalità **Rendimento mobile** del grafico misura ogni data rispetto alla chiusura esattamente $N$ giorni di calendario prima. Con $\hat{P}(d)$ la chiusura determinata del giorno di calendario $d$ — l'ultima chiusura disponibile a o prima di $d$, convertita nella valuta del grafico, in modo che un fine settimana o un giorno festivo legga la seduta precedente — il rendimento nel giorno $d$ è
 
 $$
 R^{[N]}(d) = \frac{\hat{P}(d)}{\hat{P}(d - N)} - 1

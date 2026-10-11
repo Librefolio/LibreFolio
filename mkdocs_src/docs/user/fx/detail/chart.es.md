@@ -48,7 +48,7 @@ Pasa el cursor sobre el gráfico, o tócalo en el móvil, para ver:
 ## 🧰 Botones del gráfico
 
 - 📏 **Medida** — consulta [Medidas](measures.md).
-- ✏️ **Editar cotizaciones** — consulta [Editor de datos](data-editor.md).
+- ✏️ **Editar tasas** — consulta [Editor de datos](data-editor.md).
 - ⚙️ **Estética** — colores, relleno, cuadrícula y rangos de ejes, como en [Ajustes del gráfico](../chart-settings.md).
 - 📊 El panel **Señales** por encima del gráfico — consulta [Señales](signals.md).
 

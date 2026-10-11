@@ -40,14 +40,14 @@ Scenari comuni:
 
 ## 🔀 Relazione con le Rettifiche
 
-Sotto il cofano, un Trasferimento è composto da due voci di Rettifica. LibreFolio supporta:
+Un Trasferimento è salvato come due righe `TRANSFER`, una per broker, ciascuna collegata all'altra tramite `related_transaction_id`. Scollegare la coppia trasforma le due righe in `ADJUSTMENT` indipendenti, e promuovere due Rettifiche le trasforma di nuovo in un Trasferimento:
 
 | Operazione | Risultato |
 |-----------|--------|
 | **Scollega coppia** | Trasferimento → due Rettifiche indipendenti |
 | **Promuovi** (collega) | Due Rettifiche → Trasferimento |
 
-**Vincoli di promozione**: stesso asset, broker diversi, quantità opposte.
+**Vincoli di promozione**: stesso asset, broker diversi, quantità opposte, e nessuna delle due righe collegata a un evento dell'asset (per esempio uno split), perché un trasferimento non può portare quel collegamento.
 
 ---
 

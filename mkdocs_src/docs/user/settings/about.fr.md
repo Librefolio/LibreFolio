@@ -19,10 +19,10 @@ L'onglet **À propos** affiche :
 
 La carte **Soutenir LibreFolio** propose deux façons d'aider le projet :
 
-- **Buy Me a Coffee** ouvre la page Buy Me a Coffee du projet dans un nouvel onglet. Le même lien figure dans
+- **Offrez-moi un Café** ouvre la page Buy Me a Coffee du projet dans un nouvel onglet. Le même lien figure dans
   l'en-tête de la page (l'icône café, avec son libellé sur les écrans plus larges) et dans le
-  menu **Aide & Support**.
-- Sous **Ou partager**, un bouton par réseau social : **X**, **Reddit**, **Facebook**,
+  menu **Aide et Support**.
+- Sous **Ou partagez**, un bouton par réseau social : **X**, **Reddit**, **Facebook**,
   **Instagram** et **TikTok**.
 
 Un bouton de partage ouvre une boîte de dialogue **Partager sur …** avec un **Message suggéré** rédigé pour ce
@@ -88,7 +88,7 @@ Ouvrez **Diagnostics des outils** pour charger un instantané du processus serve
   terminées et en échec, et les voies dégradées ;
 - les **Outils chargés dans ce processus API**, chacun avec son nom, son code et sa version de contrat, ainsi que
   les éventuels **Échecs de découverte** ;
-- les **Limites de plateforme effectives**, dans leur propre section repliable.
+- les **Limites effectives de la plateforme**, dans leur propre section repliable.
 
 L'instantané décrit un seul processus serveur, pas l'instance entière, et ne se met pas à jour tout seul :
 rechargez-le pour le relire.
@@ -121,7 +121,7 @@ La **modale du journal des modifications** intégrée à l'application affiche l
 
 ### 🔄 Recherche de mises à jour
 
-L'en-tête de la modale comporte également un bouton **Rechercher des mises à jour**. Il demande au serveur quelle version est
+L'en-tête de la modale comporte également un bouton **Vérifier les mises à jour**. Il demande au serveur quelle version est
 en cours d'exécution, relit la dernière version **stable** sur GitHub (au lieu de réutiliser le résultat
 que la vérification automatique conserve pendant une heure), et compare les deux. Une version plus récente ne compte qu'une fois son image Docker disponible sur le registre ; une version dont la compilation est encore en cours
 n'est donc pas encore proposée — voir [Notifications de mise à jour](../../admin/index.md#update-notifications).
@@ -136,7 +136,7 @@ Une vérification lancée ici vous indique toujours comment elle s'est déroulé
 - Si une version plus récente existe et que vous êtes **administrateur**, la modale **Nouvelle version disponible** s'ouvre
   aussitôt, par-dessus le journal des modifications : versions actuelle et dernière côte à côte, avec **Comment mettre à jour**
   (le [guide de mise à jour](../installation.md#updating)) et **Notes de version sur GitHub**. Vous pouvez
-  la fermer avec **Me rappeler plus tard** (vous serez rappelé à la prochaine connexion) ou
+  la fermer avec **Me le rappeler plus tard** (vous serez rappelé à la prochaine connexion) ou
   **Ignorer cette version** (la vérification automatique ne vous relancera plus pour cette version ; une vérification lancée
   ici l'affiche toujours). Les administrateurs sont également sollicités automatiquement à la connexion — voir
   [Notifications de mise à jour](../../admin/index.md#update-notifications) pour le flux côté administrateur.

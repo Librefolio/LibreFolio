@@ -44,7 +44,7 @@ backend/data/
 
 ### 🖼️ `custom-uploads/`
 
-File caricati nell'app, come quelli della pagina **Files**, e gli avatar predefiniti. Ogni file ha un nome casuale e un file `.json` accanto che lo descrive: mantieni le coppie insieme.
+File caricati nell'app, come quelli della pagina **File**, e gli avatar predefiniti. Ogni file ha un nome casuale e un file `.json` accanto che lo descrive: mantieni le coppie insieme.
 
 ### 📊 `broker_reports/`
 

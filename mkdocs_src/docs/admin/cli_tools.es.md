@@ -122,7 +122,7 @@ Justo después de las migraciones, cada inicio también ejecuta las **correccion
 
 El archivo vacío `app.db.post-migration.lock`, junto a la base de datos, hace que las ejecuciones se turnen cuando varios workers arrancan a la vez: déjalo en su sitio.
 
-La primera corrección, **`autoincrement`**, garantiza que el id de cualquier usuario, bróker, activo, transacción, ruta de conversión FX o evento de activo que se elimine nunca se asigne a uno nuevo. Mientras convierte una base de datos, elimina las carpetas de informes de los brókers que ya no existen, para que un nuevo bróker no pueda heredarlas.
+La primera corrección, **`autoincrement`**, garantiza que el id de cualquier usuario, bróker, activo, transacción, ruta de conversión FX o evento de activo que se elimine nunca se asigne a uno nuevo. Mientras convierte una base de datos, elimina las carpetas de informes de los brókeres que ya no existen, para que un nuevo bróker no pueda heredarlas.
 
 ??? tip "⌨️ Ejecutar las correcciones a mano — para previsualizarlas o reintentar una fallida"
 
@@ -136,7 +136,7 @@ La primera corrección, **`autoincrement`**, garantiza que el id de cualquier us
     pipenv run python -m backend.app.db.post_migration
     ```
 
-    El script imprime cada corrección como `clean` (nada que hacer), `would_apply` (simulación), `applied` o `failed`, con las carpetas de brókers huérfanas, una copia conservada y cualquier error, y sale con `1` cuando algo falla. `--db PATH` y `--data-dir PATH` lo apuntan a otra base de datos o directorio de datos.
+    El script imprime cada corrección como `clean` (nada que hacer), `would_apply` (simulación), `applied` o `failed`, con las carpetas de brókeres huérfanas, una copia conservada y cualquier error, y sale con `1` cuando algo falla. `--db PATH` y `--data-dir PATH` lo apuntan a otra base de datos o directorio de datos.
 
 🔗 Cómo funcionan las correcciones por dentro: [Esquema de la base de datos — Correcciones posteriores a la migración](../developer/architecture/database/index.md#post-migration-fixes).
 

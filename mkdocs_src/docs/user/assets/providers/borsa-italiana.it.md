@@ -28,25 +28,25 @@ ExtraMOT, EuroTLX) e fondi chiusi (MIV) — oltre a fondi comuni e SICAV.
   EuroTLX. Se LibreFolio non riesce a leggerla, lascia la tua valuta così com'è — controllala prima
   di salvare.
 - **Tipo**: ETF, ETC ed ETN arrivano tutti come semplice **ETF**. Se sai cosa detiene il fondo,
-  affinalo (ad esempio **Equity ETF** o **Commodity ETF**): un successivo
+  affinalo (ad esempio **ETF azionario** o **ETF su materie prime**): un successivo
   [controllo rispetto ai dati del provider](../create-edit.md#provider-data-comparison) mantiene la
   tua scelta.
-- Le **obbligazioni** ricevono il settore **Government Bonds** o **Corporate Bonds** (emittenti
-  sovranazionali: **Financials**) e, quando l'emittente è riconosciuto, il suo paese — *United
+- Le **obbligazioni** ricevono il settore **Titoli di Stato** o **Obbligazioni societarie** (emittenti
+  sovranazionali: **Finanziari**) e, quando l'emittente è riconosciuto, il suo paese — *United
   States of America* diventa **USA**.
 
 ## ✏️ Configuralo
 
-**Ricerca Online** compila tutto. Per configurare il provider manualmente, apri l'asset con
+**Cerca Online** compila tutto. Per configurare il provider manualmente, apri l'asset con
 **Modifica** (✏️) — o **+ Aggiungi Asset** per uno nuovo — ed espandi **Assegnazione Provider**:
 
 1. Scegli **Borsa Italiana** come **Provider**.
 2. Digita l'**ISIN** dello strumento, ad esempio `IT0003128367` (ENEL). Ogni pagina di strumento su
    [borsaitaliana.it](https://www.borsaitaliana.it) lo mostra.
 3. Scegli la **Lingua**: 🇬🇧 English o 🇮🇹 Italiano.
-4. Clicca **Test configurazione**, quindi salva.
+4. Clicca **Testa Configurazione**, quindi salva.
 
-**Ricerca Online** compila anche le altre tre impostazioni; impostale manualmente solo in questi
+**Cerca Online** compila anche le altre tre impostazioni; impostale manualmente solo in questi
 casi.
 
 ??? note "🧾 Codice interno del fondo — per un fondo comune o una SICAV"
@@ -57,14 +57,14 @@ casi.
     dall'indirizzo della sua pagina: in `…/borsa/fondi/dettaglio/2FADB602822.html` il codice è
     `2FADB602822`. Lascia il campo vuoto per tutto il resto.
 
-??? note "🧭 Market MIC e Platform — quando la pagina dello strumento non si apre"
+??? note "🧭 MIC mercato e Piattaforma — quando la pagina dello strumento non si apre"
 
     Alcuni mercati devono essere indicati esplicitamente. Apri lo strumento su borsaitaliana.it: il
-    codice dopo l'ISIN nell'indirizzo della pagina è il **Market MIC** — in
-    `…/scheda/US912810TU25-ETLX.html` è `ETLX`. **Platform** è necessario solo su EuroTLX, dove è
+    codice dopo l'ISIN nell'indirizzo della pagina è il **MIC mercato** — in
+    `…/scheda/US912810TU25-ETLX.html` è `ETLX`. **Piattaforma** è necessaria solo su EuroTLX, dove è
     `TLX`.
 
-    | Mercato | Market MIC | Platform |
+    | Mercato | MIC mercato | Piattaforma |
     |--------|:---:|:---:|
     | MTA (azioni italiane) | `MTAA` | — |
     | MOT (obbligazioni) | `MOTX` | — |
@@ -73,8 +73,8 @@ casi.
     | MIV (fondi chiusi) | `MIVX` | — |
     | EuroTLX (obbligazioni) | `ETLX` | `TLX` |
 
-    Ad esempio, l'obbligazione del Tesoro USA `US912810TU25` su EuroTLX funziona una volta che **Market MIC** è
-    `ETLX` e **Platform** è `TLX`; i suoi prezzi sono in USD.
+    Ad esempio, l'obbligazione del Tesoro USA `US912810TU25` su EuroTLX funziona una volta che **MIC mercato** è
+    `ETLX` e **Piattaforma** è `TLX`; i suoi prezzi sono in USD.
 
 ## 🧾 Fondi comuni e NAV
 

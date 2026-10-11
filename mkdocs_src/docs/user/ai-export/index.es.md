@@ -19,7 +19,7 @@ Lo que copias es contexto factual, no asesoramiento de inversión.
 
 ## 🚀 Cómo abrirla
 
-Selecciona **Exportación IA** (:material-brain:) en la barra de herramientas de una de estas páginas:
+Selecciona **Exportar IA** (:material-brain:) en la barra de herramientas de una de estas páginas:
 
 | Página | Qué cubre la exportación | Guía |
 | :--- | :--- | :--- |
@@ -73,7 +73,7 @@ tamaño estimado.
 
 ??? warning "📏 Prompt largo — cuando el texto es extenso"
 
-    El panel muestra primero el **Tamaño final del prompt** con una advertencia. Elige **Usar Compacto** para un
+    El panel muestra primero el **Tamaño del prompt final** con una advertencia. Elige **Usar Compacto** para un
     texto más corto (no se muestra en Compacto), o **Copiar de todos modos**: con la misma configuración, se copiará sin
     preguntar durante un tiempo.
 
@@ -98,7 +98,7 @@ Conviene saber:
   que mantenga tus cifras separadas de su interpretación.
 - Los análisis de **Rendimiento e impulsores del mercado** necesitan un asistente que pueda buscar en la web;
   sin él, la respuesta lo indica en lugar de inventar fuentes.
-- Los activos, brókers, pares de divisas y lotes aparecen como códigos cortos (A1, B1, F1, L1) explicados en
+- Los activos, brókeres, pares de divisas y lotes aparecen como códigos cortos (A1, B1, F1, L1) explicados en
   el texto; se le pide a la IA que responda con los nombres reales.
 - Un análisis puede sugerir una exportación más en **Datos adicionales de LibreFolio**, con dónde
   encontrarla. Si la IA la pide, copia también esa exportación y pégala en el mismo chat.
@@ -108,12 +108,12 @@ Conviene saber:
 ## 🔒 Privacidad
 
 - LibreFolio no envía la exportación a ningún sitio: solo la escribe en tu portapapeles.
-- El texto contiene tus **cifras reales** y los nombres de tus brókers y activos, incluso con
+- El texto contiene tus **cifras reales** y los nombres de tus brókeres y activos, incluso con
   el modo privacidad activado.
 - Cada página exporta solo su propio ámbito:
-    - **Panel**: los brókers que posees con una participación superior al 0%, acotados por el filtro de brókers;
+    - **Panel**: los brókeres que posees con una participación superior al 0%, acotados por el filtro de brókeres;
     - **Bróker**: solo ese bróker;
-    - **Activo** y **FX**: todos los brókers que puedes abrir, incluidos los brókers compartidos contigo.
+    - **Activo** y **FX**: todos los brókeres que puedes abrir, incluidos los brókeres compartidos contigo.
 - Revisa el texto antes de pegarlo en cualquier sitio; aparece un recordatorio después de cada copia.
 
 ---
@@ -123,7 +123,7 @@ Conviene saber:
 - **Exportación IA está atenuada**: la página todavía se está cargando o, en el Panel, no posees ningún bróker
   con una participación superior al 0%.
 - *Esta selección no es aplicable a los datos actuales.*: elige otro análisis.
-  **Revisión de posición** necesita una posición en el activo; **Impacto de exposición FX** necesita efectivo o una
+  **Revisión de posición** necesita una posición en el activo; **Impacto de la exposición FX** necesita efectivo o una
   posición vinculada al par.
 - Un mensaje que termina en *Actualiza y vuelve a intentarlo.*: recarga la página.
 - *El acceso al portapapeles no está disponible. Comprueba los permisos del navegador.*: permite el acceso al portapapeles para

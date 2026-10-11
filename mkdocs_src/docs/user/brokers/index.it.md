@@ -8,6 +8,8 @@ Un **broker** è uno dei tuoi conti — presso un'agenzia di intermediazione, un
 
 La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) nella valuta scelta in **Valuta** nella parte superiore della pagina. Fai clic su una scheda per aprire il broker.
 
+**Gain/Loss** è il NAV meno il capitale entrato nel broker: i tuoi depositi meno i prelievi, più il costo dei titoli che hai portato senza liquidità, più quanto hai spostato dagli altri tuoi broker meno quanto hai spostato verso di essi, ogni movimento valutato nel giorno in cui è arrivato. Così spostare denaro o titoli fra due dei tuoi broker non è un guadagno su una scheda e una perdita sull'altra, e finché un trasferimento è in transito il suo valore resta sulla scheda del broker che lo ha inviato. La percentuale tra parentesi è il guadagno su quel capitale: mostra 0.00% quando quel capitale è zero o negativo, per esempio quando il broker ha inviato più di quanto ha ricevuto. → [Trasferimenti interni](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+
 !!! note "I broker condivisi mostrano la tua quota"
 
     Su un broker di cui sei comproprietario, i valori sulla sua scheda e nella sua scheda **Panoramica** sono **proporzionati alla tua quota di proprietà**: un Proprietario al 50% vede metà del conto. Editor e Visualizzatori vedono sempre gli importi completi. Vedi [Condivisione broker](sharing.md).
@@ -30,10 +32,10 @@ La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) n
 ??? info "⚙️ I campi opzionali — cosa fa ciascuno"
 
     - **Descrizione** — le tue note.
-    - **Plugin di importazione predefinito** — l'importatore che la [Procedura guidata di importazione](../transactions/import/index.md) propone per i file di questo broker.
-    - **URL del portale** — il sito web del broker, aperto dalla pagina del broker. L'icona del broker è, in quest'ordine: il tuo **URL icona personalizzata**; l'icona del **Plugin di importazione predefinito**, quando quell'importatore è fatto per questo broker; l'icona del sito web; l'icona di un importatore generico come il CSV generico; altrimenti una valigetta.
-    - **Conto aperto** e **Conto attivo** — quando è stato aperto il conto e se è ancora aperto. Un broker chiuso viene mostrato in grigio nell'elenco.
-    - **Opzioni di trading** — **Consenti acquisto con leva** e **Consenti vendita allo scoperto**, spiegate in [Opzioni di trading](info.md#trading-options).
+    - **Plugin di Import Predefinito** — l'importatore che la [Procedura guidata di importazione](../transactions/import/index.md) propone per i file di questo broker.
+    - **URL Portale** — il sito web del broker, aperto dalla pagina del broker. L'icona del broker è, in quest'ordine: il tuo **URL icona personalizzata**; l'icona del **Plugin di Import Predefinito**, quando quell'importatore è fatto per questo broker; l'icona del sito web; l'icona di un importatore generico come il CSV generico; altrimenti una valigetta.
+    - **Data Apertura Conto** e **Conto attivo** — quando è stato aperto il conto e se è ancora aperto. Un broker chiuso viene mostrato in grigio nell'elenco.
+    - **Opzioni di trading** — **Consenti acquisto con leva** e **Consenti Vendita allo Scoperto (Short)**, spiegate in [Opzioni di trading](info.md#trading-options).
     - **Saldi iniziali** (solo durante la creazione) — la tua liquidità iniziale. LibreFolio registra un **Deposito** per valuta, **datato oggi**: se il denaro era presente prima, cambia la data di quei depositi nella pagina [Transazioni](../transactions/index.md).
 
 ??? warning "🏷️ “Esiste già un broker chiamato …” — quando compare"

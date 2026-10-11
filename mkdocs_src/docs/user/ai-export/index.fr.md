@@ -55,11 +55,11 @@ Choisissez **3M** (par défaut), **6M**, **1A** ou **Personnalisé** (jours, sem
 
 ### 📝 Étape 5 : Ajouter des notes (analyses uniquement)
 
-Avec **Demander une analyse**, ajoutez du contexte ou des questions dans **Notes pour l'IA** : un budget mensuel, une allocation cible, ce qui vous préoccupe. L'IA les lit comme des informations, et non comme de nouvelles règles.
+Avec **Demander une analyse**, ajoutez du contexte ou des questions dans **Notes pour l’IA** : un budget mensuel, une allocation cible, ce qui vous préoccupe. L'IA les lit comme des informations, et non comme de nouvelles règles.
 
 ### 📋 Étape 6 : Copier
 
-Sélectionnez **Copier l'export IA**. Après **Préparation de l'export…**, un message confirme la copie avec sa taille estimée.
+Sélectionnez **Copier l’export IA**. Après **Préparation de l’export…**, un message confirme la copie avec sa taille estimée.
 
 ??? warning "📏 Prompt volumineux — lorsque le texte est long"
 
@@ -103,9 +103,9 @@ Bon à savoir :
 ## 🛠️ En cas de problème
 
 - **Export IA est grisé** : la page est encore en cours de chargement ou, sur le Tableau de bord, vous ne détenez aucun courtier avec une part supérieure à 0 %.
-- *Cette sélection n'est pas applicable aux données actuelles.* : choisissez une autre analyse. **Revue de position** nécessite une position sur l'actif ; **Impact d'exposition FX** nécessite des liquidités ou une position liée à la paire.
+- *Cette sélection ne s’applique pas aux données actuelles.* : choisissez une autre analyse. **Revue de la position** nécessite une position sur l'actif ; **Impact de l’exposition FX** nécessite des liquidités ou une position liée à la paire.
 - Un message se terminant par *Actualisez et réessayez.* : rechargez la page.
-- *L'accès au presse-papiers n'est pas disponible. Vérifiez les autorisations du navigateur.* : autorisez l'accès au presse-papiers pour LibreFolio dans votre navigateur.
+- *L’accès au presse-papiers est indisponible. Vérifiez les autorisations du navigateur.* : autorisez l'accès au presse-papiers pour LibreFolio dans votre navigateur.
 
 ---
 

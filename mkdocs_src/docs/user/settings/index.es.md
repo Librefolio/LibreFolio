@@ -13,5 +13,5 @@ La configuración se divide en cuatro pestañas:
 
 ## 🔗 Relacionados
 
-- 🏦 **[Brókers](../brokers/index.md)** — Gestionar sus cuentas de bróker
+- 🏦 **[Brókeres](../brokers/index.md)** — Gestionar sus cuentas de bróker
 - 👥 **[Multiusuario y Compartir](../brokers/sharing.md)** — Invitar a colaboradores y gestionar el acceso

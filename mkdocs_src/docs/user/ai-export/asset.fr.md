@@ -9,7 +9,7 @@ coller se trouvent dans la [Vue d’ensemble de l’export IA](index.md).
 ## 📍 Où le trouver
 
 Sur la page de détail d’un actif, sélectionnez **Export IA** dans la barre d’outils de la page.
-L’export s’ouvre d’abord sur **Analyse du marché de l’actif**.
+L’export s’ouvre d’abord sur **Analyse de l'actif**.
 
 L’export couvre l’actif ouvert sur la page, dans la devise affichée par la page, avec le dernier
 jour de la plage de dates de la page comme date d’export. Votre position prend en compte chaque
@@ -21,7 +21,7 @@ courtier auquel vous avez accès.
 
 | Choix | Ce que vous obtenez |
 | :--- | :--- |
-| **Position et historique de marché (complet)** | Vos positions dans l’actif (coût, valeur, P&L, performance, lots FIFO), un contexte de marché compact et le repli |
+| **Position et historique (complet)** | Vos positions dans l’actif (coût, valeur, P&L, performance, lots FIFO), un contexte de marché compact et le repli |
 | **Historique de marché uniquement (sans positions)** | Prix, rendements, indicateurs, états, événements et repli, sans vos positions |
 
 ---
@@ -30,8 +30,8 @@ courtier auquel vous avez accès.
 
 | Analyse | Ce que fait l’IA |
 | :--- | :--- |
-| **Revue de position** | Passe en revue la valeur, le coût, le P&L, les courtiers et les lots de votre position, avec le contexte de marché ; nécessite une position dans l’actif |
-| **Analyse du marché de l’actif** | Analyse l’historique des prix, les rendements, la tendance, le momentum, la volatilité, le repli et les événements |
+| **Revue de la position** | Passe en revue la valeur, le coût, le P&L, les courtiers et les lots de votre position, avec le contexte de marché ; nécessite une position dans l’actif |
+| **Analyse de l'actif** | Analyse l’historique des prix, les rendements, la tendance, le momentum, la volatilité, le repli et les événements |
 
 ---
 

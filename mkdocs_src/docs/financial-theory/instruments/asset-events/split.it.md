@@ -88,9 +88,9 @@ Per esempio, se Apple valeva $100 prima di uno split 4:1, il prezzo storico rett
 
 In LibreFolio, un evento `SPLIT` viene registrato con:
 
-- **Date**: La data di efficacia dello split
-- **Amount**: Il rapporto di split (ad esempio, `2` per uno split 2:1, `0.1` per un reverse split 1:10)
-- **Notes**: Descrizione opzionale (ad esempio, "forward split 4:1")
+- **Data**: La data di efficacia dello split
+- **Importo**: Il rapporto di split (ad esempio, `2` per uno split 2:1, `0.1` per un reverse split 1:10)
+- **Note**: Descrizione opzionale (ad esempio, "forward split 4:1")
 
 Gli eventi di split appaiono come **marcatori sul grafico** e aiutano a spiegare improvvise discontinuità di prezzo. Quando si utilizzano i **prezzi rettificati** di provider come Yahoo Finance, lo split è già integrato nei dati dei prezzi.
 

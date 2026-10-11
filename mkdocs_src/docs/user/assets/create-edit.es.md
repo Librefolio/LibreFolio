@@ -27,13 +27,13 @@ Añade un instrumento que poseas o sigas, conéctalo a un proveedor de precios y
        el formulario tú mismo. Después, haz clic en **Crear activo**.
 
     Si el resultado que eliges tiene el mismo nombre que uno de tus activos, LibreFolio te ofrece usar ese
-    activo en su lugar; **Usarlo y añadir la clave** también guarda los códigos del informe en él.
+    activo en su lugar; **Usarlo y agregar la clave** también guarda los códigos del informe en él.
 
 Revisa estos campos antes de guardar:
 
 - **Nombre**: obligatorio y único; aparece un aviso si otro activo ya lo usa.
 - **Tipo**: consulta [Elegir el tipo de activo](#choosing-the-asset-type).
-- **Unidades por precio**: a cuántas unidades se refiere un precio, normalmente 1. Los bonos se cotizan por
+- **Unidades por precio unitario**: a cuántas unidades se refiere un precio, normalmente 1. Los bonos se cotizan por
   100: LibreFolio lo propone cuando eliges **Bono**.
 - **Divisa**: la divisa en la que se cotizan los precios. Para un fondo cotizado en euros, es EUR,
   aunque el fondo esté denominado en otra divisa.
@@ -45,8 +45,8 @@ proveedor, su historial de precios empieza a descargarse de inmediato.
 
 El campo **Tipo** abre un menú con búsqueda de
 [tipos de activo](../../financial-theory/instruments/asset-types/index.md). **ETF** y
-**Crowdfunding** son familias: abre una para ver primero su miembro genérico (**ETF**, **Crowdfund**)
-y después los específicos, como **Equity ETF** o **Real estate crowdfunding**. Escribe unas letras para
+**Crowdfunding** son familias: abre una para ver primero su miembro genérico (**ETF**, **Crowdfunding**)
+y después los específicos, como **ETF de renta variable** o **Crowdfunding inmobiliario**. Escribe unas letras para
 buscar en ambos niveles, por nombre o por código (por ejemplo, `etf_bond`).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -54,7 +54,7 @@ buscar en ambos niveles, por nombre o por código (por ejemplo, `etf_bond`).
 </div>
 
 **Buscar en línea** normalmente asigna un tipo general como **ETF**. Si sabes qué contiene el fondo,
-refínalo, por ejemplo a **Equity ETF**: su distintivo e icono mostrarán entonces lo que contiene. Una
+refínalo, por ejemplo a **ETF de renta variable**: su distintivo e icono mostrarán entonces lo que contiene. Una
 [comprobación posterior con los datos del proveedor](#provider-data-comparison) respeta tu elección.
 
 ## 🔌 Conectar un proveedor de precios
@@ -75,7 +75,7 @@ Un activo tiene como máximo un proveedor; marca **Sin proveedor** si vas a intr
 ## ⚖️ Comprobar los datos del proveedor {: #provider-data-comparison }
 
 LibreFolio compara los datos del proveedor con tu formulario después de elegir un resultado de **Buscar en línea**
-y cuando haces clic en **Consultar al proveedor**: en la parte superior de **Detalles del activo** para todo,
+y cuando haces clic en **Consultar Proveedor**: en la parte superior de **Detalles del activo** para todo,
 junto a **Identificadores** o en un editor de distribuciones solo para esa parte. Necesita un proveedor y un
 identificador.
 
@@ -100,7 +100,7 @@ Cada fila del diálogo muestra tu **Valor actual** junto al **Valor del proveedo
 Los valores aceptados solo rellenan el formulario: se guardan cuando guardas el activo.
 
 - **Tu tipo refinado se conserva.** Borsa Italiana, por ejemplo, informa todos los instrumentos de ETFplus como
-  **ETF** sin más: si elegiste **Equity ETF**, eso cuenta como coincidencia y no aparece ninguna fila (lo mismo
+  **ETF** sin más: si elegiste **ETF de renta variable**, eso cuenta como coincidencia y no aparece ninguna fila (lo mismo
   ocurre con **Crowdfunding**). Un tipo *más específico* que el tuyo sí se ofrece.
 - **Cada pregunta se hace una sola vez.** Cuando un resultado de búsqueda trae un ISIN (u otro código) distinto
   del que hay en el formulario, LibreFolio pregunta primero cuál es el principal, y la comparación no vuelve a
@@ -121,7 +121,7 @@ Un mismo valor puede tener varios códigos. LibreFolio mantiene **un solo activo
 **Más información** del formulario del activo:
 
 - **Identificadores**: los códigos principales, uno por tipo (ISIN, ticker…). **Añadir identificador** añade una fila y
-  **Consultar al proveedor** los obtiene.
+  **Consultar Proveedor** los obtiene.
 - **Otros identificadores**: cualquier código extra o etiqueta del bróker. Escribe uno y pulsa Intro, coma, punto y coma
   o Tabulador. Estos códigos son buscables y ayudan a reconocer el activo en importaciones posteriores.
 
@@ -162,11 +162,11 @@ En el formulario del activo, despliega **Más información**: en **Clasificació
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Distribución geográfica" alt="Editor de distribución geográfica en el modal del activo">
 </div>
 
-- **Añadir sector** / **Añadir país** añade una fila: elige la entrada y luego escribe su peso.
+- **Agregar sector** / **Agregar país** añade una fila: elige la entrada y luego escribe su peso.
 - El **Total** se pone verde al 100 %, ámbar cuando falta algo y rojo cuando te pasas.
 - **Equilibrar al 100 %**, una acción de fila, traslada toda la diferencia a esa fila. **Equilibrar filas seleccionadas**
   la reparte entre las filas seleccionadas, en proporción a sus pesos.
-- **Eliminar** borra una fila, **Consultar al proveedor** obtiene la distribución del proveedor e **Importar CSV**
+- **Eliminar** borra una fila, **Consultar Proveedor** obtiene la distribución del proveedor e **Importar CSV**
   carga una desde un archivo.
 
 ### 📥 Importar una distribución desde CSV {: #importing-a-distribution-csv }

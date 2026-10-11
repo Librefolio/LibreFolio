@@ -47,15 +47,15 @@ Les deux dispositions divisent la liste en trois panneaux au maximum, chacun ave
 |---|---|
 | **Vos actifs** | Actifs détenus actuellement dans un courtier que vous possédez |
 | **Actifs des autres utilisateurs** | Actifs détenus actuellement uniquement par d’autres utilisateurs — dans des courtiers que vous ne possédez pas |
-| **Suivis** | Actifs que personne ne détient actuellement — jamais achetés ou déjà vendus, gardés à l’œil |
+| **Surveillés** | Actifs que personne ne détient actuellement — jamais achetés ou déjà vendus, gardés à l’œil |
 
-Ce qui compte, c’est la position **aujourd’hui** : lorsque vous vendez toute votre position, l’actif passe dans *Actifs des autres utilisateurs* si quelqu’un d’autre le détient encore, et dans *Suivis* sinon. Les courtiers partagés avec vous en tant qu’**Éditeur** ou **Lecteur** comptent comme des courtiers d’autres utilisateurs, et une position réduite à un reliquat négligeable compte comme non détenue.
+Ce qui compte, c’est la position **aujourd’hui** : lorsque vous vendez toute votre position, l’actif passe dans *Actifs des autres utilisateurs* si quelqu’un d’autre le détient encore, et dans *Surveillés* sinon. Les courtiers partagés avec vous en tant qu’**Éditeur** ou **Lecteur** comptent comme des courtiers d’autres utilisateurs, et une position réduite à un reliquat négligeable compte comme non détenue.
 
 Dans la vue tableau, chaque panneau est un tableau avec ses propres pages ; redimensionner, déplacer ou masquer une colonne : ces opérations s’appliquent aux trois.
 
 ## 🔄 Garder les prix à jour
 
-- **Tout synchroniser** ouvre une fenêtre où **Démarrer la synchronisation** télécharge les derniers prix de chaque actif doté d’un fournisseur ; **Tout recharger** recharge la liste à partir de ce que LibreFolio a stocké. Dans l’onglet **[Corrélation](correlation.md)**, ils deviennent **Synchroniser la sélection**, qui télécharge aussi les taux de change servant à convertir les actifs sélectionnés, et **Tout recharger**, qui recalcule toutes les analyses.
+- **Sync. Tout** ouvre une fenêtre où **Démarrer la synchronisation** télécharge les derniers prix de chaque actif doté d’un fournisseur ; **Recharger Tout** recharge la liste à partir de ce que LibreFolio a stocké. Dans l’onglet **[Corrélation](correlation.md)**, ils deviennent **Sync. sélection**, qui télécharge aussi les taux de change servant à convertir les actifs sélectionnés, et **Recharger Tout**, qui recalcule toutes les analyses.
 - **Prix live** — tant que cette page ou la page d’un actif est ouverte et que la plage de dates se termine aujourd’hui, les prix se rafraîchissent d’eux-mêmes de temps à autre. Un prix passe au vert lorsqu’il a augmenté depuis le rafraîchissement précédent, au rouge lorsqu’il a baissé ; quand le marché est fermé, vous voyez la dernière clôture, sans couleur.
 - **En arrière-plan**, le serveur rafraîchit les prix selon un calendrier défini par votre administrateur ([Planificateur de données de marché](../../admin/settings.md#market-data-scheduler)). Le tableau de bord affiche les prix stockés.
 

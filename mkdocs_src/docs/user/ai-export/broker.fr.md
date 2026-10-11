@@ -16,7 +16,7 @@ L'export couvre **ce courtier uniquement**, dans la devise affichée par la page
 
 | Choix | Ce que vous obtenez |
 | :--- | :--- |
-| **Vue d'ensemble et historique du courtier** | Positions, liquidités, concentration, performance, flux, coûts, un résumé économique FIFO, un contexte de marché compact par actif et le repli |
+| **Courtier et évolution** | Positions, liquidités, concentration, performance, flux, coûts, un résumé économique FIFO, un contexte de marché compact par actif et le repli |
 | **Historique des actifs du courtier** | Prix détaillés, rendements, indicateurs, états et événements pour les actifs détenus chez ce courtier, avec la couverture |
 
 ---
@@ -26,7 +26,7 @@ L'export couvre **ce courtier uniquement**, dans la devise affichée par la page
 | Analyse | Ce que fait l'IA |
 | :--- | :--- |
 | **Revue du courtier** | Passe en revue les positions, les liquidités, la concentration, la performance, les coûts et le résumé économique FIFO, avec le contexte de marché |
-| **Performance du courtier et facteurs de marché** | Explique le résultat du courtier et recherche des facteurs de marché datés pour chaque actif qu'il détient : utilisez une IA capable de rechercher sur le web |
+| **Performance et facteurs de marché** | Explique le résultat du courtier et recherche des facteurs de marché datés pour chaque actif qu'il détient : utilisez une IA capable de rechercher sur le web |
 | **Stratégies de compensation des moins-values** | Explore comment les moins-values fiscales disponibles ou arrivant à expiration pourraient compenser les gains, en utilisant les lots FIFO de ce courtier |
 
 ??? note "🧾 Stratégies de compensation des moins-values — ayez vos informations fiscales à portée de main"

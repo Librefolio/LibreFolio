@@ -101,7 +101,7 @@ Para transferencias y ajustes, LibreFolio admite una **anulación del coste base
 **Cuando se establece (modo manual):**
 
 - La transacción entra en el cálculo del PMC como una adquisición ponderada normal que cuesta $\text{anulación} \times Q_{tx}$, convertida en la fecha de la transacción como cualquier compra
-- Esto preserva la continuidad del coste entre brókers (por ejemplo, al transferir del bróker A al bróker B)
+- Esto preserva la continuidad del coste entre brókeres (por ejemplo, al transferir del bróker A al bróker B)
 - Una anulación de **cero** es una adquisición gratuita: la dilución del Ejemplo 3
 
 **Cuando falta:**
@@ -195,7 +195,7 @@ La moneda de la última adquisición es la moneda pagada por la transacción má
 
 ## ⚙️ Implementación: alcance a nivel de posición
 
-El PMC se mantiene **por posición** $(a, b)$ — es decir, por par (activo, bróker). El mismo activo mantenido en dos brókers tiene dos pools de PMC independientes.
+El PMC se mantiene **por posición** $(a, b)$ — es decir, por par (activo, bróker). El mismo activo mantenido en dos brókeres tiene dos pools de PMC independientes.
 
 $$
 \text{PMC}(a, b_1, t) \neq \text{PMC}(a, b_2, t) \quad \text{en general}

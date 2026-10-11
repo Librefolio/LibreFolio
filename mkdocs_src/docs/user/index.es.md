@@ -17,8 +17,8 @@ Bienvenido al Manual de Usuario de LibreFolio. Esta sección proporciona guías 
 
 ## ⭐ Funciones Principales
 
-- 🏦 **[Brókers](brokers/index.md)**: Crea y gestiona cuentas de corretaje, carga informes y comparte el acceso con otros usuarios.
-- 📂 **[Archivos y Subidas](files/index.md)**: Gestiona recursos estáticos e informes de brókers. Carga archivos, edita imágenes.
+- 🏦 **[Brókeres](brokers/index.md)**: Crea y gestiona cuentas de corretaje, carga informes y comparte el acceso con otros usuarios.
+- 📂 **[Archivos y Subidas](files/index.md)**: Gestiona recursos estáticos e informes de brókeres. Carga archivos, edita imágenes.
 - 💱 **[Tipos de cambio](fx/index.md)**: Realiza el seguimiento de los tipos de cambio de divisas, configura los proveedores de datos, establece la sincronización automática e importa datos CSV.
 - 🧰 **[Herramientas](tools/index.md)**: Cálculos independientes que nunca modifican tu cartera. El primero, el **[asignador PAC](tools/pac-allocator/index.md)**, planifica las compras que acercan al máximo una nueva inversión a su asignación objetivo, sin enviar ninguna orden.
 
