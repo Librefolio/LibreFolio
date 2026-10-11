@@ -152,10 +152,10 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
 
 
 def utils_gate_docs_links(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts)."""
+    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts, anchors from the render)."""
     print_section("Utils: Docs Link Gate")
-    print_info("Testing: scripts/docs_links.py")
-    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket")
+    print_info("Testing: scripts/docs_links.py, dev.py mkdocs check-links (_mkdocs_check_anchor, _mkdocs_page_anchors)")
+    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket, anchors from the page's MkDocs render in every language, dev.py without MkDocs")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_links_gate.py", test_names)
     return run_command(cmd, "Docs link discovery tests", verbose=verbose)
 
@@ -277,6 +277,15 @@ def utils_translation_cache(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Translation cache tests", verbose=verbose)
 
 
+def utils_translation_validator(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the translate-validate checks of R2 batches 11-13 and the block-based LINE_COUNT of the structural diff (Aphra pipeline)."""
+    print_section("Utils: Translation Validator")
+    print_info("Testing: mkdocs_src/aphra-pipeline/validate_translations.py (_strip_code, HTML checks, text-untranslated, inline-code-missing, anchor-missing, validate_file), page_anchors.py (render_anchors, file_anchors), translate_docs.py (_structural_diff)")
+    print_info("Tests: fence-aware code stripping, inline code never read as HTML, untranslated alt/title/aria-label/data-title, inline code spans kept, link anchors from the page's MkDocs render, LINE_COUNT on blocks")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_validator.py", test_names)
+    return run_command(cmd, "Translation validator tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -384,7 +393,10 @@ Tests for utility modules and helper functions:
         "gate-docs-links",
         utils_gate_docs_links,
         name="Docs Link Gate",
-        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped",
+        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped; a link's anchor must be an id of the page's own MkDocs render in English and in every translation, and dev.py builds its CLI without MkDocs while check-links says it needs it",
+        # Discovery on files under tmp_path; dev.py runs in child processes, on a docs tree
+        # under tmp_path for the anchor verdict and on the code alone for the runs without
+        # MkDocs. Reads mkdocs_src/mkdocs.yml (the site configuration the anchors are rendered with).
         isolation="pure",
     )
     add_test(
@@ -482,6 +494,18 @@ Tests for utility modules and helper functions:
         desc="A language counts as done only for the EN version it was translated or stamped from: after an EN edit, a language that fails (parallel and sequential paths), is left out by --lang or is cut short by an interruption is offered again by the next run, and its failure keeps the last translated_at; a failed --force retry of an unchanged page stays done; translate-stamp of a changed EN reopens the languages it does not stamp and clears the failure records of those it does; an EN edit saved while the analysis runs is offered again too, the md5 recorded being the one of the bytes translated (LF and CRLF)",
         # run_translate and run_stamp on a docs tree and a cache under tmp_path, the
         # LLM seams faked: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-validator",
+        utils_translation_validator,
+        name="Translation Validator",
+        desc="translate-validate reads what a page renders: fenced blocks of any kind and inline code are stripped before the HTML checks, so inline code such as EUR<USD is never a tag while a real tag's class/src/data-* changes are still reported; alt, title, aria-label, data-title and Markdown image alts of three words or more copied from the source warn (text-untranslated); every inline code span of the source stays in the translation, digit grouping aside, named as the source writes it (inline-code-missing); a page.md#anchor link must land on an anchor of the translated target or its EN fallback, the anchors being the ids of the page's own MkDocs render with the site configuration (anchor-missing, page_anchors.py); the structural diff counts blocks, not lines, for LINE_COUNT",
+        # Check functions on strings in memory and on a docs tree under tmp_path (DOCS_DIR
+        # redirected in every test): no DB, no server, no network, never opens the repo's
+        # docs or translation cache, no writes outside tmp_path. Reads mkdocs_src/mkdocs.yml
+        # (the site configuration the anchors are rendered with).
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

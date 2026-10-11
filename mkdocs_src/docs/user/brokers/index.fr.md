@@ -31,7 +31,7 @@ La page **Courtiers** affiche une carte par courtier, avec sa valeur (**NAV**) d
 
     - **Description** — vos propres notes.
     - **Plugin d'importation par défaut** — l'importateur que l'[Assistant d'importation](../transactions/import/index.md) propose pour les fichiers de ce courtier.
-    - **URL du portail** — le site web du courtier, ouvert depuis la page du courtier. Son icône est utilisée lorsque vous ne définissez pas d'**URL d'icône personnalisée**.
+    - **URL du portail** — le site web du courtier, ouvert depuis la page du courtier. L'icône du courtier est, dans cet ordre : votre **URL d'icône personnalisée** ; l'icône du **Plugin d'importation par défaut**, lorsque cet importateur est conçu pour ce courtier ; l'icône du site web ; l'icône d'un importateur générique comme le CSV générique ; sinon une mallette.
     - **Compte ouvert** et **Compte actif** — la date d'ouverture du compte, et s'il est toujours ouvert. Un courtier fermé apparaît en grisé dans la liste.
     - **Options de trading** — **Autoriser l'achat à effet de levier** et **Autoriser la vente à découvert**, expliquées dans [Options de trading](info.md#trading-options).
     - **Soldes initiaux** (uniquement lors de la création) — votre trésorerie de départ. LibreFolio enregistre un **Dépôt** par devise, **daté d'aujourd'hui** : si l'argent était présent plus tôt, modifiez la date de ces dépôts sur la page [Transactions](../transactions/index.md).
