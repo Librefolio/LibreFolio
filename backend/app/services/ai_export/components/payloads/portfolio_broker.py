@@ -33,7 +33,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import Field
 from sqlalchemy import select
@@ -77,6 +77,7 @@ __all__ = [
     "build_fifo_lot_refs",
     "build_performance_bucket_rows",
     "build_uniform_performance_buckets",
+    "count_unavailable_amount_lots",
     "discover_transacted_asset_ids",
     "has_nonzero_open_lot",
     "load_lots_results",
@@ -93,6 +94,7 @@ __all__ = [
     "performance_path_bucket_count",
     "resolve_accessible_broker_ids",
     "summarize_fifo_asset_rows",
+    "total_fifo_residual_cost_basis",
 ]
 
 
@@ -152,16 +154,23 @@ def lot_status(lot: Any) -> _FifoLotStatus:
     return _FifoLotStatus.PARTIAL
 
 
-def lot_residual_cost_basis(lot: Any) -> Decimal:
-    """Return original cost attributable to the still-open quantity."""
+def lot_residual_cost_basis(lot: Any) -> Decimal | None:
+    """Return original cost attributable to the still-open quantity.
+
+    `None` when the lot is still open and its original cost is unknown (a missing FX rate);
+    a closed lot has no residual cost, so it is 0 whatever its cost.
+    """
 
     open_quantity = abs(_lot_decimal(getattr(lot, "open_quantity", None)))
     if open_quantity.is_zero():
         return Decimal("0")
+    original_cost = getattr(lot, "original_cost", None)
+    if original_cost is None:
+        return None
     original_quantity = abs(_lot_decimal(getattr(lot, "original_quantity", None)))
     if original_quantity.is_zero():
         return Decimal("0")
-    return _lot_decimal(getattr(lot, "original_cost", None)) * open_quantity / original_quantity
+    return _lot_decimal(original_cost) * open_quantity / original_quantity
 
 
 def has_nonzero_open_lot(lots: Sequence[Any]) -> bool:
@@ -398,7 +407,10 @@ def build_performance_bucket_rows(
 
 
 class FifoAssetSummaryRow(StrictModel):
-    """Per-asset economic FIFO summary derived from authoritative lot rows."""
+    """Per-asset economic FIFO summary derived from authoritative lot rows.
+
+    A summed amount with an unknown lot part (a missing FX rate) is `None`, never a partial sum.
+    """
 
     asset_id: int
     asset_name: str
@@ -410,19 +422,19 @@ class FifoAssetSummaryRow(StrictModel):
     original_quantity: SafeDecimal
     open_quantity: SafeDecimal
     realized_quantity: SafeDecimal
-    original_cost: Currency
-    residual_cost_basis: Currency
-    cumulative_proceeds: Currency
-    realized_pnl: Currency
+    original_cost: Currency | None
+    residual_cost_basis: Currency | None
+    cumulative_proceeds: Currency | None
+    realized_pnl: Currency | None
     open_value: Currency | None = None
     unrealized_pnl: Currency | None = None
     potential_gain: Currency | None = None
     potential_loss: Currency | None = None
     total_pnl: Currency | None = None
     net_total_pnl: Currency | None = None
-    income: Currency
-    fees: Currency
-    taxes: Currency
+    income: Currency | None
+    fees: Currency | None
+    taxes: Currency | None
     valued_open_lot_count: int = Field(..., ge=0)
     unavailable_open_lot_count: int = Field(..., ge=0)
     value_coverage_status: str
@@ -442,7 +454,11 @@ class FifoCustodyRow(StrictModel):
 
 
 class FifoLotRow(StrictModel):
-    """One FIFO lot row with a prompt-local audit reference, never a database ID."""
+    """One FIFO lot row with a prompt-local audit reference, never a database ID.
+
+    An amount that cannot be valued in the target currency (a missing FX rate) is `None`,
+    never zero and never the unconverted native amount.
+    """
 
     lot_ref: str = Field(..., pattern=r"^L[1-9]\d*$")
     asset_id: int
@@ -453,29 +469,91 @@ class FifoLotRow(StrictModel):
     status: str
     opening_date: Date
     closing_date: Date | None = None
-    opening_unit_price: Currency
+    opening_unit_price: Currency | None
     original_quantity: SafeDecimal
     open_quantity: SafeDecimal
     realized_quantity: SafeDecimal
-    original_cost: Currency
-    residual_cost_basis: Currency
-    cumulative_proceeds: Currency
+    original_cost: Currency | None
+    residual_cost_basis: Currency | None
+    cumulative_proceeds: Currency | None
     open_value: Currency | None = None
-    realized_pnl: Currency
+    realized_pnl: Currency | None
     unrealized_pnl: Currency | None = None
     total_pnl: Currency | None = None
     net_total_pnl: Currency | None = None
-    income: Currency
-    fees: Currency
-    taxes: Currency
+    income: Currency | None
+    fees: Currency | None
+    taxes: Currency | None
     value_source: str | None = None
     net_metrics_status: str
     states: list[str] = Field(default_factory=list)
     current_custody: list[FifoCustodyRow] = Field(default_factory=list)
 
 
+_FIFO_ROW_CURRENCY_FIELDS: tuple[str, ...] = (
+    "opening_unit_price",
+    "original_cost",
+    "residual_cost_basis",
+    "cumulative_proceeds",
+    "open_value",
+    "realized_pnl",
+    "unrealized_pnl",
+    "total_pnl",
+    "net_total_pnl",
+    "income",
+    "fees",
+    "taxes",
+)
+
+
+def _fifo_rows_currency(rows: Sequence[FifoLotRow]) -> str | None:
+    """The one currency of the rows' known amounts; `None` when every amount is unknown.
+
+    Every known amount names it: a lot can have all of its cost figures unknown and still a
+    known market value.
+    """
+
+    currency_codes = {value.code for row in rows for field_name in _FIFO_ROW_CURRENCY_FIELDS if (value := getattr(row, field_name)) is not None}
+    if len(currency_codes) > 1:
+        raise ValueError("FIFO Asset summary rows must use one target currency")
+    return next(iter(currency_codes), None)
+
+
+def _fifo_value_coverage_status(open_rows: Sequence[FifoLotRow], valued_open_rows: Sequence[FifoLotRow]) -> str:
+    if not open_rows:
+        return "not_applicable"
+    if not valued_open_rows:
+        return "unavailable"
+    if len(valued_open_rows) == len(open_rows):
+        return "complete"
+    return "partial"
+
+
+def _sum_complete_amounts(values: Sequence[Currency | None], currency_code: str | None) -> Currency | None:
+    """The sum, or `None` as soon as one part is unknown: a partial sum would read as the total."""
+
+    if any(value is None for value in values):
+        return None
+    return Currency(code=cast(str, currency_code), amount=sum((value.amount for value in values if value is not None), Decimal("0")))
+
+
+def _sum_known_amounts(values: Sequence[Currency | None], currency_code: str | None) -> Currency | None:
+    """The sum of the known parts, or `None` when none is known."""
+
+    available = [value for value in values if value is not None]
+    if not available:
+        return None
+    return Currency(code=cast(str, currency_code), amount=sum((value.amount for value in available), Decimal("0")))
+
+
 def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow:
-    """Aggregate one Asset's public lot rows without re-deriving lot economics."""
+    """Aggregate one Asset's public lot rows without re-deriving lot economics.
+
+    The cost, proceeds, realized, income/fee/tax, total and net totals are `None` as soon as one lot's
+    part is unknown (a missing FX rate, or no market value). Market-value totals (open value, unrealized
+    P&L, potential gain and loss) keep summing the valued open lots, with their coverage stated in
+    `value_coverage_status` and the valued/unavailable open lot counts.
+    """
 
     rows = tuple(rows)
     if not rows:
@@ -483,45 +561,20 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
     asset_ids = {row.asset_id for row in rows}
     if len(asset_ids) != 1:
         raise ValueError("FIFO Asset summary rows must belong to one asset")
-    currency_codes = {
-        value.code
-        for row in rows
-        for value in (
-            row.original_cost,
-            row.residual_cost_basis,
-            row.cumulative_proceeds,
-            row.realized_pnl,
-            row.income,
-            row.fees,
-            row.taxes,
-        )
-    }
-    if len(currency_codes) != 1:
-        raise ValueError("FIFO Asset summary rows must use one target currency")
-    currency_code = next(iter(currency_codes))
+    currency_code = _fifo_rows_currency(rows)
     open_rows = tuple(row for row in rows if row.open_quantity != 0)
     valued_open_rows = tuple(row for row in open_rows if row.open_value is not None and row.unrealized_pnl is not None)
-    if not open_rows:
-        value_coverage_status = "not_applicable"
-    elif not valued_open_rows:
-        value_coverage_status = "unavailable"
-    elif len(valued_open_rows) == len(open_rows):
-        value_coverage_status = "complete"
-    else:
-        value_coverage_status = "partial"
+    value_coverage_status = _fifo_value_coverage_status(open_rows, valued_open_rows)
 
-    def _sum_required(field_name: str) -> Currency:
-        return Currency(code=currency_code, amount=sum((getattr(row, field_name).amount for row in rows), Decimal("0")))
+    def _sum_complete(field_name: str) -> Currency | None:
+        return _sum_complete_amounts([getattr(row, field_name) for row in rows], currency_code)
 
     def _sum_optional(field_name: str, selected_rows: Sequence[FifoLotRow] = rows) -> Currency | None:
-        available = [value for row in selected_rows if (value := getattr(row, field_name)) is not None]
-        if not available:
-            return None
-        return Currency(code=currency_code, amount=sum((value.amount for value in available), Decimal("0")))
+        return _sum_known_amounts([getattr(row, field_name) for row in selected_rows], currency_code)
 
-    unrealized_amounts = [row.unrealized_pnl.amount for row in valued_open_rows if row.unrealized_pnl is not None]
-    potential_gain = Currency(code=currency_code, amount=sum((max(amount, Decimal("0")) for amount in unrealized_amounts), Decimal("0"))) if unrealized_amounts else None
-    potential_loss = Currency(code=currency_code, amount=sum((max(-amount, Decimal("0")) for amount in unrealized_amounts), Decimal("0"))) if unrealized_amounts else None
+    unrealized_amounts = [row.unrealized_pnl for row in valued_open_rows if row.unrealized_pnl is not None]
+    potential_gain = _sum_known_amounts([Currency(code=amount.code, amount=max(amount.amount, Decimal("0"))) for amount in unrealized_amounts], currency_code)
+    potential_loss = _sum_known_amounts([Currency(code=amount.code, amount=max(-amount.amount, Decimal("0"))) for amount in unrealized_amounts], currency_code)
     net_statuses = {row.net_metrics_status for row in rows}
     net_metrics_status = next(iter(net_statuses)) if len(net_statuses) == 1 else "PARTIAL"
     broker_ids = {
@@ -545,19 +598,19 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
         original_quantity=sum((row.original_quantity for row in rows), Decimal("0")),
         open_quantity=sum((row.open_quantity for row in rows), Decimal("0")),
         realized_quantity=sum((row.realized_quantity for row in rows), Decimal("0")),
-        original_cost=_sum_required("original_cost"),
-        residual_cost_basis=_sum_required("residual_cost_basis"),
-        cumulative_proceeds=_sum_required("cumulative_proceeds"),
-        realized_pnl=_sum_required("realized_pnl"),
+        original_cost=_sum_complete("original_cost"),
+        residual_cost_basis=_sum_complete("residual_cost_basis"),
+        cumulative_proceeds=_sum_complete("cumulative_proceeds"),
+        realized_pnl=_sum_complete("realized_pnl"),
         open_value=_sum_optional("open_value", open_rows),
         unrealized_pnl=_sum_optional("unrealized_pnl", open_rows),
         potential_gain=potential_gain,
         potential_loss=potential_loss,
-        total_pnl=_sum_optional("total_pnl"),
-        net_total_pnl=_sum_optional("net_total_pnl"),
-        income=_sum_required("income"),
-        fees=_sum_required("fees"),
-        taxes=_sum_required("taxes"),
+        total_pnl=_sum_complete("total_pnl"),
+        net_total_pnl=_sum_complete("net_total_pnl"),
+        income=_sum_complete("income"),
+        fees=_sum_complete("fees"),
+        taxes=_sum_complete("taxes"),
         valued_open_lot_count=len(valued_open_rows),
         unavailable_open_lot_count=len(open_rows) - len(valued_open_rows),
         value_coverage_status=value_coverage_status,
@@ -567,6 +620,35 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
         states=sorted({state for row in rows for state in row.states}),
         has_in_transit_custody="IN_TRANSIT" in custody_types,
     )
+
+
+# The lot amounts a missing FX rate leaves unknown (B3b). Amounts already optional before them
+# (market value and P&L) have their own coverage and are not counted.
+_FIFO_LOT_CONVERTED_AMOUNTS: tuple[str, ...] = (
+    "opening_unit_price",
+    "original_cost",
+    "residual_cost_basis",
+    "cumulative_proceeds",
+    "realized_pnl",
+    "income",
+    "fees",
+    "taxes",
+)
+
+
+def count_unavailable_amount_lots(rows: Sequence[FifoLotRow]) -> int:
+    """Lots with at least one amount that cannot be valued in the target currency (a missing FX rate)."""
+
+    return sum(1 for row in rows if any(getattr(row, field_name) is None for field_name in _FIFO_LOT_CONVERTED_AMOUNTS))
+
+
+def total_fifo_residual_cost_basis(rows: Sequence[FifoAssetSummaryRow], currency_code: str) -> Currency | None:
+    """Total residual cost basis across Asset rows: `None` as soon as one Asset's part is unknown."""
+
+    amounts = [row.residual_cost_basis for row in rows]
+    if any(amount is None for amount in amounts):
+        return None
+    return Currency(code=currency_code, amount=sum((amount.amount for amount in amounts), Decimal("0")))
 
 
 # =============================================================================
@@ -682,21 +764,21 @@ def map_fifo_lot_row(
         status=status.value.upper(),
         opening_date=lot.opening_date,
         closing_date=closing_date,
-        opening_unit_price=_currency_required(currency_code, lot.opening_unit_price),
+        opening_unit_price=_currency(currency_code, lot.opening_unit_price),
         original_quantity=lot.original_quantity,
         open_quantity=lot.open_quantity,
         realized_quantity=lot.realized_quantity,
-        original_cost=_currency_required(currency_code, lot.original_cost),
-        residual_cost_basis=_currency_required(currency_code, residual_cost_basis),
-        cumulative_proceeds=_currency_required(currency_code, lot.cumulative_proceeds),
+        original_cost=_currency(currency_code, lot.original_cost),
+        residual_cost_basis=_currency(currency_code, residual_cost_basis),
+        cumulative_proceeds=_currency(currency_code, lot.cumulative_proceeds),
         open_value=_currency(currency_code, lot.open_value),
-        realized_pnl=_currency_required(currency_code, lot.realized_pnl),
+        realized_pnl=_currency(currency_code, lot.realized_pnl),
         unrealized_pnl=_currency(currency_code, lot.market_pnl),
         total_pnl=_currency(currency_code, lot.total_pnl),
         net_total_pnl=_currency(currency_code, lot.net_total_pnl),
-        income=_currency_required(currency_code, lot.asset_income),
-        fees=_currency_required(currency_code, lot.allocated_fees),
-        taxes=_currency_required(currency_code, lot.allocated_taxes),
+        income=_currency(currency_code, lot.asset_income),
+        fees=_currency(currency_code, lot.allocated_fees),
+        taxes=_currency(currency_code, lot.allocated_taxes),
         value_source=lot.value_source,
         net_metrics_status=lot.net_metrics_status,
         states=list(lot.states),

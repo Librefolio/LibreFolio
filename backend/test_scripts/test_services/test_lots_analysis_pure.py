@@ -1145,6 +1145,62 @@ class TestBuildLotSummaries:
 
         assert (row.value_source, row.open_value, row.pnl) == (None, None, None)
 
+    # -- B3b: a base field is its conversion, or nothing ---------------------- #
+
+    @staticmethod
+    def _sold_twice() -> list[LotClosure]:
+        """40 of the 100 units sold in two halves, 20 on 20 Jan and 20 on 1 Feb: 240 of proceeds and 40 of gain each."""
+        return [
+            _closure(1, transaction_id=500, quantity=D("20"), close_date=date(2024, 1, 20), realized_pnl=D("40"), proceeds=D("240")),
+            _closure(1, transaction_id=501, quantity=D("20"), close_date=date(2024, 2, 1), realized_pnl=D("40"), proceeds=D("240")),
+        ]
+
+    def test_with_every_rate_the_base_fields_are_the_converted_amounts(self):
+        """B3b control: a USD lot whose opening and both sales have a USD rate (0.5, 0.5, 0.6).
+
+        The four base fields are what B3b keeps unchanged: the cost and unit price at the opening rate,
+        each sale at its own rate. 1000 × 0.5, 10 × 0.5, 40 × 0.5 + 40 × 0.6, 240 × 0.5 + 240 × 0.6.
+        """
+        rates = {("USD", date(2024, 1, 10)): D("0.5"), ("USD", date(2024, 1, 20)): D("0.5"), ("USD", date(2024, 2, 1)): D("0.6")}
+        row = self._call(lot=_lot(1, currency="USD", open_quantity=D("60")), closures_by_lot={1: self._sold_twice()}, fx_resolver=_resolver("EUR", rates))
+
+        assert (row.original_cost, row.opening_unit_price, row.realized_pnl, row.cumulative_proceeds) == (D("500"), D("5"), D("44"), D("264"))
+
+    def test_the_cost_of_a_lot_without_a_rate_at_its_opening_is_unknown(self):
+        """B3b: a USD lot with no USD rate at its opening date, analysed in EUR.
+
+        original_cost and opening_unit_price are the cost in EUR at the opening date; without that rate
+        they are unknown. Today the required fields carry the native 1000 and 10 USD as if they were euros.
+        """
+        row = self._call(lot=_lot(1, currency="USD"))
+
+        assert (row.original_cost, row.opening_unit_price) == (None, None)
+
+    def test_the_realized_figures_of_a_long_lot_with_a_sale_without_a_rate_are_unknown(self):
+        """B3b: the same USD lot, costed at 0.5; its first sale (20 Jan) has a rate, its second (1 Feb) has none.
+
+        realized_pnl and cumulative_proceeds need every sale in EUR, so they are unknown -- neither the
+        known half alone nor, as today, the known half plus the native USD of the other (20 + 40, 120 + 240).
+        """
+        rates = {("USD", date(2024, 1, 10)): D("0.5"), ("USD", date(2024, 1, 20)): D("0.5")}
+        row = self._call(lot=_lot(1, currency="USD", open_quantity=D("60")), closures_by_lot={1: self._sold_twice()}, fx_resolver=_resolver("EUR", rates))
+
+        assert (row.original_cost, row.opening_unit_price) == (D("500"), D("5"))
+        assert (row.realized_pnl, row.cumulative_proceeds) == (None, None)
+
+    def test_the_proceeds_of_a_short_lot_without_a_rate_at_its_opening_are_unknown(self):
+        """B3b: a USD short that sold 1500 USD at its opening, a day without a USD rate; its cover (1 Feb) has one.
+
+        A short's proceeds arrived at its opening, so they are converted there: unknown, never 1500 "EUR"
+        as today. Its realized P&L only needs the cover's rate and stays known: -80 × 0.5.
+        """
+        lot = _lot(1, direction="SHORT", currency="USD", open_quantity=D("60"), cumulative_proceeds=D("1500"))
+        cover = _closure(1, quantity=D("40"), close_reason="BUY", realized_pnl=D("-80"), proceeds=D("0"))
+        row = self._call(lot=lot, closures_by_lot={1: [cover]}, fx_resolver=_resolver("EUR", {("USD", date(2024, 2, 1)): D("0.5")}))
+
+        assert row.realized_pnl == D("-40")
+        assert row.cumulative_proceeds is None
+
 
 # --------------------------------------------------------------------------- #
 # _build_value_history / _build_return_history
@@ -1354,19 +1410,20 @@ class TestBuildValueAndReturnHistory:
 
 
 class TestSmallBuilders:
-    def test_converted_cumulative_proceeds_of_a_short_lot_uses_the_lot_total(self):
+    def test_known_cumulative_proceeds_of_a_short_lot_uses_the_lot_total(self):
         """A short's proceeds arrived at opening, not at each closure."""
         lot = _lot(1, direction="SHORT", cumulative_proceeds=D("1500"), currency="USD")
-        value = _svc()._converted_cumulative_proceeds(lot, [], _resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}))
+        value = _svc()._known_cumulative_proceeds(lot, [], _resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}))
         assert value == D("750.0")
 
-    def test_converted_cumulative_proceeds_of_a_short_lot_falls_back_to_the_native_total(self):
+    def test_known_cumulative_proceeds_of_a_short_lot_without_a_rate_are_unknown(self):
+        """B3b: no rate at the opening date leaves them unknown, never the native 1500 USD read as euros."""
         lot = _lot(1, direction="SHORT", cumulative_proceeds=D("1500"), currency="USD")
-        assert _svc()._converted_cumulative_proceeds(lot, [], _resolver("EUR")) == D("1500")
+        assert _svc()._known_cumulative_proceeds(lot, [], _resolver("EUR")) is None
 
-    def test_converted_cumulative_proceeds_of_a_long_lot_sums_its_closures(self):
+    def test_known_cumulative_proceeds_of_a_long_lot_sums_its_closures(self):
         lot = _lot(1)
-        value = _svc()._converted_cumulative_proceeds(lot, [_closure(1, proceeds=D("300")), _closure(1, proceeds=D("200"))], _resolver("EUR"))
+        value = _svc()._known_cumulative_proceeds(lot, [_closure(1, proceeds=D("300")), _closure(1, proceeds=D("200"))], _resolver("EUR"))
         assert value == D("500")
 
     def test_gantt_ignores_fragments_of_unselected_lots(self):
@@ -1377,6 +1434,21 @@ class TestSmallBuilders:
             _resolver("EUR"),
         )
         assert {segment.lot_id for segment in segments} == {1}
+
+    def test_a_gantt_fragment_without_a_rate_at_its_start_has_no_unit_price(self):
+        """B3b: a USD lot, 40 of it sold on 1 Feb, a day without a USD rate; it opened on a day with one (0.5).
+
+        Each fragment's unit_price is its price in EUR at the fragment's start: 5 for the original
+        fragment; unknown for the 60 left from 1 Feb -- today it carries the native 10 USD as euros.
+        """
+        segments = _svc()._build_gantt_segments(
+            [_fragment(1, end_date=date(2024, 2, 1)), _fragment(1, fragment_id="frag-1b", quantity=D("60"), start_date=date(2024, 2, 1))],
+            [1],
+            {1: _lot(1, currency="USD", open_quantity=D("60"))},
+            _resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}),
+        )
+
+        assert {segment.fragment_id: segment.unit_price for segment in segments} == {"frag-1": D("5"), "frag-1b": None}
 
     def test_closure_rows_ignore_closures_of_unselected_lots(self):
         rows = _svc()._build_closure_rows([_closure(1), _closure(2)], {1}, {1: _lot(1), 2: _lot(2)}, _resolver("EUR"))

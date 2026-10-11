@@ -37,6 +37,8 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
+from pydantic import Field
+
 from backend.app.schemas.common import Currency, CurrencyCode, DateRangeModel, SafeDecimal, StrictModel
 
 
@@ -455,18 +457,22 @@ class AssetLotCustodyRow(AssetComponentModel):
 
 
 class AssetLotDetailRow(AssetComponentModel):
-    """One lot with a prompt-local audit reference, never a database identifier."""
+    """One lot with a prompt-local audit reference, never a database identifier.
+
+    An amount that cannot be valued in the target currency (a missing FX rate) is `None`,
+    never zero and never the unconverted native amount.
+    """
 
     lot_ref: str
     opening_broker_id: int
     opening_date: Date
-    opening_unit_price: SafeDecimal
+    opening_unit_price: SafeDecimal | None
     original_quantity: SafeDecimal
-    original_cost: SafeDecimal
+    original_cost: SafeDecimal | None
     open_quantity: SafeDecimal
     realized_quantity: SafeDecimal
-    cumulative_proceeds: SafeDecimal
-    realized_pnl: SafeDecimal
+    cumulative_proceeds: SafeDecimal | None
+    realized_pnl: SafeDecimal | None
     open_value: SafeDecimal | None = None
     unrealized_pnl: SafeDecimal | None = None
     total_pnl: SafeDecimal | None = None
@@ -478,9 +484,9 @@ class AssetLotDetailRow(AssetComponentModel):
     opening_reference_unit_price: SafeDecimal | None = None
     opening_reference_price_source: str | None = None
     opening_market_value: SafeDecimal | None = None
-    income: SafeDecimal
-    allocated_fees: SafeDecimal
-    allocated_taxes: SafeDecimal
+    income: SafeDecimal | None
+    allocated_fees: SafeDecimal | None
+    allocated_taxes: SafeDecimal | None
     value_source: str | None = None
     net_metrics_status: str
     states: tuple[str, ...] = ()
@@ -504,6 +510,11 @@ class AssetLotDetailPayload(AssetComponentModel):
     it is omitted from `lots` rather than silently treated as open, and
     counted in `omitted_degraded_lot_count` (no lot/transaction identifiers
     are ever exposed, per this component's no-ID contract).
+
+    `unavailable_amount_lot_count` states how many exported lots have an amount
+    that cannot be valued in the target currency (a missing FX rate). It is
+    always present, 0 included: a compact table drops a column that is null in
+    every row, so the count is the trace that those amounts are unavailable.
     """
 
     asset_id: int
@@ -512,6 +523,7 @@ class AssetLotDetailPayload(AssetComponentModel):
     cost_allocation_semantics: str
     lots: tuple[AssetLotDetailRow, ...] = ()
     omitted_degraded_lot_count: int = 0
+    unavailable_amount_lot_count: int = Field(..., ge=0)
 
 
 __all__ = [
