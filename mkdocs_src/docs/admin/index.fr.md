@@ -1,6 +1,6 @@
 # 🛡️ Manuel d'administration
 
-Ce manuel s'adresse aux personnes qui installent et exploitent LibreFolio. La plupart des tâches d'administration s'effectuent depuis la ligne de commande, via des variables d'environnement, ou dans l'onglet **Admin** des paramètres de l'application.
+Ce manuel s'adresse aux personnes qui installent et exploitent LibreFolio. La plupart des tâches d'administration s'effectuent depuis la ligne de commande, via des variables d'environnement, ou dans l'onglet **Administration** des paramètres de l'application.
 
 ---
 
@@ -33,12 +33,12 @@ Lorsqu'un administrateur se connecte, LibreFolio vérifie sur GitHub la présenc
 - **Ignorer cette version** désactive l'invite automatique pour cette version ; une version plus récente sera à nouveau annoncée.
 - Une version n'est annoncée qu'une fois son image Docker téléchargeable, et la fenêtre attend qu'aucune autre fenêtre ni guide ne soit ouvert.
 - Sans accès à Internet, la vérification automatique échoue silencieusement : aucune erreur, aucune bannière.
-- Pour vérifier immédiatement, utilisez **Rechercher des mises à jour** dans le [journal des modifications](../user/settings/about.md#changelog-modal) : cette vérification signale les erreurs, ainsi que les versions que vous avez ignorées.
+- Pour vérifier immédiatement, utilisez **Vérifier les mises à jour** dans le [journal des modifications](../user/settings/about.md#changelog-modal) : cette vérification signale les erreurs, ainsi que les versions que vous avez ignorées.
 
 ??? note "👥 Autres utilisateurs — lorsqu'une personne qui n'est pas administratrice effectue une vérification"
 
     Pour les utilisateurs qui ne sont pas administrateurs, aucune vérification n'est effectuée à la connexion. Si l'un d'eux lance
-    **Rechercher des mises à jour** et qu'une version plus récente existe, la
+    **Vérifier les mises à jour** et qu'une version plus récente existe, la
     boîte de dialogue **Mise à jour disponible — contactez un administrateur** liste les administrateurs, avec leurs
     adresses e-mail lorsqu'elles sont disponibles, afin que ces utilisateurs sachent à qui s'adresser.
 

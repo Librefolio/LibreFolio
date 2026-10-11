@@ -3,7 +3,7 @@
 La page **Fichiers** conserve tout ce qui est téléversé dans LibreFolio, dans deux onglets :
 
 - **Ressources statiques** — avatars, icônes de courtiers et autres images ou documents, visibles par tous les utilisateurs ;
-- **Rapports de courtiers** — les fichiers de relevés à partir desquels vous importez des transactions, visibles uniquement par les personnes ayant accès à leur courtier.
+- **Rapports Courtier** — les fichiers de relevés à partir desquels vous importez des transactions, visibles uniquement par les personnes ayant accès à leur courtier.
 
 ---
 
@@ -26,7 +26,7 @@ Vous trouverez ici les **avatars** des utilisateurs, les **icônes** des courtie
 ### ⬆️ Téléverser un fichier
 
 1. Cliquez sur **Téléverser**, puis déposez les fichiers sur la zone ou cliquez dessus pour parcourir.
-2. Avant de téléverser, vous pouvez cliquer sur ✏️ **Modifier** sur une image pour la recadrer avec l’[outil de recadrage d’image](../misc/image-crop.md), puis confirmer avec **Recadrer** ; sur tout autre fichier, ✏️ **Renommer** change son nom. **Restaurer l’original** rétablit un fichier tel que vous l’avez sélectionné.
+2. Avant de téléverser, vous pouvez cliquer sur ✏️ **Modifier** sur une image pour la recadrer avec l’[outil de recadrage d’image](../misc/image-crop.md), puis confirmer avec **Recadrer** ; sur tout autre fichier, ✏️ **Renommer** change son nom. **Restaurer l'original** rétablit un fichier tel que vous l’avez sélectionné.
 3. Cliquez sur **Téléverser**.
 
 <div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
@@ -51,11 +51,11 @@ La colonne **Statut** vous indique où en est chaque fichier :
 
 ### 📤 Téléverser un rapport de courtier
 
-1. Dans **Rapports de courtiers**, cliquez sur **Téléverser** et sélectionnez des fichiers CSV ou Excel.
-2. Dans **Attribuer des courtiers**, choisissez le courtier de chaque fichier, ou un seul pour tous avec **Tout attribuer à**. **Créer nouveau** ajoute un courtier sur-le-champ ; si vous ne pouvez modifier qu’un seul courtier, il est déjà sélectionné.
+1. Dans **Rapports Courtier**, cliquez sur **Téléverser** et sélectionnez des fichiers CSV ou Excel.
+2. Dans **Assigner les Courtiers**, choisissez le courtier de chaque fichier, ou un seul pour tous avec **Assigner tous à**. **Créer nouveau** ajoute un courtier sur-le-champ ; si vous ne pouvez modifier qu’un seul courtier, il est déjà sélectionné.
 3. Cliquez sur **Téléverser**. Les fichiers sont stockés, mais **rien n’est encore importé**.
 
-Pour les importer, ouvrez l’[Assistant d’importation](../transactions/import/index.md) (**Transactions** → **Importer**) : son étape **Sélectionner des fichiers** liste les rapports que vous avez téléversés.
+Pour les importer, ouvrez l’[Assistant d’importation](../transactions/import/index.md) (**Transactions** → **Importer**) : son étape **Sélectionner** liste les rapports que vous avez téléversés.
 
 Le courtier que vous choisissez détermine uniquement le compte qui reçoit les transactions. L’importateur reconnaît automatiquement le format du fichier, et un plugin d’importation peut lire les exports de plusieurs courtiers.
 
@@ -65,7 +65,7 @@ Faites un clic droit sur un rapport pour **Aperçu**, **Télécharger** ou **Sup
 
 ### 🧩 Lots de rapports {: #report-sets }
 
-Certaines banques répartissent un compte sur plusieurs exports : [Danske Bank](../transactions/import/danske-bank.md), par exemple, nécessite un export d’opérations sur titres et un relevé du compte espèces. Les exports d’une telle banque que vous téléversez **ensemble** forment un **lot de rapports**, et LibreFolio les importe comme un seul lot, via un **fichier combiné** qu’il construit à partir de ceux-ci. La colonne **Lot de rapports** vous indique où en est chaque fichier (la même colonne apparaît dans les **Rapports téléversés** d’un courtier) :
+Certaines banques répartissent un compte sur plusieurs exports : [Danske Bank](../transactions/import/danske-bank.md), par exemple, nécessite un export d’opérations sur titres et un relevé du compte espèces. Les exports d’une telle banque que vous téléversez **ensemble** forment un **lot de rapports**, et LibreFolio les importe comme un seul lot, via un **fichier combiné** qu’il construit à partir de ceux-ci. La colonne **Lot de rapports** vous indique où en est chaque fichier (la même colonne apparaît dans les **Rapports Téléchargés** d’un courtier) :
 
 | Badge | Signification |
 |:--|:--|
@@ -89,7 +89,7 @@ Les deux onglets indiquent qui a téléversé chaque fichier dans la colonne **T
 
 - cliquez sur l’en-tête de colonne pour trier par téléverseur ;
 - ouvrez son filtre pour ne conserver que les fichiers d’une ou plusieurs personnes : cochez-les dans la liste, ou recherchez-les par nom ;
-- un fichier dont le téléverseur n’a pas été enregistré affiche *Téléverseur non enregistré*.
+- un fichier dont le téléverseur n’a pas été enregistré affiche *Utilisateur non indiqué*.
 
 Le filtre s’applique également à la vue grille des **Ressources statiques**. Il est enregistré dans l’adresse de la page, donc un signet ou un lien partagé s’ouvre avec le même filtre.
 
@@ -98,7 +98,7 @@ Le filtre s’applique également à la vue grille des **Ressources statiques**.
 ## 🔒 Accès et limites
 
 - 🌐 **Ressources statiques** — tout utilisateur connecté peut les voir.
-- 🔐 **Rapports de courtiers** — seuls les utilisateurs ayant accès au courtier peuvent les voir ; le téléversement et la suppression nécessitent un accès Propriétaire ou Éditeur.
+- 🔐 **Rapports Courtier** — seuls les utilisateurs ayant accès au courtier peuvent les voir ; le téléversement et la suppression nécessitent un accès Propriétaire ou Éditeur.
 - 📏 **Taille** — jusqu’à la limite définie par l’administrateur dans les [Paramètres globaux](../../admin/settings.md) : 10 Mo sauf modification.
 - 🚫 **Types de fichiers** — les programmes et scripts (tels que les fichiers `.exe`, `.sh` ou `.py`) sont refusés comme ressources statiques ; les rapports de courtiers doivent être des fichiers CSV ou Excel.
 

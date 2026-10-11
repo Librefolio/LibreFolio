@@ -27,14 +27,14 @@ ExtraMOT, EuroTLX) et fonds fermés (MIV) — ainsi que les fonds communs de pla
 - **Type** : les ETF, ETC et ETN arrivent tous en tant que simple **ETF**. Si vous connaissez la composition du fonds,
   affinez-le (par exemple **ETF actions** ou **ETF matières premières**) : une
   [vérification ultérieure par rapport aux données du fournisseur](../create-edit.md#provider-data-comparison) conserve votre choix.
-- **Obligations** : elles reçoivent le secteur **Obligations d'État** ou **Obligations d'entreprise** (émetteurs supranationaux :
-  **Financières**) et, lorsque l'émetteur est reconnu, son pays — *États-Unis d'Amérique*
+- **Obligations** : elles reçoivent le secteur **Obligations d’État** ou **Obligations d’entreprise** (émetteurs supranationaux :
+  **Financiers**) et, lorsque l'émetteur est reconnu, son pays — *États-Unis d'Amérique*
   devient **USA**.
 
 ## ✏️ Configuration
 
-**Recherche en ligne** remplit tout. Pour configurer le fournisseur manuellement, ouvrez l'actif avec
-**Modifier** (✏️) — ou **+ Ajouter un actif** pour un nouvel actif — puis développez **Affectation du fournisseur** :
+**Rechercher en Ligne** remplit tout. Pour configurer le fournisseur manuellement, ouvrez l'actif avec
+**Modifier** (✏️) — ou **+ Ajouter un actif** pour un nouvel actif — puis développez **Attribution du Fournisseur** :
 
 1. Choisissez **Borsa Italiana** comme **Fournisseur**.
 2. Saisissez l'**ISIN** de l'instrument, par exemple `IT0003128367` (ENEL). Chaque page d'instrument sur
@@ -42,7 +42,7 @@ ExtraMOT, EuroTLX) et fonds fermés (MIV) — ainsi que les fonds communs de pla
 3. Choisissez la **Langue** : 🇬🇧 English ou 🇮🇹 Italiano.
 4. Cliquez sur **Tester la configuration**, puis enregistrez.
 
-**Recherche en ligne** remplit également les trois autres paramètres ; ne les définissez manuellement que dans ces cas.
+**Rechercher en Ligne** remplit également les trois autres paramètres ; ne les définissez manuellement que dans ces cas.
 
 ??? note "🧾 Code interne du fonds — pour un fonds commun de placement ou une SICAV"
 

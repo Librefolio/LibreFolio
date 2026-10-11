@@ -83,10 +83,10 @@ Una vez que se registra un evento de liquidación al vencimiento en LibreFolio:
 
 En LibreFolio, se registra un evento `MATURITY_SETTLEMENT` con:
 
-- **Date**: La fecha de vencimiento
-- **Amount**: El valor nominal / importe del principal devuelto
-- **Currency**: La moneda de la liquidación
-- **Notes**: Descripción opcional (ej., "Bono del Tesoro a 10 años vencido")
+- **Fecha**: La fecha de vencimiento
+- **Importe**: El valor nominal / importe del principal devuelto
+- **Divisa**: La moneda de la liquidación
+- **Notas**: Descripción opcional (ej., "Bono del Tesoro a 10 años vencido")
 
 Para el proveedor **Scheduled Investment**, la fecha de vencimiento se configura en la configuración del proveedor. La fórmula de cálculo de precios reconoce que no ocurre más devengo después del vencimiento:
 

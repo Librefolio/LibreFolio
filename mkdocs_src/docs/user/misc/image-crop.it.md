@@ -36,10 +36,10 @@ Inquadra, ruota e ridimensiona un'immagine prima che LibreFolio la salvi.
 |--------|------|-------------|
 | **Avatar** | 200 × 200 px | Quadrata, anteprima rotonda attiva |
 | **Icona** | 64 × 64 px | Quadrata, anteprima rotonda attiva |
-| **Personalizzata** | Come l'area di ritaglio | Libera, o un rapporto a tua scelta: 1:1, 16:9, 4:3, 3:4 |
+| **Personalizzato** | Come l'area di ritaglio | Libera, o un rapporto a tua scelta: 1:1, 16:9, 4:3, 3:4 |
 
 Le immagini del profilo si aprono con **Avatar**, le icone broker con **Icona** e le immagini della pagina File con
-**Personalizzata**; le icone asset vengono ritagliate quadrate a 256 × 256 px. Puoi cambiare preimpostazione in qualsiasi momento.
+**Personalizzato**; le icone asset vengono ritagliate quadrate a 256 × 256 px. Puoi cambiare preimpostazione in qualsiasi momento.
 
 ---
 
@@ -61,7 +61,7 @@ Le immagini del profilo si aprono con **Avatar**, le icone broker con **Icona** 
 - **Ritaglia e carica** salva l'immagine e la utilizza. Nella pagina File, **Ritaglia** la mette invece nella lista
   di caricamento (**Ripristina originale** ↺ riporta l'originale), e **Carica** invia la lista.
 - **Annulla** o **✕** chiude lo strumento — dopo aver chiesto conferma, se hai modifiche non salvate
-  (**Scarta e chiudi**). Dal selettore di immagini, torni al selettore.
+  (**Annulla e Chiudi**). Dal selettore di immagini, torni al selettore.
 
 ??? info "📄 File che non sono immagini — nella pagina File"
 

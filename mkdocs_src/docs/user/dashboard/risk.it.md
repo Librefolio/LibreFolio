@@ -24,18 +24,18 @@ Quanto potresti perdere, e quanto è già stato grave? Ogni cifra qui è qualcos
 
 - **Una brutta giornata**, **Un brutto mese** — la tua perdita media nel 5% peggiore delle giornate, o di periodi di un mese → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Soglia VaR** — su *Distribuzione dei rendimenti giornalieri*: la perdita giornaliera che solo il 5% peggiore delle giornate ha superato → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
-- **Peggior giornata effettivamente vista** — la singola giornata peggiore del periodo → [peggior realizzazione](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
+- **Il giorno peggiore davvero visto** — la singola giornata peggiore del periodo → [peggior realizzazione](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
 - **Il peggior calo** — la discesa più profonda da un massimo a un minimo successivo → [drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Drawdown a rischio** — quanto sotto il suo picco si trovava il portafoglio, a parte il 5% peggiore delle giornate → [drawdown a rischio](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
 - **Media oltre quella soglia** — quanto sotto il suo picco si trovava, in media, in quelle giornate peggiori → [drawdown a rischio condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
-- **Attualmente sotto il picco** — quanto sotto il suo ultimo massimo si trova oggi il portafoglio → [drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Indice di Ulcer** — sotto *Tempo trascorso sotto il picco*: quanto sono stati profondi e lunghi i cali; più basso è più calmo → [indice di Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
+- **Attualmente sotto il massimo** — quanto sotto il suo ultimo massimo si trova oggi il portafoglio → [drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Indice di Ulcer** — sotto *Tempo passato sotto il picco*: quanto sono stati profondi e lunghi i cali; più basso è più calmo → [indice di Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Come leggerlo**
 
 - **Orizzonti diversi**: le schede vanno da un giorno a un mese al peggior calo, quindi non sommarle mai tra loro.
 - **L'importo** sotto ogni percentuale è quella perdita applicata al tuo patrimonio netto.
-- **Attualmente sotto il picco** compare solo mentre il tuo portafoglio è sotto il suo ultimo massimo.
+- **Attualmente sotto il massimo** compare solo mentre il tuo portafoglio è sotto il suo ultimo massimo.
 - **Le icone ? e ⓘ** accanto a una cifra aprono la sua pagina teorica.
 
 ---
@@ -60,7 +60,7 @@ Possedere molte posizioni non è la stessa cosa che essere diversificato. Questo
 
 - **Una lunga barra rossa** sulla destra segnala una posizione il cui contributo al rischio supera quanto suggerisca il suo peso; quando una spicca, la frase sotto il titolo la nomina.
 - **Nella matrice**, le coppie blu si muovono insieme, quindi tenerle entrambe aggiunge poco; le coppie rosse si muovono in direzioni opposte e si compensano a vicenda.
-- **Passa il mouse su un quadrato** per il suo valore a parole. Gli elenchi *Le più simili* e *Quelle che si compensano* individuano le coppie che vale la pena guardare.
+- **Passa il mouse su un quadrato** per il suo valore a parole. Gli elenchi *I più simili* e *Quelli che si compensano* individuano le coppie che vale la pena guardare.
 
 ---
 
@@ -75,7 +75,7 @@ Vale la pena assumersi un rischio solo se ripaga. Questo blocco confronta il ren
 **Strumenti mostrati**
 
 - **Volatilità** — quanto oscillano i rendimenti nell'arco di un anno → [volatilità](../../financial-theory/technical-analysis/risk-metrics/volatility.md)
-- **Rend. ann.** — il rendimento medio, su base annua → [Observed Annualization](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
+- **Rend. annuo** — il rendimento medio, su base annua → [Observed Annualization](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
 - **Sortino** — il rendimento ottenuto per ogni unità di oscillazioni al ribasso → [indice di Sortino](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md)
 - **Sharpe** — il rendimento ottenuto per ogni unità di oscillazioni, al rialzo o al ribasso → [indice di Sharpe](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
 - **Beta** — quanto si muove una posizione quando si muove il benchmark → [Beta & Active Return](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md)
@@ -128,11 +128,11 @@ Una cifra di rischio vale solo quanto i prezzi che vi stanno dietro. Quando i da
 
 **Strumenti mostrati**
 
-- **Qualità dei dati** — prezzi e tassi mancanti o obsoleti, e le posizioni che ne restano escluse → [qualità dei dati](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
+- **Qualità dati** — prezzi e tassi mancanti o obsoleti, e le posizioni che ne restano escluse → [qualità dei dati](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
 
 **Come leggerlo**
 
-- **Il banner in alto** elenca prezzi e tassi di cambio mancanti o obsoleti: sistemali con i suoi pulsanti, oppure con **Sync** in alto a destra.
+- **Il banner in alto** elenca prezzi e tassi di cambio mancanti o obsoleti: sistemali con i suoi pulsanti, oppure con **Sincronizza** in alto a destra.
 - **L'avviso sopra i blocchi** dice quali risultati sono parziali, e perché.
 - **Un banner dentro un blocco** nomina una cifra che non è stato possibile calcolare, con il motivo.
 - **Un trattino (—)** significa che una cifra non ha potuto essere misurata: non significa mai zero.
@@ -145,7 +145,7 @@ Una cifra di rischio vale solo quanto i prezzi che vi stanno dietro. Quando i da
 - **La scheda della Dashboard copre l'intero portafoglio** — ogni broker che possiedi con una quota superiore allo 0% — sull'intervallo di date e nella valuta della Dashboard. Ignora il filtro broker: un sottotitolo lo dice, e gli importi sotto le percentuali sono nascosti mentre un filtro è attivo.
 - **Nella pagina di un broker**, la scheda mostra gli stessi blocchi per quel singolo broker.
 - **Cambiare il periodo o la valuta** ricalcola ogni blocco e cancella i risultati di E se…?: eseguili di nuovo.
-- **Dettagli di calcolo**, ripiegati in fondo a ogni blocco, mostrano su quanti dati si basano le cifre.
+- **Dettagli calcolo**, ripiegati in fondo a ogni blocco, mostrano su quanti dati si basano le cifre.
 
 ---
 

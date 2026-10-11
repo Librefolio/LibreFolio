@@ -32,10 +32,10 @@ La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) n
 ??? info "⚙️ I campi opzionali — cosa fa ciascuno"
 
     - **Descrizione** — le tue note.
-    - **Plugin di importazione predefinito** — l'importatore che la [Procedura guidata di importazione](../transactions/import/index.md) propone per i file di questo broker.
-    - **URL del portale** — il sito web del broker, aperto dalla pagina del broker. L'icona del broker è, in quest'ordine: il tuo **URL icona personalizzata**; l'icona del **Plugin di importazione predefinito**, quando quell'importatore è fatto per questo broker; l'icona del sito web; l'icona di un importatore generico come il CSV generico; altrimenti una valigetta.
-    - **Conto aperto** e **Conto attivo** — quando è stato aperto il conto e se è ancora aperto. Un broker chiuso viene mostrato in grigio nell'elenco.
-    - **Opzioni di trading** — **Consenti acquisto con leva** e **Consenti vendita allo scoperto**, spiegate in [Opzioni di trading](info.md#trading-options).
+    - **Plugin di Import Predefinito** — l'importatore che la [Procedura guidata di importazione](../transactions/import/index.md) propone per i file di questo broker.
+    - **URL Portale** — il sito web del broker, aperto dalla pagina del broker. L'icona del broker è, in quest'ordine: il tuo **URL icona personalizzata**; l'icona del **Plugin di Import Predefinito**, quando quell'importatore è fatto per questo broker; l'icona del sito web; l'icona di un importatore generico come il CSV generico; altrimenti una valigetta.
+    - **Data Apertura Conto** e **Conto attivo** — quando è stato aperto il conto e se è ancora aperto. Un broker chiuso viene mostrato in grigio nell'elenco.
+    - **Opzioni di trading** — **Consenti acquisto con leva** e **Consenti Vendita allo Scoperto (Short)**, spiegate in [Opzioni di trading](info.md#trading-options).
     - **Saldi iniziali** (solo durante la creazione) — la tua liquidità iniziale. LibreFolio registra un **Deposito** per valuta, **datato oggi**: se il denaro era presente prima, cambia la data di quei depositi nella pagina [Transazioni](../transactions/index.md).
 
 ??? warning "🏷️ “Esiste già un broker chiamato …” — quando compare"

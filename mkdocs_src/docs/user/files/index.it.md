@@ -3,7 +3,7 @@
 La pagina **File** conserva tutto ciò che è stato caricato su LibreFolio, in due schede:
 
 - **Risorse statiche** — avatar, icone dei broker e altre immagini o documenti, visibili a ogni utente;
-- **Report del broker** — i file di estratto conto da cui importi le transazioni, visibili solo alle persone che hanno accesso al relativo broker.
+- **Report Broker** — i file di estratto conto da cui importi le transazioni, visibili solo alle persone che hanno accesso al relativo broker.
 
 ---
 
@@ -47,15 +47,15 @@ La colonna **Stato** ti dice in che situazione si trova ogni file:
 
 - **Caricato** — memorizzato, non ancora analizzato;
 - **Analizzato** — la procedura guidata di importazione lo ha letto correttamente;
-- **Non riuscito** — l'analisi è fallita; il file resta qui così puoi controllarlo o segnalarlo.
+- **Fallito** — l'analisi è fallita; il file resta qui così puoi controllarlo o segnalarlo.
 
 ### 📤 Caricare un report del broker
 
-1. In **Report del broker**, fai clic su **Carica** e scegli file CSV o Excel.
-2. In **Assegna broker**, scegli il broker di ciascun file, oppure uno per tutti con **Assegna tutto a**. **Crea nuovo** aggiunge un broker sul momento; se puoi modificare un solo broker, è già selezionato.
+1. In **Report Broker**, fai clic su **Carica** e scegli file CSV o Excel.
+2. In **Assegna broker**, scegli il broker di ciascun file, oppure uno per tutti con **Assegna tutti a**. **Crea nuovo** aggiunge un broker sul momento; se puoi modificare un solo broker, è già selezionato.
 3. Fai clic su **Carica**. I file vengono memorizzati, ma **non viene ancora importato nulla**.
 
-Per importarli, apri la [procedura guidata di importazione](../transactions/import/index.md) (**Transazioni** → **Importa**): il suo passaggio **Seleziona file** elenca i report che hai caricato.
+Per importarli, apri la [procedura guidata di importazione](../transactions/import/index.md) (**Transazioni** → **Importa**): il suo passaggio **Seleziona File** elenca i report che hai caricato.
 
 Il broker che scegli decide solo quale conto riceve le transazioni. L'importatore riconosce da sé il formato del file, e un singolo plugin di importazione può leggere gli export di più broker.
 
@@ -72,7 +72,7 @@ Alcune banche suddividono un conto su più export: [Danske Bank](../transactions
 | **Set della ‹data›** | Il file appartiene al set caricato in quella data, insieme agli altri export del set. |
 | **Incompleto** | Al set manca ancora un export richiesto: passa il mouse sul badge per vedere quale. Aggiungilo dalla scheda del set nella procedura guidata di importazione, con **Carica il file mancante**. |
 | **Combinato** | Il file che LibreFolio ha costruito dagli export di un set — quello che l'importazione legge effettivamente. Passa il mouse sul badge per vedere i file da cui è stato costruito e quali di essi sono stati eliminati nel frattempo. |
-| **Usato in un file combinato** | Questo export è stato incluso in un file combinato del suo set. |
+| **Usato in un combinato** | Questo export è stato incluso in un file combinato del suo set. |
 | **Da ricombinare** | L'importatore è cambiato da quando è stato costruito il file combinato: analizzare di nuovo il set lo ricostruisce. |
 
 Puoi visualizzare in anteprima, scaricare ed eliminare questi file come qualsiasi altro report. Eliminare un export di un set lascia al suo posto il file combinato, ma per importare di nuovo il set devi prima caricare nuovamente quell'export al suo interno.
@@ -89,7 +89,7 @@ Entrambe le schede mostrano chi ha caricato ciascun file nella colonna **Caricat
 
 - fai clic sull'intestazione della colonna per ordinare per chi ha caricato;
 - apri il relativo filtro per mantenere solo i file di una o più persone: selezionale nell'elenco, oppure cercale per nome;
-- un file il cui autore del caricamento non è stato registrato mostra *Autore del caricamento non registrato*.
+- un file il cui autore del caricamento non è stato registrato mostra *Utente non indicato*.
 
 Il filtro si applica anche alla vista griglia delle **Risorse statiche**. Viene salvato nell'indirizzo della pagina, quindi un segnalibro o un link condiviso si apre con lo stesso filtro.
 
@@ -98,7 +98,7 @@ Il filtro si applica anche alla vista griglia delle **Risorse statiche**. Viene 
 ## 🔒 Accesso e limiti
 
 - 🌐 **Risorse statiche** — ogni utente autenticato può vederle.
-- 🔐 **Report del broker** — solo gli utenti con accesso al broker possono vederli; caricarli ed eliminarli richiede l'accesso come Proprietario o Editor.
+- 🔐 **Report Broker** — solo gli utenti con accesso al broker possono vederli; caricarli ed eliminarli richiede l'accesso come Proprietario o Editor.
 - 📏 **Dimensione** — fino al limite impostato dall'amministratore nelle [Impostazioni globali](../../admin/settings.md): 10 MB se non modificato.
 - 🚫 **Tipi di file** — i programmi e gli script (come i file `.exe`, `.sh` o `.py`) vengono rifiutati come risorse statiche; i report del broker devono essere file CSV o Excel.
 

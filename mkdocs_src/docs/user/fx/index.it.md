@@ -42,7 +42,7 @@ restringere l'elenco a una coppia FX; ✕ cancella entrambe.
 
 - Il selettore **periodo** in alto imposta l'intervallo di ogni grafico e variazione; nella vista a
   schede, **Abs** / **%** mostra tutte le schede come tassi o come variazione %.
-- **Sincronizza tutto** scarica i nuovi tassi ([Sincronizzazione](sync.md)); **Ricarica tutto** legge
+- **Sinc. Tutto** scarica i nuovi tassi ([Sincronizzazione](sync.md)); **Ricarica tutto** legge
   di nuovo quelli memorizzati. **Impostazioni** imposta l'aspetto di ogni scheda ([Impostazioni
   grafico](chart-settings.md)).
 - Su una scheda, ⇄ inverte la direzione mostrata (USD → EUR invece di EUR → USD); i pulsanti in basso

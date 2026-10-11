@@ -88,9 +88,9 @@ Por ejemplo, si Apple costaba $100 antes de un desdoblamiento 4:1, el precio his
 
 En LibreFolio, un evento `SPLIT` se registra con:
 
-- **Date**: La fecha efectiva del desdoblamiento
-- **Amount**: El ratio del desdoblamiento (por ejemplo, `2` para un desdoblamiento 2:1, `0.1` para un desdoblamiento inverso 1:10)
-- **Notes**: Descripción opcional (por ejemplo, "desdoblamiento directo 4:1")
+- **Fecha**: La fecha efectiva del desdoblamiento
+- **Importe**: El ratio del desdoblamiento (por ejemplo, `2` para un desdoblamiento 2:1, `0.1` para un desdoblamiento inverso 1:10)
+- **Notas**: Descripción opcional (por ejemplo, "desdoblamiento directo 4:1")
 
 Los eventos de desdoblamiento aparecen como **marcadores en el gráfico** y ayudan a explicar discontinuidades repentinas de precio. Cuando se utilizan **precios ajustados** de proveedores como Yahoo Finance, el desdoblamiento ya está incluido en los datos de precios.
 

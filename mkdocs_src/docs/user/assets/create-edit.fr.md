@@ -33,7 +33,7 @@ Vérifiez ces champs avant d'enregistrer :
 
 - **Nom** : obligatoire et unique ; un avertissement apparaît si un autre actif l'utilise déjà.
 - **Type** : voir [Choisir le type d'actif](#choosing-the-asset-type).
-- **Unités par prix** : le nombre d'unités auxquelles se réfère un prix, généralement 1. Les obligations sont cotées sur une base
+- **Unités par prix unitaire** : le nombre d'unités auxquelles se réfère un prix, généralement 1. Les obligations sont cotées sur une base
   100 : LibreFolio le propose lorsque vous choisissez **Obligation**.
 - **Devise** : la devise dans laquelle les prix sont cotés. Pour un fonds coté en euros, il s'agit de l'EUR,
   même lorsque le fonds est libellé dans une autre devise.
@@ -45,7 +45,7 @@ fournisseur, son historique de prix commence à se télécharger immédiatement.
 
 Le champ **Type** ouvre un menu avec recherche des
 [types d'actifs](../../financial-theory/instruments/asset-types/index.md). **ETF** et
-**Crowdfunding** sont des familles : ouvrez-en une pour voir d'abord son membre générique (**ETF**, **Crowdfund**),
+**Crowdfunding** sont des familles : ouvrez-en une pour voir d'abord son membre générique (**ETF**, **Crowdfunding**),
 puis des types spécifiques tels que **ETF actions** ou **Crowdfunding immobilier**. Saisissez quelques lettres pour
 rechercher dans les deux niveaux, par nom ou par code (par exemple `etf_bond`).
 
@@ -60,7 +60,7 @@ précisez-le, par exemple en **ETF actions** : son badge et son icône indiquent
 ## 🔌 Connecter un fournisseur de prix
 
 Sélectionner un résultat de **Rechercher en ligne** connecte son fournisseur pour vous. Pour en configurer un à la main, développez
-**Attribution du fournisseur** (décochez d'abord **Aucun fournisseur** s'il est coché) :
+**Attribution du fournisseur** (décochez d'abord **Pas de Fournisseur** s'il est coché) :
 
 1. Choisissez le **Fournisseur**, puis saisissez l'**Identifiant**, son **Type d'identifiant** et les paramètres
    demandés par le fournisseur.
@@ -69,13 +69,13 @@ Sélectionner un résultat de **Rechercher en ligne** connecte son fournisseur p
    n'a pas d'historique, par exemple) ; le test réussit quand même. ❌ est une erreur : vérifiez l'identifiant et
    les paramètres.
 
-Un actif a au plus un fournisseur ; cochez **Aucun fournisseur** si vous comptez saisir ses prix vous-même. Voir
+Un actif a au plus un fournisseur ; cochez **Pas de Fournisseur** si vous comptez saisir ses prix vous-même. Voir
 [Fournisseurs](providers/index.md) pour ce que chacun propose.
 
 ## ⚖️ Vérifier les données du fournisseur {: #provider-data-comparison }
 
 LibreFolio compare les informations du fournisseur avec votre formulaire après avoir sélectionné un résultat de **Rechercher en ligne**,
-et lorsque vous cliquez sur **Interroger le fournisseur** : en haut de **Détails de l'actif** pour tout, à côté
+et lorsque vous cliquez sur **Demander au Fournisseur** : en haut de **Détails de l'actif** pour tout, à côté
 des **Identifiants** ou dans un éditeur de distribution pour cette partie uniquement. Il faut un fournisseur et un
 identifiant.
 
@@ -110,7 +110,7 @@ Les valeurs acceptées ne font que remplir le formulaire : elles sont enregistr�
 ## 🛠️ Modifier un actif {: #editing-an-asset }
 
 Sur la [page de détail](detail/index.md) de l'actif, cliquez sur **Modifier** (✏️), changez ce dont vous avez besoin dans le
-formulaire **Modifier l'actif**, puis cliquez sur **Enregistrer les modifications**.
+formulaire **Modifier l'actif**, puis cliquez sur **Enregistrer**.
 
 Une nouvelle **Devise** pour un actif qui possède déjà des prix implique la suppression de ses prix et
 événements enregistrés : lors de l'enregistrement, une boîte de dialogue liste ce qui disparaît (les transactions restent) et propose une sauvegarde. Après
@@ -119,10 +119,10 @@ Une nouvelle **Devise** pour un actif qui possède déjà des prix implique la s
 ## 🏷️ Modifier les identifiants {: #one-instrument-several-codes }
 
 Un même titre peut avoir plusieurs codes. LibreFolio conserve **un seul actif** avec tous, sous
-**Plus d'informations** dans le formulaire de l'actif :
+**Plus d'infos** dans le formulaire de l'actif :
 
-- **Identifiants** : les codes principaux, un par type (ISIN, ticker…). **Ajouter un identifiant** ajoute une ligne et
-  **Interroger le fournisseur** les récupère.
+- **Identifiants** : les codes principaux, un par type (ISIN, ticker…). **Ajouter identifiant** ajoute une ligne et
+  **Demander au Fournisseur** les récupère.
 - **Autres identifiants** : tout code supplémentaire ou libellé de courtier. Saisissez-en un et appuyez sur Entrée, virgule, point-virgule
   ou Tabulation. Ces codes sont recherchables et aident à reconnaître l'actif lors d'imports ultérieurs.
 
@@ -155,7 +155,7 @@ code doit primer et conserve l'autre sous **Autres identifiants**.
 Les fournisseurs remplissent les distributions sectorielles et géographiques lorsqu'ils le peuvent ; pour les autres actifs, définissez-les
 vous-même. Elles alimentent les graphiques d'allocation du tableau de bord et l'export IA.
 
-Dans le formulaire de l'actif, développez **Plus d'informations** : sous **Classification**, **Distribution sectorielle** et
+Dans le formulaire de l'actif, développez **Plus d'infos** : sous **Classification**, **Distribution sectorielle** et
 **Distribution géographique** comportent une ligne par secteur ou pays, avec son poids en pourcentage.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-assets-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
@@ -167,12 +167,12 @@ Dans le formulaire de l'actif, développez **Plus d'informations** : sous **Clas
 - Le **Total** devient vert à 100 %, ambre lorsqu'il manque quelque chose, rouge lorsque vous dépassez.
 - **Équilibrer à 100 %**, une action de ligne, déplace tout l'écart dans cette ligne. **Équilibrer les lignes sélectionnées**
   le répartit entre les lignes sélectionnées, proportionnellement à leurs poids.
-- **Supprimer** efface une ligne, **Interroger le fournisseur** récupère la distribution du fournisseur, et **Importer un CSV**
+- **Supprimer** efface une ligne, **Demander au Fournisseur** récupère la distribution du fournisseur, et **Importer CSV**
   en charge une depuis un fichier.
 
 ### 📥 Importer une distribution depuis un CSV {: #importing-a-distribution-csv }
 
-**Importer un CSV** attend un en-tête `name,weight`, puis une ligne par pays ou secteur, avec les poids en
+**Importer CSV** attend un en-tête `name,weight`, puis une ligne par pays ou secteur, avec les poids en
 pourcentage :
 
 ```csv

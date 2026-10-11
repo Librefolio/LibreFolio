@@ -14,8 +14,8 @@ cercarlo per nome o ticker.
 
 ## ✏️ Configurazione
 
-**Ricerca online** lo configura per te. Manualmente, in **Assegnazione provider**, scegli
-**Yahoo Finance**, imposta **Tipo di identificatore** su **TICKER** e digita il ticker come **Identificatore**.
+**Cerca Online** lo configura per te. Manualmente, in **Assegnazione provider**, scegli
+**Yahoo Finance**, imposta **Tipo Identificativo** su **TICKER** e digita il ticker come **Identificativo**.
 Non c'è altro da compilare.
 
 | Asset | Ticker |
@@ -30,7 +30,7 @@ Amsterdam.
 
 ## ⚠️ Limiti
 
-- **ISIN** funziona anche come **Tipo di identificatore**, ma solo quando Yahoo riesce ad associarlo a un ticker: preferisci
+- **ISIN** funziona anche come **Tipo Identificativo**, ma solo quando Yahoo riesce ad associarlo a un ticker: preferisci
   il ticker.
 - Yahoo può limitare la frequenza delle richieste e alcuni ticker presentano giorni senza dati.
 
